@@ -802,10 +802,9 @@ class TestConvBasis:
             else {"bounds": (1, 2)}
         )
         with pytest.raises(
-                    TypeError, match="got an unexpected keyword argument 'bounds'"
-                ):
+            TypeError, match="got an unexpected keyword argument 'bounds'"
+        ):
             cls(**kwargs, **extra_decay_rates(cls, 10))
-
 
         kwargs = {"n_basis_funcs": 10} if cls != IdentityEval else {}
         bas = instantiate_atomic_basis(
@@ -818,8 +817,6 @@ class TestConvBasis:
             ValueError, match="Invalid parameter 'bounds' for estimator"
         ):
             bas.set_params(bounds=(1, 2))
-
-
 
 
 @pytest.mark.parametrize(
@@ -1161,7 +1158,6 @@ class TestEvalBasis:
             cls(**kwargs, **extra_decay_rates(cls, 10))
 
 
-
 @pytest.mark.parametrize(
     "cls",
     [
@@ -1197,18 +1193,24 @@ def test_call_equivalent_in_conv(self, n_basis, cls):
 @pytest.mark.parametrize(
     "cls",
     [
-        {"eval": basis.RaisedCosineLogEval, "conv": basis.RaisedCosineLogConv},
-        {"eval": basis.RaisedCosineLinearEval, "conv": basis.RaisedCosineLinearConv},
-        {"eval": basis.BSplineEval, "conv": basis.BSplineConv},
-        {"eval": basis.CyclicBSplineEval, "conv": basis.CyclicBSplineConv},
-        {"eval": basis.MSplineEval, "conv": basis.MSplineConv},
-        {"eval": basis.OrthExponentialEval, "conv": basis.OrthExponentialConv},
-        {"eval": basis.IdentityEval, "conv": basis.HistoryConv},
+        basis.RaisedCosineLogEval,
+        basis.RaisedCosineLogConv,
+        basis.RaisedCosineLinearEval,
+        basis.RaisedCosineLinearConv,
+        basis.BSplineEval,
+        basis.BSplineConv,
+        basis.CyclicBSplineEval,
+        basis.CyclicBSplineConv,
+        basis.MSplineEval,
+        basis.MSplineConv,
+        basis.OrthExponentialEval,
+        basis.OrthExponentialConv,
+        basis.IdentityEval,
+        basis.HistoryConv,
     ],
 )
 class TestSharedMethods:
 
-    @pytest.mark.parametrize("mode", ["eval", "conv"])
     @pytest.mark.parametrize(
         "expected_out",
         [
@@ -1230,18 +1232,17 @@ class TestSharedMethods:
             }
         ],
     )
-    def test_repr_out(self, cls, mode, expected_out):
+    def test_repr_out(self, cls, expected_out):
         bas = instantiate_atomic_basis(
-            cls[mode],
+            cls,
             n_basis_funcs=5,
             bounds=(1, 2),
             window_size=10,
-            **extra_decay_rates(cls[mode], 5),
+            **extra_decay_rates(cls, 5),
         )
         out = repr(bas)
-        assert out == expected_out.get(cls[mode], "")
+        assert out == expected_out.get(cls, "")
 
-    @pytest.mark.parametrize("mode", ["eval", "conv"])
     @pytest.mark.parametrize(
         "expected_out",
         [
@@ -1263,41 +1264,39 @@ class TestSharedMethods:
             }
         ],
     )
-    def test_repr_out_with_label(self, cls, mode, expected_out):
+    def test_repr_out_with_label(self, cls, expected_out):
         bas = instantiate_atomic_basis(
-            cls[mode],
+            cls,
             n_basis_funcs=5,
             bounds=(1, 2),
             window_size=10,
             label="mylabel",
-            **extra_decay_rates(cls[mode], 5),
+            **extra_decay_rates(cls, 5),
         )
         out = repr(bas)
-        assert out == expected_out.get(cls[mode], "")
+        assert out == expected_out.get(cls, "")
 
     @pytest.mark.parametrize("n_basis", [5])
     @pytest.mark.parametrize("ws", [10])
     @pytest.mark.parametrize("inp_num", [1, 2])
-    @pytest.mark.parametrize("mode", ["conv", "eval"])
-    def test_len(self, cls, n_basis, ws, inp_num, mode):
+    def test_len(self, cls, n_basis, ws, inp_num):
         bas = instantiate_atomic_basis(
-            cls[mode],
+            cls,
             n_basis_funcs=n_basis,
             window_size=ws,
-            **extra_decay_rates(cls["eval"], n_basis),
+            **extra_decay_rates(cls, n_basis),
         )
         assert len(bas) == 1
 
     @pytest.mark.parametrize("n_basis", [5])
     @pytest.mark.parametrize("ws", [10])
     @pytest.mark.parametrize("inp_num", [1, 2])
-    @pytest.mark.parametrize("mode", ["conv", "eval"])
-    def test_iter(self, cls, n_basis, ws, inp_num, mode):
+    def test_iter(self, cls, n_basis, ws, inp_num):
         bas = instantiate_atomic_basis(
-            cls[mode],
+            cls,
             n_basis_funcs=n_basis,
             window_size=ws,
-            **extra_decay_rates(cls["eval"], n_basis),
+            **extra_decay_rates(cls, n_basis),
         )
         for b in bas:
             assert id(bas) == id(b)
@@ -1317,12 +1316,11 @@ class TestSharedMethods:
             ),
         ],
     )
-    @pytest.mark.parametrize("mode", ["conv", "eval"])
-    def test_attr_setter(self, attribute, value, cls, expectation, mode):
+    def test_attr_setter(self, attribute, value, cls, expectation):
         bas = instantiate_atomic_basis(
-            cls[mode],
+            cls,
             n_basis_funcs=5,
-            **extra_decay_rates(cls[mode], 5),
+            **extra_decay_rates(cls, 5),
             window_size=10,
         )
         with expectation:
@@ -1333,26 +1331,24 @@ class TestSharedMethods:
                 assert getattr(bas, attribute) == value
 
     @pytest.mark.parametrize("label", [None, "label"])
-    @pytest.mark.parametrize("mode", ["conv", "eval"])
-    def test_init_label(self, label, cls, mode):
+    def test_init_label(self, label, cls):
         bas = instantiate_atomic_basis(
-            cls[mode],
+            cls,
             n_basis_funcs=5,
             label=label,
-            **extra_decay_rates(cls[mode], 5),
+            **extra_decay_rates(cls, 5),
             window_size=10,
         )
-        expected_label = str(label) if label is not None else cls[mode].__name__
+        expected_label = str(label) if label is not None else cls.__name__
         assert bas.label == expected_label
 
-    @pytest.mark.parametrize("mode", ["conv", "eval"])
     @pytest.mark.parametrize("n_input", [1, 2, 3])
-    def test_set_num_basis_input(self, mode, n_input, cls):
+    def test_set_num_basis_input(self, n_input, cls):
         bas = instantiate_atomic_basis(
-            cls[mode],
+            cls,
             n_basis_funcs=5,
             window_size=10,
-            **extra_decay_rates(cls[mode], 5),
+            **extra_decay_rates(cls, 5),
         )
         assert bas._input_shape_product is None
         bas.compute_features(np.random.randn(20, n_input))
@@ -1360,19 +1356,16 @@ class TestSharedMethods:
         assert bas._input_shape_product == (n_input,)
 
     @pytest.mark.parametrize("n_basis", [6, 7])
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 8})]
-    )
-    def test_call_basis_number(self, n_basis, mode, kwargs, cls):
-        if cls[mode] is IdentityEval:
+    def test_call_basis_number(self, n_basis, cls):
+        if cls is IdentityEval:
             n_basis = 1
-        elif cls[mode] is HistoryConv:
-            n_basis = kwargs["window_size"]
+        elif cls is HistoryConv:
+            n_basis = 8
         bas = instantiate_atomic_basis(
-            cls[mode],
+            cls,
             n_basis_funcs=n_basis,
-            **kwargs,
-            **extra_decay_rates(cls[mode], n_basis),
+            window_size=8,
+            **extra_decay_rates(cls, n_basis),
         )
         x = np.linspace(0, 1, 10)
         assert bas.evaluate(x).shape[1] == n_basis
@@ -1395,16 +1388,13 @@ class TestSharedMethods:
             ),
         ],
     )
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 8})]
-    )
     @pytest.mark.parametrize("n_basis", [6])
-    def test_call_input_num(self, num_input, n_basis, mode, kwargs, expectation, cls):
+    def test_call_input_num(self, num_input, n_basis, expectation, cls):
         bas = instantiate_atomic_basis(
-            cls[mode],
+            cls,
+            window_size=8,
             n_basis_funcs=n_basis,
-            **kwargs,
-            **extra_decay_rates(cls[mode], n_basis),
+            **extra_decay_rates(cls, n_basis),
         )
         with expectation:
             bas.evaluate(*([np.linspace(0, 1, 10)] * num_input))
@@ -1418,20 +1408,17 @@ class TestSharedMethods:
         ],
     )
     @pytest.mark.parametrize("n_basis", [6])
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 8})]
-    )
-    def test_call_input_shape(self, inp, mode, kwargs, expectation, n_basis, cls):
+    def test_call_input_shape(self, inp, expectation, n_basis, cls):
         bas = instantiate_atomic_basis(
-            cls[mode],
+            cls,
             n_basis_funcs=n_basis,
-            **kwargs,
-            **extra_decay_rates(cls[mode], n_basis),
+            window_size=8,
+            **extra_decay_rates(cls, n_basis),
         )
         if isinstance(bas, IdentityEval):
             n_basis = 1
         elif isinstance(bas, HistoryConv):
-            n_basis = kwargs["window_size"]
+            n_basis = 8
             if inp.ndim != 1:
                 return
         with expectation:
@@ -1441,19 +1428,16 @@ class TestSharedMethods:
             assert out.shape == tuple((*inp.shape, n_basis))
 
     @pytest.mark.parametrize("n_basis", [6])
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 8})]
-    )
-    def test_call_nan_location(self, mode, kwargs, n_basis, cls):
-        if cls[mode] is HistoryConv:
+    def test_call_nan_location(self, n_basis, cls):
+        if cls is HistoryConv:
             return
-        if cls[mode] is IdentityEval:
+        if cls is IdentityEval:
             n_basis = 1
         bas = instantiate_atomic_basis(
-            cls[mode],
+            cls,
             n_basis_funcs=n_basis,
-            **kwargs,
-            **extra_decay_rates(cls[mode], n_basis),
+            window_size=8,
+            **extra_decay_rates(cls, n_basis),
         )
         inp = np.random.randn(10, 2, 3)
         inp[2, 0, [0, 2]] = np.nan
@@ -1463,48 +1447,39 @@ class TestSharedMethods:
         assert np.all(np.isnan(out[4, 1, 1]))
         assert np.isnan(out).sum() == 3 * n_basis
 
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 8})]
-    )
-    def test_call_nan(self, mode, kwargs, cls):
-        if cls[mode] is HistoryConv:
+    def test_call_nan(self, cls):
+        if cls is HistoryConv:
             # eval simply returns the evaluate...
             return
-        elif cls[mode] is IdentityEval:
+        elif cls is IdentityEval:
             n_basis = 1
         else:
             n_basis = 5
         bas = instantiate_atomic_basis(
-            cls[mode],
+            cls,
             n_basis_funcs=n_basis,
-            **kwargs,
-            **extra_decay_rates(cls[mode], n_basis),
+            window_size=8,
+            **extra_decay_rates(cls, n_basis),
         )
         x = np.linspace(0, 1, 10)
         x[3] = np.nan
         assert all(np.isnan(bas.evaluate(x)[3]))
 
     @pytest.mark.parametrize("n_basis", [6, 7])
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 8})]
-    )
-    def test_call_non_empty(self, n_basis, mode, kwargs, cls):
+    def test_call_non_empty(self, n_basis, cls):
         bas = instantiate_atomic_basis(
-            cls[mode],
+            cls,
             n_basis_funcs=n_basis,
-            **kwargs,
-            **extra_decay_rates(cls[mode], n_basis),
+            window_size=8,
+            **extra_decay_rates(cls, n_basis),
         )
         with pytest.raises(ValueError, match="All sample provided must"):
             bas.evaluate(np.array([]))
 
     @pytest.mark.parametrize("time_axis_shape", [10, 11, 12])
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 8})]
-    )
-    def test_call_sample_axis(self, time_axis_shape, mode, kwargs, cls):
+    def test_call_sample_axis(self, time_axis_shape, cls):
         bas = instantiate_atomic_basis(
-            cls[mode], n_basis_funcs=5, **kwargs, **extra_decay_rates(cls[mode], 5)
+            cls, n_basis_funcs=5, window_size=8, **extra_decay_rates(cls, 5)
         )
         assert (
             bas.evaluate(np.linspace(0, 1, time_axis_shape)).shape[0] == time_axis_shape
@@ -1517,12 +1492,9 @@ class TestSharedMethods:
             (-2, 2, does_not_raise()),
         ],
     )
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 8})]
-    )
-    def test_call_sample_range(self, mn, mx, expectation, mode, kwargs, cls):
+    def test_call_sample_range(self, mn, mx, expectation, cls):
         bas = instantiate_atomic_basis(
-            cls[mode], n_basis_funcs=5, **kwargs, **extra_decay_rates(cls[mode], 5)
+            cls, n_basis_funcs=5, window_size=8, **extra_decay_rates(cls, 5)
         )
         with expectation:
             bas.evaluate(np.linspace(mn, mx, 10))
@@ -1531,22 +1503,19 @@ class TestSharedMethods:
         "args, sample_size",
         [[{"n_basis_funcs": n_basis}, 100] for n_basis in [6, 10, 13]],
     )
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 30})]
-    )
     def test_compute_features_returns_expected_number_of_basis(
-        self, args, sample_size, mode, kwargs, cls
+        self, args, sample_size, cls
     ):
         args_copy = args.copy()
-        if cls[mode] == IdentityEval:
+        if cls == IdentityEval:
             args_copy["n_basis_funcs"] = 1
-        elif cls[mode] == HistoryConv:
-            args_copy["n_basis_funcs"] = kwargs["window_size"]
+        elif cls == HistoryConv:
+            args_copy["n_basis_funcs"] = 30
         basis_obj = instantiate_atomic_basis(
-            cls[mode],
+            cls,
             **args_copy,
-            **kwargs,
-            **extra_decay_rates(cls[mode], args_copy["n_basis_funcs"]),
+            window_size=30,
+            **extra_decay_rates(cls, args_copy["n_basis_funcs"]),
         )
         eval_basis = basis_obj.compute_features(np.linspace(0, 1, sample_size))
         assert eval_basis.shape[1] == args_copy["n_basis_funcs"], (
@@ -1556,14 +1525,11 @@ class TestSharedMethods:
         )
 
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 10, 11, 100])
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 8})]
-    )
-    def test_evaluate_on_grid_basis_size(self, sample_size, mode, kwargs, cls):
-        if "OrthExp" in cls["eval"].__name__:
+    def test_evaluate_on_grid_basis_size(self, sample_size, cls):
+        if "OrthExp" in cls.__name__:
             return
         basis_obj = instantiate_atomic_basis(
-            cls[mode], n_basis_funcs=5, **kwargs, **extra_decay_rates(cls[mode], 5)
+            cls, n_basis_funcs=5, window_size=8, **extra_decay_rates(cls, 5)
         )
         if sample_size <= 0:
             with pytest.raises(
@@ -1575,12 +1541,9 @@ class TestSharedMethods:
             assert eval_basis.shape[0] == sample_size
 
     @pytest.mark.parametrize("n_input", [0, 1, 2])
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 5})]
-    )
-    def test_evaluate_on_grid_input_number(self, n_input, mode, kwargs, cls):
+    def test_evaluate_on_grid_input_number(self, n_input, cls):
         basis_obj = instantiate_atomic_basis(
-            cls[mode], n_basis_funcs=5, **kwargs, **extra_decay_rates(cls[mode], 5)
+            cls, n_basis_funcs=5, window_size=5, **extra_decay_rates(cls, 5)
         )
         inputs = [10] * n_input
         if n_input == 0:
@@ -1600,14 +1563,11 @@ class TestSharedMethods:
             basis_obj.evaluate_on_grid(*inputs)
 
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 10, 11, 100])
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 5})]
-    )
-    def test_evaluate_on_grid_meshgrid_size(self, sample_size, mode, kwargs, cls):
-        if "OrthExp" in cls["eval"].__name__:
+    def test_evaluate_on_grid_meshgrid_size(self, sample_size, cls):
+        if "OrthExp" in cls.__name__:
             return
         basis_obj = instantiate_atomic_basis(
-            cls[mode], n_basis_funcs=5, **kwargs, **extra_decay_rates(cls[mode], 5)
+            cls, n_basis_funcs=5, window_size=5, **extra_decay_rates(cls, 5)
         )
         if sample_size <= 0:
             with pytest.raises(
@@ -1619,38 +1579,33 @@ class TestSharedMethods:
             assert grid.shape[0] == sample_size
 
     @pytest.mark.parametrize("samples", [[], [0] * 10, [0] * 11])
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 5})]
-    )
-    def test_non_empty_samples(self, samples, mode, kwargs, cls):
-        if "OrthExp" in cls["eval"].__name__:
+    def test_non_empty_samples(self, samples, cls):
+        if "OrthExp" in cls.__name__:
             return
-        if mode == "conv" and len(samples) == 1:
+        if cls.__name__.endswith("Conv") and len(samples) == 1:
             return
         if len(samples) == 0:
             with pytest.raises(
                 ValueError, match="All sample provided must be non empty"
             ):
                 instantiate_atomic_basis(
-                    cls[mode],
+                    cls,
                     n_basis_funcs=5,
-                    **kwargs,
-                    **extra_decay_rates(cls[mode], 5),
+                    window_size=5,
+                    **extra_decay_rates(cls, 5),
                 ).compute_features(samples)
         else:
             instantiate_atomic_basis(
-                cls[mode], n_basis_funcs=5, **kwargs, **extra_decay_rates(cls[mode], 5)
+                cls,
+                n_basis_funcs=5,
+                window_size=5,
+                **extra_decay_rates(cls, 5),
             ).compute_features(samples)
 
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3])
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 6})]
-    )
-    def test_number_of_required_inputs_compute_features(
-        self, n_input, mode, kwargs, cls
-    ):
+    def test_number_of_required_inputs_compute_features(self, n_input, cls):
         basis_obj = instantiate_atomic_basis(
-            cls[mode], n_basis_funcs=5, **kwargs, **extra_decay_rates(cls[mode], 5)
+            cls, n_basis_funcs=5, window_size=6, **extra_decay_rates(cls, 5)
         )
         inputs = [np.linspace(0, 1, 20)] * n_input
         if n_input == 0:
@@ -1667,12 +1622,9 @@ class TestSharedMethods:
         with expectation:
             basis_obj.compute_features(*inputs)
 
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 8})]
-    )
-    def test_pynapple_support(self, mode, kwargs, cls):
+    def test_pynapple_support(self, cls):
         bas = instantiate_atomic_basis(
-            cls[mode], n_basis_funcs=5, **kwargs, **extra_decay_rates(cls[mode], 5)
+            cls, n_basis_funcs=5, window_size=6, **extra_decay_rates(cls, 5)
         )
         x = np.linspace(0, 1, 10)
         x_nap = nap.Tsd(t=np.arange(10), d=x)
@@ -1684,8 +1636,7 @@ class TestSharedMethods:
 
     @pytest.mark.parametrize("sample_size", [30])
     @pytest.mark.parametrize("n_basis", [5])
-    @pytest.mark.parametrize("mode", ["conv", "eval"])
-    def test_pynapple_support_compute_features(self, n_basis, sample_size, cls, mode):
+    def test_pynapple_support_compute_features(self, n_basis, sample_size, cls):
         iset = nap.IntervalSet(start=[0, 0.5], end=[0.49999, 1])
         inp = nap.Tsd(
             t=np.linspace(0, 1, sample_size),
@@ -1693,10 +1644,10 @@ class TestSharedMethods:
             time_support=iset,
         )
         out = instantiate_atomic_basis(
-            cls[mode],
+            cls,
             n_basis_funcs=n_basis,
             window_size=10,
-            **extra_decay_rates(cls[mode], n_basis),
+            **extra_decay_rates(cls, n_basis),
         ).compute_features(inp)
         assert isinstance(out, nap.TsdFrame)
         assert np.array_equal(
@@ -1705,17 +1656,14 @@ class TestSharedMethods:
 
     @pytest.mark.parametrize("sample_size", [100, 1000])
     @pytest.mark.parametrize("n_basis_funcs", [5, 10, 80])
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 90})]
-    )
     def test_sample_size_of_compute_features_matches_that_of_input(
-        self, n_basis_funcs, sample_size, mode, kwargs, cls
+        self, n_basis_funcs, sample_size, cls
     ):
         basis_obj = instantiate_atomic_basis(
-            cls[mode],
+            cls,
             n_basis_funcs=n_basis_funcs,
-            **kwargs,
-            **extra_decay_rates(cls[mode], n_basis_funcs),
+            window_size=90,
+            **extra_decay_rates(cls, n_basis_funcs),
         )
         eval_basis = basis_obj.compute_features(np.linspace(0, 1, sample_size))
         assert eval_basis.shape[0] == sample_size, (
@@ -1724,10 +1672,10 @@ class TestSharedMethods:
         )
 
     @pytest.mark.parametrize(
-        "enforce_decay_to_zero, time_scaling, width, window_size, n_basis_funcs, bounds, mode, decay_rates",
+        "enforce_decay_to_zero, time_scaling, width, n_basis_funcs, bounds, decay_rates",
         [
-            (False, 15, 4, None, 10, (1, 2), "eval", np.arange(1, 11)),
-            (False, 15, 4, 10, 10, None, "conv", np.arange(1, 11)),
+            (False, 15, 4, 10, (1, 2), np.arange(1, 11)),
+            (False, 15, 4, 10, None, np.arange(1, 11)),
         ],
     )
     @pytest.mark.parametrize(
@@ -1741,10 +1689,8 @@ class TestSharedMethods:
         enforce_decay_to_zero,
         time_scaling,
         width,
-        window_size,
         n_basis_funcs,
         bounds,
-        mode: Literal["eval", "conv"],
         order,
         decay_rates,
         conv_kwargs,
@@ -1756,7 +1702,7 @@ class TestSharedMethods:
             enforce_decay_to_zero=enforce_decay_to_zero,
             time_scaling=time_scaling,
             width=width,
-            window_size=window_size,
+            window_size=10,
             n_basis_funcs=n_basis_funcs,
             bounds=bounds,
             order=order,
@@ -1766,24 +1712,23 @@ class TestSharedMethods:
         pars = {
             key: value
             for key, value in pars.items()
-            if key in basis_class_specific_params[cls[mode].__name__]
+            if key in basis_class_specific_params[cls.__name__]
         }
 
         keys = list(pars.keys())
-        bas = instantiate_atomic_basis(cls[mode], **pars)
+        bas = instantiate_atomic_basis(cls, **pars)
         for i in range(len(pars)):
             for j in range(i + 1, len(pars)):
                 par_set = {keys[i]: pars[keys[i]], keys[j]: pars[keys[j]]}
                 bas = bas.set_params(**par_set)
-                assert isinstance(bas, cls[mode])
+                assert isinstance(bas, cls)
 
-    @pytest.mark.parametrize("mode", ["conv", "eval"])
-    def test_transformer_get_params(self, cls, mode):
+    def test_transformer_get_params(self, cls):
         bas = instantiate_atomic_basis(
-            cls[mode],
+            cls,
             n_basis_funcs=5,
             window_size=10,
-            **extra_decay_rates(cls[mode], 5),
+            **extra_decay_rates(cls, 5),
         )
         bas.set_input_shape(*([1] * bas._n_input_dimensionality))
         bas_transformer = bas.to_transformer()
@@ -1845,10 +1790,9 @@ class TestSharedMethods:
             ),
         ],
     )
-    @pytest.mark.parametrize("mode", ["eval", "conv"])
-    def test_input_shape_validity(self, x, inp_shape, expectation, cls, mode):
+    def test_input_shape_validity(self, x, inp_shape, expectation, cls):
         bas = instantiate_atomic_basis(
-            cls[mode], n_basis_funcs=5, window_size=8, **extra_decay_rates(cls[mode], 5)
+            cls, n_basis_funcs=5, window_size=8, **extra_decay_rates(cls, 5)
         )
         bas.set_input_shape(inp_shape)
         with expectation:
@@ -1868,26 +1812,22 @@ class TestSharedMethods:
             (np.ones((1, 1)), does_not_raise()),
         ],
     )
-    @pytest.mark.parametrize("mode", ["eval", "conv"])
-    def test_set_input_value_types(self, inp_shape, expectation, cls, mode):
+    def test_set_input_value_types(self, inp_shape, expectation, cls):
         bas = instantiate_atomic_basis(
-            cls[mode],
+            cls,
             window_size=10,
             n_basis_funcs=5,
-            **extra_decay_rates(cls[mode], 5),
+            **extra_decay_rates(cls, 5),
         )
         with expectation:
             bas.set_input_shape(inp_shape)
 
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 6})]
-    )
-    def test_iterate_over_component(self, mode, kwargs, cls):
+    def test_iterate_over_component(self, cls):
         basis_obj = instantiate_atomic_basis(
-            cls[mode],
+            cls,
             n_basis_funcs=5,
-            **kwargs,
-            **extra_decay_rates(cls[mode], 5),
+            window_size=6,
+            **extra_decay_rates(cls, 5),
         )
 
         out = tuple(basis_obj._iterate_over_components())
