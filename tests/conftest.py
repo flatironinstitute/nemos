@@ -10,6 +10,7 @@ Note:
 """
 
 import abc
+from functools import partial
 
 import jax
 import jax.numpy as jnp
@@ -47,6 +48,14 @@ class BasisFuncsTesting(abc.ABC):
     @abc.abstractmethod
     def cls(self):
         pass
+
+
+def custom_basis(n_basis_funcs=5, label=None, **kwargs):
+    funcs = [
+        partial(lambda x, y: jax.numpy.power(y, x), n)
+        for n in range(1, n_basis_funcs + 1)
+    ]
+    return CustomBasis(funcs, label=label)
 
 
 class CombinedBasis(BasisFuncsTesting):
@@ -100,6 +109,11 @@ class CombinedBasis(BasisFuncsTesting):
             b1 = basis.MSplineEval(**kwargs_mspline)
             b2 = basis.RaisedCosineLinearConv(**kwargs_raised_cosine)
             basis_obj = b1 * b2
+        elif basis_class == CustomBasis:
+            basis_obj = custom_basis(
+                n_basis,
+                **inspect_utils.trim_kwargs(basis_class, kwargs, class_specific_params),
+            )
         else:
             basis_obj = basis_class(
                 **inspect_utils.trim_kwargs(basis_class, kwargs, class_specific_params)
@@ -113,15 +127,19 @@ def list_all_basis_classes(filter_basis="all") -> list[type]:
     Return all the classes in nemos.basis which are a subclass of Basis,
     which should be all concrete classes except TransformerBasis.
     """
-    all_basis = [
-        class_obj
-        for _, class_obj in inspect_utils.get_non_abstract_classes(basis)
-        if issubclass(class_obj, Basis)
-    ] + [
-        bas
-        for _, bas in inspect_utils.get_non_abstract_classes(nmo.basis._basis)
-        if bas != TransformerBasis
-    ]
+    all_basis = (
+        [
+            class_obj
+            for _, class_obj in inspect_utils.get_non_abstract_classes(basis)
+            if issubclass(class_obj, Basis)
+        ]
+        + [
+            bas
+            for _, bas in inspect_utils.get_non_abstract_classes(nmo.basis._basis)
+            if bas != TransformerBasis
+        ]
+        + [CustomBasis]
+    )
     if filter_basis != "all":
         all_basis = [a for a in all_basis if filter_basis in a.__name__]
     return all_basis

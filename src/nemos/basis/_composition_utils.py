@@ -452,7 +452,7 @@ def multiply_basis_by_integer(bas: "BasisMixin", mul: int) -> "BasisMixin":
             "Basis multiplication error. Integer multiplicative factor must be positive, "
             f"{mul} provided instead."
         )
-    elif not all(b._has_default_label for _, b in generate_basis_label_pair(bas)):
+    elif not all(_has_default_label(b) for _, b in generate_basis_label_pair(bas)):
         raise ValueError(
             "Cannot multiply by an integer a basis including a user-defined labels "
             "(because then they won't be unique). Set labels after multiplication."
