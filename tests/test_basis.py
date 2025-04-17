@@ -831,6 +831,7 @@ class TestConvBasis:
 @pytest.mark.parametrize(
     "cls",
     [
+        CustomBasis,
         basis.RaisedCosineLogEval,
         basis.RaisedCosineLinearEval,
         basis.BSplineEval,
@@ -867,7 +868,9 @@ class TestEvalBasis:
         ],
     )
     def test_call_vmin_vmax(self, samples, vmin, vmax, expectation, cls):
-        if "OrthExp" in cls.__name__ and not hasattr(samples, "shape"):
+        if (
+            "OrthExp" in cls.__name__ and not hasattr(samples, "shape")
+        ) or cls == CustomBasis:
             return
         bas = instantiate_atomic_basis(
             cls,
@@ -895,6 +898,8 @@ class TestEvalBasis:
             bas.__dict__.pop("decay_rates", True)
             == bas2.__dict__.pop("decay_rates", True)
         )
+        f1, f2 = bas.__dict__.pop("_funcs", [True]), bas2.__dict__.pop("_funcs", [True])
+        assert all(fi == fj for fi, fj in zip(f1, f2))
         assert bas.__dict__ == bas2.__dict__
 
     @pytest.mark.parametrize(
@@ -909,6 +914,8 @@ class TestEvalBasis:
     def test_vmin_vmax_eval_on_grid_affects_x(
         self, bounds, samples, nan_idx, mn, mx, cls
     ):
+        if cls == CustomBasis:
+            return
         bas_no_range = instantiate_atomic_basis(
             cls,
             n_basis_funcs=5,
@@ -936,6 +943,8 @@ class TestEvalBasis:
     def test_vmin_vmax_eval_on_grid_no_effect_on_eval(
         self, vmin, vmax, samples, nan_idx, cls
     ):
+        if cls == CustomBasis:
+            return
         # MSPline integrates to 1 on domain so must be excluded from this check
         # Identity also returns the same array, so if the range changes so will
         # evaluate on grid output.
@@ -976,6 +985,8 @@ class TestEvalBasis:
         ],
     )
     def test_vmin_vmax_init(self, bounds, expectation, cls):
+        if cls == CustomBasis:
+            return
         with expectation:
             bas = instantiate_atomic_basis(
                 cls,
@@ -1013,6 +1024,8 @@ class TestEvalBasis:
     def test_compute_features_vmin_vmax(self, samples, vmin, vmax, expectation, cls):
         if "OrthExp" in cls.__name__ and not hasattr(samples, "shape"):
             return
+        if cls == CustomBasis:
+            return
         basis_obj = instantiate_atomic_basis(
             cls,
             n_basis_funcs=5,
@@ -1040,7 +1053,7 @@ class TestEvalBasis:
             **extra_decay_rates(cls, n_basis),
         )  # Only eval mode is relevant here
         with expectation:
-            bas.evaluate(samples)
+            bas.compute_features(samples)
 
     @pytest.mark.parametrize(
         "eval_input", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
@@ -1063,6 +1076,8 @@ class TestEvalBasis:
         ],
     )
     def test_vmin_vmax_range(self, vmin, vmax, samples, nan_idx, cls):
+        if cls == CustomBasis:
+            return
         bounds = None if vmin is None else (vmin, vmax)
         bas = instantiate_atomic_basis(
             cls,
@@ -1094,6 +1109,8 @@ class TestEvalBasis:
         ],
     )
     def test_vmin_vmax_setter(self, bounds, expectation, cls):
+        if cls == CustomBasis:
+            return
         bas = instantiate_atomic_basis(
             cls,
             n_basis_funcs=5,
@@ -1105,6 +1122,8 @@ class TestEvalBasis:
             assert bounds == bas.bounds if bounds else bas.bounds is None
 
     def test_conv_kwargs_error(self, cls):
+        if cls == CustomBasis:
+            return
         with pytest.raises(
             TypeError, match="got an unexpected keyword argument 'test'"
         ):
@@ -1115,6 +1134,8 @@ class TestEvalBasis:
             cls(**extra, test="hi", **extra_decay_rates(cls, 5))
 
     def test_set_window_size(self, cls):
+        if cls == CustomBasis:
+            return
         kwargs = (
             {"window_size": 10, "n_basis_funcs": 10}
             if cls != IdentityEval
@@ -1153,11 +1174,15 @@ class TestEvalBasis:
         ],
     )
     def test_init_window_size(self, ws, expectation, cls):
+        if cls == CustomBasis:
+            return
         extra = dict(n_basis_funcs=5) if cls != IdentityEval else {}
         with expectation:
             cls(**extra, window_size=ws, **extra_decay_rates(cls, 5))
 
     def test_set_bounds(self, cls):
+        if cls == CustomBasis:
+            return
         kwargs = (
             {"bounds": (1, 2), "n_basis_funcs": 10}
             if cls != IdentityEval

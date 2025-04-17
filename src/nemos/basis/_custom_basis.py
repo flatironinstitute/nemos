@@ -278,9 +278,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
             axis=-1,
         )
 
-    @set_input_shape_state(
-        states=("_input_shape_product", "_input_shape_", "_label", "_out_shape")
-    )
+    @set_input_shape_state(states=("_input_shape_product", "_input_shape_", "_label"))
     def __sklearn_clone__(self) -> "CustomBasis":
         """Clone the basis while preserving attributes related to input shapes.
 
