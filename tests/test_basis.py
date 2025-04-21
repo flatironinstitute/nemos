@@ -916,7 +916,9 @@ class TestEvalBasis:
         self, bounds, samples, nan_idx, mn, mx, cls
     ):
         if cls == CustomBasis:
-            pytest.skip(f"Skipping test_vmin_vmax_eval_on_grid_affects_x for {cls.__name__}")
+            pytest.skip(
+                f"Skipping test_vmin_vmax_eval_on_grid_affects_x for {cls.__name__}"
+            )
         bas_no_range = instantiate_atomic_basis(
             cls,
             n_basis_funcs=5,
@@ -945,7 +947,9 @@ class TestEvalBasis:
         self, vmin, vmax, samples, nan_idx, cls
     ):
         if cls == CustomBasis:
-            pytest.skip(f"Skipping test_vmin_vmax_eval_on_grid_no_effect_on_eval for {cls.__name__}")
+            pytest.skip(
+                f"Skipping test_vmin_vmax_eval_on_grid_no_effect_on_eval for {cls.__name__}"
+            )
         # MSPline integrates to 1 on domain so must be excluded from this check
         # Identity also returns the same array, so if the range changes so will
         # evaluate on grid output.
@@ -1023,7 +1027,9 @@ class TestEvalBasis:
         ],
     )
     def test_compute_features_vmin_vmax(self, samples, vmin, vmax, expectation, cls):
-        if ("OrthExp" in cls.__name__ and not hasattr(samples, "shape")) or cls == CustomBasis:
+        if (
+            "OrthExp" in cls.__name__ and not hasattr(samples, "shape")
+        ) or cls == CustomBasis:
             pytest.skip(f"Skipping test_compute_features_vmin_vmax for {cls.__name__}")
         basis_obj = instantiate_atomic_basis(
             cls,
@@ -1451,8 +1457,10 @@ class TestSharedMethods:
     @pytest.mark.parametrize("n_basis", [6])
     def test_call_input_shape(self, inp, expectation, n_basis, cls):
         if cls == CustomBasis:
-            pytest.skip(f"Skipping test_call_input_shape for {cls.__name__}.\n"
-                        f"The `evaluate` call of custom basis concatenate the vectorized outputs.")
+            pytest.skip(
+                f"Skipping test_call_input_shape for {cls.__name__}.\n"
+                f"The `evaluate` call of custom basis concatenate the vectorized outputs."
+            )
         bas = instantiate_atomic_basis(
             cls,
             n_basis_funcs=n_basis,
@@ -1588,7 +1596,9 @@ class TestSharedMethods:
     @pytest.mark.parametrize("n_input", [0, 1, 2])
     def test_evaluate_on_grid_input_number(self, n_input, cls):
         if cls == CustomBasis:
-            pytest.skip(f"Skipping test_evaluate_on_grid_input_number for {cls.__name__}")
+            pytest.skip(
+                f"Skipping test_evaluate_on_grid_input_number for {cls.__name__}"
+            )
         basis_obj = instantiate_atomic_basis(
             cls, n_basis_funcs=5, window_size=5, **extra_decay_rates(cls, 5)
         )
@@ -1612,7 +1622,9 @@ class TestSharedMethods:
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 10, 11, 100])
     def test_evaluate_on_grid_meshgrid_size(self, sample_size, cls):
         if "OrthExp" in cls.__name__ or cls == CustomBasis:
-            pytest.skip(f"Skipping test_evaluate_on_grid_meshgrid_size for {cls.__name__}")
+            pytest.skip(
+                f"Skipping test_evaluate_on_grid_meshgrid_size for {cls.__name__}"
+            )
         basis_obj = instantiate_atomic_basis(
             cls, n_basis_funcs=5, window_size=5, **extra_decay_rates(cls, 5)
         )
@@ -3056,7 +3068,9 @@ class TestAdditiveBasis(CombinedBasis):
         Test whether the resulting meshgrid size matches the sample size input.
         """
         if basis_a == CustomBasis or basis_b == CustomBasis:
-            pytest.skip(f"Skipping test_evaluate_on_grid_meshgrid_size for {basis_a.__name__}")
+            pytest.skip(
+                f"Skipping test_evaluate_on_grid_meshgrid_size for {basis_a.__name__}"
+            )
         basis_a_obj = self.instantiate_basis(
             n_basis_a, basis_a, basis_class_specific_params, window_size=10
         )
@@ -3088,7 +3102,9 @@ class TestAdditiveBasis(CombinedBasis):
         Test whether the number sample size output by evaluate_on_grid matches the sample size of the input.
         """
         if basis_a == CustomBasis or basis_b == CustomBasis:
-            pytest.skip(f"Skipping test_evaluate_on_grid_basis_size for {basis_a.__name__}")
+            pytest.skip(
+                f"Skipping test_evaluate_on_grid_basis_size for {basis_a.__name__}"
+            )
         basis_a_obj = self.instantiate_basis(
             n_basis_a, basis_a, basis_class_specific_params, window_size=10
         )
@@ -3120,7 +3136,9 @@ class TestAdditiveBasis(CombinedBasis):
         the sum of the number of input samples required from each of the basis objects.
         """
         if basis_a == CustomBasis or basis_b == CustomBasis:
-            pytest.skip(f"Skipping test_evaluate_on_grid_input_number for {basis_a.__name__}")
+            pytest.skip(
+                f"Skipping test_evaluate_on_grid_input_number for {basis_a.__name__}"
+            )
         basis_a_obj = self.instantiate_basis(
             n_basis_a, basis_a, basis_class_specific_params, window_size=10
         )
@@ -3318,7 +3336,9 @@ class TestAdditiveBasis(CombinedBasis):
             or basis_b == CustomBasis
         ):
             # evaluate returns identity
-            pytest.skip(f"Skipping test_call_nan for {basis_a.__name__} and {basis_b.__name__}")
+            pytest.skip(
+                f"Skipping test_call_nan for {basis_a.__name__} and {basis_b.__name__}"
+            )
         basis_a_obj = self.instantiate_basis(
             n_basis_a, basis_a, basis_class_specific_params, window_size=9
         )
@@ -3446,7 +3466,9 @@ class TestAdditiveBasis(CombinedBasis):
         basis_class_specific_params,
     ):
         if basis_a == CustomBasis or basis_b == CustomBasis:
-            pytest.skip(f"Skipping test_call_sample_range for {basis_a.__name__} and {basis_b.__name__}")
+            pytest.skip(
+                f"Skipping test_call_sample_range for {basis_a.__name__} and {basis_b.__name__}"
+            )
         if expectation == "check":
             if (
                 basis_a == basis.OrthExponentialBasis
@@ -3508,7 +3530,9 @@ class TestAdditiveBasis(CombinedBasis):
         self, n_basis_a, n_basis_b, basis_a, basis_b, basis_class_specific_params
     ):
         if basis_a == CustomBasis or basis_b == CustomBasis:
-            pytest.skip(f"Skipping test_transform_fails for {basis_a.__name__} and {basis_b.__name__}")
+            pytest.skip(
+                f"Skipping test_transform_fails for {basis_a.__name__} and {basis_b.__name__}"
+            )
         basis_a_obj = self.instantiate_basis(
             n_basis_a, basis_a, basis_class_specific_params, window_size=10
         )
@@ -3765,7 +3789,9 @@ class TestAdditiveBasis(CombinedBasis):
         if isinstance(basis_a, (HistoryConv, IdentityEval, CustomBasis)) or isinstance(
             basis_b, (HistoryConv, IdentityEval, CustomBasis)
         ):
-            pytest.skip(f"Skipping test_call_sample_range for {basis_a.__name__} and {basis_b.__name__}")
+            pytest.skip(
+                f"Skipping test_call_sample_range for {basis_a.__name__} and {basis_b.__name__}"
+            )
         # test attributes are not related
         basis_a.n_basis_funcs = 10
         basis_b.n_basis_funcs = 10
@@ -4479,9 +4505,13 @@ class TestMultiplicativeBasis(CombinedBasis):
             basis_a == basis.OrthExponentialBasis
             or basis_b == basis.OrthExponentialBasis
         ):
-            pytest.skip(f"Skipping test_call_sample_range for {basis_a.__name__} and {basis_b.__name__}")
+            pytest.skip(
+                f"Skipping test_call_sample_range for {basis_a.__name__} and {basis_b.__name__}"
+            )
         if basis_a is HistoryConv or basis_b is HistoryConv:
-            pytest.skip(f"Skipping test_call_sample_range for {basis_a.__name__} and {basis_b.__name__}")
+            pytest.skip(
+                f"Skipping test_call_sample_range for {basis_a.__name__} and {basis_b.__name__}"
+            )
         basis_a_obj = self.instantiate_basis(
             n_basis_a, basis_a, basis_class_specific_params, window_size=window_size
         )
