@@ -87,7 +87,7 @@ def apply_f_vectorized(
     """Iterate over the output dim and apply the function to all input combination."""
 
     # check if no dimension needs vectorization
-    if all(x.ndim - 1 == ndim_input for x in xi):
+    if all(x.ndim == ndim_input for x in xi):
         return func(*xi, **kwargs)[..., np.newaxis]
 
     # compute the flat shape of the dimension that must be vectorized.
@@ -102,7 +102,7 @@ def apply_f_vectorized(
     xi_reshape = [
         (
             x[..., np.newaxis]
-            if x.ndim - 1 == ndim_input
+            if x.ndim == ndim_input
             else x.reshape((*x.shape[:ndim_input], -1))
         )
         for x in xi
