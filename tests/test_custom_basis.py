@@ -2,6 +2,7 @@ from contextlib import nullcontext as does_not_raise
 
 import numpy as np
 import pytest
+from conftest import basis_collapse_all_non_vec_axis, custom_basis
 from numpy.typing import NDArray
 
 from nemos.basis._custom_basis import apply_f_vectorized
@@ -106,3 +107,52 @@ def test_vec_function_kwargs(vec_func_kwargs, x):
     vec_f, kwargs = vec_func_kwargs
     out = vec_f(x, **kwargs)
     assert np.all(out == x + kwargs["add"])
+
+
+@pytest.mark.parametrize("n_basis_funcs", [4])
+@pytest.mark.parametrize(
+    "input_dim, expectation",
+    [
+        (1, does_not_raise()),
+        (2, pytest.raises(ValueError, match="Each input must have at least")),
+    ],
+)
+def test_input_dimension(n_basis_funcs, input_dim, expectation):
+    bas = custom_basis(n_basis_funcs=n_basis_funcs, label=None, ndim_input=input_dim)
+    with expectation:
+        shape = (10, *(1 for _ in range(1 - 1)))
+        bas.compute_features(*shape)
+
+
+@pytest.mark.parametrize("n_basis_funcs", [4, 5])
+def test_custom_basis_feature_1d_shape(n_basis_funcs):
+    bas = custom_basis(n_basis_funcs=n_basis_funcs, label=None)
+    out = bas.compute_features(
+        np.random.randn(
+            10,
+        )
+    )
+    assert out.shape == (10, n_basis_funcs)
+    out = bas.compute_features(np.random.randn(10, 2, 3))
+    assert out.shape == (10, 6 * n_basis_funcs)
+
+
+@pytest.mark.parametrize("n_basis_funcs", [4, 5])
+def test_custom_basis_feature_2d_shape(n_basis_funcs):
+    bas = custom_basis(n_basis_funcs=n_basis_funcs, label=None, ndim_input=1)
+    out = bas.compute_features(
+        np.random.randn(
+            10,
+        )
+    )
+    assert out.shape == (10, n_basis_funcs)
+    out = bas.compute_features(np.random.randn(10, 2, 3, 2))
+    assert out.shape == (10, 12 * n_basis_funcs)
+
+    # define a basis that behaves differently on vec
+    bas = basis_collapse_all_non_vec_axis(n_basis_funcs, ndim_input=1)
+    # vec second dim
+    out = bas.compute_features(np.random.randn(10, 2))
+    assert out.shape == (10, n_basis_funcs * 2)
+    out = bas.compute_features(np.random.randn(10, 2, 2))
+    assert out.shape == (10, n_basis_funcs * 4)

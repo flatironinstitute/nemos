@@ -55,7 +55,14 @@ def custom_basis(n_basis_funcs=5, label=None, **kwargs):
         partial(lambda x, y: jax.numpy.power(y, x), n)
         for n in range(1, n_basis_funcs + 1)
     ]
-    return CustomBasis(funcs, label=label)
+    ndim_input = kwargs.get("ndim_input", 1)
+    return CustomBasis(funcs, label=label, ndim_input=ndim_input)
+
+
+def basis_collapse_all_non_vec_axis(n_basis_funcs=5, label=None, **kwargs):
+    funcs = [lambda x: x.reshape(x.shape[0], -1)[:, 0] for _ in range(n_basis_funcs)]
+    ndim_input = kwargs.get("ndim_input", 1)
+    return CustomBasis(funcs, label=label, ndim_input=ndim_input)
 
 
 class CombinedBasis(BasisFuncsTesting):

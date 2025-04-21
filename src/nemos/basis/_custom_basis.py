@@ -261,6 +261,12 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
 
     def compute_features(self, *xi):
         xi = _check_transform_input(self, *xi)
+        if any(x.ndim < self.ndim_input for x in xi):
+            invalid_dims = [x.ndim for x in xi if x.ndim < self.ndim_input]
+            raise ValueError(
+                f"Each input must have at least {self.ndim_input} dimensions, as required by this basis. "
+                f"However, some inputs have fewer dimensions: {invalid_dims}."
+            )
         self.set_input_shape(*xi)
         out = self.evaluate(*xi)
         # first dim is samples, the last the concatenated features
