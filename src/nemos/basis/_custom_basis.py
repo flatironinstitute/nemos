@@ -8,7 +8,7 @@ import itertools
 import re
 from copy import deepcopy
 from numbers import Number
-from typing import Any, Callable, Iterable, List, Optional, Tuple
+from typing import Callable, Iterable, List, Optional, Tuple
 
 import numpy as np
 from numpy.typing import NDArray
@@ -178,8 +178,8 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         self,
         funcs: List[Callable[[NDArray], NDArray]] | Callable[[NDArray], NDArray],
         ndim_input: int = 1,
-        output_shape: Tuple[int, ...] = (),
-        basis_kwargs: Optional[Any] = None,
+        output_shape: Optional[Tuple[int, ...] | int] = None,
+        basis_kwargs: Optional[dict] = None,
         pynapple_support: bool = True,
         label: Optional[str] = None,
     ):
@@ -187,27 +187,14 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         self.funcs = funcs
         self.ndim_input = int(ndim_input)
 
-        output_shape = tuple(output_shape)
+        if output_shape is None:
+            output_shape = ()
 
         self.output_shape = output_shape
 
         # nomenclature is confusing, should rename this to _n_args_compute_features
         self._n_input_dimensionality = infer_input_dimensionality(self)
         self._n_basis_funcs = len(self.funcs)
-
-        # store args and kwargs
-        basis_kwargs = basis_kwargs if basis_kwargs is not None else {}
-        sig = inspect.signature(apply_f_vectorized)
-        invalid_kwargs = {
-            p.name
-            for p in sig.parameters.values()
-            if p.kind is inspect.Parameter.KEYWORD_ONLY
-        }
-        if invalid_kwargs.intersection(basis_kwargs.keys()):
-            raise ValueError(
-                f"Invalid kwargs name in ``basis_kwargs``: {invalid_kwargs.intersection(basis_kwargs.keys())}. "
-                "Change parameter name in your function definition."
-            )
 
         self.basis_kwargs = basis_kwargs
         super().__init__(label=label)
@@ -242,22 +229,53 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
     def n_basis_funcs(self) -> int:
         return self._n_basis_funcs
 
-    def set_output_shape(self, output_shape: Tuple[int] | int):
-        if isinstance(output_shape, tuple):
-            _check_valid_shape_tuple(output_shape)
-            self.output_shape = output_shape
+    @property
+    def output_shape(self) -> Tuple[int, ...]:
+        return self._output_shape
+
+    @output_shape.setter
+    def output_shape(self, output_shape: Tuple[int] | int):
         if isinstance(output_shape, int):
             if output_shape == 1:
-                self.output_shape = ()
-            if output_shape > 1:
-                self.output_shape = (output_shape,)
+                self._output_shape = ()
+            elif output_shape > 1:
+                self._output_shape = (output_shape,)
             else:
                 raise ValueError(
                     f"Output shape must be strictly positive (> 0), {output_shape} provided instead."
                 )
-        raise TypeError(
-            "`output_shape` must be a tuple of positive integers or a positive integer.}"
-        )
+        else:
+            try:
+                output_shape = tuple(output_shape)
+            except TypeError:
+                raise TypeError(
+                    "`output_shape` must be an iterable of positive integers or a positive integer."
+                )
+            _check_valid_shape_tuple(output_shape)
+            self._output_shape = output_shape
+
+    @property
+    def basis_kwargs(self) -> dict:
+        return self._basis_kwargs
+
+    @basis_kwargs.setter
+    def basis_kwargs(self, basis_kwargs: dict):
+        # store args and kwargs
+        basis_kwargs = basis_kwargs if basis_kwargs is not None else {}
+        if not isinstance(basis_kwargs, dict):
+            raise ValueError("`basis_kwargs` must be a dictionary.")
+        sig = inspect.signature(apply_f_vectorized)
+        invalid_kwargs = {
+            p.name
+            for p in sig.parameters.values()
+            if p.kind is inspect.Parameter.KEYWORD_ONLY
+        }
+        if invalid_kwargs.intersection(basis_kwargs.keys()):
+            raise ValueError(
+                f"Invalid kwargs name in ``basis_kwargs``: {invalid_kwargs.intersection(basis_kwargs.keys())}. "
+                "Change parameter name in your function definition."
+            )
+        self._basis_kwargs = basis_kwargs
 
     def compute_features(self, *xi):
         xi = _check_transform_input(self, *xi)

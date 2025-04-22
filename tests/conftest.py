@@ -56,13 +56,23 @@ def custom_basis(n_basis_funcs=5, label=None, **kwargs):
         for n in range(1, n_basis_funcs + 1)
     ]
     ndim_input = kwargs.get("ndim_input", 1)
-    return CustomBasis(funcs, label=label, ndim_input=ndim_input)
+    out_shape = kwargs.get("output_shape", None)
+    return CustomBasis(
+        funcs, label=label, ndim_input=ndim_input, output_shape=out_shape
+    )
 
 
 def basis_collapse_all_non_vec_axis(n_basis_funcs=5, label=None, **kwargs):
     funcs = [lambda x: x.reshape(x.shape[0], -1)[:, 0] for _ in range(n_basis_funcs)]
     ndim_input = kwargs.get("ndim_input", 1)
     return CustomBasis(funcs, label=label, ndim_input=ndim_input)
+
+
+def basis_with_add_kwargs(label=None, basis_kwargs=None):
+    def func(x, add=0):
+        return x + add
+
+    return CustomBasis([func], label=label, basis_kwargs=basis_kwargs)
 
 
 class CombinedBasis(BasisFuncsTesting):

@@ -2,7 +2,11 @@ from contextlib import nullcontext as does_not_raise
 
 import numpy as np
 import pytest
-from conftest import basis_collapse_all_non_vec_axis, custom_basis
+from conftest import (
+    basis_collapse_all_non_vec_axis,
+    basis_with_add_kwargs,
+    custom_basis,
+)
 from numpy.typing import NDArray
 
 from nemos.basis._custom_basis import apply_f_vectorized
@@ -156,3 +160,62 @@ def test_custom_basis_feature_2d_shape(n_basis_funcs):
     assert out.shape == (10, n_basis_funcs * 2)
     out = bas.compute_features(np.random.randn(10, 2, 2))
     assert out.shape == (10, n_basis_funcs * 4)
+
+
+@pytest.mark.parametrize(
+    "out_shape, expectation",
+    [
+        (1, does_not_raise()),
+        (-1, pytest.raises(ValueError, match="Output shape must be strictly")),
+        (2, does_not_raise()),
+        ((1, 2), does_not_raise()),
+        (0.5, pytest.raises(TypeError, match="`output_shape` must be an iterable of")),
+        (
+            ("a", 2),
+            pytest.raises(
+                ValueError, match="The tuple provided contains non integer values"
+            ),
+        ),
+    ],
+)
+def test_output_shape_setter(out_shape, expectation):
+    with expectation:
+        custom_basis(n_basis_funcs=10, output_shape=out_shape, ndim_input=1)
+
+
+def test_output_shape_reset():
+    bas = custom_basis(n_basis_funcs=3, output_shape=(2, 3, 4), ndim_input=1)
+    assert bas.output_shape == (2, 3, 4)
+    bas.compute_features(np.linspace(0, 1, 10))
+    # the output shape is set to empty tuple because each basis function
+    # returns a flat array
+    assert bas.output_shape == ()
+
+
+@pytest.mark.parametrize("kwargs", [dict(add=0), dict(add=1), dict(), None])
+def test_kwargs_apply(kwargs):
+    bas = basis_with_add_kwargs(basis_kwargs=kwargs)
+    if kwargs:
+        assert np.all(
+            np.full((10, 1), kwargs["add"]) == bas.compute_features(np.zeros(10))
+        )
+    else:
+        assert bas.basis_kwargs == {}
+
+
+@pytest.mark.parametrize(
+    "kwargs, expectation",
+    [
+        (dict(add=0), does_not_raise()),
+        (1, pytest.raises(ValueError, match="`basis_kwargs` must be a dictionary")),
+        (dict(), does_not_raise()),
+        (None, does_not_raise()),
+        (dict(ndim_input=1), pytest.raises(ValueError, match="Invalid kwargs name")),
+    ],
+)
+def test_basis_kwargs_set(kwargs, expectation):
+    with expectation:
+        basis_with_add_kwargs(basis_kwargs=kwargs)
+    bas = basis_with_add_kwargs(basis_kwargs=None)
+    with expectation:
+        bas.basis_kwargs = kwargs
