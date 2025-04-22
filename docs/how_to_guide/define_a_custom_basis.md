@@ -13,7 +13,7 @@ kernelspec:
 
 # How to Define A Custom Basis Class
 
-If you want to design features that are not covered by our collection of basis functions, you can create a custom basis class using [`nemos.basis.CustomBasis`]. To do so, simply provide a list of functions when initializing the `CustomBasis` object.
+If you want to design features that are not covered by our collection of basis functions, you can create a custom basis class using [`CustomBasis`](nemos.basis._custom_basis.CustomBasis). To do so, simply provide a list of functions when initializing the `CustomBasis` object.
 
 Below, we define a **parametric family** of functions—Laguerre polynomials—and fix their parameters using [`functools.partial`](https://docs.python.org/3/library/functools.html#functools.partial). (See the admonition below for why we avoid using `lambda` functions in this context.)
 
@@ -135,8 +135,8 @@ basis_2d = nmo.basis.RaisedCosineLinearEval(8)**2
 _, _, masks = basis_2d.evaluate_on_grid(50, 50)
 funcs = [partial(image_dot_product, mask=m) for m in masks.T]
 
-# specify the the expected for each sample is 2D
-bas_img = nmo.basis.CustomBasis(funcs=funcs, ndim_input=2, label="Image-dot")
+# specify the the expected 3D input, (n_samples, pixel, pixel)
+bas_img = nmo.basis.CustomBasis(funcs=funcs, ndim_input=3, label="Image-dot")
 
 print(bas_img.compute_features(imgs).shape)
 ```

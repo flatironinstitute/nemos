@@ -11,7 +11,10 @@ from numbers import Number
 from typing import Callable, Iterable, List, Optional, Tuple
 
 import numpy as np
-from numpy.typing import NDArray
+from numpy.typing import ArrayLike, NDArray
+from pynapple import Tsd, TsdFrame, TsdTensor
+
+from nemos.typing import FeatureMatrix
 
 from ..base_class import Base
 from ..type_casting import support_pynapple
@@ -201,10 +204,12 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
 
     @property
     def pynapple_support(self) -> bool:
+        """Support pynapple Tsd/TsdFrame/TsdTensor as inputs."""
         return self._pynapple_support
 
     @property
-    def funcs(self) -> "FunctionList":
+    def funcs(self):
+        """User defined list of basis functions."""
         return self._funcs
 
     @funcs.setter
@@ -227,10 +232,12 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
 
     @property
     def n_basis_funcs(self) -> int:
+        """The number of basis."""
         return self._n_basis_funcs
 
     @property
     def output_shape(self) -> Tuple[int, ...]:
+        """The shape of the output excluding the number of samples and the number of basis functions."""
         return self._output_shape
 
     @output_shape.setter
@@ -256,6 +263,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
 
     @property
     def basis_kwargs(self) -> dict:
+        """Additional keyword arguments to pass to the basis functions."""
         return self._basis_kwargs
 
     @basis_kwargs.setter
@@ -277,7 +285,35 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
             )
         self._basis_kwargs = basis_kwargs
 
-    def compute_features(self, *xi):
+    def compute_features(
+        self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor
+    ) -> FeatureMatrix:
+        """
+        Compute the design matrix (features) for the input data.
+
+        This method applies each function in ``self.funcs`` to the input arrays ``*xi``.
+        These functions are called with the arguments ``(*xi, **self.basis_kwargs)`` and must return
+        an array of shape ``(n_samples, ...)``, where the first dimension corresponds to the number of samples,
+        and the output must have at least one dimension (i.e., ``ndim >= 1``).
+
+        The outputs of all function calls are reshaped into 2D arrays with shape ``(n_samples, n_output)``, and
+        then concatenated along the feature axis (second dimension) to form the full design matrix.
+
+        If the input arrays have more dimensions than ``self.ndim_input``, the function calls are automatically
+        vectorized over the additional axes. This is done using Python loops, which may be slow. For better
+        performance, users are encouraged to provide fully vectorized functions.
+
+        Parameters
+        ----------
+        *xi :
+            Input arrays. Each must have at least ``self.ndim_input`` dimensions. If extra dimensions are present,
+            they are interpreted as batch or window dimensions over which the basis functions are applied.
+
+        Returns
+        -------
+        :
+            The resulting design matrix, with one row per sample and one column per output feature.
+        """
         xi = _check_transform_input(self, *xi)
         if any(x.ndim < self.ndim_input for x in xi):
             invalid_dims = [x.ndim for x in xi if x.ndim < self.ndim_input]
@@ -286,11 +322,11 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
                 f"However, some inputs have fewer dimensions: {invalid_dims}."
             )
         self.set_input_shape(*xi)
-        out = self.evaluate(*xi)
+        design_matrix = self.evaluate(*xi)
         # first dim is samples, the last the concatenated features
-        self.output_shape = out.shape[1:-1]
+        self.output_shape = design_matrix.shape[1:-1]
         # return a model design
-        return out.reshape((xi[0].shape[0], -1))
+        return design_matrix.reshape((xi[0].shape[0], -1))
 
     def evaluate(self, *xi: NDArray):
         """Evaluate funcs in a vectorized form."""
@@ -320,6 +356,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
 
     @property
     def n_output_features(self):
+        """The number of output features, i.e. the number of columns of the design matrix."""
         if self.input_shape is None:
             return None
         # Computation for number of output features:

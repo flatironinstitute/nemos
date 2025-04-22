@@ -96,6 +96,8 @@ autodoc_type_aliases = {
     "NDArray": "NDArray",
     "TsdFrame": "pynapple.TsdFrame",
     "JaxArray": "JaxArray",
+    "numpy.typing.ArrayLike": "ArrayLike",
+    "numpy.typing.NDArray": "NDArray",
 }
 autodoc_typehints_format = "short"
 
