@@ -46,7 +46,7 @@ def simplify_func_repr(string: str):
         A simplified version of the string.
 
     """
-    pattern = r"<function (<\w+>|\w+) at 0x[0-9a-fA-F]+>"
+    pattern = r"<function (.+) at 0x[0-9a-fA-F]+>"
     new_string = deepcopy(string)
     for match in re.finditer(pattern, string):
         func_name = match.group(1)
@@ -78,7 +78,7 @@ class FunctionList:
         unwrap = [self._unwrap(f) for f in self.funcs_]
         if len(unwrap) <= 2:
             return simplify_func_repr(repr(unwrap))
-        return f"{simplify_func_repr(repr(unwrap[0]))}, ..., {simplify_func_repr(repr(unwrap[-1]))}"
+        return f"[{simplify_func_repr(repr(unwrap[0]))}, ..., {simplify_func_repr(repr(unwrap[-1]))}]"
 
 
 def apply_f_vectorized(

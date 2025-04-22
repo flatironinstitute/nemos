@@ -1,6 +1,7 @@
 from contextlib import nullcontext as does_not_raise
 
 import numpy as np
+import pynapple as nap
 import pytest
 from conftest import (
     basis_collapse_all_non_vec_axis,
@@ -219,3 +220,50 @@ def test_basis_kwargs_set(kwargs, expectation):
     bas = basis_with_add_kwargs(basis_kwargs=None)
     with expectation:
         bas.basis_kwargs = kwargs
+
+
+def test_pynapple_support():
+    bas = custom_basis(5, pynapple_support=True)
+    x = nap.Tsd(np.arange(10), np.linspace(0, 1, 10))
+    assert isinstance(bas.compute_features(x), nap.TsdFrame)
+    bas = custom_basis(5, pynapple_support=False)
+    with pytest.raises(TypeError):
+        bas.compute_features(x)
+
+
+@pytest.mark.parametrize("ps", [True, False, None, 1, 0, -1, np.array([1, 2])])
+def test_pynapple_support_type(ps):
+    """Test that any value that can be parsed to bool is valid."""
+    if isinstance(ps, np.ndarray):
+        expect = pytest.raises(ValueError, match="The truth")
+    else:
+        expect = does_not_raise()
+    with expect:
+        b = custom_basis(5, pynapple_support=ps)
+        assert isinstance(b.pynapple_support, bool)
+
+
+@pytest.mark.parametrize(
+    "inp_dim, vec_shape, expected_num", [(1, [], 5), (2, [], 10), (2, [3], 30)]
+)
+def test_n_output_features_match(inp_dim, expected_num, vec_shape):
+    shape = [10] + [2] * (inp_dim - 1) + vec_shape
+    x = np.random.randn(*shape)
+    bas = custom_basis(5, ndim_input=inp_dim)
+    out = bas.compute_features(x)
+    assert out.shape[1] == bas.n_output_features == expected_num
+
+
+@pytest.mark.parametrize("ps", [True, False])
+def test_basis_repr(ps):
+    """Check that repr strips the expectation"""
+    bas = custom_basis(5, pynapple_support=ps)
+    assert (
+        repr(bas)
+        == f"CustomBasis(\n    funcs=[partial(custom_basis.<locals>.<listcomp>.<lambda>, 1), ..., partial(custom_basis.<locals>.<listcomp>.<lambda>, 5)],\n    ndim_input=1,\n    pynapple_support={ps}\n)"
+    )
+    bas = custom_basis(1, pynapple_support=ps)
+    assert (
+        repr(bas)
+        == f"CustomBasis(\n    funcs=[partial(custom_basis.<locals>.<listcomp>.<lambda>, 1)],\n    ndim_input=1,\n    pynapple_support={ps}\n)"
+    )
