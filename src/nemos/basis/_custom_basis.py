@@ -379,7 +379,11 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
             shape[:axis]
             + [
                 *bas.output_shape,
-                *(i for shape in bas._input_shape_ for i in shape[bas.ndim_input :]),
+                *(
+                    i
+                    for shape in bas._input_shape_
+                    for i in shape[bas.ndim_input - 1 :]
+                ),
                 len(bas.funcs),
             ]
             + shape[axis + 1 :]

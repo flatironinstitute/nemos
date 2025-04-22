@@ -267,3 +267,11 @@ def test_basis_repr(ps):
         repr(bas)
         == f"CustomBasis(\n    funcs=[partial(custom_basis.<locals>.<listcomp>.<lambda>, 1)],\n    ndim_input=1,\n    pynapple_support={ps}\n)"
     )
+
+
+@pytest.mark.parametrize("input_shape", [(1,), (1, 2), (1, 2, 3), ()])
+def test_split_by_features_shape(input_shape):
+    bas = custom_basis(4)
+    out = bas.compute_features(np.random.randn(10, *input_shape))
+    split = bas.split_by_feature(out, axis=1)["CustomBasis"]
+    assert split.shape == (10, *input_shape, 4)
