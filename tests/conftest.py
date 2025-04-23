@@ -50,11 +50,12 @@ class BasisFuncsTesting(abc.ABC):
         pass
 
 
+def power_func(n, x):
+    return jnp.power(x, n)
+
+
 def custom_basis(n_basis_funcs=5, label=None, **kwargs):
-    funcs = [
-        partial(lambda x, y: jax.numpy.power(y, x), n)
-        for n in range(1, n_basis_funcs + 1)
-    ]
+    funcs = [partial(power_func, n) for n in range(1, n_basis_funcs + 1)]
     ndim_input = kwargs.get("ndim_input", 1)
     out_shape = kwargs.get("output_shape", None)
     pynapple_support = kwargs.get("pynapple_support", True)
@@ -65,6 +66,15 @@ def custom_basis(n_basis_funcs=5, label=None, **kwargs):
         output_shape=out_shape,
         pynapple_support=pynapple_support,
     )
+
+
+def power_add(n, x, y):
+    return x**n + y**n
+
+
+def custom_basis_2d(n_basis_funcs=5, label=None):
+    funcs = [partial(power_add, n) for n in range(1, n_basis_funcs + 1)]
+    return CustomBasis(funcs, label=label)
 
 
 def basis_collapse_all_non_vec_axis(n_basis_funcs=5, label=None, **kwargs):

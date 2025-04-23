@@ -40,6 +40,21 @@ __PUBLIC_BASES__ = [
 ]
 
 
+def add_docstring(method_name, cls):
+    """Prepend super-class docstrings."""
+    attr = getattr(cls, method_name, None)
+    if attr is None:
+        raise AttributeError(f"{cls.__name__} has no attribute {method_name}!")
+    doc = attr.__doc__
+
+    # Decorator to add the docstring
+    def wrapper(func):
+        func.__doc__ = "\n".join([doc, func.__doc__])  # Combine docstrings
+        return func
+
+    return wrapper
+
+
 def _iterate_over_components(basis: "BasisMixin"):
     components = (
         basis._iterate_over_components()
@@ -487,7 +502,7 @@ def raise_basis_to_power(bas: "BasisMixin", exponent: int) -> "BasisMixin":
 
     if exponent <= 0:
         raise ValueError("Basis exponent should be a non-negative integer!")
-    elif not all(b._has_default_label for _, b in generate_basis_label_pair(bas)):
+    elif not all(_has_default_label(b) for _, b in generate_basis_label_pair(bas)):
         raise ValueError(
             "Cannot calculate the power of a basis including a user-defined labels "
             "(because then they won't be unique). Set labels after exponentiation."

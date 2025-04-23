@@ -22,26 +22,12 @@ from ._check_basis import (
     _check_zero_samples,
 )
 from ._composition_utils import (
+    add_docstring,
     is_basis_like,
     multiply_basis_by_integer,
     promote_to_transformer,
     raise_basis_to_power,
 )
-
-
-def add_docstring(method_name, cls):
-    """Prepend super-class docstrings."""
-    attr = getattr(cls, method_name, None)
-    if attr is None:
-        raise AttributeError(f"{cls.__name__} has no attribute {method_name}!")
-    doc = attr.__doc__
-
-    # Decorator to add the docstring
-    def wrapper(func):
-        func.__doc__ = "\n".join([doc, func.__doc__])  # Combine docstrings
-        return func
-
-    return wrapper
 
 
 def check_transform_input(func: Callable) -> Callable:

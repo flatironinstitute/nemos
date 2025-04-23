@@ -24,6 +24,7 @@ from ._basis_mixin import BasisMixin, BasisTransformerMixin, set_input_shape_sta
 from ._check_basis import _check_transform_input
 from ._composition_utils import (
     _check_valid_shape_tuple,
+    add_docstring,
     count_positional_and_var_args,
     infer_input_dimensionality,
     is_basis_like,
@@ -289,7 +290,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor
     ) -> FeatureMatrix:
         """
-        Compute the design matrix (features) for the input data.
+        Apply the basis transformation to the input data.
 
         This method applies each function in ``self.funcs`` to the input arrays ``*xi``.
         These functions are called with the arguments ``(*xi, **self.basis_kwargs)`` and must return
@@ -313,6 +314,19 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         -------
         :
             The resulting design matrix, with one row per sample and one column per output feature.
+
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> from functools import partial
+        >>> def power_func(n, x):
+        ...     return x ** n
+        >>> bas = nmo.basis.CustomBasis([partial(power_func, 1), partial(power_func, 2)])
+        >>> bas.compute_features(np.arange(1, 4))
+        array([[1., 1.],
+               [2., 4.],
+               [3., 9.]])
         """
         xi = _check_transform_input(self, *xi)
         if any(x.ndim < self.ndim_input for x in xi):
@@ -329,7 +343,45 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         return design_matrix.reshape((xi[0].shape[0], -1))
 
     def evaluate(self, *xi: NDArray):
-        """Evaluate funcs in a vectorized form."""
+        """
+        Evaluate the basis functions in a vectorized form at the given sample points.
+
+        Parameters
+        ----------
+        *xi :
+            The samples at which the basis functions are evaluated. Each element in `xi` corresponds
+            to an input dimension, and must be broadcastable to a common shape along the sample axis.
+            The shape of each input array should be (n_samples, ...) where the first axis indexes samples.
+
+        Returns
+        -------
+        basis_funcs :
+            The basis functions evaluated at the given input points, with shape
+            (n_samples, n_vect_input * n_basis_funcs), n_vect_input is the number of inputs that are
+            vectorized.
+
+        Notes
+        -----
+        This method supports both NumPy and pynapple inputs. If pynapple support is enabled,
+        the inputs and outputs are automatically cast using the configured backend (e.g., JAX or NumPy).
+        Evaluation is performed by applying a vectorized function over each basis function and
+        concatenating the results along the last axis.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import CustomBasis
+        >>> basis = CustomBasis(funcs=[lambda x: x, lambda x: x**2])
+        >>> x = np.linspace(0, 1, 10)
+        >>> out = basis.evaluate(x)
+        >>> out.shape
+        (10, 2)
+        >>> # vectorize over 3 inputs
+        >>> out = basis.evaluate(np.random.randn(10, 3))
+        >>> out.shape
+        (10, 6)
+
+        """
         if self._pynapple_support:
             apply_func = support_pynapple("jax")(apply_f_vectorized)
         else:
@@ -364,9 +416,16 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         #    - discard axis corresponding to input dimensionality
         #    - multiply the shape of the remaining axis
         # 2. multiply by the number of basis and the shape of the output
-        vec_inp = np.prod(
-            [shape[self.ndim_input - 1 :] for shape in self._input_shape_]
+
+        # Note that self._input_shape_ could be:
+        #   1. A list of tuple, if the funcs require > 1 input.
+        #   2. A single tuple, if the funcs require 1 input.
+        ishape = (
+            [self._input_shape_]
+            if not isinstance(self._input_shape_, list)
+            else self._input_shape_
         )
+        vec_inp = np.prod([p for shape in ishape for p in shape[self.ndim_input - 1 :]])
         return int(vec_inp * np.prod(self.output_shape) * len(self.funcs))
 
     @staticmethod
@@ -419,3 +478,102 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
 
     def __len__(self) -> int:
         return 1
+
+    @add_docstring("split_by_feature", BasisMixin)
+    def split_by_feature(
+        self,
+        x: NDArray,
+        axis: int = 1,
+    ):
+        """
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> from functools import partial
+        >>> def power_func(n, x):
+        ...     return x ** n
+        >>> bas = nmo.basis.CustomBasis([partial(power_func, 1), partial(power_func, 2)])
+        >>> # define a 3 x 2 input
+        >>> inp = np.arange(1, 7).reshape(3, 2)
+        >>> X = bas.compute_features(inp)
+        >>> X.shape  # (3, 2 * 2)
+        (3, 4)
+        >>> bas.split_by_feature(X)["CustomBasis"]  # spilt to (3, 2, 2)
+        array([[[ 1.,  2.],
+                [ 1.,  4.]],
+        ...
+               [[ 3.,  4.],
+                [ 9., 16.]],
+        ...
+               [[ 5.,  6.],
+                [25., 36.]]])
+        """
+        return super().split_by_feature(x, axis=axis)
+
+    def set_input_shape(self, *xi: "int | tuple[int, ...] | NDArray"):
+        """
+        Set the expected input shape for the basis object.
+
+        This method sets the input shape for each input required by the funcs in the CustomBasis.
+        One ``xi`` must be provided for each input, specified as an integer,
+        a tuple of integers, or an array. The method calculates and stores the total number of output features
+        based on the number of basis functions, the number of input per function, and the provided input shapes.
+
+        Parameters
+        ----------
+        *xi :
+            The input shape specifications. For every k,``xi[k]`` can be:
+            - An integer: Represents the dimensionality of the input. A value of ``1`` is treated as scalar input.
+            - A tuple: Represents the exact input shape excluding the first axis (sample axis).
+              All elements must be integers.
+            - An array: The shape is extracted, excluding the first axis (assumed to be the sample axis).
+
+        Raises
+        ------
+        ValueError
+            If a tuple is provided, and it contains non-integer elements.
+            If not enough inputs are provided.
+
+        Returns
+        -------
+        self :
+            Returns the instance itself to allow method chaining.
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> from functools import partial
+        >>> # Basis with one input only
+        >>> def power_func(n, x):
+        ...     return x ** n
+        >>> basis = nmo.basis.CustomBasis([partial(power_func, n) for n in range(1, 6)])
+        >>> # Configure with an integer input:
+        >>> _ = basis.set_input_shape(3)
+        >>> basis.n_output_features
+        15
+        >>> # Configure with a tuple:
+        >>> _ = basis.set_input_shape((4, 5))
+        >>> basis.n_output_features
+        100
+        >>> # Configure with an array:
+        >>> x = np.ones((10, 4, 5))
+        >>> _ = basis.set_input_shape(x)
+        >>> basis.n_output_features
+        100
+
+        >>> # basis with 2 inputs
+        >>> def power_add_func(n, x, y):
+        ...     return x ** n + y ** n
+        >>> basis = nmo.basis.CustomBasis([partial(power_add_func, n) for n in range(1, 6)])
+        >>> _ = basis.set_input_shape(3, 3)
+        >>> basis.n_output_features
+        45
+        >>> _ = basis.set_input_shape((3, 2), 3)
+        >>> basis.n_output_features
+        90
+        >>> _ = basis.set_input_shape(np.ones((10, 3, 2)), 3)
+        >>> basis.n_output_features
+        90
+        """
+        return super().set_input_shape(*xi)

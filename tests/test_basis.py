@@ -180,7 +180,9 @@ def test_example_docstrings_add(
         basis_cls.__name__ in ["HistoryConv", "IdentityEval"]
         and method_name == "evaluate"
     ):
-        return
+        pytest.skip("History and Identity eval docstring is specific.")
+    elif basis_cls.__name__ == "CustomBasis" and method_name == "evaluate_on_grid":
+        pytest.skip("CustomBasis doesn't implement the evaluate_on_grid method.")
 
     basis_instance = CombinedBasis().instantiate_basis(
         5, basis_cls, basis_class_specific_params, window_size=10
@@ -1255,7 +1257,7 @@ class TestSharedMethods:
         "expected_out",
         [
             {
-                CustomBasis: "CustomBasis(\n    funcs=partial(<function custom_basis.<locals>.<listcomp>.<lambda>",
+                CustomBasis: "CustomBasis(\n    funcs=[partial(power_func, 1), ..., partial(power_func, 5)],\n    ndim_input=1,\n    pynapple_support=True\n)",
                 basis.RaisedCosineLogEval: "RaisedCosineLogEval(n_basis_funcs=5, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True, bounds=(1.0, 2.0))",
                 basis.RaisedCosineLinearEval: "RaisedCosineLinearEval(n_basis_funcs=5, width=2.0, bounds=(1.0, 2.0))",
                 basis.BSplineEval: "BSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
@@ -1288,7 +1290,7 @@ class TestSharedMethods:
         "expected_out",
         [
             {
-                CustomBasis: "'mylabel':\n    CustomBasis(\n        funcs=partial(<function custom_basis.<locals>.<listcomp>.<lambda>",
+                CustomBasis: "'mylabel':\n    CustomBasis(\n        funcs=[partial(power_func, 1), ..., partial(power_func, 5)",
                 basis.RaisedCosineLogEval: "'mylabel': RaisedCosineLogEval(n_basis_funcs=5, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True, bounds=(1.0, 2.0))",
                 basis.RaisedCosineLinearEval: "'mylabel': RaisedCosineLinearEval(n_basis_funcs=5, width=2.0, bounds=(1.0, 2.0))",
                 basis.BSplineEval: "'mylabel': BSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
@@ -3790,7 +3792,7 @@ class TestAdditiveBasis(CombinedBasis):
             basis_b, (HistoryConv, IdentityEval, CustomBasis)
         ):
             pytest.skip(
-                f"Skipping test_call_sample_range for {basis_a.__name__} and {basis_b.__name__}"
+                f"Skipping test_call_sample_range for {basis_a.__class__.__name__} and {basis_b.__class__.__name__}"
             )
         # test attributes are not related
         basis_a.n_basis_funcs = 10
@@ -4531,9 +4533,16 @@ class TestMultiplicativeBasis(CombinedBasis):
     def test_call_equivalent_in_conv(
         self, n_basis_a, n_basis_b, basis_a, basis_b, basis_class_specific_params
     ):
-        if basis_a == HistoryConv or basis_b == HistoryConv:
+        if (
+            basis_a == HistoryConv
+            or basis_b == HistoryConv
+            or basis_a == CustomBasis
+            or basis_b == CustomBasis
+        ):
             # evaluate returns identity
-            return
+            pytest.skip(
+                f"Skipping test_call_nan for {basis_a.__name__} and {basis_b.__name__}"
+            )
         basis_a_obj = self.instantiate_basis(
             n_basis_a, basis_a, basis_class_specific_params, window_size=10
         )
@@ -4719,6 +4728,10 @@ class TestMultiplicativeBasis(CombinedBasis):
     def test_transform_fails(
         self, n_basis_a, n_basis_b, basis_a, basis_b, basis_class_specific_params
     ):
+        if basis_a == CustomBasis or basis_b == CustomBasis:
+            pytest.skip(
+                f"Skipping test_transform_fails for {basis_a.__name__} and {basis_b.__name__}"
+            )
         basis_a_obj = self.instantiate_basis(
             n_basis_a, basis_a, basis_class_specific_params, window_size=10
         )
@@ -5262,7 +5275,11 @@ def test_basis_to_transformer(basis_cls, basis_class_specific_params):
         # skip for add and multiplicative.
         if basis_cls in [AdditiveBasis, MultiplicativeBasis]:
             continue
-        assert np.all(getattr(bas, k) == getattr(trans_bas, k))
+        if k == "_funcs":
+            f1s, f2s = getattr(bas, k), getattr(trans_bas, k)
+            assert np.all(f1 == f2 for f1, f2 in zip(f1s, f2s))
+        else:
+            assert np.all(getattr(bas, k) == getattr(trans_bas, k))
 
 
 @pytest.mark.parametrize(

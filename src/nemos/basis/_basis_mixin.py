@@ -1003,7 +1003,7 @@ class CompositeBasisMixin(BasisMixin):
         Raises
         ------
         ValueError
-            If a tuple is provided and it contains non-integer elements.
+            If a tuple is provided, and it contains non-integer elements.
             If not enough inputs are provided.
 
         Returns

@@ -7,6 +7,7 @@ from conftest import (
     basis_collapse_all_non_vec_axis,
     basis_with_add_kwargs,
     custom_basis,
+    custom_basis_2d,
 )
 from numpy.typing import NDArray
 
@@ -275,3 +276,25 @@ def test_split_by_features_shape(input_shape):
     out = bas.compute_features(np.random.randn(10, *input_shape))
     split = bas.split_by_feature(out, axis=1)["CustomBasis"]
     assert split.shape == (10, *input_shape, 4)
+
+
+@pytest.mark.parametrize(
+    "ishape, n_out_features",
+    [
+        ((1, 1), 5),
+        ((1, 2), 10),
+        ((2, 1), 10),
+        ((2, 2), 20),
+        (((2, 2), 1), 20),
+        ((1, (2, 2)), 20),
+        (((2, 2), (2, 2)), 80),
+    ],
+)
+def test_set_input_shape_2d(ishape, n_out_features):
+    """Test that the output features match expectation when setting input shape.
+
+    Note that the 1D case is tested in test_basis.py::TestSharedMethods.
+    """
+    bas = custom_basis_2d(5)
+    bas.set_input_shape(*ishape)
+    assert bas.n_output_features == n_out_features
