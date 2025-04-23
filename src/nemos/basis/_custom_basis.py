@@ -161,7 +161,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
     >>> bas = nmo.basis.CustomBasis(funcs=funcs, basis_kwargs=dict(shift=1))
     >>> bas
     CustomBasis(
-        funcs=partial(decay_exp, rate=np.float64(0.0)), ..., partial(decay_exp, rate=np.float64(1.0)),
+        funcs=[partial(decay_exp, rate=np.float64(0.0)), ..., partial(decay_exp, rate=np.float64(1.0))],
         ndim_input=1,
         basis_kwargs={'shift': 1},
         pynapple_support=True
