@@ -112,6 +112,8 @@ def test_all_basis_are_tested() -> None:
         if test_cls != CombinedBasis
         if mode in test_cls.cls
     }
+    # add CustomBasis, since it is tested in tests/test_custom_basis.py
+    tested_bases = tested_bases.union({CustomBasis})
 
     # Create the set of all the concrete basis classes
     all_bases = set(list_all_basis_classes())
@@ -134,11 +136,9 @@ def test_all_basis_are_tested() -> None:
     if out is None:
         raise ValueError("cannot fine parametrization.")
 
-    basis_tested_in_shared_methods = {
-        o[key] for key in ("eval", "conv") for o in out if key in o
-    }
+    basis_tested_in_shared_methods = set(out)
     all_one_dim_basis = set(
-        list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis]
     )
     assert basis_tested_in_shared_methods == all_one_dim_basis
 
@@ -1212,7 +1212,7 @@ class TestEvalBasis:
     ],
 )
 @pytest.mark.parametrize("n_basis", [6])
-def test_call_equivalent_in_conv(self, n_basis, cls):
+def test_call_equivalent_in_conv(n_basis, cls):
     # Identity and history have a different behavior
     if cls["eval"] is IdentityEval:
         return
