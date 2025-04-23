@@ -563,7 +563,6 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         >>> _ = basis.set_input_shape(x)
         >>> basis.n_output_features
         100
-
         >>> # basis with 2 inputs
         >>> def power_add_func(n, x, y):
         ...     return x ** n + y ** n
