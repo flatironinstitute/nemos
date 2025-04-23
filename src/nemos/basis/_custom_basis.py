@@ -3,6 +3,8 @@
 Facilitate the construction of a custom basis class.
 """
 
+from __future__ import annotations
+
 import inspect
 import itertools
 import re
