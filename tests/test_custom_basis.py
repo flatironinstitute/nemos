@@ -261,12 +261,12 @@ def test_basis_repr(ps):
     bas = custom_basis(5, pynapple_support=ps)
     assert (
         repr(bas)
-        == f"CustomBasis(\n    funcs=[partial(custom_basis.<locals>.<listcomp>.<lambda>, 1), ..., partial(custom_basis.<locals>.<listcomp>.<lambda>, 5)],\n    ndim_input=1,\n    pynapple_support={ps}\n)"
+        == f"CustomBasis(\n    funcs=[partial(power_func, 1), ..., partial(power_func, 5)],\n    ndim_input=1,\n    pynapple_support={ps}\n)"
     )
     bas = custom_basis(1, pynapple_support=ps)
     assert (
         repr(bas)
-        == f"CustomBasis(\n    funcs=[partial(custom_basis.<locals>.<listcomp>.<lambda>, 1)],\n    ndim_input=1,\n    pynapple_support={ps}\n)"
+        == f"CustomBasis(\n    funcs=[partial(power_func, 1)],\n    ndim_input=1,\n    pynapple_support={ps}\n)"
     )
 
 

@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import numpy as np
 import pytest
-from conftest import CombinedBasis, list_all_basis_classes
+from conftest import CombinedBasis, basis_with_add_kwargs, list_all_basis_classes
 from sklearn.base import clone as sk_clone
 from sklearn.pipeline import Pipeline
 
@@ -15,13 +15,13 @@ from nemos import basis
 from nemos._inspect_utils import get_subclass_methods, list_abstract_methods
 from nemos.basis import (
     AdditiveBasis,
+    CustomBasis,
     HistoryConv,
     IdentityEval,
     MultiplicativeBasis,
-    TransformerBasis, CustomBasis,
+    TransformerBasis,
 )
 from nemos.basis._composition_utils import generate_basis_label_pair
-from tests.conftest import basis_with_add_kwargs
 
 
 @pytest.mark.parametrize(
@@ -783,7 +783,9 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
     pipe.fit(x, y)
     np.testing.assert_allclose(pipe["glm"].coef_, model.coef_)
 
-    set_param_dict = {f"bas__basis2__{cv_attr}": 4 if cv_attr != "basis_kwargs" else {"add": 1}}
+    set_param_dict = {
+        f"bas__basis2__{cv_attr}": 4 if cv_attr != "basis_kwargs" else {"add": 1}
+    }
     # set basis & refit
     if isinstance(bas, (basis.AdditiveBasis, basis.MultiplicativeBasis)):
         pipe.set_params(**set_param_dict)
@@ -795,7 +797,9 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
             *([inp] * bas._n_input_dimensionality)
         )
     elif basis_cls is CustomBasis:
-        set_param_dict = {f"bas__{cv_attr}": 4 if cv_attr != "basis_kwargs" else {"add": 1}}
+        set_param_dict = {
+            f"bas__{cv_attr}": 4 if cv_attr != "basis_kwargs" else {"add": 1}
+        }
         pipe.set_params(**set_param_dict)
         assert bas.basis_kwargs == {"add": 0}  # check that it is not a shallow copy
         set_param_dict_outside = {f"{cv_attr}": {"add": 1}}
@@ -803,7 +807,9 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
             *([inp] * bas._n_input_dimensionality)
         )
     else:
-        set_param_dict = {f"bas__{cv_attr}": 4 if cv_attr != "basis_kwargs" else {"add": 1}}
+        set_param_dict = {
+            f"bas__{cv_attr}": 4 if cv_attr != "basis_kwargs" else {"add": 1}
+        }
         pipe.set_params(**set_param_dict)
         assert bas.n_basis_funcs == 5  # make sure that the change did not affect bas
         set_param_dict_outside = {f"{cv_attr}": 4}
@@ -927,7 +933,12 @@ def test_dir_transformer(basis_cls, basis_class_specific_params):
         for meth in dict_abst_method:
             assert meth[0] in lst
     else:
-        for meth in ["compute_features", "evaluate", "set_input_shape", "split_by_feature"]:
+        for meth in [
+            "compute_features",
+            "evaluate",
+            "set_input_shape",
+            "split_by_feature",
+        ]:
             assert meth in lst
 
     # check all reimplemented methods
