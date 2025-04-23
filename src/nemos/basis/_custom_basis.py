@@ -10,7 +10,7 @@ import itertools
 import re
 from copy import deepcopy
 from numbers import Number
-from typing import Callable, Iterable, List, Optional, Tuple
+from typing import TYPE_CHECKING, Callable, Iterable, List, Optional, Tuple
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -34,6 +34,9 @@ from ._composition_utils import (
     promote_to_transformer,
     raise_basis_to_power,
 )
+
+if TYPE_CHECKING:
+    from . import TransformerBasis
 
 
 def simplify_func_repr(string: str):
@@ -578,3 +581,47 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         90
         """
         return super().set_input_shape(*xi)
+
+    def to_transformer(self) -> "TransformerBasis":
+        """
+        Turn the Basis into a TransformerBasis for use with scikit-learn.
+
+        Returns
+        -------
+        :
+            A transformer basis.
+
+        Examples
+        --------
+                >>> from functools import partial
+                >>>
+                >>> import numpy as np
+                >>> from sklearn.model_selection import GridSearchCV
+                >>> from sklearn.pipeline import Pipeline
+                >>>
+                >>> import nemos as nmo
+                >>>
+                >>> # load some data
+                >>> X, y = np.random.normal(size=(30, 1)), np.random.poisson(size=30)
+                >>>
+                >>>
+                >>> def power_func(n, x, bias=0):
+                ...     return (x + bias) ** n
+                >>>
+                >>>
+                >>> basis = nmo.basis.CustomBasis([partial(power_func, n) for n in range(1, 6)])
+                >>> basis = basis.to_transformer()
+                >>> glm = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=1.0)
+                >>> pipeline = Pipeline([("basis", basis), ("glm", glm)])
+                >>> param_grid = dict(
+                ...     glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
+                ...     basis__basis_kwargs=(dict(bias=0), dict(bias=1)),
+                >>> )
+                >>> gridsearch = GridSearchCV(
+                ...     pipeline,
+                ...     param_grid=param_grid,
+                ...     cv=2,
+                >>> )
+                >>> gridsearch = gridsearch.fit(X, y)
+        """
+        return super().to_transformer()
