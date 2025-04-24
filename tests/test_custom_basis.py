@@ -11,7 +11,7 @@ from conftest import (
 )
 from numpy.typing import NDArray
 
-from nemos.basis._custom_basis import apply_f_vectorized
+from nemos.basis._custom_basis import CustomBasis, apply_f_vectorized
 
 
 @pytest.fixture
@@ -298,3 +298,12 @@ def test_set_input_shape_2d(ishape, n_out_features):
     bas = custom_basis_2d(5)
     bas.set_input_shape(*ishape)
     assert bas.n_output_features == n_out_features
+
+
+def test_inconsistent_input_num():
+    # define a list of funcs with inconsistent input number
+    invalid_funcs = [lambda x: x, lambda x, y: x]
+    with pytest.raises(
+        ValueError, match="Each function provided to ``funcs`` in ``CustomBasis``"
+    ):
+        CustomBasis(invalid_funcs)

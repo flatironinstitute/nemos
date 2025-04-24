@@ -3224,6 +3224,30 @@ class TestAdditiveBasis(CombinedBasis):
         with expectation:
             basis_obj.evaluate(*([np.linspace(0, 1, 10)] * num_input))
 
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("n_basis_a", [5])
+    @pytest.mark.parametrize("num_input", [0, 1, 2])
+    @pytest.mark.parametrize(" window_size", [8])
+    def test_set_input_shape_input_num(
+        self,
+        n_basis_a,
+        basis_a,
+        num_input,
+        window_size,
+        basis_class_specific_params,
+    ):
+        basis_a_obj = self.instantiate_basis(
+            n_basis_a, basis_a, basis_class_specific_params, window_size=window_size
+        )
+        basis_b_obj = basis_a_obj.__sklearn_clone__()
+        basis_obj = basis_a_obj + basis_b_obj
+        if num_input == basis_obj._n_input_dimensionality:
+            expectation = does_not_raise()
+        else:
+            expectation = pytest.raises(ValueError, match="set_input_shape expects")
+        with expectation:
+            basis_obj.set_input_shape(*([np.linspace(0, 1, 10)] * num_input))
+
     @pytest.mark.parametrize(
         "inp, expectation",
         [
@@ -3930,7 +3954,8 @@ class TestMultiplicativeBasis(CombinedBasis):
     cls = {"eval": MultiplicativeBasis, "conv": MultiplicativeBasis}
 
     @pytest.mark.parametrize(
-        "bas_cls", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "bas_cls",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     def test_pow_by_int_basis_with_label(self, bas_cls, basis_class_specific_params):
         basis_obj = self.instantiate_basis(
@@ -3942,7 +3967,8 @@ class TestMultiplicativeBasis(CombinedBasis):
             _ = basis_obj**2
 
     @pytest.mark.parametrize(
-        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_a",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     def test_add_label_using_class_name(self, basis_a, basis_class_specific_params):
         basis_a_obj = self.instantiate_basis(
@@ -3975,7 +4001,8 @@ class TestMultiplicativeBasis(CombinedBasis):
             )
 
     @pytest.mark.parametrize(
-        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_a",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize(
         "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
@@ -4423,6 +4450,30 @@ class TestMultiplicativeBasis(CombinedBasis):
             )
         with expectation:
             basis_obj.evaluate(*([np.linspace(0, 1, 10)] * num_input))
+
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("n_basis_a", [5])
+    @pytest.mark.parametrize("num_input", [0, 1, 2])
+    @pytest.mark.parametrize(" window_size", [8])
+    def test_set_input_shape_input_num(
+        self,
+        n_basis_a,
+        basis_a,
+        num_input,
+        window_size,
+        basis_class_specific_params,
+    ):
+        basis_a_obj = self.instantiate_basis(
+            n_basis_a, basis_a, basis_class_specific_params, window_size=window_size
+        )
+        basis_b_obj = basis_a_obj.__sklearn_clone__()
+        basis_obj = basis_a_obj * basis_b_obj
+        if num_input == basis_obj._n_input_dimensionality:
+            expectation = does_not_raise()
+        else:
+            expectation = pytest.raises(ValueError, match="set_input_shape expects")
+        with expectation:
+            basis_obj.set_input_shape(*([np.linspace(0, 1, 10)] * num_input))
 
     @pytest.mark.parametrize(
         "inp, expectation",

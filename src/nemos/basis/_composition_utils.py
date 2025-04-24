@@ -235,7 +235,8 @@ def infer_input_dimensionality(bas: "BasisMixin") -> int:
             dims = [count_positional_and_var_args(f)[0] for f in funcs]
             if len(set(dims)) != 1:
                 raise ValueError(
-                    "``funcs`` in CustomBasis must accept the same number of time series as input."
+                    "Each function provided to ``funcs`` in ``CustomBasis`` must accept the same "
+                    "number of input time series."
                 )
             n_input_dim = dims[0]
         else:
