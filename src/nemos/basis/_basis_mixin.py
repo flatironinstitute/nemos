@@ -10,7 +10,7 @@ from collections import OrderedDict
 from contextlib import contextmanager
 from functools import wraps
 from itertools import chain
-from typing import TYPE_CHECKING, Any, Generator, Literal, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Generator, Optional, Tuple, Union
 
 import jax
 import numpy as np
@@ -26,7 +26,6 @@ from ._composition_utils import (
     _get_root,
     _recompute_all_default_labels,
     generate_basis_label_pair,
-    generate_composite_basis_labels,
     get_input_shape,
     infer_input_dimensionality,
     is_basis_like,
@@ -161,14 +160,6 @@ class BasisMixin:
                 f"Basis label {index} not found. Available labels: {avail_index}"
             )
         return search
-
-    def _generate_subtree_labels(
-        self, type_label: Literal["all", "user-defined"] = "all"
-    ) -> Generator[str]:
-        """
-        List all user-specified labels.
-        """
-        yield from generate_composite_basis_labels(self, type_label)
 
     def _iterate_over_components(self) -> Generator | chain:
         """Return a generator that iterates over all basis components.
@@ -433,14 +424,14 @@ class AtomicBasisMixin(BasisMixin):
         klass = self.__class__(**self.get_params())
         return klass
 
-    def _generate_subtree_labels(
-        self, type_label: Literal["all", "user-defined"] = "all"
-    ) -> Generator[str]:
-        """
-        List all user-specified labels.
-        """
-        if type_label == "all" or (not self._has_default_label):
-            yield self._label
+    #    def _generate_subtree_labels(
+    #        self, type_label: Literal["all", "user-defined"] = "all"
+    #    ) -> Generator[str]:
+    #        """
+    #        List all user-specified labels.
+    #        """
+    #        if type_label == "all" or (not self._has_default_label):
+    #            yield self._label
 
     def set_input_shape(self, xi: int | tuple[int, ...] | NDArray) -> BasisMixin:
         """
@@ -1018,19 +1009,6 @@ class CompositeBasisMixin(BasisMixin):
     def n_basis_funcs(self):
         """Read only property for composite bases."""
         pass
-
-    def _generate_subtree_labels(
-        self, type_label: Literal["all", "user-defined"] = "all"
-    ) -> Generator[str]:
-        """
-        List all user-specified labels.
-        """
-        if type_label == "all" or self._label:
-            yield self.label
-        for lab in self.basis1._generate_subtree_labels(type_label):
-            yield lab
-        for lab in self.basis2._generate_subtree_labels(type_label):
-            yield lab
 
     def setup_basis(self, *xi: NDArray) -> Basis:
         """
