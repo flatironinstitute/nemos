@@ -593,36 +593,36 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
 
         Examples
         --------
-                >>> from functools import partial
-                >>>
-                >>> import numpy as np
-                >>> from sklearn.model_selection import GridSearchCV
-                >>> from sklearn.pipeline import Pipeline
-                >>>
-                >>> import nemos as nmo
-                >>>
-                >>> # load some data
-                >>> x = 0.1 * np.random.normal(size=(100, 1))
-                >>> y = np.random.poisson(np.exp(x[:, 0]), size=100)
-                >>>
-                >>>
-                >>> def power_func(n, x, bias=0):
-                ...     return (x + bias) ** n
-                >>>
-                >>>
-                >>> basis = nmo.basis.CustomBasis([partial(power_func, n) for n in range(1, 6)])
-                >>> basis = basis.to_transformer()
-                >>> glm = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=1.0)
-                >>> pipeline = Pipeline([("basis", basis), ("glm", glm)])
-                >>> param_grid = dict(
-                ...     glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
-                ...     basis__basis_kwargs=(dict(bias=0), dict(bias=1)),
-                ... )
-                >>> gridsearch = GridSearchCV(
-                ...     pipeline,
-                ...     param_grid=param_grid,
-                ...     cv=2,
-                ... )
-                >>> gridsearch = gridsearch.fit(x, y)
+        >>> from functools import partial
+        >>>
+        >>> import numpy as np
+        >>> from sklearn.model_selection import GridSearchCV
+        >>> from sklearn.pipeline import Pipeline
+        >>>
+        >>> import nemos as nmo
+        >>>
+        >>> # load some data
+        >>> x = 0.1 * np.random.normal(size=(100, 1))
+        >>> y = np.random.poisson(np.exp(x[:, 0]), size=100)
+        >>>
+        >>>
+        >>> def power_func(n, x, bias=0):
+        ...     return (x + bias) ** n
+        >>>
+        >>>
+        >>> basis = nmo.basis.CustomBasis([partial(power_func, n) for n in range(1, 6)])
+        >>> basis = basis.to_transformer()
+        >>> glm = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=1.0)
+        >>> pipeline = Pipeline([("basis", basis), ("glm", glm)])
+        >>> param_grid = dict(
+        ...     glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
+        ...     basis__basis_kwargs=(dict(bias=0), dict(bias=1)),
+        ... )
+        >>> gridsearch = GridSearchCV(
+        ...     pipeline,
+        ...     param_grid=param_grid,
+        ...     cv=2,
+        ... )
+        >>> gridsearch = gridsearch.fit(x, y)
         """
         return super().to_transformer()
