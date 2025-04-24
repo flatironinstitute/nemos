@@ -2632,8 +2632,6 @@ class TestAdditiveBasis(CombinedBasis):
         with pytest.raises(ValueError, match="Cannot set basis label"):
             add.label = "MultiplicativeBasis"
         add.label = "AdditiveBasis"
-        with pytest.raises(ValueError, match="Label 'AdditiveBasis' is already in use"):
-            add.label = "AdditiveBasis"
 
     @pytest.mark.parametrize("bas", list_all_basis_classes())
     def test_inherit_setting(self, bas, basis_class_specific_params):
@@ -3954,10 +3952,6 @@ class TestMultiplicativeBasis(CombinedBasis):
         with pytest.raises(ValueError, match="Cannot set basis label"):
             mul.label = "AdditiveBasis"
         mul.label = "MultiplicativeBasis"
-        with pytest.raises(
-            ValueError, match="Label 'MultiplicativeBasis' is already in use"
-        ):
-            mul.label = "MultiplicativeBasis"
 
     def test_redundant_label_in_nested_basis(self):
         bas = (

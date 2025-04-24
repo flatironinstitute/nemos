@@ -289,7 +289,7 @@ def label_setter(bas: "BasisMixin", label: str | None) -> None | ValueError:
     )
     error = None
     if reset:
-        bas._label = None
+        label = None
     else:
         label = str(label)
         if label in _get_root(bas)._generate_subtree_labels():

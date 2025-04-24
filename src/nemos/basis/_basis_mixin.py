@@ -10,7 +10,7 @@ from collections import OrderedDict
 from contextlib import contextmanager
 from functools import wraps
 from itertools import chain
-from typing import TYPE_CHECKING, Any, Generator, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Generator, Literal, Optional, Tuple, Union
 
 import jax
 import numpy as np
@@ -20,12 +20,10 @@ from pynapple import Tsd, TsdFrame, TsdTensor
 from ..convolve import create_convolutional_predictor
 from ..utils import _get_terminal_size, format_repr
 from ._composition_utils import (
-    __PUBLIC_BASES__,
-    _atomic_basis_label_setter_logic,
     _composite_basis_setter_logic,
-    _get_root,
     _recompute_all_default_labels,
     generate_basis_label_pair,
+    generate_composite_basis_labels,
     get_input_shape,
     infer_input_dimensionality,
     is_basis_like,
@@ -160,6 +158,14 @@ class BasisMixin:
                 f"Basis label {index} not found. Available labels: {avail_index}"
             )
         return search
+
+    def _generate_subtree_labels(
+        self, type_label: Literal["all", "user-defined"] = "all"
+    ) -> Generator[str]:
+        """
+        List all user-specified labels.
+        """
+        yield from generate_composite_basis_labels(self, type_label)
 
     def _iterate_over_components(self) -> Generator | chain:
         """Return a generator that iterates over all basis components.
@@ -398,17 +404,6 @@ class AtomicBasisMixin(BasisMixin):
         return None
 
     @property
-    def label(self) -> str:
-        """Label for the basis."""
-        return self._label
-
-    @label.setter
-    def label(self, label: str | None) -> None:
-        error = _atomic_basis_label_setter_logic(self, label)
-        if error:
-            raise error
-
-    @property
     def _has_default_label(self):
         return re.match(rf"^{self.__class__.__name__}(_\d+)?$", self._label) is not None
 
@@ -423,15 +418,6 @@ class AtomicBasisMixin(BasisMixin):
         """
         klass = self.__class__(**self.get_params())
         return klass
-
-    #    def _generate_subtree_labels(
-    #        self, type_label: Literal["all", "user-defined"] = "all"
-    #    ) -> Generator[str]:
-    #        """
-    #        List all user-specified labels.
-    #        """
-    #        if type_label == "all" or (not self._has_default_label):
-    #            yield self._label
 
     def set_input_shape(self, xi: int | tuple[int, ...] | NDArray) -> BasisMixin:
         """
@@ -913,30 +899,6 @@ class CompositeBasisMixin(BasisMixin):
         if all(set_bases):
             # pass down the input shapes
             self.set_input_shape(*self.input_shape)
-
-    @property
-    def label(self) -> str:
-        """Label for the basis."""
-        if self._label is None:
-            return self._generate_label()
-        return self._label
-
-    @label.setter
-    def label(self, label: str | None) -> None:
-        reset = (label is None) or (label == self._generate_label())
-        if reset:
-            self._label = None
-        else:
-            label = str(label)
-            if label in _get_root(self)._generate_subtree_labels():
-                raise ValueError(
-                    f"Label '{label}' is already in use. When user-provided, label must be unique."
-                )
-            elif label in __PUBLIC_BASES__ and label != self.__class__.__name__:
-                raise ValueError(
-                    f"Cannot set basis label '{label}' for basis of type {type(self)}."
-                )
-            self._label = label
 
     @property
     def input_shape(self):
