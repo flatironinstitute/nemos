@@ -57,7 +57,7 @@ def test_transformer_has_the_same_public_attributes_as_basis(
 
 @pytest.mark.parametrize(
     "basis_cls",
-    list_all_basis_classes("Conv") + list_all_basis_classes("Eval"),
+    list_all_basis_classes("Conv") + list_all_basis_classes("Eval") + [CustomBasis],
 )
 def test_to_transformer_and_constructor_are_equivalent(
     basis_cls, basis_class_specific_params
@@ -96,6 +96,13 @@ def test_to_transformer_and_constructor_are_equivalent(
         wrapped_methods_b.update({method: val})
 
     assert wrapped_methods_a == wrapped_methods_b
+    if basis_cls == CustomBasis:
+        f1, f2 = trans_bas_a.basis.__dict__.pop(
+            "_funcs", [True]
+        ), trans_bas_b.basis.__dict__.pop("_funcs", [True])
+        # the functions will not have the same id,
+        # but the __repr__ will show that they point to the same function address with the same parameters
+        assert all(fi.__repr__() == fj.__repr__() for fi, fj in zip(f1, f2))
     assert trans_bas_a.basis.__dict__ == trans_bas_b.basis.__dict__
 
 
@@ -166,7 +173,7 @@ def test_transformerbasis_getattr(
 
 @pytest.mark.parametrize(
     "basis_cls",
-    list_all_basis_classes("Conv") + list_all_basis_classes("Eval"),
+    list_all_basis_classes("Conv") + list_all_basis_classes("Eval") + [CustomBasis],
 )
 @pytest.mark.parametrize("n_basis_funcs_init", [5])
 @pytest.mark.parametrize("n_basis_funcs_new", [6, 10, 20])
@@ -182,10 +189,15 @@ def test_transformerbasis_set_params(
     trans_basis = basis.TransformerBasis(
         bas.set_input_shape(*([1] * bas._n_input_dimensionality))
     )
-    if not isinstance(bas, HistoryConv):
+    if not isinstance(bas, (HistoryConv, CustomBasis)):
         trans_basis.set_params(n_basis_funcs=n_basis_funcs_new)
         assert trans_basis.n_basis_funcs == n_basis_funcs_new
         assert trans_basis.basis.n_basis_funcs == n_basis_funcs_new
+    elif isinstance(bas, CustomBasis):
+        basis_kwargs = {"add": n_basis_funcs_new}
+        trans_basis.set_params(basis_kwargs=basis_kwargs)
+        trans_basis.basis_kwargs == basis_kwargs
+        trans_basis.basis.basis_kwargs == basis_kwargs
     else:
         trans_basis.set_params(window_size=n_basis_funcs_new)
         assert trans_basis.window_size == n_basis_funcs_new
@@ -194,7 +206,7 @@ def test_transformerbasis_set_params(
 
 @pytest.mark.parametrize(
     "basis_cls",
-    list_all_basis_classes("Conv") + list_all_basis_classes("Eval"),
+    list_all_basis_classes("Conv") + list_all_basis_classes("Eval") + [CustomBasis],
 )
 def test_transformerbasis_setattr_basis(basis_cls, basis_class_specific_params):
 
@@ -220,7 +232,7 @@ def test_transformerbasis_setattr_basis(basis_cls, basis_class_specific_params):
 
 @pytest.mark.parametrize(
     "basis_cls",
-    list_all_basis_classes("Conv") + list_all_basis_classes("Eval"),
+    list_all_basis_classes("Conv") + list_all_basis_classes("Eval") + [CustomBasis],
 )
 def test_transformerbasis_setattr_basis_attribute(
     basis_cls, basis_class_specific_params
@@ -237,16 +249,22 @@ def test_transformerbasis_setattr_basis_attribute(
     )
     if basis_cls is nmo.basis.HistoryConv:
         trans_bas.window_size = 20
+        assert trans_bas.n_basis_funcs == 20
+        assert trans_bas.basis.n_basis_funcs == 20
+    elif basis_cls is CustomBasis:
+        trans_bas.basis_kwargs = {"add": 20}
+        assert trans_bas.basis_kwargs == {"add": 20}
+        assert trans_bas.basis.basis_kwargs == {"add": 20}
     else:
         trans_bas.n_basis_funcs = 20
-    assert trans_bas.n_basis_funcs == 20
-    assert trans_bas.basis.n_basis_funcs == 20
+        assert trans_bas.n_basis_funcs == 20
+        assert trans_bas.basis.n_basis_funcs == 20
     assert isinstance(trans_bas.basis, basis_cls)
 
 
 @pytest.mark.parametrize(
     "basis_cls",
-    list_all_basis_classes("Conv") + list_all_basis_classes("Eval"),
+    list_all_basis_classes("Conv") + list_all_basis_classes("Eval") + [CustomBasis],
 )
 def test_transformerbasis_copy_basis_on_construct(
     basis_cls, basis_class_specific_params
@@ -262,13 +280,20 @@ def test_transformerbasis_copy_basis_on_construct(
     nbas = deepcopy(orig_bas.n_basis_funcs)
     orig_bas = orig_bas.set_input_shape(*([1] * orig_bas._n_input_dimensionality))
     trans_bas = basis.TransformerBasis(orig_bas)
-    attr_name = "window_size" if basis_cls is HistoryConv else "n_basis_funcs"
-    setattr(trans_bas, attr_name, 20)
+    if isinstance(orig_bas, CustomBasis):
+        setattr(trans_bas, "basis_kwargs", {"add": 20})
+        assert orig_bas.basis_kwargs == {}
+        assert trans_bas.basis_kwargs == {"add": 20}
+        assert trans_bas.basis.basis_kwargs == {"add": 20}
 
-    assert orig_bas.n_basis_funcs == nbas
-    assert trans_bas.basis.n_basis_funcs == 20
-    assert trans_bas.basis.n_basis_funcs == 20
-    assert isinstance(trans_bas.basis, basis_cls)
+    else:
+        attr_name = "window_size" if basis_cls is HistoryConv else "n_basis_funcs"
+        setattr(trans_bas, attr_name, 20)
+
+        assert orig_bas.n_basis_funcs == nbas
+        assert trans_bas.n_basis_funcs == 20
+        assert trans_bas.basis.n_basis_funcs == 20
+        assert isinstance(trans_bas.basis, basis_cls)
 
 
 @pytest.mark.parametrize(

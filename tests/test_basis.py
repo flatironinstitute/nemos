@@ -3815,22 +3815,34 @@ class TestAdditiveBasis(CombinedBasis):
         assert id(add.basis2) != id(basis_a)
         assert id(add.basis2) != id(basis_b)
 
-        if isinstance(basis_a, (HistoryConv, IdentityEval, CustomBasis)) or isinstance(
-            basis_b, (HistoryConv, IdentityEval, CustomBasis)
+        if isinstance(basis_a, (HistoryConv, IdentityEval)) or isinstance(
+            basis_b, (HistoryConv, IdentityEval)
         ):
             pytest.skip(
                 f"Skipping test_call_sample_range for {basis_a.__class__.__name__} and {basis_b.__class__.__name__}"
             )
         # test attributes are not related
-        basis_a.n_basis_funcs = 10
-        basis_b.n_basis_funcs = 10
-        assert add.basis1.n_basis_funcs == n_basis_a
-        assert add.basis2.n_basis_funcs == n_basis_b
+        if isinstance(add.basis1, CustomBasis):
+            basis_a.basis_kwargs = {"n_basis_funcs": 10}
+            assert add.basis1.basis_kwargs == {}
+            add.basis1.basis_kwargs = {"n_basis_funcs": 6}
+            assert basis_a.basis_kwargs == {"n_basis_funcs": 10}
+        else:
+            basis_a.n_basis_funcs = 10
+            assert add.basis1.n_basis_funcs == n_basis_a
+            add.basis1.n_basis_funcs = 6
+            assert basis_a.n_basis_funcs == 10
 
-        add.basis1.n_basis_funcs = 6
-        add.basis2.n_basis_funcs = 6
-        assert basis_a.n_basis_funcs == 10
-        assert basis_b.n_basis_funcs == 10
+        if isinstance(add.basis2, CustomBasis):
+            basis_b.basis_kwargs = {"n_basis_funcs": 10}
+            assert add.basis2.basis_kwargs == {}
+            add.basis2.basis_kwargs = {"n_basis_funcs": 6}
+            assert basis_b.basis_kwargs == {"n_basis_funcs": 10}
+        else:
+            basis_b.n_basis_funcs = 10
+            assert add.basis2.n_basis_funcs == n_basis_b
+            add.basis2.n_basis_funcs = 6
+            assert basis_b.n_basis_funcs == 10
 
     @pytest.mark.parametrize(
         "basis_a",
