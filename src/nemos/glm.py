@@ -982,6 +982,7 @@ class GLM(BaseRegressor):
 
         return init_params
 
+    @cast_to_jax
     def initialize_state(
         self,
         X: DESIGN_INPUT_TYPE,
