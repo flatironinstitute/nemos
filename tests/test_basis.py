@@ -15,6 +15,7 @@ from conftest import (
     custom_basis,
     list_all_basis_classes,
 )
+from collections import namedtuple
 
 import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
@@ -34,6 +35,8 @@ from nemos.basis._raised_cosine_basis import (
 )
 from nemos.basis._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis
 from nemos.utils import pynapple_concatenate_numpy
+
+SizeTerminal = namedtuple("SizeTerminal", ["columns", "lines"])
 
 
 def instantiate_atomic_basis(cls, **kwargs):
@@ -424,7 +427,7 @@ def test_expected_output_split_by_feature(basis_instance, super_class):
 
 @pytest.mark.parametrize("label", [None, "", "default-behavior", "CoolFeature"])
 def test_repr_label(label):
-    with patch("os.get_terminal_size", return_value=(80, 24)):
+    with patch("os.get_terminal_size", return_value=SizeTerminal(80, 24)):
         if label == "default-behavior":
             bas = basis.RaisedCosineLinearEval(n_basis_funcs=5)
         else:
@@ -3916,7 +3919,7 @@ class TestAdditiveBasis(CombinedBasis):
     def test_repr_out(
         self, basis_a, basis_b, basis_class_specific_params, expected_out
     ):
-        with patch("os.get_terminal_size", return_value=(80, 24)):
+        with patch("os.get_terminal_size", return_value=SizeTerminal(80, 24)):
             basis_a_obj = self.instantiate_basis(
                 5, basis_a, basis_class_specific_params, window_size=10
             )
@@ -3928,7 +3931,7 @@ class TestAdditiveBasis(CombinedBasis):
 
     @pytest.mark.parametrize("label", [None, "", "default-behavior", "CoolFeature"])
     def test_repr_label(self, label, basis_class_specific_params):
-        with patch("os.get_terminal_size", return_value=(80, 24)):
+        with patch("os.get_terminal_size", return_value=SizeTerminal(80, 24)):
             if label == "default-behavior":
                 bas = basis.RaisedCosineLinearEval(n_basis_funcs=5)
             else:
@@ -4102,7 +4105,7 @@ class TestMultiplicativeBasis(CombinedBasis):
     def test_repr_out(
         self, basis_a, basis_b, basis_class_specific_params, expected_out
     ):
-        with patch("os.get_terminal_size", return_value=(80, 24)):
+        with patch("os.get_terminal_size", return_value=SizeTerminal(80, 24)):
             basis_a_obj = self.instantiate_basis(
                 5, basis_a, basis_class_specific_params, window_size=10
             )
@@ -4114,7 +4117,7 @@ class TestMultiplicativeBasis(CombinedBasis):
 
     @pytest.mark.parametrize("label", [None, "", "default-behavior", "CoolFeature"])
     def test_repr_label(self, label, basis_class_specific_params):
-        with patch("os.get_terminal_size", return_value=(80, 24)):
+        with patch("os.get_terminal_size", return_value=SizeTerminal(80, 24)):
             if label == "default-behavior":
                 bas = basis.RaisedCosineLinearEval(n_basis_funcs=5)
             else:
@@ -6206,7 +6209,7 @@ def test_split_feature_axis(
 
 
 def test_composite_basis_repr_wrapping():
-    with patch("os.get_terminal_size", return_value=(80, 24)):
+    with patch("os.get_terminal_size", return_value=SizeTerminal(80, 24)):
         # check multi
         bas = basis.BSplineEval(10) ** 100
         out = repr(bas)

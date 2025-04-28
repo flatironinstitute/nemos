@@ -478,8 +478,10 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
     def __pow__(self, exponent) -> BasisMixin:
         return raise_basis_to_power(self, exponent)
 
-    def __repr__(self):
-        return format_repr(self, multiline=True)
+    def __repr__(self, n=0):
+        rep = format_repr(self, multiline=True)
+        tab = "    "
+        return rep.replace("\n", f"\n{tab * n}")
 
     def __len__(self) -> int:
         return 1
