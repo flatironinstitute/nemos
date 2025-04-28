@@ -34,8 +34,8 @@ def vectorize_func(request):
 def vec_func_kwargs(request):
     kwargs = request.param
 
-    def func(*xi, add=0) -> NDArray:
-        return xi[0] + add
+    def func(*xi, add=0, mul=1) -> NDArray:
+        return xi[0] * mul + add
 
     return lambda *xi, **k: apply_f_vectorized(func, *xi, ndim_input=1, **k), kwargs
 
@@ -106,13 +106,21 @@ def test_vec_function_output_shape(vectorize_func, x, expected_out_shape):
 
 @pytest.mark.parametrize(
     "vec_func_kwargs, x",
-    [(dict(add=1), np.zeros((10, 2))), (dict(add=0), np.zeros((10, 2)))],
+    [
+        (dict(add=1), np.zeros((10, 2))),
+        (dict(add=0), np.zeros((10, 2))),
+        (dict(add=1, mul=2), np.ones((10, 2))),
+        (dict(mul=0), np.ones((10, 2))),
+        ({}, np.ones((10, 2))),
+    ],
     indirect=["vec_func_kwargs"],
 )
 def test_vec_function_kwargs(vec_func_kwargs, x):
     vec_f, kwargs = vec_func_kwargs
     out = vec_f(x, **kwargs)
-    assert np.all(out == x + kwargs["add"])
+    add = kwargs.get("add", 0)
+    mul = kwargs.get("mul", 1)
+    assert np.all(out == x * mul + add)
 
 
 @pytest.mark.parametrize("n_basis_funcs", [4])
@@ -217,10 +225,12 @@ def test_kwargs_apply(kwargs):
 )
 def test_basis_kwargs_set(kwargs, expectation):
     with expectation:
-        basis_with_add_kwargs(basis_kwargs=kwargs)
+        bas = basis_with_add_kwargs(basis_kwargs=kwargs)
+        bas.basis_kwargs == kwargs
     bas = basis_with_add_kwargs(basis_kwargs=None)
     with expectation:
         bas.basis_kwargs = kwargs
+        bas.basis_kwargs == kwargs
 
 
 def test_pynapple_support():
@@ -267,6 +277,11 @@ def test_basis_repr(ps):
     assert (
         repr(bas)
         == f"CustomBasis(\n    funcs=[partial(power_func, 1)],\n    ndim_input=1,\n    pynapple_support={ps}\n)"
+    )
+    # check composite basis repr
+    assert (
+        repr(bas + bas)
+        == f"'(CustomBasis + CustomBasis_1)': AdditiveBasis(\n    basis1=CustomBasis(\n        funcs=[partial(power_func, 1)],\n        ndim_input=1,\n        pynapple_support={ps}\n    ),\n    basis2='CustomBasis_1': CustomBasis(\n        funcs=[partial(power_func, 1)],\n        ndim_input=1,\n        pynapple_support={ps}\n    ),\n)"
     )
 
 
