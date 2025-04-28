@@ -201,6 +201,8 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
 
         self.output_shape = output_shape
 
+        self._input_shape_product = None
+
         # nomenclature is confusing, should rename this to _n_args_compute_features
         self._n_input_dimensionality = infer_input_dimensionality(self)
         self._n_basis_funcs = len(self.funcs)

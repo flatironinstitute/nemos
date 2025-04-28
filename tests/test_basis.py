@@ -2730,10 +2730,12 @@ class TestAdditiveBasis(CombinedBasis):
         assert add_a_twice.basis2.label == f"{cls_b_name}"
 
     @pytest.mark.parametrize(
-        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_a",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize(
-        "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_b",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     def test_input_shape_product_init(
         self, basis_a, basis_b, basis_class_specific_params
@@ -4008,7 +4010,8 @@ class TestMultiplicativeBasis(CombinedBasis):
         list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize(
-        "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_b",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     def test_input_shape_product_init(
         self, basis_a, basis_b, basis_class_specific_params
@@ -4853,10 +4856,12 @@ class TestMultiplicativeBasis(CombinedBasis):
         assert bas_prod._input_shape_product == (n_basis_input1, n_basis_input2)
 
     @pytest.mark.parametrize(
-        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_a",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize(
-        "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_b",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize("shape_a", [1, (), np.ones(3)])
     @pytest.mark.parametrize("shape_b", [1, (), np.ones(3)])
@@ -4889,10 +4894,12 @@ class TestMultiplicativeBasis(CombinedBasis):
         )
 
     @pytest.mark.parametrize(
-        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_a",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize(
-        "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_b",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize("shape_a", [2, (2,), np.ones((3, 2))])
     @pytest.mark.parametrize("shape_b", [3, (3,), np.ones((3, 3))])
@@ -4925,10 +4932,12 @@ class TestMultiplicativeBasis(CombinedBasis):
         )
 
     @pytest.mark.parametrize(
-        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_a",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize(
-        "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_b",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize("shape_a", [(2, 2), np.ones((3, 2, 2))])
     @pytest.mark.parametrize("shape_b", [(3, 1), np.ones((3, 3, 1))])
@@ -4979,10 +4988,12 @@ class TestMultiplicativeBasis(CombinedBasis):
         ],
     )
     @pytest.mark.parametrize(
-        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_a",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize(
-        "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_b",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     def test_set_input_value_types(
         self, inp_shape, expectation, basis_a, basis_b, basis_class_specific_params
@@ -4998,10 +5009,12 @@ class TestMultiplicativeBasis(CombinedBasis):
             mul.set_input_shape(*inp_shape)
 
     @pytest.mark.parametrize(
-        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_a",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize(
-        "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_b",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     def test_deep_copy_basis(self, basis_a, basis_b, basis_class_specific_params):
 
@@ -5031,8 +5044,8 @@ class TestMultiplicativeBasis(CombinedBasis):
         assert id(mul.basis2) != id(basis_a)
         assert id(mul.basis2) != id(basis_b)
 
-        if isinstance(basis_a, (HistoryConv, IdentityEval)) or isinstance(
-            basis_b, (HistoryConv, IdentityEval)
+        if isinstance(basis_a, (HistoryConv, IdentityEval, CustomBasis)) or isinstance(
+            basis_b, (HistoryConv, IdentityEval, CustomBasis)
         ):
             return
         # test attributes are not related
@@ -5047,10 +5060,12 @@ class TestMultiplicativeBasis(CombinedBasis):
         assert basis_b.n_basis_funcs == 10
 
     @pytest.mark.parametrize(
-        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_a",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize(
-        "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_b",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     def test_compute_n_basis_runtime(
         self, basis_a, basis_b, basis_class_specific_params
@@ -5075,10 +5090,10 @@ class TestMultiplicativeBasis(CombinedBasis):
         )
 
         mul = basis_a * basis_b
-        if not isinstance(mul.basis1, (HistoryConv, IdentityEval)):
+        if not isinstance(mul.basis1, (HistoryConv, IdentityEval, CustomBasis)):
             mul.basis1.n_basis_funcs = 10
             assert mul.n_basis_funcs == 10 * n_basis_b
-        if not isinstance(mul.basis2, (HistoryConv, IdentityEval)):
+        if not isinstance(mul.basis2, (HistoryConv, IdentityEval, CustomBasis)):
             mul.basis2.n_basis_funcs = 10
             mul.basis2.n_basis_funcs = 10
             assert mul.n_basis_funcs == 10 * mul.basis1.n_basis_funcs
@@ -5252,7 +5267,8 @@ def test_mul_of_basis_by_int(mul, basis_class, basis_class_specific_params):
 
 
 @pytest.mark.parametrize(
-    "basis_class", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+    "basis_class",
+    list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
 )
 def test_mul_of_basis_from_nested(basis_class, basis_class_specific_params):
     basis_obj = CombinedBasis.instantiate_basis(
@@ -5278,7 +5294,8 @@ def test_mul_of_basis_from_nested(basis_class, basis_class_specific_params):
 
 
 @pytest.mark.parametrize(
-    "basis_class", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+    "basis_class",
+    list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
 )
 def test_pow_of_basis_from_nested(basis_class, basis_class_specific_params):
     basis_obj = CombinedBasis.instantiate_basis(
