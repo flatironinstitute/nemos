@@ -1293,7 +1293,7 @@ class TestSharedMethods:
         "expected_out",
         [
             {
-                CustomBasis: "'mylabel':\n    CustomBasis(\n        funcs=[partial(power_func, 1), ..., partial(power_func, 5)",
+                CustomBasis: "'mylabel': CustomBasis(\n    funcs=[partial(power_func, 1), ..., partial(power_func, 5)",
                 basis.RaisedCosineLogEval: "'mylabel': RaisedCosineLogEval(n_basis_funcs=5, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True, bounds=(1.0, 2.0))",
                 basis.RaisedCosineLinearEval: "'mylabel': RaisedCosineLinearEval(n_basis_funcs=5, width=2.0, bounds=(1.0, 2.0))",
                 basis.BSplineEval: "'mylabel': BSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
