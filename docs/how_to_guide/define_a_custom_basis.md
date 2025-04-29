@@ -72,7 +72,7 @@ Replacing `functools.partial` with a `lambda` function would not work.
 funcs = [lambda x: laguerre_poly(p, c, x) for p in P]
 ```
 
-This will create a list of identical Laguerre polynomial functions. Why? Because p is captured by reference, not by value. When each lambda is called, it uses the value of `p` at that moment — which will be the last value in `P`, for all functions.
+This will create a list of identical Laguerre polynomial functions. Why? Because `p` is captured by reference, not by value. When each lambda is called, it uses the value of `p` at that moment — which will be the last value in `P`, for all functions.
 
 In contrast, `functools.partial` evaluates its arguments immediately, so each function correctly captures its own `p` value, avoiding this issue.
 :::
@@ -120,7 +120,7 @@ f(x)
 
 ## Multi-dimensional Inputs
 
-A custom basis can receive a multi-dimensional input too. As an example, let's write down a basis that acts on image inputs, and compute the dot product of an image with a bank of filter masks.
+A custom basis can also receive a multi-dimensional input. As an example, let's write down a basis that acts on image inputs, and computes the dot product of an image with a bank of filter masks.
 
 ```{code-cell} ipython3
 
