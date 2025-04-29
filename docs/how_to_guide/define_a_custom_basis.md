@@ -102,7 +102,8 @@ Using `partial` with **keyword arguments** in combination with a `vmap`-ed funct
 
 In the example below, only `x` is passed positionally, so `vmap` sees just one argument—causing a mismatch with `in_axes=(0, None, None)`.
 
-```{code} ipython
+```{code} ipython3
+
 import inspect
 
 # partial() will bind 'poly_coef' and 'decay_rate'
@@ -123,9 +124,13 @@ f(x)
 A custom basis can also receive a multi-dimensional input. As an example, let's write down a basis that acts on image inputs, and computes the dot product of an image with a bank of filter masks.
 
 ```{code-cell} ipython3
+import matplotlib.gridspec as gridspec
 
-# generate 100 random noise 50 x 50 images
+# generate 100 random noise 50 x 50 images and crop a patch
 imgs = np.random.randn(100, 50, 50)
+crop = np.zeros((1, 50, 50))
+crop[0, 20:35, 20:35] = 1
+imgs *= crop
 
 def image_dot_product(img, mask):
     return jnp.sum(img * mask[None], axis=(1,2))
@@ -137,6 +142,33 @@ funcs = [partial(image_dot_product, mask=m) for m in masks.T]
 
 # specify the the expected 3D input, (n_samples, pixel, pixel)
 bas_img = nmo.basis.CustomBasis(funcs=funcs, ndim_input=3, label="Image-dot")
+features = bas_img.compute_features(imgs)
+print(features.shape)
 
-print(bas_img.compute_features(imgs).shape)
+# plot two features, one corrresponding to a mask
+# that overlaps with the patch, one that doesn't
+fig = plt.figure(figsize=(10, 6))
+gs = gridspec.GridSpec(3, 4, figure=fig)
+ax = fig.add_subplot(gs[0, 0])
+ax.set_aspect('equal')
+ax.pcolormesh(imgs[0], cmap="Greys")
+ax.set_title("Image patch")
+
+ax = fig.add_subplot(gs[1, 0])
+ax.set_aspect('equal')
+ax.set_title("Overlapping")
+ax.pcolormesh(masks[..., 45], cmap="Blues")
+
+ax = fig.add_subplot(gs[2, 0])
+ax.set_aspect('equal')
+ax.pcolormesh(masks[..., 40], cmap="Reds")
+ax.set_title("Non-overlapping")
+
+ax = fig.add_subplot(gs[:, 1:])
+ax.set_title("Features")
+ax.plot(features[:, 45], color="b", lw=2, label="overlap")
+ax.plot(features[:, 40], color="r", lw=2, label="no-overalp")
+plt.legend()
+fig.tight_layout()
+_ = fig.show()
 ```
