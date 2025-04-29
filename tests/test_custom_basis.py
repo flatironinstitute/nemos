@@ -68,11 +68,12 @@ def test_vec_function_dims(vectorize_func, x, expectation):
     vec_f, regular_f = vectorize_func
     # should be always fine
     try:
-        vec_f(x)
+        out_vec = vec_f(x)
     except Exception:
         raise ValueError("Failed vectorization.")
     with expectation:
-        regular_f(x)
+        out_reg = regular_f(x)
+        assert np.all(out_vec.flatten() == out_reg.flatten())
 
 
 @pytest.mark.parametrize(

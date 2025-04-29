@@ -13,6 +13,7 @@ from numbers import Number
 from typing import TYPE_CHECKING, Callable, Iterable, List, Optional, Tuple
 
 import numpy as np
+import pynapple as nap
 from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame, TsdTensor
 
@@ -151,6 +152,8 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         Shape of the output excluding the number of samples.
     basis_kwargs:
         Additional keyword arguments to pass to the basis function.
+    pynapple_support:
+        Enable pynapple support if True.
     label:
         The label of the basis function.
 
@@ -203,7 +206,6 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
 
         self._input_shape_product = None
 
-        # nomenclature is confusing, should rename this to _n_args_compute_features
         self._n_input_dimensionality = infer_input_dimensionality(self)
         self._n_basis_funcs = len(self.funcs)
 
@@ -390,7 +392,8 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
 
         """
         if self._pynapple_support:
-            apply_func = support_pynapple("jax")(apply_f_vectorized)
+            conv_type = "numpy" if nap.nap_config.backend == "numba" else "jax"
+            apply_func = support_pynapple(conv_type)(apply_f_vectorized)
         else:
             apply_func = apply_f_vectorized
         return np.concatenate(

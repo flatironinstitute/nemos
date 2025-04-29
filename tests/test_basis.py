@@ -1,6 +1,7 @@
 import inspect
 import itertools
 import re
+from collections import namedtuple
 from contextlib import nullcontext as does_not_raise
 from functools import partial
 from unittest.mock import patch
@@ -15,7 +16,6 @@ from conftest import (
     custom_basis,
     list_all_basis_classes,
 )
-from collections import namedtuple
 
 import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
