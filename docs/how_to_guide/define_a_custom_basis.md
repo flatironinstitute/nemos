@@ -170,5 +170,5 @@ ax.plot(features[:, 45], color="b", lw=2, label="overlap")
 ax.plot(features[:, 40], color="r", lw=2, label="no-overalp")
 plt.legend()
 fig.tight_layout()
-_ = fig.show()
+plt.show()
 ```
