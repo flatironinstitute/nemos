@@ -149,7 +149,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         Dimensionality of the input for each sample, i.e. if your time series is of shape ``(n_samples, n, m)``,
         ``ndim_input`` is two.
     output_shape:
-        Shape of the output excluding the number of samples.
+        Shape of the output excluding the number of samples. Set automatically when `compute_features` is called.
     basis_kwargs:
         Additional keyword arguments to pass to the basis function.
     pynapple_support:
