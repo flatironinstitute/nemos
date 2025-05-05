@@ -2058,6 +2058,49 @@ class TestGLMObservationModel:
         assert model.intercept_ is not None
         assert model.scale_ is not None
 
+    @pytest.mark.parametrize("nan_inputs", [True, False])
+    @pytest.mark.parametrize(
+        "solver_name", ["ProximalGradient", "GradientDescent", "LBFGS"]
+    )
+    def test_update_params_are_finite(
+        self, nan_inputs, solver_name, request, glm_type, model_instantiation
+    ):
+        """
+        Fitting a GLM to data containing NaNs with the jaxopt.LBFGS solver worked when using GLM.fit,
+        but not when writing the training loop in Python and calling GLM.update repeatedly.
+        The problem was that this solver uses the data to initialize its state, and the state was populated
+        with NaNs by GLM.initialize_state.
+        The solution was dropping NaNs from the input data in GLM.initialize_state -- as is done in GLM.update and GLM.run.
+        """
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        model.solver_name = solver_name
+
+        if nan_inputs:
+            X[: X.shape[0] // 2, :] = np.nan
+
+        params = model.initialize_params(X, y)
+        state = model.initialize_state(X, y, params)
+
+        assert model.coef_ is None
+        assert model.intercept_ is None
+        if "gamma" not in model_instantiation:
+            # gamma model instantiation sets the scale
+            assert model.scale_ is None
+
+        # take an update step using the initialized state
+        _, _ = model.update(params, state, X, y)
+
+        assert model.coef_ is not None
+        assert model.intercept_ is not None
+        assert model.scale_ is not None
+
+        # parameters should not have NaN
+        assert jnp.all(jnp.isfinite(model.coef_))
+        assert jnp.all(jnp.isfinite(model.intercept_))
+        assert jnp.all(jnp.isfinite(model.scale_))
+
     @pytest.mark.parametrize("batch_size", [2, 10])
     def test_update_nan_drop_at_jit_comp(
         self, batch_size, request, glm_type, model_instantiation
