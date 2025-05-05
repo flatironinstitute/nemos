@@ -63,7 +63,7 @@ add = bas + nmo.basis.CustomBasis(funcs=funcs, label="Laguerre-2")
 print(add.compute_features(x, x).shape)
 ```
 
-:::{admonition} Python sharp bit
+:::{admonition} Python Warning
 :class: warning
 
 Replacing `functools.partial` with a `lambda` function would not work.
@@ -95,7 +95,7 @@ plt.plot(x, bas_vmap.compute_features(x))
 plt.show()
 ```
 
-:::{admonition} Python sharp bit #2
+:::{admonition} Python Warning #2
 :class: warning
 
 Using `partial` with **keyword arguments** in combination with a `vmap`-ed function will not work as expected. This is because `jax.vmap` applies `in_axes` only to **positional arguments**, and the number of positional arguments must match the length of `in_axes`.
