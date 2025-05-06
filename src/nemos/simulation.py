@@ -154,7 +154,7 @@ def regress_filter(coupling_filters: NDArray, eval_basis: NDArray) -> NDArray:
     --------
     .. plot::
         :include-source: True
-        :caption: Least-squares approximate filters.
+        :caption: Least-squares approximate filter.
 
         >>> import numpy as np
         >>> import matplotlib.pyplot as plt
@@ -275,7 +275,7 @@ def simulate_recurrent(
     --------
     .. plot::
         :include-source: True
-        :caption: Coupled model simulations.
+        :caption: Recurrently connected GLM simulations.
 
         >>> import numpy as np
         >>> import jax
