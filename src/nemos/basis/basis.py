@@ -120,20 +120,25 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
         """
         Examples
         --------
-        >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
-        >>> from nemos.basis import BSplineEval
-        >>> bspline_basis = BSplineEval(n_basis_funcs=4, order=3)
-        >>> sample_points, basis_values = bspline_basis.evaluate_on_grid(100)
-        >>> for i in range(4):
-        ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
-        >>> plt.title('B-Spline Basis Functions')
-        Text(0.5, 1.0, 'B-Spline Basis Functions')
-        >>> plt.xlabel('Domain')
-        Text(0.5, 0, 'Domain')
-        >>> plt.ylabel('Basis Function Value')
-        Text(0, 0.5, 'Basis Function Value')
-        >>> l = plt.legend()
+        .. plot::
+            :include-source: True
+            :caption: B-Spline
+
+            >>> import numpy as np
+            >>> import matplotlib.pyplot as plt
+            >>> from nemos.basis import BSplineEval
+            >>> bspline_basis = BSplineEval(n_basis_funcs=4, order=3)
+            >>> sample_points, basis_values = bspline_basis.evaluate_on_grid(100)
+            >>> for i in range(4):
+            ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
+            >>> plt.title('B-Spline Basis Functions')
+            Text(0.5, 1.0, 'B-Spline Basis Functions')
+            >>> plt.xlabel('Domain')
+            Text(0.5, 0, 'Domain')
+            >>> plt.ylabel('Basis Function Value')
+            Text(0, 0.5, 'Basis Function Value')
+            >>> l = plt.legend()
+            >>> plt.show()
         """
         return super().evaluate_on_grid(n_samples)
 
@@ -284,20 +289,25 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
         """
         Examples
         --------
-        >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
-        >>> from nemos.basis import BSplineConv
-        >>> bspline_basis = BSplineConv(n_basis_funcs=4, order=3, window_size=10)
-        >>> sample_points, basis_values = bspline_basis.evaluate_on_grid(100)
-        >>> for i in range(4):
-        ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
-        >>> plt.title('B-Spline Basis Functions')
-        Text(0.5, 1.0, 'B-Spline Basis Functions')
-        >>> plt.xlabel('Domain')
-        Text(0.5, 0, 'Domain')
-        >>> plt.ylabel('Basis Function Value')
-        Text(0, 0.5, 'Basis Function Value')
-        >>> l = plt.legend()
+        .. plot::
+            :include-source: True
+            :caption: B-Spline
+
+            >>> import numpy as np
+            >>> import matplotlib.pyplot as plt
+            >>> from nemos.basis import BSplineConv
+            >>> bspline_basis = BSplineConv(n_basis_funcs=4, order=3, window_size=10)
+            >>> sample_points, basis_values = bspline_basis.evaluate_on_grid(100)
+            >>> for i in range(4):
+            ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
+            >>> plt.title('B-Spline Basis Functions')
+            Text(0.5, 1.0, 'B-Spline Basis Functions')
+            >>> plt.xlabel('Domain')
+            Text(0.5, 0, 'Domain')
+            >>> plt.ylabel('Basis Function Value')
+            Text(0, 0.5, 'Basis Function Value')
+            >>> l = plt.legend()
+            >>> plt.show()
         """
         return super().evaluate_on_grid(n_samples)
 
@@ -437,20 +447,25 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         --------
         Evaluate and visualize 4 Cyclic B-spline basis functions of order 3:
 
-        >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
-        >>> from nemos.basis import CyclicBSplineEval
-        >>> cbspline_basis = CyclicBSplineEval(n_basis_funcs=4, order=3)
-        >>> sample_points, basis_values = cbspline_basis.evaluate_on_grid(100)
-        >>> for i in range(4):
-        ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
-        >>> plt.title('Cyclic B-Spline Basis Functions')
-        Text(0.5, 1.0, 'Cyclic B-Spline Basis Functions')
-        >>> plt.xlabel('Domain')
-        Text(0.5, 0, 'Domain')
-        >>> plt.ylabel('Basis Function Value')
-        Text(0, 0.5, 'Basis Function Value')
-        >>> l = plt.legend()
+        .. plot::
+            :include-source: True
+            :caption: Cyclic B-Spline
+
+            >>> import numpy as np
+            >>> import matplotlib.pyplot as plt
+            >>> from nemos.basis import CyclicBSplineEval
+            >>> cbspline_basis = CyclicBSplineEval(n_basis_funcs=4, order=3)
+            >>> sample_points, basis_values = cbspline_basis.evaluate_on_grid(100)
+            >>> for i in range(4):
+            ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
+            >>> plt.title('Cyclic B-Spline Basis Functions')
+            Text(0.5, 1.0, 'Cyclic B-Spline Basis Functions')
+            >>> plt.xlabel('Domain')
+            Text(0.5, 0, 'Domain')
+            >>> plt.ylabel('Basis Function Value')
+            Text(0, 0.5, 'Basis Function Value')
+            >>> l = plt.legend()
+            >>> plt.show()
         """
         return super().evaluate_on_grid(n_samples)
 
@@ -595,20 +610,25 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
         --------
         Evaluate and visualize 4 Cyclic B-spline basis functions of order 3:
 
-        >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
-        >>> from nemos.basis import CyclicBSplineConv
-        >>> cbspline_basis = CyclicBSplineConv(n_basis_funcs=4, order=3, window_size=10)
-        >>> sample_points, basis_values = cbspline_basis.evaluate_on_grid(100)
-        >>> for i in range(4):
-        ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
-        >>> plt.title('Cyclic B-Spline Basis Functions')
-        Text(0.5, 1.0, 'Cyclic B-Spline Basis Functions')
-        >>> plt.xlabel('Domain')
-        Text(0.5, 0, 'Domain')
-        >>> plt.ylabel('Basis Function Value')
-        Text(0, 0.5, 'Basis Function Value')
-        >>> l = plt.legend()
+        .. plot::
+            :include-source: True
+            :caption: Cyclic B-Spline
+
+            >>> import numpy as np
+            >>> import matplotlib.pyplot as plt
+            >>> from nemos.basis import CyclicBSplineConv
+            >>> cbspline_basis = CyclicBSplineConv(n_basis_funcs=4, order=3, window_size=10)
+            >>> sample_points, basis_values = cbspline_basis.evaluate_on_grid(100)
+            >>> for i in range(4):
+            ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
+            >>> plt.title('Cyclic B-Spline Basis Functions')
+            Text(0.5, 1.0, 'Cyclic B-Spline Basis Functions')
+            >>> plt.xlabel('Domain')
+            Text(0.5, 0, 'Domain')
+            >>> plt.ylabel('Basis Function Value')
+            Text(0, 0.5, 'Basis Function Value')
+            >>> l = plt.legend()
+            >>> plt.show()
         """
         return super().evaluate_on_grid(n_samples)
 
@@ -772,20 +792,24 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         --------
         Evaluate and visualize 4 M-spline basis functions of order 3:
 
-        >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
-        >>> from nemos.basis import MSplineEval
-        >>> mspline_basis = MSplineEval(n_basis_funcs=4, order=3)
-        >>> sample_points, basis_values = mspline_basis.evaluate_on_grid(100)
-        >>> for i in range(4):
-        ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
-        >>> plt.title('M-Spline Basis Functions')
-        Text(0.5, 1.0, 'M-Spline Basis Functions')
-        >>> plt.xlabel('Domain')
-        Text(0.5, 0, 'Domain')
-        >>> plt.ylabel('Basis Function Value')
-        Text(0, 0.5, 'Basis Function Value')
-        >>> l = plt.legend()
+        .. plot::
+            :include-source: True
+            :caption: M-Spline
+            >>> import numpy as np
+            >>> import matplotlib.pyplot as plt
+            >>> from nemos.basis import MSplineEval
+            >>> mspline_basis = MSplineEval(n_basis_funcs=4, order=3)
+            >>> sample_points, basis_values = mspline_basis.evaluate_on_grid(100)
+            >>> for i in range(4):
+            ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
+            >>> plt.title('M-Spline Basis Functions')
+            Text(0.5, 1.0, 'M-Spline Basis Functions')
+            >>> plt.xlabel('Domain')
+            Text(0.5, 0, 'Domain')
+            >>> plt.ylabel('Basis Function Value')
+            Text(0, 0.5, 'Basis Function Value')
+            >>> l = plt.legend()
+            >>> plt.show()
         """
         return super().evaluate_on_grid(n_samples)
 
@@ -954,6 +978,10 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         --------
         Evaluate and visualize 4 M-spline basis functions of order 3:
 
+        .. plot::
+            :include-source: True
+            :caption: M-Spline
+
         >>> import numpy as np
         >>> import matplotlib.pyplot as plt
         >>> from nemos.basis import MSplineConv
@@ -1072,13 +1100,20 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
         """
         Examples
         --------
-        >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
-        >>> from nemos.basis import RaisedCosineLinearEval
-        >>> n_basis_funcs = 5
-        >>> window_size=10
-        >>> raised_cos_basis = RaisedCosineLinearEval(n_basis_funcs)
-        >>> sample_points, basis_values = raised_cos_basis.evaluate_on_grid(100)
+        .. plot::
+            :include-source: True
+            :caption: Linearly Spaced Raised-Cosine
+
+            >>> import numpy as np
+            >>> import matplotlib.pyplot as plt
+            >>> from nemos.basis import RaisedCosineLinearEval
+            >>> n_basis_funcs = 5
+            >>> window_size=10
+            >>> raised_cos_basis = RaisedCosineLinearEval(n_basis_funcs)
+            >>> sample_points, basis_values = raised_cos_basis.evaluate_on_grid(100)
+            >>> plt.plot(sample_points, basis_values)
+            [<matplotlib.lines.Line2D object at ...
+            >>> plt.show()
 
         """
         return super().evaluate_on_grid(n_samples)
@@ -1230,14 +1265,21 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
         """
         Examples
         --------
-        >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
-        >>> from nemos.basis import RaisedCosineLinearConv
-        >>> n_basis_funcs = 5
-        >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05]) # sample decay rates
-        >>> window_size=10
-        >>> ortho_basis = RaisedCosineLinearConv(n_basis_funcs, window_size)
-        >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
+        .. plot::
+            :include-source: True
+            :caption: Linearly Spaced Raised-Cosine
+
+            >>> import numpy as np
+            >>> import matplotlib.pyplot as plt
+            >>> from nemos.basis import RaisedCosineLinearConv
+            >>> n_basis_funcs = 5
+            >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05]) # sample decay rates
+            >>> window_size=10
+            >>> ortho_basis = RaisedCosineLinearConv(n_basis_funcs, window_size)
+            >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
+            >>> plt.plot(sample_points, basis_values)
+            [<matplotlib.lines.Line2D object at ...
+            >>> plt.show()
 
         """
         return super().evaluate_on_grid(n_samples)
@@ -1392,14 +1434,21 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         """
         Examples
         --------
-        >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
-        >>> from nemos.basis import RaisedCosineLogEval
-        >>> n_basis_funcs = 5
-        >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05]) # sample decay rates
-        >>> window_size=10
-        >>> ortho_basis = RaisedCosineLogEval(n_basis_funcs)
-        >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
+        .. plot::
+            :include-source: True
+            :caption: Log Spaced Raised-Cosine
+
+            >>> import numpy as np
+            >>> import matplotlib.pyplot as plt
+            >>> from nemos.basis import RaisedCosineLogEval
+            >>> n_basis_funcs = 5
+            >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05]) # sample decay rates
+            >>> window_size=10
+            >>> ortho_basis = RaisedCosineLogEval(n_basis_funcs)
+            >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
+            >>> plt.plot(sample_points, basis_values)
+            [<matplotlib.lines.Line2D object at ...
+            >>> plt.show()
 
         """
         return super().evaluate_on_grid(n_samples)
@@ -1563,14 +1612,21 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
         """
         Examples
         --------
-        >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
-        >>> from nemos.basis import RaisedCosineLogConv
-        >>> n_basis_funcs = 5
-        >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05]) # sample decay rates
-        >>> window_size=10
-        >>> ortho_basis = RaisedCosineLogConv(n_basis_funcs, window_size)
-        >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
+        .. plot::
+            :include-source: True
+            :caption: Log Spaced Raised-Cosine
+
+            >>> import numpy as np
+            >>> import matplotlib.pyplot as plt
+            >>> from nemos.basis import RaisedCosineLogConv
+            >>> n_basis_funcs = 5
+            >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05]) # sample decay rates
+            >>> window_size=10
+            >>> ortho_basis = RaisedCosineLogConv(n_basis_funcs, window_size)
+            >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
+            >>> plt.plot(sample_points, basis_values)
+            [<matplotlib.lines.Line2D object at ...
+            >>> plt.show()
 
         """
         return super().evaluate_on_grid(n_samples)
@@ -1711,14 +1767,21 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         """
         Examples
         --------
-        >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
-        >>> from nemos.basis import OrthExponentialEval
-        >>> n_basis_funcs = 5
-        >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05]) # sample decay rates
-        >>> window_size=10
-        >>> ortho_basis = OrthExponentialEval(n_basis_funcs, decay_rates=decay_rates)
-        >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
+        .. plot::
+            :include-source: True
+            :caption: Orthogonalized Exponential Decays
+
+            >>> import numpy as np
+            >>> import matplotlib.pyplot as plt
+            >>> from nemos.basis import OrthExponentialEval
+            >>> n_basis_funcs = 5
+            >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05]) # sample decay rates
+            >>> window_size=10
+            >>> ortho_basis = OrthExponentialEval(n_basis_funcs, decay_rates=decay_rates)
+            >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
+            >>> plt.plot(sample_points, basis_values)
+            [<matplotlib.lines.Line2D object at ...
+            >>> plt.show()
 
         """
         return super().evaluate_on_grid(n_samples=n_samples)
@@ -1870,14 +1933,21 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         """
         Examples
         --------
-        >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
-        >>> from nemos.basis import OrthExponentialConv
-        >>> n_basis_funcs = 5
-        >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05]) # sample decay rates
-        >>> window_size=10
-        >>> ortho_basis = OrthExponentialConv(n_basis_funcs, window_size, decay_rates=decay_rates)
-        >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
+        .. plot::
+            :include-source: True
+            :caption: Orthogonalized Exponential Decays
+
+            >>> import numpy as np
+            >>> import matplotlib.pyplot as plt
+            >>> from nemos.basis import OrthExponentialConv
+            >>> n_basis_funcs = 5
+            >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05]) # sample decay rates
+            >>> window_size=10
+            >>> ortho_basis = OrthExponentialConv(n_basis_funcs, window_size, decay_rates=decay_rates)
+            >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
+            >>> plt.plot(sample_points, basis_values)
+            [<matplotlib.lines.Line2D object at ...
+            >>> plt.show()
 
         """
         return super().evaluate_on_grid(n_samples)
@@ -2017,11 +2087,18 @@ class IdentityEval(EvalBasisMixin, IdentityBasis):
         """
         Examples
         --------
-        >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
-        >>> from nemos.basis import IdentityEval
-        >>> basis = IdentityEval()
-        >>> sample_points, basis_values = basis.evaluate_on_grid(100)
+        .. plot::
+            :include-source: True
+            :caption: Identity
+
+            >>> import numpy as np
+            >>> import matplotlib.pyplot as plt
+            >>> from nemos.basis import IdentityEval
+            >>> basis = IdentityEval()
+            >>> sample_points, basis_values = basis.evaluate_on_grid(100)
+            >>> plt.plot(sample_points, basis_values)
+            [<matplotlib.lines.Line2D object at ...
+            >>> plt.show()
 
         """
         return super().evaluate_on_grid(n_samples=n_samples)
@@ -2150,11 +2227,18 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
         """
         Examples
         --------
-        >>> import matplotlib.pyplot as plt
-        >>> from nemos.basis import HistoryConv
-        >>> window_size=100
-        >>> basis = HistoryConv(window_size=window_size)
-        >>> sample_points, basis_values = basis.evaluate_on_grid(window_size)
+        .. plot::
+            :include-source: True
+            :caption: History
+
+            >>> import matplotlib.pyplot as plt
+            >>> from nemos.basis import HistoryConv
+            >>> window_size=100
+            >>> basis = HistoryConv(window_size=window_size)
+            >>> sample_points, basis_values = basis.evaluate_on_grid(window_size)
+            >>> plt.plot(sample_points, basis_values)
+            [<matplotlib.lines.Line2D object at ...
+            >>> plt.show()
 
         """
         return super().evaluate_on_grid(n_samples)
