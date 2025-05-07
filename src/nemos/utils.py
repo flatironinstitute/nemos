@@ -553,14 +553,10 @@ def format_repr(
     # basis), then don't use it
     disp_label = (label is not None) and (label != cls_name)
     if multiline:
-        if disp_label:
-            # cannot use tab directly since IDE converts to spaces, and doctests fail
-            tab = "        "
-        else:
-            tab = "    "
+        tab = "    "
         disp_params = "\n" + tab + f",\n{tab}".join(disp_params) + "\n" + tab[:-4]
         repr_str = (
-            f"{repr(label)}:\n    {cls_name}({disp_params})"
+            f"{repr(label)}: {cls_name}({disp_params})"
             if disp_label
             else f"{cls_name}({disp_params})"
         )

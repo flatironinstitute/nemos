@@ -137,6 +137,23 @@ custom_predictors.md
 
 :::{grid-item-card}
 
+```{eval-rst}
+
+.. plot:: scripts/basis_figs.py plot_laguerre_basis
+   :show-source-link: False
+   :height: 100px
+```
+
+```{toctree}
+:maxdepth: 2
+
+define_a_custom_basis.md
+```
+
+:::
+
+:::{grid-item-card}
+
 <figure>
 <a href="raw_history_feature.html">
 <img src="../_static/glm_population_scheme.svg" style="height: 100px", alt="Coupled GLM."/>

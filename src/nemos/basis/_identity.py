@@ -9,6 +9,7 @@ from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
 from ._basis import Basis, check_fraction_valid_samples, check_transform_input
 from ._basis_mixin import AtomicBasisMixin
+from ._check_basis import _check_input_dimensionality, _has_zero_samples
 
 
 class IdentityBasis(Basis, AtomicBasisMixin):
@@ -166,8 +167,8 @@ class HistoryBasis(Basis, AtomicBasisMixin):
         basis_funcs :
             The identity matrix of shape, i.e. ``np.eye(window_size, n_samples)``.
         """
-        self._check_input_dimensionality((n_samples,))
-        if self._has_zero_samples((n_samples,)):
+        _check_input_dimensionality(self, (n_samples,))
+        if _has_zero_samples((n_samples,)):
             raise ValueError("All sample counts provided must be greater than zero.")
         return np.linspace(0, 1, n_samples), np.eye(n_samples, self.n_basis_funcs)
 
