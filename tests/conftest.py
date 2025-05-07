@@ -10,6 +10,7 @@ Note:
 """
 
 import abc
+from functools import partial
 
 import jax
 import jax.numpy as jnp
@@ -20,7 +21,7 @@ import pytest
 import nemos as nmo
 import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
-from nemos.basis import AdditiveBasis, MultiplicativeBasis
+from nemos.basis import AdditiveBasis, CustomBasis, MultiplicativeBasis
 from nemos.basis._basis import Basis
 from nemos.basis._transformer_basis import TransformerBasis
 
@@ -31,7 +32,9 @@ nap.nap_config.suppress_conversion_warnings = True
 @pytest.fixture()
 def basis_class_specific_params():
     """Returns all the params for each class."""
-    all_cls = list_all_basis_classes("Conv") + list_all_basis_classes("Eval")
+    all_cls = (
+        list_all_basis_classes("Conv") + list_all_basis_classes("Eval") + [CustomBasis]
+    )
     return {cls.__name__: cls._get_param_names() for cls in all_cls}
 
 
@@ -45,6 +48,46 @@ class BasisFuncsTesting(abc.ABC):
     @abc.abstractmethod
     def cls(self):
         pass
+
+
+def power_func(n, x):
+    return jnp.power(x, n)
+
+
+def custom_basis(n_basis_funcs=5, label=None, **kwargs):
+    funcs = [partial(power_func, n) for n in range(1, n_basis_funcs + 1)]
+    ndim_input = kwargs.get("ndim_input", 1)
+    out_shape = kwargs.get("output_shape", None)
+    pynapple_support = kwargs.get("pynapple_support", True)
+    return CustomBasis(
+        funcs,
+        label=label,
+        ndim_input=ndim_input,
+        output_shape=out_shape,
+        pynapple_support=pynapple_support,
+    )
+
+
+def power_add(n, x, y):
+    return x**n + y**n
+
+
+def custom_basis_2d(n_basis_funcs=5, label=None):
+    funcs = [partial(power_add, n) for n in range(1, n_basis_funcs + 1)]
+    return CustomBasis(funcs, label=label)
+
+
+def basis_collapse_all_non_vec_axis(n_basis_funcs=5, label=None, **kwargs):
+    funcs = [lambda x: x.reshape(x.shape[0], -1)[:, 0] for _ in range(n_basis_funcs)]
+    ndim_input = kwargs.get("ndim_input", 1)
+    return CustomBasis(funcs, label=label, ndim_input=ndim_input)
+
+
+def basis_with_add_kwargs(label=None, basis_kwargs=None):
+    def func(x, add=0):
+        return x + add
+
+    return CustomBasis([func], label=label, basis_kwargs=basis_kwargs)
 
 
 class CombinedBasis(BasisFuncsTesting):
@@ -98,6 +141,11 @@ class CombinedBasis(BasisFuncsTesting):
             b1 = basis.MSplineEval(**kwargs_mspline)
             b2 = basis.RaisedCosineLinearConv(**kwargs_raised_cosine)
             basis_obj = b1 * b2
+        elif basis_class == CustomBasis:
+            basis_obj = custom_basis(
+                n_basis,
+                **inspect_utils.trim_kwargs(basis_class, kwargs, class_specific_params),
+            )
         else:
             basis_obj = basis_class(
                 **inspect_utils.trim_kwargs(basis_class, kwargs, class_specific_params)
@@ -111,15 +159,19 @@ def list_all_basis_classes(filter_basis="all") -> list[type]:
     Return all the classes in nemos.basis which are a subclass of Basis,
     which should be all concrete classes except TransformerBasis.
     """
-    all_basis = [
-        class_obj
-        for _, class_obj in inspect_utils.get_non_abstract_classes(basis)
-        if issubclass(class_obj, Basis)
-    ] + [
-        bas
-        for _, bas in inspect_utils.get_non_abstract_classes(nmo.basis._basis)
-        if bas != TransformerBasis
-    ]
+    all_basis = (
+        [
+            class_obj
+            for _, class_obj in inspect_utils.get_non_abstract_classes(basis)
+            if issubclass(class_obj, Basis)
+        ]
+        + [
+            bas
+            for _, bas in inspect_utils.get_non_abstract_classes(nmo.basis._basis)
+            if bas != TransformerBasis
+        ]
+        + [CustomBasis]
+    )
     if filter_basis != "all":
         all_basis = [a for a in all_basis if filter_basis in a.__name__]
     return all_basis

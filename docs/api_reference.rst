@@ -99,6 +99,19 @@ These classes are the building blocks for the concrete basis classes.
     AdditiveBasis
     MultiplicativeBasis
 
+**Custom defined Basis:**
+
+Define a fully functional basis form a list of functions.
+
+.. currentmodule:: nemos.basis._custom_basis
+
+.. autosummary::
+    :toctree: generated/_custom_basis
+    :recursive:
+    :nosignatures:
+
+    CustomBasis
+
 **Basis As ``scikit-learn`` Tranformers:**
 
 .. currentmodule:: nemos.basis._transformer_basis

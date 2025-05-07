@@ -7,7 +7,11 @@ from typing import TYPE_CHECKING, Generator
 import numpy as np
 
 from ..typing import FeatureMatrix
-from ._composition_utils import _iterate_over_components, infer_input_dimensionality
+from ._composition_utils import (
+    _iterate_over_components,
+    infer_input_dimensionality,
+    is_basis_like,
+)
 
 if TYPE_CHECKING:
     from ._basis import Basis
@@ -94,11 +98,7 @@ class TransformerBasis:
 
     @basis.setter
     def basis(self, basis):
-        if (
-            not hasattr(basis, "get_params")
-            or not hasattr(basis, "set_params")
-            or not hasattr(basis, "compute_features")
-        ):
+        if not is_basis_like(basis, sklearn_compatibility=True):
             missing_attrs = [
                 attr
                 for attr in ("get_params", "set_params", "compute_features")
@@ -203,7 +203,9 @@ class TransformerBasis:
         """
         self._check_initialized(self.basis)
         self._check_input(X, y)
-        self.basis.setup_basis(*self._unpack_inputs(X))
+        setup_basis = getattr(self.basis, "setup_basis", None)
+        if setup_basis:
+            setup_basis(*self._unpack_inputs(X))
         return self
 
     def transform(self, X: FeatureMatrix, y=None) -> FeatureMatrix:
