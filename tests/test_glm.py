@@ -2732,7 +2732,7 @@ class TestPopulationGLM:
         model.fit(X, y)
         rate = model.predict(X)
         assert hasattr(rate, "metadata") and (rate.metadata is not None)
-        assert np.all(y._metadata == rate.metadata)
+        assert np.all(y._metadata == rate._metadata)
         assert np.all(y.columns == rate.columns)
 
 
