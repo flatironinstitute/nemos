@@ -41,7 +41,7 @@ print(add.basis2)
 ```
 
 ## Retrieving Basis Components and Their Parameters
-In principle, nesting makes the process of retrieving or setting the parameters of individual components quite cumbersome.  
+In principle, nesting makes the process of retrieving or setting the parameters of individual components quite cumbersome.
 
 ```{code-cell} ipython3
 # retreive the number of basis funciton for input2 basis
@@ -79,7 +79,7 @@ A label can be specified at initialization if the composite basis is defined dir
 ```{code-cell} ipython3
 nmo.basis.AdditiveBasis(
     nmo.basis.BSplineEval(5),
-    nmo.basis.MSplineEval(5), 
+    nmo.basis.MSplineEval(5),
     label="my_custom_label"
 )
 ```
@@ -148,7 +148,7 @@ add.set_params(input3__order=3, input1__bounds=(-1,1))
 :::{admonition} Grid definition
 :class: info
 
-The parameter keys retrieved by `get_params` are the one needed to define a parameter grid when cross-validating your hyper-parameters with scikit-learn. Learn how to cross-validate basis parameters using [pipelines](https://scikit-learn.org/stable/modules/generated/sklearn.pipeline.Pipeline.html) with [this notebook](sklearn-how-to). 
+The parameter keys retrieved by `get_params` are the one needed to define a parameter grid when cross-validating your hyper-parameters with scikit-learn. Learn how to cross-validate basis parameters using [pipelines](https://scikit-learn.org/stable/modules/generated/sklearn.pipeline.Pipeline.html) with [this notebook](sklearn-how-to).
 :::
 
 

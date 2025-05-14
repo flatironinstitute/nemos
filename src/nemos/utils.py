@@ -14,6 +14,10 @@ from .base_class import Base
 from .tree_utils import pytree_map_and_reduce
 from .type_casting import is_numpy_array_like, support_pynapple
 
+SPECIAL_KEY_NAMES = {
+    jax.scipy.stats.norm.cdf: "norm.cdf",
+}
+
 
 def check_dimensionality(
     pytree: Any,
@@ -536,7 +540,10 @@ def format_repr(
         )
         if repr_param:
             if k in use_name_keys:
-                v = getattr(v, "__name__", repr(v))
+                if v in SPECIAL_KEY_NAMES:
+                    v = SPECIAL_KEY_NAMES[v]
+                else:
+                    v = getattr(v, "__name__", repr(v))
             elif isinstance(v, str):
                 v = repr(v)
             disp_params.append(f"{k}={v}")
@@ -546,14 +553,10 @@ def format_repr(
     # basis), then don't use it
     disp_label = (label is not None) and (label != cls_name)
     if multiline:
-        if disp_label:
-            # cannot use tab directly since IDE converts to spaces, and doctests fail
-            tab = "        "
-        else:
-            tab = "    "
+        tab = "    "
         disp_params = "\n" + tab + f",\n{tab}".join(disp_params) + "\n" + tab[:-4]
         repr_str = (
-            f"{repr(label)}:\n    {cls_name}({disp_params})"
+            f"{repr(label)}: {cls_name}({disp_params})"
             if disp_label
             else f"{cls_name}({disp_params})"
         )
@@ -593,3 +596,7 @@ def _get_terminal_size():
         cols, rows = shutil.get_terminal_size()
 
     return cols, rows
+
+
+def one_over_x(x):
+    return jnp.power(x, -1)

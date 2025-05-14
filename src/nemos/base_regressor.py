@@ -8,6 +8,7 @@ import inspect
 import warnings
 from abc import abstractmethod
 from copy import deepcopy
+from functools import wraps
 from typing import Any, Dict, NamedTuple, Optional, Tuple, Union
 
 import jax
@@ -20,6 +21,28 @@ from ._regularizer_builder import AVAILABLE_REGULARIZERS, create_regularizer
 from .base_class import Base
 from .regularizer import Regularizer, UnRegularized
 from .typing import DESIGN_INPUT_TYPE, SolverInit, SolverRun, SolverUpdate
+
+
+def strip_metadata(arg_num: Optional[int] = None, kwarg_key: Optional[str] = None):
+    """Strip metadata from arg."""
+    if arg_num is None and kwarg_key is None:
+        raise ValueError("Must specify either arg_num or kwarg_key.")
+
+    def decorator(func):
+        """Strip metadata if available."""
+
+        @wraps(func)
+        def wrapper(self, *args, **kwargs):
+            inp = args[arg_num] if arg_num is not None else kwargs[kwarg_key]
+            self._metadata = {
+                "metadata": inp._metadata if hasattr(inp, "_metadata") else None,
+                "columns": inp.columns if hasattr(inp, "columns") else None,
+            }
+            return func(self, *args, **kwargs)
+
+        return wrapper
+
+    return decorator
 
 
 class BaseRegressor(Base, abc.ABC):

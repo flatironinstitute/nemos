@@ -1,4 +1,3 @@
-import itertools
 import operator
 import pickle
 from contextlib import nullcontext as does_not_raise
@@ -7,7 +6,7 @@ from unittest.mock import patch
 
 import numpy as np
 import pytest
-from conftest import CombinedBasis, list_all_basis_classes
+from conftest import CombinedBasis, basis_with_add_kwargs, list_all_basis_classes
 from sklearn.base import clone as sk_clone
 from sklearn.pipeline import Pipeline
 
@@ -16,12 +15,13 @@ from nemos import basis
 from nemos._inspect_utils import get_subclass_methods, list_abstract_methods
 from nemos.basis import (
     AdditiveBasis,
+    CustomBasis,
     HistoryConv,
     IdentityEval,
     MultiplicativeBasis,
     TransformerBasis,
 )
-from nemos.basis._basis import generate_basis_label_pair
+from nemos.basis._composition_utils import generate_basis_label_pair
 
 
 @pytest.mark.parametrize(
@@ -57,7 +57,7 @@ def test_transformer_has_the_same_public_attributes_as_basis(
 
 @pytest.mark.parametrize(
     "basis_cls",
-    list_all_basis_classes("Conv") + list_all_basis_classes("Eval"),
+    list_all_basis_classes("Conv") + list_all_basis_classes("Eval") + [CustomBasis],
 )
 def test_to_transformer_and_constructor_are_equivalent(
     basis_cls, basis_class_specific_params
@@ -96,6 +96,13 @@ def test_to_transformer_and_constructor_are_equivalent(
         wrapped_methods_b.update({method: val})
 
     assert wrapped_methods_a == wrapped_methods_b
+    if basis_cls == CustomBasis:
+        f1, f2 = trans_bas_a.basis.__dict__.pop(
+            "_funcs", [True]
+        ), trans_bas_b.basis.__dict__.pop("_funcs", [True])
+        # the functions will not have the same id,
+        # but the __repr__ will show that they point to the same function address with the same parameters
+        assert all(fi.__repr__() == fj.__repr__() for fi, fj in zip(f1, f2))
     assert trans_bas_a.basis.__dict__ == trans_bas_b.basis.__dict__
 
 
@@ -105,8 +112,8 @@ def test_to_transformer_and_constructor_are_equivalent(
 )
 def test_basis_to_transformer_makes_a_copy(basis_cls, basis_class_specific_params):
 
-    if basis_cls in [nmo.basis.IdentityEval, nmo.basis.HistoryConv]:
-        return
+    if basis_cls in [nmo.basis.IdentityEval, nmo.basis.HistoryConv, CustomBasis]:
+        pytest.skip(f"{basis_cls} n_basis_funcs is not settable.")
 
     bas_a = CombinedBasis().instantiate_basis(
         5, basis_cls, basis_class_specific_params, window_size=10
@@ -166,7 +173,7 @@ def test_transformerbasis_getattr(
 
 @pytest.mark.parametrize(
     "basis_cls",
-    list_all_basis_classes("Conv") + list_all_basis_classes("Eval"),
+    list_all_basis_classes("Conv") + list_all_basis_classes("Eval") + [CustomBasis],
 )
 @pytest.mark.parametrize("n_basis_funcs_init", [5])
 @pytest.mark.parametrize("n_basis_funcs_new", [6, 10, 20])
@@ -182,10 +189,15 @@ def test_transformerbasis_set_params(
     trans_basis = basis.TransformerBasis(
         bas.set_input_shape(*([1] * bas._n_input_dimensionality))
     )
-    if not isinstance(bas, HistoryConv):
+    if not isinstance(bas, (HistoryConv, CustomBasis)):
         trans_basis.set_params(n_basis_funcs=n_basis_funcs_new)
         assert trans_basis.n_basis_funcs == n_basis_funcs_new
         assert trans_basis.basis.n_basis_funcs == n_basis_funcs_new
+    elif isinstance(bas, CustomBasis):
+        basis_kwargs = {"add": n_basis_funcs_new}
+        trans_basis.set_params(basis_kwargs=basis_kwargs)
+        trans_basis.basis_kwargs == basis_kwargs
+        trans_basis.basis.basis_kwargs == basis_kwargs
     else:
         trans_basis.set_params(window_size=n_basis_funcs_new)
         assert trans_basis.window_size == n_basis_funcs_new
@@ -194,7 +206,7 @@ def test_transformerbasis_set_params(
 
 @pytest.mark.parametrize(
     "basis_cls",
-    list_all_basis_classes("Conv") + list_all_basis_classes("Eval"),
+    list_all_basis_classes("Conv") + list_all_basis_classes("Eval") + [CustomBasis],
 )
 def test_transformerbasis_setattr_basis(basis_cls, basis_class_specific_params):
 
@@ -220,7 +232,7 @@ def test_transformerbasis_setattr_basis(basis_cls, basis_class_specific_params):
 
 @pytest.mark.parametrize(
     "basis_cls",
-    list_all_basis_classes("Conv") + list_all_basis_classes("Eval"),
+    list_all_basis_classes("Conv") + list_all_basis_classes("Eval") + [CustomBasis],
 )
 def test_transformerbasis_setattr_basis_attribute(
     basis_cls, basis_class_specific_params
@@ -237,16 +249,22 @@ def test_transformerbasis_setattr_basis_attribute(
     )
     if basis_cls is nmo.basis.HistoryConv:
         trans_bas.window_size = 20
+        assert trans_bas.n_basis_funcs == 20
+        assert trans_bas.basis.n_basis_funcs == 20
+    elif basis_cls is CustomBasis:
+        trans_bas.basis_kwargs = {"add": 20}
+        assert trans_bas.basis_kwargs == {"add": 20}
+        assert trans_bas.basis.basis_kwargs == {"add": 20}
     else:
         trans_bas.n_basis_funcs = 20
-    assert trans_bas.n_basis_funcs == 20
-    assert trans_bas.basis.n_basis_funcs == 20
+        assert trans_bas.n_basis_funcs == 20
+        assert trans_bas.basis.n_basis_funcs == 20
     assert isinstance(trans_bas.basis, basis_cls)
 
 
 @pytest.mark.parametrize(
     "basis_cls",
-    list_all_basis_classes("Conv") + list_all_basis_classes("Eval"),
+    list_all_basis_classes("Conv") + list_all_basis_classes("Eval") + [CustomBasis],
 )
 def test_transformerbasis_copy_basis_on_construct(
     basis_cls, basis_class_specific_params
@@ -262,13 +280,20 @@ def test_transformerbasis_copy_basis_on_construct(
     nbas = deepcopy(orig_bas.n_basis_funcs)
     orig_bas = orig_bas.set_input_shape(*([1] * orig_bas._n_input_dimensionality))
     trans_bas = basis.TransformerBasis(orig_bas)
-    attr_name = "window_size" if basis_cls is HistoryConv else "n_basis_funcs"
-    setattr(trans_bas, attr_name, 20)
+    if isinstance(orig_bas, CustomBasis):
+        setattr(trans_bas, "basis_kwargs", {"add": 20})
+        assert orig_bas.basis_kwargs == {}
+        assert trans_bas.basis_kwargs == {"add": 20}
+        assert trans_bas.basis.basis_kwargs == {"add": 20}
 
-    assert orig_bas.n_basis_funcs == nbas
-    assert trans_bas.basis.n_basis_funcs == 20
-    assert trans_bas.basis.n_basis_funcs == 20
-    assert isinstance(trans_bas.basis, basis_cls)
+    else:
+        attr_name = "window_size" if basis_cls is HistoryConv else "n_basis_funcs"
+        setattr(trans_bas, attr_name, 20)
+
+        assert orig_bas.n_basis_funcs == nbas
+        assert trans_bas.n_basis_funcs == 20
+        assert trans_bas.basis.n_basis_funcs == 20
+        assert isinstance(trans_bas.basis, basis_cls)
 
 
 @pytest.mark.parametrize(
@@ -746,11 +771,18 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
 
     if basis_cls is IdentityEval:
         return
-
-    cv_attr = "n_basis_funcs" if basis_cls is not HistoryConv else "window_size"
-    bas = CombinedBasis().instantiate_basis(
-        5, basis_cls, basis_class_specific_params, window_size=5
-    )
+    elif basis_cls is HistoryConv:
+        cv_attr = "window_size"
+    elif basis_cls is CustomBasis:
+        cv_attr = "basis_kwargs"
+    else:
+        cv_attr = "n_basis_funcs"
+    if basis_cls is not CustomBasis:
+        bas = CombinedBasis().instantiate_basis(
+            5, basis_cls, basis_class_specific_params, window_size=5
+        )
+    else:
+        bas = basis_with_add_kwargs(basis_kwargs={"add": 0})
     transformer = bas.set_input_shape(
         *([inp] * bas._n_input_dimensionality)
     ).to_transformer()
@@ -776,7 +808,9 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
     pipe.fit(x, y)
     np.testing.assert_allclose(pipe["glm"].coef_, model.coef_)
 
-    set_param_dict = {f"bas__basis2__{cv_attr}": 4}
+    set_param_dict = {
+        f"bas__basis2__{cv_attr}": 4 if cv_attr != "basis_kwargs" else {"add": 1}
+    }
     # set basis & refit
     if isinstance(bas, (basis.AdditiveBasis, basis.MultiplicativeBasis)):
         pipe.set_params(**set_param_dict)
@@ -787,8 +821,20 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
         X = bas.set_params(**set_param_dict_outside).compute_features(
             *([inp] * bas._n_input_dimensionality)
         )
+    elif basis_cls is CustomBasis:
+        set_param_dict = {
+            f"bas__{cv_attr}": 4 if cv_attr != "basis_kwargs" else {"add": 1}
+        }
+        pipe.set_params(**set_param_dict)
+        assert bas.basis_kwargs == {"add": 0}  # check that it is not a shallow copy
+        set_param_dict_outside = {f"{cv_attr}": {"add": 1}}
+        X = bas.set_params(**set_param_dict_outside).compute_features(
+            *([inp] * bas._n_input_dimensionality)
+        )
     else:
-        set_param_dict = {f"bas__{cv_attr}": 4}
+        set_param_dict = {
+            f"bas__{cv_attr}": 4 if cv_attr != "basis_kwargs" else {"add": 1}
+        }
         pipe.set_params(**set_param_dict)
         assert bas.n_basis_funcs == 5  # make sure that the change did not affect bas
         set_param_dict_outside = {f"{cv_attr}": 4}
@@ -906,9 +952,19 @@ def test_dir_transformer(basis_cls, basis_class_specific_params):
     lst = transformer.__dir__()
     dict_abst_method = list_abstract_methods(nmo.basis._basis.Basis)
 
-    # check it finds all abc basis methods
-    for meth in dict_abst_method:
-        assert meth[0] in lst
+    # CustomBasis does not inherit from Basis
+    if basis_cls is not CustomBasis:
+        # check it finds all abc basis methods
+        for meth in dict_abst_method:
+            assert meth[0] in lst
+    else:
+        for meth in [
+            "compute_features",
+            "evaluate",
+            "set_input_shape",
+            "split_by_feature",
+        ]:
+            assert meth in lst
 
     # check all reimplemented methods
     dict_reimplemented_method = get_subclass_methods(basis_cls)
@@ -950,7 +1006,8 @@ def test_check_input(inp, expectation, basis_cls, basis_class_specific_params, m
         5, basis_cls, basis_class_specific_params, window_size=10
     )
     # set kernels
-    bas._set_input_independent_states()
+    if hasattr(bas, "_set_input_independent_states"):
+        bas._set_input_independent_states()
     # set input shape
     transformer = bas.to_transformer().set_input_shape(
         *([3] * bas._n_input_dimensionality)
@@ -980,6 +1037,7 @@ def test_check_input(inp, expectation, basis_cls, basis_class_specific_params, m
     "expected_out",
     [
         {
+            basis.CustomBasis: "Transformer(CustomBasis(\n    funcs=[partial(power_func, 1), ..., partial(power_func, 5)],\n    ndim_input=1,\n    pynapple_support=True\n))",
             basis.BSplineConv: "Transformer(BSplineConv(n_basis_funcs=5, window_size=10, order=4))",
             basis.BSplineEval: "Transformer(BSplineEval(n_basis_funcs=5, order=4))",
             basis.CyclicBSplineConv: "Transformer(CyclicBSplineConv(n_basis_funcs=5, window_size=10, order=4))",

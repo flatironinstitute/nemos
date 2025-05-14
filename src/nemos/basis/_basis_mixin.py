@@ -6,24 +6,29 @@ import abc
 import copy
 import inspect
 import re
+from collections import OrderedDict
 from contextlib import contextmanager
 from functools import wraps
 from itertools import chain
 from typing import TYPE_CHECKING, Any, Generator, Literal, Optional, Tuple, Union
 
+import jax
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..convolve import create_convolutional_predictor
-from ..utils import _get_terminal_size
+from ..utils import _get_terminal_size, format_repr
 from ._composition_utils import (
-    __PUBLIC_BASES__,
-    _atomic_basis_label_setter_logic,
     _composite_basis_setter_logic,
-    _get_root,
     _recompute_all_default_labels,
+    generate_basis_label_pair,
+    generate_composite_basis_labels,
+    get_input_shape,
     infer_input_dimensionality,
+    is_basis_like,
+    label_setter,
+    set_input_shape,
 )
 from ._transformer_basis import TransformerBasis
 
@@ -120,29 +125,283 @@ def remap_parameters(method):
     return wrapper
 
 
-class AtomicBasisMixin:
-    """Mixin class for atomic bases (i.e. non-composite)."""
-
-    def __init__(self, n_basis_funcs: int, label: Optional[str] = None):
-        self._n_basis_funcs = n_basis_funcs
-        self._input_shape_ = None
-        self._check_n_basis_min()
-
+class BasisMixin:
+    def __init__(self, label: Optional[str] = None):
+        if not hasattr(self, "_input_shape_"):
+            self._input_shape_ = None
         # initialize as default
         self._label = self.__class__.__name__
-        # pass through the checker
+        # pass through the setter
         self.label = label
+        # initialize parent to None. This should not end in "_" because it is
+        # a permanent property of a basis, defined at composite basis init
+        self._parent: Optional["BasisMixin"] = None
+
+    def __repr__(self):
+        return format_repr(self)
+
+    def __getitem__(self, index: str) -> Basis:
+
+        if isinstance(index, (int, slice)):
+            string = "Slicing" if isinstance(index, slice) else "Indexing with integer"
+            raise IndexError(
+                f"You can only index basis using labels. {string} is invalid."
+            )
+
+        search = next(
+            (bas for lab, bas in generate_basis_label_pair(self) if lab == index), None
+        )
+
+        if search is None:
+            avail_index = ",".join(f"'{b}'" for b in self._generate_subtree_labels())
+            raise IndexError(
+                f"Basis label {index} not found. Available labels: {avail_index}"
+            )
+        return search
+
+    def _generate_subtree_labels(
+        self, type_label: Literal["all", "user-defined"] = "all"
+    ) -> Generator[str]:
+        """
+        List all user-specified labels.
+        """
+        yield from generate_composite_basis_labels(self, type_label)
+
+    def _iterate_over_components(self) -> Generator | chain:
+        """Return a generator that iterates over all basis components.
+
+        For atomic bases, the list is just [self].
+
+        Returns
+        -------
+            A generator returning self, it will be chained in composite bases.
+
+        """
+        if hasattr(self, "basis1") and hasattr(self, "basis2"):
+            components1 = (
+                self.basis1._iterate_over_components()
+                if hasattr(self.basis1, "_iterate_over_components")
+                else [self.basis1]
+            )
+            components2 = (
+                self.basis2._iterate_over_components()
+                if hasattr(self.basis2, "_iterate_over_components")
+                else [self.basis2]
+            )
+            return chain(
+                components1,
+                components2,
+            )
+        return (x for x in [self])
 
     @property
     def label(self) -> str:
         """Label for the basis."""
-        return self._label
+        if getattr(self, "_label", None) is None and hasattr(self, "_generate_label"):
+            return self._generate_label()
+        return getattr(self, "_label", self.__class__.__name__)
 
     @label.setter
     def label(self, label: str | None) -> None:
-        error = _atomic_basis_label_setter_logic(self, label)
+        error = label_setter(self, label)
         if error:
             raise error
+
+    def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> BasisMixin:
+        """Set the expected input shape for the basis object."""
+        set_input_shape(self, *xi)
+        return self
+
+    @property
+    def input_shape(self):
+        return get_input_shape(self)
+
+    def _get_feature_slicing(
+        self,
+        n_inputs: Optional[tuple] = None,
+        start_slice: Optional[int] = None,
+    ) -> Tuple[OrderedDict, int]:
+        """
+        Calculate and return the slicing for features based on the input structure.
+
+        This method determines how to slice the features for different basis types.
+
+        Parameters
+        ----------
+        n_inputs :
+            The number of input basis for each component, by default it uses ``self._input_shape_product``.
+        start_slice :
+            The starting index for slicing, by default it starts from 0.
+
+        Returns
+        -------
+        split_dict :
+            Dictionary with keys as labels and values as slices representing
+            the slicing for each additive component.
+        start_slice :
+            The updated starting index after slicing.
+
+        See Also
+        --------
+        _get_default_slicing : Handles default slicing logic.
+        _merge_slicing_dicts : Merges multiple slicing dictionaries, handling keys conflicts.
+        """
+        # Set default values for start_slice if not provided
+        start_slice = start_slice or 0
+        # Handle the default case for non-additive basis types
+        # See overwritten method for recursion logic
+        split_dict, start_slice = self._get_default_slicing(start_slice=start_slice)
+
+        return split_dict, start_slice
+
+    def _get_default_slicing(self, start_slice: int) -> Tuple[OrderedDict, int]:
+        """Handle default slicing logic."""
+        split_dict = {
+            self.label: slice(start_slice, start_slice + self.n_output_features)
+        }
+        start_slice += self.n_output_features
+        return OrderedDict(split_dict), start_slice
+
+    def split_by_feature(
+        self,
+        x: NDArray,
+        axis: int = 1,
+    ):
+        r"""
+        Decompose an array along a specified axis into sub-arrays based on the number of expected inputs.
+
+        This function takes an array (e.g., a design matrix or model coefficients) and splits it along
+        a designated axis.
+
+        **How it works:**
+
+        - If the basis expects an input shape ``(n_samples, n_inputs)``, then the feature axis length will
+          be ``total_n_features = n_inputs * n_basis_funcs``. This axis is reshaped into dimensions
+          ``(n_inputs, n_basis_funcs)``.
+
+        - If the basis expects an input of shape ``(n_samples,)``, then the feature axis length will
+          be ``total_n_features = n_basis_funcs``. This axis is reshaped into ``(1, n_basis_funcs)``.
+
+        For example, if the input array ``x`` has shape ``(1, 2, total_n_features, 4, 5)``,
+        then after applying this method, it will be reshaped into ``(1, 2, n_inputs, n_basis_funcs, 4, 5)``.
+
+        The specified axis (``axis``) determines where the split occurs, and all other dimensions
+        remain unchanged. See the example section below for the most common use cases.
+
+        Parameters
+        ----------
+        x :
+            The input array to be split, representing concatenated features, coefficients,
+            or other data. The shape of ``x`` along the specified axis must match the total
+            number of features generated by the basis, i.e., ``self.n_output_features``.
+
+            **Examples:**
+
+            - For a design matrix: ``(n_samples, total_n_features)``
+
+            - For model coefficients: ``(total_n_features,)`` or ``(total_n_features, n_neurons)``.
+
+        axis : int, optional
+            The axis along which to split the features. Defaults to 1.
+            Use ``axis=1`` for design matrices (features along columns) and ``axis=0`` for
+            coefficient arrays (features along rows). All other dimensions are preserved.
+
+        Raises
+        ------
+        ValueError
+            If the shape of ``x`` along the specified axis does not match ``self.n_output_features``.
+
+        Returns
+        -------
+        dict
+            A dictionary where:
+
+            - **Key**: Label of the basis.
+            - **Value**: the array reshaped to: ``(..., n_inputs, n_basis_funcs, ...)``
+        """
+        # convert axis to positive ints
+        axis = axis if axis >= 0 else x.ndim + axis
+
+        if x.shape[axis] != self.n_output_features:
+            raise ValueError(
+                "`x.shape[axis]` does not match the expected number of features."
+                f" `x.shape[axis] == {x.shape[axis]}`, while the expected number "
+                f"of features is {self.n_output_features}"
+            )
+
+        # Get the slice dictionary based on predefined feature slicing
+        slice_dict = self._get_feature_slicing()[0]
+
+        # Helper function to build index tuples for each slice
+        def build_index_tuple(slice_obj, axis: int, ndim: int):
+            """Create an index tuple to apply a slice on the given axis."""
+            index = [slice(None)] * ndim  # Initialize index for all dimensions
+            index[axis] = slice_obj  # Replace the axis with the slice object
+            return tuple(index)
+
+        # Get the dict for slicing the correct axis
+        index_dict = jax.tree_util.tree_map(
+            lambda sl: build_index_tuple(sl, axis, x.ndim), slice_dict
+        )
+
+        # Custom leaf function to identify index tuples as leaves
+        def is_leaf(value):
+            # Check if it's a tuple, length matches ndim, and all elements are slice objects
+            if isinstance(value, tuple) and len(value) == x.ndim:
+                return all(isinstance(v, slice) for v in value)
+            return False
+
+        # Apply the slicing using the custom leaf function
+        out = jax.tree_util.tree_map(lambda sl: x[sl], index_dict, is_leaf=is_leaf)
+        reshaped_out: dict = dict()
+        for items, bas in zip(out.items(), self):
+            key, val = items
+            reshaped_out[key] = bas._reshape_concatenated_arrays(val, bas, axis)
+        return reshaped_out
+
+    @staticmethod
+    def _reshape_concatenated_arrays(
+        array: NDArray, bas: BasisMixin, axis: int
+    ) -> NDArray:
+        # reshape the arrays to match input shapes
+        shape = list(array.shape)
+        array = array.reshape(
+            shape[:axis]
+            + [*(b for sh in bas._input_shape_ for b in sh), -1]
+            + shape[axis + 1 :]
+        )
+        return array
+
+    def __iter__(self):
+        """Makes basis iterable. Re-implemented for additive."""
+        yield self
+
+
+class AtomicBasisMixin(BasisMixin):
+    """Mixin class for atomic bases (i.e. non-composite)."""
+
+    def __init__(self, n_basis_funcs: int, label: Optional[str] = None):
+        super().__init__(label=label)
+        self._n_basis_funcs = n_basis_funcs
+        check_basis_min = getattr(self, "_check_n_basis_min", None)
+        if check_basis_min:
+            check_basis_min()
+
+    @property
+    def n_output_features(self) -> int | None:
+        """
+        Number of features returned by the basis.
+
+        Notes
+        -----
+        The number of output features can be determined only when the number of inputs
+        provided to the basis is known. Therefore, before the first call to ``compute_features``,
+        this property will return ``None``. After that call, or after setting the input shape with
+        ``set_input_shape``, ``n_output_features`` will be available.
+        """
+        if self._input_shape_product is not None:
+            return self.n_basis_funcs * self._input_shape_product[0]
+        return None
 
     @property
     def _has_default_label(self):
@@ -160,28 +419,7 @@ class AtomicBasisMixin:
         klass = self.__class__(**self.get_params())
         return klass
 
-    def _iterate_over_components(self) -> Generator:
-        """Return a generator that iterates over all basis components.
-
-        For atomic bases, the list is just [self].
-
-        Returns
-        -------
-            A generator returning self, it will be chained in composite bases.
-
-        """
-        return (x for x in [self])
-
-    def _generate_subtree_labels(
-        self, type_label: Literal["all", "user-defined"] = "all"
-    ) -> Generator[str]:
-        """
-        List all user-specified labels.
-        """
-        if type_label == "all" or (not self._has_default_label):
-            yield self._label
-
-    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray) -> BasisMixin:
         """
         Set the expected input shape for the basis object.
 
@@ -217,28 +455,7 @@ class AtomicBasisMixin:
         is not set in this method, then ``compute_features`` (equivalent to ``fit_transform``) will break.
 
         """
-        if isinstance(xi, tuple):
-            if not all(isinstance(i, int) for i in xi):
-                raise ValueError(
-                    f"The tuple provided contains non integer values. Tuple: {xi}."
-                )
-            shape = xi
-        elif isinstance(xi, int):
-            shape = () if xi == 1 else (xi,)
-        else:
-            shape = xi.shape[1:]
-
-        n_inputs = (int(np.prod(shape)),)
-
-        self._input_shape_ = [shape]
-
-        # total number of input time series. Used  for slicing and reshaping
-        self._input_shape_product = n_inputs
-        return self
-
-    @property
-    def input_shape(self) -> NDArray:
-        return self._input_shape_[0] if self._input_shape_ else None
+        return super().set_input_shape(xi)
 
 
 class EvalBasisMixin:
@@ -554,7 +771,7 @@ class BasisTransformerMixin:
         return TransformerBasis(self)
 
 
-class CompositeBasisMixin:
+class CompositeBasisMixin(BasisMixin):
     """Mixin class for composite basis.
 
     Add overwrites concrete methods or defines abstract methods for composite basis
@@ -563,7 +780,14 @@ class CompositeBasisMixin:
 
     _shallow_copy: bool = False
 
-    def __init__(self, basis1: Basis, basis2: Basis, label: Optional[str] = None):
+    def __init__(
+        self, basis1: BasisMixin, basis2: BasisMixin, label: Optional[str] = None
+    ):
+        # number of input arrays that the basis receives
+        self._n_input_dimensionality = infer_input_dimensionality(
+            basis1
+        ) + infer_input_dimensionality(basis2)
+
         # This step is slow if you add a very large number of bases
         self._basis1 = None
         self._basis2 = None
@@ -582,15 +806,22 @@ class CompositeBasisMixin:
         self.basis1._parent = self
         self.basis2._parent = self
 
-        # initialize attribute
-        self._label = None
-        # use setter to check & set provided label
-        self.label = label
+        # trigger label setter
+        super().__init__(label=label)
 
-        # number of input arrays that the basis receives
-        self._n_input_dimensionality = infer_input_dimensionality(
-            basis1
-        ) + infer_input_dimensionality(basis2)
+    def _is_basis_like(
+        self, basis1: Optional[BasisMixin] = None, basis2: Optional[BasisMixin] = None
+    ):
+        if basis1 and not is_basis_like(basis1):
+            raise ValueError(
+                "`basis1` does not implement `compute_features`. "
+                "The method is required for the correct behavior of the basis."
+            )
+        if basis2 and not is_basis_like(basis2):
+            raise ValueError(
+                "`basis2` does not implement `compute_features`. "
+                "The method is required for the correct behavior of the basis."
+            )
 
     @property
     def basis1(self):
@@ -598,11 +829,7 @@ class CompositeBasisMixin:
 
     @basis1.setter
     def basis1(self, basis):
-        if not hasattr(basis, "get_params") or not hasattr(basis, "compute_features"):
-            raise TypeError(
-                "`basis1` does not implement `compute_features`. "
-                "The method is required for the correct behavior of the basis."
-            )
+        self._is_basis_like(basis1=basis)
 
         if self._basis2:
             self._set_labels(basis, self._basis2)
@@ -617,11 +844,7 @@ class CompositeBasisMixin:
 
     @basis2.setter
     def basis2(self, basis):
-        if not hasattr(basis, "compute_features"):
-            raise TypeError(
-                "`basis2` does not implement `compute_features`. "
-                "The method is required for the correct behavior of the basis."
-            )
+        self._is_basis_like(basis2=basis)
         if self._basis1:
             self._set_labels(self._basis1, basis)
         if self._basis2:
@@ -678,82 +901,45 @@ class CompositeBasisMixin:
             self.set_input_shape(*self.input_shape)
 
     @property
-    def label(self) -> str:
-        """Label for the basis."""
-        if self._label is None:
-            return self._generate_label()
-        return self._label
-
-    @label.setter
-    def label(self, label: str | None) -> None:
-        reset = (label is None) or (label == self._generate_label())
-        if reset:
-            self._label = None
-        else:
-            label = str(label)
-            if label in _get_root(self)._generate_subtree_labels():
-                raise ValueError(
-                    f"Label '{label}' is already in use. When user-provided, label must be unique."
-                )
-            elif label in __PUBLIC_BASES__ and label != self.__class__.__name__:
-                raise ValueError(
-                    f"Cannot set basis label '{label}' for basis of type {type(self)}."
-                )
-            self._label = label
-
-    @property
-    def input_shape(self):
-        basis1 = getattr(self, "_basis1", None)
-        basis2 = getattr(self, "_basis2", None)
-        # happens at initialization
-        if basis2 is None and basis1 is not None:
-            components = (
-                basis1._iterate_over_components()
-                if hasattr(basis1, "_iterate_over_components")
-                else [basis1]
-            )
-            return [
-                *(getattr(bas1, "input_shape", None) for bas1 in components),
-                None,
-            ]
-        components1 = (
-            basis1._iterate_over_components()
-            if hasattr(basis1, "_iterate_over_components")
-            else [basis1]
-        )
-        components2 = (
-            basis2._iterate_over_components()
-            if hasattr(basis2, "_iterate_over_components")
-            else [basis2]
-        )
-        shapes = [
-            *(getattr(bas1, "input_shape", None) for bas1 in components1),
-            *(getattr(bas2, "input_shape", None) for bas2 in components2),
-        ]
-        return shapes
-
-    @property
     def _input_shape_(self):
         return self.input_shape
+
+    def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> BasisMixin:
+        """
+        Set the expected input shape for the basis object.
+
+        This method sets the input shape for each component basis in the basis.
+        One ``xi`` must be provided for each basis component, specified as an integer,
+        a tuple of integers, or an array. The method calculates and stores the total number of output features
+        based on the number of basis functions in each component and the provided input shapes.
+
+        Parameters
+        ----------
+        *xi :
+            The input shape specifications. For every k,``xi[k]`` can be:
+            - An integer: Represents the dimensionality of the input. A value of ``1`` is treated as scalar input.
+            - A tuple: Represents the exact input shape excluding the first axis (sample axis).
+              All elements must be integers.
+            - An array: The shape is extracted, excluding the first axis (assumed to be the sample axis).
+
+        Raises
+        ------
+        ValueError
+            If a tuple is provided, and it contains non-integer elements.
+            If not enough inputs are provided.
+
+        Returns
+        -------
+        self :
+            Returns the instance itself to allow method chaining.
+        """
+        return super().set_input_shape(*xi)
 
     @property
     @abc.abstractmethod
     def n_basis_funcs(self):
         """Read only property for composite bases."""
         pass
-
-    def _generate_subtree_labels(
-        self, type_label: Literal["all", "user-defined"] = "all"
-    ) -> Generator[str]:
-        """
-        List all user-specified labels.
-        """
-        if type_label == "all" or self._label:
-            yield self.label
-        for lab in self.basis1._generate_subtree_labels(type_label):
-            yield lab
-        for lab in self.basis2._generate_subtree_labels(type_label):
-            yield lab
 
     def setup_basis(self, *xi: NDArray) -> Basis:
         """
@@ -792,33 +978,10 @@ class CompositeBasisMixin:
         :
             The basis with the states stored as attributes of each component.
         """
-        self.basis1._set_input_independent_states()
-        self.basis2._set_input_independent_states()
-
-    def _iterate_over_components(self):
-        """Return a generator that iterates over all basis components.
-
-        Reimplements the default behavior by iteratively calling _iterate_over_components of the
-        elements.
-
-        Returns
-        -------
-            A generator looping on each individual input.
-        """
-        components1 = (
-            self.basis1._iterate_over_components()
-            if hasattr(self.basis1, "_iterate_over_components")
-            else [self.basis1]
-        )
-        components2 = (
-            self.basis2._iterate_over_components()
-            if hasattr(self.basis2, "_iterate_over_components")
-            else [self.basis2]
-        )
-        return chain(
-            components1,
-            components2,
-        )
+        if hasattr(self.basis1, "_set_input_independent_states"):
+            self.basis1._set_input_independent_states()
+        if hasattr(self.basis2, "_set_input_independent_states"):
+            self.basis2._set_input_independent_states()
 
     @contextmanager
     def _set_shallow_copy(self, value):
@@ -855,44 +1018,6 @@ class CompositeBasisMixin:
             klass = self.__class__(basis1, basis2)
 
         return klass
-
-    def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> Basis:
-        """
-        Set the expected input shape for the basis object.
-
-        This method sets the input shape for each component basis in the basis.
-        One ``xi`` must be provided for each basis component, specified as an integer,
-        a tuple of integers, or an array. The method calculates and stores the total number of output features
-        based on the number of basis functions in each component and the provided input shapes.
-
-        Parameters
-        ----------
-        *xi :
-            The input shape specifications. For every k,``xi[k]`` can be:
-            - An integer: Represents the dimensionality of the input. A value of ``1`` is treated as scalar input.
-            - A tuple: Represents the exact input shape excluding the first axis (sample axis).
-              All elements must be integers.
-            - An array: The shape is extracted, excluding the first axis (assumed to be the sample axis).
-
-        Raises
-        ------
-        ValueError
-            If a tuple is provided and it contains non-integer elements.
-
-        Returns
-        -------
-        self :
-            Returns the instance itself to allow method chaining.
-        """
-        self._input_shape_product = (
-            *self.basis1.set_input_shape(
-                *xi[: self.basis1._n_input_dimensionality]
-            )._input_shape_product,
-            *self.basis2.set_input_shape(
-                *xi[self.basis1._n_input_dimensionality :]
-            )._input_shape_product,
-        )
-        return self
 
     def __repr__(self, n=0):
         cols, rows = _get_terminal_size()

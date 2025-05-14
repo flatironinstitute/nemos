@@ -103,7 +103,7 @@ plot_07_glm_pytree.md
 :::{grid-item-card}
 
 ```{eval-rst}
- 
+
 .. plot:: scripts/glm_predictors.py plot_categorical_var_design_matrix
    :show-source-link: False
    :height: 100px
@@ -131,6 +131,23 @@ categorical_predictors.md
 :maxdepth: 2
 
 custom_predictors.md
+```
+
+:::
+
+:::{grid-item-card}
+
+```{eval-rst}
+
+.. plot:: scripts/basis_figs.py plot_laguerre_basis
+   :show-source-link: False
+   :height: 100px
+```
+
+```{toctree}
+:maxdepth: 2
+
+define_a_custom_basis.md
 ```
 
 :::
