@@ -2719,7 +2719,7 @@ class TestPopulationGLM:
             "population_poissonGLM_model_instantiation_pytree",
         ],
     )
-    def test_metdata_pynapple_predict(self, reg_setup, request):
+    def test_metadata_pynapple_predict(self, reg_setup, request):
         X, y, model, true_params, firing_rate = request.getfixturevalue(reg_setup)
         y = TsdFrame(
             t=np.arange(y.shape[0]),
