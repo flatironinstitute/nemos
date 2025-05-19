@@ -9,8 +9,9 @@ from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
-import jaxopt
 from numpy.typing import ArrayLike
+
+from third_party.jaxopt import jaxopt
 
 from . import observation_models as obs
 from . import tree_utils, validation

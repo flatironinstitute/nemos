@@ -11,8 +11,9 @@ from typing import Callable, Tuple, Union
 
 import jax
 import jax.numpy as jnp
-import jaxopt
 from numpy.typing import NDArray
+
+from third_party.jaxopt import jaxopt
 
 from . import tree_utils
 from .base_class import Base

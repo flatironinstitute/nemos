@@ -2,13 +2,13 @@ import inspect
 from contextlib import nullcontext as does_not_raise
 
 import jax
-import jaxopt
 import numpy as np
 import pytest
 
 import nemos as nmo
 from nemos.solvers._svrg import SVRG, ProxSVRG, SVRGState
 from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
+from third_party.jaxopt import jaxopt
 
 
 @pytest.mark.parametrize(
@@ -482,7 +482,6 @@ def test_svrg_update_converges(request, regr_setup, stepsize):
     ],
 )
 def test_svrg_xk_update_step(request, regr_setup, to_tuple, prox, prox_lambda):
-
     X, y, true_params, ols_coef, loss_arr = request.getfixturevalue(regr_setup)
 
     # the loss takes an array, but I want to test with tuples as well
