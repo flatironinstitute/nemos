@@ -23,11 +23,11 @@ import jax
 import jax.numpy as jnp
 from jax.scipy.special import logsumexp
 
-from jaxopt._src.bisection import Bisection
-from jaxopt._src.eq_qp import EqualityConstrainedQP
-from jaxopt._src.lbfgs import LBFGS
-from jaxopt._src.osqp import OSQP, BoxOSQP
-from jaxopt._src import tree_util
+from third_party.jaxopt.jaxopt._src.bisection import Bisection
+from third_party.jaxopt.jaxopt._src.eq_qp import EqualityConstrainedQP
+from third_party.jaxopt.jaxopt._src.lbfgs import LBFGS
+from third_party.jaxopt.jaxopt._src.osqp import OSQP, BoxOSQP
+from third_party.jaxopt.jaxopt._src import tree_util
 
 
 def projection_non_negative(x: Any, hyperparams=None) -> Any:

@@ -12,16 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from jaxopt._src.objective import CompositeLinearFunction
+from third_party.jaxopt.jaxopt._src.objective import CompositeLinearFunction
 
-from jaxopt._src.objective import least_squares
-from jaxopt._src.objective import ridge_regression
+from third_party.jaxopt.jaxopt._src.objective import least_squares
+from third_party.jaxopt.jaxopt._src.objective import ridge_regression
 
-from jaxopt._src.objective import binary_logreg
+from third_party.jaxopt.jaxopt._src.objective import binary_logreg
 
-from jaxopt._src.objective import multiclass_logreg
-from jaxopt._src.objective import multiclass_logreg_with_intercept
-from jaxopt._src.objective import l2_multiclass_logreg
-from jaxopt._src.objective import l2_multiclass_logreg_with_intercept
+from third_party.jaxopt.jaxopt._src.objective import multiclass_logreg
+from third_party.jaxopt.jaxopt._src.objective import multiclass_logreg_with_intercept
+from third_party.jaxopt.jaxopt._src.objective import l2_multiclass_logreg
+from third_party.jaxopt.jaxopt._src.objective import l2_multiclass_logreg_with_intercept
 
-from jaxopt._src.objective import multiclass_linear_svm_dual
+from third_party.jaxopt.jaxopt._src.objective import multiclass_linear_svm_dual

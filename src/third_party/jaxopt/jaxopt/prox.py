@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from jaxopt._src.prox import make_prox_from_projection
-from jaxopt._src.prox import prox_none
-from jaxopt._src.prox import prox_lasso
-from jaxopt._src.prox import prox_non_negative_lasso
-from jaxopt._src.prox import prox_elastic_net
-from jaxopt._src.prox import prox_group_lasso
-from jaxopt._src.prox import prox_ridge
-from jaxopt._src.prox import prox_non_negative_ridge
+from third_party.jaxopt.jaxopt._src.prox import make_prox_from_projection
+from third_party.jaxopt.jaxopt._src.prox import prox_none
+from third_party.jaxopt.jaxopt._src.prox import prox_lasso
+from third_party.jaxopt.jaxopt._src.prox import prox_non_negative_lasso
+from third_party.jaxopt.jaxopt._src.prox import prox_elastic_net
+from third_party.jaxopt.jaxopt._src.prox import prox_group_lasso
+from third_party.jaxopt.jaxopt._src.prox import prox_ridge
+from third_party.jaxopt.jaxopt._src.prox import prox_non_negative_ridge

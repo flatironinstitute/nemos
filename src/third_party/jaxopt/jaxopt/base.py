@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from jaxopt._src.base import AutoOrBoolean
-from jaxopt._src.base import IterativeSolver
-from jaxopt._src.base import LinearOperator
-from jaxopt._src.base import OptStep
-from jaxopt._src.base import StochasticSolver
-from jaxopt._src.base import KKTSolution
+from third_party.jaxopt.jaxopt._src.base import AutoOrBoolean
+from third_party.jaxopt.jaxopt._src.base import IterativeSolver
+from third_party.jaxopt.jaxopt._src.base import LinearOperator
+from third_party.jaxopt.jaxopt._src.base import OptStep
+from third_party.jaxopt.jaxopt._src.base import StochasticSolver
+from third_party.jaxopt.jaxopt._src.base import KKTSolution

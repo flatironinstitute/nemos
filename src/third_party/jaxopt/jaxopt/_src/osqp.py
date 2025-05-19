@@ -27,16 +27,16 @@ import jax
 import jax.numpy as jnp
 from jax.tree_util import tree_reduce
 
-from jaxopt._src import base
-from jaxopt._src import implicit_diff as idf
-from jaxopt._src.cond import cond
-from jaxopt.tree_util import tree_add, tree_sub, tree_mul, tree_sum
-from jaxopt.tree_util import tree_scalar_mul, tree_add_scalar_mul
-from jaxopt.tree_util import tree_map, tree_vdot
-from jaxopt.tree_util import tree_ones_like, tree_zeros_like, tree_where
-from jaxopt.tree_util import tree_negative, tree_l2_norm, tree_inf_norm
-from jaxopt._src.linear_operator import DenseLinearOperator, _make_linear_operator
-import jaxopt.linear_solve as linear_solve
+from third_party.jaxopt.jaxopt._src import base
+from third_party.jaxopt.jaxopt._src import implicit_diff as idf
+from third_party.jaxopt.jaxopt._src.cond import cond
+from third_party.jaxopt.jaxopt.tree_util import tree_add, tree_sub, tree_mul, tree_sum
+from third_party.jaxopt.jaxopt.tree_util import tree_scalar_mul, tree_add_scalar_mul
+from third_party.jaxopt.jaxopt.tree_util import tree_map, tree_vdot
+from third_party.jaxopt.jaxopt.tree_util import tree_ones_like, tree_zeros_like, tree_where
+from third_party.jaxopt.jaxopt.tree_util import tree_negative, tree_l2_norm, tree_inf_norm
+from third_party.jaxopt.jaxopt._src.linear_operator import DenseLinearOperator, _make_linear_operator
+import third_party.jaxopt.jaxopt.linear_solve as linear_solve
 
 
 # Since jaxopt.projection itself depends on OSQP, we duplicate projection_box to avoid a circular dependency.

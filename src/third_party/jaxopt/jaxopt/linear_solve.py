@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from jaxopt._src.linear_solve import solve_lu
-from jaxopt._src.linear_solve import solve_cholesky
-from jaxopt._src.linear_solve import solve_qr
-from jaxopt._src.linear_solve import solve_inv
-from jaxopt._src.linear_solve import solve_cg
-from jaxopt._src.linear_solve import solve_normal_cg
-from jaxopt._src.linear_solve import solve_gmres
-from jaxopt._src.linear_solve import solve_bicgstab
-from jaxopt._src.iterative_refinement import solve_iterative_refinement
+from third_party.jaxopt.jaxopt._src.linear_solve import solve_lu
+from third_party.jaxopt.jaxopt._src.linear_solve import solve_cholesky
+from third_party.jaxopt.jaxopt._src.linear_solve import solve_qr
+from third_party.jaxopt.jaxopt._src.linear_solve import solve_inv
+from third_party.jaxopt.jaxopt._src.linear_solve import solve_cg
+from third_party.jaxopt.jaxopt._src.linear_solve import solve_normal_cg
+from third_party.jaxopt.jaxopt._src.linear_solve import solve_gmres
+from third_party.jaxopt.jaxopt._src.linear_solve import solve_bicgstab
+from third_party.jaxopt.jaxopt._src.iterative_refinement import solve_iterative_refinement

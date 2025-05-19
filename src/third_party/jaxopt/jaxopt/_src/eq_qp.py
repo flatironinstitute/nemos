@@ -24,15 +24,15 @@ from dataclasses import dataclass
 import jax
 import jax.numpy as jnp
 
-from jaxopt._src import base
-from jaxopt._src import implicit_diff as idf
-from jaxopt._src.tree_util import tree_add, tree_sub, tree_add_scalar_mul
-from jaxopt._src.tree_util import tree_vdot, tree_negative, tree_l2_norm
-from jaxopt._src.tree_util import tree_zeros_like
-from jaxopt._src.linear_operator import _make_linear_operator
-from jaxopt._src.cvxpy_wrapper import _check_params
-import jaxopt._src.linear_solve as linear_solve
-from jaxopt._src.iterative_refinement import IterativeRefinement
+from third_party.jaxopt.jaxopt._src import base
+from third_party.jaxopt.jaxopt._src import implicit_diff as idf
+from third_party.jaxopt.jaxopt._src.tree_util import tree_add, tree_sub, tree_add_scalar_mul
+from third_party.jaxopt.jaxopt._src.tree_util import tree_vdot, tree_negative, tree_l2_norm
+from third_party.jaxopt.jaxopt._src.tree_util import tree_zeros_like
+from third_party.jaxopt.jaxopt._src.linear_operator import _make_linear_operator
+from third_party.jaxopt.jaxopt._src.cvxpy_wrapper import _check_params
+import third_party.jaxopt.jaxopt._src.linear_solve as linear_solve
+from third_party.jaxopt.jaxopt._src.iterative_refinement import IterativeRefinement
 
 
 def extract_Qc_from_obj(init_params, params_obj, fun):

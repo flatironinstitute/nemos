@@ -20,7 +20,7 @@ import jax
 from jax.nn import softplus
 import jax.numpy as jnp
 from jax.scipy.special import logsumexp
-from jaxopt._src.projection import projection_simplex, projection_hypercube
+from third_party.jaxopt.jaxopt._src.projection import projection_simplex, projection_hypercube
 
 
 # Regression

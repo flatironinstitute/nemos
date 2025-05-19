@@ -15,10 +15,10 @@
 """Line searches utilities."""
 
 from jax import numpy as jnp
-from jaxopt._src import base
-from jaxopt._src.backtracking_linesearch import BacktrackingLineSearch
-from jaxopt._src.hager_zhang_linesearch import HagerZhangLineSearch
-from jaxopt._src.zoom_linesearch import ZoomLineSearch
+from third_party.jaxopt.jaxopt._src import base
+from third_party.jaxopt.jaxopt._src.backtracking_linesearch import BacktrackingLineSearch
+from third_party.jaxopt.jaxopt._src.hager_zhang_linesearch import HagerZhangLineSearch
+from third_party.jaxopt.jaxopt._src.zoom_linesearch import ZoomLineSearch
 
 
 def _setup_linesearch(

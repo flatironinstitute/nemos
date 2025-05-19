@@ -19,8 +19,8 @@ from typing import Tuple
 import jax
 import jax.numpy as jnp
 
-from jaxopt._src import base
-from jaxopt._src import loss
+from third_party.jaxopt.jaxopt._src import base
+from third_party.jaxopt.jaxopt._src import loss
 
 
 class CompositeLinearFunction:

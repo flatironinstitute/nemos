@@ -25,15 +25,15 @@ from typing import Union
 import jax
 from jax import lax
 import jax.numpy as jnp
-from jaxopt._src import base
-from jaxopt._src.base import _make_funs_with_aux
-from jaxopt._src.cond import cond
-from jaxopt._src.tree_util import tree_single_dtype
-from jaxopt._src.tree_util import get_real_dtype
-from jaxopt.tree_util import tree_add_scalar_mul
-from jaxopt.tree_util import tree_scalar_mul
-from jaxopt.tree_util import tree_vdot_real
-from jaxopt.tree_util import tree_conj
+from third_party.jaxopt.jaxopt._src import base
+from third_party.jaxopt.jaxopt._src.base import _make_funs_with_aux
+from third_party.jaxopt.jaxopt._src.cond import cond
+from third_party.jaxopt.jaxopt._src.tree_util import tree_single_dtype
+from third_party.jaxopt.jaxopt._src.tree_util import get_real_dtype
+from third_party.jaxopt.jaxopt.tree_util import tree_add_scalar_mul
+from third_party.jaxopt.jaxopt.tree_util import tree_scalar_mul
+from third_party.jaxopt.jaxopt.tree_util import tree_vdot_real
+from third_party.jaxopt.jaxopt.tree_util import tree_conj
 
 # pylint: disable=g-bare-generic
 # pylint: disable=invalid-name

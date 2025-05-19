@@ -28,13 +28,13 @@ import jax
 import jax.numpy as jnp
 import jax.scipy as jsp
 
-from jaxopt._src import base
-from jaxopt._src.linear_solve import solve_cg
-from jaxopt._src.linear_solve import solve_cholesky
-from jaxopt._src.linear_solve import solve_inv
-from jaxopt._src.linear_solve import solve_lu
-from jaxopt._src.linear_solve import solve_qr
-from jaxopt._src.tree_util import tree_l2_norm, tree_inf_norm
+from third_party.jaxopt.jaxopt._src import base
+from third_party.jaxopt.jaxopt._src.linear_solve import solve_cg
+from third_party.jaxopt.jaxopt._src.linear_solve import solve_cholesky
+from third_party.jaxopt.jaxopt._src.linear_solve import solve_inv
+from third_party.jaxopt.jaxopt._src.linear_solve import solve_lu
+from third_party.jaxopt.jaxopt._src.linear_solve import solve_qr
+from third_party.jaxopt.jaxopt._src.tree_util import tree_l2_norm, tree_inf_norm
 
 
 class LevenbergMarquardtState(NamedTuple):

@@ -36,10 +36,10 @@ from jax import config
 import jax.numpy as jnp
 import jax.tree_util as tree_util
 from jax.tree_util import register_pytree_node_class
-from jaxopt._src import base
-from jaxopt._src import implicit_diff as idf
-from jaxopt._src import projection
-from jaxopt._src.tree_util import tree_sub
+from third_party.jaxopt.jaxopt._src import base
+from third_party.jaxopt.jaxopt._src import implicit_diff as idf
+from third_party.jaxopt.jaxopt._src import projection
+from third_party.jaxopt.jaxopt._src.tree_util import tree_sub
 import numpy as onp
 import scipy as osp
 from scipy.optimize import LbfgsInvHessProduct

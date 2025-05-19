@@ -28,19 +28,19 @@ from typing import Any, Callable, NamedTuple, Optional, Union
 import jax
 from jax import numpy as jnp
 
-from jaxopt._src import base
-from jaxopt._src import projection
-from jaxopt._src.lbfgs import init_history
-from jaxopt._src.lbfgs import update_history
-from jaxopt._src.linesearch_util import _init_stepsize
-from jaxopt._src.linesearch_util import _setup_linesearch
+from third_party.jaxopt.jaxopt._src import base
+from third_party.jaxopt.jaxopt._src import projection
+from third_party.jaxopt.jaxopt._src.lbfgs import init_history
+from third_party.jaxopt.jaxopt._src.lbfgs import update_history
+from third_party.jaxopt.jaxopt._src.linesearch_util import _init_stepsize
+from third_party.jaxopt.jaxopt._src.linesearch_util import _setup_linesearch
 
-from jaxopt._src.tree_util import tree_single_dtype
-from jaxopt.tree_util import tree_add_scalar_mul
-from jaxopt.tree_util import tree_inf_norm
-from jaxopt.tree_util import tree_map
-from jaxopt.tree_util import tree_sub
-from jaxopt.tree_util import tree_vdot
+from third_party.jaxopt.jaxopt._src.tree_util import tree_single_dtype
+from third_party.jaxopt.jaxopt.tree_util import tree_add_scalar_mul
+from third_party.jaxopt.jaxopt.tree_util import tree_inf_norm
+from third_party.jaxopt.jaxopt.tree_util import tree_map
+from third_party.jaxopt.jaxopt.tree_util import tree_sub
+from third_party.jaxopt.jaxopt.tree_util import tree_vdot
 
 import numpy as np
 

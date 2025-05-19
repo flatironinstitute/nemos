@@ -29,15 +29,15 @@ from typing import Tuple
 import jax
 import jax.numpy as jnp
 
-from jaxopt import implicit_diff as idf
+from third_party.jaxopt.jaxopt import implicit_diff as idf
 
 # Do not use jaxopt.linear_solve to avoid circular imports: use
 # jaxopt._src.linear_solve instead.
 # This allows to define linear solver with base.Solver interface,
 # and then exporting them in jaxopt.linear_solve.
 
-from jaxopt import loop
-from jaxopt import tree_util
+from third_party.jaxopt.jaxopt import loop
+from third_party.jaxopt.jaxopt import tree_util
 
 
 AutoOrBoolean = Union[str, bool]

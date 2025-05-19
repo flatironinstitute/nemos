@@ -28,14 +28,14 @@ from dataclasses import dataclass
 import jax
 import jax.numpy as jnp
 
-from jaxopt._src import base
-from jaxopt._src import loop
-from jaxopt._src.prox import prox_none
-from jaxopt._src.tree_util import tree_add_scalar_mul
-from jaxopt._src.tree_util import tree_l2_norm
-from jaxopt._src.tree_util import tree_sub
-from jaxopt._src.tree_util import tree_vdot
-from jaxopt._src.tree_util import tree_single_dtype
+from third_party.jaxopt.jaxopt._src import base
+from third_party.jaxopt.jaxopt._src import loop
+from third_party.jaxopt.jaxopt._src.prox import prox_none
+from third_party.jaxopt.jaxopt._src.tree_util import tree_add_scalar_mul
+from third_party.jaxopt.jaxopt._src.tree_util import tree_l2_norm
+from third_party.jaxopt.jaxopt._src.tree_util import tree_sub
+from third_party.jaxopt.jaxopt._src.tree_util import tree_vdot
+from third_party.jaxopt.jaxopt._src.tree_util import tree_single_dtype
 
 
 def fista_line_search(

@@ -22,9 +22,9 @@ from typing import Union
 
 from dataclasses import dataclass
 
-from jaxopt._src import base
-from jaxopt._src import prox
-from jaxopt._src.proximal_gradient import ProximalGradient, ProxGradState
+from third_party.jaxopt.jaxopt._src import base
+from third_party.jaxopt.jaxopt._src import prox
+from third_party.jaxopt.jaxopt._src.proximal_gradient import ProximalGradient, ProxGradState
 
 
 @dataclass(eq=False)

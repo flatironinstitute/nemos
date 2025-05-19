@@ -12,4 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from jaxopt._src.loop import while_loop
+from third_party.jaxopt.jaxopt._src.loop import while_loop

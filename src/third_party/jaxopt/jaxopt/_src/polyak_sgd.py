@@ -23,14 +23,14 @@ from typing import Union
 
 import jax.numpy as jnp
 
-from jaxopt._src import base
-from jaxopt.tree_util import tree_add
-from jaxopt.tree_util import tree_add_scalar_mul
-from jaxopt.tree_util import tree_l2_norm
-from jaxopt.tree_util import tree_scalar_mul
-from jaxopt.tree_util import tree_sub
-from jaxopt.tree_util import tree_zeros_like
-from jaxopt._src.tree_util import tree_single_dtype
+from third_party.jaxopt.jaxopt._src import base
+from third_party.jaxopt.jaxopt.tree_util import tree_add
+from third_party.jaxopt.jaxopt.tree_util import tree_add_scalar_mul
+from third_party.jaxopt.jaxopt.tree_util import tree_l2_norm
+from third_party.jaxopt.jaxopt.tree_util import tree_scalar_mul
+from third_party.jaxopt.jaxopt.tree_util import tree_sub
+from third_party.jaxopt.jaxopt.tree_util import tree_zeros_like
+from third_party.jaxopt.jaxopt._src.tree_util import tree_single_dtype
 
 
 class PolyakSGDState(NamedTuple):

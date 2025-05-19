@@ -25,11 +25,11 @@ from dataclasses import dataclass
 import jax
 import jax.numpy as jnp
 
-from jaxopt._src import base
-from jaxopt._src.tree_util import tree_sub
-from jaxopt._src.tree_util import tree_vdot
-from jaxopt._src.tree_util import tree_average, tree_add_scalar_mul
-from jaxopt._src.tree_util import tree_map
+from third_party.jaxopt.jaxopt._src import base
+from third_party.jaxopt.jaxopt._src.tree_util import tree_sub
+from third_party.jaxopt.jaxopt._src.tree_util import tree_vdot
+from third_party.jaxopt.jaxopt._src.tree_util import tree_average, tree_add_scalar_mul
+from third_party.jaxopt.jaxopt._src.tree_util import tree_map
 
 
 def minimize_residuals(residual_gram, ridge):

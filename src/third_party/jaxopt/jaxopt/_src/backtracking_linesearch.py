@@ -24,12 +24,12 @@ from dataclasses import dataclass
 
 import jax.numpy as jnp
 
-from jaxopt._src import base
-from jaxopt._src.cond import cond
-from jaxopt.tree_util import tree_add_scalar_mul
-from jaxopt.tree_util import tree_conj
-from jaxopt.tree_util import tree_scalar_mul
-from jaxopt.tree_util import tree_vdot_real
+from third_party.jaxopt.jaxopt._src import base
+from third_party.jaxopt.jaxopt._src.cond import cond
+from third_party.jaxopt.jaxopt.tree_util import tree_add_scalar_mul
+from third_party.jaxopt.jaxopt.tree_util import tree_conj
+from third_party.jaxopt.jaxopt.tree_util import tree_scalar_mul
+from third_party.jaxopt.jaxopt.tree_util import tree_vdot_real
 
 
 class BacktrackingLineSearchState(NamedTuple):

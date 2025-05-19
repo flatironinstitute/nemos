@@ -82,7 +82,7 @@ class ProxSVRG:
     Examples
     --------
     >>> import numpy as np
-    >>> from jaxopt.prox import prox_lasso
+    >>> from third_party.jaxopt.jaxopt.prox import prox_lasso
     >>> loss_fn = lambda params, X, y: ((X.dot(params) - y)**2).sum()
     >>> svrg = ProxSVRG(loss_fn, prox_lasso)
     >>> hyperparams_prox = 0.1

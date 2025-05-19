@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from jaxopt._src.implicit_diff import custom_root
-from jaxopt._src.implicit_diff import custom_fixed_point
-from jaxopt._src.implicit_diff import root_jvp
-from jaxopt._src.implicit_diff import root_vjp
+from third_party.jaxopt.jaxopt._src.implicit_diff import custom_root
+from third_party.jaxopt.jaxopt._src.implicit_diff import custom_fixed_point
+from third_party.jaxopt.jaxopt._src.implicit_diff import root_jvp
+from third_party.jaxopt.jaxopt._src.implicit_diff import root_vjp

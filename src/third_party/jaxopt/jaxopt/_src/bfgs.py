@@ -21,15 +21,15 @@ import warnings
 
 import jax
 import jax.numpy as jnp
-from jaxopt._src import base
-from jaxopt._src.linesearch_util import _init_stepsize
-from jaxopt._src.linesearch_util import _setup_linesearch
-from jaxopt._src.scipy_wrappers import make_onp_to_jnp
-from jaxopt._src.scipy_wrappers import pytree_topology_from_example
-from jaxopt._src.tree_util import tree_single_dtype
-from jaxopt.tree_util import tree_add_scalar_mul
-from jaxopt.tree_util import tree_l2_norm
-from jaxopt.tree_util import tree_sub
+from third_party.jaxopt.jaxopt._src import base
+from third_party.jaxopt.jaxopt._src.linesearch_util import _init_stepsize
+from third_party.jaxopt.jaxopt._src.linesearch_util import _setup_linesearch
+from third_party.jaxopt.jaxopt._src.scipy_wrappers import make_onp_to_jnp
+from third_party.jaxopt.jaxopt._src.scipy_wrappers import pytree_topology_from_example
+from third_party.jaxopt.jaxopt._src.tree_util import tree_single_dtype
+from third_party.jaxopt.jaxopt.tree_util import tree_add_scalar_mul
+from third_party.jaxopt.jaxopt.tree_util import tree_l2_norm
+from third_party.jaxopt.jaxopt.tree_util import tree_sub
 
 
 _dot = partial(jnp.dot, precision=jax.lax.Precision.HIGHEST)

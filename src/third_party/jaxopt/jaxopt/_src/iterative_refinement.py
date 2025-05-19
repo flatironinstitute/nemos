@@ -30,11 +30,11 @@ from functools import partial
 
 import jax.numpy as jnp
 
-from jaxopt._src import base
-from jaxopt._src.tree_util import tree_zeros_like, tree_add, tree_sub
-from jaxopt._src.tree_util import tree_l2_norm
-from jaxopt._src.linear_operator import _make_linear_operator
-import jaxopt._src.linear_solve as linear_solve
+from third_party.jaxopt.jaxopt._src import base
+from third_party.jaxopt.jaxopt._src.tree_util import tree_zeros_like, tree_add, tree_sub
+from third_party.jaxopt.jaxopt._src.tree_util import tree_l2_norm
+from third_party.jaxopt.jaxopt._src.linear_operator import _make_linear_operator
+import third_party.jaxopt.jaxopt._src.linear_solve as linear_solve
 
 
 class IterativeRefinementState(NamedTuple):

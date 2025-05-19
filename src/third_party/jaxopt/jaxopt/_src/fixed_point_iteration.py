@@ -24,8 +24,8 @@ from dataclasses import dataclass
 
 import jax.numpy as jnp
 
-from jaxopt._src import base
-from jaxopt._src.tree_util import tree_l2_norm, tree_sub
+from third_party.jaxopt.jaxopt._src import base
+from third_party.jaxopt.jaxopt._src.tree_util import tree_l2_norm, tree_sub
 
 
 class FixedPointState(NamedTuple):

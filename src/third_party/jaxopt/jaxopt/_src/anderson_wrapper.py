@@ -25,9 +25,9 @@ from dataclasses import dataclass
 import jax
 import jax.numpy as jnp
 
-from jaxopt._src import base
-from jaxopt._src.tree_util import tree_sub, tree_map
-from jaxopt._src.anderson import anderson_step, update_history
+from third_party.jaxopt.jaxopt._src import base
+from third_party.jaxopt.jaxopt._src.tree_util import tree_sub, tree_map
+from third_party.jaxopt.jaxopt._src.anderson import anderson_step, update_history
 
 
 class AndersonWrapperState(NamedTuple):

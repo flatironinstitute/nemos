@@ -24,8 +24,8 @@ from dataclasses import dataclass
 import jax
 import jax.numpy as jnp
 
-from jaxopt._src import base
-from jaxopt._src import projection
+from third_party.jaxopt.jaxopt._src import base
+from third_party.jaxopt.jaxopt._src import projection
 
 
 class BoxCDQPState(NamedTuple):

@@ -21,19 +21,19 @@ from typing import Any, Callable, NamedTuple, Optional, Union
 
 import jax
 import jax.numpy as jnp
-from jaxopt._src import base
-from jaxopt._src.linesearch_util import _init_stepsize
-from jaxopt._src.linesearch_util import _setup_linesearch
-from jaxopt._src.tree_util import tree_single_dtype
-from jaxopt._src.tree_util import get_real_dtype
-from jaxopt.tree_util import tree_add_scalar_mul
-from jaxopt.tree_util import tree_conj
-from jaxopt.tree_util import tree_l2_norm
-from jaxopt.tree_util import tree_map
-from jaxopt.tree_util import tree_scalar_mul
-from jaxopt.tree_util import tree_sub
-from jaxopt.tree_util import tree_sum
-from jaxopt.tree_util import tree_vdot_real
+from third_party.jaxopt.jaxopt._src import base
+from third_party.jaxopt.jaxopt._src.linesearch_util import _init_stepsize
+from third_party.jaxopt.jaxopt._src.linesearch_util import _setup_linesearch
+from third_party.jaxopt.jaxopt._src.tree_util import tree_single_dtype
+from third_party.jaxopt.jaxopt._src.tree_util import get_real_dtype
+from third_party.jaxopt.jaxopt.tree_util import tree_add_scalar_mul
+from third_party.jaxopt.jaxopt.tree_util import tree_conj
+from third_party.jaxopt.jaxopt.tree_util import tree_l2_norm
+from third_party.jaxopt.jaxopt.tree_util import tree_map
+from third_party.jaxopt.jaxopt.tree_util import tree_scalar_mul
+from third_party.jaxopt.jaxopt.tree_util import tree_sub
+from third_party.jaxopt.jaxopt.tree_util import tree_sum
+from third_party.jaxopt.jaxopt.tree_util import tree_vdot_real
 
 
 def select_ith_tree(tree_history, i):

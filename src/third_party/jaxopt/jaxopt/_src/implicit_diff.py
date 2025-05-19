@@ -22,12 +22,12 @@ from typing import Tuple
 
 import jax
 
-from jaxopt._src import base
-from jaxopt._src import linear_solve
-from jaxopt._src.tree_util import tree_add
-from jaxopt._src.tree_util import tree_mul
-from jaxopt._src.tree_util import tree_scalar_mul
-from jaxopt._src.tree_util import tree_sub
+from third_party.jaxopt.jaxopt._src import base
+from third_party.jaxopt.jaxopt._src import linear_solve
+from third_party.jaxopt.jaxopt._src.tree_util import tree_add
+from third_party.jaxopt.jaxopt._src.tree_util import tree_mul
+from third_party.jaxopt.jaxopt._src.tree_util import tree_scalar_mul
+from third_party.jaxopt.jaxopt._src.tree_util import tree_sub
 
 
 def root_vjp(optimality_fun: Callable,
