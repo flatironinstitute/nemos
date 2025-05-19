@@ -28,7 +28,7 @@ dependencies = [
     "typing_extensions>=4.6",       # Typing extensions for Python
     "pynapple>=0.6.6",
 ]
-# jaxopt 0.8.5 is included in src/third_party/jaxopt
+# jaxopt 0.8.5 is included in src/nemos/third_party/jaxopt
 # TODO jaxopt has jaxlib as a dependency that might need to be added here
 # jaxlib>=0.1.69
 
@@ -61,6 +61,7 @@ dev = [
     "dandi",                        # Required by doctest for fetch module
     "seaborn",                      # Required by doctest for _documentation_utils module
     "myst-nb",                      # Test myst_nb utils for glue
+    "absl-py",                      # For JAXopt's tests. # TODO rewrite to pytest?
 ]
 docs = [
     "numpydoc",
@@ -120,14 +121,14 @@ exclude = '''
     | build
     | dist
     | examples
-    | src/third_party/jaxopt))'''
+    | src/nemos/third_party/jaxopt))'''
 
 # Configure isort
 [tool.isort]
 multi_line_output = 3             # Use three-line style for multi-line imports
 include_trailing_comma = true     # Include trailing comma in multi-line imports
 profile = "black"
-skip = ["src/third_party/jaxopt"]
+skip = ["src/nemos/third_party/jaxopt"]
 
 # Configure pytest
 [tool.pytest.ini_options]

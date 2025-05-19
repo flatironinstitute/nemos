@@ -15,7 +15,7 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import ArrayLike, NDArray
 
-from third_party.jaxopt import jaxopt
+from nemos.third_party.jaxopt import jaxopt
 
 from . import solvers, utils, validation
 from ._regularizer_builder import AVAILABLE_REGULARIZERS, create_regularizer

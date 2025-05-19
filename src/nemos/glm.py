@@ -11,7 +11,7 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import ArrayLike
 
-from third_party.jaxopt import jaxopt
+from nemos.third_party.jaxopt import jaxopt
 
 from . import observation_models as obs
 from . import tree_utils, validation

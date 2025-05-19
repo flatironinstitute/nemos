@@ -9,7 +9,7 @@ import pynapple as nap
 from jax.typing import ArrayLike
 from numpy.typing import NDArray
 
-from third_party.jaxopt import jaxopt
+from nemos.third_party.jaxopt import jaxopt
 
 from .pytrees import FeaturePytree
 

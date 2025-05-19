@@ -13,7 +13,7 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import NDArray
 
-from third_party.jaxopt import jaxopt
+from nemos.third_party.jaxopt import jaxopt
 
 from . import tree_utils
 from .base_class import Base

@@ -7,8 +7,8 @@ import pytest
 
 import nemos as nmo
 from nemos.solvers._svrg import SVRG, ProxSVRG, SVRGState
+from nemos.third_party.jaxopt import jaxopt
 from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
-from third_party.jaxopt import jaxopt
 
 
 @pytest.mark.parametrize(
