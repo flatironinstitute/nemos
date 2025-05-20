@@ -25,13 +25,13 @@ from sklearn import datasets
 from sklearn import preprocessing
 from sklearn import svm
 
-from jaxopt import projection
-from jaxopt._src.base import KKTSolution
-from jaxopt._src.osqp import BoxOSQP
-from jaxopt._src.osqp import OSQP
-from jaxopt._src.osqp import extract_Qc_from_obj
-from jaxopt._src.cvxpy_wrapper import CvxpyQP
-from jaxopt._src import test_util
+from nemos.third_party.jaxopt.jaxopt import projection
+from nemos.third_party.jaxopt.jaxopt._src.base import KKTSolution
+from nemos.third_party.jaxopt.jaxopt._src.osqp import BoxOSQP
+from nemos.third_party.jaxopt.jaxopt._src.osqp import OSQP
+from nemos.third_party.jaxopt.jaxopt._src.osqp import extract_Qc_from_obj
+from nemos.third_party.jaxopt.jaxopt._src.cvxpy_wrapper import CvxpyQP
+from nemos.third_party.jaxopt.jaxopt._src import test_util
 
 
 def get_random_osqp_problem(problem_size, eq_constraints, ineq_constraints):
@@ -483,9 +483,9 @@ class BoxOSQPTest(test_util.JaxoptTestCase):
       sol, state = osqp.run(None, **hyper_params)
       return sol.primal[0][0]
 
-    from jaxopt import objective
-    from jaxopt import prox
-    from jaxopt import ProximalGradient
+    from nemos.third_party.jaxopt.jaxopt import objective
+    from nemos.third_party.jaxopt.jaxopt import prox
+    from nemos.third_party.jaxopt.jaxopt import ProximalGradient
 
     fun = objective.least_squares
     w_init = jnp.zeros(data.shape[1])

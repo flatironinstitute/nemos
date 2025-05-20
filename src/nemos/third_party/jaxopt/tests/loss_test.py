@@ -19,9 +19,9 @@ from jax.nn import softplus
 import jax.numpy as jnp
 from jax.scipy.special import expit as sigmoid
 from jax.scipy.special import logsumexp
-from jaxopt import loss
-from jaxopt import projection
-from jaxopt._src import test_util
+from nemos.third_party.jaxopt.jaxopt import loss
+from nemos.third_party.jaxopt.jaxopt import projection
+from nemos.third_party.jaxopt.jaxopt._src import test_util
 import numpy as onp
 
 

@@ -18,9 +18,9 @@ from absl.testing import parameterized
 import jax
 import jax.numpy as jnp
 
-from jaxopt import GradientDescent
-from jaxopt import objective
-from jaxopt._src import test_util
+from nemos.third_party.jaxopt.jaxopt import GradientDescent
+from nemos.third_party.jaxopt.jaxopt import objective
+from nemos.third_party.jaxopt.jaxopt._src import test_util
 
 from sklearn import datasets
 

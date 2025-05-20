@@ -19,9 +19,9 @@ from absl.testing import parameterized
 import jax
 import jax.numpy as jnp
 
-from jaxopt import LevenbergMarquardt
-from jaxopt._src import linear_solve
-from jaxopt._src import test_util
+from nemos.third_party.jaxopt.jaxopt import LevenbergMarquardt
+from nemos.third_party.jaxopt.jaxopt._src import linear_solve
+from nemos.third_party.jaxopt.jaxopt._src import test_util
 
 import numpy as onp
 

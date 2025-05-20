@@ -19,9 +19,9 @@ from typing import Optional
 from dataclasses import dataclass
 
 import jax.numpy as jnp 
-from nemos.third_party.jaxopt.jaxopt._src import base
-from nemos.third_party.jaxopt.jaxopt._src import implicit_diff as idf
-from nemos.third_party.jaxopt.jaxopt._src import tree_util
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src import base
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src import implicit_diff as idf
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src import tree_util
 
 
 def _check_params(params_obj, params_eq=None, params_ineq=None):

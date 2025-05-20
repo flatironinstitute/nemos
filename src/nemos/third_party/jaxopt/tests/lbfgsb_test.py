@@ -19,12 +19,12 @@ from absl.testing import parameterized
 
 import jax
 import jax.numpy as jnp
-from jaxopt import LBFGSB
-from jaxopt import BacktrackingLineSearch
-from jaxopt import objective
-from jaxopt import OptStep
-from jaxopt import ScipyBoundedMinimize
-from jaxopt._src import test_util
+from nemos.third_party.jaxopt.jaxopt import LBFGSB
+from nemos.third_party.jaxopt.jaxopt import BacktrackingLineSearch
+from nemos.third_party.jaxopt.jaxopt import objective
+from nemos.third_party.jaxopt.jaxopt import OptStep
+from nemos.third_party.jaxopt.jaxopt import ScipyBoundedMinimize
+from nemos.third_party.jaxopt.jaxopt._src import test_util
 import numpy as onp
 
 from sklearn import datasets

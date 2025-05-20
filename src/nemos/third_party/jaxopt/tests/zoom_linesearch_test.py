@@ -19,17 +19,17 @@ from absl.testing import absltest
 from absl.testing import parameterized
 import jax
 import jax.numpy as jnp
-from jaxopt import objective
-from jaxopt import ZoomLineSearch
-from jaxopt._src import test_util
-from jaxopt._src.zoom_linesearch import FLAG_CURVATURE_COND_NOT_SATSIFIED
-from jaxopt._src.zoom_linesearch import FLAG_INTERVAL_NOT_FOUND
-from jaxopt._src.zoom_linesearch import FLAG_INTERVAL_TOO_SMALL
-from jaxopt._src.zoom_linesearch import FLAG_NAN_INF_VALUES
-from jaxopt._src.zoom_linesearch import FLAG_NO_STEPSIZE_FOUND
-from jaxopt._src.zoom_linesearch import FLAG_NOT_A_DESCENT_DIRECTION
-from jaxopt.tree_util import tree_add_scalar_mul
-from jaxopt.tree_util import tree_negative
+from nemos.third_party.jaxopt.jaxopt import objective
+from nemos.third_party.jaxopt.jaxopt import ZoomLineSearch
+from nemos.third_party.jaxopt.jaxopt._src import test_util
+from nemos.third_party.jaxopt.jaxopt._src.zoom_linesearch import FLAG_CURVATURE_COND_NOT_SATSIFIED
+from nemos.third_party.jaxopt.jaxopt._src.zoom_linesearch import FLAG_INTERVAL_NOT_FOUND
+from nemos.third_party.jaxopt.jaxopt._src.zoom_linesearch import FLAG_INTERVAL_TOO_SMALL
+from nemos.third_party.jaxopt.jaxopt._src.zoom_linesearch import FLAG_NAN_INF_VALUES
+from nemos.third_party.jaxopt.jaxopt._src.zoom_linesearch import FLAG_NO_STEPSIZE_FOUND
+from nemos.third_party.jaxopt.jaxopt._src.zoom_linesearch import FLAG_NOT_A_DESCENT_DIRECTION
+from nemos.third_party.jaxopt.jaxopt.tree_util import tree_add_scalar_mul
+from nemos.third_party.jaxopt.jaxopt.tree_util import tree_negative
 import numpy as onp
 import scipy.optimize
 from sklearn import datasets

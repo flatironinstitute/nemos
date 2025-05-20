@@ -18,8 +18,8 @@ from absl.testing import absltest
 import jax.numpy as jnp
 import numpy as onp
 
-from jaxopt._src.linear_operator import FunctionalLinearOperator
-from jaxopt._src import test_util
+from nemos.third_party.jaxopt.jaxopt._src.linear_operator import FunctionalLinearOperator
+from nemos.third_party.jaxopt.jaxopt._src import test_util
 
 
 class LinearOperatorTest(test_util.JaxoptTestCase):

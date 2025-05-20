@@ -19,9 +19,9 @@ from absl.testing import absltest
 import jax
 import jax.numpy as jnp
 
-from jaxopt import perturbations
-from jaxopt._src import test_util
-from jaxopt import loss
+from nemos.third_party.jaxopt.jaxopt import perturbations
+from nemos.third_party.jaxopt.jaxopt._src import test_util
+from nemos.third_party.jaxopt.jaxopt import loss
 from absl.testing import parameterized
 
 

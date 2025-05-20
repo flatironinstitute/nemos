@@ -14,51 +14,50 @@
 
 from absl.testing import absltest
 
-import jaxopt
-from jaxopt._src import test_util
+import nemos.third_party.jaxopt.jaxopt
+from nemos.third_party.jaxopt.jaxopt._src import test_util
 
 
 class ImportTest(test_util.JaxoptTestCase):
+    def test_implicit_diff(self):
+        jaxopt.implicit_diff.root_vjp
+        from nemos.third_party.jaxopt.jaxopt.implicit_diff import root_vjp
 
-  def test_implicit_diff(self):
-    jaxopt.implicit_diff.root_vjp
-    from jaxopt.implicit_diff import root_vjp
+    def test_isotonic(self):
+        jaxopt.isotonic.isotonic_l2_pav
+        from nemos.third_party.jaxopt.jaxopt.isotonic import isotonic_l2_pav
 
-  def test_isotonic(self):
-    jaxopt.isotonic.isotonic_l2_pav
-    from jaxopt.isotonic import isotonic_l2_pav
+    def test_prox(self):
+        jaxopt.prox.prox_none
+        from nemos.third_party.jaxopt.jaxopt.prox import prox_none
 
-  def test_prox(self):
-    jaxopt.prox.prox_none
-    from jaxopt.prox import prox_none
+    def test_projection(self):
+        jaxopt.projection.projection_simplex
+        from nemos.third_party.jaxopt.jaxopt.projection import projection_simplex
 
-  def test_projection(self):
-    jaxopt.projection.projection_simplex
-    from jaxopt.projection import projection_simplex
+    def test_tree_util(self):
+        from nemos.third_party.jaxopt.jaxopt.tree_util import tree_vdot
 
-  def test_tree_util(self):
-    from jaxopt.tree_util import tree_vdot
+    def test_linear_solve(self):
+        from nemos.third_party.jaxopt.jaxopt.linear_solve import solve_lu
 
-  def test_linear_solve(self):
-    from jaxopt.linear_solve import solve_lu
+    def test_base(self):
+        from nemos.third_party.jaxopt.jaxopt.base import LinearOperator
 
-  def test_base(self):
-    from jaxopt.base import LinearOperator
+    def test_perturbations(self):
+        from nemos.third_party.jaxopt.jaxopt.perturbations import make_perturbed_argmax
 
-  def test_perturbations(self):
-    from jaxopt.perturbations import make_perturbed_argmax
+    def test_loss(self):
+        jaxopt.loss.binary_logistic_loss
+        from nemos.third_party.jaxopt.jaxopt.loss import binary_logistic_loss
 
-  def test_loss(self):
-    jaxopt.loss.binary_logistic_loss
-    from jaxopt.loss import binary_logistic_loss
+    def test_objective(self):
+        jaxopt.objective.least_squares
+        from nemos.third_party.jaxopt.jaxopt.objective import least_squares
 
-  def test_objective(self):
-    jaxopt.objective.least_squares
-    from jaxopt.objective import least_squares
-
-  def test_loop(self):
-    from jaxopt.loop import while_loop
+    def test_loop(self):
+        from nemos.third_party.jaxopt.jaxopt.loop import while_loop
 
 
-if __name__ == '__main__':
-  absltest.main()
+if __name__ == "__main__":
+    absltest.main()

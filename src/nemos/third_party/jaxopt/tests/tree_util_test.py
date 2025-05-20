@@ -18,8 +18,8 @@ import jax
 import jax.numpy as jnp
 import jax.tree_util as jtu
 
-from jaxopt import tree_util
-from jaxopt._src import test_util
+from nemos.third_party.jaxopt.jaxopt import tree_util
+from nemos.third_party.jaxopt.jaxopt._src import test_util
 
 import numpy as onp
 
@@ -241,7 +241,7 @@ class TreeUtilTest(test_util.JaxoptTestCase):
 
   @parameterized.product(high_precision=[True, False], convert_in_jax_dtype=[True, False])
   def test_tree_single_dtype(self, high_precision, convert_in_jax_dtype):
-    from jaxopt._src.tree_util import tree_single_dtype
+    from nemos.third_party.jaxopt.jaxopt._src.tree_util import tree_single_dtype
     current_precision = jax.config.jax_enable_x64
     if high_precision:
       jax.config.update("jax_enable_x64", True)
@@ -286,7 +286,7 @@ class TreeUtilTest(test_util.JaxoptTestCase):
     jax.config.update("jax_enable_x64", current_precision)
 
   def test_get_real_dtype(self):
-    from jaxopt._src.tree_util import get_real_dtype
+    from nemos.third_party.jaxopt.jaxopt._src.tree_util import get_real_dtype
     complex_dtype = jnp.asarray(1j * 1.).dtype
     real_dtype = jnp.asarray(1.).dtype
     self.assertEqual(get_real_dtype(complex_dtype), real_dtype)

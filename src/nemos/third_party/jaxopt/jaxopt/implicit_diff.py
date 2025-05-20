@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from nemos.third_party.jaxopt.jaxopt._src.implicit_diff import custom_root
-from nemos.third_party.jaxopt.jaxopt._src.implicit_diff import custom_fixed_point
-from nemos.third_party.jaxopt.jaxopt._src.implicit_diff import root_jvp
-from nemos.third_party.jaxopt.jaxopt._src.implicit_diff import root_vjp
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.implicit_diff import custom_root
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.implicit_diff import custom_fixed_point
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.implicit_diff import root_jvp
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.implicit_diff import root_vjp

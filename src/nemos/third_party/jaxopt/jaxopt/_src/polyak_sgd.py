@@ -23,14 +23,14 @@ from typing import Union
 
 import jax.numpy as jnp
 
-from nemos.third_party.jaxopt.jaxopt._src import base
-from nemos.third_party.jaxopt.jaxopt.tree_util import tree_add
-from nemos.third_party.jaxopt.jaxopt.tree_util import tree_add_scalar_mul
-from nemos.third_party.jaxopt.jaxopt.tree_util import tree_l2_norm
-from nemos.third_party.jaxopt.jaxopt.tree_util import tree_scalar_mul
-from nemos.third_party.jaxopt.jaxopt.tree_util import tree_sub
-from nemos.third_party.jaxopt.jaxopt.tree_util import tree_zeros_like
-from nemos.third_party.jaxopt.jaxopt._src.tree_util import tree_single_dtype
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src import base
+from nemos.third_party.jaxopt.jaxopt.jaxopt.tree_util import tree_add
+from nemos.third_party.jaxopt.jaxopt.jaxopt.tree_util import tree_add_scalar_mul
+from nemos.third_party.jaxopt.jaxopt.jaxopt.tree_util import tree_l2_norm
+from nemos.third_party.jaxopt.jaxopt.jaxopt.tree_util import tree_scalar_mul
+from nemos.third_party.jaxopt.jaxopt.jaxopt.tree_util import tree_sub
+from nemos.third_party.jaxopt.jaxopt.jaxopt.tree_util import tree_zeros_like
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.tree_util import tree_single_dtype
 
 
 class PolyakSGDState(NamedTuple):

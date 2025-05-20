@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from nemos.third_party.jaxopt.jaxopt._src.base import AutoOrBoolean
-from nemos.third_party.jaxopt.jaxopt._src.base import IterativeSolver
-from nemos.third_party.jaxopt.jaxopt._src.base import LinearOperator
-from nemos.third_party.jaxopt.jaxopt._src.base import OptStep
-from nemos.third_party.jaxopt.jaxopt._src.base import StochasticSolver
-from nemos.third_party.jaxopt.jaxopt._src.base import KKTSolution
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.base import AutoOrBoolean
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.base import IterativeSolver
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.base import LinearOperator
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.base import OptStep
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.base import StochasticSolver
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.base import KKTSolution

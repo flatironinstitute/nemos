@@ -12,13 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from nemos.third_party.jaxopt.jaxopt._src.loss import binary_logistic_loss
-from nemos.third_party.jaxopt.jaxopt._src.loss import binary_sparsemax_loss, sparse_plus, sparse_sigmoid
-from nemos.third_party.jaxopt.jaxopt._src.loss import huber_loss
-from nemos.third_party.jaxopt.jaxopt._src.loss import make_fenchel_young_loss
-from nemos.third_party.jaxopt.jaxopt._src.loss import multiclass_logistic_loss
-from nemos.third_party.jaxopt.jaxopt._src.loss import multiclass_sparsemax_loss
-from nemos.third_party.jaxopt.jaxopt._src.loss import binary_hinge_loss
-from nemos.third_party.jaxopt.jaxopt._src.loss import binary_perceptron_loss
-from nemos.third_party.jaxopt.jaxopt._src.loss import multiclass_hinge_loss
-from nemos.third_party.jaxopt.jaxopt._src.loss import multiclass_perceptron_loss
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.loss import binary_logistic_loss
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.loss import binary_sparsemax_loss, sparse_plus, sparse_sigmoid
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.loss import huber_loss
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.loss import make_fenchel_young_loss
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.loss import multiclass_logistic_loss
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.loss import multiclass_sparsemax_loss
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.loss import binary_hinge_loss
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.loss import binary_perceptron_loss
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.loss import multiclass_hinge_loss
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.loss import multiclass_perceptron_loss

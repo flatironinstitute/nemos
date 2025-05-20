@@ -23,7 +23,7 @@ import jax
 import jax.numpy as jnp
 import jax.scipy as jsp
 
-from nemos.third_party.jaxopt.jaxopt._src.tree_util import tree_add_scalar_mul
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.tree_util import tree_add_scalar_mul
 
 
 def _materialize_array(matvec, shape, dtype=None):

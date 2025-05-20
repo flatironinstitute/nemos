@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from nemos.third_party.jaxopt.jaxopt._src.perturbations import Gumbel
-from nemos.third_party.jaxopt.jaxopt._src.perturbations import Normal
-from nemos.third_party.jaxopt.jaxopt._src.perturbations import make_perturbed_argmax
-from nemos.third_party.jaxopt.jaxopt._src.perturbations import make_perturbed_max
-from nemos.third_party.jaxopt.jaxopt._src.perturbations import make_perturbed_fun
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.perturbations import Gumbel
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.perturbations import Normal
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.perturbations import make_perturbed_argmax
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.perturbations import make_perturbed_max
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.perturbations import make_perturbed_fun

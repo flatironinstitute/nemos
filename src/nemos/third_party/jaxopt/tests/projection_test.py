@@ -17,10 +17,10 @@ from absl.testing import absltest
 import jax
 import jax.numpy as jnp
 
-from jaxopt import projection
-from jaxopt._src import test_util
-from jaxopt._src.lbfgs import LBFGS
-from jaxopt import OSQP
+from nemos.third_party.jaxopt.jaxopt import projection
+from nemos.third_party.jaxopt.jaxopt._src import test_util
+from nemos.third_party.jaxopt.jaxopt._src.lbfgs import LBFGS
+from nemos.third_party.jaxopt.jaxopt import OSQP
 
 import numpy as onp
 

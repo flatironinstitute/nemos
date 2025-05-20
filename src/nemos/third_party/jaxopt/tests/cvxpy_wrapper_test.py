@@ -20,9 +20,9 @@ import jax
 import jax.numpy as jnp
 import numpy as onp
 
-from jaxopt import projection
-from jaxopt import CvxpyQP
-from jaxopt._src import test_util
+from nemos.third_party.jaxopt.jaxopt import projection
+from nemos.third_party.jaxopt.jaxopt import CvxpyQP
+from nemos.third_party.jaxopt.jaxopt._src import test_util
 
 
 class CvxpyQPTest(test_util.JaxoptTestCase):

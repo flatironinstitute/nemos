@@ -20,9 +20,9 @@ import jax
 import jax.numpy as jnp
 from jax.test_util import check_grads
 
-from jaxopt import linear_solve
-from jaxopt import IterativeRefinement
-from jaxopt._src import test_util
+from nemos.third_party.jaxopt.jaxopt import linear_solve
+from nemos.third_party.jaxopt.jaxopt import IterativeRefinement
+from nemos.third_party.jaxopt.jaxopt._src import test_util
 
 import numpy as onp
 

@@ -20,10 +20,10 @@ from absl.testing import parameterized
 import jax
 import jax.numpy as jnp
 
-from jaxopt import objective
-from jaxopt import prox
-from jaxopt import ProximalGradient
-from jaxopt._src import test_util
+from nemos.third_party.jaxopt.jaxopt import objective
+from nemos.third_party.jaxopt.jaxopt import prox
+from nemos.third_party.jaxopt.jaxopt import ProximalGradient
+from nemos.third_party.jaxopt.jaxopt._src import test_util
 
 from sklearn import datasets
 

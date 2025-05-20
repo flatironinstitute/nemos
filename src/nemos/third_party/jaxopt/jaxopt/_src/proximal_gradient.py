@@ -28,14 +28,14 @@ from dataclasses import dataclass
 import jax
 import jax.numpy as jnp
 
-from nemos.third_party.jaxopt.jaxopt._src import base
-from nemos.third_party.jaxopt.jaxopt._src import loop
-from nemos.third_party.jaxopt.jaxopt._src.prox import prox_none
-from nemos.third_party.jaxopt.jaxopt._src.tree_util import tree_add_scalar_mul
-from nemos.third_party.jaxopt.jaxopt._src.tree_util import tree_l2_norm
-from nemos.third_party.jaxopt.jaxopt._src.tree_util import tree_sub
-from nemos.third_party.jaxopt.jaxopt._src.tree_util import tree_vdot
-from nemos.third_party.jaxopt.jaxopt._src.tree_util import tree_single_dtype
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src import base
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src import loop
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.prox import prox_none
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.tree_util import tree_add_scalar_mul
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.tree_util import tree_l2_norm
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.tree_util import tree_sub
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.tree_util import tree_vdot
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.tree_util import tree_single_dtype
 
 
 def fista_line_search(

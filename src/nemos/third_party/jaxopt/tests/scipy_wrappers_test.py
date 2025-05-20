@@ -20,15 +20,15 @@ from jax import random
 from jax import tree_util
 import jax.numpy as jnp
 
-from jaxopt import objective
-from jaxopt import ScipyBoundedLeastSquares
-from jaxopt import ScipyBoundedMinimize
-from jaxopt import ScipyLeastSquares
-from jaxopt import ScipyMinimize
-from jaxopt import ScipyRootFinding
-from jaxopt._src import scipy_wrappers
-from jaxopt._src import test_util
-from jaxopt._src.tree_util import tree_scalar_mul
+from nemos.third_party.jaxopt.jaxopt import objective
+from nemos.third_party.jaxopt.jaxopt import ScipyBoundedLeastSquares
+from nemos.third_party.jaxopt.jaxopt import ScipyBoundedMinimize
+from nemos.third_party.jaxopt.jaxopt import ScipyLeastSquares
+from nemos.third_party.jaxopt.jaxopt import ScipyMinimize
+from nemos.third_party.jaxopt.jaxopt import ScipyRootFinding
+from nemos.third_party.jaxopt.jaxopt._src import scipy_wrappers
+from nemos.third_party.jaxopt.jaxopt._src import test_util
+from nemos.third_party.jaxopt.jaxopt._src.tree_util import tree_scalar_mul
 
 import numpy as onp
 import scipy as osp

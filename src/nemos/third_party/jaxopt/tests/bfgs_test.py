@@ -19,10 +19,10 @@ from absl.testing import parameterized
 import jax
 import jax.numpy as jnp
 
-from jaxopt import BFGS
-from jaxopt import BacktrackingLineSearch
-from jaxopt import objective
-from jaxopt._src import test_util
+from nemos.third_party.jaxopt.jaxopt import BFGS
+from nemos.third_party.jaxopt.jaxopt import BacktrackingLineSearch
+from nemos.third_party.jaxopt.jaxopt import objective
+from nemos.third_party.jaxopt.jaxopt._src import test_util
 import numpy as onp
 import scipy.optimize as scipy_opt
 from sklearn import datasets

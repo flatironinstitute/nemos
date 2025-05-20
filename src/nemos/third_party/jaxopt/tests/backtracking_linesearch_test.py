@@ -18,13 +18,13 @@ from absl.testing import parameterized
 import jax
 import jax.numpy as jnp
 
-from jaxopt import objective
-from jaxopt._src import test_util
-from jaxopt import BacktrackingLineSearch
-from jaxopt.tree_util import tree_add_scalar_mul
-from jaxopt.tree_util import tree_negative
-from jaxopt.tree_util import tree_scalar_mul
-from jaxopt.tree_util import tree_vdot
+from nemos.third_party.jaxopt.jaxopt import objective
+from nemos.third_party.jaxopt.jaxopt._src import test_util
+from nemos.third_party.jaxopt.jaxopt import BacktrackingLineSearch
+from nemos.third_party.jaxopt.jaxopt.tree_util import tree_add_scalar_mul
+from nemos.third_party.jaxopt.jaxopt.tree_util import tree_negative
+from nemos.third_party.jaxopt.jaxopt.tree_util import tree_scalar_mul
+from nemos.third_party.jaxopt.jaxopt.tree_util import tree_vdot
 
 import numpy as onp
 

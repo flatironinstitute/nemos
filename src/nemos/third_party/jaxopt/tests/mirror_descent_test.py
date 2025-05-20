@@ -20,10 +20,10 @@ from absl.testing import parameterized
 import jax
 import jax.numpy as jnp
 
-from jaxopt import MirrorDescent
-from jaxopt import objective
-from jaxopt._src import test_util
-from jaxopt import tree_util as tu
+from nemos.third_party.jaxopt.jaxopt import MirrorDescent
+from nemos.third_party.jaxopt.jaxopt import objective
+from nemos.third_party.jaxopt.jaxopt._src import test_util
+from nemos.third_party.jaxopt.jaxopt import tree_util as tu
 
 from sklearn import datasets
 from sklearn import preprocessing

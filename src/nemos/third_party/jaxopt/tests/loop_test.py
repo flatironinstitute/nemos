@@ -18,8 +18,8 @@ from absl.testing import parameterized
 import jax
 import jax.numpy as jnp
 
-from jaxopt import loop
-from jaxopt._src import test_util
+from nemos.third_party.jaxopt.jaxopt import loop
+from nemos.third_party.jaxopt.jaxopt._src import test_util
 
 
 class LoopTest(test_util.JaxoptTestCase):

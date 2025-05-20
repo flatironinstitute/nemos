@@ -18,10 +18,10 @@ from absl.testing import parameterized
 import jax
 import jax.numpy as jnp
 
-from jaxopt import projection
-from jaxopt import prox
-from jaxopt import tree_util
-from jaxopt._src import test_util
+from nemos.third_party.jaxopt.jaxopt import projection
+from nemos.third_party.jaxopt.jaxopt import prox
+from nemos.third_party.jaxopt.jaxopt import tree_util
+from nemos.third_party.jaxopt.jaxopt._src import test_util
 
 import numpy as onp
 

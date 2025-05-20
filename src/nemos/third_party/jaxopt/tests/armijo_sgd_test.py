@@ -20,9 +20,9 @@ import itertools
 import jax
 import jax.numpy as jnp
 
-from jaxopt import objective
-from jaxopt import ArmijoSGD
-from jaxopt._src import test_util
+from nemos.third_party.jaxopt.jaxopt import objective
+from nemos.third_party.jaxopt.jaxopt import ArmijoSGD
+from nemos.third_party.jaxopt.jaxopt._src import test_util
 
 import numpy as onp
 from sklearn import datasets

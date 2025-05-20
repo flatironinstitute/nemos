@@ -22,9 +22,9 @@ from typing import Union
 
 from dataclasses import dataclass
 
-from nemos.third_party.jaxopt.jaxopt._src import base
-from nemos.third_party.jaxopt.jaxopt._src import prox
-from nemos.third_party.jaxopt.jaxopt._src.proximal_gradient import ProximalGradient, ProxGradState
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src import base
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src import prox
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.proximal_gradient import ProximalGradient, ProxGradState
 
 
 @dataclass(eq=False)

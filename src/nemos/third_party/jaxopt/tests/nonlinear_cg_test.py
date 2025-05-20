@@ -20,10 +20,10 @@ import jax.numpy as jnp
 
 import numpy as onp
 
-import jaxopt
-from jaxopt import NonlinearCG
-from jaxopt import objective
-from jaxopt._src import test_util
+from nemos.third_party import jaxopt
+from nemos.third_party.jaxopt.jaxopt import NonlinearCG
+from nemos.third_party.jaxopt.jaxopt import objective
+from nemos.third_party.jaxopt.jaxopt._src import test_util
 from sklearn import datasets
 
 # Uncomment this line to test in x64 

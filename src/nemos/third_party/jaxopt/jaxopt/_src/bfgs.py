@@ -21,15 +21,15 @@ import warnings
 
 import jax
 import jax.numpy as jnp
-from nemos.third_party.jaxopt.jaxopt._src import base
-from nemos.third_party.jaxopt.jaxopt._src.linesearch_util import _init_stepsize
-from nemos.third_party.jaxopt.jaxopt._src.linesearch_util import _setup_linesearch
-from nemos.third_party.jaxopt.jaxopt._src.scipy_wrappers import make_onp_to_jnp
-from nemos.third_party.jaxopt.jaxopt._src.scipy_wrappers import pytree_topology_from_example
-from nemos.third_party.jaxopt.jaxopt._src.tree_util import tree_single_dtype
-from nemos.third_party.jaxopt.jaxopt.tree_util import tree_add_scalar_mul
-from nemos.third_party.jaxopt.jaxopt.tree_util import tree_l2_norm
-from nemos.third_party.jaxopt.jaxopt.tree_util import tree_sub
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src import base
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.linesearch_util import _init_stepsize
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.linesearch_util import _setup_linesearch
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.scipy_wrappers import make_onp_to_jnp
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.scipy_wrappers import pytree_topology_from_example
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.tree_util import tree_single_dtype
+from nemos.third_party.jaxopt.jaxopt.jaxopt.tree_util import tree_add_scalar_mul
+from nemos.third_party.jaxopt.jaxopt.jaxopt.tree_util import tree_l2_norm
+from nemos.third_party.jaxopt.jaxopt.jaxopt.tree_util import tree_sub
 
 
 _dot = partial(jnp.dot, precision=jax.lax.Precision.HIGHEST)

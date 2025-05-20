@@ -19,8 +19,8 @@ from absl.testing import absltest
 import jax
 import jax.numpy as jnp
 
-from jaxopt import implicit_diff as idf
-from jaxopt._src import test_util
+from nemos.third_party.jaxopt.jaxopt import implicit_diff as idf
+from nemos.third_party.jaxopt.jaxopt._src import test_util
 
 from sklearn import datasets
 

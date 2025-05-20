@@ -17,9 +17,9 @@ from absl.testing import absltest
 import jax
 import jax.numpy as jnp
 
-from jaxopt import projection
-from jaxopt import Bisection
-from jaxopt._src import test_util
+from nemos.third_party.jaxopt.jaxopt import projection
+from nemos.third_party.jaxopt.jaxopt import Bisection
+from nemos.third_party.jaxopt.jaxopt._src import test_util
 
 import numpy as onp
 

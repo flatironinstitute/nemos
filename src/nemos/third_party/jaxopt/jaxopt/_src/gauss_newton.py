@@ -25,9 +25,9 @@ from dataclasses import dataclass
 import jax
 import jax.numpy as jnp
 
-from nemos.third_party.jaxopt.jaxopt._src import base
-from nemos.third_party.jaxopt.jaxopt._src import linear_solve
-from nemos.third_party.jaxopt.jaxopt.tree_util import tree_l2_norm, tree_sub
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src import base
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src import linear_solve
+from nemos.third_party.jaxopt.jaxopt.jaxopt.tree_util import tree_l2_norm, tree_sub
 
 
 class GaussNewtonState(NamedTuple):

@@ -17,7 +17,7 @@ import functools
 import jax
 import jax.numpy as jnp
 
-from nemos.third_party.jaxopt.jaxopt.tree_util import tree_map
+from nemos.third_party.jaxopt.jaxopt.jaxopt.tree_util import tree_map
 
 
 class DenseLinearOperator:

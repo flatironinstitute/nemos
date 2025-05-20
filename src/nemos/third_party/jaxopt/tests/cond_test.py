@@ -19,8 +19,8 @@ import jax
 import jax.numpy as jnp
 import numpy as onp
 
-from jaxopt._src.cond import cond
-from jaxopt._src import test_util
+from nemos.third_party.jaxopt.jaxopt._src.cond import cond
+from nemos.third_party.jaxopt.jaxopt._src import test_util
 
 
 class CondTest(test_util.JaxoptTestCase):

@@ -16,9 +16,9 @@ from absl.testing import absltest
 from absl.testing import parameterized
 import jax
 import jax.numpy as jnp
-from jaxopt._src import test_util
-from jaxopt._src.linesearch_util import _init_stepsize
-from jaxopt._src.linesearch_util import _setup_linesearch
+from nemos.third_party.jaxopt.jaxopt._src import test_util
+from nemos.third_party.jaxopt.jaxopt._src.linesearch_util import _init_stepsize
+from nemos.third_party.jaxopt.jaxopt._src.linesearch_util import _setup_linesearch
 
 
 class LinesearchTest(test_util.JaxoptTestCase):

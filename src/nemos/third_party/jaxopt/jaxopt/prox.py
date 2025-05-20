@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from nemos.third_party.jaxopt.jaxopt._src.prox import make_prox_from_projection
-from nemos.third_party.jaxopt.jaxopt._src.prox import prox_none
-from nemos.third_party.jaxopt.jaxopt._src.prox import prox_lasso
-from nemos.third_party.jaxopt.jaxopt._src.prox import prox_non_negative_lasso
-from nemos.third_party.jaxopt.jaxopt._src.prox import prox_elastic_net
-from nemos.third_party.jaxopt.jaxopt._src.prox import prox_group_lasso
-from nemos.third_party.jaxopt.jaxopt._src.prox import prox_ridge
-from nemos.third_party.jaxopt.jaxopt._src.prox import prox_non_negative_ridge
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.prox import make_prox_from_projection
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.prox import prox_none
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.prox import prox_lasso
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.prox import prox_non_negative_lasso
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.prox import prox_elastic_net
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.prox import prox_group_lasso
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.prox import prox_ridge
+from nemos.third_party.jaxopt.jaxopt.jaxopt._src.prox import prox_non_negative_ridge

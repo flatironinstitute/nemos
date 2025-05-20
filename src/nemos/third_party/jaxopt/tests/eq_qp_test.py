@@ -18,10 +18,10 @@ from absl.testing import parameterized
 import jax
 import jax.numpy as jnp
 
-from jaxopt import projection
-from jaxopt.base import KKTSolution
-from jaxopt import EqualityConstrainedQP
-from jaxopt._src import test_util
+from nemos.third_party.jaxopt.jaxopt import projection
+from nemos.third_party.jaxopt.jaxopt.base import KKTSolution
+from nemos.third_party.jaxopt.jaxopt import EqualityConstrainedQP
+from nemos.third_party.jaxopt.jaxopt._src import test_util
 
 import numpy as onp
 

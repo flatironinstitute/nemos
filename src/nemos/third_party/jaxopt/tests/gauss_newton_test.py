@@ -18,8 +18,8 @@ from absl.testing import parameterized
 import jax
 import jax.numpy as jnp
 
-from jaxopt import GaussNewton
-from jaxopt._src import test_util
+from nemos.third_party.jaxopt.jaxopt import GaussNewton
+from nemos.third_party.jaxopt.jaxopt._src import test_util
 
 import numpy as onp
 
