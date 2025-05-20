@@ -61,9 +61,15 @@ dev = [
     "dandi",                        # Required by doctest for fetch module
     "seaborn",                      # Required by doctest for _documentation_utils module
     "myst-nb",                      # Test myst_nb utils for glue
-    "absl-py",                      # For JAXopt's tests. # TODO rewrite to pytest?
-    "optax",                        # For JAXopt's tests. # TODO take out if only a subset of optax is kept
-    "cvxpy",                        # For JAXopt's tests. # TODO take out if only a subset of optax is kept
+    # For JAXopt's tests
+    # TODO Decide which one to keep. Potentially trim down jaxopt and port to pytest
+    "absl-py>=0.7.0",
+    "cvxpy>=1.1.11",
+    "optax>=0.0.9",
+    "pytest-xdist",
+    "scikit-learn>=0.24.1",
+    "cvxopt",
+
 ]
 docs = [
     "numpydoc",
@@ -134,7 +140,8 @@ skip = ["src/nemos/third_party/jaxopt"]
 
 # Configure pytest
 [tool.pytest.ini_options]
-testpaths = ["tests", "src/nemos/third_party/jaxopt/tests"]             # Specify the directory where test files are located
+#testpaths = ["tests", "src/nemos/third_party/jaxopt/tests"]             # Specify the directory where test files are located
+testpaths = ["src/nemos/third_party/jaxopt/tests"]             # Specify the directory where test files are located
 filterwarnings = [
     # note the use of single quote below to denote "raw" strings in TOML
     # this is raised whenever one imports the plotting utils
