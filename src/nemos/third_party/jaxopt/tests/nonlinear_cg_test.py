@@ -20,7 +20,7 @@ import jax.numpy as jnp
 
 import numpy as onp
 
-from nemos.third_party import jaxopt
+from nemos.third_party.jaxopt import jaxopt
 from nemos.third_party.jaxopt.jaxopt import NonlinearCG
 from nemos.third_party.jaxopt.jaxopt import objective
 from nemos.third_party.jaxopt.jaxopt._src import test_util

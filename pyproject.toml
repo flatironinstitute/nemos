@@ -62,6 +62,8 @@ dev = [
     "seaborn",                      # Required by doctest for _documentation_utils module
     "myst-nb",                      # Test myst_nb utils for glue
     "absl-py",                      # For JAXopt's tests. # TODO rewrite to pytest?
+    "optax",                        # For JAXopt's tests. # TODO take out if only a subset of optax is kept
+    "cvxpy",                        # For JAXopt's tests. # TODO take out if only a subset of optax is kept
 ]
 docs = [
     "numpydoc",

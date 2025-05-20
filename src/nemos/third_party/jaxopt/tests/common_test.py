@@ -29,7 +29,7 @@ import optax
 from sklearn import datasets
 from sklearn import preprocessing
 
-import nemos.third_party.jaxopt.jaxopt
+import nemos.third_party.jaxopt.jaxopt as jaxopt
 from nemos.third_party.jaxopt.jaxopt import objective
 from nemos.third_party.jaxopt.jaxopt import projection
 from nemos.third_party.jaxopt.jaxopt import prox

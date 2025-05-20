@@ -14,7 +14,7 @@
 
 from absl.testing import absltest
 
-import nemos.third_party.jaxopt.jaxopt
+import nemos.third_party.jaxopt.jaxopt as jaxopt
 from nemos.third_party.jaxopt.jaxopt._src import test_util
 
 

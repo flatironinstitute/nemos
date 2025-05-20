@@ -21,7 +21,7 @@ import jax.numpy as jnp
 from jax import scipy as jsp
 from jax.test_util import check_grads
 
-from nemos.third_party import jaxopt
+from nemos.third_party.jaxopt import jaxopt
 from nemos.third_party.jaxopt.jaxopt.tree_util import tree_l2_norm
 from nemos.third_party.jaxopt.jaxopt import AndersonAcceleration
 from nemos.third_party.jaxopt.jaxopt._src import test_util
