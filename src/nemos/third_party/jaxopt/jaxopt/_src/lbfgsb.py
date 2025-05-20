@@ -28,19 +28,19 @@ from typing import Any, Callable, NamedTuple, Optional, Union
 import jax
 from jax import numpy as jnp
 
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src import base
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src import projection
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.lbfgs import init_history
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.lbfgs import update_history
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.linesearch_util import _init_stepsize
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.linesearch_util import _setup_linesearch
+from nemos.third_party.jaxopt.jaxopt._src import base
+from nemos.third_party.jaxopt.jaxopt._src import projection
+from nemos.third_party.jaxopt.jaxopt._src.lbfgs import init_history
+from nemos.third_party.jaxopt.jaxopt._src.lbfgs import update_history
+from nemos.third_party.jaxopt.jaxopt._src.linesearch_util import _init_stepsize
+from nemos.third_party.jaxopt.jaxopt._src.linesearch_util import _setup_linesearch
 
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.tree_util import tree_single_dtype
-from nemos.third_party.jaxopt.jaxopt.jaxopt.tree_util import tree_add_scalar_mul
-from nemos.third_party.jaxopt.jaxopt.jaxopt.tree_util import tree_inf_norm
-from nemos.third_party.jaxopt.jaxopt.jaxopt.tree_util import tree_map
-from nemos.third_party.jaxopt.jaxopt.jaxopt.tree_util import tree_sub
-from nemos.third_party.jaxopt.jaxopt.jaxopt.tree_util import tree_vdot
+from nemos.third_party.jaxopt.jaxopt._src.tree_util import tree_single_dtype
+from nemos.third_party.jaxopt.jaxopt.tree_util import tree_add_scalar_mul
+from nemos.third_party.jaxopt.jaxopt.tree_util import tree_inf_norm
+from nemos.third_party.jaxopt.jaxopt.tree_util import tree_map
+from nemos.third_party.jaxopt.jaxopt.tree_util import tree_sub
+from nemos.third_party.jaxopt.jaxopt.tree_util import tree_vdot
 
 import numpy as np
 

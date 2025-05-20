@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.linear_solve import solve_lu
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.linear_solve import solve_cholesky
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.linear_solve import solve_qr
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.linear_solve import solve_inv
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.linear_solve import solve_cg
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.linear_solve import solve_normal_cg
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.linear_solve import solve_gmres
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.linear_solve import solve_bicgstab
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.iterative_refinement import solve_iterative_refinement
+from nemos.third_party.jaxopt.jaxopt._src.linear_solve import solve_lu
+from nemos.third_party.jaxopt.jaxopt._src.linear_solve import solve_cholesky
+from nemos.third_party.jaxopt.jaxopt._src.linear_solve import solve_qr
+from nemos.third_party.jaxopt.jaxopt._src.linear_solve import solve_inv
+from nemos.third_party.jaxopt.jaxopt._src.linear_solve import solve_cg
+from nemos.third_party.jaxopt.jaxopt._src.linear_solve import solve_normal_cg
+from nemos.third_party.jaxopt.jaxopt._src.linear_solve import solve_gmres
+from nemos.third_party.jaxopt.jaxopt._src.linear_solve import solve_bicgstab
+from nemos.third_party.jaxopt.jaxopt._src.iterative_refinement import solve_iterative_refinement

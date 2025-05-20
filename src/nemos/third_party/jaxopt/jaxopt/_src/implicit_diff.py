@@ -22,12 +22,12 @@ from typing import Tuple
 
 import jax
 
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src import base
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src import linear_solve
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.tree_util import tree_add
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.tree_util import tree_mul
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.tree_util import tree_scalar_mul
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.tree_util import tree_sub
+from nemos.third_party.jaxopt.jaxopt._src import base
+from nemos.third_party.jaxopt.jaxopt._src import linear_solve
+from nemos.third_party.jaxopt.jaxopt._src.tree_util import tree_add
+from nemos.third_party.jaxopt.jaxopt._src.tree_util import tree_mul
+from nemos.third_party.jaxopt.jaxopt._src.tree_util import tree_scalar_mul
+from nemos.third_party.jaxopt.jaxopt._src.tree_util import tree_sub
 
 
 def root_vjp(optimality_fun: Callable,

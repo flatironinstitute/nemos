@@ -25,15 +25,15 @@ from typing import Union
 import jax
 from jax import lax
 import jax.numpy as jnp
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src import base
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.base import _make_funs_with_aux
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.cond import cond
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.tree_util import tree_single_dtype
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.tree_util import get_real_dtype
-from nemos.third_party.jaxopt.jaxopt.jaxopt.tree_util import tree_add_scalar_mul
-from nemos.third_party.jaxopt.jaxopt.jaxopt.tree_util import tree_scalar_mul
-from nemos.third_party.jaxopt.jaxopt.jaxopt.tree_util import tree_vdot_real
-from nemos.third_party.jaxopt.jaxopt.jaxopt.tree_util import tree_conj
+from nemos.third_party.jaxopt.jaxopt._src import base
+from nemos.third_party.jaxopt.jaxopt._src.base import _make_funs_with_aux
+from nemos.third_party.jaxopt.jaxopt._src.cond import cond
+from nemos.third_party.jaxopt.jaxopt._src.tree_util import tree_single_dtype
+from nemos.third_party.jaxopt.jaxopt._src.tree_util import get_real_dtype
+from nemos.third_party.jaxopt.jaxopt.tree_util import tree_add_scalar_mul
+from nemos.third_party.jaxopt.jaxopt.tree_util import tree_scalar_mul
+from nemos.third_party.jaxopt.jaxopt.tree_util import tree_vdot_real
+from nemos.third_party.jaxopt.jaxopt.tree_util import tree_conj
 
 # pylint: disable=g-bare-generic
 # pylint: disable=invalid-name

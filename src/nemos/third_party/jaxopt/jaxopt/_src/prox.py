@@ -21,7 +21,7 @@ from typing import Tuple
 import jax
 import jax.numpy as jnp
 
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src import tree_util
+from nemos.third_party.jaxopt.jaxopt._src import tree_util
 
 
 def prox_none(x: Any,

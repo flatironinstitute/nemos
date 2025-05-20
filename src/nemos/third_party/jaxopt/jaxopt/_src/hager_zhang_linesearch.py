@@ -34,11 +34,11 @@ from typing import Union
 import jax
 import jax.numpy as jnp
 
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src import base
-from nemos.third_party.jaxopt.jaxopt.jaxopt.tree_util import tree_add_scalar_mul
-from nemos.third_party.jaxopt.jaxopt.jaxopt.tree_util import tree_scalar_mul
-from nemos.third_party.jaxopt.jaxopt.jaxopt.tree_util import tree_vdot_real
-from nemos.third_party.jaxopt.jaxopt.jaxopt.tree_util import tree_conj
+from nemos.third_party.jaxopt.jaxopt._src import base
+from nemos.third_party.jaxopt.jaxopt.tree_util import tree_add_scalar_mul
+from nemos.third_party.jaxopt.jaxopt.tree_util import tree_scalar_mul
+from nemos.third_party.jaxopt.jaxopt.tree_util import tree_vdot_real
+from nemos.third_party.jaxopt.jaxopt.tree_util import tree_conj
 
 
 def _failed_nan(value, grad):

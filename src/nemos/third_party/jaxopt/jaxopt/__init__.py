@@ -14,25 +14,25 @@
 
 import warnings
 
-from nemos.third_party.jaxopt.jaxopt.jaxopt import implicit_diff
-from nemos.third_party.jaxopt.jaxopt.jaxopt import loss
-from nemos.third_party.jaxopt.jaxopt.jaxopt import objective
-from nemos.third_party.jaxopt.jaxopt.jaxopt import projection
-from nemos.third_party.jaxopt.jaxopt.jaxopt import prox
+from nemos.third_party.jaxopt.jaxopt import implicit_diff
+from nemos.third_party.jaxopt.jaxopt import loss
+from nemos.third_party.jaxopt.jaxopt import objective
+from nemos.third_party.jaxopt.jaxopt import projection
+from nemos.third_party.jaxopt.jaxopt import prox
 
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.armijo_sgd import ArmijoSGD
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.base import OptStep
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.backtracking_linesearch import (
+from nemos.third_party.jaxopt.jaxopt._src.armijo_sgd import ArmijoSGD
+from nemos.third_party.jaxopt.jaxopt._src.base import OptStep
+from nemos.third_party.jaxopt.jaxopt._src.backtracking_linesearch import (
     BacktrackingLineSearch,
 )
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.bfgs import BFGS
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.gradient_descent import GradientDescent
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.hager_zhang_linesearch import (
+from nemos.third_party.jaxopt.jaxopt._src.bfgs import BFGS
+from nemos.third_party.jaxopt.jaxopt._src.gradient_descent import GradientDescent
+from nemos.third_party.jaxopt.jaxopt._src.hager_zhang_linesearch import (
     HagerZhangLineSearch,
 )
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.lbfgs import LBFGS
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.proximal_gradient import ProximalGradient
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.zoom_linesearch import ZoomLineSearch
+from nemos.third_party.jaxopt.jaxopt._src.lbfgs import LBFGS
+from nemos.third_party.jaxopt.jaxopt._src.proximal_gradient import ProximalGradient
+from nemos.third_party.jaxopt.jaxopt._src.zoom_linesearch import ZoomLineSearch
 
 warnings.warn(
     "JAXopt is no longer maintained. See https://docs.jax.dev/en/latest/ for"

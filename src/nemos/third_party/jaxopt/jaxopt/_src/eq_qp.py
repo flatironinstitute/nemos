@@ -24,15 +24,15 @@ from dataclasses import dataclass
 import jax
 import jax.numpy as jnp
 
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src import base
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src import implicit_diff as idf
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.tree_util import tree_add, tree_sub, tree_add_scalar_mul
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.tree_util import tree_vdot, tree_negative, tree_l2_norm
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.tree_util import tree_zeros_like
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.linear_operator import _make_linear_operator
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.cvxpy_wrapper import _check_params
-import nemos.third_party.jaxopt.jaxopt.jaxopt._src.linear_solve as linear_solve
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.iterative_refinement import IterativeRefinement
+from nemos.third_party.jaxopt.jaxopt._src import base
+from nemos.third_party.jaxopt.jaxopt._src import implicit_diff as idf
+from nemos.third_party.jaxopt.jaxopt._src.tree_util import tree_add, tree_sub, tree_add_scalar_mul
+from nemos.third_party.jaxopt.jaxopt._src.tree_util import tree_vdot, tree_negative, tree_l2_norm
+from nemos.third_party.jaxopt.jaxopt._src.tree_util import tree_zeros_like
+from nemos.third_party.jaxopt.jaxopt._src.linear_operator import _make_linear_operator
+from nemos.third_party.jaxopt.jaxopt._src.cvxpy_wrapper import _check_params
+import nemos.third_party.jaxopt.jaxopt._src.linear_solve as linear_solve
+from nemos.third_party.jaxopt.jaxopt._src.iterative_refinement import IterativeRefinement
 
 
 def extract_Qc_from_obj(init_params, params_obj, fun):

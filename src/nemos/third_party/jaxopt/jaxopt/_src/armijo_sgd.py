@@ -27,13 +27,13 @@ import jax
 import jax.lax as lax
 import jax.numpy as jnp
 
-from nemos.third_party.jaxopt.jaxopt.jaxopt.tree_util import tree_add_scalar_mul, tree_l2_norm
-from nemos.third_party.jaxopt.jaxopt.jaxopt.tree_util import tree_scalar_mul, tree_zeros_like
-from nemos.third_party.jaxopt.jaxopt.jaxopt.tree_util import tree_add, tree_sub
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src.tree_util import tree_single_dtype
+from nemos.third_party.jaxopt.jaxopt.tree_util import tree_add_scalar_mul, tree_l2_norm
+from nemos.third_party.jaxopt.jaxopt.tree_util import tree_scalar_mul, tree_zeros_like
+from nemos.third_party.jaxopt.jaxopt.tree_util import tree_add, tree_sub
+from nemos.third_party.jaxopt.jaxopt._src.tree_util import tree_single_dtype
 
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src import base
-from nemos.third_party.jaxopt.jaxopt.jaxopt._src import loop
+from nemos.third_party.jaxopt.jaxopt._src import base
+from nemos.third_party.jaxopt.jaxopt._src import loop
 
 
 def wolfe_cond_violated(stepsize, coef, f_cur, f_next, grad_sqnorm):
