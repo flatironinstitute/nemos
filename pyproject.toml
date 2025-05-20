@@ -140,8 +140,7 @@ skip = ["src/nemos/third_party/jaxopt"]
 
 # Configure pytest
 [tool.pytest.ini_options]
-#testpaths = ["tests", "src/nemos/third_party/jaxopt/tests"]             # Specify the directory where test files are located
-testpaths = ["src/nemos/third_party/jaxopt/tests"]             # Specify the directory where test files are located
+testpaths = ["tests", "src/nemos/third_party/jaxopt/tests"]             # Specify the directory where test files are located
 filterwarnings = [
     # note the use of single quote below to denote "raw" strings in TOML
     # this is raised whenever one imports the plotting utils
