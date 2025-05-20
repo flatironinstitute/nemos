@@ -29,9 +29,6 @@ dependencies = [
     "pynapple>=0.6.6",
 ]
 # jaxopt 0.8.5 is included in src/nemos/third_party/jaxopt
-# TODO jaxopt has jaxlib as a dependency that might need to be added here
-# jaxlib>=0.1.69
-
 
 
 # Configure package discovery for setuptools

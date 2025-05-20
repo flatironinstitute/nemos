@@ -69,3 +69,4 @@ Research. It is not an official Google product.
 ## Changelog inside NeMoS
 - Removed docs, examples, benchmarks
 - Changed import paths to import `jaxopt` from `nemos.third_party`
+- Removed Github workflows (.github)
