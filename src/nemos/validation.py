@@ -7,6 +7,7 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import DTypeLike, NDArray
 
+from . import utils
 from .pytrees import FeaturePytree
 from .tree_utils import get_valid_multitree, pytree_map_and_reduce
 
@@ -317,4 +318,36 @@ def _warn_if_not_float64(feature_matrix: Any, message: str):
         warnings.warn(
             message,
             UserWarning,
+        )
+
+
+def check_basis_matrix_shape(basis_matrix):
+    basis_matrix = jnp.asarray(basis_matrix)
+    if not utils.check_dimensionality(basis_matrix, 2):
+        raise ValueError(
+            "basis_matrix must be a 2 dimensional array! "
+            f"{basis_matrix.ndim} dimensions provided instead."
+        )
+    if basis_matrix.shape[0] == 1:
+        raise ValueError("`basis_matrix.shape[0]` should be at least 2!")
+    return basis_matrix
+
+
+def check_non_empty_inputs(time_series, basis_matrix):
+    utils.check_non_empty(basis_matrix, "basis_matrix")
+    utils.check_non_empty(time_series, "time_series")
+
+
+def check_time_series_ndim(time_series, axis):
+    if not utils.pytree_map_and_reduce(lambda x: x.ndim > axis, all, time_series):
+        raise ValueError(
+            "`time_series` should contain arrays of at least one-dimension. "
+            "At least one 0-dimensional array provided."
+        )
+
+
+def check_shift_causality_consistency(shift, predictor_causality):
+    if shift and predictor_causality == "acausal":
+        raise ValueError(
+            "Cannot shift `predictor` when `predictor_causality` is `acausal`!"
         )
