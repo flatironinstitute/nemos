@@ -24,7 +24,11 @@ class TestShiftTimeAxisAndConvolve:
     def test_output_ndim(self, time_series, check_func, axis):
         """Check that the output dimensionality matches expectation."""
         res = convolve._shift_time_axis_and_convolve(
-            time_series, np.zeros((1, 1)), axis=axis
+            time_series,
+            np.zeros((1, 1)),
+            axis=axis,
+            batches_time_series=1,
+            batches_basis=1,
         )
         if not utils.pytree_map_and_reduce(check_func, all, res):
             raise ValueError("Output doesn't match expected structure")
@@ -43,7 +47,11 @@ class TestShiftTimeAxisAndConvolve:
             return x.shape == output_shape
 
         res = convolve._shift_time_axis_and_convolve(
-            time_series, np.zeros((1, 1)), axis=axis
+            time_series,
+            np.zeros((1, 1)),
+            axis=axis,
+            batches_time_series=1,
+            batches_basis=1,
         )
         if not utils.pytree_map_and_reduce(check_func, all, res):
             raise ValueError("Output  number of neuron doesn't match input.")
@@ -64,7 +72,11 @@ class TestShiftTimeAxisAndConvolve:
             return basis_matrix.shape[-1] == conv.shape[-1]
 
         res = convolve._shift_time_axis_and_convolve(
-            time_series, basis_matrix, axis=axis
+            time_series,
+            basis_matrix,
+            axis=axis,
+            batches_time_series=1,
+            batches_basis=1,
         )
         if not utils.pytree_map_and_reduce(check_func, all, res):
             raise ValueError("Output  number of neuron doesn't match input.")
@@ -93,7 +105,13 @@ class TestShiftTimeAxisAndConvolve:
                     )
 
         utils_out = np.asarray(
-            convolve._shift_time_axis_and_convolve(trial_counts, basis_matrix, axis=1)
+            convolve._shift_time_axis_and_convolve(
+                trial_counts,
+                basis_matrix,
+                axis=1,
+                batches_time_series=1,
+                batches_basis=basis_matrix.shape[1],
+            )
         )
         assert np.allclose(utils_out, numpy_out, rtol=10**-5, atol=10**-5), (
             "Output of utils.convolve_1d_trials "

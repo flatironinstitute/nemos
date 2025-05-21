@@ -6,13 +6,22 @@ from __future__ import annotations
 import re
 import warnings
 from functools import partial
+from math import prod
 from typing import Any, Literal, Optional
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from . import type_casting, utils
+from . import type_casting, utils, validation
+
+
+def _resolve_shift_default(shift, predictor_causality):
+    if shift is None:
+        return predictor_causality != "acausal"
+    return shift
+
 
 _CORR_VEC_BASIS = jax.vmap(partial(jnp.convolve, mode="valid"), (None, 1), 1)
 
@@ -20,10 +29,37 @@ _CORR_VEC = jax.vmap(partial(jnp.convolve, mode="valid"), (1, None), 1)
 _CORR_VEC = jax.vmap(_CORR_VEC, (None, 1), 2)
 
 
-@jax.jit
-def tensor_convolve(array: NDArray, eval_basis: NDArray):
+def _batched_convolve(array: NDArray, eval_basis: NDArray, batch_size: int):
+    n_filters = eval_basis.shape[1]
+    window_size = eval_basis.shape[0]
+
+    leftover = n_filters % batch_size
+    n_batches = n_filters // batch_size
+
+    def conv_batch(_, batch_idx):
+        start = batch_idx * batch_size
+        chunk = jax.lax.dynamic_slice(eval_basis, (0, start), (window_size, batch_size))
+        conv_out = _CORR_VEC(array, chunk)
+        return None, conv_out
+
+    _, batched_convs = jax.lax.scan(conv_batch, None, jnp.arange(n_batches))
+    batched_convs = np.transpose(batched_convs, axes=(1, 2, 0, 3)).reshape(
+        *batched_convs.shape[1:-1], -1
+    )
+    if leftover > 0:
+        batched_convs = jnp.concatenate(
+            [batched_convs, _CORR_VEC(array, eval_basis[:, n_batches * batch_size :])],
+            axis=2,
+        )
+    return batched_convs
+
+
+@partial(jax.jit, static_argnums=(2, 3))
+def tensor_convolve(
+    array: NDArray, eval_basis: NDArray, batch_time_series: int, batch_basis: int
+):
     """
-    Apply a convolution on the given array with the evaluation basis and reshapes the result.
+    Memory-efficient convolution using scan over batches of input channels.
 
     This function first flattens the input array across dimensions other than the first one, then
     performs a vectorized convolution with the evaluation basis. The result is reshaped back to the
@@ -37,6 +73,10 @@ def tensor_convolve(array: NDArray, eval_basis: NDArray):
     eval_basis :
         The evaluation basis array for convolution. It should be 2D, where the first dimension
         represents the window size for convolution. Shape ``(window_size, n_basis_funcs)``.
+    batch_time_series :
+        Batch size over time series channels.
+    batch_basis:
+        Batch size over basis filters.
 
     Returns
     -------
@@ -50,19 +90,65 @@ def tensor_convolve(array: NDArray, eval_basis: NDArray):
     ``num_samples - window_size + 1``, where num_samples is the first size of the first axis of ``array``
     and ``window_size`` is the size of the first axis in ``eval_basis``.
     """
-    # flatten over other dims & apply vectorized conv
-    conv = _CORR_VEC(array.reshape(array.shape[0], -1), eval_basis)
+    n_samples, *feat_shape = array.shape
+    vectorized_dimension = prod(feat_shape)  # total number of columns
+    array_flat = array.reshape(n_samples, -1)
 
-    # unravel the dimensions
-    window_size = eval_basis.shape[0]
-    num_samples = array.shape[0]
-    conv = conv.reshape(
-        num_samples - window_size + 1, *array.shape[1:], eval_basis.shape[1]
+    window_size, n_basis_funcs = eval_basis.shape
+    n_samples_out = n_samples - window_size + 1
+
+    n_batches = vectorized_dimension // batch_time_series
+    leftover = vectorized_dimension % batch_time_series
+
+    def conv_batch(_, batch_idx):
+        # Get start:end column indices
+        start = batch_idx * batch_time_series
+
+        # Slice and apply _CORR_VEC
+        chunk = jax.lax.dynamic_slice(
+            array_flat, (0, start), (n_samples, batch_time_series)
+        )
+        conv_out = _batched_convolve(
+            chunk, eval_basis, batch_basis
+        )  # shape: (T_out, batch_size, B)
+        return None, conv_out
+
+    _, batched_convs = jax.lax.scan(
+        conv_batch, None, jnp.arange(n_batches)
+    )  # shape: (n_batches, n_samples_out, batch_size, n_basis)
+
+    # Reshape to (n_samples_out, batch_size * n_batches, n_basis)
+    batched_convs = batched_convs.transpose(1, 0, 2, 3).reshape(
+        n_samples_out, n_batches * batch_time_series, n_basis_funcs
     )
-    return conv
+
+    def finish_conv():
+        leftover_chunk = array_flat[
+            :, n_batches * batch_time_series :
+        ]  # shape: (T, leftover)
+        leftover_conv = _CORR_VEC(
+            leftover_chunk, eval_basis
+        )  # shape: (T_out, leftover, B)
+        full_conv = jnp.concatenate([batched_convs, leftover_conv], axis=1)
+        return full_conv
+
+    # Handle leftovers
+    if leftover:
+        leftover_conv = _CORR_VEC(
+            array_flat[:, n_batches * batch_time_series :], eval_basis
+        )  # shape: (T_out, leftover, B)
+        batched_convs = jnp.concatenate([batched_convs, leftover_conv], axis=1)
+
+    return batched_convs.reshape(n_samples_out, *feat_shape, n_basis_funcs)
 
 
-def _shift_time_axis_and_convolve(array: NDArray, eval_basis: NDArray, axis: int):
+def _shift_time_axis_and_convolve(
+    array: NDArray,
+    eval_basis: NDArray,
+    axis: int,
+    batches_time_series: int,
+    batches_basis: int,
+):
     """
     Shifts the specified axis to the first position, applies convolution, and then reverses the shift.
 
@@ -79,6 +165,10 @@ def _shift_time_axis_and_convolve(array: NDArray, eval_basis: NDArray, axis: int
     axis : int
         The axis along which the convolution is applied. This axis is temporarily shifted
         to the first position for the convolution operation.
+    batches_time_series:
+        Number of batched input channels for the convolution.
+    batches_basis:
+        Number of batched basis filters for the convolution.
 
     Returns
     -------
@@ -98,9 +188,11 @@ def _shift_time_axis_and_convolve(array: NDArray, eval_basis: NDArray, axis: int
 
     # convolve
     if array.ndim > 1:
-        conv = tensor_convolve(array, eval_basis)
+        conv = tensor_convolve(array, eval_basis, batches_time_series, batches_basis)
     else:
-        conv = _CORR_VEC_BASIS(array, eval_basis)
+        conv = tensor_convolve(
+            array[:, jnp.newaxis], eval_basis, batches_time_series, batches_basis
+        )[:, 0]
 
     # reverse transposition
     new_axis = (*((jnp.arange(array.ndim) - axis) % array.ndim), array.ndim)
@@ -133,6 +225,8 @@ def _list_epochs(tsd: Any):
 def _convolve_pad_and_shift(
     basis_matrix: ArrayLike,
     time_series: Any,
+    batches_time_series: Any,
+    batches_basis: int,
     predictor_causality: Literal["causal", "acausal", "anti-causal"] = "causal",
     axis: int = 0,
     shift: Optional[bool] = None,
@@ -157,6 +251,10 @@ def _convolve_pad_and_shift(
     time_series :
         The time series to convolve with the basis matrix. This variable should
         be a pytree with arrays of at least one-dimension as leaves.
+    batches_time_series :
+        Pytree of batch sizes. The number of batched channels for the convolution.
+    batches_basis :
+        Number of batched basis filters for the convolution.
     predictor_causality:
         Causality of this predictor, which determines where padded values are
         added and how the predictor is shifted.
@@ -174,10 +272,16 @@ def _convolve_pad_and_shift(
     """
 
     # apply convolution
-    def conv(x):
-        return _shift_time_axis_and_convolve(x, basis_matrix, axis=axis)
+    def conv(x, bs):
+        return _shift_time_axis_and_convolve(
+            x,
+            basis_matrix,
+            axis=axis,
+            batches_time_series=bs,
+            batches_basis=batches_basis,
+        )
 
-    predictor = jax.tree_util.tree_map(conv, time_series)
+    predictor = jax.tree_util.tree_map(conv, time_series, batches_time_series)
 
     with warnings.catch_warnings(record=True) as warns:
         warnings.simplefilter("always")
@@ -207,6 +311,8 @@ def create_convolutional_predictor(
     predictor_causality: Literal["causal", "acausal", "anti-causal"] = "causal",
     shift: Optional[bool] = None,
     axis: int = 0,
+    batches_time_series: Optional[int] = None,
+    batches_basis: Optional[int] = None,
 ):
     """Create a convolutional predictor by convolving a basis matrix with a time series.
 
@@ -241,6 +347,10 @@ def create_convolutional_predictor(
         If None, it defaults to True for 'causal' and 'anti-causal' and to False for 'acausal'.
     axis :
         The axis along which the convolution is applied.
+    batches_time_series :
+        Batch size for the time series channels.
+    batches_basis :
+        Batch size for the convolved basis filters.
 
     Returns
     -------
@@ -263,65 +373,75 @@ def create_convolutional_predictor(
     ValueError:
         If shifting is attempted with 'acausal' causality.
     """
-    # convert to jnp.ndarray
-    basis_matrix = jnp.asarray(basis_matrix)
-    if not utils.check_dimensionality(basis_matrix, 2):
-        raise ValueError(
-            "basis_matrix must be a 2 dimensional array! "
-            f"{basis_matrix.ndim} dimensions provided instead."
-        )
-
-    if basis_matrix.shape[0] == 1:
-        raise ValueError("`basis_matrix.shape[0]` should be at least 2!")
-
-    # check for empty inputs
-    utils.check_non_empty(basis_matrix, "basis_matrix")
-    utils.check_non_empty(time_series, "time_series")
-
-    # check sample_axis exists
-    if not utils.pytree_map_and_reduce(lambda x: x.ndim > axis, all, time_series):
-        raise ValueError(
-            "`time_series` should contain arrays of at least one-dimension. "
-            "At list one 0-dimensional array provided."
-        )
-
-    # assign defaults
-    if shift is None:
-        if predictor_causality == "acausal":
-            shift = False
-        else:
-            shift = True
-
-    if shift and predictor_causality == "acausal":
-        raise ValueError(
-            "Cannot shift `predictor` when `predictor_causality` is `acausal`!"
-        )
+    # apply checks
+    validation.check_basis_matrix_shape(basis_matrix)
+    validation.check_non_empty_inputs(time_series, basis_matrix)
+    validation.check_time_series_ndim(time_series, axis)
+    shift = _resolve_shift_default(shift, predictor_causality)
+    validation.check_shift_causality_consistency(shift, predictor_causality)
 
     # flatten and grab tree struct
-    flat_tree, struct = jax.tree_util.tree_flatten(time_series)
+    time_series, struct = jax.tree_util.tree_flatten(time_series)
+
+    if batches_time_series is None:
+        batches_time_series = jax.tree_util.tree_map(
+            lambda x: prod(x.shape[:axis] + x.shape[axis + 1 :]), time_series
+        )
+    elif not isinstance(batches_time_series, int) or batches_time_series < 1:
+        raise ValueError(
+            f"When provided `batches_time_series` must be a strictly positive integer! "
+            f"{batches_time_series} provided instead."
+        )
+    else:
+        batches_time_series = jax.tree_util.tree_map(
+            lambda x: min(
+                [prod(x.shape[:axis] + x.shape[axis + 1 :]), batches_time_series]
+            ),
+            time_series,
+        )
+
+    if batches_basis is None:
+        batches_basis = basis_matrix.shape[1]
+    elif not isinstance(batches_basis, int) or batches_basis < 1:
+        raise ValueError(
+            f"When provided `batches_basis` must be a strictly positive integer! "
+            f"{batches_basis} provided instead."
+        )
+    else:
+        batches_basis = min([batches_basis, basis_matrix.shape[1]])
 
     # find pynapple
-    is_nap = list(type_casting.is_pynapple_tsd(x) for x in flat_tree)
+    is_nap = list(type_casting.is_pynapple_tsd(x) for x in time_series)
 
     # retrieve time info
     time_info = [
         type_casting.get_time_info(ts) if is_nap[i] else None
-        for i, ts in enumerate(flat_tree)
+        for i, ts in enumerate(time_series)
     ]
 
     # split epochs (adds one layer to pytree)
-    two_layer = jax.tree_util.tree_map(_list_epochs, flat_tree)
+    # if pynapple one batch size per epoch to match tree-struct
+    batches_time_series = jax.tree_util.tree_map(
+        lambda x, y: (
+            [x] * len(y.time_support) if type_casting.is_pynapple_tsd(y) else [x]
+        ),
+        batches_time_series,
+        time_series,
+    )
+    time_series = jax.tree_util.tree_map(_list_epochs, time_series)
 
     # check trial size (after splitting)
-    utils.check_trials_longer_than_time_window(two_layer, basis_matrix.shape[0], axis)
+    utils.check_trials_longer_than_time_window(time_series, basis_matrix.shape[0], axis)
 
     # convert to array
-    two_layer = jax.tree_util.tree_map(jnp.asarray, two_layer)
+    time_series = jax.tree_util.tree_map(jnp.asarray, time_series)
 
     # convolve
     conv = _convolve_pad_and_shift(
         basis_matrix,
-        two_layer,
+        time_series,
+        batches_time_series=batches_time_series,
+        batches_basis=batches_basis,
         predictor_causality=predictor_causality,
         axis=axis,
         shift=shift,
