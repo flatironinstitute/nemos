@@ -86,7 +86,8 @@ _, w = basis_obj.evaluate_on_grid(ws)
 
 plt.plot(w)
 
-spk_conv = nmo.convolve.tensor_convolve(spk, w)
+# convolve specifying the batch size for time, channels and basis
+spk_conv = nmo.convolve.tensor_convolve(spk, w, *spk.shape, w.shape[1])
 
 # valid convolution should be of shape n_samples - ws + 1
 print(f"Shape of the convolution output: {spk_conv.shape}")
