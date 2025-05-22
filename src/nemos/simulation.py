@@ -400,8 +400,9 @@ def simulate_recurrent(
         conv_act = convolve.tensor_convolve(
             activity,
             coupling_basis_matrix,
-            batch_channels=1,
-            batch_basis=1,
+            batch_size_samples=feedforward_input.shape[0],
+            batch_size_channels=1,
+            batch_size_basis=1,
         ).reshape(
             -1,
         )
