@@ -8,6 +8,10 @@ import pytest
 from nemos import convolve, utils
 
 
+def _get_sample_axis_len(time_series, axis=0):
+    return jax.tree_util.tree_leaves(time_series)[0].shape[axis]
+
+
 class TestShiftTimeAxisAndConvolve:
 
     @pytest.mark.parametrize(
@@ -27,8 +31,9 @@ class TestShiftTimeAxisAndConvolve:
             time_series,
             np.zeros((1, 1)),
             axis=axis,
-            batches_time_series=1,
-            batches_basis=1,
+            batch_size_channels=1,
+            batch_size_basis=1,
+            batch_size_samples=_get_sample_axis_len(time_series, axis=axis),
         )
         if not utils.pytree_map_and_reduce(check_func, all, res):
             raise ValueError("Output doesn't match expected structure")
@@ -50,8 +55,9 @@ class TestShiftTimeAxisAndConvolve:
             time_series,
             np.zeros((1, 1)),
             axis=axis,
-            batches_time_series=1,
-            batches_basis=1,
+            batch_size_channels=1,
+            batch_size_basis=1,
+            batch_size_samples=_get_sample_axis_len(time_series, axis=axis),
         )
         if not utils.pytree_map_and_reduce(check_func, all, res):
             raise ValueError("Output  number of neuron doesn't match input.")
@@ -75,8 +81,9 @@ class TestShiftTimeAxisAndConvolve:
             time_series,
             basis_matrix,
             axis=axis,
-            batches_time_series=1,
-            batches_basis=1,
+            batch_size_channels=1,
+            batch_size_basis=1,
+            batch_size_samples=_get_sample_axis_len(time_series, axis=axis),
         )
         if not utils.pytree_map_and_reduce(check_func, all, res):
             raise ValueError("Output  number of neuron doesn't match input.")
@@ -109,8 +116,9 @@ class TestShiftTimeAxisAndConvolve:
                 trial_counts,
                 basis_matrix,
                 axis=1,
-                batches_time_series=1,
-                batches_basis=basis_matrix.shape[1],
+                batch_size_channels=1,
+                batch_size_basis=basis_matrix.shape[1],
+                batch_size_samples=_get_sample_axis_len(trial_counts, axis=1),
             )
         )
         assert np.allclose(utils_out, numpy_out, rtol=10**-5, atol=10**-5), (

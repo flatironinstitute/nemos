@@ -351,3 +351,13 @@ def check_shift_causality_consistency(shift, predictor_causality):
         raise ValueError(
             "Cannot shift `predictor` when `predictor_causality` is `acausal`!"
         )
+
+
+def check_batch_size(batch_size, var_name):
+    if batch_size is None:
+        return
+    elif not isinstance(batch_size, int) or batch_size < 1:
+        raise ValueError(
+            f"When provided `{var_name}` must be a strictly positive integer! "
+            f"{batch_size} provided instead."
+        )
