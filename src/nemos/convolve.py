@@ -571,7 +571,12 @@ def create_convolutional_predictor(
     time_series = jax.tree_util.tree_map(_list_epochs, time_series)
 
     # check trial size (after splitting)
-    utils.check_trials_longer_than_time_window(time_series, basis_matrix.shape[0], axis)
+    validation.check_trials_longer_than_time_window(
+        time_series, basis_matrix.shape[0], axis
+    )
+    validation.check_batch_size_larger_than_convolution_window(
+        batch_size=batch_size_samples, window_size=basis_matrix.shape[0]
+    )
 
     # convert to array
     time_series = jax.tree_util.tree_map(jnp.asarray, time_series)

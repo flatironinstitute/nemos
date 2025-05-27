@@ -358,6 +358,70 @@ def check_batch_size(batch_size, var_name):
         return
     elif not isinstance(batch_size, int) or batch_size < 1:
         raise ValueError(
-            f"When provided `{var_name}` must be a strictly positive integer! "
-            f"{batch_size} provided instead."
+            f"When provided ``{var_name}`` must be a strictly positive integer! "
+            f"``{batch_size}`` provided instead."
+        )
+
+
+def check_trials_longer_than_time_window(
+    time_series: Any, window_size: int | Any, axis: int = 0
+):
+    """
+    Check if the duration of each trial in the time series is at least as long as the window size.
+
+    Parameters
+    ----------
+    time_series :
+        A pytree of trial data.
+    window_size :
+        The size of the window to be used in convolution. Either an int or a pytree with the same
+        struct as time_series.
+    axis :
+        The axis in the arrays representing the time dimension.
+
+    Raises
+    ------
+    ValueError
+        If any trial in the time series is shorter than the window size.
+    """
+    has_same_struct = jax.tree_util.tree_structure(
+        time_series
+    ) == jax.tree_util.tree_structure(window_size)
+    if has_same_struct:
+        insufficient_window_size = pytree_map_and_reduce(
+            lambda x, w: x.shape[axis] < w, any, time_series, window_size
+        )
+    else:
+        insufficient_window_size = pytree_map_and_reduce(
+            lambda x: x.shape[axis] < window_size, any, time_series
+        )
+    # Check window size
+    if insufficient_window_size:
+        raise ValueError(
+            "Insufficient trial duration. The number of time points in each trial must "
+            "be greater or equal to the window size."
+        )
+
+
+def check_batch_size_larger_than_convolution_window(
+    batch_size: int | Any, window_size: int | Any
+):
+    has_same_struct = jax.tree_util.tree_structure(
+        batch_size
+    ) == jax.tree_util.tree_structure(window_size)
+    if has_same_struct:
+        insufficient_window_size = pytree_map_and_reduce(
+            lambda x, w: x < w, any, batch_size, window_size
+        )
+    else:
+        insufficient_window_size = pytree_map_and_reduce(
+            lambda x: x < window_size, any, batch_size
+        )
+    if insufficient_window_size:
+        bs = jax.tree_util.tree_leaves(batch_size)[0]
+        ws = jax.tree_util.tree_leaves(window_size)[0]
+        raise ValueError(
+            "Batch size too small. Batch size must be larger than the convolution window size. "
+            f"The provided batch size is ``{bs}``, while the window size for the convolution is ``{ws}``. "
+            "Please increase the batch size."
         )

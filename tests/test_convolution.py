@@ -192,6 +192,30 @@ class TestCreateConvolutionalPredictor:
         else:
             convolve.create_convolutional_predictor(basis_matrix, trial_counts, axis=1)
 
+    @pytest.mark.parametrize("basis_matrix", [np.zeros((4, 3))])
+    @pytest.mark.parametrize(
+        "trial_counts, batch_samples, expectation",
+        [
+            (np.zeros((1, 4, 2)), None, does_not_raise()),
+            (np.zeros((1, 4, 2)), 4, does_not_raise()),
+            (
+                np.zeros((1, 4, 2)),
+                3,
+                pytest.raises(
+                    ValueError,
+                    match="Batch size too small",
+                ),
+            ),
+        ],
+    )
+    def test_sufficient_trial_duration_batching(
+        self, basis_matrix, trial_counts, batch_samples, expectation
+    ):
+        with expectation:
+            convolve.create_convolutional_predictor(
+                basis_matrix, trial_counts, axis=1, batch_size_samples=batch_samples
+            )
+
     @pytest.mark.parametrize(
         "basis_matrix, expectation",
         [
@@ -482,3 +506,144 @@ class TestCreateConvolutionalPredictor:
         times_nan_found = res[np.isnan(res.d[:, 0])].t
         assert len(times_nan_found) == len(nan_index)
         assert all(times_nan_found == np.array(nan_index))
+
+    @pytest.mark.parametrize(
+        "batch_samples, expectation",
+        [
+            (None, does_not_raise()),
+            (4, does_not_raise()),
+            (
+                -1,
+                pytest.raises(
+                    ValueError,
+                    match="When provided ``batch_size_samples`` must be a strictly positive",
+                ),
+            ),
+            (
+                "a",
+                pytest.raises(
+                    ValueError,
+                    match="When provided ``batch_size_samples`` must be a strictly positive",
+                ),
+            ),
+            (
+                (),
+                pytest.raises(
+                    ValueError,
+                    match="When provided ``batch_size_samples`` must be a strictly positive",
+                ),
+            ),
+            (
+                (1,),
+                pytest.raises(
+                    ValueError,
+                    match="When provided ``batch_size_samples`` must be a strictly positive",
+                ),
+            ),
+        ],
+    )
+    @pytest.mark.parametrize(
+        "ts, kernels", [(np.random.randn(10, 5), np.random.randn(4, 5))]
+    )
+    def test_invalid_batch_size_samples(self, ts, kernels, batch_samples, expectation):
+        with expectation:
+            convolve.create_convolutional_predictor(
+                kernels,
+                ts,
+                axis=0,
+                batch_size_samples=batch_samples,
+            )
+
+    @pytest.mark.parametrize(
+        "batch_channels, expectation",
+        [
+            (None, does_not_raise()),
+            (4, does_not_raise()),
+            (
+                -1,
+                pytest.raises(
+                    ValueError,
+                    match="When provided ``batch_size_channels`` must be a strictly positive",
+                ),
+            ),
+            (
+                "a",
+                pytest.raises(
+                    ValueError,
+                    match="When provided ``batch_size_channels`` must be a strictly positive",
+                ),
+            ),
+            (
+                (),
+                pytest.raises(
+                    ValueError,
+                    match="When provided ``batch_size_channels`` must be a strictly positive",
+                ),
+            ),
+            (
+                (1,),
+                pytest.raises(
+                    ValueError,
+                    match="When provided ``batch_size_channels`` must be a strictly positive",
+                ),
+            ),
+        ],
+    )
+    @pytest.mark.parametrize(
+        "ts, kernels", [(np.random.randn(10, 5), np.random.randn(4, 5))]
+    )
+    def test_invalid_batch_size_samples(self, ts, kernels, batch_channels, expectation):
+        with expectation:
+            convolve.create_convolutional_predictor(
+                kernels,
+                ts,
+                axis=0,
+                batch_size_channels=batch_channels,
+            )
+
+    @pytest.mark.parametrize(
+        "batch_basis, expectation",
+        [
+            (None, does_not_raise()),
+            (4, does_not_raise()),
+            (
+                -1,
+                pytest.raises(
+                    ValueError,
+                    match="When provided ``batch_size_basis`` must be a strictly positive",
+                ),
+            ),
+            (
+                "a",
+                pytest.raises(
+                    ValueError,
+                    match="When provided ``batch_size_basis`` must be a strictly positive",
+                ),
+            ),
+            (
+                (),
+                pytest.raises(
+                    ValueError,
+                    match="When provided ``batch_size_basis`` must be a strictly positive",
+                ),
+            ),
+            (
+                (1,),
+                pytest.raises(
+                    ValueError,
+                    match="When provided ``batch_size_basis`` must be a strictly positive",
+                ),
+            ),
+        ],
+    )
+    @pytest.mark.parametrize(
+        "ts, kernels", [(np.random.randn(10, 5), np.random.randn(4, 5))]
+    )
+    def test_invalid_batch_size_samples(self, ts, kernels, batch_basis, expectation):
+        with expectation:
+            convolve.create_convolutional_predictor(
+                kernels,
+                ts,
+                axis=0,
+                batch_size_basis=batch_basis,
+            )
