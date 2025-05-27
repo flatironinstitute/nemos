@@ -312,7 +312,12 @@ class TestCreateConvolutionalPredictor:
     @pytest.mark.parametrize(
         "trial_counts", [{key: np.random.normal(size=(10, 3)) for key in range(2)}]
     )
-    def test_valid_convolution_output_tree(self, basis_matrix, trial_counts):
+    @pytest.mark.parametrize("batch_samples", [None, 5])
+    @pytest.mark.parametrize("batch_channels", [None, 1, 2])
+    @pytest.mark.parametrize("batch_basis", [None, 1, 2])
+    def test_valid_convolution_output_tree(
+        self, basis_matrix, trial_counts, batch_samples, batch_channels, batch_basis
+    ):
         numpy_out = np.zeros(
             (
                 len(trial_counts),
@@ -329,7 +334,13 @@ class TestCreateConvolutionalPredictor:
                     )
         ws = basis_matrix.shape[0]
         utils_out = convolve.create_convolutional_predictor(
-            basis_matrix, trial_counts, axis=0, shift=False
+            basis_matrix,
+            trial_counts,
+            axis=0,
+            shift=False,
+            batch_size_samples=batch_samples,
+            batch_size_basis=batch_basis,
+            batch_size_channels=batch_channels,
         )
         check = all(
             np.allclose(utils_out[k][ws - 1 :], numpy_out[k], rtol=10**-5, atol=10**-5)
@@ -378,7 +389,20 @@ class TestCreateConvolutionalPredictor:
             (3, False, "acausal", [29, 0]),
         ],
     )
-    def test_expected_nan(self, axis, window_size, shift, predictor_causality, nan_idx):
+    @pytest.mark.parametrize("batch_samples", [None, 5])
+    @pytest.mark.parametrize("batch_channels", [None, 1, 2])
+    @pytest.mark.parametrize("batch_basis", [None, 1, 2])
+    def test_expected_nan(
+        self,
+        axis,
+        window_size,
+        shift,
+        predictor_causality,
+        nan_idx,
+        batch_samples,
+        batch_channels,
+        batch_basis,
+    ):
         shape = [1, 1, 1]
         shape[axis] = 30
         feature = np.zeros(shape)
@@ -389,6 +413,9 @@ class TestCreateConvolutionalPredictor:
             predictor_causality=predictor_causality,
             shift=shift,
             axis=axis,
+            batch_size_samples=batch_samples,
+            batch_size_basis=batch_basis,
+            batch_size_channels=batch_channels,
         )
         # get expected non-nan idxs
         other_idx = list(set(np.arange(res.shape[1])).difference(nan_idx))
@@ -425,13 +452,30 @@ class TestCreateConvolutionalPredictor:
             (3, False, "acausal", [0, 20, 50, 75]),
         ],
     )
+    @pytest.mark.parametrize("batch_samples", [None, 5])
+    @pytest.mark.parametrize("batch_channels", [None, 1, 2])
+    @pytest.mark.parametrize("batch_basis", [None, 1, 2])
     def test_multi_epoch_pynapple(
-        self, tsd, window_size, shift, predictor_causality, nan_index
+        self,
+        tsd,
+        window_size,
+        shift,
+        predictor_causality,
+        nan_index,
+        batch_samples,
+        batch_channels,
+        batch_basis,
     ):
         """Test nan location in multi-epoch pynapple tsd."""
         basis = np.zeros((window_size, 1))
         res = convolve.create_convolutional_predictor(
-            basis, tsd, predictor_causality=predictor_causality, shift=shift
+            basis,
+            tsd,
+            predictor_causality=predictor_causality,
+            shift=shift,
+            batch_size_samples=batch_samples,
+            batch_size_basis=batch_basis,
+            batch_size_channels=batch_channels,
         )
 
         nan_index = np.sort(nan_index)
