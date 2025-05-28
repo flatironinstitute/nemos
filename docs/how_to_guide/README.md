@@ -179,4 +179,20 @@ handling_composite_bases.md
 
 :::
 
+:::{grid-item-card}
+
+<figure>
+<a href="convolve_large_arrays.html">
+<img src="../_static/convolve_batching_scheme.svg" style="height: 100px", alt="Batching scheme."/>
+</a>
+</figure>
+
+```{toctree}
+:maxdepth: 2
+
+convolve_large_arrays.md
+```
+
+:::
+
 ::::
