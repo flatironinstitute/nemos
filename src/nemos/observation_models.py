@@ -385,7 +385,7 @@ class Observations(Base, abc.ABC):
         predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
         aggregate_sample_scores: Callable = jnp.mean,
-    ):
+    ):  # noqa D403
         """
         McFadden's pseudo-:math:`R^2`.
 

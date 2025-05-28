@@ -1,4 +1,5 @@
-#!/usr/bin/env python3
+"""Public available modules."""
+
 from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
 from importlib.metadata import version as _get_version
 

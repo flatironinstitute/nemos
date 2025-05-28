@@ -573,7 +573,7 @@ pynapple_concatenate_numpy = support_pynapple(conv_type="numpy")(np.concatenate)
 
 
 def _get_terminal_size():
-    """Helper to get terminal size for __repr__
+    """Get the terminal size for __repr__.
 
     Returns
     -------

@@ -149,3 +149,6 @@ exclude_lines = [
     "@abc.abstractmethod",
     "if __name__ == .__main__.:"
 ]
+
+[tool.pydocstyle]
+match-dir = "(?!_documentation_utils).*"

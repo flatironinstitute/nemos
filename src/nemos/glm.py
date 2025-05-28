@@ -1124,10 +1124,11 @@ class GLM(BaseRegressor):
         return glm_compute_optimal_stepsize_configs(self)
 
     def __repr__(self):
+        """Representation of the GLM class."""
         return format_repr(self, multiline=True)
 
     def __sklearn_clone__(self) -> GLM:
-        """Clone the PopulationGLM, dropping feature_mask"""
+        """Clone the PopulationGLM, dropping feature_mask."""
         params = self.get_params(deep=False)
         klass = self.__class__(**params)
         return klass
@@ -1640,7 +1641,7 @@ class PopulationGLM(GLM):
         )
 
     def __sklearn_clone__(self) -> PopulationGLM:
-        """Clone the PopulationGLM, dropping feature_mask"""
+        """Clone the PopulationGLM, dropping feature_mask."""
         params = self.get_params(deep=False)
         params.pop("feature_mask")
         klass = self.__class__(**params)

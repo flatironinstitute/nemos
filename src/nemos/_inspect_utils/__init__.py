@@ -1,4 +1,6 @@
 """
+Inspect utility function module.
+
 This module provides utilities for inspecting class hierarchies,
 abstract methods, and subclass method implementations.
 
