@@ -130,7 +130,7 @@ class HistoryBasis(Basis, AtomicBasisMixin):
         self, sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor
     ) -> FeatureMatrix:
         r"""
-        Returns an identity matrix of shape ``(len(samples), n_basis_funcs)``.
+        Return an identity matrix of shape ``(len(samples), n_basis_funcs)``.
 
         The output is the convolutional kernels for spike history.
 
