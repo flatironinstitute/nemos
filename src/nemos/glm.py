@@ -1268,11 +1268,11 @@ class PopulationGLM(GLM):
     >>> weights = np.array([[ 0.5,  0. ], [-0.5, -0.5], [ 0. ,  1. ]])
     >>> y = np.random.poisson(np.exp(X.dot(weights)))
     >>> # Define a feature mask, shape (num_features, num_neurons)
-    >>> feature_mask = jnp.array([[1, 0], [1, 1], [0, 1]])
+    >>> feature_mask = np.array([[1, 0], [1, 1], [0, 1]])
     >>> feature_mask
-    Array([[1, 0],
+    array([[1, 0],
            [1, 1],
-           [0, 1]], dtype=int32)
+           [0, 1]])
     >>> # Create and fit the model
     >>> model = PopulationGLM(feature_mask=feature_mask).fit(X, y)
     >>> model

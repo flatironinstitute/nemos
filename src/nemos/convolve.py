@@ -98,7 +98,7 @@ def batch_binary_func(
     >>> x, y = jax.random.normal(jax.random.PRNGKey(123), (10, 11, 12)), jnp.array(1)
     >>> result = batch_binary_func(x, y, func, batch_size=3, axis=1)
     >>> jnp.allclose(result, x + y)
-    True
+    Array(True, dtype=bool)
     """
     n_batched_features = batched_array.shape[axis]
     leftover = n_batched_features % batch_size
