@@ -1,3 +1,5 @@
+"""Basis module."""
+
 from ._basis import AdditiveBasis, MultiplicativeBasis
 from ._composition_utils import __PUBLIC_BASES__
 from ._transformer_basis import TransformerBasis

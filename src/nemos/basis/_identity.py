@@ -44,7 +44,7 @@ class IdentityBasis(Basis, AtomicBasisMixin):
         self, sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor
     ) -> FeatureMatrix:
         """
-        Returns the samples as a 2D array.
+        Return the samples as a 2D array.
 
         Parameters
         ----------

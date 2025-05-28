@@ -45,7 +45,7 @@ def _iterate_over_components(basis: "Basis"):
 
 
 def _get_root(bas: "AtomicBasisMixin | CompositeBasisMixin"):
-    """Get the basis root"""
+    """Get the basis root."""
     parent = bas
     while hasattr(parent, "_parent") and parent._parent is not None:
         parent = parent._parent
@@ -200,6 +200,7 @@ def _atomic_basis_label_setter_logic(
 
 
 def infer_input_dimensionality(bas: "Basis") -> int:
+    """Infer input dimensionality from ``compute_feature`` signature."""
     n_input_dim = getattr(bas, "_n_input_dimensionality", None)
     if n_input_dim is None:
         # infer from compute_features (facilitate custom basis compatibility).

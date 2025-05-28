@@ -40,7 +40,7 @@ def _is_basis(object: Any):
 
 def set_input_shape_state(states: Tuple[str] = ("_input_shape_product",)):
     """
-    Decorator to preserve input shape-related attributes during method execution.
+    Preserve input shape-related attributes during method execution.
 
     This decorator ensures that the attributes `_n_basis_input_` and `_input_shape_product`
     are copied from the original object (`self`) to the returned object (`klass`)
@@ -175,9 +175,7 @@ class AtomicBasisMixin:
     def _generate_subtree_labels(
         self, type_label: Literal["all", "user-defined"] = "all"
     ) -> Generator[str]:
-        """
-        List all user-specified labels.
-        """
+        """List all user-specified labels."""
         if type_label == "all" or (not self._has_default_label):
             yield self._label
 
@@ -238,6 +236,7 @@ class AtomicBasisMixin:
 
     @property
     def input_shape(self) -> NDArray:
+        """Return the input shape for the component."""
         return self._input_shape_[0] if self._input_shape_ else None
 
 
@@ -594,6 +593,7 @@ class CompositeBasisMixin:
 
     @property
     def basis1(self):
+        """Return first component."""
         return self._basis1
 
     @basis1.setter
@@ -613,6 +613,7 @@ class CompositeBasisMixin:
 
     @property
     def basis2(self):
+        """Return second component."""
         return self._basis2
 
     @basis2.setter
@@ -635,7 +636,6 @@ class CompositeBasisMixin:
 
     def _check_unique_labels(self, basis1, basis2):
         """Check that all user-defined labels in the given basis objects are unique."""
-
         # Include self's label in uniqueness check (if applicable)
         self_label = getattr(self, "_label", None)
 
@@ -703,6 +703,7 @@ class CompositeBasisMixin:
 
     @property
     def input_shape(self):
+        """Return the input shape for each component."""
         basis1 = getattr(self, "_basis1", None)
         basis2 = getattr(self, "_basis2", None)
         # happens at initialization
@@ -745,9 +746,7 @@ class CompositeBasisMixin:
     def _generate_subtree_labels(
         self, type_label: Literal["all", "user-defined"] = "all"
     ) -> Generator[str]:
-        """
-        List all user-specified labels.
-        """
+        """List all user-specified labels."""
         if type_label == "all" or self._label:
             yield self.label
         for lab in self.basis1._generate_subtree_labels(type_label):
@@ -845,7 +844,6 @@ class CompositeBasisMixin:
         The ``_shallow_copy`` attribute is set to True in the context, forcing a shallow copy, at
         before the klass definition, and reset to False after cloning.
         """
-
         with self._set_shallow_copy(True):
             # clone recursively
             basis1 = self.basis1.__sklearn_clone__()
@@ -895,6 +893,7 @@ class CompositeBasisMixin:
         return self
 
     def __repr__(self, n=0):
+        """Nested repr for composite basis."""
         cols, rows = _get_terminal_size()
         rows = rows // 4
         cols = cols
@@ -984,7 +983,7 @@ class CompositeBasisMixin:
 
     def __sklearn_get_params__(self, deep=True):
         """
-        Implements standard scikit-learn get parameters by inspecting init.
+        Implement standard scikit-learn get parameters by inspecting init.
 
         This function will be called by Base.set_params() to get the actual param
         structure, since the inherited``get_params`` is overridden to use basis labels
@@ -1019,13 +1018,13 @@ class CompositeBasisMixin:
         """
         Remap parameters in a given object by replacing 'basis[12]' patterns with unique labels.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         bas : object
             An object that contains a `get_params()` method returning a dictionary of parameters.
 
-        Returns:
-        --------
+        Returns
+        -------
         param_dict_map:
             A dictionary with renamed parameters.
         key_map:
@@ -1110,9 +1109,11 @@ class CompositeBasisMixin:
         }
 
     def get_params(self, deep=True) -> dict:
+        """Get parameters using labels."""
         new_param_dict, _ = self._map_parameters(deep=deep)
         return new_param_dict
 
     @remap_parameters
     def set_params(self, **params: Any):
+        """Map parameters using labels and set."""
         return super().set_params(**params)

@@ -79,7 +79,7 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
         self,
         x: NDArray,
         axis: int = 1,
-    ):
+    ):  # noqa: D205, D400
         r"""
         Examples
         --------
@@ -97,7 +97,7 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("_compute_features", EvalBasisMixin)
-    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:  # noqa: D205, D400
         """
         Examples
         --------
@@ -116,7 +116,9 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
         return super().compute_features(xi)
 
     @add_docstring("evaluate_on_grid", BSplineBasis)
-    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
+    def evaluate_on_grid(
+        self, n_samples: int
+    ) -> Tuple[NDArray, NDArray]:  # noqa: D205, D400
         """
         Examples
         --------
@@ -138,7 +140,7 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", BSplineBasis)
-    def evaluate(self, sample_pts: NDArray) -> NDArray:
+    def evaluate(self, sample_pts: NDArray) -> NDArray:  # noqa: D205, D400
         """
         Examples
         --------
@@ -152,7 +154,7 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
         return super().evaluate(sample_pts)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
-    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):  # noqa: D205, D400
         """
         Examples
         --------
@@ -243,7 +245,7 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
         self,
         x: NDArray,
         axis: int = 1,
-    ):
+    ):  # noqa: D205, D400
         r"""
         Examples
         --------
@@ -261,7 +263,7 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("_compute_features", ConvBasisMixin)
-    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:  # noqa: D205, D400
         """
         Examples
         --------
@@ -280,7 +282,9 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
         return super().compute_features(xi)
 
     @add_docstring("evaluate_on_grid", BSplineBasis)
-    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
+    def evaluate_on_grid(
+        self, n_samples: int
+    ) -> Tuple[NDArray, NDArray]:  # noqa: D205, D400
         """
         Examples
         --------
@@ -302,7 +306,7 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", BSplineBasis)
-    def evaluate(self, sample_pts: NDArray) -> NDArray:
+    def evaluate(self, sample_pts: NDArray) -> NDArray:  # noqa: D205, D400
         """
         Examples
         --------
@@ -316,7 +320,7 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
         return super().evaluate(sample_pts)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
-    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):  # noqa: D205, D400
         """
         Examples
         --------
@@ -394,7 +398,7 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         self,
         x: NDArray,
         axis: int = 1,
-    ):
+    ):  # noqa: D205, D400
         r"""
         Examples
         --------
@@ -412,7 +416,7 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("_compute_features", EvalBasisMixin)
-    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:  # noqa: D205, D400
         """
         Examples
         --------
@@ -431,7 +435,9 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         return super().compute_features(xi)
 
     @add_docstring("evaluate_on_grid", CyclicBSplineBasis)
-    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
+    def evaluate_on_grid(
+        self, n_samples: int
+    ) -> Tuple[NDArray, NDArray]:  # noqa: D205, D400
         """
         Examples
         --------
@@ -455,7 +461,7 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", CyclicBSplineBasis)
-    def evaluate(self, sample_pts: NDArray) -> NDArray:
+    def evaluate(self, sample_pts: NDArray) -> NDArray:  # noqa: D205, D400
         """
         Examples
         --------
@@ -469,7 +475,7 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         return super().evaluate(sample_pts)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
-    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):  # noqa: D205, D400
         """
         Examples
         --------
@@ -552,7 +558,7 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
         self,
         x: NDArray,
         axis: int = 1,
-    ):
+    ):  # noqa: D205, D400
         r"""
         Examples
         --------
@@ -570,7 +576,7 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("_compute_features", ConvBasisMixin)
-    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:  # noqa: D205, D400
         """
         Examples
         --------
@@ -589,7 +595,9 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
         return super().compute_features(xi)
 
     @add_docstring("evaluate_on_grid", CyclicBSplineBasis)
-    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
+    def evaluate_on_grid(
+        self, n_samples: int
+    ) -> Tuple[NDArray, NDArray]:  # noqa: D205, D400
         """
         Examples
         --------
@@ -613,7 +621,7 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", CyclicBSplineBasis)
-    def evaluate(self, sample_pts: NDArray) -> NDArray:
+    def evaluate(self, sample_pts: NDArray) -> NDArray:  # noqa: D205, D400
         """
         Examples
         --------
@@ -627,7 +635,7 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
         return super().evaluate(sample_pts)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
-    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):  # noqa: D205, D400
         """
         Examples
         --------
@@ -729,7 +737,7 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         self,
         x: NDArray,
         axis: int = 1,
-    ):
+    ):  # noqa: D205, D400
         r"""
         Examples
         --------
@@ -747,7 +755,7 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         return MSplineBasis.split_by_feature(self, x, axis=axis)
 
     @add_docstring("_compute_features", EvalBasisMixin)
-    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:  # noqa: D205, D400
         """
         Examples
         --------
@@ -766,7 +774,9 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         return super().compute_features(xi)
 
     @add_docstring("evaluate_on_grid", MSplineBasis)
-    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
+    def evaluate_on_grid(
+        self, n_samples: int
+    ) -> Tuple[NDArray, NDArray]:  # noqa: D205, D400
         """
         Examples
         --------
@@ -790,7 +800,7 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", MSplineBasis)
-    def evaluate(self, sample_pts: NDArray) -> NDArray:
+    def evaluate(self, sample_pts: NDArray) -> NDArray:  # noqa: D205, D400
         """
         Examples
         --------
@@ -804,7 +814,7 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         return super().evaluate(sample_pts)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
-    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):  # noqa: D205, D400
         """
         Examples
         --------
@@ -911,7 +921,7 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         self,
         x: NDArray,
         axis: int = 1,
-    ):
+    ):  # noqa: D205, D400
         r"""
         Examples
         --------
@@ -929,7 +939,7 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("_compute_features", ConvBasisMixin)
-    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:  # noqa: D205, D400
         """
         Examples
         --------
@@ -948,7 +958,9 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         return super().compute_features(xi)
 
     @add_docstring("evaluate_on_grid", MSplineBasis)
-    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
+    def evaluate_on_grid(
+        self, n_samples: int
+    ) -> Tuple[NDArray, NDArray]:  # noqa: D205, D400
         """
         Examples
         --------
@@ -972,7 +984,7 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", MSplineBasis)
-    def evaluate(self, sample_pts: NDArray) -> NDArray:
+    def evaluate(self, sample_pts: NDArray) -> NDArray:  # noqa: D205, D400
         """
         Examples
         --------
@@ -986,7 +998,7 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         return super().evaluate(sample_pts)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
-    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):  # noqa: D205, D400
         """
         Examples
         --------
@@ -1068,7 +1080,9 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
         )
 
     @add_docstring("evaluate_on_grid", RaisedCosineBasisLinear)
-    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
+    def evaluate_on_grid(
+        self, n_samples: int
+    ) -> Tuple[NDArray, NDArray]:  # noqa: D205, D400
         """
         Examples
         --------
@@ -1084,7 +1098,7 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", RaisedCosineBasisLinear)
-    def evaluate(self, sample_pts: NDArray) -> NDArray:
+    def evaluate(self, sample_pts: NDArray) -> NDArray:  # noqa: D205, D400
         """
         Examples
         --------
@@ -1098,7 +1112,7 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
         return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", EvalBasisMixin)
-    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:  # noqa: D205, D400
         """
         Examples
         --------
@@ -1121,7 +1135,7 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
         self,
         x: NDArray,
         axis: int = 1,
-    ):
+    ):  # noqa: D205, D400
         r"""
         Examples
         --------
@@ -1139,7 +1153,7 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
-    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):  # noqa: D205, D400
         """
         Examples
         --------
@@ -1226,7 +1240,9 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
         )
 
     @add_docstring("evaluate_on_grid", RaisedCosineBasisLinear)
-    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
+    def evaluate_on_grid(
+        self, n_samples: int
+    ) -> Tuple[NDArray, NDArray]:  # noqa: D205, D400
         """
         Examples
         --------
@@ -1243,7 +1259,7 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", RaisedCosineBasisLinear)
-    def evaluate(self, sample_pts: NDArray) -> NDArray:
+    def evaluate(self, sample_pts: NDArray) -> NDArray:  # noqa: D205, D400
         """
         Examples
         --------
@@ -1257,7 +1273,7 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
         return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", ConvBasisMixin)
-    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:  # noqa: D205, D400
         """
         Examples
         --------
@@ -1280,7 +1296,7 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
         self,
         x: NDArray,
         axis: int = 1,
-    ):
+    ):  # noqa: D205, D400
         r"""
         Examples
         --------
@@ -1298,7 +1314,7 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
-    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):  # noqa: D205, D400
         """
         Examples
         --------
@@ -1388,7 +1404,9 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         )
 
     @add_docstring("evaluate_on_grid", RaisedCosineBasisLog)
-    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
+    def evaluate_on_grid(
+        self, n_samples: int
+    ) -> Tuple[NDArray, NDArray]:  # noqa: D205, D400
         """
         Examples
         --------
@@ -1405,7 +1423,7 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", RaisedCosineBasisLog)
-    def evaluate(self, sample_pts: NDArray) -> NDArray:
+    def evaluate(self, sample_pts: NDArray) -> NDArray:  # noqa: D205, D400
         """
         Examples
         --------
@@ -1419,7 +1437,7 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", EvalBasisMixin)
-    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:  # noqa: D205, D400
         """
         Examples
         --------
@@ -1442,7 +1460,7 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         self,
         x: NDArray,
         axis: int = 1,
-    ):
+    ):  # noqa: D205, D400
         r"""
         Examples
         --------
@@ -1460,7 +1478,7 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
-    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):  # noqa: D205, D400
         """
         Examples
         --------
@@ -1559,7 +1577,9 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
         )
 
     @add_docstring("evaluate_on_grid", RaisedCosineBasisLog)
-    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
+    def evaluate_on_grid(
+        self, n_samples: int
+    ) -> Tuple[NDArray, NDArray]:  # noqa: D205, D400
         """
         Examples
         --------
@@ -1576,7 +1596,7 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", RaisedCosineBasisLog)
-    def evaluate(self, sample_pts: NDArray) -> NDArray:
+    def evaluate(self, sample_pts: NDArray) -> NDArray:  # noqa: D205, D400
         """
         Examples
         --------
@@ -1590,7 +1610,7 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
         return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", ConvBasisMixin)
-    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:  # noqa: D205, D400
         """
         Examples
         --------
@@ -1613,7 +1633,7 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
         self,
         x: NDArray,
         axis: int = 1,
-    ):
+    ):  # noqa: D205, D400
         r"""
         Examples
         --------
@@ -1631,7 +1651,7 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
-    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):  # noqa: D205, D400
         """
         Examples
         --------
@@ -1707,7 +1727,9 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         )
 
     @add_docstring("evaluate_on_grid", OrthExponentialBasis)
-    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
+    def evaluate_on_grid(
+        self, n_samples: int
+    ) -> Tuple[NDArray, NDArray]:  # noqa: D205, D400
         """
         Examples
         --------
@@ -1724,7 +1746,7 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         return super().evaluate_on_grid(n_samples=n_samples)
 
     @add_docstring("evaluate", OrthExponentialBasis)
-    def evaluate(self, sample_pts: NDArray) -> NDArray:
+    def evaluate(self, sample_pts: NDArray) -> NDArray:  # noqa: D205, D400
         """
         Examples
         --------
@@ -1739,7 +1761,7 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", EvalBasisMixin)
-    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:  # noqa: D205, D400
         """
         Examples
         --------
@@ -1762,7 +1784,7 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         self,
         x: NDArray,
         axis: int = 1,
-    ):
+    ):  # noqa: D205, D400
         """
         Examples
         --------
@@ -1784,7 +1806,7 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
-    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):  # noqa: D205, D400
         """
         Examples
         --------
@@ -1866,7 +1888,9 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         self._check_window_size(self.window_size)
 
     @add_docstring("evaluate_on_grid", OrthExponentialBasis)
-    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
+    def evaluate_on_grid(
+        self, n_samples: int
+    ) -> Tuple[NDArray, NDArray]:  # noqa: D205, D400
         """
         Examples
         --------
@@ -1883,7 +1907,7 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", OrthExponentialBasis)
-    def evaluate(self, sample_pts: NDArray) -> NDArray:
+    def evaluate(self, sample_pts: NDArray) -> NDArray:  # noqa: D205, D400
         """
         Examples
         --------
@@ -1898,7 +1922,7 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", ConvBasisMixin)
-    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:  # noqa: D205, D400
         """
         Examples
         --------
@@ -1921,7 +1945,7 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         self,
         x: NDArray,
         axis: int = 1,
-    ):
+    ):  # noqa: D205, D400
         r"""
         Examples
         --------
@@ -1944,7 +1968,7 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
-    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):  # noqa: D205, D400
         """
         Examples
         --------
@@ -1969,7 +1993,7 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         return AtomicBasisMixin.set_input_shape(self, xi)
 
     def _check_window_size(self, window_size: int):
-        """OrthExponentialBasis specific window size check."""
+        """Specific window size check for ``Orthexponentialbasis``."""
         super()._check_window_size(window_size)
         # if n_basis_funcs is not yet initialized, skip check
         n_basis = getattr(self, "n_basis_funcs", None)
@@ -2013,7 +2037,9 @@ class IdentityEval(EvalBasisMixin, IdentityBasis):
         )
 
     @add_docstring("evaluate_on_grid", IdentityBasis)
-    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
+    def evaluate_on_grid(
+        self, n_samples: int
+    ) -> Tuple[NDArray, NDArray]:  # noqa: D205, D400
         """
         Examples
         --------
@@ -2027,7 +2053,7 @@ class IdentityEval(EvalBasisMixin, IdentityBasis):
         return super().evaluate_on_grid(n_samples=n_samples)
 
     @add_docstring("evaluate", IdentityBasis)
-    def evaluate(self, sample_pts: NDArray) -> NDArray:
+    def evaluate(self, sample_pts: NDArray) -> NDArray:  # noqa: D205, D400
         """
         Examples
         --------
@@ -2041,7 +2067,7 @@ class IdentityEval(EvalBasisMixin, IdentityBasis):
         return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", EvalBasisMixin)
-    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:  # noqa: D205, D400
         """
         Examples
         --------
@@ -2064,7 +2090,7 @@ class IdentityEval(EvalBasisMixin, IdentityBasis):
         self,
         x: NDArray,
         axis: int = 1,
-    ):
+    ):  # noqa: D205, D400
         """
         Examples
         --------
@@ -2086,7 +2112,7 @@ class IdentityEval(EvalBasisMixin, IdentityBasis):
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
-    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):  # noqa: D205, D400
         """
         Examples
         --------
@@ -2146,7 +2172,9 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
         )
 
     @add_docstring("evaluate_on_grid", HistoryBasis)
-    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
+    def evaluate_on_grid(
+        self, n_samples: int
+    ) -> Tuple[NDArray, NDArray]:  # noqa: D205, D400
         """
         Examples
         --------
@@ -2160,7 +2188,7 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", HistoryBasis)
-    def evaluate(self, sample_pts: NDArray) -> NDArray:
+    def evaluate(self, sample_pts: NDArray) -> NDArray:  # noqa: D205, D400
         """
         Examples
         --------
@@ -2175,7 +2203,7 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
         return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", ConvBasisMixin)
-    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:  # noqa: D205, D400
         """
         Examples
         --------
@@ -2198,7 +2226,7 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
         self,
         x: NDArray,
         axis: int = 1,
-    ):
+    ):  # noqa: D205, D400
         """
         Examples
         --------
@@ -2220,7 +2248,7 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
-    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):  # noqa: D205, D400
         """
         Examples
         --------
@@ -2246,6 +2274,7 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
 
     @property
     def window_size(self):
+        """Window size for the history basis."""
         return self._window_size
 
     @window_size.setter

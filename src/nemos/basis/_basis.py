@@ -32,7 +32,7 @@ def is_transformer(bas: Any):
 
 
 def promote_to_transformer(method):
-    """Apply operations to basis within transformer and transform output,"""
+    """Apply operations to basis within transformer and transform output."""
 
     @wraps(method)
     def wrapper(*args, **kwargs):
@@ -165,6 +165,7 @@ def get_equi_spaced_samples(
 
 
 def generate_basis_label_pair(bas: Basis):
+    """Generate all (label, basis) pair of a composite basis."""
     if hasattr(bas, "basis1"):
         for label, sub_bas in generate_basis_label_pair(bas.basis1):
             yield label, sub_bas
@@ -499,6 +500,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
     @promote_to_transformer
     def __rmul__(self, other: Basis | int):
+        """Right multiplication operator for basis."""
         return self.__mul__(other)
 
     @promote_to_transformer
@@ -615,10 +617,11 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         return mul
 
     def __repr__(self):
+        """Repr for a basis object."""
         return format_repr(self)
 
     def __getitem__(self, index: str) -> Basis:
-
+        """Get a basis by its label."""
         if isinstance(index, (int, slice)):
             string = "Slicing" if isinstance(index, slice) else "Indexing with integer"
             raise IndexError(
@@ -825,10 +828,11 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         return reshaped_out
 
     def __iter__(self):
-        """Makes basis iterable. Re-implemented for additive."""
+        """Make basis iterable. Re-implemented for additive."""
         yield self
 
     def __len__(self):
+        """Return the number of additive basis."""
         return 1
 
 
@@ -889,6 +893,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
 
     @property
     def n_output_features(self):
+        """Return the number of output features."""
         out1 = getattr(self.basis1, "n_output_features", None)
         out2 = getattr(self.basis2, "n_output_features", None)
         if out1 is None or out2 is None:
@@ -896,7 +901,9 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         return out1 + out2
 
     @add_docstring("set_input_shape", CompositeBasisMixin)
-    def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> Basis:
+    def set_input_shape(
+        self, *xi: int | tuple[int, ...] | NDArray
+    ) -> Basis:  # noqa: D205, D400
         """
         Examples
         --------
@@ -966,7 +973,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
     @add_docstring("compute_features", Basis)
     def compute_features(
         self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor
-    ) -> FeatureMatrix:
+    ) -> FeatureMatrix:  # noqa: D205, D400
         r"""
         Examples
         --------
@@ -1258,6 +1265,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
             yield bas
 
     def __len__(self):
+        """Return the number of additive basis."""
         return len(self.basis1) + len(self.basis2)
 
 
@@ -1319,6 +1327,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
 
     @property
     def n_output_features(self):
+        """Return the number of output features."""
         out1 = getattr(self.basis1, "n_output_features", None)
         out2 = getattr(self.basis2, "n_output_features", None)
         if out1 is None or out2 is None:
@@ -1443,7 +1452,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
     @add_docstring("compute_features", Basis)
     def compute_features(
         self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor
-    ) -> FeatureMatrix:
+    ) -> FeatureMatrix:  # noqa: D205, D400
         """
         Examples
         --------
@@ -1465,7 +1474,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         self,
         x: NDArray,
         axis: int = 1,
-    ):
+    ):  # noqa: D205, D400
         """
         Examples
         --------
@@ -1489,7 +1498,9 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", CompositeBasisMixin)
-    def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> Basis:
+    def set_input_shape(
+        self, *xi: int | tuple[int, ...] | NDArray
+    ) -> Basis:  # noqa: D400, D205
         """
         Examples
         --------
