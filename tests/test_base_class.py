@@ -46,7 +46,7 @@ def test_get_params(mock_regressor_nested):
     assert params["other_param__std_param"] == 1
 
 
-def set_params(mock_regressor):
+def test_set_params(mock_regressor):
     """Test the set_params method."""
     model = mock_regressor
     model.set_params(std_param=1)

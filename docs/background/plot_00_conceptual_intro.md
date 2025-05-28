@@ -64,7 +64,7 @@ causation for you (causation being a notoriously difficult problem in
 science), but it will allow you to see the effect of adding and removing
 different inputs on the predicted firing rate, which can facilitate
 causal inferences. For more reading on causation and explanation in
-neuroscience, the work of [Carl Craver](https://philosophy.wustl.edu/people/carl-f-craver) 
+neuroscience, the work of [Carl Craver](https://philosophy.wustl.edu/people/carl-f-craver)
 is a good place to start.
 :::
 
@@ -151,7 +151,7 @@ from nemos import _documentation_utils as doc_plots
 plt.style.use(nmo.styles.plot_style)
 ```
 
-to simplify things, we will look at three simple LNP neuron models as 
+to simplify things, we will look at three simple LNP neuron models as
 described above, working through each step of the transform. First, we will
 plot the linear transformation of the input x:
 
@@ -203,7 +203,7 @@ $$
 We can see that the output of the nonlinear transformation is always
 positive, though note that the y-values have changed drastically.
 
-Now we're ready to look at the third step of the LNP model, and see what 
+Now we're ready to look at the third step of the LNP model, and see what
 the generated spikes spikes look like!
 
 ```{code-cell} ipython3
@@ -214,8 +214,8 @@ fig = doc_plots.lnp_schematic(input_feature, weights, intercepts,
 
 Remember, spiking is a stochastic process. That means that a given firing
 rate can give rise to a variety of different spike trains; the plot above
-shows three possibilities for each neuron. Each spike train is a sample from 
-a Poisson process with the mean equal to the firing rate, i.e., output of 
+shows three possibilities for each neuron. Each spike train is a sample from
+a Poisson process with the mean equal to the firing rate, i.e., output of
 the linear-nonlinear parts of the model.
 
 Given that this is a stochastic process that could produce an infinite number

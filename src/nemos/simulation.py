@@ -71,21 +71,25 @@ def difference_of_gammas(
 
     Examples
     --------
-    >>> import matplotlib.pyplot as plt
-    >>> from nemos.simulation import difference_of_gammas
-    >>> coupling_duration = 100
-    >>> inhib_a, inhib_b = 1.0, 1.0
-    >>> excit_a, excit_b = 2.0, 2.0
-    >>> coupling_filter = difference_of_gammas(
-    ...     ws=coupling_duration,
-    ...     inhib_a=inhib_a,
-    ...     inhib_b=inhib_b,
-    ...     excit_a=excit_a,
-    ...     excit_b=excit_b
-    ... )
-    >>> _ = plt.plot(coupling_filter)
-    >>> _ = plt.title("Coupling filter from difference of gammas")
-    >>> _ = plt.show()
+    .. plot::
+        :include-source: True
+        :caption: Difference of Gammas.
+
+        >>> import matplotlib.pyplot as plt
+        >>> from nemos.simulation import difference_of_gammas
+        >>> coupling_duration = 100
+        >>> inhib_a, inhib_b = 1.0, 1.0
+        >>> excit_a, excit_b = 2.0, 2.0
+        >>> coupling_filter = difference_of_gammas(
+        ...     ws=coupling_duration,
+        ...     inhib_a=inhib_a,
+        ...     inhib_b=inhib_b,
+        ...     excit_a=excit_a,
+        ...     excit_b=excit_b
+        ... )
+        >>> _ = plt.plot(coupling_filter)
+        >>> _ = plt.title("Coupling filter from difference of gammas")
+        >>> _ = plt.show()
 
     """
     # check that the gamma parameters are positive (scipy returns
@@ -148,22 +152,26 @@ def regress_filter(coupling_filters: NDArray, eval_basis: NDArray) -> NDArray:
 
     Examples
     --------
-    >>> import numpy as np
-    >>> import matplotlib.pyplot as plt
-    >>> from nemos.simulation import regress_filter, difference_of_gammas
-    >>> from nemos.basis import RaisedCosineLogEval
-    >>> filter_duration = 100
-    >>> n_basis_funcs = 20
-    >>> filter_bank = difference_of_gammas(filter_duration).reshape(filter_duration, 1, 1)
-    >>> _, basis = RaisedCosineLogEval(10).evaluate_on_grid(filter_duration)
-    >>> weights = regress_filter(filter_bank, basis)[0, 0]
-    >>> print("Weights shape:", weights.shape)
-    Weights shape: (10,)
-    >>> _ = plt.plot(filter_bank[:, 0, 0], label=f"True filter")
-    >>> _ = plt.plot(basis.dot(weights), "--", label=f"Approx. filter")
-    >>> _ = plt.legend()
-    >>> _ = plt.title("True vs. Approximated Filters")
-    >>> _ = plt.show()
+    .. plot::
+        :include-source: True
+        :caption: Least-squares approximate filter.
+
+        >>> import numpy as np
+        >>> import matplotlib.pyplot as plt
+        >>> from nemos.simulation import regress_filter, difference_of_gammas
+        >>> from nemos.basis import RaisedCosineLogEval
+        >>> filter_duration = 100
+        >>> n_basis_funcs = 20
+        >>> filter_bank = difference_of_gammas(filter_duration).reshape(filter_duration, 1, 1)
+        >>> _, basis = RaisedCosineLogEval(10).evaluate_on_grid(filter_duration)
+        >>> weights = regress_filter(filter_bank, basis)[0, 0]
+        >>> print("Weights shape:", weights.shape)
+        Weights shape: (10,)
+        >>> _ = plt.plot(filter_bank[:, 0, 0], label=f"True filter")
+        >>> _ = plt.plot(basis.dot(weights), "--", label=f"Approx. filter")
+        >>> _ = plt.legend()
+        >>> _ = plt.title("True vs. Approximated Filters")
+        >>> _ = plt.show()
 
     """
     # check shapes
@@ -265,34 +273,38 @@ def simulate_recurrent(
 
     Examples
     --------
-    >>> import numpy as np
-    >>> import jax
-    >>> import matplotlib.pyplot as plt
-    >>> from nemos.simulation import simulate_recurrent
-    >>> np.random.seed(42)
-    >>> n_neurons = 2
-    >>> coupling_duration = 100
-    >>> feedforward_input = np.random.normal(size=(1000, n_neurons, 1))
-    >>> coupling_basis = np.random.normal(size=(coupling_duration, 10))
-    >>> coupling_coef = 0.5*np.random.normal(size=(n_neurons, n_neurons, 10))
-    >>> intercept = -9 * np.ones(n_neurons)
-    >>> init_spikes = np.zeros((coupling_duration, n_neurons))
-    >>> random_key = jax.random.key(123)
-    >>> spikes, rates = simulate_recurrent(
-    ...     coupling_coef=coupling_coef,
-    ...     feedforward_coef=np.ones((n_neurons, 1)),
-    ...     intercepts=intercept,
-    ...     random_key=random_key,
-    ...     feedforward_input=feedforward_input,
-    ...     coupling_basis_matrix=coupling_basis,
-    ...     init_y=init_spikes
-    ... )
-    >>> _ = plt.figure()
-    >>> _ = plt.plot(rates[:, 0], label="Neuron 0 rate")
-    >>> _ = plt.plot(rates[:, 1], label="Neuron 1 rate")
-    >>> _ = plt.legend()
-    >>> _ = plt.title("Simulated firing rates")
-    >>> _ = plt.show()
+    .. plot::
+        :include-source: True
+        :caption: Recurrently connected GLM simulations.
+
+        >>> import numpy as np
+        >>> import jax
+        >>> import matplotlib.pyplot as plt
+        >>> from nemos.simulation import simulate_recurrent
+        >>> np.random.seed(42)
+        >>> n_neurons = 2
+        >>> coupling_duration = 100
+        >>> feedforward_input = np.random.normal(size=(1000, n_neurons, 1))
+        >>> coupling_basis = np.random.normal(size=(coupling_duration, 10))
+        >>> coupling_coef = 0.5*np.random.normal(size=(n_neurons, n_neurons, 10))
+        >>> intercept = -9 * np.ones(n_neurons)
+        >>> init_spikes = np.zeros((coupling_duration, n_neurons))
+        >>> random_key = jax.random.key(123)
+        >>> spikes, rates = simulate_recurrent(
+        ...     coupling_coef=coupling_coef,
+        ...     feedforward_coef=np.ones((n_neurons, 1)),
+        ...     intercepts=intercept,
+        ...     random_key=random_key,
+        ...     feedforward_input=feedforward_input,
+        ...     coupling_basis_matrix=coupling_basis,
+        ...     init_y=init_spikes
+        ... )
+        >>> _ = plt.figure()
+        >>> _ = plt.plot(rates[:, 0], label="Neuron 0 rate")
+        >>> _ = plt.plot(rates[:, 1], label="Neuron 1 rate")
+        >>> _ = plt.legend()
+        >>> _ = plt.title("Simulated firing rates")
+        >>> _ = plt.show()
     """
     if isinstance(feedforward_input, FeaturePytree):
         raise ValueError(

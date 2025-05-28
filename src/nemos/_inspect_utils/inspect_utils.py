@@ -1,6 +1,9 @@
 import abc
+import functools
 import inspect
-from typing import Callable, List, Tuple
+from typing import Any, Callable, List, Tuple
+
+import numpy as np
 
 
 def reimplements_method(
@@ -267,11 +270,42 @@ def count_params_by_kind(func: Callable, kind: set[inspect.Parameter.kind]):
     """
     sig = inspect.signature(func)
     params = sig.parameters.values()
-    return sum(1 for p in params if p.kind in kind)
+    return sum(
+        1 for p in params if p.kind in kind and p.default == inspect.Parameter.empty
+    )
+
+
+def count_positional_and_var_args_ufunc(func) -> Tuple[int, int]:
+    """Count how many positional and variable args ufunc.
+
+    Note that numpy ufunc are implemented in C directly. Luckily, they all the same signature,
+    all positional args and no variable args, and store the number of args as an attribute.
+    """
+    func = unwrap_func(func)
+    n_pos = func.nin if hasattr(func, "nin") else func.func.nin
+    n_partial = 0 if not hasattr(func, "args") else len(func.args) + len(func.keywords)
+    return n_pos - n_partial, 0
+
+
+def unwrap_func(func: Any) -> Any:
+    if hasattr(func, "__wrapped__"):
+        return unwrap_func(func.__wrapped__)
+    return func
+
+
+def is_ufunc(func: Any) -> bool:
+    """Check if a function or is ufunc or a partial ufunc."""
+    func = unwrap_func(func)
+    if isinstance(func, functools.partial):
+        return isinstance(func.func, np.ufunc)
+    return isinstance(func, np.ufunc)
 
 
 def count_positional_and_var_args(func: Callable):
     """Count the positional arguments of a callable."""
+    if is_ufunc(func):
+        return count_positional_and_var_args_ufunc(func)
+
     num_positional_args = count_params_by_kind(
         func,
         {inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD},

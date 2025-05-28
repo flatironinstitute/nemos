@@ -1,28 +1,32 @@
 import inspect
 import itertools
 import re
+from collections import namedtuple
 from contextlib import nullcontext as does_not_raise
 from functools import partial
-from typing import Literal
 from unittest.mock import patch
 
 import jax.numpy
 import numpy as np
 import pynapple as nap
 import pytest
-from conftest import BasisFuncsTesting, CombinedBasis, list_all_basis_classes
+from conftest import (
+    BasisFuncsTesting,
+    CombinedBasis,
+    custom_basis,
+    list_all_basis_classes,
+)
 
 import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
 import nemos.convolve as convolve
-from nemos.basis import HistoryConv, IdentityEval, TransformerBasis
+from nemos.basis import CustomBasis, HistoryConv, IdentityEval, TransformerBasis
 from nemos.basis._basis import (
     AdditiveBasis,
-    Basis,
     MultiplicativeBasis,
     add_docstring,
-    generate_basis_label_pair,
 )
+from nemos.basis._composition_utils import generate_basis_label_pair
 from nemos.basis._decaying_exponential import OrthExponentialBasis
 from nemos.basis._identity import HistoryBasis, IdentityBasis
 from nemos.basis._raised_cosine_basis import (
@@ -32,8 +36,12 @@ from nemos.basis._raised_cosine_basis import (
 from nemos.basis._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis
 from nemos.utils import pynapple_concatenate_numpy
 
+SizeTerminal = namedtuple("SizeTerminal", ["columns", "lines"])
+
 
 def instantiate_atomic_basis(cls, **kwargs):
+    if cls == CustomBasis:
+        return custom_basis(**kwargs)
     names = cls._get_param_names()
     new_kwargs = kwargs.copy()
     for key in kwargs:
@@ -75,6 +83,8 @@ def compare_basis(b1, b2):
         decay_rates_b1 = b1.__dict__.get("_decay_rates", -1)
         decay_rates_b2 = b2.__dict__.get("_decay_rates", -1)
         assert np.array_equal(decay_rates_b1, decay_rates_b2)
+        f1, f2 = b1.__dict__.pop("_funcs", [True]), b2.__dict__.pop("_funcs", [True])
+        assert all(fi == fj for fi, fj in zip(f1, f2))
         d1 = filter_attributes(b1, exclude_keys=["_decay_rates", "_parent"])
         d2 = filter_attributes(b2, exclude_keys=["_decay_rates", "_parent"])
         assert d1 == d2
@@ -105,6 +115,8 @@ def test_all_basis_are_tested() -> None:
         if test_cls != CombinedBasis
         if mode in test_cls.cls
     }
+    # add CustomBasis, since it is tested in tests/test_custom_basis.py
+    tested_bases = tested_bases.union({CustomBasis})
 
     # Create the set of all the concrete basis classes
     all_bases = set(list_all_basis_classes())
@@ -127,11 +139,9 @@ def test_all_basis_are_tested() -> None:
     if out is None:
         raise ValueError("cannot fine parametrization.")
 
-    basis_tested_in_shared_methods = {
-        o[key] for key in ("eval", "conv") for o in out if key in o
-    }
+    basis_tested_in_shared_methods = set(out)
     all_one_dim_basis = set(
-        list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis]
     )
     assert basis_tested_in_shared_methods == all_one_dim_basis
 
@@ -173,7 +183,9 @@ def test_example_docstrings_add(
         basis_cls.__name__ in ["HistoryConv", "IdentityEval"]
         and method_name == "evaluate"
     ):
-        return
+        pytest.skip("History and Identity eval docstring is specific.")
+    elif basis_cls.__name__ == "CustomBasis" and method_name == "evaluate_on_grid":
+        pytest.skip("CustomBasis doesn't implement the evaluate_on_grid method.")
 
     basis_instance = CombinedBasis().instantiate_basis(
         5, basis_cls, basis_class_specific_params, window_size=10
@@ -415,7 +427,7 @@ def test_expected_output_split_by_feature(basis_instance, super_class):
 
 @pytest.mark.parametrize("label", [None, "", "default-behavior", "CoolFeature"])
 def test_repr_label(label):
-    with patch("os.get_terminal_size", return_value=(80, 24)):
+    with patch("os.get_terminal_size", return_value=SizeTerminal(80, 24)):
         if label == "default-behavior":
             bas = basis.RaisedCosineLinearEval(n_basis_funcs=5)
         else:
@@ -471,149 +483,25 @@ def test_composite_split_by_feature(composite_op, input_shape_1, input_shape_2):
 @pytest.mark.parametrize(
     "cls",
     [
-        {"eval": basis.RaisedCosineLogEval, "conv": basis.RaisedCosineLogConv},
-        {"eval": basis.RaisedCosineLinearEval, "conv": basis.RaisedCosineLinearConv},
-        {"eval": basis.BSplineEval, "conv": basis.BSplineConv},
-        {"eval": basis.CyclicBSplineEval, "conv": basis.CyclicBSplineConv},
-        {"eval": basis.MSplineEval, "conv": basis.MSplineConv},
-        {"eval": basis.OrthExponentialEval, "conv": basis.OrthExponentialConv},
-        {"eval": basis.IdentityEval, "conv": basis.HistoryConv},
+        basis.RaisedCosineLogConv,
+        basis.RaisedCosineLinearConv,
+        basis.BSplineConv,
+        basis.CyclicBSplineConv,
+        basis.MSplineConv,
+        basis.OrthExponentialConv,
+        basis.HistoryConv,
     ],
 )
-class TestSharedMethods:
-
-    @pytest.mark.parametrize("mode", ["eval", "conv"])
-    @pytest.mark.parametrize(
-        "expected_out",
-        [
-            {
-                basis.RaisedCosineLogEval: "RaisedCosineLogEval(n_basis_funcs=5, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True, bounds=(1.0, 2.0))",
-                basis.RaisedCosineLinearEval: "RaisedCosineLinearEval(n_basis_funcs=5, width=2.0, bounds=(1.0, 2.0))",
-                basis.BSplineEval: "BSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
-                basis.CyclicBSplineEval: "CyclicBSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
-                basis.MSplineEval: "MSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
-                basis.OrthExponentialEval: "OrthExponentialEval(n_basis_funcs=5, bounds=(1.0, 2.0))",
-                basis.IdentityEval: "IdentityEval(bounds=(1.0, 2.0))",
-                basis.RaisedCosineLogConv: "RaisedCosineLogConv(n_basis_funcs=5, window_size=10, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True)",
-                basis.RaisedCosineLinearConv: "RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0)",
-                basis.BSplineConv: "BSplineConv(n_basis_funcs=5, window_size=10, order=4)",
-                basis.CyclicBSplineConv: "CyclicBSplineConv(n_basis_funcs=5, window_size=10, order=4)",
-                basis.MSplineConv: "MSplineConv(n_basis_funcs=5, window_size=10, order=4)",
-                basis.OrthExponentialConv: "OrthExponentialConv(n_basis_funcs=5, window_size=10)",
-                basis.HistoryConv: "HistoryConv(window_size=10)",
-            }
-        ],
-    )
-    def test_repr_out(self, cls, mode, expected_out):
-        bas = instantiate_atomic_basis(
-            cls[mode],
-            n_basis_funcs=5,
-            bounds=(1, 2),
-            window_size=10,
-            **extra_decay_rates(cls[mode], 5),
-        )
-        out = repr(bas)
-        assert out == expected_out.get(cls[mode], "")
-
-    @pytest.mark.parametrize("mode", ["eval", "conv"])
-    @pytest.mark.parametrize(
-        "expected_out",
-        [
-            {
-                basis.RaisedCosineLogEval: "'mylabel': RaisedCosineLogEval(n_basis_funcs=5, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True, bounds=(1.0, 2.0))",
-                basis.RaisedCosineLinearEval: "'mylabel': RaisedCosineLinearEval(n_basis_funcs=5, width=2.0, bounds=(1.0, 2.0))",
-                basis.BSplineEval: "'mylabel': BSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
-                basis.CyclicBSplineEval: "'mylabel': CyclicBSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
-                basis.MSplineEval: "'mylabel': MSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
-                basis.OrthExponentialEval: "'mylabel': OrthExponentialEval(n_basis_funcs=5, bounds=(1.0, 2.0))",
-                basis.IdentityEval: "'mylabel': IdentityEval(bounds=(1.0, 2.0))",
-                basis.RaisedCosineLogConv: "'mylabel': RaisedCosineLogConv(n_basis_funcs=5, window_size=10, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True)",
-                basis.RaisedCosineLinearConv: "'mylabel': RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0)",
-                basis.BSplineConv: "'mylabel': BSplineConv(n_basis_funcs=5, window_size=10, order=4)",
-                basis.CyclicBSplineConv: "'mylabel': CyclicBSplineConv(n_basis_funcs=5, window_size=10, order=4)",
-                basis.MSplineConv: "'mylabel': MSplineConv(n_basis_funcs=5, window_size=10, order=4)",
-                basis.OrthExponentialConv: "'mylabel': OrthExponentialConv(n_basis_funcs=5, window_size=10)",
-                basis.HistoryConv: "'mylabel': HistoryConv(window_size=10)",
-            }
-        ],
-    )
-    def test_repr_out_with_label(self, cls, mode, expected_out):
-        bas = instantiate_atomic_basis(
-            cls[mode],
-            n_basis_funcs=5,
-            bounds=(1, 2),
-            window_size=10,
-            label="mylabel",
-            **extra_decay_rates(cls[mode], 5),
-        )
-        out = repr(bas)
-        assert out == expected_out.get(cls[mode], "")
-
-    @pytest.mark.parametrize(
-        "samples, vmin, vmax, expectation",
-        [
-            (0.5, 0, 1, does_not_raise()),
-            (
-                -0.5,
-                0,
-                1,
-                pytest.raises(ValueError, match="All the samples lie outside"),
-            ),
-            (np.linspace(-1, 1, 10), 0, 1, does_not_raise()),
-            (
-                np.linspace(-1, 0, 10),
-                0,
-                1,
-                pytest.warns(UserWarning, match="More than 90% of the samples"),
-            ),
-            (
-                np.linspace(1, 2, 10),
-                0,
-                1,
-                pytest.warns(UserWarning, match="More than 90% of the samples"),
-            ),
-        ],
-    )
-    def test_call_vmin_vmax(self, samples, vmin, vmax, expectation, cls):
-        if "OrthExp" in cls["eval"].__name__ and not hasattr(samples, "shape"):
-            return
-        bas = instantiate_atomic_basis(
-            cls["eval"],
-            n_basis_funcs=5,
-            bounds=(vmin, vmax),
-            **extra_decay_rates(cls["eval"], 5),
-        )
-        with expectation:
-            bas.evaluate(samples)
-
-    @pytest.mark.parametrize("n_basis", [5, 6])
-    @pytest.mark.parametrize("vmin, vmax", [(0, 1), (-1, 1)])
-    @pytest.mark.parametrize("inp_num", [1, 2])
-    def test_sklearn_clone_eval(self, cls, n_basis, vmin, vmax, inp_num):
-        bas = instantiate_atomic_basis(
-            cls["eval"],
-            n_basis_funcs=n_basis,
-            bounds=(vmin, vmax),
-            **extra_decay_rates(cls["eval"], n_basis),
-        )
-        bas.set_input_shape(inp_num)
-        bas2 = bas.__sklearn_clone__()
-        assert id(bas) != id(bas2)
-        assert np.all(
-            bas.__dict__.pop("decay_rates", True)
-            == bas2.__dict__.pop("decay_rates", True)
-        )
-        assert bas.__dict__ == bas2.__dict__
-
+class TestConvBasis:
     @pytest.mark.parametrize("n_basis", [5, 6])
     @pytest.mark.parametrize("ws", [10, 20])
     @pytest.mark.parametrize("inp_num", [1, 2])
     def test_sklearn_clone_conv(self, cls, n_basis, ws, inp_num):
         bas = instantiate_atomic_basis(
-            cls["conv"],
+            cls,
             n_basis_funcs=n_basis,
             window_size=ws,
-            **extra_decay_rates(cls["eval"], n_basis),
+            **extra_decay_rates(cls, n_basis),
         )
         bas.set_input_shape(inp_num)
         bas2 = bas.__sklearn_clone__()
@@ -622,60 +510,9 @@ class TestSharedMethods:
             bas.__dict__.pop("decay_rates", True)
             == bas2.__dict__.pop("decay_rates", True)
         )
+        f1, f2 = bas.__dict__.pop("_funcs", [True]), bas2.__dict__.pop("_funcs", [True])
+        assert all(fi == fj for fi, fj in zip(f1, f2))
         assert bas.__dict__ == bas2.__dict__
-
-    @pytest.mark.parametrize("n_basis", [5])
-    @pytest.mark.parametrize("ws", [10])
-    @pytest.mark.parametrize("inp_num", [1, 2])
-    @pytest.mark.parametrize("mode", ["conv", "eval"])
-    def test_len(self, cls, n_basis, ws, inp_num, mode):
-        bas = instantiate_atomic_basis(
-            cls[mode],
-            n_basis_funcs=n_basis,
-            window_size=ws,
-            **extra_decay_rates(cls["eval"], n_basis),
-        )
-        assert len(bas) == 1
-
-    @pytest.mark.parametrize("n_basis", [5])
-    @pytest.mark.parametrize("ws", [10])
-    @pytest.mark.parametrize("inp_num", [1, 2])
-    @pytest.mark.parametrize("mode", ["conv", "eval"])
-    def test_iter(self, cls, n_basis, ws, inp_num, mode):
-        bas = instantiate_atomic_basis(
-            cls[mode],
-            n_basis_funcs=n_basis,
-            window_size=ws,
-            **extra_decay_rates(cls["eval"], n_basis),
-        )
-        for b in bas:
-            assert id(bas) == id(b)
-
-    @pytest.mark.parametrize(
-        "attribute, value, expectation",
-        [
-            ("label", None, does_not_raise()),
-            ("label", "label", does_not_raise()),
-            (
-                "n_output_features",
-                5,
-                pytest.raises(
-                    AttributeError,
-                    match=r"can't set attribute 'n_output_features'|property 'n_output_features' of '.+' object",
-                ),
-            ),
-        ],
-    )
-    def test_attr_setter(self, attribute, value, cls, expectation):
-        bas = instantiate_atomic_basis(
-            cls["eval"], n_basis_funcs=5, **extra_decay_rates(cls["eval"], 5)
-        )
-        with expectation:
-            setattr(bas, attribute, value)
-
-        if expectation is does_not_raise():
-            if value is not None:
-                assert getattr(bas, attribute) == value
 
     @pytest.mark.parametrize(
         "n_input, expectation",
@@ -688,10 +525,10 @@ class TestSharedMethods:
     )
     def test_expected_input_number(self, n_input, expectation, cls):
         bas = instantiate_atomic_basis(
-            cls["conv"],
+            cls,
             n_basis_funcs=5,
             window_size=10,
-            **extra_decay_rates(cls["eval"], 5),
+            **extra_decay_rates(cls, 5),
         )
         x = np.random.randn(20, 2)
         bas.compute_features(x)
@@ -735,343 +572,24 @@ class TestSharedMethods:
     def test_init_conv_kwargs(self, conv_kwargs, expectation, cls):
         with expectation:
             instantiate_atomic_basis(
-                cls["conv"],
+                cls,
                 n_basis_funcs=5,
                 window_size=200,
                 conv_kwargs=conv_kwargs,
-                **extra_decay_rates(cls["eval"], 5),
+                **extra_decay_rates(cls, 5),
             )
-
-    @pytest.mark.parametrize("label", [None, "label"])
-    def test_init_label(self, label, cls):
-        bas = instantiate_atomic_basis(
-            cls["eval"],
-            n_basis_funcs=5,
-            label=label,
-            **extra_decay_rates(cls["eval"], 5),
-        )
-        expected_label = str(label) if label is not None else cls["eval"].__name__
-        assert bas.label == expected_label
 
     @pytest.mark.parametrize("n_input", [1, 2, 3])
     def test_set_num_output_features(self, n_input, cls):
         bas = instantiate_atomic_basis(
-            cls["conv"],
+            cls,
             n_basis_funcs=5,
             window_size=10,
-            **extra_decay_rates(cls["conv"], 5),
+            **extra_decay_rates(cls, 5),
         )
         assert bas.n_output_features is None
         bas.compute_features(np.random.randn(20, n_input))
         assert bas.n_output_features == n_input * bas.n_basis_funcs
-
-    @pytest.mark.parametrize("n_input", [1, 2, 3])
-    def test_set_num_basis_input(self, n_input, cls):
-        bas = instantiate_atomic_basis(
-            cls["conv"],
-            n_basis_funcs=5,
-            window_size=10,
-            **extra_decay_rates(cls["conv"], 5),
-        )
-        assert bas._input_shape_product is None
-        bas.compute_features(np.random.randn(20, n_input))
-        assert bas._input_shape_product == (n_input,)
-        assert bas._input_shape_product == (n_input,)
-
-    @pytest.mark.parametrize(
-        "bounds, samples, nan_idx, mn, mx",
-        [
-            (None, np.arange(5), [4], 0, 1),
-            ((0, 3), np.arange(5), [4], 0, 3),
-            ((1, 4), np.arange(5), [0], 1, 4),
-            ((1, 3), np.arange(5), [0, 4], 1, 3),
-        ],
-    )
-    def test_vmin_vmax_eval_on_grid_affects_x(
-        self, bounds, samples, nan_idx, mn, mx, cls
-    ):
-        bas_no_range = instantiate_atomic_basis(
-            cls["eval"],
-            n_basis_funcs=5,
-            bounds=None,
-            **extra_decay_rates(cls["eval"], 5),
-        )
-        bas = instantiate_atomic_basis(
-            cls["eval"],
-            n_basis_funcs=5,
-            bounds=bounds,
-            **extra_decay_rates(cls["eval"], 5),
-        )
-        x1, _ = bas.evaluate_on_grid(10)
-        x2, _ = bas_no_range.evaluate_on_grid(10)
-        assert np.allclose(x1, x2 * (mx - mn) + mn)
-
-    @pytest.mark.parametrize(
-        "vmin, vmax, samples, nan_idx",
-        [
-            (0, 3, np.arange(5), [4]),
-            (1, 4, np.arange(5), [0]),
-            (1, 3, np.arange(5), [0, 4]),
-        ],
-    )
-    def test_vmin_vmax_eval_on_grid_no_effect_on_eval(
-        self, vmin, vmax, samples, nan_idx, cls
-    ):
-        # MSPline integrates to 1 on domain so must be excluded from this check
-        # Identity also returns the same array, so if the range changes so will
-        # evaluate on grid output.
-        if "MSpline" in cls["eval"].__name__ or "Identity" in cls["eval"].__name__:
-            return
-        bas_no_range = instantiate_atomic_basis(
-            cls["eval"],
-            n_basis_funcs=5,
-            bounds=None,
-            **extra_decay_rates(cls["eval"], 5),
-        )
-        bas = instantiate_atomic_basis(
-            cls["eval"],
-            n_basis_funcs=5,
-            bounds=(vmin, vmax),
-            **extra_decay_rates(cls["eval"], 5),
-        )
-        _, out1 = bas.evaluate_on_grid(10)
-        _, out2 = bas_no_range.evaluate_on_grid(10)
-        assert np.allclose(out1, out2)
-
-    @pytest.mark.parametrize(
-        "bounds, expectation",
-        [
-            (None, does_not_raise()),
-            ((None, 3), pytest.raises(TypeError, match=r"Could not convert")),
-            ((1, None), pytest.raises(TypeError, match=r"Could not convert")),
-            ((1, 3), does_not_raise()),
-            (("a", 3), pytest.raises(TypeError, match="Could not convert")),
-            ((1, "a"), pytest.raises(TypeError, match="Could not convert")),
-            (("a", "a"), pytest.raises(TypeError, match="Could not convert")),
-            (
-                (1, 2, 3),
-                pytest.raises(
-                    ValueError, match="The provided `bounds` must be of length two"
-                ),
-            ),
-        ],
-    )
-    def test_vmin_vmax_init(self, bounds, expectation, cls):
-        with expectation:
-            bas = instantiate_atomic_basis(
-                cls["eval"],
-                n_basis_funcs=5,
-                bounds=bounds,
-                **extra_decay_rates(cls["eval"], 5),
-            )
-            assert bounds == bas.bounds if bounds else bas.bounds is None
-
-    @pytest.mark.parametrize("n_basis", [6, 7])
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 8})]
-    )
-    def test_call_basis_number(self, n_basis, mode, kwargs, cls):
-        if cls[mode] is IdentityEval:
-            n_basis = 1
-        elif cls[mode] is HistoryConv:
-            n_basis = kwargs["window_size"]
-        bas = instantiate_atomic_basis(
-            cls[mode],
-            n_basis_funcs=n_basis,
-            **kwargs,
-            **extra_decay_rates(cls[mode], n_basis),
-        )
-        x = np.linspace(0, 1, 10)
-        assert bas.evaluate(x).shape[1] == n_basis
-
-    @pytest.mark.parametrize("n_basis", [6])
-    def test_call_equivalent_in_conv(self, n_basis, cls):
-        # Identity and history have a different behavior
-        if cls["eval"] is IdentityEval:
-            return
-        bas_con = instantiate_atomic_basis(
-            cls["conv"],
-            n_basis_funcs=n_basis,
-            window_size=10,
-            **extra_decay_rates(cls["conv"], n_basis),
-        )
-        bas_eval = instantiate_atomic_basis(
-            cls["eval"],
-            n_basis_funcs=n_basis,
-            **extra_decay_rates(cls["eval"], n_basis),
-        )
-        x = np.linspace(0, 1, 10)
-        assert np.all(bas_con.evaluate(x) == bas_eval.evaluate(x))
-
-    @pytest.mark.parametrize(
-        "num_input, expectation",
-        [
-            (
-                0,
-                pytest.raises(
-                    TypeError, match="missing 1 required positional argument"
-                ),
-            ),
-            (1, does_not_raise()),
-            (
-                2,
-                pytest.raises(
-                    TypeError, match="takes 2 positional arguments but 3 were given" ""
-                ),
-            ),
-        ],
-    )
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 8})]
-    )
-    @pytest.mark.parametrize("n_basis", [6])
-    def test_call_input_num(self, num_input, n_basis, mode, kwargs, expectation, cls):
-        bas = instantiate_atomic_basis(
-            cls[mode],
-            n_basis_funcs=n_basis,
-            **kwargs,
-            **extra_decay_rates(cls[mode], n_basis),
-        )
-        with expectation:
-            bas.evaluate(*([np.linspace(0, 1, 10)] * num_input))
-
-    @pytest.mark.parametrize(
-        "inp, expectation",
-        [
-            (np.linspace(0, 1, 10), does_not_raise()),
-            (np.linspace(0, 1, 10)[:, None], does_not_raise()),
-            (np.repeat(np.linspace(0, 1, 10), 10).reshape(10, 5, 2), does_not_raise()),
-        ],
-    )
-    @pytest.mark.parametrize("n_basis", [6])
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 8})]
-    )
-    def test_call_input_shape(self, inp, mode, kwargs, expectation, n_basis, cls):
-        bas = instantiate_atomic_basis(
-            cls[mode],
-            n_basis_funcs=n_basis,
-            **kwargs,
-            **extra_decay_rates(cls[mode], n_basis),
-        )
-        if isinstance(bas, IdentityEval):
-            n_basis = 1
-        elif isinstance(bas, HistoryConv):
-            n_basis = kwargs["window_size"]
-            if inp.ndim != 1:
-                return
-        with expectation:
-            out = bas.evaluate(inp)
-            out2 = bas.evaluate_on_grid(inp.shape[0])[1]
-            assert np.all((out.reshape(out.shape[0], -1, n_basis) - out2[:, None]) == 0)
-            assert out.shape == tuple((*inp.shape, n_basis))
-
-    @pytest.mark.parametrize("n_basis", [6])
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 8})]
-    )
-    def test_call_nan_location(self, mode, kwargs, n_basis, cls):
-        if cls[mode] is HistoryConv:
-            return
-        if cls[mode] is IdentityEval:
-            n_basis = 1
-        bas = instantiate_atomic_basis(
-            cls[mode],
-            n_basis_funcs=n_basis,
-            **kwargs,
-            **extra_decay_rates(cls[mode], n_basis),
-        )
-        inp = np.random.randn(10, 2, 3)
-        inp[2, 0, [0, 2]] = np.nan
-        inp[4, 1, 1] = np.nan
-        out = bas.evaluate(inp)
-        assert np.all(np.isnan(out[2, 0, [0, 2]]))
-        assert np.all(np.isnan(out[4, 1, 1]))
-        assert np.isnan(out).sum() == 3 * n_basis
-
-    @pytest.mark.parametrize(
-        "samples, expectation",
-        [
-            (np.array([0, 1, 2, 3, 4, 5]), does_not_raise()),
-            (
-                np.array(["a", "1", "2", "3", "4", "5"]),
-                pytest.raises(TypeError, match="Input samples must"),
-            ),
-        ],
-    )
-    @pytest.mark.parametrize("n_basis", [6])
-    def test_call_input_type(self, samples, expectation, n_basis, cls):
-        bas = instantiate_atomic_basis(
-            cls["eval"],
-            n_basis_funcs=n_basis,
-            **extra_decay_rates(cls["eval"], n_basis),
-        )  # Only eval mode is relevant here
-        with expectation:
-            bas.evaluate(samples)
-
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 8})]
-    )
-    def test_call_nan(self, mode, kwargs, cls):
-        if cls[mode] is HistoryConv:
-            # eval simply returns the evaluate...
-            return
-        elif cls[mode] is IdentityEval:
-            n_basis = 1
-        else:
-            n_basis = 5
-        bas = instantiate_atomic_basis(
-            cls[mode],
-            n_basis_funcs=n_basis,
-            **kwargs,
-            **extra_decay_rates(cls[mode], n_basis),
-        )
-        x = np.linspace(0, 1, 10)
-        x[3] = np.nan
-        assert all(np.isnan(bas.evaluate(x)[3]))
-
-    @pytest.mark.parametrize("n_basis", [6, 7])
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 8})]
-    )
-    def test_call_non_empty(self, n_basis, mode, kwargs, cls):
-        bas = instantiate_atomic_basis(
-            cls[mode],
-            n_basis_funcs=n_basis,
-            **kwargs,
-            **extra_decay_rates(cls[mode], n_basis),
-        )
-        with pytest.raises(ValueError, match="All sample provided must"):
-            bas.evaluate(np.array([]))
-
-    @pytest.mark.parametrize("time_axis_shape", [10, 11, 12])
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 8})]
-    )
-    def test_call_sample_axis(self, time_axis_shape, mode, kwargs, cls):
-        bas = instantiate_atomic_basis(
-            cls[mode], n_basis_funcs=5, **kwargs, **extra_decay_rates(cls[mode], 5)
-        )
-        assert (
-            bas.evaluate(np.linspace(0, 1, time_axis_shape)).shape[0] == time_axis_shape
-        )
-
-    @pytest.mark.parametrize(
-        "mn, mx, expectation",
-        [
-            (0, 1, does_not_raise()),
-            (-2, 2, does_not_raise()),
-        ],
-    )
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 8})]
-    )
-    def test_call_sample_range(self, mn, mx, expectation, mode, kwargs, cls):
-        bas = instantiate_atomic_basis(
-            cls[mode], n_basis_funcs=5, **kwargs, **extra_decay_rates(cls[mode], 5)
-        )
-        with expectation:
-            bas.evaluate(np.linspace(mn, mx, 10))
 
     @pytest.mark.parametrize(
         "kwargs, input1_shape, expectation",
@@ -1096,11 +614,11 @@ class TestSharedMethods:
     def test_compute_features_axis(self, kwargs, input1_shape, expectation, cls):
         with expectation:
             basis_obj = instantiate_atomic_basis(
-                cls["conv"],
+                cls,
                 n_basis_funcs=5,
                 window_size=5,
                 conv_kwargs=kwargs,
-                **extra_decay_rates(cls["conv"], 5),
+                **extra_decay_rates(cls, 5),
             )
             basis_obj.compute_features(np.ones(input1_shape))
 
@@ -1147,88 +665,11 @@ class TestSharedMethods:
         )
 
         # figure out which kwargs needs to be removed
-        kwargs = inspect_utils.trim_kwargs(
-            cls["conv"], kwargs, basis_class_specific_params
-        )
+        kwargs = inspect_utils.trim_kwargs(cls, kwargs, basis_class_specific_params)
 
-        basis_obj = instantiate_atomic_basis(cls["conv"], **kwargs)
+        basis_obj = instantiate_atomic_basis(cls, **kwargs)
         out = basis_obj.compute_features(x)
         assert out.shape[1] == expected_n_input * basis_obj.n_basis_funcs
-
-    @pytest.mark.parametrize(
-        "eval_input", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
-    )
-    def test_compute_features_input(self, eval_input, cls):
-        # orth exp needs more inputs (orthogonalizaiton impossible otherwise)
-        if "OrthExp" in cls["eval"].__name__:
-            return
-        basis_obj = instantiate_atomic_basis(cls["eval"], n_basis_funcs=5)
-        basis_obj.compute_features(eval_input)
-
-    @pytest.mark.parametrize(
-        "args, sample_size",
-        [[{"n_basis_funcs": n_basis}, 100] for n_basis in [6, 10, 13]],
-    )
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 30})]
-    )
-    def test_compute_features_returns_expected_number_of_basis(
-        self, args, sample_size, mode, kwargs, cls
-    ):
-        args_copy = args.copy()
-        if cls[mode] == IdentityEval:
-            args_copy["n_basis_funcs"] = 1
-        elif cls[mode] == HistoryConv:
-            args_copy["n_basis_funcs"] = kwargs["window_size"]
-        basis_obj = instantiate_atomic_basis(
-            cls[mode],
-            **args_copy,
-            **kwargs,
-            **extra_decay_rates(cls[mode], args_copy["n_basis_funcs"]),
-        )
-        eval_basis = basis_obj.compute_features(np.linspace(0, 1, sample_size))
-        assert eval_basis.shape[1] == args_copy["n_basis_funcs"], (
-            "Dimensions do not agree: The number of basis should match the first dimension "
-            f"of the evaluated basis. The number of basis is {args['n_basis_funcs']}, but the "
-            f"evaluated basis has dimension {eval_basis.shape[1]}"
-        )
-
-    @pytest.mark.parametrize(
-        "samples, vmin, vmax, expectation",
-        [
-            (0.5, 0, 1, does_not_raise()),
-            (
-                -0.5,
-                0,
-                1,
-                pytest.raises(ValueError, match="All the samples lie outside"),
-            ),
-            (np.linspace(-1, 1, 10), 0, 1, does_not_raise()),
-            (
-                np.linspace(-1, 0, 10),
-                0,
-                1,
-                pytest.warns(UserWarning, match="More than 90% of the samples"),
-            ),
-            (
-                np.linspace(1, 2, 10),
-                0,
-                1,
-                pytest.warns(UserWarning, match="More than 90% of the samples"),
-            ),
-        ],
-    )
-    def test_compute_features_vmin_vmax(self, samples, vmin, vmax, expectation, cls):
-        if "OrthExp" in cls["eval"].__name__ and not hasattr(samples, "shape"):
-            return
-        basis_obj = instantiate_atomic_basis(
-            cls["eval"],
-            n_basis_funcs=5,
-            bounds=(vmin, vmax),
-            **extra_decay_rates(cls["eval"], 5),
-        )
-        with expectation:
-            basis_obj.compute_features(samples)
 
     @pytest.mark.parametrize(
         "bounds, samples, exception",
@@ -1265,15 +706,375 @@ class TestSharedMethods:
     )
     def test_vmin_vmax_mode_conv(self, bounds, samples, exception, cls):
         extra_args = {"n_basis_funcs": 5}
-        if cls["conv"] == HistoryConv:
+        if cls == HistoryConv:
             extra_args = {}
         with exception:
-            cls["conv"](
+            cls(
                 **extra_args,
                 window_size=10,
                 bounds=bounds,
-                **extra_decay_rates(cls["conv"], 5),
+                **extra_decay_rates(cls, 5),
             )
+
+    def test_convolution_is_performed(self, cls):
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=5,
+            window_size=10,
+            **extra_decay_rates(cls, 5),
+        )
+        x = np.random.normal(size=100)
+        conv = bas.compute_features(x)
+        conv_2 = convolve.create_convolutional_predictor(bas.kernel_, x)
+        valid = ~np.isnan(conv)
+        assert np.all(conv[valid] == conv_2[valid])
+        assert np.all(np.isnan(conv_2[~valid]))
+
+    def test_fit_kernel(self, cls):
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=5,
+            window_size=30,
+            **extra_decay_rates(cls, 5),
+        )
+        bas._set_kernel()
+        assert bas.kernel_ is not None
+
+    def test_fit_kernel_shape(self, cls):
+        n_basis = 5 if cls != HistoryConv else 30
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=n_basis,
+            window_size=30,
+            **extra_decay_rates(cls, n_basis),
+        )
+        bas._set_kernel()
+        assert bas.kernel_.shape == (30, n_basis)
+
+    def test_set_window_size(self, cls):
+        kwargs = (
+            {"window_size": 10, "n_basis_funcs": 10}
+            if cls != HistoryConv
+            else {"window_size": 10}
+        )
+
+        with does_not_raise():
+            cls(**kwargs, **extra_decay_rates(cls, 10))
+
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=10,
+            window_size=10,
+            **extra_decay_rates(cls, 10),
+        )
+        with pytest.raises(ValueError, match="You must provide a window_siz"):
+            bas.set_params(window_size=None)
+
+    def test_transform_fails(self, cls):
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=5,
+            window_size=5,
+            **extra_decay_rates(cls, 5),
+        )
+        with pytest.raises(
+            RuntimeError, match="You must call `setup_basis` before `_compute_features`"
+        ):
+            bas._compute_features(np.linspace(0, 1, 10))
+
+    @pytest.mark.parametrize(
+        "ws, expectation",
+        [
+            (5, does_not_raise()),
+            (
+                -1,
+                pytest.raises(
+                    ValueError, match="`window_size` must be a positive integer"
+                ),
+            ),
+            (
+                None,
+                pytest.raises(
+                    ValueError,
+                    match="You must provide a window_size",
+                ),
+            ),
+            (
+                1.5,
+                pytest.raises(ValueError, match="`window_size` must be a positive "),
+            ),
+        ],
+    )
+    def test_init_window_size(self, ws, expectation, cls):
+        extra = dict(n_basis_funcs=5) if cls != HistoryConv else {}
+        with expectation:
+            cls(**extra, window_size=ws, **extra_decay_rates(cls, 5))
+
+    def test_set_bounds(self, cls):
+        kwargs = (
+            {"bounds": (1, 2), "n_basis_funcs": 10}
+            if cls != HistoryConv
+            else {"bounds": (1, 2)}
+        )
+        with pytest.raises(
+            TypeError, match="got an unexpected keyword argument 'bounds'"
+        ):
+            cls(**kwargs, **extra_decay_rates(cls, 10))
+
+        kwargs = {"n_basis_funcs": 10} if cls != IdentityEval else {}
+        bas = instantiate_atomic_basis(
+            cls,
+            **kwargs,
+            window_size=20,
+            **extra_decay_rates(cls, 10),
+        )
+        with pytest.raises(
+            ValueError, match="Invalid parameter 'bounds' for estimator"
+        ):
+            bas.set_params(bounds=(1, 2))
+
+
+@pytest.mark.parametrize(
+    "cls",
+    [
+        CustomBasis,
+        basis.RaisedCosineLogEval,
+        basis.RaisedCosineLinearEval,
+        basis.BSplineEval,
+        basis.CyclicBSplineEval,
+        basis.MSplineEval,
+        basis.OrthExponentialEval,
+        basis.IdentityEval,
+    ],
+)
+class TestEvalBasis:
+    @pytest.mark.parametrize(
+        "samples, vmin, vmax, expectation",
+        [
+            (0.5, 0, 1, does_not_raise()),
+            (
+                -0.5,
+                0,
+                1,
+                pytest.raises(ValueError, match="All the samples lie outside"),
+            ),
+            (np.linspace(-1, 1, 10), 0, 1, does_not_raise()),
+            (
+                np.linspace(-1, 0, 10),
+                0,
+                1,
+                pytest.warns(UserWarning, match="More than 90% of the samples"),
+            ),
+            (
+                np.linspace(1, 2, 10),
+                0,
+                1,
+                pytest.warns(UserWarning, match="More than 90% of the samples"),
+            ),
+        ],
+    )
+    def test_call_vmin_vmax(self, samples, vmin, vmax, expectation, cls):
+        if (
+            "OrthExp" in cls.__name__ and not hasattr(samples, "shape")
+        ) or cls == CustomBasis:
+            pytest.skip(f"Skipping test_call_vmin_vmax for {cls.__name__}")
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=5,
+            bounds=(vmin, vmax),
+            **extra_decay_rates(cls, 5),
+        )
+        with expectation:
+            bas.evaluate(samples)
+
+    @pytest.mark.parametrize("n_basis", [5, 6])
+    @pytest.mark.parametrize("vmin, vmax", [(0, 1), (-1, 1)])
+    @pytest.mark.parametrize("inp_num", [1, 2])
+    def test_sklearn_clone_eval(self, cls, n_basis, vmin, vmax, inp_num):
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=n_basis,
+            bounds=(vmin, vmax),
+            **extra_decay_rates(cls, n_basis),
+        )
+        bas.set_input_shape(inp_num)
+        bas2 = bas.__sklearn_clone__()
+        assert id(bas) != id(bas2)
+        assert np.all(
+            bas.__dict__.pop("decay_rates", True)
+            == bas2.__dict__.pop("decay_rates", True)
+        )
+        f1, f2 = bas.__dict__.pop("_funcs", [True]), bas2.__dict__.pop("_funcs", [True])
+        assert all(fi == fj for fi, fj in zip(f1, f2))
+        assert bas.__dict__ == bas2.__dict__
+
+    @pytest.mark.parametrize(
+        "bounds, samples, nan_idx, mn, mx",
+        [
+            (None, np.arange(5), [4], 0, 1),
+            ((0, 3), np.arange(5), [4], 0, 3),
+            ((1, 4), np.arange(5), [0], 1, 4),
+            ((1, 3), np.arange(5), [0, 4], 1, 3),
+        ],
+    )
+    def test_vmin_vmax_eval_on_grid_affects_x(
+        self, bounds, samples, nan_idx, mn, mx, cls
+    ):
+        if cls == CustomBasis:
+            pytest.skip(
+                f"Skipping test_vmin_vmax_eval_on_grid_affects_x for {cls.__name__}"
+            )
+        bas_no_range = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=5,
+            bounds=None,
+            **extra_decay_rates(cls, 5),
+        )
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=5,
+            bounds=bounds,
+            **extra_decay_rates(cls, 5),
+        )
+        x1, _ = bas.evaluate_on_grid(10)
+        x2, _ = bas_no_range.evaluate_on_grid(10)
+        assert np.allclose(x1, x2 * (mx - mn) + mn)
+
+    @pytest.mark.parametrize(
+        "vmin, vmax, samples, nan_idx",
+        [
+            (0, 3, np.arange(5), [4]),
+            (1, 4, np.arange(5), [0]),
+            (1, 3, np.arange(5), [0, 4]),
+        ],
+    )
+    def test_vmin_vmax_eval_on_grid_no_effect_on_eval(
+        self, vmin, vmax, samples, nan_idx, cls
+    ):
+        if cls == CustomBasis:
+            pytest.skip(
+                f"Skipping test_vmin_vmax_eval_on_grid_no_effect_on_eval for {cls.__name__}"
+            )
+        # MSPline integrates to 1 on domain so must be excluded from this check
+        # Identity also returns the same array, so if the range changes so will
+        # evaluate on grid output.
+        if "MSpline" in cls.__name__ or "Identity" in cls.__name__:
+            return
+        bas_no_range = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=5,
+            bounds=None,
+            **extra_decay_rates(cls, 5),
+        )
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=5,
+            bounds=(vmin, vmax),
+            **extra_decay_rates(cls, 5),
+        )
+        _, out1 = bas.evaluate_on_grid(10)
+        _, out2 = bas_no_range.evaluate_on_grid(10)
+        assert np.allclose(out1, out2)
+
+    @pytest.mark.parametrize(
+        "bounds, expectation",
+        [
+            (None, does_not_raise()),
+            ((None, 3), pytest.raises(TypeError, match=r"Could not convert")),
+            ((1, None), pytest.raises(TypeError, match=r"Could not convert")),
+            ((1, 3), does_not_raise()),
+            (("a", 3), pytest.raises(TypeError, match="Could not convert")),
+            ((1, "a"), pytest.raises(TypeError, match="Could not convert")),
+            (("a", "a"), pytest.raises(TypeError, match="Could not convert")),
+            (
+                (1, 2, 3),
+                pytest.raises(
+                    ValueError, match="The provided `bounds` must be of length two"
+                ),
+            ),
+        ],
+    )
+    def test_vmin_vmax_init(self, bounds, expectation, cls):
+        if cls == CustomBasis:
+            pytest.skip(f"Skipping test_vmin_vmax_init for {cls.__name__}")
+        with expectation:
+            bas = instantiate_atomic_basis(
+                cls,
+                n_basis_funcs=5,
+                bounds=bounds,
+                **extra_decay_rates(cls, 5),
+            )
+            assert bounds == bas.bounds if bounds else bas.bounds is None
+
+    @pytest.mark.parametrize(
+        "samples, vmin, vmax, expectation",
+        [
+            (0.5, 0, 1, does_not_raise()),
+            (
+                -0.5,
+                0,
+                1,
+                pytest.raises(ValueError, match="All the samples lie outside"),
+            ),
+            (np.linspace(-1, 1, 10), 0, 1, does_not_raise()),
+            (
+                np.linspace(-1, 0, 10),
+                0,
+                1,
+                pytest.warns(UserWarning, match="More than 90% of the samples"),
+            ),
+            (
+                np.linspace(1, 2, 10),
+                0,
+                1,
+                pytest.warns(UserWarning, match="More than 90% of the samples"),
+            ),
+        ],
+    )
+    def test_compute_features_vmin_vmax(self, samples, vmin, vmax, expectation, cls):
+        if (
+            "OrthExp" in cls.__name__ and not hasattr(samples, "shape")
+        ) or cls == CustomBasis:
+            pytest.skip(f"Skipping test_compute_features_vmin_vmax for {cls.__name__}")
+        basis_obj = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=5,
+            bounds=(vmin, vmax),
+            **extra_decay_rates(cls, 5),
+        )
+        with expectation:
+            basis_obj.compute_features(samples)
+
+    @pytest.mark.parametrize(
+        "samples, expectation",
+        [
+            (np.array([0, 1, 2, 3, 4, 5]), does_not_raise()),
+            (
+                np.array(["a", "1", "2", "3", "4", "5"]),
+                pytest.raises(TypeError, match="Input samples must"),
+            ),
+        ],
+    )
+    @pytest.mark.parametrize("n_basis", [6])
+    def test_call_input_type(self, samples, expectation, n_basis, cls):
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=n_basis,
+            **extra_decay_rates(cls, n_basis),
+        )  # Only eval mode is relevant here
+        with expectation:
+            bas.compute_features(samples)
+
+    @pytest.mark.parametrize(
+        "eval_input", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
+    )
+    def test_compute_features_input(self, eval_input, cls):
+        # test only in eval because conv requires at least window_size samples
+        # orth exp needs more inputs (orthogonalizaiton impossible otherwise)
+        if "OrthExp" in cls.__name__:
+            return
+        basis_obj = instantiate_atomic_basis(cls, n_basis_funcs=5)
+        basis_obj.compute_features(eval_input)
 
     @pytest.mark.parametrize(
         "vmin, vmax, samples, nan_idx",
@@ -1285,12 +1086,14 @@ class TestSharedMethods:
         ],
     )
     def test_vmin_vmax_range(self, vmin, vmax, samples, nan_idx, cls):
+        if cls == CustomBasis:
+            pytest.skip(f"Skipping test_vmin_vmax_range for {cls.__name__}")
         bounds = None if vmin is None else (vmin, vmax)
         bas = instantiate_atomic_basis(
-            cls["eval"],
+            cls,
             n_basis_funcs=5,
             bounds=bounds,
-            **extra_decay_rates(cls["eval"], 5),
+            **extra_decay_rates(cls, 5),
         )
         out = bas.compute_features(samples)
         assert np.all(np.isnan(out[nan_idx]))
@@ -1316,49 +1119,475 @@ class TestSharedMethods:
         ],
     )
     def test_vmin_vmax_setter(self, bounds, expectation, cls):
+        if cls == CustomBasis:
+            pytest.skip(f"Skipping test_vmin_vmax_setter for {cls.__name__}")
         bas = instantiate_atomic_basis(
-            cls["eval"],
+            cls,
             n_basis_funcs=5,
             bounds=(1, 3),
-            **extra_decay_rates(cls["eval"], 5),
+            **extra_decay_rates(cls, 5),
         )
         with expectation:
             bas.set_params(bounds=bounds)
             assert bounds == bas.bounds if bounds else bas.bounds is None
 
     def test_conv_kwargs_error(self, cls):
+        if cls == CustomBasis:
+            pytest.skip(f"Skipping test_conv_kwargs_error for {cls.__name__}")
         with pytest.raises(
             TypeError, match="got an unexpected keyword argument 'test'"
         ):
-            if cls["eval"] == IdentityEval:
+            if cls == IdentityEval:
                 extra = {}
             else:
                 extra = dict(n_basis_funcs=5)
-            cls["eval"](**extra, test="hi", **extra_decay_rates(cls["eval"], 5))
+            cls(**extra, test="hi", **extra_decay_rates(cls, 5))
 
-    def test_convolution_is_performed(self, cls):
+    def test_set_window_size(self, cls):
+        if cls == CustomBasis:
+            pytest.skip(f"Skipping test_set_window_size for {cls.__name__}")
+        kwargs = (
+            {"window_size": 10, "n_basis_funcs": 10}
+            if cls != IdentityEval
+            else {"window_size": 10}
+        )
+        with pytest.raises(
+            TypeError, match="got an unexpected keyword argument 'window_size'"
+        ):
+            cls(**kwargs, **extra_decay_rates(cls, 10))
+
         bas = instantiate_atomic_basis(
-            cls["conv"],
+            cls, n_basis_funcs=10, **extra_decay_rates(cls, 10)
+        )
+        with pytest.raises(
+            ValueError, match="Invalid parameter 'window_size' for estimator"
+        ):
+            bas.set_params(window_size=10)
+
+    @pytest.mark.parametrize(
+        "ws, expectation",
+        [
+            (
+                None,
+                pytest.raises(
+                    TypeError,
+                    match=r"got an unexpected keyword argument 'window_size'",
+                ),
+            ),
+            (
+                10,
+                pytest.raises(
+                    TypeError,
+                    match=r"got an unexpected keyword argument 'window_size'",
+                ),
+            ),
+        ],
+    )
+    def test_init_window_size(self, ws, expectation, cls):
+        if cls == CustomBasis:
+            pytest.skip(f"Skipping test_init_window_size for {cls.__name__}")
+        extra = dict(n_basis_funcs=5) if cls != IdentityEval else {}
+        with expectation:
+            cls(**extra, window_size=ws, **extra_decay_rates(cls, 5))
+
+    def test_set_bounds(self, cls):
+        if cls == CustomBasis:
+            pytest.skip(f"Skipping test_set_bounds for {cls.__name__}")
+        kwargs = (
+            {"bounds": (1, 2), "n_basis_funcs": 10}
+            if cls != IdentityEval
+            else {"bounds": (1, 2)}
+        )
+        with does_not_raise():
+            cls(**kwargs, **extra_decay_rates(cls, 10))
+
+
+@pytest.mark.parametrize(
+    "cls",
+    [
+        {"eval": basis.RaisedCosineLogEval, "conv": basis.RaisedCosineLogConv},
+        {"eval": basis.RaisedCosineLinearEval, "conv": basis.RaisedCosineLinearConv},
+        {"eval": basis.BSplineEval, "conv": basis.BSplineConv},
+        {"eval": basis.CyclicBSplineEval, "conv": basis.CyclicBSplineConv},
+        {"eval": basis.MSplineEval, "conv": basis.MSplineConv},
+        {"eval": basis.OrthExponentialEval, "conv": basis.OrthExponentialConv},
+        {"eval": basis.IdentityEval, "conv": basis.HistoryConv},
+    ],
+)
+@pytest.mark.parametrize("n_basis", [6])
+def test_call_equivalent_in_conv(n_basis, cls):
+    # Identity and history have a different behavior
+    if cls["eval"] is IdentityEval:
+        return
+    bas_con = instantiate_atomic_basis(
+        cls["conv"],
+        n_basis_funcs=n_basis,
+        window_size=10,
+        **extra_decay_rates(cls["conv"], n_basis),
+    )
+    bas_eval = instantiate_atomic_basis(
+        cls["eval"],
+        n_basis_funcs=n_basis,
+        **extra_decay_rates(cls["eval"], n_basis),
+    )
+    x = np.linspace(0, 1, 10)
+    assert np.all(bas_con.evaluate(x) == bas_eval.evaluate(x))
+
+
+@pytest.mark.parametrize(
+    "cls",
+    [
+        CustomBasis,
+        basis.RaisedCosineLogEval,
+        basis.RaisedCosineLogConv,
+        basis.RaisedCosineLinearEval,
+        basis.RaisedCosineLinearConv,
+        basis.BSplineEval,
+        basis.BSplineConv,
+        basis.CyclicBSplineEval,
+        basis.CyclicBSplineConv,
+        basis.MSplineEval,
+        basis.MSplineConv,
+        basis.OrthExponentialEval,
+        basis.OrthExponentialConv,
+        basis.IdentityEval,
+        basis.HistoryConv,
+    ],
+)
+class TestSharedMethods:
+
+    @pytest.mark.parametrize(
+        "expected_out",
+        [
+            {
+                CustomBasis: "CustomBasis(\n    funcs=[partial(power_func, 1), ..., partial(power_func, 5)],\n    ndim_input=1,\n    pynapple_support=True\n)",
+                basis.RaisedCosineLogEval: "RaisedCosineLogEval(n_basis_funcs=5, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True, bounds=(1.0, 2.0))",
+                basis.RaisedCosineLinearEval: "RaisedCosineLinearEval(n_basis_funcs=5, width=2.0, bounds=(1.0, 2.0))",
+                basis.BSplineEval: "BSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
+                basis.CyclicBSplineEval: "CyclicBSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
+                basis.MSplineEval: "MSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
+                basis.OrthExponentialEval: "OrthExponentialEval(n_basis_funcs=5, bounds=(1.0, 2.0))",
+                basis.IdentityEval: "IdentityEval(bounds=(1.0, 2.0))",
+                basis.RaisedCosineLogConv: "RaisedCosineLogConv(n_basis_funcs=5, window_size=10, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True)",
+                basis.RaisedCosineLinearConv: "RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0)",
+                basis.BSplineConv: "BSplineConv(n_basis_funcs=5, window_size=10, order=4)",
+                basis.CyclicBSplineConv: "CyclicBSplineConv(n_basis_funcs=5, window_size=10, order=4)",
+                basis.MSplineConv: "MSplineConv(n_basis_funcs=5, window_size=10, order=4)",
+                basis.OrthExponentialConv: "OrthExponentialConv(n_basis_funcs=5, window_size=10)",
+                basis.HistoryConv: "HistoryConv(window_size=10)",
+            }
+        ],
+    )
+    def test_repr_out(self, cls, expected_out):
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=5,
+            bounds=(1, 2),
+            window_size=10,
+            **extra_decay_rates(cls, 5),
+        )
+        out = repr(bas)
+        assert out.startswith(expected_out.get(cls, ""))
+
+    @pytest.mark.parametrize(
+        "expected_out",
+        [
+            {
+                CustomBasis: "'mylabel': CustomBasis(\n    funcs=[partial(power_func, 1), ..., partial(power_func, 5)",
+                basis.RaisedCosineLogEval: "'mylabel': RaisedCosineLogEval(n_basis_funcs=5, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True, bounds=(1.0, 2.0))",
+                basis.RaisedCosineLinearEval: "'mylabel': RaisedCosineLinearEval(n_basis_funcs=5, width=2.0, bounds=(1.0, 2.0))",
+                basis.BSplineEval: "'mylabel': BSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
+                basis.CyclicBSplineEval: "'mylabel': CyclicBSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
+                basis.MSplineEval: "'mylabel': MSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
+                basis.OrthExponentialEval: "'mylabel': OrthExponentialEval(n_basis_funcs=5, bounds=(1.0, 2.0))",
+                basis.IdentityEval: "'mylabel': IdentityEval(bounds=(1.0, 2.0))",
+                basis.RaisedCosineLogConv: "'mylabel': RaisedCosineLogConv(n_basis_funcs=5, window_size=10, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True)",
+                basis.RaisedCosineLinearConv: "'mylabel': RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0)",
+                basis.BSplineConv: "'mylabel': BSplineConv(n_basis_funcs=5, window_size=10, order=4)",
+                basis.CyclicBSplineConv: "'mylabel': CyclicBSplineConv(n_basis_funcs=5, window_size=10, order=4)",
+                basis.MSplineConv: "'mylabel': MSplineConv(n_basis_funcs=5, window_size=10, order=4)",
+                basis.OrthExponentialConv: "'mylabel': OrthExponentialConv(n_basis_funcs=5, window_size=10)",
+                basis.HistoryConv: "'mylabel': HistoryConv(window_size=10)",
+            }
+        ],
+    )
+    def test_repr_out_with_label(self, cls, expected_out):
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=5,
+            bounds=(1, 2),
+            window_size=10,
+            label="mylabel",
+            **extra_decay_rates(cls, 5),
+        )
+        out = repr(bas)
+        assert out.startswith(expected_out.get(cls, ""))
+
+    @pytest.mark.parametrize("n_basis", [5])
+    @pytest.mark.parametrize("ws", [10])
+    @pytest.mark.parametrize("inp_num", [1, 2])
+    def test_len(self, cls, n_basis, ws, inp_num):
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=n_basis,
+            window_size=ws,
+            **extra_decay_rates(cls, n_basis),
+        )
+        assert len(bas) == 1
+
+    @pytest.mark.parametrize("n_basis", [5])
+    @pytest.mark.parametrize("ws", [10])
+    @pytest.mark.parametrize("inp_num", [1, 2])
+    def test_iter(self, cls, n_basis, ws, inp_num):
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=n_basis,
+            window_size=ws,
+            **extra_decay_rates(cls, n_basis),
+        )
+        for b in bas:
+            assert id(bas) == id(b)
+
+    @pytest.mark.parametrize(
+        "attribute, value, expectation",
+        [
+            ("label", None, does_not_raise()),
+            ("label", "label", does_not_raise()),
+            (
+                "n_output_features",
+                5,
+                pytest.raises(
+                    AttributeError,
+                    match=r"can't set attribute 'n_output_features'|property 'n_output_features' of '.+' object",
+                ),
+            ),
+        ],
+    )
+    def test_attr_setter(self, attribute, value, cls, expectation):
+        if cls == CustomBasis:
+            pytest.skip(f"Skipping test_attr_setter for {cls.__name__}")
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=5,
+            **extra_decay_rates(cls, 5),
+            window_size=10,
+        )
+        with expectation:
+            setattr(bas, attribute, value)
+
+        if expectation is does_not_raise():
+            if value is not None:
+                assert getattr(bas, attribute) == value
+
+    @pytest.mark.parametrize("label", [None, "label"])
+    def test_init_label(self, label, cls):
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=5,
+            label=label,
+            **extra_decay_rates(cls, 5),
+            window_size=10,
+        )
+        expected_label = str(label) if label is not None else cls.__name__
+        assert bas.label == expected_label
+
+    @pytest.mark.parametrize("n_input", [1, 2, 3])
+    def test_set_num_basis_input(self, n_input, cls):
+        bas = instantiate_atomic_basis(
+            cls,
             n_basis_funcs=5,
             window_size=10,
-            **extra_decay_rates(cls["conv"], 5),
+            **extra_decay_rates(cls, 5),
         )
-        x = np.random.normal(size=100)
-        conv = bas.compute_features(x)
-        conv_2 = convolve.create_convolutional_predictor(bas.kernel_, x)
-        valid = ~np.isnan(conv)
-        assert np.all(conv[valid] == conv_2[valid])
-        assert np.all(np.isnan(conv_2[~valid]))
+
+        ishape_prod = getattr(bas, "_input_shape_product", None)
+        assert ishape_prod is None
+        bas.compute_features(np.random.randn(20, n_input))
+        ishape_prod = getattr(bas, "_input_shape_product", None)
+        if ishape_prod:
+            assert bas._input_shape_product == (n_input,)
+
+    @pytest.mark.parametrize("n_basis", [6, 7])
+    def test_call_basis_number(self, n_basis, cls):
+        if cls is IdentityEval:
+            n_basis = 1
+        elif cls is HistoryConv:
+            n_basis = 8
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=n_basis,
+            window_size=8,
+            **extra_decay_rates(cls, n_basis),
+        )
+        x = np.linspace(0, 1, 10)
+        assert bas.evaluate(x).shape[1] == n_basis
+
+    @pytest.mark.parametrize(
+        "num_input, expectation",
+        [
+            (
+                0,
+                pytest.raises(
+                    TypeError, match="missing 1 required positional argument"
+                ),
+            ),
+            (1, does_not_raise()),
+            (
+                2,
+                pytest.raises(
+                    TypeError, match="takes 2 positional arguments but 3 were given" ""
+                ),
+            ),
+        ],
+    )
+    @pytest.mark.parametrize("n_basis", [6])
+    def test_call_input_num(self, num_input, n_basis, expectation, cls):
+        bas = instantiate_atomic_basis(
+            cls,
+            window_size=8,
+            n_basis_funcs=n_basis,
+            **extra_decay_rates(cls, n_basis),
+        )
+        with expectation:
+            bas.evaluate(*([np.linspace(0, 1, 10)] * num_input))
+
+    @pytest.mark.parametrize(
+        "inp, expectation",
+        [
+            (np.linspace(0, 1, 10), does_not_raise()),
+            (np.linspace(0, 1, 10)[:, None], does_not_raise()),
+            (np.repeat(np.linspace(0, 1, 10), 10).reshape(10, 5, 2), does_not_raise()),
+        ],
+    )
+    @pytest.mark.parametrize("n_basis", [6])
+    def test_call_input_shape(self, inp, expectation, n_basis, cls):
+        if cls == CustomBasis:
+            pytest.skip(
+                f"Skipping test_call_input_shape for {cls.__name__}.\n"
+                f"The `evaluate` call of custom basis concatenate the vectorized outputs."
+            )
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=n_basis,
+            window_size=8,
+            **extra_decay_rates(cls, n_basis),
+        )
+        if isinstance(bas, IdentityEval):
+            n_basis = 1
+        elif isinstance(bas, HistoryConv):
+            n_basis = 8
+            if inp.ndim != 1:
+                return
+        with expectation:
+            out = bas.evaluate(inp)
+            assert out.shape == tuple((*inp.shape, n_basis))
+            out2 = bas.evaluate_on_grid(inp.shape[0])[1]
+            assert np.all((out.reshape(out.shape[0], -1, n_basis) - out2[:, None]) == 0)
+
+    @pytest.mark.parametrize("n_basis", [6])
+    def test_call_nan_location(self, n_basis, cls):
+        if cls is HistoryConv or cls is CustomBasis:
+            return
+        if cls is IdentityEval:
+            n_basis = 1
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=n_basis,
+            window_size=8,
+            **extra_decay_rates(cls, n_basis),
+        )
+        inp = np.random.randn(10, 2, 3)
+        inp[2, 0, [0, 2]] = np.nan
+        inp[4, 1, 1] = np.nan
+        out = bas.evaluate(inp)
+        assert np.all(np.isnan(out[2, 0, [0, 2]]))
+        assert np.all(np.isnan(out[4, 1, 1]))
+        assert np.isnan(out).sum() == 3 * n_basis
+
+    def test_call_nan(self, cls):
+        if cls is HistoryConv:
+            # eval simply returns the evaluate...
+            return
+        elif cls is IdentityEval:
+            n_basis = 1
+        else:
+            n_basis = 5
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=n_basis,
+            window_size=8,
+            **extra_decay_rates(cls, n_basis),
+        )
+        x = np.linspace(0, 1, 10)
+        x[3] = np.nan
+        assert all(np.isnan(bas.evaluate(x)[3]))
+
+    @pytest.mark.parametrize("n_basis", [6, 7])
+    def test_call_non_empty(self, n_basis, cls):
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=n_basis,
+            window_size=8,
+            **extra_decay_rates(cls, n_basis),
+        )
+        meth = bas.compute_features if cls == CustomBasis else bas.evaluate
+        with pytest.raises(ValueError, match="All sample provided must"):
+            meth(np.array([]))
+
+    @pytest.mark.parametrize("time_axis_shape", [10, 11, 12])
+    def test_call_sample_axis(self, time_axis_shape, cls):
+        bas = instantiate_atomic_basis(
+            cls, n_basis_funcs=5, window_size=8, **extra_decay_rates(cls, 5)
+        )
+        assert (
+            bas.evaluate(np.linspace(0, 1, time_axis_shape)).shape[0] == time_axis_shape
+        )
+
+    @pytest.mark.parametrize(
+        "mn, mx, expectation",
+        [
+            (0, 1, does_not_raise()),
+            (-2, 2, does_not_raise()),
+        ],
+    )
+    def test_call_sample_range(self, mn, mx, expectation, cls):
+        bas = instantiate_atomic_basis(
+            cls, n_basis_funcs=5, window_size=8, **extra_decay_rates(cls, 5)
+        )
+        with expectation:
+            bas.evaluate(np.linspace(mn, mx, 10))
+
+    @pytest.mark.parametrize(
+        "args, sample_size",
+        [[{"n_basis_funcs": n_basis}, 100] for n_basis in [6, 10, 13]],
+    )
+    def test_compute_features_returns_expected_number_of_basis(
+        self, args, sample_size, cls
+    ):
+        args_copy = args.copy()
+        if cls == IdentityEval:
+            args_copy["n_basis_funcs"] = 1
+        elif cls == HistoryConv:
+            args_copy["n_basis_funcs"] = 30
+        basis_obj = instantiate_atomic_basis(
+            cls,
+            **args_copy,
+            window_size=30,
+            **extra_decay_rates(cls, args_copy["n_basis_funcs"]),
+        )
+        eval_basis = basis_obj.compute_features(np.linspace(0, 1, sample_size))
+        assert eval_basis.shape[1] == args_copy["n_basis_funcs"], (
+            "Dimensions do not agree: The number of basis should match the first dimension "
+            f"of the evaluated basis. The number of basis is {args['n_basis_funcs']}, but the "
+            f"evaluated basis has dimension {eval_basis.shape[1]}"
+        )
 
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 10, 11, 100])
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 8})]
-    )
-    def test_evaluate_on_grid_basis_size(self, sample_size, mode, kwargs, cls):
-        if "OrthExp" in cls["eval"].__name__:
-            return
+    def test_evaluate_on_grid_basis_size(self, sample_size, cls):
+        if "OrthExp" in cls.__name__ or cls == CustomBasis:
+            pytest.skip(f"Skipping test_evaluate_on_grid_basis_size for {cls.__name__}")
         basis_obj = instantiate_atomic_basis(
-            cls[mode], n_basis_funcs=5, **kwargs, **extra_decay_rates(cls[mode], 5)
+            cls, n_basis_funcs=5, window_size=8, **extra_decay_rates(cls, 5)
         )
         if sample_size <= 0:
             with pytest.raises(
@@ -1370,12 +1599,13 @@ class TestSharedMethods:
             assert eval_basis.shape[0] == sample_size
 
     @pytest.mark.parametrize("n_input", [0, 1, 2])
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 5})]
-    )
-    def test_evaluate_on_grid_input_number(self, n_input, mode, kwargs, cls):
+    def test_evaluate_on_grid_input_number(self, n_input, cls):
+        if cls == CustomBasis:
+            pytest.skip(
+                f"Skipping test_evaluate_on_grid_input_number for {cls.__name__}"
+            )
         basis_obj = instantiate_atomic_basis(
-            cls[mode], n_basis_funcs=5, **kwargs, **extra_decay_rates(cls[mode], 5)
+            cls, n_basis_funcs=5, window_size=5, **extra_decay_rates(cls, 5)
         )
         inputs = [10] * n_input
         if n_input == 0:
@@ -1395,14 +1625,13 @@ class TestSharedMethods:
             basis_obj.evaluate_on_grid(*inputs)
 
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 10, 11, 100])
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 5})]
-    )
-    def test_evaluate_on_grid_meshgrid_size(self, sample_size, mode, kwargs, cls):
-        if "OrthExp" in cls["eval"].__name__:
-            return
+    def test_evaluate_on_grid_meshgrid_size(self, sample_size, cls):
+        if "OrthExp" in cls.__name__ or cls == CustomBasis:
+            pytest.skip(
+                f"Skipping test_evaluate_on_grid_meshgrid_size for {cls.__name__}"
+            )
         basis_obj = instantiate_atomic_basis(
-            cls[mode], n_basis_funcs=5, **kwargs, **extra_decay_rates(cls[mode], 5)
+            cls, n_basis_funcs=5, window_size=5, **extra_decay_rates(cls, 5)
         )
         if sample_size <= 0:
             with pytest.raises(
@@ -1413,116 +1642,45 @@ class TestSharedMethods:
             grid, _ = basis_obj.evaluate_on_grid(sample_size)
             assert grid.shape[0] == sample_size
 
-    def test_fit_kernel(self, cls):
-        bas = instantiate_atomic_basis(
-            cls["conv"],
-            n_basis_funcs=5,
-            window_size=30,
-            **extra_decay_rates(cls["conv"], 5),
-        )
-        bas._set_kernel()
-        assert bas.kernel_ is not None
-
-    def test_fit_kernel_shape(self, cls):
-        n_basis = 5 if cls["conv"] != HistoryConv else 30
-        bas = instantiate_atomic_basis(
-            cls["conv"],
-            n_basis_funcs=n_basis,
-            window_size=30,
-            **extra_decay_rates(cls["conv"], n_basis),
-        )
-        bas._set_kernel()
-        assert bas.kernel_.shape == (30, n_basis)
-
-    @pytest.mark.parametrize(
-        "mode, ws, expectation",
-        [
-            ("conv", 5, does_not_raise()),
-            (
-                "conv",
-                -1,
-                pytest.raises(
-                    ValueError, match="`window_size` must be a positive integer"
-                ),
-            ),
-            (
-                "conv",
-                None,
-                pytest.raises(
-                    ValueError,
-                    match="You must provide a window_size",
-                ),
-            ),
-            (
-                "conv",
-                1.5,
-                pytest.raises(ValueError, match="`window_size` must be a positive "),
-            ),
-            (
-                "eval",
-                None,
-                pytest.raises(
-                    TypeError,
-                    match=r"got an unexpected keyword argument 'window_size'",
-                ),
-            ),
-            (
-                "eval",
-                10,
-                pytest.raises(
-                    TypeError,
-                    match=r"got an unexpected keyword argument 'window_size'",
-                ),
-            ),
-        ],
-    )
-    def test_init_window_size(self, mode, ws, expectation, cls):
-        extra = dict(n_basis_funcs=5) if cls["eval"] != IdentityEval else {}
-        with expectation:
-            cls[mode](**extra, window_size=ws, **extra_decay_rates(cls[mode], 5))
-
     @pytest.mark.parametrize("samples", [[], [0] * 10, [0] * 11])
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 5})]
-    )
-    def test_non_empty_samples(self, samples, mode, kwargs, cls):
-        if "OrthExp" in cls["eval"].__name__:
-            return
-        if mode == "conv" and len(samples) == 1:
+    def test_non_empty_samples(self, samples, cls):
+        if "OrthExp" in cls.__name__:
+            pytest.skip(f"Skipping test_non_empty_samples for {cls.__name__}")
+        if cls.__name__.endswith("Conv") and len(samples) == 1:
             return
         if len(samples) == 0:
             with pytest.raises(
                 ValueError, match="All sample provided must be non empty"
             ):
                 instantiate_atomic_basis(
-                    cls[mode],
+                    cls,
                     n_basis_funcs=5,
-                    **kwargs,
-                    **extra_decay_rates(cls[mode], 5),
+                    window_size=5,
+                    **extra_decay_rates(cls, 5),
                 ).compute_features(samples)
         else:
             instantiate_atomic_basis(
-                cls[mode], n_basis_funcs=5, **kwargs, **extra_decay_rates(cls[mode], 5)
+                cls,
+                n_basis_funcs=5,
+                window_size=5,
+                **extra_decay_rates(cls, 5),
             ).compute_features(samples)
 
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3])
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 6})]
-    )
-    def test_number_of_required_inputs_compute_features(
-        self, n_input, mode, kwargs, cls
-    ):
+    def test_number_of_required_inputs_compute_features(self, n_input, cls):
         basis_obj = instantiate_atomic_basis(
-            cls[mode], n_basis_funcs=5, **kwargs, **extra_decay_rates(cls[mode], 5)
+            cls, n_basis_funcs=5, window_size=6, **extra_decay_rates(cls, 5)
         )
         inputs = [np.linspace(0, 1, 20)] * n_input
         if n_input == 0:
             expectation = pytest.raises(
-                TypeError, match="missing 1 required positional argument"
+                TypeError,
+                match="missing 1 required positional argument|Input dimensionality mismatch",
             )
         elif n_input != basis_obj._n_input_dimensionality:
             expectation = pytest.raises(
-                TypeError, match=r"takes 2 positional arguments but \d were given"
+                TypeError,
+                match=r"takes 2 positional arguments but \d were given|Input dimensionality mismatch",
             )
         else:
             expectation = does_not_raise()
@@ -1530,12 +1688,9 @@ class TestSharedMethods:
         with expectation:
             basis_obj.compute_features(*inputs)
 
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 8})]
-    )
-    def test_pynapple_support(self, mode, kwargs, cls):
+    def test_pynapple_support(self, cls):
         bas = instantiate_atomic_basis(
-            cls[mode], n_basis_funcs=5, **kwargs, **extra_decay_rates(cls[mode], 5)
+            cls, n_basis_funcs=5, window_size=6, **extra_decay_rates(cls, 5)
         )
         x = np.linspace(0, 1, 10)
         x_nap = nap.Tsd(t=np.arange(10), d=x)
@@ -1555,26 +1710,26 @@ class TestSharedMethods:
             time_support=iset,
         )
         out = instantiate_atomic_basis(
-            cls["eval"],
+            cls,
             n_basis_funcs=n_basis,
-            **extra_decay_rates(cls["eval"], n_basis),
+            window_size=10,
+            **extra_decay_rates(cls, n_basis),
         ).compute_features(inp)
         assert isinstance(out, nap.TsdFrame)
-        assert np.all(out.time_support.values == inp.time_support.values)
+        assert np.array_equal(
+            out.time_support.values, inp.time_support.values, equal_nan=True
+        )
 
     @pytest.mark.parametrize("sample_size", [100, 1000])
     @pytest.mark.parametrize("n_basis_funcs", [5, 10, 80])
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 90})]
-    )
     def test_sample_size_of_compute_features_matches_that_of_input(
-        self, n_basis_funcs, sample_size, mode, kwargs, cls
+        self, n_basis_funcs, sample_size, cls
     ):
         basis_obj = instantiate_atomic_basis(
-            cls[mode],
+            cls,
             n_basis_funcs=n_basis_funcs,
-            **kwargs,
-            **extra_decay_rates(cls[mode], n_basis_funcs),
+            window_size=90,
+            **extra_decay_rates(cls, n_basis_funcs),
         )
         eval_basis = basis_obj.compute_features(np.linspace(0, 1, sample_size))
         assert eval_basis.shape[0] == sample_size, (
@@ -1583,44 +1738,10 @@ class TestSharedMethods:
         )
 
     @pytest.mark.parametrize(
-        "mode, expectation",
+        "enforce_decay_to_zero, time_scaling, width, n_basis_funcs, bounds, decay_rates",
         [
-            ("eval", does_not_raise()),
-            (
-                "conv",
-                pytest.raises(
-                    TypeError, match="got an unexpected keyword argument 'bounds'"
-                ),
-            ),
-        ],
-    )
-    def test_set_bounds(self, mode, expectation, cls):
-        kwargs = (
-            {"bounds": (1, 2), "n_basis_funcs": 10}
-            if cls["eval"] != IdentityEval
-            else {"bounds": (1, 2)}
-        )
-        with expectation:
-            cls[mode](**kwargs, **extra_decay_rates(cls[mode], 10))
-
-        if mode == "conv":
-            kwargs = {"n_basis_funcs": 10} if cls["eval"] != IdentityEval else {}
-            bas = instantiate_atomic_basis(
-                cls["conv"],
-                **kwargs,
-                window_size=20,
-                **extra_decay_rates(cls[mode], 10),
-            )
-            with pytest.raises(
-                ValueError, match="Invalid parameter 'bounds' for estimator"
-            ):
-                bas.set_params(bounds=(1, 2))
-
-    @pytest.mark.parametrize(
-        "enforce_decay_to_zero, time_scaling, width, window_size, n_basis_funcs, bounds, mode, decay_rates",
-        [
-            (False, 15, 4, None, 10, (1, 2), "eval", np.arange(1, 11)),
-            (False, 15, 4, 10, 10, None, "conv", np.arange(1, 11)),
+            (False, 15, 4, 10, (1, 2), np.arange(1, 11)),
+            (False, 15, 4, 10, None, np.arange(1, 11)),
         ],
     )
     @pytest.mark.parametrize(
@@ -1634,10 +1755,8 @@ class TestSharedMethods:
         enforce_decay_to_zero,
         time_scaling,
         width,
-        window_size,
         n_basis_funcs,
         bounds,
-        mode: Literal["eval", "conv"],
         order,
         decay_rates,
         conv_kwargs,
@@ -1649,7 +1768,7 @@ class TestSharedMethods:
             enforce_decay_to_zero=enforce_decay_to_zero,
             time_scaling=time_scaling,
             width=width,
-            window_size=window_size,
+            window_size=10,
             n_basis_funcs=n_basis_funcs,
             bounds=bounds,
             order=order,
@@ -1659,82 +1778,41 @@ class TestSharedMethods:
         pars = {
             key: value
             for key, value in pars.items()
-            if key in basis_class_specific_params[cls[mode].__name__]
+            if key in basis_class_specific_params[cls.__name__]
         }
 
         keys = list(pars.keys())
-        bas = instantiate_atomic_basis(cls[mode], **pars)
+        bas = instantiate_atomic_basis(cls, **pars)
         for i in range(len(pars)):
             for j in range(i + 1, len(pars)):
                 par_set = {keys[i]: pars[keys[i]], keys[j]: pars[keys[j]]}
                 bas = bas.set_params(**par_set)
-                assert isinstance(bas, cls[mode])
-
-    @pytest.mark.parametrize(
-        "mode, expectation",
-        [
-            ("conv", does_not_raise()),
-            (
-                "eval",
-                pytest.raises(
-                    TypeError, match="got an unexpected keyword argument 'window_size'"
-                ),
-            ),
-        ],
-    )
-    def test_set_window_size(self, mode, expectation, cls):
-        kwargs = (
-            {"window_size": 10, "n_basis_funcs": 10}
-            if cls["eval"] != IdentityEval
-            else {"window_size": 10}
-        )
-        with expectation:
-            cls[mode](**kwargs, **extra_decay_rates(cls[mode], 10))
-
-        if mode == "conv":
-            bas = instantiate_atomic_basis(
-                cls["conv"],
-                n_basis_funcs=10,
-                window_size=10,
-                **extra_decay_rates(cls["conv"], 10),
-            )
-            with pytest.raises(ValueError, match="You must provide a window_siz"):
-                bas.set_params(window_size=None)
-
-        if mode == "eval":
-            bas = instantiate_atomic_basis(
-                cls["eval"], n_basis_funcs=10, **extra_decay_rates(cls["eval"], 10)
-            )
-            with pytest.raises(
-                ValueError, match="Invalid parameter 'window_size' for estimator"
-            ):
-                bas.set_params(window_size=10)
-
-    def test_transform_fails(self, cls):
-        bas = instantiate_atomic_basis(
-            cls["conv"],
-            n_basis_funcs=5,
-            window_size=5,
-            **extra_decay_rates(cls["conv"], 5),
-        )
-        with pytest.raises(
-            RuntimeError, match="You must call `setup_basis` before `_compute_features`"
-        ):
-            bas._compute_features(np.linspace(0, 1, 10))
+                assert isinstance(bas, cls)
 
     def test_transformer_get_params(self, cls):
         bas = instantiate_atomic_basis(
-            cls["eval"], n_basis_funcs=5, **extra_decay_rates(cls["eval"], 5)
+            cls,
+            n_basis_funcs=5,
+            window_size=10,
+            **extra_decay_rates(cls, 5),
         )
         bas.set_input_shape(*([1] * bas._n_input_dimensionality))
         bas_transformer = bas.to_transformer()
         params_transf = bas_transformer.get_params()
         params_transf.pop("basis")
+        funcs_transf = (
+            params_transf.pop("funcs") if hasattr(bas_transformer, "funcs") else None
+        )
         params_basis = bas.get_params()
+        funcs_orig = params_basis.pop("funcs") if hasattr(bas, "funcs") else None
         rates_1 = params_basis.pop("decay_rates", 1)
         rates_2 = params_transf.pop("decay_rates", 1)
         assert params_transf == params_basis
         assert np.all(rates_1 == rates_2)
+        if funcs_orig:
+            assert all(
+                f1.keywords == f2.keywords for f1, f2 in zip(funcs_orig, funcs_transf)
+            )
 
     @pytest.mark.parametrize(
         "x, inp_shape, expectation",
@@ -1788,7 +1866,7 @@ class TestSharedMethods:
     )
     def test_input_shape_validity(self, x, inp_shape, expectation, cls):
         bas = instantiate_atomic_basis(
-            cls["eval"], n_basis_funcs=5, **extra_decay_rates(cls["eval"], 5)
+            cls, n_basis_funcs=5, window_size=8, **extra_decay_rates(cls, 5)
         )
         bas.set_input_shape(inp_shape)
         with expectation:
@@ -1810,20 +1888,20 @@ class TestSharedMethods:
     )
     def test_set_input_value_types(self, inp_shape, expectation, cls):
         bas = instantiate_atomic_basis(
-            cls["eval"], n_basis_funcs=5, **extra_decay_rates(cls["eval"], 5)
+            cls,
+            window_size=10,
+            n_basis_funcs=5,
+            **extra_decay_rates(cls, 5),
         )
         with expectation:
             bas.set_input_shape(inp_shape)
 
-    @pytest.mark.parametrize(
-        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 6})]
-    )
-    def test_iterate_over_component(self, mode, kwargs, cls):
+    def test_iterate_over_component(self, cls):
         basis_obj = instantiate_atomic_basis(
-            cls[mode],
+            cls,
             n_basis_funcs=5,
-            **kwargs,
-            **extra_decay_rates(cls[mode], 5),
+            window_size=6,
+            **extra_decay_rates(cls, 5),
         )
 
         out = tuple(basis_obj._iterate_over_components())
@@ -2533,7 +2611,8 @@ class TestAdditiveBasis(CombinedBasis):
     cls = {"eval": AdditiveBasis, "conv": AdditiveBasis}
 
     @pytest.mark.parametrize(
-        "bas_cls", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "bas_cls",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     def test_mul_by_int_basis_with_label(self, bas_cls, basis_class_specific_params):
         basis_obj = self.instantiate_basis(
@@ -2545,7 +2624,8 @@ class TestAdditiveBasis(CombinedBasis):
             _ = basis_obj * 2
 
     @pytest.mark.parametrize(
-        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_a",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     def test_add_label_using_class_name(self, basis_a, basis_class_specific_params):
         basis_a_obj = self.instantiate_basis(
@@ -2555,8 +2635,6 @@ class TestAdditiveBasis(CombinedBasis):
         with pytest.raises(ValueError, match="Cannot set basis label"):
             add.label = "MultiplicativeBasis"
         add.label = "AdditiveBasis"
-        with pytest.raises(ValueError, match="Label 'AdditiveBasis' is already in use"):
-            add.label = "AdditiveBasis"
 
     @pytest.mark.parametrize("bas", list_all_basis_classes())
     def test_inherit_setting(self, bas, basis_class_specific_params):
@@ -2567,15 +2645,6 @@ class TestAdditiveBasis(CombinedBasis):
         basis_update = basis.BSplineEval(5) + basis.BSplineEval(5, label="z")
         basis_update.set_params(z=comp_bases)
         assert basis_update.basis2.label != "z"
-
-    @pytest.mark.parametrize("bas", list_all_basis_classes())
-    def test_class_method_gen_key(self, bas, basis_class_specific_params):
-        basis_a_obj = self.instantiate_basis(
-            5, bas, basis_class_specific_params, window_size=10
-        )
-        add = basis_a_obj + basis_a_obj
-        out = add._merge_slicing_dicts({"1": 1, "2": 2, "3": 3}, {"1": 11, "2": 12})
-        assert out == {"1": 1, "2": 2, "3": 3, "1_1": 11, "2_1": 12}
 
     def test_redundant_label_in_nested_basis(self):
         bas = (
@@ -2661,10 +2730,12 @@ class TestAdditiveBasis(CombinedBasis):
         assert add_a_twice.basis2.label == f"{cls_b_name}"
 
     @pytest.mark.parametrize(
-        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_a",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize(
-        "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_b",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     def test_input_shape_product_init(
         self, basis_a, basis_b, basis_class_specific_params
@@ -2689,7 +2760,8 @@ class TestAdditiveBasis(CombinedBasis):
         assert (add + add)._input_shape_product == (1, 6, 1, 6)
 
     @pytest.mark.parametrize(
-        "bas", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "bas",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     def test_rmul_lmul(self, bas, basis_class_specific_params):
         basis_obj = self.instantiate_basis(
@@ -2703,10 +2775,12 @@ class TestAdditiveBasis(CombinedBasis):
         assert sum((1 for _ in out._iterate_over_components())) == 10
 
     @pytest.mark.parametrize(
-        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_a",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize(
-        "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_b",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     def test_provide_label_at_init(self, basis_a, basis_b, basis_class_specific_params):
         basis_a_obj = self.instantiate_basis(
@@ -2793,13 +2867,18 @@ class TestAdditiveBasis(CombinedBasis):
         assert tuple(id(o) for o in out) == tuple(id_list)
 
     @pytest.mark.parametrize("samples", [[[0], []], [[], [0]], [[0, 0], [0, 0]]])
-    @pytest.mark.parametrize("base_cls", [basis.BSplineEval, basis.BSplineConv])
+    @pytest.mark.parametrize(
+        "base_cls", [basis.BSplineEval, basis.BSplineConv, CustomBasis]
+    )
     def test_non_empty_samples(self, base_cls, samples, basis_class_specific_params):
         kwargs = {"window_size": 2, "n_basis_funcs": 5}
         kwargs = inspect_utils.trim_kwargs(
             base_cls, kwargs, basis_class_specific_params
         )
-        basis_obj = base_cls(**kwargs) + base_cls(**kwargs)
+        if base_cls == CustomBasis:
+            basis_obj = custom_basis(**kwargs) + custom_basis(**kwargs)
+        else:
+            basis_obj = base_cls(**kwargs) + base_cls(**kwargs)
         if any(tuple(len(s) == 0 for s in samples)):
             with pytest.raises(
                 ValueError, match="All sample provided must be non empty"
@@ -2993,6 +3072,10 @@ class TestAdditiveBasis(CombinedBasis):
         """
         Test whether the resulting meshgrid size matches the sample size input.
         """
+        if basis_a == CustomBasis or basis_b == CustomBasis:
+            pytest.skip(
+                f"Skipping test_evaluate_on_grid_meshgrid_size for {basis_a.__name__}"
+            )
         basis_a_obj = self.instantiate_basis(
             n_basis_a, basis_a, basis_class_specific_params, window_size=10
         )
@@ -3023,6 +3106,10 @@ class TestAdditiveBasis(CombinedBasis):
         """
         Test whether the number sample size output by evaluate_on_grid matches the sample size of the input.
         """
+        if basis_a == CustomBasis or basis_b == CustomBasis:
+            pytest.skip(
+                f"Skipping test_evaluate_on_grid_basis_size for {basis_a.__name__}"
+            )
         basis_a_obj = self.instantiate_basis(
             n_basis_a, basis_a, basis_class_specific_params, window_size=10
         )
@@ -3053,6 +3140,10 @@ class TestAdditiveBasis(CombinedBasis):
         Test whether the number of inputs provided to `evaluate_on_grid` matches
         the sum of the number of input samples required from each of the basis objects.
         """
+        if basis_a == CustomBasis or basis_b == CustomBasis:
+            pytest.skip(
+                f"Skipping test_evaluate_on_grid_input_number for {basis_a.__name__}"
+            )
         basis_a_obj = self.instantiate_basis(
             n_basis_a, basis_a, basis_class_specific_params, window_size=10
         )
@@ -3138,6 +3229,30 @@ class TestAdditiveBasis(CombinedBasis):
         with expectation:
             basis_obj.evaluate(*([np.linspace(0, 1, 10)] * num_input))
 
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("n_basis_a", [5])
+    @pytest.mark.parametrize("num_input", [0, 1, 2])
+    @pytest.mark.parametrize(" window_size", [8])
+    def test_set_input_shape_input_num(
+        self,
+        n_basis_a,
+        basis_a,
+        num_input,
+        window_size,
+        basis_class_specific_params,
+    ):
+        basis_a_obj = self.instantiate_basis(
+            n_basis_a, basis_a, basis_class_specific_params, window_size=window_size
+        )
+        basis_b_obj = basis_a_obj.__sklearn_clone__()
+        basis_obj = basis_a_obj + basis_b_obj
+        if num_input == basis_obj._n_input_dimensionality:
+            expectation = does_not_raise()
+        else:
+            expectation = pytest.raises(ValueError, match="set_input_shape expects")
+        with expectation:
+            basis_obj.set_input_shape(*([np.linspace(0, 1, 10)] * num_input))
+
     @pytest.mark.parametrize(
         "inp, expectation",
         [
@@ -3215,7 +3330,7 @@ class TestAdditiveBasis(CombinedBasis):
             basis.OrthExponentialBasis,
             basis.HistoryConv,
         ):
-            return
+            pytest.skip(f"Skipping test_call_nan for {basis_a.__name__}")
         if basis_a == IdentityEval:
             n_basis_a = 1
         else:
@@ -3243,9 +3358,16 @@ class TestAdditiveBasis(CombinedBasis):
     def test_call_equivalent_in_conv(
         self, n_basis_a, n_basis_b, basis_a, basis_b, basis_class_specific_params
     ):
-        if basis_a == HistoryConv or basis_b == HistoryConv:
+        if (
+            basis_a == HistoryConv
+            or basis_b == HistoryConv
+            or basis_a == CustomBasis
+            or basis_b == CustomBasis
+        ):
             # evaluate returns identity
-            return
+            pytest.skip(
+                f"Skipping test_call_nan for {basis_a.__name__} and {basis_b.__name__}"
+            )
         basis_a_obj = self.instantiate_basis(
             n_basis_a, basis_a, basis_class_specific_params, window_size=9
         )
@@ -3317,6 +3439,7 @@ class TestAdditiveBasis(CombinedBasis):
         )
         bas = basis_a_obj + basis_b_obj
         x = [np.linspace(0, 1, 10)] * bas._n_input_dimensionality
+
         assert (
             bas.evaluate(*x).shape[1]
             == basis_a_obj.n_basis_funcs + basis_b_obj.n_basis_funcs
@@ -3344,7 +3467,7 @@ class TestAdditiveBasis(CombinedBasis):
         )
         bas = basis_a_obj + basis_b_obj
         with pytest.raises(ValueError, match="All sample provided must"):
-            bas.evaluate(*([np.array([])] * bas._n_input_dimensionality))
+            bas.compute_features(*([np.array([])] * bas._n_input_dimensionality))
 
     @pytest.mark.parametrize(
         "mn, mx, expectation",
@@ -3371,6 +3494,10 @@ class TestAdditiveBasis(CombinedBasis):
         window_size,
         basis_class_specific_params,
     ):
+        if basis_a == CustomBasis or basis_b == CustomBasis:
+            pytest.skip(
+                f"Skipping test_call_sample_range for {basis_a.__name__} and {basis_b.__name__}"
+            )
         if expectation == "check":
             if (
                 basis_a == basis.OrthExponentialBasis
@@ -3431,6 +3558,10 @@ class TestAdditiveBasis(CombinedBasis):
     def test_transform_fails(
         self, n_basis_a, n_basis_b, basis_a, basis_b, basis_class_specific_params
     ):
+        if basis_a == CustomBasis or basis_b == CustomBasis:
+            pytest.skip(
+                f"Skipping test_transform_fails for {basis_a.__name__} and {basis_b.__name__}"
+            )
         basis_a_obj = self.instantiate_basis(
             n_basis_a, basis_a, basis_class_specific_params, window_size=10
         )
@@ -3497,10 +3628,12 @@ class TestAdditiveBasis(CombinedBasis):
             )
 
     @pytest.mark.parametrize(
-        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_a",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize(
-        "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_b",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize("shape_a", [1, (), np.ones(3)])
     @pytest.mark.parametrize("shape_b", [1, (), np.ones(3)])
@@ -3533,10 +3666,12 @@ class TestAdditiveBasis(CombinedBasis):
         )
 
     @pytest.mark.parametrize(
-        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_a",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize(
-        "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_b",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize("shape_a", [2, (2,), np.ones((3, 2))])
     @pytest.mark.parametrize("shape_b", [3, (3,), np.ones((3, 3))])
@@ -3569,10 +3704,12 @@ class TestAdditiveBasis(CombinedBasis):
         )
 
     @pytest.mark.parametrize(
-        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_a",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize(
-        "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_b",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize("shape_a", [(2, 2), np.ones((3, 2, 2))])
     @pytest.mark.parametrize("shape_b", [(3, 1), np.ones((3, 3, 1))])
@@ -3623,10 +3760,12 @@ class TestAdditiveBasis(CombinedBasis):
         ],
     )
     @pytest.mark.parametrize(
-        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_a",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize(
-        "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_b",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     def test_set_input_value_types(
         self, inp_shape, expectation, basis_a, basis_b, basis_class_specific_params
@@ -3642,10 +3781,12 @@ class TestAdditiveBasis(CombinedBasis):
             add.set_input_shape(*inp_shape)
 
     @pytest.mark.parametrize(
-        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_a",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize(
-        "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_b",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     def test_deep_copy_basis(self, basis_a, basis_b, basis_class_specific_params):
 
@@ -3677,23 +3818,39 @@ class TestAdditiveBasis(CombinedBasis):
         if isinstance(basis_a, (HistoryConv, IdentityEval)) or isinstance(
             basis_b, (HistoryConv, IdentityEval)
         ):
-            return
+            pytest.skip(
+                f"Skipping test_call_sample_range for {basis_a.__class__.__name__} and {basis_b.__class__.__name__}"
+            )
         # test attributes are not related
-        basis_a.n_basis_funcs = 10
-        basis_b.n_basis_funcs = 10
-        assert add.basis1.n_basis_funcs == n_basis_a
-        assert add.basis2.n_basis_funcs == n_basis_b
+        if isinstance(add.basis1, CustomBasis):
+            basis_a.basis_kwargs = {"n_basis_funcs": 10}
+            assert add.basis1.basis_kwargs == {}
+            add.basis1.basis_kwargs = {"n_basis_funcs": 6}
+            assert basis_a.basis_kwargs == {"n_basis_funcs": 10}
+        else:
+            basis_a.n_basis_funcs = 10
+            assert add.basis1.n_basis_funcs == n_basis_a
+            add.basis1.n_basis_funcs = 6
+            assert basis_a.n_basis_funcs == 10
 
-        add.basis1.n_basis_funcs = 6
-        add.basis2.n_basis_funcs = 6
-        assert basis_a.n_basis_funcs == 10
-        assert basis_b.n_basis_funcs == 10
+        if isinstance(add.basis2, CustomBasis):
+            basis_b.basis_kwargs = {"n_basis_funcs": 10}
+            assert add.basis2.basis_kwargs == {}
+            add.basis2.basis_kwargs = {"n_basis_funcs": 6}
+            assert basis_b.basis_kwargs == {"n_basis_funcs": 10}
+        else:
+            basis_b.n_basis_funcs = 10
+            assert add.basis2.n_basis_funcs == n_basis_b
+            add.basis2.n_basis_funcs = 6
+            assert basis_b.n_basis_funcs == 10
 
     @pytest.mark.parametrize(
-        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_a",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize(
-        "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_b",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     def test_compute_n_basis_runtime(
         self, basis_a, basis_b, basis_class_specific_params
@@ -3718,10 +3875,10 @@ class TestAdditiveBasis(CombinedBasis):
         )
         add = basis_a + basis_b
 
-        if not isinstance(add.basis1, (HistoryConv, IdentityEval)):
+        if not isinstance(add.basis1, (HistoryConv, IdentityEval, CustomBasis)):
             add.basis1.n_basis_funcs = 10
             assert add.n_basis_funcs == 10 + n_basis_b
-        if not isinstance(add.basis2, (HistoryConv, IdentityEval)):
+        if not isinstance(add.basis2, (HistoryConv, IdentityEval, CustomBasis)):
             add.basis2.n_basis_funcs = 10
             add.basis2.n_basis_funcs = 10
             assert add.n_basis_funcs == 10 + add.basis1.n_basis_funcs
@@ -3776,7 +3933,7 @@ class TestAdditiveBasis(CombinedBasis):
     def test_repr_out(
         self, basis_a, basis_b, basis_class_specific_params, expected_out
     ):
-        with patch("os.get_terminal_size", return_value=(80, 24)):
+        with patch("os.get_terminal_size", return_value=SizeTerminal(80, 24)):
             basis_a_obj = self.instantiate_basis(
                 5, basis_a, basis_class_specific_params, window_size=10
             )
@@ -3788,7 +3945,7 @@ class TestAdditiveBasis(CombinedBasis):
 
     @pytest.mark.parametrize("label", [None, "", "default-behavior", "CoolFeature"])
     def test_repr_label(self, label, basis_class_specific_params):
-        with patch("os.get_terminal_size", return_value=(80, 24)):
+        with patch("os.get_terminal_size", return_value=SizeTerminal(80, 24)):
             if label == "default-behavior":
                 bas = basis.RaisedCosineLinearEval(n_basis_funcs=5)
             else:
@@ -3814,7 +3971,8 @@ class TestMultiplicativeBasis(CombinedBasis):
     cls = {"eval": MultiplicativeBasis, "conv": MultiplicativeBasis}
 
     @pytest.mark.parametrize(
-        "bas_cls", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "bas_cls",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     def test_pow_by_int_basis_with_label(self, bas_cls, basis_class_specific_params):
         basis_obj = self.instantiate_basis(
@@ -3826,7 +3984,8 @@ class TestMultiplicativeBasis(CombinedBasis):
             _ = basis_obj**2
 
     @pytest.mark.parametrize(
-        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_a",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     def test_add_label_using_class_name(self, basis_a, basis_class_specific_params):
         basis_a_obj = self.instantiate_basis(
@@ -3836,10 +3995,6 @@ class TestMultiplicativeBasis(CombinedBasis):
         with pytest.raises(ValueError, match="Cannot set basis label"):
             mul.label = "AdditiveBasis"
         mul.label = "MultiplicativeBasis"
-        with pytest.raises(
-            ValueError, match="Label 'MultiplicativeBasis' is already in use"
-        ):
-            mul.label = "MultiplicativeBasis"
 
     def test_redundant_label_in_nested_basis(self):
         bas = (
@@ -3863,10 +4018,12 @@ class TestMultiplicativeBasis(CombinedBasis):
             )
 
     @pytest.mark.parametrize(
-        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_a",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize(
-        "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_b",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     def test_input_shape_product_init(
         self, basis_a, basis_b, basis_class_specific_params
@@ -3963,7 +4120,7 @@ class TestMultiplicativeBasis(CombinedBasis):
     def test_repr_out(
         self, basis_a, basis_b, basis_class_specific_params, expected_out
     ):
-        with patch("os.get_terminal_size", return_value=(80, 24)):
+        with patch("os.get_terminal_size", return_value=SizeTerminal(80, 24)):
             basis_a_obj = self.instantiate_basis(
                 5, basis_a, basis_class_specific_params, window_size=10
             )
@@ -3975,7 +4132,7 @@ class TestMultiplicativeBasis(CombinedBasis):
 
     @pytest.mark.parametrize("label", [None, "", "default-behavior", "CoolFeature"])
     def test_repr_label(self, label, basis_class_specific_params):
-        with patch("os.get_terminal_size", return_value=(80, 24)):
+        with patch("os.get_terminal_size", return_value=SizeTerminal(80, 24)):
             if label == "default-behavior":
                 bas = basis.RaisedCosineLinearEval(n_basis_funcs=5)
             else:
@@ -4312,6 +4469,30 @@ class TestMultiplicativeBasis(CombinedBasis):
         with expectation:
             basis_obj.evaluate(*([np.linspace(0, 1, 10)] * num_input))
 
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("n_basis_a", [5])
+    @pytest.mark.parametrize("num_input", [0, 1, 2])
+    @pytest.mark.parametrize(" window_size", [8])
+    def test_set_input_shape_input_num(
+        self,
+        n_basis_a,
+        basis_a,
+        num_input,
+        window_size,
+        basis_class_specific_params,
+    ):
+        basis_a_obj = self.instantiate_basis(
+            n_basis_a, basis_a, basis_class_specific_params, window_size=window_size
+        )
+        basis_b_obj = basis_a_obj.__sklearn_clone__()
+        basis_obj = basis_a_obj * basis_b_obj
+        if num_input == basis_obj._n_input_dimensionality:
+            expectation = does_not_raise()
+        else:
+            expectation = pytest.raises(ValueError, match="set_input_shape expects")
+        with expectation:
+            basis_obj.set_input_shape(*([np.linspace(0, 1, 10)] * num_input))
+
     @pytest.mark.parametrize(
         "inp, expectation",
         [
@@ -4389,9 +4570,13 @@ class TestMultiplicativeBasis(CombinedBasis):
             basis_a == basis.OrthExponentialBasis
             or basis_b == basis.OrthExponentialBasis
         ):
-            return
+            pytest.skip(
+                f"Skipping test_call_sample_range for {basis_a.__name__} and {basis_b.__name__}"
+            )
         if basis_a is HistoryConv or basis_b is HistoryConv:
-            return
+            pytest.skip(
+                f"Skipping test_call_sample_range for {basis_a.__name__} and {basis_b.__name__}"
+            )
         basis_a_obj = self.instantiate_basis(
             n_basis_a, basis_a, basis_class_specific_params, window_size=window_size
         )
@@ -4411,9 +4596,16 @@ class TestMultiplicativeBasis(CombinedBasis):
     def test_call_equivalent_in_conv(
         self, n_basis_a, n_basis_b, basis_a, basis_b, basis_class_specific_params
     ):
-        if basis_a == HistoryConv or basis_b == HistoryConv:
+        if (
+            basis_a == HistoryConv
+            or basis_b == HistoryConv
+            or basis_a == CustomBasis
+            or basis_b == CustomBasis
+        ):
             # evaluate returns identity
-            return
+            pytest.skip(
+                f"Skipping test_call_nan for {basis_a.__name__} and {basis_b.__name__}"
+            )
         basis_a_obj = self.instantiate_basis(
             n_basis_a, basis_a, basis_class_specific_params, window_size=10
         )
@@ -4599,6 +4791,10 @@ class TestMultiplicativeBasis(CombinedBasis):
     def test_transform_fails(
         self, n_basis_a, n_basis_b, basis_a, basis_b, basis_class_specific_params
     ):
+        if basis_a == CustomBasis or basis_b == CustomBasis:
+            pytest.skip(
+                f"Skipping test_transform_fails for {basis_a.__name__} and {basis_b.__name__}"
+            )
         basis_a_obj = self.instantiate_basis(
             n_basis_a, basis_a, basis_class_specific_params, window_size=10
         )
@@ -4672,10 +4868,12 @@ class TestMultiplicativeBasis(CombinedBasis):
         assert bas_prod._input_shape_product == (n_basis_input1, n_basis_input2)
 
     @pytest.mark.parametrize(
-        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_a",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize(
-        "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_b",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize("shape_a", [1, (), np.ones(3)])
     @pytest.mark.parametrize("shape_b", [1, (), np.ones(3)])
@@ -4708,10 +4906,12 @@ class TestMultiplicativeBasis(CombinedBasis):
         )
 
     @pytest.mark.parametrize(
-        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_a",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize(
-        "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_b",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize("shape_a", [2, (2,), np.ones((3, 2))])
     @pytest.mark.parametrize("shape_b", [3, (3,), np.ones((3, 3))])
@@ -4744,10 +4944,12 @@ class TestMultiplicativeBasis(CombinedBasis):
         )
 
     @pytest.mark.parametrize(
-        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_a",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize(
-        "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_b",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize("shape_a", [(2, 2), np.ones((3, 2, 2))])
     @pytest.mark.parametrize("shape_b", [(3, 1), np.ones((3, 3, 1))])
@@ -4798,10 +5000,12 @@ class TestMultiplicativeBasis(CombinedBasis):
         ],
     )
     @pytest.mark.parametrize(
-        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_a",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize(
-        "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_b",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     def test_set_input_value_types(
         self, inp_shape, expectation, basis_a, basis_b, basis_class_specific_params
@@ -4817,10 +5021,12 @@ class TestMultiplicativeBasis(CombinedBasis):
             mul.set_input_shape(*inp_shape)
 
     @pytest.mark.parametrize(
-        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_a",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize(
-        "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_b",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     def test_deep_copy_basis(self, basis_a, basis_b, basis_class_specific_params):
 
@@ -4850,8 +5056,8 @@ class TestMultiplicativeBasis(CombinedBasis):
         assert id(mul.basis2) != id(basis_a)
         assert id(mul.basis2) != id(basis_b)
 
-        if isinstance(basis_a, (HistoryConv, IdentityEval)) or isinstance(
-            basis_b, (HistoryConv, IdentityEval)
+        if isinstance(basis_a, (HistoryConv, IdentityEval, CustomBasis)) or isinstance(
+            basis_b, (HistoryConv, IdentityEval, CustomBasis)
         ):
             return
         # test attributes are not related
@@ -4866,10 +5072,12 @@ class TestMultiplicativeBasis(CombinedBasis):
         assert basis_b.n_basis_funcs == 10
 
     @pytest.mark.parametrize(
-        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_a",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     @pytest.mark.parametrize(
-        "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+        "basis_b",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
     def test_compute_n_basis_runtime(
         self, basis_a, basis_b, basis_class_specific_params
@@ -4894,10 +5102,10 @@ class TestMultiplicativeBasis(CombinedBasis):
         )
 
         mul = basis_a * basis_b
-        if not isinstance(mul.basis1, (HistoryConv, IdentityEval)):
+        if not isinstance(mul.basis1, (HistoryConv, IdentityEval, CustomBasis)):
             mul.basis1.n_basis_funcs = 10
             assert mul.n_basis_funcs == 10 * n_basis_b
-        if not isinstance(mul.basis2, (HistoryConv, IdentityEval)):
+        if not isinstance(mul.basis2, (HistoryConv, IdentityEval, CustomBasis)):
             mul.basis2.n_basis_funcs = 10
             mul.basis2.n_basis_funcs = 10
             assert mul.n_basis_funcs == 10 * mul.basis1.n_basis_funcs
@@ -5071,7 +5279,8 @@ def test_mul_of_basis_by_int(mul, basis_class, basis_class_specific_params):
 
 
 @pytest.mark.parametrize(
-    "basis_class", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+    "basis_class",
+    list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
 )
 def test_mul_of_basis_from_nested(basis_class, basis_class_specific_params):
     basis_obj = CombinedBasis.instantiate_basis(
@@ -5097,7 +5306,8 @@ def test_mul_of_basis_from_nested(basis_class, basis_class_specific_params):
 
 
 @pytest.mark.parametrize(
-    "basis_class", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+    "basis_class",
+    list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
 )
 def test_pow_of_basis_from_nested(basis_class, basis_class_specific_params):
     basis_obj = CombinedBasis.instantiate_basis(
@@ -5142,7 +5352,11 @@ def test_basis_to_transformer(basis_cls, basis_class_specific_params):
         # skip for add and multiplicative.
         if basis_cls in [AdditiveBasis, MultiplicativeBasis]:
             continue
-        assert np.all(getattr(bas, k) == getattr(trans_bas, k))
+        if k == "_funcs":
+            f1s, f2s = getattr(bas, k), getattr(trans_bas, k)
+            assert np.all(f1 == f2 for f1, f2 in zip(f1s, f2s))
+        else:
+            assert np.all(getattr(bas, k) == getattr(trans_bas, k))
 
 
 @pytest.mark.parametrize(
@@ -5408,175 +5622,8 @@ def test__get_splitter(
     bas123 = func1(bas23)
     inps = [np.zeros((1, n)) if n > 1 else np.zeros((1,)) for n in n_input_basis]
     bas123.set_input_shape(*inps)
-    splitter_dict, _ = bas123._get_feature_slicing(split_by_input=False)
+    splitter_dict, _ = bas123._get_feature_slicing()
     exp_slices = compute_slice(bas1_instance, bas2_instance, bas3_instance)
-    assert exp_slices == splitter_dict
-
-
-@pytest.mark.parametrize(
-    "bas1, bas2",
-    list(itertools.product(*[list_all_basis_classes()] * 2)),
-)
-@pytest.mark.parametrize(
-    "operator, n_input_basis_1, n_input_basis_2, compute_slice",
-    [
-        (
-            "__add__",
-            1,
-            1,
-            lambda bas1, bas2: {
-                "1": slice(0, bas1._input_shape_product[0] * bas1.n_basis_funcs),
-                "2": slice(
-                    bas1._input_shape_product[0] * bas1.n_basis_funcs,
-                    bas1._input_shape_product[0] * bas1.n_basis_funcs
-                    + bas2._input_shape_product[0] * bas2.n_basis_funcs,
-                ),
-            },
-        ),
-        (
-            "__mul__",
-            1,
-            1,
-            lambda bas1, bas2: {
-                "(1 * 2)": slice(
-                    0,
-                    bas1._input_shape_product[0]
-                    * bas1.n_basis_funcs
-                    * bas2._input_shape_product[0]
-                    * bas2.n_basis_funcs,
-                )
-            },
-        ),
-        (
-            "__add__",
-            2,
-            1,
-            lambda bas1, bas2: {
-                "1": {
-                    "0": slice(0, bas1.n_basis_funcs),
-                    "1": slice(bas1.n_basis_funcs, 2 * bas1.n_basis_funcs),
-                },
-                "2": slice(
-                    2 * bas1.n_basis_funcs, 2 * bas1.n_basis_funcs + bas2.n_basis_funcs
-                ),
-            },
-        ),
-        (
-            "__mul__",
-            2,
-            1,
-            lambda bas1, bas2: {
-                "(1 * 2)": slice(
-                    0,
-                    bas1._input_shape_product[0]
-                    * bas1.n_basis_funcs
-                    * bas2.n_basis_funcs,
-                )
-            },
-        ),
-        (
-            "__add__",
-            1,
-            2,
-            lambda bas1, bas2: {
-                "1": slice(0, bas1.n_basis_funcs),
-                "2": {
-                    "0": slice(
-                        bas1.n_basis_funcs, bas1.n_basis_funcs + bas2.n_basis_funcs
-                    ),
-                    "1": slice(
-                        bas1.n_basis_funcs + bas2.n_basis_funcs,
-                        bas1.n_basis_funcs + 2 * bas2.n_basis_funcs,
-                    ),
-                },
-            },
-        ),
-        (
-            "__mul__",
-            1,
-            2,
-            lambda bas1, bas2: {
-                "(1 * 2)": slice(
-                    0,
-                    bas2._input_shape_product[0]
-                    * bas1.n_basis_funcs
-                    * bas2.n_basis_funcs,
-                )
-            },
-        ),
-        (
-            "__add__",
-            2,
-            2,
-            lambda bas1, bas2: {
-                "1": {
-                    "0": slice(0, bas1.n_basis_funcs),
-                    "1": slice(bas1.n_basis_funcs, 2 * bas1.n_basis_funcs),
-                },
-                "2": {
-                    "0": slice(
-                        2 * bas1.n_basis_funcs,
-                        2 * bas1.n_basis_funcs + bas2.n_basis_funcs,
-                    ),
-                    "1": slice(
-                        2 * bas1.n_basis_funcs + bas2.n_basis_funcs,
-                        2 * bas1.n_basis_funcs + 2 * bas2.n_basis_funcs,
-                    ),
-                },
-            },
-        ),
-        (
-            "__mul__",
-            2,
-            2,
-            lambda bas1, bas2: {
-                "(1 * 2)": slice(0, 2 * bas1.n_basis_funcs * 2 * bas2.n_basis_funcs)
-            },
-        ),
-    ],
-)
-def test__get_splitter_split_by_input(
-    bas1,
-    bas2,
-    operator,
-    n_input_basis_1,
-    n_input_basis_2,
-    compute_slice,
-    basis_class_specific_params,
-):
-    # skip nested
-    if any(
-        bas in (AdditiveBasis, MultiplicativeBasis, TransformerBasis)
-        for bas in [bas1, bas2]
-    ):
-        return
-    # define the basis
-    n_basis = [5, 6]
-    combine_basis = CombinedBasis()
-    bas1_instance = combine_basis.instantiate_basis(
-        n_basis[0], bas1, basis_class_specific_params, window_size=10, label="1"
-    )
-    bas1_instance.set_input_shape(
-        *([n_input_basis_1] * bas1_instance._n_input_dimensionality)
-    )
-
-    bas2_instance = combine_basis.instantiate_basis(
-        n_basis[1], bas2, basis_class_specific_params, window_size=10, label="2"
-    )
-    bas2_instance.set_input_shape(
-        *([n_input_basis_2] * bas1_instance._n_input_dimensionality)
-    )
-
-    func1 = getattr(bas1_instance, operator)
-    bas12 = func1(bas2_instance)
-
-    inps = [
-        np.zeros((1, n)) if n > 1 else np.zeros((1,))
-        for n in (n_input_basis_1, n_input_basis_2)
-    ]
-    bas12.set_input_shape(*inps)
-    splitter_dict, _ = bas12._get_feature_slicing()
-    exp_slices = compute_slice(bas1_instance, bas2_instance)
     assert exp_slices == splitter_dict
 
 
@@ -6191,7 +6238,7 @@ def test_split_feature_axis(
 
 
 def test_composite_basis_repr_wrapping():
-    with patch("os.get_terminal_size", return_value=(80, 24)):
+    with patch("os.get_terminal_size", return_value=SizeTerminal(80, 24)):
         # check multi
         bas = basis.BSplineEval(10) ** 100
         out = repr(bas)
@@ -6241,7 +6288,7 @@ def test_all_public_importable_bases_equal():
         if issubclass(obj, nemos.basis._basis.Basis)
     }
 
-    if public_bases != imported_bases:
+    if public_bases.difference(imported_bases) != {"CustomBasis"}:
         raise ValueError(
             "nemos/basis/__init__.py imported basis objects does not match"
             " nemos/basis/_composition_utils.py's __PUBLIC_BASES__ list:\n"

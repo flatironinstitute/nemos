@@ -176,3 +176,6 @@ plot_html_show_formats = False
 
 # raise an error if exec error in notebooks
 nb_execution_raise_on_error = True
+
+# cache notebooks when possible
+nb_execution_mode = "cache"

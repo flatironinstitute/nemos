@@ -173,7 +173,7 @@ if root:
 # if local store in ../_build/html/...
 else:
    path = Path("../_build/html/_static/thumbnails/background")
- 
+
 # make sure the folder exists if run from build
 if root or Path("../assets/stylesheets").exists():
    path.mkdir(parents=True, exist_ok=True)
@@ -184,11 +184,11 @@ if path.exists():
 
 ## Convolve using [`Basis.compute_features`](nemos.basis._basis.Basis.compute_features)
 
-Every basis in the `nemos.basis` module whose class name ends with "Conv" will perform a 1D convolution over the 
+Every basis in the `nemos.basis` module whose class name ends with "Conv" will perform a 1D convolution over the
 provided input when the `compute_features` method is called. The basis elements will be used as filters for the
 convolution.
 
-All the parameters of [`create_convolutional_predictor`](nemos.convolve.create_convolutional_predictor) can be passed to the object directly at initialization. 
+All the parameters of [`create_convolutional_predictor`](nemos.convolve.create_convolutional_predictor) can be passed to the object directly at initialization.
 Let's see how we can get the same results through [`Basis`](nemos.basis._basis.Basis).
 
 ```{code-cell} ipython3
@@ -196,7 +196,7 @@ Let's see how we can get the same results through [`Basis`](nemos.basis._basis.B
 causal_basis = nmo.basis.RaisedCosineLinearConv(
         n_basis_funcs=3, window_size=ws,
         conv_kwargs=dict(predictor_causality="causal")
-        
+
 )
 
 acausal_basis = nmo.basis.RaisedCosineLinearConv(
