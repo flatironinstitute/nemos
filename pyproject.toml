@@ -47,6 +47,7 @@ dev = [
     "black",                        # Code formatter
     "isort",                        # Import sorter
     "pip-tools",                    # Dependency management
+    "ruff",                         # Lint docstrings for now, eventually switch to ruff for all linting
     "pytest",                       # Testing framework
     "pytest-xdist",                 # Parallelize pytest
     "flake8",                       # Code linter
@@ -149,3 +150,16 @@ exclude_lines = [
     "@abc.abstractmethod",
     "if __name__ == .__main__.:"
 ]
+
+
+[tool.ruff]
+exclude = ["src/nemos/_documentation_utils"]
+
+
+[tool.ruff.lint]
+select = ["D"]
+ignore = ["D202"]  # this conflicts with black
+
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"

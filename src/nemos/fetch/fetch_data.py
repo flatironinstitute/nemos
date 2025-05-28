@@ -132,7 +132,7 @@ def fetch_data(
 
 
 def download_dandi_data(dandiset_id: str, filepath: str) -> NWBHDF5IO:
-    """Download a dataset from the DANDI Archive (https://dandiarchive.org/)
+    """Download a dataset from the [DANDI Archive](https://dandiarchive.org/).
 
     Parameters
     ----------

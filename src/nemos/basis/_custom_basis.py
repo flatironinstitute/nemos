@@ -521,6 +521,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
                [[ 5.,  6.],
                 [25., 36.]]])
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     def set_input_shape(self, *xi: "int | tuple[int, ...] | NDArray"):
@@ -551,6 +552,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         -------
         self :
             Returns the instance itself to allow method chaining.
+
         Examples
         --------
         >>> import nemos as nmo

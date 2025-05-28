@@ -125,7 +125,7 @@ class UnRegularized(Regularizer):
 
     def penalized_loss(self, loss: Callable, regularizer_strength: float):
         """
-        Returns the original loss function unpenalized.
+        Return the original loss function unpenalized.
 
         Unregularized regularization method does not add any penalty.
         """
@@ -135,12 +135,11 @@ class UnRegularized(Regularizer):
         self,
     ) -> ProximalOperator:
         """
-        Returns the identity operator.
+        Return the identity operator.
 
         Unregularized method corresponds to an identity proximal operator, since no
         shrinkage factor is applied.
         """
-
         return jaxopt.prox.prox_none
 
 
@@ -201,7 +200,7 @@ class Ridge(Regularizer):
         )
 
     def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
-        """Returns the penalized loss function for Ridge regularization."""
+        """Return the penalized loss function for Ridge regularization."""
 
         def _penalized_loss(params, X, y):
             return loss(params, X, y) + self._penalization(params, regularizer_strength)
@@ -299,7 +298,7 @@ class Lasso(Regularizer):
         )
 
     def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
-        """Returns a function for calculating the penalized loss using Lasso regularization."""
+        """Return a function for calculating the penalized loss using Lasso regularization."""
 
         def _penalized_loss(params, X, y):
             return loss(params, X, y) + self._penalization(params, regularizer_strength)
@@ -434,7 +433,6 @@ class GroupLasso(Regularizer):
         where :math:`g` is the number of groups, :math:`\dim(\cdot)` is the dimension of the vector,
         i.e. the number of coefficient in each :math:`\beta_j`, and :math:`||\cdot||_2` is the euclidean norm.
         """
-
         # conform to shape (1, n_features) if param is (n_features,) or (n_neurons, n_features) if
         # param is (n_features, n_neurons)
         param_with_extra_axis = jnp.atleast_2d(params[0].T)
@@ -458,7 +456,7 @@ class GroupLasso(Regularizer):
         return penalty * regularizer_strength
 
     def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
-        """Returns a function for calculating the penalized loss using Group Lasso regularization."""
+        """Return a function for calculating the penalized loss using Group Lasso regularization."""
 
         def _penalized_loss(params, X, y):
             return loss(params, X, y) + self._penalization(params, regularizer_strength)
