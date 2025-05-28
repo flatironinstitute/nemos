@@ -1296,7 +1296,10 @@ class PopulationGLM(GLM):
     >>> rate = np.exp(X["feature_1"].dot(weights["feature_1"]) + X["feature_2"].dot(weights["feature_2"]))
     >>> y = np.random.poisson(rate)
     >>> # Define a feature mask with arrays of shape (num_neurons, )
-    >>> feature_mask = FeaturePytree(feature_1=jnp.array([0, 1]), feature_2=jnp.array([1, 0]))
+    >>> feature_mask = FeaturePytree(
+    ...     feature_1=jnp.array([0, 1], dtype=jnp.int32),
+    ...     feature_2=jnp.array([1, 0], dtype=jnp.int32)
+    ... )
     >>> print(feature_mask)
     feature_1: shape (2,), dtype int32
     feature_2: shape (2,), dtype int32
