@@ -503,14 +503,14 @@ def create_convolutional_predictor(
         If shifting is attempted with 'acausal' causality.
     """
     # apply checks
-    validation.check_basis_matrix_shape(basis_matrix)
-    validation.check_non_empty_inputs(time_series, basis_matrix)
-    validation.check_time_series_ndim(time_series, axis)
+    validation._check_basis_matrix_shape(basis_matrix)
+    validation._check_non_empty_inputs(time_series, basis_matrix)
+    validation._check_time_series_ndim(time_series, axis)
     shift = _resolve_shift_default(shift, predictor_causality)
-    validation.check_shift_causality_consistency(shift, predictor_causality)
-    validation.check_batch_size(batch_size_samples, "batch_size_samples")
-    validation.check_batch_size(batch_size_channels, "batch_size_channels")
-    validation.check_batch_size(batch_size_basis, "batch_size_basis")
+    validation._check_shift_causality_consistency(shift, predictor_causality)
+    validation._check_batch_size(batch_size_samples, "batch_size_samples")
+    validation._check_batch_size(batch_size_channels, "batch_size_channels")
+    validation._check_batch_size(batch_size_basis, "batch_size_basis")
 
     # flatten and grab tree struct
     time_series, struct = jax.tree_util.tree_flatten(time_series)
@@ -571,10 +571,10 @@ def create_convolutional_predictor(
     time_series = jax.tree_util.tree_map(_list_epochs, time_series)
 
     # check trial size (after splitting)
-    validation.check_trials_longer_than_time_window(
+    validation._check_trials_longer_than_time_window(
         time_series, basis_matrix.shape[0], axis
     )
-    validation.check_batch_size_larger_than_convolution_window(
+    validation._check_batch_size_larger_than_convolution_window(
         batch_size=batch_size_samples, window_size=basis_matrix.shape[0]
     )
 

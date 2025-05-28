@@ -321,7 +321,7 @@ def _warn_if_not_float64(feature_matrix: Any, message: str):
         )
 
 
-def check_basis_matrix_shape(basis_matrix):
+def _check_basis_matrix_shape(basis_matrix):
     basis_matrix = jnp.asarray(basis_matrix)
     if not utils.check_dimensionality(basis_matrix, 2):
         raise ValueError(
@@ -333,12 +333,12 @@ def check_basis_matrix_shape(basis_matrix):
     return basis_matrix
 
 
-def check_non_empty_inputs(time_series, basis_matrix):
+def _check_non_empty_inputs(time_series, basis_matrix):
     utils.check_non_empty(basis_matrix, "basis_matrix")
     utils.check_non_empty(time_series, "time_series")
 
 
-def check_time_series_ndim(time_series, axis):
+def _check_time_series_ndim(time_series, axis):
     if not utils.pytree_map_and_reduce(lambda x: x.ndim > axis, all, time_series):
         raise ValueError(
             "`time_series` should contain arrays of at least one-dimension. "
@@ -346,14 +346,16 @@ def check_time_series_ndim(time_series, axis):
         )
 
 
-def check_shift_causality_consistency(shift, predictor_causality):
+def _check_shift_causality_consistency(shift, predictor_causality):
+    """Check shift causality consistency."""
     if shift and predictor_causality == "acausal":
         raise ValueError(
             "Cannot shift `predictor` when `predictor_causality` is `acausal`!"
         )
 
 
-def check_batch_size(batch_size, var_name):
+def _check_batch_size(batch_size, var_name):
+    """Check if ``batch_size`` is a positive integer."""
     if batch_size is None:
         return
     elif not isinstance(batch_size, int) or batch_size < 1:
@@ -363,7 +365,7 @@ def check_batch_size(batch_size, var_name):
         )
 
 
-def check_trials_longer_than_time_window(
+def _check_trials_longer_than_time_window(
     time_series: Any, window_size: int | Any, axis: int = 0
 ):
     """
@@ -403,9 +405,10 @@ def check_trials_longer_than_time_window(
         )
 
 
-def check_batch_size_larger_than_convolution_window(
+def _check_batch_size_larger_than_convolution_window(
     batch_size: int | Any, window_size: int | Any
 ):
+    """Check if the batch_size is larger than the window size."""
     has_same_struct = jax.tree_util.tree_structure(
         batch_size
     ) == jax.tree_util.tree_structure(window_size)
