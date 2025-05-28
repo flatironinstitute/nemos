@@ -5,9 +5,10 @@ import jax
 import jax.flatten_util
 import jax.numpy as jnp
 from jax import grad, jit, lax, random
-from jaxopt import OptStep
-from jaxopt._src import loop
-from jaxopt.prox import prox_none
+
+from nemos.third_party.jaxopt.jaxopt import OptStep
+from nemos.third_party.jaxopt.jaxopt._src import loop
+from nemos.third_party.jaxopt.jaxopt.prox import prox_none
 
 from ..tree_utils import tree_add_scalar_mul, tree_l2_norm, tree_slice, tree_sub
 from ..typing import KeyArrayLike, Pytree
@@ -81,7 +82,7 @@ class ProxSVRG:
     Examples
     --------
     >>> import numpy as np
-    >>> from jaxopt.prox import prox_lasso
+    >>> from nemos.third_party.jaxopt.jaxopt.prox import prox_lasso
     >>> loss_fn = lambda params, X, y: ((X.dot(params) - y)**2).sum()
     >>> svrg = ProxSVRG(loss_fn, prox_lasso)
     >>> hyperparams_prox = 0.1
