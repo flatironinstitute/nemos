@@ -13,7 +13,7 @@ from .. import pytrees
 
 def _convert_to_float(func):
     """
-    Decorator to convert all inputs to float before passing them to the function.
+    Convert all inputs to float before passing them to the function.
 
     Ensures that calculations within the function are performed with floating-point precision.
 
@@ -247,7 +247,6 @@ def _glm_softplus_poisson_l_smooth_with_power_iteration(
     :
         The largest eigenvalue of X.T @ D @ X.
     """
-
     if batch_size is None:
         batch_size = X.shape[0]
 

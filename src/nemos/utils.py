@@ -576,7 +576,7 @@ pynapple_concatenate_numpy = support_pynapple(conv_type="numpy")(np.concatenate)
 
 
 def _get_terminal_size():
-    """Helper to get terminal size for __repr__
+    """Get the terminal size for __repr__.
 
     Returns
     -------
@@ -599,4 +599,5 @@ def _get_terminal_size():
 
 
 def one_over_x(x):
+    """Implement 1/x."""
     return jnp.power(x, -1)

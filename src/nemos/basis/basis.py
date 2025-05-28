@@ -113,6 +113,7 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("evaluate_on_grid", BSplineBasis)
@@ -140,6 +141,7 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
             >>> l = plt.legend()
             >>> plt.show()
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", BSplineBasis)
@@ -154,6 +156,7 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
         >>> out.shape
         (100, 5, 2, 4)
         """
+        # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -179,6 +182,7 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -263,6 +267,7 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
         two_inputs, shape (20, 2, 6)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("_compute_features", ConvBasisMixin)
@@ -282,6 +287,7 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("evaluate_on_grid", BSplineBasis)
@@ -309,6 +315,7 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
             >>> l = plt.legend()
             >>> plt.show()
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", BSplineBasis)
@@ -323,6 +330,7 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
         >>> out.shape
         (100, 5, 2, 4)
         """
+        # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -348,6 +356,7 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -419,6 +428,7 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         one_input, shape (20, 6)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("_compute_features", EvalBasisMixin)
@@ -438,6 +448,7 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("evaluate_on_grid", CyclicBSplineBasis)
@@ -467,6 +478,7 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
             >>> l = plt.legend()
             >>> plt.show()
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", CyclicBSplineBasis)
@@ -481,6 +493,7 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         >>> out.shape
         (100, 5, 2, 4)
         """
+        # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -506,6 +519,7 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -582,6 +596,7 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
         two_inputs, shape (20, 2, 6)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("_compute_features", ConvBasisMixin)
@@ -601,6 +616,7 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("evaluate_on_grid", CyclicBSplineBasis)
@@ -630,6 +646,7 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
             >>> l = plt.legend()
             >>> plt.show()
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", CyclicBSplineBasis)
@@ -644,6 +661,7 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
         >>> out.shape
         (100, 5, 2, 4)
         """
+        # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -669,6 +687,7 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -764,6 +783,7 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         one_input, shape (20, 6)
 
         """
+        # ruff: noqa: D205, D400
         return MSplineBasis.split_by_feature(self, x, axis=axis)
 
     @add_docstring("_compute_features", EvalBasisMixin)
@@ -783,6 +803,7 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("evaluate_on_grid", MSplineBasis)
@@ -811,6 +832,7 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
             >>> l = plt.legend()
             >>> plt.show()
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", MSplineBasis)
@@ -825,6 +847,7 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         >>> out.shape
         (100, 5, 2, 4)
         """
+        # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -850,6 +873,7 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -950,6 +974,7 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         two_inputs, shape (20, 2, 6)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("_compute_features", ConvBasisMixin)
@@ -969,6 +994,7 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("evaluate_on_grid", MSplineBasis)
@@ -997,6 +1023,7 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         Text(0, 0.5, 'Basis Function Value')
         >>> l = plt.legend()
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", MSplineBasis)
@@ -1011,6 +1038,7 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         >>> out.shape
         (100, 5, 2, 4)
         """
+        # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -1036,6 +1064,7 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -1116,6 +1145,7 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
             >>> plt.show()
 
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", RaisedCosineBasisLinear)
@@ -1130,6 +1160,7 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
         >>> out.shape
         (100, 5, 2, 4)
         """
+        # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", EvalBasisMixin)
@@ -1149,6 +1180,7 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("split_by_feature", RaisedCosineBasisLinear)
@@ -1171,6 +1203,7 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
         one_input, shape (20, 6)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -1196,6 +1229,7 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -1282,6 +1316,7 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
             >>> plt.show()
 
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", RaisedCosineBasisLinear)
@@ -1296,6 +1331,7 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
         >>> out.shape
         (100, 5, 2, 4)
         """
+        # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", ConvBasisMixin)
@@ -1315,6 +1351,7 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("split_by_feature", RaisedCosineBasisLinear)
@@ -1337,6 +1374,7 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
         two_inputs, shape (20, 2, 6)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -1362,6 +1400,7 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -1451,6 +1490,7 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
             >>> plt.show()
 
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", RaisedCosineBasisLog)
@@ -1465,6 +1505,7 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         >>> out.shape
         (100, 5, 2, 4)
         """
+        # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", EvalBasisMixin)
@@ -1484,6 +1525,7 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("split_by_feature", RaisedCosineBasisLog)
@@ -1506,6 +1548,7 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         one_input, shape (20, 6)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -1531,6 +1574,7 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -1629,6 +1673,7 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
             >>> plt.show()
 
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", RaisedCosineBasisLog)
@@ -1643,6 +1688,7 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
         >>> out.shape
         (100, 5, 2, 4)
         """
+        # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", ConvBasisMixin)
@@ -1662,6 +1708,7 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("split_by_feature", RaisedCosineBasisLog)
@@ -1684,6 +1731,7 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
         two_inputs, shape (20, 2, 6)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -1709,6 +1757,7 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -1784,6 +1833,7 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
             >>> plt.show()
 
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples=n_samples)
 
     @add_docstring("evaluate", OrthExponentialBasis)
@@ -1799,6 +1849,7 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         >>> out.shape
         (100, 5, 2, 5)
         """
+        # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", EvalBasisMixin)
@@ -1818,6 +1869,7 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("split_by_feature", OrthExponentialBasis)
@@ -1844,6 +1896,7 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         feature: shape (20, 5)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -1869,6 +1922,7 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -1950,6 +2004,7 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
             >>> plt.show()
 
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", OrthExponentialBasis)
@@ -1965,6 +2020,7 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         >>> out.shape
         (100, 5, 2, 5)
         """
+        # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", ConvBasisMixin)
@@ -1984,6 +2040,7 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("split_by_feature", OrthExponentialBasis)
@@ -2011,6 +2068,7 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         two_inputs, shape (20, 2, 6)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -2036,10 +2094,11 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
     def _check_window_size(self, window_size: int):
-        """OrthExponentialBasis specific window size check."""
+        """Specific window size check for ``Orthexponentialbasis``."""
         super()._check_window_size(window_size)
         # if n_basis_funcs is not yet initialized, skip check
         n_basis = getattr(self, "n_basis_funcs", None)
@@ -2101,6 +2160,7 @@ class IdentityEval(EvalBasisMixin, IdentityBasis):
             >>> plt.show()
 
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples=n_samples)
 
     @add_docstring("evaluate", IdentityBasis)
@@ -2115,6 +2175,7 @@ class IdentityEval(EvalBasisMixin, IdentityBasis):
         >>> out.shape
         (100, 5, 2, 1)
         """
+        # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", EvalBasisMixin)
@@ -2134,6 +2195,7 @@ class IdentityEval(EvalBasisMixin, IdentityBasis):
         (1000, 1)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("split_by_feature", IdentityBasis)
@@ -2160,6 +2222,7 @@ class IdentityEval(EvalBasisMixin, IdentityBasis):
         feature: shape (20, 1)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -2185,6 +2248,7 @@ class IdentityEval(EvalBasisMixin, IdentityBasis):
         20
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -2241,6 +2305,7 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
             >>> plt.show()
 
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", HistoryBasis)
@@ -2256,6 +2321,7 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
         >>> out.shape
         (100, 20)
         """
+        # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", ConvBasisMixin)
@@ -2275,6 +2341,7 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("split_by_feature", IdentityBasis)
@@ -2301,6 +2368,7 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
         feature: shape (20, 5)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -2324,12 +2392,13 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
         >>> _ = basis.set_input_shape(x)
         >>> basis.n_output_features
         100
-
         """
+        # ruff: noqa: D400, D205
         return AtomicBasisMixin.set_input_shape(self, xi)
 
     @property
     def window_size(self):
+        """Window size for the history basis."""
         return self._window_size
 
     @window_size.setter

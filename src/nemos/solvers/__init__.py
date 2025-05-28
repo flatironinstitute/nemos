@@ -1,3 +1,5 @@
+"""Custom solvers module."""
+
 from ._svrg import SVRG, ProxSVRG
 from ._svrg_defaults import (
     glm_softplus_poisson_l_max_and_l,

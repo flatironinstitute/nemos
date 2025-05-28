@@ -18,6 +18,8 @@ if TYPE_CHECKING:
 
 
 def transformer_chaining(func):
+    """Apply chainable methods and return self."""
+
     @wraps(func)
     def wrapper(self, *args, **kwargs):
         # Call the wrapped function and capture its return value
@@ -94,6 +96,7 @@ class TransformerBasis:
 
     @property
     def basis(self):
+        """Return the wrapped basis."""
         return self._basis
 
     @basis.setter
@@ -395,6 +398,7 @@ class TransformerBasis:
             )
 
     def __getitem__(self, name: str):
+        """Get the basis from label and wrap into a transformer."""
         return self.__class__(self.basis.__getitem__(name))
 
     def __sklearn_clone__(self) -> TransformerBasis:
@@ -415,6 +419,7 @@ class TransformerBasis:
         return cloned_obj
 
     def __repr__(self):
+        """Repr for Transformer wrapped basis."""
         return f"Transformer({self.basis})"
 
     def set_params(self, **parameters) -> TransformerBasis:
@@ -484,6 +489,7 @@ class TransformerBasis:
         return TransformerBasis(self.basis + add)
 
     def __rmul__(self, other: TransformerBasis | Basis | int) -> TransformerBasis:
+        """Right multiplication operator for basis."""
         return self.__mul__(other)
 
     def __mul__(self, other: TransformerBasis | Basis | int) -> TransformerBasis:
