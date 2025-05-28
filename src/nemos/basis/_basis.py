@@ -901,9 +901,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         return out1 + out2
 
     @add_docstring("set_input_shape", CompositeBasisMixin)
-    def set_input_shape(
-        self, *xi: int | tuple[int, ...] | NDArray
-    ) -> Basis:  # noqa: D205, D400
+    def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> Basis:
         """
         Examples
         --------
@@ -926,6 +924,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         181
 
         """
+        # ruff: noqa: D205, D400
         return super().set_input_shape(*xi)
 
     @support_pynapple(conv_type="numpy")
@@ -973,7 +972,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
     @add_docstring("compute_features", Basis)
     def compute_features(
         self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor
-    ) -> FeatureMatrix:  # noqa: D205, D400
+    ) -> FeatureMatrix:
         r"""
         Examples
         --------
@@ -988,6 +987,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         (20, 17)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(*xi)
 
     def _compute_features(
@@ -1452,7 +1452,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
     @add_docstring("compute_features", Basis)
     def compute_features(
         self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor
-    ) -> FeatureMatrix:  # noqa: D205, D400
+    ) -> FeatureMatrix:
         """
         Examples
         --------
@@ -1474,7 +1474,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         self,
         x: NDArray,
         axis: int = 1,
-    ):  # noqa: D205, D400
+    ):
         """
         Examples
         --------
@@ -1495,12 +1495,11 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         (one_input * two_inputs): shape (20, 2, 30)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", CompositeBasisMixin)
-    def set_input_shape(
-        self, *xi: int | tuple[int, ...] | NDArray
-    ) -> Basis:  # noqa: D400, D205
+    def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> Basis:
         """
         Examples
         --------
@@ -1523,4 +1522,5 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         25200
 
         """
+        # ruff: noqa: D400, D205
         return super().set_input_shape(*xi)
