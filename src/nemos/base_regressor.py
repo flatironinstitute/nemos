@@ -186,10 +186,10 @@ class BaseRegressor(Base, abc.ABC):
         return self._regularizer
 
     @regularizer.setter
-    def regularizer(self, regularizer: Union[str, Regularizer]):
+    def regularizer(self, regularizer: Union[str, None, Regularizer]):
         """Setter for the regularizer attribute."""
         # instantiate regularizer if str
-        if isinstance(regularizer, str):
+        if isinstance(regularizer, str) or isinstance(regularizer, type(None)):
             self._regularizer = create_regularizer(name=regularizer)
         elif isinstance(regularizer, Regularizer):
             self._regularizer = regularizer
@@ -657,9 +657,11 @@ class BaseRegressor(Base, abc.ABC):
         new_solver_kwargs = self.solver_kwargs.copy()
 
         # get the model specific configs
-        compute_defaults, compute_l_smooth, strong_convexity = (
-            self._get_optimal_solver_params_config()
-        )
+        (
+            compute_defaults,
+            compute_l_smooth,
+            strong_convexity,
+        ) = self._get_optimal_solver_params_config()
         if compute_defaults and compute_l_smooth:
             # Check if the user has provided batch size or stepsize, or else use None
             batch_size = new_solver_kwargs.get("batch_size", None)
