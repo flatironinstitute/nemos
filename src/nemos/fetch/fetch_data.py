@@ -172,6 +172,12 @@ def download_dandi_data(dandiset_id: str, filepath: str) -> NWBHDF5IO:
             " Please use pip or "
             "conda to install 'dandi'."
         )
+    if pooch is None:
+        raise ImportError(
+            "Missing optional dependency 'pooch'."
+            " Please use pip or "
+            "conda to install 'pooch'."
+        )
     with DandiAPIClient() as client:
         asset = client.get_dandiset(dandiset_id, "draft").get_asset_by_path(filepath)
         s3_url = asset.get_content_url(follow_redirects=1, strip_query=True)
