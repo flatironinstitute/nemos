@@ -173,11 +173,11 @@ def tensor_convolve(
     eval_basis :
         The evaluation basis array for convolution. It should be 2D, where the first dimension
         represents the window size for convolution. Shape ``(window_size, n_basis_funcs)``.
-    batch_size_samples:
+    batch_size_samples :
         The batch size for convolution as number of samples. Must be larger than ``eval_basis.shape[1]``.
     batch_size_channels :
         Batch size over time series channels.
-    batch_size_basis:
+    batch_size_basis :
         Batch size over basis filters.
 
     Returns
