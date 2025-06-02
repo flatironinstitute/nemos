@@ -95,7 +95,7 @@ class BaseRegressor(Base, abc.ABC):
         solver_name: str = None,
         solver_kwargs: Optional[dict] = None,
     ):
-        self.regularizer = regularizer
+        self.regularizer = "UnRegularized" if regularizer is None else regularizer
         self.regularizer_strength = regularizer_strength
 
         # no solver name provided, use default
@@ -186,10 +186,10 @@ class BaseRegressor(Base, abc.ABC):
         return self._regularizer
 
     @regularizer.setter
-    def regularizer(self, regularizer: Union[str, None, Regularizer]):
+    def regularizer(self, regularizer: Union[str, Regularizer]):
         """Setter for the regularizer attribute."""
         # instantiate regularizer if str
-        if isinstance(regularizer, str) or isinstance(regularizer, type(None)):
+        if isinstance(regularizer, str):
             self._regularizer = create_regularizer(name=regularizer)
         elif isinstance(regularizer, Regularizer):
             self._regularizer = regularizer
