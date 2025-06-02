@@ -185,7 +185,7 @@ class GLM(BaseRegressor):
         # With python 3.11 Literal[*AVAILABLE_OBSERVATION_MODELS] will be allowed.
         # Replace this manual list after dropping support for 3.10?
         observation_model: obs.Observations | Literal["Poisson", "Gamma"] = "Poisson",
-        regularizer: Union[str, Regularizer] = "UnRegularized",
+        regularizer: Optional[Union[str, Regularizer]] = None,
         regularizer_strength: Optional[float] = None,
         solver_name: str = None,
         solver_kwargs: dict = None,

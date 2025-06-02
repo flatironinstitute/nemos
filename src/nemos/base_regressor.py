@@ -95,7 +95,7 @@ class BaseRegressor(Base, abc.ABC):
         solver_name: str = None,
         solver_kwargs: Optional[dict] = None,
     ):
-        self.regularizer = regularizer
+        self.regularizer = "UnRegularized" if regularizer is None else regularizer
         self.regularizer_strength = regularizer_strength
 
         # no solver name provided, use default
@@ -657,9 +657,11 @@ class BaseRegressor(Base, abc.ABC):
         new_solver_kwargs = self.solver_kwargs.copy()
 
         # get the model specific configs
-        compute_defaults, compute_l_smooth, strong_convexity = (
-            self._get_optimal_solver_params_config()
-        )
+        (
+            compute_defaults,
+            compute_l_smooth,
+            strong_convexity,
+        ) = self._get_optimal_solver_params_config()
         if compute_defaults and compute_l_smooth:
             # Check if the user has provided batch size or stepsize, or else use None
             batch_size = new_solver_kwargs.get("batch_size", None)
