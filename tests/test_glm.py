@@ -99,17 +99,12 @@ class TestGLM:
         "regularizer, expectation",
         [
             # regularizer with class objects are tested in test_regularizers.py
-            # so here we only test the string input names
+            # so here we only test the string input names and None type
+            (None, does_not_raise()),
             ("UnRegularized", does_not_raise()),
             ("Ridge", does_not_raise()),
             ("Lasso", does_not_raise()),
             ("GroupLasso", does_not_raise()),
-            (
-                None,
-                pytest.raises(
-                    TypeError, match="The regularizer should be either a string from "
-                ),
-            ),
             (
                 nmo.regularizer.Ridge,
                 pytest.raises(
