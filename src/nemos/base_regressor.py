@@ -14,6 +14,7 @@ from typing import Any, Dict, NamedTuple, Optional, Tuple, Union
 import jax
 import jax.numpy as jnp
 import jaxopt
+import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from . import solvers, utils, validation
@@ -684,3 +685,56 @@ class BaseRegressor(Base, abc.ABC):
     def _get_optimal_solver_params_config(self):
         """Return the functions for computing default step and batch size for the solver."""
         pass
+
+    def save_params(self, filename: str = None) -> None:
+        """
+
+        Save parameters of the model to a npz file.
+
+        Parameters
+        ----------
+        filename : str, optional
+            Name of the npz file to save the model parameters to. If not provided,
+            default is "model_params.npz".
+
+        """
+
+        filename = "model_params.npz" if filename is None else f"{filename}.npz"
+
+        model_params = self.get_params()
+
+        # filter out non-native types
+        native_types = (int, float, str, list, dict, tuple, set, bool, type(None))
+
+        saved_params = {}
+
+        # save all native types and numpy objects
+        for key, value in model_params.items():
+            if (
+                isinstance(value, native_types)
+                or isinstance(value, np.ndarray)
+                or np.isscalar(value)
+            ):
+                saved_params[key] = value
+            else:
+                saved_params[key] = str(value)
+                warnings.warn(
+                    UserWarning(
+                        f"Cannot save parameter {key} of type {type(value)}. saved as a string instead."
+                    )
+                )
+
+        # save coef_ and intercept_ attributes if they exist
+        coef, intercept = self._get_coef_and_intercept()
+        if coef is not None:
+            saved_params["coef"] = coef
+        if intercept is not None:
+            saved_params["intercept"] = intercept
+
+        # save the parameters
+        np.savez(
+            filename,
+            params=saved_params,
+        )
+
+        return
