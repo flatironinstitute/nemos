@@ -120,6 +120,9 @@ class CombinedBasis(BasisFuncsTesting):
 
         # Merge with provided  extra kwargs
         kwargs = {**default_kwargs, **kwargs}
+        if issubclass(basis_class, basis.FourierBasis):
+            value = kwargs.pop("n_basis_funcs")
+            kwargs["n_frequencies"] = value
 
         if basis_class == AdditiveBasis:
             kwargs_mspline = inspect_utils.trim_kwargs(

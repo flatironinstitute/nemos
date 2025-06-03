@@ -2469,7 +2469,8 @@ class FourierEval(EvalBasisMixin, FourierBasis):
             >>> fourier_basis = FourierEval(n_frequencies)
             >>> sample_points, basis_values = fourier_basis.evaluate_on_grid(100)
             >>> plt.plot(sample_points, basis_values)
-
+            [<matplotlib.lines.Line2D object at ...
+            >>> plt.show()
         """
         return super().evaluate_on_grid(n_samples)
 
@@ -2538,3 +2539,18 @@ class FourierEval(EvalBasisMixin, FourierBasis):
 
         """
         return AtomicBasisMixin.set_input_shape(self, xi)
+
+    @add_docstring("evaluate", FourierBasis)
+    def evaluate(self, sample_pts: NDArray) -> NDArray:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import FourierEval
+        >>> bspline_basis = FourierEval(n_frequencies=4)
+        >>> out = bspline_basis.evaluate(np.random.randn(100, 5, 2))
+        >>> out.shape
+        (100, 5, 2, 8)
+        """
+        # ruff: noqa: D205, D400
+        return super().evaluate(sample_pts)

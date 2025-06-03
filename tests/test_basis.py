@@ -20,7 +20,13 @@ from conftest import (
 import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
 import nemos.convolve as convolve
-from nemos.basis import CustomBasis, HistoryConv, IdentityEval, TransformerBasis
+from nemos.basis import (
+    CustomBasis,
+    FourierEval,
+    HistoryConv,
+    IdentityEval,
+    TransformerBasis,
+)
 from nemos.basis._basis import (
     AdditiveBasis,
     MultiplicativeBasis,
@@ -82,11 +88,18 @@ def compare_basis(b1, b2):
     else:
         decay_rates_b1 = b1.__dict__.get("_decay_rates", -1)
         decay_rates_b2 = b2.__dict__.get("_decay_rates", -1)
+        freqs1 = b1.__dict__.get("_frequencies", -1)
+        freqs2 = b2.__dict__.get("_frequencies", -1)
         assert np.array_equal(decay_rates_b1, decay_rates_b2)
+        assert np.array_equal(freqs1, freqs2)
         f1, f2 = b1.__dict__.pop("_funcs", [True]), b2.__dict__.pop("_funcs", [True])
         assert all(fi == fj for fi, fj in zip(f1, f2))
-        d1 = filter_attributes(b1, exclude_keys=["_decay_rates", "_parent"])
-        d2 = filter_attributes(b2, exclude_keys=["_decay_rates", "_parent"])
+        d1 = filter_attributes(
+            b1, exclude_keys=["_decay_rates", "_parent", "_frequencies"]
+        )
+        d2 = filter_attributes(
+            b2, exclude_keys=["_decay_rates", "_parent", "_frequencies"]
+        )
         assert d1 == d2
 
 
@@ -3827,6 +3840,11 @@ class TestAdditiveBasis(CombinedBasis):
             assert add.basis1.basis_kwargs == {}
             add.basis1.basis_kwargs = {"n_basis_funcs": 6}
             assert basis_a.basis_kwargs == {"n_basis_funcs": 10}
+        elif issubclass(type(add.basis1), basis.FourierBasis):
+            basis_a.n_frequencies = 10
+            assert add.basis1.n_frequencies != 10
+            add.basis1.n_frequencies = 6
+            assert basis_a.n_frequencies == 10
         else:
             basis_a.n_basis_funcs = 10
             assert add.basis1.n_basis_funcs == n_basis_a
@@ -3838,6 +3856,11 @@ class TestAdditiveBasis(CombinedBasis):
             assert add.basis2.basis_kwargs == {}
             add.basis2.basis_kwargs = {"n_basis_funcs": 6}
             assert basis_b.basis_kwargs == {"n_basis_funcs": 10}
+        elif issubclass(type(add.basis2), basis.FourierBasis):
+            basis_b.n_frequencies = 10
+            assert add.basis2.n_frequencies != 10
+            add.basis2.n_frequencies = 6
+            assert basis_b.n_frequencies == 10
         else:
             basis_b.n_basis_funcs = 10
             assert add.basis2.n_basis_funcs == n_basis_b
@@ -3875,13 +3898,22 @@ class TestAdditiveBasis(CombinedBasis):
         )
         add = basis_a + basis_b
 
-        if not isinstance(add.basis1, (HistoryConv, IdentityEval, CustomBasis)):
+        if not isinstance(
+            add.basis1, (basis.FourierBasis, HistoryConv, IdentityEval, CustomBasis)
+        ):
             add.basis1.n_basis_funcs = 10
-            assert add.n_basis_funcs == 10 + n_basis_b
-        if not isinstance(add.basis2, (HistoryConv, IdentityEval, CustomBasis)):
-            add.basis2.n_basis_funcs = 10
+            assert add.n_basis_funcs == 10 + add.basis2.n_basis_funcs
+        elif isinstance(add.basis1, basis.FourierBasis):
+            add.basis1.n_frequencies = 10
+            assert add.n_basis_funcs == 20 + add.basis2.n_basis_funcs
+        if not isinstance(
+            add.basis2, (basis.FourierBasis, HistoryConv, IdentityEval, CustomBasis)
+        ):
             add.basis2.n_basis_funcs = 10
             assert add.n_basis_funcs == 10 + add.basis1.n_basis_funcs
+        elif isinstance(add.basis2, basis.FourierBasis):
+            add.basis2.n_frequencies = 10
+            assert add.n_basis_funcs == 20 + add.basis1.n_basis_funcs
 
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
@@ -5060,16 +5092,28 @@ class TestMultiplicativeBasis(CombinedBasis):
             basis_b, (HistoryConv, IdentityEval, CustomBasis)
         ):
             return
-        # test attributes are not related
-        basis_a.n_basis_funcs = 10
-        basis_b.n_basis_funcs = 10
-        assert mul.basis1.n_basis_funcs == n_basis_a
-        assert mul.basis2.n_basis_funcs == n_basis_b
 
-        mul.basis1.n_basis_funcs = 6
-        mul.basis2.n_basis_funcs = 6
-        assert basis_a.n_basis_funcs == 10
-        assert basis_b.n_basis_funcs == 10
+        if issubclass(type(mul.basis1), basis.FourierBasis):
+            basis_a.n_frequencies = 10
+            assert mul.basis1.n_frequencies != 10
+            mul.basis1.n_frequencies = 6
+            assert basis_a.n_frequencies == 10
+        else:
+            basis_a.n_basis_funcs = 10
+            assert mul.basis1.n_basis_funcs == n_basis_a
+            mul.basis1.n_basis_funcs = 6
+            assert basis_a.n_basis_funcs == 10
+
+        if issubclass(type(mul.basis2), basis.FourierBasis):
+            basis_b.n_frequencies = 10
+            assert mul.basis2.n_frequencies != 10
+            mul.basis1.n_frequencies = 6
+            assert basis_b.n_frequencies == 10
+        else:
+            basis_b.n_basis_funcs = 10
+            assert mul.basis2.n_basis_funcs != 10
+            mul.basis2.n_basis_funcs = 6
+            assert basis_b.n_basis_funcs == 10
 
     @pytest.mark.parametrize(
         "basis_a",
@@ -5102,13 +5146,23 @@ class TestMultiplicativeBasis(CombinedBasis):
         )
 
         mul = basis_a * basis_b
-        if not isinstance(mul.basis1, (HistoryConv, IdentityEval, CustomBasis)):
+        if not isinstance(
+            mul.basis1, (basis.FourierBasis, HistoryConv, IdentityEval, CustomBasis)
+        ):
             mul.basis1.n_basis_funcs = 10
-            assert mul.n_basis_funcs == 10 * n_basis_b
-        if not isinstance(mul.basis2, (HistoryConv, IdentityEval, CustomBasis)):
+            assert mul.n_basis_funcs == 10 * mul.basis2.n_basis_funcs
+        elif isinstance(mul.basis1, basis.FourierBasis):
+            mul.basis1.n_frequencies = 10
+            assert mul.n_basis_funcs == 20 * mul.basis2.n_basis_funcs
+        if not isinstance(
+            mul.basis2, (basis.FourierBasis, HistoryConv, IdentityEval, CustomBasis)
+        ):
             mul.basis2.n_basis_funcs = 10
             mul.basis2.n_basis_funcs = 10
             assert mul.n_basis_funcs == 10 * mul.basis1.n_basis_funcs
+        elif isinstance(mul.basis2, basis.FourierBasis):
+            mul.basis2.n_frequencies = 10
+            assert mul.n_basis_funcs == 20 * mul.basis1.n_basis_funcs
 
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
@@ -6230,6 +6284,31 @@ def test_split_feature_axis(
 
     bas = bas1_instance + bas2_instance
     bas.set_input_shape(np.zeros((1, 2)), np.zeros((1, 3)))
+
+    # reset n basis (fourier basis will be double the original value)
+    if isinstance(bas1_instance, basis.FourierBasis) or isinstance(
+        bas2_instance, basis.FourierBasis
+    ):
+        feature_axis_len = int(
+            sum(bas._input_shape_product * np.array([b.n_basis_funcs for b in bas]))
+        )
+        # incorrect dim if raises
+        delta = 1 - int(isinstance(expectation, does_not_raise))
+        ax = axis if axis >= 0 else x.ndim + axis
+        x = np.ones((*x.shape[:ax], feature_axis_len - delta, *x.shape[ax + 1 :]))
+        exp_shapes = [
+            (
+                *exp_shapes[0][: ax + 1],
+                bas1_instance.n_basis_funcs,
+                *exp_shapes[0][ax + 2 :],
+            ),
+            (
+                *exp_shapes[1][: ax + 1],
+                bas2_instance.n_basis_funcs,
+                *exp_shapes[1][ax + 2 :],
+            ),
+        ]
+
     with expectation:
         out = bas.split_by_feature(x, axis=axis)
         for i, itm in enumerate(out.items()):

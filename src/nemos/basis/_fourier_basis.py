@@ -61,7 +61,7 @@ class FourierBasis(Basis, AtomicBasisMixin, abc.ABC):
         self,
         sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor,
     ) -> FeatureMatrix:
-        """Generate basis functions with given samples.
+        """Evaluate the Fourier basis at the sample points.
 
         Parameters
         ----------
