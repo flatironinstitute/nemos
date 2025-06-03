@@ -507,6 +507,7 @@ def test_composite_split_by_feature(composite_op, input_shape_1, input_shape_2):
         basis.MSplineConv,
         basis.OrthExponentialConv,
         basis.HistoryConv,
+        basis.FourierConv,
     ],
 )
 class TestConvBasis:
@@ -528,6 +529,8 @@ class TestConvBasis:
             == bas2.__dict__.pop("decay_rates", True)
         )
         f1, f2 = bas.__dict__.pop("_funcs", [True]), bas2.__dict__.pop("_funcs", [True])
+        assert all(fi == fj for fi, fj in zip(f1, f2))
+        f1, f2 = bas.__dict__.pop("_frequencies", [True]), bas2.__dict__.pop("_frequencies", [True])
         assert all(fi == fj for fi, fj in zip(f1, f2))
         assert bas.__dict__ == bas2.__dict__
 
@@ -679,6 +682,7 @@ class TestConvBasis:
             enforce_decay_to_zero=enforce_decay,
             order=order,
             width=width,
+            n_frequencies=5,
         )
 
         # figure out which kwargs needs to be removed
@@ -722,7 +726,7 @@ class TestConvBasis:
         ],
     )
     def test_vmin_vmax_mode_conv(self, bounds, samples, exception, cls):
-        extra_args = {"n_basis_funcs": 5}
+        extra_args = {key: 5 for key in ["n_basis_funcs", "n_frequencies"] if key in cls._get_param_names()}
         if cls == HistoryConv:
             extra_args = {}
         with exception:
@@ -765,15 +769,14 @@ class TestConvBasis:
             window_size=30,
             **extra_decay_rates(cls, n_basis),
         )
+        if isinstance(bas, FourierConv):
+            n_basis = bas.n_basis_funcs
         bas._set_kernel()
         assert bas.kernel_.shape == (30, n_basis)
 
     def test_set_window_size(self, cls):
-        kwargs = (
-            {"window_size": 10, "n_basis_funcs": 10}
-            if cls != HistoryConv
-            else {"window_size": 10}
-        )
+        kwargs = {key: 10 for key in ["n_basis_funcs", "n_frequencies"] if key in cls._get_param_names()}
+        kwargs.update({"window_size": 10})
 
         with does_not_raise():
             cls(**kwargs, **extra_decay_rates(cls, 10))
@@ -823,7 +826,7 @@ class TestConvBasis:
         ],
     )
     def test_init_window_size(self, ws, expectation, cls):
-        extra = dict(n_basis_funcs=5) if cls != HistoryConv else {}
+        extra = {key: 5 for key in ["n_basis_funcs", "n_frequencies"] if key in cls._get_param_names()}
         with expectation:
             cls(**extra, window_size=ws, **extra_decay_rates(cls, 5))
 
