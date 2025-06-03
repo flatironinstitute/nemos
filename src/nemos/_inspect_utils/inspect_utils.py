@@ -1,6 +1,9 @@
 import abc
+import functools
 import inspect
-from typing import List, Tuple
+from typing import Any, Callable, List, Tuple
+
+import numpy as np
 
 
 def reimplements_method(
@@ -23,7 +26,6 @@ def reimplements_method(
     bool
         True if the method is defined in the subclass and not inherited from the base class, False otherwise.
     """
-
     subclass_method = getattr(class_obj, method_name, None)
     superclass_method = getattr(base_class_obj, method_name, None)
     return subclass_method != superclass_method
@@ -245,3 +247,70 @@ def trim_kwargs(cls: type, kwargs: dict, class_specific_params: dict):
         for key, value in kwargs.items()
         if key in class_specific_params[cls.__name__]
     }
+
+
+def count_params_by_kind(func: Callable, kind: set[inspect.Parameter.kind]):
+    """Count how many parameters of the callable are of the desired kind.
+
+    In a callable definition, the parameter kind is one of the following:
+
+    - POSITIONAL_ONLY: A parameter that can only be specified positionally
+      (i.e., it cannot be passed as a keyword argument).
+
+    - POSITIONAL_OR_KEYWORD: A parameter that can be passed either positionally or as a keyword argument.
+
+    - KEYWORD_ONLY: A parameter that must be passed as a keyword argument
+      (appears after `*args` in function signatures).
+
+    - VAR_POSITIONAL: A variable-length positional argument (`*args`),
+      which collects extra positional arguments.
+
+    - VAR_KEYWORD: A variable-length keyword argument (`**kwargs`),
+      which collects extra keyword arguments.
+    """
+    sig = inspect.signature(func)
+    params = sig.parameters.values()
+    return sum(
+        1 for p in params if p.kind in kind and p.default == inspect.Parameter.empty
+    )
+
+
+def count_positional_and_var_args_ufunc(func) -> Tuple[int, int]:
+    """Count how many positional and variable args ufunc.
+
+    Note that numpy ufunc are implemented in C directly. Luckily, they all the same signature,
+    all positional args and no variable args, and store the number of args as an attribute.
+    """
+    func = unwrap_func(func)
+    n_pos = func.nin if hasattr(func, "nin") else func.func.nin
+    n_partial = 0 if not hasattr(func, "args") else len(func.args) + len(func.keywords)
+    return n_pos - n_partial, 0
+
+
+def unwrap_func(func: Any) -> Any:
+    if hasattr(func, "__wrapped__"):
+        return unwrap_func(func.__wrapped__)
+    return func
+
+
+def is_ufunc(func: Any) -> bool:
+    """Check if a function or is ufunc or a partial ufunc."""
+    func = unwrap_func(func)
+    if isinstance(func, functools.partial):
+        return isinstance(func.func, np.ufunc)
+    return isinstance(func, np.ufunc)
+
+
+def count_positional_and_var_args(func: Callable):
+    """Count the positional arguments of a callable."""
+    if is_ufunc(func):
+        return count_positional_and_var_args_ufunc(func)
+
+    num_positional_args = count_params_by_kind(
+        func,
+        {inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD},
+    )
+    num_var_args = count_params_by_kind(
+        func, {inspect.Parameter.VAR_KEYWORD, inspect.Parameter.VAR_POSITIONAL}
+    )
+    return num_positional_args, num_var_args

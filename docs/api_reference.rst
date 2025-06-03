@@ -99,6 +99,19 @@ These classes are the building blocks for the concrete basis classes.
     AdditiveBasis
     MultiplicativeBasis
 
+**Custom defined Basis:**
+
+Define a fully functional basis form a list of functions.
+
+.. currentmodule:: nemos.basis._custom_basis
+
+.. autosummary::
+    :toctree: generated/_custom_basis
+    :recursive:
+    :nosignatures:
+
+    CustomBasis
+
 **Basis As ``scikit-learn`` Tranformers:**
 
 .. currentmodule:: nemos.basis._transformer_basis
@@ -126,6 +139,7 @@ Statistical models to describe the distribution of neural responses or other pre
     Observations
     PoissonObservations
     GammaObservations
+    BernoulliObservations
 
 .. _regularizers:
 
@@ -194,7 +208,7 @@ solutions.
 
 The ``nemos.pytrees.FeaturePytree`` class
 -----------------------------------------
-Class for storing the input arrays in a dictionary. Keys are usually variable names. 
+Class for storing the input arrays in a dictionary. Keys are usually variable names.
 These objects can be provided as input to nemos GLM methods.
 
 .. currentmodule:: nemos.pytrees

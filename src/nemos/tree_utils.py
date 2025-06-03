@@ -203,5 +203,13 @@ def tree_l2_norm(tree_x, squared=False):
 
 
 def tree_zeros_like(tree_x):
-    """Creates an all-zero tree with the same structure as tree_x."""
+    """Create an all-zero tree with the same structure as tree_x."""
     return jax.tree_util.tree_map(jnp.zeros_like, tree_x)
+
+
+def has_matching_axis_pytree(*trees: Any, axis: int = 0):
+    """Check if an arbitrary number of trees have matching axis length."""
+    ax_lengths = {
+        xi.shape[axis] for tree in trees for xi in jax.tree_util.tree_leaves(tree)
+    }
+    return len(ax_lengths) == 1

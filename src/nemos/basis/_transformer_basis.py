@@ -7,12 +7,19 @@ from typing import TYPE_CHECKING, Generator
 import numpy as np
 
 from ..typing import FeatureMatrix
+from ._composition_utils import (
+    _iterate_over_components,
+    infer_input_dimensionality,
+    is_basis_like,
+)
 
 if TYPE_CHECKING:
     from ._basis import Basis
 
 
 def transformer_chaining(func):
+    """Apply chainable methods and return self."""
+
     @wraps(func)
     def wrapper(self, *args, **kwargs):
         # Call the wrapped function and capture its return value
@@ -75,15 +82,55 @@ class TransformerBasis:
     """
 
     _chainable_methods = (
-        "set_kernel",
+        "_set_kernel",
         "set_input_shape",
         "_set_input_independent_states",
         "setup_basis",
     )
 
     def __init__(self, basis: Basis):
-        self.basis = copy.deepcopy(basis)
         self._wrapped_methods = {}  # Cache for wrapped methods
+        self._basis = None
+        self.basis = copy.deepcopy(basis)
+        self.basis._parent = None
+
+    @property
+    def basis(self):
+        """Return the wrapped basis."""
+        return self._basis
+
+    @basis.setter
+    def basis(self, basis):
+        if not is_basis_like(basis, sklearn_compatibility=True):
+            missing_attrs = [
+                attr
+                for attr in ("get_params", "set_params", "compute_features")
+                if not hasattr(basis, attr)
+            ]
+            raise TypeError(
+                "TransformerBasis accepts only object implementing `get_params`, `set_params`, and `compute_features`."
+                f"\nMissing methods: {missing_attrs}."
+            )
+        self._assign_input_shape(basis)
+        self._basis = basis
+
+    @staticmethod
+    def _assign_input_shape(basis):
+        # iterate over atomic or custom components
+        default_shape = []
+        for bas in _iterate_over_components(basis):
+            ishape = getattr(bas, "input_shape", None)
+            # handles the case of a multi-dim basis with set shape
+            if isinstance(ishape, list):
+                default_shape.extend(ishape)
+            # handles the case of a 1dim basis with set shape
+            elif ishape is not None:
+                default_shape.append(ishape)
+            # handles custom or 1dim with no set shape
+            else:
+                default_shape.extend([()] * infer_input_dimensionality(bas))
+        basis.set_input_shape(*default_shape)
+        return basis
 
     @staticmethod
     def _check_initialized(basis):
@@ -159,7 +206,9 @@ class TransformerBasis:
         """
         self._check_initialized(self.basis)
         self._check_input(X, y)
-        self.basis.setup_basis(*self._unpack_inputs(X))
+        setup_basis = getattr(self.basis, "setup_basis", None)
+        if setup_basis:
+            setup_basis(*self._unpack_inputs(X))
         return self
 
     def transform(self, X: FeatureMatrix, y=None) -> FeatureMatrix:
@@ -203,7 +252,7 @@ class TransformerBasis:
         self._check_input(X, y)
         # transpose does not work with pynapple
         # can't use func(*X.T) to unwrap
-        return self.basis._compute_features(*self._unpack_inputs(X))
+        return self.basis.compute_features(*self._unpack_inputs(X))
 
     def fit_transform(self, X: FeatureMatrix, y=None) -> FeatureMatrix:
         """
@@ -254,7 +303,7 @@ class TransformerBasis:
         # returning the cached wrapped methods would create
         # a circular binding of the state to self (i.e. infinite recursion when
         # unpickling).
-        return {"basis": self.basis}
+        return {"basis": self._basis}
 
     def __setstate__(self, state):
         """
@@ -266,7 +315,7 @@ class TransformerBasis:
         See https://docs.python.org/3/library/pickle.html#object.__setstate__
         and https://docs.python.org/3/library/pickle.html#pickle-state
         """
-        self.basis = state["basis"]
+        self._basis = state["basis"]
         self._wrapped_methods = {}  # Reinitialize the cache
 
     def __getattr__(self, name: str):
@@ -291,11 +340,11 @@ class TransformerBasis:
         if name in self._wrapped_methods:
             return self._wrapped_methods[name]
 
-        if not hasattr(self.basis, name) or name == "to_transformer":
+        if not hasattr(self._basis, name) or name == "to_transformer":
             raise AttributeError(f"'TransformerBasis' object has no attribute '{name}'")
 
         # Get the original attribute from the basis
-        attr = getattr(self.basis, name)
+        attr = getattr(self._basis, name)
 
         # If the attribute is a callable method, wrap it dynamically
         if name in self._chainable_methods:
@@ -337,7 +386,7 @@ class TransformerBasis:
         ValueError('Only setting basis or existing attributes of basis is allowed. Attempt to set `rand_atrr`.')
         """
         # allow self.basis = basis and other attrs of self to be retrievable
-        if name in ["basis", "_wrapped_methods"]:
+        if name in ["basis", "_wrapped_methods", "_basis"]:
             super().__setattr__(name, value)
         # allow changing existing attributes of self.basis
         elif hasattr(self.basis, name):
@@ -348,6 +397,10 @@ class TransformerBasis:
                 f"Only setting basis or existing attributes of basis is allowed. Attempt to set `{name}`."
             )
 
+    def __getitem__(self, name: str):
+        """Get the basis from label and wrap into a transformer."""
+        return self.__class__(self.basis.__getitem__(name))
+
     def __sklearn_clone__(self) -> TransformerBasis:
         """
         Customize how TransformerBasis objects are cloned when used with sklearn.model_selection.
@@ -357,10 +410,16 @@ class TransformerBasis:
 
         For more info: https://scikit-learn.org/stable/developers/develop.html#cloning
         """
-        cloned_obj = TransformerBasis(self.basis.__sklearn_clone__())
+        cloned = (
+            self.basis.__sklearn_clone__()
+            if hasattr(self.basis, "__sklearn_clone__")
+            else copy.deepcopy(self.basis)
+        )
+        cloned_obj = TransformerBasis(cloned)
         return cloned_obj
 
     def __repr__(self):
+        """Repr for Transformer wrapped basis."""
         return f"Transformer({self.basis})"
 
     def set_params(self, **parameters) -> TransformerBasis:
@@ -412,7 +471,7 @@ class TransformerBasis:
         unique_attrs.discard("to_transformer")
         return list(unique_attrs)
 
-    def __add__(self, other: TransformerBasis) -> TransformerBasis:
+    def __add__(self, other: TransformerBasis | Basis) -> TransformerBasis:
         """
         Add two TransformerBasis objects.
 
@@ -426,9 +485,14 @@ class TransformerBasis:
         : TransformerBasis
             The resulting Basis object.
         """
-        return TransformerBasis(self.basis + other.basis)
+        add = getattr(other, "basis", other)
+        return TransformerBasis(self.basis + add)
 
-    def __mul__(self, other: TransformerBasis) -> TransformerBasis:
+    def __rmul__(self, other: TransformerBasis | Basis | int) -> TransformerBasis:
+        """Right multiplication operator for basis."""
+        return self.__mul__(other)
+
+    def __mul__(self, other: TransformerBasis | Basis | int) -> TransformerBasis:
         """
         Multiply two TransformerBasis objects.
 
@@ -442,7 +506,8 @@ class TransformerBasis:
         :
             The resulting Basis object.
         """
-        return TransformerBasis(self.basis * other.basis)
+        mul = getattr(other, "basis", other)
+        return TransformerBasis(self.basis * mul)
 
     def __pow__(self, exponent: int) -> TransformerBasis:
         """Exponentiation of a TransformerBasis object.

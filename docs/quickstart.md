@@ -18,23 +18,23 @@ hide:
 ## **Overview**
 
 NeMoS is a neural modeling software package designed to model neural spiking activity and other time-series data
- powered by [JAX](https://jax.readthedocs.io/en/latest/). 
+ powered by [JAX](https://jax.readthedocs.io/en/latest/).
 
 At its core, NeMoS consists of two primary modules: the **`glm`** and the **`basis`** module:
 
-The **`glm`** module implements a Generalized Linear Model (GLM) to map features to neural activity, such as 
-spike counts or calcium transients. It supports learning GLM weights, evaluating model performance, and exploring 
+The **`glm`** module implements a Generalized Linear Model (GLM) to map features to neural activity, such as
+spike counts or calcium transients. It supports learning GLM weights, evaluating model performance, and exploring
 model behavior on new inputs.
 
 
-The **`basis`** module focuses on designing model features (inputs) for the GLM. 
-It includes a suite of composable feature constructors that accept time-series data, allowing users to model a wide 
+The **`basis`** module focuses on designing model features (inputs) for the GLM.
+It includes a suite of composable feature constructors that accept time-series data, allowing users to model a wide
 range of observed variables—such as stimuli, head direction, position, or spike counts— as inputs to the GLM.
 
 
 ## **Generalized Linear Model**
 
-NeMoS provides two implementations of the GLM: one for fitting a single neuron, and one for fitting a  neural population simultaneously. 
+NeMoS provides two implementations of the GLM: one for fitting a single neuron, and one for fitting a  neural population simultaneously.
 
 ### **Single Neuron GLM**
 
@@ -49,7 +49,7 @@ model = nmo.glm.GLM()
 
 ```
 
-The coefficients can be learned by invoking the `fit` method of `GLM`. The method requires a design 
+The coefficients can be learned by invoking the `fit` method of `GLM`. The method requires a design
 matrix of shape `(num_samples, num_features)`, and the output neural activity of shape `(num_samples, )`.
 
 ```{code-cell} ipython3
@@ -146,15 +146,15 @@ print(f"Model intercept shape: {population_model.intercept_.shape}")
 
 The `basis` module includes objects that perform two types of transformations on the inputs:
 
-1. **Non-linear Mapping:** This process transforms the input data through a non-linear function, 
-   allowing it to capture complex, non-linear relationships between inputs and neuronal firing rates. 
-   Importantly, this transformation preserves the properties that makes GLM easy to fit and guarantee a 
+1. **Non-linear Mapping:** This process transforms the input data through a non-linear function,
+   allowing it to capture complex, non-linear relationships between inputs and neuronal firing rates.
+   Importantly, this transformation preserves the properties that makes GLM easy to fit and guarantee a
    single optimal solution (e.g. convexity).
 
-2. **Convolution:** This applies a convolution of the input data with a bank of filters, designed to 
-   capture linear temporal effects. This transformation is particularly useful when analyzing data with 
+2. **Convolution:** This applies a convolution of the input data with a bank of filters, designed to
+   capture linear temporal effects. This transformation is particularly useful when analyzing data with
    inherent time dependencies or when the temporal dynamics of the input are significant.
-    Both transformations produce a vector of features `X` that changes over time, with a shape 
+    Both transformations produce a vector of features `X` that changes over time, with a shape
     of `(n_time_points, n_features)`.
 
 ### **Non-linear Mapping**
@@ -164,7 +164,7 @@ The `basis` module includes objects that perform two types of transformations on
     <figcaption><strong>Figure 1:</strong> Basis as non-linear mappings. The figure demonstrate the use of basis functions to create complex non-linear features for a GLM.</figcaption>
 </figure>
 
-Non-linear mapping is the default mode of operation of any `basis` object. To instantiate a basis for non-linear mapping, 
+Non-linear mapping is the default mode of operation of any `basis` object. To instantiate a basis for non-linear mapping,
 you need to specify the number of basis functions. For some `basis` objects, additional arguments may be required (see the [API Reference](nemos_basis) for detailed information).
 
 ```{code-cell}
@@ -176,8 +176,8 @@ basis = nmo.basis.RaisedCosineLinearEval(n_basis_funcs)
 
 ```
 
-Once the basis is instantiated, you can apply it to your input data using the `compute_features` method. 
-This method takes an input array of shape `(n_samples, )` and transforms it into a two-dimensional array of 
+Once the basis is instantiated, you can apply it to your input data using the `compute_features` method.
+This method takes an input array of shape `(n_samples, )` and transforms it into a two-dimensional array of
 shape `(n_samples, n_basis_funcs)`, where each column represents a feature generated by the non-linear mapping.
 
 ```{code-cell}
@@ -201,8 +201,8 @@ X.shape
 
 </figure>
 
-If you want to convolve a bank of basis functions with an input you must set the mode of operation of a basis object to 
-`"conv"` and you must provide an integer `window_size` parameter, which defines the length of the filter bank in 
+If you want to convolve a bank of basis functions with an input you must set the mode of operation of a basis object to
+`"conv"` and you must provide an integer `window_size` parameter, which defines the length of the filter bank in
 number of sample points.
 
 ```{code-cell} ipython3
@@ -215,8 +215,8 @@ basis = nmo.basis.BSplineConv(n_basis_funcs, window_size=200)
 
 ```
 
-Once the basis is initialized, you can call `compute_features` on an input of shape `(n_samples, )` or 
-`(n_samples, n_signals)` to perform the convolution. The output will be a 2-dimensional array of shape 
+Once the basis is initialized, you can call `compute_features` on an input of shape `(n_samples, )` or
+`(n_samples, n_signals)` to perform the convolution. The output will be a 2-dimensional array of shape
 `(n_samples, n_basis_funcs)` or `(n_samples, n_basis_funcs * n_signals)` respectively.
 
 :::{admonition} Signal length and window size
@@ -238,7 +238,7 @@ X.shape
 x_multi = np.ones((500, 3))
 
 # convolve a multiple signals
-X_multi = basis.set_input_shape(3).compute_features(x_multi)
+X_multi = basis.compute_features(x_multi)
 X_multi.shape
 
 ```
@@ -265,6 +265,20 @@ glm = nmo.glm.GLM(observation_model=nmo.observation_models.GammaObservations())
 
 Take a look at our [tutorial](tutorial-calcium-imaging) for a detailed example.
 
+## **Binary Observations**
+
+
+NeMoS additionally supports a [Bernoulli observation model](nemos.observation_models.BernoulliObservations), which is useful for modeling binary observations, such as a binary choices or singular spikes. To use this observation model, set the `observation_model` argument during model initialization.
+
+
+```{code-cell} ipython3
+
+import nemos as nmo
+
+# set up a Bernoulli GLM for modeling binary observations
+glm = nmo.glm.GLM(observation_model=nmo.observation_models.BernoulliObservations())
+
+```
 
 ## **Regularization**
 
@@ -352,13 +366,13 @@ head_dir = data["ry"]
 counts = spikes[6].count(0.01, ep=head_dir.time_support)
 
 # down-sample head direction
-upsampled_head_dir = head_dir.bin_average(0.01)  
+upsampled_head_dir = head_dir.bin_average(0.01)
 
 # create your features
 X = nmo.basis.CyclicBSplineEval(10).compute_features(upsampled_head_dir)
 
 # add a neuron axis and fit model
-model = nmo.glm.GLM().fit(X, counts) 
+model = nmo.glm.GLM().fit(X, counts)
 
 ```
 
@@ -394,7 +408,7 @@ xlab = plt.xlabel("heading angle")
 ## **Compatibility with `scikit-learn`**
 
 
-[`scikit-learn`](https://scikit-learn.org/stable/) is a machine learning toolkit that offers advanced features like pipelines and cross-validation methods. 
+[`scikit-learn`](https://scikit-learn.org/stable/) is a machine learning toolkit that offers advanced features like pipelines and cross-validation methods.
 NeMoS takes advantage of these features, while still gaining the benefit of JAX's just-in-time compilation and GPU-acceleration!
 
 For example, if we would like to tune the critical hyper-parameter `regularizer_strength`, we  could easily run a `K-Fold` cross-validation[^1] using `scikit-learn`.

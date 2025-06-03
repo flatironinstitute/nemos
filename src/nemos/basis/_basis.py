@@ -3,11 +3,9 @@ from __future__ import annotations
 
 import abc
 import copy
-from collections import OrderedDict
 from functools import wraps
-from typing import Callable, Generator, Literal, Optional, Tuple, Union
+from typing import Callable, Generator, Optional, Tuple, Union
 
-import jax
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame, TsdTensor
@@ -15,31 +13,28 @@ from pynapple import Tsd, TsdFrame, TsdTensor
 from ..base_class import Base
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
-from ..utils import format_repr, row_wise_kron
+from ..utils import row_wise_kron
 from ..validation import check_fraction_valid_samples
-from ._basis_mixin import BasisTransformerMixin, CompositeBasisMixin
-
-
-def add_docstring(method_name, cls):
-    """Prepend super-class docstrings."""
-    attr = getattr(cls, method_name, None)
-    if attr is None:
-        raise AttributeError(f"{cls.__name__} has no attribute {method_name}!")
-    doc = attr.__doc__
-
-    # Decorator to add the docstring
-    def wrapper(func):
-        func.__doc__ = "\n".join([doc, func.__doc__])  # Combine docstrings
-        return func
-
-    return wrapper
+from ._basis_mixin import BasisMixin, BasisTransformerMixin, CompositeBasisMixin
+from ._check_basis import (
+    _check_input_dimensionality,
+    _check_transform_input,
+    _check_zero_samples,
+)
+from ._composition_utils import (
+    add_docstring,
+    is_basis_like,
+    multiply_basis_by_integer,
+    promote_to_transformer,
+    raise_basis_to_power,
+)
 
 
 def check_transform_input(func: Callable) -> Callable:
     """Check input before calling basis.
 
     This decorator allows to raise an exception that is more readable
-    when the wrong number of input is provided to _evaluate.
+    when the wrong number of input is provided to evaluate.
     """
 
     @wraps(func)
@@ -102,6 +97,35 @@ def min_max_rescale_samples(
     return sample_pts, scaling
 
 
+def get_equi_spaced_samples(
+    *n_samples, bounds: Optional[tuple[float, float]] = None
+) -> Generator[NDArray]:
+    """Get equi-spaced samples for all the input dimensions.
+
+    This will be used to evaluate the basis on a grid of
+    points derived by the samples.
+
+    Parameters
+    ----------
+    n_samples[0],...,n_samples[n]
+        The number of samples in each axis of the grid.
+    bounds:
+        The bounds for the linspace, if provided.
+
+    Returns
+    -------
+    :
+        A generator yielding numpy arrays of linspaces from 0 to 1 of sizes specified by ``n_samples``.
+    """
+    # handling of defaults when evaluating on a grid
+    # (i.e. when we cannot use max and min of samples)
+    if bounds is None:
+        mn, mx = 0, 1
+    else:
+        mn, mx = bounds
+    return (np.linspace(mn, mx, n_samples[k]) for k in range(len(n_samples)))
+
+
 class Basis(Base, abc.ABC, BasisTransformerMixin):
     """
     Abstract base class for defining basis functions for feature transformation.
@@ -110,21 +134,8 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
     often more compact or interpretable forms. This class provides a template for such
     transformations, with specific implementations defining the actual behavior.
 
-    Parameters
-    ----------
-    mode :
-        The mode of operation. 'eval' for evaluation at sample points,
-        'conv' for convolutional operation.
-    label :
-        The label of the basis, intended to be descriptive of the task variable being processed.
-        For example: velocity, position, spike_counts.
-
     Raises
     ------
-    ValueError:
-        If ``mode`` is not 'eval' or 'conv'.
-    ValueError:
-        If ``kwargs`` are not None and ``mode =="eval"``.
     ValueError:
         If ``kwargs`` include parameters not recognized or do not have
         default values in ``create_convolutional_predictor``.
@@ -134,45 +145,11 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
     def __init__(
         self,
-        mode: Literal["eval", "conv", "composite"] = "eval",
-        label: Optional[str] = None,
     ) -> None:
         self._n_input_dimensionality = getattr(self, "_n_input_dimensionality", 0)
 
-        self._mode = mode
-
-        if label is None:
-            self._label = self.__class__.__name__
-        else:
-            self._label = str(label)
-
         # specified only after inputs/input shapes are provided
         self._input_shape_product = getattr(self, "_input_shape_product", None)
-
-        # initialize parent to None. This should not end in "_" because it is
-        # a permanent property of a basis, defined at composite basis init
-        self._parent = None
-
-    @property
-    def n_output_features(self) -> int | None:
-        """
-        Number of features returned by the basis.
-
-        Notes
-        -----
-        The number of output features can be determined only when the number of inputs
-        provided to the basis is known. Therefore, before the first call to ``compute_features``,
-        this property will return ``None``. After that call, or after setting the input shape with
-        ``set_input_shape``, ``n_output_features`` will be available.
-        """
-        if self._input_shape_product is not None:
-            return self.n_basis_funcs * self._input_shape_product[0]
-        return None
-
-    @property
-    def label(self) -> str:
-        """Label for the basis."""
-        return self._label
 
     @property
     def n_basis_funcs(self):
@@ -188,11 +165,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         except ValueError as e:
             self._n_basis_funcs = orig_n_basis
             raise e
-
-    @property
-    def mode(self):
-        """Mode of operation, either ``"conv"`` or ``"eval"``."""
-        return self._mode
 
     @check_transform_input
     def compute_features(
@@ -216,8 +188,8 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         Returns
         -------
         :
-            Transformed features. In 'eval' mode, it corresponds to the basis functions
-            evaluated at the input samples. In 'conv' mode, it consists of convolved
+            Transformed features. In 'Eval' mode, it corresponds to the basis functions
+            evaluated at the input samples. In 'Conv' mode, it consists of convolved
             input samples with the basis functions. The output shape varies based on
             the subclass and mode.
 
@@ -226,10 +198,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         Subclasses should implement how to handle the transformation specific to their
         basis function types and operation modes.
         """
-        if self._input_shape_product is None:
-            self.set_input_shape(*xi)
-        self._check_input_shape_consistency(*xi)
-        self._set_input_independent_states()
+        self.setup_basis(*xi)
         return self._compute_features(*xi)
 
     @abc.abstractmethod
@@ -264,17 +233,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         pass
 
     @abc.abstractmethod
-    def _set_input_independent_states(self):
-        """
-        Compute all the basis states that do not depend on the input.
-
-        An example of such state is the kernel_ for Conv bases, which can be computed
-        without any input (it only depends on the basis type, the window size and the
-        number of basis elements).
-        """
-        pass
-
-    @abc.abstractmethod
     def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
         Set the expected input shape for the basis object.
@@ -288,7 +246,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         pass
 
     @abc.abstractmethod
-    def _evaluate(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
+    def evaluate(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
         """
         Abstract method to evaluate the basis functions at given points.
 
@@ -332,11 +290,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         # handling of defaults when evaluating on a grid
         # (i.e. when we cannot use max and min of samples)
         bounds = getattr(self, "bounds", None)
-        if bounds is None:
-            mn, mx = 0, 1
-        else:
-            mn, mx = bounds
-        return (np.linspace(mn, mx, n_samples[k]) for k in range(len(n_samples)))
+        return get_equi_spaced_samples(*n_samples, bounds=bounds)
 
     @support_pynapple(conv_type="numpy")
     def _check_transform_input(
@@ -357,25 +311,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             - At least one of the samples is empty.
 
         """
-        # check that the input is array-like (i.e., whether we can cast it to
-        # numeric arrays)
-        try:
-            # make sure array is at least 1d (so that we succeed when only
-            # passed a scalar)
-            xi = tuple(np.atleast_1d(np.asarray(x, dtype=float)) for x in xi)
-        # ValueError here surfaces the exception with e.g., `x=np.array["a", "b"])`
-        except (TypeError, ValueError):
-            raise TypeError("Input samples must be array-like of floats!")
-
-        # check for non-empty samples
-        if self._has_zero_samples(tuple(len(x) for x in xi)):
-            raise ValueError("All sample provided must be non empty.")
-
-        # checks on input and outputs
-        self._check_samples_consistency(*xi)
-        self._check_input_dimensionality(xi)
-
-        return xi
+        return _check_transform_input(self, *xi)
 
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.
@@ -388,74 +324,36 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         Returns
         -------
         X :
-           Array of shape (n_samples,) containing the equi-spaced sample
+           Array of shape ``(n_samples,)`` containing the equi-spaced sample
            points where we've evaluated the basis.
         basis_funcs :
            Evaluated exponentially decaying basis functions, numerically
-           orthogonalized, shape (n_samples, n_basis_funcs)
+           orthogonalized, shape ``(n_samples, n_basis_funcs)``
         """
-        self._check_input_dimensionality(n_samples)
+        _check_input_dimensionality(self, n_samples)
 
-        if self._has_zero_samples(n_samples):
-            raise ValueError("All sample counts provided must be greater than zero.")
+        _check_zero_samples(
+            n_samples,
+            err_message="All sample counts provided must be greater than zero.",
+        )
 
-        # get the samples
-        sample_tuple = self._get_samples(*n_samples)
+        # get the samples (can be re-implemented, by providing a _get_samples)
+        bounds = getattr(self, "bounds", None)
+        get_samples = getattr(
+            self, "_get_samples", lambda *x: get_equi_spaced_samples(*x, bounds=bounds)
+        )
+        sample_tuple = get_samples(*n_samples)
         Xs = np.meshgrid(*sample_tuple, indexing="ij")
 
         # evaluates the basis on a flat NDArray and reshape to match meshgrid output
-        Y = self._evaluate(*tuple(grid_axis.flatten() for grid_axis in Xs)).reshape(
+        Y = self.evaluate(*(grid_axis.flatten() for grid_axis in Xs)).reshape(
             (*n_samples, self.n_basis_funcs)
         )
 
         return *Xs, Y
 
-    @staticmethod
-    def _has_zero_samples(n_samples: Tuple[int, ...]) -> bool:
-        return any([n <= 0 for n in n_samples])
-
-    def _check_input_dimensionality(self, xi: Tuple) -> None:
-        """
-        Check that the number of inputs provided by the user matches the number of inputs required.
-
-        Parameters
-        ----------
-        xi[0], ..., xi[n] :
-            The input samples, shape (number of samples, ).
-
-        Raises
-        ------
-        ValueError
-            If the number of inputs doesn't match what the Basis object requires.
-        """
-        if len(xi) != self._n_input_dimensionality:
-            raise TypeError(
-                f"Input dimensionality mismatch. This basis evaluation requires {self._n_input_dimensionality} inputs, "
-                f"{len(xi)} inputs provided instead."
-            )
-
-    @staticmethod
-    def _check_samples_consistency(*xi: NDArray) -> None:
-        """
-        Check that each input provided to the Basis object has the same number of time points.
-
-        Parameters
-        ----------
-        xi[0], ..., xi[n] :
-            The input samples, shape (number of samples, ).
-
-        Raises
-        ------
-        ValueError
-            If the time point number is inconsistent between inputs.
-        """
-        sample_sizes = [sample.shape[0] for sample in xi]
-        if any(elem != sample_sizes[0] for elem in sample_sizes):
-            raise ValueError(
-                "Sample size mismatch. Input elements have inconsistent sample sizes."
-            )
-
-    def __add__(self, other: Basis) -> AdditiveBasis:
+    @promote_to_transformer
+    def __add__(self, other: BasisMixin) -> AdditiveBasis:
         """
         Add two Basis objects together.
 
@@ -471,7 +369,13 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         """
         return AdditiveBasis(self, other)
 
-    def __mul__(self, other: Basis) -> MultiplicativeBasis:
+    @promote_to_transformer
+    def __rmul__(self, other: BasisMixin | int):
+        """Right multiplication operator for basis."""
+        return self.__mul__(other)
+
+    @promote_to_transformer
+    def __mul__(self, other: BasisMixin | int) -> Basis:
         """
         Multiply two Basis objects together.
 
@@ -485,9 +389,17 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         :
             The resulting Basis object.
         """
+        if isinstance(other, int):
+            return multiply_basis_by_integer(self, other)
+
+        if not is_basis_like(other):
+            raise TypeError(
+                "Basis multiplicative factor should be a Basis object or a positive integer!"
+            )
         return MultiplicativeBasis(self, other)
 
-    def __pow__(self, exponent: int) -> MultiplicativeBasis:
+    @promote_to_transformer
+    def __pow__(self, exponent: int) -> BasisMixin:
         """Exponentiation of a Basis object.
 
         Define the power of a basis by repeatedly applying the method __multiply__.
@@ -510,213 +422,10 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         ValueError
             If the integer is zero or negative.
         """
-        if not isinstance(exponent, int):
-            raise TypeError("Exponent should be an integer!")
-
-        if exponent <= 0:
-            raise ValueError("Exponent should be a non-negative integer!")
-
-        result = self
-        for _ in range(exponent - 1):
-            result = result * self
-        return result
-
-    def __repr__(self):
-        return format_repr(self)
-
-    def _get_feature_slicing(
-        self,
-        n_inputs: Optional[tuple] = None,
-        start_slice: Optional[int] = None,
-        split_by_input: bool = True,
-    ) -> Tuple[OrderedDict, int]:
-        """
-        Calculate and return the slicing for features based on the input structure.
-
-        This method determines how to slice the features for different basis types.
-
-        Parameters
-        ----------
-        n_inputs :
-            The number of input basis for each component, by default it uses ``self._input_shape_product``.
-        start_slice :
-            The starting index for slicing, by default it starts from 0.
-        split_by_input :
-            Flag indicating whether to split the slicing by individual inputs or not.
-            If ``False``, a single slice is generated for all inputs.
-
-        Returns
-        -------
-        split_dict :
-            Dictionary with keys as labels and values as slices representing
-            the slicing for each input or additive component, if split_by_input equals to
-            True or False respectively.
-        start_slice :
-            The updated starting index after slicing.
-
-        See Also
-        --------
-        _get_default_slicing : Handles default slicing logic.
-        _merge_slicing_dicts : Merges multiple slicing dictionaries, handling keys conflicts.
-        """
-        # Set default values for start_slice if not provided
-        start_slice = start_slice or 0
-        # Handle the default case for non-additive basis types
-        # See overwritten method for recursion logic
-        split_dict, start_slice = self._get_default_slicing(
-            split_by_input=split_by_input, start_slice=start_slice
-        )
-
-        return split_dict, start_slice
-
-    @staticmethod
-    def _generate_unique_key(existing_dict: dict, key: str) -> str:
-        """Generate a unique key if there is a conflict."""
-        extra = 1
-        new_key = f"{key}-{extra}"
-        while new_key in existing_dict:
-            extra += 1
-            new_key = f"{key}-{extra}"
-        return new_key
-
-    def _get_default_slicing(
-        self, split_by_input: bool, start_slice: int
-    ) -> Tuple[OrderedDict, int]:
-        """Handle default slicing logic."""
-        if split_by_input:
-            # should we remove this option?
-            if self._input_shape_product[0] == 1 or isinstance(
-                self, MultiplicativeBasis
-            ):
-                split_dict = {
-                    self.label: slice(start_slice, start_slice + self.n_output_features)
-                }
-            else:
-                split_dict = {
-                    self.label: {
-                        f"{i}": slice(
-                            start_slice + i * self.n_basis_funcs,
-                            start_slice + (i + 1) * self.n_basis_funcs,
-                        )
-                        for i in range(self._input_shape_product[0])
-                    }
-                }
-        else:
-            split_dict = {
-                self.label: slice(start_slice, start_slice + self.n_output_features)
-            }
-        start_slice += self.n_output_features
-        return OrderedDict(split_dict), start_slice
-
-    def split_by_feature(
-        self,
-        x: NDArray,
-        axis: int = 1,
-    ):
-        r"""
-        Decompose an array along a specified axis into sub-arrays based on the number of expected inputs.
-
-        This function takes an array (e.g., a design matrix or model coefficients) and splits it along
-        a designated axis.
-
-        **How it works:**
-
-        - If the basis expects an input shape ``(n_samples, n_inputs)``, then the feature axis length will
-          be ``total_n_features = n_inputs * n_basis_funcs``. This axis is reshaped into dimensions
-          ``(n_inputs, n_basis_funcs)``.
-
-        - If the basis expects an input of shape ``(n_samples,)``, then the feature axis length will
-          be ``total_n_features = n_basis_funcs``. This axis is reshaped into ``(1, n_basis_funcs)``.
-
-        For example, if the input array ``x`` has shape ``(1, 2, total_n_features, 4, 5)``,
-        then after applying this method, it will be reshaped into ``(1, 2, n_inputs, n_basis_funcs, 4, 5)``.
-
-        The specified axis (``axis``) determines where the split occurs, and all other dimensions
-        remain unchanged. See the example section below for the most common use cases.
-
-        Parameters
-        ----------
-        x :
-            The input array to be split, representing concatenated features, coefficients,
-            or other data. The shape of ``x`` along the specified axis must match the total
-            number of features generated by the basis, i.e., ``self.n_output_features``.
-
-            **Examples:**
-
-            - For a design matrix: ``(n_samples, total_n_features)``
-
-            - For model coefficients: ``(total_n_features,)`` or ``(total_n_features, n_neurons)``.
-
-        axis : int, optional
-            The axis along which to split the features. Defaults to 1.
-            Use ``axis=1`` for design matrices (features along columns) and ``axis=0`` for
-            coefficient arrays (features along rows). All other dimensions are preserved.
-
-        Raises
-        ------
-        ValueError
-            If the shape of ``x`` along the specified axis does not match ``self.n_output_features``.
-
-        Returns
-        -------
-        dict
-            A dictionary where:
-
-            - **Key**: Label of the basis.
-            - **Value**: the array reshaped to: ``(..., n_inputs, n_basis_funcs, ...)``
-        """
-        # convert axis to positive ints
-        axis = axis if axis >= 0 else x.ndim + axis
-
-        if x.shape[axis] != self.n_output_features:
-            raise ValueError(
-                "`x.shape[axis]` does not match the expected number of features."
-                f" `x.shape[axis] == {x.shape[axis]}`, while the expected number "
-                f"of features is {self.n_output_features}"
-            )
-
-        # Get the slice dictionary based on predefined feature slicing
-        slice_dict = self._get_feature_slicing(split_by_input=False)[0]
-
-        # Helper function to build index tuples for each slice
-        def build_index_tuple(slice_obj, axis: int, ndim: int):
-            """Create an index tuple to apply a slice on the given axis."""
-            index = [slice(None)] * ndim  # Initialize index for all dimensions
-            index[axis] = slice_obj  # Replace the axis with the slice object
-            return tuple(index)
-
-        # Get the dict for slicing the correct axis
-        index_dict = jax.tree_util.tree_map(
-            lambda sl: build_index_tuple(sl, axis, x.ndim), slice_dict
-        )
-
-        # Custom leaf function to identify index tuples as leaves
-        def is_leaf(val):
-            # Check if it's a tuple, length matches ndim, and all elements are slice objects
-            if isinstance(val, tuple) and len(val) == x.ndim:
-                return all(isinstance(v, slice) for v in val)
-            return False
-
-        # Apply the slicing using the custom leaf function
-        out = jax.tree_util.tree_map(lambda sl: x[sl], index_dict, is_leaf=is_leaf)
-
-        # reshape the arrays to match input shapes
-        reshaped_out = dict()
-        for items, bas in zip(out.items(), self):
-            key, val = items
-            shape = list(val.shape)
-            reshaped_out[key] = val.reshape(
-                shape[:axis]
-                + [*(b for sh in bas._input_shape_ for b in sh), -1]
-                + shape[axis + 1 :]
-            )
-        return reshaped_out
-
-    def __iter__(self):
-        """Makes basis iterable. Re-implemented for additive."""
-        yield self
+        return raise_basis_to_power(self, exponent)
 
     def __len__(self):
+        """Return the number of additive basis."""
         return 1
 
 
@@ -743,33 +452,27 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
     >>> basis_2 = nmo.basis.RaisedCosineLinearEval(15)
     >>> additive_basis = basis_1 + basis_2
     >>> additive_basis
-    AdditiveBasis(
-        basis1=BSplineEval(n_basis_funcs=10, order=4),
-        basis2=RaisedCosineLinearEval(n_basis_funcs=15, width=2.0),
+    '(BSplineEval + RaisedCosineLinearEval)': AdditiveBasis(
+        ...
     )
     >>> # can add another basis to the AdditiveBasis object
     >>> X = np.random.normal(size=(30, 3))
     >>> basis_3 = nmo.basis.RaisedCosineLogEval(100)
     >>> additive_basis_2 = additive_basis + basis_3
     >>> additive_basis_2
-    AdditiveBasis(
-        basis1=AdditiveBasis(
-            basis1=BSplineEval(n_basis_funcs=10, order=4),
-            basis2=RaisedCosineLinearEval(n_basis_funcs=15, width=2.0),
-        ),
-        basis2=RaisedCosineLogEval(n_basis_funcs=100, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True),
+    '((BSplineEval + RaisedCosineLinearEval) + RaisedCosineLogEval)': AdditiveBasis(
+        ...
     )
     """
 
-    def __init__(self, basis1: Basis, basis2: Basis) -> None:
-        CompositeBasisMixin.__init__(self, basis1, basis2)
-        Basis.__init__(self, mode="composite")
-        self._label = "(" + basis1.label + " + " + basis2.label + ")"
+    def __init__(
+        self, basis1: BasisMixin, basis2: BasisMixin, label: Optional[str] = None
+    ) -> None:
+        CompositeBasisMixin.__init__(self, basis1, basis2, label=label)
+        Basis.__init__(self)
 
-        # number of input arrays that the basis receives
-        self._n_input_dimensionality = (
-            basis1._n_input_dimensionality + basis2._n_input_dimensionality
-        )
+    def _generate_label(self) -> str:
+        return "(" + self.basis1.label + " + " + self.basis2.label + ")"
 
     @property
     def n_basis_funcs(self):
@@ -783,6 +486,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
 
     @property
     def n_output_features(self):
+        """Return the number of output features."""
         out1 = getattr(self.basis1, "n_output_features", None)
         out2 = getattr(self.basis2, "n_output_features", None)
         if out1 is None or out2 is None:
@@ -813,14 +517,15 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         181
 
         """
+        # ruff: noqa: D205, D400
         return super().set_input_shape(*xi)
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def _evaluate(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
+    def evaluate(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
         """
-        Evaluate the basis at the input samples.
+        Evaluate the basis at the sample points.
 
         Parameters
         ----------
@@ -846,13 +551,13 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         >>> additive_basis = basis_1 + basis_2
 
         >>> # call the basis.
-        >>> out = additive_basis._evaluate(x, y)
+        >>> out = additive_basis.evaluate(x, y)
 
         """
         X = np.hstack(
             (
-                self.basis1._evaluate(*xi[: self.basis1._n_input_dimensionality]),
-                self.basis2._evaluate(*xi[self.basis1._n_input_dimensionality :]),
+                self.basis1.evaluate(*xi[: self.basis1._n_input_dimensionality]),
+                self.basis2.evaluate(*xi[self.basis1._n_input_dimensionality :]),
             )
         )
         return X
@@ -875,6 +580,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         (20, 17)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(*xi)
 
     def _compute_features(
@@ -898,14 +604,16 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         # the numpy conversion is important, there is some in-place
         # array modification in basis.
         hstack_pynapple = support_pynapple(conv_type="numpy")(np.hstack)
+        comp_feature_1 = getattr(
+            self.basis1, "_compute_features", self.basis1.compute_features
+        )
+        comp_feature_2 = getattr(
+            self.basis2, "_compute_features", self.basis2.compute_features
+        )
         X = hstack_pynapple(
             (
-                self.basis1._compute_features(
-                    *xi[: self.basis1._n_input_dimensionality]
-                ),
-                self.basis2._compute_features(
-                    *xi[self.basis1._n_input_dimensionality :]
-                ),
+                comp_feature_1(*xi[: self.basis1._n_input_dimensionality]),
+                comp_feature_2(*xi[self.basis1._n_input_dimensionality :]),
             ),
         )
         return X
@@ -1083,7 +791,6 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         self,
         n_inputs: Optional[tuple] = None,
         start_slice: Optional[int] = None,
-        split_by_input: bool = True,
     ) -> Tuple[dict, int]:
         """
         Calculate and return the slicing for features based on the input structure.
@@ -1096,16 +803,12 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
             The number of input basis for each component, by default it uses ``self._n_basis_input``.
         start_slice :
             The starting index for slicing, by default it starts from 0.
-        split_by_input :
-            Flag indicating whether to split the slicing by individual inputs or not.
-            If ``False``, a single slice is generated for all inputs.
 
         Returns
         -------
         split_dict :
             Dictionary with keys as labels and values as slices representing
-            the slicing for each input or additive component, if split_by_input equals to
-            True or False respectively.
+            the slicing for each additive component.
         start_slice :
             The updated starting index after slicing.
 
@@ -1123,25 +826,14 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         split_dict, start_slice = self.basis1._get_feature_slicing(
             n_inputs[: len(self.basis1._input_shape_product)],
             start_slice,
-            split_by_input=split_by_input,
         )
         sp2, start_slice = self.basis2._get_feature_slicing(
             n_inputs[len(self.basis1._input_shape_product) :],
             start_slice,
-            split_by_input=split_by_input,
         )
-        split_dict = self._merge_slicing_dicts(split_dict, sp2)
+        # label should always be unique, so update is safe
+        split_dict.update(sp2)
         return split_dict, start_slice
-
-    def _merge_slicing_dicts(self, dict1: dict, dict2: dict) -> dict:
-        """Merge two slicing dictionaries, handling key conflicts."""
-        for key, val in dict2.items():
-            if key in dict1:
-                new_key = self._generate_unique_key(dict1, key)
-                dict1[new_key] = val
-            else:
-                dict1[key] = val
-        return dict1
 
     def __iter__(self):
         """Iterate over components."""
@@ -1151,6 +843,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
             yield bas
 
     def __len__(self):
+        """Return the number of additive basis."""
         return len(self.basis1) + len(self.basis2)
 
 
@@ -1177,31 +870,28 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
     >>> basis_2 = nmo.basis.RaisedCosineLinearEval(15)
     >>> multiplicative_basis = basis_1 * basis_2
     >>> multiplicative_basis
-    MultiplicativeBasis(
-        basis1=BSplineEval(n_basis_funcs=10, order=4),
-        basis2=RaisedCosineLinearEval(n_basis_funcs=15, width=2.0),
+    '(BSplineEval * RaisedCosineLinearEval)': MultiplicativeBasis(
+        ...
     )
+
     >>> # Can multiply or add another basis to the AdditiveBasis object
     >>> # This will cause the number of output features of the result basis to grow accordingly
     >>> basis_3 = nmo.basis.RaisedCosineLogEval(100)
     >>> multiplicative_basis_2 = multiplicative_basis * basis_3
     >>> multiplicative_basis_2
-    MultiplicativeBasis(
-        basis1=MultiplicativeBasis(
-            basis1=BSplineEval(n_basis_funcs=10, order=4),
-            basis2=RaisedCosineLinearEval(n_basis_funcs=15, width=2.0),
-        ),
-        basis2=RaisedCosineLogEval(n_basis_funcs=100, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True),
+    '((BSplineEval * RaisedCosineLinearEval) * RaisedCosineLogEval)': MultiplicativeBasis(
+        ...
     )
     """
 
-    def __init__(self, basis1: Basis, basis2: Basis) -> None:
-        CompositeBasisMixin.__init__(self, basis1, basis2)
-        Basis.__init__(self, mode="composite")
-        self._label = "(" + basis1.label + " * " + basis2.label + ")"
-        self._n_input_dimensionality = (
-            basis1._n_input_dimensionality + basis2._n_input_dimensionality
-        )
+    def __init__(
+        self, basis1: BasisMixin, basis2: BasisMixin, label: Optional[str] = None
+    ) -> None:
+        CompositeBasisMixin.__init__(self, basis1, basis2, label=label)
+        Basis.__init__(self)
+
+    def _generate_label(self) -> str:
+        return "(" + self.basis1.label + " * " + self.basis2.label + ")"
 
     @property
     def n_basis_funcs(self):
@@ -1215,6 +905,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
 
     @property
     def n_output_features(self):
+        """Return the number of output features."""
         out1 = getattr(self.basis1, "n_output_features", None)
         out2 = getattr(self.basis2, "n_output_features", None)
         if out1 is None or out2 is None:
@@ -1224,9 +915,9 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def _evaluate(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
+    def evaluate(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
         """
-        Evaluate the basis at the input samples.
+        Evaluate the basis at the sample points.
 
         Parameters
         ----------
@@ -1245,12 +936,12 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         >>> import nemos as nmo
         >>> mult_basis = nmo.basis.BSplineEval(5) * nmo.basis.RaisedCosineLinearEval(6)
         >>> x, y = np.random.randn(2, 30)
-        >>> X = mult_basis._evaluate(x, y)
+        >>> X = mult_basis.evaluate(x, y)
         """
         X = np.asarray(
             row_wise_kron(
-                self.basis1._evaluate(*xi[: self.basis1._n_input_dimensionality]),
-                self.basis2._evaluate(*xi[self.basis1._n_input_dimensionality :]),
+                self.basis1.evaluate(*xi[: self.basis1._n_input_dimensionality]),
+                self.basis2.evaluate(*xi[self.basis1._n_input_dimensionality :]),
                 transpose=False,
             )
         )
@@ -1282,9 +973,15 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         >>> X = mult_basis.compute_features(x, y)
         """
         kron = support_pynapple(conv_type="numpy")(row_wise_kron)
+        comp_feature_1 = getattr(
+            self.basis1, "_compute_features", self.basis1.compute_features
+        )
+        comp_feature_2 = getattr(
+            self.basis2, "_compute_features", self.basis2.compute_features
+        )
         X = kron(
-            self.basis1._compute_features(*xi[: self.basis1._n_input_dimensionality]),
-            self.basis2._compute_features(*xi[self.basis1._n_input_dimensionality :]),
+            comp_feature_1(*xi[: self.basis1._n_input_dimensionality]),
+            comp_feature_2(*xi[self.basis1._n_input_dimensionality :]),
             transpose=False,
         )
         return X
@@ -1356,7 +1053,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         """
         return super().compute_features(*xi)
 
-    @add_docstring("split_by_feature", Basis)
+    @add_docstring("split_by_feature", BasisMixin)
     def split_by_feature(
         self,
         x: NDArray,
@@ -1382,6 +1079,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         (one_input * two_inputs): shape (20, 2, 30)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", CompositeBasisMixin)
@@ -1408,4 +1106,5 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         25200
 
         """
+        # ruff: noqa: D400, D205
         return super().set_input_shape(*xi)

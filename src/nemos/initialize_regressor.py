@@ -1,3 +1,5 @@
+"""Initialization of GLM parameters."""
+
 from typing import Callable
 
 import jax
@@ -9,6 +11,9 @@ from scipy.optimize import root_scalar
 INVERSE_FUNCS = {
     jnp.exp: jnp.log,
     jax.nn.softplus: lambda x: jnp.log(jnp.exp(x) - 1.0),
+    jax.scipy.special.expit: jax.scipy.special.logit,
+    jax.lax.logistic: jax.scipy.special.logit,
+    jax.scipy.stats.norm.cdf: jax.scipy.stats.norm.ppf,
 }
 
 
@@ -77,7 +82,6 @@ def initialize_intercept_matching_mean_rate(
         The initial intercept term, shape (n_neurons,).
 
     """
-
     # return inverse if analytical solution is available
     analytical_inv = INVERSE_FUNCS.get(inverse_link_function, None)
 

@@ -14,7 +14,8 @@ from numpy.typing import ArrayLike
 
 from . import observation_models as obs
 from . import tree_utils, validation
-from .base_regressor import BaseRegressor
+from ._observation_model_builder import instantiate_observation_model
+from .base_regressor import BaseRegressor, strip_metadata
 from .exceptions import NotFittedError
 from .initialize_regressor import initialize_intercept_matching_mean_rate
 from .pytrees import FeaturePytree
@@ -156,6 +157,20 @@ class GLM(BaseRegressor):
     Regularizer type:  <class 'nemos.regularizer.UnRegularized'>
     >>> print("Observation model: ", type(model.observation_model))
     Observation model:  <class 'nemos.observation_models.PoissonObservations'>
+    >>> # define a Gamma GLM providing a string
+    >>> nmo.glm.GLM(observation_model="Gamma")
+    GLM(
+        observation_model=GammaObservations(inverse_link_function=one_over_x),
+        regularizer=UnRegularized(),
+        solver_name='GradientDescent'
+    )
+    >>> # or equivalently, passing the observation model object
+    >>> nmo.glm.GLM(observation_model=nmo.observation_models.GammaObservations())
+    GLM(
+        observation_model=GammaObservations(inverse_link_function=one_over_x),
+        regularizer=UnRegularized(),
+        solver_name='GradientDescent'
+    )
     >>> # define GLM model of PoissonObservations model with soft-plus NL
     >>> observation_models = nmo.observation_models.PoissonObservations(jax.nn.softplus)
     >>> model = nmo.glm.GLM(observation_model=observation_models, solver_name="LBFGS")
@@ -167,8 +182,10 @@ class GLM(BaseRegressor):
 
     def __init__(
         self,
-        observation_model: obs.Observations = obs.PoissonObservations(),
-        regularizer: Union[str, Regularizer] = "UnRegularized",
+        # With python 3.11 Literal[*AVAILABLE_OBSERVATION_MODELS] will be allowed.
+        # Replace this manual list after dropping support for 3.10?
+        observation_model: obs.Observations | Literal["Poisson", "Gamma"] = "Poisson",
+        regularizer: Optional[Union[str, Regularizer]] = None,
         regularizer_strength: Optional[float] = None,
         solver_name: str = None,
         solver_kwargs: dict = None,
@@ -196,6 +213,8 @@ class GLM(BaseRegressor):
 
     @observation_model.setter
     def observation_model(self, observation: obs.Observations):
+        if isinstance(observation, str):
+            observation = instantiate_observation_model(observation)
         # check that the model has the required attributes
         # and that the attribute can be called
         obs.check_observation_model(observation)
@@ -963,6 +982,7 @@ class GLM(BaseRegressor):
 
         return init_params
 
+    @cast_to_jax
     def initialize_state(
         self,
         X: DESIGN_INPUT_TYPE,
@@ -1000,10 +1020,15 @@ class GLM(BaseRegressor):
         >>> opt_state = model.initialize_state(X, y, params)
         >>> # Now ready to run optimization or update steps
         """
-        if isinstance(X, FeaturePytree):
-            data = X.data
-        else:
-            data = X
+        # find non-nans
+        is_valid = tree_utils.get_valid_multitree(X, y)
+
+        # drop nans
+        X = jax.tree_util.tree_map(lambda x: x[is_valid], X)
+        y = jax.tree_util.tree_map(lambda x: x[is_valid], y)
+
+        # grab the data
+        data = X.data if isinstance(X, FeaturePytree) else X
 
         # check if mask has been set is using group lasso
         # if mask has not been set, use a single group as default
@@ -1124,10 +1149,11 @@ class GLM(BaseRegressor):
         return glm_compute_optimal_stepsize_configs(self)
 
     def __repr__(self):
+        """Representation of the GLM class."""
         return format_repr(self, multiline=True)
 
     def __sklearn_clone__(self) -> GLM:
-        """Clone the PopulationGLM, dropping feature_mask"""
+        """Clone the PopulationGLM, dropping feature_mask."""
         params = self.get_params(deep=False)
         klass = self.__class__(**params)
         return klass
@@ -1283,7 +1309,7 @@ class PopulationGLM(GLM):
 
     def __init__(
         self,
-        observation_model: obs.Observations = obs.PoissonObservations(),
+        observation_model: obs.Observations | Literal["Poisson", "Gamma"] = "Poisson",
         regularizer: Union[str, Regularizer] = "UnRegularized",
         regularizer_strength: Optional[float] = None,
         solver_name: str = None,
@@ -1299,6 +1325,7 @@ class PopulationGLM(GLM):
             solver_kwargs=solver_kwargs,
             **kwargs,
         )
+        self._metadata = None
         self.feature_mask = feature_mask
 
     @property
@@ -1465,7 +1492,6 @@ class PopulationGLM(GLM):
         self._check_mask(X, y, params)
 
     def _check_mask(self, X, y, params):
-
         if isinstance(X, FeaturePytree):
             data = X.data
         else:
@@ -1508,7 +1534,7 @@ class PopulationGLM(GLM):
             f"model coefficients have {jax.tree_util.tree_map(lambda x: x.shape[1], params[0])}  instead!",
         )
 
-    @cast_to_jax
+    @strip_metadata(arg_num=1)
     def fit(
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
@@ -1640,8 +1666,10 @@ class PopulationGLM(GLM):
         )
 
     def __sklearn_clone__(self) -> PopulationGLM:
-        """Clone the PopulationGLM, dropping feature_mask"""
+        """Clone the PopulationGLM, dropping feature_mask."""
         params = self.get_params(deep=False)
         params.pop("feature_mask")
         klass = self.__class__(**params)
+        # reattach metadata
+        klass._metadata = self._metadata
         return klass

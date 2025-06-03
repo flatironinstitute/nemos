@@ -68,7 +68,7 @@ the model parameters the regularizer finds for a convex problem such as the GLM 
 whether one minimizes the penalized loss directly and uses the proximal operator (i.e., when
 using `ProximalGradient`). In practice, this means you should test the result of the `ProximalGradient`
 optimization against that of either `GradientDescent` (if your regularization is differentiable) or
-`Nelder-Mead` from [`scipy.optimize.minimize`](https://docs.scipy.org/doc/scipy/reference/optimize.minimize-neldermead.html) 
+`Nelder-Mead` from [`scipy.optimize.minimize`](https://docs.scipy.org/doc/scipy/reference/optimize.minimize-neldermead.html)
 (or another non-gradient based method, if your regularization is non-differentiable). You can refer to NeMoS `test_lasso_convergence`
 from `tests/test_convergence.py` for a concrete example.
 :::

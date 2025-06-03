@@ -6,7 +6,7 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.16.4
 kernelspec:
-  display_name: Python 3
+  display_name: Python 3 (ipykernel)
   language: python
   name: python3
 ---
@@ -44,7 +44,7 @@ import pandas as pd
 from patsy import dmatrix
 import numpy as np
 
-# Example data 
+# Example data
 data = pd.DataFrame({
     'stimulus': ['Tri', 'Tri', 'Sq', 'Sq'],  # Stimulus
     'context': ['C', 'C', 'S', 'S']   # Context
@@ -57,7 +57,6 @@ counts = np.array([10, 5, 2, 0])
 You can use a `patsy` formula to structure the design matrix:
 
 ```{code-cell} ipython3
-
 # (a:b) indicates interaction between a and b
 formula = "stimulus + context + stimulus:context"
 ```
@@ -72,7 +71,7 @@ design_df
 ```
 
 The feature in the design matrix are 1-hot encoded categories.
-Note that `patsy` adds an intercept and drops the reference `Tri`. This is done by design to avoid perfect collinearity (the sum of the `Tri` and the `Sq` column would be equal to the intercept). 
+Note that `patsy` adds an intercept and drops the reference `Tri`. This is done by design to avoid perfect collinearity (the sum of the `Tri` and the `Sq` column would be equal to the intercept).
 
 NeMoS GLMs, however, implicitly specify an intercept term, making the first column of this dataframe redundant. Let's drop it.
 
@@ -92,15 +91,14 @@ In the design matrix:
 - Similarly, for `context`, columns `context[C]`, and `context[T.S]` is dropped to avoid collinearity.
 - The interaction term `stimulus[T.Sq]:context[T.S]` represents the combined effect of `stimulus = Sq` and `context = S`. Only one column is needed for the interaction, as the other combinations are implicitly represented by the reference categories (`Tri` and `C`).
 
-See [`patsy` docs](https://patsy.readthedocs.io/en/latest/formulas.html#the-formula-language) for more details. 
+See [`patsy` docs](https://patsy.readthedocs.io/en/latest/formulas.html#the-formula-language) for more details.
 :::
 
 
 ### Fit the GLM
 
-We are now ready to fit a GLM model using the 1-hot encoded categories as predictor. The model will learn a different 
-firing rate for each condition. 
-
+We are now ready to fit a GLM model using the 1-hot encoded categories as predictor. The model will learn a different
+firing rate for each condition.
 
 ```{code-cell} ipython3
 import nemos as nmo
@@ -108,9 +106,10 @@ import nemos as nmo
 # Fit the GLM model
 model = nmo.glm.GLM().fit(design_df, counts)
 ```
+
 :::{note}
 
-You can directly pass a [`pandas.DataFrame`](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html) to the 
+You can directly pass a [`pandas.DataFrame`](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html) to the
 `fit` method, as long as it can be internally converted to a floating-point array (that means, for example, that you can't have a column whose values are strings). The conversion is handled automatically, by calling `design_df.values`,
 so no additional steps are required on your part.
 :::
@@ -128,8 +127,16 @@ You can create a composite basis to combine predictors:
 
 ```{code-cell} ipython3
 # Identity basis combined with a B-spline basis
-bas = nmo.basis.IdentityEval() + nmo.basis.RaisedCosineLinearEval(3)
+bas = (
+    nmo.basis.IdentityEval(label="context") +
+    nmo.basis.RaisedCosineLinearEval(3, label="speed")
+)
+bas
+```
 
+And you can compute a design matrix including both predictors.
+
+```{code-cell} ipython3
 # Compute features
 X = bas.compute_features(design_df, speed)
 
@@ -152,7 +159,10 @@ To add the interaction To add the interaction between the `S` context and speed 
 
 ```{code-cell} ipython3
 # Interaction basis
-bas = nmo.basis.IdentityEval() * nmo.basis.RaisedCosineLinearEval(3)
+bas = (
+    nmo.basis.IdentityEval(label="context") *
+    nmo.basis.RaisedCosineLinearEval(3, label="speed")
+)
 
 # Compute features for interaction
 X2 = bas.compute_features(design_df["context[T.S]"], speed)
@@ -160,4 +170,3 @@ X2 = bas.compute_features(design_df["context[T.S]"], speed)
 # convert to DataFrame for readability
 pd.DataFrame(X2, columns=[f"context[T.S] * b{i}(speed)" for i in range(3)])
 ```
-

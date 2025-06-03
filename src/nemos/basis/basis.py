@@ -8,37 +8,13 @@ from typing import Optional, Tuple
 from numpy.typing import ArrayLike, NDArray
 
 from ..typing import FeatureMatrix
-from ._basis import add_docstring
 from ._basis_mixin import AtomicBasisMixin, ConvBasisMixin, EvalBasisMixin
+from ._composition_utils import add_docstring
 from ._decaying_exponential import OrthExponentialBasis
 from ._fourier_basis import FourierBasis
 from ._identity import HistoryBasis, IdentityBasis
 from ._raised_cosine_basis import RaisedCosineBasisLinear, RaisedCosineBasisLog
 from ._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis
-from ._transformer_basis import TransformerBasis
-
-__all__ = [
-    "IdentityEval",
-    "HistoryConv",
-    "MSplineEval",
-    "MSplineConv",
-    "BSplineEval",
-    "BSplineConv",
-    "CyclicBSplineEval",
-    "CyclicBSplineConv",
-    "RaisedCosineLinearEval",
-    "RaisedCosineLinearConv",
-    "RaisedCosineLogEval",
-    "RaisedCosineLogConv",
-    "OrthExponentialEval",
-    "OrthExponentialConv",
-    "TransformerBasis",
-    "FourierEval",
-]
-
-
-def __dir__() -> list[str]:
-    return __all__
 
 
 class BSplineEval(EvalBasisMixin, BSplineBasis):
@@ -94,7 +70,6 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
         BSplineBasis.__init__(
             self,
             n_basis_funcs,
-            mode="eval",
             order=order,
             label=label,
         )
@@ -139,6 +114,7 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("evaluate_on_grid", BSplineBasis)
@@ -146,24 +122,43 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
         """
         Examples
         --------
-        Evaluate and visualize 4 B-spline basis functions of order 3:
+        .. plot::
+            :include-source: True
+            :caption: B-Spline
 
+            >>> import numpy as np
+            >>> import matplotlib.pyplot as plt
+            >>> from nemos.basis import BSplineEval
+            >>> bspline_basis = BSplineEval(n_basis_funcs=4, order=3)
+            >>> sample_points, basis_values = bspline_basis.evaluate_on_grid(100)
+            >>> for i in range(4):
+            ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
+            >>> plt.title('B-Spline Basis Functions')
+            Text(0.5, 1.0, 'B-Spline Basis Functions')
+            >>> plt.xlabel('Domain')
+            Text(0.5, 0, 'Domain')
+            >>> plt.ylabel('Basis Function Value')
+            Text(0, 0.5, 'Basis Function Value')
+            >>> l = plt.legend()
+            >>> plt.show()
+        """
+        # ruff: noqa: D205, D400
+        return super().evaluate_on_grid(n_samples)
+
+    @add_docstring("evaluate", BSplineBasis)
+    def evaluate(self, sample_pts: NDArray) -> NDArray:
+        """
+        Examples
+        --------
         >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
         >>> from nemos.basis import BSplineEval
         >>> bspline_basis = BSplineEval(n_basis_funcs=4, order=3)
-        >>> sample_points, basis_values = bspline_basis.evaluate_on_grid(100)
-        >>> for i in range(4):
-        ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
-        >>> plt.title('B-Spline Basis Functions')
-        Text(0.5, 1.0, 'B-Spline Basis Functions')
-        >>> plt.xlabel('Domain')
-        Text(0.5, 0, 'Domain')
-        >>> plt.ylabel('Basis Function Value')
-        Text(0, 0.5, 'Basis Function Value')
-        >>> l = plt.legend()
+        >>> out = bspline_basis.evaluate(np.random.randn(100, 5, 2))
+        >>> out.shape
+        (100, 5, 2, 4)
         """
-        return super().evaluate_on_grid(n_samples)
+        # ruff: noqa: D205, D400
+        return super().evaluate(sample_pts)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
     def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
@@ -188,6 +183,7 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -248,7 +244,6 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
         BSplineBasis.__init__(
             self,
             n_basis_funcs,
-            mode="conv",
             order=order,
             label=label,
         )
@@ -273,6 +268,7 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
         two_inputs, shape (20, 2, 6)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("_compute_features", ConvBasisMixin)
@@ -292,6 +288,7 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("evaluate_on_grid", BSplineBasis)
@@ -299,24 +296,43 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
         """
         Examples
         --------
-        Evaluate and visualize 4 B-spline basis functions of order 3:
+        .. plot::
+            :include-source: True
+            :caption: B-Spline
 
-        >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
-        >>> from nemos.basis import BSplineConv
-        >>> bspline_basis = BSplineConv(n_basis_funcs=4, order=3, window_size=10)
-        >>> sample_points, basis_values = bspline_basis.evaluate_on_grid(100)
-        >>> for i in range(4):
-        ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
-        >>> plt.title('B-Spline Basis Functions')
-        Text(0.5, 1.0, 'B-Spline Basis Functions')
-        >>> plt.xlabel('Domain')
-        Text(0.5, 0, 'Domain')
-        >>> plt.ylabel('Basis Function Value')
-        Text(0, 0.5, 'Basis Function Value')
-        >>> l = plt.legend()
+            >>> import numpy as np
+            >>> import matplotlib.pyplot as plt
+            >>> from nemos.basis import BSplineConv
+            >>> bspline_basis = BSplineConv(n_basis_funcs=4, order=3, window_size=10)
+            >>> sample_points, basis_values = bspline_basis.evaluate_on_grid(100)
+            >>> for i in range(4):
+            ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
+            >>> plt.title('B-Spline Basis Functions')
+            Text(0.5, 1.0, 'B-Spline Basis Functions')
+            >>> plt.xlabel('Domain')
+            Text(0.5, 0, 'Domain')
+            >>> plt.ylabel('Basis Function Value')
+            Text(0, 0.5, 'Basis Function Value')
+            >>> l = plt.legend()
+            >>> plt.show()
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
+
+    @add_docstring("evaluate", BSplineBasis)
+    def evaluate(self, sample_pts: NDArray) -> NDArray:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import BSplineConv
+        >>> bspline_basis = BSplineConv(n_basis_funcs=4, window_size=20, order=3)
+        >>> out = bspline_basis.evaluate(np.random.randn(100, 5, 2))
+        >>> out.shape
+        (100, 5, 2, 4)
+        """
+        # ruff: noqa: D205, D400
+        return super().evaluate(sample_pts)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
     def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
@@ -341,6 +357,7 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -388,7 +405,6 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         CyclicBSplineBasis.__init__(
             self,
             n_basis_funcs,
-            mode="eval",
             order=order,
             label=label,
         )
@@ -413,6 +429,7 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         one_input, shape (20, 6)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("_compute_features", EvalBasisMixin)
@@ -432,6 +449,7 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("evaluate_on_grid", CyclicBSplineBasis)
@@ -441,22 +459,43 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         --------
         Evaluate and visualize 4 Cyclic B-spline basis functions of order 3:
 
+        .. plot::
+            :include-source: True
+            :caption: Cyclic B-Spline
+
+            >>> import numpy as np
+            >>> import matplotlib.pyplot as plt
+            >>> from nemos.basis import CyclicBSplineEval
+            >>> cbspline_basis = CyclicBSplineEval(n_basis_funcs=4, order=3)
+            >>> sample_points, basis_values = cbspline_basis.evaluate_on_grid(100)
+            >>> for i in range(4):
+            ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
+            >>> plt.title('Cyclic B-Spline Basis Functions')
+            Text(0.5, 1.0, 'Cyclic B-Spline Basis Functions')
+            >>> plt.xlabel('Domain')
+            Text(0.5, 0, 'Domain')
+            >>> plt.ylabel('Basis Function Value')
+            Text(0, 0.5, 'Basis Function Value')
+            >>> l = plt.legend()
+            >>> plt.show()
+        """
+        # ruff: noqa: D205, D400
+        return super().evaluate_on_grid(n_samples)
+
+    @add_docstring("evaluate", CyclicBSplineBasis)
+    def evaluate(self, sample_pts: NDArray) -> NDArray:
+        """
+        Examples
+        --------
         >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
         >>> from nemos.basis import CyclicBSplineEval
         >>> cbspline_basis = CyclicBSplineEval(n_basis_funcs=4, order=3)
-        >>> sample_points, basis_values = cbspline_basis.evaluate_on_grid(100)
-        >>> for i in range(4):
-        ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
-        >>> plt.title('Cyclic B-Spline Basis Functions')
-        Text(0.5, 1.0, 'Cyclic B-Spline Basis Functions')
-        >>> plt.xlabel('Domain')
-        Text(0.5, 0, 'Domain')
-        >>> plt.ylabel('Basis Function Value')
-        Text(0, 0.5, 'Basis Function Value')
-        >>> l = plt.legend()
+        >>> out = cbspline_basis.evaluate(np.random.randn(100, 5, 2))
+        >>> out.shape
+        (100, 5, 2, 4)
         """
-        return super().evaluate_on_grid(n_samples)
+        # ruff: noqa: D205, D400
+        return super().evaluate(sample_pts)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
     def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
@@ -481,6 +520,7 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -533,7 +573,6 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
         CyclicBSplineBasis.__init__(
             self,
             n_basis_funcs,
-            mode="conv",
             order=order,
             label=label,
         )
@@ -558,6 +597,7 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
         two_inputs, shape (20, 2, 6)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("_compute_features", ConvBasisMixin)
@@ -577,6 +617,7 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("evaluate_on_grid", CyclicBSplineBasis)
@@ -586,22 +627,43 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
         --------
         Evaluate and visualize 4 Cyclic B-spline basis functions of order 3:
 
-        >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
-        >>> from nemos.basis import CyclicBSplineConv
-        >>> cbspline_basis = CyclicBSplineConv(n_basis_funcs=4, order=3, window_size=10)
-        >>> sample_points, basis_values = cbspline_basis.evaluate_on_grid(100)
-        >>> for i in range(4):
-        ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
-        >>> plt.title('Cyclic B-Spline Basis Functions')
-        Text(0.5, 1.0, 'Cyclic B-Spline Basis Functions')
-        >>> plt.xlabel('Domain')
-        Text(0.5, 0, 'Domain')
-        >>> plt.ylabel('Basis Function Value')
-        Text(0, 0.5, 'Basis Function Value')
-        >>> l = plt.legend()
+        .. plot::
+            :include-source: True
+            :caption: Cyclic B-Spline
+
+            >>> import numpy as np
+            >>> import matplotlib.pyplot as plt
+            >>> from nemos.basis import CyclicBSplineConv
+            >>> cbspline_basis = CyclicBSplineConv(n_basis_funcs=4, order=3, window_size=10)
+            >>> sample_points, basis_values = cbspline_basis.evaluate_on_grid(100)
+            >>> for i in range(4):
+            ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
+            >>> plt.title('Cyclic B-Spline Basis Functions')
+            Text(0.5, 1.0, 'Cyclic B-Spline Basis Functions')
+            >>> plt.xlabel('Domain')
+            Text(0.5, 0, 'Domain')
+            >>> plt.ylabel('Basis Function Value')
+            Text(0, 0.5, 'Basis Function Value')
+            >>> l = plt.legend()
+            >>> plt.show()
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
+
+    @add_docstring("evaluate", CyclicBSplineBasis)
+    def evaluate(self, sample_pts: NDArray) -> NDArray:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import CyclicBSplineConv
+        >>> cbspline_basis = CyclicBSplineConv(n_basis_funcs=4, window_size=20, order=3)
+        >>> out = cbspline_basis.evaluate(np.random.randn(100, 5, 2))
+        >>> out.shape
+        (100, 5, 2, 4)
+        """
+        # ruff: noqa: D205, D400
+        return super().evaluate(sample_pts)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
     def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
@@ -626,6 +688,7 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -697,7 +760,6 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         MSplineBasis.__init__(
             self,
             n_basis_funcs,
-            mode="eval",
             order=order,
             label=label,
         )
@@ -722,6 +784,7 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         one_input, shape (20, 6)
 
         """
+        # ruff: noqa: D205, D400
         return MSplineBasis.split_by_feature(self, x, axis=axis)
 
     @add_docstring("_compute_features", EvalBasisMixin)
@@ -741,6 +804,7 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("evaluate_on_grid", MSplineBasis)
@@ -750,22 +814,42 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         --------
         Evaluate and visualize 4 M-spline basis functions of order 3:
 
+        .. plot::
+            :include-source: True
+            :caption: M-Spline
+            >>> import numpy as np
+            >>> import matplotlib.pyplot as plt
+            >>> from nemos.basis import MSplineEval
+            >>> mspline_basis = MSplineEval(n_basis_funcs=4, order=3)
+            >>> sample_points, basis_values = mspline_basis.evaluate_on_grid(100)
+            >>> for i in range(4):
+            ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
+            >>> plt.title('M-Spline Basis Functions')
+            Text(0.5, 1.0, 'M-Spline Basis Functions')
+            >>> plt.xlabel('Domain')
+            Text(0.5, 0, 'Domain')
+            >>> plt.ylabel('Basis Function Value')
+            Text(0, 0.5, 'Basis Function Value')
+            >>> l = plt.legend()
+            >>> plt.show()
+        """
+        # ruff: noqa: D205, D400
+        return super().evaluate_on_grid(n_samples)
+
+    @add_docstring("evaluate", MSplineBasis)
+    def evaluate(self, sample_pts: NDArray) -> NDArray:
+        """
+        Examples
+        --------
         >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
         >>> from nemos.basis import MSplineEval
         >>> mspline_basis = MSplineEval(n_basis_funcs=4, order=3)
-        >>> sample_points, basis_values = mspline_basis.evaluate_on_grid(100)
-        >>> for i in range(4):
-        ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
-        >>> plt.title('M-Spline Basis Functions')
-        Text(0.5, 1.0, 'M-Spline Basis Functions')
-        >>> plt.xlabel('Domain')
-        Text(0.5, 0, 'Domain')
-        >>> plt.ylabel('Basis Function Value')
-        Text(0, 0.5, 'Basis Function Value')
-        >>> l = plt.legend()
+        >>> out = mspline_basis.evaluate(np.random.randn(100, 5, 2))
+        >>> out.shape
+        (100, 5, 2, 4)
         """
-        return super().evaluate_on_grid(n_samples)
+        # ruff: noqa: D205, D400
+        return super().evaluate(sample_pts)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
     def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
@@ -790,6 +874,7 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -866,7 +951,6 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         MSplineBasis.__init__(
             self,
             n_basis_funcs,
-            mode="conv",
             order=order,
             label=label,
         )
@@ -891,6 +975,7 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         two_inputs, shape (20, 2, 6)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("_compute_features", ConvBasisMixin)
@@ -910,6 +995,7 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("evaluate_on_grid", MSplineBasis)
@@ -918,6 +1004,10 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         Examples
         --------
         Evaluate and visualize 4 M-spline basis functions of order 3:
+
+        .. plot::
+            :include-source: True
+            :caption: M-Spline
 
         >>> import numpy as np
         >>> import matplotlib.pyplot as plt
@@ -934,7 +1024,23 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         Text(0, 0.5, 'Basis Function Value')
         >>> l = plt.legend()
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
+
+    @add_docstring("evaluate", MSplineBasis)
+    def evaluate(self, sample_pts: NDArray) -> NDArray:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import MSplineConv
+        >>> mspline_basis = MSplineConv(n_basis_funcs=4, window_size=20, order=3)
+        >>> out = mspline_basis.evaluate(np.random.randn(100, 5, 2))
+        >>> out.shape
+        (100, 5, 2, 4)
+        """
+        # ruff: noqa: D205, D400
+        return super().evaluate(sample_pts)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
     def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
@@ -959,6 +1065,7 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -1015,7 +1122,6 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
             self,
             n_basis_funcs,
             width=width,
-            mode="eval",
             label=label,
         )
 
@@ -1024,15 +1130,38 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
         """
         Examples
         --------
-        >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
-        >>> from nemos.basis import RaisedCosineLinearEval
-        >>> n_basis_funcs = 5
-        >>> basis = RaisedCosineLinearEval(n_basis_funcs)
-        >>> sample_points, basis_values = basis.evaluate_on_grid(100)
+        .. plot::
+            :include-source: True
+            :caption: Linearly Spaced Raised-Cosine
 
+            >>> import numpy as np
+            >>> import matplotlib.pyplot as plt
+            >>> from nemos.basis import RaisedCosineLinearEval
+            >>> n_basis_funcs = 5
+            >>> window_size=10
+            >>> raised_cos_basis = RaisedCosineLinearEval(n_basis_funcs)
+            >>> sample_points, basis_values = raised_cos_basis.evaluate_on_grid(100)
+            >>> plt.plot(sample_points, basis_values)
+            [<matplotlib.lines.Line2D object at ...
+            >>> plt.show()
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
+
+    @add_docstring("evaluate", RaisedCosineBasisLinear)
+    def evaluate(self, sample_pts: NDArray) -> NDArray:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import RaisedCosineLinearEval
+        >>> raised_cos = RaisedCosineLinearEval(n_basis_funcs=4)
+        >>> out = raised_cos.evaluate(np.random.randn(100, 5, 2))
+        >>> out.shape
+        (100, 5, 2, 4)
+        """
+        # ruff: noqa: D205, D400
+        return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", EvalBasisMixin)
     def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
@@ -1051,6 +1180,7 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("split_by_feature", RaisedCosineBasisLinear)
@@ -1073,6 +1203,7 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
         one_input, shape (20, 6)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -1098,6 +1229,7 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -1158,7 +1290,6 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
         RaisedCosineBasisLinear.__init__(
             self,
             n_basis_funcs,
-            mode="conv",
             width=width,
             label=label,
         )
@@ -1168,16 +1299,40 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
         """
         Examples
         --------
-        >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
-        >>> from nemos.basis import RaisedCosineLinearConv
-        >>> n_basis_funcs = 5
-        >>> window_size=10
-        >>> basis = RaisedCosineLinearConv(n_basis_funcs, window_size)
-        >>> sample_points, basis_values = basis.evaluate_on_grid(100)
+        .. plot::
+            :include-source: True
+            :caption: Linearly Spaced Raised-Cosine
+
+            >>> import numpy as np
+            >>> import matplotlib.pyplot as plt
+            >>> from nemos.basis import RaisedCosineLinearConv
+            >>> n_basis_funcs = 5
+            >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05]) # sample decay rates
+            >>> window_size=10
+            >>> ortho_basis = RaisedCosineLinearConv(n_basis_funcs, window_size)
+            >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
+            >>> plt.plot(sample_points, basis_values)
+            [<matplotlib.lines.Line2D object at ...
+            >>> plt.show()
 
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
+
+    @add_docstring("evaluate", RaisedCosineBasisLinear)
+    def evaluate(self, sample_pts: NDArray) -> NDArray:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import RaisedCosineLinearConv
+        >>> raised_cos = RaisedCosineLinearConv(n_basis_funcs=4, window_size=20)
+        >>> out = raised_cos.evaluate(np.random.randn(100, 5, 2))
+        >>> out.shape
+        (100, 5, 2, 4)
+        """
+        # ruff: noqa: D205, D400
+        return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", ConvBasisMixin)
     def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
@@ -1196,6 +1351,7 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("split_by_feature", RaisedCosineBasisLinear)
@@ -1218,6 +1374,7 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
         two_inputs, shape (20, 2, 6)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -1243,6 +1400,7 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -1307,7 +1465,6 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
             width=width,
             time_scaling=time_scaling,
             enforce_decay_to_zero=enforce_decay_to_zero,
-            mode="eval",
             label=label,
         )
 
@@ -1316,15 +1473,40 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         """
         Examples
         --------
-        >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
-        >>> from nemos.basis import RaisedCosineLogEval
-        >>> n_basis_funcs = 5
-        >>> basis = RaisedCosineLogEval(n_basis_funcs)
-        >>> sample_points, basis_values = basis.evaluate_on_grid(100)
+        .. plot::
+            :include-source: True
+            :caption: Log Spaced Raised-Cosine
+
+            >>> import numpy as np
+            >>> import matplotlib.pyplot as plt
+            >>> from nemos.basis import RaisedCosineLogEval
+            >>> n_basis_funcs = 5
+            >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05]) # sample decay rates
+            >>> window_size=10
+            >>> ortho_basis = RaisedCosineLogEval(n_basis_funcs)
+            >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
+            >>> plt.plot(sample_points, basis_values)
+            [<matplotlib.lines.Line2D object at ...
+            >>> plt.show()
 
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
+
+    @add_docstring("evaluate", RaisedCosineBasisLog)
+    def evaluate(self, sample_pts: NDArray) -> NDArray:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import RaisedCosineLogEval
+        >>> raised_cos = RaisedCosineLogEval(n_basis_funcs=4)
+        >>> out = raised_cos.evaluate(np.random.randn(100, 5, 2))
+        >>> out.shape
+        (100, 5, 2, 4)
+        """
+        # ruff: noqa: D205, D400
+        return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", EvalBasisMixin)
     def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
@@ -1343,6 +1525,7 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("split_by_feature", RaisedCosineBasisLog)
@@ -1365,6 +1548,7 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         one_input, shape (20, 6)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -1390,6 +1574,7 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -1460,7 +1645,6 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
         RaisedCosineBasisLog.__init__(
             self,
             n_basis_funcs,
-            mode="conv",
             width=width,
             time_scaling=time_scaling,
             enforce_decay_to_zero=enforce_decay_to_zero,
@@ -1472,16 +1656,40 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
         """
         Examples
         --------
-        >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
-        >>> from nemos.basis import RaisedCosineLogConv
-        >>> n_basis_funcs = 5
-        >>> window_size=10
-        >>> basis = RaisedCosineLogConv(n_basis_funcs, window_size)
-        >>> sample_points, basis_values = basis.evaluate_on_grid(100)
+        .. plot::
+            :include-source: True
+            :caption: Log Spaced Raised-Cosine
+
+            >>> import numpy as np
+            >>> import matplotlib.pyplot as plt
+            >>> from nemos.basis import RaisedCosineLogConv
+            >>> n_basis_funcs = 5
+            >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05]) # sample decay rates
+            >>> window_size=10
+            >>> ortho_basis = RaisedCosineLogConv(n_basis_funcs, window_size)
+            >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
+            >>> plt.plot(sample_points, basis_values)
+            [<matplotlib.lines.Line2D object at ...
+            >>> plt.show()
 
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
+
+    @add_docstring("evaluate", RaisedCosineBasisLog)
+    def evaluate(self, sample_pts: NDArray) -> NDArray:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import RaisedCosineLogConv
+        >>> raised_cos = RaisedCosineLogConv(n_basis_funcs=4, window_size=20)
+        >>> out = raised_cos.evaluate(np.random.randn(100, 5, 2))
+        >>> out.shape
+        (100, 5, 2, 4)
+        """
+        # ruff: noqa: D205, D400
+        return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", ConvBasisMixin)
     def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
@@ -1500,6 +1708,7 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("split_by_feature", RaisedCosineBasisLog)
@@ -1522,6 +1731,7 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
         two_inputs, shape (20, 2, 6)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -1547,6 +1757,7 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -1597,7 +1808,6 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
             self,
             n_basis_funcs,
             decay_rates=decay_rates,
-            mode="eval",
             label=label,
         )
 
@@ -1606,17 +1816,41 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         """
         Examples
         --------
-        >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
-        >>> from nemos.basis import OrthExponentialEval
-        >>> n_basis_funcs = 5
-        >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05]) # sample decay rates
-        >>> window_size=10
-        >>> ortho_basis = OrthExponentialEval(n_basis_funcs, decay_rates=decay_rates)
-        >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
+        .. plot::
+            :include-source: True
+            :caption: Orthogonalized Exponential Decays
+
+            >>> import numpy as np
+            >>> import matplotlib.pyplot as plt
+            >>> from nemos.basis import OrthExponentialEval
+            >>> n_basis_funcs = 5
+            >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05]) # sample decay rates
+            >>> window_size=10
+            >>> ortho_basis = OrthExponentialEval(n_basis_funcs, decay_rates=decay_rates)
+            >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
+            >>> plt.plot(sample_points, basis_values)
+            [<matplotlib.lines.Line2D object at ...
+            >>> plt.show()
 
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples=n_samples)
+
+    @add_docstring("evaluate", OrthExponentialBasis)
+    def evaluate(self, sample_pts: NDArray) -> NDArray:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import OrthExponentialEval
+        >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05])
+        >>> ortho_basis = OrthExponentialEval(n_basis_funcs=5, decay_rates=decay_rates)
+        >>> out = ortho_basis.evaluate(np.random.randn(100, 5, 2))
+        >>> out.shape
+        (100, 5, 2, 5)
+        """
+        # ruff: noqa: D205, D400
+        return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", EvalBasisMixin)
     def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
@@ -1635,6 +1869,7 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("split_by_feature", OrthExponentialBasis)
@@ -1661,6 +1896,7 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         feature: shape (20, 5)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -1686,6 +1922,7 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -1738,7 +1975,6 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         OrthExponentialBasis.__init__(
             self,
             n_basis_funcs,
-            mode="conv",
             decay_rates=decay_rates,
             label=label,
         )
@@ -1751,17 +1987,41 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         """
         Examples
         --------
-        >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
-        >>> from nemos.basis import OrthExponentialConv
-        >>> n_basis_funcs = 5
-        >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05]) # sample decay rates
-        >>> window_size=10
-        >>> ortho_basis = OrthExponentialConv(n_basis_funcs, window_size, decay_rates=decay_rates)
-        >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
+        .. plot::
+            :include-source: True
+            :caption: Orthogonalized Exponential Decays
+
+            >>> import numpy as np
+            >>> import matplotlib.pyplot as plt
+            >>> from nemos.basis import OrthExponentialConv
+            >>> n_basis_funcs = 5
+            >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05]) # sample decay rates
+            >>> window_size=10
+            >>> ortho_basis = OrthExponentialConv(n_basis_funcs, window_size, decay_rates=decay_rates)
+            >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
+            >>> plt.plot(sample_points, basis_values)
+            [<matplotlib.lines.Line2D object at ...
+            >>> plt.show()
 
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
+
+    @add_docstring("evaluate", OrthExponentialBasis)
+    def evaluate(self, sample_pts: NDArray) -> NDArray:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import OrthExponentialConv
+        >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05])
+        >>> ortho_basis = OrthExponentialConv(n_basis_funcs=5, window_size=20, decay_rates=decay_rates)
+        >>> out = ortho_basis.evaluate(np.random.randn(100, 5, 2))
+        >>> out.shape
+        (100, 5, 2, 5)
+        """
+        # ruff: noqa: D205, D400
+        return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", ConvBasisMixin)
     def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
@@ -1780,6 +2040,7 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("split_by_feature", OrthExponentialBasis)
@@ -1807,6 +2068,7 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         two_inputs, shape (20, 2, 6)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -1832,10 +2094,11 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
     def _check_window_size(self, window_size: int):
-        """OrthExponentialBasis specific window size check."""
+        """Specific window size check for ``Orthexponentialbasis``."""
         super()._check_window_size(window_size)
         # if n_basis_funcs is not yet initialized, skip check
         n_basis = getattr(self, "n_basis_funcs", None)
@@ -1878,19 +2141,42 @@ class IdentityEval(EvalBasisMixin, IdentityBasis):
             label=label,
         )
 
-    @add_docstring("evaluate_on_grid", OrthExponentialBasis)
+    @add_docstring("evaluate_on_grid", IdentityBasis)
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
         """
         Examples
         --------
-        >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
-        >>> from nemos.basis import IdentityEval
-        >>> basis = IdentityEval()
-        >>> sample_points, basis_values = basis.evaluate_on_grid(100)
+        .. plot::
+            :include-source: True
+            :caption: Identity
+
+            >>> import numpy as np
+            >>> import matplotlib.pyplot as plt
+            >>> from nemos.basis import IdentityEval
+            >>> basis = IdentityEval()
+            >>> sample_points, basis_values = basis.evaluate_on_grid(100)
+            >>> plt.plot(sample_points, basis_values)
+            [<matplotlib.lines.Line2D object at ...
+            >>> plt.show()
 
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples=n_samples)
+
+    @add_docstring("evaluate", IdentityBasis)
+    def evaluate(self, sample_pts: NDArray) -> NDArray:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import IdentityEval
+        >>> basis = IdentityEval()
+        >>> out = basis.evaluate(np.random.randn(100, 5, 2))
+        >>> out.shape
+        (100, 5, 2, 1)
+        """
+        # ruff: noqa: D205, D400
+        return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", EvalBasisMixin)
     def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
@@ -1909,6 +2195,7 @@ class IdentityEval(EvalBasisMixin, IdentityBasis):
         (1000, 1)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("split_by_feature", IdentityBasis)
@@ -1935,6 +2222,7 @@ class IdentityEval(EvalBasisMixin, IdentityBasis):
         feature: shape (20, 1)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -1960,6 +2248,7 @@ class IdentityEval(EvalBasisMixin, IdentityBasis):
         20
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -2002,14 +2291,38 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
         """
         Examples
         --------
-        >>> import matplotlib.pyplot as plt
-        >>> from nemos.basis import HistoryConv
-        >>> window_size=100
-        >>> basis = HistoryConv(window_size=window_size)
-        >>> sample_points, basis_values = basis.evaluate_on_grid(window_size)
+        .. plot::
+            :include-source: True
+            :caption: History
+
+            >>> import matplotlib.pyplot as plt
+            >>> from nemos.basis import HistoryConv
+            >>> window_size=100
+            >>> basis = HistoryConv(window_size=window_size)
+            >>> sample_points, basis_values = basis.evaluate_on_grid(window_size)
+            >>> plt.plot(sample_points, basis_values)
+            [<matplotlib.lines.Line2D object at ...
+            >>> plt.show()
 
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
+
+    @add_docstring("evaluate", HistoryBasis)
+    def evaluate(self, sample_pts: NDArray) -> NDArray:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import HistoryConv
+        >>> basis = HistoryConv(window_size=20)
+        >>> # evaluate for HistoryConv require a 1d input
+        >>> out = basis.evaluate(np.random.randn(100, ))
+        >>> out.shape
+        (100, 20)
+        """
+        # ruff: noqa: D205, D400
+        return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", ConvBasisMixin)
     def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
@@ -2028,6 +2341,7 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("split_by_feature", IdentityBasis)
@@ -2054,6 +2368,7 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
         feature: shape (20, 5)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -2077,12 +2392,13 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
         >>> _ = basis.set_input_shape(x)
         >>> basis.n_output_features
         100
-
         """
+        # ruff: noqa: D400, D205
         return AtomicBasisMixin.set_input_shape(self, xi)
 
     @property
     def window_size(self):
+        """Window size for the history basis."""
         return self._window_size
 
     @window_size.setter
@@ -2134,7 +2450,6 @@ class FourierEval(EvalBasisMixin, FourierBasis):
             self,
             n_frequencies,
             include_constant=include_constant,
-            mode="eval",
             label=label,
         )
 
@@ -2143,12 +2458,17 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         """
         Examples
         --------
-        >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
-        >>> from nemos.basis import FourierEval
-        >>> n_frequencies = 5
-        >>> fourier_basis = FourierEval(n_frequencies)
-        >>> sample_points, basis_values = fourier_basis.evaluate_on_grid(100)
+        .. plot::
+            :include-source: True
+            :caption: FourierEval Basis
+
+            >>> import numpy as np
+            >>> import matplotlib.pyplot as plt
+            >>> from nemos.basis import FourierEval
+            >>> n_frequencies = 5
+            >>> fourier_basis = FourierEval(n_frequencies)
+            >>> sample_points, basis_values = fourier_basis.evaluate_on_grid(100)
+            >>> plt.plot(sample_points, basis_values)
 
         """
         return super().evaluate_on_grid(n_samples)

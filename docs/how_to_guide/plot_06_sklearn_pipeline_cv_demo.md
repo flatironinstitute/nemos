@@ -6,7 +6,7 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.16.4
 kernelspec:
-  display_name: Python 3
+  display_name: Python 3 (ipykernel)
   language: python
   name: python3
 ---
@@ -78,7 +78,7 @@ from sklearn.pipeline import Pipeline
 # Assume transformer_i/predictor is a transformer/model object
 pipe = Pipeline(
     [
-        ("label_1", transformer_1), 
+        ("label_1", transformer_1),
         ("label_2", transformer_2),
         ...,
         ("label_n", transformer_n),
@@ -115,7 +115,6 @@ In the following sections, we will showcase this approach with a concrete exampl
 
 Let's start by creating some toy data.
 
-
 ```{code-cell} ipython3
 import matplotlib.pyplot as plt
 import numpy as np
@@ -142,7 +141,6 @@ y = np.random.poisson(rate).astype(float).flatten()
 
 Let's now plot the simulated neuron's tuning curve, which is bimodal, Gaussian-shaped, and has peaks at 0.25 and 0.75.
 
-
 ```{code-cell} ipython3
 fig, ax = plt.subplots()
 ax.scatter(X.flatten(), y, alpha=0.2)
@@ -152,8 +150,7 @@ sns.despine(ax=ax)
 ```
 
 ### Converting NeMoS `Basis` to a transformer
-In order to use NeMoS [`Basis`](nemos.basis._basis.Basis) in a pipeline, we need to convert it into a scikit-learn transformer. 
-
+In order to use NeMoS [`Basis`](nemos.basis._basis.Basis) in a pipeline, we need to convert it into a scikit-learn transformer.
 
 ```{code-cell} ipython3
 bas = nmo.basis.RaisedCosineLinearConv(5, window_size=5)
@@ -164,14 +161,12 @@ trans_bas = nmo.basis.TransformerBasis(bas)
 # equivalent initialization via "to_transformer"
 trans_bas = bas.to_transformer()
 
-# setup the transformer
-trans_bas.set_input_shape(1)
 ```
 
-:::{admonition} Learn More about `TransformerBasis`
-:class: note
+:::{admonition} Additional `TransformerBasis` Setup
+:class: attention
 
-To learn more about `sklearn` transformers and `TransforerBasis`, check out [this note](tansformer-vs-nemos-basis).
+`TransformerBasis` requires an additional setup step when working with multi-dimensional inputs. Learn everything you need to know about using `TransformerBasis` in [this note](tansformer-vs-nemos-basis).
 :::
 
 ### Creating and fitting a pipeline
@@ -179,13 +174,12 @@ We might want to combine first transforming the input data with our basis functi
 
 This is exactly what `Pipeline` is for!
 
-
 ```{code-cell} ipython3
 pipeline = Pipeline(
     [
         (
             "transformerbasis",
-            nmo.basis.RaisedCosineLinearEval(6).set_input_shape(1).to_transformer(),
+            nmo.basis.RaisedCosineLinearEval(6).to_transformer(),
         ),
         (
             "glm",
@@ -200,7 +194,6 @@ pipeline.fit(X, y)
 Note how NeMoS models are already scikit-learn compatible and can be used directly in the pipeline.
 
 Visualize the fit:
-
 
 ```{code-cell} ipython3
 # Predict the rate.
@@ -236,9 +229,6 @@ The current model captures the bimodal distribution of responses, appropriately 
 
 ### Select the number of basis by cross-validation
 
-
-
-
 :::{warning}
 Please keep in mind that while [`GLM.score`](nemos.glm.GLM.score) supports different ways of evaluating goodness-of-fit through the `score_type` argument, `pipeline.score(X, y, score_type="...")` does not propagate this, and uses the default value of `log-likelihood`.
 
@@ -247,8 +237,35 @@ To evaluate a pipeline, please create a custom scorer (e.g. `pseudo_r2` below) a
 
 #### Define the parameter grid
 
-Let's define candidate values for the parameters of each step of the pipeline we want to cross-validate. In this case the number of basis functions in the transformation step and the ridge regularization's strength in the GLM fit:
+You can inspect the parameters of a transformer or that of an estimator (either a model or a pipeline object), by calling the `get_params` method.
 
+```{code-cell} ipython3
+pipeline["transformerbasis"].get_params()
+```
+
+Pipelines include parameters from all the steps, as well as that of the pipeline object itself.
+
+```{code-cell} ipython3
+pipeline.get_params()
+```
+
+You can retrieve any parameter of any pipeline step by creating a key starting with the name of the step followed by a double underscore and the name of the parameter: `step_name__parameter_name`.
+
+
+```{code-cell} ipython3
+# retrieve the number of basis function from the transformerbasis of the pipeline
+pipeline.get_params()["transformerbasis__n_basis_funcs"]
+```
+
+You can set any of the parameter values with the `set_params` method, which receives the parameters as keyword arguments.
+
+```{code-cell} ipython3
+# set the number of basis to 8
+pipeline.set_params(transformerbasis__n_basis_funcs=8)
+pipeline.get_params()["transformerbasis__n_basis_funcs"]
+```
+
+Let's define candidate values for the parameters of each step of the pipeline we want to cross-validate. In this case the number of basis functions in the transformation step and the ridge regularization's strength in the GLM fit:
 
 ```{code-cell} ipython3
 param_grid = dict(
@@ -321,7 +338,7 @@ scores = np.zeros((len(regularizer_strength) * len(n_basis_funcs), n_folds))
 coeffs = {}
 
 # initialize basis and model
-basis = nmo.basis.RaisedCosineLinearEval(6).set_input_shape(1)
+basis = nmo.basis.RaisedCosineLinearEval(6)
 basis = nmo.basis.TransformerBasis(basis)
 model = nmo.glm.GLM(regularizer="Ridge")
 
@@ -368,7 +385,6 @@ best_n_basis = n_basis_funcs[i_best % len(n_basis_funcs)]
 
 Let's extract the scores from `gridsearch` and take a look at how the different parameter values of our pipeline influence the test score:
 
-
 ```{code-cell} ipython3
 cvdf = pd.DataFrame(gridsearch.cv_results_)
 
@@ -385,7 +401,6 @@ The plot displays the model's log-likelihood for each parameter combination in t
 
 #### Visualize the predicted rate
 Finally, visualize the predicted firing rates using the best model found by our grid-search, which gives a better fit than the randomly chosen parameter values we tried in the beginning:
-
 
 ```{code-cell} ipython3
 # Predict the ate using the best configuration,
@@ -425,7 +440,7 @@ if root:
 # if local store in ../_build/html/...
 else:
    path = Path("../_build/html/_static/thumbnails/how_to_guide")
- 
+
 # make sure the folder exists if run from build
 if root or Path("../assets/stylesheets").exists():
    path.mkdir(parents=True, exist_ok=True)
@@ -444,23 +459,21 @@ In the previous example we set the number of basis functions of the [`Basis`](ne
 
 Here we include `transformerbasis__basis` in the parameter grid to try different values for `TransformerBasis.basis`:
 
-
 ```{code-cell} ipython3
 param_grid = dict(
     glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
     transformerbasis__basis=(
-        nmo.basis.RaisedCosineLinearEval(5).set_input_shape(1),
-        nmo.basis.RaisedCosineLinearEval(10).set_input_shape(1),
-        nmo.basis.RaisedCosineLogEval(5).set_input_shape(1),
-        nmo.basis.RaisedCosineLogEval(10).set_input_shape(1),
-        nmo.basis.MSplineEval(5).set_input_shape(1),
-        nmo.basis.MSplineEval(10).set_input_shape(1),
+        nmo.basis.RaisedCosineLinearEval(5),
+        nmo.basis.RaisedCosineLinearEval(10),
+        nmo.basis.RaisedCosineLogEval(5),
+        nmo.basis.RaisedCosineLogEval(10),
+        nmo.basis.MSplineEval(5),
+        nmo.basis.MSplineEval(10),
     ),
 )
 ```
 
 Then run the grid search:
-
 
 ```{code-cell} ipython3
 gridsearch = GridSearchCV(
@@ -474,7 +487,6 @@ gridsearch.fit(X, y)
 ```
 
 Wrangling the output data a bit and looking at the scores:
-
 
 ```{code-cell} ipython3
 cvdf = pd.DataFrame(gridsearch.cv_results_)
@@ -494,9 +506,8 @@ cvdf_wide = cvdf.pivot(
 doc_plots.plot_heatmap_cv_results(cvdf_wide)
 ```
 
-As shown in the table, the model with the highest score, highlighted in blue, used a RaisedCosineLinearEval basis (as used above), which appears to be a suitable choice for our toy data. 
+As shown in the table, the model with the highest score, highlighted in blue, used a RaisedCosineLinearEval basis (as used above), which appears to be a suitable choice for our toy data.
 We can confirm that by plotting the firing rate predictions:
-
 
 ```{code-cell} ipython3
 # Predict the rate using the optimal configuration
@@ -539,12 +550,12 @@ param_grid = dict(
     glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
     transformerbasis__n_basis_funcs=(3, 5, 10, 20, 100),
     transformerbasis__basis=(
-        nmo.basis.RaisedCosineLinearEval(5).set_input_shape(1),
-        nmo.basis.RaisedCosineLinearEval(10).set_input_shape(1),
-        nmo.basis.RaisedCosineLogEval(5).set_input_shape(1),
-        nmo.basis.RaisedCosineLogEval(10).set_input_shape(1),
-        nmo.basis.MSplineEval(5).set_input_shape(1),
-        nmo.basis.MSplineEval(10).set_input_shape(1),
+        nmo.basis.RaisedCosineLinearEval(5),
+        nmo.basis.RaisedCosineLinearEval(10),
+        nmo.basis.RaisedCosineLogEval(5),
+        nmo.basis.RaisedCosineLogEval(10),
+        nmo.basis.MSplineEval(5),
+        nmo.basis.MSplineEval(10),
     ),
 )
 ```
@@ -555,7 +566,6 @@ param_grid = dict(
 ## Create a custom scorer
 By default, the GLM score method returns the model log-likelihood. If you want to try a different metric, such as the pseudo-R2, you can create a custom scorer and pass it to the cross-validation object:
 
-
 ```{code-cell} ipython3
 from sklearn.metrics import make_scorer
 
@@ -565,7 +575,6 @@ pseudo_r2 = make_scorer(
 ```
 
 We can now run the grid search providing the custom scorer
-
 
 ```{code-cell} ipython3
 gridsearch = GridSearchCV(
@@ -585,7 +594,6 @@ And finally, we can plot each model's score.
 
 
 Plot the pseudo-R2 scores
-
 
 ```{code-cell} ipython3
 cvdf = pd.DataFrame(gridsearch.cv_results_)

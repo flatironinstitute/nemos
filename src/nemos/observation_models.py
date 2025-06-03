@@ -10,7 +10,7 @@ from numpy.typing import NDArray
 from . import utils
 from .base_class import Base
 
-__all__ = ["PoissonObservations", "GammaObservations"]
+__all__ = ["PoissonObservations", "GammaObservations", "BernoulliObservations"]
 
 
 def __dir__():
@@ -35,9 +35,11 @@ class Observations(Base, abc.ABC):
     See Also
     --------
     :class:`~nemos.observation_models.PoissonObservations`
-        A specific implementation of a observation model using the Poisson distribution.
+        A specific implementation of an observation model using the Poisson distribution.
     :class:`~nemos.observation_models.GammaObservations`
-        A specific implementation of a observation model using the Gamma distribution.
+        A specific implementation of an observation model using the Gamma distribution.
+    :class:`~nemos.observation_models.BernoulliObservations`
+        A specific implementation of an observation model using the Bernoulli distribution.
     """
 
     def __init__(self, inverse_link_function: Callable, **kwargs):
@@ -407,6 +409,7 @@ class Observations(Base, abc.ABC):
             The pseudo-:math:`R^2` of the model. A value closer to 1 indicates a better model fit,
             whereas a value closer to 0 suggests that the model doesn't improve much over the null model.
         """
+        # ruff: noqa D403
         mean_y = jnp.ones(y.shape) * y.mean(axis=0)
         ll_null = self.log_likelihood(
             y, mean_y, scale=scale, aggregate_sample_scores=aggregate_sample_scores
@@ -660,7 +663,10 @@ class GammaObservations(Observations):
 
     """
 
-    def __init__(self, inverse_link_function=lambda x: jnp.power(x, -1)):
+    def __init__(
+        self,
+        inverse_link_function=utils.one_over_x,
+    ):
         super().__init__(inverse_link_function=inverse_link_function)
         self.scale = 1.0
 
@@ -890,6 +896,10 @@ def check_observation_model(observation_model):
     ...                     jnp.sum((y_true - y_true.mean()) ** 2))
     ...     def sample_generator(self, key, params, scale=1.):
     ...         return jax.random.bernoulli(key, params)
+    ...     def estimate_scale(self, y, predicted_rate, dof_resid):
+    ...         return 1
+    ...     def log_likelihood(self, params, y_true, aggregate_sample_scores=jnp.mean):
+    ...         return -self._negative_log_likelihood(params, y_true, aggregate_sample_scores)
     >>> model = MyObservationModel()
     >>> check_observation_model(model)  # Should pass without error if the model is correctly implemented.
     """
@@ -937,3 +947,221 @@ def check_observation_model(observation_model):
 
         if check_info.get("test_scalar_func"):
             utils.assert_scalar_func(func, check_info["input"], attr_name)
+
+
+class BernoulliObservations(Observations):
+    """
+    Model observations as Bernoulli random variables.
+
+    The BernoulliObservations is designed to model an observed binary variable based on a Bernoulli distribution
+    with a given success probability. When using a logit link function (i.e. a logistic inverse link function),
+    this is equivalent to Logistic Regression. It provides methods for computing the negative log-likelihood,
+    generating samples, and computing the residual deviance for the given binary observations.
+
+    Attributes
+    ----------
+    inverse_link_function :
+        A function that maps the success probability to the domain of the Bernoulli parameter.
+        Defaults to ``jax.lax.logistic``.
+
+    """
+
+    def __init__(self, inverse_link_function=jax.lax.logistic):
+        super().__init__(inverse_link_function=inverse_link_function)
+        self.scale = 1.0
+
+    def _negative_log_likelihood(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        aggregate_sample_scores: Callable = jnp.mean,
+    ) -> jnp.ndarray:
+        r"""Compute the Bernoulli negative log-likelihood.
+
+        This computes the Bernoulli negative log-likelihood of the predicted success probability (predicted rates)
+        for the observations up to a constant.
+
+        Parameters
+        ----------
+        y :
+            The target observation to compare against. Shape (n_time_bins, ), or (n_time_bins, n_observations).
+        predicted_rate :
+            The predicted rate (success probability) of the current model.
+            Shape (n_time_bins, ), or (n_time_bins, n_observations).
+        aggregate_sample_scores :
+            Function that aggregates the log-likelihood of each sample.
+
+        Returns
+        -------
+        :
+            The Bernoulli negative log-likelihood. Shape (1,).
+
+        Notes
+        -----
+        The formula for the Bernoulli mean log-likelihood is the following,
+
+        .. math::
+            \text{LL}(p | y) &= \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T}
+            [y_{tn} \log(p_{tn}) + (1 - y_{tn}) \log(1 - p_{tn})]
+
+        where :math:`p` is the predicted success probability, given by the inverse link function, and :math:`y` is
+        the observed binary variable.
+        """
+        predicted_rate = jnp.clip(
+            predicted_rate,
+            min=jnp.finfo(predicted_rate.dtype).eps,
+            max=1.0 - jnp.finfo(predicted_rate.dtype).eps,
+        )
+
+        x = y * jnp.log(predicted_rate) + (1 - y) * jnp.log1p(-predicted_rate)
+        return -aggregate_sample_scores(x)
+
+    def log_likelihood(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
+        aggregate_sample_scores: Callable = jnp.mean,
+    ):
+        r"""Compute the Bernoulli negative log-likelihood.
+
+        This computes the Bernoulli negative log-likelihood of the predicted success probability (predicted rates)
+        for the observations up to a constant.
+
+        Parameters
+        ----------
+        y :
+            The target observation to compare against. Shape (n_time_bins, ), or (n_time_bins, n_observations).
+        predicted_rate :
+            The predicted rate (success probability) of the current model. Shape (n_time_bins, ),
+            or (n_time_bins, n_observations).
+        scale :
+            The scale parameter of the model.
+        aggregate_sample_scores :
+            Function that aggregates the log-likelihood of each sample.
+
+        Returns
+        -------
+        :
+            The Bernoulli negative log-likehood. Shape (1,).
+
+        Notes
+        -----
+        The formula for the Bernoulli mean log-likelihood is the following,
+
+        .. math::
+            \text{LL}(p | y) &= \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T}
+            [y_{tn} \log(p_{tn}) + (1 - y_{tn}) \log(1 - p_{tn})]
+
+        where :math:`p` is the predicted success probability, given by the inverse link function, and :math:`y` is the
+        observed binary variable.
+        """
+        nll = self._negative_log_likelihood(y, predicted_rate, aggregate_sample_scores)
+        return -nll
+
+    def sample_generator(
+        self,
+        key: jax.Array,
+        predicted_rate: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
+    ) -> jnp.ndarray:
+        """
+        Sample from the Bernoulli distribution.
+
+        This method generates random numbers from a Bernoulli distribution based on the given
+        `predicted_rate`.
+
+        Parameters
+        ----------
+        key :
+            Random key used for the generation of random numbers in JAX.
+        predicted_rate :
+            Expected rate (success probability) of the Poisson distribution. Shape ``(n_time_bins, )``, or
+            ``(n_time_bins, n_observations)``.
+        scale :
+            Scale parameter. For Bernoulli should be equal to 1.
+
+        Returns
+        -------
+        jnp.ndarray
+            Random numbers generated from the Bernoulli distribution based on the `predicted_rate`.
+        """
+        return jax.random.bernoulli(key, predicted_rate)
+
+    def deviance(
+        self,
+        observations: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
+    ) -> jnp.ndarray:
+        r"""Compute the residual deviance for a Bernoulli model.
+
+        Parameters
+        ----------
+        observations:
+            The binary observations. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_observations)`` for population
+            models (i.e. multiple observations).
+        predicted_rate:
+            The predicted rate (success probability). Shape ``(n_time_bins, )``  or ``(n_time_bins, n_observations)``
+            for population models (i.e. multiple observations).
+        scale:
+            Scale parameter of the model. For Bernoulli should be equal to 1.
+
+        Returns
+        -------
+        :
+            The residual deviance of the model.
+
+        Notes
+        -----
+        The deviance is a measure of the goodness of fit of a statistical model.
+        For a Bernoulli model, the residual deviance is computed as:
+
+        .. math::
+            \begin{aligned}
+                D(y_{tn}, \hat{y}_{tn}) &= 2 \left( \text{LL}\left(y_{tn} | y_{tn}\right) - \text{LL}\left(y_{tn}
+                  | \hat{y}_{tn}\right)\right) \\\
+                &= 2 \left[ y_{tn} \log\left(\frac{y_{tn}}{\hat{y}_{tn}}\right) + (1 - y_{tn}) \log\left(\frac{1
+                  - y_{tn}}{1 - \hat{y}_{tn}}\right) \right]
+            \end{aligned}
+
+        where :math:`y` is the observed data, :math:`\hat{y}` is the predicted data, and :math:`\text{LL}` is
+        the model log-likelihood. Lower values of deviance indicate a better fit.
+        """
+        # this takes care of 0s in the log
+        ratio1 = jnp.clip(
+            observations / predicted_rate, jnp.finfo(predicted_rate.dtype).eps, jnp.inf
+        )
+        ratio2 = jnp.clip(
+            (1 - observations) / (1 - predicted_rate),
+            jnp.finfo(predicted_rate.dtype).eps,
+            jnp.inf,
+        )
+        deviance = 2 * (
+            observations * jnp.log(ratio1) + (1 - observations) * jnp.log(ratio2)
+        )
+        return deviance
+
+    def estimate_scale(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        dof_resid: Union[float, jnp.ndarray],
+    ) -> Union[float, jnp.ndarray]:
+        r"""
+        Assign 1 to the scale parameter of the Bernoulli model.
+
+        For the Binomial exponential family distribution (to which the Bernoulli belongs), the scale parameter
+        :math:`\phi` is always 1.
+
+        Parameters
+        ----------
+        y :
+            Observed spike counts.
+        predicted_rate :
+            The predicted rate values (success probabilities). This is not used in the Bernoulli model for estimating
+            scale, but is retained for compatibility with the abstract method signature.
+        dof_resid :
+            The DOF of the residuals.
+        """
+        return jnp.ones_like(jnp.atleast_1d(y[0]))

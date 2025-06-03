@@ -6,7 +6,7 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.16.4
 kernelspec:
-  display_name: Python 3
+  display_name: Python 3 (ipykernel)
   language: python
   name: python3
 ---
@@ -40,7 +40,6 @@ warnings.filterwarnings(
 )
 ```
 
-
 # Batching example
 
 Here we demonstrate how to setup and run a stochastic gradient descent in `nemos`
@@ -63,7 +62,6 @@ np.random.seed(123)
 
 Let's generate some data artificially
 
-
 ```{code-cell} ipython3
 n_neurons = 10
 T = 50
@@ -73,7 +71,6 @@ rate = np.exp(np.sin(times + np.linspace(0, np.pi*2, n_neurons).reshape(1, n_neu
 ```
 
 Get the spike times from the rate and generate a `TsGroup` object
-
 
 ```{code-cell} ipython3
 spike_t, spike_id = np.where(np.random.poisson(rate))
@@ -91,7 +88,6 @@ You must shutdown the dynamic update of the step for fitting a batched (also cal
 In jaxopt, this can be done by setting the parameters `acceleration` to False and setting the `stepsize`.
 :::
 
-
 ```{code-cell} ipython3
 glm = nmo.glm.PopulationGLM(
 	solver_name="GradientDescent",
@@ -103,7 +99,6 @@ glm = nmo.glm.PopulationGLM(
 
 Here we instantiate the basis. `ws` is 40 time bins. It corresponds to a 200 ms windows
 
-
 ```{code-cell} ipython3
 ws = 40
 basis = nmo.basis.RaisedCosineLogConv(5, window_size=ws)
@@ -113,14 +108,12 @@ basis = nmo.basis.RaisedCosineLogConv(5, window_size=ws)
 
 The batch size needs to be larger than the window size of the convolution kernel defined above.
 
-
 ```{code-cell} ipython3
 batch_size = 5  # second
 ```
 
 Here we define a batcher function that generate a random 5 s of design matrix and spike counts.
 This function will be called during each iteration of the stochastic gradient descent.
-
 
 ```{code-cell} ipython3
 def batcher():
@@ -143,7 +136,6 @@ def batcher():
 First we need to initialize the gradient descent solver within the [`PopulationGLM`](nemos.glm.PopulationGLM) .
 This gets you the initial parameters and the first state of the solver.
 
-
 ```{code-cell} ipython3
 params = glm.initialize_params(*batcher())
 state = glm.initialize_state(*batcher(), params)
@@ -154,12 +146,11 @@ state = glm.initialize_state(*batcher(), params)
 Let's do a few iterations of gradient descent calling the `batcher` function at every step.
 At each step, we store the log-likelihood of the model for each neuron evaluated on the batch
 
-
 ```{code-cell} ipython3
 n_step = 500
 logl = np.zeros(n_step)
 
-for i in range(n_step):	
+for i in range(n_step):
 
 	# Get a batch of data
 	X, Y = batcher()
@@ -184,7 +175,6 @@ incorrect computations.
 
 First let's plot the log-likelihood to see if the model is converging.
 
-
 ```{code-cell} ipython3
 fig = plt.figure()
 plt.plot(logl)
@@ -206,7 +196,7 @@ if root:
 # if local store in ../_build/html/...
 else:
    path = Path("../_build/html/_static/thumbnails/how_to_guide")
- 
+
 # make sure the folder exists if run from build
 if root or Path("../assets/stylesheets").exists():
    path.mkdir(parents=True, exist_ok=True)
@@ -222,7 +212,6 @@ We can take a look at the coefficients.
 Here we extract the weight matrix of shape `(n_neurons*n_basis, n_neurons)`
 and reshape it to `(n_neurons, n_basis, n_neurons)`.
 We then average along basis to get a weight matrix of shape `(n_neurons, n_neurons)`.
-
 
 ```{code-cell} ipython3
 W = glm.coef_.reshape(len(units), basis.n_basis_funcs, len(units))
@@ -242,7 +231,6 @@ plt.show()
 Since this example is small enough, we can fit the full model and compare the scores.
 Here we generate the design matrix and spike counts for the whole dataset.
 
-
 ```{code-cell} ipython3
 Y = units.count(0.005)
 X = basis.compute_features(Y)
@@ -251,7 +239,6 @@ full_model = nmo.glm.PopulationGLM().fit(X, Y)
 
 Now that the full model is fitted, we are scoring the full model and the batch model against the full datasets to compare the scores.
 The score is pseudo-R2
-
 
 ```{code-cell} ipython3
 full_scores = full_model.score(
@@ -263,7 +250,6 @@ batch_scores = glm.score(
 ```
 
 Let's compare scores for each neurons as well as the coefficients.
-
 
 ```{code-cell} ipython3
 plt.figure(figsize=(10, 8))

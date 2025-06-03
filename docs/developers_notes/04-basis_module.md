@@ -19,7 +19,7 @@ Abstract Class Basis
 │   │
 │   └─ Concrete Subclass CyclicBSplineBasis
 │
-├─ Concrete Subclass RaisedCosineBasisLinear 
+├─ Concrete Subclass RaisedCosineBasisLinear
 │   │
 │   └─ Concrete Subclass RaisedCosineLogEval
 │
@@ -33,7 +33,7 @@ The super-class [`Basis`](nemos.basis._basis.Basis) provides two public methods,
 (the-public-method-compute_features)=
 ### The Public Method `compute_features`
 
-The [`compute_features`](nemos.basis._basis.Basis.compute_features) method checks input consistency and applies the basis function to the inputs. 
+The [`compute_features`](nemos.basis._basis.Basis.compute_features) method checks input consistency and applies the basis function to the inputs.
 [`Basis`](nemos.basis._basis.Basis) can operate in two modes defined at initialization: `"eval"` and `"conv"`. When a basis is in mode `"eval"`,
 [`compute_features`](nemos.basis._basis.Basis.compute_features) evaluates the basis at the given input samples. When in mode `"conv"`, it will convolve the samples
 with a bank of kernels, one per basis function.
@@ -48,7 +48,7 @@ It accepts one or more NumPy array or pynapple `Tsd` object as input, and perfor
 :::{admonition} Multiple epochs
 :class: note
 
-Note that the convolution works gracefully with multiple disjoint epochs, when a pynapple time series is used as 
+Note that the convolution works gracefully with multiple disjoint epochs, when a pynapple time series is used as
 input.
 :::
 
@@ -79,5 +79,4 @@ To write a usable (i.e., concrete, non-abstract) basis object, you
 - **Must** inherit the abstract superclass [`Basis`](nemos.basis._basis.Basis)
 - **Must** define the `_evaluate` and `_check_n_basis_min` methods with the expected input/output format, see [API Reference](nemos_basis) for the specifics.
 - **Should not** overwrite the [`compute_features`](nemos.basis._basis.Basis.compute_features) and [`compute_features`](nemos.basis._basis.Basis.evaluate_on_grid) methods inherited from [`Basis`](nemos.basis._basis.Basis).
-- **May** inherit any number of abstract intermediate classes (e.g., [`SplineBasis`](nemos.basis._spline_basis.SplineBasis)). 
-
+- **May** inherit any number of abstract intermediate classes (e.g., [`SplineBasis`](nemos.basis._spline_basis.SplineBasis)).

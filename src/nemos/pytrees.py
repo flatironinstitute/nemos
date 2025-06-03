@@ -1,4 +1,10 @@
-#!/usr/bin/env python3
+"""Custom FeaturePytree class.
+
+Implement the ``FeaturePytree`` class that stores inputs as a dictionary of arrays.
+These objects can be used as inputs to NeMoS models. The fitted coefficients will be stored as
+dictionaries with matching keys, facilitating interpretation of the model output.
+"""
+
 from collections import UserDict
 
 import jax
@@ -25,20 +31,24 @@ class FeaturePytree(UserDict):
 
     @property
     def shape(self):
+        """Return the sample points, i.e. the shared dimension."""
         # Every value is an array with the same number of time points, so
         # that's the only shared shape.
         return (self._num_time_points,)
 
     def __len__(self):
+        """Return the number of sample points."""
         # Same logic as shape
         return self._num_time_points
 
     @property
     def ndim(self):
+        """Force slicing only on the time axis."""
         # You can slice into a FeaturePytree along one dimension (time)
         return 1
 
     def __setitem__(self, key, value):
+        """Check arrays and set the values."""
         # All keys are strings
         if not isinstance(key, str):
             raise ValueError("Keys must be strings!")
@@ -61,6 +71,7 @@ class FeaturePytree(UserDict):
         super().__setitem__(key, value)
 
     def __getitem__(self, key):
+        """Getitem using data dictionary keys."""
         # We can index into either the features, which have strs as their
         # keys...
         if isinstance(key, str):
@@ -70,11 +81,13 @@ class FeaturePytree(UserDict):
             return jax.tree_util.tree_map(lambda x: x[key], self)
 
     def __repr__(self):
+        """Represent a FeaturePytree."""
         # Show the shape and data type of each array
         repr = [f"{k}: shape {v.shape}, dtype {v.dtype}" for k, v in self.data.items()]
         return "\n".join(repr)
 
     def __eq__(self, other):
+        """Equality over a tree of arrays."""
         # if structure is different, pytree_map_and_reduce will return a ValueError
         if jax.tree_util.tree_structure(self) != jax.tree_util.tree_structure(other):
             return False
@@ -83,10 +96,12 @@ class FeaturePytree(UserDict):
         )
 
     def tree_flatten(self):
+        """Flatten data."""
         return jax.tree_util.tree_flatten(self.data)
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
+        """Unflatten the data dict and return the class."""
         try:
             return cls(**jax.tree_util.tree_unflatten(aux_data, children))
         except ValueError:

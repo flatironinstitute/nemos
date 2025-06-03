@@ -1,5 +1,7 @@
-#!/usr/bin/env python3
-__version__ = "0.2.1"
+"""Public available modules."""
+
+from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
+from importlib.metadata import version as _get_version
 
 from . import (
     basis,
@@ -17,3 +19,9 @@ from . import (
     type_casting,
     utils,
 )
+
+try:
+    __version__ = _get_version("nemos")
+except _PackageNotFoundError:
+    # package is not installed
+    pass

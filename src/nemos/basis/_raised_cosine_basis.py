@@ -15,7 +15,7 @@ from ._basis_mixin import AtomicBasisMixin
 
 
 class RaisedCosineBasisLinear(Basis, AtomicBasisMixin, abc.ABC):
-    """Represent linearly-spaced raised cosine basis functions.
+    r"""Represent linearly-spaced raised cosine basis functions.
 
     This implementation is based on the cosine bumps used by Pillow et al. [1]_
     to uniformly tile the internal points of the domain.
@@ -24,11 +24,9 @@ class RaisedCosineBasisLinear(Basis, AtomicBasisMixin, abc.ABC):
     ----------
     n_basis_funcs :
         The number of basis functions.
-    mode :
-        The mode of operation. 'eval' for evaluation at sample points,
-        'conv' for convolutional operation.
     width :
-        Width of the raised cosine. By default, it's set to 2.0.
+        Width of the raised cosine. Must be $x/2$ for any integer $x\geq 3$ (e.g., 1.5,
+        2, 2.5, 3, etc.)
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
@@ -39,19 +37,25 @@ class RaisedCosineBasisLinear(Basis, AtomicBasisMixin, abc.ABC):
         C. E. (2005). Prediction and decoding of retinal ganglion cell responses
         with a probabilistic spiking model. Journal of Neuroscience, 25(47),
         11003–11013.
+
+    Raises
+    ------
+    ValueError
+        If width <= 1 or 2*width is not a positive integer. Values that do not match
+        this constraint will result in the following, which contribute to aliasing:
+        - No overlap between bumps (width < 1).
+        - Oscillatory behavior when summing the basis elements (2*width not integer).
     """
 
     def __init__(
         self,
         n_basis_funcs: int,
-        mode="eval",
         width: float = 2.0,
         label: Optional[str] = "RaisedCosineBasisLinear",
     ) -> None:
-        AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs)
-        super().__init__(
-            mode=mode,
-            label=label,
+        AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, label=label)
+        Basis.__init__(
+            self,
         )
         self._n_input_dimensionality = 1
         self._check_width(width)
@@ -83,23 +87,24 @@ class RaisedCosineBasisLinear(Basis, AtomicBasisMixin, abc.ABC):
         ------
         ValueError
             If width <= 1 or 2*width is not a positive integer. Values that do not match
-            this constraint will result in:
+            this constraint will result in the following, which contribute to aliasing:
             - No overlap between bumps (width < 1).
             - Oscillatory behavior when summing the basis elements (2*width not integer).
         """
         if width <= 1 or (not np.isclose(width * 2, round(2 * width))):
             raise ValueError(
-                f"Invalid raised cosine width. "
-                f"2*width must be a positive integer, 2*width = {2 * width} instead!"
+                f"Invalid raised cosine width. Width must be strictly greater than 1 and "
+                f"2*width must be a integer, but got width={width} instead! At other "
+                "values, basis sampling will lead to aliasing."
             )
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    def _evaluate(  # call these _evaluate
+    def evaluate(  # call these evaluate
         self,
         sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor,
     ) -> FeatureMatrix:
-        """Generate basis functions with given samples.
+        """Evaluate the raised cosine basis at the sample points.
 
         Parameters
         ----------
@@ -121,7 +126,7 @@ class RaisedCosineBasisLinear(Basis, AtomicBasisMixin, abc.ABC):
             # basis1 = nmo.basis.RaisedCosineBasisLinear(5)
             # basis2 = nmo.basis.RaisedCosineBasisLog(5)
             # additive_basis = basis1 + basis2
-            # additive_basis._evaluate(*([x] * 2)) would modify both inputs
+            # additive_basis.evaluate(*([x] * 2)) would modify both inputs
             sample_pts, _ = min_max_rescale_samples(
                 np.copy(sample_pts), getattr(self, "bounds", None)
             )
@@ -198,7 +203,7 @@ class RaisedCosineBasisLinear(Basis, AtomicBasisMixin, abc.ABC):
 
 
 class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
-    """Represent log-spaced raised cosine basis functions.
+    r"""Represent log-spaced raised cosine basis functions.
 
     Similar to ``RaisedCosineBasisLinear`` but the basis functions are log-spaced.
     This implementation is based on the cosine bumps used by Pillow et al. [1]_
@@ -208,11 +213,9 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
     ----------
     n_basis_funcs :
         The number of basis functions.
-    mode :
-        The mode of operation. 'eval' for evaluation at sample points,
-        'conv' for convolutional operation.
     width :
-        Width of the raised cosine.
+        Width of the raised cosine. Must be $x/2$ for any integer $x\geq 3$ (e.g., 1.5,
+        2, 2.5, 3, etc.)
     time_scaling :
         Non-negative hyper-parameter controlling the logarithmic stretch magnitude, with
         larger values resulting in more stretching. As this approaches 0, the
@@ -231,12 +234,12 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
        C. E. (2005). Prediction and decoding of retinal ganglion cell responses
        with a probabilistic spiking model. Journal of Neuroscience, 25(47),
        11003–11013.
+
     """
 
     def __init__(
         self,
         n_basis_funcs: int,
-        mode="eval",
         width: float = 2.0,
         time_scaling: float = None,
         enforce_decay_to_zero: bool = True,
@@ -244,7 +247,6 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
     ) -> None:
         super().__init__(
             n_basis_funcs,
-            mode=mode,
             width=width,
             label=label,
         )
@@ -333,11 +335,11 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    def _evaluate(
+    def evaluate(
         self,
         sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor,
     ) -> FeatureMatrix:
-        """Generate log-spaced raised cosine basis with given samples.
+        """Evaluate the log-spaced raised cosine basis at the sample points.
 
         Parameters
         ----------
@@ -356,4 +358,4 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
         ValueError
             If the sample provided do not lie in [0,1].
         """
-        return super()._evaluate(self._transform_samples(sample_pts))
+        return super().evaluate(self._transform_samples(sample_pts))

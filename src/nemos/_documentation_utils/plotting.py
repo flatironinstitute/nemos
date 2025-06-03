@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from typing import Optional, Union
+from typing import List, Optional, Union
 
 import jax
 
@@ -197,14 +197,18 @@ def current_injection_plot(
     current: nap.Tsd,
     spikes: nap.TsGroup,
     firing_rate: nap.TsdFrame,
-    predicted_firing_rate: Optional[nap.TsdFrame] = None,
+    predicted_firing_rates: Optional[Union[nap.TsdFrame, List[nap.TsdFrame]]] = None,
 ):
     ex_intervals = current.threshold(0.0).time_support
+
+    # that is, if predicted_firing_rates looks like a pynapple object
+    if predicted_firing_rates and hasattr(predicted_firing_rates, "t"):
+        predicted_firing_rates = [predicted_firing_rates]
 
     # define plotting parameters
     # colormap, color levels and transparency level
     # for the current injection epochs
-    cmap = plt.get_cmap("autumn")
+    cmap = plt.colormaps["autumn"]
     color_levs = [0.8, 0.5, 0.2]
     alpha = 0.4
 
@@ -237,10 +241,18 @@ def current_injection_plot(
     # second row subplot: response
     resp_ax = plt.subplot2grid((4, 3), loc=(1, 0), rowspan=1, colspan=3, fig=fig)
     resp_ax.plot(firing_rate, color="k", label="Observed firing rate")
-    if predicted_firing_rate:
-        resp_ax.plot(
-            predicted_firing_rate, color="tomato", label="Predicted firing rate"
-        )
+    if predicted_firing_rates:
+        if len(predicted_firing_rates) > 1:
+            lbls = [" (current history)", " (instantaneous only)"]
+        else:
+            lbls = [""]
+        for pred_fr, style, lbl in zip(predicted_firing_rates, ["-", "--"], lbls):
+            resp_ax.plot(
+                pred_fr,
+                linestyle=style,
+                color="tomato",
+                label=f"Predicted firing rate{lbl}",
+            )
     resp_ax.plot(spikes.to_tsd([-1.5]), "|", color="k", ms=10, label="Observed spikes")
     resp_ax.set_ylabel("Firing rate (Hz)")
     resp_ax.set_xlabel("Time (s)")
@@ -272,8 +284,9 @@ def current_injection_plot(
         ax = plt.subplot2grid((4, 3), loc=(2, i), rowspan=1, colspan=1, fig=fig)
         ax.plot(firing_rate.restrict(interval), color="k")
         ax.plot(spikes.restrict(interval).to_tsd([-1.5]), "|", color="k", ms=10)
-        if predicted_firing_rate:
-            ax.plot(predicted_firing_rate.restrict(interval), color="tomato")
+        if predicted_firing_rates:
+            for pred_fr, style in zip(predicted_firing_rates, ["-", "--"]):
+                ax.plot(pred_fr.restrict(interval), linestyle=style, color="tomato")
         else:
             ax.set_ylim(ylim)
         if i == 0:
@@ -508,7 +521,7 @@ def plot_coupling(
     cmap_label="hsv",
 ):
     pref_ang = tuning.idxmax()
-    cmap_tun = plt.get_cmap(cmap_label)
+    cmap_tun = plt.colormaps[cmap_label]
     color_tun = (pref_ang.values - pref_ang.values.min()) / (
         pref_ang.values.max() - pref_ang.values.min()
     )
@@ -522,7 +535,7 @@ def plot_coupling(
     # scale to 0,1
     color = -0.5 * (sum_resp_n - sum_resp_n.min()) / sum_resp_n.min()
 
-    cmap = plt.get_cmap(cmap_name)
+    cmap = plt.colormaps[cmap_name]
     n_row, n_col, n_tp = responses.shape
     time = np.arange(n_tp)
     fig, axs = plt.subplots(n_row + 1, n_col + 1, figsize=figsize, sharey="row")
@@ -825,7 +838,7 @@ def plot_head_direction_tuning(
     )
 
     # plot raster and heading
-    cmap = plt.get_cmap(cmap_label)
+    cmap = plt.colormaps[cmap_label]
     unq_angles = np.unique(pref_ang.values)
     n_subplots = len(unq_angles)
     relative_color_levs = (unq_angles - unq_angles[0]) / (
@@ -930,7 +943,7 @@ def plot_head_direction_tuning_model(
     )
 
     # plot raster and heading
-    cmap = plt.get_cmap(cmap_label)
+    cmap = plt.colormaps[cmap_label]
     unq_angles = np.unique(pref_ang.values)
     n_subplots = len(unq_angles)
     relative_color_levs = (unq_angles - unq_angles[0]) / (
@@ -1129,4 +1142,51 @@ def plot_features(
             ax.set_ylabel("$t_{%d}$" % (window_size + k), rotation=0)
 
     plt.tight_layout()
+    return fig
+
+
+def plot_current_history_features(
+    current, features, basis, window_duration_sec, interval=nap.IntervalSet(462.77, 463)
+):
+    fig, axes = plt.subplots(2, 3, sharey="row", figsize=(8, 3.5))
+    time, basis = basis.evaluate_on_grid(basis.window_size)
+    time *= window_duration_sec
+    current = current.restrict(interval)
+    features = (
+        features.restrict(interval) / features.restrict(interval).max(0) * current.max()
+    )
+    for ax in axes[1, :]:
+        ax.plot(current, "k--")
+        ax.set_xlabel("Time (sec")
+    axes[0, 0].plot(time, basis, alpha=0.1)
+    axes[0, 0].plot(time, basis[:, 0], "C0", alpha=1)
+    axes[0, 0].set_ylabel("Amplitude (A.U.)")
+    axes[1, 0].plot(features[:, 0])
+    axes[1, 0].set_ylabel("Current")
+    axes[0, 0].set_title("Feature 1")
+    axes[1, 1].plot(features[:, -1], f"C{basis.shape[1]-1}")
+    axes[0, 1].plot(time, basis, alpha=0.1)
+    axes[0, 1].plot(time, basis[:, -1], f"C{basis.shape[1]-1}", alpha=1)
+    axes[0, 1].set_title(f"Feature {basis.shape[1]}")
+    axes[0, 2].plot(time, basis)
+    axes[1, 2].plot(features)
+    axes[0, 2].set_title("All features")
+    return fig
+
+
+def plot_basis_filter(basis, model, current_history_duration_sec=0.2):
+    """Visualize the model's learned filter."""
+    fig, axes = plt.subplots(1, 4, figsize=(20, 5))
+    time, kernel = basis.evaluate_on_grid(200)
+    time *= current_history_duration_sec
+    axes[0].plot(time, kernel)
+    axes[0].set(title="Basis functions", xlabel="Time (sec)", ylabel="Amplitude (A.U.)")
+    axes[1].bar(np.arange(len(model.coef_)), model.coef_)
+    axes[1].set(title="Coefficient Weights", xlabel="Basis number")
+    axes[2].plot(time, kernel * model.coef_)
+    axes[2].set(title="Weighted basis functions", xlabel="Time (sec)")
+    axes[2].axhline(0, c="k", linestyle="--")
+    axes[3].plot(time, np.matmul(kernel, model.coef_))
+    axes[3].axhline(0, c="k", linestyle="--")
+    axes[3].set(title="Learned linear filter", xlabel="Time (sec)")
     return fig

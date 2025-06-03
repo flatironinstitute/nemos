@@ -6,9 +6,14 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-import nemos
 import sys, os
 from pathlib import Path
+
+from importlib.metadata import version
+release: str = version("nemos")
+# this will grab major.minor.patch (excluding any .devN afterwards, which should only
+# show up when building locally during development)
+version: str = ".".join(release.split('.')[:3])
 
 sys.path.insert(0, str(Path('..', 'src').resolve()))
 sys.path.insert(0, os.path.abspath('sphinxext'))
@@ -17,7 +22,6 @@ sys.path.insert(0, os.path.abspath('sphinxext'))
 project = 'nemos'
 copyright = '2024'
 author = 'E Balzani'
-version = release = nemos.__version__
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -163,7 +167,7 @@ nitpicky = True
 exclude_tutorials = os.environ.get("EXCLUDE_TUTORIALS", "false").lower() == "true"
 
 if exclude_tutorials:
-    nb_execution_excludepatterns = ["tutorials/**", "how_to_guide/**", "background/**"]
+    nb_execution_excludepatterns = ["tutorials/*md", "how_to_guide/*md", "background/*md", "background/*/*md"]
 
 viewcode_follow_imported_members = True
 
@@ -172,3 +176,6 @@ plot_html_show_formats = False
 
 # raise an error if exec error in notebooks
 nb_execution_raise_on_error = True
+
+# cache notebooks when possible
+nb_execution_mode = "cache"

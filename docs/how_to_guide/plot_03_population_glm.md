@@ -6,7 +6,7 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.16.4
 kernelspec:
-  display_name: Python 3
+  display_name: Python 3 (ipykernel)
   language: python
   name: python3
 ---
@@ -39,7 +39,6 @@ warnings.filterwarnings(
     category=RuntimeWarning,
 )
 ```
-
 
 # Population GLM
 
@@ -95,7 +94,6 @@ print(spikes.shape)
 
 We can now instantiate the [`PopulationGLM`](nemos.glm.PopulationGLM) model and  fit.
 
-
 ```{code-cell} ipython3
 model = nmo.glm.PopulationGLM()
 model.fit(X, spikes)
@@ -108,7 +106,6 @@ print(f"population GLM log-likelihood: {model.score(X, spikes)}")
 If you want to model neurons with different input features, the way to do so is to specify a `feature_mask`.
 Let's assume that we have two neurons, share one shared input, and have an extra private one, for a total of
 3 inputs.
-
 
 ```{code-cell} ipython3
 # let's take the first three input
@@ -124,7 +121,6 @@ Let's assume that:
 
 We can simulate this scenario,
 
-
 ```{code-cell} ipython3
 # model the rate of the first neuron using only the first two features and weights.
 rate_neuron_1 = jnp.exp(np.dot(input_features[:, [0, 1]], w_true[: 2, 0]))
@@ -138,7 +134,6 @@ spikes = np.random.poisson(rate)
 ```
 
 We can impose the same constraint to the [`PopulationGLM`](nemos.glm.PopulationGLM) by masking the weights.
-
 
 ```{code-cell} ipython3
 # initialize the mask to a matrix of 1s.
@@ -157,7 +152,6 @@ print(feature_mask)
 The mask can be passed at initialization or set after the model is initialized, but cannot be changed
 after the model is fit.
 
-
 ```{code-cell} ipython3
 # set a quasi-newton solver and low tolerance for better numerical precision
 model = nmo.glm.PopulationGLM(solver_name="LBFGS", solver_kwargs={"tol": 10**-12})
@@ -171,7 +165,6 @@ model.fit(input_features, spikes)
 
 If we print the model coefficients, we can see the effect of the mask.
 
-
 ```{code-cell} ipython3
 print(model.coef_)
 ```
@@ -181,7 +174,6 @@ the coefficient of the second neuron corresponding to the second feature.
 
 To convince ourselves that this is equivalent to fit each neuron individually with the correct features,
 let's go ahead and try.
-
 
 ```{code-cell} ipython3
 # features for each neuron
@@ -229,7 +221,7 @@ if root:
 # if local store in ../_build/html/...
 else:
    path = Path("../_build/html/_static/thumbnails/how_to_guide")
- 
+
 # make sure the folder exists if run from build
 if root or Path("../assets/stylesheets").exists():
    path.mkdir(parents=True, exist_ok=True)
@@ -243,7 +235,6 @@ if path.exists():
 in a [`FeaturePytree`](nemos.pytrees.FeaturePytree), the `feature_mask` needs to be a dictionary of the same structure, containing arrays
 of shape `(n_neurons, )`.
 The example above can be reformulated as follows,
-
 
 ```{code-cell} ipython3
 # restructure the input as FeaturePytree

@@ -16,13 +16,10 @@ class FourierBasis(Basis, AtomicBasisMixin, abc.ABC):
 
     Parameters
     ----------
-    n_basis_funcs :
-        The number of basis functions.
+    n_frequencies :
+        The number of frequencies for the Fourier basis.
     include_constant:
         Include the constant term, which corresponds to 0 frequency. Default is False.
-    mode :
-        The mode of operation. 'eval' for evaluation at sample points,
-        'conv' for convolutional operation.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
@@ -33,7 +30,6 @@ class FourierBasis(Basis, AtomicBasisMixin, abc.ABC):
         self,
         n_frequencies: int,
         include_constant: bool = False,
-        mode="eval",
         label: Optional[str] = "RaisedCosineBasisLinear",
     ) -> None:
 
@@ -43,11 +39,8 @@ class FourierBasis(Basis, AtomicBasisMixin, abc.ABC):
         # this sets the _n_basis_funcs too
         self.n_frequencies = n_frequencies
 
-        AtomicBasisMixin.__init__(self, n_basis_funcs=self._n_basis_funcs)
-        super().__init__(
-            mode=mode,
-            label=label,
-        )
+        AtomicBasisMixin.__init__(self, n_basis_funcs=self._n_basis_funcs, label=label)
+        super().__init__()
 
     @property
     def include_constant(self):
@@ -64,7 +57,7 @@ class FourierBasis(Basis, AtomicBasisMixin, abc.ABC):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    def _evaluate(  # call these _evaluate
+    def evaluate(  # call these _evaluate
         self,
         sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor,
     ) -> FeatureMatrix:
