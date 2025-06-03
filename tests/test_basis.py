@@ -22,6 +22,7 @@ import nemos.basis.basis as basis
 import nemos.convolve as convolve
 from nemos.basis import (
     CustomBasis,
+    FourierConv,
     FourierEval,
     HistoryConv,
     IdentityEval,
@@ -48,6 +49,9 @@ SizeTerminal = namedtuple("SizeTerminal", ["columns", "lines"])
 def instantiate_atomic_basis(cls, **kwargs):
     if cls == CustomBasis:
         return custom_basis(**kwargs)
+    if cls in (FourierEval, FourierConv) and "n_basis_funcs" in kwargs:
+        out = kwargs.pop("n_basis_funcs")
+        kwargs["n_frequencies"] = out
     names = cls._get_param_names()
     new_kwargs = kwargs.copy()
     for key in kwargs:
@@ -1265,6 +1269,8 @@ def test_call_equivalent_in_conv(n_basis, cls):
         basis.OrthExponentialConv,
         basis.IdentityEval,
         basis.HistoryConv,
+        basis.FourierEval,
+        basis.FourierConv,
     ],
 )
 class TestSharedMethods:
@@ -1281,6 +1287,7 @@ class TestSharedMethods:
                 basis.MSplineEval: "MSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
                 basis.OrthExponentialEval: "OrthExponentialEval(n_basis_funcs=5, bounds=(1.0, 2.0))",
                 basis.IdentityEval: "IdentityEval(bounds=(1.0, 2.0))",
+                basis.FourierEval: "FourierEval(n_frequencies=5, include_constant=False, bounds=(1.0, 2.0))",
                 basis.RaisedCosineLogConv: "RaisedCosineLogConv(n_basis_funcs=5, window_size=10, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True)",
                 basis.RaisedCosineLinearConv: "RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0)",
                 basis.BSplineConv: "BSplineConv(n_basis_funcs=5, window_size=10, order=4)",
@@ -1288,6 +1295,7 @@ class TestSharedMethods:
                 basis.MSplineConv: "MSplineConv(n_basis_funcs=5, window_size=10, order=4)",
                 basis.OrthExponentialConv: "OrthExponentialConv(n_basis_funcs=5, window_size=10)",
                 basis.HistoryConv: "HistoryConv(window_size=10)",
+                basis.FourierConv: "FourierConv(n_frequencies=5, window_size=10, include_constant=True)",
             }
         ],
     )
@@ -1433,7 +1441,9 @@ class TestSharedMethods:
             **extra_decay_rates(cls, n_basis),
         )
         x = np.linspace(0, 1, 10)
-        assert bas.evaluate(x).shape[1] == n_basis
+        assert bas.evaluate(x).shape[1] == (
+            n_basis if not isinstance(bas, basis.FourierBasis) else bas.n_basis_funcs
+        )
 
     @pytest.mark.parametrize(
         "num_input, expectation",
@@ -1491,6 +1501,8 @@ class TestSharedMethods:
             n_basis = 8
             if inp.ndim != 1:
                 return
+        elif isinstance(bas, basis.FourierBasis):
+            n_basis = bas.n_basis_funcs
         with expectation:
             out = bas.evaluate(inp)
             assert out.shape == tuple((*inp.shape, n_basis))
@@ -1515,7 +1527,7 @@ class TestSharedMethods:
         out = bas.evaluate(inp)
         assert np.all(np.isnan(out[2, 0, [0, 2]]))
         assert np.all(np.isnan(out[4, 1, 1]))
-        assert np.isnan(out).sum() == 3 * n_basis
+        assert np.isnan(out).sum() == 3 * bas.n_basis_funcs
 
     def test_call_nan(self, cls):
         if cls is HistoryConv:
@@ -1588,6 +1600,8 @@ class TestSharedMethods:
             window_size=30,
             **extra_decay_rates(cls, args_copy["n_basis_funcs"]),
         )
+        if isinstance(basis_obj, basis.FourierBasis):
+            args_copy["n_basis_funcs"] = basis_obj.n_basis_funcs
         eval_basis = basis_obj.compute_features(np.linspace(0, 1, sample_size))
         assert eval_basis.shape[1] == args_copy["n_basis_funcs"], (
             "Dimensions do not agree: The number of basis should match the first dimension "
@@ -1787,6 +1801,7 @@ class TestSharedMethods:
             order=order,
             decay_rates=decay_rates,
             conv_kwargs=conv_kwargs,
+            n_frequencies=4,
         )
         pars = {
             key: value

@@ -2547,8 +2547,161 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         --------
         >>> import numpy as np
         >>> from nemos.basis import FourierEval
-        >>> bspline_basis = FourierEval(n_frequencies=4)
-        >>> out = bspline_basis.evaluate(np.random.randn(100, 5, 2))
+        >>> basis = FourierEval(n_frequencies=4)
+        >>> out = basis.evaluate(np.random.randn(100, 5, 2))
+        >>> out.shape
+        (100, 5, 2, 8)
+        """
+        # ruff: noqa: D205, D400
+        return super().evaluate(sample_pts)
+
+
+class FourierConv(ConvBasisMixin, FourierBasis):
+    """Fourier basis.
+
+    Parameters
+    ----------
+    n_frequencies :
+        The number of frequency in the basis.
+    window_size :
+        The window size for convolution in number of samples.
+    include_constant :
+        Include the constant (0 frequency) term or not. Default is True.
+    label :
+        The label of the basis, intended to be descriptive of the task variable being processed.
+        For example: velocity, position, spike_counts.
+    conv_kwargs:
+        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor`;
+        These arguments are used to change the default behavior of the convolution.
+        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
+        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
+        that the convolution axis is ``axis=0``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from nemos.basis import FourierConv
+    >>> n_freq = 5
+    >>> fourier_basis = FourierConv(n_freq, 50)
+    >>> fourier_basis
+    FourierConv(n_frequencies=5, window_size=50, include_constant=False)
+    >>> sample_points = np.random.randn(100)
+    >>> # convolve the basis
+    >>> features = fourier_basis.compute_features(sample_points)
+    """
+
+    def __init__(
+        self,
+        n_frequencies: int,
+        window_size: int,
+        include_constant: bool = True,
+        label: Optional[str] = "FourierConv",
+        conv_kwargs: Optional[dict] = None,
+    ):
+        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
+        FourierBasis.__init__(
+            self,
+            n_frequencies,
+            include_constant=include_constant,
+            label=label,
+        )
+
+    @add_docstring("evaluate_on_grid", FourierBasis)
+    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
+        """
+        Examples
+        --------
+        .. plot::
+            :include-source: True
+            :caption: FourierEval Basis
+
+            >>> import numpy as np
+            >>> import matplotlib.pyplot as plt
+            >>> from nemos.basis import FourierConv
+            >>> n_frequencies = 5
+            >>> fourier_basis = FourierConv(n_frequencies, 50)
+            >>> sample_points, basis_values = fourier_basis.evaluate_on_grid(100)
+            >>> plt.plot(sample_points, basis_values)
+            [<matplotlib.lines.Line2D object at ...
+            >>> plt.show()
+        """
+        return super().evaluate_on_grid(n_samples)
+
+    @add_docstring("_compute_features", ConvBasisMixin)
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import FourierConv
+
+        >>> # Generate data
+        >>> num_samples = 1000
+        >>> X = np.random.normal(size=(num_samples, ))  # raw time series
+        >>> basis = FourierConv(n_frequencies=10, window_size=50)
+        >>> features = basis.compute_features(X)  # basis transformed time series
+        >>> features.shape
+        (1000, 20)
+
+        """
+        return super().compute_features(xi)
+
+    @add_docstring("split_by_feature", FourierBasis)
+    def split_by_feature(
+        self,
+        x: NDArray,
+        axis: int = 1,
+    ):
+        r"""
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import FourierConv
+        >>> from nemos.glm import GLM
+        >>> basis = FourierConv(n_frequencies=6, window_size=50, label="one_input")
+        >>> X = basis.compute_features(np.random.randn(200,))
+        >>> split_features_multi = basis.split_by_feature(X, axis=1)
+        >>> for feature, sub_dict in split_features_multi.items():
+        ...        print(f"{feature}, shape {sub_dict.shape}")
+        one_input, shape (200, 12)
+
+        """
+        return super().split_by_feature(x, axis=axis)
+
+    @add_docstring("set_input_shape", AtomicBasisMixin)
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
+        """
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> basis = nmo.basis.FourierConv(5, 50)
+        >>> # Configure with an integer input:
+        >>> _ = basis.set_input_shape(3)
+        >>> basis.n_output_features
+        30
+        >>> # Configure with a tuple:
+        >>> _ = basis.set_input_shape((4, 5))
+        >>> basis.n_output_features
+        200
+        >>> # Configure with an array:
+        >>> x = np.ones((10, 4, 5))
+        >>> _ = basis.set_input_shape(x)
+        >>> basis.n_output_features
+        200
+
+        """
+        return AtomicBasisMixin.set_input_shape(self, xi)
+
+    @add_docstring("evaluate", FourierBasis)
+    def evaluate(self, sample_pts: NDArray) -> NDArray:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import FourierConv
+        >>> basis = FourierConv(n_frequencies=4, window_size=50)
+        >>> out = basis.evaluate(np.random.randn(100, 5, 2))
         >>> out.shape
         (100, 5, 2, 8)
         """

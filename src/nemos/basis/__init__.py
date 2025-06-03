@@ -9,6 +9,7 @@ from .basis import (
     BSplineEval,
     CyclicBSplineConv,
     CyclicBSplineEval,
+    FourierConv,
     FourierEval,
     HistoryConv,
     IdentityEval,
