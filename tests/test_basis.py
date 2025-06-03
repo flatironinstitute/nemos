@@ -862,6 +862,7 @@ class TestConvBasis:
         basis.MSplineEval,
         basis.OrthExponentialEval,
         basis.IdentityEval,
+        basis.FourierEval,
     ],
 )
 class TestEvalBasis:
@@ -923,6 +924,10 @@ class TestEvalBasis:
         )
         f1, f2 = bas.__dict__.pop("_funcs", [True]), bas2.__dict__.pop("_funcs", [True])
         assert all(fi == fj for fi, fj in zip(f1, f2))
+
+        f1, f2 = bas.__dict__.pop("_frequencies", [True]), bas2.__dict__.pop("_frequencies", [True])
+        assert all(fi == fj for fi, fj in zip(f1, f2))
+
         assert bas.__dict__ == bas2.__dict__
 
     @pytest.mark.parametrize(
@@ -1157,7 +1162,7 @@ class TestEvalBasis:
             if cls == IdentityEval:
                 extra = {}
             else:
-                extra = dict(n_basis_funcs=5)
+                extra = {key: 5 for key in ["n_basis_funcs", "n_frequencies"] if key in cls._get_param_names()}
             cls(**extra, test="hi", **extra_decay_rates(cls, 5))
 
     def test_set_window_size(self, cls):
@@ -1203,18 +1208,15 @@ class TestEvalBasis:
     def test_init_window_size(self, ws, expectation, cls):
         if cls == CustomBasis:
             pytest.skip(f"Skipping test_init_window_size for {cls.__name__}")
-        extra = dict(n_basis_funcs=5) if cls != IdentityEval else {}
+        extra = {key: 5 for key in ["n_basis_funcs", "n_frequencies"] if key in cls._get_param_names()}
         with expectation:
             cls(**extra, window_size=ws, **extra_decay_rates(cls, 5))
 
     def test_set_bounds(self, cls):
         if cls == CustomBasis:
             pytest.skip(f"Skipping test_set_bounds for {cls.__name__}")
-        kwargs = (
-            {"bounds": (1, 2), "n_basis_funcs": 10}
-            if cls != IdentityEval
-            else {"bounds": (1, 2)}
-        )
+        kwargs = {"bounds": (1, 2)}
+        kwargs.update({key: 10 for key in ["n_basis_funcs", "n_frequencies"] if key in cls._get_param_names()})
         with does_not_raise():
             cls(**kwargs, **extra_decay_rates(cls, 10))
 
