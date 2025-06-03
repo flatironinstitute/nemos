@@ -141,6 +141,7 @@ class FourierBasis(Basis, AtomicBasisMixin, abc.ABC):
 
     def _check_n_basis_min(self) -> None:
         """Check that the user required enough basis elements.
+
         Checks that the number of basis is at least 1.
 
         Raises
