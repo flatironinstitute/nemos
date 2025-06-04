@@ -2649,7 +2649,7 @@ class FourierConv(ConvBasisMixin, FourierBasis):
         --------
         .. plot::
             :include-source: True
-            :caption: FourierEval Basis
+            :caption: FourierConv Basis
 
             >>> import numpy as np
             >>> import matplotlib.pyplot as plt
