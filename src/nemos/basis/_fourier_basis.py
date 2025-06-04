@@ -30,6 +30,7 @@ class FourierBasis(Basis, AtomicBasisMixin, abc.ABC):
         self,
         n_frequencies: int,
         include_constant: bool = False,
+        phase_sign: int = 1,
         label: Optional[str] = "RaisedCosineBasisLinear",
     ) -> None:
 
@@ -39,8 +40,20 @@ class FourierBasis(Basis, AtomicBasisMixin, abc.ABC):
         # this sets the _n_basis_funcs too
         self.n_frequencies = n_frequencies
 
+        if phase_sign not in (-1, 1):
+            raise ValueError(
+                f"`phase_sign` must be either -1, or 1. `{phase_sign}` provided instead!"
+            )
+
+        self._phase_sign = float(phase_sign)
+
         AtomicBasisMixin.__init__(self, n_basis_funcs=self._n_basis_funcs, label=label)
         super().__init__()
+
+    @property
+    def phase_sign(self):
+        """Read-only phase sign property."""
+        return self._phase_sign
 
     @property
     def include_constant(self):
@@ -50,7 +63,7 @@ class FourierBasis(Basis, AtomicBasisMixin, abc.ABC):
     def include_constant(self, value):
         if not isinstance(value, bool):
             raise TypeError(
-                f"`include_constant` must be a boolean. {value} provided instead!"
+                f"`include_constant` must be a boolean. `{value}` provided instead!"
             )
         # store as int (used in slicing)
         self._include_constant = int(value)
@@ -93,7 +106,11 @@ class FourierBasis(Basis, AtomicBasisMixin, abc.ABC):
         # compute angles
         angles = np.outer(sample_pts, self._frequencies)
         out = np.concatenate(
-            [np.cos(angles), -np.sin(angles[:, int(self._include_constant) :])], axis=1
+            [
+                np.cos(angles),
+                self.phase_sign * np.sin(angles[:, int(self._include_constant) :]),
+            ],
+            axis=1,
         )
         return out.reshape(*shape, out.shape[1])
 
@@ -129,7 +146,9 @@ class FourierBasis(Basis, AtomicBasisMixin, abc.ABC):
     @n_frequencies.setter
     def n_frequencies(self, value: int):
         if not isinstance(value, int):
-            raise TypeError(f"`value` must be an integer. {value} provided instead!")
+            raise TypeError(
+                f"`n_frequencies` must be an integer. `{value}` provided instead!"
+            )
         if value <= 0:
             raise ValueError(
                 f"`value` must be a positive integer. {value} provided instead!"

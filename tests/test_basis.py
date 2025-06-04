@@ -530,7 +530,9 @@ class TestConvBasis:
         )
         f1, f2 = bas.__dict__.pop("_funcs", [True]), bas2.__dict__.pop("_funcs", [True])
         assert all(fi == fj for fi, fj in zip(f1, f2))
-        f1, f2 = bas.__dict__.pop("_frequencies", [True]), bas2.__dict__.pop("_frequencies", [True])
+        f1, f2 = bas.__dict__.pop("_frequencies", [True]), bas2.__dict__.pop(
+            "_frequencies", [True]
+        )
         assert all(fi == fj for fi, fj in zip(f1, f2))
         assert bas.__dict__ == bas2.__dict__
 
@@ -726,7 +728,11 @@ class TestConvBasis:
         ],
     )
     def test_vmin_vmax_mode_conv(self, bounds, samples, exception, cls):
-        extra_args = {key: 5 for key in ["n_basis_funcs", "n_frequencies"] if key in cls._get_param_names()}
+        extra_args = {
+            key: 5
+            for key in ["n_basis_funcs", "n_frequencies"]
+            if key in cls._get_param_names()
+        }
         if cls == HistoryConv:
             extra_args = {}
         with exception:
@@ -775,7 +781,11 @@ class TestConvBasis:
         assert bas.kernel_.shape == (30, n_basis)
 
     def test_set_window_size(self, cls):
-        kwargs = {key: 10 for key in ["n_basis_funcs", "n_frequencies"] if key in cls._get_param_names()}
+        kwargs = {
+            key: 10
+            for key in ["n_basis_funcs", "n_frequencies"]
+            if key in cls._get_param_names()
+        }
         kwargs.update({"window_size": 10})
 
         with does_not_raise():
@@ -826,7 +836,11 @@ class TestConvBasis:
         ],
     )
     def test_init_window_size(self, ws, expectation, cls):
-        extra = {key: 5 for key in ["n_basis_funcs", "n_frequencies"] if key in cls._get_param_names()}
+        extra = {
+            key: 5
+            for key in ["n_basis_funcs", "n_frequencies"]
+            if key in cls._get_param_names()
+        }
         with expectation:
             cls(**extra, window_size=ws, **extra_decay_rates(cls, 5))
 
@@ -928,7 +942,9 @@ class TestEvalBasis:
         f1, f2 = bas.__dict__.pop("_funcs", [True]), bas2.__dict__.pop("_funcs", [True])
         assert all(fi == fj for fi, fj in zip(f1, f2))
 
-        f1, f2 = bas.__dict__.pop("_frequencies", [True]), bas2.__dict__.pop("_frequencies", [True])
+        f1, f2 = bas.__dict__.pop("_frequencies", [True]), bas2.__dict__.pop(
+            "_frequencies", [True]
+        )
         assert all(fi == fj for fi, fj in zip(f1, f2))
 
         assert bas.__dict__ == bas2.__dict__
@@ -1165,7 +1181,11 @@ class TestEvalBasis:
             if cls == IdentityEval:
                 extra = {}
             else:
-                extra = {key: 5 for key in ["n_basis_funcs", "n_frequencies"] if key in cls._get_param_names()}
+                extra = {
+                    key: 5
+                    for key in ["n_basis_funcs", "n_frequencies"]
+                    if key in cls._get_param_names()
+                }
             cls(**extra, test="hi", **extra_decay_rates(cls, 5))
 
     def test_set_window_size(self, cls):
@@ -1211,7 +1231,11 @@ class TestEvalBasis:
     def test_init_window_size(self, ws, expectation, cls):
         if cls == CustomBasis:
             pytest.skip(f"Skipping test_init_window_size for {cls.__name__}")
-        extra = {key: 5 for key in ["n_basis_funcs", "n_frequencies"] if key in cls._get_param_names()}
+        extra = {
+            key: 5
+            for key in ["n_basis_funcs", "n_frequencies"]
+            if key in cls._get_param_names()
+        }
         with expectation:
             cls(**extra, window_size=ws, **extra_decay_rates(cls, 5))
 
@@ -1219,7 +1243,13 @@ class TestEvalBasis:
         if cls == CustomBasis:
             pytest.skip(f"Skipping test_set_bounds for {cls.__name__}")
         kwargs = {"bounds": (1, 2)}
-        kwargs.update({key: 10 for key in ["n_basis_funcs", "n_frequencies"] if key in cls._get_param_names()})
+        kwargs.update(
+            {
+                key: 10
+                for key in ["n_basis_funcs", "n_frequencies"]
+                if key in cls._get_param_names()
+            }
+        )
         with does_not_raise():
             cls(**kwargs, **extra_decay_rates(cls, 10))
 
@@ -2638,6 +2668,106 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         """
         basis_obj = self.cls["eval"](n_basis_funcs=5, order=3)
         basis_obj.compute_features(np.linspace(*sample_range, 100))
+
+
+class TestFourierBasis(BasisFuncsTesting):
+    cls = {"eval": basis.FourierEval, "conv": basis.FourierConv}
+
+    @pytest.mark.parametrize(
+        "include_constant, expectation",
+        [
+            (True, does_not_raise()),
+            (False, does_not_raise()),
+            (
+                None,
+                pytest.raises(TypeError, match="`include_constant` must be a boolean"),
+            ),
+            (
+                -1,
+                pytest.raises(TypeError, match="`include_constant` must be a boolean"),
+            ),
+        ],
+    )
+    @pytest.mark.parametrize("mode", ["eval", "conv"])
+    def test_include_constant_type(self, mode, include_constant, expectation):
+        with expectation:
+            instantiate_atomic_basis(
+                self.cls[mode],
+                n_basis_funcs=5,
+                window_size=10,
+                include_constant=include_constant,
+            )
+
+    @pytest.mark.parametrize("mode, expected_value", [("eval", False), ("conv", True)])
+    def test_include_constant_defaults(self, mode, expected_value):
+        bas = instantiate_atomic_basis(
+            self.cls[mode],
+            n_frequencies=5,
+            window_size=10,
+        )
+        assert bas.include_constant == expected_value
+
+    @pytest.mark.parametrize("n_frequencies", [1, 2, 3])
+    @pytest.mark.parametrize("mode", ["eval", "conv"])
+    @pytest.mark.parametrize("include_constant", [True, False])
+    def test_n_frequencies_to_n_basis_init(self, n_frequencies, mode, include_constant):
+        bas = instantiate_atomic_basis(
+            self.cls[mode],
+            n_frequencies=n_frequencies,
+            window_size=10,
+            include_constant=include_constant,
+        )
+        assert bas.n_basis_funcs == 2 * n_frequencies + include_constant
+
+    @pytest.mark.parametrize("mode", ["eval", "conv"])
+    @pytest.mark.parametrize(
+        "new_n_freq, expectation",
+        [
+            (6, does_not_raise()),
+            (
+                None,
+                pytest.raises(TypeError, match="`n_frequencies` must be an integer"),
+            ),
+        ],
+    )
+    def test_n_frequencies_to_n_basis_setter(self, mode, new_n_freq, expectation):
+        bas = instantiate_atomic_basis(
+            self.cls[mode],
+            n_frequencies=5,
+            window_size=10,
+        )
+        with expectation:
+            bas.n_frequencies = new_n_freq
+            assert bas.n_frequencies == new_n_freq
+            assert bas.n_basis_funcs == new_n_freq * 2 + bas.include_constant
+
+    @pytest.mark.parametrize("mode", ["eval", "conv"])
+    def test_n_basis_readonly(self, mode):
+        bas = instantiate_atomic_basis(
+            self.cls[mode],
+            n_frequencies=5,
+            window_size=10,
+        )
+        with pytest.raises(AttributeError):  # standard python error
+            bas.n_basis_funcs = 100
+
+    @pytest.mark.parametrize("mode", ["eval", "conv"])
+    @pytest.mark.parametrize(
+        "phase_sign, expectation",
+        [
+            (1, does_not_raise()),
+            (-1, does_not_raise()),
+            (None, pytest.raises(ValueError, match="`phase_sign` must be")),
+        ],
+    )
+    def test_phase_sign_type(self, phase_sign, expectation, mode):
+        with expectation:
+            bas = instantiate_atomic_basis(
+                self.cls[mode],
+                n_frequencies=5,
+                window_size=10,
+                phase_sign=phase_sign,
+            )
 
 
 class TestAdditiveBasis(CombinedBasis):

@@ -2417,6 +2417,22 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         The number of frequency in the basis.
     include_constant :
         Include the constant (0 frequency) term or not. Default is False.
+    phase_sign:
+        Sign convention for the sine components in the Fourier basis.
+        The basis functions are defined as:
+
+    .. math::
+
+        \phi_k(x) =
+        \begin{cases}
+            \cos(2\pi k x), & \text{for cosine terms} \\
+            \text{phase\_sign} \cdot \sin(2\pi k x), & \text{for sine terms}
+        \end{cases}
+
+        By default, ``phase_sign = 1``, which corresponds to the standard orthonormal Fourier basis.
+        Setting ``phase_sign = -1`` inverts the sign of the phase angle and aligns the basis
+        with the Discrete Fourier Transform (DFT) convention. With such convention the convolution
+        with this basis yields the FFT time evolution.
     bounds :
         The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
@@ -2442,6 +2458,7 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         self,
         n_frequencies: int,
         include_constant: bool = False,
+        phase_sign: int = 1,
         bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = "FourierEval",
     ):
@@ -2450,6 +2467,7 @@ class FourierEval(EvalBasisMixin, FourierBasis):
             self,
             n_frequencies,
             include_constant=include_constant,
+            phase_sign=phase_sign,
             label=label,
         )
 
@@ -2567,6 +2585,21 @@ class FourierConv(ConvBasisMixin, FourierBasis):
         The window size for convolution in number of samples.
     include_constant :
         Include the constant (0 frequency) term or not. Default is True.
+    phase_sign:
+        Sign convention for the sine components in the Fourier basis.
+        The basis functions are defined as:
+
+    .. math::
+
+        \phi_k(x) =
+        \begin{cases}
+            \cos(2\pi k x), & \text{for cosine terms} \\
+            \text{phase\_sign} \cdot \sin(2\pi k x), & \text{for sine terms}
+        \end{cases}
+
+        By default, ``phase_sign = -1``, which aligns the basis with the Discrete Fourier Transform (DFT)
+        convention where convolution with this basis yields the standard FFT time evolution.
+        Setting ``phase_sign = +1`` results in the standard orthonormal Fourier basis without sign inversion.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
@@ -2595,6 +2628,7 @@ class FourierConv(ConvBasisMixin, FourierBasis):
         n_frequencies: int,
         window_size: int,
         include_constant: bool = True,
+        phase_sign: int = -1,
         label: Optional[str] = "FourierConv",
         conv_kwargs: Optional[dict] = None,
     ):
@@ -2603,6 +2637,7 @@ class FourierConv(ConvBasisMixin, FourierBasis):
             self,
             n_frequencies,
             include_constant=include_constant,
+            phase_sign=phase_sign,
             label=label,
         )
 
