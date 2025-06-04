@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import warnings
 from functools import wraps
+from pathlib import Path
 from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
 
 import jax
@@ -1157,6 +1158,44 @@ class GLM(BaseRegressor):
         params = self.get_params(deep=False)
         klass = self.__class__(**params)
         return klass
+
+    def save_params(self, filename: Union[str, Path]):
+        """
+        Save GLM model parameters to a .npz file.
+
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> import numpy as np
+
+        >>> X = np.random.normal(size=(num_samples, num_features))
+        >>> # generate some counts
+        >>> spike_counts = np.random.poisson(size=num_samples)
+
+        >>> # Create a GLM model and configure parameters
+        >>> model = nmo.glm.GLM()
+        >>> model.set_params(
+        ...     regularizer=nmo.regularizer.Ridge(),
+        ...     regularizer_strength=0.1,
+        ...     observation_model="Gamma",
+        ...     solver_kwargs={"stepsize": 0.1, "acceleration": False},
+        ...     solver_name="BFGS",
+        ... )
+
+        >>> # Fit the model to add coefficients and intercept attributes
+        >>> model = model.fit(X, spike_counts)
+
+        >>> # Save model parameters to a file
+        >>> model.save_params("model_params")
+        """
+
+        # initialize saving dictionary
+        save_attrs = {}
+
+        save_attrs["coef_"] = self.coef_
+        save_attrs["intercept_"] = self.intercept_
+
+        self._save_params_base(filename, save_attrs)
 
 
 class PopulationGLM(GLM):
