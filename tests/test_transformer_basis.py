@@ -22,6 +22,7 @@ from nemos.basis import (
     TransformerBasis,
 )
 from nemos.basis._composition_utils import generate_basis_label_pair
+from nemos.basis._fourier_basis import FourierBasis
 
 
 @pytest.mark.parametrize(
@@ -81,6 +82,10 @@ def test_to_transformer_and_constructor_are_equivalent(
         trans_bas_a.basis.__dict__.pop("_decay_rates", 1)
         == trans_bas_b.basis.__dict__.pop("_decay_rates", 1)
     )
+    assert np.all(
+        trans_bas_a.basis.__dict__.pop("_frequencies", 1)
+        == trans_bas_b.basis.__dict__.pop("_frequencies", 1)
+    )
 
     # extract the wrapped func for these methods
     wrapped_methods_a = {}
@@ -135,6 +140,17 @@ def test_basis_to_transformer_makes_a_copy(basis_cls, basis_class_specific_param
         trans_bas_b = bas_b.to_transformer()
         trans_bas_b.basis.basis1.n_basis_funcs = 100
         assert bas_b.basis1.n_basis_funcs == 5
+    elif isinstance(bas_a, (basis.FourierEval, basis.FourierConv)):
+        bas_a.n_frequencies = 3
+        assert trans_bas_a.n_frequencies == 5
+        bas_b = CombinedBasis().instantiate_basis(
+            5, basis_cls, basis_class_specific_params, window_size=10
+        )
+        trans_bas_b = bas_b.set_input_shape(
+            *([1] * bas_b._n_input_dimensionality)
+        ).to_transformer()
+        trans_bas_b.n_frequencies = 3
+        assert bas_b.n_frequencies == 5
     else:
         bas_a.n_basis_funcs = 10
         assert trans_bas_a.n_basis_funcs == 5
@@ -189,10 +205,14 @@ def test_transformerbasis_set_params(
     trans_basis = basis.TransformerBasis(
         bas.set_input_shape(*([1] * bas._n_input_dimensionality))
     )
-    if not isinstance(bas, (HistoryConv, CustomBasis)):
+    if not isinstance(bas, (HistoryConv, CustomBasis, FourierBasis)):
         trans_basis.set_params(n_basis_funcs=n_basis_funcs_new)
         assert trans_basis.n_basis_funcs == n_basis_funcs_new
         assert trans_basis.basis.n_basis_funcs == n_basis_funcs_new
+    elif isinstance(bas, FourierBasis):
+        trans_basis.set_params(n_frequencies=n_basis_funcs_new)
+        assert trans_basis.n_frequencies == n_basis_funcs_new
+        assert trans_basis.basis.n_frequencies == n_basis_funcs_new
     elif isinstance(bas, CustomBasis):
         basis_kwargs = {"add": n_basis_funcs_new}
         trans_basis.set_params(basis_kwargs=basis_kwargs)
@@ -255,6 +275,10 @@ def test_transformerbasis_setattr_basis_attribute(
         trans_bas.basis_kwargs = {"add": 20}
         assert trans_bas.basis_kwargs == {"add": 20}
         assert trans_bas.basis.basis_kwargs == {"add": 20}
+    elif issubclass(basis_cls, FourierBasis):
+        trans_bas.n_frequencies = 20
+        assert trans_bas.n_frequencies == 20
+        assert trans_bas.basis.n_frequencies == 20
     else:
         trans_bas.n_basis_funcs = 20
         assert trans_bas.n_basis_funcs == 20
@@ -285,6 +309,17 @@ def test_transformerbasis_copy_basis_on_construct(
         assert orig_bas.basis_kwargs == {}
         assert trans_bas.basis_kwargs == {"add": 20}
         assert trans_bas.basis.basis_kwargs == {"add": 20}
+
+    elif isinstance(orig_bas, FourierBasis):
+        attr_name = "n_frequencies"
+        setattr(trans_bas, attr_name, 20)
+
+        assert (
+            orig_bas.n_basis_funcs == nbas
+        )  # this would change to 41 for Conv, 40 for Eval
+        assert trans_bas.n_frequencies == 20
+        assert trans_bas.basis.n_frequencies == 20
+        assert isinstance(trans_bas.basis, basis_cls)
 
     else:
         attr_name = "window_size" if basis_cls is HistoryConv else "n_basis_funcs"
@@ -352,8 +387,16 @@ def test_transformerbasis_addition(basis_cls, basis_class_specific_params):
         == trans_bas_a._n_input_dimensionality + trans_bas_b._n_input_dimensionality
     )
     if basis_cls not in [basis.AdditiveBasis, basis.MultiplicativeBasis]:
-        assert trans_bas_sum.basis1.n_basis_funcs == n_basis_funcs_a
-        assert trans_bas_sum.basis2.n_basis_funcs == n_basis_funcs_b
+        assert (
+            trans_bas_sum.basis1.n_basis_funcs == n_basis_funcs_a
+            if not isinstance(trans_bas_sum.basis1, FourierBasis)
+            else (2 * n_basis_funcs_a + trans_bas_sum.basis1.include_constant)
+        )
+        assert (
+            trans_bas_sum.basis2.n_basis_funcs == n_basis_funcs_b
+            if not isinstance(trans_bas_sum.basis2, FourierBasis)
+            else (2 * n_basis_funcs_b + trans_bas_sum.basis2.include_constant)
+        )
 
 
 @pytest.mark.parametrize(
@@ -775,6 +818,8 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
         cv_attr = "window_size"
     elif basis_cls is CustomBasis:
         cv_attr = "basis_kwargs"
+    elif issubclass(basis_cls, FourierBasis):
+        cv_attr = "n_frequencies"
     else:
         cv_attr = "n_basis_funcs"
     if basis_cls is not CustomBasis:
@@ -836,7 +881,14 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
             f"bas__{cv_attr}": 4 if cv_attr != "basis_kwargs" else {"add": 1}
         }
         pipe.set_params(**set_param_dict)
-        assert bas.n_basis_funcs == 5  # make sure that the change did not affect bas
+        if isinstance(bas, FourierBasis):
+            assert (
+                bas.n_basis_funcs == 5 * 2 + bas.include_constant
+            )  # make sure that the change did not affect bas
+        else:
+            assert (
+                bas.n_basis_funcs == 5
+            )  # make sure that the change did not affect bas
         set_param_dict_outside = {f"{cv_attr}": 4}
         X = bas.set_params(**set_param_dict_outside).compute_features(
             *([inp] * bas._n_input_dimensionality)
@@ -1054,6 +1106,8 @@ def test_check_input(inp, expectation, basis_cls, basis_class_specific_params, m
             basis.RaisedCosineLogEval: "Transformer(RaisedCosineLogEval(n_basis_funcs=5, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True))",
             basis.AdditiveBasis: "Transformer('(MSplineEval + RaisedCosineLinearConv)': AdditiveBasis(\n    basis1=MSplineEval(n_basis_funcs=5, order=4),\n    basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n))",
             basis.MultiplicativeBasis: "Transformer('(MSplineEval * RaisedCosineLinearConv)': MultiplicativeBasis(\n    basis1=MSplineEval(n_basis_funcs=5, order=4),\n    basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n))",
+            basis.FourierEval: "Transformer(FourierEval(n_frequencies=5, include_constant=False, phase_sign=1.0))",
+            basis.FourierConv: "Transformer(FourierConv(n_frequencies=5, window_size=10, include_constant=True, phase_sign=-1.0))",
         }
     ],
 )

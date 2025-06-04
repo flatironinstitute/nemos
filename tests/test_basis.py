@@ -1322,7 +1322,7 @@ class TestSharedMethods:
                 basis.MSplineEval: "MSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
                 basis.OrthExponentialEval: "OrthExponentialEval(n_basis_funcs=5, bounds=(1.0, 2.0))",
                 basis.IdentityEval: "IdentityEval(bounds=(1.0, 2.0))",
-                basis.FourierEval: "FourierEval(n_frequencies=5, include_constant=False, bounds=(1.0, 2.0))",
+                basis.FourierEval: "FourierEval(n_frequencies=5, include_constant=False, phase_sign=1.0, bounds=(1.0, 2.0))",
                 basis.RaisedCosineLogConv: "RaisedCosineLogConv(n_basis_funcs=5, window_size=10, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True)",
                 basis.RaisedCosineLinearConv: "RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0)",
                 basis.BSplineConv: "BSplineConv(n_basis_funcs=5, window_size=10, order=4)",
@@ -1330,7 +1330,7 @@ class TestSharedMethods:
                 basis.MSplineConv: "MSplineConv(n_basis_funcs=5, window_size=10, order=4)",
                 basis.OrthExponentialConv: "OrthExponentialConv(n_basis_funcs=5, window_size=10)",
                 basis.HistoryConv: "HistoryConv(window_size=10)",
-                basis.FourierConv: "FourierConv(n_frequencies=5, window_size=10, include_constant=True)",
+                basis.FourierConv: "FourierConv(n_frequencies=5, window_size=10, include_constant=True, phase_sign=-1.0)",
             }
         ],
     )
@@ -4055,7 +4055,10 @@ class TestAdditiveBasis(CombinedBasis):
             assert add.n_basis_funcs == 10 + add.basis2.n_basis_funcs
         elif isinstance(add.basis1, basis.FourierBasis):
             add.basis1.n_frequencies = 10
-            assert add.n_basis_funcs == 20 + add.basis2.n_basis_funcs
+            assert (
+                add.n_basis_funcs
+                == 20 + add.basis2.n_basis_funcs + add.basis1.include_constant
+            )
         if not isinstance(
             add.basis2, (basis.FourierBasis, HistoryConv, IdentityEval, CustomBasis)
         ):
@@ -4063,7 +4066,10 @@ class TestAdditiveBasis(CombinedBasis):
             assert add.n_basis_funcs == 10 + add.basis1.n_basis_funcs
         elif isinstance(add.basis2, basis.FourierBasis):
             add.basis2.n_frequencies = 10
-            assert add.n_basis_funcs == 20 + add.basis1.n_basis_funcs
+            assert (
+                add.n_basis_funcs
+                == 20 + add.basis1.n_basis_funcs + add.basis2.include_constant
+            )
 
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
@@ -5303,7 +5309,10 @@ class TestMultiplicativeBasis(CombinedBasis):
             assert mul.n_basis_funcs == 10 * mul.basis2.n_basis_funcs
         elif isinstance(mul.basis1, basis.FourierBasis):
             mul.basis1.n_frequencies = 10
-            assert mul.n_basis_funcs == 20 * mul.basis2.n_basis_funcs
+            assert (
+                mul.n_basis_funcs
+                == (20 + mul.basis1.include_constant) * mul.basis2.n_basis_funcs
+            )
         if not isinstance(
             mul.basis2, (basis.FourierBasis, HistoryConv, IdentityEval, CustomBasis)
         ):
@@ -5312,7 +5321,10 @@ class TestMultiplicativeBasis(CombinedBasis):
             assert mul.n_basis_funcs == 10 * mul.basis1.n_basis_funcs
         elif isinstance(mul.basis2, basis.FourierBasis):
             mul.basis2.n_frequencies = 10
-            assert mul.n_basis_funcs == 20 * mul.basis1.n_basis_funcs
+            assert (
+                mul.n_basis_funcs
+                == (20 + mul.basis2.include_constant) * mul.basis1.n_basis_funcs
+            )
 
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
