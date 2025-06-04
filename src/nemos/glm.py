@@ -1159,7 +1159,7 @@ class GLM(BaseRegressor):
         klass = self.__class__(**params)
         return klass
 
-    def save_params(self, filename: Union[str, Path]) -> None:
+    def save_params(self, filename: Union[str, Path]):
         """
         Save GLM model parameters to a .npz file.
         """

@@ -92,7 +92,7 @@ def unpack_params(params_dict: dict) -> dict:
 
     Parameters
     ----------
-    params_dict : dict
+    params_dict
         Dictionary of parameters, possibly containing objects.
 
     Returns
@@ -776,7 +776,7 @@ class BaseRegressor(Base, abc.ABC):
         self,
         filename: Union[str, Path],
         save_attrs: dict,
-    ) -> None:
+    ):
         """
         Save model parameters and specified attributes to a .npz file.
         This is a private method intended to be used by subclasses to implement.
@@ -784,7 +784,7 @@ class BaseRegressor(Base, abc.ABC):
 
         Parameters
         ----------
-        filename : str or pathlib.Path
+        filename
             The output filename.
         save_attrs : dict
             Dictionary containing the attributes specific to the subclass model.
@@ -807,13 +807,13 @@ class BaseRegressor(Base, abc.ABC):
         except Exception as e:
             raise RuntimeError(f"Saving failed for '{filename}': {e}")
 
-    def load_params(self, filename: Union[str, Path]) -> None:
+    def load_params(self, filename: Union[str, Path]):
         """
         Load model parameters and attributes from a .npz file.
 
         Parameters
         ----------
-        filename : str or pathlib.Path
+        filename
             Path to the saved .npz file.
         """
         filename = Path(filename)
