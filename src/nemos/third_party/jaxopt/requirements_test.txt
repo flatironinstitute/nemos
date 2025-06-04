@@ -1,0 +1,6 @@
+absl-py>=0.7.0
+cvxpy>=1.1.11
+optax>=0.0.9
+pytest-xdist
+scikit-learn>=0.24.1
+cvxopt
