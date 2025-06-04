@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import warnings
 from functools import wraps
+from pathlib import Path
 from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
 
 import jax
@@ -1157,6 +1158,19 @@ class GLM(BaseRegressor):
         params = self.get_params(deep=False)
         klass = self.__class__(**params)
         return klass
+
+    def save_params(self, filename: Union[str, Path]) -> None:
+        """
+        Save GLM model parameters to a .npz file.
+        """
+
+        # initialize saving dictionary
+        save_attrs = {}
+
+        save_attrs["coef_"] = self.coef_
+        save_attrs["intercept_"] = self.intercept_
+
+        self._save_params_base(filename, save_attrs)
 
 
 class PopulationGLM(GLM):
