@@ -766,7 +766,7 @@ class BaseRegressor(Base, abc.ABC):
         pass
 
     @abstractmethod
-    def save_params(self, filename: Union[str, Path]) -> None:
+    def save_params(self, filename: Union[str, Path]):
         """
         Abstract method that subclasses must implement.
         """
@@ -786,7 +786,7 @@ class BaseRegressor(Base, abc.ABC):
         ----------
         filename
             The output filename.
-        save_attrs : dict
+        save_attrs
             Dictionary containing the attributes specific to the subclass model.
         """
 
@@ -815,6 +815,18 @@ class BaseRegressor(Base, abc.ABC):
         ----------
         filename
             Path to the saved .npz file.
+
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> # Create a GLM model with some parameters
+        >>> model = nmo.glm.GLM(regularizer='Lasso', regularizer_strength=100)
+        >>> # Inspect initial parameters
+        >>> print(model.get_params())
+        >>> # Load parameters from previously saved file
+        >>> model.load_params("model_params.npz")
+        >>> # Updated parameters reflect the saved configuration
+        >>> print(model.get_params())
         """
         filename = Path(filename)
         if not filename.exists():
