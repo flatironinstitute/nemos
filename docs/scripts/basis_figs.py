@@ -19,6 +19,7 @@ KWARGS = dict(
     enforce_decay_to_zero=True,
     order=4,
     width=2,
+    n_frequencies=5,
 )
 
 
@@ -67,6 +68,10 @@ def plot_cyclic_bspline():
 
 def plot_orth_exp_basis():
     plot_basis(nmo.basis.OrthExponentialEval)
+
+
+def plot_fourier_basis():
+    plot_basis(nmo.basis.FourierEval)
 
 
 def plot_nd_basis_thumbnail():
