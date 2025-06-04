@@ -2409,7 +2409,7 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
 
 
 class FourierEval(EvalBasisMixin, FourierBasis):
-    """Fourier basis.
+    r"""Fourier basis.
 
     Parameters
     ----------
@@ -2575,7 +2575,7 @@ class FourierEval(EvalBasisMixin, FourierBasis):
 
 
 class FourierConv(ConvBasisMixin, FourierBasis):
-    """Fourier basis.
+    r"""Fourier basis.
 
     Parameters
     ----------
@@ -2621,6 +2621,7 @@ class FourierConv(ConvBasisMixin, FourierBasis):
     >>> sample_points = np.random.randn(100)
     >>> # convolve the basis
     >>> features = fourier_basis.compute_features(sample_points)
+
     """
 
     def __init__(
