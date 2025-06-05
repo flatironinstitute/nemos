@@ -2421,13 +2421,12 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         Sign convention for the sine components in the Fourier basis.
         The basis functions are defined as:
 
-    .. math::
-
-        \phi_k(x) =
-        \begin{cases}
-            \cos(2\pi k x), & \text{for cosine terms} \\
-            \text{phase\_sign} \cdot \sin(2\pi k x), & \text{for sine terms}
-        \end{cases}
+        .. math::
+            \phi_k(x) =
+            \begin{cases}
+                \cos(2\pi k x), & \text{for } k \leq \text{n_frequencies} \\
+                \text{phase_sign} \cdot \sin(2\pi k x), & \text{otherwise}
+            \end{cases}
 
         By default, ``phase_sign = 1``, which corresponds to the standard orthonormal Fourier basis.
         Setting ``phase_sign = -1`` inverts the sign of the phase angle and aligns the basis
@@ -2589,13 +2588,12 @@ class FourierConv(ConvBasisMixin, FourierBasis):
         Sign convention for the sine components in the Fourier basis.
         The basis functions are defined as:
 
-    .. math::
-
-        \phi_k(x) =
-        \begin{cases}
-            \cos(2\pi k x), & \text{for cosine terms} \\
-            \text{phase\_sign} \cdot \sin(2\pi k x), & \text{for sine terms}
-        \end{cases}
+        .. math::
+            \phi_k(x) =
+            \begin{cases}
+                \cos(2\pi k x), & \text{for } k \leq \text{n_frequencies} \\
+                \text{phase_sign} \cdot \sin(2\pi k x), & \text{otherwise}
+            \end{cases}
 
         By default, ``phase_sign = -1``, which aligns the basis with the Discrete Fourier Transform (DFT)
         convention where convolution with this basis yields the standard FFT time evolution.

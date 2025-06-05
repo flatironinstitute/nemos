@@ -65,6 +65,7 @@ These classes are the building blocks for the concrete basis classes.
     CyclicBSplineConv
     RaisedCosineLinearConv
     RaisedCosineLogConv
+    FourierConv
     OrthExponentialConv
     HistoryConv
 
@@ -84,6 +85,7 @@ These classes are the building blocks for the concrete basis classes.
     CyclicBSplineEval
     RaisedCosineLinearEval
     RaisedCosineLogEval
+    FourierEval
     OrthExponentialEval
     IdentityEval
 
