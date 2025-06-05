@@ -2641,6 +2641,13 @@ class FourierConv(ConvBasisMixin, FourierBasis):
             phase_sign=phase_sign,
             label=label,
         )
+        # Check Nyquist condition: ensure window size is sufficient to avoid aliasing
+        if window_size < 2 * n_frequencies + 1:
+            raise ValueError(
+                f"`window_size` is too small for a Fourier basis with {n_frequencies} frequencies. "
+                f"To satisfy the Nyquist criterion and avoid aliasing, `window_size` must be at least "
+                f"{2 * n_frequencies + 1} (i.e., `window_size >= 2 * n_frequencies + 1`)."
+            )
 
     @add_docstring("evaluate_on_grid", FourierBasis)
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
