@@ -58,15 +58,6 @@ dev = [
     "dandi",                        # Required by doctest for fetch module
     "seaborn",                      # Required by doctest for _documentation_utils module
     "myst-nb",                      # Test myst_nb utils for glue
-    # For JAXopt's tests
-    # TODO Decide which one to keep. Potentially trim down jaxopt and port to pytest
-    "absl-py>=0.7.0",
-    "cvxpy>=1.1.11",
-    "optax>=0.0.9",
-    "pytest-xdist",
-    "scikit-learn>=0.24.1",
-    "cvxopt",
-
 ]
 docs = [
     "numpydoc",
@@ -102,6 +93,14 @@ examples = [
     "pooch",
     "fsspec",
     "patsy",
+]
+jaxopt_dev = [
+    "absl-py>=0.7.0",
+    "cvxpy>=1.1.11",
+    "optax>=0.0.9",
+    "pytest-xdist",
+    "scikit-learn>=0.24.1",
+    "cvxopt",
 ]
 
 
