@@ -94,6 +94,10 @@ Below we provide the function [`create_convolutional_predictor`](nemos.convolve.
 for the different filter types.
 
 ```{code-cell} ipython3
+# create three filters
+basis_obj = nmo.basis.RaisedCosineLinearEval(n_basis_funcs=3)
+_, w = basis_obj.evaluate_on_grid(ws)
+
 # pad according to the causal direction of the filter, after squeeze,
 # the dimension is (n_filters, n_samples)
 spk_causal_conv = nmo.convolve.create_convolutional_predictor(
