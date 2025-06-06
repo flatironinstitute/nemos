@@ -67,9 +67,9 @@ spk[-1] = 1
 spk[-4] = 1
 ```
 
-## Convolution in `"valid"` mode
-Generate and plot a filter, then execute a convolution in "valid" mode for all trials and neurons.
-In nemos, you can use the [`tensor_convolve`](nemos.convolve.tensor_convolve) function for this.
+## Causal, Anti-Causal, and Acausal Predictors
+
+To construct a temporal predictor with a specified causality, we convolve a time series with one or more filters using `"valid"` mode, then pad the result according to the desired direction of causality—causal, anti-causal, or acausal.
 
 :::{note}
 The `"valid"` mode of convolution only calculates the product when the two input vectors overlap completely,
@@ -79,22 +79,6 @@ of elements in the arrays being convolved. For more detailed information on this
 see [jax.numpy.convolve](https://jax.readthedocs.io/en/latest/_autosummary/jax.numpy.convolve.html).
 :::
 
-```{code-cell} ipython3
-# create three filters
-basis_obj = nmo.basis.RaisedCosineLinearEval(n_basis_funcs=3)
-_, w = basis_obj.evaluate_on_grid(ws)
-
-plt.plot(w)
-
-# convolve specifying the batch size for time, channels and basis
-spk_conv = nmo.convolve.tensor_convolve(spk, w, n_samples, 1, w.shape[1])
-
-# valid convolution should be of shape n_samples - ws + 1
-print(f"Shape of the convolution output: {spk_conv.shape}")
-```
-
-## Causal, Anti-Causal, and Acausal filters
-NaN padding appropriately the output of the convolution allows to model  causal, anti-causal and acausal filters.
 A causal filter captures how an event or task variable influences the future firing-rate.
 An example usage case would be that of characterizing the refractory period of a neuron
 (i.e. the drop in firing rate  immediately after a spike event). Another example could be characterizing how

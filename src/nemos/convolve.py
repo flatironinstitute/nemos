@@ -151,7 +151,7 @@ def batch_binary_func(
 
 
 @partial(jax.jit, static_argnums=(2, 3, 4))
-def tensor_convolve(
+def _tensor_convolve(
     array: NDArray,
     eval_basis: NDArray,
     batch_size_samples: int,
@@ -304,7 +304,7 @@ def _shift_time_axis_and_convolve(
     array = jnp.transpose(array, new_axis)
 
     # convolve
-    conv = tensor_convolve(
+    conv = _tensor_convolve(
         array, eval_basis, batch_size_samples, batch_size_channels, batch_size_basis
     )
 

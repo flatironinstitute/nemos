@@ -397,7 +397,7 @@ def simulate_recurrent(
         #    sample
         # 2. Flatten to shape (n_neuron * n_basis_coupling, )
         # Convolution in safe mode (no vectorization)
-        conv_act = convolve.tensor_convolve(
+        conv_act = convolve._tensor_convolve(
             activity,
             coupling_basis_matrix,
             batch_size_samples=feedforward_input.shape[0],
