@@ -31,6 +31,15 @@ Use these keyword arguments inside `conv_kwargs` when initializing a convolution
 <figcaption>Schematic of the batched dimensions.</figcaption>
 </figure>
 
+:::{note} CPU vs GPU memory allocation
+
+On the CPU, the vectorization process does not result in excessive memory allocation. As a result, specifying batch sizes has little to no effect on the overall memory footprint.
+
+On the GPU, however, specifying smaller batch sizes **significantly reduces** the memory allocated during computation by limiting the size of intermediate tensors.
+
+See the [related issue](https://github.com/flatironinstitute/nemos/issues/345) for more details.
+:::
+
 ## Example
 
 ```{code-cell} ipython3
@@ -55,8 +64,9 @@ basis = nmo.basis.RaisedCosineLogConv(n_basis, window_size, conv_kwargs=batch_si
 # performe the convolution as usual
 out = basis.compute_features(time_series)
 
-# note that the channels can be resahaped and nothing would change
+# note that this works for n-dimensional array (not only 2-dimensional arrays)
+# here an example with a 3D array:
 out2 = basis.compute_features(
-    time_series.reshape(-1, n_channels//2,  n_channels//2)
+    np.random.randn(n_samples, n_channels, 2)
 )
 ```
