@@ -504,6 +504,11 @@ def create_convolutional_predictor(
         is less than the window size of the `basis_matrix`.
     ValueError:
         If shifting is attempted with 'acausal' causality.
+    ValueError:
+        Raised if any explicitly provided batch sizes—``batch_size_samples``,
+        ``batch_size_channels``, or ``batch_size_basis``—are not positive integers.
+        A value of ``None`` is allowed and treated as unspecified.
+
     """
     # apply checks
     validation._check_basis_matrix_shape(basis_matrix)
