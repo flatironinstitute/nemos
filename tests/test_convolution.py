@@ -649,3 +649,77 @@ class TestCreateConvolutionalPredictor:
                 axis=0,
                 batch_size_basis=batch_basis,
             )
+
+    @pytest.mark.parametrize("input_shape", [(3, 1), (3, 2), (3, 3)])
+    @pytest.mark.parametrize("batch_size", [1, 2, 3])
+    def test_batch_binary_func_output(self,input_shape, batch_size):
+        """Check expected output values."""
+        jax.config.update("jax_enable_x64", True)
+
+        def add(a, b):
+            return a + b
+
+        x, y = np.random.randn(*input_shape), np.arange(3)[:, np.newaxis]
+        result = convolve._batch_binary_func(x, y, binary_func=add, batch_size=batch_size, axis=1)
+        assert np.all(result == add(x, y))
+
+
+    @pytest.mark.parametrize("input_shape", [(3, 2)])
+    @pytest.mark.parametrize("batch_size", [1])
+    @pytest.mark.parametrize("out_axis, expected_out_shape", [(0, (6, 1)), (1, (3, 2))])
+    def test_batch_binary_func_out_axis(self,input_shape, batch_size, out_axis, expected_out_shape):
+        """Check expected out shape."""
+        jax.config.update("jax_enable_x64", True)
+
+        def add(a, b):
+            return a + b
+
+        x, y = np.random.randn(*input_shape), np.arange(3)[:, np.newaxis]
+        result = convolve._batch_binary_func(x, y, binary_func=add, batch_size=batch_size, axis=1, out_axis=out_axis)
+        assert expected_out_shape == result.shape
+
+    @pytest.mark.parametrize("input_shape", [(3, 3)])
+    @pytest.mark.parametrize("batch_size", [2])
+    def test_batch_binary_func_pad(self,input_shape, batch_size):
+        jax.config.update("jax_enable_x64", True)
+
+        def add(a, b):
+            return a + b
+
+        x, y = np.random.randn(*input_shape), np.arange(3)[:, np.newaxis]
+        # test that nan-padding and crop and no padding makes no difference
+        result = convolve._batch_binary_func(
+            x, y, binary_func=add, batch_size=batch_size, axis=1, pad_final_batch=True
+        )
+        result_nopad = convolve._batch_binary_func(
+            x, y, binary_func=add, batch_size=batch_size, axis=1, pad_final_batch=False
+        )
+        assert np.all(result_nopad == result)
+
+
+def numpy_tensor_convolve(array, eval_basis):
+    """Naive implementation of _tensor_convolve."""
+    n_samples, n_channels = array.shape
+    window_size, n_basis = eval_basis.shape
+    output = np.empty((n_samples - window_size + 1, n_channels, n_basis))
+    for i in range(n_channels):
+        for j in range(n_basis):
+            output[:, i, j] = np.convolve(array[:, i], eval_basis[:, j], mode="valid")
+    return output
+
+
+@pytest.mark.parametrize("input_shape", [(30, 4), (50, 6)])
+@pytest.mark.parametrize("basis_shape", [(5, 3), (7, 2)])
+@pytest.mark.parametrize("batch_sizes", [(16, 2, 1), (25, 3, 1)])
+def test_tensor_convolve(input_shape, basis_shape, batch_sizes):
+    """Test different parameter combinations against naive implementation."""
+    key = jax.random.PRNGKey(0)
+    array = jax.random.normal(key, shape=input_shape)
+    eval_basis = jax.random.normal(key, shape=basis_shape)
+
+    batch_size_samples, batch_size_channels, batch_size_basis = batch_sizes
+
+    result = convolve._tensor_convolve(array, eval_basis, batch_size_samples, batch_size_channels, batch_size_basis)
+    expected = numpy_tensor_convolve(np.array(array), np.array(eval_basis))
+
+    np.testing.assert_allclose(np.array(result), expected, rtol=1e-5, atol=1e-5)

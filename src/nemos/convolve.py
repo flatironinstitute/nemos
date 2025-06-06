@@ -35,8 +35,8 @@ def _reorganize_scan_out(out, axis):
     return out.reshape(*out.shape[:axis], -1, *out.shape[axis + 2 :])
 
 
-@partial(jax.jit, static_argnums=(2, 3, 4, 5))
-def batch_binary_func(
+@partial(jax.jit, static_argnums=(2, 3, 4, 5, 6))
+def _batch_binary_func(
     batched_array: NDArray,
     other_array: NDArray,
     binary_func: Callable[[NDArray, NDArray], NDArray],
@@ -96,7 +96,7 @@ def batch_binary_func(
     >>> def func(x, y):
     ...     return x + y
     >>> x, y = jax.random.normal(jax.random.PRNGKey(123), (10, 11, 12)), jnp.array(1)
-    >>> result = batch_binary_func(x, y, func, batch_size=3, axis=1)
+    >>> result = _batch_binary_func(x, y, func, batch_size=3, axis=1)
     >>> jnp.allclose(result, x + y)
     Array(True, dtype=bool)
     """
@@ -236,7 +236,7 @@ def _batch_convolve_over_channels(
     def conv_over_basis(array_chunk, basis_matrix):
         return _batch_over_basis_convolve(array_chunk, basis_matrix, batch_size_basis)
 
-    return batch_binary_func(
+    return _batch_binary_func(
         array, eval_basis, conv_over_basis, batch_size_channels, axis=1
     )
 
@@ -244,7 +244,7 @@ def _batch_convolve_over_channels(
 def _batch_over_basis_convolve(
     array: NDArray, eval_basis: NDArray, batch_size_basis: int
 ):
-    out = batch_binary_func(
+    out = _batch_binary_func(
         eval_basis,
         array,
         _CORR_VEC,
