@@ -592,7 +592,9 @@ class TestCreateConvolutionalPredictor:
     @pytest.mark.parametrize(
         "ts, kernels", [(np.random.randn(10, 5), np.random.randn(4, 5))]
     )
-    def test_invalid_batch_size_samples(self, ts, kernels, batch_channels, expectation):
+    def test_invalid_batch_size_channels(
+        self, ts, kernels, batch_channels, expectation
+    ):
         with expectation:
             convolve.create_convolutional_predictor(
                 kernels,
@@ -639,7 +641,7 @@ class TestCreateConvolutionalPredictor:
     @pytest.mark.parametrize(
         "ts, kernels", [(np.random.randn(10, 5), np.random.randn(4, 5))]
     )
-    def test_invalid_batch_size_samples(self, ts, kernels, batch_basis, expectation):
+    def test_invalid_batch_size_basis(self, ts, kernels, batch_basis, expectation):
         with expectation:
             convolve.create_convolutional_predictor(
                 kernels,

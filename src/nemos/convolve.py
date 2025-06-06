@@ -65,20 +65,20 @@ def batch_binary_func(
     binary_func :
         A function accepting two arrays (batch_chunk, other_array) and returning an array of the same shape
         as a batch result. Must be JAX-compatible and support broadcasting across batch dimensions.
-    batch_size : int
+    batch_size :
         Number of elements to process per batch along the batching axis.
     axis :
         The axis along which to batch `batched_array`.
     out_axis :
         The axis over which concatenating the scan output.
-    pad_final_batch : bool, default=True
+    pad_final_batch :
         If True, pads the final batch to `batch_size` with zeros (and slices off the padded output),
         ensuring uniform shape for all batches and preventing JAX recompilation.
         If False, the leftover portion is processed separately, which may incur compilation overhead.
 
     Returns
     -------
-    :
+    batched_out :
         The output of applying `binary_func` to all slices of `batched_array`, concatenated along `out_axis`.
 
     Notes
@@ -173,11 +173,11 @@ def _tensor_convolve(
     eval_basis :
         The evaluation basis array for convolution. It should be 2D, where the first dimension
         represents the window size for convolution. Shape ``(window_size, n_basis_funcs)``.
-    batch_size_samples:
+    batch_size_samples :
         The batch size for convolution as number of samples. Must be larger than ``eval_basis.shape[1]``.
     batch_size_channels :
         Batch size over time series channels.
-    batch_size_basis:
+    batch_size_basis :
         Batch size over basis filters.
 
     Returns
@@ -273,23 +273,23 @@ def _shift_time_axis_and_convolve(
 
     Parameters
     ----------
-    array : NDArray
+    array :
         The input array for convolution.
-    eval_basis : NDArray
+    eval_basis :
         The evaluation basis array for convolution, should be 2D.
-    axis : int
+    axis :
         The axis along which the convolution is applied. This axis is temporarily shifted
         to the first position for the convolution operation.
-    batch_size_samples:
+    batch_size_samples :
         Size of the batches in samples.
-    batch_size_channels:
+    batch_size_channels :
         Size of the batches in number of input channels.
-    batch_size_basis:
+    batch_size_basis :
         Size of the batches in number of basis filters.
 
     Returns
     -------
-    NDArray
+    conv :
         The array after applying the convolution along the specified axis, with the original
         axis order restored.
 
@@ -315,7 +315,8 @@ def _shift_time_axis_and_convolve(
 
 
 def _list_epochs(tsd: Any):
-    """List epochs from a time series with data object, supporting 'pynapple' Tsd formats.
+    """
+    List epochs from a time series with data object, supporting 'pynapple' Tsd formats.
 
     If the input is recognized as a 'pynapple' TSD, it extracts epochs based on the TSD's
     time support. Otherwise, it returns the input as is, assuming it's a single epoch.
@@ -346,7 +347,8 @@ def _convolve_pad_and_shift(
     axis: int = 0,
     shift: Optional[bool] = None,
 ):
-    """Create predictor by convolving basis_matrix with time_series.
+    """
+    Create predictor by convolving basis_matrix with time_series.
 
     To create the convolutional predictor, three steps are taken, each of
     calls a single function. See their docstrings for more details about
@@ -435,7 +437,8 @@ def create_convolutional_predictor(
     batch_size_channels: Optional[int] = None,
     batch_size_basis: Optional[int] = None,
 ):
-    """Create a convolutional predictor by convolving a basis matrix with a time series.
+    """
+    Create a convolutional predictor by convolving a basis matrix with a time series.
 
     To create the convolutional predictor, three steps are taken, convolve, pad and shift.
 
@@ -483,7 +486,7 @@ def create_convolutional_predictor(
 
     Returns
     -------
-    Any
+    :
         The convolutional predictor, structured similarly to the input `time_series`, appropriately
         padded and shifted according to the specified causality.
 
