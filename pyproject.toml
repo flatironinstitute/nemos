@@ -154,6 +154,7 @@ exclude_lines = [
 
 [tool.ruff]
 exclude = ["src/nemos/_documentation_utils"]
+src = ["src"]
 
 
 [tool.ruff.lint]
