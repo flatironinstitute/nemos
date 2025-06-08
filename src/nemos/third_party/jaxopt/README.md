@@ -65,8 +65,3 @@ Our implicit differentiation framework is described in this
 
 JAXopt was an open source project maintained by a dedicated team in Google
 Research. It is not an official Google product.
-
-## Changelog inside NeMoS
-- Removed docs, examples, benchmarks
-- Changed import paths to import `jaxopt` from `nemos.third_party`
-- Removed Github workflows (.github)
