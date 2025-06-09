@@ -12,9 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# ------------------------------------------------------------------------------
+# VENDORED FROM: https://github.com/google/jaxopt/blob/v0.8.5/jaxoppt/_src/isotonic.py
+# COMMIT: 51ad403cf81c366d70973a85cd1409cef1e164cf
+# MODIFIED: 2025-06-09 by @ebalzani
+# CHANGES:
+# - Removed numba njit, which is now incompatible with JAX buffer inputs.
+# ------------------------------------------------------------------------------
+
 """Isotonic Regression."""
 
-import warnings
 import numpy as onp
 import jax
 import jax.numpy as jnp
