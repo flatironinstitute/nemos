@@ -12,6 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# ------------------------------------------------------------------------------
+# VENDORED FROM: https://github.com/google/jaxopt/blob/v0.8.5/tests/isotonic_test.py
+# COMMIT: 51ad403cf81c366d70973a85cd1409cef1e164cf
+# MODIFIED: 2025-06-09 by @ebalzani
+# CHANGES:
+# - Removed numba njit, which is now incompatible with JAX buffer inputs.
+# ------------------------------------------------------------------------------
+
 """Tests for Isotonic Regression."""
 
 from absl.testing import absltest
