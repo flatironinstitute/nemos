@@ -20,20 +20,6 @@ import jax
 import jax.numpy as jnp
 
 
-# pylint: disable=g-import-not-at-top
-try:
-  from numba import njit
-
-  NUMBA_AVAILABLE = True
-except ImportError:
-  NUMBA_AVAILABLE = False
-  # If Numba is not available, we define a dummy 'njit' function.
-
-  def njit(func):
-    return func
-
-
-@njit
 def _isotonic_l2_pav_numba(y):
   n = y.shape[0]
   target = onp.arange(n)
@@ -90,11 +76,6 @@ def _isotonic_l2_pav_numba(y):
 
 @jax.custom_jvp
 def _isotonic_l2_pav(y):
-  if not NUMBA_AVAILABLE:
-    warnings.warn(
-        "Numba could not be imported. Code will run much more slowly."
-        " To install, run 'pip install numba'."
-    )
   # Define the expected shape & dtype of output.
   shape_dtype = jax.ShapeDtypeStruct(shape=y.shape, dtype=y.dtype)
   sol = jax.pure_callback(
