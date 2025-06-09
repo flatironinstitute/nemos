@@ -163,7 +163,7 @@ exclude_lines = [
 
 
 [tool.ruff]
-exclude = ["src/nemos/_documentation_utils"]
+exclude = ["src/nemos/_documentation_utils", "src/nemos/third_party"]
 
 
 [tool.ruff.lint]
