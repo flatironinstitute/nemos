@@ -203,7 +203,7 @@ def tree_l2_norm(tree_x, squared=False):
 
 
 def tree_zeros_like(tree_x):
-    """Creates an all-zero tree with the same structure as tree_x."""
+    """Create an all-zero tree with the same structure as tree_x."""
     return jax.tree_util.tree_map(jnp.zeros_like, tree_x)
 
 

@@ -52,7 +52,7 @@ class SVRGState(NamedTuple):
 
 class ProxSVRG:
     """
-    Prox-SVRG solver
+    Prox-SVRG solver.
 
     Borrowing from jaxopt.ProximalGradient, this solver minimizes:
 
@@ -130,7 +130,7 @@ class ProxSVRG:
         *args,
     ) -> SVRGState:
         """
-        Initialize the solver state
+        Initialize the solver state.
 
         Parameters
         ----------
@@ -238,8 +238,7 @@ class ProxSVRG:
         *args,
     ) -> OptStep:
         """
-        Perform a single parameter update on the passed data (no random sampling or loops)
-        and increment `state.iter_num`.
+        Perform a single parameter update on the data (no random sampling or loops) and increment `state.iter_num`.
 
         Please note that this gets called by `BaseRegressor._solver_update` (e.g., as called by `GLM.update`),
         but repeated calls to `(Prox)SVRG.update` (so in turn e.g. to `GLM.update`) on mini-batches passed to it
@@ -355,6 +354,7 @@ class ProxSVRG:
     ) -> OptStep:
         """
         Run a whole optimization until convergence or until `maxiter` epochs are reached.
+
         Called by `BaseRegressor._solver_run` (e.g. as called by `GLM.fit`) and assumes
         that X and y are the full data set.
 
@@ -402,6 +402,7 @@ class ProxSVRG:
     ) -> OptStep:
         """
         Run a whole optimization until convergence or until `maxiter` epochs are reached.
+
         Called by `BaseRegressor._solver_run` (e.g. as called by `GLM.fit`) and assumes that
         X and y are the full data set.
         Assumes the state has been initialized, which works a bit differently for SVRG and ProxSVRG.
@@ -424,14 +425,14 @@ class ProxSVRG:
                     Input data.
                 y : jnp.ndarray
                     Output data.
+
         Returns
         -------
-        OptStep
-            final_params :
-                Parameters at the end of the last innner loop.
-                (... or the average of the parameters over the last inner loop)
-            final_state :
-                Final optimizer state.
+        final_params :
+            Parameters at the end of the last innner loop.
+            (... or the average of the parameters over the last inner loop)
+        final_state :
+            Final optimizer state.
         """
 
         # this method assumes that args hold the full data
@@ -493,7 +494,9 @@ class ProxSVRG:
         *args,
     ) -> OptStep:
         """
-        Performs the inner loop of Prox-SVRG sweeping through approximately one full epoch,
+        Perform the inner loop of Prox-SVRG.
+
+        Performs the inner loop of Prox-SVRG  sweeping through approximately one full epoch,
         updating the parameters after sampling a mini-batch on each iteration.
 
         Parameters
@@ -577,6 +580,7 @@ class ProxSVRG:
     def _error(x, x_prev, stepsize):
         """
         Calculate the magnitude of the update relative to the stepsize.
+
         Used for terminating the algorithm if a certain tolerance is reached.
 
         Params
@@ -658,7 +662,7 @@ class SVRG(ProxSVRG):
 
     def init_state(self, init_params: Pytree, *args, **kwargs) -> SVRGState:
         """
-        Initialize the solver state
+        Initialize the solver state.
 
         Parameters
         ----------
@@ -685,8 +689,7 @@ class SVRG(ProxSVRG):
     @partial(jit, static_argnums=(0,))
     def update(self, params: Pytree, state: SVRGState, *args, **kwargs) -> OptStep:
         """
-        Perform a single parameter update on the passed data (no random sampling or loops)
-        and increment `state.iter_num`.
+        Perform a single parameter update on the data (no random sampling or loops) and increment `state.iter_num`.
 
         Please note that this gets called by `BaseRegressor._solver_update` (e.g., as called by `GLM.update`),
         but repeated calls to `(Prox)SVRG.update` (so in turn e.g. to `GLM.update`) on mini-batches passed to it
@@ -737,6 +740,7 @@ class SVRG(ProxSVRG):
     ) -> OptStep:
         """
         Run a whole optimization until convergence or until `maxiter` epochs are reached.
+
         Called by `BaseRegressor._solver_run` (e.g. as called by `GLM.fit`) and assumes that
         X and y are the full data set.
 

@@ -186,7 +186,7 @@ class GLM(BaseRegressor):
         # With python 3.11 Literal[*AVAILABLE_OBSERVATION_MODELS] will be allowed.
         # Replace this manual list after dropping support for 3.10?
         observation_model: obs.Observations | Literal["Poisson", "Gamma"] = "Poisson",
-        regularizer: Union[str, Regularizer] = "UnRegularized",
+        regularizer: Optional[Union[str, Regularizer]] = None,
         regularizer_strength: Optional[float] = None,
         solver_name: str = None,
         solver_kwargs: dict = None,
@@ -1150,10 +1150,11 @@ class GLM(BaseRegressor):
         return glm_compute_optimal_stepsize_configs(self)
 
     def __repr__(self):
+        """Representation of the GLM class."""
         return format_repr(self, multiline=True)
 
     def __sklearn_clone__(self) -> GLM:
-        """Clone the PopulationGLM, dropping feature_mask"""
+        """Clone the PopulationGLM, dropping feature_mask."""
         params = self.get_params(deep=False)
         klass = self.__class__(**params)
         return klass
@@ -1666,7 +1667,7 @@ class PopulationGLM(GLM):
         )
 
     def __sklearn_clone__(self) -> PopulationGLM:
-        """Clone the PopulationGLM, dropping feature_mask"""
+        """Clone the PopulationGLM, dropping feature_mask."""
         params = self.get_params(deep=False)
         params.pop("feature_mask")
         klass = self.__class__(**params)

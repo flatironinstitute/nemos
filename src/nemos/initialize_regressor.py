@@ -1,3 +1,5 @@
+"""Initialization of GLM parameters."""
+
 from typing import Callable
 
 import jax
@@ -80,7 +82,6 @@ def initialize_intercept_matching_mean_rate(
         The initial intercept term, shape (n_neurons,).
 
     """
-
     # return inverse if analytical solution is available
     analytical_inv = INVERSE_FUNCS.get(inverse_link_function, None)
 

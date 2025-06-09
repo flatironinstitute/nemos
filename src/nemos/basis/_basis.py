@@ -371,6 +371,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
     @promote_to_transformer
     def __rmul__(self, other: BasisMixin | int):
+        """Right multiplication operator for basis."""
         return self.__mul__(other)
 
     @promote_to_transformer
@@ -424,6 +425,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         return raise_basis_to_power(self, exponent)
 
     def __len__(self):
+        """Return the number of additive basis."""
         return 1
 
 
@@ -484,6 +486,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
 
     @property
     def n_output_features(self):
+        """Return the number of output features."""
         out1 = getattr(self.basis1, "n_output_features", None)
         out2 = getattr(self.basis2, "n_output_features", None)
         if out1 is None or out2 is None:
@@ -514,6 +517,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         181
 
         """
+        # ruff: noqa: D205, D400
         return super().set_input_shape(*xi)
 
     @support_pynapple(conv_type="numpy")
@@ -576,6 +580,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         (20, 17)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(*xi)
 
     def _compute_features(
@@ -838,6 +843,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
             yield bas
 
     def __len__(self):
+        """Return the number of additive basis."""
         return len(self.basis1) + len(self.basis2)
 
 
@@ -899,6 +905,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
 
     @property
     def n_output_features(self):
+        """Return the number of output features."""
         out1 = getattr(self.basis1, "n_output_features", None)
         out2 = getattr(self.basis2, "n_output_features", None)
         if out1 is None or out2 is None:
@@ -1072,6 +1079,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         (one_input * two_inputs): shape (20, 2, 30)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", CompositeBasisMixin)
@@ -1098,4 +1106,5 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         25200
 
         """
+        # ruff: noqa: D400, D205
         return super().set_input_shape(*xi)

@@ -409,6 +409,7 @@ class Observations(Base, abc.ABC):
             The pseudo-:math:`R^2` of the model. A value closer to 1 indicates a better model fit,
             whereas a value closer to 0 suggests that the model doesn't improve much over the null model.
         """
+        # ruff: noqa D403
         mean_y = jnp.ones(y.shape) * y.mean(axis=0)
         ll_null = self.log_likelihood(
             y, mean_y, scale=scale, aggregate_sample_scores=aggregate_sample_scores

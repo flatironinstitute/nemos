@@ -3,14 +3,16 @@
 AVAILABLE_REGULARIZERS = ["UnRegularized", "Ridge", "Lasso", "GroupLasso"]
 
 
-def create_regularizer(name: str):
+def create_regularizer(name: str | None):
     """
     Create a regularizer from a given name.
 
     Parameters
     ----------
     name :
-        The string name of the regularizer to create. Must be one of: 'UnRegularized', 'Ridge', 'Lasso', 'GroupLasso'.
+        The string name of the regularizer to create.
+        Must be one of: 'UnRegularized', 'Ridge', 'Lasso','GroupLasso', None.
+        If set to None, it will behave as 'Unregularized'.
 
     Returns
     -------
@@ -22,7 +24,7 @@ def create_regularizer(name: str):
     ValueError
         If the `name` provided does not match to any available regularizer.
     """
-    if name == "UnRegularized":
+    if name in ("UnRegularized", None):
         from .regularizer import UnRegularized
 
         return UnRegularized()

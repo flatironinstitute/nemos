@@ -132,7 +132,7 @@ def fetch_data(
 
 
 def download_dandi_data(dandiset_id: str, filepath: str) -> NWBHDF5IO:
-    """Download a dataset from the DANDI Archive (https://dandiarchive.org/)
+    """Download a dataset from the [DANDI Archive](https://dandiarchive.org/).
 
     Parameters
     ----------
@@ -171,6 +171,12 @@ def download_dandi_data(dandiset_id: str, filepath: str) -> NWBHDF5IO:
             "Missing optional dependency 'dandi'."
             " Please use pip or "
             "conda to install 'dandi'."
+        )
+    if pooch is None:
+        raise ImportError(
+            "Missing optional dependency 'pooch'."
+            " Please use pip or "
+            "conda to install 'pooch'."
         )
     with DandiAPIClient() as client:
         asset = client.get_dandiset(dandiset_id, "draft").get_asset_by_path(filepath)

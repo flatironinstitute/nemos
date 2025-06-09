@@ -65,7 +65,8 @@ def _iterate_over_components(basis: "BasisMixin"):
 
 
 def _get_root(bas: "BasisMixin"):
-    """Get the basis root"""
+    """Get the basis root."""
+
     parent = bas
     while hasattr(parent, "_parent") and parent._parent is not None:
         parent = parent._parent
@@ -538,7 +539,7 @@ def is_transformer(bas: Any):
 
 
 def promote_to_transformer(method):
-    """Apply operations to basis within transformer and transform output,"""
+    """Apply operations to basis within transformer and transform output."""
 
     @wraps(method)
     def wrapper(*args, **kwargs):
