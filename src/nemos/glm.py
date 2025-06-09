@@ -1174,6 +1174,7 @@ class GLM(BaseRegressor):
         Examples
         --------
         >>> import nemos as nmo
+        >>> from nemos.io.load_model import load_model
 
         >>> # Create a GLM model with specified parameters
         >>> solver_args = {"stepsize": 0.1, "maxiter": 1000, "tol": 1e-6}
@@ -1187,16 +1188,24 @@ class GLM(BaseRegressor):
 
         >>> # Print the model parameters
         >>> print(model.get_params())
+        {'observation_model__inverse_link_function': <function one_over_x at ...>, 'observation_model': GammaObservations(inverse_link_function=one_over_x), 'regularizer': Ridge(), 'regularizer_strength': 0.1, 'solver_kwargs': {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}, 'solver_name': 'BFGS'}
 
         >>> # Save the model parameters to a file
         >>> model.save_params("model_params.npz")
 
+        >>> # Initialize a default GLM
+        >>> model = nmo.glm.GLM()
+
+        >>> # Print the model parameters
+        >>> print(model.get_params())
+        {'observation_model__inverse_link_function': <PjitFunction of <function exp at ...>>, 'observation_model': PoissonObservations(inverse_link_function=exp), 'regularizer': UnRegularized(), 'regularizer_strength': None, 'solver_kwargs': {}, 'solver_name': 'GradientDescent'}
+
         >>> # Load the model from the saved file
-        >>> model = nmo.load_model("model_params.npz")
+        >>> model = load_model("model_params.npz")
 
         >>> # Print the parameters of the loaded model
-        >>> # This should match the original model parameters
         >>> print(model.get_params())
+        {'observation_model__inverse_link_function': <function one_over_x at ...>, 'observation_model': GammaObservations(inverse_link_function=one_over_x), 'regularizer': Ridge(), 'regularizer_strength': 0.1, 'solver_kwargs': {'stepsize': array(0.1), 'maxiter': array(1000), 'tol': array(1.e-06)}, 'solver_name': 'BFGS'}
         """
 
         # initialize saving dictionary

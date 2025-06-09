@@ -10,6 +10,7 @@ from . import (
     fetch,
     glm,
     identifiability_constraints,
+    io,
     observation_models,
     pytrees,
     regularizer,
@@ -19,7 +20,6 @@ from . import (
     type_casting,
     utils,
 )
-from .io import load_model
 
 try:
     __version__ = _get_version("nemos")
