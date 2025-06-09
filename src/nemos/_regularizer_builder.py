@@ -22,6 +22,9 @@ def create_regularizer(name: str):
     ValueError
         If the `name` provided does not match to any available regularizer.
     """
+    if "." in name:
+        name = name.split(".")[-1]
+
     if name == "UnRegularized":
         from .regularizer import UnRegularized
 

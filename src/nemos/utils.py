@@ -601,3 +601,147 @@ def _get_terminal_size():
 def one_over_x(x):
     """Implement 1/x."""
     return jnp.power(x, -1)
+
+
+def flatten_dict(d: dict, parent_key: str = "") -> dict:
+    """
+    Flatten a nested dictionary into a single-level dictionary with keys representing the hierarchy.
+
+    Parameters
+    ----------
+    d :
+        The dictionary to flatten.
+
+    parent_key :
+        This key starts blank, but recursively it will be filled with the parent key,
+        which is used to create the hierarchy in the flattened dictionary.
+
+    Returns
+    -------
+    dict :
+        A flattened dictionary where the hierarchy is represented by concatenated keys (using __ as a separator).
+    -----------
+    """
+
+    sep = "__"
+    items = []
+    # Iterate over key-value pairs in the dictionary
+    for k, v in d.items():
+        new_key = f"{parent_key}{sep}{k}" if parent_key else k
+        # Recursively flatten if the value is a dictionary
+        if isinstance(v, dict):
+            items.extend(flatten_dict(v, new_key).items())
+        else:
+            # None values and non-standard types are converted to numpy
+            if v is None:
+                v = np.nan
+            elif not isinstance(v, (str, int, float, bool)):
+                try:
+                    v = np.array(v)
+                except Exception as e:
+                    warnings.warn(
+                        f"Could not convert value '{v}' to numpy array: {e}, "
+                        "setting it to NaN."
+                    )
+                    v = np.nan
+            items.append((new_key, v))
+    return dict(items)
+
+
+def unflatten_dict(d: dict) -> dict:
+    """
+    Unflatten a dictionary with keys representing hierarchy into a nested dictionary.
+
+    Parameters
+    ----------
+    d :
+        The dictionary to unflatten.
+
+    Returns
+    -------
+    dict :
+        A nested dictionary with the original hierarchy restored.
+    """
+
+    sep = "__"
+    result = {}
+    # Process each key-value pair in the flattened dictionary
+    for k, v in d.items():
+        keys = k.split(sep)
+        dct = result
+        # Traverse or create nested dictionaries
+        for key in keys[:-1]:
+            if key not in dct:
+                dct[key] = {}
+            dct = dct[key]
+        # Convert numpy string types to standard Python strings
+        if v.dtype.type is np.str_:
+            v = str(v)
+        dct[keys[-1]] = v
+    return result
+
+
+def get_name(x: object) -> str:
+    """
+    Get the name of an object ``x``, for saving/loading purposes.
+
+    Parameters
+    ----------
+    x :
+        A python object or function.
+
+    Returns
+    -------
+    name :
+        The name of the object, with full module path (e.g.,
+        ``nemos.observation_models.PoissonObservations``).
+    """
+    if x is None:
+        return None
+    if hasattr(x, "__module__") and hasattr(x, "__name__"):
+        # x is a function or class
+        return f"{x.__module__}.{x.__name__}"
+    elif hasattr(x, "__class__"):
+        # x is an instance of a class
+        cls = x.__class__
+        return f"{cls.__module__}.{cls.__name__}"
+    else:
+        raise TypeError(f"Cannot retrieve name of variable {x} of type {type(x)}.")
+
+
+def unpack_params(params_dict: dict, string_attrs: list = None) -> dict:
+    """
+    Convert a parameter dictionary into serializable format.
+
+    For objects with `get_params`/`set_params`, extracts the class name and
+    parameters. Some attributes are converted to strings to facilitate saving and loading.
+
+    Parameters
+    ----------
+    params_dict :
+        Dictionary of parameters, possibly containing objects.
+
+    string_attrs :
+        List of attributes that should be converted to strings (e.g., `inverse_link_function`).
+
+    Returns
+    -------
+    dict :
+        Serializable dictionary with class names and nested parameters.
+    """
+
+    out = dict()
+    for key, value in params_dict.items():
+        # if the parameter is an objet with get_params/set_params,
+        # extract its class name and parameters
+        if hasattr(value, "get_params") and hasattr(value, "set_params"):
+            cls_name = get_name(value)
+            params = unpack_params(value.get_params(deep=False), string_attrs)
+            out[key] = cls_name if not params else {"class": cls_name, "params": params}
+        else:
+            # if the parameter is in string_attrs, store its name
+            if string_attrs is not None and key in string_attrs:
+                out[key] = get_name(value)
+            else:
+                out[key] = value
+    return out

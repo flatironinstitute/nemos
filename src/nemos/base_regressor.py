@@ -20,18 +20,11 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from . import solvers, utils, validation
-from ._observation_model_builder import instantiate_observation_model
 from ._regularizer_builder import AVAILABLE_REGULARIZERS, create_regularizer
 from .base_class import Base
 from .regularizer import Regularizer, UnRegularized
 from .typing import DESIGN_INPUT_TYPE, SolverInit, SolverRun, SolverUpdate
-
-# move somewhere else?
-OBSERVER_NAME_MAP = {
-    "PoissonObservations": "Poisson",
-    "GammaObservations": "Gamma",
-    "BernoulliObservations": "Bernoulli",
-}
+from .utils import flatten_dict, get_name, unpack_params
 
 
 def strip_metadata(arg_num: Optional[int] = None, kwarg_key: Optional[str] = None):
@@ -54,75 +47,6 @@ def strip_metadata(arg_num: Optional[int] = None, kwarg_key: Optional[str] = Non
         return wrapper
 
     return decorator
-
-
-def get_name(x: object) -> str:
-    """
-    Get the name of an object ``x``, for saving/loading purposes.
-
-    Parameters
-    ----------
-    x
-        A python object or function.
-
-    Returns
-    -------
-    name
-        The name of that object, with full module path (e.g.,
-        ``nemos.observation_models.PoissonObservations``).
-    """
-    if x is None:
-        return None
-    try:
-        # if this passes, attr is a function
-        name = f"{x.__module__}.{x.__name__}"
-    except AttributeError:
-        # if we're here, then it's an object
-        cls = x.__class__
-        name = f"{cls.__module__}.{cls.__name__}"
-    return name
-
-
-def unpack_params(params_dict: dict) -> dict:
-    """
-    Convert a parameter dictionary into serializable format.
-
-    For objects with `get_params`/`set_params`, extracts the class name and
-    parameters. Some attributes are converted to strings to facilitate saving and loading.
-
-    Parameters
-    ----------
-    params_dict
-        Dictionary of parameters, possibly containing objects.
-
-    Returns
-    -------
-    dict
-        Serializable dictionary with class names and nested parameters.
-    """
-
-    attributes_as_string = ["inverse_link_function"]
-    out = dict()
-    for key, value in params_dict.items():
-        # if the parameter is an objet with get_params/set_params,
-        # extract its class name and parameters
-        if hasattr(value, "get_params") and hasattr(value, "set_params"):
-            cls = value.__class__
-            cls_name = f"{cls.__module__}.{cls.__qualname__}"
-            params = unpack_params(value.get_params(deep=False))
-            out[key] = (
-                {"class": cls_name}
-                if not params
-                else {"class": cls_name, "params": params}
-            )
-
-        else:
-            # if the parameter is in attributes_as_string, store its name
-            if key in attributes_as_string:
-                out[key] = get_name(value)
-            else:
-                out[key] = value
-    return out
 
 
 class BaseRegressor(Base, abc.ABC):
@@ -765,131 +689,50 @@ class BaseRegressor(Base, abc.ABC):
         """Return the functions for computing default step and batch size for the solver."""
         pass
 
+    @classmethod
     @abstractmethod
-    def save_params(self, filename: Union[str, Path]):
-        """
-        Abstract method that subclasses must implement.
-        """
+    def _load_from_dict(cls, saved_attrs: dict[str, Any]):
         pass
 
-    def _save_params_base(
+    @abstractmethod
+    def save_params(
         self,
         filename: Union[str, Path],
-        save_attrs: dict,
+        fit_attrs: dict,
+        string_attrs: list = None,
     ):
         """
         Save model parameters and specified attributes to a .npz file.
+
         This is a private method intended to be used by subclasses to implement.
         Adds metadata about the jax and nemos versions used to save the model.
 
         Parameters
         ----------
-        filename
+        filename :
             The output filename.
-        save_attrs
-            Dictionary containing the attributes specific to the subclass model.
+        fit_attrs :
+            Dictionary containing the fitting parameters specific to the subclass model.
+        string_attrs :
+            List of attributes to be saved as strings.
         """
 
         # extract model parameters
         model_params = self.get_params(deep=False)
-        save_params = unpack_params(model_params)
+        model_params = unpack_params(model_params, string_attrs)
 
-        # append the model parameters to the save_attrs
-        save_attrs.update(save_params)
+        # append the fit attributes to the model parameters
+        model_params.update(fit_attrs)
 
-        save_attrs["save_metadata"] = {
+        # save jax and nemos versions
+        model_params["save_metadata"] = {
             "jax_version": importlib.metadata.version("jax"),
             "nemos_version": importlib.metadata.version("nemos"),
         }
 
-        try:
-            np.savez(filename, params=save_attrs)
-        except Exception as e:
-            raise RuntimeError(f"Saving failed for '{filename}': {e}")
+        # save the model class name
+        model_params["model_class"] = get_name(self.__class__)
 
-    def load_params(self, filename: Union[str, Path]):
-        """
-        Load model parameters and attributes from a .npz file.
-
-        Parameters
-        ----------
-        filename
-            Path to the saved .npz file.
-
-        Examples
-        --------
-        >>> import nemos as nmo
-        >>> # Create a GLM model with some parameters
-        >>> model = nmo.glm.GLM(regularizer='Lasso', regularizer_strength=100)
-        >>> # Inspect initial parameters
-        >>> print(model.get_params())
-        >>> # Load parameters from previously saved file
-        >>> model.load_params("model_params.npz")
-        >>> # Updated parameters reflect the saved configuration
-        >>> print(model.get_params())
-        """
-        filename = Path(filename)
-        if not filename.exists():
-            raise FileNotFoundError(f"File not found: {filename}")
-
-        data = np.load(filename, allow_pickle=True)
-        saved_attrs = data["params"].item()
-
-        # Extract model parameters
-        valid_params = self.get_params()
-        model_params = {k: v for k, v in saved_attrs.items() if k in valid_params}
-
-        # Regularizer
-        if "regularizer" in model_params:
-            model_params["regularizer"] = model_params["regularizer"]["class"].split(
-                "."
-            )[-1]
-
-        # Observation model
-        try:
-            obs_model_info = model_params["observation_model"]
-            obs_class = obs_model_info["class"].split(".")[-1]
-            obs_params = obs_model_info["params"]
-        except KeyError:
-            raise ValueError(
-                "'observation_model' in saved parameters is missing or not formatted correctly."
-            )
-
-        simplified_obs_class = OBSERVER_NAME_MAP.get(obs_class, None)
-        if not simplified_obs_class:
-            raise ValueError(
-                f"Unknown observation model class: {obs_class}. Supported: {list(OBSERVER_NAME_MAP.keys())}"
-            )
-
-        # Instantiate observation model
-        observation_model = instantiate_observation_model(simplified_obs_class)
-
-        # Link function - maybe we should allow numpy versions - mapping?
-        link_str = obs_params.get("inverse_link_function")
-        if not link_str:
-            raise ValueError(
-                "Missing 'inverse_link_function' in observation model parameters."
-            )
-
-        if link_str.startswith("nemos"):
-            observation_model.inverse_link_function = eval(link_str.split("nemos.")[1])
-        elif link_str.startswith("jax"):
-            observation_model.inverse_link_function = eval(link_str)
-        else:
-            raise ValueError(f"Unknown inverse link function: {link_str}")
-
-        model_params["observation_model"] = observation_model
-
-        # Set known model parameters
-        self.set_params(**model_params)
-
-        # instantiate the solver - maybe not needed
-        self.instantiate_solver()
-
-        # Set other attributes that are not model parameters
-        for key, value in saved_attrs.items():
-            if key not in model_params:
-                try:
-                    setattr(self, key, value)
-                except Exception as e:
-                    warnings.warn(f"Could not set attribute '{key}': {e}")
+        # flatten the parameters dictionary to ensure it can be saved
+        model_params = flatten_dict(model_params)
+        np.savez(filename, **model_params)

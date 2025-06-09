@@ -1163,39 +1163,107 @@ class GLM(BaseRegressor):
         """
         Save GLM model parameters to a .npz file.
 
+        This method allows to reuse the model parameters. The saved parameters can be loaded back
+        into a GLM instance using the `load_params` function.
+
+        Parameters
+        ----------
+        filename :
+            The name of the file where the model parameters will be saved. The file will be saved in `.npz` format.
+
         Examples
         --------
         >>> import nemos as nmo
-        >>> import numpy as np
 
-        >>> X = np.random.normal(size=(num_samples, num_features))
-        >>> # generate some counts
-        >>> spike_counts = np.random.poisson(size=num_samples)
-
-        >>> # Create a GLM model and configure parameters
-        >>> model = nmo.glm.GLM()
-        >>> model.set_params(
-        ...     regularizer=nmo.regularizer.Ridge(),
+        >>> # Create a GLM model with specified parameters
+        >>> solver_args = {"stepsize": 0.1, "maxiter": 1000, "tol": 1e-6}
+        >>> model = nmo.glm.GLM(
+        ...     regularizer="Ridge",
         ...     regularizer_strength=0.1,
         ...     observation_model="Gamma",
-        ...     solver_kwargs={"stepsize": 0.1, "acceleration": False},
         ...     solver_name="BFGS",
+        ...     solver_kwargs=solver_args,
         ... )
 
-        >>> # Fit the model to add coefficients and intercept attributes
-        >>> model = model.fit(X, spike_counts)
+        >>> # Print the model parameters
+        >>> print(model.get_params())
 
-        >>> # Save model parameters to a file
-        >>> model.save_params("model_params")
+        >>> # Save the model parameters to a file
+        >>> model.save_params("model_params.npz")
+
+        >>> # Load the model from the saved file
+        >>> model = nmo.load_model("model_params.npz")
+
+        >>> # Print the parameters of the loaded model
+        >>> # This should match the original model parameters
+        >>> print(model.get_params())
         """
 
         # initialize saving dictionary
-        save_attrs = {}
+        fit_attrs = {}
 
-        save_attrs["coef_"] = self.coef_
-        save_attrs["intercept_"] = self.intercept_
+        fit_attrs["coef_"] = self.coef_
+        fit_attrs["intercept_"] = self.intercept_
 
-        self._save_params_base(filename, save_attrs)
+        string_attrs = ["inverse_link_function"]
+
+        super().save_params(filename, fit_attrs, string_attrs)
+
+    @classmethod
+    def _load_from_dict(
+        cls, saved_attrs: dict[str, Any], mapping_dict: Optional[dict] = None
+    ) -> GLM:
+        """
+        Load a GLM model from a dictionary of saved attributes.
+
+        This private method is designed to be called internally by the function load_model.
+
+        Parameters
+        ----------
+        saved_attrs :
+            Dictionary containing the saved attributes of the model.
+
+        mapping_dict :
+            Optional dictionary to map custom attribute names to their actual objects.
+
+        Returns
+        -------
+        model :
+            A GLM instance with the loaded parameters.
+        """
+
+        # Get the parameter names for the class
+        model_params_names = cls._get_param_names()
+
+        saved_attrs["inverse_link_function"] = saved_attrs["observation_model"][
+            "params"
+        ]["inverse_link_function"]
+        saved_attrs["observation_model"] = saved_attrs["observation_model"]["class"]
+
+        # Filter only valid parameters for the model constructor
+        parameter_config = {
+            k: v for k, v in saved_attrs.items() if k in model_params_names
+        }
+
+        # Create the model instance
+        model = cls(**parameter_config)
+
+        # Set inverse_link_function if available
+        try:
+            if hasattr(model.observation_model, "inverse_link_function"):
+                model.observation_model.inverse_link_function = str(
+                    saved_attrs["inverse_link_function"]
+                )
+        except KeyError:
+            pass
+
+        # Set coef_ and intercept_ if available
+        if "coef_" in saved_attrs:
+            model.coef_ = saved_attrs["coef_"]
+        if "intercept_" in saved_attrs:
+            model.intercept_ = saved_attrs["intercept_"]
+
+        return model
 
 
 class PopulationGLM(GLM):
