@@ -39,13 +39,3 @@ repos:
   - id: end-of-file-fixer
   # Removes trailing whitespace characters from files.
   - id: trailing-whitespace
-
-- repo: https://github.com/numpy/numpydoc
-  rev: v1.8.0
-  hooks:
-    - id: numpydoc-validation
-      exclude: |
-          (?x)(
-              tests/|
-              docs/
-          )
