@@ -1,9 +1,14 @@
 """Utility functions for creating regularizer object."""
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .regularizer import Regularizer
+
 AVAILABLE_REGULARIZERS = ["UnRegularized", "Ridge", "Lasso", "GroupLasso"]
 
 
-def create_regularizer(name: str | None):
+def create_regularizer(name: str | None) -> Regularizer:
     """
     Create a regularizer from a given name.
 
