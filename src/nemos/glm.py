@@ -1615,7 +1615,7 @@ class PopulationGLM(GLM):
         """
         return super().fit(X, y, init_params)
 
-    def _initialize_feature_mask(self, X, y):
+    def _initialize_feature_mask(self, X: FeaturePytree, y: jnp.ndarray):
         if self.feature_mask is None:
             # static checker does not realize conversion to ndarray happened in cast_to_jax.
             if isinstance(X, FeaturePytree):
