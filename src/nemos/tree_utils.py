@@ -24,6 +24,7 @@ def _get_not_inf(array: jnp.ndarray) -> jnp.ndarray:
 
     Returns
     -------
+    :
         A 1D boolean array of length equal to the size of the first dimension of the input array.
         Each entry in this array corresponds to an aggregation across all other dimensions of the input array,
         with True indicating all values are finite (not infinite) and False indicating at least one infinite value.
@@ -68,6 +69,7 @@ def _get_valid_tree(tree: Any) -> jnp.ndarray:
 
     Returns
     -------
+    :
         A boolean array indicating validity of each entry across all leaves. True represents a valid entry,
         while False indicates an invalid (NaN or infinite) entry.
     """
@@ -86,7 +88,7 @@ def get_valid_multitree(*tree: Any) -> jnp.ndarray:
 
     Parameters
     ----------
-    tree :
+    *tree :
         Variable number of pytrees with NDArrays as leaves, each having a consistent first dimension size.
 
     Returns
@@ -126,8 +128,9 @@ def pytree_map_and_reduce(
 
     Returns
     -------
-    The result of applying the reduce function to the mapped results. The type of the
-    return value depends on the reduce function.
+    :
+        The result of applying the reduce function to the mapped results. The type of the
+        return value depends on the reduce function.
 
     Examples
     --------
@@ -175,23 +178,87 @@ tree_sub.__doc__ = "Tree subtraction."
 
 
 def tree_scalar_mul(scalar, tree_x):
-    """Compute scalar * tree_x."""
+    """
+    Compute scalar * tree_x.
+    
+    Parameters
+    ----------
+    scalar :
+        A scalar multiplier applied to each element of tree_x.
+    tree_x : 
+        A pytree with leaves as NDArrays.
+    
+    Returns
+    -------
+    Any
+        A pytree with the same structure as tree_x, where each leaf is computed as:
+        scalar * tree_x.
+    """
+    
     return jax.tree_util.tree_map(lambda x: scalar * x, tree_x)
 
 
 def tree_add_scalar_mul(tree_x, scalar, tree_y):
-    """Compute tree_x + scalar * tree_y."""
+    """
+    Compute tree_x + scalar * tree_y.
+    
+    Parameters
+    ----------
+    tree_x : 
+        A pytree with leaves as NDArrays.
+    scalar :
+        A scalar multiplier applied to each element of tree_y.
+    tree_y : 
+        A pytree with the same structure as tree_x.
+    
+    Returns
+    -------
+    Any
+        A pytree with the same structure as the inputs, where each leaf is computed as:
+        x + scalar * y.
+    """
     return jax.tree_util.tree_map(lambda x, y: x + scalar * y, tree_x, tree_y)
 
 
 def tree_sum(tree_x):
-    """Compute sum(tree_x)."""
+    """
+    Compute sum(tree_x).
+
+    Parameters
+    ----------
+    tree_x : Any
+        A pytree with leaves as NDArrays.
+    
+    Returns
+    -------
+    scalar:
+        A scalar representing the sum of all elements across the PyTree.
+    """
     sums = jax.tree_util.tree_map(jnp.sum, tree_x)
     return jax.tree_util.tree_reduce(operator.add, sums)
 
 
-def tree_l2_norm(tree_x, squared=False):
-    """Compute the l2 norm ||tree_x||."""
+def tree_l2_norm(tree_x: Any, squared=False):
+    """
+    Compute the L2 norm (Euclidean norm) of a PyTree of arrays, ||tree_x||.
+
+    This function supports real and complex-valued arrays. For complex values,
+    it computes the squared magnitude as real² + imag².
+
+    Parameters
+    ----------
+    tree_x : Any
+        A pytree with leaves as NDArrays.
+
+    squared :
+        If True, return the squared L2 norm (sum of squared magnitudes).
+        If False, return the L2 norm (square root of the sum).
+
+    Returns
+    -------
+    jnp.ndarray
+        A scalar representing the L2 norm (or squared L2 norm) of the pytree.
+    """
     squared_tree = jax.tree_util.tree_map(
         lambda leaf: jnp.square(leaf.real) + jnp.square(leaf.imag), tree_x
     )
@@ -200,15 +267,42 @@ def tree_l2_norm(tree_x, squared=False):
         return sqnorm
     else:
         return jnp.sqrt(sqnorm)
+    
 
+def tree_zeros_like(tree_x: Any):
+    """
+    Create an all-zero tree with the same structure as tree_x.
+    
+    Parameters
+    ----------
+    tree_x :
+        A pytree with leaves as NDArrays.
 
-def tree_zeros_like(tree_x):
-    """Create an all-zero tree with the same structure as tree_x."""
+    Returns
+    -------
+    tree :
+        All-zero tree with same structure as tree_x.
+    """
     return jax.tree_util.tree_map(jnp.zeros_like, tree_x)
 
 
 def has_matching_axis_pytree(*trees: Any, axis: int = 0):
-    """Check if an arbitrary number of trees have matching axis length."""
+    """
+    Check if an arbitrary number of trees have matching axis length.
+
+    Parameters
+    ----------
+    *trees :
+        A variable number of pytrees with leaves as NDArrays.
+
+    axis :
+        Axis in which the length will be checked.
+
+    Returns
+    -------
+    bool :
+        True if there's only one unique length, meaning all arrays have the same size along that axis.
+    """
     ax_lengths = {
         xi.shape[axis] for tree in trees for xi in jax.tree_util.tree_leaves(tree)
     }
