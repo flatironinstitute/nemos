@@ -173,3 +173,24 @@ ignore = ["D202"]  # this conflicts with black
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
+
+
+[tool.ruff.lint.flake8-annotations]
+allow-star-arg-any = true
+suppress-none-returning = true
+
+
+[tool.ruff.lint.per-file-ignores]
+# Ignore docstring rules everywhere except for the `src/` directory, from
+# https://docs.astral.sh/ruff/settings/#lint_per-file-ignores.
+"!src/**.py" = ["D", "DOC", "ANN"]
+
+
+[tool.numpydoc_validation]
+checks = [
+    "all",
+    "SA01",
+    # will remove this eventually
+    "EX01",
+    "PR04",
+]
