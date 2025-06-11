@@ -7,7 +7,8 @@ with various optimization methods, and they can be applied depending on the mode
 """
 
 import abc
-from typing import Callable, Tuple, Union
+from typing import Callable, Tuple, Union, Any, Optional
+from .typing import DESIGN_INPUT_TYPE
 
 import jax
 import jax.numpy as jnp
@@ -25,6 +26,7 @@ __all__ = ["UnRegularized", "Ridge", "Lasso", "GroupLasso"]
 
 
 def __dir__() -> list[str]:
+    """Include the list of all regularizers in the module to __dir__."""
     return __all__
 
 
@@ -35,6 +37,11 @@ class Regularizer(Base, abc.ABC):
     This class is designed to provide a consistent interface for optimization solvers,
     enabling users to easily switch between different regularizers, ensuring compatibility
     with various loss functions and optimization algorithms.
+
+    Parameters
+    ----------
+    **kwargs :
+        Additional keyword arguments that can be passed to the regularizer.
 
     Attributes
     ----------
@@ -47,18 +54,31 @@ class Regularizer(Base, abc.ABC):
     _allowed_solvers: Tuple[str] = tuple()
     _default_solver: str = None
 
-    def __init__(
-        self,
-        **kwargs,
-    ):
+    def __init__(self, **kwargs: Any):
         super().__init__(**kwargs)
 
     @property
     def allowed_solvers(self) -> Tuple[str]:
+        """
+        Get the allowed solvers for this regularizer.
+
+        Returns
+        -------
+        :
+            Tuple of strings representing the names of allowed solvers for this regularizer.
+        """
         return self._allowed_solvers
 
     @property
     def default_solver(self) -> str:
+        """
+        Get the default solver for this regularizer.
+
+        Returns
+        -------
+        :
+            String representing the name of the default solver for this regularizer.
+        """
         return self._default_solver
 
     @abc.abstractmethod
@@ -95,7 +115,7 @@ class Regularizer(Base, abc.ABC):
         """
         pass
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return format_repr(self)
 
 
@@ -124,11 +144,23 @@ class UnRegularized(Regularizer):
     ):
         super().__init__()
 
-    def penalized_loss(self, loss: Callable, regularizer_strength: float):
+    def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
         """
         Return the original loss function unpenalized.
 
         Unregularized regularization method does not add any penalty.
+
+        Parameters
+        ----------
+        loss :
+            Callable loss function.
+        regularizer_strength :
+            Float indicating the regularization strength (not used in unregularized case).
+
+        Returns
+        -------
+        :
+            The original loss function unpenalized.
         """
         return loss
 
@@ -140,6 +172,11 @@ class UnRegularized(Regularizer):
 
         Unregularized method corresponds to an identity proximal operator, since no
         shrinkage factor is applied.
+
+        Returns
+        -------
+        :
+            The identity proximal operator, with no shrinkage applied to the parameters.
         """
         return jaxopt.prox.prox_none
 
@@ -180,6 +217,8 @@ class Ridge(Regularizer):
         ----------
         params :
             Model parameters for which to compute the penalization.
+        regularizer_strength :
+            Float indicating the regularization strength.
 
         Returns
         -------
@@ -188,6 +227,21 @@ class Ridge(Regularizer):
         """
 
         def l2_penalty(coeff: jnp.ndarray, intercept: jnp.ndarray) -> jnp.ndarray:
+            """
+            Compute the L2 penalty for the coefficients and intercept.
+
+            Parameters
+            ----------
+            coeff :
+                Coefficients of the model.
+            intercept :
+                Intercept of the model.
+
+            Returns
+            -------
+            :
+                The L2 penalty value, scaled by the regularization strength.
+            """
             return (
                 0.5
                 * regularizer_strength
@@ -201,9 +255,27 @@ class Ridge(Regularizer):
         )
 
     def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
-        """Return the penalized loss function for Ridge regularization."""
+        """
+        Return the penalized loss function for Ridge regularization.
 
-        def _penalized_loss(params, X, y):
+        Parameters
+        ----------
+        loss :
+            Callable loss function.
+        regularizer_strength :
+            Float indicating the regularization strength.
+
+        Returns
+        -------
+        :
+            The loss function, including the Ridge regularization term.
+        """
+
+        def _penalized_loss(
+            params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+            X: DESIGN_INPUT_TYPE,
+            y: jnp.ndarray,
+        ) -> jnp.ndarray:
             return loss(params, X, y) + self._penalization(params, regularizer_strength)
 
         return _penalized_loss
@@ -221,7 +293,28 @@ class Ridge(Regularizer):
             term is not regularized.
         """
 
-        def prox_op(params, l2reg, scaling=1.0):
+        def prox_op(
+            params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+            l2reg: float,
+            scaling: float = 1.0,
+        ) -> Any:
+            """
+            Apply the Ridge proximal operator to the parameters.
+
+            Parameters
+            ----------
+            params :
+                Tuple containing the parameters.
+            l2reg :
+                Float indicating the L2 regularization term.
+            scaling :
+                Float indicating the scaling factor for the regularization (default is 1.0).
+
+            Returns
+            -------
+            :
+                Tuple containing the regularized weights and the original intercept.
+            """
             Ws, bs = params
             l2reg /= bs.shape[0]
             return jaxopt.prox.prox_ridge(Ws, l2reg, scaling=scaling), bs
@@ -262,7 +355,11 @@ class Lasso(Regularizer):
             term is not regularized.
         """
 
-        def prox_op(params, l1reg, scaling=1.0):
+        def prox_op(
+            params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+            l1reg: float,
+            scaling: float = 1.0,
+        ) -> Any:
             Ws, bs = params
             l1reg /= bs.shape[0]
             # if Ws is a pytree, l1reg needs to be a pytree with the same
@@ -301,7 +398,11 @@ class Lasso(Regularizer):
     def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
         """Return a function for calculating the penalized loss using Lasso regularization."""
 
-        def _penalized_loss(params, X, y):
+        def _penalized_loss(
+            params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+            X: DESIGN_INPUT_TYPE,
+            y: jnp.ndarray,
+        ) -> jnp.ndarray:
             return loss(params, X, y) + self._penalization(params, regularizer_strength)
 
         return _penalized_loss
@@ -363,7 +464,7 @@ class GroupLasso(Regularizer):
         self.mask = mask
 
     @property
-    def mask(self):
+    def mask(self) -> Union[jnp.ndarray, None]:
         """Getter for the mask attribute."""
         return self._mask
 
@@ -459,7 +560,11 @@ class GroupLasso(Regularizer):
     def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
         """Return a function for calculating the penalized loss using Group Lasso regularization."""
 
-        def _penalized_loss(params, X, y):
+        def _penalized_loss(
+            params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+            X: DESIGN_INPUT_TYPE,
+            y: jnp.ndarray,
+        ) -> jnp.ndarray:
             return loss(params, X, y) + self._penalization(params, regularizer_strength)
 
         return _penalized_loss
@@ -477,7 +582,11 @@ class GroupLasso(Regularizer):
             intercept term is not regularized.
         """
 
-        def prox_op(params, regularizer_strength, scaling=1.0):
+        def prox_op(
+            params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+            regularizer_strength: float,
+            scaling: float = 1.0,
+        ) -> Tuple[jnp.ndarray, jnp.ndarray]:
             return prox_group_lasso(
                 params, regularizer_strength, mask=self.mask, scaling=scaling
             )
