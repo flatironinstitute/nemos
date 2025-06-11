@@ -167,7 +167,7 @@ exclude = ["src/nemos/_documentation_utils", "src/nemos/third_party"]
 
 
 [tool.ruff.lint]
-select = ["D"]
+select = ["D", "ANN"]
 ignore = ["D202"]  # this conflicts with black
 
 
