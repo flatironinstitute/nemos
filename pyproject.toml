@@ -196,3 +196,9 @@ checks = [
     "ANN401",
     "ES01",
 ]
+
+# don't report on objects that match any of these regex
+exclude = [
+    "__.*__",
+    "noxfile",
+]

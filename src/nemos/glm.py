@@ -26,14 +26,14 @@ from .type_casting import jnp_asarray_if, support_pynapple
 from .typing import DESIGN_INPUT_TYPE
 from .utils import format_repr
 
-ModelParams = Tuple[jnp.ndarray, jnp.ndarray]
+ModelParams = Tuple[Union[FeaturePytree, jnp.ndarray], jnp.ndarray]
 
 
-def cast_to_jax(func):
+def cast_to_jax(func: Callable) -> Callable:
     """Cast argument to jax."""
 
     @wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
         try:
             args, kwargs = jax.tree_util.tree_map(
                 lambda x: jnp_asarray_if(x, dtype=float), (args, kwargs)
@@ -284,7 +284,7 @@ class GLM(BaseRegressor):
 
     @staticmethod
     def _check_input_and_params_consistency(
-        params: Tuple[Union[FeaturePytree, jnp.ndarray], jnp.ndarray],
+        params: ModelParams,
         X: Optional[Union[FeaturePytree, jnp.ndarray]] = None,
         y: Optional[jnp.ndarray] = None,
     ):
@@ -329,9 +329,7 @@ class GLM(BaseRegressor):
                 "This GLM instance is not fitted yet. Call 'fit' with appropriate arguments."
             )
 
-    def _predict(
-        self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], X: jnp.ndarray
-    ) -> jnp.ndarray:
+    def _predict(self, params: ModelParams, X: jnp.ndarray) -> jnp.ndarray:
         """
         Predicts firing rates based on given parameters and design matrix.
 
@@ -433,7 +431,7 @@ class GLM(BaseRegressor):
 
     def _predict_and_compute_loss(
         self,
-        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+        params: ModelParams,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
     ) -> jnp.ndarray:
@@ -674,7 +672,7 @@ class GLM(BaseRegressor):
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: ArrayLike,
         init_params: Optional[Tuple[Union[dict, ArrayLike], ArrayLike]] = None,
-    ):
+    ) -> GLM:
         """Fit GLM to neural activity.
 
         Fit and store the model parameters as attributes
@@ -768,7 +766,7 @@ class GLM(BaseRegressor):
         self.solver_state_ = state
         return self
 
-    def _get_coef_and_intercept(self):
+    def _get_coef_and_intercept(self) -> ModelParams:
         """Pack coef_ and intercept_  into a params pytree.
 
         This method should be overwritten in case the parameter structure changes,
@@ -777,7 +775,7 @@ class GLM(BaseRegressor):
         # Retrieve parameter tree
         return self.coef_, self.intercept_
 
-    def _set_coef_and_intercept(self, params):
+    def _set_coef_and_intercept(self, params: ModelParams) -> None:
         """Unpack and store params pytree to coef_ and intercept_.
 
         This method should be overwritten in case the parameter structure changes,
@@ -862,7 +860,7 @@ class GLM(BaseRegressor):
 
     def _estimate_resid_degrees_of_freedom(
         self, X: DESIGN_INPUT_TYPE, n_samples: Optional[int] = None
-    ):
+    ) -> int:
         """
         Estimate the degrees of freedom of the residuals.
 
@@ -1145,7 +1143,9 @@ class GLM(BaseRegressor):
 
         return opt_step
 
-    def _get_optimal_solver_params_config(self) -> Tuple[Optional[Callable], Optional[Callable], Optional[float]]:
+    def _get_optimal_solver_params_config(
+        self,
+    ) -> Tuple[Optional[Callable], Optional[Callable], Optional[float]]:
         """Return the functions for computing default step and batch size for the solver."""
         return glm_compute_optimal_stepsize_configs(self)
 
@@ -1492,7 +1492,12 @@ class PopulationGLM(GLM):
             )
         self._check_mask(X, y, params)
 
-    def _check_mask(self, X: FeaturePytree, y: jnp.ndarray, params: Tuple[Union[FeaturePytree, jnp.ndarray], jnp.ndarray]):
+    def _check_mask(
+        self,
+        X: FeaturePytree,
+        y: jnp.ndarray,
+        params: Tuple[Union[FeaturePytree, jnp.ndarray], jnp.ndarray],
+    ):
         if isinstance(X, FeaturePytree):
             data = X.data
         else:
