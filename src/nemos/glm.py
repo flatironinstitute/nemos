@@ -988,7 +988,7 @@ class GLM(BaseRegressor):
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
-        init_params,
+        init_params: Tuple[Union[FeaturePytree, jnp.ndarray], jnp.ndarray],
     ) -> Union[Any, NamedTuple]:
         """Initialize the solver by instantiating its init_state, update and, run methods.
 
@@ -1059,9 +1059,9 @@ class GLM(BaseRegressor):
         opt_state: NamedTuple,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
-        *args,
+        *args: Any,
         n_samples: Optional[int] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> jaxopt.OptStep:
         """
         Update the model parameters and solver state.
@@ -1145,11 +1145,11 @@ class GLM(BaseRegressor):
 
         return opt_step
 
-    def _get_optimal_solver_params_config(self):
+    def _get_optimal_solver_params_config(self) -> Tuple[Optional[Callable], Optional[Callable], Optional[float]]:
         """Return the functions for computing default step and batch size for the solver."""
         return glm_compute_optimal_stepsize_configs(self)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """Representation of the GLM class."""
         return format_repr(self, multiline=True)
 
@@ -1316,7 +1316,7 @@ class PopulationGLM(GLM):
         solver_name: str = None,
         solver_kwargs: dict = None,
         feature_mask: Optional[jnp.ndarray] = None,
-        **kwargs,
+        **kwargs: Any,
     ):
         super().__init__(
             observation_model=observation_model,
@@ -1492,7 +1492,7 @@ class PopulationGLM(GLM):
             )
         self._check_mask(X, y, params)
 
-    def _check_mask(self, X, y, params):
+    def _check_mask(self, X: FeaturePytree, y: jnp.ndarray, params: Tuple[Union[FeaturePytree, jnp.ndarray], jnp.ndarray]):
         if isinstance(X, FeaturePytree):
             data = X.data
         else:
@@ -1541,7 +1541,7 @@ class PopulationGLM(GLM):
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: ArrayLike,
         init_params: Optional[Tuple[Union[dict, ArrayLike], ArrayLike]] = None,
-    ):
+    ) -> GLM:
         """Fit GLM to the activity of a population of neurons.
 
         Fit and store the model parameters as attributes ``coef_`` and ``intercept_``.
@@ -1616,7 +1616,7 @@ class PopulationGLM(GLM):
         """
         return super().fit(X, y, init_params)
 
-    def _initialize_feature_mask(self, X, y):
+    def _initialize_feature_mask(self, X: FeaturePytree, y: jnp.ndarray):
         if self.feature_mask is None:
             # static checker does not realize conversion to ndarray happened in cast_to_jax.
             if isinstance(X, FeaturePytree):

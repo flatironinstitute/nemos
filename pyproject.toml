@@ -168,7 +168,7 @@ exclude = ["src/nemos/_documentation_utils", "src/nemos/third_party"]
 
 [tool.ruff.lint]
 select = ["D", "ANN"]
-ignore = ["D202"]  # this conflicts with black
+ignore = ["D202", "ANN401"]  # this conflicts with black
 
 
 [tool.ruff.lint.pydocstyle]
@@ -193,4 +193,5 @@ checks = [
     # will remove this eventually
     "EX01",
     "PR04",
+    "ANN401",
 ]
