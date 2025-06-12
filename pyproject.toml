@@ -28,7 +28,6 @@ dependencies = [
     "typing_extensions>=4.6",       # Typing extensions for Python
     "pynapple>=0.6.6",
 ]
-# jaxopt 0.8.5 is included in src/nemos/third_party/jaxopt
 
 
 # Configure package discovery for setuptools
@@ -95,6 +94,7 @@ examples = [
     "fsspec",
     "patsy",
 ]
+# jaxopt 0.8.5 is included in src/nemos/third_party/jaxopt
 jaxopt_dev = [
     "pytest",
     "absl-py>=0.7.0",
