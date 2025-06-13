@@ -10,6 +10,7 @@ from . import (
     fetch,
     glm,
     identifiability_constraints,
+    io,
     observation_models,
     pytrees,
     regularizer,

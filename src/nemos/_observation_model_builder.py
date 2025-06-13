@@ -25,6 +25,10 @@ def instantiate_observation_model(observation_model: str):
     ValueError
         If the `observation_model` provided does not match to any available observation models.
     """
+    if "." in observation_model:
+        observation_model = observation_model.split(".")[-1].removesuffix(
+            "Observations"
+        )
     if observation_model == "Poisson":
         return PoissonObservations()
     elif observation_model == "Gamma":
