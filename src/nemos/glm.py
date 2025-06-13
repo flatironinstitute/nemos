@@ -10,8 +10,9 @@ from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
-import jaxopt
 from numpy.typing import ArrayLike
+
+from nemos.third_party.jaxopt import jaxopt
 
 from . import observation_models as obs
 from . import tree_utils, validation
@@ -1188,7 +1189,7 @@ class GLM(BaseRegressor):
 
         >>> # Print the model parameters
         >>> print(model.get_params())
-        {'observation_model__inverse_link_function': <function one_over_x at ...>, 'observation_model': GammaObservations(inverse_link_function=one_over_x), 'regularizer': Ridge(), 'regularizer_strength': 0.1, 'solver_kwargs': {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}, 'solver_name': 'BFGS'}
+        {'observation_model__inverse_link_function': <function one_over_x at ...
 
         >>> # Save the model parameters to a file
         >>> model.save_params("model_params.npz")
@@ -1198,14 +1199,14 @@ class GLM(BaseRegressor):
 
         >>> # Print the model parameters
         >>> print(model.get_params())
-        {'observation_model__inverse_link_function': <PjitFunction of <function exp at ...>>, 'observation_model': PoissonObservations(inverse_link_function=exp), 'regularizer': UnRegularized(), 'regularizer_strength': None, 'solver_kwargs': {}, 'solver_name': 'GradientDescent'}
+        {'observation_model__inverse_link_function': <PjitFunction of <function exp at ...
 
         >>> # Load the model from the saved file
         >>> model = load_model("model_params.npz")
 
         >>> # Print the parameters of the loaded model
         >>> print(model.get_params())
-        {'observation_model__inverse_link_function': <function one_over_x at ...>, 'observation_model': GammaObservations(inverse_link_function=one_over_x), 'regularizer': Ridge(), 'regularizer_strength': 0.1, 'solver_kwargs': {'stepsize': array(0.1), 'maxiter': array(1000), 'tol': array(1.e-06)}, 'solver_name': 'BFGS'}
+        {'observation_model__inverse_link_function': <function one_over_x at ...
         """
 
         # initialize saving dictionary
@@ -1731,7 +1732,7 @@ class PopulationGLM(GLM):
         """
         return super().fit(X, y, init_params)
 
-    def _initialize_feature_mask(self, X, y):
+    def _initialize_feature_mask(self, X: FeaturePytree, y: jnp.ndarray):
         if self.feature_mask is None:
             # static checker does not realize conversion to ndarray happened in cast_to_jax.
             if isinstance(X, FeaturePytree):
