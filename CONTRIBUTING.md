@@ -282,3 +282,6 @@ properly documented as outlined below.
 
 > [!NOTE]
 > All internal links to NeMoS documentation pages **must be relative**. Using absolute links can lead to broken references whenever the documentation structure is altered. Any presence of absolute links to documentation pages will cause the continuous integration checks to fail. Please ensure all links follow the relative format before submitting your PR.
+
+### Modifying vendored libraries
+All changes made to vendored libraries should be documented in the [changelog](./src/nemos/third_party/README.md).

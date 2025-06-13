@@ -4,21 +4,22 @@ repos:
   hooks:
     - id: black
       args: [ "--check" ]
-      files: ^src/
+      # Only include src/, but exclude third_party/
+      files: ^src/(?!nemos/third_party)
 
 - repo: https://github.com/pycqa/isort
   rev: 6.0.1
   hooks:
     - id: isort
       args: ["--profile", "black", "--check-only"]
-      files: ^src/|^docs/how_to_guide/|^docs/background/|^docs/tutorials/
+      files: ^src/(?!nemos/third_party)|^docs/how_to_guide/|^docs/background/|^docs/tutorials/
 
 - repo: https://github.com/pycqa/flake8
   rev: 7.2.0
   hooks:
     - id: flake8
       args: ["--config=tox.ini"]
-      files: ^src/
+      files: ^src/(?!nemos/third_party)
 
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v5.0.0
