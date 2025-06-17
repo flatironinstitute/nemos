@@ -81,28 +81,58 @@ jobs:
       - name: Check links
         run: ./bash_scripts/prevent_absolute_links_to_docs.sh
 
-  check-links:
-      runs-on: ubuntu-latest
-      steps:
-        - name: Checkout repository
-          uses: actions/checkout@v4
+  check-relative-links:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-        - name: Install markdown-link-check
-          run: npm install -g markdown-link-check
+      - name: Cache npm dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
 
-        - name: Make .sh executable
-          run: chmod +x bash_scripts/check_markdown_links.sh
+      - name: Install markdown-link-check locally
+        run: npm ci
 
-        - name: Check links in root Markdown files
-          run: ./bash_scripts/check_markdown_links.sh
+      - name: Make .sh executable
+        run: chmod +x bash_scripts/check_markdown_links.sh
 
+      - name: Check relative links in root Markdown files
+        run: ./bash_scripts/check_markdown_links.sh relative
+
+  check-external-links:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Cache npm dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+
+      - name: Install markdown-link-check locally
+        run: npm ci
+
+      - name: Make .sh executable
+        run: chmod +x bash_scripts/check_markdown_links.sh
+
+      - name: Check external links in root Markdown files
+        run: ./bash_scripts/check_markdown_links.sh external
   check:
     if: ${{ !github.event.pull_request.draft }}
     needs:
       - tox_tests
       - prevent_docs_absolute_links
       - tox_check
-      - check-links
+      - check-relative-links
     runs-on: ubuntu-latest
     steps:
       - name: Decide whether all tests and notebooks succeeded

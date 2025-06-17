@@ -1,35 +1,60 @@
 #!/bin/bash
-
-# Fail script if any command fails
 set -e
 
-# Find markdown-link-check path
 MARKDOWN_LINK_CHECK=$(which markdown-link-check || echo "")
-
-# If markdown-link-check is not found, print an error and exit
 if [[ -z "$MARKDOWN_LINK_CHECK" ]]; then
-    echo "❌ ERROR: markdown-link-check command not found. Make sure it is installed globally."
+    echo "❌ ERROR: markdown-link-check command not found. Install it globally via:"
     exit 1
 fi
 
-echo "🔍 Checking Markdown links in root directory..."
+# Check if a link type was specified
+LINK_TYPE=$1
+if [[ -z "$LINK_TYPE" ]]; then
+    echo "❌ Usage: $0 [relative|external|all]"
+    exit 1
+fi
 
-# Initialize an error flag
-ERROR=0
-LOG_FILE=$(mktemp)  # Temporary file to store output
+# Set config path based on type
+if [[ "$LINK_TYPE" == "relative" ]]; then
+    CONFIG=".mlc.relative.json"
+    LABEL="relative"
+elif [[ "$LINK_TYPE" == "external" ]]; then
+    CONFIG=".mlc.external.json"
+    LABEL="external"
+elif [[ "$LINK_TYPE" == "all" ]]; then
+    CONFIGS=(".mlc.relative.json" ".mlc.external.json")
+    LABEL="all"
+else
+    echo "❌ Unknown link type: $LINK_TYPE"
+    echo "Valid options are: relative, external, all"
+    exit 1
+fi
 
-# Find all Markdown files in the root directory and check links
-for file in $(find . -maxdepth 1 -name "*.md"); do
-    echo "📂 Checking $file..."
+echo "🔍 Checking $LABEL Markdown links in root directory..."
+LOG_FILE=$(mktemp)
 
-    # Run markdown-link-check and capture output
-    $MARKDOWN_LINK_CHECK "$file" 2>&1 | tee -a "$LOG_FILE"
-done
+run_check() {
+    local CONFIG=$1
+    echo "🔎 Using config: $CONFIG"
+    for file in $(find . -maxdepth 1 -name "*.md"); do
+        echo "📄 Checking $file..."
+        $MARKDOWN_LINK_CHECK -c "$CONFIG" "$file" 2>&1 | tee -a "$LOG_FILE"
+    done
+}
 
-# Check if "ERROR:" appears in the log file
+# Run one or both checks
+if [[ "$LINK_TYPE" == "all" ]]; then
+    for config in "${CONFIGS[@]}"; do
+        run_check "$config"
+    done
+else
+    run_check "$CONFIG"
+fi
+
+# Check for errors
 if grep -q "ERROR:" "$LOG_FILE"; then
     echo "🚨 Link check failed! Please fix broken links."
     exit 1
 else
-    echo "✅ All links are valid."
+    echo "✅ All links passed validation."
 fi
