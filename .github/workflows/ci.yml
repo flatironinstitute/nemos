@@ -1,21 +1,21 @@
 name: ci
 
 on:
-   workflow_dispatch:
-   schedule:
-     - cron: 0 0 1 * 0     # monthly
-   pull_request:
-     branches:
-       - main
-       - development
-     types:
-       - opened
-       - reopened
-       - synchronize
-       - ready_for_review
-   push:
-     branches:
-       - main
+  workflow_dispatch:
+  schedule:
+    - cron: 0 0 1 * 0     # monthly
+  pull_request:
+    branches:
+      - main
+      - development
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+  push:
+    branches:
+      - main
 
 jobs:
   tox_tests:
@@ -30,7 +30,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4 # Use v4 for compatibility with pyproject.toml
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
@@ -56,7 +56,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4 # Use v4 for compatibility with pyproject.toml
+        uses: actions/setup-python@v4
         with:
           python-version: 3.12
           cache: pip
@@ -87,13 +87,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Cache npm dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-npm-
+      - name: Install markdown-link-check
+        run: npm install -g markdown-link-check
 
       - name: Install markdown-link-check locally
         run: npm ci
@@ -110,22 +105,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Cache npm dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-npm-
-
-      - name: Install markdown-link-check locally
-        run: npm ci
+      - name: Install markdown-link-check
+        run: npm install -g markdown-link-check
 
       - name: Make .sh executable
         run: chmod +x bash_scripts/check_markdown_links.sh
 
       - name: Check external links in root Markdown files
         run: ./bash_scripts/check_markdown_links.sh external
+
   check:
     if: ${{ !github.event.pull_request.draft }}
     needs:
