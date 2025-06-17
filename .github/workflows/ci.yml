@@ -90,9 +90,6 @@ jobs:
       - name: Install markdown-link-check
         run: npm install -g markdown-link-check
 
-      - name: Install markdown-link-check locally
-        run: npm ci
-
       - name: Make .sh executable
         run: chmod +x bash_scripts/check_markdown_links.sh
 
