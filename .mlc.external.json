@@ -1,0 +1,8 @@
+{
+  "ignorePatterns": [
+    { "pattern": "^\\." },
+    { "pattern": "^/" },
+    { "pattern": "^../" },
+    { "pattern": "^README.md$" }
+  ]
+}
