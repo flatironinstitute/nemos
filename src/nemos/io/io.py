@@ -90,7 +90,7 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     if "observation_model" in saved_params:
         obs_model_data = saved_params.pop("observation_model")
         saved_params["observation_model"] = instantiate_observation_model(
-            obs_model_data["class"], obs_model_data["params"]["inverse_link_function"]
+            obs_model_data["class"], **obs_model_data["params"]
         )
 
     # Extract the model class from the saved attributes
