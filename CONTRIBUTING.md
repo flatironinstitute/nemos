@@ -132,7 +132,7 @@ flake8 --config=tox.ini src
 > If some files were reformatted after running `black`, make sure to commit those changes and push them to your feature branch as well.
 
 Now you are ready to make a Pull Request (PR). You can open a pull request by clicking on the big `Compare & pull request` button that appears at the top of the `nemos` repo
-after pushing to your branch (see [here](https://intersect-training.org/collaborative-git/03-pr/index.html) for a tutorial).
+after pushing to your branch (see [here](https://intersect-training.org/collaborative-git/pr.html) for a tutorial).
 
 Your pull request should include the following:
 - A summary including information on what you changed and why
