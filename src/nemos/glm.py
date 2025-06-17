@@ -1175,7 +1175,6 @@ class GLM(BaseRegressor):
         Examples
         --------
         >>> import nemos as nmo
-        >>> from nemos.io.load_model import load_model
 
         >>> # Create a GLM model with specified parameters
         >>> solver_args = {"stepsize": 0.1, "maxiter": 1000, "tol": 1e-6}
@@ -1188,8 +1187,14 @@ class GLM(BaseRegressor):
         ... )
 
         >>> # Print the model parameters
-        >>> print(model.get_params())
-        {'observation_model__inverse_link_function': <function one_over_x at ...
+        >>> for key, value in model.get_params().items():
+        ...     print(f"{key}: {value}")
+        observation_model__inverse_link_function: <function one_over_x at ...>
+        observation_model: GammaObservations(inverse_link_function=one_over_x)
+        regularizer: Ridge()
+        regularizer_strength: 0.1
+        solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
+        solver_name: BFGS
 
         >>> # Save the model parameters to a file
         >>> model.save_params("model_params.npz")
@@ -1197,16 +1202,18 @@ class GLM(BaseRegressor):
         >>> # Initialize a default GLM
         >>> model = nmo.glm.GLM()
 
-        >>> # Print the model parameters
-        >>> print(model.get_params())
-        {'observation_model__inverse_link_function': <PjitFunction of <function exp at ...
-
         >>> # Load the model from the saved file
-        >>> model = load_model("model_params.npz")
+        >>> model = nmo.load_model("model_params.npz")
 
         >>> # Print the parameters of the loaded model
-        >>> print(model.get_params())
-        {'observation_model__inverse_link_function': <function one_over_x at ...
+        >>> for key, value in model.get_params().items():
+        ...     print(f"{key}: {value}")
+        observation_model__inverse_link_function: <function one_over_x at ...>
+        observation_model: GammaObservations(inverse_link_function=one_over_x)
+        regularizer: Ridge()
+        regularizer_strength: 0.1
+        solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
+        solver_name: BFGS
         """
 
         # initialize saving dictionary
@@ -1218,62 +1225,6 @@ class GLM(BaseRegressor):
         string_attrs = ["inverse_link_function"]
 
         super().save_params(filename, fit_attrs, string_attrs)
-
-    @classmethod
-    def _load_from_dict(
-        cls, saved_attrs: dict[str, Any], mapping_dict: Optional[dict] = None
-    ) -> GLM:
-        """
-        Load a GLM model from a dictionary of saved attributes.
-
-        This private method is designed to be called internally by the function load_model.
-
-        Parameters
-        ----------
-        saved_attrs :
-            Dictionary containing the saved attributes of the model.
-
-        mapping_dict :
-            Optional dictionary to map custom attribute names to their actual objects.
-
-        Returns
-        -------
-        model :
-            A GLM instance with the loaded parameters.
-        """
-
-        # Get the parameter names for the class
-        model_params_names = cls._get_param_names()
-
-        saved_attrs["inverse_link_function"] = saved_attrs["observation_model"][
-            "params"
-        ]["inverse_link_function"]
-        saved_attrs["observation_model"] = saved_attrs["observation_model"]["class"]
-
-        # Filter only valid parameters for the model constructor
-        parameter_config = {
-            k: v for k, v in saved_attrs.items() if k in model_params_names
-        }
-
-        # Create the model instance
-        model = cls(**parameter_config)
-
-        # Set inverse_link_function if available
-        try:
-            if hasattr(model.observation_model, "inverse_link_function"):
-                model.observation_model.inverse_link_function = str(
-                    saved_attrs["inverse_link_function"]
-                )
-        except KeyError:
-            pass
-
-        # Set coef_ and intercept_ if available
-        if "coef_" in saved_attrs:
-            model.coef_ = saved_attrs["coef_"]
-        if "intercept_" in saved_attrs:
-            model.intercept_ = saved_attrs["intercept_"]
-
-        return model
 
 
 class PopulationGLM(GLM):

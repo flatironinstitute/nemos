@@ -24,8 +24,8 @@ def create_regularizer(name: str | None):
     ValueError
         If the `name` provided does not match to any available regularizer.
     """
-    if "." in name:
-        name = name.split(".")[-1]
+    # If the name contains a module path, extract the class name
+    name = name.split("nemos.regularizer.")[-1]
 
     if name in ("UnRegularized", None):
         from .regularizer import UnRegularized
@@ -46,5 +46,5 @@ def create_regularizer(name: str | None):
     else:
         raise ValueError(
             f"Unknown regularizer: {name}. "
-            f"Regularizer must be one of {AVAILABLE_REGULARIZERS}"
+            f"Regularizer must be one of {AVAILABLE_REGULARIZERS} or their full module path."
         )

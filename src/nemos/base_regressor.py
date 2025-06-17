@@ -692,11 +692,6 @@ class BaseRegressor(Base, abc.ABC):
         """Return the functions for computing default step and batch size for the solver."""
         pass
 
-    @classmethod
-    @abstractmethod
-    def _load_from_dict(cls, saved_attrs: dict[str, Any]):
-        pass
-
     @abstractmethod
     def save_params(
         self,

@@ -21,10 +21,15 @@ def __dir__():
 LINK_NAME_TO_FUNC = {
     "nemos.utils.one_over_x": one_over_x,
     "jax.numpy.exp": jnp.exp,
+    "jax._src.numpy.ufuncs.exp": jnp.exp,
     "jax.nn.softplus": jax.nn.softplus,
+    "jax._src.nn.functions.softplus": jax.nn.softplus,
     "jax.scipy.special.expit": jax.scipy.special.expit,
+    "jax._src.scipy.special.expit": jax.scipy.special.expit,
     "jax.lax.logistic": jax.lax.logistic,
+    "jax._src.lax.lax.logistic": jax.lax.logistic,
     "jax.scipy.stats.norm.cdf": jax.scipy.stats.norm.cdf,
+    "jax._src.scipy.stats.norm.cdf": jax.scipy.stats.norm.cdf,
 }
 
 
@@ -53,6 +58,8 @@ def create_link_function(link_name: str):
         raise ValueError(
             f"Unknown link function: {link_name}. "
             f"Link function must be one of {list(LINK_NAME_TO_FUNC.keys())}"
+            f"if you want to use a custom link function, please provide it as a Callable."
+            f"if you think this is a bug, please open an issue at 'https://github.com/flatironinstitute/nemos/issues'."
         )
 
 

@@ -611,7 +611,6 @@ def flatten_dict(d: dict, parent_key: str = "") -> dict:
     ----------
     d :
         The dictionary to flatten.
-
     parent_key :
         This key starts blank, but recursively it will be filled with the parent key,
         which is used to create the hierarchy in the flattened dictionary.
@@ -620,7 +619,6 @@ def flatten_dict(d: dict, parent_key: str = "") -> dict:
     -------
     dict :
         A flattened dictionary where the hierarchy is represented by concatenated keys (using __ as a separator).
-    -----------
     """
 
     sep = "__"
@@ -636,14 +634,7 @@ def flatten_dict(d: dict, parent_key: str = "") -> dict:
             if v is None:
                 v = np.nan
             elif not isinstance(v, (str, int, float, bool)):
-                try:
-                    v = np.array(v)
-                except Exception as e:
-                    warnings.warn(
-                        f"Could not convert value '{v}' to numpy array: {e}, "
-                        "setting it to NaN."
-                    )
-                    v = np.nan
+                v = np.array(v)
             items.append((new_key, v))
     return dict(items)
 
@@ -674,9 +665,13 @@ def unflatten_dict(d: dict) -> dict:
             if key not in dct:
                 dct[key] = {}
             dct = dct[key]
-        # Convert numpy string types to standard Python strings
+        # Convert numpy string, int, float or nan to their respective types
         if v.dtype.type is np.str_:
             v = str(v)
+        elif v.dtype.type is np.int_:
+            v = int(v)
+        elif v.dtype.type is np.float64:
+            v = None if np.isnan(v) else float(v)
         dct[keys[-1]] = v
     return result
 
@@ -720,7 +715,6 @@ def unpack_params(params_dict: dict, string_attrs: list = None) -> dict:
     ----------
     params_dict :
         Dictionary of parameters, possibly containing objects.
-
     string_attrs :
         List of attributes that should be converted to strings (e.g., `inverse_link_function`).
 
