@@ -1165,3 +1165,262 @@ class BernoulliObservations(Observations):
             The DOF of the residuals.
         """
         return jnp.ones_like(jnp.atleast_1d(y[0]))
+
+
+class NegativeBinomialObservations(Observations):
+    r"""
+    A Negative Binomial model for overdispersed count data using mean-dispersion parameterization.
+
+    This model represents a Negative Binomial distribution commonly used to model overdispersed
+    count data (i.e., data where the variance exceeds the mean), which cannot be captured by a
+    standard Poisson model. The distribution is parameterized by the predicted mean rate
+    (:math:`\mu`) and a fixed dispersion parameter (:math:`\phi`),
+    also referred to as the "scale" of the model.
+
+    The variance of the Negative Binomial distribution under this parameterization is:
+
+    .. math::
+
+        \mathrm{Var}(Y) = \mu + \phi \mu^2
+
+    where :math:`\mu` is the predicted mean, and :math:`\phi` is the dispersion parameter. This
+    formulation corresponds to the Negative Binomial as a Gamma–Poisson mixture.
+
+    The scale parameter φ is related to the canonical Negative Binomial shape parameter `r` as:
+
+    .. math::
+
+        r = \frac{1}{\phi}
+
+    As :math:`\phi \to 0` (equivalently, :math:`r \to \infty`), the distribution approaches a
+    Poisson distribution. This makes the model flexible for handling both equidispersed
+    (Poisson-like) and overdispersed data.
+
+    Parameters
+    ----------
+    inverse_link_function :
+        Inverse of the link function used to map linear predictors to the predicted mean rate.
+        For count data, this is typically `jax.numpy.exp` or `jax.nn.softplus`. The default
+        logistic function is bounded and may not be appropriate for most count models.
+    scale :
+        The dispersion parameter φ. Lower values correspond to lower overdispersion, and as
+        φ → 0, the model behaves like a Poisson. The shape parameter of the Negative Binomial is
+        given by `r = 1 / scale`. If not provided, it will be
+    """
+
+    def __init__(
+        self,
+        inverse_link_function=jax.lax.logistic,
+        scale=0.1,
+    ):
+        super().__init__(inverse_link_function=inverse_link_function)
+        self.scale = scale
+
+    def _negative_log_likelihood(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        aggregate_sample_scores: Callable = jnp.mean,
+    ) -> jnp.ndarray:
+        r"""Compute the Negative Binomial negative log-likelihood.
+
+        This computes the Negative Binomial negative log-likelihood of the predicted mean rate for the observed counts.
+
+        Parameters
+        ----------
+        y :
+            Observed count data. Shape ``(n_time_bins,)`` or ``(n_time_bins, n_observations)``.
+        predicted_rate :
+            The predicted mean of the Negative Binomial distribution. Shape
+            ``(n_time_bins,)`` or ``(n_time_bins, n_observations)``.
+        aggregate_sample_scores :
+            Function that aggregates the log-likelihood across samples (e.g., jnp.mean or jnp.sum).
+
+        Returns
+        -------
+        :
+            The Negative Binomial negative log-likelihood. Shape ``(1,)``.
+
+        Notes
+        -----
+        The Negative Binomial distribution models overdispersed count data.
+        The likelihood assumes the mean-parameterized form with dispersion `r = 1 / scale`.
+
+        The log-likelihood is computed (up to a constant) using:
+
+        .. math::
+            \log p(y | \mu, r) = \log \Gamma(y + r) - \log \Gamma(r) - \log y!
+            + r \log\left(\frac{r}{r + \mu}\right)
+            + y \log\left(\frac{\mu}{r + \mu}\right)
+
+        """
+        if self.scale is None:
+            self.estimate_scale(y, predicted_rate, aggregate_sample_scores)
+        predicted_rate = jnp.clip(
+            predicted_rate, min=jnp.finfo(predicted_rate.dtype).eps
+        )
+        factor = 1 / (self.scale * predicted_rate + 1)
+        return -aggregate_sample_scores(
+            y * jnp.log(1 - factor) + jnp.log(factor) / self.scale
+        )
+
+    def log_likelihood(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = None,
+        aggregate_sample_scores: Callable = jnp.mean,
+    ):
+        r"""Compute the Negative Binomial log-likelihood.
+
+        This computes the Negative Binomial log-likelihood of the predicted mean rate for the observed counts.
+
+        Parameters
+        ----------
+        y :
+            Observed count data. Shape ``(n_time_bins,)`` or ``(n_time_bins, n_observations)``.
+        predicted_rate :
+            The predicted mean of the Negative Binomial distribution. Shape ``(n_time_bins,)`` or
+            ``(n_time_bins, n_observations)``.
+        scale :
+            The scale (dispersion) parameter of the distribution. It is related to the shape ``r`` as ``r = 1 / scale``.
+            Default is the scale provided at initialization ``self.scale``.
+        aggregate_sample_scores :
+            Function that aggregates the log-likelihood across samples (e.g., jnp.mean or jnp.sum).
+
+        Returns
+        -------
+        :
+            The log-likelihood of the Negative Binomial model. Shape ``(1,)``.
+        """
+        scale = self.scale if scale is None else scale
+        ll_unnormalized = -self._negative_log_likelihood(
+            y, predicted_rate, aggregate_sample_scores
+        )
+        norm = aggregate_sample_scores(
+            jax.scipy.special.gammaln(y + 1 / scale)
+            - jax.scipy.special.gammaln(y + 1)
+            - jax.scipy.special.gammaln(1 / scale)
+        )
+        return ll_unnormalized + norm
+
+    def sample_generator(
+        self,
+        key: jax.Array,
+        predicted_rate: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
+    ) -> jnp.ndarray:
+        """
+        Sample from the Negative Binomial distribution.
+
+        This method generates random count data from the Negative Binomial distribution based on the predicted rate
+        and scale (dispersion).
+
+        Parameters
+        ----------
+        key :
+            Random key used for number generation in JAX.
+        predicted_rate :
+            The predicted mean of the Negative Binomial distribution. Shape ``(n_time_bins,)`` or
+            ``(n_time_bins, n_observations)``.
+        scale :
+            Dispersion parameter of the distribution. Smaller values imply higher variance.
+
+        Returns
+        -------
+        :
+            Samples drawn from the Negative Binomial distribution. Same shape as ``predicted_rate``.
+
+        Notes
+        -----
+        This method uses the Gamma--Poisson mixture representation of the Negative Binomial distribution:
+
+        .. math::
+
+            Y \sim \mathrm{Poisson}(\lambda), \quad \lambda \sim \mathrm{Gamma}(r, \beta)
+
+        where :math:`r = 1 / \phi` and :math:`\beta = r / \mu`.
+
+        For more information, see the `Negative Binomial distribution on Wikipedia
+        <https://en.wikipedia.org/wiki/Negative_binomial_distribution#Gamma%E2%80%93Poisson_mixture>`_.
+        """
+        r = 1.0 / scale
+        gamma_key, poisson_key = jax.random.split(key)
+
+        # Gamma with shape=r, rate=r/mu → scale=mu/r
+        gamma_sample = jax.random.gamma(gamma_key, r, shape=predicted_rate.shape) * (
+            predicted_rate / r
+        )
+
+        return jax.random.poisson(poisson_key, gamma_sample)
+
+    def deviance(
+        self,
+        observations: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
+    ) -> jnp.ndarray:
+        r"""Compute the residual deviance for a Negative Binomial model.
+
+        Parameters
+        ----------
+        observations:
+            Observed count data. Shape (n_time_bins,) or (n_time_bins, n_observations).
+        predicted_rate:
+            Predicted mean count of the Negative Binomial distribution. Shape matches `observations`.
+        scale:
+            Dispersion parameter of the distribution.
+
+        Returns
+        -------
+        :
+            The residual deviance of the model. Shape matches `observations`.
+
+        Notes
+        -----
+        The deviance is a measure of the goodness of fit of a statistical model.
+        For a Negative Binomial model, the residual deviance is computed as:
+
+        .. math::
+            \begin{aligned}
+                D(y_{tn}, \hat{y}_{tn}) &= 2 \left( \text{LL}\left(y_{tn} | y_{tn}\right) - \text{LL}\left(y_{tn}
+                  | \hat{y}_{tn}\right)\right) \\\
+                &= 2 \left[ y_{tn} \log\left(\frac{y_{tn}}{\hat{y}_{tn}}\right) + (1 - y_{tn}) \log\left(\frac{1
+                  - y_{tn}}{1 - \hat{y}_{tn}}\right) \right]
+            \end{aligned}
+
+        where :math:`y` is the observed data, :math:`\hat{y}` is the predicted data, and :math:`\text{LL}` is
+        the model log-likelihood. Lower values of deviance indicate a better fit.
+        """
+        factor = (predicted_rate * self.scale + 1) / (observations * self.scale + 1)
+        y_mu = observations / predicted_rate
+        term1 = observations * jnp.log(
+            jnp.clip(y_mu * factor, min=jnp.finfo(predicted_rate.dtype).eps)
+        )
+        term2 = jnp.log(factor) / scale
+        return 2 * (term1 + term2)
+
+    def estimate_scale(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        dof_resid: Union[float, jnp.ndarray],
+    ) -> Union[float, jnp.ndarray]:
+        r"""
+        Assign 1 to the scale parameter of the Bernoulli model.
+
+        For the Binomial exponential family distribution (to which the Bernoulli belongs), the scale parameter
+        :math:`\phi` is always 1.
+
+        Parameters
+        ----------
+        y :
+            Observed spike counts.
+        predicted_rate :
+            The predicted rate values (success probabilities). This is not used in the Bernoulli model for estimating
+            scale, but is retained for compatibility with the abstract method signature.
+        dof_resid :
+            The DOF of the residuals.
+        """
+        resid = y - predicted_rate
+        return ((resid**2 / predicted_rate - 1) / predicted_rate).sum() / dof_resid
