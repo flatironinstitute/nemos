@@ -1200,8 +1200,7 @@ class NegativeBinomialObservations(Observations):
     ----------
     inverse_link_function :
         Inverse of the link function used to map linear predictors to the predicted mean rate.
-        For count data, this is typically `jax.numpy.exp` or `jax.nn.softplus`. The default
-        logistic function is bounded and may not be appropriate for most count models.
+        For count data, this is typically `jax.numpy.exp` or `jax.nn.softplus`.
     scale :
         The dispersion parameter φ. Lower values correspond to lower overdispersion, and as
         φ → 0, the model behaves like a Poisson. The shape parameter of the Negative Binomial is
@@ -1210,7 +1209,7 @@ class NegativeBinomialObservations(Observations):
 
     def __init__(
         self,
-        inverse_link_function=jax.lax.logistic,
+        inverse_link_function=jnp.exp,
         scale=0.1,
     ):
         super().__init__(inverse_link_function=inverse_link_function)
