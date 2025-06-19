@@ -2724,12 +2724,12 @@ class FourierConv(ConvBasisMixin, FourierBasis):
         >>> # Configure with a tuple:
         >>> _ = basis.set_input_shape((4, 5))
         >>> basis.n_output_features
-        200
+        220
         >>> # Configure with an array:
         >>> x = np.ones((10, 4, 5))
         >>> _ = basis.set_input_shape(x)
         >>> basis.n_output_features
-        200
+        220
 
         """
         return AtomicBasisMixin.set_input_shape(self, xi)
