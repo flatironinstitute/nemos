@@ -253,12 +253,7 @@ class BaseRegressor(Base, abc.ABC):
     def solver_name(self, solver_name: str):
         """Setter for the solver_name attribute."""
         # check if solver str passed is valid for regularizer
-        if solver_name not in self._regularizer.allowed_solvers:
-            raise ValueError(
-                f"The solver: {solver_name} is not allowed for "
-                f"{self._regularizer.__class__.__name__} regularization. Allowed solvers are "
-                f"{self._regularizer.allowed_solvers}."
-            )
+        self._regularizer.check_solver(solver_name)
         self._solver_name = solver_name
 
     @property
@@ -267,11 +262,13 @@ class BaseRegressor(Base, abc.ABC):
         return self._solver_kwargs
 
     @solver_kwargs.setter
-    def solver_kwargs(self, solver_kwargs: dict):
-        """Setter for the solver_kwargs attribute."""
-        self._check_solver_kwargs(
-            self._get_solver_class(self.solver_name), solver_kwargs
-        )
+    # def solver_kwargs(self, solver_kwargs: dict):
+    #    """Setter for the solver_kwargs attribute."""
+    #    self._check_solver_kwargs(
+    #        self._get_solver_class(self.solver_name), solver_kwargs
+    #    )
+    #    self._solver_kwargs = solver_kwargs
+    def solver_kwargs(self, solver_kwargs):
         self._solver_kwargs = solver_kwargs
 
     @staticmethod
@@ -329,78 +326,31 @@ class BaseRegressor(Base, abc.ABC):
             The instance itself for method chaining.
         """
         # final check that solver is valid for chosen regularizer
-        if self.solver_name not in self.regularizer.allowed_solvers:
-            raise ValueError(
-                f"The solver: {self.solver_name} is not allowed for "
-                f"{self._regularizer.__class__.__name__} regularization. Allowed solvers are "
-                f"{self._regularizer.allowed_solvers}."
-            )
-
-        # only use penalized loss if not using proximal gradient descent
-        # In proximal method you must use the unpenalized loss independently
-        # of what regularizer you are using.
-        if self.solver_name not in ("ProximalGradient", "ProxSVRG"):
-            loss = self.regularizer.penalized_loss(
-                self._predict_and_compute_loss, self.regularizer_strength
-            )
-        else:
-            loss = self._predict_and_compute_loss
+        self._regularizer.check_solver(self.solver_name)
 
         if solver_kwargs is None:
             # copy dictionary of kwargs to avoid modifying user settings
             solver_kwargs = deepcopy(self.solver_kwargs)
 
-        # check that the loss is Callable
-        utils.assert_is_callable(loss, "loss")
-
-        # some parsing to make sure solver gets instantiated properly
-        if self.solver_name in ("ProximalGradient", "ProxSVRG"):
-            if "prox" in self.solver_kwargs:
-                raise ValueError(
-                    "Proximal operator specification is not permitted. "
-                    "The proximal operator is automatically determined based on the selected regularizer. "
-                    "Please remove the 'prox' argument from the `solver_kwargs` "
-                )
-
-            solver_kwargs.update(prox=self.regularizer.get_proximal_operator())
-            # add self.regularizer_strength to args
-            args += (self.regularizer_strength,)
-
-        (
-            solver_run_kwargs,
-            solver_init_state_kwargs,
-            solver_update_kwargs,
-            solver_init_kwargs,
-        ) = self._inspect_solver_kwargs(solver_kwargs)
-
         # instantiate the solver
-        solver = self._get_solver_class(self.solver_name)(
-            fun=loss, **solver_init_kwargs
+        solver_cls = solvers.solver_registry[self.solver_name]
+
+        solver = solver_cls(
+            self._predict_and_compute_loss,
+            self.regularizer,
+            self.regularizer_strength,
+            **solver_kwargs,
         )
+        self._solver = solver
 
-        self._solver_loss_fun_ = loss
+        # check that the loss is Callable
+        # utils.assert_is_callable(solver.fun, "solver's loss")
+        self._solver_loss_fun_ = solver.fun
 
-        def solver_run(
-            init_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], *run_args: jnp.ndarray
-        ) -> jaxopt.OptStep:
-            return solver.run(init_params, *args, *run_args, **solver_run_kwargs)
+        self._solver_init_state = solver.init_state
+        self._solver_update = solver.update
+        self._solver_run = solver.run
 
-        def solver_update(params, state, *run_args, **run_kwargs) -> jaxopt.OptStep:
-            return solver.update(
-                params, state, *args, *run_args, **solver_update_kwargs, **run_kwargs
-            )
-
-        def solver_init_state(params, *run_args, **run_kwargs) -> NamedTuple:
-            return solver.init_state(
-                params,
-                *run_args,
-                **run_kwargs,
-                **solver_init_state_kwargs,
-            )
-
-        self._solver_init_state = solver_init_state
-        self._solver_update = solver_update
-        self._solver_run = solver_run
         return self
 
     def _inspect_solver_kwargs(
@@ -602,38 +552,6 @@ class BaseRegressor(Base, abc.ABC):
     ) -> Union[Any, NamedTuple]:
         """Initialize the state of the solver for running fit and update."""
         pass
-
-    @staticmethod
-    def _get_solver_class(solver_name: str):
-        """
-        Find a solver class first looking in nemos.solvers, then in jaxopt.
-
-        Parameters
-        ----------
-        solver_name : str
-            Name of the solver class to load.
-
-        Returns
-        -------
-        solver_class :
-            Solver class ready to be instantiated.
-
-        Raises
-        ------
-        AttributeError
-            If a solver class with that name is not found.
-        """
-        try:
-            solver_class = getattr(solvers, solver_name)
-        except AttributeError:
-            try:
-                solver_class = getattr(jaxopt, solver_name)
-            except AttributeError:
-                raise AttributeError(
-                    f"Could not find {solver_name} in nemos.solvers or jaxopt"
-                )
-
-        return solver_class
 
     def _optimize_solver_params(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray) -> dict:
         """
