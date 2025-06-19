@@ -2447,7 +2447,7 @@ class FourierEval(EvalBasisMixin, FourierBasis):
     >>> n_freq = 5
     >>> fourier_basis = FourierEval(n_freq)
     >>> fourier_basis
-    FourierEval(n_frequencies=5, include_constant=False)
+    FourierEval(n_frequencies=5, include_constant=False, phase_sign=1.0)
     >>> sample_points = np.random.randn(100)
     >>> # convolve the basis
     >>> features = fourier_basis.compute_features(sample_points)
@@ -2615,7 +2615,7 @@ class FourierConv(ConvBasisMixin, FourierBasis):
     >>> n_freq = 5
     >>> fourier_basis = FourierConv(n_freq, 50)
     >>> fourier_basis
-    FourierConv(n_frequencies=5, window_size=50, include_constant=False)
+    FourierConv(n_frequencies=5, window_size=50, include_constant=True, phase_sign=-1.0)
     >>> sample_points = np.random.randn(100)
     >>> # convolve the basis
     >>> features = fourier_basis.compute_features(sample_points)
@@ -2682,7 +2682,7 @@ class FourierConv(ConvBasisMixin, FourierBasis):
         >>> basis = FourierConv(n_frequencies=10, window_size=50)
         >>> features = basis.compute_features(X)  # basis transformed time series
         >>> features.shape
-        (1000, 20)
+        (1000, 21)
 
         """
         return super().compute_features(xi)
@@ -2704,7 +2704,7 @@ class FourierConv(ConvBasisMixin, FourierBasis):
         >>> split_features_multi = basis.split_by_feature(X, axis=1)
         >>> for feature, sub_dict in split_features_multi.items():
         ...        print(f"{feature}, shape {sub_dict.shape}")
-        one_input, shape (200, 12)
+        one_input, shape (200, 13)
 
         """
         return super().split_by_feature(x, axis=axis)
@@ -2720,7 +2720,7 @@ class FourierConv(ConvBasisMixin, FourierBasis):
         >>> # Configure with an integer input:
         >>> _ = basis.set_input_shape(3)
         >>> basis.n_output_features
-        30
+        33
         >>> # Configure with a tuple:
         >>> _ = basis.set_input_shape((4, 5))
         >>> basis.n_output_features
@@ -2744,7 +2744,7 @@ class FourierConv(ConvBasisMixin, FourierBasis):
         >>> basis = FourierConv(n_frequencies=4, window_size=50)
         >>> out = basis.evaluate(np.random.randn(100, 5, 2))
         >>> out.shape
-        (100, 5, 2, 8)
+        (100, 5, 2, 9)
         """
         # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
