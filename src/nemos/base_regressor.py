@@ -256,21 +256,6 @@ class BaseRegressor(Base, abc.ABC):
         self._regularizer.check_solver(solver_name)
         self._solver_name = solver_name
 
-    @property
-    def solver_kwargs(self):
-        """Getter for the solver_kwargs attribute."""
-        return self._solver_kwargs
-
-    @solver_kwargs.setter
-    # def solver_kwargs(self, solver_kwargs: dict):
-    #    """Setter for the solver_kwargs attribute."""
-    #    self._check_solver_kwargs(
-    #        self._get_solver_class(self.solver_name), solver_kwargs
-    #    )
-    #    self._solver_kwargs = solver_kwargs
-    def solver_kwargs(self, solver_kwargs):
-        self._solver_kwargs = solver_kwargs
-
     @staticmethod
     def _check_solver_kwargs(solver_class, solver_kwargs):
         """
