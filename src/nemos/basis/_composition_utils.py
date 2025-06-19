@@ -32,6 +32,8 @@ __PUBLIC_BASES__ = [
     "RaisedCosineLinearConv",
     "RaisedCosineLogEval",
     "RaisedCosineLogConv",
+    "FourierEval",
+    "FourierConv",
     "OrthExponentialEval",
     "OrthExponentialConv",
     "AdditiveBasis",
