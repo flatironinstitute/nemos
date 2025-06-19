@@ -12,3 +12,5 @@ from .jaxopt_solvers import (
     JaxoptBFGS,
     JaxoptLBFGS,
 )
+
+from ._solver_registry import solver_registry
