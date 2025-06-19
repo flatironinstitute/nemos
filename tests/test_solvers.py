@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 import nemos as nmo
+
 from nemos.solvers._svrg import SVRG, ProxSVRG, SVRGState
 from nemos.third_party.jaxopt import jaxopt
 from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
@@ -135,7 +136,8 @@ def test_svrg_glm_instantiate_solver(regularizer_name, solver_class, mask):
     )
     glm.instantiate_solver()
 
-    solver = inspect.getclosurevars(glm._solver_run).nonlocals["solver"]
+    # currently glm._solver is a Wrapped(Prox)SVRG
+    solver = glm._solver._solver
     assert glm.solver_name == solver_name
     assert isinstance(solver, solver_class)
 
@@ -170,7 +172,8 @@ def test_svrg_glm_passes_solver_kwargs(regularizer_name, solver_name, mask, glm_
     )
     glm.instantiate_solver()
 
-    solver = inspect.getclosurevars(glm._solver_run).nonlocals["solver"]
+    # currently glm._solver is a Wrapped(Prox)SVRG
+    solver = glm._solver._solver
     assert solver.stepsize == solver_kwargs["stepsize"]
     assert solver.maxiter == solver_kwargs["maxiter"]
 
@@ -226,7 +229,7 @@ def test_svrg_glm_initialize_state(
     assert state.reference_point == init_params
 
     for f in (glm._solver_init_state, glm._solver_update, glm._solver_run):
-        assert isinstance(inspect.getclosurevars(f).nonlocals["solver"], solver_class)
+        assert isinstance(f.__self__._solver, solver_class)
     assert isinstance(state, SVRGState)
 
 
@@ -357,7 +360,7 @@ def test_svrg_glm_fit(
 
     glm.fit(X, y)
 
-    solver = inspect.getclosurevars(glm._solver_run).nonlocals["solver"]
+    solver = glm._solver
     assert solver.maxiter == maxiter
     assert glm.solver_state_.iter_num == maxiter
 

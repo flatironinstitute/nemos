@@ -2541,7 +2541,7 @@ class TestGLMObservationModel:
         # use glm static methods to check if the solver is batchable
         # if not pop the batch_size kwarg
         try:
-            slv_class = nmo.glm.GLM._get_solver_class(solver_name)
+            slv_class = nmo.solvers.solver_registry[solver_name]
             nmo.glm.GLM._check_solver_kwargs(slv_class, solver_kwargs)
         except NameError:
             solver_kwargs.pop("batch_size")
@@ -3052,7 +3052,7 @@ class TestPoissonGLM:
             regularizer_strength=None if reg == "UnRegularized" else 1.0,
         )
         opt_state = model.initialize_state(X, y, true_params)
-        solver = inspect.getclosurevars(model._solver_run).nonlocals["solver"]
+        solver = model._solver
 
         if stepsize is not None:
             assert opt_state.stepsize == stepsize
