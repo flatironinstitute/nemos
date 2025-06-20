@@ -925,7 +925,6 @@ def population_bernoulliGLM_model_instantiation_pytree(
     return X_tree, np.random.binomial(1, rate), model_tree, true_params_tree, rate
 
 
-
 @pytest.fixture
 def negativeBinomialGLM_model_instantiation():
     """Set up a Negative Binomial GLM for testing purposes.
@@ -946,7 +945,9 @@ def negativeBinomialGLM_model_instantiation():
     X = np.random.normal(size=(100, 5))
     b_true = np.zeros((1,))
     w_true = np.random.normal(size=(5,))
-    observation_model = nmo.observation_models.NegativeBinomialObservations(jax.nn.softplus)
+    observation_model = nmo.observation_models.NegativeBinomialObservations(
+        jax.nn.softplus
+    )
     regularizer = nmo.regularizer.UnRegularized()
     model = nmo.glm.GLM(observation_model, regularizer)
     rate = jax.numpy.exp(jax.numpy.einsum("k,tk->t", w_true, X) + b_true)
@@ -954,7 +955,9 @@ def negativeBinomialGLM_model_instantiation():
 
 
 @pytest.fixture
-def negativeBinomialGLM_model_instantiation_pytree(negativeBinomialGLM_model_instantiation):
+def negativeBinomialGLM_model_instantiation_pytree(
+    negativeBinomialGLM_model_instantiation,
+):
     """Set up a Negative Binomial GLM for testing purposes.
 
     This fixture initializes a Negative Binomial GLM with random parameters, simulates its response, and
@@ -999,7 +1002,9 @@ def population_negativeBinomialGLM_model_instantiation():
     X = np.random.normal(size=(500, 5))
     b_true = -2 * np.ones((3,))
     w_true = np.random.normal(size=(5, 3))
-    observation_model = nmo.observation_models.NegativeBinomialObservations(jax.nn.softplus)
+    observation_model = nmo.observation_models.NegativeBinomialObservations(
+        jax.nn.softplus
+    )
     regularizer = nmo.regularizer.UnRegularized()
     model = nmo.glm.PopulationGLM(
         observation_model=observation_model, regularizer=regularizer
@@ -1026,7 +1031,9 @@ def population_negativeBinomialGLM_model_instantiation_pytree(
             - (w_true, b_true) (tuple): True weight and bias parameters.
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
-    X, spikes, model, true_params, rate = population_negativeBinomialGLM_model_instantiation
+    X, spikes, model, true_params, rate = (
+        population_negativeBinomialGLM_model_instantiation
+    )
     X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
     true_params_tree = (
         dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),

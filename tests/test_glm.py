@@ -18,7 +18,6 @@ from nemos.observation_models import NegativeBinomialObservations
 from nemos.pytrees import FeaturePytree
 from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
 
-
 GLM_COMMON_PARAMS_NAMES = {
     "observation_model__inverse_link_function",
     "observation_model",
@@ -1672,7 +1671,10 @@ class TestGLMObservationModel:
                     norm = y.shape[0]
                 elif y.ndim == 2:
                     norm = y.shape[0] * y.shape[1]
-                return sm.families.NegativeBinomial(alpha=0.1).loglike(y, mean_firing) / norm
+                return (
+                    sm.families.NegativeBinomial(alpha=0.1).loglike(y, mean_firing)
+                    / norm
+                )
 
         else:
             raise ValueError("Unknown model instantiation")
@@ -1850,10 +1852,10 @@ class TestGLMObservationModel:
         _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
         if "population" in glm_type:
             expected_keys = GLM_COMMON_PARAMS_NAMES.union(
-                OBSERVATION_MODEL_EXTRA_PARAMS_NAMES[model.observation_model.__class__.__name__]
-            ).union(
-                POPULATIONGLM_EXTRA_PARAMS
-            )
+                OBSERVATION_MODEL_EXTRA_PARAMS_NAMES[
+                    model.observation_model.__class__.__name__
+                ]
+            ).union(POPULATIONGLM_EXTRA_PARAMS)
 
             def get_expected_values(model):
                 if isinstance(model.observation_model, NegativeBinomialObservations):
@@ -1881,7 +1883,9 @@ class TestGLMObservationModel:
 
         else:
             expected_keys = GLM_COMMON_PARAMS_NAMES.union(
-                OBSERVATION_MODEL_EXTRA_PARAMS_NAMES[model.observation_model.__class__.__name__]
+                OBSERVATION_MODEL_EXTRA_PARAMS_NAMES[
+                    model.observation_model.__class__.__name__
+                ]
             )
 
             def get_expected_values(model):
@@ -3230,7 +3234,9 @@ class TestBernoulliGLM:
 
 @pytest.mark.parametrize("inv_link", [jax.nn.softplus, jax.numpy.exp])
 @pytest.mark.parametrize("glm_type", ["", "population_"])
-@pytest.mark.parametrize("model_instantiation", ["negativeBinomialGLM_model_instantiation"])
+@pytest.mark.parametrize(
+    "model_instantiation", ["negativeBinomialGLM_model_instantiation"]
+)
 class TestNegativeBinomialGLM:
     """
     Unit tests specific to Negative Binomial GLM.

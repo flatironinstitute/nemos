@@ -1042,7 +1042,9 @@ class TestNegativeBinomialObservations:
             sm.families.links.Log(),
         ],
     )
-    def test_initialization_link_is_jax(self, link_function, negative_binomial_observations):
+    def test_initialization_link_is_jax(
+        self, link_function, negative_binomial_observations
+    ):
         raise_exception = (
             isinstance(link_function, np.ufunc)
             | isinstance(link_function, sm.families.links.Link)
@@ -1135,10 +1137,14 @@ class TestNegativeBinomialObservations:
             "scale": 0.1,
         }
 
-    def test_deviance_against_statsmodels(self, negativeBinomialGLM_model_instantiation):
+    def test_deviance_against_statsmodels(
+        self, negativeBinomialGLM_model_instantiation
+    ):
         jax.config.update("jax_enable_x64", True)
         _, y, model, _, firing_rate = negativeBinomialGLM_model_instantiation
-        dev = sm.families.NegativeBinomial(alpha=model.observation_model.scale).deviance(y, firing_rate)
+        dev = sm.families.NegativeBinomial(
+            alpha=model.observation_model.scale
+        ).deviance(y, firing_rate)
         dev_model = model.observation_model.deviance(y, firing_rate).sum()
         if not np.allclose(dev, dev_model):
             raise ValueError("Deviance doesn't match statsmodels!")
@@ -1177,12 +1183,16 @@ class TestNegativeBinomialObservations:
         key_array = jax.random.key(123)
         gkey, pkey = jax.random.split(key_array)
         p = np.random.rand(10)
-        counts = model.observation_model.sample_generator(key_array, p, scale=model.observation_model.scale)
+        counts = model.observation_model.sample_generator(
+            key_array, p, scale=model.observation_model.scale
+        )
         r = 1.0 / model.observation_model.scale
         gamma_sample = jax.random.gamma(gkey, r, shape=p.shape) * (p / r)
         expected_counts = jax.random.poisson(pkey, gamma_sample)
         if not jnp.allclose(counts, expected_counts):
-            raise ValueError("The emission probability doesn't match expected NB sampling.")
+            raise ValueError(
+                "The emission probability doesn't match expected NB sampling."
+            )
 
     @pytest.mark.parametrize(
         "score_type, expectation",
@@ -1215,7 +1225,9 @@ class TestNegativeBinomialObservations:
             ),
         ],
     )
-    def test_scale_setter(self, scale, expectation, negativeBinomialGLM_model_instantiation):
+    def test_scale_setter(
+        self, scale, expectation, negativeBinomialGLM_model_instantiation
+    ):
         _, _, model, _, _ = negativeBinomialGLM_model_instantiation
         with expectation:
             model.observation_model.scale = scale
@@ -1224,7 +1236,9 @@ class TestNegativeBinomialObservations:
         _, _, model, _, _ = negativeBinomialGLM_model_instantiation
         assert model.observation_model.scale == 0.1  # or your default value
 
-    def test_non_differentiable_inverse_link(self, negativeBinomialGLM_model_instantiation):
+    def test_non_differentiable_inverse_link(
+        self, negativeBinomialGLM_model_instantiation
+    ):
         _, _, model, _, _ = negativeBinomialGLM_model_instantiation
 
         from numba import njit
@@ -1239,10 +1253,17 @@ class TestNegativeBinomialObservations:
 
     def test_pseudo_r2_vs_statsmodels(self, negativeBinomialGLM_model_instantiation):
         X, y, model, _, firing_rate = negativeBinomialGLM_model_instantiation
-        mdl = sm.GLM(y, sm.add_constant(X), family=sm.families.NegativeBinomial(alpha=model.observation_model.scale)).fit()
+        mdl = sm.GLM(
+            y,
+            sm.add_constant(X),
+            family=sm.families.NegativeBinomial(alpha=model.observation_model.scale),
+        ).fit()
         pr2_sms = mdl.pseudo_rsquared("mcf")
         pr2_model = model.observation_model.pseudo_r2(
-            y, mdl.mu, scale=model.observation_model.scale, score_type="pseudo-r2-McFadden"
+            y,
+            mdl.mu,
+            scale=model.observation_model.scale,
+            score_type="pseudo-r2-McFadden",
         )
         if not np.allclose(pr2_model, pr2_sms, atol=1e-5):
             raise ValueError("Pseudo-r2 doesn't match statsmodels!")
@@ -1264,7 +1285,9 @@ class TestNegativeBinomialObservations:
         assert np.allclose(sm, mn * y.shape[0])
 
     @pytest.mark.parametrize("score_type", ["pseudo-r2-McFadden", "pseudo-r2-Cohen"])
-    def test_aggregation_score_pr2(self, score_type, negativeBinomialGLM_model_instantiation):
+    def test_aggregation_score_pr2(
+        self, score_type, negativeBinomialGLM_model_instantiation
+    ):
         X, y, model, _, firing_rate = negativeBinomialGLM_model_instantiation
         sm = model.observation_model.pseudo_r2(
             y, firing_rate, score_type=score_type, aggregate_sample_scores=jnp.sum

@@ -1422,3 +1422,80 @@ class NegativeBinomialObservations(Observations):
         """
         resid = y - predicted_rate
         return ((resid**2 / predicted_rate - 1) / predicted_rate).sum() / dof_resid
+
+    def pseudo_r2(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        score_type: Literal[
+            "pseudo-r2-McFadden", "pseudo-r2-Cohen"
+        ] = "pseudo-r2-McFadden",
+        scale: Union[
+            float, jnp.ndarray, NDArray
+        ] = 0.1,  # different from super-class, matches self defaults.
+        aggregate_sample_scores: Callable = jnp.mean,
+    ) -> jnp.ndarray:
+        r"""Pseudo-:math:`R^2` calculation for a GLM.
+
+        Compute the pseudo-:math:`R^2` metric for the GLM, as defined by McFadden et al. [1]_
+        or by Cohen et al. [2]_.
+
+        This metric evaluates the goodness-of-fit of the model relative to a null (baseline) model that assumes a
+        constant mean for the observations. While the pseudo-:math:`R^2` is bounded between 0 and 1 for the
+        training set, it can yield negative values on out-of-sample data, indicating potential over-fitting.
+
+        Parameters
+        ----------
+        y:
+            The neural activity. Expected shape: ``(n_time_bins, )``
+        predicted_rate:
+            The mean neural activity. Expected shape: ``(n_time_bins, )``
+        score_type:
+            The pseudo-:math:`R^2` type.
+        scale:
+            The scale parameter of the model.
+
+        Returns
+        -------
+        :
+            The pseudo-:math:`R^2` of the model. A value closer to 1 indicates a better model fit,
+            whereas a value closer to 0 suggests that the model doesn't improve much over the null model.
+
+        Notes
+        -----
+        - The McFadden pseudo-:math:`R^2` is given by:
+
+          .. math::
+                R^2_{\text{mcf}} = 1 - \frac{\log(L_{M})}{\log(L_0)}.
+
+          *Equivalent to statsmodels*
+          `GLMResults.pseudo_rsquared(kind='mcf') <https://www.statsmodels.org/dev/generated/statsmodels.genmod.
+          generalized_linear_model.GLMResults.pseudo_rsquared.html>`_ .
+
+        - The Cohen pseudo-:math:`R^2` is given by:
+
+          .. math::
+               \begin{aligned}
+               R^2_{\text{Cohen}} &= \frac{D_0 - D_M}{D_0} \\\
+               &= 1 - \frac{\log(L_s) - \log(L_M)}{\log(L_s)-\log(L_0)},
+               \end{aligned}
+
+          where :math:`L_M`, :math:`L_0` and :math:`L_s` are the likelihood of the fitted model, the null model (a
+          model with only the intercept term), and the saturated model (a model with one parameter per
+          sample, i.e. the maximum value that the likelihood could possibly achieve). :math:`D_M` and :math:`D_0` are
+          the model and the null deviance, :math:`D_i = -2 \left[ \log(L_s) - \log(L_i) \right]` for :math:`i=M,0`.
+
+        References
+        ----------
+        .. [1] McFadden D (1979). Quantitative methods for analysing travel behavior of individuals: Some recent
+               developments. In D. A. Hensher & P. R. Stopher (Eds.), *Behavioural travel modelling* (pp. 279-318).
+               London: Croom Helm.
+
+        .. [2] Jacob Cohen, Patricia Cohen, Steven G. West, Leona S. Aiken.
+               *Applied Multiple Regression/Correlation Analysis for the Behavioral Sciences*.
+               3rd edition. Routledge, 2002. p.502. ISBN 978-0-8058-2223-6. (May 2012)
+        """
+        # change the default scale value to match negative binomial defaults.
+        return super().pseudo_r2(
+            y, predicted_rate, score_type, scale, aggregate_sample_scores
+        )
