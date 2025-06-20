@@ -136,6 +136,7 @@ class TestGLM:
             (nmo.observation_models.PoissonObservations(), does_not_raise()),
             (nmo.observation_models.GammaObservations(), does_not_raise()),
             (nmo.observation_models.BernoulliObservations(), does_not_raise()),
+            (nmo.observation_models.NegativeBinomialObservations(), does_not_raise()),
             (
                 nmo.regularizer.Regularizer,
                 pytest.raises(
@@ -1645,6 +1646,12 @@ class TestGLMObservationModel:
             def ll(y, mean_firing):
                 return jax.scipy.stats.bernoulli.logpmf(y, mean_firing).mean()
 
+        elif "negative_binomial" in model_instantiation:
+
+            def ll(y, mean_firing):
+                norm = y.shape[0] * y.shape[1]
+                return sm.families.NegativeBinomial(alpha=0.1).loglike(y, mean_firing) / norm
+
         else:
             raise ValueError("Unknown model instantiation")
         return ll
@@ -1752,6 +1759,12 @@ class TestGLMObservationModel:
                 return "PopulationGLM(\n    observation_model=BernoulliObservations(inverse_link_function=logistic),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
             else:
                 return "GLM(\n    observation_model=BernoulliObservations(inverse_link_function=logistic),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
+
+        elif "negative_binomial":
+            if "population" in glm_type:
+                return "PopulationGLM(\n    observation_model=NegativeBinomialObservations(inverse_link_function=exp, scale=0.1),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
+            else:
+                return "GLM(\n    observation_model=NegativeBinomialObservations(inverse_link_function=exp, scale=0.1),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
 
         else:
             raise ValueError("Unknown model instantiation")
