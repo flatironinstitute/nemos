@@ -24,7 +24,7 @@ repos:
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v5.0.0
   # note: pre-commit runs top-to-bottom, so put the hooks that modify content first,
-  # followed by checks that might be more likely to pass after the modifactaion hooks (like flake8)
+  # followed by checks that might be more likely to pass after the modification hooks (like flake8)
   hooks:
   # Checks for large files added to the repository, typically to prevent accidental inclusion of large binaries or datasets.
   - id: check-added-large-files
@@ -34,9 +34,16 @@ repos:
   - id: check-merge-conflict
   # Validates YAML files for syntax errors.
   - id: check-yaml
-  # Detects debug statments (e.g., print, console.log, etc.) left in code.
+  # Detects debug statements (e.g., print, console.log, etc.) left in code.
   - id: debug-statements
   # Ensures files have a newline at the end.
   - id: end-of-file-fixer
   # Removes trailing whitespace characters from files.
   - id: trailing-whitespace
+
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.11.5
+  hooks:
+    - id: ruff
+      args: ["--fix", "--config=pyproject.toml"]
+      files: ^src/
