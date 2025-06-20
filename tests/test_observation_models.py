@@ -28,12 +28,18 @@ def bernoulli_observations():
     return nmo.observation_models.BernoulliObservations
 
 
+@pytest.fixture()
+def negative_binomial_observations():
+    return nmo.observation_models.NegativeBinomialObservations
+
+
 @pytest.mark.parametrize(
     "obs_model_string, expectation",
     [
         ("Poisson", does_not_raise()),
         ("Gamma", does_not_raise()),
         ("Bernoulli", does_not_raise()),
+        ("NegativeBinomial", does_not_raise()),
         (
             "invalid",
             pytest.raises(ValueError, match="Unknown observation model: invalid"),
@@ -54,6 +60,7 @@ def test_glm_instantiation_from_string_at_init(
         ("Poisson", does_not_raise()),
         ("Gamma", does_not_raise()),
         ("Bernoulli", does_not_raise()),
+        ("NegativeBinomial", does_not_raise()),
         (
             "invalid",
             pytest.raises(ValueError, match="Unknown observation model: invalid"),
@@ -81,6 +88,10 @@ def test_glm_setter_observation_model(obs_model_string, glm_class, expectation):
     elif obs_model_string == "Bernoulli":
         assert isinstance(
             model.observation_model, nmo.observation_models.BernoulliObservations
+        )
+    elif obs_model_string == "NegativeBinomial":
+        assert isinstance(
+            model.observation_model, nmo.observation_models.NegativeBinomialObservations
         )
 
 
