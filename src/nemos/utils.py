@@ -14,6 +14,29 @@ from .base_class import Base
 from .tree_utils import pytree_map_and_reduce
 from .type_casting import is_numpy_array_like, support_pynapple
 
+__all__ = [
+    "check_dimensionality",
+    "validate_axis",
+    "check_non_empty",
+    "check_trials_longer_than_time_window",
+    "nan_pad",
+    "shift_time_series",
+    "row_wise_kron",
+    "assert_has_attribute",
+    "assert_is_callable",
+    "assert_returns_ndarray",
+    "assert_differentiable",
+    "assert_preserve_shape",
+    "assert_scalar_func",
+    "format_repr",
+    "one_over_x",
+]
+
+
+def __dir__() -> list[str]:
+    return __all__
+
+
 SPECIAL_KEY_NAMES = {
     jax.scipy.stats.norm.cdf: "norm.cdf",
 }
@@ -603,7 +626,7 @@ def one_over_x(x: NDArray):
     return jnp.power(x, -1)
 
 
-def flatten_dict(d: dict, parent_key: str = "") -> dict:
+def _flatten_dict(d: dict, parent_key: str = "") -> dict:
     """
     Flatten a nested dictionary into a single-level dictionary with keys representing the hierarchy.
 
@@ -628,7 +651,7 @@ def flatten_dict(d: dict, parent_key: str = "") -> dict:
         new_key = f"{parent_key}{sep}{k}" if parent_key else k
         # Recursively flatten if the value is a dictionary
         if isinstance(v, dict):
-            items.extend(flatten_dict(v, new_key).items())
+            items.extend(_flatten_dict(v, new_key).items())
         else:
             # None values and non-standard types are converted to numpy
             if v is None:
@@ -639,7 +662,7 @@ def flatten_dict(d: dict, parent_key: str = "") -> dict:
     return dict(items)
 
 
-def unflatten_dict(d: dict) -> dict:
+def _unflatten_dict(d: dict) -> dict:
     """
     Unflatten a dictionary with keys representing hierarchy into a nested dictionary.
 
@@ -676,7 +699,7 @@ def unflatten_dict(d: dict) -> dict:
     return result
 
 
-def get_name(x: object) -> str:
+def _get_name(x: object) -> str:
     """
     Get the name of an object ``x``, for saving/loading purposes.
 
@@ -704,7 +727,7 @@ def get_name(x: object) -> str:
         raise TypeError(f"Cannot retrieve name of variable {x} of type {type(x)}.")
 
 
-def unpack_params(params_dict: dict, string_attrs: list = None) -> dict:
+def _unpack_params(params_dict: dict, string_attrs: list = None) -> dict:
     """
     Convert a parameter dictionary into serializable format.
 
@@ -729,13 +752,13 @@ def unpack_params(params_dict: dict, string_attrs: list = None) -> dict:
         # if the parameter is an objet with get_params/set_params,
         # extract its class name and parameters
         if hasattr(value, "get_params") and hasattr(value, "set_params"):
-            cls_name = get_name(value)
-            params = unpack_params(value.get_params(deep=False), string_attrs)
+            cls_name = _get_name(value)
+            params = _unpack_params(value.get_params(deep=False), string_attrs)
             out[key] = cls_name if not params else {"class": cls_name, "params": params}
         else:
             # if the parameter is in string_attrs, store its name
             if string_attrs is not None and key in string_attrs:
-                out[key] = get_name(value)
+                out[key] = _get_name(value)
             else:
                 out[key] = value
     return out

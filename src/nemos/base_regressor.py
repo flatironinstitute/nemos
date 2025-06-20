@@ -25,7 +25,7 @@ from ._regularizer_builder import AVAILABLE_REGULARIZERS, create_regularizer
 from .base_class import Base
 from .regularizer import Regularizer, UnRegularized
 from .typing import DESIGN_INPUT_TYPE, SolverInit, SolverRun, SolverUpdate
-from .utils import flatten_dict, get_name, unpack_params
+from .utils import _flatten_dict, _get_name, _unpack_params
 
 
 def strip_metadata(arg_num: Optional[int] = None, kwarg_key: Optional[str] = None):
@@ -717,7 +717,7 @@ class BaseRegressor(Base, abc.ABC):
 
         # extract model parameters
         model_params = self.get_params(deep=False)
-        model_params = unpack_params(model_params, string_attrs)
+        model_params = _unpack_params(model_params, string_attrs)
 
         # append the fit attributes to the model parameters
         model_params.update(fit_attrs)
@@ -729,8 +729,8 @@ class BaseRegressor(Base, abc.ABC):
         }
 
         # save the model class name
-        model_params["model_class"] = get_name(self.__class__)
+        model_params["model_class"] = _get_name(self.__class__)
 
         # flatten the parameters dictionary to ensure it can be saved
-        model_params = flatten_dict(model_params)
+        model_params = _flatten_dict(model_params)
         np.savez(filename, **model_params)

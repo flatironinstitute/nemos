@@ -1,5 +1,6 @@
 """Provides functionality to load a previously saved nemos model from a `.npz` file."""
 
+import importlib
 import warnings
 from pathlib import Path
 from typing import Union
@@ -8,7 +9,7 @@ import numpy as np
 
 from .._observation_model_builder import instantiate_observation_model
 from ..glm import GLM, PopulationGLM
-from ..utils import get_name, unflatten_dict
+from ..utils import _get_name, _unflatten_dict
 
 MODEL_REGISTRY = {"nemos.glm.GLM": GLM, "nemos.glm.PopulationGLM": PopulationGLM}
 
@@ -16,6 +17,10 @@ MODEL_REGISTRY = {"nemos.glm.GLM": GLM, "nemos.glm.PopulationGLM": PopulationGLM
 def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     """
     Load a previously saved nemos model from a .npz file.
+
+    This will read the model parameters from the specified file and instantiate
+    the model class with those parameters. It allows for custom mapping of
+    attribute names to their actual objects using a mapping dictionary.
 
     Parameters
     ----------
@@ -32,7 +37,6 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     Examples
     --------
     >>> import nemos as nmo
-
     >>> # Create a GLM model with specified parameters
     >>> solver_args = {"stepsize": 0.1, "maxiter": 1000, "tol": 1e-6}
     >>> model = nmo.glm.GLM(
@@ -42,8 +46,6 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     ...     solver_name="BFGS",
     ...     solver_kwargs=solver_args,
     ... )
-
-    >>> # Print the model parameters
     >>> for key, value in model.get_params().items():
     ...     print(f"{key}: {value}")
     observation_model__inverse_link_function: <function one_over_x at ...>
@@ -52,17 +54,13 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     regularizer_strength: 0.1
     solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
     solver_name: BFGS
-
     >>> # Save the model parameters to a file
     >>> model.save_params("model_params.npz")
-
     >>> # Initialize a default GLM
     >>> model = nmo.glm.GLM()
-
     >>> # Load the model from the saved file
     >>> model = nmo.load_model("model_params.npz")
-
-    >>> # Print the parameters of the loaded model
+    >>> # Model has the same parameters before and after load
     >>> for key, value in model.get_params().items():
     ...     print(f"{key}: {value}")
     observation_model__inverse_link_function: <function one_over_x at ...>
@@ -78,7 +76,7 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     data = np.load(filename, allow_pickle=False)
 
     # Unflatten the dictionary to restore the original structure
-    saved_params = unflatten_dict(data)
+    saved_params = _unflatten_dict(data)
 
     # "save_metadata" is used to store versions of Nemos and Jax, not needed for loading
     saved_params.pop("save_metadata")
@@ -87,11 +85,18 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     # replace it with the corresponding value from mapping_dict
     saved_params = _apply_custom_map(saved_params, mapping_dict)
 
+    # If the observation model is a string or a dictionary, instantiate it
+    # By default it is saved as a dictionary with "class" and "params"
     if "observation_model" in saved_params:
         obs_model_data = saved_params.pop("observation_model")
-        saved_params["observation_model"] = instantiate_observation_model(
-            obs_model_data["class"], **obs_model_data["params"]
-        )
+        if isinstance(obs_model_data, str):
+            saved_params["observation_model"] = instantiate_observation_model(
+                obs_model_data
+            )
+        elif isinstance(obs_model_data, dict):
+            saved_params["observation_model"] = instantiate_observation_model(
+                obs_model_data["class"], **obs_model_data["params"]
+            )
 
     # Extract the model class from the saved attributes
     model_name = str(saved_params.pop("model_class"))
@@ -105,7 +110,7 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     except Exception:
         raise ValueError(
             f"Failed to instantiate model class '{model_name}' with parameters: {config_params}"
-            f"`{get_name(examine_saved_model)}('{filename}')` to inspect the saved object."
+            f"`{_get_name(inspect_npz)}('{filename}')` to inspect the saved object."
         )
 
     # Set the rest of the parameters as attributes if recognized
@@ -119,20 +124,21 @@ def _apply_custom_map(params: dict, mapping_dict: dict) -> dict:
     if not mapping_dict:
         return params
 
-    for k, v in params.items():
-        try:
-            if v in mapping_dict:
-                try:
-                    params[k] = mapping_dict[v]
-                except Exception as e:
-                    warnings.warn(
-                        f"Failed to replace '{v}' for key '{k}': {e}. "
-                        "Ensure the mapping dictionary is correctly formatted."
-                    )
-        except TypeError:
-            pass
+    missing_keys = [key for key in mapping_dict if key not in params]
+    if missing_keys:
+        raise ValueError(
+            f"Keys {missing_keys} in mapping_dict are not found in the model parameters. "
+            f"Available keys: {list(params.keys())}"
+        )
 
-    return params
+    updated_params = params.copy()
+    updated_params.update(mapping_dict)
+
+    warnings.warn(
+        f"The following keys have been replaced in the model parameters: {list(mapping_dict.keys())}. "
+    )
+
+    return updated_params
 
 
 def _split_model_params(params: dict, model_class) -> tuple:
@@ -144,21 +150,21 @@ def _split_model_params(params: dict, model_class) -> tuple:
 
 
 def _set_fit_params(model, fit_params: dict, filename: Path):
-    """Set remaining model attributes, warn if unrecognized."""
+    """Set fit model attributes, warn if unrecognized."""
     check_str = (
         f"\nIf this is confusing, try calling "
-        f"`{get_name(examine_saved_model)}('{filename}')` to inspect the saved object."
+        f"`{_get_name(inspect_npz)}('{filename}')` to inspect the saved object."
     )
     for key, value in fit_params.items():
         if hasattr(model, key):
             setattr(model, key, value)
         else:
-            warnings.warn(
-                f"Ignoring unrecognized attribute '{key}' during model loading.{check_str}"
+            raise ValueError(
+                f"Unrecognized attribute '{key}' during model loading.{check_str}"
             )
 
 
-def examine_saved_model(file_path: Union[str, Path]):
+def inspect_npz(file_path: Union[str, Path]):
     """
     Examine a saved model parameter file (.npz).
 
@@ -168,52 +174,39 @@ def examine_saved_model(file_path: Union[str, Path]):
     ----------
     file_path :
         Path to the `.npz` file containing the saved model parameters.
-
-    Examples
-    --------
-    >>> import nemos as nmo
-
-    >>> # Define solver arguments
-    >>> solver_args = {"stepsize": 0.1, "maxiter": 1000, "tol": 1e-6}
-
-    >>> # Create a GLM model with specified regularizer and observation model
-    >>> model = nmo.glm.GLM(
-    ...     regularizer="Ridge",
-    ...     regularizer_strength=0.1,
-    ...     observation_model="Gamma",
-    ...     solver_name="BFGS",
-    ...     solver_kwargs=solver_args,
-    ... )
-
-    >>> # Save the model parameters to a file
-    >>> model.save_params("model_params.npz")
-
-    >>> # Examine the contents of the saved file
-    >>> nmo.io.io.examine_saved_model("model_params.npz")
-    observation_model     : <class 'dict'> with length 2 : {'class': 'nemos.observation_models.GammaObservations',\
-'params': {'inverse_link_function': 'nemos.utils.one_over_x'}}
-    regularizer           : <class 'str'> : nemos.regularizer.Ridge
-    regularizer_strength  : <class 'float'> : 0.1
-    solver_kwargs         : <class 'dict'> with length 3 : {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
-    solver_name           : <class 'str'> : BFGS
-    coef_                 : <class 'NoneType'> : None
-    intercept_            : <class 'NoneType'> : None
-    save_metadata         : <class 'dict'> with length 2 : {'jax_version': '0.4.38', 'nemos_version': '0.2.4.dev59'}
-    model_class           : <class 'str'> : nemos.glm.GLM
     """
     file_path = Path(file_path)
     data = np.load(file_path, allow_pickle=True)
-    data = unflatten_dict(data)
+    data = _unflatten_dict(data)
 
     pad_len = max(len(k) for k in data.keys()) + 2
 
-    for key in data:
-        val = data[key]
-        if isinstance(val, np.ndarray):
-            print(
-                f"{key:<{pad_len}}: {type(val)}, dtype {val.dtype}, shape {val.shape} : {val}"
-            )
-        elif hasattr(val, "__len__") and not isinstance(val, str):
-            print(f"{key:<{pad_len}}: {type(val)} with length {len(val)} : {val}")
+    metadata = data.pop("save_metadata", None)
+    print("Metadata\n--------")
+    print(
+        f"{'nemos version':<{pad_len}}: {metadata['nemos_version']} "
+        f"(installed: {importlib.metadata.version('nemos')})"
+    )
+    print(
+        f"{'jax version':<{pad_len}}: {metadata['jax_version']} "
+        f"(installed: {importlib.metadata.version('jax')})"
+    )
+
+    print("\nModel class\n-----------")
+    model_class = data.pop("model_class", None)
+    if model_class:
+        print(f"{'Saved model class':<{pad_len}}: {model_class}")
+
+    print("\nModel parameters \n----------------")
+    config_params = {k: data.pop(k) for k in list(data) if not k.endswith("_")}
+    for key in config_params:
+        val = config_params[key]
+        # If the value is a callable, print its name, otherwise print the value
+        if hasattr(val, "__name__"):
+            print(f"{key:<{pad_len}}: {_get_name(val)}")
         else:
-            print(f"{key:<{pad_len}}: {type(val)} : {val}")
+            print(f"{key:<{pad_len}}: {val}")
+
+    print("\nModel fit parameters \n--------------------")
+    for param in data:
+        print(f"{param}: {data[param]}")

@@ -1175,7 +1175,6 @@ class GLM(BaseRegressor):
         Examples
         --------
         >>> import nemos as nmo
-
         >>> # Create a GLM model with specified parameters
         >>> solver_args = {"stepsize": 0.1, "maxiter": 1000, "tol": 1e-6}
         >>> model = nmo.glm.GLM(
@@ -1185,8 +1184,6 @@ class GLM(BaseRegressor):
         ...     solver_name="BFGS",
         ...     solver_kwargs=solver_args,
         ... )
-
-        >>> # Print the model parameters
         >>> for key, value in model.get_params().items():
         ...     print(f"{key}: {value}")
         observation_model__inverse_link_function: <function one_over_x at ...>
@@ -1195,17 +1192,13 @@ class GLM(BaseRegressor):
         regularizer_strength: 0.1
         solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
         solver_name: BFGS
-
         >>> # Save the model parameters to a file
         >>> model.save_params("model_params.npz")
-
         >>> # Initialize a default GLM
         >>> model = nmo.glm.GLM()
-
         >>> # Load the model from the saved file
         >>> model = nmo.load_model("model_params.npz")
-
-        >>> # Print the parameters of the loaded model
+        >>> # Model has the same parameters before and after load
         >>> for key, value in model.get_params().items():
         ...     print(f"{key}: {value}")
         observation_model__inverse_link_function: <function one_over_x at ...>

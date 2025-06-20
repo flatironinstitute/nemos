@@ -7,28 +7,26 @@ from .observation_models import (
 AVAILABLE_OBSERVATION_MODELS = ["Bernoulli", "Gamma", "Poisson"]
 
 
-def instantiate_observation_model(
-    observation_model: str, inverse_link_function: str = None
-):
+def instantiate_observation_model(observation_model: str, **kwargs):
     """
-    Create an observation model from a given name.
+    Create an observation model instance based on the provided name and optional parameters.
 
     Parameters
     ----------
     observation_model:
         The observation model as a string.
-    inverse_link_function:
-        The inverse link function to use for the observation model.
-        If not provided, the default inverse link function of the observation model will be used.
+    **kwargs :
+        Arbitrary keyword arguments to pass to the constructor of the observation model.
 
     Returns
     -------
-        The observation model instance with default parameters.
+    :
+        An instance of the specified observation model class, initialized with the provided parameters.
 
     Raises
     ------
     ValueError
-        If the `observation_model` provided does not match to any available observation models.
+        If the provided `observation_model` name does not match any available observation models.
     """
     if "." in observation_model:
         # extract the observation class if parsed as a full path
@@ -36,13 +34,6 @@ def instantiate_observation_model(
 
     # Remove "Observations" suffix if present
     observation_model = observation_model.removesuffix("Observations")
-
-    # if inverse_link_function, pass it as a keyword argument, if not, use the default
-    kwargs = (
-        {"inverse_link_function": inverse_link_function}
-        if inverse_link_function
-        else {}
-    )
 
     if observation_model == "Poisson":
         return PoissonObservations(**kwargs)
