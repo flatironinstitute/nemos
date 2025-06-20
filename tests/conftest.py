@@ -240,6 +240,9 @@ class MockRegressor(nmo.base_regressor.BaseRegressor):
 
     def _get_optimal_solver_params_config(self):
         return None, None, None
+    
+    def save_params(self, *args):
+        pass
 
 
 class MockRegressorNested(MockRegressor):
