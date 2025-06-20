@@ -9,8 +9,9 @@ from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
-import jaxopt
 from numpy.typing import ArrayLike
+
+from nemos.third_party.jaxopt import jaxopt
 
 from . import observation_models as obs
 from . import tree_utils, validation
@@ -185,7 +186,7 @@ class GLM(BaseRegressor):
         # With python 3.11 Literal[*AVAILABLE_OBSERVATION_MODELS] will be allowed.
         # Replace this manual list after dropping support for 3.10?
         observation_model: obs.Observations | Literal["Poisson", "Gamma"] = "Poisson",
-        regularizer: Union[str, Regularizer] = "UnRegularized",
+        regularizer: Optional[Union[str, Regularizer]] = None,
         regularizer_strength: Optional[float] = None,
         solver_name: str = None,
         solver_kwargs: dict = None,
@@ -1618,7 +1619,7 @@ class PopulationGLM(GLM):
         """
         return super().fit(X, y, init_params)
 
-    def _initialize_feature_mask(self, X, y):
+    def _initialize_feature_mask(self, X: FeaturePytree, y: jnp.ndarray):
         if self.feature_mask is None:
             # static checker does not realize conversion to ndarray happened in cast_to_jax.
             if isinstance(X, FeaturePytree):

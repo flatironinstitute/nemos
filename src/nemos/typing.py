@@ -5,10 +5,11 @@ from __future__ import annotations
 from typing import Any, Callable, NamedTuple, Tuple, Union
 
 import jax.numpy as jnp
-import jaxopt
 import pynapple as nap
 from jax.typing import ArrayLike
 from numpy.typing import NDArray
+
+from nemos.third_party.jaxopt import jaxopt
 
 from .pytrees import FeaturePytree
 

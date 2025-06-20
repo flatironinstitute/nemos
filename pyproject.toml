@@ -23,13 +23,11 @@ classifiers = [
 # Define dependencies for the project
 dependencies = [
     "jax>=0.4.28",                     # Numerical computing library
-    "jaxopt>=0.6",                  # Optimization library built on JAX
     "numpy>1.20",                   # Numerical computing library
     "scipy>=1.10",                  # Scientific computing library
     "typing_extensions>=4.6",       # Typing extensions for Python
     "pynapple>=0.6.6",
 ]
-
 
 
 # Configure package discovery for setuptools
@@ -96,6 +94,16 @@ examples = [
     "fsspec",
     "patsy",
 ]
+# jaxopt 0.8.5 is included in src/nemos/third_party/jaxopt
+jaxopt_dev = [
+    "pytest",
+    "absl-py>=0.7.0",
+    "cvxpy>=1.1.11",
+    "optax>=0.0.9",
+    "pytest-xdist",
+    "scikit-learn>=0.24.1",
+    "cvxopt",
+]
 
 
 [tool.black]
@@ -118,13 +126,15 @@ exclude = '''
     | buck-out
     | build
     | dist
-    | examples))'''
+    | examples
+    | src/nemos/third_party/jaxopt))'''
 
 # Configure isort
 [tool.isort]
 multi_line_output = 3             # Use three-line style for multi-line imports
 include_trailing_comma = true     # Include trailing comma in multi-line imports
 profile = "black"
+skip = ["src/nemos/third_party/jaxopt"]
 
 # Configure pytest
 [tool.pytest.ini_options]
@@ -153,7 +163,7 @@ exclude_lines = [
 
 
 [tool.ruff]
-exclude = ["src/nemos/_documentation_utils"]
+exclude = ["src/nemos/_documentation_utils", "src/nemos/third_party"]
 
 
 [tool.ruff.lint]

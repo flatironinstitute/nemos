@@ -16,6 +16,7 @@ import nemos as nmo
     "reg_str, reg_type",
     [
         ("UnRegularized", nmo.regularizer.UnRegularized),
+        (None, nmo.regularizer.UnRegularized),
         ("Ridge", nmo.regularizer.Ridge),
         ("Lasso", nmo.regularizer.Lasso),
         ("GroupLasso", nmo.regularizer.GroupLasso),
@@ -24,7 +25,10 @@ import nemos as nmo
 )
 def test_regularizer_builder(reg_str, reg_type):
     """Test building a regularizer from a string"""
-    raise_exception = reg_str not in nmo._regularizer_builder.AVAILABLE_REGULARIZERS
+    raise_exception = (
+        reg_str is not None
+        and reg_str not in nmo._regularizer_builder.AVAILABLE_REGULARIZERS
+    )
     if raise_exception:
         with pytest.raises(ValueError, match=f"Unknown regularizer: {reg_str}. "):
             nmo._regularizer_builder.create_regularizer(reg_str)
@@ -107,7 +111,6 @@ def test_regularizer_setter(regularizer_strength, regularizer):
             match=f"Could not convert the regularizer strength: {regularizer_strength} "
             f"to a float.",
         ):
-
             nmo.glm.GLM(
                 regularizer=regularizer, regularizer_strength=regularizer_strength
             )

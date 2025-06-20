@@ -570,6 +570,6 @@ def _get_terminal_size():
     return cols, rows
 
 
-def one_over_x(x):
+def one_over_x(x: NDArray):
     """Implement 1/x."""
     return jnp.power(x, -1)
