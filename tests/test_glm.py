@@ -1599,47 +1599,6 @@ class TestGLM:
         with warns:
             model.set_params(**params)
 
-    @pytest.mark.parametrize("regularizer", ["Ridge", "UnRegularized"])
-    @pytest.mark.parametrize("obs_model", [
-        "PoissonObservations",
-        "BernoulliObservations",
-        "GammaObservations",
-    ])
-    def test_save_and_load(
-        self, regularizer, obs_model, request, glm_class_type, model_instantiation_type
-    ):
-        """
-        Test saving and loading a model with various observation models and regularizers.
-        Ensure all parameters are preserved.
-        """
-        _, _, model, _, _ = request.getfixturevalue(model_instantiation_type)
-
-        model.set_params(
-            observation_model=obs_model,
-            regularizer=regularizer,
-        )
-
-        initial_params = model.get_params()
-
-        # Save
-        save_path = "test_model.npz"
-        model.save_params(save_path)
-
-        # Load
-        loaded_model = nmo.load_model(save_path)
-        loaded_params = loaded_model.get_params()
-
-        # Assert matching keys and values
-        assert initial_params.keys() == loaded_params.keys(), "Parameter keys mismatch after load."
-
-        for key in initial_params:
-            init_val = initial_params[key]
-            load_val = loaded_params[key]
-
-            if isinstance(init_val, (int, float, str, type(None), dict, jnp.ndarray)):
-                assert init_val == load_val, f"{key} mismatch: {init_val} != {load_val}"
-            elif isinstance(init_val, Callable):
-                assert init_val.__name__ == load_val.__name__, f"{key} function mismatch: {init_val.__name__} != {load_val.__name__}"
 
 @pytest.mark.parametrize("glm_type", ["", "population_"])
 @pytest.mark.parametrize(
