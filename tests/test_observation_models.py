@@ -1012,3 +1012,300 @@ class TestBernoulliObservations:
             repr(obs)
             == f"BernoulliObservations(inverse_link_function={link_func_name})"
         )
+
+
+class TestNegativeBinomialObservations:
+    @pytest.mark.parametrize(
+        "link_function",
+        [jax.numpy.exp, jax.nn.softplus, 1],
+    )
+    def test_initialization_link_is_callable(
+        self, link_function, negative_binomial_observations
+    ):
+        raise_exception = not callable(link_function)
+        if raise_exception:
+            with pytest.raises(
+                TypeError,
+                match="The `inverse_link_function` function must be a Callable",
+            ):
+                negative_binomial_observations(link_function)
+        else:
+            negative_binomial_observations(link_function)
+
+    @pytest.mark.parametrize(
+        "link_function",
+        [
+            jax.numpy.exp,
+            jax.nn.softplus,
+            np.exp,
+            lambda x: x,
+            sm.families.links.Log(),
+        ],
+    )
+    def test_initialization_link_is_jax(self, link_function, negative_binomial_observations):
+        raise_exception = (
+            isinstance(link_function, np.ufunc)
+            | isinstance(link_function, sm.families.links.Link)
+            | isinstance(link_function, type(sts.norm.cdf))
+        )
+        if raise_exception:
+            with pytest.raises(
+                TypeError,
+                match="The `inverse_link_function` must return a jax.numpy.ndarray",
+            ):
+                negative_binomial_observations(link_function)
+        else:
+            negative_binomial_observations(link_function)
+
+    @pytest.mark.parametrize(
+        "link_function",
+        [jax.lax.logistic, jax.scipy.special.expit, jax.scipy.stats.norm.cdf, 1],
+    )
+    def test_initialization_link_is_callable_set_params(
+        self, link_function, negative_binomial_observations
+    ):
+        observation_model = negative_binomial_observations()
+        raise_exception = not callable(link_function)
+        if raise_exception:
+            with pytest.raises(
+                TypeError,
+                match="The `inverse_link_function` function must be a Callable",
+            ):
+                observation_model.set_params(inverse_link_function=link_function)
+        else:
+            observation_model.set_params(inverse_link_function=link_function)
+
+    @pytest.mark.parametrize(
+        "link_function",
+        [
+            jax.scipy.special.expit,
+            sp.special.expit,
+            jax.scipy.stats.norm.cdf,
+            sts.norm.cdf,
+            np.exp,
+            lambda x: x,
+            sm.families.links.Log(),
+        ],
+    )
+    def test_initialization_link_is_jax_set_params(
+        self, link_function, negative_binomial_observations
+    ):
+        raise_exception = (
+            isinstance(link_function, np.ufunc)
+            | isinstance(link_function, sm.families.links.Link)
+            | isinstance(link_function, type(sts.norm.cdf))
+        )
+        observation_model = negative_binomial_observations()
+        if raise_exception:
+            with pytest.raises(
+                TypeError,
+                match="The `inverse_link_function` must return a jax.numpy.ndarray!",
+            ):
+                observation_model.set_params(inverse_link_function=link_function)
+        else:
+            observation_model.set_params(inverse_link_function=link_function)
+
+    @pytest.mark.parametrize(
+        "link_function",
+        [
+            jax.numpy.exp,
+            lambda x: (
+                jax.numpy.exp(x) if isinstance(x, jnp.ndarray) else "not a number"
+            ),
+        ],
+    )
+    def test_initialization_link_returns_scalar(
+        self, link_function, negative_binomial_observations
+    ):
+        raise_exception = not isinstance(link_function(1.0), (jnp.ndarray, float))
+        observation_model = negative_binomial_observations()
+        if raise_exception:
+            with pytest.raises(
+                TypeError,
+                match="The `inverse_link_function` must handle scalar inputs correctly",
+            ):
+                observation_model.set_params(inverse_link_function=link_function)
+        else:
+            observation_model.set_params(inverse_link_function=link_function)
+
+    def test_get_params(self, negative_binomial_observations):
+        observation_model = negative_binomial_observations()
+        assert observation_model.get_params() == {
+            "inverse_link_function": observation_model.inverse_link_function,
+            "scale": 0.1,
+        }
+
+    def test_deviance_against_statsmodels(self, negativeBinomialGLM_model_instantiation):
+        jax.config.update("jax_enable_x64", True)
+        _, y, model, _, firing_rate = negativeBinomialGLM_model_instantiation
+        dev = sm.families.NegativeBinomial(alpha=model.observation_model.scale).deviance(y, firing_rate)
+        dev_model = model.observation_model.deviance(y, firing_rate).sum()
+        if not np.allclose(dev, dev_model):
+            raise ValueError("Deviance doesn't match statsmodels!")
+
+    def test_loglikelihood_against_scipy(self, negativeBinomialGLM_model_instantiation):
+        _, y, model, _, firing_rate = negativeBinomialGLM_model_instantiation
+        r = 1.0 / model.observation_model.scale
+        p = r / (r + firing_rate)
+        ll_model = model.observation_model.log_likelihood(y, firing_rate)
+        ll_scipy = sts.nbinom.logpmf(y, r, p).mean()
+        if not np.allclose(ll_model, ll_scipy, atol=1e-5):
+            raise ValueError("Log-likelihood doesn't match scipy!")
+
+    @pytest.mark.parametrize("score_type", ["pseudo-r2-Cohen", "pseudo-r2-McFadden"])
+    def test_pseudo_r2_range(self, score_type, negativeBinomialGLM_model_instantiation):
+        _, y, model, _, firing_rate = negativeBinomialGLM_model_instantiation
+        pseudo_r2 = model.observation_model.pseudo_r2(
+            y, firing_rate, score_type=score_type
+        )
+        if (pseudo_r2 > 1) or (pseudo_r2 < 0):
+            raise ValueError(f"pseudo-r2 of {pseudo_r2} outside the [0,1] range!")
+
+    @pytest.mark.parametrize("score_type", ["pseudo-r2-Cohen", "pseudo-r2-McFadden"])
+    def test_pseudo_r2_mean(self, score_type, negativeBinomialGLM_model_instantiation):
+        _, y, model, _, _ = negativeBinomialGLM_model_instantiation
+        pseudo_r2 = model.observation_model.pseudo_r2(
+            y, y.mean(), score_type=score_type
+        )
+        if not np.allclose(pseudo_r2, 0, atol=1e-6, rtol=0.0):
+            raise ValueError(
+                f"pseudo-r2 of {pseudo_r2} for the null model. Should be equal to 0!"
+            )
+
+    def test_emission_probability(self, negativeBinomialGLM_model_instantiation):
+        _, _, model, _, _ = negativeBinomialGLM_model_instantiation
+        key_array = jax.random.key(123)
+        gkey, pkey = jax.random.split(key_array)
+        p = np.random.rand(10)
+        counts = model.observation_model.sample_generator(key_array, p, scale=model.observation_model.scale)
+        r = 1.0 / model.observation_model.scale
+        gamma_sample = jax.random.gamma(gkey, r, shape=p.shape) * (p / r)
+        expected_counts = jax.random.poisson(pkey, gamma_sample)
+        if not jnp.allclose(counts, expected_counts):
+            raise ValueError("The emission probability doesn't match expected NB sampling.")
+
+    @pytest.mark.parametrize(
+        "score_type, expectation",
+        [
+            ("pseudo-r2-McFadden", does_not_raise()),
+            (
+                "not-implemented",
+                pytest.raises(
+                    NotImplementedError, match="Score not-implemented not implemented"
+                ),
+            ),
+        ],
+    )
+    def test_not_implemented_score(
+        self, score_type, expectation, negativeBinomialGLM_model_instantiation
+    ):
+        _, y, model, _, firing_rate = negativeBinomialGLM_model_instantiation
+        with expectation:
+            model.observation_model.pseudo_r2(y, firing_rate, score_type)
+
+    @pytest.mark.parametrize(
+        "scale, expectation",
+        [
+            (1, does_not_raise()),
+            (
+                "invalid",
+                pytest.raises(
+                    ValueError, match="The `scale` parameter must be of numeric type"
+                ),
+            ),
+        ],
+    )
+    def test_scale_setter(self, scale, expectation, negativeBinomialGLM_model_instantiation):
+        _, _, model, _, _ = negativeBinomialGLM_model_instantiation
+        with expectation:
+            model.observation_model.scale = scale
+
+    def test_scale_getter(self, negativeBinomialGLM_model_instantiation):
+        _, _, model, _, _ = negativeBinomialGLM_model_instantiation
+        assert model.observation_model.scale == 0.1  # or your default value
+
+    def test_non_differentiable_inverse_link(self, negativeBinomialGLM_model_instantiation):
+        _, _, model, _, _ = negativeBinomialGLM_model_instantiation
+
+        from numba import njit
+
+        non_diff = lambda y: jnp.asarray(njit(lambda x: x)(np.atleast_1d(y)))
+
+        with pytest.raises(
+            TypeError,
+            match="The `inverse_link_function` function cannot be differentiated",
+        ):
+            model.observation_model.inverse_link_function = non_diff
+
+    def test_pseudo_r2_vs_statsmodels(self, negativeBinomialGLM_model_instantiation):
+        X, y, model, _, firing_rate = negativeBinomialGLM_model_instantiation
+        mdl = sm.GLM(y, sm.add_constant(X), family=sm.families.NegativeBinomial(alpha=model.observation_model.scale)).fit()
+        pr2_sms = mdl.pseudo_rsquared("mcf")
+        pr2_model = model.observation_model.pseudo_r2(
+            y, mdl.mu, scale=model.observation_model.scale, score_type="pseudo-r2-McFadden"
+        )
+        if not np.allclose(pr2_model, pr2_sms, atol=1e-5):
+            raise ValueError("Pseudo-r2 doesn't match statsmodels!")
+
+    def test_aggregation_score_neg_ll(self, negativeBinomialGLM_model_instantiation):
+        X, y, model, _, firing_rate = negativeBinomialGLM_model_instantiation
+        sm = model.observation_model._negative_log_likelihood(y, firing_rate, jnp.sum)
+        mn = model.observation_model._negative_log_likelihood(y, firing_rate, jnp.mean)
+        assert np.allclose(sm, mn * y.shape[0])
+
+    def test_aggregation_score_ll(self, negativeBinomialGLM_model_instantiation):
+        X, y, model, _, firing_rate = negativeBinomialGLM_model_instantiation
+        sm = model.observation_model.log_likelihood(
+            y, firing_rate, aggregate_sample_scores=jnp.sum
+        )
+        mn = model.observation_model.log_likelihood(
+            y, firing_rate, aggregate_sample_scores=jnp.mean
+        )
+        assert np.allclose(sm, mn * y.shape[0])
+
+    @pytest.mark.parametrize("score_type", ["pseudo-r2-McFadden", "pseudo-r2-Cohen"])
+    def test_aggregation_score_pr2(self, score_type, negativeBinomialGLM_model_instantiation):
+        X, y, model, _, firing_rate = negativeBinomialGLM_model_instantiation
+        sm = model.observation_model.pseudo_r2(
+            y, firing_rate, score_type=score_type, aggregate_sample_scores=jnp.sum
+        )
+        mn = model.observation_model.pseudo_r2(
+            y, firing_rate, score_type=score_type, aggregate_sample_scores=jnp.mean
+        )
+        assert np.allclose(sm, mn)
+
+    def test_aggregation_score_mcfadden(self, negativeBinomialGLM_model_instantiation):
+        X, y, model, _, firing_rate = negativeBinomialGLM_model_instantiation
+        sm = model.observation_model._pseudo_r2_mcfadden(
+            y, firing_rate, aggregate_sample_scores=jnp.sum
+        )
+        mn = model.observation_model._pseudo_r2_mcfadden(
+            y, firing_rate, aggregate_sample_scores=jnp.mean
+        )
+        assert np.allclose(sm, mn)
+
+    def test_aggregation_score_choen(self, negativeBinomialGLM_model_instantiation):
+        X, y, model, _, firing_rate = negativeBinomialGLM_model_instantiation
+        sm = model.observation_model._pseudo_r2_cohen(
+            y, firing_rate, aggregate_sample_scores=jnp.sum
+        )
+        mn = model.observation_model._pseudo_r2_cohen(
+            y, firing_rate, aggregate_sample_scores=jnp.mean
+        )
+        assert np.allclose(sm, mn)
+
+    @pytest.mark.parametrize(
+        "link_func, link_func_name",
+        [
+            (jax.nn.softplus, "softplus"),
+            (jax.numpy.exp, "exp"),
+        ],
+    )
+    def test_repr_out(self, link_func, link_func_name):
+        obs = nmo.observation_models.NegativeBinomialObservations(
+            inverse_link_function=link_func
+        )
+        assert (
+            repr(obs)
+            == f"NegativeBinomialObservations(inverse_link_function={link_func_name}, scale=0.1)"
+        )
