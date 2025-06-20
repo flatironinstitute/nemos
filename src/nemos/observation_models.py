@@ -1307,7 +1307,7 @@ class NegativeBinomialObservations(Observations):
         self,
         key: jax.Array,
         predicted_rate: jnp.ndarray,
-        scale: Union[float, jnp.ndarray] = 1.0,
+        scale: Union[float, jnp.ndarray] = 0.1,
     ) -> jnp.ndarray:
         """
         Sample from the Negative Binomial distribution.
@@ -1357,7 +1357,7 @@ class NegativeBinomialObservations(Observations):
         self,
         observations: jnp.ndarray,
         predicted_rate: jnp.ndarray,
-        scale: Union[float, jnp.ndarray] = 1.0,
+        scale: Union[float, jnp.ndarray] = 0.1,
     ) -> jnp.ndarray:
         r"""Compute the residual deviance for a Negative Binomial model.
 
@@ -1391,11 +1391,10 @@ class NegativeBinomialObservations(Observations):
         where :math:`y` is the observed data, :math:`\hat{y}` is the predicted data, and :math:`\text{LL}` is
         the model log-likelihood. Lower values of deviance indicate a better fit.
         """
-        factor = (predicted_rate * self.scale + 1) / (observations * self.scale + 1)
+        factor = (predicted_rate * scale + 1) / (observations * scale + 1)
         y_mu = observations / predicted_rate
-        term1 = observations * jnp.log(
-            jnp.clip(y_mu * factor, min=jnp.finfo(predicted_rate.dtype).eps)
-        )
+        y_mu = jnp.clip(y_mu, min=jnp.finfo(predicted_rate.dtype).eps)
+        term1 = observations * jnp.log(y_mu * factor)
         term2 = jnp.log(factor) / scale
         return 2 * (term1 + term2)
 
