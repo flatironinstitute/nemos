@@ -97,34 +97,6 @@ def check_non_empty(pytree: Any, pytree_name: str):
         )
 
 
-def check_trials_longer_than_time_window(
-    time_series: Any, window_size: int, axis: int = 0
-):
-    """
-    Check if the duration of each trial in the time series is at least as long as the window size.
-
-    Parameters
-    ----------
-    time_series :
-        A pytree of trial data.
-    window_size :
-        The size of the window to be used in convolution.
-    axis :
-        The axis in the arrays representing the time dimension.
-
-    Raises
-    ------
-    ValueError
-        If any trial in the time series is shorter than the window size.
-    """
-    # Check window size
-    if pytree_map_and_reduce(lambda x: x.shape[axis] < window_size, any, time_series):
-        raise ValueError(
-            "Insufficient trial duration. The number of time points in each trial must "
-            "be greater or equal to the window size."
-        )
-
-
 def _pad_dimension(
     array: jnp.ndarray,
     axis: int,
@@ -598,6 +570,6 @@ def _get_terminal_size():
     return cols, rows
 
 
-def one_over_x(x):
+def one_over_x(x: NDArray):
     """Implement 1/x."""
     return jnp.power(x, -1)

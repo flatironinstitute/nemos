@@ -9,8 +9,9 @@ from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
-import jaxopt
 from numpy.typing import ArrayLike
+
+from nemos.third_party.jaxopt import jaxopt
 
 from . import observation_models as obs
 from . import tree_utils, validation
@@ -1268,11 +1269,11 @@ class PopulationGLM(GLM):
     >>> weights = np.array([[ 0.5,  0. ], [-0.5, -0.5], [ 0. ,  1. ]])
     >>> y = np.random.poisson(np.exp(X.dot(weights)))
     >>> # Define a feature mask, shape (num_features, num_neurons)
-    >>> feature_mask = jnp.array([[1, 0], [1, 1], [0, 1]])
+    >>> feature_mask = np.array([[1, 0], [1, 1], [0, 1]])
     >>> feature_mask
-    Array([[1, 0],
+    array([[1, 0],
            [1, 1],
-           [0, 1]], dtype=int32)
+           [0, 1]])
     >>> # Create and fit the model
     >>> model = PopulationGLM(feature_mask=feature_mask).fit(X, y)
     >>> model
@@ -1296,7 +1297,10 @@ class PopulationGLM(GLM):
     >>> rate = np.exp(X["feature_1"].dot(weights["feature_1"]) + X["feature_2"].dot(weights["feature_2"]))
     >>> y = np.random.poisson(rate)
     >>> # Define a feature mask with arrays of shape (num_neurons, )
-    >>> feature_mask = FeaturePytree(feature_1=jnp.array([0, 1]), feature_2=jnp.array([1, 0]))
+    >>> feature_mask = FeaturePytree(
+    ...     feature_1=jnp.array([0, 1], dtype=jnp.int32),
+    ...     feature_2=jnp.array([1, 0], dtype=jnp.int32)
+    ... )
     >>> print(feature_mask)
     feature_1: shape (2,), dtype int32
     feature_2: shape (2,), dtype int32
@@ -1615,7 +1619,7 @@ class PopulationGLM(GLM):
         """
         return super().fit(X, y, init_params)
 
-    def _initialize_feature_mask(self, X, y):
+    def _initialize_feature_mask(self, X: FeaturePytree, y: jnp.ndarray):
         if self.feature_mask is None:
             # static checker does not realize conversion to ndarray happened in cast_to_jax.
             if isinstance(X, FeaturePytree):
