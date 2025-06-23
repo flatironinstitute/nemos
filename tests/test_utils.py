@@ -635,3 +635,18 @@ def test_shape_param_exclusion():
 
     obj = Example(a=np.arange(3), b=1, c=None)
     assert utils.format_repr(obj) == "Example(b=1, d=1)"
+
+
+def test_inspect_npz(tmp_path):
+    """
+    Save a GLM model with given observation model, call `inspect_npz`,
+    and verify that output contains key headers and fields.
+    """
+    file_path = tmp_path / f"test_model.npz"
+    model = nmo.glm.GLM(
+        regularizer="Ridge",
+        regularizer_strength=0.1,
+        solver_name="BFGS",
+    )
+    model.save_params(file_path)
+    nmo.inspect_npz(file_path)
