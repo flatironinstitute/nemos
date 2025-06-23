@@ -7,6 +7,7 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import DTypeLike, NDArray
 
+from . import utils
 from .pytrees import FeaturePytree
 from .tree_utils import get_valid_multitree, pytree_map_and_reduce
 
@@ -317,4 +318,113 @@ def _warn_if_not_float64(feature_matrix: Any, message: str):
         warnings.warn(
             message,
             UserWarning,
+        )
+
+
+def _check_basis_matrix_shape(basis_matrix):
+    basis_matrix = jnp.asarray(basis_matrix)
+    if not utils.check_dimensionality(basis_matrix, 2):
+        raise ValueError(
+            "basis_matrix must be a 2 dimensional array! "
+            f"{basis_matrix.ndim} dimensions provided instead."
+        )
+    if basis_matrix.shape[0] == 1:
+        raise ValueError("`basis_matrix.shape[0]` should be at least 2!")
+    return basis_matrix
+
+
+def _check_non_empty_inputs(time_series, basis_matrix):
+    utils.check_non_empty(basis_matrix, "basis_matrix")
+    utils.check_non_empty(time_series, "time_series")
+
+
+def _check_time_series_ndim(time_series, axis):
+    if not utils.pytree_map_and_reduce(lambda x: x.ndim > axis, all, time_series):
+        raise ValueError(
+            "`time_series` should contain arrays of at least one-dimension. "
+            "At least one 0-dimensional array provided."
+        )
+
+
+def _check_shift_causality_consistency(shift, predictor_causality):
+    """Check shift causality consistency."""
+    if shift and predictor_causality == "acausal":
+        raise ValueError(
+            "Cannot shift `predictor` when `predictor_causality` is `acausal`!"
+        )
+
+
+def _check_batch_size(batch_size, var_name):
+    """Check if ``batch_size`` is a positive integer."""
+    if batch_size is None:
+        return
+    elif not isinstance(batch_size, int) or batch_size < 1:
+        raise ValueError(
+            f"When provided ``{var_name}`` must be a strictly positive integer! "
+            f"``{batch_size}`` provided instead."
+        )
+
+
+def _check_trials_longer_than_time_window(
+    time_series: Any, window_size: int | Any, axis: int = 0
+):
+    """
+    Check if the duration of each trial in the time series is at least as long as the window size.
+
+    Parameters
+    ----------
+    time_series :
+        A pytree of trial data.
+    window_size :
+        The size of the window to be used in convolution. Either an int or a pytree with the same
+        struct as time_series.
+    axis :
+        The axis in the arrays representing the time dimension.
+
+    Raises
+    ------
+    ValueError
+        If any trial in the time series is shorter than the window size.
+    """
+    has_same_struct = jax.tree_util.tree_structure(
+        time_series
+    ) == jax.tree_util.tree_structure(window_size)
+    if has_same_struct:
+        insufficient_window_size = pytree_map_and_reduce(
+            lambda x, w: x.shape[axis] < w, any, time_series, window_size
+        )
+    else:
+        insufficient_window_size = pytree_map_and_reduce(
+            lambda x: x.shape[axis] < window_size, any, time_series
+        )
+    # Check window size
+    if insufficient_window_size:
+        raise ValueError(
+            "Insufficient trial duration. The number of time points in each trial must "
+            "be greater or equal to the window size."
+        )
+
+
+def _check_batch_size_larger_than_convolution_window(
+    batch_size: int | Any, window_size: int | Any
+):
+    """Check if the batch_size is larger than the window size."""
+    has_same_struct = jax.tree_util.tree_structure(
+        batch_size
+    ) == jax.tree_util.tree_structure(window_size)
+    if has_same_struct:
+        insufficient_window_size = pytree_map_and_reduce(
+            lambda x, w: x < w, any, batch_size, window_size
+        )
+    else:
+        insufficient_window_size = pytree_map_and_reduce(
+            lambda x: x < window_size, any, batch_size
+        )
+    if insufficient_window_size:
+        bs = jax.tree_util.tree_leaves(batch_size)[0]
+        ws = jax.tree_util.tree_leaves(window_size)[0]
+        raise ValueError(
+            "Batch size too small. Batch size must be larger than the convolution window size. "
+            f"The provided batch size is ``{bs}``, while the window size for the convolution is ``{ws}``. "
+            "Please increase the batch size."
         )

@@ -59,5 +59,3 @@ print(f"Design matrix shape: {X.shape}")
 # fit the glm
 model = nmo.glm.GLM().fit(X, counts)
 ```
-
-
