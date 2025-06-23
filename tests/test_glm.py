@@ -1672,7 +1672,7 @@ class TestGLMObservationModel:
                 elif y.ndim == 2:
                     norm = y.shape[0] * y.shape[1]
                 return (
-                    sm.families.NegativeBinomial(alpha=0.1).loglike(y, mean_firing)
+                    sm.families.NegativeBinomial(alpha=1.).loglike(y, mean_firing)
                     / norm
                 )
 
@@ -1751,7 +1751,7 @@ class TestGLMObservationModel:
             if "population" in glm_type:
                 return np.array([3, 2, 1])
             else:
-                return np.array([3])
+                return np.array([4])
 
         else:
             raise ValueError("Unknown model instantiation")
@@ -1801,9 +1801,9 @@ class TestGLMObservationModel:
 
         elif "negative_binomial":
             if "population" in glm_type:
-                return "PopulationGLM(\n    observation_model=NegativeBinomialObservations(inverse_link_function=exp, scale=0.1),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
+                return "PopulationGLM(\n    observation_model=NegativeBinomialObservations(inverse_link_function=exp, scale=1.0),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
             else:
-                return "GLM(\n    observation_model=NegativeBinomialObservations(inverse_link_function=exp, scale=0.1),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
+                return "GLM(\n    observation_model=NegativeBinomialObservations(inverse_link_function=exp, scale=1.0),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
 
         else:
             raise ValueError("Unknown model instantiation")

@@ -1134,7 +1134,7 @@ class TestNegativeBinomialObservations:
         observation_model = negative_binomial_observations()
         assert observation_model.get_params() == {
             "inverse_link_function": observation_model.inverse_link_function,
-            "scale": 0.1,
+            "scale": 1.,
         }
 
     def test_deviance_against_statsmodels(
@@ -1160,9 +1160,10 @@ class TestNegativeBinomialObservations:
 
     @pytest.mark.parametrize("score_type", ["pseudo-r2-Cohen", "pseudo-r2-McFadden"])
     def test_pseudo_r2_range(self, score_type, negativeBinomialGLM_model_instantiation):
-        _, y, model, _, firing_rate = negativeBinomialGLM_model_instantiation
+        X, y, model, params, _ = negativeBinomialGLM_model_instantiation
+        model.fit(X, y)
         pseudo_r2 = model.observation_model.pseudo_r2(
-            y, firing_rate, score_type=score_type
+            y, model.predict(X), score_type=score_type
         )
         if (pseudo_r2 > 1) or (pseudo_r2 < 0):
             raise ValueError(f"pseudo-r2 of {pseudo_r2} outside the [0,1] range!")
@@ -1216,7 +1217,7 @@ class TestNegativeBinomialObservations:
     @pytest.mark.parametrize(
         "scale, expectation",
         [
-            (1, does_not_raise()),
+            (0.1, does_not_raise()),
             (
                 "invalid",
                 pytest.raises(
@@ -1234,7 +1235,7 @@ class TestNegativeBinomialObservations:
 
     def test_scale_getter(self, negativeBinomialGLM_model_instantiation):
         _, _, model, _, _ = negativeBinomialGLM_model_instantiation
-        assert model.observation_model.scale == 0.1  # or your default value
+        assert model.observation_model.scale == 1  # or your default value
 
     def test_non_differentiable_inverse_link(
         self, negativeBinomialGLM_model_instantiation
@@ -1330,5 +1331,5 @@ class TestNegativeBinomialObservations:
         )
         assert (
             repr(obs)
-            == f"NegativeBinomialObservations(inverse_link_function={link_func_name}, scale=0.1)"
+            == f"NegativeBinomialObservations(inverse_link_function={link_func_name}, scale=1.0)"
         )

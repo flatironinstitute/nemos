@@ -978,7 +978,7 @@ def negativeBinomialGLM_model_instantiation_pytree(
         dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
         true_params[1],
     )
-    model_tree = nmo.glm.GLM(model.observation_model, model.regularizer)
+    model_tree = nmo.glm.GLM(model.observation_model, model.regularizer, solver_name="LBFGS")
     return X_tree, np.random.poisson(rate), model_tree, true_params_tree, rate
 
 
@@ -1007,7 +1007,7 @@ def population_negativeBinomialGLM_model_instantiation():
     )
     regularizer = nmo.regularizer.UnRegularized()
     model = nmo.glm.PopulationGLM(
-        observation_model=observation_model, regularizer=regularizer
+        observation_model=observation_model, regularizer=regularizer, solver_name="LBFGS"
     )
     rate = jnp.exp(jnp.einsum("ki,tk->ti", w_true, X) + b_true)
     return X, np.random.poisson(rate), model, (w_true, b_true), rate
@@ -1040,6 +1040,6 @@ def population_negativeBinomialGLM_model_instantiation_pytree(
         true_params[1],
     )
     model_tree = nmo.glm.PopulationGLM(
-        observation_model=model.observation_model, regularizer=model.regularizer
+        observation_model=model.observation_model, regularizer=model.regularizer, solver_name="LBFGS"
     )
     return X_tree, np.random.poisson(rate), model_tree, true_params_tree, rate

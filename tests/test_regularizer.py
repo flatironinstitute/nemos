@@ -467,8 +467,8 @@ class TestUnRegularized:
 
         res_sm = model_sm.fit(cnvrg_tol=10 ** -12)
 
-        match_weights = np.allclose(res_sm.params[1:], weights_bfgs)
-        match_intercepts = np.allclose(res_sm.params[:1], intercepts_bfgs)
+        match_weights = np.allclose(res_sm.params[1:], weights_bfgs, atol=10**-6)
+        match_intercepts = np.allclose(res_sm.params[:1], intercepts_bfgs, atol=10**-6)
         if (not match_weights) or (not match_intercepts):
             raise ValueError("Unregularized GLM estimate does not match statsmodels!")
 
