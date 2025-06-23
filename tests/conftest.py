@@ -1003,7 +1003,7 @@ def population_negativeBinomialGLM_model_instantiation():
     b_true = -2 * np.ones((3,))
     w_true = np.random.normal(size=(5, 3))
     observation_model = nmo.observation_models.NegativeBinomialObservations(
-        jax.nn.softplus
+        jax.numpy.exp
     )
     regularizer = nmo.regularizer.UnRegularized()
     model = nmo.glm.PopulationGLM(
