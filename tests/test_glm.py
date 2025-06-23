@@ -32,7 +32,7 @@ OBSERVATION_MODEL_EXTRA_PARAMS_NAMES = {
     "BernoulliObservations": {},
     "NegativeBinomialObservations": {"observation_model__scale"},
 }
-POPULATIONGLM_EXTRA_PARAMS = {"feature_mask"}
+POPULATION_GLM_EXTRA_PARAMS = {"feature_mask"}
 
 
 def convert_to_nap(arr, t):
@@ -1801,9 +1801,9 @@ class TestGLMObservationModel:
 
         elif "negative_binomial":
             if "population" in glm_type:
-                return "PopulationGLM(\n    observation_model=NegativeBinomialObservations(inverse_link_function=exp, scale=1.0),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
+                return "PopulationGLM(\n    observation_model=NegativeBinomialObservations(inverse_link_function=exp, scale=1.0),\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
             else:
-                return "GLM(\n    observation_model=NegativeBinomialObservations(inverse_link_function=exp, scale=1.0),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
+                return "GLM(\n    observation_model=NegativeBinomialObservations(inverse_link_function=exp, scale=1.0),\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
 
         else:
             raise ValueError("Unknown model instantiation")
@@ -1855,7 +1855,7 @@ class TestGLMObservationModel:
                 OBSERVATION_MODEL_EXTRA_PARAMS_NAMES[
                     model.observation_model.__class__.__name__
                 ]
-            ).union(POPULATIONGLM_EXTRA_PARAMS)
+            ).union(POPULATION_GLM_EXTRA_PARAMS)
 
             def get_expected_values(model):
                 if isinstance(model.observation_model, NegativeBinomialObservations):
