@@ -1407,10 +1407,11 @@ class NegativeBinomialObservations(Observations):
         dof_resid: Union[float, jnp.ndarray],
     ) -> Union[float, jnp.ndarray]:
         r"""
-        Assign 1 to the scale parameter of the Bernoulli model.
+        Return the scale parameter of the distribution.
 
-        For the Binomial exponential family distribution (to which the Bernoulli belongs), the scale parameter
-        :math:`\phi` is always 1.
+        The `scale` parameter of this distribution is set at initialization and
+        affect the likelihood landscape. This implies that the `scale`
+        parameter cannot be estimated post-hoc without re-fitting a model.
 
         Parameters
         ----------
@@ -1422,5 +1423,4 @@ class NegativeBinomialObservations(Observations):
         dof_resid :
             The DOF of the residuals.
         """
-        resid = y - predicted_rate
-        return ((resid**2 / predicted_rate - 1) / predicted_rate).sum() / dof_resid
+        return self.scale

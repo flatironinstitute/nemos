@@ -978,7 +978,9 @@ def negativeBinomialGLM_model_instantiation_pytree(
         dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
         true_params[1],
     )
-    model_tree = nmo.glm.GLM(model.observation_model, model.regularizer, solver_name="LBFGS")
+    model_tree = nmo.glm.GLM(
+        model.observation_model, model.regularizer, solver_name="LBFGS"
+    )
     return X_tree, np.random.poisson(rate), model_tree, true_params_tree, rate
 
 
@@ -1001,16 +1003,19 @@ def population_negativeBinomialGLM_model_instantiation():
     np.random.seed(123)
     X = np.random.normal(size=(500, 5))
     b_true = -2 * np.ones((3,))
-    w_true = np.random.normal(size=(5, 3))
+    w_true = 0.1 * np.random.normal(size=(5, 3))
     observation_model = nmo.observation_models.NegativeBinomialObservations(
         jax.numpy.exp
     )
     regularizer = nmo.regularizer.UnRegularized()
     model = nmo.glm.PopulationGLM(
-        observation_model=observation_model, regularizer=regularizer, solver_name="LBFGS"
+        observation_model=observation_model,
+        regularizer=regularizer,
+        solver_name="LBFGS",
     )
     rate = jnp.exp(jnp.einsum("ki,tk->ti", w_true, X) + b_true)
-    return X, np.random.poisson(rate), model, (w_true, b_true), rate
+    spikes = model.observation_model.sample_generator(jax.random.PRNGKey(123), rate)
+    return X, spikes, model, (w_true, b_true), rate
 
 
 @pytest.fixture
@@ -1040,6 +1045,8 @@ def population_negativeBinomialGLM_model_instantiation_pytree(
         true_params[1],
     )
     model_tree = nmo.glm.PopulationGLM(
-        observation_model=model.observation_model, regularizer=model.regularizer, solver_name="LBFGS"
+        observation_model=model.observation_model,
+        regularizer=model.regularizer,
+        solver_name="LBFGS",
     )
     return X_tree, np.random.poisson(rate), model_tree, true_params_tree, rate

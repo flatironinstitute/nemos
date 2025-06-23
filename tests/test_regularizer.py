@@ -444,7 +444,11 @@ class TestUnRegularized:
     )
     @pytest.mark.parametrize("solver_name", ["LBFGS", "SVRG"])
     def test_solver_match_statsmodels_negative_binomial(
-            self, inv_link_jax, link_sm, negativeBinomialGLM_model_instantiation, solver_name
+        self,
+        inv_link_jax,
+        link_sm,
+        negativeBinomialGLM_model_instantiation,
+        solver_name,
     ):
         """Test that different solvers converge to the same solution."""
         jax.config.update("jax_enable_x64", True)
@@ -454,18 +458,20 @@ class TestUnRegularized:
         model.observation_model.inverse_link_function = inv_link_jax
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
-        model.solver_kwargs = {"tol": 10 ** -13}
+        model.solver_kwargs = {"tol": 10**-13}
         model.instantiate_solver()
         weights_bfgs, intercepts_bfgs = model.solver_run(
             model._initialize_parameters(X, y), X, y
         )[0]
         model_sm = sm.GLM(
-            endog=y, exog=sm.add_constant(X), family=sm.families.NegativeBinomial(
+            endog=y,
+            exog=sm.add_constant(X),
+            family=sm.families.NegativeBinomial(
                 link=link_sm, alpha=model.observation_model.scale
-            )
+            ),
         )
 
-        res_sm = model_sm.fit(cnvrg_tol=10 ** -12)
+        res_sm = model_sm.fit(cnvrg_tol=10**-12)
 
         match_weights = np.allclose(res_sm.params[1:], weights_bfgs, atol=10**-6)
         match_intercepts = np.allclose(res_sm.params[:1], intercepts_bfgs, atol=10**-6)

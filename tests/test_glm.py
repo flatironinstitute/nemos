@@ -1,6 +1,7 @@
 import inspect
 import warnings
 from contextlib import nullcontext as does_not_raise
+from copy import deepcopy
 from typing import Callable
 
 import jax
@@ -1672,7 +1673,7 @@ class TestGLMObservationModel:
                 elif y.ndim == 2:
                     norm = y.shape[0] * y.shape[1]
                 return (
-                    sm.families.NegativeBinomial(alpha=1.).loglike(y, mean_firing)
+                    sm.families.NegativeBinomial(alpha=1.0).loglike(y, mean_firing)
                     / norm
                 )
 
@@ -1719,7 +1720,7 @@ class TestGLMObservationModel:
             return 0.1
 
         elif "negativeBinomial" in model_instantiation:
-            return 0.1
+            return 0.01
 
         else:
             raise ValueError("Unknown model instantiation")
@@ -1749,9 +1750,9 @@ class TestGLMObservationModel:
 
         elif "negativeBinomial" in model_instantiation:
             if "population" in glm_type:
-                return np.array([3, 2, 1])
+                return np.array([3, 2, 4])
             else:
-                return np.array([4])
+                return np.array([5])
 
         else:
             raise ValueError("Unknown model instantiation")
@@ -2170,22 +2171,35 @@ class TestGLMObservationModel:
         self, batch_size, request, glm_type, model_instantiation
     ):
         """Test that jit compilation does not affect the update in the presence of nans."""
+        jax.config.update("jax_enable_x64", True)
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
         params = model.initialize_params(X, y)
         state = model.initialize_state(X, y, params)
-
         # extract batch and add nans
         Xnan = X[:batch_size]
         Xnan[: batch_size // 2] = np.nan
 
-        jit_update, _ = model.update(params, state, Xnan, y[:batch_size])
+        # run 3 iterations
+        tot_iter = 3
+        jit_update = deepcopy(params)
+        jit_state = deepcopy(state)
+        for _ in range(tot_iter):
+            jit_update, jit_state = model.update(
+                jit_update, jit_state, Xnan, y[:batch_size]
+            )
         # make sure there is an update
         assert any(~jnp.allclose(p0, jit_update[k]) for k, p0 in enumerate(params))
+
         # update without jitting
+        nojit_update = deepcopy(params)
+        nojit_state = deepcopy(state)
         with jax.disable_jit(True):
-            nojit_update, _ = model.update(params, state, Xnan, y[:batch_size])
+            for _ in range(tot_iter):
+                nojit_update, nojit_state = model.update(
+                    nojit_update, nojit_state, Xnan, y[:batch_size]
+                )
         # check for equivalence update
         assert all(jnp.allclose(p0, jit_update[k]) for k, p0 in enumerate(nojit_update))
 
@@ -3249,10 +3263,9 @@ class TestNegativeBinomialGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
-        # not stable enough for accellerated GD
-        model.solver_name = "LBFGS"
+        # intialize to true params
         model.observation_model.inverse_link_function = inv_link
-        model.fit(X, y)
+        model.fit(X, y, init_params=true_params)
 
     def test_score_glm(self, inv_link, request, glm_type, model_instantiation):
         """

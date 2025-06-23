@@ -1134,7 +1134,7 @@ class TestNegativeBinomialObservations:
         observation_model = negative_binomial_observations()
         assert observation_model.get_params() == {
             "inverse_link_function": observation_model.inverse_link_function,
-            "scale": 1.,
+            "scale": 1.0,
         }
 
     def test_deviance_against_statsmodels(
