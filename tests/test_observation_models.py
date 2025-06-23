@@ -11,6 +11,7 @@ import statsmodels.api as sm
 from numba import njit
 
 import nemos as nmo
+from nemos._observation_model_builder import instantiate_observation_model
 
 
 @pytest.fixture()
@@ -54,6 +55,9 @@ def test_glm_instantiation_from_string_at_init(
         ("Poisson", does_not_raise()),
         ("Gamma", does_not_raise()),
         ("Bernoulli", does_not_raise()),
+        ("nemos.observation_models.PoissonObservations", does_not_raise()),
+        ("nemos.observation_models.GammaObservations", does_not_raise()),
+        ("nemos.observation_models.BernoulliObservations", does_not_raise()),
         (
             "invalid",
             pytest.raises(ValueError, match="Unknown observation model: invalid"),
@@ -70,17 +74,52 @@ def test_glm_setter_observation_model(obs_model_string, glm_class, expectation):
     model = glm_class(observation_model=obs)
     with expectation:
         model.observation_model = obs_model_string
-    if obs_model_string == "Gamma":
+    if (
+        obs_model_string == "Gamma"
+        or obs_model_string == "nemos.observation_models.GammaObservations"
+    ):
         assert isinstance(
             model.observation_model, nmo.observation_models.GammaObservations
         )
-    elif obs_model_string == "Poisson":
+    elif (
+        obs_model_string == "Poisson"
+        or obs_model_string == "nemos.observation_models.PoissonObservations"
+    ):
         assert isinstance(
             model.observation_model, nmo.observation_models.PoissonObservations
         )
-    elif obs_model_string == "Bernoulli":
+    elif (
+        obs_model_string == "Bernoulli"
+        or obs_model_string == "nemos.observation_models.BernoulliObservations"
+    ):
         assert isinstance(
             model.observation_model, nmo.observation_models.BernoulliObservations
+        )
+
+
+@pytest.mark.parametrize(
+    "link_func_string, expectation",
+    [
+        ("jax.numpy.exp", does_not_raise()),
+        ("jax.nn.softplus", does_not_raise()),
+        ("jax.lax.logistic", does_not_raise()),
+        ("invalid", pytest.raises(ValueError, match="Unknown link function")),
+    ],
+)
+@pytest.mark.parametrize(
+    "obs_model_string",
+    [
+        "Poisson",
+        "Gamma",
+        "Bernoulli",
+    ],
+)
+def test_instantiate_observation_model(link_func_string, obs_model_string, expectation):
+    """Test instantiation of observation model with a link function."""
+    with expectation:
+        obs_model = instantiate_observation_model(
+            obs_model_string,
+            inverse_link_function=link_func_string,
         )
 
 
