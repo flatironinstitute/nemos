@@ -945,13 +945,13 @@ def negativeBinomialGLM_model_instantiation():
     X = np.random.normal(size=(100, 5))
     b_true = np.zeros((1,))
     w_true = np.random.normal(size=(5,))
-    observation_model = nmo.observation_models.NegativeBinomialObservations(
-        jax.nn.softplus
-    )
+    observation_model = nmo.observation_models.NegativeBinomialObservations()
     regularizer = nmo.regularizer.UnRegularized()
-    model = nmo.glm.GLM(observation_model, regularizer)
+    model = nmo.glm.GLM(observation_model, regularizer, solver_name="LBFGS")
     rate = jax.numpy.exp(jax.numpy.einsum("k,tk->t", w_true, X) + b_true)
-    return X, np.random.poisson(rate), model, (w_true, b_true), rate
+    r = 1 / model.observation_model.scale
+    spikes = np.random.poisson(np.random.gamma(shape=r, size=rate.shape) * (r / rate))
+    return X, spikes, model, (w_true, b_true), rate
 
 
 @pytest.fixture
