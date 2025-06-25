@@ -313,7 +313,7 @@ def create_convolutional_predictor(
     two_layer = jax.tree_util.tree_map(_list_epochs, flat_tree)
 
     # check trial size (after splitting)
-    utils.check_trials_longer_than_time_window(two_layer, basis_matrix.shape[0], axis)
+    utils._check_trials_longer_than_time_window(two_layer, basis_matrix.shape[0], axis)
 
     # convert to array
     two_layer = jax.tree_util.tree_map(jnp.asarray, two_layer)

@@ -15,21 +15,21 @@ from .tree_utils import pytree_map_and_reduce
 from .type_casting import is_numpy_array_like, support_pynapple
 
 __all__ = [
-    "check_dimensionality",
-    "validate_axis",
-    "check_non_empty",
-    # "check_trials_longer_than_time_window",
-    "nan_pad",
-    "shift_time_series",
-    "row_wise_kron",
-    "assert_has_attribute",
-    "assert_is_callable",
-    "assert_returns_ndarray",
-    "assert_differentiable",
-    "assert_preserve_shape",
-    "assert_scalar_func",
-    "format_repr",
-    "one_over_x",
+    # "check_dimensionality",
+    # "validate_axis",
+    # "check_non_empty",
+    "_check_trials_longer_than_time_window",
+    # "nan_pad",
+    # "shift_time_series",
+    # "row_wise_kron",
+    # "assert_has_attribute",
+    # "assert_is_callable",
+    # "assert_returns_ndarray",
+    # "assert_differentiable",
+    # "assert_preserve_shape",
+    # "assert_scalar_func",
+    # "format_repr",
+    # "one_over_x",
 ]
 
 
@@ -120,7 +120,7 @@ def check_non_empty(pytree: Any, pytree_name: str):
         )
 
 
-def check_trials_longer_than_time_window(
+def _check_trials_longer_than_time_window(
     time_series: Any, window_size: int, axis: int = 0
 ):
     """
