@@ -180,37 +180,37 @@ tree_sub.__doc__ = "Tree subtraction."
 def tree_scalar_mul(scalar, tree_x):
     """
     Compute scalar * tree_x.
-    
+
     Parameters
     ----------
     scalar :
         A scalar multiplier applied to each element of tree_x.
-    tree_x : 
+    tree_x :
         A pytree with leaves as NDArrays.
-    
+
     Returns
     -------
     Any
         A pytree with the same structure as tree_x, where each leaf is computed as:
         scalar * tree_x.
     """
-    
+
     return jax.tree_util.tree_map(lambda x: scalar * x, tree_x)
 
 
 def tree_add_scalar_mul(tree_x, scalar, tree_y):
     """
     Compute tree_x + scalar * tree_y.
-    
+
     Parameters
     ----------
-    tree_x : 
+    tree_x :
         A pytree with leaves as NDArrays.
     scalar :
         A scalar multiplier applied to each element of tree_y.
-    tree_y : 
+    tree_y :
         A pytree with the same structure as tree_x.
-    
+
     Returns
     -------
     Any
@@ -228,7 +228,7 @@ def tree_sum(tree_x):
     ----------
     tree_x : Any
         A pytree with leaves as NDArrays.
-    
+
     Returns
     -------
     scalar:
@@ -267,12 +267,12 @@ def tree_l2_norm(tree_x: Any, squared=False):
         return sqnorm
     else:
         return jnp.sqrt(sqnorm)
-    
+
 
 def tree_zeros_like(tree_x: Any):
     """
     Create an all-zero tree with the same structure as tree_x.
-    
+
     Parameters
     ----------
     tree_x :
