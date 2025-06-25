@@ -8,7 +8,7 @@ dynamic = ["version"]
 authors = [{name = "nemos authors"}]
 description = "NEural MOdelS, a statistical modeling framework for neuroscience."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 keywords = ["neuroscience", "Poisson-GLM"]
 license = { file = "LICENSE" }
 classifiers = [
@@ -98,7 +98,7 @@ examples = [
 
 
 [tool.black]
-target-version = ['py310', 'py311', 'py312']
+target-version = ['py39', 'py310', 'py311', 'py312']
 skip-string-normalization = false
 exclude = '''
 (
