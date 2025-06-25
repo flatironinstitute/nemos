@@ -2748,3 +2748,19 @@ class FourierConv(ConvBasisMixin, FourierBasis):
         """
         # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
+
+    def _shift_angles(self, sample_pts: NDArray) -> NDArray:
+        """
+        Shift angles to match Fourier coefficients when basis is convolved.
+
+        Parameters
+        ----------
+        sample_pts:
+            The original sample points.
+
+        Returns
+        -------
+        :
+            The angle shifted sample points.
+        """
+        return sample_pts * (1.0 - 1.0 / sample_pts.shape[0])

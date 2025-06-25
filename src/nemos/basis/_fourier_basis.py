@@ -95,7 +95,7 @@ class FourierBasis(Basis, AtomicBasisMixin, abc.ABC):
             np.copy(sample_pts), getattr(self, "bounds", None)
         )[0]
         # first sample in 0, last sample in 2 pi - 2 pi / n_samples.
-        sample_pts *= 2 * np.pi * (1.0 - 1.0 / sample_pts.shape[0])
+        sample_pts = 2 * np.pi * self._shift_angles(sample_pts)
 
         # reshape samples
         shape = sample_pts.shape
@@ -173,3 +173,24 @@ class FourierBasis(Basis, AtomicBasisMixin, abc.ABC):
                 f"Object class {self.__class__.__name__} requires >= 1 basis elements. "
                 f"{self.n_basis_funcs} basis elements specified instead"
             )
+
+    def _shift_angles(self, sample_pts: ArrayLike) -> ArrayLike:
+        """
+        Shift angles.
+
+        Reimplemented for ``FourierConv``, shifting the angles to
+        match the Fourier coefficients when the basis is used for convolutions.
+        This shift must not be applied for ``FourierEval`` basis, therefore the
+        super-class implements an identity function.
+
+        Parameters
+        ----------
+        sample_pts :
+            The samples.
+
+        Returns
+        -------
+        sample_pts :
+            The samples as provided, identity function.
+        """
+        return sample_pts
