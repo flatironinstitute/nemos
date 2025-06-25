@@ -1527,7 +1527,7 @@ class TestSharedMethods:
         bas = instantiate_atomic_basis(
             cls,
             n_basis_funcs=n_basis,
-            window_size=2*n_basis+1,
+            window_size=2 * n_basis + 1,
             **extra_decay_rates(cls, n_basis),
         )
         if isinstance(bas, IdentityEval):
@@ -1774,7 +1774,7 @@ class TestSharedMethods:
         out = instantiate_atomic_basis(
             cls,
             n_basis_funcs=n_basis,
-            window_size=2*n_basis+1,
+            window_size=2 * n_basis + 1,
             **extra_decay_rates(cls, n_basis),
         ).compute_features(inp)
         assert isinstance(out, nap.TsdFrame)
@@ -5628,8 +5628,10 @@ def test_multi_epoch_pynapple_basis(
         nbasis = 5
 
     if window_size < 11 and issubclass(basis_cls, basis.FourierBasis):
-        pytest.skip("Fourier basis needs a window size of at least 11, i.e. 2 * n_basis_func + 1. "
-                    f"Skipping for `window_size` {window_size}")
+        pytest.skip(
+            "Fourier basis needs a window size of at least 11, i.e. 2 * n_basis_func + 1. "
+            f"Skipping for `window_size` {window_size}"
+        )
 
     bas = CombinedBasis().instantiate_basis(
         nbasis,
@@ -5703,8 +5705,10 @@ def test_multi_epoch_pynapple_basis_transformer(
         nbasis = 5
 
     if window_size < 11 and issubclass(basis_cls, basis.FourierBasis):
-        pytest.skip("Fourier basis needs a window size of at least 11, i.e. 2 * n_basis_func + 1. "
-                    f"Skipping for `window_size` {window_size}")
+        pytest.skip(
+            "Fourier basis needs a window size of at least 11, i.e. 2 * n_basis_func + 1. "
+            f"Skipping for `window_size` {window_size}"
+        )
 
     bas = CombinedBasis().instantiate_basis(
         nbasis,
