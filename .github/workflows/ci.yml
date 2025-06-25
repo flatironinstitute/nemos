@@ -67,7 +67,7 @@ jobs:
           pip install flake8
 
       - name: Run linters
-        run: flake8 --config={toxinidir}/tox.ini src
+        run: flake8 --config=tox.ini src
 #          pip install tox
 #
 #      - name: Run tox
