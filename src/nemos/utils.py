@@ -18,7 +18,7 @@ __all__ = [
     "check_dimensionality",
     "validate_axis",
     "check_non_empty",
-    "check_trials_longer_than_time_window",
+    # "check_trials_longer_than_time_window",
     "nan_pad",
     "shift_time_series",
     "row_wise_kron",
