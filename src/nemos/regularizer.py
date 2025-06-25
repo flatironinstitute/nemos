@@ -7,8 +7,7 @@ with various optimization methods, and they can be applied depending on the mode
 """
 
 import abc
-from typing import Callable, Tuple, Union, Any, Optional
-from .typing import DESIGN_INPUT_TYPE
+from typing import Any, Callable, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -360,6 +359,23 @@ class Lasso(Regularizer):
             l1reg: float,
             scaling: float = 1.0,
         ) -> Any:
+            """
+            Apply the Lasso proximal operator to the parameters.
+
+            Parameters
+            ----------
+            params :
+                Tuple containing the parameters.
+            l1reg :
+                Float indicating the L1 regularization term.
+            scaling :
+                Float indicating the scaling factor for the regularization.
+
+            Returns
+            -------
+            :
+                Tuple containing the regularized weights and the original intercept.
+            """
             Ws, bs = params
             l1reg /= bs.shape[0]
             # if Ws is a pytree, l1reg needs to be a pytree with the same
@@ -380,6 +396,8 @@ class Lasso(Regularizer):
         ----------
         params :
             Model parameters for which to compute the penalization.
+        regularizer_strength :
+            Float indicating the regularization strength.
 
         Returns
         -------
@@ -388,6 +406,21 @@ class Lasso(Regularizer):
         """
 
         def l1_penalty(coeff: jnp.ndarray, intercept: jnp.ndarray) -> jnp.ndarray:
+            """
+            Compute the L1 penalty for the coefficients and intercept.
+
+            Parameters
+            ----------
+            coeff :
+                Coefficients of the model.
+            intercept :
+                Intercept of the model.
+
+            Returns
+            -------
+            :
+                The L1 penalty value, scaled by the regularization strength.
+            """
             return regularizer_strength * jnp.sum(jnp.abs(coeff)) / intercept.shape[0]
 
         # tree map the computation and sum over leaves
@@ -396,7 +429,21 @@ class Lasso(Regularizer):
         )
 
     def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
-        """Return a function for calculating the penalized loss using Lasso regularization."""
+        """
+        Return a function for calculating the penalized loss using Lasso regularization.
+
+        Parameters
+        ----------
+        loss :
+            Callable loss function.
+        regularizer_strength :
+            Float indicating the regularization strength.
+
+        Returns
+        -------
+        :
+            A function that computes the loss with Lasso regularization applied.
+        """
 
         def _penalized_loss(
             params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
@@ -415,7 +462,7 @@ class GroupLasso(Regularizer):
     This class equips models with the group-lasso proximal operator and the
     group-lasso penalized loss function.
 
-    Attributes
+    Parameters
     ----------
     mask :
         A 2d mask array indicating groups of features for regularization, shape ``(num_groups, num_features)``.
@@ -465,12 +512,27 @@ class GroupLasso(Regularizer):
 
     @property
     def mask(self) -> Union[jnp.ndarray, None]:
-        """Getter for the mask attribute."""
+        """
+        Getter for the mask attribute.
+
+        Returns
+        -------
+        :
+            An array representing the mask for group lasso regularization.
+            If not set, returns None.
+        """
         return self._mask
 
     @mask.setter
     def mask(self, mask: Union[jnp.ndarray, None]):
-        """Setter for the mask attribute."""
+        """
+        Setter for the mask attribute.
+
+        Parameters
+        ----------
+        mask :
+            An array representing the mask for group lasso regularization.
+        """
         # check mask if passed by user, else will be initialized later
         if mask is not None:
             self._check_mask(mask)
@@ -487,6 +549,11 @@ class GroupLasso(Regularizer):
         - Each feature should belong to only one group.
         - The mask should not be empty.
         - The mask is an array of float type.
+
+        Parameters
+        ----------
+        mask :
+            The mask array to validate.
 
         Raises
         ------
@@ -534,6 +601,18 @@ class GroupLasso(Regularizer):
 
         where :math:`g` is the number of groups, :math:`\dim(\cdot)` is the dimension of the vector,
         i.e. the number of coefficient in each :math:`\beta_j`, and :math:`||\cdot||_2` is the euclidean norm.
+
+        Parameters
+        ----------
+        params :
+            Model parameters for which to compute the penalization.
+        regularizer_strength :
+            Float indicating the regularization strength.
+
+        Returns
+        -------
+        float
+            The penalization value.
         """
         # conform to shape (1, n_features) if param is (n_features,) or (n_neurons, n_features) if
         # param is (n_features, n_neurons)
@@ -558,7 +637,21 @@ class GroupLasso(Regularizer):
         return penalty * regularizer_strength
 
     def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
-        """Return a function for calculating the penalized loss using Group Lasso regularization."""
+        """
+        Return a function for calculating the penalized loss using Group Lasso regularization.
+
+        Parameters
+        ----------
+        loss :
+            Callable loss function.
+        regularizer_strength :
+            Float the indicates the regularization strength.
+
+        Returns
+        -------
+        :
+            A function that computes the loss with Group Lasso regularization applied.
+        """
 
         def _penalized_loss(
             params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
@@ -587,6 +680,24 @@ class GroupLasso(Regularizer):
             regularizer_strength: float,
             scaling: float = 1.0,
         ) -> Tuple[jnp.ndarray, jnp.ndarray]:
+            """
+            Apply the Group Lasso proximal operator to the parameters.
+
+            Parameters
+            ----------
+            params :
+                Tuple containing the parameters of the model.
+            regularizer_strength :
+                Float indicating the Group Lasso regularization strength.
+            scaling :
+                Float indicating the scaling factor for the regularization (default is 1.0).
+
+            Returns
+            -------
+            :
+                Tuple containing the regularized weights and the original intercept.
+            """
+
             return prox_group_lasso(
                 params, regularizer_strength, mask=self.mask, scaling=scaling
             )
