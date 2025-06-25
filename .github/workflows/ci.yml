@@ -17,7 +17,7 @@ on:
     branches:
       - main
 
-#jobs:
+jobs:
 #  tox_tests:
 #    if: ${{ !github.event.pull_request.draft }}
 #    strategy:
