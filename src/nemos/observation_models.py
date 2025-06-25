@@ -1174,8 +1174,7 @@ class NegativeBinomialObservations(Observations):
     This model represents a Negative Binomial distribution commonly used to model overdispersed
     count data (i.e., data where the variance exceeds the mean), which cannot be captured by a
     standard Poisson model. The distribution is parameterized by the predicted mean rate
-    (:math:`\mu`) and a fixed dispersion parameter (:math:`\phi`),
-    also referred to as the "scale" of the model.
+    (:math:`\mu`) and a fixed dispersion parameter (:math:`\phi`) or "scale" of the model.
 
     The variance of the Negative Binomial distribution under this parameterization is:
 
@@ -1186,7 +1185,8 @@ class NegativeBinomialObservations(Observations):
     where :math:`\mu` is the predicted mean, and :math:`\phi` is the dispersion parameter. This
     formulation corresponds to the Negative Binomial as a Gamma–Poisson mixture.
 
-    The scale parameter φ is related to the canonical Negative Binomial shape parameter `r` as:
+    The scale parameter :math:`\phi` is related to the canonical Negative Binomial
+    shape parameter `r` as:
 
     .. math::
 
@@ -1203,8 +1203,8 @@ class NegativeBinomialObservations(Observations):
         For count data, this is typically `jax.numpy.exp` or `jax.nn.softplus`.
     scale :
         The dispersion parameter φ. Lower values correspond to lower overdispersion, and as
-        φ → 0, the model behaves like a Poisson. The shape parameter of the Negative Binomial is
-        given by `r = 1 / scale`. If not provided, it will be
+        :math:`\phi` → 0, the model behaves like a Poisson. The shape parameter of
+        the Negative Binomial is given by `r = 1 / scale`.
     """
 
     def __init__(
@@ -1223,7 +1223,8 @@ class NegativeBinomialObservations(Observations):
     ) -> jnp.ndarray:
         r"""Compute the Negative Binomial negative log-likelihood.
 
-        This computes the Negative Binomial negative log-likelihood of the predicted mean rate for the observed counts.
+        This computes the Negative Binomial negative log-likelihood of the
+        predicted mean rate for the observed counts.
 
         Parameters
         ----------
@@ -1272,7 +1273,8 @@ class NegativeBinomialObservations(Observations):
     ):
         r"""Compute the Negative Binomial log-likelihood.
 
-        This computes the Negative Binomial log-likelihood of the predicted mean rate for the observed counts.
+        This computes the Negative Binomial log-likelihood of the predicted mean
+        rate for the observed counts.
 
         Parameters
         ----------
