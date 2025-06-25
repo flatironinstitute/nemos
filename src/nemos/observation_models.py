@@ -1409,18 +1409,25 @@ class NegativeBinomialObservations(Observations):
         r"""
         Return the scale parameter of the distribution.
 
-        The `scale` parameter of this distribution is set at initialization and
-        affect the likelihood landscape. This implies that the `scale`
-        parameter cannot be estimated post-hoc without re-fitting a model.
+        The `scale` parameter of the Negative Binomial distribution is set
+        at initialization and affect the likelihood landscape. This implies
+        that the `scale` parameter cannot be estimated post-hoc without
+        re-fitting a model.
 
         Parameters
         ----------
         y :
             Observed spike counts.
         predicted_rate :
-            The predicted rate values (success probabilities). This is not used in the Bernoulli model for estimating
-            scale, but is retained for compatibility with the abstract method signature.
+            The predicted mean of the distribution.
         dof_resid :
             The DOF of the residuals.
+
+        Notes
+        -----
+        NeMoS currently does not support joint estimation of scale and mean for the negative binomial.
+        For alternatives, see the R package MASS
+        `glm.nb <https://www.rdocumentation.org/packages/MASS/versions/7.3-65/topics/glm.nb>`_
+        for more details.
         """
         return self.scale
