@@ -1194,8 +1194,6 @@ class GLM(BaseRegressor):
         solver_name: BFGS
         >>> # Save the model parameters to a file
         >>> model.save_params("model_params.npz")
-        >>> # Initialize a default GLM
-        >>> model = nmo.glm.GLM()
         >>> # Load the model from the saved file
         >>> model = nmo.load_model("model_params.npz")
         >>> # Model has the same parameters before and after load

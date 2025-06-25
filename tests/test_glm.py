@@ -1623,21 +1623,26 @@ class TestGLM:
             "ProxSVRG",
         ],
     )
+    @pytest.mark.parametrize(
+        "model_class",
+        [
+            nmo.glm.GLM,
+            nmo.glm.PopulationGLM,
+        ],
+    )
     def test_save_and_load(
         self,
         regularizer,
         obs_model,
         solver_name,
         tmp_path,
-        request,
         glm_class_type,
-        model_instantiation_type,
+        model_class,
     ):
         """
         Test saving and loading a model with various observation models and regularizers.
         Ensure all parameters are preserved.
         """
-
         if (
             regularizer == "Lasso"
             or regularizer == "GroupLasso"
@@ -1647,16 +1652,20 @@ class TestGLM:
                 f"Skipping {solver_name} for Lasso type regularizer; not an approximate solver."
             )
 
-        _, _, model, _, _ = request.getfixturevalue(model_instantiation_type)
-
-        model.set_params(
+        model = model_class(
             observation_model=obs_model,
             solver_name=solver_name,
             regularizer=regularizer,
             regularizer_strength=2.0,
         )
 
+        model.coef_ = jnp.zeros((10, 5))
+        model.intercept_ = jnp.zeros((5,))
+
         initial_params = model.get_params()
+        initial_fit_params = model._get_coef_and_intercept()
+        initial_params["coef_"] = initial_fit_params[0]
+        initial_params["intercept_"] = initial_fit_params[1]
 
         # Save
         save_path = tmp_path / "test_model.npz"
@@ -1665,6 +1674,9 @@ class TestGLM:
         # Load
         loaded_model = nmo.load_model(save_path)
         loaded_params = loaded_model.get_params()
+        loaded_fit_params = loaded_model._get_coef_and_intercept()
+        loaded_params["coef_"] = loaded_fit_params[0]
+        loaded_params["intercept_"] = loaded_fit_params[1]
 
         # Assert matching keys and values
         assert (
@@ -1711,6 +1723,13 @@ class TestGLM:
         ],
     )
     @pytest.mark.parametrize(
+        "model_class",
+        [
+            nmo.glm.GLM,
+            nmo.glm.PopulationGLM,
+        ],
+    )
+    @pytest.mark.parametrize(
         "mapping_dict",
         [
             {},
@@ -1719,6 +1738,24 @@ class TestGLM:
                 "regularizer": "Ridge",
                 "solver_name": "ProxSVRG",
                 "regularizer_strength": 5.0,
+            },
+            {
+                "observation_model": nmo.observation_models.PoissonObservations(),
+                "regularizer": nmo.regularizer.Ridge(),
+                "solver_name": "ProxSVRG",
+                "regularizer_strength": 5.0,
+            },
+            {
+                "observation_model": "Gamma",
+                "regularizer": "Lasso",
+                "solver_name": "ProximalGradient",
+                "regularizer_strength": 3.0,
+            },
+            {
+                "observation_model": nmo.observation_models.GammaObservations(),
+                "regularizer": nmo.regularizer.Lasso(),
+                "solver_name": "ProximalGradient",
+                "regularizer_strength": 3.0,
             },
         ],
     )
@@ -1729,9 +1766,8 @@ class TestGLM:
         solver_name,
         mapping_dict,
         tmp_path,
-        request,
         glm_class_type,
-        model_instantiation_type,
+        model_class,
     ):
         """
         Test saving and loading a model with various observation models and regularizers.
@@ -1747,16 +1783,20 @@ class TestGLM:
                 f"Skipping {solver_name} for Lasso type regularizer; not an approximate solver."
             )
 
-        _, _, model, _, _ = request.getfixturevalue(model_instantiation_type)
-
-        model.set_params(
+        model = model_class(
             observation_model=obs_model,
             solver_name=solver_name,
             regularizer=regularizer,
-            regularizer_strength=2.0 if regularizer != "UnRegularized" else None,
+            regularizer_strength=2.0,
         )
 
+        model.coef_ = jnp.zeros((10, 5))
+        model.intercept_ = jnp.zeros((5,))
+
         initial_params = model.get_params()
+        initial_fit_params = model._get_coef_and_intercept()
+        initial_params["coef_"] = initial_fit_params[0]
+        initial_params["intercept_"] = initial_fit_params[1]
 
         # Save
         save_path = tmp_path / "test_model.npz"
@@ -1765,6 +1805,9 @@ class TestGLM:
         # Load
         loaded_model = nmo.load_model(save_path, mapping_dict=mapping_dict)
         loaded_params = loaded_model.get_params()
+        loaded_fit_params = loaded_model._get_coef_and_intercept()
+        loaded_params["coef_"] = loaded_fit_params[0]
+        loaded_params["intercept_"] = loaded_fit_params[1]
 
         # Assert matching keys and values
         assert (
@@ -1790,12 +1833,18 @@ class TestGLM:
                     continue
             if key in mapping_dict:
                 if key == "observation_model":
-                    mapping_obs = instantiate_observation_model(mapping_dict[key])
+                    if isinstance(mapping_dict[key], str):
+                        mapping_obs = instantiate_observation_model(mapping_dict[key])
+                    else:
+                        mapping_obs = mapping_dict[key]
                     assert _get_name(mapping_obs) == _get_name(
                         load_val
                     ), f"{key} observation model mismatch: {mapping_dict[key]} != {load_val}"
                 elif key == "regularizer":
-                    mapping_reg = create_regularizer(mapping_dict[key])
+                    if isinstance(mapping_dict[key], str):
+                        mapping_reg = create_regularizer(mapping_dict[key])
+                    else:
+                        mapping_reg = mapping_dict[key]
                     assert _get_name(mapping_reg) == _get_name(
                         load_val
                     ), f"{key} regularizer mismatch: {mapping_dict[key]} != {load_val}"

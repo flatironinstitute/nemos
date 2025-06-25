@@ -637,13 +637,23 @@ def test_shape_param_exclusion():
     assert utils.format_repr(obj) == "Example(b=1, d=1)"
 
 
-def test_inspect_npz(tmp_path):
+@pytest.mark.parametrize(
+    "model_class",
+    [
+        nmo.glm.GLM,
+        nmo.glm.PopulationGLM,
+    ],
+)
+def test_inspect_npz(tmp_path, model_class):
     """
-    Save a GLM model with given observation model, call `inspect_npz`,
-    and verify that output contains key headers and fields.
+    Save a model to a .npz file and inspect it.
+
+    This function tests that the function `nmo.inspect_npz` runs correctly
     """
     file_path = tmp_path / f"test_model.npz"
-    model = nmo.glm.GLM(
+
+    # Initialize the model with some parameters
+    model = model_class(
         regularizer="Ridge",
         regularizer_strength=0.1,
         solver_name="BFGS",

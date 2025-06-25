@@ -56,19 +56,23 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     solver_name: BFGS
     >>> # Save the model parameters to a file
     >>> model.save_params("model_params.npz")
-    >>> # Initialize a default GLM
-    >>> model = nmo.glm.GLM()
-    >>> # Load the model from the saved file
-    >>> model = nmo.load_model("model_params.npz")
-    >>> # Model has the same parameters before and after load
+    >>> # create a mapping dictionary to replace the observation model
+    >>> mapping_dict = {
+    ...     "observation_model": "Poisson",
+    ...     "regularizer": "Lasso",
+    ...     "solver_name": "ProxSVRG",
+    ... }
+    >>> # Load the model from the saved file with custom mapping
+    >>> model = nmo.load_model("model_params.npz", mapping_dict=mapping_dict)
+    >>> # The model is now loaded, overwriting the observation model and regularizer
     >>> for key, value in model.get_params().items():
     ...     print(f"{key}: {value}")
-    observation_model__inverse_link_function: <function one_over_x at ...>
-    observation_model: GammaObservations(inverse_link_function=one_over_x)
-    regularizer: Ridge()
+    observation_model__inverse_link_function: <PjitFunction of <function exp at ...>>
+    observation_model: PoissonObservations(inverse_link_function=exp)
+    regularizer: Lasso()
     regularizer_strength: 0.1
     solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
-    solver_name: BFGS
+    solver_name: ProxSVRG
     """
 
     # load the model from a .npz file
@@ -88,7 +92,7 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     # If the observation model is a string or a dictionary, instantiate it
     # By default it is saved as a dictionary with "class" and "params"
     if "observation_model" in saved_params:
-        obs_model_data = saved_params.pop("observation_model")
+        obs_model_data = saved_params["observation_model"]
         if isinstance(obs_model_data, str):
             saved_params["observation_model"] = instantiate_observation_model(
                 obs_model_data
@@ -109,8 +113,8 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
         model = model_class(**config_params)
     except Exception:
         raise ValueError(
-            f"Failed to instantiate model class '{model_name}' with parameters: {config_params}"
-            f"`{_get_name(inspect_npz)}('{filename}')` to inspect the saved object."
+            f"Failed to instantiate model class '{model_name}' with parameters: {config_params}. "
+            f"Use `nmo.inspect_npz('{filename}')` to inspect the saved object."
         )
 
     # Set the rest of the parameters as attributes if recognized
