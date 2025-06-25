@@ -14,6 +14,24 @@ from .base_class import Base
 from .tree_utils import pytree_map_and_reduce
 from .type_casting import is_numpy_array_like, support_pynapple
 
+__all__ = [
+    "check_dimensionality",
+    "validate_axis",
+    "check_non_empty",
+    "check_trials_longer_than_time_window",
+    "nan_pad",
+    "shift_time_series",
+    "row_wise_kron",
+    "assert_has_attribute",
+    "assert_is_callable",
+    "assert_returns_ndarray",
+    "assert_differentiable",
+    "assert_preserve_shape",
+    "assert_scalar_func",
+    "format_repr",
+    "one_over_x",
+]
+
 
 def __dir__() -> list[str]:
     return __all__
@@ -744,22 +762,3 @@ def _unpack_params(params_dict: dict, string_attrs: list = None) -> dict:
             else:
                 out[key] = value
     return out
-
-
-__all__ = [
-    "check_dimensionality",
-    "validate_axis",
-    "check_non_empty",
-    "check_trials_longer_than_time_window",
-    "nan_pad",
-    "shift_time_series",
-    "row_wise_kron",
-    "assert_has_attribute",
-    "assert_is_callable",
-    "assert_returns_ndarray",
-    "assert_differentiable",
-    "assert_preserve_shape",
-    "assert_scalar_func",
-    "format_repr",
-    "one_over_x",
-]
