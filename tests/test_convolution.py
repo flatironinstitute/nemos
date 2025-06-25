@@ -8,6 +8,10 @@ import pytest
 from nemos import convolve, utils
 
 
+def _get_sample_axis_len(time_series, axis=0):
+    return jax.tree_util.tree_leaves(time_series)[0].shape[axis]
+
+
 class TestShiftTimeAxisAndConvolve:
 
     @pytest.mark.parametrize(
@@ -24,7 +28,12 @@ class TestShiftTimeAxisAndConvolve:
     def test_output_ndim(self, time_series, check_func, axis):
         """Check that the output dimensionality matches expectation."""
         res = convolve._shift_time_axis_and_convolve(
-            time_series, np.zeros((1, 1)), axis=axis
+            time_series,
+            np.zeros((1, 1)),
+            axis=axis,
+            batch_size_channels=1,
+            batch_size_basis=1,
+            batch_size_samples=_get_sample_axis_len(time_series, axis=axis),
         )
         if not utils.pytree_map_and_reduce(check_func, all, res):
             raise ValueError("Output doesn't match expected structure")
@@ -43,7 +52,12 @@ class TestShiftTimeAxisAndConvolve:
             return x.shape == output_shape
 
         res = convolve._shift_time_axis_and_convolve(
-            time_series, np.zeros((1, 1)), axis=axis
+            time_series,
+            np.zeros((1, 1)),
+            axis=axis,
+            batch_size_channels=1,
+            batch_size_basis=1,
+            batch_size_samples=_get_sample_axis_len(time_series, axis=axis),
         )
         if not utils.pytree_map_and_reduce(check_func, all, res):
             raise ValueError("Output  number of neuron doesn't match input.")
@@ -64,7 +78,12 @@ class TestShiftTimeAxisAndConvolve:
             return basis_matrix.shape[-1] == conv.shape[-1]
 
         res = convolve._shift_time_axis_and_convolve(
-            time_series, basis_matrix, axis=axis
+            time_series,
+            basis_matrix,
+            axis=axis,
+            batch_size_channels=1,
+            batch_size_basis=1,
+            batch_size_samples=_get_sample_axis_len(time_series, axis=axis),
         )
         if not utils.pytree_map_and_reduce(check_func, all, res):
             raise ValueError("Output  number of neuron doesn't match input.")
@@ -93,7 +112,14 @@ class TestShiftTimeAxisAndConvolve:
                     )
 
         utils_out = np.asarray(
-            convolve._shift_time_axis_and_convolve(trial_counts, basis_matrix, axis=1)
+            convolve._shift_time_axis_and_convolve(
+                trial_counts,
+                basis_matrix,
+                axis=1,
+                batch_size_channels=1,
+                batch_size_basis=basis_matrix.shape[1],
+                batch_size_samples=_get_sample_axis_len(trial_counts, axis=1),
+            )
         )
         assert np.allclose(utils_out, numpy_out, rtol=10**-5, atol=10**-5), (
             "Output of utils.convolve_1d_trials "
@@ -165,6 +191,30 @@ class TestCreateConvolutionalPredictor:
                 )
         else:
             convolve.create_convolutional_predictor(basis_matrix, trial_counts, axis=1)
+
+    @pytest.mark.parametrize("basis_matrix", [np.zeros((4, 3))])
+    @pytest.mark.parametrize(
+        "trial_counts, batch_samples, expectation",
+        [
+            (np.zeros((1, 4, 2)), None, does_not_raise()),
+            (np.zeros((1, 4, 2)), 4, does_not_raise()),
+            (
+                np.zeros((1, 4, 2)),
+                3,
+                pytest.raises(
+                    ValueError,
+                    match="Batch size too small",
+                ),
+            ),
+        ],
+    )
+    def test_sufficient_trial_duration_batching(
+        self, basis_matrix, trial_counts, batch_samples, expectation
+    ):
+        with expectation:
+            convolve.create_convolutional_predictor(
+                basis_matrix, trial_counts, axis=1, batch_size_samples=batch_samples
+            )
 
     @pytest.mark.parametrize(
         "basis_matrix, expectation",
@@ -286,7 +336,12 @@ class TestCreateConvolutionalPredictor:
     @pytest.mark.parametrize(
         "trial_counts", [{key: np.random.normal(size=(10, 3)) for key in range(2)}]
     )
-    def test_valid_convolution_output_tree(self, basis_matrix, trial_counts):
+    @pytest.mark.parametrize("batch_samples", [None, 5])
+    @pytest.mark.parametrize("batch_channels", [None, 1, 2])
+    @pytest.mark.parametrize("batch_basis", [None, 1, 2])
+    def test_valid_convolution_output_tree(
+        self, basis_matrix, trial_counts, batch_samples, batch_channels, batch_basis
+    ):
         numpy_out = np.zeros(
             (
                 len(trial_counts),
@@ -303,7 +358,13 @@ class TestCreateConvolutionalPredictor:
                     )
         ws = basis_matrix.shape[0]
         utils_out = convolve.create_convolutional_predictor(
-            basis_matrix, trial_counts, axis=0, shift=False
+            basis_matrix,
+            trial_counts,
+            axis=0,
+            shift=False,
+            batch_size_samples=batch_samples,
+            batch_size_basis=batch_basis,
+            batch_size_channels=batch_channels,
         )
         check = all(
             np.allclose(utils_out[k][ws - 1 :], numpy_out[k], rtol=10**-5, atol=10**-5)
@@ -352,7 +413,20 @@ class TestCreateConvolutionalPredictor:
             (3, False, "acausal", [29, 0]),
         ],
     )
-    def test_expected_nan(self, axis, window_size, shift, predictor_causality, nan_idx):
+    @pytest.mark.parametrize("batch_samples", [None, 5])
+    @pytest.mark.parametrize("batch_channels", [None, 1, 2])
+    @pytest.mark.parametrize("batch_basis", [None, 1, 2])
+    def test_expected_nan(
+        self,
+        axis,
+        window_size,
+        shift,
+        predictor_causality,
+        nan_idx,
+        batch_samples,
+        batch_channels,
+        batch_basis,
+    ):
         shape = [1, 1, 1]
         shape[axis] = 30
         feature = np.zeros(shape)
@@ -363,6 +437,9 @@ class TestCreateConvolutionalPredictor:
             predictor_causality=predictor_causality,
             shift=shift,
             axis=axis,
+            batch_size_samples=batch_samples,
+            batch_size_basis=batch_basis,
+            batch_size_channels=batch_channels,
         )
         # get expected non-nan idxs
         other_idx = list(set(np.arange(res.shape[1])).difference(nan_idx))
@@ -399,16 +476,257 @@ class TestCreateConvolutionalPredictor:
             (3, False, "acausal", [0, 20, 50, 75]),
         ],
     )
+    @pytest.mark.parametrize("batch_samples", [None, 5])
+    @pytest.mark.parametrize("batch_channels", [None, 1, 2])
+    @pytest.mark.parametrize("batch_basis", [None, 1, 2])
     def test_multi_epoch_pynapple(
-        self, tsd, window_size, shift, predictor_causality, nan_index
+        self,
+        tsd,
+        window_size,
+        shift,
+        predictor_causality,
+        nan_index,
+        batch_samples,
+        batch_channels,
+        batch_basis,
     ):
         """Test nan location in multi-epoch pynapple tsd."""
         basis = np.zeros((window_size, 1))
         res = convolve.create_convolutional_predictor(
-            basis, tsd, predictor_causality=predictor_causality, shift=shift
+            basis,
+            tsd,
+            predictor_causality=predictor_causality,
+            shift=shift,
+            batch_size_samples=batch_samples,
+            batch_size_basis=batch_basis,
+            batch_size_channels=batch_channels,
         )
 
         nan_index = np.sort(nan_index)
         times_nan_found = res[np.isnan(res.d[:, 0])].t
         assert len(times_nan_found) == len(nan_index)
         assert all(times_nan_found == np.array(nan_index))
+
+    @pytest.mark.parametrize(
+        "batch_samples, expectation",
+        [
+            (None, does_not_raise()),
+            (4, does_not_raise()),
+            (
+                -1,
+                pytest.raises(
+                    ValueError,
+                    match="When provided ``batch_size_samples`` must be a strictly positive",
+                ),
+            ),
+            (
+                "a",
+                pytest.raises(
+                    ValueError,
+                    match="When provided ``batch_size_samples`` must be a strictly positive",
+                ),
+            ),
+            (
+                (),
+                pytest.raises(
+                    ValueError,
+                    match="When provided ``batch_size_samples`` must be a strictly positive",
+                ),
+            ),
+            (
+                (1,),
+                pytest.raises(
+                    ValueError,
+                    match="When provided ``batch_size_samples`` must be a strictly positive",
+                ),
+            ),
+        ],
+    )
+    @pytest.mark.parametrize(
+        "ts, kernels", [(np.random.randn(10, 5), np.random.randn(4, 5))]
+    )
+    def test_invalid_batch_size_samples(self, ts, kernels, batch_samples, expectation):
+        with expectation:
+            convolve.create_convolutional_predictor(
+                kernels,
+                ts,
+                axis=0,
+                batch_size_samples=batch_samples,
+            )
+
+    @pytest.mark.parametrize(
+        "batch_channels, expectation",
+        [
+            (None, does_not_raise()),
+            (4, does_not_raise()),
+            (
+                -1,
+                pytest.raises(
+                    ValueError,
+                    match="When provided ``batch_size_channels`` must be a strictly positive",
+                ),
+            ),
+            (
+                "a",
+                pytest.raises(
+                    ValueError,
+                    match="When provided ``batch_size_channels`` must be a strictly positive",
+                ),
+            ),
+            (
+                (),
+                pytest.raises(
+                    ValueError,
+                    match="When provided ``batch_size_channels`` must be a strictly positive",
+                ),
+            ),
+            (
+                (1,),
+                pytest.raises(
+                    ValueError,
+                    match="When provided ``batch_size_channels`` must be a strictly positive",
+                ),
+            ),
+        ],
+    )
+    @pytest.mark.parametrize(
+        "ts, kernels", [(np.random.randn(10, 5), np.random.randn(4, 5))]
+    )
+    def test_invalid_batch_size_channels(
+        self, ts, kernels, batch_channels, expectation
+    ):
+        with expectation:
+            convolve.create_convolutional_predictor(
+                kernels,
+                ts,
+                axis=0,
+                batch_size_channels=batch_channels,
+            )
+
+    @pytest.mark.parametrize(
+        "batch_basis, expectation",
+        [
+            (None, does_not_raise()),
+            (4, does_not_raise()),
+            (
+                -1,
+                pytest.raises(
+                    ValueError,
+                    match="When provided ``batch_size_basis`` must be a strictly positive",
+                ),
+            ),
+            (
+                "a",
+                pytest.raises(
+                    ValueError,
+                    match="When provided ``batch_size_basis`` must be a strictly positive",
+                ),
+            ),
+            (
+                (),
+                pytest.raises(
+                    ValueError,
+                    match="When provided ``batch_size_basis`` must be a strictly positive",
+                ),
+            ),
+            (
+                (1,),
+                pytest.raises(
+                    ValueError,
+                    match="When provided ``batch_size_basis`` must be a strictly positive",
+                ),
+            ),
+        ],
+    )
+    @pytest.mark.parametrize(
+        "ts, kernels", [(np.random.randn(10, 5), np.random.randn(4, 5))]
+    )
+    def test_invalid_batch_size_basis(self, ts, kernels, batch_basis, expectation):
+        with expectation:
+            convolve.create_convolutional_predictor(
+                kernels,
+                ts,
+                axis=0,
+                batch_size_basis=batch_basis,
+            )
+
+    @pytest.mark.parametrize("input_shape", [(3, 1), (3, 2), (3, 3)])
+    @pytest.mark.parametrize("batch_size", [1, 2, 3])
+    def test_batch_binary_func_output(self, input_shape, batch_size):
+        """Check expected output values."""
+        jax.config.update("jax_enable_x64", True)
+
+        def add(a, b):
+            return a + b
+
+        x, y = np.random.randn(*input_shape), np.arange(3)[:, np.newaxis]
+        result = convolve._batch_binary_func(
+            x, y, binary_func=add, batch_size=batch_size, axis=1
+        )
+        assert np.all(result == add(x, y))
+
+    @pytest.mark.parametrize("input_shape", [(3, 2)])
+    @pytest.mark.parametrize("batch_size", [1])
+    @pytest.mark.parametrize("out_axis, expected_out_shape", [(0, (6, 1)), (1, (3, 2))])
+    def test_batch_binary_func_out_axis(
+        self, input_shape, batch_size, out_axis, expected_out_shape
+    ):
+        """Check expected out shape."""
+        jax.config.update("jax_enable_x64", True)
+
+        def add(a, b):
+            return a + b
+
+        x, y = np.random.randn(*input_shape), np.arange(3)[:, np.newaxis]
+        result = convolve._batch_binary_func(
+            x, y, binary_func=add, batch_size=batch_size, axis=1, out_axis=out_axis
+        )
+        assert expected_out_shape == result.shape
+
+    @pytest.mark.parametrize("input_shape", [(3, 3)])
+    @pytest.mark.parametrize("batch_size", [2])
+    def test_batch_binary_func_pad(self, input_shape, batch_size):
+        jax.config.update("jax_enable_x64", True)
+
+        def add(a, b):
+            return a + b
+
+        x, y = np.random.randn(*input_shape), np.arange(3)[:, np.newaxis]
+        # test that nan-padding and crop and no padding makes no difference
+        result = convolve._batch_binary_func(
+            x, y, binary_func=add, batch_size=batch_size, axis=1, pad_final_batch=True
+        )
+        result_nopad = convolve._batch_binary_func(
+            x, y, binary_func=add, batch_size=batch_size, axis=1, pad_final_batch=False
+        )
+        assert np.all(result_nopad == result)
+
+
+def numpy_tensor_convolve(array, eval_basis):
+    """Naive implementation of _tensor_convolve."""
+    n_samples, n_channels = array.shape
+    window_size, n_basis = eval_basis.shape
+    output = np.empty((n_samples - window_size + 1, n_channels, n_basis))
+    for i in range(n_channels):
+        for j in range(n_basis):
+            output[:, i, j] = np.convolve(array[:, i], eval_basis[:, j], mode="valid")
+    return output
+
+
+@pytest.mark.parametrize("input_shape", [(30, 4), (50, 6)])
+@pytest.mark.parametrize("basis_shape", [(5, 3), (7, 2)])
+@pytest.mark.parametrize("batch_sizes", [(16, 2, 1), (25, 3, 1)])
+def test_tensor_convolve(input_shape, basis_shape, batch_sizes):
+    """Test different parameter combinations against naive implementation."""
+    key = jax.random.PRNGKey(0)
+    array = jax.random.normal(key, shape=input_shape)
+    eval_basis = jax.random.normal(key, shape=basis_shape)
+
+    batch_size_samples, batch_size_channels, batch_size_basis = batch_sizes
+
+    result = convolve._tensor_convolve(
+        array, eval_basis, batch_size_samples, batch_size_channels, batch_size_basis
+    )
+    expected = numpy_tensor_convolve(np.array(array), np.array(eval_basis))
+
+    np.testing.assert_allclose(np.array(result), expected, rtol=1e-5, atol=1e-5)

@@ -10,6 +10,7 @@ Note:
 """
 
 import abc
+from collections import namedtuple
 from functools import partial
 
 import jax
@@ -926,3 +927,6 @@ def population_bernoulliGLM_model_instantiation_pytree(
         observation_model=model.observation_model, regularizer=model.regularizer
     )
     return X_tree, np.random.binomial(1, rate), model_tree, true_params_tree, rate
+
+
+SizeTerminal = namedtuple("SizeTerminal", ["columns", "lines"])

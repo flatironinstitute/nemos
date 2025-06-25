@@ -15,21 +15,12 @@ from .tree_utils import pytree_map_and_reduce
 from .type_casting import is_numpy_array_like, support_pynapple
 
 __all__ = [
-    # "check_dimensionality",
-    # "validate_axis",
-    # "check_non_empty",
-    "_check_trials_longer_than_time_window",
-    # "nan_pad",
-    # "shift_time_series",
-    # "row_wise_kron",
-    # "assert_has_attribute",
-    # "assert_is_callable",
-    # "assert_returns_ndarray",
-    # "assert_differentiable",
-    # "assert_preserve_shape",
-    # "assert_scalar_func",
-    # "format_repr",
-    # "one_over_x",
+    "check_dimensionality",
+    "validate_axis",
+    "nan_pad",
+    "shift_time_series",
+    "row_wise_kron",
+    "one_over_x",
 ]
 
 
@@ -117,34 +108,6 @@ def check_non_empty(pytree: Any, pytree_name: str):
     if pytree_map_and_reduce(lambda x: 0 in x.shape, any, pytree):
         raise ValueError(
             f"Empty array provided. At least one of dimension in {pytree_name} is empty."
-        )
-
-
-def _check_trials_longer_than_time_window(
-    time_series: Any, window_size: int, axis: int = 0
-):
-    """
-    Check if the duration of each trial in the time series is at least as long as the window size.
-
-    Parameters
-    ----------
-    time_series :
-        A pytree of trial data.
-    window_size :
-        The size of the window to be used in convolution.
-    axis :
-        The axis in the arrays representing the time dimension.
-
-    Raises
-    ------
-    ValueError
-        If any trial in the time series is shorter than the window size.
-    """
-    # Check window size
-    if pytree_map_and_reduce(lambda x: x.shape[axis] < window_size, any, time_series):
-        raise ValueError(
-            "Insufficient trial duration. The number of time points in each trial must "
-            "be greater or equal to the window size."
         )
 
 

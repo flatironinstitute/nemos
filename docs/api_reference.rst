@@ -188,7 +188,6 @@ Utility functions for running convolution over the sample axis.
     :nosignatures:
 
     create_convolutional_predictor
-    tensor_convolve
 
 
 The ``nemos.identifiability_constraints`` module
