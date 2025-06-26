@@ -138,6 +138,7 @@ class BasisMixin:
         # a permanent property of a basis, defined at composite basis init
         self._parent: Optional["BasisMixin"] = None
         self._is_complex = False
+        self._include_constant = False
 
     def __repr__(self):
         return format_repr(self)
@@ -235,7 +236,15 @@ class BasisMixin:
                     np.real(X[..., sl])
                     if not self[key]._is_complex
                     else np.concatenate(
-                        [np.real(X[..., sl]), np.imag(X[..., sl])], axis=-1
+                        [
+                            np.real(X[..., sl]),
+                            (
+                                np.imag(X[..., sl])[..., 1:]
+                                if self[key]._include_constant
+                                else np.imag(X[..., sl])
+                            ),
+                        ],
+                        axis=-1,
                     )
                 )
                 for key, sl in slice_dict.items()
