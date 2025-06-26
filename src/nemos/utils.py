@@ -656,8 +656,9 @@ def _unflatten_dict(d: dict) -> dict:
             v = str(v)
         elif v.dtype.type is np.int_:
             v = int(v)
-        elif v.dtype.type is np.float64:
-            v = None if np.isnan(v) else float(v)
+        elif issubclass(v.dtype.type, np.floating):
+            if v.ndim == 0:
+                v = None if np.isnan(v) else float(v)
         dct[keys[-1]] = v
     return result
 
