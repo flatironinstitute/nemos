@@ -560,3 +560,88 @@ def promote_to_transformer(method):
         return out
 
     return wrapper
+
+
+def _atomic_basis_get_n_basis_output_features(basis: "AtomicBasisMixin") -> int | None:
+    """
+    Return the number of output features for an atomic basis.
+
+    This function computes the number of features (i.e., columns) in the design matrix
+    for an atomic basis. The number of features is the product of the number of basis
+    functions and the number of input dimensions, inferred from the shape product.
+
+    If the input shape is not yet assigned (i.e., ``_input_shape_product`` is ``None``),
+    the function returns ``None``.
+
+    Parameters
+    ----------
+    basis :
+        An atomic basis object with a defined number of basis functions and input shape.
+
+    Returns
+    -------
+    :
+        The number of output features, or ``None`` if the input shape is undefined.
+    """
+    if basis._input_shape_product is not None:
+        return basis.n_basis_funcs * basis._input_shape_product[0]
+    return None
+
+
+def _get_n_output_features(
+    basis: "BasisMixin", double_complex: bool = True
+) -> int | None:
+    """
+    Compute the number of output features for a basis object.
+
+    This function returns the number of features (i.e., columns) that the design matrix
+    will have when this basis is evaluated. If the basis or any of its components
+    is complex-valued, the real and imaginary parts are split into separate columns,
+    effectively doubling the number of output features when ``double_complex=True``.
+
+    Additive and multiplicative structure is handled as follows:
+
+    - *Additive structure*: The total number of output features is the sum of
+      features from each additive component. If a component is complex, its features
+      are doubled (when ``double_complex=True``).
+
+    - *Multiplicative structure*: The number of features is computed as the product
+      of the number of features from each factor. Doubling (for complex-valued outputs)
+      is applied *after* the product — not to the individual factors.
+
+    A component is considered complex if:
+
+    1. It is an atomic complex basis.
+    2. It is the product of a complex and a real basis.
+    3. It is the product of two complex bases.
+
+    Parameters
+    ----------
+    basis :
+        The basis object, which may be atomic, additive, or multiplicative.
+    double_complex :
+        If ``True``, complex outputs are split into real and imaginary parts,
+        effectively doubling the number of output features.
+
+    Returns
+    -------
+    :
+        The number of output features, or ``None`` if shape inference fails.
+    """
+    n_output_features = 0
+    for b in basis:
+        basis1 = getattr(b, "_basis1", None)
+        basis2 = getattr(b, "_basis2", None)
+        scale = 2 if b._is_complex and double_complex else 1
+        if basis1 and basis2:
+            n_basis_1 = _get_n_output_features(basis1, double_complex=False)
+            n_basis_2 = _get_n_output_features(basis2, double_complex=False)
+            if n_basis_1 is None or n_basis_2 is None:
+                return None
+            n_output_features += scale * n_basis_1 * n_basis_2
+        else:
+            n_out = _atomic_basis_get_n_basis_output_features(b)
+            if n_out is None:
+                return None
+            n_output_features += scale * n_out
+    return n_output_features

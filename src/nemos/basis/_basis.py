@@ -199,7 +199,8 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         basis function types and operation modes.
         """
         self.setup_basis(*xi)
-        return self._compute_features(*xi)
+        X = self._compute_features(*xi)
+        return self._expand_complex(X, False)
 
     @abc.abstractmethod
     def _compute_features(
@@ -349,8 +350,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         Y = self.evaluate(*(grid_axis.flatten() for grid_axis in Xs)).reshape(
             (*n_samples, self.n_basis_funcs)
         )
-
-        return *Xs, Y
+        return *Xs, self._expand_complex(Y, True)
 
     @promote_to_transformer
     def __add__(self, other: BasisMixin) -> AdditiveBasis:
@@ -483,15 +483,6 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         is determined by the two basis elements and the type of composition.
         """
         return self.basis1.n_basis_funcs + self.basis2.n_basis_funcs
-
-    @property
-    def n_output_features(self):
-        """Return the number of output features."""
-        out1 = getattr(self.basis1, "n_output_features", None)
-        out2 = getattr(self.basis2, "n_output_features", None)
-        if out1 is None or out2 is None:
-            return None
-        return out1 + out2
 
     @add_docstring("set_input_shape", CompositeBasisMixin)
     def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> Basis:
@@ -791,6 +782,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         self,
         n_inputs: Optional[tuple] = None,
         start_slice: Optional[int] = None,
+        double_complex: bool = False,
     ) -> Tuple[dict, int]:
         """
         Calculate and return the slicing for features based on the input structure.
@@ -811,6 +803,8 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
             the slicing for each additive component.
         start_slice :
             The updated starting index after slicing.
+        double_complex :
+            True if complex arrays are split into real and imaginary components, False otherwise.
 
         See Also
         --------
@@ -826,10 +820,12 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         split_dict, start_slice = self.basis1._get_feature_slicing(
             n_inputs[: len(self.basis1._input_shape_product)],
             start_slice,
+            double_complex=double_complex,
         )
         sp2, start_slice = self.basis2._get_feature_slicing(
             n_inputs[len(self.basis1._input_shape_product) :],
             start_slice,
+            double_complex=double_complex,
         )
         # label should always be unique, so update is safe
         split_dict.update(sp2)
@@ -889,6 +885,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
     ) -> None:
         CompositeBasisMixin.__init__(self, basis1, basis2, label=label)
         Basis.__init__(self)
+        self._is_complex = self.basis1._is_complex or self.basis2._is_complex
 
     def _generate_label(self) -> str:
         return "(" + self.basis1.label + " * " + self.basis2.label + ")"
@@ -902,15 +899,6 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         is determined by the two basis elements and the type of composition.
         """
         return self.basis1.n_basis_funcs * self.basis2.n_basis_funcs
-
-    @property
-    def n_output_features(self):
-        """Return the number of output features."""
-        out1 = getattr(self.basis1, "n_output_features", None)
-        out2 = getattr(self.basis2, "n_output_features", None)
-        if out1 is None or out2 is None:
-            return None
-        return out1 * out2
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input

@@ -21,6 +21,7 @@ from ..convolve import create_convolutional_predictor
 from ..utils import _get_terminal_size, format_repr
 from ._composition_utils import (
     _composite_basis_setter_logic,
+    _get_n_output_features,
     _recompute_all_default_labels,
     generate_basis_label_pair,
     generate_composite_basis_labels,
@@ -136,6 +137,7 @@ class BasisMixin:
         # initialize parent to None. This should not end in "_" because it is
         # a permanent property of a basis, defined at composite basis init
         self._parent: Optional["BasisMixin"] = None
+        self._is_complex = False
 
     def __repr__(self):
         return format_repr(self)
@@ -214,10 +216,39 @@ class BasisMixin:
     def input_shape(self):
         return get_input_shape(self)
 
+    def _expand_complex(self, X: NDArray, eval_on_grid: bool) -> NDArray:
+        if not any(b._is_complex for b in self):
+            return X
+        elif eval_on_grid:
+            # assume 1 linspace per slice
+            slice_dict = {}
+            i = 0
+            for b in self:
+                slice_dict[b.label] = slice(i, i + b.n_basis_funcs)
+                i += b.n_basis_funcs
+        else:
+            slice_dict = self._get_feature_slicing(double_complex=False)[0]
+        # expand complex output to real and imag, drop imag component if real
+        X = np.concatenate(
+            [
+                (
+                    np.real(X[..., sl])
+                    if not self[key]._is_complex
+                    else np.concatenate(
+                        [np.real(X[..., sl]), np.imag(X[..., sl])], axis=-1
+                    )
+                )
+                for key, sl in slice_dict.items()
+            ],
+            axis=-1,
+        )
+        return X
+
     def _get_feature_slicing(
         self,
         n_inputs: Optional[tuple] = None,
         start_slice: Optional[int] = None,
+        double_complex: bool = True,
     ) -> Tuple[OrderedDict, int]:
         """
         Calculate and return the slicing for features based on the input structure.
@@ -248,16 +279,19 @@ class BasisMixin:
         start_slice = start_slice or 0
         # Handle the default case for non-additive basis types
         # See overwritten method for recursion logic
-        split_dict, start_slice = self._get_default_slicing(start_slice=start_slice)
+        split_dict, start_slice = self._get_default_slicing(
+            start_slice=start_slice, double_complex=double_complex
+        )
 
         return split_dict, start_slice
 
-    def _get_default_slicing(self, start_slice: int) -> Tuple[OrderedDict, int]:
+    def _get_default_slicing(
+        self, start_slice: int, double_complex: bool
+    ) -> Tuple[OrderedDict, int]:
         """Handle default slicing logic."""
-        split_dict = {
-            self.label: slice(start_slice, start_slice + self.n_output_features)
-        }
-        start_slice += self.n_output_features
+        n_output_features = _get_n_output_features(self, double_complex=double_complex)
+        split_dict = {self.label: slice(start_slice, start_slice + n_output_features)}
+        start_slice += n_output_features
         return OrderedDict(split_dict), start_slice
 
     def split_by_feature(
@@ -374,6 +408,23 @@ class BasisMixin:
         """Make basis iterable. Re-implemented for additive."""
         yield self
 
+    @property
+    def n_output_features(self) -> int | None:
+        """
+        Number of features returned by the basis.
+
+        Returns the number of features returned by the basis which correspond to
+        the number of columns of the feature matrix.
+
+        Notes
+        -----
+        The number of output features can be determined only when the number of inputs
+        provided to the basis is known. Therefore, before the first call to ``compute_features``,
+        this property will return ``None``. After that call, or after setting the input shape with
+        ``set_input_shape``, ``n_output_features`` will be available.
+        """
+        return _get_n_output_features(self)
+
 
 class AtomicBasisMixin(BasisMixin):
     """Mixin class for atomic bases (i.e. non-composite)."""
@@ -384,22 +435,6 @@ class AtomicBasisMixin(BasisMixin):
         check_basis_min = getattr(self, "_check_n_basis_min", None)
         if check_basis_min:
             check_basis_min()
-
-    @property
-    def n_output_features(self) -> int | None:
-        """
-        Number of features returned by the basis.
-
-        Notes
-        -----
-        The number of output features can be determined only when the number of inputs
-        provided to the basis is known. Therefore, before the first call to ``compute_features``,
-        this property will return ``None``. After that call, or after setting the input shape with
-        ``set_input_shape``, ``n_output_features`` will be available.
-        """
-        if self._input_shape_product is not None:
-            return self.n_basis_funcs * self._input_shape_product[0]
-        return None
 
     @property
     def _has_default_label(self):
