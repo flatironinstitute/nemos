@@ -14,6 +14,7 @@ from conftest import (
     BasisFuncsTesting,
     CombinedBasis,
     custom_basis,
+    instantiate_atomic_basis,
     list_all_basis_classes,
 )
 
@@ -44,20 +45,6 @@ from nemos.basis._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineB
 from nemos.utils import pynapple_concatenate_numpy
 
 SizeTerminal = namedtuple("SizeTerminal", ["columns", "lines"])
-
-
-def instantiate_atomic_basis(cls, **kwargs):
-    if cls == CustomBasis:
-        return custom_basis(**kwargs)
-    if cls in (FourierEval, FourierConv) and "n_basis_funcs" in kwargs:
-        out = kwargs.pop("n_basis_funcs")
-        kwargs["n_frequencies"] = out
-    names = cls._get_param_names()
-    new_kwargs = kwargs.copy()
-    for key in kwargs:
-        if key not in names:
-            new_kwargs.pop(key)
-    return cls(**new_kwargs)
 
 
 def extra_decay_rates(cls, n_basis):
