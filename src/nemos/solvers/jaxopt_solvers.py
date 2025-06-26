@@ -2,10 +2,13 @@ from .abstract_solver import AbstractSolver
 
 import jaxopt
 
-from typing import Generic, TypeVar, ClassVar, Type
+from typing import Generic, TypeVar, ClassVar, Type, NamedTuple, TypeAlias
+
+JaxoptSolverState: TypeAlias = NamedTuple
+# JaxoptStepResult ~ jaxopt.OptStep
 
 
-class JaxoptWrapper(AbstractSolver):
+class JaxoptWrapper(AbstractSolver[JaxoptSolverState, jaxopt.OptStep]):
     _solver_cls: Type
     _proximal: bool = False
 
@@ -40,13 +43,13 @@ class JaxoptWrapper(AbstractSolver):
         else:
             return args
 
-    def init_state(self, init_params, *args):
+    def init_state(self, init_params, *args) -> JaxoptSolverState:
         return self._solver.init_state(init_params, *self._extend_args(args))
 
-    def update(self, params, state, *args):
+    def update(self, params, state, *args) -> jaxopt.OptStep:
         return self._solver.update(params, state, *self._extend_args(args))
 
-    def run(self, init_params, *args):
+    def run(self, init_params, *args) -> jaxopt.OptStep:
         return self._solver.run(init_params, *self._extend_args(args))
 
     def __getattr__(self, name: str):
