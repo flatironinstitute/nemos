@@ -2707,6 +2707,25 @@ class TestFourierBasis(BasisFuncsTesting):
         )
         assert bas.include_constant == expected_value
 
+    @pytest.mark.parametrize("value", [True, False])
+    @pytest.mark.parametrize("mode", ["eval", "conv"])
+    def test_include_constant_setter_changes_basis_number(self, value, mode):
+        bas = instantiate_atomic_basis(
+            self.cls[mode],
+            n_frequencies=5,
+            window_size=11,
+            include_constant=not value,
+        )
+        assert bas.include_constant == (not value)
+        n_basis_before_setter = bas.n_basis_funcs
+        n_frequencies_before_setter = bas.n_frequencies
+        bas.include_constant = value
+        assert bas.n_basis_funcs != n_basis_before_setter
+        assert bas.n_frequencies == n_frequencies_before_setter
+        # check that the expected n_basis is correct
+        assert bas.compute_features(np.array([1])).shape[1] == bas.n_basis_funcs * 2
+
+
     @pytest.mark.parametrize("n_frequencies", [1, 2, 3])
     @pytest.mark.parametrize("mode", ["eval", "conv"])
     @pytest.mark.parametrize("include_constant", [True, False])
