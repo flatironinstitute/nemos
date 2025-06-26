@@ -19,3 +19,5 @@ from .optimistix_solvers import (
 )
 
 from ._solver_registry import solver_registry
+
+from ._prox_grad import OptaxOptimistixProximalGradient
