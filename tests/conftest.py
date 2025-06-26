@@ -926,3 +926,17 @@ def population_bernoulliGLM_model_instantiation_pytree(
         observation_model=model.observation_model, regularizer=model.regularizer
     )
     return X_tree, np.random.binomial(1, rate), model_tree, true_params_tree, rate
+
+
+def instantiate_atomic_basis(cls, **kwargs):
+    if cls == CustomBasis:
+        return custom_basis(**kwargs)
+    if cls in (basis.FourierEval, basis.FourierConv) and "n_basis_funcs" in kwargs:
+        out = kwargs.pop("n_basis_funcs")
+        kwargs["n_frequencies"] = out
+    names = cls._get_param_names()
+    new_kwargs = kwargs.copy()
+    for key in kwargs:
+        if key not in names:
+            new_kwargs.pop(key)
+    return cls(**new_kwargs)
