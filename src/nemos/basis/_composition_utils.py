@@ -638,10 +638,16 @@ def _get_n_output_features(
             n_features_2 = _get_n_output_features(basis2, double_complex=False)
             if n_features_1 is None or n_features_2 is None:
                 return None
-            n_output_features += scale * n_features_1 * n_features_2
+            n_output_features += (
+                scale * n_features_1 * n_features_2
+                - b._include_constant * double_complex
+            )
         else:
             n_features = _atomic_basis_get_n_basis_output_features(b)
             if n_features is None:
                 return None
-            n_output_features += scale * n_features
+            n_output_features += (
+                scale * n_features - b._include_constant * double_complex
+            )
+
     return n_output_features

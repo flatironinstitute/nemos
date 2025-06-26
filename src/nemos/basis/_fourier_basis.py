@@ -49,6 +49,7 @@ class FourierBasis(Basis, AtomicBasisMixin, abc.ABC):
 
         AtomicBasisMixin.__init__(self, n_basis_funcs=self._n_basis_funcs, label=label)
         super().__init__()
+        self.include_constant = include_constant
         self._is_complex = True
 
     @property
@@ -112,7 +113,6 @@ class FourierBasis(Basis, AtomicBasisMixin, abc.ABC):
         # compute angles
         angles = np.outer(sample_pts, self._frequencies)
         out = np.cos(angles) + 1j * self.phase_sign * np.sin(angles)
-        out = out[:, 1 - self._include_constant :]
         return out.reshape(*shape, out.shape[-1])
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -173,7 +173,7 @@ class FourierBasis(Basis, AtomicBasisMixin, abc.ABC):
         self._frequencies = np.arange(
             1 - self._include_constant, value + 1, dtype=float
         )
-        self._n_basis_funcs = len(self._frequencies) - 1 + self._include_constant
+        self._n_basis_funcs = len(self._frequencies)
 
     def _check_n_basis_min(self) -> None:
         """Check that the user required enough basis elements.

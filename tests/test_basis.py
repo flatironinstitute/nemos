@@ -2725,7 +2725,6 @@ class TestFourierBasis(BasisFuncsTesting):
         # check that the expected n_basis is correct
         assert bas.compute_features(np.array([1])).shape[1] == bas.n_basis_funcs * 2
 
-
     @pytest.mark.parametrize("n_frequencies", [1, 2, 3])
     @pytest.mark.parametrize("mode", ["eval", "conv"])
     @pytest.mark.parametrize("include_constant", [True, False])

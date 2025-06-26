@@ -886,6 +886,9 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         CompositeBasisMixin.__init__(self, basis1, basis2, label=label)
         Basis.__init__(self)
         self._is_complex = self.basis1._is_complex or self.basis2._is_complex
+        self._include_constant = (
+            self.basis1._include_constant and self.basis2._include_constant
+        )
 
     def _generate_label(self) -> str:
         return "(" + self.basis1.label + " * " + self.basis2.label + ")"
