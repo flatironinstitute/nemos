@@ -37,6 +37,7 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     Examples
     --------
     >>> import nemos as nmo
+    >>> import jax.numpy as jnp
     >>> # Create a GLM model with specified parameters
     >>> solver_args = {"stepsize": 0.1, "maxiter": 1000, "tol": 1e-6}
     >>> model = nmo.glm.GLM(
@@ -56,9 +57,14 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     solver_name: BFGS
     >>> # Save the model parameters to a file
     >>> model.save_params("model_params.npz")
-    >>> # create a mapping dictionary to replace the observation model
+    >>> # Create a custom link function
+    >>> def custom_link_function(x):
+    ...     return jnp.pow(x, 2)
+    >>> observation_model = nmo.observation_models.PoissonObservations(
+    ...     inverse_link_function=custom_link_function
+    ... )
     >>> mapping_dict = {
-    ...     "observation_model": "Poisson",
+    ...     "observation_model": observation_model,
     ...     "regularizer": "Lasso",
     ...     "solver_name": "ProxSVRG",
     ... }
@@ -67,12 +73,18 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     >>> # The model is now loaded, overwriting the observation model and regularizer
     >>> for key, value in model.get_params().items():
     ...     print(f"{key}: {value}")
-    observation_model__inverse_link_function: <PjitFunction of <function exp at ...>>
-    observation_model: PoissonObservations(inverse_link_function=exp)
+    observation_model__inverse_link_function: <function custom_link_function at ...>
+    observation_model: PoissonObservations(inverse_link_function=custom_link_function)
     regularizer: Lasso()
     regularizer_strength: 0.1
     solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
     solver_name: ProxSVRG
+    >>> # Test the custom link function does what we expect
+    >>> x = jnp.array([5.0])
+    >>> expected_output = jnp.array([25.0])
+    >>> output = model.observation_model.inverse_link_function(x)
+    >>> print(f"Custom link function output: {output}, Expected: {expected_output}")
+    Custom link function output: [25.], Expected: [25.]
     """
 
     # load the model from a .npz file

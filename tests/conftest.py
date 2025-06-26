@@ -361,6 +361,14 @@ def poissonGLM_model_instantiation_pytree(poissonGLM_model_instantiation):
 
 
 @pytest.fixture
+def poissonGLM_fitted_model_instantiation(poissonGLM_model_instantiation):
+    X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+    model.fit(X, y)
+
+    return X, y, model, true_params, firing_rate
+
+
+@pytest.fixture
 def population_poissonGLM_model_instantiation():
     """Set up a population Poisson GLM for testing purposes.
 
@@ -417,6 +425,16 @@ def population_poissonGLM_model_instantiation_pytree(
         observation_model=model.observation_model, regularizer=model.regularizer
     )
     return X_tree, np.random.poisson(rate), model_tree, true_params_tree, rate
+
+
+@pytest.fixture
+def population_poissonGLM_fitted_model_instantiation(
+    population_poissonGLM_model_instantiation,
+):
+    X, y, model, true_params, firing_rate = population_poissonGLM_model_instantiation
+    model.fit(X, y)
+
+    return X, y, model, true_params, firing_rate
 
 
 @pytest.fixture

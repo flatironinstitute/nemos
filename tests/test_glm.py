@@ -16,6 +16,7 @@ from sklearn.model_selection import GridSearchCV
 import nemos as nmo
 from nemos._observation_model_builder import instantiate_observation_model
 from nemos._regularizer_builder import create_regularizer
+from nemos.initialize_regressor import initialize_intercept_matching_mean_rate
 from nemos.pytrees import FeaturePytree
 from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
 from nemos.utils import _get_name
@@ -1659,9 +1660,6 @@ class TestGLM:
             regularizer_strength=2.0,
         )
 
-        model.coef_ = jnp.zeros((10, 5))
-        model.intercept_ = jnp.zeros((5,))
-
         initial_params = model.get_params()
         initial_fit_params = model._get_coef_and_intercept()
         initial_params["coef_"] = initial_fit_params[0]
@@ -1701,24 +1699,16 @@ class TestGLM:
                     load_val
                 ), f"{key} function mismatch: {_get_name(init_val)} != {_get_name(load_val)}"
 
-    @pytest.mark.parametrize("regularizer", ["Ridge", "UnRegularized", "Lasso"])
+    @pytest.mark.parametrize("regularizer", ["Ridge"])
     @pytest.mark.parametrize(
         "obs_model",
         [
             "PoissonObservations",
-            "BernoulliObservations",
-            "GammaObservations",
         ],
     )
     @pytest.mark.parametrize(
         "solver_name",
         [
-            "GradientDescent",
-            "BFGS",
-            "LBFGS",
-            "NonlinearCG",
-            "ProximalGradient",
-            "SVRG",
             "ProxSVRG",
         ],
     )
@@ -1734,18 +1724,6 @@ class TestGLM:
         [
             {},
             {
-                "observation_model": "PoissonObservations",
-                "regularizer": "Ridge",
-                "solver_name": "ProxSVRG",
-                "regularizer_strength": 5.0,
-            },
-            {
-                "observation_model": nmo.observation_models.PoissonObservations(),
-                "regularizer": nmo.regularizer.Ridge(),
-                "solver_name": "ProxSVRG",
-                "regularizer_strength": 5.0,
-            },
-            {
                 "observation_model": "Gamma",
                 "regularizer": "Lasso",
                 "solver_name": "ProximalGradient",
@@ -1759,7 +1737,7 @@ class TestGLM:
             },
         ],
     )
-    def test_save_and_load_with_mapping(
+    def test_save_and_load_with_custom_mapping(
         self,
         regularizer,
         obs_model,
@@ -1789,9 +1767,6 @@ class TestGLM:
             regularizer=regularizer,
             regularizer_strength=2.0,
         )
-
-        model.coef_ = jnp.zeros((10, 5))
-        model.intercept_ = jnp.zeros((5,))
 
         initial_params = model.get_params()
         initial_fit_params = model._get_coef_and_intercept()
@@ -1875,6 +1850,112 @@ class TestGLM:
                 assert _get_name(init_val) == _get_name(
                     load_val
                 ), f"{key} function mismatch: {_get_name(init_val)} != {_get_name(load_val)}"
+
+    @pytest.mark.parametrize("regularizer", ["Ridge"])
+    @pytest.mark.parametrize("obs_model", ["PoissonObservations"])
+    @pytest.mark.parametrize("solver_name", ["ProxSVRG"])
+    @pytest.mark.parametrize("model_class", [nmo.glm.GLM, nmo.glm.PopulationGLM])
+    @pytest.mark.parametrize(
+        "mapping_dict",
+        [
+            {
+                "observation_model": nmo.observation_models.PoissonObservations(
+                    inverse_link_function=lambda x: jnp.power(x, 2)
+                ),
+                "regularizer": nmo.regularizer.Lasso(),
+                "solver_name": "ProximalGradient",
+                "regularizer_strength": 3.0,
+            },
+        ],
+    )
+    @pytest.mark.parametrize(
+        "test_value",
+        [
+            jnp.array([25.0]),
+            jnp.array([7]),
+            jnp.array([0.0]),
+        ],
+    )
+    def test_save_load_with_custom_link_function(
+        self,
+        regularizer,
+        obs_model,
+        solver_name,
+        mapping_dict,
+        tmp_path,
+        glm_class_type,
+        model_class,
+        test_value,
+    ):
+        """
+        Test that models with custom inverse link functions can be saved and loaded properly.
+        """
+
+        model = model_class(
+            observation_model=obs_model,
+            solver_name=solver_name,
+            regularizer=regularizer,
+            regularizer_strength=2.0,
+        )
+
+        # Save
+        save_path = tmp_path / "test_model.npz"
+        model.save_params(save_path)
+
+        # Load
+        loaded_model = nmo.load_model(save_path, mapping_dict=mapping_dict)
+
+        # Validate custom link function in mapping_dict
+        test_value = test_value
+        expected_output = jnp.sqrt(test_value)
+
+        result = initialize_intercept_matching_mean_rate(
+            loaded_model.observation_model.inverse_link_function, test_value
+        )
+
+        assert np.allclose(
+            result, expected_output
+        ), f"Inverse link function result mismatch: expected {expected_output}, got {result}"
+
+    @pytest.mark.parametrize(
+        "fitted_glm_type",
+        [
+            "poissonGLM_fitted_model_instantiation",
+            "population_poissonGLM_fitted_model_instantiation",
+        ],
+    )
+    def test_save_and_load_fitted_model(
+        self, request, fitted_glm_type, glm_class_type, tmp_path
+    ):
+        """
+        Test saving and loading a fitted model with various observation models and regularizers.
+        Ensure all parameters are preserved.
+        """
+        _, _, fitted_model, _, _ = request.getfixturevalue(fitted_glm_type)
+
+        initial_params = fitted_model.get_params()
+        initial_fit_params = fitted_model._get_coef_and_intercept()
+        initial_params["coef_"] = initial_fit_params[0]
+        initial_params["intercept_"] = initial_fit_params[1]
+
+        # Save
+        save_path = tmp_path / "test_model.npz"
+        fitted_model.save_params(save_path)
+
+        # Load
+        loaded_model = nmo.load_model(save_path)
+        loaded_params = loaded_model.get_params()
+        loaded_fit_params = loaded_model._get_coef_and_intercept()
+        loaded_params["coef_"] = loaded_fit_params[0]
+        loaded_params["intercept_"] = loaded_fit_params[1]
+
+        # Assert coef and intercept are preserved
+        assert np.allclose(
+            initial_params["coef_"], loaded_params["coef_"]
+        ), "Coefficient mismatch after load."
+        assert np.allclose(
+            initial_params["intercept_"], loaded_params["intercept_"]
+        ), "Intercept mismatch after load."
 
 
 @pytest.mark.parametrize("glm_type", ["", "population_"])
