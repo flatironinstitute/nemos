@@ -230,6 +230,17 @@ class BasisMixin:
         else:
             slice_dict = self._get_feature_slicing(double_complex=False)[0]
         # expand complex output to real and imag, drop imag component if real
+        column_idx_info = {
+            key: (sl.stop - sl.start, self[key].n_basis_funcs)
+            for key, sl in slice_dict.items()
+        }
+
+        # define a mask
+        def mask_array(length, step):
+            mask = np.ones(length, dtype=bool)
+            mask[::step] = False
+            return mask
+
         X = np.concatenate(
             [
                 (
@@ -239,7 +250,9 @@ class BasisMixin:
                         [
                             np.real(X[..., sl]),
                             (
-                                np.imag(X[..., sl])[..., 1:]
+                                np.imag(X[..., sl])[
+                                    ..., mask_array(*column_idx_info[key])
+                                ]
                                 if self[key]._include_constant
                                 else np.imag(X[..., sl])
                             ),

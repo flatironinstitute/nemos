@@ -640,7 +640,9 @@ def _get_n_output_features(
                 return None
             n_output_features += (
                 scale * n_features_1 * n_features_2
-                - b._include_constant * double_complex
+                - b._include_constant
+                * double_complex
+                * int(np.prod(b._input_shape_product))
             )
         else:
             n_features = _atomic_basis_get_n_basis_output_features(b)
