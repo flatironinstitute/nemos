@@ -31,7 +31,7 @@ class FourierBasis(Basis, AtomicBasisMixin, abc.ABC):
         n_frequencies: int,
         include_constant: bool = False,
         phase_sign: int = 1,
-        label: Optional[str] = "RaisedCosineBasisLinear",
+        label: Optional[str] = "FourierBasis",
     ) -> None:
 
         self.include_constant = include_constant
@@ -68,6 +68,11 @@ class FourierBasis(Basis, AtomicBasisMixin, abc.ABC):
             )
         # store as int (used in slicing)
         self._include_constant = int(value)
+
+        # not true only at initialization
+        if hasattr(self, "n_frequencies"):
+            # set frequencies by invoking setter
+            self.n_frequencies = self.n_frequencies
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
@@ -134,6 +139,22 @@ class FourierBasis(Basis, AtomicBasisMixin, abc.ABC):
         """Read-only property for Fourier basis."""
         return super().n_basis_funcs
 
+    @n_basis_funcs.setter
+    def n_basis_funcs(self, value: int):
+        if not isinstance(value, int):
+            raise TypeError(
+                f"`n_basis_funcs` must be an integer. `{value}` provided instead!"
+            )
+        if value <= 0:
+            raise ValueError(
+                f"`n_basis_funcs` must be a positive integer. {value} provided instead!"
+            )
+        self._n_basis_funcs = value
+        max_frequency = value + 1 - self._include_constant
+        self._frequencies = np.arange(
+            1 - self._include_constant, max_frequency, dtype=float
+        )
+
     @property
     def n_frequencies(self) -> int:
         """Number of frequencies for the basis."""
@@ -147,7 +168,7 @@ class FourierBasis(Basis, AtomicBasisMixin, abc.ABC):
             )
         if value <= 0:
             raise ValueError(
-                f"`value` must be a positive integer. {value} provided instead!"
+                f"`n_frequencies` must be a positive integer. {value} provided instead!"
             )
         self._frequencies = np.arange(
             1 - self._include_constant, value + 1, dtype=float
