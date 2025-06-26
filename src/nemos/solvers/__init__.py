@@ -13,4 +13,9 @@ from .jaxopt_solvers import (
     JaxoptLBFGS,
 )
 
+from .optimistix_solvers import (
+    OptimistixBFGS,
+    # OptimistixLBFGS,
+)
+
 from ._solver_registry import solver_registry
