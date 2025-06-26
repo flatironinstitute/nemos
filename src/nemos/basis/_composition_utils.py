@@ -647,7 +647,8 @@ def _get_n_output_features(
             if n_features is None:
                 return None
             n_output_features += (
-                scale * n_features - b._include_constant * double_complex
+                scale * n_features
+                - b._input_shape_product[0] * b._include_constant * double_complex
             )
 
     return n_output_features
