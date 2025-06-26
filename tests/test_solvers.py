@@ -332,7 +332,8 @@ def test_svrg_glm_fit(
     # set tolerance to -1 so that doesn't stop the iteration
     solver_kwargs = {
         "maxiter": maxiter,
-        "tol": -1.0,
+        # "tol": -1.0,
+        "tol": 0.0,
     }
 
     # only pass mask if it's not None
@@ -362,7 +363,11 @@ def test_svrg_glm_fit(
 
     solver = glm._solver
     assert solver.maxiter == maxiter
-    assert glm.solver_state_.iter_num == maxiter
+
+    if hasattr(glm.solver_state_, "iter_num"):
+        assert glm.solver_state_.iter_num == maxiter
+    else:
+        assert glm.solver_state_.step.item() == maxiter
 
 
 @pytest.mark.parametrize(
