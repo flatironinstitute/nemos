@@ -239,7 +239,11 @@ class BasisMixin:
                         [
                             np.real(X[..., sl]),
                             (
-                                np.imag(X[..., sl])[..., 1:]
+                                np.delete(
+                                    np.imag(X[..., sl]),
+                                    slice(None, None, self[key].n_basis_funcs),
+                                    axis=-1,
+                                )
                                 if self[key]._include_constant
                                 else np.imag(X[..., sl])
                             ),
