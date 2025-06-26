@@ -634,14 +634,14 @@ def _get_n_output_features(
         basis2 = getattr(b, "_basis2", None)
         scale = 2 if b._is_complex and double_complex else 1
         if basis1 and basis2:
-            n_basis_1 = _get_n_output_features(basis1, double_complex=False)
-            n_basis_2 = _get_n_output_features(basis2, double_complex=False)
-            if n_basis_1 is None or n_basis_2 is None:
+            n_features_1 = _get_n_output_features(basis1, double_complex=False)
+            n_features_2 = _get_n_output_features(basis2, double_complex=False)
+            if n_features_1 is None or n_features_2 is None:
                 return None
-            n_output_features += scale * n_basis_1 * n_basis_2
+            n_output_features += scale * n_features_1 * n_features_2
         else:
-            n_out = _atomic_basis_get_n_basis_output_features(b)
-            if n_out is None:
+            n_features = _atomic_basis_get_n_basis_output_features(b)
+            if n_features is None:
                 return None
-            n_output_features += scale * n_out
+            n_output_features += scale * n_features
     return n_output_features
