@@ -71,3 +71,7 @@ class JaxoptBFGS(JaxoptWrapper):
 
 class JaxoptLBFGS(JaxoptWrapper):
     _solver_cls = jaxopt.LBFGS
+
+
+class JaxoptNonlinearCG(JaxoptWrapper):
+    _solver_cls = jaxopt.NonlinearCG

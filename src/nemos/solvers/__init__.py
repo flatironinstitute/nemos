@@ -11,11 +11,13 @@ from .jaxopt_solvers import (
     JaxoptProximalGradient,
     JaxoptBFGS,
     JaxoptLBFGS,
+    JaxoptNonlinearCG,
 )
 
 from .optimistix_solvers import (
     OptimistixBFGS,
     # OptimistixLBFGS,
+    OptimistixNonlinearCG,
 )
 
 from ._solver_registry import solver_registry

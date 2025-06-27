@@ -169,3 +169,7 @@ class OptimistixOptaxSolver(OptimistixAdapter):
 
 # class OptimistixLBFGS(OptimistixAdapter):
 #    _solver_cls = optx.LBFGS
+
+
+class OptimistixNonlinearCG(OptimistixAdapter):
+    _solver_cls = optx.NonlinearCG
