@@ -163,11 +163,13 @@ class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
         atol = solver_init_kwargs.pop("atol", atol)
         rtol = solver_init_kwargs.pop("rtol", rtol)
 
-        user_args = {
-            f.name: solver_init_kwargs.pop(f.name)
-            for f in dataclasses.fields(OptimistixConfig)
-            if f.name in solver_init_kwargs
-        }
+        # take out the arguments that go into minimise, init, terminate and so on
+        # and only pass the actually needed things to __init__
+        user_args = {}
+        for f in dataclasses.fields(OptimistixConfig):
+            kw = f.name
+            if kw in solver_init_kwargs:
+                user_args[kw] = solver_init_kwargs.pop(kw)
         self.config = OptimistixConfig(**user_args)
 
         stepsize = solver_init_kwargs.get("stepsize", None)

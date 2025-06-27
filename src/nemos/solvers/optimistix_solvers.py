@@ -2,7 +2,7 @@ from .abstract_solver import AbstractSolver
 
 from typing import Type, Callable, Any, TypeAlias
 from jaxtyping import PyTree, ArrayLike
-from dataclasses import dataclass, fields, field
+import dataclasses
 import inspect
 
 import jax
@@ -21,14 +21,14 @@ OptimistixSolverState: TypeAlias = eqx.Module
 OptimistixStepResult: TypeAlias = tuple[ModelParams, OptimistixSolverState]
 
 
-@dataclass
+@dataclasses.dataclass
 class OptimistixConfig:
     """Defaults for common arguments required by optimistix solvers."""
 
     # max number of steps
     max_steps: int = DEFAULT_MAX_STEPS
     # options dict passed around within optimistix
-    options: dict[str, Any] = field(default_factory=dict)
+    options: dict[str, Any] = dataclasses.field(default_factory=dict)
     # "The shape+dtype of the output of `fn`"
     f_struct: PyTree[jax.ShapeDtypeStruct] = jax.ShapeDtypeStruct((), _float_dtype)
     # this would be the output shape + dtype of the aux variables fn returns
@@ -71,20 +71,11 @@ class OptimistixAdapter(AbstractSolver[OptimistixSolverState, OptimistixStepResu
 
         # take out the arguments that go into minimise, init, terminate and so on
         # and only pass the actually needed things to __init__
-
-        # user_args = {}
-        # for f in fields(OptimistixConfig):
-        #    kw = f.name
-        #    if kw in solver_init_kwargs:
-        #        user_args[kw] = solver_init_kwargs.pop(kw)
-
-        # another solution for the same
-        user_args = {
-            f.name: solver_init_kwargs.pop(f.name)
-            for f in fields(OptimistixConfig)
-            if f.name in solver_init_kwargs
-        }
-
+        user_args = {}
+        for f in dataclasses.fields(OptimistixConfig):
+            kw = f.name
+            if kw in solver_init_kwargs:
+                user_args[kw] = solver_init_kwargs.pop(kw)
         self.config = OptimistixConfig(**user_args)
 
         self._solver = self._solver_cls(atol=atol, rtol=rtol, **solver_init_kwargs)
@@ -140,7 +131,9 @@ class OptimistixAdapter(AbstractSolver[OptimistixSolverState, OptimistixStepResu
     def get_accepted_arguments(cls) -> list[str]:
         own_arguments = set(inspect.getfullargspec(cls).args)
         solver_arguments = set(inspect.getfullargspec(cls._solver_cls).args)
-        common_optx_arguments = set([f.name for f in fields(OptimistixConfig)])
+        common_optx_arguments = set(
+            [f.name for f in dataclasses.fields(OptimistixConfig)]
+        )
 
         all_arguments = own_arguments | solver_arguments | common_optx_arguments
 
