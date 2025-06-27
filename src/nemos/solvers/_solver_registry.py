@@ -17,7 +17,7 @@ from .optimistix_solvers import (
     OptimistixNonlinearCG,
 )
 
-from ._prox_grad import (
+from .optax_optimistix_solvers import (
     OptaxOptimistixProximalGradient,
     OptaxOptimistixGradientDescent,
 )
