@@ -237,7 +237,7 @@ class BasisMixin:
                 (
                     np.real(X[..., sl]).reshape(
                         X.shape[0],
-                        np.prod(jax.tree.leaves(self[key]._input_shape_)),
+                        np.prod(jax.tree.leaves(self[key]._input_shape_), dtype=int),
                         -1,
                     )
                     if not self[key]._is_complex
@@ -245,19 +245,27 @@ class BasisMixin:
                         [
                             np.real(X[..., sl]).reshape(
                                 X.shape[0],
-                                np.prod(jax.tree.leaves(self[key]._input_shape_)),
+                                np.prod(
+                                    jax.tree.leaves(self[key]._input_shape_), dtype=int
+                                ),
                                 -1,
                             ),
                             (
                                 np.imag(X[..., sl]).reshape(
                                     X.shape[0],
-                                    np.prod(jax.tree.leaves(self[key]._input_shape_)),
+                                    np.prod(
+                                        jax.tree.leaves(self[key]._input_shape_),
+                                        dtype=int,
+                                    ),
                                     -1,
                                 )[..., 1:]
                                 if self[key]._include_constant
                                 else np.imag(X[..., sl]).reshape(
                                     X.shape[0],
-                                    np.prod(jax.tree.leaves(self[key]._input_shape_)),
+                                    np.prod(
+                                        jax.tree.leaves(self[key]._input_shape_),
+                                        dtype=int,
+                                    ),
                                     -1,
                                 )
                             ),
