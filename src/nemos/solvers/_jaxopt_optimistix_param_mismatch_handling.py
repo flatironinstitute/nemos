@@ -68,7 +68,7 @@ def _replace_atol_rtol(
 ) -> dict[str, Any]:
     if "atol" in solver_init_kwargs and "atol" not in accepted_arguments:
         warnings.warn(
-            "solver does not accept `atol` and `rtol`."
+            "solver does not accept `atol` and `rtol`. "
             "Discarding `rtol` and using `atol` as `tol`."
         )
         solver_init_kwargs["tol"] = solver_init_kwargs.pop("atol")

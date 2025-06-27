@@ -99,7 +99,6 @@ class OptaxOptimistixGradientDescent(OptimistixOptaxSolver):
             optax.sgd(learning_rate=1.0, nesterov=True),
             _make_rate_scaler(stepsize, linesearch_kwargs),
         )
-
         solver_init_kwargs["optim"] = _sgd
 
         super().__init__(
