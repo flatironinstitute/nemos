@@ -64,8 +64,6 @@ class OptimistixAdapter(AbstractSolver[OptimistixSolverState, OptimistixStepResu
         atol = solver_init_kwargs.pop("atol", atol)
         rtol = solver_init_kwargs.pop("rtol", rtol)
 
-        solver_init_kwargs = self._replace_maxiter(solver_init_kwargs)
-
         if "stepsize" in solver_init_kwargs:
             solver_init_kwargs["search"] = optx.LearningRate(
                 solver_init_kwargs.pop("stepsize")
@@ -92,12 +90,6 @@ class OptimistixAdapter(AbstractSolver[OptimistixSolverState, OptimistixStepResu
         self._solver = self._solver_cls(atol=atol, rtol=rtol, **solver_init_kwargs)
 
         self.stats = {}
-
-    def _replace_maxiter(self, solver_init_kwargs):
-        if "maxiter" in solver_init_kwargs:
-            solver_init_kwargs["max_steps"] = solver_init_kwargs.pop("maxiter")
-
-        return solver_init_kwargs
 
     def init_state(self, init_params, *args) -> OptimistixSolverState:
         return self._solver.init(
