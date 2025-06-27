@@ -419,11 +419,38 @@ class BasisMixin:
     ) -> NDArray:
         # reshape the arrays to match input shapes
         shape = list(array.shape)
-        array = array.reshape(
-            shape[:axis]
-            + [*(b for sh in bas._input_shape_ for b in sh), -1]
-            + shape[axis + 1 :]
-        )
+        if bas._is_complex and bas._include_constant:
+            real_num_end = _get_n_output_features(bas, False)
+            slice_array = (
+                [slice(None)] * axis
+                + [slice(0, real_num_end)]
+                + [slice(None)] * (len(shape) - axis - 1)
+            )
+            real_array = array[tuple(slice_array)]
+            slice_array[axis] = slice(real_num_end, None)
+            imag_array = array[tuple(slice_array)]
+            array = np.concatenate(
+                [
+                    real_array.reshape(
+                        shape[:axis]
+                        + [*(b for sh in bas._input_shape_ for b in sh), -1]
+                        + shape[axis + 1 :]
+                    ),
+                    imag_array.reshape(
+                        shape[:axis]
+                        + [*(b for sh in bas._input_shape_ for b in sh), -1]
+                        + shape[axis + 1 :]
+                    ),
+                ],
+                axis=-1,
+            )
+        else:
+            array = array.reshape(
+                shape[:axis]
+                + [*(b for sh in bas._input_shape_ for b in sh), -1]
+                + shape[axis + 1 :]
+            )
+
         return array
 
     def __iter__(self):
