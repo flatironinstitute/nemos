@@ -77,8 +77,8 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     solver_name: BFGS
     >>> # Test the custom link function does what we expect
     >>> x = jnp.array([5.0])
-    >>> model.observation_model.inverse_link_function(x)
-    array([25.])
+    >>> print(model.observation_model.inverse_link_function(x))
+    [25.]
     """
 
     # load the model from a .npz file
