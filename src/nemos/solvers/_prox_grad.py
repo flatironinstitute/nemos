@@ -142,7 +142,13 @@ class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
             _make_rate_scaler(stepsize, linesearch_kwargs),
         )
 
-        self._solver = optx.OptaxMinimiser(_sgd, rtol, atol)
+        optax_minim_kwargs = {}
+        if "verbose" in solver_init_kwargs:
+            optax_minim_kwargs["verbose"] = solver_init_kwargs["verbose"]
+        if "norm" in solver_init_kwargs:
+            optax_minim_kwargs["norm"] = solver_init_kwargs["norm"]
+
+        self._solver = optx.OptaxMinimiser(_sgd, rtol, atol, **optax_minim_kwargs)
 
         self.stats = {}
 
