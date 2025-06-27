@@ -635,3 +635,28 @@ def test_shape_param_exclusion():
 
     obj = Example(a=np.arange(3), b=1, c=None)
     assert utils.format_repr(obj) == "Example(b=1, d=1)"
+
+
+@pytest.mark.parametrize(
+    "model_class",
+    [
+        nmo.glm.GLM,
+        nmo.glm.PopulationGLM,
+    ],
+)
+def test_inspect_npz(tmp_path, model_class):
+    """
+    Save a model to a .npz file and inspect it.
+
+    This function tests that the function `nmo.inspect_npz` runs correctly
+    """
+    file_path = tmp_path / f"test_model.npz"
+
+    # Initialize the model with some parameters
+    model = model_class(
+        regularizer="Ridge",
+        regularizer_strength=0.1,
+        solver_name="BFGS",
+    )
+    model.save_params(file_path)
+    nmo.inspect_npz(file_path)
