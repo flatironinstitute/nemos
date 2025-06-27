@@ -53,7 +53,13 @@ class JaxoptWrapper(AbstractSolver[JaxoptSolverState, jaxopt.OptStep]):
         return self._solver.run(init_params, *self._extend_args(args))
 
     def __getattr__(self, name: str):
-        return getattr(self._solver, name)
+        # without this guard deepcopy leads to a RecursionError
+        try:
+            solver = object.__getattribute__(self, "_solver")
+        except AttributeError:
+            raise AttributeError(name)
+
+        return getattr(solver, name)
 
 
 class JaxoptProximalGradient(JaxoptWrapper):
