@@ -229,7 +229,20 @@ class BasisMixin:
                 i += b.n_basis_funcs
         else:
             slice_dict = self._get_feature_slicing(double_complex=False)[0]
+
+        # define a mask
+        column_idx_info = {
+            key: (sl.stop - sl.start, self[key].n_basis_funcs)
+            for key, sl in slice_dict.items()
+        }
+
+        def mask_array(length, step):
+            mask = np.ones(length, dtype=bool)
+            mask[::step] = False
+            return mask
+
         # expand complex output to real and imag, drop imag component if real
+        # reshape so concatenation is correct
         X = np.concatenate(
             [
                 (
@@ -247,11 +260,9 @@ class BasisMixin:
                                 -1,
                             ),
                             (
-                                np.delete(
-                                    np.imag(X[..., sl]),
-                                    slice(None, None, self[key].n_basis_funcs),
-                                    axis=-1,
-                                ).reshape(
+                                np.imag(X[..., sl])[
+                                    ..., mask_array(*column_idx_info[key])
+                                ].reshape(
                                     X.shape[0],
                                     *jax.tree.leaves(self[key]._input_shape_),
                                     -1,
