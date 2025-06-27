@@ -970,12 +970,17 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         comp_feature_2 = getattr(
             self.basis2, "_compute_features", self.basis2.compute_features
         )
+        # reshape to (n_samples, ..., n_basis) before kron
         X = kron(
-            comp_feature_1(*xi[: self.basis1._n_input_dimensionality]),
-            comp_feature_2(*xi[self.basis1._n_input_dimensionality :]),
+            comp_feature_1(*xi[: self.basis1._n_input_dimensionality]).reshape(
+                xi[0].shape[0], -1, self.basis1.n_basis_funcs
+            ),
+            comp_feature_2(*xi[self.basis1._n_input_dimensionality :]).reshape(
+                xi[0].shape[0], -1, self.basis2.n_basis_funcs
+            ),
             transpose=False,
         )
-        return X
+        return X.reshape(X.shape[0], -1)
 
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.
