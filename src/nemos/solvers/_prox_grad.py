@@ -83,6 +83,34 @@ def _make_rate_scaler(
         return stateful_scale_by_learning_rate(stepsize)
 
 
+class OptaxOptimistixGradientDescent(OptimistixOptaxSolver):
+    def __init__(
+        self,
+        unregularized_loss,
+        regularizer,
+        regularizer_strength,
+        atol: float = DEFAULT_ATOL,
+        rtol: float = DEFAULT_RTOL,
+        **solver_init_kwargs,
+    ):
+        stepsize = solver_init_kwargs.get("stepsize", None)
+        linesearch_kwargs = solver_init_kwargs.get("linesearch_kwargs", {})
+
+        _sgd = optax.chain(
+            optax.sgd(learning_rate=1.0, nesterov=True),
+            _make_rate_scaler(stepsize, linesearch_kwargs),
+        )
+
+        solver_init_kwargs["optim"] = _sgd
+
+        super().__init__(
+            unregularized_loss,
+            regularizer,
+            regularizer_strength,
+            atol=atol,
+            rtol=rtol,
+            **solver_init_kwargs,
+        )
 class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
     """
     ProximalGradient implementation combining Optax and Optimistix.

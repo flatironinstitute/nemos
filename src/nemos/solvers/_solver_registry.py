@@ -19,10 +19,13 @@ from .optimistix_solvers import (
 
 from ._prox_grad import (
     OptaxOptimistixProximalGradient,
+    OptaxOptimistixGradientDescent,
 )
 
 solver_registry = {
-    "GradientDescent": JaxoptGradientDescent,
+    # "GradientDescent": JaxoptGradientDescent,
+    "GradientDescent": OptaxOptimistixGradientDescent,
+    #
     # "ProximalGradient": JaxoptProximalGradient,
     "ProximalGradient": OptaxOptimistixProximalGradient,
     #
