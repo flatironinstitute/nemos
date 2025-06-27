@@ -23,6 +23,8 @@ from .base_class import Base
 from .regularizer import Regularizer, UnRegularized
 from .typing import DESIGN_INPUT_TYPE, SolverInit, SolverRun, SolverUpdate
 
+from .solvers._jaxopt_optimistix_param_mismatch_handling import _clean_solver_kwargs
+
 
 def strip_metadata(arg_num: Optional[int] = None, kwarg_key: Optional[str] = None):
     """Strip metadata from arg."""
@@ -108,9 +110,9 @@ class BaseRegressor(Base, abc.ABC):
         if solver_kwargs is None:
             solver_kwargs = dict()
 
-        self._check_solver_kwargs(
-            solvers.solver_registry[self.solver_name], solver_kwargs
-        )
+        solver_class = solvers.solver_registry[self.solver_name]
+        solver_kwargs = _clean_solver_kwargs(solver_class, solver_kwargs)
+        self._check_solver_kwargs(solver_class, solver_kwargs)
 
         self.solver_kwargs = solver_kwargs
         self._solver_init_state = None
@@ -282,13 +284,6 @@ class BaseRegressor(Base, abc.ABC):
 
         undefined_kwargs = set(solver_kwargs.keys()) - set(accepted_args)
 
-        # TODO these should be handled before _check_solver_kwargs is ever invoked?
-        undefined_kwargs.discard("tol")
-        undefined_kwargs.discard("atol")
-        undefined_kwargs.discard("rtol")
-        undefined_kwargs.discard("max_steps")
-        undefined_kwargs.discard("maxiter")
-
         if undefined_kwargs:
             raise NameError(
                 f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for {solver_class.__name__}!"
@@ -334,6 +329,7 @@ class BaseRegressor(Base, abc.ABC):
         # instantiate the solver
         solver_cls = solvers.solver_registry[self.solver_name]
 
+        solver_kwargs = _clean_solver_kwargs(solver_cls, solver_kwargs)
         self._check_solver_kwargs(solver_cls, solver_kwargs)
 
         solver = solver_cls(
