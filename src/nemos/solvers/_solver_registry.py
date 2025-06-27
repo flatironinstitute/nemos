@@ -3,6 +3,7 @@ from .jaxopt_solvers import (
     JaxoptProximalGradient,
     JaxoptBFGS,
     JaxoptLBFGS,
+    JaxoptNonlinearCG,
 )
 
 from ._svrg import (
@@ -13,6 +14,7 @@ from ._svrg import (
 from .optimistix_solvers import (
     OptimistixBFGS,
     # OptimistixLBFGS,
+    OptimistixNonlinearCG,
 )
 
 from ._prox_grad import (
@@ -31,4 +33,7 @@ solver_registry = {
     #
     "SVRG": WrappedSVRG,
     "ProxSVRG": WrappedProxSVRG,
+    #
+    "NonlinearCG": JaxoptNonlinearCG,
+    # "NonlinearCG": OptimistixNonlinearCG,
 }
