@@ -12,6 +12,7 @@ from numba import njit
 
 import nemos as nmo
 from nemos._observation_model_builder import instantiate_observation_model
+from nemos.initialize_regressor import initialize_intercept_matching_mean_rate
 
 
 @pytest.fixture()
@@ -100,9 +101,25 @@ def test_glm_setter_observation_model(obs_model_string, glm_class, expectation):
 @pytest.mark.parametrize(
     "link_func_string, expectation",
     [
+        ("nemos.utils.one_over_x", does_not_raise()),
         ("jax.numpy.exp", does_not_raise()),
         ("jax.nn.softplus", does_not_raise()),
         ("jax.lax.logistic", does_not_raise()),
+        ("jax.scipy.special.expit", does_not_raise()),
+        ("jax.scipy.stats.norm.cdf", does_not_raise()),
+        ("jax._src.numpy.ufuncs.exp", does_not_raise()),
+        ("jax._src.nn.functions.softplus", does_not_raise()),
+        ("jax._src.lax.lax.logistic", does_not_raise()),
+        ("jax._src.scipy.special.expit", does_not_raise()),
+        ("jax._src.scipy.stats.norm.cdf", does_not_raise()),
+        (
+            "nemos.utils.invalid_link",
+            pytest.raises(ValueError, match="Unknown link function"),
+        ),
+        (
+            "jax.numpy.invalid_link",
+            pytest.raises(ValueError, match="Unknown link function"),
+        ),
         ("invalid", pytest.raises(ValueError, match="Unknown link function")),
     ],
 )
@@ -333,6 +350,39 @@ class TestPoissonObservations:
             match="The `inverse_link_function` function cannot be differentiated",
         ):
             model.observation_model.inverse_link_function = non_diff
+
+    @pytest.mark.parametrize(
+        "test_value",
+        [
+            jnp.array([25.0]),
+            jnp.array([7]),
+            jnp.array([0.0]),
+            jnp.array([1.0]),
+            jnp.array([0.5]),
+        ],
+    )
+    def test_custom_inverse_link_function(
+        self,
+        test_value,
+        poissonGLM_model_instantiation,
+    ):
+        """
+        Test that custom inverse link function can be inversed and works correctly.
+        """
+
+        # Initialize model
+        _, _, model, _, _ = poissonGLM_model_instantiation
+        model.observation_model.inverse_link_function = lambda x: jnp.power(x, 2)
+
+        # Validate custom link function
+        expected_output = jnp.sqrt(test_value)
+        result = initialize_intercept_matching_mean_rate(
+            model.observation_model.inverse_link_function, test_value
+        )
+
+        assert np.allclose(
+            result, expected_output
+        ), f"Inverse link function result mismatch: expected {expected_output}, got {result}"
 
     def test_pseudo_r2_vs_statsmodels(self, poissonGLM_model_instantiation):
         """

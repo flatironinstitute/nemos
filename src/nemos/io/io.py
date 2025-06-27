@@ -63,28 +63,22 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     >>> observation_model = nmo.observation_models.PoissonObservations(
     ...     inverse_link_function=custom_link_function
     ... )
-    >>> mapping_dict = {
-    ...     "observation_model": observation_model,
-    ...     "regularizer": "Lasso",
-    ...     "solver_name": "ProxSVRG",
-    ... }
+    >>> mapping_dict = {"observation_model": observation_model}
     >>> # Load the model from the saved file with custom mapping
     >>> model = nmo.load_model("model_params.npz", mapping_dict=mapping_dict)
-    >>> # The model is now loaded, overwriting the observation model and regularizer
+    >>> # The model is now loaded, overwriting the link function
     >>> for key, value in model.get_params().items():
     ...     print(f"{key}: {value}")
     observation_model__inverse_link_function: <function custom_link_function at ...>
     observation_model: PoissonObservations(inverse_link_function=custom_link_function)
-    regularizer: Lasso()
+    regularizer: Ridge()
     regularizer_strength: 0.1
     solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
-    solver_name: ProxSVRG
+    solver_name: BFGS
     >>> # Test the custom link function does what we expect
     >>> x = jnp.array([5.0])
-    >>> expected_output = jnp.array([25.0])
-    >>> output = model.observation_model.inverse_link_function(x)
-    >>> print(f"Custom link function output: {output}, Expected: {expected_output}")
-    Custom link function output: [25.], Expected: [25.]
+    >>> model.observation_model.inverse_link_function(x)
+    array([25.])
     """
 
     # load the model from a .npz file
