@@ -113,6 +113,11 @@ class BaseRegressor(Base, abc.ABC):
 
         if solver_kwargs is None:
             solver_kwargs = dict()
+
+        self._check_solver_kwargs(
+            solvers.solver_registry[self.solver_name], solver_kwargs
+        )
+
         self.solver_kwargs = solver_kwargs
         self._solver_init_state = None
         self._solver_update = None
@@ -273,8 +278,20 @@ class BaseRegressor(Base, abc.ABC):
         NameError
             If any of the solver keyword arguments are not valid.
         """
-        solver_args = inspect.getfullargspec(solver_class).args
-        undefined_kwargs = set(solver_kwargs.keys()).difference(solver_args)
+        try:
+            accepted_args = solver_class.get_accepted_arguments()
+        except AttributeError:
+            accepted_args = inspect.getfullargspec(solver_class).args
+
+        undefined_kwargs = set(solver_kwargs.keys()) - set(accepted_args)
+
+        # TODO these should be handled before _check_solver_kwargs is ever invoked?
+        undefined_kwargs.discard("tol")
+        undefined_kwargs.discard("atol")
+        undefined_kwargs.discard("rtol")
+        undefined_kwargs.discard("max_steps")
+        undefined_kwargs.discard("maxiter")
+
         if undefined_kwargs:
             raise NameError(
                 f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for {solver_class.__name__}!"
@@ -319,6 +336,8 @@ class BaseRegressor(Base, abc.ABC):
 
         # instantiate the solver
         solver_cls = solvers.solver_registry[self.solver_name]
+
+        self._check_solver_kwargs(solver_cls, solver_kwargs)
 
         solver = solver_cls(
             self._predict_and_compute_loss,

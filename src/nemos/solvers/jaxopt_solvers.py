@@ -3,6 +3,7 @@ from .abstract_solver import AbstractSolver
 import jaxopt
 
 from typing import Generic, TypeVar, ClassVar, Type, NamedTuple, TypeAlias
+import inspect
 
 JaxoptSolverState: TypeAlias = NamedTuple
 # JaxoptStepResult ~ jaxopt.OptStep
@@ -60,6 +61,21 @@ class JaxoptWrapper(AbstractSolver[JaxoptSolverState, jaxopt.OptStep]):
             raise AttributeError(name)
 
         return getattr(solver, name)
+
+    @classmethod
+    def get_accepted_arguments(cls) -> list[str]:
+        own_arguments = set(inspect.getfullargspec(cls).args)
+        solver_arguments = set(inspect.getfullargspec(cls._solver_cls).args)
+
+        all_arguments = own_arguments | solver_arguments
+
+        # discard arguments that are passed by BaseRegressor
+        all_arguments.discard("self")
+        all_arguments.discard("unregularized_loss")
+        all_arguments.discard("regularizer")
+        all_arguments.discard("regularizer_strength")
+
+        return list(all_arguments)
 
 
 class JaxoptProximalGradient(JaxoptWrapper):

@@ -3,6 +3,7 @@ from .abstract_solver import AbstractSolver
 from typing import Type, Callable, Any, TypeAlias
 from jaxtyping import PyTree, ArrayLike
 from dataclasses import dataclass, fields, field
+import inspect
 
 import jax
 import jax.numpy as jnp
@@ -155,6 +156,22 @@ class OptimistixAdapter(AbstractSolver[OptimistixSolverState, OptimistixStepResu
         self.stats.update(solution.stats)
 
         return solution.value, solution.state
+
+    @classmethod
+    def get_accepted_arguments(cls) -> list[str]:
+        own_arguments = set(inspect.getfullargspec(cls).args)
+        solver_arguments = set(inspect.getfullargspec(cls._solver_cls).args)
+        common_optx_arguments = set([f.name for f in fields(OptimistixConfig)])
+
+        all_arguments = own_arguments | solver_arguments | common_optx_arguments
+
+        # discard arguments that are passed by BaseRegressor
+        all_arguments.discard("self")
+        all_arguments.discard("unregularized_loss")
+        all_arguments.discard("regularizer")
+        all_arguments.discard("regularizer_strength")
+
+        return list(all_arguments)
 
 
 class OptimistixBFGS(OptimistixAdapter):

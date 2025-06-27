@@ -17,3 +17,14 @@ class AbstractSolver(abc.ABC, Generic[SolverState, StepResult]):
     @abc.abstractmethod
     def run(self, init_params, *args) -> StepResult:
         pass
+
+    @classmethod
+    @abc.abstractmethod
+    def get_accepted_arguments(cls) -> list[str]:
+        """
+        List the argument names accepted by the solver.
+
+        Used by `BaseRegressor` to determine what arguments
+        can be passed to the solver's __init__.
+        """
+        pass

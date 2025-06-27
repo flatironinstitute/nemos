@@ -78,8 +78,7 @@ def _make_rate_scaler(
         return optax.scale_by_zoom_linesearch(**linesearch_kwargs)
     else:
         # NOTE GradientDescent works with optax.scale_by_learning_rate as well
-        # but for _prox_grad_learning_rate_from_optax.ProximalGradient
-        # we need to be able to extract the current learning rate
+        # but for ProximalGradient we need to be able to extract the current learning rate
         return stateful_scale_by_learning_rate(stepsize)
 
 
@@ -111,6 +110,18 @@ class OptaxOptimistixGradientDescent(OptimistixOptaxSolver):
             rtol=rtol,
             **solver_init_kwargs,
         )
+
+    @classmethod
+    def get_accepted_arguments(cls) -> list[str]:
+        arguments = set(super().get_accepted_arguments())
+
+        arguments.discard("optim")  # we create this, it can't be passed
+        arguments.add("stepsize")
+        arguments.add("linesearch_kwargs")
+
+        return list(arguments)
+
+
 class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
     """
     ProximalGradient implementation combining Optax and Optimistix.
@@ -170,6 +181,7 @@ class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
             _make_rate_scaler(stepsize, linesearch_kwargs),
         )
 
+        # TODO aren't these already handled in user_args?
         optax_minim_kwargs = {}
         if "verbose" in solver_init_kwargs:
             optax_minim_kwargs["verbose"] = solver_init_kwargs["verbose"]
@@ -179,6 +191,16 @@ class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
         self._solver = optx.OptaxMinimiser(_sgd, rtol, atol, **optax_minim_kwargs)
 
         self.stats = {}
+
+    @classmethod
+    def get_accepted_arguments(cls) -> list[str]:
+        arguments = set(super().get_accepted_arguments())
+
+        arguments.discard("optim")  # we create this, it can't be passed
+        arguments.add("stepsize")
+        arguments.add("linesearch_kwargs")
+
+        return list(arguments)
 
     @property
     def maxiter(self):
