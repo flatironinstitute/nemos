@@ -254,9 +254,6 @@ class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
 
         return new_params, new_state, new_aux
 
-    # def __getattr__(self, name: str):
-    #    return getattr(self._solver, name)
-
     def init(self, *args, **kwargs):
         # so that when passing self to optx.minimise, init can be called
         return self._solver.init(*args, **kwargs)
