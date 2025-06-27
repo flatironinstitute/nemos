@@ -719,6 +719,8 @@ class ConvBasisMixin:
 
         """
         self.kernel_ = self.evaluate(np.linspace(0, 1, self.window_size))
+        if np.issubdtype(self.kernel_.dtype, np.complexfloating):
+            self.kernel_ = self.kernel_.astype(float)
         return self
 
     @property
