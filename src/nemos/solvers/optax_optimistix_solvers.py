@@ -163,8 +163,6 @@ class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
         atol = solver_init_kwargs.pop("atol", atol)
         rtol = solver_init_kwargs.pop("rtol", rtol)
 
-        solver_init_kwargs = self._replace_maxiter(solver_init_kwargs)
-
         user_args = {
             f.name: solver_init_kwargs.pop(f.name)
             for f in dataclasses.fields(OptimistixConfig)
