@@ -16,60 +16,69 @@
      - **Examples**
      - **Evaluation/Convolution**
      - **Preferred Mode**
+
    * - **B-Spline**
      - .. plot:: scripts/basis_figs.py plot_bspline
           :show-source-link: False
           :height: 80px
      - :ref:`Grid cells <grid_cells_nemos>`
-     - :class:`~nemos.basis.BSplineEval` :raw-html:`<br />`
-       :class:`~nemos.basis.BSplineConv`
+     - :class:`~nemos.basis.BSplineEval` :raw-html:`<br />` :class:`~nemos.basis.BSplineConv`
      - 🟢 Eval
+
    * - **Cyclic B-Spline**
      - .. plot:: scripts/basis_figs.py plot_cyclic_bspline
           :show-source-link: False
           :height: 80px
      - :ref:`Place cells <basis_eval_place_cells>`
-     - :class:`~nemos.basis.CyclicBSplineEval`  :raw-html:`<br />`
-       :class:`~nemos.basis.CyclicBSplineConv`
+     - :class:`~nemos.basis.CyclicBSplineEval` :raw-html:`<br />` :class:`~nemos.basis.CyclicBSplineConv`
      - 🟢 Eval
+
    * - **M-Spline**
      - .. plot:: scripts/basis_figs.py plot_mspline
           :show-source-link: False
           :height: 80px
      - :ref:`Place cells <basis_eval_place_cells>`
-     - :class:`~nemos.basis.MSplineEval`  :raw-html:`<br />`
-       :class:`~nemos.basis.MSplineConv`
+     - :class:`~nemos.basis.MSplineEval` :raw-html:`<br />` :class:`~nemos.basis.MSplineConv`
      - 🟢 Eval
+
    * - **Linearly Spaced Raised Cosine**
      - .. plot:: scripts/basis_figs.py plot_raised_cosine_linear
           :show-source-link: False
           :height: 80px
      -
-     - :class:`~nemos.basis.RaisedCosineLinearEval`  :raw-html:`<br />`
-       :class:`~nemos.basis.RaisedCosineLinearConv`
+     - :class:`~nemos.basis.RaisedCosineLinearEval` :raw-html:`<br />` :class:`~nemos.basis.RaisedCosineLinearConv`
      - 🟢 Eval
+
    * - **Log Spaced Raised Cosine**
      - .. plot:: scripts/basis_figs.py plot_raised_cosine_log
           :show-source-link: False
           :height: 80px
      - :ref:`Head Direction <head_direction_reducing_dimensionality>`
-     - :class:`~nemos.basis.RaisedCosineLogEval`  :raw-html:`<br />`
-       :class:`~nemos.basis.RaisedCosineLogConv`
+     - :class:`~nemos.basis.RaisedCosineLogEval` :raw-html:`<br />` :class:`~nemos.basis.RaisedCosineLogConv`
      - 🔵 Conv
+
+   * - **Fourier Basis**
+     - .. plot:: scripts/basis_figs.py plot_fourier_basis
+          :show-source-link: False
+          :height: 80px
+     -
+     - :class:`~nemos.basis.FourierEval` :raw-html:`<br />` :class:`~nemos.basis.FourierConv`
+     - 🔵 Conv
+
    * - **Orthogonalized Exponential Decays**
      - .. plot:: scripts/basis_figs.py plot_orth_exp_basis
           :show-source-link: False
           :height: 80px
      -
-     - :class:`~nemos.basis.OrthExponentialEval`  :raw-html:`<br />`
-       :class:`~nemos.basis.OrthExponentialConv`
+     - :class:`~nemos.basis.OrthExponentialEval` :raw-html:`<br />` :class:`~nemos.basis.OrthExponentialConv`
      - 🟢 Eval
+
    * - **Identity Function**
      - .. plot:: scripts/basis_figs.py plot_identity_basis
           :show-source-link: False
           :height: 80px
      - :ref:`Custom Features <custom-features>`
-     - :class:`~nemos.basis.IdentityEval`  :raw-html:`<br />`
+     - :class:`~nemos.basis.IdentityEval` :raw-html:`<br />`
      - 🟢 Eval
 
    * - **History Effects**
@@ -77,7 +86,7 @@
           :show-source-link: False
           :height: 80px
      - :ref:`Coupled GLM <fully_coupled_glm_how_to>`
-     - :class:`~nemos.basis.HistoryConv`  :raw-html:`<br />`
+     - :class:`~nemos.basis.HistoryConv` :raw-html:`<br />`
      - 🔵 Conv
 ```
 
