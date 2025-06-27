@@ -230,31 +230,38 @@ class BasisMixin:
         else:
             slice_dict = self._get_feature_slicing(double_complex=False)[0]
         # expand complex output to real and imag, drop imag component if real
-        column_idx_info = {
-            key: (sl.stop - sl.start, self[key].n_basis_funcs)
-            for key, sl in slice_dict.items()
-        }
-
-        # define a mask
-        def mask_array(length, step):
-            mask = np.ones(length, dtype=bool)
-            mask[::step] = False
-            return mask
-
         X = np.concatenate(
             [
                 (
-                    np.real(X[..., sl])
+                    np.real(X[..., sl]).reshape(
+                        X.shape[0],
+                        *jax.tree.leaves(self[key]._input_shape_),
+                        -1,
+                    )
                     if not self[key]._is_complex
                     else np.concatenate(
                         [
-                            np.real(X[..., sl]),
+                            np.real(X[..., sl]).reshape(
+                                X.shape[0],
+                                *jax.tree.leaves(self[key]._input_shape_),
+                                -1,
+                            ),
                             (
-                                np.imag(X[..., sl])[
-                                    ..., mask_array(*column_idx_info[key])
-                                ]
+                                np.delete(
+                                    np.imag(X[..., sl]),
+                                    slice(None, None, self[key].n_basis_funcs),
+                                    axis=-1,
+                                ).reshape(
+                                    X.shape[0],
+                                    *jax.tree.leaves(self[key]._input_shape_),
+                                    -1,
+                                )
                                 if self[key]._include_constant
-                                else np.imag(X[..., sl])
+                                else np.imag(X[..., sl]).reshape(
+                                    X.shape[0],
+                                    *jax.tree.leaves(self[key]._input_shape_),
+                                    -1,
+                                )
                             ),
                         ],
                         axis=-1,
@@ -264,7 +271,7 @@ class BasisMixin:
             ],
             axis=-1,
         )
-        return X
+        return X.reshape(X.shape[0], -1)
 
     def _get_feature_slicing(
         self,
