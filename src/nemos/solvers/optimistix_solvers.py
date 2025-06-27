@@ -61,7 +61,6 @@ class OptimistixAdapter(AbstractSolver[OptimistixSolverState, OptimistixStepResu
         self.fun = lambda params, args: loss_fn(params, *args)
         self.fun_with_aux = lambda params, args: (loss_fn(params, *args), None)
 
-        solver_init_kwargs = self._replace_tol(solver_init_kwargs)
         atol = solver_init_kwargs.pop("atol", atol)
         rtol = solver_init_kwargs.pop("rtol", rtol)
 
@@ -97,18 +96,6 @@ class OptimistixAdapter(AbstractSolver[OptimistixSolverState, OptimistixStepResu
     def _replace_maxiter(self, solver_init_kwargs):
         if "maxiter" in solver_init_kwargs:
             solver_init_kwargs["max_steps"] = solver_init_kwargs.pop("maxiter")
-
-        return solver_init_kwargs
-
-    def _replace_tol(self, solver_init_kwargs):
-        if "tol" in solver_init_kwargs:
-            if "atol" in solver_init_kwargs:
-                raise ValueError("tol and atol can't both be given.")
-            if "rtol" in solver_init_kwargs:
-                raise ValueError("tol and rtol can't both be given.")
-
-            solver_init_kwargs["atol"] = solver_init_kwargs.pop("tol")
-            solver_init_kwargs["rtol"] = 0.0
 
         return solver_init_kwargs
 
