@@ -679,7 +679,7 @@ class TestConvBasis:
 
         basis_obj = instantiate_atomic_basis(cls, **kwargs)
         out = basis_obj.compute_features(x)
-        assert out.shape[1] == expected_n_input * basis_obj.n_basis_funcs
+        assert out.shape[1] == basis_obj.n_output_features
 
     @pytest.mark.parametrize(
         "bounds, samples, exception",
