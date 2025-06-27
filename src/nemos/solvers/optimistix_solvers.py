@@ -26,7 +26,7 @@ class OptimistixConfig:
 
     # max number of steps
     max_steps: int = DEFAULT_MAX_STEPS
-    # options dict passed around within optimistix. e.g. ProximalGradient uses it to pass regularizer_strength
+    # options dict passed around within optimistix
     options: dict[str, Any] = field(default_factory=dict)
     # "The shape+dtype of the output of `fn`"
     f_struct: PyTree[jax.ShapeDtypeStruct] = jax.ShapeDtypeStruct((), _float_dtype)
@@ -34,8 +34,6 @@ class OptimistixConfig:
     aux_struct: PyTree[jax.ShapeDtypeStruct] = None
     # "Any Lineax tags describing the structure of the Jacobian matrix d(fn)/dy."
     tags: frozenset = frozenset()
-    # increase optimistix's default of 256
-    max_steps: int = DEFAULT_MAX_STEPS
     # sets if the minimisation throws an error if an iterative solver runs out of steps
     throw: bool = False
     # norm used in the Cauchy convergence criterion
