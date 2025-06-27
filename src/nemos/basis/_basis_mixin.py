@@ -229,32 +229,50 @@ class BasisMixin:
                 i += b.n_basis_funcs
         else:
             slice_dict = self._get_feature_slicing(double_complex=False)[0]
-        # expand complex output to real and imag, drop imag component if real
+
+        # define a mask
         column_idx_info = {
             key: (sl.stop - sl.start, self[key].n_basis_funcs)
             for key, sl in slice_dict.items()
         }
 
-        # define a mask
         def mask_array(length, step):
             mask = np.ones(length, dtype=bool)
             mask[::step] = False
             return mask
 
+        # expand complex output to real and imag, drop imag component if real
+        # reshape so concatenation is correct
         X = np.concatenate(
             [
                 (
-                    np.real(X[..., sl])
+                    np.real(X[..., sl]).reshape(
+                        X.shape[0],
+                        *jax.tree.leaves(self[key]._input_shape_),
+                        -1,
+                    )
                     if not self[key]._is_complex
                     else np.concatenate(
                         [
-                            np.real(X[..., sl]),
+                            np.real(X[..., sl]).reshape(
+                                X.shape[0],
+                                *jax.tree.leaves(self[key]._input_shape_),
+                                -1,
+                            ),
                             (
                                 np.imag(X[..., sl])[
                                     ..., mask_array(*column_idx_info[key])
-                                ]
+                                ].reshape(
+                                    X.shape[0],
+                                    *jax.tree.leaves(self[key]._input_shape_),
+                                    -1,
+                                )
                                 if self[key]._include_constant
-                                else np.imag(X[..., sl])
+                                else np.imag(X[..., sl]).reshape(
+                                    X.shape[0],
+                                    *jax.tree.leaves(self[key]._input_shape_),
+                                    -1,
+                                )
                             ),
                         ],
                         axis=-1,
@@ -264,7 +282,7 @@ class BasisMixin:
             ],
             axis=-1,
         )
-        return X
+        return X.reshape(X.shape[0], -1)
 
     def _get_feature_slicing(
         self,
@@ -419,38 +437,11 @@ class BasisMixin:
     ) -> NDArray:
         # reshape the arrays to match input shapes
         shape = list(array.shape)
-        if bas._is_complex and bas._include_constant:
-            real_num_end = _get_n_output_features(bas, False)
-            slice_array = (
-                [slice(None)] * axis
-                + [slice(0, real_num_end)]
-                + [slice(None)] * (len(shape) - axis - 1)
-            )
-            real_array = array[tuple(slice_array)]
-            slice_array[axis] = slice(real_num_end, None)
-            imag_array = array[tuple(slice_array)]
-            array = np.concatenate(
-                [
-                    real_array.reshape(
-                        shape[:axis]
-                        + [*(b for sh in bas._input_shape_ for b in sh), -1]
-                        + shape[axis + 1 :]
-                    ),
-                    imag_array.reshape(
-                        shape[:axis]
-                        + [*(b for sh in bas._input_shape_ for b in sh), -1]
-                        + shape[axis + 1 :]
-                    ),
-                ],
-                axis=-1,
-            )
-        else:
-            array = array.reshape(
-                shape[:axis]
-                + [*(b for sh in bas._input_shape_ for b in sh), -1]
-                + shape[axis + 1 :]
-            )
-
+        array = array.reshape(
+            shape[:axis]
+            + [*(b for sh in bas._input_shape_ for b in sh), -1]
+            + shape[axis + 1 :]
+        )
         return array
 
     def __iter__(self):
