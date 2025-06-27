@@ -384,7 +384,7 @@ class BasisMixin:
             )
 
         # Get the slice dictionary based on predefined feature slicing
-        slice_dict = self._get_feature_slicing()[0]
+        slice_dict = self._get_feature_slicing(double_complex=True)[0]
 
         # Helper function to build index tuples for each slice
         def build_index_tuple(slice_obj, axis: int, ndim: int):
