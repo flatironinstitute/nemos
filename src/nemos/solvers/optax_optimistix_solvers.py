@@ -187,7 +187,12 @@ class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
         if "norm" in solver_init_kwargs:
             optax_minim_kwargs["norm"] = solver_init_kwargs["norm"]
 
-        self._solver = optx.OptaxMinimiser(_sgd, rtol, atol, **optax_minim_kwargs)
+        self._solver = optx.OptaxMinimiser(
+            optim=_sgd,
+            rtol=rtol,
+            atol=atol,
+            **optax_minim_kwargs,
+        )
 
         self.stats = {}
 
@@ -254,16 +259,6 @@ class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
 
         return new_params, new_state, new_aux
 
-    def init(self, *args, **kwargs):
-        # so that when passing self to optx.minimise, init can be called
-        return self._solver.init(*args, **kwargs)
-
-    def terminate(self, *args, **kwargs):
-        return self._solver.terminate(*args, **kwargs)
-
-    def postprocess(self, *args, **kwargs):
-        return self._solver.postprocess(*args, **kwargs)
-
     def run(
         self,
         init_params,
@@ -285,3 +280,15 @@ class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
         self.stats.update(solution.stats)
 
         return solution.value, solution.state
+
+    def init(self, *args, **kwargs):
+        # so that when passing self to optx.minimise, init can be called
+        return self._solver.init(*args, **kwargs)
+
+    def terminate(self, *args, **kwargs):
+        # so that when passing self to optx.minimise, terminate can be called
+        return self._solver.terminate(*args, **kwargs)
+
+    def postprocess(self, *args, **kwargs):
+        # so that when passing self to optx.minimise, postprocess can be called
+        return self._solver.postprocess(*args, **kwargs)
