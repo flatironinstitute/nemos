@@ -338,56 +338,6 @@ class BaseRegressor(Base, abc.ABC):
 
         return self
 
-    def _inspect_solver_kwargs(
-        self, solver_kwargs: dict
-    ) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
-        """Inspect and categorize the solver keyword arguments.
-
-        This method inspects the provided `solver_kwargs` dictionary and categorizes
-        the keyword arguments based on which solver functions they apply to:
-        `run`, `init_state`, `update`, and `__init__`. This ensures that the
-        appropriate arguments are passed to each function when the solver is used.
-
-        Parameters
-        ----------
-        solver_kwargs :
-            Dictionary containing keyword arguments for the solver.
-
-        Returns
-        -------
-        :
-            A tuple containing four dictionaries:
-            - solver_run_kwargs: Arguments for the solver's `run` method.
-            - solver_init_state_kwargs: Arguments for the solver's `init_state` method.
-            - solver_update_kwargs: Arguments for the solver's `update` method.
-            - solver_init_kwargs: Arguments for the solver's `__init__` constructor.
-        """
-        solver_run_kwargs = dict()
-        solver_init_state_kwargs = dict()
-        solver_update_kwargs = dict()
-        solver_init_kwargs = dict()
-
-        if solver_kwargs:
-            # instantiate a solver to then inspect the params of its various functions
-            solver = self._get_solver_class(self.solver_name)
-
-            for key, value in solver_kwargs.items():
-                if key in inspect.getfullargspec(solver.run).args:
-                    solver_run_kwargs[key] = value
-                if key in inspect.getfullargspec(solver.init_state).args:
-                    solver_init_state_kwargs[key] = value
-                if key in inspect.getfullargspec(solver.update).args:
-                    solver_update_kwargs[key] = value
-                if key in inspect.getfullargspec(solver.__init__).args:
-                    solver_init_kwargs[key] = value
-
-        return (
-            solver_run_kwargs,
-            solver_init_state_kwargs,
-            solver_update_kwargs,
-            solver_init_kwargs,
-        )
-
     @abc.abstractmethod
     def fit(self, X: DESIGN_INPUT_TYPE, y: Union[NDArray, jnp.ndarray]):
         """Fit the model to neural activity."""
