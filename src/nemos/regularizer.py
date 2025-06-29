@@ -307,6 +307,88 @@ class Lasso(Regularizer):
         return _penalized_loss
 
 
+class ElasticNet(Regularizer):
+    """
+    Regularizer class for Elastic Net (L1 + L2 regularization).
+
+    This class equips models with the Elastic Net proximal operator and the
+    Elastic Net penalized loss function.
+    """
+
+    _allowed_solvers = (
+        "ProximalGradient",
+        "ProxSVRG",
+    )
+
+    _default_solver = "ProximalGradient"
+
+    def __init__(
+        self,
+    ):
+        super().__init__()
+
+    def get_proximal_operator(
+        self,
+    ) -> ProximalOperator:
+        """
+        Retrieve the proximal operator for Elastic Net regularization (L1 + L2 penalty).
+
+        Returns
+        -------
+        :
+            The proximal operator, applying L1 + L2 regularization to the provided parameters. The intercept
+            term is not regularized.
+        """
+
+        def prox_op(params, netreg, scaling=1.0):
+            Ws, bs = params
+            netreg /= bs.shape[0]
+            # if Ws is a pytree, netreg needs to be a pytree with the same
+            # structure
+            netreg = jax.tree_util.tree_map(lambda x: netreg * jnp.ones_like(x), Ws)
+            return jaxopt.prox.prox_elastic_net(Ws, netreg, scaling=scaling), bs
+
+        return prox_op
+
+    @staticmethod
+    def _penalization(
+        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], regularizer_strength: float
+    ) -> jnp.ndarray:
+        """
+        Compute the Elastic Net penalization for given parameters.
+
+        Parameters
+        ----------
+        params :
+            Model parameters for which to compute the penalization.
+
+        Returns
+        -------
+        float
+            The Elastic Net penalization value.
+        """
+
+        def net_penalty(coeff: jnp.ndarray, intercept: jnp.ndarray) -> jnp.ndarray:
+            # TODO benchmark single vs double jnp.sum?
+            return (
+                0.5 * (1 - regularizer_strength) * jnp.sum(jnp.power(coeff, 2))
+                + regularizer_strength * jnp.sum(jnp.abs(coeff))
+            ) / intercept.shape[0]
+
+        # tree map the computation and sum over leaves
+        return tree_utils.pytree_map_and_reduce(
+            lambda x: net_penalty(x, params[1]), sum, params[0]
+        )
+
+    def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
+        """Return a function for calculating the penalized loss using Elastic Net regularization."""
+
+        def _penalized_loss(params, X, y):
+            return loss(params, X, y) + self._penalization(params, regularizer_strength)
+
+        return _penalized_loss
+
+
 class GroupLasso(Regularizer):
     """
     Regularizer class for Group Lasso (group-L1) regularized models.
