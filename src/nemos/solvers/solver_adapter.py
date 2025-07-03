@@ -7,7 +7,7 @@ import inspect
 
 class SolverAdapter(AbstractSolver[SolverState, StepResult]):
     """
-    Base class for adapter wrapping solver from JAXopt and Optimistix.
+    Base class for adapters wrapping solvers from JAXopt and Optimistix.
 
     Needs to define the class attribute `_solver_cls` and set
     the wrapped solver in the `_solver` attribute.
