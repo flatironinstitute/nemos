@@ -1,23 +1,22 @@
 """Solvers wrapping Optax solvers with Optimistix for use with NeMoS."""
 
-import equinox as eqx
-import optax
-import optimistix as optx
-from typing import NamedTuple, Union, Any, Callable
-
 import dataclasses
+from typing import Any, Callable, NamedTuple, Union
 
-from .optimistix_solvers import (
-    DEFAULT_RTOL,
-    DEFAULT_ATOL,
-    OptimistixOptaxSolver,
-    OptimistixConfig,
-)
-
+import equinox as eqx
 import jax
 import jax.numpy as jnp
-from jaxtyping import PyTree, ArrayLike
+import optax
+import optimistix as optx
+from jaxtyping import ArrayLike, PyTree
+
 from ..tree_utils import tree_sub
+from .optimistix_solvers import (
+    DEFAULT_ATOL,
+    DEFAULT_RTOL,
+    OptimistixConfig,
+    OptimistixOptaxSolver,
+)
 
 # FIXME This might be solved in a simpler way using
 # https://optax.readthedocs.io/en/latest/getting_started.html#accessing-learning-rate

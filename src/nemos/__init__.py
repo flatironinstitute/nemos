@@ -14,11 +14,11 @@ from . import (
     pytrees,
     regularizer,
     simulation,
+    solvers,
     styles,
     tree_utils,
     type_casting,
     utils,
-    solvers,
 )
 
 try:

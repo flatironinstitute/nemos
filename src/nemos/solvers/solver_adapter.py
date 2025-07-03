@@ -1,8 +1,9 @@
 """Base class for adapter wrapping solver from JAXopt and Optimistix."""
 
-from .abstract_solver import AbstractSolver, SolverState, StepResult
-from typing import Type, Any, ClassVar
 import inspect
+from typing import Any, ClassVar, Type
+
+from .abstract_solver import AbstractSolver, SolverState, StepResult
 
 
 class SolverAdapter(AbstractSolver[SolverState, StepResult]):
@@ -57,7 +58,7 @@ class SolverAdapter(AbstractSolver[SolverState, StepResult]):
 
         # make a list of accepted arguments
         accepted_doc_header = inspect.cleandoc(
-            f"""
+            """
             Accepted arguments:
             -------------------
             """
@@ -67,7 +68,7 @@ class SolverAdapter(AbstractSolver[SolverState, StepResult]):
 
         # read the underlying solver class's documentation
         solver_doc_header = inspect.cleandoc(
-            f"""
+            """
             Solver's documentation:
             -----------------------
             """

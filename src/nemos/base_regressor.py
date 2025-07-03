@@ -21,9 +21,8 @@ from . import solvers, utils, validation
 from ._regularizer_builder import AVAILABLE_REGULARIZERS, create_regularizer
 from .base_class import Base
 from .regularizer import Regularizer, UnRegularized
-from .typing import DESIGN_INPUT_TYPE, SolverInit, SolverRun, SolverUpdate
-
 from .solvers._jaxopt_optimistix_param_mismatch_handling import _clean_solver_kwargs
+from .typing import DESIGN_INPUT_TYPE, SolverInit, SolverRun, SolverUpdate
 
 
 def strip_metadata(arg_num: Optional[int] = None, kwarg_key: Optional[str] = None):

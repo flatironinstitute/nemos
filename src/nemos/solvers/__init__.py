@@ -1,28 +1,23 @@
 """Custom solvers module."""
 
-from ._svrg import SVRG, ProxSVRG, WrappedSVRG, WrappedProxSVRG
+from ._solver_registry import solver_registry
+from ._svrg import SVRG, ProxSVRG, WrappedProxSVRG, WrappedSVRG
 from ._svrg_defaults import (
     glm_softplus_poisson_l_max_and_l,
     svrg_optimal_batch_and_stepsize,
 )
-
 from .jaxopt_solvers import (
-    JaxoptGradientDescent,
-    JaxoptProximalGradient,
     JaxoptBFGS,
+    JaxoptGradientDescent,
     JaxoptLBFGS,
     JaxoptNonlinearCG,
+    JaxoptProximalGradient,
 )
-
-from .optimistix_solvers import (
-    OptimistixBFGS,
-    # OptimistixLBFGS,
-    OptimistixNonlinearCG,
-)
-
-from ._solver_registry import solver_registry
-
 from .optax_optimistix_solvers import (
-    OptaxOptimistixProximalGradient,
     OptaxOptimistixGradientDescent,
+    OptaxOptimistixProximalGradient,
+)
+from .optimistix_solvers import (  # OptimistixLBFGS,
+    OptimistixBFGS,
+    OptimistixNonlinearCG,
 )
