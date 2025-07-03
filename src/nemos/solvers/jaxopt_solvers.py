@@ -63,7 +63,7 @@ class JaxoptWrapper(AbstractSolver[JaxoptSolverState, jaxopt.OptStep]):
         return getattr(solver, name)
 
     @classmethod
-    def get_accepted_arguments(cls) -> list[str]:
+    def get_accepted_arguments(cls) -> set[str]:
         own_arguments = set(inspect.getfullargspec(cls).args)
         solver_arguments = set(inspect.getfullargspec(cls._solver_cls).args)
 
@@ -75,7 +75,7 @@ class JaxoptWrapper(AbstractSolver[JaxoptSolverState, jaxopt.OptStep]):
         all_arguments.discard("regularizer")
         all_arguments.discard("regularizer_strength")
 
-        return list(all_arguments)
+        return all_arguments
 
 
 class JaxoptProximalGradient(JaxoptWrapper):

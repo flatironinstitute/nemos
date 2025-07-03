@@ -136,7 +136,7 @@ class OptimistixAdapter(AbstractSolver[OptimistixSolverState, OptimistixStepResu
         return solution.value, solution.state
 
     @classmethod
-    def get_accepted_arguments(cls) -> list[str]:
+    def get_accepted_arguments(cls) -> set[str]:
         own_arguments = set(inspect.getfullargspec(cls).args)
         solver_arguments = set(inspect.getfullargspec(cls._solver_cls).args)
         common_optx_arguments = set(
@@ -151,7 +151,7 @@ class OptimistixAdapter(AbstractSolver[OptimistixSolverState, OptimistixStepResu
         all_arguments.discard("regularizer")
         all_arguments.discard("regularizer_strength")
 
-        return list(all_arguments)
+        return all_arguments
 
 
 class OptimistixBFGS(OptimistixAdapter):
