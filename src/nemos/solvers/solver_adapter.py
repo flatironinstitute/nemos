@@ -1,13 +1,23 @@
+"""Base class for adapter wrapping solver from JAXopt and Optimistix."""
+
 from .abstract_solver import AbstractSolver, SolverState, StepResult
-from typing import Generic, TypeVar, Type, Any, ClassVar
+from typing import Type, Any, ClassVar
 import inspect
 
 
 class SolverAdapter(AbstractSolver[SolverState, StepResult]):
+    """
+    Base class for adapter wrapping solver from JAXopt and Optimistix.
+
+    Needs to define the class attribute `_solver_cls` and set
+    the wrapped solver in the `_solver` attribute.
+    """
+
     _solver_cls: ClassVar[Type]
     _solver: Any
 
     def __getattr__(self, name: str):
+        """Try getting undefined attributes from the underlying solver."""
         # without this guard deepcopy leads to a RecursionError
         try:
             solver = object.__getattribute__(self, "_solver")
