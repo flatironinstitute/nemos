@@ -6,16 +6,43 @@ StepResult = TypeVar("StepResult")
 
 
 class AbstractSolver(abc.ABC, Generic[SolverState, StepResult]):
+    """Base class defining the interface for solvers that can be used by `BaseRegressor`."""
+
+    @abc.abstractmethod
+    def __init__(
+        self,
+        unregularized_loss,
+        regularizer,
+        regularizer_strength,
+        **solver_init_kwargs,
+    ):
+        pass
+
     @abc.abstractmethod
     def init_state(self, init_params, *args) -> SolverState:
+        """
+        Initialize the solver state.
+
+        Used by `BaseRegressor.initialize_state`
+        """
         pass
 
     @abc.abstractmethod
     def update(self, params, state, *args) -> StepResult:
+        """
+        Perform a single step/update of the optimization process.
+
+        Used by `BaseRegressor.update`.
+        """
         pass
 
     @abc.abstractmethod
     def run(self, init_params, *args) -> StepResult:
+        """
+        Run a full optimization process until a stopping criterion is reached.
+
+        Used by `BaseRegressor.fit`.
+        """
         pass
 
     @classmethod
