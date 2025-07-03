@@ -83,6 +83,13 @@ def _make_rate_scaler(
 
 
 class OptaxOptimistixGradientDescent(OptimistixOptaxSolver):
+    """
+    Gradient descent implementation combining Optax and Optimistix.
+
+    Uses Optax's SGD with Nesterov acceleration combined with Optax's
+    zoom linesearch or a constant learning rate.
+    """
+
     def __init__(
         self,
         unregularized_loss,

@@ -1,4 +1,4 @@
-from .abstract_solver import AbstractSolver
+from .wrapped_solver import SolverAdapter
 
 import jaxopt
 
@@ -9,8 +9,10 @@ JaxoptSolverState: TypeAlias = NamedTuple
 # JaxoptStepResult ~ jaxopt.OptStep
 
 
-class JaxoptWrapper(AbstractSolver[JaxoptSolverState, jaxopt.OptStep]):
-    _solver_cls: Type
+class JaxoptWrapper(SolverAdapter[JaxoptSolverState, jaxopt.OptStep]):
+    """Base class for adapters wrapping JAXopt solvers."""
+
+    _solver_cls: ClassVar[Type]
     _proximal: bool = False
 
     def __init__(
@@ -53,47 +55,33 @@ class JaxoptWrapper(AbstractSolver[JaxoptSolverState, jaxopt.OptStep]):
     def run(self, init_params, *args) -> jaxopt.OptStep:
         return self._solver.run(init_params, *self._extend_args(args))
 
-    def __getattr__(self, name: str):
-        # without this guard deepcopy leads to a RecursionError
-        try:
-            solver = object.__getattribute__(self, "_solver")
-        except AttributeError:
-            raise AttributeError(name)
-
-        return getattr(solver, name)
-
-    @classmethod
-    def get_accepted_arguments(cls) -> set[str]:
-        own_arguments = set(inspect.getfullargspec(cls).args)
-        solver_arguments = set(inspect.getfullargspec(cls._solver_cls).args)
-
-        all_arguments = own_arguments | solver_arguments
-
-        # discard arguments that are passed by BaseRegressor
-        all_arguments.discard("self")
-        all_arguments.discard("unregularized_loss")
-        all_arguments.discard("regularizer")
-        all_arguments.discard("regularizer_strength")
-
-        return all_arguments
-
 
 class JaxoptProximalGradient(JaxoptWrapper):
+    """Adapter for jaxopt.ProximalGradient."""
+
     _solver_cls = jaxopt.ProximalGradient
     _proximal = True
 
 
 class JaxoptGradientDescent(JaxoptWrapper):
+    """Adapter for jaxopt.GradientDescent."""
+
     _solver_cls = jaxopt.GradientDescent
 
 
 class JaxoptBFGS(JaxoptWrapper):
+    """Adapter for jaxopt.BFGS."""
+
     _solver_cls = jaxopt.BFGS
 
 
 class JaxoptLBFGS(JaxoptWrapper):
+    """Adapter for jaxopt.LBFGS."""
+
     _solver_cls = jaxopt.LBFGS
 
 
 class JaxoptNonlinearCG(JaxoptWrapper):
+    """Adapter for jaxopt.NonlinearCG."""
+
     _solver_cls = jaxopt.NonlinearCG
