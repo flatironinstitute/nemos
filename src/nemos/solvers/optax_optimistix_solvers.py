@@ -90,13 +90,14 @@ class OptaxOptimistixGradientDescent(OptimistixOptaxSolver):
         regularizer_strength,
         atol: float = DEFAULT_ATOL,
         rtol: float = DEFAULT_RTOL,
+        nesterov: bool = True,
         **solver_init_kwargs,
     ):
         stepsize = solver_init_kwargs.get("stepsize", None)
         linesearch_kwargs = solver_init_kwargs.get("linesearch_kwargs", {})
 
         _sgd = optax.chain(
-            optax.sgd(learning_rate=1.0, nesterov=True),
+            optax.sgd(learning_rate=1.0, nesterov=nesterov),
             _make_rate_scaler(stepsize, linesearch_kwargs),
         )
         solver_init_kwargs["optim"] = _sgd
@@ -128,13 +129,9 @@ class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
     Uses Optax's SGD with Nesterov acceleration combined with Optax's
     zoom linesearch or a constant learning rate.
     Then uses the learning rate given by Optax to scale the proximal
-    operator's update and check for convergence using Optimistix's.
+    operator's update and check for convergence using Optimistix's criterion.
 
     Works with the same proximal operator functions as JAXopt did.
-
-    Passes the regularizer strength (aka. `hyperparams_prox` following
-    the JAXopt naming) to .step through the `options` dict as
-    `options["regularizer_strength"]`.
     """
 
     fun: Callable
@@ -150,6 +147,7 @@ class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
         regularizer_strength,
         atol: float = DEFAULT_ATOL,
         rtol: float = DEFAULT_RTOL,
+        nesterov: bool = True,
         **solver_init_kwargs,
     ):
         loss_fn = unregularized_loss
@@ -175,7 +173,7 @@ class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
         linesearch_kwargs = solver_init_kwargs.get("linesearch_kwargs", {})
 
         _sgd = optax.chain(
-            optax.sgd(learning_rate=1.0, nesterov=True),
+            optax.sgd(learning_rate=1.0, nesterov=nesterov),
             _make_rate_scaler(stepsize, linesearch_kwargs),
         )
 
