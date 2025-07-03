@@ -1,4 +1,4 @@
-from .wrapped_solver import SolverAdapter
+from .solver_adapter import SolverAdapter
 
 from typing import Type, Callable, Any, TypeAlias, ClassVar
 from jaxtyping import PyTree, ArrayLike
