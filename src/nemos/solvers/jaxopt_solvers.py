@@ -1,4 +1,4 @@
-from .wrapped_solver import SolverAdapter
+from .solver_adapter import SolverAdapter
 
 import jaxopt
 
