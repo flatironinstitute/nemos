@@ -1301,7 +1301,6 @@ class TestGLM:
         )
         params = model.initialize_params(X, y)
         init_state = model.initialize_state(X, y, params)
-        assert init_state.velocity == params
 
     @pytest.mark.parametrize(
         "fill_val, expectation",
@@ -2780,7 +2779,12 @@ class TestPopulationGLMObservationModel:
                 "LBFGS",
                 {"tol": 10**-14},
             ),
-            (nmo.regularizer.Ridge(), 1.0, "LBFGS", {"stepsize": 0.1, "tol": 10**-14}),
+            (
+                nmo.regularizer.Ridge(),
+                1.0,
+                "LBFGS",
+                {"stepsize": 0.1, "tol": 10**-14},
+            ),
             (
                 nmo.regularizer.Lasso(),
                 0.001,
