@@ -1,19 +1,25 @@
+"""Base class for adapters wrapping JAXopt solvers."""
+
 from .solver_adapter import SolverAdapter
 
 import jaxopt
 
-from typing import Generic, TypeVar, ClassVar, Type, NamedTuple, TypeAlias
-import inspect
+from typing import ClassVar, Type, NamedTuple, TypeAlias
 
 JaxoptSolverState: TypeAlias = NamedTuple
 # JaxoptStepResult ~ jaxopt.OptStep
 
 
 class JaxoptWrapper(SolverAdapter[JaxoptSolverState, jaxopt.OptStep]):
-    """Base class for adapters wrapping JAXopt solvers."""
+    """
+    Base class for adapters wrapping JAXopt solvers.
+
+    Besides `_solver_cls`, for proximal solvers the `_proximal` class variable
+    needs to be set to `True`
+    """
 
     _solver_cls: ClassVar[Type]
-    _proximal: bool = False
+    _proximal: ClassVar[bool] = False
 
     def __init__(
         self,
@@ -41,6 +47,12 @@ class JaxoptWrapper(SolverAdapter[JaxoptSolverState, jaxopt.OptStep]):
             return regularizer.penalized_loss(unregularized_loss, regularizer_strength)
 
     def _extend_args(self, args):
+        """
+        Prepend the regularizer strength to args for proximal solvers.
+
+        Methods of `jaxopt.ProximalGradient` expect `hyperparams_prox` before
+        the objective function's arguments, while others do not need this.
+        """
         if self._proximal:
             return (self.regularizer_strength, *args)
         else:

@@ -1,3 +1,5 @@
+"""Registry for mapping from solver name to concrete implementation."""
+
 from .jaxopt_solvers import (
     JaxoptGradientDescent,
     JaxoptProximalGradient,

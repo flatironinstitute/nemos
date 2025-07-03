@@ -1,3 +1,5 @@
+"""Base class defining the interface for solvers that can be used by `BaseRegressor`."""
+
 import abc
 from typing import Generic, TypeVar
 
