@@ -179,18 +179,11 @@ class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
             _make_rate_scaler(stepsize, linesearch_kwargs),
         )
 
-        # TODO aren't these already handled in user_args?
-        optax_minim_kwargs = {}
-        if "verbose" in solver_init_kwargs:
-            optax_minim_kwargs["verbose"] = solver_init_kwargs["verbose"]
-        if "norm" in solver_init_kwargs:
-            optax_minim_kwargs["norm"] = solver_init_kwargs["norm"]
-
         self._solver = optx.OptaxMinimiser(
             optim=_sgd,
             rtol=rtol,
             atol=atol,
-            **optax_minim_kwargs,
+            norm=self.config.norm,
         )
 
         self.stats = {}
