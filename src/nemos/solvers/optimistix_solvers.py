@@ -1,6 +1,6 @@
-from .abstract_solver import AbstractSolver
+from .wrapped_solver import SolverAdapter
 
-from typing import Type, Callable, Any, TypeAlias
+from typing import Type, Callable, Any, TypeAlias, ClassVar
 from jaxtyping import PyTree, ArrayLike
 import dataclasses
 import inspect
@@ -46,8 +46,10 @@ class OptimistixConfig:
     has_aux: bool = False
 
 
-class OptimistixAdapter(AbstractSolver[OptimistixSolverState, OptimistixStepResult]):
-    _solver_cls: Type
+class OptimistixAdapter(SolverAdapter[OptimistixSolverState, OptimistixStepResult]):
+    """Base class for adapters wrapping Optimistix minimizers."""
+
+    _solver_cls: ClassVar[Type]
 
     # NOTE currently no proximal solvers are in Optimistix
 
@@ -137,8 +139,8 @@ class OptimistixAdapter(AbstractSolver[OptimistixSolverState, OptimistixStepResu
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:
-        own_arguments = set(inspect.getfullargspec(cls).args)
-        solver_arguments = set(inspect.getfullargspec(cls._solver_cls).args)
+        own_arguments = set(inspect.getfullargspec(cls.__init__).args)
+        solver_arguments = set(inspect.getfullargspec(cls._solver_cls.__init__).args)
         common_optx_arguments = set(
             [f.name for f in dataclasses.fields(OptimistixConfig)]
         )
@@ -155,16 +157,24 @@ class OptimistixAdapter(AbstractSolver[OptimistixSolverState, OptimistixStepResu
 
 
 class OptimistixBFGS(OptimistixAdapter):
+    """Adapter for optimistix.BFGS"""
+
     _solver_cls = optx.BFGS
 
 
 class OptimistixOptaxSolver(OptimistixAdapter):
+    """Adapter for optimistix.OptaxMinimiser which is an adapter for Optax solvers."""
+
     _solver_cls = optx.OptaxMinimiser
 
 
 # class OptimistixLBFGS(OptimistixAdapter):
+#    """Adapter for optimistix.LBFGS"""
+#
 #    _solver_cls = optx.LBFGS
 
 
 class OptimistixNonlinearCG(OptimistixAdapter):
+    """Adapter for optimistix.NonlinearCG"""
+
     _solver_cls = optx.NonlinearCG
