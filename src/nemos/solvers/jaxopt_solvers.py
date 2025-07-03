@@ -28,10 +28,13 @@ class JaxoptWrapper(SolverAdapter[JaxoptSolverState, jaxopt.OptStep]):
         regularizer_strength,
         **solver_init_kwargs,
     ):
-        self.fun = self._make_fun(unregularized_loss, regularizer, regularizer_strength)
-
         if self._proximal:
+            self.fun = unregularized_loss
             solver_init_kwargs["prox"] = regularizer.get_proximal_operator()
+        else:
+            self.fun = regularizer.penalized_loss(
+                unregularized_loss, regularizer_strength
+            )
 
         self.regularizer_strength = regularizer_strength
 
@@ -39,12 +42,6 @@ class JaxoptWrapper(SolverAdapter[JaxoptSolverState, jaxopt.OptStep]):
             fun=self.fun,
             **solver_init_kwargs,
         )
-
-    def _make_fun(self, unregularized_loss, regularizer, regularizer_strength):
-        if self._proximal:
-            return unregularized_loss
-        else:
-            return regularizer.penalized_loss(unregularized_loss, regularizer_strength)
 
     def _extend_args(self, args):
         """
