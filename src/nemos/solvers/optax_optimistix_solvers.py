@@ -112,14 +112,14 @@ class OptaxOptimistixGradientDescent(OptimistixOptaxSolver):
         )
 
     @classmethod
-    def get_accepted_arguments(cls) -> list[str]:
-        arguments = set(super().get_accepted_arguments())
+    def get_accepted_arguments(cls) -> set[str]:
+        arguments = super().get_accepted_arguments()
 
         arguments.discard("optim")  # we create this, it can't be passed
         arguments.add("stepsize")
         arguments.add("linesearch_kwargs")
 
-        return list(arguments)
+        return arguments
 
 
 class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
@@ -187,14 +187,14 @@ class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
         self.stats = {}
 
     @classmethod
-    def get_accepted_arguments(cls) -> list[str]:
-        arguments = set(super().get_accepted_arguments())
+    def get_accepted_arguments(cls) -> set[str]:
+        arguments = super().get_accepted_arguments()
 
         arguments.discard("optim")  # we create this, it can't be passed
         arguments.add("stepsize")
         arguments.add("linesearch_kwargs")
 
-        return list(arguments)
+        return arguments
 
     @property
     def maxiter(self):

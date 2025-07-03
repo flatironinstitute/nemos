@@ -7,7 +7,7 @@ def _clean_solver_kwargs(solver_class, solver_init_kwargs):
     try:
         accepted_args = solver_class.get_accepted_arguments()
     except AttributeError:
-        accepted_args = inspect.getfullargspec(solver_class).args
+        accepted_args = set(inspect.getfullargspec(solver_class).args)
 
     solver_init_kwargs = _replace_param(
         solver_init_kwargs, accepted_args, "maxiter", "max_steps"
@@ -25,7 +25,7 @@ def _clean_solver_kwargs(solver_class, solver_init_kwargs):
 
 def _replace_param(
     solver_init_kwargs: dict[str, Any],
-    accepted_arguments: list[str],
+    accepted_arguments: set[str],
     unaccepted_name: str,
     accepted_name: str,
 ) -> dict[str, Any]:
@@ -44,7 +44,7 @@ def _replace_param(
 
 def _replace_tol(
     solver_init_kwargs: dict[str, Any],
-    accepted_arguments: list[str],
+    accepted_arguments: set[str],
 ) -> dict[str, Any]:
     if "tol" in solver_init_kwargs and "tol" not in accepted_arguments:
         warnings.warn(
@@ -64,7 +64,7 @@ def _replace_tol(
 
 def _replace_atol_rtol(
     solver_init_kwargs: dict[str, Any],
-    accepted_arguments: list[str],
+    accepted_arguments: set[str],
 ) -> dict[str, Any]:
     if "atol" in solver_init_kwargs and "atol" not in accepted_arguments:
         warnings.warn(

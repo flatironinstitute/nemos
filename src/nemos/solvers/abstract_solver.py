@@ -20,9 +20,9 @@ class AbstractSolver(abc.ABC, Generic[SolverState, StepResult]):
 
     @classmethod
     @abc.abstractmethod
-    def get_accepted_arguments(cls) -> list[str]:
+    def get_accepted_arguments(cls) -> set[str]:
         """
-        List the argument names accepted by the solver.
+        Set the argument names accepted by the solver.
 
         Used by `BaseRegressor` to determine what arguments
         can be passed to the solver's __init__.
