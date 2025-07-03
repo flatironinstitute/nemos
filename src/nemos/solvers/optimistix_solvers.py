@@ -37,9 +37,12 @@ class OptimistixConfig:
     tags: frozenset = frozenset()
     # sets if the minimisation throws an error if an iterative solver runs out of steps
     throw: bool = False
-    # norm used in the Cauchy convergence criterion
+    # norm used in the Cauchy convergence criterion. Required by all Optimistix solvers.
     norm: Callable = optx.two_norm
+    # way of autodifferentiation: https://docs.kidger.site/optimistix/api/adjoints/
     adjoint: optx.AbstractAdjoint = optx.ImplicitAdjoint()
+    # whether the objective function returns any auxiliary results.
+    # We assume False throughout NeMoS.
     has_aux: bool = False
 
 
@@ -78,7 +81,12 @@ class OptimistixAdapter(AbstractSolver[OptimistixSolverState, OptimistixStepResu
                 user_args[kw] = solver_init_kwargs.pop(kw)
         self.config = OptimistixConfig(**user_args)
 
-        self._solver = self._solver_cls(atol=atol, rtol=rtol, **solver_init_kwargs)
+        self._solver = self._solver_cls(
+            atol=atol,
+            rtol=rtol,
+            norm=self.config.norm,
+            **solver_init_kwargs,
+        )
 
         self.stats = {}
 
