@@ -2,7 +2,7 @@
 
 from typing import ClassVar, NamedTuple, Type, TypeAlias
 
-import jaxopt
+from nemos.third_party.jaxopt import jaxopt
 
 from .solver_adapter import SolverAdapter
 
