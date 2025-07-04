@@ -4,18 +4,18 @@ from ._svrg import (
     WrappedProxSVRG,
     WrappedSVRG,
 )
-from .jaxopt_solvers import (
+from ._jaxopt_solvers import (
     JaxoptBFGS,
     JaxoptGradientDescent,
     JaxoptLBFGS,
     JaxoptNonlinearCG,
     JaxoptProximalGradient,
 )
-from .optax_optimistix_solvers import (
+from ._optax_optimistix_solvers import (
     OptaxOptimistixGradientDescent,
     OptaxOptimistixProximalGradient,
 )
-from .optimistix_solvers import (
+from ._optimistix_solvers import (
     OptimistixBFGS,
     # OptimistixLBFGS,
     OptimistixNonlinearCG,

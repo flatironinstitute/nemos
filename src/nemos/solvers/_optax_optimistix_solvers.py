@@ -11,7 +11,7 @@ import optimistix as optx
 from jaxtyping import ArrayLike, PyTree
 
 from ..tree_utils import tree_sub
-from .optimistix_solvers import (
+from ._optimistix_solvers import (
     DEFAULT_ATOL,
     DEFAULT_RTOL,
     OptimistixConfig,

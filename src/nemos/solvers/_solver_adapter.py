@@ -3,7 +3,7 @@
 import inspect
 from typing import Any, ClassVar, Type
 
-from .abstract_solver import AbstractSolver, SolverState, StepResult
+from ._abstract_solver import AbstractSolver, SolverState, StepResult
 
 
 class SolverAdapter(AbstractSolver[SolverState, StepResult]):

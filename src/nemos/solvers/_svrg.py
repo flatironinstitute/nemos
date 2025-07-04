@@ -12,7 +12,7 @@ from nemos.third_party.jaxopt.jaxopt.prox import prox_none
 
 from ..tree_utils import tree_add_scalar_mul, tree_l2_norm, tree_slice, tree_sub
 from ..typing import KeyArrayLike, Pytree
-from .jaxopt_solvers import JaxoptWrapper
+from ._jaxopt_solvers import JaxoptWrapper
 
 
 class SVRGState(NamedTuple):

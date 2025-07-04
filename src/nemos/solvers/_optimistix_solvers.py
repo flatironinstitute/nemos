@@ -8,7 +8,7 @@ import jax.numpy as jnp
 import optimistix as optx
 from jaxtyping import PyTree
 
-from .solver_adapter import SolverAdapter
+from ._solver_adapter import SolverAdapter
 
 DEFAULT_ATOL = 1e-8
 DEFAULT_RTOL = 0.0
