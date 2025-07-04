@@ -784,7 +784,7 @@ class WrappedSVRG(JaxoptWrapper):
 
 
 class WrappedProxSVRG(JaxoptWrapper):
-    """Adapter for NeMoS's implementation of SVRG."""
+    """Adapter for NeMoS's implementation of Prox-SVRG."""
 
     _solver_cls = ProxSVRG
     _proximal = True
