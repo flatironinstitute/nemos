@@ -28,6 +28,8 @@ dependencies = [
     "typing_extensions>=4.6",       # Typing extensions for Python
     "pynapple>=0.6.6",
     "scikit-learn",                 # BaseEstimator and Tags inheritance
+    "optimistix @ git+https://github.com/bagibence/optimistix.git@zoom_linesearch", # TODO switch to released version once they have L-BFGS and Zoom linesearch
+    "optax",
 ]
 
 
