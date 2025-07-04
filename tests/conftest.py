@@ -9,8 +9,8 @@ Note:
     and loading predefined parameters for testing various functionalities of the NeMoS library.
 """
 
-import os
 import abc
+import os
 from functools import partial
 
 import jax
