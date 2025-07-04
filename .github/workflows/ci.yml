@@ -49,6 +49,56 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
+  tox_backend_jaxopt:
+    if: ${{ !github.event.pull_request.draft }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ['3.10', '3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4 # Use v4 for compatibility with pyproject.toml
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install tox
+
+      - name: Run solver-dependent tests with JAXopt backend
+        run: tox -e backend-jaxopt
+
+  tox_backend_optimistix:
+    if: ${{ !github.event.pull_request.draft }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ['3.10', '3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4 # Use v4 for compatibility with pyproject.toml
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install tox
+
+      - name: Run solver-dependent tests with Optimistix backend
+        run: tox -e backend-optimistix
+
   tox_check:
     if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
@@ -110,6 +160,8 @@ jobs:
       - prevent_docs_absolute_links
       - tox_check
       - check-relative-links
+      # - tox_backend_jaxopt
+      # - tox_backend_optimistix
     runs-on: ubuntu-latest
     steps:
       - name: Decide whether all tests and notebooks succeeded
