@@ -1,5 +1,5 @@
-import os
 import inspect
+import os
 from contextlib import nullcontext as does_not_raise
 
 import jax
