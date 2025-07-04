@@ -15,8 +15,9 @@ from .optax_optimistix_solvers import (
     OptaxOptimistixGradientDescent,
     OptaxOptimistixProximalGradient,
 )
-from .optimistix_solvers import (  # OptimistixLBFGS,
+from .optimistix_solvers import (
     OptimistixBFGS,
+    # OptimistixLBFGS,
     OptimistixNonlinearCG,
 )
 
@@ -30,11 +31,12 @@ solver_registry = {
     "LBFGS": JaxoptLBFGS,
     # "LBFGS": OptimistixLBFGS,
     #
+    # "BFGS": JaxoptBFGS,
     "BFGS": OptimistixBFGS,
     #
     "SVRG": WrappedSVRG,
     "ProxSVRG": WrappedProxSVRG,
     #
-    "NonlinearCG": JaxoptNonlinearCG,
-    # "NonlinearCG": OptimistixNonlinearCG,
+    # "NonlinearCG": JaxoptNonlinearCG,
+    "NonlinearCG": OptimistixNonlinearCG,
 }
