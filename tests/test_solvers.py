@@ -1,3 +1,4 @@
+import os
 import inspect
 from contextlib import nullcontext as does_not_raise
 
@@ -328,12 +329,11 @@ def test_svrg_glm_fit(
 ):
     X, y, model, (w_true, b_true), rate = poissonGLM_model_instantiation
 
-    # set tolerance to -1 so that doesn't stop the iteration
-    solver_kwargs = {
-        "maxiter": maxiter,
-        # "tol": -1.0,
-        "tol": 0.0,
-    }
+    # set the tolerance such that the solvers never hit their convergence criterion
+    # and run until maxiter is reached
+    backend = os.getenv("NEMOS_SOLVER_BACKEND")
+    tol = -1.0 if backend == "jaxopt" else 0.0
+    solver_kwargs = {"maxiter": maxiter, "tol": tol}
 
     # only pass mask if it's not None
     reg_cls = getattr(nmo.regularizer, regularizer_name)
