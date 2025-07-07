@@ -3,7 +3,9 @@ import warnings
 from typing import Any, Type
 
 
-def _clean_solver_kwargs(solver_class: Type, solver_init_kwargs: dict[str, Any]):
+def _clean_solver_kwargs(
+    solver_class: Type, solver_init_kwargs: dict[str, Any]
+) -> dict[str, Any]:
     """
     Clean up the arguments passed to the solver accounting for some mismatches between JAXopt and Optimistix.
 

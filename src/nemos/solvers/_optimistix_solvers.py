@@ -8,6 +8,8 @@ import jax.numpy as jnp
 import optimistix as optx
 from jaxtyping import PyTree
 
+from ..regularizer import Regularizer
+from ._abstract_solver import Params
 from ._solver_adapter import SolverAdapter
 
 DEFAULT_ATOL = 1e-8
@@ -16,9 +18,8 @@ DEFAULT_MAX_STEPS = 100_000
 
 _float_dtype = jnp.float64 if jax.config.jax_enable_x64 else jnp.float32
 
-ModelParams: TypeAlias = PyTree
 OptimistixSolverState: TypeAlias = eqx.Module
-OptimistixStepResult: TypeAlias = tuple[ModelParams, OptimistixSolverState]
+OptimistixStepResult: TypeAlias = tuple[Params, OptimistixSolverState]
 
 
 @dataclasses.dataclass
@@ -55,9 +56,9 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState, OptimistixStepResul
 
     def __init__(
         self,
-        unregularized_loss,
-        regularizer,
-        regularizer_strength,
+        unregularized_loss: Callable,
+        regularizer: Regularizer,
+        regularizer_strength: float | None,
         atol: float = DEFAULT_ATOL,
         rtol: float = DEFAULT_RTOL,
         **solver_init_kwargs,
@@ -157,7 +158,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState, OptimistixStepResul
 
 
 class OptimistixBFGS(OptimistixAdapter):
-    """Adapter for optimistix.BFGS"""
+    """Adapter for optimistix.BFGS."""
 
     _solver_cls = optx.BFGS
 
@@ -175,6 +176,6 @@ class OptimistixOptaxSolver(OptimistixAdapter):
 
 
 class OptimistixNonlinearCG(OptimistixAdapter):
-    """Adapter for optimistix.NonlinearCG"""
+    """Adapter for optimistix.NonlinearCG."""
 
     _solver_cls = optx.NonlinearCG

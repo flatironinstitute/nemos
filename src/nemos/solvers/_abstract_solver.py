@@ -1,8 +1,11 @@
 """Base class defining the interface for solvers that can be used by `BaseRegressor`."""
 
 import abc
-from typing import Generic, TypeVar
+from typing import Generic, TypeVar, Callable, TypeAlias
+from jaxtyping import PyTree
+from ..regularizer import Regularizer
 
+Params: TypeAlias = PyTree
 SolverState = TypeVar("SolverState")
 StepResult = TypeVar("StepResult")
 
@@ -13,15 +16,15 @@ class AbstractSolver(abc.ABC, Generic[SolverState, StepResult]):
     @abc.abstractmethod
     def __init__(
         self,
-        unregularized_loss,
-        regularizer,
-        regularizer_strength,
+        unregularized_loss: Callable,
+        regularizer: Regularizer,
+        regularizer_strength: float | None,
         **solver_init_kwargs,
     ):
         pass
 
     @abc.abstractmethod
-    def init_state(self, init_params, *args) -> SolverState:
+    def init_state(self, init_params: Params, *args) -> SolverState:
         """
         Initialize the solver state.
 
@@ -30,7 +33,7 @@ class AbstractSolver(abc.ABC, Generic[SolverState, StepResult]):
         pass
 
     @abc.abstractmethod
-    def update(self, params, state, *args) -> StepResult:
+    def update(self, params: Params, state: SolverState, *args) -> StepResult:
         """
         Perform a single step/update of the optimization process.
 
@@ -39,7 +42,7 @@ class AbstractSolver(abc.ABC, Generic[SolverState, StepResult]):
         pass
 
     @abc.abstractmethod
-    def run(self, init_params, *args) -> StepResult:
+    def run(self, init_params: Params, *args) -> StepResult:
         """
         Run a full optimization process until a stopping criterion is reached.
 

@@ -1,10 +1,12 @@
 """Base class for adapters wrapping JAXopt solvers."""
 
-from typing import ClassVar, NamedTuple, Type, TypeAlias
+from typing import ClassVar, NamedTuple, Type, TypeAlias, Callable
 
 from nemos.third_party.jaxopt import jaxopt
 
+from ._abstract_solver import Params
 from ._solver_adapter import SolverAdapter
+from ..regularizer import Regularizer
 
 JaxoptSolverState: TypeAlias = NamedTuple
 # JaxoptStepResult ~ jaxopt.OptStep
@@ -23,9 +25,9 @@ class JaxoptWrapper(SolverAdapter[JaxoptSolverState, jaxopt.OptStep]):
 
     def __init__(
         self,
-        unregularized_loss,
-        regularizer,
-        regularizer_strength,
+        unregularized_loss: Callable,
+        regularizer: Regularizer,
+        regularizer_strength: float | None,
         **solver_init_kwargs,
     ):
         if self._proximal:
@@ -55,13 +57,13 @@ class JaxoptWrapper(SolverAdapter[JaxoptSolverState, jaxopt.OptStep]):
         else:
             return args
 
-    def init_state(self, init_params, *args) -> JaxoptSolverState:
+    def init_state(self, init_params: Params, *args) -> JaxoptSolverState:
         return self._solver.init_state(init_params, *self._extend_args(args))
 
-    def update(self, params, state, *args) -> jaxopt.OptStep:
+    def update(self, params: Params, state: JaxoptSolverState, *args) -> jaxopt.OptStep:
         return self._solver.update(params, state, *self._extend_args(args))
 
-    def run(self, init_params, *args) -> jaxopt.OptStep:
+    def run(self, init_params: Params, *args) -> jaxopt.OptStep:
         return self._solver.run(init_params, *self._extend_args(args))
 
 
