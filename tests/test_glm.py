@@ -2867,6 +2867,12 @@ class TestPopulationGLMObservationModel:
                 {"tol": 10**-14},
             ),
             (
+                nmo.regularizer.Lasso(),
+                0.1,
+                "ProximalGradient",
+                {"tol": 10**-14},
+            ),
+            (
                 nmo.regularizer.ElasticNet(),
                 (1.0, 0.5),
                 "ProximalGradient",
