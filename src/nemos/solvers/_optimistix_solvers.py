@@ -68,7 +68,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState, OptimistixStepResul
     # updated with the dict from an optimistix._solution.Solution.stats
     stats: dict[str, Any]
 
-    # NOTE currently no proximal solvers are in Optimistix
+    _proximal: ClassVar[bool] = False
 
     def __init__(
         self,
@@ -79,7 +79,14 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState, OptimistixStepResul
         rtol: float = DEFAULT_RTOL,
         **solver_init_kwargs,
     ):
-        loss_fn = regularizer.penalized_loss(unregularized_loss, regularizer_strength)
+        if self._proximal:
+            loss_fn = unregularized_loss
+            solver_init_kwargs["prox"] = regularizer.get_proximal_operator()
+            solver_init_kwargs["regularizer_strength"] = regularizer_strength
+        else:
+            loss_fn = regularizer.penalized_loss(
+                unregularized_loss, regularizer_strength
+            )
         self.fun = lambda params, args: loss_fn(params, *args)
         self.fun_with_aux = lambda params, args: (loss_fn(params, *args), None)
 
@@ -173,6 +180,9 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState, OptimistixStepResul
         all_arguments.discard("regularizer")
         all_arguments.discard("regularizer_strength")
 
+        # we can create a LearningRate search from stepsize
+        all_arguments.add("stepsize")
+
         return all_arguments
 
 
@@ -198,3 +208,12 @@ class OptimistixNonlinearCG(OptimistixAdapter):
     """Adapter for optimistix.NonlinearCG."""
 
     _solver_cls = optx.NonlinearCG
+
+
+# class OptimistixProximalGradient(OptimistixAdapter):
+#    _solver_cls = optx.ProximalGradient
+#    _proximal = True
+#
+#    @property
+#    def maxiter(self):
+#        return self.config.max_steps

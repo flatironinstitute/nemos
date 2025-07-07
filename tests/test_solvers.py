@@ -365,8 +365,10 @@ def test_svrg_glm_fit(
 
     if hasattr(glm.solver_state_, "iter_num"):
         assert glm.solver_state_.iter_num == maxiter
-    else:
+    elif hasattr(glm.solver_state_, "step"):
         assert glm.solver_state_.step.item() == maxiter
+    else:
+        assert solver.stats["num_steps"].item() == maxiter
 
 
 @pytest.mark.parametrize(

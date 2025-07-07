@@ -2791,6 +2791,12 @@ class TestPopulationGLMObservationModel:
                 "ProximalGradient",
                 {"tol": 10**-14},
             ),
+            (
+                nmo.regularizer.Lasso(),
+                0.1,
+                "ProximalGradient",
+                {"tol": 10**-14},
+            ),
         ],
     )
     @pytest.mark.parametrize(
