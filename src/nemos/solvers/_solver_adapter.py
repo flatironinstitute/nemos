@@ -3,7 +3,7 @@
 import inspect
 from typing import Any, ClassVar, Type
 
-from ._abstract_solver import AbstractSolver, SolverState, StepResult
+from ._abstract_solver import AbstractSolver, SolverState, StepResult, Params
 
 
 class SolverAdapter(AbstractSolver[SolverState, StepResult]):
@@ -47,6 +47,7 @@ class SolverAdapter(AbstractSolver[SolverState, StepResult]):
         """Generate the docstring including accepted arguments and the wrapped solver's documentation."""
         super().__init_subclass__(**kw)
 
+        # can only do anything if there is a _solver_cls class attribute
         solver_cls = getattr(cls, "_solver_cls", None)
         if solver_cls is None:
             return

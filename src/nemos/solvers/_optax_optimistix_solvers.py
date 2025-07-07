@@ -10,15 +10,18 @@ import optax
 import optimistix as optx
 from jaxtyping import ArrayLike, PyTree
 
+from ..regularizer import Regularizer
 from ..tree_utils import tree_sub
 from ._optimistix_solvers import (
     DEFAULT_ATOL,
     DEFAULT_RTOL,
     OptimistixConfig,
     OptimistixOptaxSolver,
+    OptimistixStepResult,
+    Params,
 )
 
-# FIXME This might be solved in a simpler way using
+# NOTE This might be solved in a simpler way using
 # https://optax.readthedocs.io/en/latest/getting_started.html#accessing-learning-rate
 
 
@@ -86,9 +89,9 @@ class OptaxOptimistixGradientDescent(OptimistixOptaxSolver):
 
     def __init__(
         self,
-        unregularized_loss,
-        regularizer,
-        regularizer_strength,
+        unregularized_loss: Callable,
+        regularizer: Regularizer,
+        regularizer_strength: float | None,
         atol: float = DEFAULT_ATOL,
         rtol: float = DEFAULT_RTOL,
         nesterov: bool = True,
@@ -143,9 +146,9 @@ class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
 
     def __init__(
         self,
-        unregularized_loss,
-        regularizer,
-        regularizer_strength,
+        unregularized_loss: Callable,
+        regularizer: Regularizer,
+        regularizer_strength: float | None,
         atol: float = DEFAULT_ATOL,
         rtol: float = DEFAULT_RTOL,
         nesterov: bool = True,
@@ -201,7 +204,7 @@ class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
     def maxiter(self):
         return self.config.max_steps
 
-    def get_learning_rate(self, state) -> float:
+    def get_learning_rate(self, state: optx._solver.optax._OptaxState) -> float:
         """
         Read out the learning rate for scaling within the proximal operator.
 
@@ -211,11 +214,11 @@ class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
 
     def step(
         self,
-        fn,
-        y,
+        fn: Callable,
+        y: Params,
         args: PyTree,
         options: dict[str, Any],
-        state,
+        state: optx._solver.optax._OptaxState,
         tags: frozenset[object],
     ):
         # take gradient step
@@ -252,9 +255,9 @@ class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
 
     def run(
         self,
-        init_params,
+        init_params: Params,
         *args,
-    ):
+    ) -> OptimistixStepResult:
         solution = optx.minimise(
             fn=self.fun,
             solver=self,  # pyright: ignore
