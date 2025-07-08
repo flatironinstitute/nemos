@@ -1,8 +1,10 @@
 """Base class defining the interface for solvers that can be used by `BaseRegressor`."""
 
 import abc
-from typing import Generic, TypeVar, Callable, TypeAlias
+from typing import Callable, Generic, TypeAlias, TypeVar
+
 from jaxtyping import PyTree
+
 from ..regularizer import Regularizer
 
 Params: TypeAlias = PyTree

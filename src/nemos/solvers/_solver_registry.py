@@ -15,10 +15,7 @@ from ._optimistix_solvers import (  # OptimistixLBFGS,
     OptimistixBFGS,
     OptimistixNonlinearCG,
 )
-from ._svrg import (
-    WrappedProxSVRG,
-    WrappedSVRG,
-)
+from ._svrg import WrappedProxSVRG, WrappedSVRG
 
 solver_registry = {
     # "GradientDescent": JaxoptGradientDescent,
