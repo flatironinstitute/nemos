@@ -17,7 +17,7 @@ class JaxoptWrapper(SolverAdapter[JaxoptSolverState, jaxopt.OptStep]):
     Base class for adapters wrapping JAXopt solvers.
 
     Besides `_solver_cls`, for proximal solvers the `_proximal` class variable
-    needs to be set to `True`
+    needs to be set to `True`.
     """
 
     _solver_cls: ClassVar[Type]

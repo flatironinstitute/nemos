@@ -16,14 +16,13 @@ DEFAULT_ATOL = 1e-8
 DEFAULT_RTOL = 0.0
 DEFAULT_MAX_STEPS = 100_000
 
+OptimistixSolverState: TypeAlias = eqx.Module
+OptimistixStepResult: TypeAlias = tuple[Params, OptimistixSolverState]
+
 
 def _current_float_dtype() -> jnp.dtype:
     """Return the floating point dtype matching the current JAX precision."""
     return jnp.float64 if jax.config.jax_enable_x64 else jnp.float32
-
-
-OptimistixSolverState: TypeAlias = eqx.Module
-OptimistixStepResult: TypeAlias = tuple[Params, OptimistixSolverState]
 
 
 @dataclasses.dataclass
@@ -54,9 +53,20 @@ class OptimistixConfig:
 
 
 class OptimistixAdapter(SolverAdapter[OptimistixSolverState, OptimistixStepResult]):
-    """Base class for adapters wrapping Optimistix minimizers."""
+    """
+    Base class for adapters wrapping Optimistix minimizers.
+
+    Subclasses must define the `_solver_cls` class attribute.
+    The `_solver` and `stats` attributes are assumed to exist after construction,
+    so if a subclass is overwriting ``__init__`, these must be created.
+    """
 
     _solver_cls: ClassVar[Type]
+    _solver: optx.AbstractMinimiser
+
+    # used for storing info after an optimization run
+    # updated with the dict from an optimistix._solution.Solution.stats
+    stats: dict[str, Any]
 
     # NOTE currently no proximal solvers are in Optimistix
 
