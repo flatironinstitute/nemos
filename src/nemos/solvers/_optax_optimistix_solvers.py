@@ -85,6 +85,8 @@ class OptaxOptimistixGradientDescent(OptimistixOptaxSolver):
 
     Uses Optax's SGD with Nesterov acceleration combined with Optax's
     zoom linesearch or a constant learning rate.
+
+    The full optimization loop is handled by the `optimistix.OptaxMinimiser` wrapper.
     """
 
     def __init__(

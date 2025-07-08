@@ -9,9 +9,7 @@ def _clean_solver_kwargs(
     """
     Clean up the arguments passed to the solver accounting for some mismatches between JAXopt and Optimistix.
 
-    The maximum number of iterations:
-        JAXopt solvers use `maxiter`
-        `Optimistix` uses `max_steps.`
+    The maximum number of iterations: JAXopt solvers use `maxiter`, `Optimistix` uses `max_steps.`
     If the unexpected parameter name is given, just rename it in `solver_init_kwargs`.
 
     The tolerances for the convergence criterion are defined differently.
@@ -25,6 +23,7 @@ def _clean_solver_kwargs(
     try:
         accepted_args = solver_class.get_accepted_arguments()
     except AttributeError:
+        # NOTE might want to take the union with solver_class.__init__'s args?
         accepted_args = set(inspect.getfullargspec(solver_class).args)
 
     solver_init_kwargs = _replace_param(
