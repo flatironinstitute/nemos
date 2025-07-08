@@ -344,7 +344,7 @@ class BaseRegressor(Base, abc.ABC):
         self._solver = solver
 
         # check that the loss is Callable
-        # utils.assert_is_callable(solver.fun, "solver's loss")
+        utils.assert_is_callable(solver.fun, "solver's loss")
         self._solver_loss_fun_ = solver.fun
 
         self._solver_init_state = solver.init_state
