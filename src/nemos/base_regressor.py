@@ -9,7 +9,7 @@ import warnings
 from abc import abstractmethod
 from copy import deepcopy
 from functools import wraps
-from typing import Any, Dict, NamedTuple, Optional, Tuple, Union
+from typing import Any, NamedTuple, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -302,11 +302,13 @@ class BaseRegressor(Base, abc.ABC):
         that initialize the solver state, update the model parameters, and run the optimization
         as attributes.
 
-        This method creates a solver instance from nemos.solvers or the jaxopt library, tailored to
+        This method creates a solver instance from the solver registry, tailored to
         the specific loss function and regularization approach defined by the Regularizer instance.
         It also handles the proximal operator if required for the optimization method. The returned
         functions are directly usable in optimization loops, simplifying the syntax by pre-setting
         common arguments like regularization strength and other hyperparameters.
+
+        Solvers are expected to adhere to the `AbstractSolver` API.
 
         Parameters
         ----------
