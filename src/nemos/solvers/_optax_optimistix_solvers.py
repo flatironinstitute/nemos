@@ -176,6 +176,10 @@ class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
         stepsize = solver_init_kwargs.get("stepsize", None)
         linesearch_kwargs = solver_init_kwargs.get("linesearch_kwargs", {})
 
+        # disable the curvature test
+        if "curv_rtol" not in linesearch_kwargs:
+            linesearch_kwargs["curv_rtol"] = jnp.inf
+
         _sgd = optax.chain(
             optax.sgd(learning_rate=1.0, nesterov=nesterov),
             _make_rate_scaler(stepsize, linesearch_kwargs),
@@ -248,6 +252,11 @@ class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
             new_state.f,
             new_state.f - state.f,
         )
+        # we could also replicate the jaxopt stopping criterion
+        # terminate = (
+        #    optx.two_norm(updates) / self.get_learning_rate(new_state)
+        #    < self._solver.atol
+        # )
 
         new_state = eqx.tree_at(lambda s: s.terminate, new_state, terminate)
 
