@@ -476,7 +476,9 @@ class TestUnRegularized:
         match_weights = np.allclose(res_sm.params[1:], weights_bfgs, atol=10**-6)
         match_intercepts = np.allclose(res_sm.params[:1], intercepts_bfgs, atol=10**-6)
         if (not match_weights) or (not match_intercepts):
-            raise ValueError("Unregularized GLM estimate does not match statsmodels!")
+            raise ValueError("Unregularized GLM estimate does not match statsmodels!\n"
+                             f"Intercept difference is: {res_sm.params[:1] - intercepts_bfgs}\n"
+                             f"Coefficient difference is: {res_sm.params[1:] - weights_bfgs}")
 
     @pytest.mark.parametrize(
         "solver_name",
