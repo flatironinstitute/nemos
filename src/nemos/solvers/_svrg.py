@@ -778,13 +778,13 @@ class SVRG(ProxSVRG):
 
 
 class WrappedSVRG(JaxoptWrapper):
-    """Adapter for NeMoS's implementation of SVRG."""
+    """Adapter for NeMoS's implementation of SVRG following the AbstractSolver interface."""
 
     _solver_cls = SVRG
 
 
 class WrappedProxSVRG(JaxoptWrapper):
-    """Adapter for NeMoS's implementation of Prox-SVRG."""
+    """Adapter for NeMoS's implementation of Prox-SVRG following the AbstractSolver interface."""
 
     _solver_cls = ProxSVRG
     _proximal = True
