@@ -1075,7 +1075,7 @@ _solver_registry_per_backend = {
         "GradientDescent": nmo.solvers.OptaxOptimistixGradientDescent,
         "ProximalGradient": nmo.solvers.OptaxOptimistixProximalGradient,
         # "LBFGS": nmo.solvers.OptimistixLBFGS, # TODO switch to this after Optimistix releases L-BFGS
-        "LBFGS": nmo.solvers.JaxoptLBFGS,
+        "LBFGS": nmo.solvers.OptaxOptimistixLBFGS,
         "BFGS": nmo.solvers.OptimistixBFGS,
         "NonlinearCG": nmo.solvers.OptimistixNonlinearCG,
     },

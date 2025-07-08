@@ -10,6 +10,7 @@ from ._jaxopt_solvers import (
 from ._optax_optimistix_solvers import (
     OptaxOptimistixGradientDescent,
     OptaxOptimistixProximalGradient,
+    OptaxOptimistixLBFGS,
 )
 from ._optimistix_solvers import (  # OptimistixLBFGS,
     OptimistixBFGS,
@@ -24,7 +25,7 @@ solver_registry = {
     # "ProximalGradient": JaxoptProximalGradient,
     "ProximalGradient": OptaxOptimistixProximalGradient,
     #
-    "LBFGS": JaxoptLBFGS,
+    "LBFGS": OptaxOptimistixLBFGS,
     # "LBFGS": OptimistixLBFGS,
     #
     # "BFGS": JaxoptBFGS,
