@@ -297,3 +297,38 @@ class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
     def postprocess(self, *args, **kwargs):
         # so that when passing self to optx.minimise, postprocess can be called
         return self._solver.postprocess(*args, **kwargs)
+
+
+class OptaxOptimistixLBFGS(OptimistixOptaxSolver):
+    """
+    L-BFGS implementation using optax.lbfgs wrapped by optimistix.OptaxMinimiser.
+
+    Convergence criterion is implemented by Optimistix, so it's their Cauchy criterion.
+    """
+
+    fun: Callable
+    fun_with_aux: Callable
+
+    stats: dict[str, PyTree[ArrayLike]]
+
+    def __init__(
+        self,
+        unregularized_loss: Callable,
+        regularizer: Regularizer,
+        regularizer_strength: float | None,
+        atol: float = DEFAULT_ATOL,
+        rtol: float = DEFAULT_RTOL,
+        stepsize: float | None = None,
+        **solver_init_kwargs,
+    ):
+        # TODO might want to expose some more parameters?
+        solver_init_kwargs["optim"] = optax.lbfgs(learning_rate=stepsize)
+
+        super().__init__(
+            unregularized_loss,
+            regularizer,
+            regularizer_strength,
+            atol=atol,
+            rtol=rtol,
+            **solver_init_kwargs,
+        )
