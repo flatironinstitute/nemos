@@ -16,7 +16,11 @@ DEFAULT_ATOL = 1e-8
 DEFAULT_RTOL = 0.0
 DEFAULT_MAX_STEPS = 100_000
 
-_float_dtype = jnp.float64 if jax.config.jax_enable_x64 else jnp.float32
+
+def _current_float_dtype() -> jnp.dtype:
+    """Return the floating point dtype matching the current JAX precision."""
+    return jnp.float64 if jax.config.jax_enable_x64 else jnp.float32
+
 
 OptimistixSolverState: TypeAlias = eqx.Module
 OptimistixStepResult: TypeAlias = tuple[Params, OptimistixSolverState]
@@ -31,7 +35,9 @@ class OptimistixConfig:
     # options dict passed around within optimistix
     options: dict[str, Any] = dataclasses.field(default_factory=dict)
     # "The shape+dtype of the output of `fn`"
-    f_struct: PyTree[jax.ShapeDtypeStruct] = jax.ShapeDtypeStruct((), _float_dtype)
+    f_struct: PyTree[jax.ShapeDtypeStruct] = dataclasses.field(
+        default_factory=lambda: jax.ShapeDtypeStruct((), _current_float_dtype())
+    )
     # this would be the output shape + dtype of the aux variables fn returns
     aux_struct: PyTree[jax.ShapeDtypeStruct] = None
     # "Any Lineax tags describing the structure of the Jacobian matrix d(fn)/dy."
