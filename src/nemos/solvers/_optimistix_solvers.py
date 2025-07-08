@@ -210,10 +210,10 @@ class OptimistixNonlinearCG(OptimistixAdapter):
     _solver_cls = optx.NonlinearCG
 
 
-# class OptimistixProximalGradient(OptimistixAdapter):
-#    _solver_cls = optx.ProximalGradient
-#    _proximal = True
-#
-#    @property
-#    def maxiter(self):
-#        return self.config.max_steps
+class OptimistixProximalGradient(OptimistixAdapter):
+   _solver_cls = optx.ProximalGradient
+   _proximal = True
+
+   @property
+   def maxiter(self):
+       return self.config.max_steps

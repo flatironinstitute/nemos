@@ -15,7 +15,7 @@ from ._optax_optimistix_solvers import (
 from ._optimistix_solvers import (  # OptimistixLBFGS,
     OptimistixBFGS,
     OptimistixNonlinearCG,
-    # OptimistixProximalGradient,
+    OptimistixProximalGradient,
 )
 from ._solver_registry import solver_registry
 from ._svrg import SVRG, ProxSVRG, WrappedProxSVRG, WrappedSVRG
