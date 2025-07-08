@@ -1,12 +1,12 @@
 """Base class for adapters wrapping JAXopt solvers."""
 
-from typing import ClassVar, NamedTuple, Type, TypeAlias, Callable
+from typing import Callable, ClassVar, NamedTuple, Type, TypeAlias
 
 from nemos.third_party.jaxopt import jaxopt
 
+from ..regularizer import Regularizer
 from ._abstract_solver import Params
 from ._solver_adapter import SolverAdapter
-from ..regularizer import Regularizer
 
 JaxoptSolverState: TypeAlias = NamedTuple
 # JaxoptStepResult ~ jaxopt.OptStep
