@@ -22,7 +22,7 @@ classifiers = [
 
 # Define dependencies for the project
 dependencies = [
-    "jax>=0.4.28",                     # Numerical computing library
+    "jax>=0.4.28",                  # Numerical computing library
     "numpy>1.20",                   # Numerical computing library
     "scipy>=1.10",                  # Scientific computing library
     "typing_extensions>=4.6",       # Typing extensions for Python
@@ -52,8 +52,8 @@ dev = [
     "flake8",                       # Code linter
     "coverage",                     # Test coverage measurement
     "pytest-cov",                   # Test coverage plugin for pytest
-    # TODO: remove intstall statsmodels from main after release > 0.14.4
-    "statsmodels @ git+https://github.com/statsmodels/statsmodels.git@main", # Used to compare model pseudo-r2 in testing
+    "statsmodels",                  # Used to compare model pseudo-r2 in testing
+    "scikit-learn",                 # Testing compatibility with CV & pipelines
     "matplotlib>=3.7",              # Needed by doctest to run docstrings examples
     "pooch",                        # Required by doctest for fetch module
     "dandi",                        # Required by doctest for fetch module
