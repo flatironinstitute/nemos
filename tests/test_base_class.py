@@ -91,6 +91,6 @@ def test_glm_varargs_error():
     """Test that variable number of argument in __init__ is not allowed."""
     bad_estimator = BadEstimator(1)
     with pytest.raises(
-        RuntimeError, match="GLM estimators should always specify their parameters"
+        RuntimeError, match="scikit-learn estimators should always specify their parameters"
     ):
         bad_estimator._get_param_names()
