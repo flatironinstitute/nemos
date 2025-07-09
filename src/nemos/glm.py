@@ -216,8 +216,8 @@ class GLM(BaseRegressor):
     def observation_model(self, observation: obs.Observations):
         if isinstance(observation, str):
             observation = instantiate_observation_model(observation)
-        # check that the model has the required attributes
-        # and that the attribute can be called
+        # Check that the model has the required attributes
+        # And that the attribute can be called
         obs.check_observation_model(observation)
         self._observation_model = observation
 
@@ -234,9 +234,9 @@ class GLM(BaseRegressor):
         It ensures that the parameters and data are compatible for the model.
 
         """
-        # check that params has length two (coeff and intercept)
+        # Check that params has length two (coeff and intercept)
         validation.check_length(params, 2, "Params must have length two.")
-        # convert to jax array (specify type if needed)
+        # Convert to jax array (specify type if needed)
         params = validation.convert_tree_leaves_to_jax_array(
             params,
             "Initial parameters must be array-like objects (or pytrees of array-like objects) "
@@ -1567,6 +1567,10 @@ class PopulationGLM(GLM):
             log of the mean neural activity. coefficients is an array of shape
             (n_features, n_neurons) or pytree of the same shape, intercepts is an array
             of shape (n_neurons, )
+        Returns
+        -------
+        :
+            Fitted GLM model instance, including coefficients and intercept.
 
         Raises
         ------
@@ -1622,6 +1626,15 @@ class PopulationGLM(GLM):
         return super().fit(X, y, init_params)
 
     def _initialize_feature_mask(self, X: FeaturePytree, y: jnp.ndarray):
+        """
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        """
         if self.feature_mask is None:
             # static checker does not realize conversion to ndarray happened in cast_to_jax.
             if isinstance(X, FeaturePytree):
@@ -1639,7 +1652,7 @@ class PopulationGLM(GLM):
         self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], X: jnp.ndarray
     ) -> jnp.ndarray:
         """
-        Predicts firing rates based on given parameters and design matrix.
+        Predict firing rates based on given parameters and design matrix.
 
         This function computes the predicted firing rates using the provided parameters, the feature
         mask and model design matrix ``X``. It is a streamlined version used internally within
