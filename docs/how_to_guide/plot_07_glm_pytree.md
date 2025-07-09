@@ -63,6 +63,13 @@ import nemos as nmo
 np.random.seed(111)
 ```
 
+
+```{code-cell} ipython3
+:tags: [hide-input]
+# Truncate arrays: show only 10 elements per dimension with '...'
+np.set_printoptions(threshold=10)  # total number of elements before summarizing
+```
+
 ## FeaturePytrees
 
 A FeaturePytree is a custom NeMoS object used to represent design matrices,
