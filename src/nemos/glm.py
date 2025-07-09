@@ -10,6 +10,7 @@ from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
 import jax
 import jax.numpy as jnp
 from numpy.typing import ArrayLike
+from sklearn.utils import InputTags, TargetTags
 
 from nemos.third_party.jaxopt import jaxopt
 
@@ -206,6 +207,17 @@ class GLM(BaseRegressor):
         self.solver_state_ = None
         self.scale_ = None
         self.dof_resid_ = None
+
+    def __sklearn_tags__(self):
+        """Return GLM specific estimator tags."""
+        tags = super().__sklearn_tags__()
+        # Tags for X
+        tags.input_tags = InputTags(allow_nan=True, two_d_array=True)
+        # Tags for y
+        tags.target_tags = TargetTags(
+            required=True, one_d_labels=True, two_d_labels=False
+        )
+        return tags
 
     @property
     def observation_model(self) -> Union[None, obs.Observations]:
@@ -1331,6 +1343,15 @@ class PopulationGLM(GLM):
         )
         self._metadata = None
         self.feature_mask = feature_mask
+
+    def __sklearn_tags__(self):
+        """Return Population GLM specific estimator tags."""
+        tags = super().__sklearn_tags__()
+        # Tags for y
+        tags.target_tags = TargetTags(
+            required=True, one_d_labels=False, two_d_labels=True
+        )
+        return tags
 
     @property
     def feature_mask(self) -> Union[jnp.ndarray, dict]:
