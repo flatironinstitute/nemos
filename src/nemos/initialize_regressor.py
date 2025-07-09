@@ -89,7 +89,6 @@ def initialize_intercept_matching_mean_rate(
     if analytical_inv:
         out = analytical_inv(means)
         if jnp.any(jnp.isnan(out)):
-            print(means)
             raise ValueError(
                 "Failed to initialize the model intercept as the inverse of the firing rate for "
                 "the provided link function. The mean firing rate has some non-positive values."
