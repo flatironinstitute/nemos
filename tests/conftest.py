@@ -1015,6 +1015,8 @@ def population_negativeBinomialGLM_model_instantiation():
     )
     rate = jnp.exp(jnp.einsum("ki,tk->ti", w_true, X) + b_true)
     spikes = model.observation_model.sample_generator(jax.random.PRNGKey(123), rate)
+    # make sure that at least one entry is non-zero
+    spikes = spikes.at[-1].set(1)
     return X, spikes, model, (w_true, b_true), rate
 
 
