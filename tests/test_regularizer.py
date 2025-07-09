@@ -453,6 +453,7 @@ class TestUnRegularized:
         """Test that different solvers converge to the same solution."""
         jax.config.update("jax_enable_x64", True)
         X, y, model, true_params, firing_rate = negativeBinomialGLM_model_instantiation
+        y = y.astype(float) # needed since solver.run is called directly, nemos converts.
         # set precision to float64 for accurate matching of the results
         model.data_type = jnp.float64
         model.observation_model.inverse_link_function = inv_link_jax
