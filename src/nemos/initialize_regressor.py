@@ -88,6 +88,7 @@ def initialize_intercept_matching_mean_rate(
     means = jnp.atleast_1d(jnp.nanmean(y, axis=0))
     if analytical_inv:
         out = analytical_inv(means)
+        print(means)
         if jnp.any(jnp.isnan(out)):
             raise ValueError(
                 "Failed to initialize the model intercept as the inverse of the firing rate for "
