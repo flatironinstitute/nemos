@@ -276,8 +276,8 @@ class Observations(Base, abc.ABC):
     ) -> jnp.ndarray:
         r"""Pseudo-:math:`R^2` calculation for a GLM.
 
-        Compute the pseudo-:math:`R^2` metric for the GLM, as defined by McFadden et al. [1]_
-        or by Cohen et al. [2]_.
+        Compute the pseudo-:math:`R^2` metric for the GLM, as defined by McFadden et al. [2]_
+        or by Cohen et al. [3]_.
 
         This metric evaluates the goodness-of-fit of the model relative to a null (baseline) model that assumes a
         constant mean for the observations. While the pseudo-:math:`R^2` is bounded between 0 and 1 for the
@@ -326,11 +326,11 @@ class Observations(Base, abc.ABC):
 
         References
         ----------
-        .. [1] McFadden D (1979). Quantitative methods for analysing travel behavior of individuals: Some recent
+        .. [2] McFadden D (1979). Quantitative methods for analysing travel behavior of individuals: Some recent
                developments. In D. A. Hensher & P. R. Stopher (Eds.), *Behavioural travel modelling* (pp. 279-318).
                London: Croom Helm.
 
-        .. [2] Jacob Cohen, Patricia Cohen, Steven G. West, Leona S. Aiken.
+        .. [3] Jacob Cohen, Patricia Cohen, Steven G. West, Leona S. Aiken.
                *Applied Multiple Regression/Correlation Analysis for the Behavioral Sciences*.
                3rd edition. Routledge, 2002. p.502. ISBN 978-0-8058-2223-6. (May 2012)
         """

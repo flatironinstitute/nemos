@@ -17,7 +17,7 @@ from ._basis import Basis, check_transform_input, min_max_rescale_samples
 from ._basis_mixin import AtomicBasisMixin
 
 
-class OrthExponentialBasis(Basis, AtomicBasisMixin, abc.ABC):
+class OrthExponentialBasis(AtomicBasisMixin, Basis, abc.ABC):
     """Set of 1D basis decaying exponential functions numerically orthogonalized.
 
     Parameters

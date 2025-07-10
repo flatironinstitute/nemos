@@ -12,7 +12,7 @@ from ._basis_mixin import AtomicBasisMixin
 from ._check_basis import _check_input_dimensionality, _has_zero_samples
 
 
-class IdentityBasis(Basis, AtomicBasisMixin):
+class IdentityBasis(AtomicBasisMixin, Basis):
     """
     Base class for the Identity basis.
 
@@ -98,7 +98,7 @@ class IdentityBasis(Basis, AtomicBasisMixin):
         return super().n_basis_funcs
 
 
-class HistoryBasis(Basis, AtomicBasisMixin):
+class HistoryBasis(AtomicBasisMixin, Basis):
     """
     Base class for history effects.
 
