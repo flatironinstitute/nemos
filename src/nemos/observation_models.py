@@ -1382,7 +1382,7 @@ class NegativeBinomialObservations(Observations):
         Parameters
         ----------
         observations:
-            Observed count data. Shape (n_time_bins,) or (n_time_bins, n_observations).
+            Observed count data. Shape ``(n_time_bins,)`` or ``(n_time_bins, n_observations).``
         predicted_rate:
             Predicted mean count of the Negative Binomial distribution. Shape matches `observations`.
         scale:
@@ -1391,7 +1391,7 @@ class NegativeBinomialObservations(Observations):
         Returns
         -------
         :
-            The residual deviance of the model. Shape matches `observations`.
+            The residual deviance of the model. Shape matches ``observations``.
 
         Notes
         -----
