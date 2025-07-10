@@ -927,7 +927,7 @@ def population_bernoulliGLM_model_instantiation_pytree(
 
 @pytest.fixture
 def negativeBinomialGLM_model_instantiation():
-    """Set up a Negative Binomial GLM for testing purposes.
+    """Set up a Negative Binomial GLM with array inputs for testing purposes.
 
     This fixture initializes a Negative Binomial GLM with random parameters, simulates its response, and
     returns the test data, expected output, the model instance, true parameters, and the rate
@@ -958,7 +958,7 @@ def negativeBinomialGLM_model_instantiation():
 def negativeBinomialGLM_model_instantiation_pytree(
     negativeBinomialGLM_model_instantiation,
 ):
-    """Set up a Negative Binomial GLM for testing purposes.
+    """Set up a Negative Binomial GLM with pytree inputs for testing purposes .
 
     This fixture initializes a Negative Binomial GLM with random parameters, simulates its response, and
     returns the test data, expected output, the model instance, true parameters, and the rate
@@ -966,7 +966,7 @@ def negativeBinomialGLM_model_instantiation_pytree(
 
     Returns:
         tuple: A tuple containing:
-            - X (numpy.ndarray): Simulated input data.
+            - X (FeaturePytree): Simulated input data.
             - np.random.poisson(rate) (numpy.ndarray): Simulated spike responses.
             - model (nmo.glm.PoissonGLM): Initialized model instance.
             - (w_true, b_true) (tuple): True weight and bias parameters.
