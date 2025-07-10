@@ -10,7 +10,7 @@ The current package version includes a concrete class named [`nemos.glm.GLM`](ne
 As a `BaseRegressor`, it **must** implement the [`fit`](nemos.glm.GLM.fit), [`score`](nemos.glm.GLM.score), [`predict`](nemos.glm.GLM.predict) and the other abstract methods of this class, see below.
 :::
 
-### Abstract Methods
+## Abstract Methods
 
 For subclasses derived from `BaseRegressor` to function correctly, they must implement the following:
 
@@ -28,7 +28,7 @@ For subclasses derived from `BaseRegressor` to function correctly, they must imp
 All the `_check_<method-name>` methods are called by the `_validate` method which checks that the provided
 input and parameters conform with the model requirements.
 
-### Attributes
+## Attributes
 
 Public attributes are stored as properties:
 
@@ -59,7 +59,16 @@ When devising a new model subclass based on the `BaseRegressor` abstract class, 
 - **Must** realize the abstract methods, see above.
 - **Should not** overwrite the `get_params` and `set_params` methods, inherited from `Base`.
 - **May** introduce auxiliary methods for added utility.
+- **May** add re-implement the `__sklearn_tags__` adding metadata that could be relevant to the specific model implementation. See the [`scikit-learn` Tags](https://scikit-learn.org/stable/modules/generated/sklearn.utils.Tags.html#sklearn.utils.Tags) for the available tagging options.
 
+:::{admonition} Tags
+:class: note
+
+Tags are not needed for estimators to function correctly, as long as the required methods are implemented Citing the `scikit-learn` [documentation for the estimator API](https://scikit-learn.org/stable/developers/develop.html#estimator-tags),
+
+> Scikit-learn introduced estimator tags in version 0.21 as a private API and mostly used in tests. However, these tags expanded over time and many third party developers also need to use them. Therefore in version 1.6 the API for the tags was revamped and exposed as public API.
+
+:::
 
 ## Glossary
 
