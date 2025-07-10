@@ -37,7 +37,6 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     Examples
     --------
     >>> import nemos as nmo
-    >>> import jax.numpy as jnp
     >>> # Create a GLM model with specified parameters
     >>> solver_args = {"stepsize": 0.1, "maxiter": 1000, "tol": 1e-6}
     >>> model = nmo.glm.GLM(
@@ -57,28 +56,30 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     solver_name: BFGS
     >>> # Save the model parameters to a file
     >>> model.save_params("model_params.npz")
-    >>> # Create a custom link function
-    >>> def custom_link_function(x):
-    ...     return jnp.pow(x, 2)
-    >>> observation_model = nmo.observation_models.PoissonObservations(
-    ...     inverse_link_function=custom_link_function
-    ... )
-    >>> mapping_dict = {"observation_model": observation_model}
-    >>> # Load the model from the saved file with custom mapping
-    >>> model = nmo.load_model("model_params.npz", mapping_dict=mapping_dict)
-    >>> # The model is now loaded, overwriting the link function
+    >>> # Load the model from the saved file
+    >>> model = nmo.load_model("model_params.npz")
+    >>> # Model has the same parameters before and after load
     >>> for key, value in model.get_params().items():
     ...     print(f"{key}: {value}")
-    observation_model__inverse_link_function: <function custom_link_function at ...>
-    observation_model: PoissonObservations(inverse_link_function=custom_link_function)
+    observation_model__inverse_link_function: <function one_over_x at ...>
+    observation_model: GammaObservations(inverse_link_function=one_over_x)
     regularizer: Ridge()
     regularizer_strength: 0.1
     solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
     solver_name: BFGS
-    >>> # Test the custom link function does what we expect
-    >>> x = jnp.array([5.0])
-    >>> print(model.observation_model.inverse_link_function(x))
-    [25.]
+    >>> # If you want to load the model with a custom mapping, you can use the mapping_dict parameter.
+    >>> mapping_dict = {"solver_name": "GradientDescent",
+    ...                 "solver_kwargs": {"stepsize": 0.01, "acceleration": False}}
+    >>> loaded_model = nmo.load_model("model_params.npz", mapping_dict=mapping_dict)
+    >>> # Now the loaded model will have the updated solver_name and solver_kwargs
+    >>> for key, value in loaded_model.get_params().items():
+    ...     print(f"{key}: {value}")
+    observation_model__inverse_link_function: <function one_over_x at ...>
+    observation_model: GammaObservations(inverse_link_function=one_over_x)
+    regularizer: Ridge()
+    regularizer_strength: 0.1
+    solver_kwargs: {'stepsize': 0.01, 'acceleration': False}
+    solver_name: GradientDescent
     """
 
     # load the model from a .npz file
