@@ -1171,8 +1171,8 @@ class NegativeBinomialObservations(Observations):
     r"""
     A Negative Binomial model for overdispersed count data using mean-dispersion parameterization.
 
-    This model represents a Negative Binomial distribution commonly used to model overdispersed
-    count data (i.e., data where the variance exceeds the mean), which cannot be captured by a
+    This model represents a Negative Binomial distribution [3]_ commonly used to model overdispersed
+    count data [4]_ [5]_ (i.e., data where the variance exceeds the mean), which cannot be captured by a
     standard Poisson model. The distribution is parameterized by the predicted mean rate
     (:math:`\mu`) and a fixed dispersion parameter (:math:`\phi`) or "scale" of the model.
 
@@ -1202,9 +1202,19 @@ class NegativeBinomialObservations(Observations):
         Inverse of the link function used to map linear predictors to the predicted mean rate.
         For count data, this is typically `jax.numpy.exp` or `jax.nn.softplus`.
     scale :
-        The dispersion parameter φ. Lower values correspond to lower overdispersion, and as
-        :math:`\phi` → 0, the model behaves like a Poisson. The shape parameter of
+        The dispersion parameter :math:`\phi`. Lower values correspond to lower overdispersion, and as
+        :math:`\phi \to 0`, the model behaves like a Poisson. The shape parameter of
         the Negative Binomial is given by `r = 1 / scale`.
+
+    References
+    ----------
+    .. [3] https://en.wikipedia.org/wiki/Negative_binomial_distribution
+
+    .. [4] Pillow, Jonathan, and James Scott. "Fully Bayesian inference for neural models
+        with negative-binomial spiking." Advances in neural information processing systems 25 (2012).
+
+    .. [5] Wei, Ganchao, et al. "Calibrating Bayesian decoders of neural spiking activity."
+        Journal of Neuroscience 44.18 (2024).
     """
 
     def __init__(
@@ -1234,7 +1244,8 @@ class NegativeBinomialObservations(Observations):
             The predicted mean of the Negative Binomial distribution. Shape
             ``(n_time_bins,)`` or ``(n_time_bins, n_observations)``.
         aggregate_sample_scores :
-            Function that aggregates the log-likelihood across samples (e.g., jnp.mean or jnp.sum).
+            Function that aggregates the log-likelihood across samples (e.g., ``jnp.mean`` or
+            ``jnp.sum``).
 
         Returns
         -------
@@ -1311,7 +1322,7 @@ class NegativeBinomialObservations(Observations):
         predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray, None] = None,
     ) -> jnp.ndarray:
-        """
+        r"""
         Sample from the Negative Binomial distribution.
 
         This method generates random count data from the Negative Binomial distribution based on the predicted rate
@@ -1338,7 +1349,7 @@ class NegativeBinomialObservations(Observations):
 
         .. math::
 
-            Y \sim \mathrm{Poisson}(\lambda), \quad \lambda \sim \mathrm{Gamma}(r, \beta)
+            Y \sim \text{Poisson}(\lambda), \quad \lambda \sim \text{Gamma}(r, \beta)
 
         where :math:`r = 1 / \phi` and :math:`\beta = r / \mu`.
 
