@@ -1176,6 +1176,12 @@ class NegativeBinomialObservations(Observations):
     standard Poisson model. The distribution is parameterized by the predicted mean rate
     (:math:`\mu`) and a fixed dispersion parameter (:math:`\phi`) or "scale" of the model.
 
+    **Important:** the scale parameter must be estimated from the data for accurately capturing the
+    dispersion. In the context of NeMoS GLM, estimation can be achieved by cross-validating the
+    ``scale`` parameter. One may use scikit-learn
+    `GridSearchCV <https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GridSearchCV.html>`_
+    for example.
+
     The variance of the Negative Binomial distribution under this parameterization is:
 
     .. math::
