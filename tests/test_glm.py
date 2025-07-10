@@ -1851,8 +1851,7 @@ class TestGLMObservationModel:
         if "population" in glm_type:
             expected_keys = GLM_COMMON_PARAMS_NAMES.union(
                 OBSERVATION_MODEL_EXTRA_PARAMS_NAMES.get(
-                    model.observation_model.__class__.__name__,
-                    {}
+                    model.observation_model.__class__.__name__, {}
                 )
             ).union(POPULATION_GLM_EXTRA_PARAMS)
 
@@ -1883,8 +1882,7 @@ class TestGLMObservationModel:
         else:
             expected_keys = GLM_COMMON_PARAMS_NAMES.union(
                 OBSERVATION_MODEL_EXTRA_PARAMS_NAMES.get(
-                    model.observation_model.__class__.__name__,
-                    {}
+                    model.observation_model.__class__.__name__, {}
                 )
             )
 
@@ -2224,7 +2222,6 @@ class TestGLMObservationModel:
         )
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
-        model.scale_ = model.observation_model.scale
         if "population" in glm_type:
             model._initialize_feature_mask(X, y)
         if input_type == TsdFrame:
