@@ -1235,7 +1235,7 @@ class TestNegativeBinomialObservations:
 
     def test_scale_getter(self, negativeBinomialGLM_model_instantiation):
         _, _, model, _, _ = negativeBinomialGLM_model_instantiation
-        assert model.observation_model.scale == 1  # or your default value
+        assert model.observation_model.scale == 1  
 
     def test_non_differentiable_inverse_link(
         self, negativeBinomialGLM_model_instantiation
