@@ -1033,30 +1033,32 @@ class TestNegativeBinomialObservations:
             negative_binomial_observations(link_function)
 
     @pytest.mark.parametrize(
-        "link_function",
+        "link_function, expectation",
         [
-            jax.numpy.exp,
-            jax.nn.softplus,
-            np.exp,
-            lambda x: x,
-            sm.families.links.Log(),
+            (jax.numpy.exp, does_not_raise()),
+            (jax.nn.softplus, does_not_raise()),
+            (
+                np.exp,
+                pytest.raises(
+                    TypeError,
+                    match="The `inverse_link_function` must return a jax.numpy.ndarray",
+                ),
+            ),
+            (lambda x: x, does_not_raise()),
+            (
+                sm.families.links.Log(),
+                pytest.raises(
+                    TypeError,
+                    match="The `inverse_link_function` must return a jax.numpy.ndarray",
+                ),
+            ),
         ],
     )
     def test_initialization_link_is_jax(
-        self, link_function, negative_binomial_observations
+        self, link_function, negative_binomial_observations, expectation
     ):
-        raise_exception = (
-            isinstance(link_function, np.ufunc)
-            | isinstance(link_function, sm.families.links.Link)
-            | isinstance(link_function, type(sts.norm.cdf))
-        )
-        if raise_exception:
-            with pytest.raises(
-                TypeError,
-                match="The `inverse_link_function` must return a jax.numpy.ndarray",
-            ):
-                negative_binomial_observations(link_function)
-        else:
+
+        with expectation:
             negative_binomial_observations(link_function)
 
     @pytest.mark.parametrize(
@@ -1235,7 +1237,7 @@ class TestNegativeBinomialObservations:
 
     def test_scale_getter(self, negativeBinomialGLM_model_instantiation):
         _, _, model, _, _ = negativeBinomialGLM_model_instantiation
-        assert model.observation_model.scale == 1  
+        assert model.observation_model.scale == 1
 
     def test_non_differentiable_inverse_link(
         self, negativeBinomialGLM_model_instantiation
