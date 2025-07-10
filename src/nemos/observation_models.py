@@ -1387,7 +1387,7 @@ class NegativeBinomialObservations(Observations):
         Returns
         -------
         :
-            The residual deviance of the model. Shape matches `observations`.
+            The residual deviance of the model. Shape matches ``observations``.
 
         Notes
         -----
