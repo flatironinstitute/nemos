@@ -1375,6 +1375,10 @@ class NegativeBinomialObservations(Observations):
     ) -> jnp.ndarray:
         r"""Compute the residual deviance for a Negative Binomial model.
 
+        The deviance measures how well a statistical model fits the data by
+        quantifying the difference between the observed values and the values
+        predicted by the model. Lower values of deviance indicate a better fit.
+
         Parameters
         ----------
         observations:
@@ -1403,7 +1407,7 @@ class NegativeBinomialObservations(Observations):
             \end{aligned}
 
         where :math:`y` is the observed data, :math:`\hat{y}` is the predicted data, and :math:`\text{LL}` is
-        the model log-likelihood. Lower values of deviance indicate a better fit.
+        the model log-likelihood.
         """
         scale = self.scale if scale is None else scale
         factor = (predicted_rate * scale + 1) / (observations * scale + 1)
