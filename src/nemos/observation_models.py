@@ -1426,9 +1426,9 @@ class NegativeBinomialObservations(Observations):
         r"""
         Return the scale parameter of the distribution.
 
-        The `scale` parameter of the Negative Binomial distribution is set
+        The ``scale`` parameter of the Negative Binomial distribution is set
         at initialization and affect the likelihood landscape. This implies
-        that the `scale` parameter cannot be estimated post-hoc without
+        that the ``scale`` parameter cannot be estimated post-hoc without
         re-fitting a model.
 
         Parameters
