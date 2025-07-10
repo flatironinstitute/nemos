@@ -26,6 +26,22 @@ class Base(BaseEstimator):
     Additionally, it has methods for selecting target devices and sending arrays to them.
     """
 
+    def get_params(self, deep=True) -> dict:
+        """
+        From scikit-learn, get parameters by inspecting init.
+
+        Parameters
+        ----------
+        deep
+
+        Returns
+        -------
+        :
+            A dictionary containing the parameters. Key is the parameter
+            name, value is the parameter value.
+        """
+        return super().get_params(deep=deep)
+
     def set_params(self, **params: Any):
         """Set the parameters of this estimator.
 
