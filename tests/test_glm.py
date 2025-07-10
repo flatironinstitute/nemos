@@ -28,9 +28,6 @@ GLM_COMMON_PARAMS_NAMES = {
     "solver_name",
 }
 OBSERVATION_MODEL_EXTRA_PARAMS_NAMES = {
-    "PoissonObservations": {},
-    "GammaObservations": {},
-    "BernoulliObservations": {},
     "NegativeBinomialObservations": {"observation_model__scale"},
 }
 POPULATION_GLM_EXTRA_PARAMS = {"feature_mask"}
@@ -1853,9 +1850,10 @@ class TestGLMObservationModel:
         _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
         if "population" in glm_type:
             expected_keys = GLM_COMMON_PARAMS_NAMES.union(
-                OBSERVATION_MODEL_EXTRA_PARAMS_NAMES[
-                    model.observation_model.__class__.__name__
-                ]
+                OBSERVATION_MODEL_EXTRA_PARAMS_NAMES.get(
+                    model.observation_model.__class__.__name__,
+                    {}
+                )
             ).union(POPULATION_GLM_EXTRA_PARAMS)
 
             def get_expected_values(model):
@@ -1884,9 +1882,10 @@ class TestGLMObservationModel:
 
         else:
             expected_keys = GLM_COMMON_PARAMS_NAMES.union(
-                OBSERVATION_MODEL_EXTRA_PARAMS_NAMES[
-                    model.observation_model.__class__.__name__
-                ]
+                OBSERVATION_MODEL_EXTRA_PARAMS_NAMES.get(
+                    model.observation_model.__class__.__name__,
+                    {}
+                )
             )
 
             def get_expected_values(model):
