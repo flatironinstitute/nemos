@@ -1016,20 +1016,23 @@ class TestBernoulliObservations:
 
 class TestNegativeBinomialObservations:
     @pytest.mark.parametrize(
-        "link_function",
-        [jax.numpy.exp, jax.nn.softplus, 1],
+        "link_function, expectation",
+        [
+            (jax.numpy.exp, does_not_raise()),
+            (jax.nn.softplus, does_not_raise()),
+            (
+                1,
+                pytest.raises(
+                    TypeError,
+                    match="The `inverse_link_function` function must be a Callable",
+                ),
+            ),
+        ],
     )
     def test_initialization_link_is_callable(
-        self, link_function, negative_binomial_observations
+        self, link_function, negative_binomial_observations, expectation
     ):
-        raise_exception = not callable(link_function)
-        if raise_exception:
-            with pytest.raises(
-                TypeError,
-                match="The `inverse_link_function` function must be a Callable",
-            ):
-                negative_binomial_observations(link_function)
-        else:
+        with expectation:
             negative_binomial_observations(link_function)
 
     @pytest.mark.parametrize(
@@ -1057,26 +1060,29 @@ class TestNegativeBinomialObservations:
     def test_initialization_link_is_jax(
         self, link_function, negative_binomial_observations, expectation
     ):
-
         with expectation:
             negative_binomial_observations(link_function)
 
     @pytest.mark.parametrize(
-        "link_function",
-        [jax.lax.logistic, jax.scipy.special.expit, jax.scipy.stats.norm.cdf, 1],
+        "link_function, expectation",
+        [
+            (jax.lax.logistic, does_not_raise()),
+            (jax.scipy.special.expit, does_not_raise()),
+            (jax.scipy.stats.norm.cdf, does_not_raise()),
+            (
+                1,
+                pytest.raises(
+                    TypeError,
+                    match="The `inverse_link_function` function must be a Callable",
+                ),
+            ),
+        ],
     )
     def test_initialization_link_is_callable_set_params(
-        self, link_function, negative_binomial_observations
+        self, link_function, negative_binomial_observations, expectation
     ):
         observation_model = negative_binomial_observations()
-        raise_exception = not callable(link_function)
-        if raise_exception:
-            with pytest.raises(
-                TypeError,
-                match="The `inverse_link_function` function must be a Callable",
-            ):
-                observation_model.set_params(inverse_link_function=link_function)
-        else:
+        with expectation:
             observation_model.set_params(inverse_link_function=link_function)
 
     @pytest.mark.parametrize(
@@ -1124,26 +1130,25 @@ class TestNegativeBinomialObservations:
             observation_model.set_params(inverse_link_function=link_function)
 
     @pytest.mark.parametrize(
-        "link_function",
+        "link_function, expectation",
         [
-            jax.numpy.exp,
-            lambda x: (
-                jax.numpy.exp(x) if isinstance(x, jnp.ndarray) else "not a number"
+            (jax.numpy.exp, does_not_raise()),
+            (
+                lambda x: (
+                    jax.numpy.exp(x) if isinstance(x, jnp.ndarray) else "not a number"
+                ),
+                pytest.raises(
+                    TypeError,
+                    match="The `inverse_link_function` must handle scalar inputs correctly",
+                ),
             ),
         ],
     )
     def test_initialization_link_returns_scalar(
-        self, link_function, negative_binomial_observations
+        self, link_function, negative_binomial_observations, expectation
     ):
-        raise_exception = not isinstance(link_function(1.0), (jnp.ndarray, float))
         observation_model = negative_binomial_observations()
-        if raise_exception:
-            with pytest.raises(
-                TypeError,
-                match="The `inverse_link_function` must handle scalar inputs correctly",
-            ):
-                observation_model.set_params(inverse_link_function=link_function)
-        else:
+        with expectation:
             observation_model.set_params(inverse_link_function=link_function)
 
     def test_get_params(self, negative_binomial_observations):
