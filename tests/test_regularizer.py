@@ -453,7 +453,9 @@ class TestUnRegularized:
         """Test that different solvers converge to the same solution."""
         jax.config.update("jax_enable_x64", True)
         X, y, model, true_params, firing_rate = negativeBinomialGLM_model_instantiation
-        y = y.astype(float) # needed since solver.run is called directly, nemos converts.
+        y = y.astype(
+            float
+        )  # needed since solver.run is called directly, nemos converts.
         # set precision to float64 for accurate matching of the results
         model.data_type = jnp.float64
         model.observation_model.inverse_link_function = inv_link_jax
@@ -477,9 +479,11 @@ class TestUnRegularized:
         match_weights = np.allclose(res_sm.params[1:], weights_bfgs, atol=10**-6)
         match_intercepts = np.allclose(res_sm.params[:1], intercepts_bfgs, atol=10**-6)
         if (not match_weights) or (not match_intercepts):
-            raise ValueError("Unregularized GLM estimate does not match statsmodels!\n"
-                             f"Intercept difference is: {res_sm.params[:1] - intercepts_bfgs}\n"
-                             f"Coefficient difference is: {res_sm.params[1:] - weights_bfgs}")
+            raise ValueError(
+                "Unregularized GLM estimate does not match statsmodels!\n"
+                f"Intercept difference is: {res_sm.params[:1] - intercepts_bfgs}\n"
+                f"Coefficient difference is: {res_sm.params[1:] - weights_bfgs}"
+            )
 
     @pytest.mark.parametrize(
         "solver_name",
