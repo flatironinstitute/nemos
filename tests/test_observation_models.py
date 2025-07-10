@@ -1080,33 +1080,47 @@ class TestNegativeBinomialObservations:
             observation_model.set_params(inverse_link_function=link_function)
 
     @pytest.mark.parametrize(
-        "link_function",
+        "link_function, expectation",
         [
-            jax.scipy.special.expit,
-            sp.special.expit,
-            jax.scipy.stats.norm.cdf,
-            sts.norm.cdf,
-            np.exp,
-            lambda x: x,
-            sm.families.links.Log(),
+            (jax.scipy.special.expit, does_not_raise()),
+            (
+                sp.special.expit,
+                pytest.raises(
+                    TypeError,
+                    match="The `inverse_link_function` must return a jax.numpy.ndarray!",
+                ),
+            ),
+            (jax.scipy.stats.norm.cdf, does_not_raise()),
+            (
+                sts.norm.cdf,
+                pytest.raises(
+                    TypeError,
+                    match="The `inverse_link_function` must return a jax.numpy.ndarray!",
+                ),
+            ),
+            (
+                np.exp,
+                pytest.raises(
+                    TypeError,
+                    match="The `inverse_link_function` must return a jax.numpy.ndarray!",
+                ),
+            ),
+            (lambda x: x, does_not_raise()),
+            (
+                sm.families.links.Log(),
+                pytest.raises(
+                    TypeError,
+                    match="The `inverse_link_function` must return a jax.numpy.ndarray!",
+                ),
+            ),
         ],
     )
     def test_initialization_link_is_jax_set_params(
-        self, link_function, negative_binomial_observations
+        self, link_function, negative_binomial_observations, expectation
     ):
-        raise_exception = (
-            isinstance(link_function, np.ufunc)
-            | isinstance(link_function, sm.families.links.Link)
-            | isinstance(link_function, type(sts.norm.cdf))
-        )
         observation_model = negative_binomial_observations()
-        if raise_exception:
-            with pytest.raises(
-                TypeError,
-                match="The `inverse_link_function` must return a jax.numpy.ndarray!",
-            ):
-                observation_model.set_params(inverse_link_function=link_function)
-        else:
+
+        with expectation:
             observation_model.set_params(inverse_link_function=link_function)
 
     @pytest.mark.parametrize(
