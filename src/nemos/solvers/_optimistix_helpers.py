@@ -107,9 +107,17 @@ class ProxBacktrackingArmijo(
         has_reduction = predicted_reduction <= 0
 
         reached_max_ls = state.ls_iter + 1 == self.max_ls
+        reached_min_stepsize = state.step_size <= 1e-6
         accept = first_step | (satisfies_armijo & has_reduction) | reached_max_ls
         step_size = jnp.where(
-            accept, self.step_init, self.decrease_factor * state.step_size
+            accept,
+            state.step_size / self.decrease_factor,  # increase if accepted
+            state.step_size * self.decrease_factor,  # decrease if not
+        )
+        step_size = jnp.where(
+            accept & reached_min_stepsize,
+            self.step_init,  # reset if too small
+            step_size,  # keep the increased value
         )
         step_size = cast(Scalar, step_size)
         next_ls_iter = jnp.where(reached_max_ls, jnp.array(0), state.ls_iter + 1)
