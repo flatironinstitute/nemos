@@ -84,32 +84,32 @@ class ProximalGradient(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
         # TODO might want to store value_and_grad_fun instead of doing this
         # if we need the gradient anyway?
         autodiff_mode = options.get("autodiff_mode", "bwd")
-        f_val, lin_fn, _ = jax.linearize(lambda _y: fn(_y, args), y, has_aux=True)
-        grad = optx._misc.lin_to_grad(lin_fn, y, autodiff_mode=autodiff_mode)
+        f_val, lin_fn, _ = jax.linearize(
+            lambda _y: fn(_y, args), state.velocity, has_aux=True
+        )
+        grad = optx._misc.lin_to_grad(
+            lin_fn, state.velocity, autodiff_mode=autodiff_mode
+        )
 
         fun_without_aux = lambda x, args: fn(x, args)[0]
         next_y, new_stepsize = self.fista_line_search(
             fun_without_aux,
-            y,
+            state.velocity,
             f_val,
             grad,
             state.stepsize,
             args,
         )
 
-        # with a simple reset here it works
-        # with the attempt to increase it doesn't. I don't know how it works in jaxopt...
-        # TODO figure out where I can increase
         new_stepsize = jnp.where(
             new_stepsize <= 1e-6,
             jnp.array(1.0),
-            # new_stepsize / self.decrease_factor,
-            new_stepsize,
+            new_stepsize / self.decrease_factor,
         )
 
         next_t = 0.5 * (1 + jnp.sqrt(1 + 4 * state.t**2))
         diff_y = tree_sub(next_y, y)
-        next_y = tree_add_scalar_mul(next_y, (state.t - 1) / next_t, diff_y)
+        next_vel = tree_add_scalar_mul(next_y, (state.t - 1) / next_t, diff_y)
 
         new_fun_val, new_aux = fn(next_y, args)
 
@@ -128,7 +128,7 @@ class ProximalGradient(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
 
         next_state = ProxGradState(
             iter_num=state.iter_num + 1,
-            velocity=next_y,
+            velocity=next_vel,
             t=next_t,
             stepsize=jnp.asarray(new_stepsize),
             terminate=terminate,
@@ -174,7 +174,7 @@ class ProximalGradient(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
             stepsize = carry[1]
             new_stepsize = stepsize * self.decrease_factor
             next_x = tree_add_scalar_mul(x, -new_stepsize, grad)
-            next_x = self.prox(next_x, self.regularizer_strength, stepsize)
+            next_x = self.prox(next_x, self.regularizer_strength, new_stepsize)
             return next_x, new_stepsize
 
         init_x = tree_add_scalar_mul(x, -stepsize, grad)
