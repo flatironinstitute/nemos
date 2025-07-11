@@ -652,7 +652,7 @@ class TestCreateConvolutionalPredictor:
 
     @pytest.mark.parametrize("input_shape", [(3, 1), (3, 2), (3, 3)])
     @pytest.mark.parametrize("batch_size", [1, 2, 3])
-    def test_batch_binary_func_output(self,input_shape, batch_size):
+    def test_batch_binary_func_output(self, input_shape, batch_size):
         """Check expected output values."""
         jax.config.update("jax_enable_x64", True)
 
@@ -660,14 +660,17 @@ class TestCreateConvolutionalPredictor:
             return a + b
 
         x, y = np.random.randn(*input_shape), np.arange(3)[:, np.newaxis]
-        result = convolve._batch_binary_func(x, y, binary_func=add, batch_size=batch_size, axis=1)
+        result = convolve._batch_binary_func(
+            x, y, binary_func=add, batch_size=batch_size, axis=1
+        )
         assert np.all(result == add(x, y))
-
 
     @pytest.mark.parametrize("input_shape", [(3, 2)])
     @pytest.mark.parametrize("batch_size", [1])
     @pytest.mark.parametrize("out_axis, expected_out_shape", [(0, (6, 1)), (1, (3, 2))])
-    def test_batch_binary_func_out_axis(self,input_shape, batch_size, out_axis, expected_out_shape):
+    def test_batch_binary_func_out_axis(
+        self, input_shape, batch_size, out_axis, expected_out_shape
+    ):
         """Check expected out shape."""
         jax.config.update("jax_enable_x64", True)
 
@@ -675,12 +678,14 @@ class TestCreateConvolutionalPredictor:
             return a + b
 
         x, y = np.random.randn(*input_shape), np.arange(3)[:, np.newaxis]
-        result = convolve._batch_binary_func(x, y, binary_func=add, batch_size=batch_size, axis=1, out_axis=out_axis)
+        result = convolve._batch_binary_func(
+            x, y, binary_func=add, batch_size=batch_size, axis=1, out_axis=out_axis
+        )
         assert expected_out_shape == result.shape
 
     @pytest.mark.parametrize("input_shape", [(3, 3)])
     @pytest.mark.parametrize("batch_size", [2])
-    def test_batch_binary_func_pad(self,input_shape, batch_size):
+    def test_batch_binary_func_pad(self, input_shape, batch_size):
         jax.config.update("jax_enable_x64", True)
 
         def add(a, b):
@@ -719,7 +724,9 @@ def test_tensor_convolve(input_shape, basis_shape, batch_sizes):
 
     batch_size_samples, batch_size_channels, batch_size_basis = batch_sizes
 
-    result = convolve._tensor_convolve(array, eval_basis, batch_size_samples, batch_size_channels, batch_size_basis)
+    result = convolve._tensor_convolve(
+        array, eval_basis, batch_size_samples, batch_size_channels, batch_size_basis
+    )
     expected = numpy_tensor_convolve(np.array(array), np.array(eval_basis))
 
     np.testing.assert_allclose(np.array(result), expected, rtol=1e-5, atol=1e-5)

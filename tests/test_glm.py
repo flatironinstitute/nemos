@@ -14,8 +14,11 @@ from sklearn.linear_model import GammaRegressor, LogisticRegression, PoissonRegr
 from sklearn.model_selection import GridSearchCV
 
 import nemos as nmo
+from nemos._observation_model_builder import instantiate_observation_model
+from nemos._regularizer_builder import create_regularizer
 from nemos.pytrees import FeaturePytree
 from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
+from nemos.utils import _get_name
 
 
 def convert_to_nap(arr, t):
@@ -1598,6 +1601,299 @@ class TestGLM:
         model = glm_class(regularizer=reg, regularizer_strength=1)
         with warns:
             model.set_params(**params)
+
+    @pytest.mark.parametrize("regularizer", ["Ridge", "UnRegularized", "Lasso"])
+    @pytest.mark.parametrize(
+        "obs_model",
+        [
+            "PoissonObservations",
+            "BernoulliObservations",
+            "GammaObservations",
+        ],
+    )
+    @pytest.mark.parametrize(
+        "solver_name",
+        [
+            "GradientDescent",
+            "BFGS",
+            "LBFGS",
+            "NonlinearCG",
+            "ProximalGradient",
+            "SVRG",
+            "ProxSVRG",
+        ],
+    )
+    @pytest.mark.parametrize(
+        "model_class",
+        [
+            nmo.glm.GLM,
+            nmo.glm.PopulationGLM,
+        ],
+    )
+    def test_save_and_load(
+        self,
+        regularizer,
+        obs_model,
+        solver_name,
+        tmp_path,
+        glm_class_type,
+        model_class,
+    ):
+        """
+        Test saving and loading a model with various observation models and regularizers.
+        Ensure all parameters are preserved.
+        """
+        if (
+            regularizer == "Lasso"
+            or regularizer == "GroupLasso"
+            and solver_name not in ["ProximalGradient", "SVRG", "ProxSVRG"]
+        ):
+            pytest.skip(
+                f"Skipping {solver_name} for Lasso type regularizer; not an approximate solver."
+            )
+
+        model = model_class(
+            observation_model=obs_model,
+            solver_name=solver_name,
+            regularizer=regularizer,
+            regularizer_strength=2.0,
+        )
+
+        initial_params = model.get_params()
+        initial_fit_params = model._get_coef_and_intercept()
+        initial_params["coef_"] = initial_fit_params[0]
+        initial_params["intercept_"] = initial_fit_params[1]
+
+        # Save
+        save_path = tmp_path / "test_model.npz"
+        model.save_params(save_path)
+
+        # Load
+        loaded_model = nmo.load_model(save_path)
+        loaded_params = loaded_model.get_params()
+        loaded_fit_params = loaded_model._get_coef_and_intercept()
+        loaded_params["coef_"] = loaded_fit_params[0]
+        loaded_params["intercept_"] = loaded_fit_params[1]
+
+        # Assert matching keys and values
+        assert (
+            initial_params.keys() == loaded_params.keys()
+        ), "Parameter keys mismatch after load."
+
+        for key in initial_params:
+            init_val = initial_params[key]
+            load_val = loaded_params[key]
+            if isinstance(init_val, (int, float, str, type(None))):
+                assert init_val == load_val, f"{key} mismatch: {init_val} != {load_val}"
+            elif isinstance(init_val, dict):
+                assert (
+                    init_val == load_val
+                ), f"{key} dict mismatch: {init_val} != {load_val}"
+            elif isinstance(init_val, (np.ndarray, jnp.ndarray)):
+                assert np.allclose(
+                    np.array(init_val), np.array(load_val)
+                ), f"{key} array mismatch"
+            elif isinstance(init_val, Callable):
+                assert _get_name(init_val) == _get_name(
+                    load_val
+                ), f"{key} function mismatch: {_get_name(init_val)} != {_get_name(load_val)}"
+
+    @pytest.mark.parametrize("regularizer", ["Ridge"])
+    @pytest.mark.parametrize(
+        "obs_model",
+        [
+            "PoissonObservations",
+        ],
+    )
+    @pytest.mark.parametrize(
+        "solver_name",
+        [
+            "ProxSVRG",
+        ],
+    )
+    @pytest.mark.parametrize(
+        "model_class",
+        [
+            nmo.glm.GLM,
+            nmo.glm.PopulationGLM,
+        ],
+    )
+    @pytest.mark.parametrize(
+        "mapping_dict",
+        [
+            {},
+            {
+                "observation_model": "Gamma",
+                "regularizer": "Lasso",
+                "solver_name": "ProximalGradient",
+                "regularizer_strength": 3.0,
+            },
+            {
+                "observation_model": nmo.observation_models.GammaObservations(),
+                "regularizer": nmo.regularizer.Lasso(),
+                "solver_name": "ProximalGradient",
+                "regularizer_strength": 3.0,
+            },
+            {
+                "observation_model": nmo.observation_models.PoissonObservations(
+                    inverse_link_function=lambda x: jnp.pow(x, 2)
+                ),
+            },
+        ],
+    )
+    def test_save_and_load_with_custom_mapping(
+        self,
+        regularizer,
+        obs_model,
+        solver_name,
+        mapping_dict,
+        tmp_path,
+        glm_class_type,
+        model_class,
+    ):
+        """
+        Test saving and loading a model with various observation models and regularizers.
+        Ensure all parameters are preserved.
+        """
+
+        if (
+            regularizer == "Lasso"
+            or regularizer == "GroupLasso"
+            and solver_name not in ["ProximalGradient", "SVRG", "ProxSVRG"]
+        ):
+            pytest.skip(
+                f"Skipping {solver_name} for Lasso type regularizer; not an approximate solver."
+            )
+
+        model = model_class(
+            observation_model=obs_model,
+            solver_name=solver_name,
+            regularizer=regularizer,
+            regularizer_strength=2.0,
+        )
+
+        initial_params = model.get_params()
+        initial_fit_params = model._get_coef_and_intercept()
+        initial_params["coef_"] = initial_fit_params[0]
+        initial_params["intercept_"] = initial_fit_params[1]
+
+        # Save
+        save_path = tmp_path / "test_model.npz"
+        model.save_params(save_path)
+
+        # Load
+        loaded_model = nmo.load_model(save_path, mapping_dict=mapping_dict)
+        loaded_params = loaded_model.get_params()
+        loaded_fit_params = loaded_model._get_coef_and_intercept()
+        loaded_params["coef_"] = loaded_fit_params[0]
+        loaded_params["intercept_"] = loaded_fit_params[1]
+
+        # Assert matching keys and values
+        assert (
+            initial_params.keys() == loaded_params.keys()
+        ), "Parameter keys mismatch after load."
+
+        unexpected_keys = set(mapping_dict) - set(initial_params)
+        raise_exception = bool(unexpected_keys)
+        if raise_exception:
+            with pytest.raises(
+                ValueError, match="mapping_dict contains unexpected keys"
+            ):
+                raise ValueError(
+                    f"mapping_dict contains unexpected keys: {unexpected_keys}"
+                )
+
+        for key in initial_params:
+            init_val = initial_params[key]
+            load_val = loaded_params[key]
+
+            if key == "observation_model__inverse_link_function":
+                if "observation_model" in mapping_dict:
+                    continue
+            if key in mapping_dict:
+                if key == "observation_model":
+                    if isinstance(mapping_dict[key], str):
+                        mapping_obs = instantiate_observation_model(mapping_dict[key])
+                    else:
+                        mapping_obs = mapping_dict[key]
+                    assert _get_name(mapping_obs) == _get_name(
+                        load_val
+                    ), f"{key} observation model mismatch: {mapping_dict[key]} != {load_val}"
+                elif key == "regularizer":
+                    if isinstance(mapping_dict[key], str):
+                        mapping_reg = create_regularizer(mapping_dict[key])
+                    else:
+                        mapping_reg = mapping_dict[key]
+                    assert _get_name(mapping_reg) == _get_name(
+                        load_val
+                    ), f"{key} regularizer mismatch: {mapping_dict[key]} != {load_val}"
+                elif key == "solver_name":
+                    assert (
+                        mapping_dict[key] == load_val
+                    ), f"{key} solver name mismatch: {mapping_dict[key]} != {load_val}"
+                elif key == "regularizer_strength":
+                    assert (
+                        mapping_dict[key] == load_val
+                    ), f"{key} regularizer strength mismatch: {mapping_dict[key]} != {load_val}"
+                continue
+
+            if isinstance(init_val, (int, float, str, type(None))):
+                assert init_val == load_val, f"{key} mismatch: {init_val} != {load_val}"
+
+            elif isinstance(init_val, dict):
+                assert (
+                    init_val == load_val
+                ), f"{key} dict mismatch: {init_val} != {load_val}"
+
+            elif isinstance(init_val, (np.ndarray, jnp.ndarray)):
+                assert np.allclose(
+                    np.array(init_val), np.array(load_val)
+                ), f"{key} array mismatch"
+
+            elif isinstance(init_val, Callable):
+                assert _get_name(init_val) == _get_name(
+                    load_val
+                ), f"{key} function mismatch: {_get_name(init_val)} != {_get_name(load_val)}"
+
+    @pytest.mark.parametrize(
+        "fitted_glm_type",
+        [
+            "poissonGLM_fitted_model_instantiation",
+            "population_poissonGLM_fitted_model_instantiation",
+        ],
+    )
+    def test_save_and_load_fitted_model(
+        self, request, fitted_glm_type, glm_class_type, tmp_path
+    ):
+        """
+        Test saving and loading a fitted model with various observation models and regularizers.
+        Ensure all parameters are preserved.
+        """
+        _, _, fitted_model, _, _ = request.getfixturevalue(fitted_glm_type)
+
+        initial_params = fitted_model.get_params()
+        initial_fit_params = fitted_model._get_coef_and_intercept()
+        initial_params["coef_"] = initial_fit_params[0]
+        initial_params["intercept_"] = initial_fit_params[1]
+
+        # Save
+        save_path = tmp_path / "test_model.npz"
+        fitted_model.save_params(save_path)
+
+        # Load
+        loaded_model = nmo.load_model(save_path)
+        loaded_params = loaded_model.get_params()
+        loaded_fit_params = loaded_model._get_coef_and_intercept()
+        loaded_params["coef_"] = loaded_fit_params[0]
+        loaded_params["intercept_"] = loaded_fit_params[1]
+
+        # Assert coef and intercept are preserved
+        assert np.allclose(
+            initial_params["coef_"], loaded_params["coef_"]
+        ), "Coefficient mismatch after load."
+        assert np.allclose(
+            initial_params["intercept_"], loaded_params["intercept_"]
+        ), "Intercept mismatch after load."
 
 
 @pytest.mark.parametrize("glm_type", ["", "population_"])
