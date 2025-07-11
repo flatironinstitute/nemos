@@ -35,9 +35,9 @@ class ProxGradState(eqx.Module):
     stepsize: Float[Array, ""]
     velocity: PyTree
     t: Float[Array, ""]
+    fun_val: Float[Array, ""]
 
     terminate: Bool[Array, ""]
-    # result: optx._solution.RESULTS
 
 
 class ProximalGradient(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
@@ -61,13 +61,15 @@ class ProximalGradient(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
         aux_struct: PyTree[jax.ShapeDtypeStruct],
         tags: frozenset[object],
     ) -> ProxGradState:
-        del fn, args, options, f_struct, aux_struct, tags
+        del options, f_struct, aux_struct, tags
+        fun_val, _ = fn(y, args)
         return ProxGradState(
             iter_num=jnp.asarray(0),
             velocity=y,
             t=jnp.asarray(1.0),
             stepsize=jnp.asarray(1.0),
             terminate=jnp.asarray(False),
+            fun_val=fun_val,
         )
 
     def step(
@@ -81,25 +83,54 @@ class ProximalGradient(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
     ) -> tuple[Y, ProxGradState, Aux]:
         del tags
 
+        # Some clarification on variable names because Optimistix's and the FISTA paper's / JAXopt's notation are different:
+        #
+        # In the paper x_{i} are the parameters, y_{i} the points after the momentum step.
+        # The updates:
+        #   x_{k} = prox(y_{k} - stepsize_{k} * gradient_at_y_{k})
+        #
+        #   t_{k+1} = (1 + sqrt(1 + 4 t_{k}^2)) / 2
+        #   y_{k+1} = x_{k} + ((t_{k} - 1) / t_{k+1}) * (x_{k} - x_{k-1})
+        #
+        #   Where we run a linesearch to find the stepsize_{k} starting with stepsize_{k-1} / decrease_factor or 1.
+        #   Note that instead of x_{k}, the current parameter values, the linsearch is done "looking out" from y_{k}
+        #   in the direction of the gradient at that point.
+        #   Also, the new t_{k+1} and y_{k+1} are precalculated to be used on the next iteration.
+        #
+        # In Optimistix the parameter values are denoted by y,
+        # so what is x in the formula above will be y in the code,
+        # and what is y in the formula will be called velocity or vel.
+        #
+        # In order of appearance in the code:
+        #   y = x_{k-1}
+        #   state.velocity = y_{k}          # note that it was precalculated at the previous step
+        #   state.stepsize = stepsize_{k-1}
+        #   new_y = x_{k}
+        #   new_stepsize = stepsize_{k}
+        #   state.t = t_{k}                 # also precalculated at the previous step
+        #   next_t = t_{k+1}
+        #   next_vel = y_{k+1}
+
         # TODO might want to store value_and_grad_fun instead of doing this
         # if we need the gradient anyway?
         autodiff_mode = options.get("autodiff_mode", "bwd")
-        f_val, lin_fn, _ = jax.linearize(
+        f_at_prev_vel, lin_fn, _ = jax.linearize(
             lambda _y: fn(_y, args), state.velocity, has_aux=True
         )
-        grad = optx._misc.lin_to_grad(
+        grad_at_prev_vel = optx._misc.lin_to_grad(
             lin_fn, state.velocity, autodiff_mode=autodiff_mode
         )
 
-        fun_without_aux = lambda x, args: fn(x, args)[0]
-        next_y, new_stepsize = self.fista_line_search(
+        fun_without_aux = lambda params, args: fn(params, args)[0]
+        new_y, new_stepsize = self.fista_line_search(
             fun_without_aux,
             state.velocity,
-            f_val,
-            grad,
+            f_at_prev_vel,
+            grad_at_prev_vel,
             state.stepsize,
             args,
         )
+        new_fun_val, new_aux = fn(new_y, args)
 
         new_stepsize = jnp.where(
             new_stepsize <= 1e-6,
@@ -108,10 +139,8 @@ class ProximalGradient(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
         )
 
         next_t = 0.5 * (1 + jnp.sqrt(1 + 4 * state.t**2))
-        diff_y = tree_sub(next_y, y)
-        next_vel = tree_add_scalar_mul(next_y, (state.t - 1) / next_t, diff_y)
-
-        new_fun_val, new_aux = fn(next_y, args)
+        diff_y = tree_sub(new_y, y)
+        next_vel = tree_add_scalar_mul(new_y, (state.t - 1) / next_t, diff_y)
 
         # NOTE do we want to use Cauchy for consistency with other solvers
         # or the other to be consistent with JAXopt?
@@ -121,10 +150,10 @@ class ProximalGradient(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
             self.norm,
             y,
             diff_y,
-            f_val,
-            new_fun_val - f_val,
+            state.fun_val,
+            new_fun_val - state.fun_val,
         )
-        # terminate = (optx.two_norm(tree_sub(next_y, y)) / new_stepsize) < self.atol
+        # terminate = (optx.two_norm(tree_sub(new_y, y)) / new_stepsize) < self.atol
 
         next_state = ProxGradState(
             iter_num=state.iter_num + 1,
@@ -132,10 +161,10 @@ class ProximalGradient(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
             t=next_t,
             stepsize=jnp.asarray(new_stepsize),
             terminate=terminate,
-            # result=optx._solution.RESULTS.successful,
+            fun_val=new_fun_val,
         )
 
-        return next_y, next_state, new_aux
+        return new_y, next_state, new_aux
 
     # adapted from JAXopt
     def fista_line_search(
@@ -202,7 +231,6 @@ class ProximalGradient(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
     ) -> tuple[Bool[Array, ""], optx._solution.RESULTS]:
         del fn, y, args, options, tags
 
-        # return state.terminate, state.result
         return state.terminate, optx._solution.RESULTS.successful
 
     def postprocess(
