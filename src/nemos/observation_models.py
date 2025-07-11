@@ -1437,6 +1437,10 @@ class NegativeBinomialObservations(Observations):
         that the ``scale`` parameter cannot be estimated post-hoc without
         re-fitting a model.
 
+        Note that the arguments of this method are not used but are kept for
+        API consistency—i.e., all ``Observations.estimate_scale`` methods
+        have the same signature.
+
         Parameters
         ----------
         y :
