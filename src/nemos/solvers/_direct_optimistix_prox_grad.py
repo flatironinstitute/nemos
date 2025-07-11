@@ -112,8 +112,8 @@ class ProximalGradient(optx.AbstractIterativeSolver):
         diff_y = tree_sub(next_y, y)
         next_y = tree_add_scalar_mul(next_y, (state.t - 1) / next_t, diff_y)
 
-        # NOTE do we want to use Cauchy for consistency with other solvers or the other to be consistent with JAXopt?
-        # TODO could read the function value from the linesearch
+        # NOTE do we want to use Cauchy for consistency with other solvers
+        # or the other to be consistent with JAXopt and save a function evaluation?
         terminate = optx._misc.cauchy_termination(
             self.rtol,
             self.atol,
