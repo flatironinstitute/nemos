@@ -351,10 +351,10 @@ class GLM(BaseRegressor):
         Returns
         -------
         :
-            The predicted rates. Shape (n_time_bins, ).
+            The linked predicted rates. Shape (n_time_bins, ).
         """
         Ws, bs = params
-        return self._observation_model.inverse_link_function(
+        return (
             # First, multiply each feature by its corresponding coefficient,
             # then sum across all features and add the intercept, before
             # passing to the inverse link function
@@ -458,8 +458,8 @@ class GLM(BaseRegressor):
             The model negative log-likehood. Shape (1,).
 
         """
-        predicted_rate = self._predict(params, X)
-        return self._observation_model._negative_log_likelihood(y, predicted_rate)
+        linked_rate = self._predict(params, X)
+        return self._observation_model._negative_log_likelihood(y, linked_rate)
 
     def score(
         self,
@@ -852,12 +852,12 @@ class GLM(BaseRegressor):
         # validate input and params consistency
         self._check_input_and_params_consistency(params, X=feedforward_input)
 
-        predicted_rate = self._predict(params, feedforward_input)
+        linked_rate = self._predict(params, feedforward_input)
         return (
             self._observation_model.sample_generator(
-                key=random_key, predicted_rate=predicted_rate, scale=self.scale_
+                key=random_key, linked_rate=linked_rate, scale=self.scale_
             ),
-            predicted_rate,
+            self.observation_model.inverse_link_function(linked_rate),
         )
 
     def _estimate_resid_degrees_of_freedom(
