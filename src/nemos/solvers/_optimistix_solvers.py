@@ -123,7 +123,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState, OptimistixStepResul
 
     def init_state(self, init_params, *args) -> OptimistixSolverState:
         return self._solver.init(
-            self.fun,
+            self.fun_with_aux,
             init_params,
             args,
             self.config.options,
