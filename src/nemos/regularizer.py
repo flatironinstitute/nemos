@@ -309,10 +309,28 @@ class Lasso(Regularizer):
 
 class ElasticNet(Regularizer):
     """
-    Regularizer class for Elastic Net (L1 + L2 regularization).
+    Regularizer class for Elastic Net (L1 + L2 regularization) [3]_ [4]_.
+
+    The elasitc net penalty is defined as:
+
+    .. math::
+        P_\alpha(\beta) = (1 - \alpha) \frac{1}{2} ||\beta||_{\ell_2}^2 + \alpha ||\beta||_{\ell_1}
+
+    where the `regularizer_strength` parameter :math:`\alpha` controls the balance between L1 (Lasso) and L2 (Ridge)
+    regularization, where :math:`\alpha = 0` is equivalent to Ridge regularization and :math:`\alpha = 1` is
+    equivalent to Lasso regularization.
 
     This class equips models with the Elastic Net proximal operator and the
     Elastic Net penalized loss function.
+
+    References
+    ----------
+    .. [3] Zou, H., & Hastie, T. (2005).
+        Regularization and variable selection via the elastic net.
+        Journal of the Royal Statistical Society: Series B (Statistical Methodology), 67(2), 301-320.
+        https://doi.org/10.1111/j.1467-9868.2005.00503.x
+
+    .. [4] https://en.wikipedia.org/wiki/Elastic_net_regularization
     """
 
     _allowed_solvers = (
@@ -355,7 +373,14 @@ class ElasticNet(Regularizer):
         params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], regularizer_strength: float
     ) -> jnp.ndarray:
         """
-        Compute the Elastic Net penalization for given parameters.
+        Compute the Elastic Net penalization for given parameters. The elasitc net penalty is defined as:
+
+        .. math::
+            P_\alpha(\beta) = (1 - \alpha) \frac{1}{2} ||\beta||_{\ell_2}^2 + \alpha ||\beta||_{\ell_1}
+
+        where the `regularizer_strength` parameter :math:`\alpha` controls the balance between L1 (Lasso) and L2 (Ridge)
+        regularization, where :math:`\alpha = 0` is equivalent to Ridge regularization and :math:`\alpha = 1` is
+        equivalent to Lasso regularization.
 
         Parameters
         ----------
