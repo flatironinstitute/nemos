@@ -1,4 +1,5 @@
 import inspect
+import os
 from contextlib import nullcontext as does_not_raise
 
 import jax
@@ -135,7 +136,8 @@ def test_svrg_glm_instantiate_solver(regularizer_name, solver_class, mask):
     )
     glm.instantiate_solver()
 
-    solver = inspect.getclosurevars(glm._solver_run).nonlocals["solver"]
+    # currently glm._solver is a Wrapped(Prox)SVRG
+    solver = glm._solver._solver
     assert glm.solver_name == solver_name
     assert isinstance(solver, solver_class)
 
@@ -170,7 +172,8 @@ def test_svrg_glm_passes_solver_kwargs(regularizer_name, solver_name, mask, glm_
     )
     glm.instantiate_solver()
 
-    solver = inspect.getclosurevars(glm._solver_run).nonlocals["solver"]
+    # currently glm._solver is a Wrapped(Prox)SVRG
+    solver = glm._solver._solver
     assert solver.stepsize == solver_kwargs["stepsize"]
     assert solver.maxiter == solver_kwargs["maxiter"]
 
@@ -226,7 +229,7 @@ def test_svrg_glm_initialize_state(
     assert state.reference_point == init_params
 
     for f in (glm._solver_init_state, glm._solver_update, glm._solver_run):
-        assert isinstance(inspect.getclosurevars(f).nonlocals["solver"], solver_class)
+        assert isinstance(f.__self__._solver, solver_class)
     assert isinstance(state, SVRGState)
 
 
@@ -326,11 +329,11 @@ def test_svrg_glm_fit(
 ):
     X, y, model, (w_true, b_true), rate = poissonGLM_model_instantiation
 
-    # set tolerance to -1 so that doesn't stop the iteration
-    solver_kwargs = {
-        "maxiter": maxiter,
-        "tol": -1.0,
-    }
+    # set the tolerance such that the solvers never hit their convergence criterion
+    # and run until maxiter is reached
+    backend = os.getenv("NEMOS_SOLVER_BACKEND")
+    tol = -1.0 if backend == "jaxopt" else 0.0
+    solver_kwargs = {"maxiter": maxiter, "tol": tol}
 
     # only pass mask if it's not None
     reg_cls = getattr(nmo.regularizer, regularizer_name)
@@ -357,9 +360,15 @@ def test_svrg_glm_fit(
 
     glm.fit(X, y)
 
-    solver = inspect.getclosurevars(glm._solver_run).nonlocals["solver"]
+    solver = glm._solver
     assert solver.maxiter == maxiter
-    assert glm.solver_state_.iter_num == maxiter
+
+    if hasattr(glm.solver_state_, "iter_num"):
+        assert glm.solver_state_.iter_num == maxiter
+    elif hasattr(glm.solver_state_, "step"):
+        assert glm.solver_state_.step.item() == maxiter
+    else:
+        assert solver.stats["num_steps"].item() == maxiter
 
 
 @pytest.mark.parametrize(

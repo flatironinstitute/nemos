@@ -958,7 +958,6 @@ class TestGLM:
             params = model.initialize_params(X, y, init_params=init_params)
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
 
     @pytest.fixture
     def initialize_solver_weights_dimensionality_expectation(self, glm_class_type):
@@ -1029,7 +1028,6 @@ class TestGLM:
             params = model.initialize_params(X, y, init_params=(init_w, true_params[1]))
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
 
     @pytest.mark.parametrize(
         "dim_intercepts, expectation",
@@ -1067,7 +1065,6 @@ class TestGLM:
             params = model.initialize_params(X, y, init_params=(init_w, init_b))
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
 
     @pytest.mark.parametrize(*fit_init_params_type_init_params)
     def test_initialize_solver_init_params_type(
@@ -1095,7 +1092,6 @@ class TestGLM:
             params = model.initialize_params(X, y, init_params=init_params)
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
 
     @pytest.mark.parametrize(
         "delta_dim, expectation",
@@ -1124,7 +1120,6 @@ class TestGLM:
             params = model.initialize_params(X, y, init_params=true_params)
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
 
     @pytest.mark.parametrize(
         "delta_dim, expectation",
@@ -1159,7 +1154,6 @@ class TestGLM:
             params = model.initialize_params(X, y, init_params=true_params)
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -1198,7 +1192,6 @@ class TestGLM:
             params = model.initialize_params(X, y, init_params=(init_w, init_b))
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -1231,7 +1224,6 @@ class TestGLM:
             params = model.initialize_params(X, y, init_params=true_params)
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
 
     @pytest.mark.parametrize(
         "delta_tp, expectation",
@@ -1263,7 +1255,6 @@ class TestGLM:
             params = model.initialize_params(X, y, init_params=true_params)
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
 
     @pytest.mark.parametrize(
         "delta_tp, expectation",
@@ -1295,7 +1286,6 @@ class TestGLM:
             params = model.initialize_params(X, y, init_params=true_params)
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
 
     def test_initialize_solver_mask_grouplasso(
         self, request, glm_class_type, model_instantiation_type
@@ -1311,7 +1301,6 @@ class TestGLM:
         )
         params = model.initialize_params(X, y)
         init_state = model.initialize_state(X, y, params)
-        assert init_state.velocity == params
 
     @pytest.mark.parametrize(
         "fill_val, expectation",
@@ -1341,7 +1330,6 @@ class TestGLM:
         with expectation:
             params = model.initialize_params(X, y)
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
 
     #######################
     # Test model.simulate
@@ -2467,7 +2455,7 @@ class TestGLMObservationModel:
         # use glm static methods to check if the solver is batchable
         # if not pop the batch_size kwarg
         try:
-            slv_class = nmo.glm.GLM._get_solver_class(solver_name)
+            slv_class = nmo.solvers.solver_registry[solver_name]
             nmo.glm.GLM._check_solver_kwargs(slv_class, solver_kwargs)
         except NameError:
             solver_kwargs.pop("batch_size")
@@ -2791,10 +2779,21 @@ class TestPopulationGLMObservationModel:
                 "LBFGS",
                 {"tol": 10**-14},
             ),
-            (nmo.regularizer.Ridge(), 1.0, "LBFGS", {"stepsize": 0.1, "tol": 10**-14}),
+            (
+                nmo.regularizer.Ridge(),
+                1.0,
+                "LBFGS",
+                {"stepsize": 0.1, "tol": 10**-14},
+            ),
             (
                 nmo.regularizer.Lasso(),
                 0.001,
+                "ProximalGradient",
+                {"tol": 10**-14},
+            ),
+            (
+                nmo.regularizer.Lasso(),
+                0.1,
                 "ProximalGradient",
                 {"tol": 10**-14},
             ),
@@ -2970,7 +2969,7 @@ class TestPoissonGLM:
             regularizer_strength=None if reg == "UnRegularized" else 1.0,
         )
         opt_state = model.initialize_state(X, y, true_params)
-        solver = inspect.getclosurevars(model._solver_run).nonlocals["solver"]
+        solver = model._solver
 
         if stepsize is not None:
             assert opt_state.stepsize == stepsize

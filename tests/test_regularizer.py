@@ -1,6 +1,7 @@
 import copy
 import warnings
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -1157,12 +1158,14 @@ class TestGroupLasso:
         state = model.solver_init_state(true_params, X, y)
         # asses that state is a NamedTuple by checking tuple type and the availability of some NamedTuple
         # specific namespace attributes
-        assert isinstance(state, tuple)
-        assert (
-            hasattr(state, "_fields")
-            and hasattr(state, "_field_defaults")
-            and hasattr(state, "_asdict")
-        )
+        assert isinstance(state, tuple | eqx.Module)
+
+        # NOTE not testing these anymore since non-JAXopt solvers' state is not necessarily a namedtuple
+        # assert (
+        #    hasattr(state, "_fields")
+        #    and hasattr(state, "_field_defaults")
+        #    and hasattr(state, "_asdict")
+        # )
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
     def test_update_solver(self, solver_name, poissonGLM_model_instantiation):
@@ -1191,12 +1194,15 @@ class TestGroupLasso:
         params, state = model.solver_update(true_params, state, X, y)
         # asses that state is a NamedTuple by checking tuple type and the availability of some NamedTuple
         # specific namespace attributes
-        assert isinstance(state, tuple)
-        assert (
-            hasattr(state, "_fields")
-            and hasattr(state, "_field_defaults")
-            and hasattr(state, "_asdict")
-        )
+        assert isinstance(state, tuple | eqx.Module)
+
+        # NOTE not testing these anymore since non-JAXopt solvers' state is not necessarily a namedtuple
+        # assert (
+        #    hasattr(state, "_fields")
+        #    and hasattr(state, "_field_defaults")
+        #    and hasattr(state, "_asdict")
+        # )
+
         # check params struct and shapes
         assert jax.tree_util.tree_structure(params) == jax.tree_util.tree_structure(
             true_params

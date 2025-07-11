@@ -173,6 +173,12 @@ There are several options for how to run a subset of tests:
 - Run a specific test within a specific module: `pytests tests/test_glm.py::test_func`
 - Another example specifying a test method via the command line: `pytest tests/test_glm.py::GLMClass::test_func`
 
+To run tests with solvers implemented with either the `jaxopt` or the `optimistix` backend, set the `NEMOS_SOLVER_BACKEND` environment variable. E.g. setting for a single test run:
+`NEMOS_SOLVER_BACKEND=jaxopt pytest`
+
+There are also dedicated tox environments that do this automatically and run a subset of tests that depend on the solvers:
+`tox -e backend-jaxopt,backend-optimistix` will run solver-dependent tests with both backends separately.
+
 #### Adding tests
 
 New tests can be added in any of the existing `tests/test_*.py` scripts. Tests should be functions, contained within classes. The class contains a bunch of related tests
