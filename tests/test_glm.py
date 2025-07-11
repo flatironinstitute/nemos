@@ -2820,6 +2820,7 @@ class TestPopulationGLM:
         "population_poissonGLM_model_instantiation",
         "population_gammaGLM_model_instantiation",
         "population_bernoulliGLM_model_instantiation",
+        "population_negativeBinomialGLM_model_instantiation",
     ],
 )
 class TestPopulationGLMObservationModel:
