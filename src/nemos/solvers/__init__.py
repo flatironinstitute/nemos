@@ -23,3 +23,4 @@ from ._svrg_defaults import (
     glm_softplus_poisson_l_max_and_l,
     svrg_optimal_batch_and_stepsize,
 )
+from ._direct_optimistix_prox_grad import DirectProximalGradient
