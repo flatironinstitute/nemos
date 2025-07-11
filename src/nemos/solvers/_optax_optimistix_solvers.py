@@ -96,14 +96,14 @@ class OptaxOptimistixGradientDescent(OptimistixOptaxSolver):
         regularizer_strength: float | None,
         atol: float = DEFAULT_ATOL,
         rtol: float = DEFAULT_RTOL,
-        nesterov: bool = True,
+        acceleration: bool = True,
         **solver_init_kwargs,
     ):
         stepsize = solver_init_kwargs.get("stepsize", None)
         linesearch_kwargs = solver_init_kwargs.get("linesearch_kwargs", {})
 
         _sgd = optax.chain(
-            optax.sgd(learning_rate=1.0, nesterov=nesterov),
+            optax.sgd(learning_rate=1.0, nesterov=acceleration),
             _make_rate_scaler(stepsize, linesearch_kwargs),
         )
         solver_init_kwargs["optim"] = _sgd
@@ -153,7 +153,7 @@ class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
         regularizer_strength: float | None,
         atol: float = DEFAULT_ATOL,
         rtol: float = DEFAULT_RTOL,
-        nesterov: bool = True,
+        acceleration: bool = True,
         **solver_init_kwargs,
     ):
         loss_fn = unregularized_loss
@@ -183,7 +183,7 @@ class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
             linesearch_kwargs["curv_rtol"] = jnp.inf
 
         _sgd = optax.chain(
-            optax.sgd(learning_rate=1.0, nesterov=nesterov),
+            optax.sgd(learning_rate=1.0, nesterov=acceleration),
             _make_rate_scaler(stepsize, linesearch_kwargs),
         )
 
