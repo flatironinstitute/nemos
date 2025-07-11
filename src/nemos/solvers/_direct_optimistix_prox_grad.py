@@ -28,64 +28,6 @@ def tree_add_scalar_mul(tree_x: PyTree, scalar, tree_y):
     return jax.tree_util.tree_map(lambda x, y: x + scalar * y, tree_x, tree_y)
 
 
-# adapted from JAXopt
-def fista_line_search(
-    fun,
-    prox,
-    maxls,
-    x,
-    x_fun_val,
-    grad,
-    stepsize,
-    decrease_factor,
-    regularizer_strength,
-    args,
-):
-    # epsilon of current dtype for robust checking of
-    # sufficient decrease condition
-    eps = jnp.finfo(x_fun_val.dtype).eps
-
-    def cond_fun(carry):
-        next_x, stepsize = carry
-
-        new_fun_val = fun(next_x, args)
-
-        diff_x = tree_sub(next_x, x)
-        sqdist = optx._misc.tree_dot(diff_x, diff_x)
-        # sqdist = optx._misc.sum_squares(diff_x)
-
-        # NOTE verbatim from JAXopt
-        # The expression below checks the sufficient decrease condition
-        # f(next_x) < f(x) + dot(grad_f(x), diff_x) + (0.5/stepsize) ||diff_x||^2
-        # where the terms have been reordered for numerical stability.
-        fun_decrease = stepsize * (new_fun_val - x_fun_val)
-        expected_decrease = stepsize * optx._misc.tree_dot(diff_x, grad) + 0.5 * sqdist
-
-        return fun_decrease > expected_decrease + eps
-
-    def body_fun(carry):
-        stepsize = carry[1]
-        new_stepsize = stepsize * decrease_factor
-        next_x = tree_add_scalar_mul(x, -new_stepsize, grad)
-        next_x = prox(next_x, regularizer_strength, stepsize)
-        return next_x, new_stepsize
-
-    init_x = tree_add_scalar_mul(x, -stepsize, grad)
-    init_x = prox(init_x, regularizer_strength, stepsize)
-    init_val = (init_x, stepsize)
-
-    # TODO make kind dependent on the adjoint used.
-    # "lax" for implicit, "checkpointed" for RecursiveCheckpointAdjoint
-    # so probably move fista_line_search inside ProximalGradient
-    return eqx.internal.while_loop(
-        cond_fun=cond_fun,
-        body_fun=body_fun,
-        init_val=init_val,
-        max_steps=maxls,
-        kind="lax",
-    )
-
-
 class ProxGradState(eqx.Module):
     iter_num: Int[Array, ""]
     stepsize: Float[Array, ""]
@@ -147,16 +89,12 @@ class ProximalGradient(optx.AbstractIterativeSolver):
         # f_val, grad = jax.value_and_grad(fun_without_aux)(y, args)
 
         # TODO get next_aux?
-        next_y, new_stepsize = fista_line_search(
+        next_y, new_stepsize = self.fista_line_search(
             fun_without_aux,
-            self.prox,
-            self.maxls,
             y,
             f_val,
             grad,
             state.stepsize,
-            self.decrease_factor,
-            self.regularizer_strength,
             args,
         )
 
@@ -174,9 +112,18 @@ class ProximalGradient(optx.AbstractIterativeSolver):
         diff_y = tree_sub(next_y, y)
         next_y = tree_add_scalar_mul(next_y, (state.t - 1) / next_t, diff_y)
 
-        # NOTE using JAXopt's termination criteria instead of the Cauchy
-        # NOTE do we want to use Cauchy for consistency with other solvers?
-        terminate = (optx.two_norm(tree_sub(next_y, y)) / new_stepsize) < self.atol
+        # NOTE do we want to use Cauchy for consistency with other solvers or the other to be consistent with JAXopt?
+        # TODO could read the function value from the linesearch
+        terminate = optx._misc.cauchy_termination(
+            self.rtol,
+            self.atol,
+            self.norm,
+            y,
+            diff_y,
+            f_val,
+            fun_without_aux(next_y, args) - f_val,
+        )
+        # terminate = (optx.two_norm(tree_sub(next_y, y)) / new_stepsize) < self.atol
 
         next_state = ProxGradState(
             iter_num=state.iter_num + 1,
@@ -188,6 +135,60 @@ class ProximalGradient(optx.AbstractIterativeSolver):
         )
 
         return next_y, next_state, None
+
+    # adapted from JAXopt
+    def fista_line_search(
+        self,
+        fun,
+        x,
+        x_fun_val,
+        grad,
+        stepsize,
+        args,
+    ):
+        # epsilon of current dtype for robust checking of
+        # sufficient decrease condition
+        eps = jnp.finfo(x_fun_val.dtype).eps
+
+        def cond_fun(carry):
+            next_x, stepsize = carry
+
+            new_fun_val = fun(next_x, args)
+
+            diff_x = tree_sub(next_x, x)
+            sqdist = optx._misc.sum_squares(diff_x)
+
+            # NOTE verbatim from JAXopt
+            # The expression below checks the sufficient decrease condition
+            # f(next_x) < f(x) + dot(grad_f(x), diff_x) + (0.5/stepsize) ||diff_x||^2
+            # where the terms have been reordered for numerical stability.
+            fun_decrease = stepsize * (new_fun_val - x_fun_val)
+            expected_decrease = (
+                stepsize * optx._misc.tree_dot(diff_x, grad) + 0.5 * sqdist
+            )
+
+            return fun_decrease > expected_decrease + eps
+
+        def body_fun(carry):
+            stepsize = carry[1]
+            new_stepsize = stepsize * self.decrease_factor
+            next_x = tree_add_scalar_mul(x, -new_stepsize, grad)
+            next_x = self.prox(next_x, self.regularizer_strength, stepsize)
+            return next_x, new_stepsize
+
+        init_x = tree_add_scalar_mul(x, -stepsize, grad)
+        init_x = self.prox(init_x, self.regularizer_strength, stepsize)
+        init_val = (init_x, stepsize)
+
+        # TODO make kind dependent on the adjoint used?
+        # "lax" for implicit, "checkpointed" for RecursiveCheckpointAdjoint
+        return eqx.internal.while_loop(
+            cond_fun=cond_fun,
+            body_fun=body_fun,
+            init_val=init_val,
+            max_steps=self.maxls,
+            kind="lax",
+        )
 
     def terminate(
         self,
