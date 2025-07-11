@@ -9,6 +9,8 @@ import operator
 import optimistix as optx
 import equinox as eqx
 
+from optimistix._custom_types import Y, Aux
+
 from typing import Any, Callable
 
 from jaxtyping import Array, Int, Float, PyTree, Bool
@@ -38,7 +40,7 @@ class ProxGradState(eqx.Module):
     # result: optx._solution.RESULTS
 
 
-class ProximalGradient(optx.AbstractIterativeSolver):
+class ProximalGradient(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
     prox: Callable
     regularizer_strength: float
 
@@ -51,14 +53,15 @@ class ProximalGradient(optx.AbstractIterativeSolver):
 
     def init(
         self,
-        fn,
-        y,
-        args,
+        fn: Callable,
+        y: Y,
+        args: PyTree[Any],
         options: dict[str, Any],
-        f_struct,
-        aux_struct,
+        f_struct: PyTree[jax.ShapeDtypeStruct],
+        aux_struct: PyTree[jax.ShapeDtypeStruct],
         tags: frozenset[object],
-    ):
+    ) -> ProxGradState:
+        del fn, args, options, f_struct, aux_struct, tags
         return ProxGradState(
             iter_num=jnp.asarray(0),
             velocity=y,
@@ -69,26 +72,22 @@ class ProximalGradient(optx.AbstractIterativeSolver):
 
     def step(
         self,
-        fn,
-        y,
-        args,
-        options,
-        state,
+        fn: Callable,
+        y: Y,
+        args: PyTree[Any],
+        options: dict[str, Any],
+        state: ProxGradState,
         tags: frozenset[object],
-    ):
+    ) -> tuple[Y, ProxGradState, Aux]:
         del tags
-        # TODO do this after __init__ and include it in fista_line_search with partial?
-        fun_without_aux = lambda x, args: fn(x, args)[0]
-
-        autodiff_mode = options.get("autodiff_mode", "bwd")
 
         # TODO might want to store value_and_grad_fun instead of doing this
         # if we need the gradient anyway?
-        f_val, lin_fn, aux = jax.linearize(lambda _y: fn(_y, args), y, has_aux=True)
+        autodiff_mode = options.get("autodiff_mode", "bwd")
+        f_val, lin_fn, _ = jax.linearize(lambda _y: fn(_y, args), y, has_aux=True)
         grad = optx._misc.lin_to_grad(lin_fn, y, autodiff_mode=autodiff_mode)
-        # f_val, grad = jax.value_and_grad(fun_without_aux)(y, args)
 
-        # TODO get next_aux?
+        fun_without_aux = lambda x, args: fn(x, args)[0]
         next_y, new_stepsize = self.fista_line_search(
             fun_without_aux,
             y,
@@ -112,8 +111,10 @@ class ProximalGradient(optx.AbstractIterativeSolver):
         diff_y = tree_sub(next_y, y)
         next_y = tree_add_scalar_mul(next_y, (state.t - 1) / next_t, diff_y)
 
+        new_fun_val, new_aux = fn(next_y, args)
+
         # NOTE do we want to use Cauchy for consistency with other solvers
-        # or the other to be consistent with JAXopt and save a function evaluation?
+        # or the other to be consistent with JAXopt?
         terminate = optx._misc.cauchy_termination(
             self.rtol,
             self.atol,
@@ -121,7 +122,7 @@ class ProximalGradient(optx.AbstractIterativeSolver):
             y,
             diff_y,
             f_val,
-            fun_without_aux(next_y, args) - f_val,
+            new_fun_val - f_val,
         )
         # terminate = (optx.two_norm(tree_sub(next_y, y)) / new_stepsize) < self.atol
 
@@ -134,18 +135,18 @@ class ProximalGradient(optx.AbstractIterativeSolver):
             # result=optx._solution.RESULTS.successful,
         )
 
-        return next_y, next_state, None
+        return next_y, next_state, new_aux
 
     # adapted from JAXopt
     def fista_line_search(
         self,
-        fun,
-        x,
-        x_fun_val,
-        grad,
-        stepsize,
-        args,
-    ):
+        fun: Callable,
+        x: Y,
+        x_fun_val: Float[Array, ""],
+        grad: Y,
+        stepsize: Float[Array, ""],
+        args: PyTree[Any],
+    ) -> tuple[Y, Float[Array, ""]]:
         # epsilon of current dtype for robust checking of
         # sufficient decrease condition
         eps = jnp.finfo(x_fun_val.dtype).eps
@@ -192,13 +193,13 @@ class ProximalGradient(optx.AbstractIterativeSolver):
 
     def terminate(
         self,
-        fn,
-        y,
-        args,
-        options,
-        state,
+        fn: Callable,
+        y: Y,
+        args: PyTree[Any],
+        options: dict[str, Any],
+        state: ProxGradState,
         tags: frozenset[object],
-    ):
+    ) -> tuple[Bool[Array, ""], optx._solution.RESULTS]:
         del fn, y, args, options, tags
 
         # return state.terminate, state.result
@@ -206,16 +207,15 @@ class ProximalGradient(optx.AbstractIterativeSolver):
 
     def postprocess(
         self,
-        fn,
-        y,
-        aux,
-        args,
+        fn: Callable,
+        y: Y,
+        aux: Aux,
+        args: PyTree[Any],
         options: dict[str, Any],
-        state,
+        state: ProxGradState,
         tags: frozenset[object],
-        result,
-    ):
-        # ) -> tuple[Y, Aux, dict[str, Any]]:
+        result: optx._solution.RESULTS,
+    ) -> tuple[Y, Aux, dict[str, Any]]:
         del fn, args, options, state, tags, result
         return y, aux, {}
 
