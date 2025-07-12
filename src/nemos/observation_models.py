@@ -393,7 +393,7 @@ class Observations(Base, abc.ABC):
         null_mu = jnp.ones(observations.shape, dtype=jnp.float32) * jnp.mean(
             observations, axis=0
         )
-        with self._unlinked_rate():
+        with self.bypass_link_function():
             null_dev_t = self.deviance(observations, null_mu)
         null_deviance = aggregate_sample_scores(null_dev_t)
         return (null_deviance - model_deviance) / null_deviance
@@ -428,7 +428,7 @@ class Observations(Base, abc.ABC):
         """
         # ruff: noqa D403
         mean_y = jnp.ones(observations.shape) * observations.mean(axis=0)
-        with self._unlinked_rate():
+        with self.bypass_link_function():
             ll_null = self.log_likelihood(
                 observations,
                 mean_y,
@@ -444,7 +444,7 @@ class Observations(Base, abc.ABC):
         return 1 - ll_model / ll_null
 
     @contextmanager
-    def _unlinked_rate(self):
+    def bypass_link_function(self):
         """
         Context manager for temporarily setting the link function to identity.
 
