@@ -1659,7 +1659,7 @@ class PopulationGLM(GLM):
             The predicted rates. Shape (n_timebins, n_neurons).
         """
         Ws, bs = params
-        return self._observation_model.inverse_link_function(
+        return (
             # First, multiply each feature by its corresponding coefficient,
             # then sum across all features and add the intercept, before
             # passing to the inverse link function
