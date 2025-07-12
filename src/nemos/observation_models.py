@@ -1,7 +1,6 @@
 """Observation model classes for GLMs."""
 
 import abc
-from contextlib import contextmanager
 from typing import Callable, Literal, Union
 
 import jax
@@ -16,6 +15,10 @@ __all__ = ["PoissonObservations", "GammaObservations", "BernoulliObservations"]
 
 def __dir__():
     return __all__
+
+
+def identity_function(x):
+    return x
 
 
 class Observations(Base, abc.ABC):
@@ -127,7 +130,11 @@ class Observations(Base, abc.ABC):
 
     @abc.abstractmethod
     def _negative_log_likelihood(
-        self, observations, linked_rate, aggregate_sample_scores: Callable = jnp.mean
+        self,
+        observations,
+        linked_rate,
+        aggregate_sample_scores: Callable = jnp.mean,
+        inverse_link_function: Callable | None = None,
     ):
         r"""Compute the observation model negative log-likelihood.
 
@@ -142,6 +149,10 @@ class Observations(Base, abc.ABC):
             The predicted rate passed through the link function,
             i.e. ``predicted_rate = self.inverse_link_function(linked_rate)``.
             Shape (n_time_bins, ), or (n_time_bins, n_neurons).
+        aggregate_sample_scores :
+            Function that aggregates the log-likelihood of each sample.
+        inverse_link_function :
+            Inverse link function, if ``None``, then use ``self._inverse_link_function``.
 
         Returns
         -------
@@ -157,6 +168,7 @@ class Observations(Base, abc.ABC):
         linked_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
         aggregate_sample_scores: Callable = jnp.mean,
+        inverse_link_function: Callable | None = None,
     ):
         r"""Compute the observation model log-likelihood.
 
@@ -175,6 +187,8 @@ class Observations(Base, abc.ABC):
             The scale parameter of the model
         aggregate_sample_scores :
             Function that aggregates the log-likelihood of each sample.
+        inverse_link_function:
+            Inverse link function, if ``None``, then use ``self._inverse_link_function``.
 
         Returns
         -------
@@ -189,6 +203,7 @@ class Observations(Base, abc.ABC):
         key: jax.Array,
         linked_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
+        inverse_link_function: Callable | None = None,
     ) -> jnp.ndarray:
         """
         Sample from the estimated distribution.
@@ -206,6 +221,8 @@ class Observations(Base, abc.ABC):
              Shape (n_time_bins, ), or (n_time_bins, n_neurons).
         scale:
             Scale parameter for the distribution.
+        inverse_link_function :
+            Inverse link function, if ``None``, then use ``self._inverse_link_function``.
 
         Returns
         -------
@@ -220,6 +237,7 @@ class Observations(Base, abc.ABC):
         observations: jnp.ndarray,
         linked_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
+        inverse_link_function: Callable | None = None,
     ):
         r"""Compute the residual deviance for the observation model.
 
@@ -233,6 +251,8 @@ class Observations(Base, abc.ABC):
             Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)`` for population models.
         scale:
             Scale parameter of the model.
+        inverse_link_function:
+            Inverse link function, if ``None``, then use ``self._inverse_link_function``.
 
         Returns
         -------
@@ -247,6 +267,7 @@ class Observations(Base, abc.ABC):
         observations: jnp.ndarray,
         linked_rate: jnp.ndarray,
         dof_resid: Union[float, jnp.ndarray],
+        inverse_link_function: Callable | None = None,
     ) -> Union[float, jnp.ndarray]:
         r"""Estimate the scale parameter for the model.
 
@@ -271,6 +292,8 @@ class Observations(Base, abc.ABC):
             i.e. ``predicted_rate = self.inverse_link_function(linked_rate)``.
         dof_resid :
             The DOF of the residual.
+        inverse_link_function:
+            Inverse link function, if ``None``, then use ``self._inverse_link_function``.
         """
         pass
 
@@ -283,6 +306,7 @@ class Observations(Base, abc.ABC):
         ] = "pseudo-r2-McFadden",
         scale: Union[float, jnp.ndarray, NDArray] = 1.0,
         aggregate_sample_scores: Callable = jnp.mean,
+        inverse_link_function: Callable | None = None,
     ) -> jnp.ndarray:
         r"""Pseudo-:math:`R^2` calculation for a GLM.
 
@@ -305,6 +329,11 @@ class Observations(Base, abc.ABC):
             The pseudo-:math:`R^2` type.
         scale:
             The scale parameter of the model.
+        aggregate_sample_scores :
+            Function that aggregates the log-likelihood of each sample.
+
+        inverse_link_function:
+            Inverse link function, if ``None``, then use ``self._inverse_link_function``.
 
         Returns
         -------
@@ -346,18 +375,21 @@ class Observations(Base, abc.ABC):
                *Applied Multiple Regression/Correlation Analysis for the Behavioral Sciences*.
                3rd edition. Routledge, 2002. p.502. ISBN 978-0-8058-2223-6. (May 2012)
         """
+        inverse_link_function = inverse_link_function or self._inverse_link_function
         if score_type == "pseudo-r2-McFadden":
             pseudo_r2 = self._pseudo_r2_mcfadden(
                 observations,
                 linked_rate,
                 scale=scale,
                 aggregate_sample_scores=aggregate_sample_scores,
+                inverse_link_function=inverse_link_function,
             )
         elif score_type == "pseudo-r2-Cohen":
             pseudo_r2 = self._pseudo_r2_cohen(
                 observations,
                 linked_rate,
                 aggregate_sample_scores=aggregate_sample_scores,
+                inverse_link_function=inverse_link_function,
             )
         else:
             raise NotImplementedError(f"Score {score_type} not implemented!")
@@ -367,6 +399,7 @@ class Observations(Base, abc.ABC):
         self,
         observations: jnp.ndarray,
         linked_rate: jnp.ndarray,
+        inverse_link_function: Callable,
         aggregate_sample_scores: Callable = jnp.mean,
     ) -> jnp.ndarray:
         r"""Cohen's pseudo-:math:`R^2`.
@@ -380,6 +413,8 @@ class Observations(Base, abc.ABC):
             The neural activity. Expected shape: ``(n_time_bins, )``.
         linked_rate:
             The linked mean neural activity. Expected shape: ``(n_time_bins, )``
+        inverse_link_function:
+            Inverse link function.
 
         Returns
         -------
@@ -387,14 +422,17 @@ class Observations(Base, abc.ABC):
             The pseudo-:math:`R^2` of the model. A value closer to 1 indicates a better model fit,
             whereas a value closer to 0 suggests that the model doesn't improve much over the null model.
         """
-        model_dev_t = self.deviance(observations, linked_rate)
+        model_dev_t = self.deviance(
+            observations, linked_rate, inverse_link_function=inverse_link_function
+        )
         model_deviance = aggregate_sample_scores(model_dev_t)
 
         null_mu = jnp.ones(observations.shape, dtype=jnp.float32) * jnp.mean(
             observations, axis=0
         )
-        with self.bypass_link_function():
-            null_dev_t = self.deviance(observations, null_mu)
+        null_dev_t = self.deviance(
+            observations, null_mu, inverse_link_function=identity_function
+        )
         null_deviance = aggregate_sample_scores(null_dev_t)
         return (null_deviance - model_deviance) / null_deviance
 
@@ -402,6 +440,7 @@ class Observations(Base, abc.ABC):
         self,
         observations: jnp.ndarray,
         linked_rate: jnp.ndarray,
+        inverse_link_function: Callable,
         scale: Union[float, jnp.ndarray] = 1.0,
         aggregate_sample_scores: Callable = jnp.mean,
     ):
@@ -419,6 +458,8 @@ class Observations(Base, abc.ABC):
             The mean neural activity. Expected shape: (n_time_bins, ), or (n_time_bins, n_neurons).
         scale:
             The scale parameter of the model.
+        inverse_link_function:
+            Inverse link function.
 
         Returns
         -------
@@ -428,35 +469,21 @@ class Observations(Base, abc.ABC):
         """
         # ruff: noqa D403
         mean_y = jnp.ones(observations.shape) * observations.mean(axis=0)
-        with self.bypass_link_function():
-            ll_null = self.log_likelihood(
-                observations,
-                mean_y,
-                scale=scale,
-                aggregate_sample_scores=aggregate_sample_scores,
-            )
+        ll_null = self.log_likelihood(
+            observations,
+            mean_y,
+            scale=scale,
+            aggregate_sample_scores=aggregate_sample_scores,
+            inverse_link_function=identity_function,
+        )
         ll_model = self.log_likelihood(
             observations,
             linked_rate,
             scale=scale,
             aggregate_sample_scores=aggregate_sample_scores,
+            inverse_link_function=inverse_link_function,
         )
         return 1 - ll_model / ll_null
-
-    @contextmanager
-    def bypass_link_function(self):
-        """
-        Context manager for temporarily setting the link function to identity.
-
-        This is used when the predicted rate is provided directly instead of the
-        linked rate.
-        """
-        old_value = self._inverse_link_function
-        self._inverse_link_function = lambda x: x
-        try:
-            yield
-        finally:
-            self._inverse_link_function = old_value
 
 
 class PoissonObservations(Observations):
@@ -483,6 +510,7 @@ class PoissonObservations(Observations):
         observations: jnp.ndarray,
         linked_rate: jnp.ndarray,
         aggregate_sample_scores: Callable = jnp.mean,
+        inverse_link_function: Callable | None = None,
     ) -> jnp.ndarray:
         r"""Compute the Poisson negative log-likelihood.
 
@@ -497,6 +525,8 @@ class PoissonObservations(Observations):
             The predicted rate passed through the link function,
             i.e. ``predicted_rate = self.inverse_link_function(linked_rate)``.
             Shape (n_time_bins, ), or (n_time_bins, n_neurons).
+        inverse_link_function:
+            Inverse link function, if ``None``, then use ``self._inverse_link_function``.
 
         Returns
         -------
@@ -522,7 +552,8 @@ class PoissonObservations(Observations):
         The :math:`\log({y_{tn}!})` term is not a function of the parameters and can be disregarded
         when computing the loss-function. This is why we incorporated it into the `const` term.
         """
-        predicted_rate = self.inverse_link_function(linked_rate)
+        inverse_link_function = inverse_link_function or self.inverse_link_function
+        predicted_rate = inverse_link_function(linked_rate)
         predicted_rate = jnp.clip(
             predicted_rate, min=jnp.finfo(predicted_rate.dtype).eps
         )
@@ -536,6 +567,7 @@ class PoissonObservations(Observations):
         linked_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
         aggregate_sample_scores: Callable = jnp.mean,
+        inverse_link_function: Callable | None = None,
     ):
         r"""Compute the Poisson negative log-likelihood.
 
@@ -552,6 +584,8 @@ class PoissonObservations(Observations):
             The scale parameter of the model.
         aggregate_sample_scores :
             Function that aggregates the log-likelihood of each sample.
+        inverse_link_function:
+            Inverse link function, if ``None``, then use ``self._inverse_link_function``.
 
         Returns
         -------
@@ -578,8 +612,12 @@ class PoissonObservations(Observations):
         The :math:`\log({y_{tn}!})` term is not a function of the parameters and can be disregarded
         when computing the loss-function. This is why we incorporated it into the `const` term.
         """
+        inverse_link_function = inverse_link_function or self._inverse_link_function
         nll = self._negative_log_likelihood(
-            observations, linked_rate, aggregate_sample_scores
+            observations,
+            linked_rate,
+            aggregate_sample_scores,
+            inverse_link_function=inverse_link_function,
         )
         return -nll - aggregate_sample_scores(
             jax.scipy.special.gammaln(observations + 1)
@@ -590,6 +628,7 @@ class PoissonObservations(Observations):
         key: jax.Array,
         linked_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
+        inverse_link_function: Callable | None = None,
     ) -> jnp.ndarray:
         """
         Sample from the Poisson distribution.
@@ -606,19 +645,23 @@ class PoissonObservations(Observations):
             ``(n_time_bins, n_neurons)``.
         scale :
             Scale parameter. For Poisson should be equal to 1.
+        inverse_link_function :
+            Inverse link function, if ``None``, then use ``self._inverse_link_function``.
 
         Returns
         -------
         jnp.ndarray
             Random numbers generated from the Poisson distribution based on the `predicted_rate`.
         """
-        return jax.random.poisson(key, self.inverse_link_function(linked_rate))
+        inverse_link_function = inverse_link_function or self._inverse_link_function
+        return jax.random.poisson(key, inverse_link_function(linked_rate))
 
     def deviance(
         self,
         observations: jnp.ndarray,
         linked_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
+        inverse_link_function: Callable | None = None,
     ) -> jnp.ndarray:
         r"""Compute the residual deviance for a Poisson model.
 
@@ -632,6 +675,8 @@ class PoissonObservations(Observations):
             population models.
         scale:
             Scale parameter of the model.
+        inverse_link_function:
+            Inverse link function, if ``None``, then use ``self._inverse_link_function``.
 
         Returns
         -------
@@ -653,7 +698,8 @@ class PoissonObservations(Observations):
         where :math:`y` is the observed data, :math:`\hat{y}` is the predicted data, and :math:`\text{LL}` is
         the model log-likelihood. Lower values of deviance indicate a better fit.
         """
-        predicted_rate = self.inverse_link_function(linked_rate)
+        inverse_link_function = inverse_link_function or self._inverse_link_function
+        predicted_rate = inverse_link_function(linked_rate)
         # this takes care of 0s in the log
         ratio = jnp.clip(
             observations / predicted_rate, jnp.finfo(predicted_rate.dtype).eps, jnp.inf
@@ -666,6 +712,7 @@ class PoissonObservations(Observations):
         observations: jnp.ndarray,
         linked_rate: jnp.ndarray,
         dof_resid: Union[float, jnp.ndarray],
+        inverse_link_function: Callable | None = None,
     ) -> Union[float, jnp.ndarray]:
         r"""
         Assign 1 to the scale parameter of the Poisson model.
@@ -691,6 +738,8 @@ class PoissonObservations(Observations):
             but is retained for compatibility with the abstract method signature.
         dof_resid :
             The DOF of the residuals.
+        inverse_link_function:
+            Inverse link function, if ``None``, then use ``self._inverse_link_function``.
         """
         return jnp.ones_like(jnp.atleast_1d(observations[0]))
 
@@ -722,6 +771,7 @@ class GammaObservations(Observations):
         observations: jnp.ndarray,
         linked_rate: jnp.ndarray,
         aggregate_sample_scores: Callable = jnp.mean,
+        inverse_link_function: Callable | None = None,
     ) -> jnp.ndarray:
         r"""Compute the Gamma negative log-likelihood.
 
@@ -738,6 +788,8 @@ class GammaObservations(Observations):
             Shape (n_time_bins, ), or (n_time_bins, n_neurons).
         aggregate_sample_scores :
             Function that aggregates the log-likelihood of each sample.
+        inverse_link_function:
+            Inverse link function, if ``None``, then use ``self._inverse_link_function``.
 
         Returns
         -------
@@ -745,7 +797,8 @@ class GammaObservations(Observations):
             The Gamma negative log-likelihood. Shape (1,).
 
         """
-        predicted_rate = self.inverse_link_function(linked_rate)
+        inverse_link_function = inverse_link_function or self._inverse_link_function
+        predicted_rate = inverse_link_function(linked_rate)
         predicted_rate = jnp.clip(
             predicted_rate, min=jnp.finfo(predicted_rate.dtype).eps
         )
@@ -759,6 +812,7 @@ class GammaObservations(Observations):
         linked_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
         aggregate_sample_scores: Callable = jnp.mean,
+        inverse_link_function: Callable | None = None,
     ):
         r"""Compute the Gamma negative log-likelihood.
 
@@ -775,6 +829,8 @@ class GammaObservations(Observations):
             The scale parameter of the model.
         aggregate_sample_scores :
             Function that aggregates the log-likelihood of each sample.
+        inverse_link_function:
+            Inverse link function, if ``None``, then use ``self._inverse_link_function``.
 
         Returns
         -------
@@ -782,6 +838,7 @@ class GammaObservations(Observations):
             The Gamma negative log-likelihood. Shape (1,).
 
         """
+        inverse_link_function = inverse_link_function or self._inverse_link_function
         k = 1 / scale
         norm = (
             (k - 1) * jnp.mean(jnp.log(observations))
@@ -790,7 +847,13 @@ class GammaObservations(Observations):
         )
         return aggregate_sample_scores(
             norm
-            - k * self._negative_log_likelihood(observations, linked_rate, lambda x: x)
+            - k
+            * self._negative_log_likelihood(
+                observations,
+                linked_rate,
+                identity_function,
+                inverse_link_function=inverse_link_function,
+            )
         )
 
     def sample_generator(
@@ -798,6 +861,7 @@ class GammaObservations(Observations):
         key: jax.Array,
         linked_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
+        inverse_link_function: Callable | None = None,
     ) -> jnp.ndarray:
         """
         Sample from the Gamma distribution.
@@ -814,13 +878,16 @@ class GammaObservations(Observations):
             Shape (n_time_bins, ), or (n_time_bins, n_neurons).
         scale:
             The scale parameter for the distribution.
+        inverse_link_function :
+            Inverse link function, if ``None``, then use ``self._inverse_link_function``.
 
         Returns
         -------
         jnp.ndarray
             Random numbers generated from the Gamma distribution based on the `predicted_rate` and the `scale`.
         """
-        predicted_rate = self.inverse_link_function(linked_rate)
+        inverse_link_function = inverse_link_function or self._inverse_link_function
+        predicted_rate = inverse_link_function(linked_rate)
         return jax.random.gamma(key, predicted_rate / scale) * scale
 
     def deviance(
@@ -828,6 +895,7 @@ class GammaObservations(Observations):
         observations: jnp.ndarray,
         linked_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
+        inverse_link_function: Callable | None = None,
     ) -> jnp.ndarray:
         r"""Compute the residual deviance for a Gamma model.
 
@@ -840,6 +908,8 @@ class GammaObservations(Observations):
             Shape (n_time_bins, ) or (n_time_bins, n_neurons) for population models.
         scale:
             Scale parameter of the model.
+        inverse_link_function:
+            Inverse link function, if ``None``, then use ``self._inverse_link_function``.
 
         Returns
         -------
@@ -862,7 +932,8 @@ class GammaObservations(Observations):
         log-likelihood. Lower values of deviance indicate a better fit.
 
         """
-        predicted_rate = self.inverse_link_function(linked_rate)
+        inverse_link_function = inverse_link_function or self.inverse_link_function
+        predicted_rate = inverse_link_function(linked_rate)
         y_mu = jnp.clip(observations / predicted_rate, min=jnp.finfo(float).eps)
         resid_dev = 2 * (
             -jnp.log(y_mu) + (observations - predicted_rate) / predicted_rate
@@ -874,6 +945,7 @@ class GammaObservations(Observations):
         observations: jnp.ndarray,
         linked_rate: jnp.ndarray,
         dof_resid: Union[float, jnp.ndarray],
+        inverse_link_function: Callable | None = None,
     ) -> Union[float, jnp.ndarray]:
         r"""
         Estimate the scale of the model based on the GLM residuals.
@@ -898,6 +970,8 @@ class GammaObservations(Observations):
             but is retained for compatibility with the abstract method signature.
         dof_resid :
             The DOF of the residuals.
+        inverse_link_function:
+            Inverse link function, if ``None``, then use ``self._inverse_link_function``.
 
         Returns
         -------
@@ -905,7 +979,8 @@ class GammaObservations(Observations):
             The scale parameter. If predicted_rate is ``(n_samples, n_neurons)``, this method will return a
             scale for each neuron.
         """
-        predicted_rate = self.inverse_link_function(linked_rate)
+        inverse_link_function = inverse_link_function or self.inverse_link_function
+        predicted_rate = inverse_link_function(linked_rate)
         predicted_rate = jnp.clip(
             predicted_rate, min=jnp.finfo(predicted_rate.dtype).eps
         )
@@ -1033,6 +1108,7 @@ class BernoulliObservations(Observations):
         observations: jnp.ndarray,
         linked_rate: jnp.ndarray,
         aggregate_sample_scores: Callable = jnp.mean,
+        inverse_link_function: Callable | None = None,
     ) -> jnp.ndarray:
         r"""Compute the Bernoulli negative log-likelihood.
 
@@ -1049,6 +1125,8 @@ class BernoulliObservations(Observations):
             Shape (n_time_bins, ), or (n_time_bins, n_observations).
         aggregate_sample_scores :
             Function that aggregates the log-likelihood of each sample.
+        inverse_link_function:
+            Inverse link function, if ``None``, then use ``self._inverse_link_function``.
 
         Returns
         -------
@@ -1066,7 +1144,8 @@ class BernoulliObservations(Observations):
         where :math:`p` is the predicted success probability, given by the inverse link function, and :math:`y` is
         the observed binary variable.
         """
-        predicted_rate = self.inverse_link_function(linked_rate)
+        inverse_link_function = inverse_link_function or self._inverse_link_function
+        predicted_rate = inverse_link_function(linked_rate)
         predicted_rate = jnp.clip(
             predicted_rate,
             min=jnp.finfo(predicted_rate.dtype).eps,
@@ -1084,6 +1163,7 @@ class BernoulliObservations(Observations):
         linked_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
         aggregate_sample_scores: Callable = jnp.mean,
+        inverse_link_function: Callable | None = None,
     ):
         r"""Compute the Bernoulli negative log-likelihood.
 
@@ -1101,6 +1181,8 @@ class BernoulliObservations(Observations):
             The scale parameter of the model.
         aggregate_sample_scores :
             Function that aggregates the log-likelihood of each sample.
+        inverse_link_function:
+            Inverse link function, if ``None``, then use ``self._inverse_link_function``.
 
         Returns
         -------
@@ -1118,8 +1200,12 @@ class BernoulliObservations(Observations):
         where :math:`p` is the predicted success probability, given by the inverse link function, and :math:`y` is the
         observed binary variable.
         """
+        inverse_link_function = inverse_link_function or self._inverse_link_function
         nll = self._negative_log_likelihood(
-            observations, linked_rate, aggregate_sample_scores
+            observations,
+            linked_rate,
+            aggregate_sample_scores,
+            inverse_link_function=inverse_link_function,
         )
         return -nll
 
@@ -1128,6 +1214,7 @@ class BernoulliObservations(Observations):
         key: jax.Array,
         linked_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
+        inverse_link_function: Callable | None = None,
     ) -> jnp.ndarray:
         """
         Sample from the Bernoulli distribution.
@@ -1144,13 +1231,16 @@ class BernoulliObservations(Observations):
             ``(n_time_bins, n_observations)``.
         scale :
             Scale parameter. For Bernoulli should be equal to 1.
+        inverse_link_function :
+            Inverse link function, if ``None``, then use ``self._inverse_link_function``.
 
         Returns
         -------
         jnp.ndarray
             Random numbers generated from the Bernoulli distribution based on the `predicted_rate`.
         """
-        predicted_rate = self.inverse_link_function(linked_rate)
+        inverse_link_function = inverse_link_function or self._inverse_link_function
+        predicted_rate = inverse_link_function(linked_rate)
         return jax.random.bernoulli(key, predicted_rate)
 
     def deviance(
@@ -1158,6 +1248,7 @@ class BernoulliObservations(Observations):
         observations: jnp.ndarray,
         linked_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
+        inverse_link_function: Callable | None = None,
     ) -> jnp.ndarray:
         r"""Compute the residual deviance for a Bernoulli model.
 
@@ -1172,6 +1263,8 @@ class BernoulliObservations(Observations):
             for population models (i.e. multiple observations).
         scale:
             Scale parameter of the model. For Bernoulli should be equal to 1.
+        inverse_link_function:
+            Inverse link function, if ``None``, then use ``self._inverse_link_function``.
 
         Returns
         -------
@@ -1194,7 +1287,8 @@ class BernoulliObservations(Observations):
         where :math:`y` is the observed data, :math:`\hat{y}` is the predicted data, and :math:`\text{LL}` is
         the model log-likelihood. Lower values of deviance indicate a better fit.
         """
-        predicted_rate = self.inverse_link_function(linked_rate)
+        inverse_link_function = inverse_link_function or self._inverse_link_function
+        predicted_rate = inverse_link_function(linked_rate)
         # this takes care of 0s in the log
         ratio1 = jnp.clip(
             observations / predicted_rate, jnp.finfo(predicted_rate.dtype).eps, jnp.inf
@@ -1214,6 +1308,7 @@ class BernoulliObservations(Observations):
         observations: jnp.ndarray,
         linked_rate: jnp.ndarray,
         dof_resid: Union[float, jnp.ndarray],
+        inverse_link_function: Callable | None = None,
     ) -> Union[float, jnp.ndarray]:
         r"""
         Assign 1 to the scale parameter of the Bernoulli model.
@@ -1232,5 +1327,7 @@ class BernoulliObservations(Observations):
             scale, but is retained for compatibility with the abstract method signature.
         dof_resid :
             The DOF of the residuals.
+        inverse_link_function:
+            Inverse link function, if ``None``, then use ``self._inverse_link_function``.
         """
         return jnp.ones_like(jnp.atleast_1d(observations[0]))
