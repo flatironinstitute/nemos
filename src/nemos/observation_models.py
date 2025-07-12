@@ -127,7 +127,7 @@ class Observations(Base, abc.ABC):
 
     @abc.abstractmethod
     def _negative_log_likelihood(
-        self, y, linked_rate, aggregate_sample_scores: Callable = jnp.mean
+        self, observations, linked_rate, aggregate_sample_scores: Callable = jnp.mean
     ):
         r"""Compute the observation model negative log-likelihood.
 
@@ -136,7 +136,7 @@ class Observations(Base, abc.ABC):
 
         Parameters
         ----------
-        y :
+        observations :
             The target activity to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons)..
         linked_rate :
             The predicted rate passed through the link function,
@@ -153,7 +153,7 @@ class Observations(Base, abc.ABC):
     @abc.abstractmethod
     def log_likelihood(
         self,
-        y: jnp.ndarray,
+        observations: jnp.ndarray,
         linked_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
         aggregate_sample_scores: Callable = jnp.mean,
@@ -165,7 +165,7 @@ class Observations(Base, abc.ABC):
 
         Parameters
         ----------
-        y :
+        observations :
             The target activity to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
         linked_rate :
             The predicted rate passed through the link function,
@@ -217,7 +217,7 @@ class Observations(Base, abc.ABC):
     @abc.abstractmethod
     def deviance(
         self,
-        spike_counts: jnp.ndarray,
+        observations: jnp.ndarray,
         linked_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
     ):
@@ -225,7 +225,7 @@ class Observations(Base, abc.ABC):
 
         Parameters
         ----------
-        spike_counts:
+        observations:
             The spike counts. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)`` for population models.
         linked_rate:
             The linked predicted firing rates,
@@ -244,7 +244,7 @@ class Observations(Base, abc.ABC):
     @abc.abstractmethod
     def estimate_scale(
         self,
-        y: jnp.ndarray,
+        observations: jnp.ndarray,
         linked_rate: jnp.ndarray,
         dof_resid: Union[float, jnp.ndarray],
     ) -> Union[float, jnp.ndarray]:
@@ -264,7 +264,7 @@ class Observations(Base, abc.ABC):
 
         Parameters
         ----------
-        y :
+        observations :
             Observed activity.
         linked_rate :
             The linked predicted rate values,
@@ -276,7 +276,7 @@ class Observations(Base, abc.ABC):
 
     def pseudo_r2(
         self,
-        y: jnp.ndarray,
+        observations: jnp.ndarray,
         linked_rate: jnp.ndarray,
         score_type: Literal[
             "pseudo-r2-McFadden", "pseudo-r2-Cohen"
@@ -295,7 +295,7 @@ class Observations(Base, abc.ABC):
 
         Parameters
         ----------
-        y:
+        observations:
             The neural activity. Expected shape: ``(n_time_bins, )``
         linked_rate:
             The linked mean neural activity,
@@ -348,14 +348,16 @@ class Observations(Base, abc.ABC):
         """
         if score_type == "pseudo-r2-McFadden":
             pseudo_r2 = self._pseudo_r2_mcfadden(
-                y,
+                observations,
                 linked_rate,
                 scale=scale,
                 aggregate_sample_scores=aggregate_sample_scores,
             )
         elif score_type == "pseudo-r2-Cohen":
             pseudo_r2 = self._pseudo_r2_cohen(
-                y, linked_rate, aggregate_sample_scores=aggregate_sample_scores
+                observations,
+                linked_rate,
+                aggregate_sample_scores=aggregate_sample_scores,
             )
         else:
             raise NotImplementedError(f"Score {score_type} not implemented!")
@@ -363,7 +365,7 @@ class Observations(Base, abc.ABC):
 
     def _pseudo_r2_cohen(
         self,
-        y: jnp.ndarray,
+        observations: jnp.ndarray,
         linked_rate: jnp.ndarray,
         aggregate_sample_scores: Callable = jnp.mean,
     ) -> jnp.ndarray:
@@ -374,7 +376,7 @@ class Observations(Base, abc.ABC):
 
         Parameters
         ----------
-        y:
+        observations:
             The neural activity. Expected shape: ``(n_time_bins, )``.
         linked_rate:
             The linked mean neural activity. Expected shape: ``(n_time_bins, )``
@@ -385,18 +387,20 @@ class Observations(Base, abc.ABC):
             The pseudo-:math:`R^2` of the model. A value closer to 1 indicates a better model fit,
             whereas a value closer to 0 suggests that the model doesn't improve much over the null model.
         """
-        model_dev_t = self.deviance(y, linked_rate)
+        model_dev_t = self.deviance(observations, linked_rate)
         model_deviance = aggregate_sample_scores(model_dev_t)
 
-        null_mu = jnp.ones(y.shape, dtype=jnp.float32) * jnp.mean(y, axis=0)
+        null_mu = jnp.ones(observations.shape, dtype=jnp.float32) * jnp.mean(
+            observations, axis=0
+        )
         with self._unlinked_rate():
-            null_dev_t = self.deviance(y, null_mu)
+            null_dev_t = self.deviance(observations, null_mu)
         null_deviance = aggregate_sample_scores(null_dev_t)
         return (null_deviance - model_deviance) / null_deviance
 
     def _pseudo_r2_mcfadden(
         self,
-        y: jnp.ndarray,
+        observations: jnp.ndarray,
         linked_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
         aggregate_sample_scores: Callable = jnp.mean,
@@ -409,7 +413,7 @@ class Observations(Base, abc.ABC):
 
         Parameters
         ----------
-        y:
+        observations:
             The neural activity. Expected shape: (n_time_bins, ), or (n_time_bins, n_neurons).
         linked_rate:
             The mean neural activity. Expected shape: (n_time_bins, ), or (n_time_bins, n_neurons).
@@ -423,16 +427,16 @@ class Observations(Base, abc.ABC):
             whereas a value closer to 0 suggests that the model doesn't improve much over the null model.
         """
         # ruff: noqa D403
-        mean_y = jnp.ones(y.shape) * y.mean(axis=0)
+        mean_y = jnp.ones(observations.shape) * observations.mean(axis=0)
         with self._unlinked_rate():
             ll_null = self.log_likelihood(
-                y,
+                observations,
                 mean_y,
                 scale=scale,
                 aggregate_sample_scores=aggregate_sample_scores,
             )
         ll_model = self.log_likelihood(
-            y,
+            observations,
             linked_rate,
             scale=scale,
             aggregate_sample_scores=aggregate_sample_scores,
@@ -476,7 +480,7 @@ class PoissonObservations(Observations):
 
     def _negative_log_likelihood(
         self,
-        y: jnp.ndarray,
+        observations: jnp.ndarray,
         linked_rate: jnp.ndarray,
         aggregate_sample_scores: Callable = jnp.mean,
     ) -> jnp.ndarray:
@@ -487,7 +491,7 @@ class PoissonObservations(Observations):
 
         Parameters
         ----------
-        y :
+        observations :
             The target spikes to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
         linked_rate :
             The predicted rate passed through the link function,
@@ -522,13 +526,13 @@ class PoissonObservations(Observations):
         predicted_rate = jnp.clip(
             predicted_rate, min=jnp.finfo(predicted_rate.dtype).eps
         )
-        x = y * jnp.log(predicted_rate)
+        x = observations * jnp.log(predicted_rate)
         # see above for derivation of this.
         return aggregate_sample_scores(predicted_rate - x)
 
     def log_likelihood(
         self,
-        y: jnp.ndarray,
+        observations: jnp.ndarray,
         linked_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
         aggregate_sample_scores: Callable = jnp.mean,
@@ -540,7 +544,7 @@ class PoissonObservations(Observations):
 
         Parameters
         ----------
-        y :
+        observations :
             The target spikes to compare against. Shape ``(n_time_bins, )``, or ``(n_time_bins, n_neurons)``.
         linked_rate :
             The predicted rate of the current model. Shape ``(n_time_bins, )``, or ``(n_time_bins, n_neurons)``.
@@ -574,8 +578,12 @@ class PoissonObservations(Observations):
         The :math:`\log({y_{tn}!})` term is not a function of the parameters and can be disregarded
         when computing the loss-function. This is why we incorporated it into the `const` term.
         """
-        nll = self._negative_log_likelihood(y, linked_rate, aggregate_sample_scores)
-        return -nll - aggregate_sample_scores(jax.scipy.special.gammaln(y + 1))
+        nll = self._negative_log_likelihood(
+            observations, linked_rate, aggregate_sample_scores
+        )
+        return -nll - aggregate_sample_scores(
+            jax.scipy.special.gammaln(observations + 1)
+        )
 
     def sample_generator(
         self,
@@ -608,7 +616,7 @@ class PoissonObservations(Observations):
 
     def deviance(
         self,
-        spike_counts: jnp.ndarray,
+        observations: jnp.ndarray,
         linked_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
     ) -> jnp.ndarray:
@@ -616,7 +624,7 @@ class PoissonObservations(Observations):
 
         Parameters
         ----------
-        spike_counts:
+        observations:
             The spike counts. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)`` for population models.
         linked_rate:
             The predicted firing rates passed through the link function.
@@ -648,14 +656,14 @@ class PoissonObservations(Observations):
         predicted_rate = self.inverse_link_function(linked_rate)
         # this takes care of 0s in the log
         ratio = jnp.clip(
-            spike_counts / predicted_rate, jnp.finfo(predicted_rate.dtype).eps, jnp.inf
+            observations / predicted_rate, jnp.finfo(predicted_rate.dtype).eps, jnp.inf
         )
-        deviance = 2 * (spike_counts * jnp.log(ratio) - (spike_counts - predicted_rate))
+        deviance = 2 * (observations * jnp.log(ratio) - (observations - predicted_rate))
         return deviance
 
     def estimate_scale(
         self,
-        y: jnp.ndarray,
+        observations: jnp.ndarray,
         linked_rate: jnp.ndarray,
         dof_resid: Union[float, jnp.ndarray],
     ) -> Union[float, jnp.ndarray]:
@@ -674,7 +682,7 @@ class PoissonObservations(Observations):
 
         Parameters
         ----------
-        y :
+        observations :
             Observed spike counts.
         linked_rate :
             The linked predicted rate values,
@@ -684,7 +692,7 @@ class PoissonObservations(Observations):
         dof_resid :
             The DOF of the residuals.
         """
-        return jnp.ones_like(jnp.atleast_1d(y[0]))
+        return jnp.ones_like(jnp.atleast_1d(observations[0]))
 
 
 class GammaObservations(Observations):
@@ -711,7 +719,7 @@ class GammaObservations(Observations):
 
     def _negative_log_likelihood(
         self,
-        y: jnp.ndarray,
+        observations: jnp.ndarray,
         linked_rate: jnp.ndarray,
         aggregate_sample_scores: Callable = jnp.mean,
     ) -> jnp.ndarray:
@@ -722,7 +730,7 @@ class GammaObservations(Observations):
 
         Parameters
         ----------
-        y :
+        observations :
             The target activity to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
         linked_rate :
             The predicted rate passed through the link function,
@@ -743,11 +751,11 @@ class GammaObservations(Observations):
         )
         x = jnp.power(-predicted_rate, -1)
         # see above for derivation of this.
-        return -aggregate_sample_scores(y * x + jnp.log(-x))
+        return -aggregate_sample_scores(observations * x + jnp.log(-x))
 
     def log_likelihood(
         self,
-        y: jnp.ndarray,
+        observations: jnp.ndarray,
         linked_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
         aggregate_sample_scores: Callable = jnp.mean,
@@ -759,7 +767,7 @@ class GammaObservations(Observations):
 
         Parameters
         ----------
-        y :
+        observations :
             The target activity to compare against. Shape (n_time_bins, ) or (n_time_bins, n_neurons).
         linked_rate :
             The predicted rate of the current model. Shape (n_time_bins, ) or (n_time_bins, n_neurons).
@@ -776,12 +784,13 @@ class GammaObservations(Observations):
         """
         k = 1 / scale
         norm = (
-            (k - 1) * jnp.mean(jnp.log(y))
+            (k - 1) * jnp.mean(jnp.log(observations))
             + k * jnp.log(k)
             - jax.scipy.special.gammaln(k)
         )
         return aggregate_sample_scores(
-            norm - k * self._negative_log_likelihood(y, linked_rate, lambda x: x)
+            norm
+            - k * self._negative_log_likelihood(observations, linked_rate, lambda x: x)
         )
 
     def sample_generator(
@@ -862,7 +871,7 @@ class GammaObservations(Observations):
 
     def estimate_scale(
         self,
-        y: jnp.ndarray,
+        observations: jnp.ndarray,
         linked_rate: jnp.ndarray,
         dof_resid: Union[float, jnp.ndarray],
     ) -> Union[float, jnp.ndarray]:
@@ -880,7 +889,7 @@ class GammaObservations(Observations):
 
         Parameters
         ----------
-        y :
+        observations :
             Observed neural activity.
         linked_rate :
             The linked predicted rate values,
@@ -900,7 +909,7 @@ class GammaObservations(Observations):
         predicted_rate = jnp.clip(
             predicted_rate, min=jnp.finfo(predicted_rate.dtype).eps
         )
-        resid = jnp.power(y - predicted_rate, 2)
+        resid = jnp.power(observations - predicted_rate, 2)
         return (
             jnp.sum(resid * jnp.power(predicted_rate, -2), axis=0) / dof_resid
         )  # pearson residuals
@@ -1021,7 +1030,7 @@ class BernoulliObservations(Observations):
 
     def _negative_log_likelihood(
         self,
-        y: jnp.ndarray,
+        observations: jnp.ndarray,
         linked_rate: jnp.ndarray,
         aggregate_sample_scores: Callable = jnp.mean,
     ) -> jnp.ndarray:
@@ -1032,7 +1041,7 @@ class BernoulliObservations(Observations):
 
         Parameters
         ----------
-        y :
+        observations :
             The target observation to compare against. Shape (n_time_bins, ), or (n_time_bins, n_observations).
         linked_rate :
             The predicted rate (success probability) passed through the link function,
@@ -1064,12 +1073,14 @@ class BernoulliObservations(Observations):
             max=1.0 - jnp.finfo(predicted_rate.dtype).eps,
         )
 
-        x = y * jnp.log(predicted_rate) + (1 - y) * jnp.log1p(-predicted_rate)
+        x = observations * jnp.log(predicted_rate) + (1 - observations) * jnp.log1p(
+            -predicted_rate
+        )
         return -aggregate_sample_scores(x)
 
     def log_likelihood(
         self,
-        y: jnp.ndarray,
+        observations: jnp.ndarray,
         linked_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
         aggregate_sample_scores: Callable = jnp.mean,
@@ -1081,7 +1092,7 @@ class BernoulliObservations(Observations):
 
         Parameters
         ----------
-        y :
+        observations :
             The target observation to compare against. Shape (n_time_bins, ), or (n_time_bins, n_observations).
         linked_rate :
             The predicted rate (success probability) of the current model. Shape (n_time_bins, ),
@@ -1107,7 +1118,9 @@ class BernoulliObservations(Observations):
         where :math:`p` is the predicted success probability, given by the inverse link function, and :math:`y` is the
         observed binary variable.
         """
-        nll = self._negative_log_likelihood(y, linked_rate, aggregate_sample_scores)
+        nll = self._negative_log_likelihood(
+            observations, linked_rate, aggregate_sample_scores
+        )
         return -nll
 
     def sample_generator(
@@ -1198,7 +1211,7 @@ class BernoulliObservations(Observations):
 
     def estimate_scale(
         self,
-        y: jnp.ndarray,
+        observations: jnp.ndarray,
         linked_rate: jnp.ndarray,
         dof_resid: Union[float, jnp.ndarray],
     ) -> Union[float, jnp.ndarray]:
@@ -1210,7 +1223,7 @@ class BernoulliObservations(Observations):
 
         Parameters
         ----------
-        y :
+        observations :
             Observed spike counts.
         linked_rate :
             The linked predicted rate values (success probabilities),
@@ -1220,4 +1233,4 @@ class BernoulliObservations(Observations):
         dof_resid :
             The DOF of the residuals.
         """
-        return jnp.ones_like(jnp.atleast_1d(y[0]))
+        return jnp.ones_like(jnp.atleast_1d(observations[0]))
