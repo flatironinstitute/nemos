@@ -825,7 +825,7 @@ class GammaObservations(Observations):
 
     def deviance(
         self,
-        neural_activity: jnp.ndarray,
+        observations: jnp.ndarray,
         linked_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
     ) -> jnp.ndarray:
@@ -833,7 +833,7 @@ class GammaObservations(Observations):
 
         Parameters
         ----------
-        neural_activity:
+        observations:
             The spike count activity. Shape (n_time_bins, ) or (n_time_bins, n_neurons) for population models.
         linked_rate:
             The predicted firing rates passed through the link function.
@@ -863,9 +863,9 @@ class GammaObservations(Observations):
 
         """
         predicted_rate = self.inverse_link_function(linked_rate)
-        y_mu = jnp.clip(neural_activity / predicted_rate, min=jnp.finfo(float).eps)
+        y_mu = jnp.clip(observations / predicted_rate, min=jnp.finfo(float).eps)
         resid_dev = 2 * (
-            -jnp.log(y_mu) + (neural_activity - predicted_rate) / predicted_rate
+            -jnp.log(y_mu) + (observations - predicted_rate) / predicted_rate
         )
         return resid_dev / scale
 
