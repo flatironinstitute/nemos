@@ -389,7 +389,7 @@ class Observations(Base, abc.ABC):
         model_deviance = aggregate_sample_scores(model_dev_t)
 
         null_mu = jnp.ones(y.shape, dtype=jnp.float32) * jnp.mean(y, axis=0)
-        with self._unlinked_rate:
+        with self._unlinked_rate():
             null_dev_t = self.deviance(y, null_mu)
         null_deviance = aggregate_sample_scores(null_dev_t)
         return (null_deviance - model_deviance) / null_deviance
@@ -424,7 +424,7 @@ class Observations(Base, abc.ABC):
         """
         # ruff: noqa D403
         mean_y = jnp.ones(y.shape) * y.mean(axis=0)
-        with self._unlinked_rate:
+        with self._unlinked_rate():
             ll_null = self.log_likelihood(
                 y,
                 mean_y,
