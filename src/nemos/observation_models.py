@@ -612,7 +612,7 @@ class PoissonObservations(Observations):
         jnp.ndarray
             Random numbers generated from the Poisson distribution based on the `predicted_rate`.
         """
-        return jax.random.poisson(key, linked_rate)
+        return jax.random.poisson(key, self.inverse_link_function(linked_rate))
 
     def deviance(
         self,
