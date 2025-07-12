@@ -429,7 +429,7 @@ class GLM(BaseRegressor):
             data = X.data
         else:
             data = X
-        return self._predict(params, data)
+        return self.observation_model.inverse_link_function(self._predict(params, data))
 
     def _predict_and_compute_loss(
         self,
