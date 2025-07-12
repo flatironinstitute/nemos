@@ -375,7 +375,8 @@ class Observations(Base, abc.ABC):
                *Applied Multiple Regression/Correlation Analysis for the Behavioral Sciences*.
                3rd edition. Routledge, 2002. p.502. ISBN 978-0-8058-2223-6. (May 2012)
         """
-        inverse_link_function = inverse_link_function or self._inverse_link_function
+        if inverse_link_function is None:
+            inverse_link_function = self._inverse_link_function
         if score_type == "pseudo-r2-McFadden":
             pseudo_r2 = self._pseudo_r2_mcfadden(
                 observations,
@@ -612,7 +613,8 @@ class PoissonObservations(Observations):
         The :math:`\log({y_{tn}!})` term is not a function of the parameters and can be disregarded
         when computing the loss-function. This is why we incorporated it into the `const` term.
         """
-        inverse_link_function = inverse_link_function or self._inverse_link_function
+        if inverse_link_function is None:
+            inverse_link_function = self._inverse_link_function
         nll = self._negative_log_likelihood(
             observations,
             linked_rate,
@@ -653,7 +655,8 @@ class PoissonObservations(Observations):
         jnp.ndarray
             Random numbers generated from the Poisson distribution based on the `predicted_rate`.
         """
-        inverse_link_function = inverse_link_function or self._inverse_link_function
+        if inverse_link_function is None:
+            inverse_link_function = self._inverse_link_function
         return jax.random.poisson(key, inverse_link_function(linked_rate))
 
     def deviance(
@@ -698,7 +701,8 @@ class PoissonObservations(Observations):
         where :math:`y` is the observed data, :math:`\hat{y}` is the predicted data, and :math:`\text{LL}` is
         the model log-likelihood. Lower values of deviance indicate a better fit.
         """
-        inverse_link_function = inverse_link_function or self._inverse_link_function
+        if inverse_link_function is None:
+            inverse_link_function = self._inverse_link_function
         predicted_rate = inverse_link_function(linked_rate)
         # this takes care of 0s in the log
         ratio = jnp.clip(
@@ -797,7 +801,8 @@ class GammaObservations(Observations):
             The Gamma negative log-likelihood. Shape (1,).
 
         """
-        inverse_link_function = inverse_link_function or self._inverse_link_function
+        if inverse_link_function is None:
+            inverse_link_function = self._inverse_link_function
         predicted_rate = inverse_link_function(linked_rate)
         predicted_rate = jnp.clip(
             predicted_rate, min=jnp.finfo(predicted_rate.dtype).eps
@@ -838,7 +843,8 @@ class GammaObservations(Observations):
             The Gamma negative log-likelihood. Shape (1,).
 
         """
-        inverse_link_function = inverse_link_function or self._inverse_link_function
+        if inverse_link_function is None:
+            inverse_link_function = self._inverse_link_function
         k = 1 / scale
         norm = (
             (k - 1) * jnp.mean(jnp.log(observations))
@@ -886,7 +892,8 @@ class GammaObservations(Observations):
         jnp.ndarray
             Random numbers generated from the Gamma distribution based on the `predicted_rate` and the `scale`.
         """
-        inverse_link_function = inverse_link_function or self._inverse_link_function
+        if inverse_link_function is None:
+            inverse_link_function = self._inverse_link_function
         predicted_rate = inverse_link_function(linked_rate)
         return jax.random.gamma(key, predicted_rate / scale) * scale
 
@@ -1144,7 +1151,8 @@ class BernoulliObservations(Observations):
         where :math:`p` is the predicted success probability, given by the inverse link function, and :math:`y` is
         the observed binary variable.
         """
-        inverse_link_function = inverse_link_function or self._inverse_link_function
+        if inverse_link_function is None:
+            inverse_link_function = self._inverse_link_function
         predicted_rate = inverse_link_function(linked_rate)
         predicted_rate = jnp.clip(
             predicted_rate,
@@ -1200,7 +1208,8 @@ class BernoulliObservations(Observations):
         where :math:`p` is the predicted success probability, given by the inverse link function, and :math:`y` is the
         observed binary variable.
         """
-        inverse_link_function = inverse_link_function or self._inverse_link_function
+        if inverse_link_function is None:
+            inverse_link_function = self._inverse_link_function
         nll = self._negative_log_likelihood(
             observations,
             linked_rate,
@@ -1239,7 +1248,8 @@ class BernoulliObservations(Observations):
         jnp.ndarray
             Random numbers generated from the Bernoulli distribution based on the `predicted_rate`.
         """
-        inverse_link_function = inverse_link_function or self._inverse_link_function
+        if inverse_link_function is None:
+            inverse_link_function = self._inverse_link_function
         predicted_rate = inverse_link_function(linked_rate)
         return jax.random.bernoulli(key, predicted_rate)
 
@@ -1287,7 +1297,8 @@ class BernoulliObservations(Observations):
         where :math:`y` is the observed data, :math:`\hat{y}` is the predicted data, and :math:`\text{LL}` is
         the model log-likelihood. Lower values of deviance indicate a better fit.
         """
-        inverse_link_function = inverse_link_function or self._inverse_link_function
+        if inverse_link_function is None:
+            inverse_link_function = self._inverse_link_function
         predicted_rate = inverse_link_function(linked_rate)
         # this takes care of 0s in the log
         ratio1 = jnp.clip(
