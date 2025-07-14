@@ -33,13 +33,13 @@ LINK_NAME_TO_FUNC = {
 }
 
 
-def create_link_function(link_name: str):
+def link_function_from_string(link_name: str):
     """
-    Create a link function from a given name.
+    Get a link function from a given name.
 
     Parameters
     ----------
-    name:
+    link_name:
         A string representation of the link function, e.g. "jax.numpy.exp".
 
     Returns
@@ -105,7 +105,7 @@ class Observations(Base, abc.ABC):
     def inverse_link_function(self, inverse_link_function: Callable):
         """Setter for the inverse link function for the model."""
         if isinstance(inverse_link_function, str):
-            inverse_link_function = create_link_function(inverse_link_function)
+            inverse_link_function = link_function_from_string(inverse_link_function)
         self.check_inverse_link_function(inverse_link_function)
         self._inverse_link_function = inverse_link_function
 
