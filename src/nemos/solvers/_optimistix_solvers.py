@@ -92,9 +92,6 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState, OptimistixStepResul
         self.fun = lambda params, args: loss_fn(params, *args)
         self.fun_with_aux = lambda params, args: (loss_fn(params, *args), None)
 
-        atol = solver_init_kwargs.pop("atol", atol)
-        rtol = solver_init_kwargs.pop("rtol", rtol)
-
         # by default Optimistix doesn't expose the search attribute of concrete solvers
         # but in our custom implementations we might want to flexibly switch between
         # linesearches and constant learning rates depending on whether `stepsize` is passed

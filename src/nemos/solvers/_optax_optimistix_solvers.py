@@ -163,9 +163,6 @@ class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
         self.prox = regularizer.get_proximal_operator()
         self.regularizer_strength = regularizer_strength
 
-        atol = solver_init_kwargs.pop("atol", atol)
-        rtol = solver_init_kwargs.pop("rtol", rtol)
-
         # take out the arguments that go into minimise, init, terminate and so on
         # and only pass the actually needed things to __init__
         user_args = {}
