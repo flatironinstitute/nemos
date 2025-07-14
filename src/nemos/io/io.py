@@ -92,26 +92,7 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     saved_params = _unflatten_dict(data)
 
     # "save_metadata" is used to store versions of Nemos and Jax, not needed for loading
-    saved_env_metadata = saved_params.pop("save_metadata")
-    current_env_metadata = get_env_metadata()
-    mismatches = []
-    for key in saved_env_metadata:
-        saved_value = saved_env_metadata[key]
-        current_value = current_env_metadata.get(key)
-        if saved_value != current_value:
-            mismatches.append(
-                f"  - {key}: saved='{saved_value}' vs current='{current_value}'"
-            )
-
-    if mismatches:
-        msg = (
-            "Environment metadata mismatch detected!\n"
-            "The following versions differ between the saved model and your current environment:\n"
-            + "\n".join(mismatches)
-            + "\nThis may lead to unexpected behavior. "
-            "Consider re-fitting the model or verifying compatibility."
-        )
-        warnings.warn(msg, UserWarning)
+    saved_params.pop("save_metadata")
 
     # if any value from saved_params is a key in mapping_dict,
     # replace it with the corresponding value from mapping_dict
@@ -226,7 +207,7 @@ def inspect_npz(file_path: Union[str, Path]):
     if model_class:
         print(f"{'Saved model class':<{pad_len}}: {model_class}")
 
-    print("\nModel parameters \n----------------")
+    print("\nModel parameters\n----------------")
     config_params = {k: data.pop(k) for k in list(data) if not k.endswith("_")}
     for key in config_params:
         val = config_params[key]
@@ -236,6 +217,6 @@ def inspect_npz(file_path: Union[str, Path]):
         else:
             print(f"{key:<{pad_len}}: {val}")
 
-    print("\nModel fit parameters \n--------------------")
+    print("\nModel fit parameters\n--------------------")
     for param in data:
         print(f"{param}: {data[param]}")
