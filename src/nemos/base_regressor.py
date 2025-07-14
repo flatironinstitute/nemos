@@ -379,7 +379,7 @@ class BaseRegressor(Base, abc.ABC):
             fun=loss, **solver_init_kwargs
         )
 
-        self._solver_loss_fun_ = loss
+        self._solver_loss_fun = loss
 
         def solver_run(
             init_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], *run_args: jnp.ndarray
@@ -734,3 +734,20 @@ class BaseRegressor(Base, abc.ABC):
         # flatten the parameters dictionary to ensure it can be saved
         model_params = _flatten_dict(model_params)
         np.savez(filename, **model_params)
+
+    def _get_fit_state(self) -> dict:
+        """
+        Collect all attributes that follow the fitted attribute convention.
+
+        Collect all attributes ending with an underscore.
+
+        Returns
+        -------
+        :
+            A dictionary of attribute names and their values.
+        """
+        return {
+            name: getattr(self, name)
+            for name in dir(self)
+            if name.endswith("_") and not name.endswith("__")
+        }

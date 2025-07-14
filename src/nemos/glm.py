@@ -1221,11 +1221,8 @@ class GLM(BaseRegressor):
         """
 
         # initialize saving dictionary
-        fit_attrs = {}
-
-        fit_attrs["coef_"] = self.coef_
-        fit_attrs["intercept_"] = self.intercept_
-
+        fit_attrs = self._get_fit_state()
+        fit_attrs.pop("solver_state_")
         string_attrs = ["inverse_link_function"]
 
         super().save_params(filename, fit_attrs, string_attrs)
