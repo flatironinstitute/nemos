@@ -15,7 +15,7 @@ from sklearn.model_selection import GridSearchCV
 
 import nemos as nmo
 from nemos._observation_model_builder import instantiate_observation_model
-from nemos._regularizer_builder import create_regularizer
+from nemos._regularizer_builder import instantiate_regularizer
 from nemos.pytrees import FeaturePytree
 from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
 from nemos.utils import _get_name
@@ -1880,7 +1880,7 @@ class TestGLM:
                     ), f"{key} observation model mismatch: {mapping_dict[key]} != {load_val}"
                 elif key == "regularizer":
                     if isinstance(mapping_dict[key], str):
-                        mapping_reg = create_regularizer(mapping_dict[key])
+                        mapping_reg = instantiate_regularizer(mapping_dict[key])
                     else:
                         mapping_reg = mapping_dict[key]
                     assert _get_name(mapping_reg) == _get_name(

@@ -36,10 +36,10 @@ def test_regularizer_builder(reg_str, reg_type):
     )
     if raise_exception:
         with pytest.raises(ValueError, match=f"Unknown regularizer: {reg_str}. "):
-            nmo._regularizer_builder.create_regularizer(reg_str)
+            nmo._regularizer_builder.instantiate_regularizer(reg_str)
     else:
         # build a regularizer by string
-        regularizer = nmo._regularizer_builder.create_regularizer(reg_str)
+        regularizer = nmo._regularizer_builder.instantiate_regularizer(reg_str)
         # assert correct type of regularizer is instantiated
         assert isinstance(regularizer, reg_type)
         # create a regularizer of that type
@@ -63,7 +63,7 @@ def test_regularizer_repr(reg, expected):
 
 def test_regularizer_available():
     for regularizer in nmo._regularizer_builder.AVAILABLE_REGULARIZERS:
-        reg = nmo._regularizer_builder.create_regularizer(regularizer)
+        reg = nmo._regularizer_builder.instantiate_regularizer(regularizer)
         assert reg.__class__.__name__ == regularizer
 
 
