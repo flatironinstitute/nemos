@@ -3,7 +3,7 @@
 AVAILABLE_REGULARIZERS = ["UnRegularized", "Ridge", "Lasso", "GroupLasso"]
 
 
-def create_regularizer(name: str | None):
+def instantiate_regularizer(name: str | None):
     """
     Create a regularizer from a given name.
 
