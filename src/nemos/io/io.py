@@ -3,9 +3,12 @@
 import importlib
 import warnings
 from pathlib import Path
-from typing import Union
+from typing import TYPE_CHECKING, Union
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from ..base_regressor import BaseRegressor
 
 from .._observation_model_builder import instantiate_observation_model
 from ..glm import GLM, PopulationGLM
@@ -160,7 +163,7 @@ def _split_model_params(params: dict, model_class) -> tuple:
     return config_params, fit_params
 
 
-def _set_fit_params(model, fit_params: dict, filename: Path):
+def _set_fit_params(model: BaseRegressor, fit_params: dict, filename: Path):
     """Set fit model attributes, warn if unrecognized."""
     check_str = (
         f"\nIf this is confusing, try calling "
