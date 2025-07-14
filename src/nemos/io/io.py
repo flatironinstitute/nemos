@@ -1,5 +1,6 @@
 """Provides functionality to load a previously saved nemos model from a `.npz` file."""
 
+import inspect
 import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Union
@@ -10,6 +11,7 @@ if TYPE_CHECKING:
     from ..base_regressor import BaseRegressor
 
 from .._observation_model_builder import instantiate_observation_model
+from .._regularizer_builder import instantiate_regularizer
 from ..glm import GLM, PopulationGLM
 from ..utils import _get_name, _unflatten_dict, get_env_metadata
 
@@ -108,7 +110,17 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
             )
         elif isinstance(obs_model_data, dict):
             saved_params["observation_model"] = instantiate_observation_model(
-                obs_model_data["class"], **obs_model_data["params"]
+                obs_model_data["class"], **obs_model_data.get("params", {})
+            )
+
+    if "regularizer" in saved_params:
+        regularizer_data = saved_params["regularizer"]
+        if isinstance(regularizer_data, str):
+            saved_params["regularizer"] = instantiate_regularizer(regularizer_data)
+
+        elif isinstance(regularizer_data, dict):
+            saved_params["regularizer"] = instantiate_regularizer(
+                regularizer_data["class"]
             )
 
     # Extract the model class from the saved attributes
@@ -132,6 +144,28 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     return model
 
 
+def update_keys(map_dict, params_dict):
+    """Update parameter mapping."""
+    for key in map_dict:
+        if key in params_dict:
+            value = map_dict[key]
+            if inspect.isclass(value):
+                if (
+                    not isinstance(params_dict[key], dict)
+                    or "class" not in params_dict[key]
+                ):
+                    raise ValueError(
+                        f"Failed to instantiate class {value} mapped by key '{key}'. "
+                        "The saved parameter does not represent a class."
+                    )
+                # key might be missing if there are no init params
+                kwargs = params_dict[key].get("params", {})
+                params_dict[key] = value(**kwargs)
+
+            else:
+                params_dict[key] = value
+
+
 def _apply_custom_map(params: dict, mapping_dict: dict) -> dict:
     """Apply mapping dictionary to replace values if keys match."""
     if not mapping_dict:
@@ -145,10 +179,13 @@ def _apply_custom_map(params: dict, mapping_dict: dict) -> dict:
         )
 
     updated_params = params.copy()
-    updated_params.update(mapping_dict)
 
+    update_keys(mapping_dict, updated_params)
+
+    # check what is updated
+    updated = set(updated_params).intersection(mapping_dict)
     warnings.warn(
-        f"The following keys have been replaced in the model parameters: {list(mapping_dict.keys())}. "
+        f"The following keys have been replaced in the model parameters: {updated}. "
     )
 
     return updated_params
