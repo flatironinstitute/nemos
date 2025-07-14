@@ -1,6 +1,5 @@
 """Provides functionality to load a previously saved nemos model from a `.npz` file."""
 
-import importlib
 import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Union
@@ -12,7 +11,7 @@ if TYPE_CHECKING:
 
 from .._observation_model_builder import instantiate_observation_model
 from ..glm import GLM, PopulationGLM
-from ..utils import _get_name, _unflatten_dict
+from ..utils import _get_name, _unflatten_dict, get_env_metadata
 
 MODEL_REGISTRY = {"nemos.glm.GLM": GLM, "nemos.glm.PopulationGLM": PopulationGLM}
 
@@ -93,7 +92,26 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     saved_params = _unflatten_dict(data)
 
     # "save_metadata" is used to store versions of Nemos and Jax, not needed for loading
-    saved_params.pop("save_metadata")
+    saved_env_metadata = saved_params.pop("save_metadata")
+    current_env_metadata = get_env_metadata()
+    mismatches = []
+    for key in saved_env_metadata:
+        saved_value = saved_env_metadata[key]
+        current_value = current_env_metadata.get(key)
+        if saved_value != current_value:
+            mismatches.append(
+                f"  - {key}: saved='{saved_value}' vs current='{current_value}'"
+            )
+
+    if mismatches:
+        msg = (
+            "Environment metadata mismatch detected!\n"
+            "The following versions differ between the saved model and your current environment:\n"
+            + "\n".join(mismatches)
+            + "\nThis may lead to unexpected behavior. "
+            "Consider re-fitting the model or verifying compatibility."
+        )
+        warnings.warn(msg, UserWarning)
 
     # if any value from saved_params is a key in mapping_dict,
     # replace it with the corresponding value from mapping_dict
@@ -195,16 +213,13 @@ def inspect_npz(file_path: Union[str, Path]):
 
     pad_len = max(len(k) for k in data.keys()) + 2
 
-    metadata = data.pop("save_metadata", None)
-    print("Metadata\n--------")
-    print(
-        f"{'nemos version':<{pad_len}}: {metadata['nemos_version']} "
-        f"(installed: {importlib.metadata.version('nemos')})"
-    )
-    print(
-        f"{'jax version':<{pad_len}}: {metadata['jax_version']} "
-        f"(installed: {importlib.metadata.version('jax')})"
-    )
+    metadata: dict | None = data.pop("save_metadata", None)
+    installed_env = get_env_metadata()
+    if metadata is not None:
+        print("Metadata\n--------")
+        for k, v in metadata.items():
+            label = f"{k} version"
+            print(f"{label:<{pad_len}}: {v}" f" (installed: {installed_env[k]})")
 
     print("\nModel class\n-----------")
     model_class = data.pop("model_class", None)
