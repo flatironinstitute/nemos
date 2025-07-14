@@ -170,22 +170,14 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState, OptimistixStepResul
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:
-        own_arguments = set(inspect.getfullargspec(cls.__init__).args)
-        solver_arguments = set(inspect.getfullargspec(cls._solver_cls.__init__).args)
+        own_and_solver_args = super().get_accepted_arguments()
         common_optx_arguments = set(
             [f.name for f in dataclasses.fields(OptimistixConfig)]
         )
+        all_arguments = own_and_solver_args | common_optx_arguments
 
-        all_arguments = own_arguments | solver_arguments | common_optx_arguments
-
-        # discard arguments that are passed by BaseRegressor
-        all_arguments.discard("self")
-        all_arguments.discard("unregularized_loss")
-        all_arguments.discard("regularizer")
-        all_arguments.discard("regularizer_strength")
-
-        # we can create a LearningRate search from stepsize
-        all_arguments.add("stepsize")
+        # in case we decide to create a LearningRate search from stepsize
+        # all_arguments.add("stepsize")
 
         return all_arguments
 
