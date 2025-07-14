@@ -1749,10 +1749,30 @@ class TestGLM:
         ],
     )
     @pytest.mark.parametrize(
-        "model_class",
+        "model_class, fit_state_attrs",
         [
-            nmo.glm.GLM,
-            nmo.glm.PopulationGLM,
+            (
+                nmo.glm.GLM,
+                {
+                    "coef_": jnp.zeros(
+                        3,
+                    ),
+                    "intercept_": jnp.array([1.0]),
+                    "scale_": 2.0,
+                    "dof_resid_": 3,
+                },
+            ),
+            (
+                nmo.glm.PopulationGLM,
+                {
+                    "coef_": jnp.zeros(
+                        (3, 1),
+                    ),
+                    "intercept_": jnp.array([1.0]),
+                    "scale_": 2.0,
+                    "dof_resid_": 3,
+                },
+            ),
         ],
     )
     @pytest.mark.parametrize(
@@ -1786,6 +1806,7 @@ class TestGLM:
         mapping_dict,
         tmp_path,
         glm_class_type,
+        fit_state_attrs,
         model_class,
     ):
         """
@@ -1810,9 +1831,10 @@ class TestGLM:
         )
 
         initial_params = model.get_params()
-        initial_fit_params = model._get_coef_and_intercept()
-        initial_params["coef_"] = initial_fit_params[0]
-        initial_params["intercept_"] = initial_fit_params[1]
+        # set fit states
+        for key, val in fit_state_attrs.items():
+            setattr(model, key, val)
+            initial_params[key] = val
 
         # Save
         save_path = tmp_path / "test_model.npz"
@@ -1821,9 +1843,9 @@ class TestGLM:
         # Load
         loaded_model = nmo.load_model(save_path, mapping_dict=mapping_dict)
         loaded_params = loaded_model.get_params()
-        loaded_fit_params = loaded_model._get_coef_and_intercept()
-        loaded_params["coef_"] = loaded_fit_params[0]
-        loaded_params["intercept_"] = loaded_fit_params[1]
+        fit_state = loaded_model._get_fit_state()
+        fit_state.pop("solver_state_")
+        loaded_params.update(fit_state)
 
         # Assert matching keys and values
         assert (
@@ -1909,9 +1931,9 @@ class TestGLM:
         _, _, fitted_model, _, _ = request.getfixturevalue(fitted_glm_type)
 
         initial_params = fitted_model.get_params()
-        initial_fit_params = fitted_model._get_coef_and_intercept()
-        initial_params["coef_"] = initial_fit_params[0]
-        initial_params["intercept_"] = initial_fit_params[1]
+        fit_state = fitted_model._get_fit_state()
+        fit_state.pop("solver_state_")
+        initial_params.update(fit_state)
 
         # Save
         save_path = tmp_path / "test_model.npz"
@@ -1920,17 +1942,13 @@ class TestGLM:
         # Load
         loaded_model = nmo.load_model(save_path)
         loaded_params = loaded_model.get_params()
-        loaded_fit_params = loaded_model._get_coef_and_intercept()
-        loaded_params["coef_"] = loaded_fit_params[0]
-        loaded_params["intercept_"] = loaded_fit_params[1]
+        fit_state = loaded_model._get_fit_state()
+        fit_state.pop("solver_state_")
+        loaded_params.update(fit_state)
 
-        # Assert coef and intercept are preserved
-        assert np.allclose(
-            initial_params["coef_"], loaded_params["coef_"]
-        ), "Coefficient mismatch after load."
-        assert np.allclose(
-            initial_params["intercept_"], loaded_params["intercept_"]
-        ), "Intercept mismatch after load."
+        # Assert states are close
+        for k, v in fit_state.items():
+            assert np.allclose(initial_params[k], v), f"{k} mismatch after load."
 
 
 @pytest.mark.parametrize("glm_type", ["", "population_"])
