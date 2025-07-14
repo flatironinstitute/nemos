@@ -589,13 +589,13 @@ def one_over_x(x: NDArray):
     return jnp.power(x, -1)
 
 
-def _flatten_dict(d: dict, parent_key: str = "") -> dict:
+def _flatten_dict(nested_dict: dict, parent_key: str = "") -> dict:
     """
     Flatten a nested dictionary into a single-level dictionary with keys representing the hierarchy.
 
     Parameters
     ----------
-    d :
+    nested_dict :
         The dictionary to flatten.
     parent_key :
         This key starts blank, but recursively it will be filled with the parent key,
@@ -610,7 +610,7 @@ def _flatten_dict(d: dict, parent_key: str = "") -> dict:
     sep = "__"
     items = []
     # Iterate over key-value pairs in the dictionary
-    for k, v in d.items():
+    for k, v in nested_dict.items():
         new_key = f"{parent_key}{sep}{k}" if parent_key else k
         # Recursively flatten if the value is a dictionary
         if isinstance(v, dict):
@@ -625,27 +625,27 @@ def _flatten_dict(d: dict, parent_key: str = "") -> dict:
     return dict(items)
 
 
-def _unflatten_dict(d: dict) -> dict:
+def _unflatten_dict(flat_dict: dict) -> dict:
     """
     Unflatten a dictionary with keys representing hierarchy into a nested dictionary.
 
     Parameters
     ----------
-    d :
+    flat_dict :
         The dictionary to unflatten.
 
     Returns
     -------
-    dict :
+    out :
         A nested dictionary with the original hierarchy restored.
     """
 
     sep = "__"
-    result = {}
+    nested_dict = {}
     # Process each key-value pair in the flattened dictionary
-    for k, v in d.items():
+    for k, v in flat_dict.items():
         keys = k.split(sep)
-        dct = result
+        dct = nested_dict
         # Traverse or create nested dictionaries
         for key in keys[:-1]:
             if key not in dct:
@@ -660,7 +660,7 @@ def _unflatten_dict(d: dict) -> dict:
             if v.ndim == 0:
                 v = None if np.isnan(v) else float(v)
         dct[keys[-1]] = v
-    return result
+    return nested_dict
 
 
 def _get_name(x: object) -> str:
