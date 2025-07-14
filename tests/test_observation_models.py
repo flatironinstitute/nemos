@@ -13,6 +13,7 @@ from numba import njit
 import nemos as nmo
 from nemos._observation_model_builder import instantiate_observation_model
 from nemos.initialize_regressor import initialize_intercept_matching_mean_rate
+from nemos.observation_models import LINK_NAME_TO_FUNC
 
 
 @pytest.fixture()
@@ -101,17 +102,7 @@ def test_glm_setter_observation_model(obs_model_string, glm_class, expectation):
 @pytest.mark.parametrize(
     "link_func_string, expectation",
     [
-        ("nemos.utils.one_over_x", does_not_raise()),
-        ("jax.numpy.exp", does_not_raise()),
-        ("jax.nn.softplus", does_not_raise()),
-        ("jax.lax.logistic", does_not_raise()),
-        ("jax.scipy.special.expit", does_not_raise()),
-        ("jax.scipy.stats.norm.cdf", does_not_raise()),
-        ("jax._src.numpy.ufuncs.exp", does_not_raise()),
-        ("jax._src.nn.functions.softplus", does_not_raise()),
-        ("jax._src.lax.lax.logistic", does_not_raise()),
-        ("jax._src.scipy.special.expit", does_not_raise()),
-        ("jax._src.scipy.stats.norm.cdf", does_not_raise()),
+        *((link_name, does_not_raise()) for link_name in LINK_NAME_TO_FUNC),
         (
             "nemos.utils.invalid_link",
             pytest.raises(ValueError, match="Unknown link function"),
