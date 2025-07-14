@@ -719,7 +719,7 @@ def _unpack_params(params_dict: dict, string_attrs: list = None) -> dict:
         if hasattr(value, "get_params") and hasattr(value, "set_params"):
             cls_name = _get_name(value)
             params = _unpack_params(value.get_params(deep=False), string_attrs)
-            out[key] = cls_name if not params else {"class": cls_name, "params": params}
+            out[key] = {"class": cls_name, "params": params}
         else:
             # if the parameter is in string_attrs, store its name
             if string_attrs is not None and key in string_attrs:
