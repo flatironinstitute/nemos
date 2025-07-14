@@ -118,7 +118,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState, OptimistixStepResul
 
         self.stats = {}
 
-    def init_state(self, init_params, *args) -> OptimistixSolverState:
+    def init_state(self, init_params: Params, *args) -> OptimistixSolverState:
         return self._solver.init(
             self.fun_with_aux,
             init_params,
@@ -129,7 +129,12 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState, OptimistixStepResul
             self.config.tags,
         )
 
-    def update(self, params, state, *args) -> OptimistixStepResult:
+    def update(
+        self,
+        params: Params,
+        state: OptimistixSolverState,
+        *args,
+    ) -> OptimistixStepResult:
         new_params, state, aux = self._solver.step(
             fn=self.fun_with_aux,
             y=params,
@@ -143,7 +148,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState, OptimistixStepResul
 
     def run(
         self,
-        init_params,
+        init_params: Params,
         *args,
     ) -> OptimistixStepResult:
         solution = optx.minimise(
