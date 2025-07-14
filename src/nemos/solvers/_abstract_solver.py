@@ -1,7 +1,7 @@
 """Base class defining the interface for solvers that can be used by `BaseRegressor`."""
 
 import abc
-from typing import Callable, Generic, TypeAlias, TypeVar
+from typing import Callable, Generic, TypeAlias, TypeVar, Iterator
 
 from jaxtyping import PyTree
 
@@ -73,6 +73,13 @@ class AbstractSolver(abc.ABC, Generic[SolverState, StepResult]):
         Used by `BaseRegressor.fit`.
         """
         pass
+
+    @abc.abstractmethod
+    def run_iterator(self, iterator: Iterator) -> StepResult:
+        raise NotImplementedError(
+            "If the solver is stochastic, i.e. works with mini-batches of data, this method should be implemented."
+            "If the solver is not stochastic, this method should not be called."
+        )
 
     @classmethod
     @abc.abstractmethod
