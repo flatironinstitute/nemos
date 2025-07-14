@@ -62,6 +62,23 @@ def model_instantiation_type(glm_class_type):
         return "poissonGLM_model_instantiation"
 
 
+@pytest.mark.parametrize("glm_class_type", ["", "population"])
+def test_get_fit_attrs(request, glm_class_type, model_instantiation_type):
+    X, y, model = request.getfixturevalue(model_instantiation_type)[:3]
+    expected_state = {
+        "coef_": None,
+        "intercept_": None,
+        "scale_": None,
+        "solver_state_": None,
+        "dof_resid_": None,
+    }
+    assert model._get_fit_state() == expected_state
+    model.solver_kwargs = {"maxiter": 1}
+    model.fit(X, y)
+    assert all(val is not None for val in model._get_fit_state().values())
+    assert model._get_fit_state().keys() == expected_state.keys()
+
+
 @pytest.mark.parametrize("glm_class_type", ["glm_class", "population_glm_class"])
 class TestGLM:
     """
@@ -1624,10 +1641,28 @@ class TestGLM:
         ],
     )
     @pytest.mark.parametrize(
-        "model_class",
+        "model_class, fit_state_attrs",
         [
-            nmo.glm.GLM,
-            nmo.glm.PopulationGLM,
+            (
+                nmo.glm.GLM,
+                {
+                    "coef_": jnp.zeros(
+                        3,
+                    ),
+                    "intercept_": jnp.array([1.0]),
+                    "scale_": 2.0,
+                    "dof_resid_": 3,
+                },
+            ),
+            (
+                nmo.glm.PopulationGLM,
+                {
+                    "coef_": jnp.zeros((3, 1)),
+                    "intercept_": jnp.array([1.0]),
+                    "scale_": 2.0,
+                    "dof_resid_": 3,
+                },
+            ),
         ],
     )
     def test_save_and_load(
@@ -1637,6 +1672,7 @@ class TestGLM:
         solver_name,
         tmp_path,
         glm_class_type,
+        fit_state_attrs,
         model_class,
     ):
         """
@@ -1660,9 +1696,10 @@ class TestGLM:
         )
 
         initial_params = model.get_params()
-        initial_fit_params = model._get_coef_and_intercept()
-        initial_params["coef_"] = initial_fit_params[0]
-        initial_params["intercept_"] = initial_fit_params[1]
+        # set fit states
+        for key, val in fit_state_attrs.items():
+            setattr(model, key, val)
+            initial_params[key] = val
 
         # Save
         save_path = tmp_path / "test_model.npz"
@@ -1671,9 +1708,9 @@ class TestGLM:
         # Load
         loaded_model = nmo.load_model(save_path)
         loaded_params = loaded_model.get_params()
-        loaded_fit_params = loaded_model._get_coef_and_intercept()
-        loaded_params["coef_"] = loaded_fit_params[0]
-        loaded_params["intercept_"] = loaded_fit_params[1]
+        fit_state = loaded_model._get_fit_state()
+        fit_state.pop("solver_state_")
+        loaded_params.update(fit_state)
 
         # Assert matching keys and values
         assert (
@@ -2565,7 +2602,7 @@ class TestGLMObservationModel:
 
         # NOTE these two are not the same because for example Ridge augments the loss
         # loss_grad = jax.jit(jax.grad(glm._predict_and_compute_loss))
-        loss_grad = jax.jit(jax.grad(glm._solver_loss_fun_))
+        loss_grad = jax.jit(jax.grad(glm._solver_loss_fun))
 
         # copied from GLM.fit
         # grab data if needed (tree map won't function because param is never a FeaturePytree).
