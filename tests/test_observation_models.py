@@ -358,9 +358,8 @@ class TestPoissonObservations:
         poissonGLM_model_instantiation,
     ):
         """
-        Test that custom inverse link function can be inversed and works correctly.
+        Test that custom inverse link function can be inverted and works correctly.
         """
-
         # Initialize model
         _, _, model, _, _ = poissonGLM_model_instantiation
         model.observation_model.inverse_link_function = lambda x: jnp.power(x, 2)
