@@ -163,7 +163,7 @@ def _split_model_params(params: dict, model_class) -> tuple:
     return config_params, fit_params
 
 
-def _set_fit_params(model: BaseRegressor, fit_params: dict, filename: Path):
+def _set_fit_params(model: "BaseRegressor", fit_params: dict, filename: Path):
     """Set fit model attributes, warn if unrecognized."""
     check_str = (
         f"\nIf this is confusing, try calling "
