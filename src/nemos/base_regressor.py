@@ -20,7 +20,7 @@ from numpy.typing import ArrayLike, NDArray
 from nemos.third_party.jaxopt import jaxopt
 
 from . import solvers, utils, validation
-from ._regularizer_builder import AVAILABLE_REGULARIZERS, create_regularizer
+from ._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from .base_class import Base
 from .regularizer import Regularizer, UnRegularized
 from .typing import DESIGN_INPUT_TYPE, SolverInit, SolverRun, SolverUpdate
@@ -194,7 +194,7 @@ class BaseRegressor(Base, abc.ABC):
         """Setter for the regularizer attribute."""
         # instantiate regularizer if str
         if isinstance(regularizer, str):
-            self._regularizer = create_regularizer(name=regularizer)
+            self._regularizer = instantiate_regularizer(name=regularizer)
         elif isinstance(regularizer, Regularizer):
             self._regularizer = regularizer
         else:
