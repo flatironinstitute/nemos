@@ -3,6 +3,7 @@
 import inspect
 import os
 import warnings
+from importlib.metadata import version
 from typing import Any, Callable, List, Literal, Optional, Union
 
 import jax
@@ -726,3 +727,24 @@ def _unpack_params(params_dict: dict, string_attrs: list = None) -> dict:
             else:
                 out[key] = value
     return out
+
+
+def get_env_metadata() -> dict[str, str]:
+    """Get environment metadata.
+
+    Get the environment metadata relevant to model fitting.
+
+
+    Notes
+    -----
+    ``jax`` and ``jaxlib`` for arrays and linear algebra, ``scipy`` is used at model
+    initialization to find numerical inverse for custom link functions, ``scikit-learn``
+    is used for pipelines and cross-validation.
+    """
+    return {
+        "jax": version("jax"),
+        "jaxlib": version("jaxlib"),
+        "scipy": version("scipy"),
+        "scikit-learn": version("scikit-learn"),
+        "nemos": version("nemos"),
+    }
