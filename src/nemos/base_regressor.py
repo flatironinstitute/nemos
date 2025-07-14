@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import abc
-import importlib
 import inspect
 import warnings
 from abc import abstractmethod
@@ -25,7 +24,7 @@ from ._regularizer_builder import AVAILABLE_REGULARIZERS, create_regularizer
 from .base_class import Base
 from .regularizer import Regularizer, UnRegularized
 from .typing import DESIGN_INPUT_TYPE, SolverInit, SolverRun, SolverUpdate
-from .utils import _flatten_dict, _get_name, _unpack_params
+from .utils import _flatten_dict, _get_name, _unpack_params, get_env_metadata
 
 
 def strip_metadata(arg_num: Optional[int] = None, kwarg_key: Optional[str] = None):
@@ -723,10 +722,7 @@ class BaseRegressor(Base, abc.ABC):
         model_params.update(fit_attrs)
 
         # save jax and nemos versions
-        model_params["save_metadata"] = {
-            "jax_version": importlib.metadata.version("jax"),
-            "nemos_version": importlib.metadata.version("nemos"),
-        }
+        model_params["save_metadata"] = get_env_metadata()
 
         # save the model class name
         model_params["model_class"] = _get_name(self.__class__)
