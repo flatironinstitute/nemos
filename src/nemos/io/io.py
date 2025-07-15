@@ -85,10 +85,6 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     solver_kwargs: {'stepsize': 0.01, 'acceleration': False}
     solver_name: GradientDescent
     """
-    print("🚩 load_model has been entered!")  # Just before your breakpoint
-    import os
-
-    print(f"🚩 PID: {os.getpid()}")
     # load the model from a .npz file
     filename = Path(filename)
     data = np.load(filename, allow_pickle=False)
@@ -132,11 +128,6 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
         regularizer_data = saved_params["regularizer"]
         if isinstance(regularizer_data, str):
             saved_params["regularizer"] = instantiate_regularizer(regularizer_data)
-
-        elif isinstance(regularizer_data, dict):
-            saved_params["regularizer"] = instantiate_regularizer(
-                regularizer_data["class"]
-            )
 
     # Extract the model class from the saved attributes
     model_name = str(saved_params.pop("model_class"))
