@@ -948,3 +948,17 @@ def population_bernoulliGLM_model_instantiation_pytree(
 
 
 SizeTerminal = namedtuple("SizeTerminal", ["columns", "lines"])
+
+
+class NestedRegularizer(nmo.regularizer.Ridge):
+    def __init__(self, sub_regularizer):
+        self.sub_regularizer = sub_regularizer
+        super().__init__()
+
+
+@pytest.fixture
+def nested_regularizer():
+    """
+    Nested retularizer for testing save/load.
+    """
+    return NestedRegularizer(nmo.regularizer.Lasso())

@@ -1800,9 +1800,7 @@ class TestGLM:
                     "observation_model": "GammaObservations",  # fails, only class or callable
                     "regularizer": nmo.regularizer.Lasso,
                 },
-                pytest.raises(
-                    ValueError, match="Invalid map parameter types detected"
-                ),
+                pytest.raises(ValueError, match="Invalid map parameter types detected"),
             ),
             (
                 {
@@ -1815,9 +1813,7 @@ class TestGLM:
                 {
                     "solver_kwargs": {"tol": 10**-1},
                 },
-                pytest.raises(
-                    ValueError, match="Invalid map parameter types detected"
-                ),
+                pytest.raises(ValueError, match="Invalid map parameter types detected"),
             ),
             (
                 {
@@ -1950,6 +1946,34 @@ class TestGLM:
                     load_val
                 ), f"{key} function mismatch: {_get_name(init_val)} != {_get_name(load_val)}"
 
+    def test_save_and_load_nested_class(
+        self, nested_regularizer, tmp_path, glm_class_type
+    ):
+        """Test that save and load works with nested classes."""
+        model = nmo.glm.GLM(regularizer=nested_regularizer)
+        save_path = tmp_path / "test_model.npz"
+        model.save_params(save_path)
+
+        mapping_dict = {"regularizer": nested_regularizer.__class__}
+        loaded_model = nmo.load_model(save_path, mapping_dict=mapping_dict)
+
+        assert isinstance(loaded_model.regularizer, nested_regularizer.__class__)
+        assert isinstance(
+            loaded_model.regularizer.sub_regularizer,
+            nested_regularizer.sub_regularizer.__class__,
+        )
+
+        # change mapping
+        mapping_dict = {
+            "regularizer": nested_regularizer.__class__,
+            "regularizer__sub_regularizer": nmo.regularizer.Ridge,
+        }
+        loaded_model = nmo.load_model(save_path, mapping_dict=mapping_dict)
+        assert isinstance(loaded_model.regularizer, nested_regularizer.__class__)
+        assert isinstance(
+            loaded_model.regularizer.sub_regularizer, nmo.regularizer.Ridge
+        )
+
     @pytest.mark.parametrize(
         "fitted_glm_type",
         [
@@ -2043,9 +2067,23 @@ class TestGLM:
                     ValueError, match="Failed to instantiate model class 'nemos.glm"
                 ),
             ),
+            # Unexpected dtype for class name
+            (
+                "regularizer__class",
+                1,
+                pytest.raises(
+                    ValueError, match="Parameter ``regularizer`` cannot be initialized"
+                ),
+            ),
+            # Invalid fit parameter
+            (
+                "scales_",  # wrong name for the params
+                1,
+                pytest.raises(ValueError, match="Unrecognized attribute 'scales_'"),
+            ),
         ],
     )
-    def test_altered_saved_file_safety(
+    def test_modified_saved_file_raises(
         self,
         param_name,
         param_value,

@@ -168,7 +168,7 @@ def _safe_instantiate(
     if not isinstance(class_name, str):
         # this should not be hit, if it does the saved params had been modified.
         raise ValueError(
-            f"Parameter {parameter_name} cannot be initialized. "
+            f"Parameter ``{parameter_name}`` cannot be initialized. "
             "When a parameter specifies a class, the class name must be a string. "
             f"Class name for the loaded parameter is {class_name}."
         )
@@ -186,19 +186,6 @@ def _safe_instantiate(
         )
 
 
-def _unwrap_param(value):
-    """
-    Recursively unwrap a mapped param structure.
-
-    - If it’s a param leaf [orig, [is_mapped, mapped]] → return orig.
-    - If it’s a dict → recurse on each value.
-    """
-    if isinstance(value, dict):
-        # Nested dict: unwrap each leaf.
-        return {k: _unwrap_param(v) for k, v in value.items()}
-    return value[0]
-
-
 def _apply_custom_map(
     params: dict, updated_keys: List | None = None
 ) -> Tuple[dict, List]:
@@ -212,18 +199,11 @@ def _apply_custom_map(
         # handle classes and params separately
         if _is_param(val):
             # unpack mapping info and val
-            if isinstance(val, dict):
-                orig_param = _unwrap_param(val)
-                is_mapped = False  # cannot map params other than classes and callable
-            else:
-                orig_param, (is_mapped, mapped_param) = val
+            orig_param, (is_mapped, mapped_param) = val
 
             if not is_mapped:
                 updated_params[key] = orig_param
             else:
-                # only allow callable to be overridden
-                if not callable(mapped_param):
-                    raise ValueError(ERROR_MSG_OVERRIDE_NOT_ALLOWED.format(key=key))
                 updated_params[key] = mapped_param
                 updated_keys.append(key)
         else:
@@ -238,23 +218,20 @@ def _apply_custom_map(
                 updated_params[key] = _safe_instantiate(key, class_name, **new_params)
             else:
                 updated_keys.append(key)
-                if inspect.isclass(mapped_class):
-                    # map callables and nested classes
-                    new_params, updated_keys = _apply_custom_map(
-                        val.pop("params", {}), updated_keys=updated_keys
-                    )
-                    # try instantiating it with the params
-                    # this executes code, but we are assuming that the mapped_class is safe
-                    updated_params[key] = mapped_class(**new_params)
-                elif isinstance(mapped_class, str):
-                    raise ValueError(
-                        f"Trying to instantiate the class for parameter ``{key}`` "
-                        f"from a string describing the class {mapped_class!r}. "
-                        f"Provide the class object itself instead of the class name string."
-                    )
-                else:
-                    # user probably provided an instance, raise an error
-                    raise ValueError(ERROR_MSG_OVERRIDE_NOT_ALLOWED.format(key=key))
+                # Should not be hit ever, assertion for developers
+                assert inspect.isclass(mapped_class), (
+                    f"The parameter '{key}' passed the type check in "
+                    f"``nmo.load_model`` but is not callable or class, "
+                    "check why this is the case."
+                )
+                # map callables and nested classes
+                new_params, updated_keys = _apply_custom_map(
+                    val.pop("params", {}), updated_keys=updated_keys
+                )
+                # try instantiating it with the params
+                # this executes code, but we are assuming that the mapped_class is safe
+                updated_params[key] = mapped_class(**new_params)
+
     return updated_params, updated_keys
 
 
