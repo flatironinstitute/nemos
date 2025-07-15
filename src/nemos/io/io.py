@@ -186,12 +186,12 @@ def _safe_instantiate(
     class_basename = class_name.split(".")[-1]
     if class_basename in AVAILABLE_REGULARIZERS:
         return instantiate_regularizer(class_name)
-    elif class_basename in AVAILABLE_OBSERVATION_MODELS:
+    elif any(class_basename.startswith(obs) for obs in AVAILABLE_OBSERVATION_MODELS):
         return instantiate_observation_model(class_name, **kwargs)
     else:
         # Should be hit only if the params had been modified
         raise ValueError(
-            f"Invalid class name {class_name}."
+            f"Invalid class name {class_name}. \n"
             f"Initialization is only allowed for NeMoS regularizers or "
             f"observation models."
         )
@@ -227,7 +227,7 @@ def _apply_custom_map(
                 new_params, updated_keys = _apply_custom_map(
                     val.pop("params", {}), updated_keys=updated_keys
                 )
-                updated_params[key] = _safe_instantiate(class_name, **new_params)
+                updated_params[key] = _safe_instantiate(key, class_name, **new_params)
             else:
                 updated_keys.append(key)
                 if inspect.isclass(mapped_class):
