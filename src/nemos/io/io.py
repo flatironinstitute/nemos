@@ -353,12 +353,13 @@ def _expand_user_keys(user_key, flat_keys):
 
     # flat key (one level only)
     if len(parts) == 1:
-        # either it is a class
+        # either it is a class or a param
         if f"{parts[0]}__class" in flat_keys:
             return "__".join([parts[0], "class"])
         return parts[0]
 
-    # interleave params
+    # interleave params, this assumes that the only nesting allowed
+    # is: class__params__class__params... but not dictionaries.
     path = []
     for part in parts[:-1]:
         path.extend([part, "params"])
