@@ -156,28 +156,6 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     return model
 
 
-def update_keys(map_dict, params_dict):
-    """Update parameter mapping."""
-    for key in map_dict:
-        if key in params_dict:
-            value = map_dict[key]
-            if inspect.isclass(value):
-                if (
-                    not isinstance(params_dict[key], dict)
-                    or "class" not in params_dict[key]
-                ):
-                    raise ValueError(
-                        f"Failed to instantiate class {value} mapped by key '{key}'. "
-                        "The saved parameter does not represent a class."
-                    )
-                # key might be missing if there are no init params
-                kwargs = params_dict[key].get("params", {})
-                params_dict[key] = value(**kwargs)
-
-            else:
-                params_dict[key] = value
-
-
 def _is_param(par):
     if not isinstance(par, dict):
         return True
@@ -256,6 +234,7 @@ def _apply_custom_map(
                 new_params, updated_keys = _apply_custom_map(
                     val.pop("params", {}), updated_keys=updated_keys
                 )
+                updated_params[key] = _safe_instantiate(key, class_name, **new_params)
                 updated_params[key] = _safe_instantiate(key, class_name, **new_params)
             else:
                 updated_keys.append(key)
