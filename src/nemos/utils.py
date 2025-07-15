@@ -626,7 +626,7 @@ def _flatten_dict(nested_dict: dict, parent_key: str = "") -> dict:
     return dict(items)
 
 
-def _unflatten_dict(flat_dict: dict) -> dict:
+def _unflatten_dict(flat_dict: dict, flat_map_dict: Optional[dict] = None) -> dict:
     """
     Unflatten a dictionary with keys representing hierarchy into a nested dictionary.
 
@@ -640,12 +640,23 @@ def _unflatten_dict(flat_dict: dict) -> dict:
     out :
         A nested dictionary with the original hierarchy restored.
     """
+    if flat_map_dict is None:
+        flat_map_dict = {}
+        add_mapping = False
+    else:
+        add_mapping = True
 
     sep = "__"
     nested_dict = {}
     # Process each key-value pair in the flattened dictionary
     for k, v in flat_dict.items():
         keys = k.split(sep)
+
+        if k in flat_map_dict:
+            mapping = [True, flat_map_dict[k]]
+        else:
+            mapping = [False, None]
+
         dct = nested_dict
         # Traverse or create nested dictionaries
         for key in keys[:-1]:
@@ -660,7 +671,7 @@ def _unflatten_dict(flat_dict: dict) -> dict:
         elif issubclass(v.dtype.type, np.floating):
             if v.ndim == 0:
                 v = None if np.isnan(v) else float(v)
-        dct[keys[-1]] = v
+        dct[keys[-1]] = [v, mapping] if add_mapping else v
     return nested_dict
 
 
