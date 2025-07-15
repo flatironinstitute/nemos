@@ -32,7 +32,9 @@ class Base(BaseEstimator):
 
         Parameters
         ----------
-        deep
+        deep:
+            If True, will return the parameters for this estimator and
+            contained subobjects that are estimators.
 
         Returns
         -------
