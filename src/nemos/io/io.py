@@ -9,13 +9,26 @@ import numpy as np
 
 if TYPE_CHECKING:
     from ..base_regressor import BaseRegressor
+    from ..observation_models import Observations
+    from ..regularizer import Regularizer
 
-from .._observation_model_builder import instantiate_observation_model
-from .._regularizer_builder import instantiate_regularizer
+from .._observation_model_builder import (
+    AVAILABLE_OBSERVATION_MODELS,
+    instantiate_observation_model,
+)
+from .._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from ..glm import GLM, PopulationGLM
 from ..utils import _get_name, _unflatten_dict, get_env_metadata
 
 MODEL_REGISTRY = {"nemos.glm.GLM": GLM, "nemos.glm.PopulationGLM": PopulationGLM}
+
+ERROR_MSG_OVERRIDE_NOT_ALLOWED = (
+    "Cannot override the parameter {key}. "
+    "NeMoS only allows overriding parameters that cannot be directly saved, "
+    "such as callables, custom classes, or other objects that require pickling. "
+    "If you really want to override the parameter, load the model without mapping "
+    "it and then call ``set_params`` to set it afterwards."
+)
 
 
 def load_model(filename: Union[str, Path], mapping_dict: dict = None):
@@ -111,24 +124,6 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
             UserWarning,
         )
 
-    # If the observation model is a string or a dictionary, instantiate it
-    # By default it is saved as a dictionary with "class" and "params"
-    if "observation_model" in saved_params:
-        obs_model_data = saved_params["observation_model"]
-        if isinstance(obs_model_data, str):
-            saved_params["observation_model"] = instantiate_observation_model(
-                obs_model_data
-            )
-        elif isinstance(obs_model_data, dict):
-            saved_params["observation_model"] = instantiate_observation_model(
-                obs_model_data["class"], **obs_model_data.get("params", {})
-            )
-
-    if "regularizer" in saved_params:
-        regularizer_data = saved_params["regularizer"]
-        if isinstance(regularizer_data, str):
-            saved_params["regularizer"] = instantiate_regularizer(regularizer_data)
-
     # Extract the model class from the saved attributes
     model_name = str(saved_params.pop("model_class"))
     model_class = MODEL_REGISTRY[model_name]
@@ -178,6 +173,30 @@ def _is_param(par):
     return "class" not in par
 
 
+def _safe_instantiate(
+    parameter_name: str, class_name: str, **kwargs
+) -> "Regularizer | Observations":
+    if not isinstance(class_name, str):
+        # this should not be hit, if it does the saved params had been modified.
+        raise ValueError(
+            f"Parameter {parameter_name} cannot be initialized. "
+            "When a parameter specifies a class, the class name must be a string. "
+            f"Class name for the loaded parameter is {class_name}."
+        )
+    class_basename = class_name.split(".")[-1]
+    if class_basename in AVAILABLE_REGULARIZERS:
+        return instantiate_regularizer(class_name)
+    elif class_basename in AVAILABLE_OBSERVATION_MODELS:
+        return instantiate_observation_model(class_name, **kwargs)
+    else:
+        # Should be hit only if the params had been modified
+        raise ValueError(
+            f"Invalid class name {class_name}."
+            f"Initialization is only allowed for NeMoS regularizers or "
+            f"observation models."
+        )
+
+
 def _apply_custom_map(
     params: dict, updated_keys: List | None = None
 ) -> Tuple[dict, List]:
@@ -188,49 +207,47 @@ def _apply_custom_map(
         updated_keys = []
 
     for key, val in params.items():
+        # handle classes and params separately
         if _is_param(val):
+            # unpack mapping info and val
             orig_param, (is_mapped, mapped_param) = val
             if not is_mapped:
                 updated_params[key] = orig_param
             else:
+                # only allow callable to be overridden
+                if not callable(mapped_param):
+                    raise ValueError(ERROR_MSG_OVERRIDE_NOT_ALLOWED.format(key=key))
                 updated_params[key] = mapped_param
                 updated_keys.append(key)
         else:
+            # if val is a class, it must be a dict with a "class" key
             class_name, (is_mapped, mapped_class) = val.pop("class")
-            new_params, updated_keys = _apply_custom_map(
-                val.pop("params", {}), updated_keys=updated_keys
-            )
             if not is_mapped:
-                # the class was not mapped, re-create a new dict with the mapped params
-                updated_params[key] = {"class": class_name, "params": new_params}
+                # check for nested callable/classes save instantiate based on the string
+                new_params, updated_keys = _apply_custom_map(
+                    val.pop("params", {}), updated_keys=updated_keys
+                )
+                updated_params[key] = _safe_instantiate(class_name, **new_params)
             else:
                 updated_keys.append(key)
-                # the class was mapped
                 if inspect.isclass(mapped_class):
-                    # try instantiating it with the params
-                    # this executes code, assumes mapped_class is safe
-                    updated_params[key] = mapped_class(**new_params)
-                else:
-                    # try to map as if it was our own class
+                    # map callables and nested classes
                     new_params, updated_keys = _apply_custom_map(
-                        new_params, updated_keys=updated_keys
+                        val.pop("params", {}), updated_keys=updated_keys
                     )
-                    updated_params[key] = {"class": mapped_class, "params": new_params}
+                    # try instantiating it with the params
+                    # this executes code, but we are assuming that the mapped_class is safe
+                    updated_params[key] = mapped_class(**new_params)
+                elif isinstance(mapped_class, str):
+                    raise ValueError(
+                        f"Trying to instantiate the class for parameter ``{key}`` "
+                        f"from a string describing the class {mapped_class!r}. "
+                        f"Provide the class object itself instead of the class name string."
+                    )
+                else:
+                    # user probably provided an instance, raise an error
+                    raise ValueError(ERROR_MSG_OVERRIDE_NOT_ALLOWED.format(key=key))
     return updated_params, updated_keys
-    #     if value i
-    # flat_params, struct = jax.tree_util.tree_flatten(params, is_leaf=lambda x: not isinstance(x, dict))
-    # updated_flat_params = []
-    # for pars in flat_params:
-    #
-    #     if is_mapped and inspect.isclass(map_value):
-    #         updated_flat_params.append(map_value)
-    # # check what is updated
-    # updated = set(updated_params).intersection(mapping_dict)
-    # warnings.warn(
-    #     f"The following keys have been replaced in the model parameters: {updated}. "
-    # )
-    #
-    # return updated_params
 
 
 def _split_model_params(params: dict, model_class) -> tuple:
