@@ -216,7 +216,62 @@ def _unwrap_param(value):
 def _apply_custom_map(
     params: dict, updated_keys: List | None = None
 ) -> Tuple[dict, List]:
-    """Apply mapping dictionary to replace values if keys match."""
+    """
+    Recursively apply user-defined mappings to a saved parameter structure.
+
+    This function processes the nested parameter dictionary produced by `_unflatten_dict`
+    and applies user-specified overrides where allowed. It does the following:
+
+    - For leaf parameters stored as [value, [is_mapped, mapped_value]]:
+        * If `is_mapped` is True, the parameter is replaced with `mapped_value`.
+          Only callables or classes are allowed; other types raise an error.
+        * If `is_mapped` is False, the original saved value is kept.
+    - For nested dictionaries of parameters (e.g., solver kwargs):
+        * These cannot be overridden because they are not callables or classes.
+        * All leaves are recursively unwrapped to extract the original saved values,
+          discarding any mapping info.
+    - For parameters representing classes:
+        * If not mapped, the original class name is checked and instantiated safely using `_safe_instantiate`.
+        * If mapped, the mapping must be an actual Python class object (not a string or an instance).
+          This invariant is enforced with an internal assertion for developer safety.
+
+    This function also keeps track of which keys were overridden by the user-supplied mapping,
+    returning this list alongside the reconstructed parameter dictionary.
+
+    Parameters
+    ----------
+    params :
+        The nested saved parameters to process. Each entry is either:
+          - A leaf in the form [value, [is_mapped, mapped_value]], or
+          - A nested dict representing classes.
+    updated_keys :
+        List of keys that have already been updated, used for accumulating changes
+        across recursive calls.
+
+    Returns
+    -------
+    updated_params :
+        The new parameter dictionary with mappings applied and wrappers removed.
+    updated_keys :
+        List of all keys that were actually overridden.
+
+    Raises
+    ------
+    ValueError
+        If a user tries to override a parameter with an unsupported type (non-callable, non-class),
+        or provides a mapped class as a string instead of a Python class object. This is triggered
+        in `_safe_instantiate`.
+
+    Notes
+    -----
+    This function enforces strict override safety: only callables and classes may be
+    mapped at load time. Directly serializable values and nested dictionaries cannot
+    be overridden and must be changed later using `set_params` if needed.
+
+    Internal invariants are checked with `assert` to ensure that only valid class mappings
+    reach instantiation. If these assertions fail, it indicates a bug in the input validation
+    logic and should never occur in normal use.
+    """
     updated_params = {}
 
     if updated_keys is None:
