@@ -1776,26 +1776,41 @@ class TestGLM:
         ],
     )
     @pytest.mark.parametrize(
-        "mapping_dict",
+        "mapping_dict, expectation",
         [
-            {},
-            {
-                "observation_model": "Gamma",
-                "regularizer": "Lasso",
-                "solver_name": "ProximalGradient",
-                "regularizer_strength": 3.0,
-            },
-            {
-                "observation_model": nmo.observation_models.GammaObservations(),
-                "regularizer": nmo.regularizer.Lasso(),
-                "solver_name": "ProximalGradient",
-                "regularizer_strength": 3.0,
-            },
-            {
-                "observation_model": nmo.observation_models.PoissonObservations(
-                    inverse_link_function=lambda x: jnp.pow(x, 2)
+            ({}, does_not_raise()),
+            (
+                {
+                    "observation_model": nmo.observation_models.GammaObservations,
+                    "regularizer": nmo.regularizer.Lasso,
+                    "observation_model__inverse_link_function": lambda x: x**2,
+                },
+                does_not_raise(),
+            ),
+            (
+                {
+                    "observation_model": nmo.observation_models.GammaObservations(),  # fails, only class or callable
+                    "regularizer": nmo.regularizer.Lasso,
+                    "observation_model__inverse_link_function": lambda x: x**2,
+                },
+                pytest.raises(ValueError, match="Cannot override the parameter"),
+            ),
+            (
+                {
+                    "observation_model": "GammaObservations",  # fails, only class or callable
+                    "regularizer": nmo.regularizer.Lasso,
+                },
+                pytest.raises(
+                    ValueError, match="Trying to instantiate the class for parameter"
                 ),
-            },
+            ),
+            (
+                {
+                    "regularizer": nmo.regularizer.Lasso,
+                    "regularizer_strength": 3.0,  # fails, only class or callable
+                },
+                pytest.raises(ValueError, match="Cannot override the parameter"),
+            ),
         ],
     )
     def test_save_and_load_with_custom_mapping(
@@ -1808,6 +1823,7 @@ class TestGLM:
         glm_class_type,
         fit_state_attrs,
         model_class,
+        expectation,
     ):
         """
         Test saving and loading a model with various observation models and regularizers.
@@ -1841,60 +1857,63 @@ class TestGLM:
         model.save_params(save_path)
 
         # Load
-        loaded_model = nmo.load_model(save_path, mapping_dict=mapping_dict)
-        loaded_params = loaded_model.get_params()
-        fit_state = loaded_model._get_fit_state()
-        fit_state.pop("solver_state_")
-        loaded_params.update(fit_state)
+        with expectation:
+            loaded_model = nmo.load_model(save_path, mapping_dict=mapping_dict)
+            loaded_params = loaded_model.get_params()
+            fit_state = loaded_model._get_fit_state()
+            fit_state.pop("solver_state_")
+            loaded_params.update(fit_state)
 
-        # Assert matching keys and values
-        assert (
-            initial_params.keys() == loaded_params.keys()
-        ), "Parameter keys mismatch after load."
+            # Assert matching keys and values
+            assert (
+                initial_params.keys() == loaded_params.keys()
+            ), "Parameter keys mismatch after load."
 
-        unexpected_keys = set(mapping_dict) - set(initial_params)
-        raise_exception = bool(unexpected_keys)
-        if raise_exception:
-            with pytest.raises(
-                ValueError, match="mapping_dict contains unexpected keys"
-            ):
-                raise ValueError(
-                    f"mapping_dict contains unexpected keys: {unexpected_keys}"
-                )
+            unexpected_keys = set(mapping_dict) - set(initial_params)
+            raise_exception = bool(unexpected_keys)
+            if raise_exception:
+                with pytest.raises(
+                    ValueError, match="mapping_dict contains unexpected keys"
+                ):
+                    raise ValueError(
+                        f"mapping_dict contains unexpected keys: {unexpected_keys}"
+                    )
 
-        for key in initial_params:
-            init_val = initial_params[key]
-            load_val = loaded_params[key]
+            for key in initial_params:
+                init_val = initial_params[key]
+                load_val = loaded_params[key]
 
-            if key == "observation_model__inverse_link_function":
-                if "observation_model" in mapping_dict:
+                if key == "observation_model__inverse_link_function":
+                    if "observation_model" in mapping_dict:
+                        continue
+                if key in mapping_dict:
+                    if key == "observation_model":
+                        if isinstance(mapping_dict[key], str):
+                            mapping_obs = instantiate_observation_model(
+                                mapping_dict[key]
+                            )
+                        else:
+                            mapping_obs = mapping_dict[key]
+                        assert _get_name(mapping_obs) == _get_name(
+                            load_val
+                        ), f"{key} observation model mismatch: {mapping_dict[key]} != {load_val}"
+                    elif key == "regularizer":
+                        if isinstance(mapping_dict[key], str):
+                            mapping_reg = instantiate_regularizer(mapping_dict[key])
+                        else:
+                            mapping_reg = mapping_dict[key]
+                        assert _get_name(mapping_reg) == _get_name(
+                            load_val
+                        ), f"{key} regularizer mismatch: {mapping_dict[key]} != {load_val}"
+                    elif key == "solver_name":
+                        assert (
+                            mapping_dict[key] == load_val
+                        ), f"{key} solver name mismatch: {mapping_dict[key]} != {load_val}"
+                    elif key == "regularizer_strength":
+                        assert (
+                            mapping_dict[key] == load_val
+                        ), f"{key} regularizer strength mismatch: {mapping_dict[key]} != {load_val}"
                     continue
-            if key in mapping_dict:
-                if key == "observation_model":
-                    if isinstance(mapping_dict[key], str):
-                        mapping_obs = instantiate_observation_model(mapping_dict[key])
-                    else:
-                        mapping_obs = mapping_dict[key]
-                    assert _get_name(mapping_obs) == _get_name(
-                        load_val
-                    ), f"{key} observation model mismatch: {mapping_dict[key]} != {load_val}"
-                elif key == "regularizer":
-                    if isinstance(mapping_dict[key], str):
-                        mapping_reg = instantiate_regularizer(mapping_dict[key])
-                    else:
-                        mapping_reg = mapping_dict[key]
-                    assert _get_name(mapping_reg) == _get_name(
-                        load_val
-                    ), f"{key} regularizer mismatch: {mapping_dict[key]} != {load_val}"
-                elif key == "solver_name":
-                    assert (
-                        mapping_dict[key] == load_val
-                    ), f"{key} solver name mismatch: {mapping_dict[key]} != {load_val}"
-                elif key == "regularizer_strength":
-                    assert (
-                        mapping_dict[key] == load_val
-                    ), f"{key} regularizer strength mismatch: {mapping_dict[key]} != {load_val}"
-                continue
 
             if isinstance(init_val, (int, float, str, type(None))):
                 assert init_val == load_val, f"{key} mismatch: {init_val} != {load_val}"
