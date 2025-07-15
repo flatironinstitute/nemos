@@ -699,7 +699,7 @@ def test_inspect_npz(tmp_path, model_class, monkeypatch, capsys):
 
     lines += [
         "observation_model     : {'class': 'nemos.observation_models.PoissonObservations', 'params': {'inverse_link_function': 'jax.numpy.exp'}}",
-        "regularizer           : nemos.regularizer.Ridge",
+        "regularizer           : {'class': 'nemos.regularizer.Ridge'}",
         "regularizer_strength  : 0.1",
         "solver_name           : BFGS",
         "",

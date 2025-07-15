@@ -1969,6 +1969,87 @@ class TestGLM:
         for k, v in fit_state.items():
             assert np.allclose(initial_params[k], v), f"{k} mismatch after load."
 
+    @pytest.mark.parametrize(
+        "fitted_glm_type",
+        [
+            "poissonGLM_fitted_model_instantiation",
+            "population_poissonGLM_fitted_model_instantiation",
+        ],
+    )
+    @pytest.mark.parametrize(
+        "param_name, param_value, expectation",
+        [
+            # Replace observation model class name  with a string
+            (
+                "observation_model__class",
+                "InvalidObservations",
+                pytest.raises(ValueError, match="Invalid class name"),
+            ),
+            # Full path string
+            (
+                "observation_model__class",
+                "nemos.observation_models.InvalidObservations",
+                pytest.raises(ValueError, match="Invalid class name"),
+            ),
+            # Replace observation model class name  with an instance
+            (
+                "observation_model__class",
+                nmo.observation_models.GammaObservations(),
+                pytest.raises(
+                    ValueError,
+                    match="Object arrays cannot be loaded when allow_pickle=False",
+                ),
+            ),
+            # Replace observation model class name with class
+            (
+                "observation_model__class",
+                nmo.observation_models.GammaObservations,
+                pytest.raises(
+                    ValueError,
+                    match="Object arrays cannot be loaded when allow_pickle=False",
+                ),
+            ),
+            # Replace link function with another callable
+            (
+                "observation_model__params__inverse_link_function",
+                np.exp,
+                pytest.raises(
+                    ValueError,
+                    match="Object arrays cannot be loaded when allow_pickle=False",
+                ),
+            ),
+            # Replace are picklable with other stuff
+            (
+                "regularizer_strength",
+                "malicious_string",
+                pytest.raises(
+                    ValueError, match="Failed to instantiate model class 'nemos.glm"
+                ),
+            ),
+        ],
+    )
+    def test_altered_saved_file_safety(
+        self,
+        param_name,
+        param_value,
+        expectation,
+        glm_class_type,
+        fitted_glm_type,
+        request,
+        tmp_path,
+    ):
+        _, _, fitted_model, _, _ = request.getfixturevalue(fitted_glm_type)
+        save_path = tmp_path / "test_model.npz"
+        fitted_model.save_params(save_path)
+        # load and edit
+        data = np.load(save_path, allow_pickle=True)
+        load_data = dict((k, v) for k, v in data.items())
+        load_data[param_name] = param_value
+        np.savez(save_path, **load_data, allow_pickle=True)
+
+        with expectation:
+            nmo.load_model(save_path)
+
 
 @pytest.mark.parametrize("glm_type", ["", "population_"])
 @pytest.mark.parametrize(
