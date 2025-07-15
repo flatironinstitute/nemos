@@ -84,23 +84,34 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     regularizer_strength: 0.1
     solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
     solver_name: BFGS
-    >>> # If you want to load the model with a custom mapping, you can use the mapping_dict parameter.
-    >>> mapping_dict = {"solver_name": "GradientDescent",
-    ...                 "solver_kwargs": {"stepsize": 0.01, "acceleration": False}}
+    >>> # If you want to load the model with a custom mapping for callables and custom classes,
+    >>> # you can use the mapping_dict parameter.
+    >>> mapping_dict = {
+    ...     "observation_model__inverse_link_function": lambda x: x**2,
+    ...     "regularizer": nmo.regularizer.UnRegularized,
+    ... }
     >>> loaded_model = nmo.load_model("model_params.npz", mapping_dict=mapping_dict)
     >>> # Now the loaded model will have the updated solver_name and solver_kwargs
     >>> for key, value in loaded_model.get_params().items():
     ...     print(f"{key}: {value}")
-    observation_model__inverse_link_function: <function one_over_x at ...>
-    observation_model: GammaObservations(inverse_link_function=one_over_x)
-    regularizer: Ridge()
+    observation_model__inverse_link_function: <function <lambda> at ...>
+    observation_model: GammaObservations(inverse_link_function=<lambda>)
+    regularizer: UnRegularized()
     regularizer_strength: 0.1
-    solver_kwargs: {'stepsize': 0.01, 'acceleration': False}
-    solver_name: GradientDescent
+    solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
+    solver_name: BFGS
     """
     # load the model from a .npz file
     filename = Path(filename)
     data = np.load(filename, allow_pickle=False)
+
+    invalid_keys = _get_invalid_mappings(mapping_dict)
+    if len(invalid_keys) > 0:
+        raise ValueError(
+            "Invalid map parameter types detected. "
+            f"The following parameters are non mappable:\n\t{invalid_keys}\n"
+            "Only callables and classes can be mapped."
+        )
 
     flat_map_dict = (
         {}
@@ -345,12 +356,6 @@ def _expand_user_keys(user_key, flat_keys):
         # either it is a class
         if f"{parts[0]}__class" in flat_keys:
             return "__".join([parts[0], "class"])
-        # or a single parameter
-        if not parts[0] in flat_keys:
-            raise ValueError(
-                f"Parameter ``{user_key}`` is not mappable. "
-                f"Only callables and classes can be mapped."
-            )
         return parts[0]
 
     # interleave params
@@ -364,13 +369,14 @@ def _expand_user_keys(user_key, flat_keys):
     else:
         path.append(parts[-1])
         flat_key = "__".join(path)
-
-    if flat_key not in flat_keys:
-        # the parameter is not a first level attribute of a class
-        # (it doesn't have the key struct key1__params__key2__params...)
-        # but it is still nested, i.e. it is a dictionary.
-        raise ValueError(
-            f"Parameter ``{user_key}`` is not mappable. "
-            f"Only callables and classes can be mapped."
-        )
     return flat_key
+
+
+def _get_invalid_mappings(mapping_dict: dict | None) -> List:
+    if mapping_dict is None:
+        return []
+    return [
+        k
+        for k, v in mapping_dict.items()
+        if (not inspect.isclass(v)) and not callable(v)
+    ]
