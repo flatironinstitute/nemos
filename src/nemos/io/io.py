@@ -197,6 +197,19 @@ def _safe_instantiate(
         )
 
 
+def _unwrap_param(value):
+    """
+    Recursively unwrap a mapped param structure.
+
+    - If it’s a param leaf [orig, [is_mapped, mapped]] → return orig.
+    - If it’s a dict → recurse on each value.
+    """
+    if isinstance(value, dict):
+        # Nested dict: unwrap each leaf.
+        return {k: _unwrap_param(v) for k, v in value.items()}
+    return value[0]
+
+
 def _apply_custom_map(
     params: dict, updated_keys: List | None = None
 ) -> Tuple[dict, List]:
@@ -210,7 +223,12 @@ def _apply_custom_map(
         # handle classes and params separately
         if _is_param(val):
             # unpack mapping info and val
-            orig_param, (is_mapped, mapped_param) = val
+            if isinstance(val, dict):
+                orig_param = _unwrap_param(val)
+                is_mapped = False  # cannot map params other than classes and callable
+            else:
+                orig_param, (is_mapped, mapped_param) = val
+
             if not is_mapped:
                 updated_params[key] = orig_param
             else:
@@ -329,7 +347,10 @@ def _expand_user_keys(user_key, flat_keys):
             return "__".join([parts[0], "class"])
         # or a single parameter
         if not parts[0] in flat_keys:
-            raise ValueError(f"Cannot find mapping for {user_key}.")
+            raise ValueError(
+                f"Parameter ``{user_key}`` is not mappable. "
+                f"Only callables and classes can be mapped."
+            )
         return parts[0]
 
     # interleave params
@@ -345,5 +366,11 @@ def _expand_user_keys(user_key, flat_keys):
         flat_key = "__".join(path)
 
     if flat_key not in flat_keys:
-        raise ValueError(f"Cannot find mapping for {user_key}.")
+        # the parameter is not a first level attribute of a class
+        # (it doesn't have the key struct key1__params__key2__params...)
+        # but it is still nested, i.e. it is a dictionary.
+        raise ValueError(
+            f"Parameter ``{user_key}`` is not mappable. "
+            f"Only callables and classes can be mapped."
+        )
     return flat_key
