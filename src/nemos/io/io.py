@@ -3,7 +3,7 @@
 import inspect
 import warnings
 from pathlib import Path
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, List, Tuple, Union
 
 import numpy as np
 
@@ -85,20 +85,35 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     solver_kwargs: {'stepsize': 0.01, 'acceleration': False}
     solver_name: GradientDescent
     """
+    print("🚩 load_model has been entered!")  # Just before your breakpoint
+    import os
 
+    print(f"🚩 PID: {os.getpid()}")
     # load the model from a .npz file
     filename = Path(filename)
     data = np.load(filename, allow_pickle=False)
 
+    flat_map_dict = (
+        {}
+        if mapping_dict is None
+        else {_expand_user_keys(k, data): v for k, v in mapping_dict.items()}
+    )
+
     # Unflatten the dictionary to restore the original structure
-    saved_params = _unflatten_dict(data)
+    saved_params = _unflatten_dict(data, flat_map_dict)
 
     # "save_metadata" is used to store versions of Nemos and Jax, not needed for loading
     saved_params.pop("save_metadata")
 
     # if any value from saved_params is a key in mapping_dict,
     # replace it with the corresponding value from mapping_dict
-    saved_params = _apply_custom_map(saved_params, mapping_dict)
+    saved_params, updated_keys = _apply_custom_map(saved_params)
+
+    if len(updated_keys) > 0:
+        warnings.warn(
+            f"The following keys have been replaced in the model parameters: {updated_keys}.",
+            UserWarning,
+        )
 
     # If the observation model is a string or a dictionary, instantiate it
     # By default it is saved as a dictionary with "class" and "params"
@@ -166,29 +181,65 @@ def update_keys(map_dict, params_dict):
                 params_dict[key] = value
 
 
-def _apply_custom_map(params: dict, mapping_dict: dict) -> dict:
+def _is_param(par):
+    if not isinstance(par, dict):
+        return True
+    return "class" not in par
+
+
+def _apply_custom_map(
+    params: dict, updated_keys: List | None = None
+) -> Tuple[dict, List]:
     """Apply mapping dictionary to replace values if keys match."""
-    if not mapping_dict:
-        return params
+    updated_params = {}
 
-    missing_keys = [key for key in mapping_dict if key not in params]
-    if missing_keys:
-        raise ValueError(
-            f"Keys {missing_keys} in mapping_dict are not found in the model parameters. "
-            f"Available keys: {list(params.keys())}"
-        )
+    if updated_keys is None:
+        updated_keys = []
 
-    updated_params = params.copy()
-
-    update_keys(mapping_dict, updated_params)
-
-    # check what is updated
-    updated = set(updated_params).intersection(mapping_dict)
-    warnings.warn(
-        f"The following keys have been replaced in the model parameters: {updated}. "
-    )
-
-    return updated_params
+    for key, val in params.items():
+        if _is_param(val):
+            orig_param, (is_mapped, mapped_param) = val
+            if not is_mapped:
+                updated_params[key] = orig_param
+            else:
+                updated_params[key] = mapped_param
+                updated_keys.append(key)
+        else:
+            class_name, (is_mapped, mapped_class) = val.pop("class")
+            new_params, updated_keys = _apply_custom_map(
+                val.pop("params", {}), updated_keys=updated_keys
+            )
+            if not is_mapped:
+                # the class was not mapped, re-create a new dict with the mapped params
+                updated_params[key] = {"class": class_name, "params": new_params}
+            else:
+                updated_keys.append(key)
+                # the class was mapped
+                if inspect.isclass(mapped_class):
+                    # try instantiating it with the params
+                    # this executes code, assumes mapped_class is safe
+                    updated_params[key] = mapped_class(**new_params)
+                else:
+                    # try to map as if it was our own class
+                    new_params, updated_keys = _apply_custom_map(
+                        new_params, updated_keys=updated_keys
+                    )
+                    updated_params[key] = {"class": mapped_class, "params": new_params}
+    return updated_params, updated_keys
+    #     if value i
+    # flat_params, struct = jax.tree_util.tree_flatten(params, is_leaf=lambda x: not isinstance(x, dict))
+    # updated_flat_params = []
+    # for pars in flat_params:
+    #
+    #     if is_mapped and inspect.isclass(map_value):
+    #         updated_flat_params.append(map_value)
+    # # check what is updated
+    # updated = set(updated_params).intersection(mapping_dict)
+    # warnings.warn(
+    #     f"The following keys have been replaced in the model parameters: {updated}. "
+    # )
+    #
+    # return updated_params
 
 
 def _split_model_params(params: dict, model_class) -> tuple:
@@ -257,3 +308,34 @@ def inspect_npz(file_path: Union[str, Path]):
     print("\nModel fit parameters\n--------------------")
     for param in data:
         print(f"{param}: {data[param]}")
+
+
+def _expand_user_keys(user_key, flat_keys):
+    """Expand user key mapping path to match saved keys."""
+    parts = user_key.split("__")
+
+    # flat key (one level only)
+    if len(parts) == 1:
+        # either it is a class
+        if f"{parts[0]}__class" in flat_keys:
+            return "__".join([parts[0], "class"])
+        # or a single parameter
+        if not parts[0] in flat_keys:
+            raise ValueError(f"Cannot find mapping for {user_key}.")
+        return parts[0]
+
+    # interleave params
+    path = []
+    for part in parts[:-1]:
+        path.extend([part, "params"])
+
+    flat_key = "__".join(path) + f"__{parts[-1]}__class"
+    if flat_key in flat_keys:
+        return flat_key
+    else:
+        path.append(parts[-1])
+        flat_key = "__".join(path)
+
+    if flat_key not in flat_keys:
+        raise ValueError(f"Cannot find mapping for {user_key}.")
+    return flat_key
