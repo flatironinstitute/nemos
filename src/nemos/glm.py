@@ -1205,19 +1205,22 @@ class GLM(BaseRegressor):
         regularizer_strength: 0.1
         solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
         solver_name: BFGS
-        >>> # If you want to load the model with a custom mapping, you can use the mapping_dict parameter.
-        >>> mapping_dict = {"solver_name": "GradientDescent",
-        ...                 "solver_kwargs": {"stepsize": 0.01, "acceleration": False}}
+        >>> # If you want to load the model with a custom mapping for callables and custom classes,
+        >>> # you can use the mapping_dict parameter.
+        >>> mapping_dict = {
+        ...     "observation_model__inverse_link_function": lambda x: x**2,
+        ...     "regularizer": nmo.regularizer.UnRegularized,
+        ... }
         >>> loaded_model = nmo.load_model("model_params.npz", mapping_dict=mapping_dict)
-        >>> # The loaded model will have the updated solver_name and solver_kwargs
+        >>> # Now the loaded model will have the updated solver_name and solver_kwargs
         >>> for key, value in loaded_model.get_params().items():
         ...     print(f"{key}: {value}")
-        observation_model__inverse_link_function: <function one_over_x at ...>
-        observation_model: GammaObservations(inverse_link_function=one_over_x)
-        regularizer: Ridge()
+        observation_model__inverse_link_function: <function <lambda> at ...>
+        observation_model: GammaObservations(inverse_link_function=<lambda>)
+        regularizer: UnRegularized()
         regularizer_strength: 0.1
-        solver_kwargs: {'stepsize': 0.01, 'acceleration': False}
-        solver_name: GradientDescent
+        solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
+        solver_name: BFGS
         """
 
         # initialize saving dictionary
