@@ -1811,6 +1811,18 @@ class TestGLM:
                 },
                 pytest.raises(ValueError, match="Cannot override the parameter"),
             ),
+            (
+                    {
+                        "solver_kwargs": {"tol" : 10**-1},
+                    },
+                    pytest.raises(ValueError, match="Parameter ``solver_kwargs`` is not mappable"),
+            ),
+            (
+                    {
+                        "some__nested__dictionary": {"tol": 10 ** -1},
+                    },
+                    pytest.raises(ValueError, match="Parameter ``some__nested__dictionary`` is not mappable"),
+            ),
         ],
     )
     def test_save_and_load_with_custom_mapping(
