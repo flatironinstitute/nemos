@@ -1824,6 +1824,16 @@ class TestGLM:
                     match="Invalid map parameter types detected",
                 ),
             ),
+            # valid mapping dtype, invalid name
+            (
+                {
+                    "some__nested__dictionary": nmo.regularizer.Ridge,
+                },
+                pytest.raises(
+                    ValueError,
+                    match="The following mapped parameters are not available",
+                ),
+            ),
         ],
     )
     def test_save_and_load_with_custom_mapping(

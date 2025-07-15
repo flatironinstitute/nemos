@@ -119,6 +119,20 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
         else {_expand_user_keys(k, data): v for k, v in mapping_dict.items()}
     )
 
+    # check for keys that are not in the parameters
+    if mapping_dict is not None:
+        not_available = [
+            key_user
+            for key_expanded, key_user in zip(flat_map_dict.keys(), mapping_dict.keys())
+            if key_expanded not in data.keys()
+        ]
+        if len(not_available) > 0:
+            raise ValueError(
+                "The following mapped parameters are not available in the loaded model:\n"
+                f"\t{not_available}"
+                "Use `nmo.inspect_npz('{filename}')` to inspect the saved parameter names."
+            )
+
     # Unflatten the dictionary to restore the original structure
     saved_params = _unflatten_dict(data, flat_map_dict)
 

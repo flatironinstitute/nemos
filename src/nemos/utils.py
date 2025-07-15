@@ -705,9 +705,7 @@ def _get_name(x: object) -> str:
 
 def _is_callable_or_class(obj):
     """Check if obj is callable or class."""
-    if callable(obj) or inspect.isclass(obj):
-        return True
-    return False
+    return callable(obj) or inspect.isclass(obj)
 
 
 def _unpack_params(params_dict: dict, string_attrs: list = None) -> dict:
