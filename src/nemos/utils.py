@@ -703,6 +703,13 @@ def _get_name(x: object) -> str:
         raise TypeError(f"Cannot retrieve name of variable {x} of type {type(x)}.")
 
 
+def _is_callable_or_class(obj):
+    """Check if obj is callable or class."""
+    if callable(obj) or inspect.isclass(obj):
+        return True
+    return False
+
+
 def _unpack_params(params_dict: dict, string_attrs: list = None) -> dict:
     """
     Convert a parameter dictionary into serializable format.
@@ -733,7 +740,9 @@ def _unpack_params(params_dict: dict, string_attrs: list = None) -> dict:
             out[key] = {"class": cls_name, "params": params}
         else:
             # if the parameter is in string_attrs, store its name
-            if string_attrs is not None and key in string_attrs:
+            if string_attrs is not None and (
+                key in string_attrs or _is_callable_or_class(value)
+            ):
                 out[key] = _get_name(value)
             else:
                 out[key] = value

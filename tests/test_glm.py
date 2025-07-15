@@ -1954,7 +1954,10 @@ class TestGLM:
         save_path = tmp_path / "test_model.npz"
         model.save_params(save_path)
 
-        mapping_dict = {"regularizer": nested_regularizer.__class__}
+        mapping_dict = {
+            "regularizer": nested_regularizer.__class__,
+            "regularizer__func": jnp.exp,
+        }
         loaded_model = nmo.load_model(save_path, mapping_dict=mapping_dict)
 
         assert isinstance(loaded_model.regularizer, nested_regularizer.__class__)
@@ -1962,17 +1965,20 @@ class TestGLM:
             loaded_model.regularizer.sub_regularizer,
             nested_regularizer.sub_regularizer.__class__,
         )
+        assert loaded_model.regularizer.func == mapping_dict["regularizer__func"]
 
         # change mapping
         mapping_dict = {
             "regularizer": nested_regularizer.__class__,
             "regularizer__sub_regularizer": nmo.regularizer.Ridge,
+            "regularizer__func": lambda x: x**2,
         }
         loaded_model = nmo.load_model(save_path, mapping_dict=mapping_dict)
         assert isinstance(loaded_model.regularizer, nested_regularizer.__class__)
         assert isinstance(
             loaded_model.regularizer.sub_regularizer, nmo.regularizer.Ridge
         )
+        assert loaded_model.regularizer.func == mapping_dict["regularizer__func"]
 
     @pytest.mark.parametrize(
         "fitted_glm_type",

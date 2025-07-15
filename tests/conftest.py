@@ -951,8 +951,9 @@ SizeTerminal = namedtuple("SizeTerminal", ["columns", "lines"])
 
 
 class NestedRegularizer(nmo.regularizer.Ridge):
-    def __init__(self, sub_regularizer):
+    def __init__(self, sub_regularizer, func=np.exp):
         self.sub_regularizer = sub_regularizer
+        self.func = func
         super().__init__()
 
 
