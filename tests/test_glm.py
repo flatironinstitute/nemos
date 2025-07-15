@@ -1793,7 +1793,7 @@ class TestGLM:
                     "regularizer": nmo.regularizer.Lasso,
                     "observation_model__inverse_link_function": lambda x: x**2,
                 },
-                pytest.raises(ValueError, match="Cannot override the parameter"),
+                pytest.raises(ValueError, match="Invalid map parameter types detected"),
             ),
             (
                 {
@@ -1801,7 +1801,7 @@ class TestGLM:
                     "regularizer": nmo.regularizer.Lasso,
                 },
                 pytest.raises(
-                    ValueError, match="Trying to instantiate the class for parameter"
+                    ValueError, match="Invalid map parameter types detected"
                 ),
             ),
             (
@@ -1809,14 +1809,14 @@ class TestGLM:
                     "regularizer": nmo.regularizer.Lasso,
                     "regularizer_strength": 3.0,  # fails, only class or callable
                 },
-                pytest.raises(ValueError, match="Cannot override the parameter"),
+                pytest.raises(ValueError, match="Invalid map parameter types detected"),
             ),
             (
                 {
                     "solver_kwargs": {"tol": 10**-1},
                 },
                 pytest.raises(
-                    ValueError, match="Parameter ``solver_kwargs`` is not mappable"
+                    ValueError, match="Invalid map parameter types detected"
                 ),
             ),
             (
@@ -1825,7 +1825,7 @@ class TestGLM:
                 },
                 pytest.raises(
                     ValueError,
-                    match="Parameter ``some__nested__dictionary`` is not mappable",
+                    match="Invalid map parameter types detected",
                 ),
             ),
         ],
