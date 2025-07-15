@@ -200,6 +200,19 @@ def _safe_instantiate(
         )
 
 
+def _unwrap_param(value):
+    """
+    Recursively unwrap a mapped param structure.
+
+    - If it’s a param leaf [orig, [is_mapped, mapped]] → return orig.
+    - If it’s a dict → recurse on each value.
+    """
+    if isinstance(value, dict):
+        # Nested dict: unwrap each leaf.
+        return {k: _unwrap_param(v) for k, v in value.items()}
+    return value[0]
+
+
 def _apply_custom_map(
     params: dict, updated_keys: List | None = None
 ) -> Tuple[dict, List]:
@@ -212,14 +225,19 @@ def _apply_custom_map(
     for key, val in params.items():
         # handle classes and params separately
         if _is_param(val):
-            # unpack mapping info and val
-            orig_param, (is_mapped, mapped_param) = val
-
-            if not is_mapped:
+            if isinstance(val, dict):
+                # dict cannot be mapped, so store original params
+                orig_param = _unwrap_param(val)
                 updated_params[key] = orig_param
             else:
-                updated_params[key] = mapped_param
-                updated_keys.append(key)
+                # unpack mapping info and val
+                orig_param, (is_mapped, mapped_param) = val
+                if is_mapped:
+                    updated_params[key] = mapped_param
+                    updated_keys.append(key)
+                else:
+                    updated_params[key] = orig_param
+
         else:
             # if val is a class, it must be a dict with a "class" key
             class_name, (is_mapped, mapped_class) = val.pop("class")
@@ -228,7 +246,6 @@ def _apply_custom_map(
                 new_params, updated_keys = _apply_custom_map(
                     val.pop("params", {}), updated_keys=updated_keys
                 )
-                updated_params[key] = _safe_instantiate(key, class_name, **new_params)
                 updated_params[key] = _safe_instantiate(key, class_name, **new_params)
             else:
                 updated_keys.append(key)
