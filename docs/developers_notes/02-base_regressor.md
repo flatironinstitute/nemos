@@ -59,7 +59,7 @@ When devising a new model subclass based on the `BaseRegressor` abstract class, 
 - **Must** realize the abstract methods, see above.
 - **Should not** overwrite the `get_params` and `set_params` methods, inherited from `Base`.
 - **May** introduce auxiliary methods for added utility.
-- **May** add re-implement the `__sklearn_tags__` method adding metadata that is relevant to the specific estimator implemented. See the [`scikit-learn` Tags](https://scikit-learn.org/stable/modules/generated/sklearn.utils.Tags.html#sklearn.utils.Tags) for the available tagging options.
+- **May** re-implement the `__sklearn_tags__` method to add metadata that is relevant to the specific estimator implemented. See the [`scikit-learn` documentation](https://scikit-learn.org/stable/modules/generated/sklearn.utils.Tags.html#sklearn.utils.Tags) for the available tagging options.
 
 :::{admonition} Tags
 :class: note
