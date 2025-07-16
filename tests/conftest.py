@@ -1072,9 +1072,8 @@ _solver_registry_per_backend = {
     "optimistix": {
         **_common_solvers,
         "GradientDescent": nmo.solvers.OptaxOptimistixGradientDescent,
-        # "ProximalGradient": nmo.solvers.OptaxOptimistixProximalGradient,
+        "ProximalGradient": nmo.solvers.OptaxOptimistixProximalGradient,
         # "ProximalGradient": nmo.solvers.OptimistixProximalGradient,
-        "ProximalGradient": nmo.solvers.DirectProximalGradient,
         "LBFGS": nmo.solvers.OptaxOptimistixLBFGS,
         "BFGS": nmo.solvers.OptimistixBFGS,
         "NonlinearCG": nmo.solvers.OptimistixNonlinearCG,
