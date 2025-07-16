@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import warnings
 
 from nemos.third_party.jaxopt.jaxopt import implicit_diff
 from nemos.third_party.jaxopt.jaxopt import isotonic
@@ -62,9 +61,3 @@ from nemos.third_party.jaxopt.jaxopt._src.scipy_wrappers import ScipyLeastSquare
 from nemos.third_party.jaxopt.jaxopt._src.scipy_wrappers import ScipyMinimize
 from nemos.third_party.jaxopt.jaxopt._src.scipy_wrappers import ScipyRootFinding
 from nemos.third_party.jaxopt.jaxopt._src.zoom_linesearch import ZoomLineSearch
-
-warnings.warn(
-    "JAXopt is no longer maintained. See https://docs.jax.dev/en/latest/ for"
-    " alternatives.",
-    DeprecationWarning,
-)
