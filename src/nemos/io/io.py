@@ -135,7 +135,7 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
                 (
                     f"\t- '{provided}', did you mean '{suggested}'?\n"
                     if suggested is not None
-                    else f"\t- '{provided}'"
+                    else f"\t- '{provided}'\n"
                 )
                 for provided, suggested in suggested_pairs
             ]
@@ -143,7 +143,7 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
         if len(not_available) > 0:
             raise ValueError(
                 "The following keys in your mapping do not match any parameters in the loaded model:\n\n"
-                f"{suggestions}\n\n"
+                f"{suggestions}\n"
                 "Please double-check your mapping dictionary."
             )
 
