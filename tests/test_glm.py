@@ -1693,7 +1693,7 @@ class TestGLM:
             solver_name=solver_name,
             regularizer=regularizer,
             regularizer_strength=2.0,
-            solver_kwargs={"tol": 10**-6}
+            solver_kwargs={"tol": 10**-6},
         )
 
         initial_params = model.get_params()

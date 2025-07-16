@@ -755,5 +755,9 @@ class BaseRegressor(Base, abc.ABC):
         return {
             name: getattr(self, name)
             for name in dir(self)
-            if name.endswith("_") and not name.endswith("__")
+            # sklearn has "_repr_html_" and "_repr_mimebundle_" methods
+            # filter callables
+            if name.endswith("_")
+            and not name.endswith("__")
+            and (not callable(getattr(self, name)))
         }
