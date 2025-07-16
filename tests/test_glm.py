@@ -1786,7 +1786,7 @@ class TestGLM:
                     "regularizer": nmo.regularizer.Lasso,
                     "observation_model__inverse_link_function": lambda x: x**2,
                 },
-                does_not_raise(),
+                pytest.warns(UserWarning, match="The following keys have been replaced"),
             ),
             (
                 {
@@ -1969,7 +1969,8 @@ class TestGLM:
             "regularizer": nested_regularizer.__class__,
             "regularizer__func": jnp.exp,
         }
-        loaded_model = nmo.load_model(save_path, mapping_dict=mapping_dict)
+        with pytest.warns(UserWarning, match="The following keys have been replaced"):
+            loaded_model = nmo.load_model(save_path, mapping_dict=mapping_dict)
 
         assert isinstance(loaded_model.regularizer, nested_regularizer.__class__)
         assert isinstance(
