@@ -173,7 +173,7 @@ class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
         self.config = OptimistixConfig(**user_args)
 
         stepsize = solver_init_kwargs.get("stepsize", None)
-        linesearch_kwargs = solver_init_kwargs.get("linesearch_kwargs", None)
+        linesearch_kwargs = solver_init_kwargs.get("linesearch_kwargs", {})
 
         # disable the curvature test
         if "curv_rtol" not in linesearch_kwargs:
