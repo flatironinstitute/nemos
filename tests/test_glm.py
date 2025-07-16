@@ -1696,7 +1696,7 @@ class TestGLM:
             solver_kwargs={"tol": 10**-6},
         )
 
-        if regularizer == "Unregularized":
+        if regularizer == "UnRegularized":
             kwargs.pop("regularizer_strength")
 
         model = model_class(**kwargs)
@@ -1839,7 +1839,7 @@ class TestGLM:
                 },
                 pytest.raises(
                     ValueError,
-                    match="The following mapped parameters are not available",
+                    match="The following keys in your mapping do not match ",
                 ),
             ),
         ],
