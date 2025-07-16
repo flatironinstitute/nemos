@@ -74,7 +74,6 @@ class AbstractSolver(abc.ABC, Generic[SolverState, StepResult]):
         """
         pass
 
-    @abc.abstractmethod
     def run_iterator(self, iterator: Iterator) -> StepResult:
         raise NotImplementedError(
             "If the solver is stochastic, i.e. works with mini-batches of data, this method should be implemented."
