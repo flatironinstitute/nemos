@@ -1688,13 +1688,18 @@ class TestGLM:
                 f"Skipping {solver_name} for Lasso type regularizer; not an approximate solver."
             )
 
-        model = model_class(
+        kwargs = dict(
             observation_model=obs_model,
             solver_name=solver_name,
             regularizer=regularizer,
             regularizer_strength=2.0,
             solver_kwargs={"tol": 10**-6},
         )
+
+        if regularizer == "Unregularized":
+            kwargs.pop("regularizer_strength")
+
+        model = model_class(**kwargs)
 
         initial_params = model.get_params()
         # set fit states
