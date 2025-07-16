@@ -1,6 +1,5 @@
 """Provides functionality to load a previously saved nemos model from a `.npz` file."""
 
-import difflib
 import inspect
 import re
 import warnings
@@ -21,6 +20,7 @@ from .._observation_model_builder import (
 from .._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from ..glm import GLM, PopulationGLM
 from ..utils import _get_name, _unflatten_dict, get_env_metadata
+from ..validation import _suggest_keys
 
 MODEL_REGISTRY = {"nemos.glm.GLM": GLM, "nemos.glm.PopulationGLM": PopulationGLM}
 
@@ -31,19 +31,6 @@ ERROR_MSG_OVERRIDE_NOT_ALLOWED = (
     "If you really want to override the parameter, load the model without mapping "
     "it and then call ``set_params`` to set it afterwards."
 )
-
-
-def _suggest_keys(
-    unmatched_keys: List[str], valid_keys: List[str], cutoff: float = 0.6
-):
-    """Return suggested key if fuzzy match is found."""
-    key_paris = []  # format, (user_provided, similar key)
-    for unmatched_key in unmatched_keys:
-        suggestions = difflib.get_close_matches(
-            unmatched_key, valid_keys, n=1, cutoff=cutoff
-        )
-        key_paris.append((unmatched_key, suggestions[0] if suggestions else None))
-    return key_paris
 
 
 def load_model(filename: Union[str, Path], mapping_dict: dict = None):
