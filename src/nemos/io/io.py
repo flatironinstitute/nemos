@@ -192,11 +192,14 @@ def _safe_instantiate(
     elif any(class_basename.startswith(obs) for obs in AVAILABLE_OBSERVATION_MODELS):
         return instantiate_observation_model(class_name, **kwargs)
     else:
-        # Should be hit only if the params had been modified
+        # Hit when loading a custom class without mapping
         raise ValueError(
-            f"Invalid class name {class_name}. \n"
-            f"Initialization is only allowed for NeMoS regularizers or "
-            f"observation models."
+            f"The class '{class_basename}' is not a native NeMoS class.\n"
+            "To load custom observation or regularization classes, please provide a mapping:\n\n"
+            "  - For observation models:\n"
+            "      nemos.load_model(save_path, mapping_dict={'observation_model': YourCustomObservations})\n"
+            "  - For regularization:\n"
+            "      nemos.load_model(save_path, mapping_dict={'regularization': YourCustomRegularizer})"
         )
 
 
