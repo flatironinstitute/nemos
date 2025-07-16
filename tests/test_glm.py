@@ -1791,7 +1791,9 @@ class TestGLM:
                     "regularizer": nmo.regularizer.Lasso,
                     "observation_model__inverse_link_function": lambda x: x**2,
                 },
-                pytest.warns(UserWarning, match="The following keys have been replaced"),
+                pytest.warns(
+                    UserWarning, match="The following keys have been replaced"
+                ),
             ),
             (
                 {
@@ -1966,7 +1968,7 @@ class TestGLM:
         self, nested_regularizer, tmp_path, glm_class_type
     ):
         """Test that save and load works with nested classes."""
-        model = nmo.glm.GLM(regularizer=nested_regularizer, regularizer_strength=1.)
+        model = nmo.glm.GLM(regularizer=nested_regularizer, regularizer_strength=1.0)
         save_path = tmp_path / "test_model.npz"
         model.save_params(save_path)
 
