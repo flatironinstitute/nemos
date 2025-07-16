@@ -31,9 +31,12 @@ class SolverAdapter(AbstractSolver[SolverState, StepResult]):
     def get_accepted_arguments(cls) -> set[str]:
         """Set of accepted argument names, extended with the wrapped solver's arguments."""
         own_arguments = set(inspect.getfullargspec(cls.__init__).args)
-        solver_arguments = set(inspect.getfullargspec(cls._solver_cls.__init__).args)
+        solver_arguments = set(inspect.getfullargspec(cls._solver_cls).args)
+        solver_init_arguments = set(
+            inspect.getfullargspec(cls._solver_cls.__init__).args
+        )
 
-        all_arguments = own_arguments | solver_arguments
+        all_arguments = own_arguments | solver_arguments | solver_init_arguments
 
         # discard arguments that are passed by BaseRegressor
         all_arguments.discard("self")
