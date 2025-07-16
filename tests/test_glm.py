@@ -2135,6 +2135,34 @@ class TestGLM:
         with expectation:
             nmo.load_model(save_path)
 
+    @pytest.mark.parametrize(
+        "fitted_glm_type",
+        [
+            "poissonGLM_fitted_model_instantiation",
+            "population_poissonGLM_fitted_model_instantiation",
+        ],
+    )
+    def test_key_suggestions(self, fitted_glm_type, request, glm_class_type, tmp_path):
+        _, _, fitted_model, _, _ = request.getfixturevalue(fitted_glm_type)
+        save_path = tmp_path / "test_model.npz"
+        fitted_model.save_params(save_path)
+
+        invalid_mapping = {
+            "regulsriaer": nmo.regularizer.Ridge,
+            "observatino_mdels": nmo.observation_models.GammaObservations,
+            "observaiton_models__inv_link_function": jax.numpy.exp,
+            "total_nonsense": jax.numpy.exp,
+        }
+        match = (
+            r"The following keys in your mapping do not match any parameters in the loaded model:\n\n"
+            r"\t- 'regulsriaer', did you mean 'regularizer'\?\n"
+            r"\t- 'observatino_mdels', did you mean 'observation_model'\?\n"
+            r"\t- 'observaiton_models__inv_link_function', did you mean 'observation_model__inverse_link_function'\?\n"
+            r"\t- 'total_nonsense'\n"
+        )
+        with pytest.raises(ValueError, match=match):
+            nmo.load_model(save_path, mapping_dict=invalid_mapping)
+
 
 @pytest.mark.parametrize("glm_type", ["", "population_"])
 @pytest.mark.parametrize(

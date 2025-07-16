@@ -133,7 +133,7 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
         suggestions = "".join(
             [
                 (
-                    f"\t- '{provided}', did you mean '{suggested}'?"
+                    f"\t- '{provided}', did you mean '{suggested}'?\n"
                     if suggested is not None
                     else f"\t- '{provided}'"
                 )
