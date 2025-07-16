@@ -1,6 +1,8 @@
 """Provides functionality to load a previously saved nemos model from a `.npz` file."""
 
+import difflib
 import inspect
+import re
 import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Tuple, Union
@@ -29,6 +31,19 @@ ERROR_MSG_OVERRIDE_NOT_ALLOWED = (
     "If you really want to override the parameter, load the model without mapping "
     "it and then call ``set_params`` to set it afterwards."
 )
+
+
+def _suggest_keys(
+    unmatched_keys: List[str], valid_keys: List[str], cutoff: float = 0.6
+):
+    """Return suggested key if fuzzy match is found."""
+    key_paris = []  # format, (user_provided, similar key)
+    for unmatched_key in unmatched_keys:
+        suggestions = difflib.get_close_matches(
+            unmatched_key, valid_keys, n=1, cutoff=cutoff
+        )
+        key_paris.append((unmatched_key, suggestions[0] if suggestions else None))
+    return key_paris
 
 
 def load_model(filename: Union[str, Path], mapping_dict: dict = None):
@@ -126,11 +141,23 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
             for key_expanded, key_user in zip(flat_map_dict.keys(), mapping_dict.keys())
             if key_expanded not in data.keys()
         ]
+        available_keys = [re.sub("(__class|__params)", "", key) for key in data.keys()]
+        suggested_pairs = _suggest_keys(not_available, available_keys)
+        suggestions = "".join(
+            [
+                (
+                    f"\t- '{provided}', did you mean '{suggested}'?"
+                    if suggested is not None
+                    else f"\t- '{provided}'"
+                )
+                for provided, suggested in suggested_pairs
+            ]
+        )
         if len(not_available) > 0:
             raise ValueError(
-                "The following mapped parameters are not available in the loaded model:\n"
-                f"\t{not_available}"
-                "Use `nmo.inspect_npz('{filename}')` to inspect the saved parameter names."
+                "The following keys in your mapping do not match any parameters in the loaded model:\n\n"
+                f"{suggestions}\n\n"
+                "Please double-check your mapping dictionary."
             )
 
     # Unflatten the dictionary to restore the original structure

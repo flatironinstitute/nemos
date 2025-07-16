@@ -2050,13 +2050,17 @@ class TestGLM:
             (
                 "observation_model__class",
                 "InvalidObservations",
-                pytest.raises(ValueError, match="The class '[A-z]+' is not a native NeMoS"),
+                pytest.raises(
+                    ValueError, match="The class '[A-z]+' is not a native NeMoS"
+                ),
             ),
             # Full path string
             (
                 "observation_model__class",
                 "nemos.observation_models.InvalidObservations",
-                pytest.raises(ValueError, match="The class '[A-z]+' is not a native NeMoS"),
+                pytest.raises(
+                    ValueError, match="The class '[A-z]+' is not a native NeMoS"
+                ),
             ),
             # Replace observation model class name  with an instance
             (
