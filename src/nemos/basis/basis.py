@@ -41,7 +41,7 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
 
     References
     ----------
-    .. [1] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline
+    .. [2] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline
         Techniques. Mathematics and Visualization. Springer, Berlin, Heidelberg.
         https://doi.org/10.1007/978-3-662-04919-8_5
 
@@ -214,7 +214,7 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
 
     References
     ----------
-    .. [1] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In:
+    .. [2] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In:
         Bézier and B-Spline Techniques. Mathematics and Visualization. Springer, Berlin, Heidelberg.
         https://doi.org/10.1007/978-3-662-04919-8_5
 
@@ -724,7 +724,7 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
 
     References
     ----------
-    .. [1] Ramsay, J. O. (1988). Monotone regression splines in action. Statistical science,
+    .. [2] Ramsay, J. O. (1988). Monotone regression splines in action. Statistical science,
         3(4), 425-441.
 
     Notes
@@ -914,7 +914,7 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
 
     References
     ----------
-    .. [1] Ramsay, J. O. (1988). Monotone regression splines in action. Statistical science,
+    .. [2] Ramsay, J. O. (1988). Monotone regression splines in action. Statistical science,
         3(4), 425-441.
 
     Notes
@@ -1091,7 +1091,7 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
 
     References
     ----------
-    .. [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+    .. [2] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
         C. E. (2005). Prediction and decoding of retinal ganglion cell responses
         with a probabilistic spiking model. Journal of Neuroscience, 25(47),
         11003–11013.
@@ -1260,7 +1260,7 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
 
     References
     ----------
-    .. [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+    .. [2] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
         C. E. (2005). Prediction and decoding of retinal ganglion cell responses
         with a probabilistic spiking model. Journal of Neuroscience, 25(47),
         11003–11013.
@@ -1431,7 +1431,7 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
 
     References
     ----------
-    .. [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+    .. [2] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
        C. E. (2005). Prediction and decoding of retinal ganglion cell responses
        with a probabilistic spiking model. Journal of Neuroscience, 25(47),
        11003–11013.
@@ -1613,7 +1613,7 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
 
     References
     ----------
-    .. [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+    .. [2] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
        C. E. (2005). Prediction and decoding of retinal ganglion cell responses
        with a probabilistic spiking model. Journal of Neuroscience, 25(47),
        11003–11013.
