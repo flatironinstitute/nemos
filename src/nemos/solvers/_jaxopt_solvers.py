@@ -5,7 +5,7 @@ from typing import Callable, ClassVar, NamedTuple, Type, TypeAlias
 from nemos.third_party.jaxopt import jaxopt
 
 from ..regularizer import Regularizer
-from ._abstract_solver import Params
+from ._abstract_solver import Params, StochasticMixin
 from ._solver_adapter import SolverAdapter
 
 JaxoptSolverState: TypeAlias = NamedTuple
@@ -14,7 +14,8 @@ JaxoptSolverState: TypeAlias = NamedTuple
 # TODO do we want the JAXopt solvers to use the same tolerance and max_steps as the Optimistix solvers?
 
 
-class JaxoptWrapper(SolverAdapter[JaxoptSolverState, jaxopt.OptStep]):
+# class JaxoptWrapper(SolverAdapter[JaxoptSolverState, jaxopt.OptStep]):
+class JaxoptWrapper(SolverAdapter[JaxoptSolverState, tuple[Params, JaxoptSolverState]]):
     """
     Base class for adapters wrapping JAXopt solvers.
 
@@ -69,14 +70,14 @@ class JaxoptWrapper(SolverAdapter[JaxoptSolverState, jaxopt.OptStep]):
         return self._solver.run(init_params, *self._extend_args(args))
 
 
-class JaxoptProximalGradient(JaxoptWrapper):
+class JaxoptProximalGradient(StochasticMixin, JaxoptWrapper):
     """Adapter for jaxopt.ProximalGradient."""
 
     _solver_cls = jaxopt.ProximalGradient
     _proximal = True
 
 
-class JaxoptGradientDescent(JaxoptWrapper):
+class JaxoptGradientDescent(StochasticMixin, JaxoptWrapper):
     """Adapter for jaxopt.GradientDescent."""
 
     _solver_cls = jaxopt.GradientDescent

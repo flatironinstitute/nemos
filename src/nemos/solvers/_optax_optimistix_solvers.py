@@ -1,7 +1,7 @@
 """Solvers wrapping Optax solvers with Optimistix for use with NeMoS."""
 
 import dataclasses
-from typing import Any, Callable, NamedTuple, Union
+from typing import Any, Callable, NamedTuple, Union, ClassVar
 
 import equinox as eqx
 import jax
@@ -20,6 +20,8 @@ from ._optimistix_solvers import (
     OptimistixStepResult,
     Params,
 )
+
+from ._abstract_solver import StochasticMixin
 
 # NOTE This might be solved in a simpler way using
 # https://optax.readthedocs.io/en/latest/getting_started.html#accessing-learning-rate
@@ -79,7 +81,7 @@ def _make_rate_scaler(
         return stateful_scale_by_learning_rate(stepsize)
 
 
-class OptaxOptimistixGradientDescent(OptimistixOptaxSolver):
+class OptaxOptimistixGradientDescent(StochasticMixin, OptimistixOptaxSolver):
     """
     Gradient descent implementation combining Optax and Optimistix.
 
@@ -128,7 +130,7 @@ class OptaxOptimistixGradientDescent(OptimistixOptaxSolver):
         return arguments
 
 
-class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
+class OptaxOptimistixProximalGradient(StochasticMixin, OptimistixOptaxSolver):
     """
     ProximalGradient implementation combining Optax and Optimistix.
 

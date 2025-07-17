@@ -613,3 +613,92 @@ def test_svrg_wrong_shapes(shapes, expected_context):
     with expected_context:
         svrg = SVRG(loss_fn)
         svrg.run(init_params, X, y)
+
+
+@pytest.mark.parametrize(
+    "solver_class",
+    [
+        nmo.solvers.JaxoptGradientDescent,
+        nmo.solvers.JaxoptProximalGradient,
+        nmo.solvers.OptaxOptimistixGradientDescent,
+        nmo.solvers.OptaxOptimistixProximalGradient,
+    ],
+)
+def test_run_iterator(solver_class, request):
+    jax.config.update("jax_enable_x64", True)
+    X, y, _, params, loss = request.getfixturevalue("linear_regression")
+
+    n = X.shape[0]
+
+    maxiter = 5
+    batch_size = 32
+
+    regularizer = nmo.regularizer.UnRegularized()
+    regularizer_strength = None
+
+    if "maxiter" in solver_class.get_accepted_arguments():
+        solver_kwargs = {"maxiter": maxiter}
+    else:
+        assert "max_steps" in solver_class.get_accepted_arguments()
+        solver_kwargs = {"max_steps": maxiter}
+
+    solver = solver_class(loss, regularizer, regularizer_strength, **solver_kwargs)
+    init_params = jax.tree_util.tree_map(np.zeros_like, params)
+
+    def data_iterator(X, y):
+        i = 0
+        while True:
+            idx = i % n
+            yield (X[idx : idx + batch_size], y[idx : idx + batch_size])
+            i += 1
+
+    params, state = solver.run_iterator(init_params, data_iterator(X, y))
+
+    if hasattr(state, "iter_num"):
+        assert state.iter_num.item() == maxiter
+    else:
+        assert state.step.item() == maxiter
+
+
+@pytest.mark.parametrize(
+    "solver_class, expectation",
+    [
+        (nmo.solvers.JaxoptGradientDescent, does_not_raise()),
+        (nmo.solvers.JaxoptProximalGradient, does_not_raise()),
+        (nmo.solvers.OptaxOptimistixGradientDescent, does_not_raise()),
+        (nmo.solvers.OptaxOptimistixProximalGradient, does_not_raise()),
+        (nmo.solvers.JaxoptLBFGS, pytest.raises(NotImplementedError)),
+        (nmo.solvers.JaxoptBFGS, pytest.raises(NotImplementedError)),
+        (nmo.solvers.OptaxOptimistixLBFGS, pytest.raises(NotImplementedError)),
+        (nmo.solvers.OptimistixBFGS, pytest.raises(NotImplementedError)),
+    ],
+)
+def test_only_stochastic_solvers_have_run_iterator(solver_class, request, expectation):
+    """Stochastic solvers need a working run_iterator, others should raise NotImplementedError."""
+    jax.config.update("jax_enable_x64", True)
+    X, y, _, params, loss = request.getfixturevalue("linear_regression")
+    n = X.shape[0]
+    batch_size = 32
+    maxiter = 1
+
+    regularizer = nmo.regularizer.UnRegularized()
+    regularizer_strength = None
+
+    if "maxiter" in solver_class.get_accepted_arguments():
+        solver_kwargs = {"maxiter": maxiter}
+    else:
+        assert "max_steps" in solver_class.get_accepted_arguments()
+        solver_kwargs = {"max_steps": maxiter}
+
+    solver = solver_class(loss, regularizer, regularizer_strength, **solver_kwargs)
+    init_params = jax.tree_util.tree_map(np.zeros_like, params)
+
+    def data_iterator(X, y):
+        i = 0
+        while True:
+            idx = i % n
+            yield (X[idx : idx + batch_size], y[idx : idx + batch_size])
+            i += 1
+
+    with expectation:
+        params, state = solver.run_iterator(init_params, data_iterator(X, y))

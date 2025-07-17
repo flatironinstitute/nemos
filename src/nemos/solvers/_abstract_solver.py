@@ -1,7 +1,9 @@
 """Base class defining the interface for solvers that can be used by `BaseRegressor`."""
 
 import abc
-from typing import Callable, Generic, TypeAlias, TypeVar, Iterator
+from typing import Callable, Generic, TypeAlias, TypeVar, Iterator, Protocol
+
+import itertools
 
 from jaxtyping import PyTree
 
@@ -10,6 +12,10 @@ from ..regularizer import Regularizer
 Params: TypeAlias = PyTree
 SolverState = TypeVar("SolverState")
 StepResult = TypeVar("StepResult")
+
+# TODO If we want to accept solvers that implement this interface,
+# but are not implemented as a subclass of AbstractSolver,
+# we could just create a protocol listing the methods.
 
 
 class AbstractSolver(abc.ABC, Generic[SolverState, StepResult]):
@@ -74,7 +80,7 @@ class AbstractSolver(abc.ABC, Generic[SolverState, StepResult]):
         """
         pass
 
-    def run_iterator(self, iterator: Iterator) -> StepResult:
+    def run_iterator(self, init_params: Params, iterator: Iterator) -> StepResult:
         raise NotImplementedError(
             "If the solver is stochastic, i.e. works with mini-batches of data, this method should be implemented."
             "If the solver is not stochastic, this method should not be called."
@@ -90,3 +96,41 @@ class AbstractSolver(abc.ABC, Generic[SolverState, StepResult]):
         can be passed to the solver's __init__.
         """
         pass
+
+
+class StochasticSolver(Protocol):
+    def run_iterator(self, init_params: Params, iterator: Iterator) -> StepResult: ...
+
+
+class StochasticMixin(AbstractSolver[SolverState, tuple[Params, SolverState]]):
+    """
+    Mixin providing a `run_iterator` method for stochastic optimization.
+
+    Requires the solver to implement the `AbstractSolver` interface
+    plus provide a `maxiter` attribute or property.
+    """
+
+    @property
+    @abc.abstractmethod
+    def maxiter(self) -> int:
+        """If run_iterator is implemented with this, the child class needs maxiter."""
+        pass
+
+    def run_iterator(
+        self,
+        init_params: Params,
+        iterator: Iterator,
+    ) -> tuple[Params, SolverState]:
+        """
+        Iterate through `iterator` and take a step using the data provided until the maximum number of steps is reached.
+
+        Implementation copied from `jaxopt.base.StochasticSolver`.
+        """
+        data = next(iterator)
+        state = self.init_state(init_params, *data)
+        params = init_params
+
+        for data in itertools.islice(iterator, 0, self.maxiter):
+            params, state = self.update(params, state, *data)
+
+        return params, state
