@@ -77,7 +77,7 @@ def _get_valid_tree(tree: Any) -> jnp.ndarray:
     return reduce(jnp.logical_and, valid)
 
 
-def get_valid_multitree(*tree: Any) -> jnp.ndarray:
+def get_valid_multitree(*pytree: Any) -> jnp.ndarray:
     """
     Filter valid entries across multiple pytrees.
 
@@ -86,7 +86,7 @@ def get_valid_multitree(*tree: Any) -> jnp.ndarray:
 
     Parameters
     ----------
-    tree :
+    pytree :
         Variable number of pytrees with NDArrays as leaves, each having a consistent first dimension size.
 
     Returns
@@ -95,13 +95,13 @@ def get_valid_multitree(*tree: Any) -> jnp.ndarray:
         A boolean array indicating the validity of each entry across all leaves in all pytrees. True for valid entries,
         False for invalid ones.
     """
-    return reduce(jnp.logical_and, map(_get_valid_tree, tree))
+    return reduce(jnp.logical_and, map(_get_valid_tree, pytree))
 
 
 def pytree_map_and_reduce(
     map_fn: Callable,
     reduce_fn: Callable,
-    *pytrees: Any,
+    *pytree: Any,
     is_leaf: Optional[Callable[[Any], bool]] = None,
 ):
     """
@@ -119,7 +119,7 @@ def pytree_map_and_reduce(
     reduce_fn :
         A function that reduces the mapped results. This function should take an
         iterable and return a single value.
-    *pytrees :
+    *pytree :
         One or more pytrees to which the map and reduce functions are applied.
     is_leaf :
         Callable, returns true if sub-tree is a leaf.
@@ -138,7 +138,7 @@ def pytree_map_and_reduce(
     >>> # Example usage
     >>> result_any = pytree_map_and_reduce(map_fn, any, pytree1, pytree2)
     """
-    cond_tree = jax.tree_util.tree_map(map_fn, *pytrees, is_leaf=is_leaf)
+    cond_tree = jax.tree_util.tree_map(map_fn, *pytree, is_leaf=is_leaf)
     # for some reason, tree_reduce doesn't work well with any.
     return reduce_fn(jax.tree_util.tree_leaves(cond_tree))
 
@@ -174,26 +174,26 @@ tree_sub = partial(jax.tree_util.tree_map, operator.sub)
 tree_sub.__doc__ = "Tree subtraction."
 
 
-def tree_scalar_mul(scalar, tree_x):
-    """Compute scalar * tree_x."""
-    return jax.tree_util.tree_map(lambda x: scalar * x, tree_x)
+def tree_scalar_mul(scalar, pytree_x):
+    """Compute scalar * pytree_x."""
+    return jax.tree_util.tree_map(lambda x: scalar * x, pytree_x)
 
 
-def tree_add_scalar_mul(tree_x, scalar, tree_y):
-    """Compute tree_x + scalar * tree_y."""
-    return jax.tree_util.tree_map(lambda x, y: x + scalar * y, tree_x, tree_y)
+def tree_add_scalar_mul(pytree_x, scalar, pytree_y):
+    """Compute pytree_x + scalar * pytree_y."""
+    return jax.tree_util.tree_map(lambda x, y: x + scalar * y, pytree_x, pytree_y)
 
 
-def tree_sum(tree_x):
-    """Compute sum(tree_x)."""
-    sums = jax.tree_util.tree_map(jnp.sum, tree_x)
+def tree_sum(pytree_x):
+    """Compute sum(pytree_x)."""
+    sums = jax.tree_util.tree_map(jnp.sum, pytree_x)
     return jax.tree_util.tree_reduce(operator.add, sums)
 
 
-def tree_l2_norm(tree_x, squared=False):
-    """Compute the l2 norm ||tree_x||."""
+def tree_l2_norm(pytree_x, squared=False):
+    """Compute the l2 norm ||pytree_x||."""
     squared_tree = jax.tree_util.tree_map(
-        lambda leaf: jnp.square(leaf.real) + jnp.square(leaf.imag), tree_x
+        lambda leaf: jnp.square(leaf.real) + jnp.square(leaf.imag), pytree_x
     )
     sqnorm = tree_sum(squared_tree)
     if squared:
@@ -202,14 +202,14 @@ def tree_l2_norm(tree_x, squared=False):
         return jnp.sqrt(sqnorm)
 
 
-def tree_zeros_like(tree_x):
-    """Create an all-zero tree with the same structure as tree_x."""
-    return jax.tree_util.tree_map(jnp.zeros_like, tree_x)
+def tree_zeros_like(pytree_x):
+    """Create an all-zero tree with the same structure as pytree_x."""
+    return jax.tree_util.tree_map(jnp.zeros_like, pytree_x)
 
 
-def has_matching_axis_pytree(*trees: Any, axis: int = 0):
+def has_matching_axis_pytree(*pytree: Any, axis: int = 0):
     """Check if an arbitrary number of trees have matching axis length."""
     ax_lengths = {
-        xi.shape[axis] for tree in trees for xi in jax.tree_util.tree_leaves(tree)
+        xi.shape[axis] for tree in pytree for xi in jax.tree_util.tree_leaves(tree)
     }
     return len(ax_lengths) == 1
