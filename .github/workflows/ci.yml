@@ -76,10 +76,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Make .sh executable
-        run: chmod +x bash_scripts/prevent_absolute_links_to_docs.sh
+        run: chmod +x scripts/prevent_absolute_links_to_docs.sh
 
       - name: Check links
-        run: ./bash_scripts/prevent_absolute_links_to_docs.sh
+        run: ./scripts/prevent_absolute_links_to_docs.sh
 
   check-relative-links:
     runs-on: ubuntu-latest
@@ -91,10 +91,10 @@ jobs:
         run: npm install -g markdown-link-check
 
       - name: Make .sh executable
-        run: chmod +x bash_scripts/check_markdown_links.sh
+        run: chmod +x scripts/check_markdown_links.sh
 
       - name: Check relative links in root Markdown files
-        run: ./bash_scripts/check_markdown_links.sh relative
+        run: ./scripts/check_markdown_links.sh relative
 
   check-external-links:
     runs-on: ubuntu-latest
@@ -106,10 +106,10 @@ jobs:
         run: npm install -g markdown-link-check
 
       - name: Make .sh executable
-        run: chmod +x bash_scripts/check_markdown_links.sh
+        run: chmod +x scripts/check_markdown_links.sh
 
       - name: Check external links in root Markdown files
-        run: ./bash_scripts/check_markdown_links.sh external
+        run: ./scripts/check_markdown_links.sh external
 
   check:
     if: ${{ !github.event.pull_request.draft }}
