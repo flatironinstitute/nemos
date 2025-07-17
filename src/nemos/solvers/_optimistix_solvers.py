@@ -179,6 +179,10 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState, OptimistixStepResul
 
         return all_arguments
 
+    @property
+    def maxiter(self) -> int:
+        return self.config.max_steps
+
 
 class OptimistixBFGS(OptimistixAdapter):
     """Adapter for optimistix.BFGS."""

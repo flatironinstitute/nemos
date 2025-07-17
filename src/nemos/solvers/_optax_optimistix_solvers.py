@@ -188,10 +188,6 @@ class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
 
         return arguments
 
-    @property
-    def maxiter(self):
-        return self.config.max_steps
-
     def get_learning_rate(self, state: optx._solver.optax._OptaxState) -> float:
         """
         Read out the learning rate for scaling within the proximal operator.
