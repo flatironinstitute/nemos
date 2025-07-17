@@ -81,8 +81,8 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState, OptimistixStepResul
     ):
         if self._proximal:
             loss_fn = unregularized_loss
-            solver_init_kwargs["prox"] = regularizer.get_proximal_operator()
-            solver_init_kwargs["regularizer_strength"] = regularizer_strength
+            self.prox = regularizer.get_proximal_operator()
+            self.regularizer_strength = regularizer_strength
         else:
             loss_fn = regularizer.penalized_loss(
                 unregularized_loss, regularizer_strength

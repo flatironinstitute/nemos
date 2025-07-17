@@ -146,6 +146,8 @@ class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
 
     stats: dict[str, PyTree[ArrayLike]]
 
+    _proximal: ClassVar[bool] = True
+
     def __init__(
         self,
         unregularized_loss: Callable,
