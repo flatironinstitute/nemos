@@ -156,22 +156,6 @@ class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
         acceleration: bool = True,
         **solver_init_kwargs,
     ):
-        loss_fn = unregularized_loss
-        self.fun = lambda params, args: loss_fn(params, *args)
-        self.fun_with_aux = lambda params, args: (loss_fn(params, *args), None)
-
-        self.prox = regularizer.get_proximal_operator()
-        self.regularizer_strength = regularizer_strength
-
-        # take out the arguments that go into minimise, init, terminate and so on
-        # and only pass the actually needed things to __init__
-        user_args = {}
-        for f in dataclasses.fields(OptimistixConfig):
-            kw = f.name
-            if kw in solver_init_kwargs:
-                user_args[kw] = solver_init_kwargs.pop(kw)
-        self.config = OptimistixConfig(**user_args)
-
         stepsize = solver_init_kwargs.get("stepsize", None)
         linesearch_kwargs = solver_init_kwargs.get("linesearch_kwargs", {})
 
@@ -183,15 +167,16 @@ class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
             optax.sgd(learning_rate=1.0, nesterov=acceleration),
             _make_rate_scaler(stepsize, linesearch_kwargs),
         )
+        solver_init_kwargs["optim"] = _sgd
 
-        self._solver = optx.OptaxMinimiser(
-            optim=_sgd,
-            rtol=rtol,
+        super().__init__(
+            unregularized_loss,
+            regularizer,
+            regularizer_strength,
             atol=atol,
-            norm=self.config.norm,
+            rtol=rtol,
+            **solver_init_kwargs,
         )
-
-        self.stats = {}
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:
