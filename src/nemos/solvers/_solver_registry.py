@@ -15,7 +15,6 @@ from ._optax_optimistix_solvers import (
 from ._optimistix_solvers import (
     OptimistixBFGS,
     OptimistixNonlinearCG,
-    OptimistixProximalGradient,
 )
 from ._svrg import WrappedProxSVRG, WrappedSVRG
 
@@ -25,7 +24,6 @@ solver_registry = {
     #
     "ProximalGradient": JaxoptProximalGradient,
     # "ProximalGradient": OptaxOptimistixProximalGradient,
-    # "ProximalGradient": OptimistixProximalGradient,
     #
     "LBFGS": OptaxOptimistixLBFGS,
     #

@@ -12,8 +12,6 @@ from ..regularizer import Regularizer
 from ._abstract_solver import Params
 from ._solver_adapter import SolverAdapter
 
-from ._optimistix_prox_grad import _ProximalGradient
-
 DEFAULT_ATOL = 1e-8
 DEFAULT_RTOL = 0.0
 DEFAULT_MAX_STEPS = 100_000
@@ -198,12 +196,3 @@ class OptimistixNonlinearCG(OptimistixAdapter):
     """Adapter for optimistix.NonlinearCG."""
 
     _solver_cls = optx.NonlinearCG
-
-
-class OptimistixProximalGradient(OptimistixAdapter):
-    _solver_cls = _ProximalGradient
-    _proximal = True
-
-    @property
-    def maxiter(self):
-        return self.config.max_steps
