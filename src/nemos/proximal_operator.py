@@ -184,3 +184,47 @@ def prox_lasso(x: Any, l1reg: Optional[Any] = None, scaling: float = 1.0) -> Any
         return jnp.sign(u) * jax.nn.relu(jnp.abs(u) - v * scaling)
 
     return jax.tree_util.tree_map(fun, x, l1reg)
+
+
+def prox_elastic_net(
+    x: Any, hyperparams: Optional[Tuple[Any, Any]] = None, scaling: float = 1.0
+) -> Any:
+    r"""Proximal operator for the elastic net.
+
+    .. math::
+
+      \underset{y}{\text{argmin}} ~ \frac{1}{2} ||x - y||_2^2
+      + \text{scaling} \cdot \text{hyperparams[0]} \cdot g(y)
+
+    where :math:`g(y) = ||y||_1 + \text{hyperparams[1]} \cdot 0.5 \cdot ||y||_2^2`.
+
+    Args:
+      x: input pytree.
+      hyperparams: a tuple, where both ``hyperparams[0]`` and ``hyperparams[1]``
+        can be either floats or pytrees with the same structure as ``x``.
+      scaling: a scaling factor.
+
+    Returns:
+      output pytree, with the same structure as ``x``.
+    """
+    if hyperparams is None:
+        hyperparams = (1.0, 1.0)
+
+    lam = (
+        tree_util.tree_map(lambda y: hyperparams[0] * jnp.ones_like(y), x)
+        if type(hyperparams[0]) == float
+        else hyperparams[0]
+    )
+    gam = (
+        tree_util.tree_map(lambda y: hyperparams[1] * jnp.ones_like(y), x)
+        if type(hyperparams[1]) == float
+        else hyperparams[1]
+    )
+
+    def prox_l1(u, lambd):
+        return jnp.sign(u) * jax.nn.relu(jnp.abs(u) - lambd)
+
+    def fun(u, lambd, gamma):
+        return prox_l1(u, scaling * lambd) / (1.0 + scaling * lambd * gamma)
+
+    return tree_util.tree_map(fun, x, lam, gam)

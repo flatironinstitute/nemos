@@ -8,6 +8,7 @@ with various optimization methods, and they can be applied depending on the mode
 
 import abc
 from typing import Callable, Tuple, Union
+import warnings
 
 import jax
 import jax.numpy as jnp
@@ -98,6 +99,26 @@ class Regularizer(Base, abc.ABC):
     def __repr__(self):
         return format_repr(self)
 
+    def _validate_regularizer_strength(self, strength: Union[None, float]):
+        if strength is None:
+            warnings.warn(
+                UserWarning(
+                    "Caution: regularizer strength has not been set. Defaulting to 1.0. Please see "
+                    "the documentation for best practices in setting regularization strength."
+                )
+            )
+            strength = 1.0
+        else:
+            try:
+                # force conversion to float to prevent weird GPU issues
+                strength = jax.tree_util.tree_map(float, strength)
+            except ValueError:
+                # raise a more detailed ValueError
+                raise ValueError(
+                    f"Could not convert the regularizer strength: {strength} to a float."
+                )
+        return strength
+
 
 class UnRegularized(Regularizer):
     """
@@ -142,6 +163,16 @@ class UnRegularized(Regularizer):
         shrinkage factor is applied.
         """
         return jaxopt.prox.prox_none
+
+    def _validate_regularizer_strength(self, strength: None):
+        warnings.warn(
+            UserWarning(
+                "Unused parameter `regularizer_strength` for UnRegularized GLM. "
+                "The regularizer strength parameter is not required and won't be used when the regularizer "
+                "is set to UnRegularized."
+            )
+        )
+        return None
 
 
 class Ridge(Regularizer):
@@ -361,11 +392,20 @@ class ElasticNet(Regularizer):
         def prox_op(params, netreg, scaling=1.0):
             Ws, bs = params
             # since we do not allow array regularization assume we pass a tuple
-            regularizer_strength, regularization_ratio = netreg
+            regularizer_strength, regularizer_ratio = netreg
             regularizer_strength /= bs.shape[0]
             # if Ws is a pytree, netreg needs to be a pytree with the same
             # structure
-            netreg = (regularizer_strength, regularization_ratio)
+            regularizer_strength = jax.tree_util.tree_map(
+                lambda x: regularizer_strength * jnp.ones_like(x), Ws
+            )
+            regularizer_ratio = jax.tree_util.tree_map(
+                lambda x: regularizer_ratio * jnp.ones_like(x), Ws
+            )
+            netreg = (
+                regularizer_strength * regularizer_ratio,
+                (1 - regularizer_ratio) / regularizer_ratio,
+            )
             return jaxopt.prox.prox_elastic_net(Ws, netreg, scaling=scaling), bs
 
         return prox_op
@@ -422,6 +462,59 @@ class ElasticNet(Regularizer):
             return loss(params, X, y) + self._penalization(params, regularizer_strength)
 
         return _penalized_loss
+
+    def _validate_regularizer_strength(
+        self, strength: Union[None, float, Tuple[float, float]]
+    ):
+        if strength is None:
+            warnings.warn(
+                UserWarning(
+                    "Caution: regularizer strength and regularizer ratio has not been set. Defaulting to (1.0, 0.5). "
+                    "Please see the documentation for best practices in setting regularization strength and "
+                    "regularization ratio."
+                )
+            )
+            strength = (1.0, 0.5)
+        elif hasattr(strength, "__len__") is False:
+            try:
+                # force conversion to float to prevent weird GPU issues
+                strength = (jax.tree_util.tree_map(float, strength), 0.5)
+                warnings.warn(
+                    UserWarning(
+                        "Caution: regularizer ratio has not been set. Defaulting to 0.5. "
+                        "Please see the documentation for best practices in setting regularization strength and "
+                        "regularization ratio."
+                    )
+                )
+            except ValueError:
+                # raise a more detailed ValueError
+                raise ValueError(
+                    f"Could not convert the regularizer strength: {strength} to a float."
+                )
+        else:
+            try:
+                # force conversion to float to prevent weird GPU issues
+                strength = (
+                    jax.tree_util.tree_map(float, strength[0]),
+                    jax.tree_util.tree_map(float, strength[1]),
+                )
+            except ValueError:
+                # raise a more detailed ValueError
+                raise ValueError(
+                    f"Could not convert the regularizer strength and regularizer ratio: {strength} to a tuple of "
+                    "floats."
+                )
+            if (strength[1] > 1) | (strength[1] < 0):
+                raise ValueError(
+                    f"Invalid regularization ratio: {strength[1]}. Regularization ratio must be a number between "
+                    "0 and 1."
+                )
+            elif strength[0] == 0:
+                raise ValueError(
+                    "Regularization ratio of 0 is not supported. Use Ridge regularization instead."
+                )
+
+        return strength
 
 
 class GroupLasso(Regularizer):

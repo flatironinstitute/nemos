@@ -229,32 +229,7 @@ class BaseRegressor(Base, abc.ABC):
     @regularizer_strength.setter
     def regularizer_strength(self, strength: Union[None, RegularizerStrength]):
         # check regularizer strength
-        if strength is None and not isinstance(self._regularizer, UnRegularized):
-            warnings.warn(
-                UserWarning(
-                    "Caution: regularizer strength has not been set. Defaulting to 1.0. Please see "
-                    "the documentation for best practices in setting regularization strength."
-                )
-            )
-            strength = 1.0
-        elif strength is not None:
-            try:
-                # force conversion to float to prevent weird GPU issues
-                strength = jax.tree_util.tree_map(float, strength)
-            except ValueError:
-                # raise a more detailed ValueError
-                raise ValueError(
-                    f"Could not convert the regularizer strength: {strength} to a float."
-                )
-            if isinstance(self._regularizer, UnRegularized):
-                warnings.warn(
-                    UserWarning(
-                        "Unused parameter `regularizer_strength` for UnRegularized GLM. "
-                        "The regularizer strength parameter is not required and won't be used when the regularizer "
-                        "is set to UnRegularized."
-                    )
-                )
-
+        strength = self.regularizer._validate_regularizer_strength(strength)
         self._regularizer_strength = strength
 
     @property

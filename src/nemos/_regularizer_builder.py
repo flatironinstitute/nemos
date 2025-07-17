@@ -1,6 +1,6 @@
 """Utility functions for creating regularizer object."""
 
-AVAILABLE_REGULARIZERS = ["UnRegularized", "Ridge", "Lasso", "GroupLasso"]
+AVAILABLE_REGULARIZERS = ["UnRegularized", "Ridge", "Lasso", "GroupLasso", "ElasticNet"]
 
 
 def create_regularizer(name: str | None):
