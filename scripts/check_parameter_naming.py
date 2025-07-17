@@ -150,7 +150,6 @@ if __name__ == "__main__":
             msg_lines.append("\n")
 
         logger.warning("".join(msg_lines))
-        # TODO: change this sys.exit(1) to fail the CI
-        sys.exit(0)
+        sys.exit(1)
     else:
         logger.info("No parameter naming inconsistencies found.")
