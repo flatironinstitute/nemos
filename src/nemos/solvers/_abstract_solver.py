@@ -1,7 +1,7 @@
 """Base class defining the interface for solvers that can be used by `BaseRegressor`."""
 
 import abc
-from typing import Callable, Generic, TypeAlias, TypeVar, Iterator, Protocol
+from typing import Callable, Generic, TypeAlias, TypeVar, Iterator, Protocol, Any
 
 import itertools
 
@@ -54,7 +54,7 @@ class AbstractSolver(abc.ABC, Generic[SolverState, StepResult]):
         pass
 
     @abc.abstractmethod
-    def init_state(self, init_params: Params, *args) -> SolverState:
+    def init_state(self, init_params: Params, *args: Any) -> SolverState:
         """
         Initialize the solver state.
 
@@ -63,7 +63,7 @@ class AbstractSolver(abc.ABC, Generic[SolverState, StepResult]):
         pass
 
     @abc.abstractmethod
-    def update(self, params: Params, state: SolverState, *args) -> StepResult:
+    def update(self, params: Params, state: SolverState, *args: Any) -> StepResult:
         """
         Perform a single step/update of the optimization process.
 
@@ -72,7 +72,7 @@ class AbstractSolver(abc.ABC, Generic[SolverState, StepResult]):
         pass
 
     @abc.abstractmethod
-    def run(self, init_params: Params, *args) -> StepResult:
+    def run(self, init_params: Params, *args: Any) -> StepResult:
         """
         Run a full optimization process until a stopping criterion is reached.
 

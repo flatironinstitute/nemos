@@ -1,6 +1,6 @@
 """Base class for adapters wrapping JAXopt solvers."""
 
-from typing import Callable, ClassVar, NamedTuple, Type, TypeAlias
+from typing import Callable, ClassVar, NamedTuple, Type, TypeAlias, Any
 
 from nemos.third_party.jaxopt import jaxopt
 
@@ -60,13 +60,15 @@ class JaxoptWrapper(SolverAdapter[JaxoptSolverState, tuple[Params, JaxoptSolverS
         else:
             return args
 
-    def init_state(self, init_params: Params, *args) -> JaxoptSolverState:
+    def init_state(self, init_params: Params, *args: Any) -> JaxoptSolverState:
         return self._solver.init_state(init_params, *self._extend_args(args))
 
-    def update(self, params: Params, state: JaxoptSolverState, *args) -> jaxopt.OptStep:
+    def update(
+        self, params: Params, state: JaxoptSolverState, *args: Any
+    ) -> jaxopt.OptStep:
         return self._solver.update(params, state, *self._extend_args(args))
 
-    def run(self, init_params: Params, *args) -> jaxopt.OptStep:
+    def run(self, init_params: Params, *args: Any) -> jaxopt.OptStep:
         return self._solver.run(init_params, *self._extend_args(args))
 
 

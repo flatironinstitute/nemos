@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Callable, NamedTuple, Optional, Union
+from typing import Callable, NamedTuple, Optional, Union, Any
 
 import jax
 import jax.flatten_util
@@ -128,7 +128,7 @@ class ProxSVRG:
     def init_state(
         self,
         init_params: Pytree,
-        *args,
+        *args: Any,
     ) -> SVRGState:
         """
         Initialize the solver state.
@@ -172,7 +172,7 @@ class ProxSVRG:
         full_grad_at_reference_point: Pytree,
         stepsize: float,
         hyperparams_prox: Union[float, None],
-        *args,
+        *args: Any,
     ) -> Pytree:
         """
         Body of the inner loop of Prox-SVRG that takes a step.
@@ -236,7 +236,7 @@ class ProxSVRG:
         params: Pytree,
         state: SVRGState,
         hyperparams_prox: Union[float, None],
-        *args,
+        *args: Any,
     ) -> OptStep:
         """
         Perform a single parameter update on the data (no random sampling or loops) and increment `state.iter_num`.
@@ -294,7 +294,7 @@ class ProxSVRG:
         params: Pytree,
         state: SVRGState,
         hyperparams_prox: Union[float, None],
-        *args,
+        *args: Any,
     ) -> OptStep:
         """
         Update parameters given a mini-batch of data and increment iteration/epoch number in state.
@@ -351,7 +351,7 @@ class ProxSVRG:
         self,
         init_params: Pytree,
         hyperparams_prox: Union[float, None],
-        *args,
+        *args: Any,
     ) -> OptStep:
         """
         Run a whole optimization until convergence or until `maxiter` epochs are reached.
@@ -399,7 +399,7 @@ class ProxSVRG:
         init_params: Pytree,
         init_state: SVRGState,
         hyperparams_prox: Union[float, None],
-        *args,
+        *args: Any,
     ) -> OptStep:
         """
         Run a whole optimization until convergence or until `maxiter` epochs are reached.
@@ -492,7 +492,7 @@ class ProxSVRG:
         params: Pytree,
         state: SVRGState,
         hyperparams_prox: Union[float, None],
-        *args,
+        *args: Any,
     ) -> OptStep:
         """
         Perform the inner loop of Prox-SVRG.
@@ -661,7 +661,7 @@ class SVRG(ProxSVRG):
             batch_size,
         )
 
-    def init_state(self, init_params: Pytree, *args, **kwargs) -> SVRGState:
+    def init_state(self, init_params: Pytree, *args: Any, **kwargs) -> SVRGState:
         """
         Initialize the solver state.
 
@@ -688,7 +688,7 @@ class SVRG(ProxSVRG):
         return super().init_state(init_params, *args, **kwargs)
 
     @partial(jit, static_argnums=(0,))
-    def update(self, params: Pytree, state: SVRGState, *args, **kwargs) -> OptStep:
+    def update(self, params: Pytree, state: SVRGState, *args: Any, **kwargs) -> OptStep:
         """
         Perform a single parameter update on the data (no random sampling or loops) and increment `state.iter_num`.
 
@@ -737,7 +737,7 @@ class SVRG(ProxSVRG):
     def run(
         self,
         init_params: Pytree,
-        *args,
+        *args: Any,
     ) -> OptStep:
         """
         Run a whole optimization until convergence or until `maxiter` epochs are reached.
