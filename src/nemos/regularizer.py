@@ -360,19 +360,22 @@ class ElasticNet(Regularizer):
 
         def prox_op(params, netreg, scaling=1.0):
             Ws, bs = params
-            netreg /= bs.shape[0]
+            # since we do not allow array regularization assume we pass a tuple
+            regularizer_strength, regularization_ratio = netreg
+            regularizer_strength /= bs.shape[0]
             # if Ws is a pytree, netreg needs to be a pytree with the same
             # structure
-            netreg = jax.tree_util.tree_map(lambda x: netreg * jnp.ones_like(x), Ws)
+            netreg = (regularizer_strength, regularization_ratio)
             return jaxopt.prox.prox_elastic_net(Ws, netreg, scaling=scaling), bs
 
         return prox_op
 
     @staticmethod
     def _penalization(
-        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], regularizer_strength: float
+        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+        net_regularization: Tuple[float, float],
     ) -> jnp.ndarray:
-        """
+        r"""
         Compute the Elastic Net penalization for given parameters. The elasitc net penalty is defined as:
 
         .. math::
@@ -395,17 +398,24 @@ class ElasticNet(Regularizer):
 
         def net_penalty(coeff: jnp.ndarray, intercept: jnp.ndarray) -> jnp.ndarray:
             # TODO benchmark single vs double jnp.sum?
+            regularizer_strength, regularization_ratio = net_regularization
             return (
-                0.5 * (1 - regularizer_strength) * jnp.sum(jnp.power(coeff, 2))
-                + regularizer_strength * jnp.sum(jnp.abs(coeff))
-            ) / intercept.shape[0]
+                regularizer_strength
+                * (
+                    0.5 * (1 - regularization_ratio) * jnp.sum(jnp.power(coeff, 2))
+                    + regularization_ratio * jnp.sum(jnp.abs(coeff))
+                )
+                / intercept.shape[0]
+            )
 
         # tree map the computation and sum over leaves
         return tree_utils.pytree_map_and_reduce(
             lambda x: net_penalty(x, params[1]), sum, params[0]
         )
 
-    def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
+    def penalized_loss(
+        self, loss: Callable, regularizer_strength: Tuple[float, float]
+    ) -> Callable:
         """Return a function for calculating the penalized loss using Elastic Net regularization."""
 
         def _penalized_loss(params, X, y):

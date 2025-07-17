@@ -24,7 +24,7 @@ from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Lasso, Regularizer, Ridge
 from .solvers._compute_defaults import glm_compute_optimal_stepsize_configs
 from .type_casting import jnp_asarray_if, support_pynapple
-from .typing import DESIGN_INPUT_TYPE
+from .typing import DESIGN_INPUT_TYPE, RegularizerStrength
 from .utils import format_repr
 
 ModelParams = Tuple[jnp.ndarray, jnp.ndarray]
@@ -188,7 +188,7 @@ class GLM(BaseRegressor):
         # Replace this manual list after dropping support for 3.10?
         observation_model: obs.Observations | Literal["Poisson", "Gamma"] = "Poisson",
         regularizer: Optional[Union[str, Regularizer]] = None,
-        regularizer_strength: Optional[float] = None,
+        regularizer_strength: Optional[RegularizerStrength] = None,
         solver_name: str = None,
         solver_kwargs: dict = None,
     ):

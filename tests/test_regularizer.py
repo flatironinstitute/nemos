@@ -7,7 +7,6 @@ import numpy as np
 import pytest
 import statsmodels.api as sm
 from sklearn.linear_model import GammaRegressor, PoissonRegressor
-from statsmodels.tools.sm_exceptions import DomainWarning
 
 import nemos as nmo
 

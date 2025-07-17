@@ -21,7 +21,13 @@ from . import solvers, utils, validation
 from ._regularizer_builder import AVAILABLE_REGULARIZERS, create_regularizer
 from .base_class import Base
 from .regularizer import Regularizer, UnRegularized
-from .typing import DESIGN_INPUT_TYPE, SolverInit, SolverRun, SolverUpdate
+from .typing import (
+    DESIGN_INPUT_TYPE,
+    RegularizerStrength,
+    SolverInit,
+    SolverRun,
+    SolverUpdate,
+)
 
 
 def strip_metadata(arg_num: Optional[int] = None, kwarg_key: Optional[str] = None):
@@ -92,7 +98,7 @@ class BaseRegressor(Base, abc.ABC):
     def __init__(
         self,
         regularizer: Union[str, Regularizer] = "UnRegularized",
-        regularizer_strength: Optional[float] = None,
+        regularizer_strength: Optional[RegularizerStrength] = None,
         solver_name: str = None,
         solver_kwargs: Optional[dict] = None,
     ):
@@ -216,12 +222,12 @@ class BaseRegressor(Base, abc.ABC):
             self.regularizer_strength = self._regularizer_strength
 
     @property
-    def regularizer_strength(self) -> float:
+    def regularizer_strength(self) -> RegularizerStrength:
         """Regularizer strength getter."""
         return self._regularizer_strength
 
     @regularizer_strength.setter
-    def regularizer_strength(self, strength: Union[float, None]):
+    def regularizer_strength(self, strength: Union[None, RegularizerStrength]):
         # check regularizer strength
         if strength is None and not isinstance(self._regularizer, UnRegularized):
             warnings.warn(
@@ -234,7 +240,7 @@ class BaseRegressor(Base, abc.ABC):
         elif strength is not None:
             try:
                 # force conversion to float to prevent weird GPU issues
-                strength = float(strength)
+                strength = jax.tree_util.tree_map(float, strength)
             except ValueError:
                 # raise a more detailed ValueError
                 raise ValueError(
