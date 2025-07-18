@@ -425,13 +425,12 @@ class ElasticNet(Regularizer):
         """
 
         def net_penalty(coeff: jnp.ndarray, intercept: jnp.ndarray) -> jnp.ndarray:
-            # TODO benchmark single vs double jnp.sum?
-            regularizer_strength, regularization_ratio = net_regularization
+            regularizer_strength, regularizer_ratio = net_regularization
             return (
                 regularizer_strength
                 * (
-                    0.5 * (1 - regularization_ratio) * jnp.sum(jnp.power(coeff, 2))
-                    + regularization_ratio * jnp.sum(jnp.abs(coeff))
+                    0.5 * (1 - regularizer_ratio) * jnp.sum(jnp.power(coeff, 2))
+                    + regularizer_ratio * jnp.sum(jnp.abs(coeff))
                 )
                 / intercept.shape[0]
             )

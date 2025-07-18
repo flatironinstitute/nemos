@@ -1181,8 +1181,8 @@ class TestElasticNet:
         )
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
-    @pytest.mark.parametrize("reg_strength", [1.0])
-    @pytest.mark.parametrize("reg_ratio", [0.5])
+    @pytest.mark.parametrize("reg_strength", [1.0, 0.5, 0.1])
+    @pytest.mark.parametrize("reg_ratio", [1.0, 0.5, 0.2])
     def test_solver_match_statsmodels(
         self, solver_name, reg_strength, reg_ratio, poissonGLM_model_instantiation
     ):
@@ -1196,7 +1196,7 @@ class TestElasticNet:
             regularizer=self.cls(), regularizer_strength=(reg_strength, reg_ratio)
         )
         model.solver_name = solver_name
-        model.solver_kwargs = {"tol": 10**-12}
+        model.solver_kwargs = {"tol": 10**-12, "maxiter": 10000}
 
         runner = model.instantiate_solver().solver_run
         weights, intercepts = runner((true_params[0] * 0.0, true_params[1]), X, y)[0]
@@ -1215,22 +1215,19 @@ class TestElasticNet:
             alpha=alpha_sm,
             L1_wt=reg_ratio,
             cnvrg_tol=10**-12,
-            zero_tol=1e-200,
-            maxiter=1000,
+            zero_tol=1e-1000,
+            maxiter=10000,
         )
         # compare params
         sm_params = res_sm.params
         glm_params = jnp.hstack((intercepts, weights.flatten()))
         assert np.allclose(sm_params, glm_params)
-        # if not match_weights:
-        #     raise ValueError(
-        #         "ElasticNet GLM solver estimate does not match statsmodels!"
-        #     )
 
-    def test_loss_convergence(self, poissonGLM_model_instantiation):
+    def test_loss_convergence(self):
+        """Test that penalized loss converges to the same value as statsmodels and the proximal operator."""
         jax.config.update("jax_enable_x64", True)
         # generate toy data
-        num_samples, num_features = 1000, 3
+        num_samples, num_features = 1000, 5
         X = np.random.normal(size=(num_samples, num_features))  # design matrix
         w = list(np.random.normal(size=(num_features,)))
         # w = [0.5]  # define some weights
@@ -1241,7 +1238,7 @@ class TestElasticNet:
             regularizer="ElasticNet",
             regularizer_strength=(1.0, 0.5),
             solver_name="ProximalGradient",
-            solver_kwargs=dict(tol=10**-12),
+            solver_kwargs=dict(tol=10**-12, maxiter=10000),
         )
         model_PG.fit(X, y)
         glm_res = np.hstack((model_PG.intercept_, model_PG.coef_))
@@ -1274,7 +1271,12 @@ class TestElasticNet:
         # elastic net with
         glm_sm = sm.GLM(endog=y, exog=sm.add_constant(X), family=sm.families.Poisson())
         res_sm = glm_sm.fit_regularized(
-            method="elastic_net", alpha=alpha_sm, L1_wt=0.5, cnvrg_tol=10**-12
+            method="elastic_net",
+            alpha=alpha_sm,
+            L1_wt=0.5,
+            cnvrg_tol=10**-12,
+            zero_tol=1e-1000,
+            maxiter=10000,
         )
         # assert weights are the same
         assert np.allclose(res.x, glm_res)
