@@ -22,7 +22,7 @@ from .proximal_operator import prox_group_lasso
 from .typing import DESIGN_INPUT_TYPE, ProximalOperator
 from .utils import format_repr
 
-__all__ = ["UnRegularized", "Ridge", "Lasso", "GroupLasso"]
+__all__ = ["UnRegularized", "Ridge", "Lasso", "GroupLasso", "ElasticNet"]
 
 
 def __dir__() -> list[str]:
@@ -101,12 +101,6 @@ class Regularizer(Base, abc.ABC):
 
     def _validate_regularizer_strength(self, strength: Union[None, float]):
         if strength is None:
-            warnings.warn(
-                UserWarning(
-                    "Caution: regularizer strength has not been set. Defaulting to 1.0. Please see "
-                    "the documentation for best practices in setting regularization strength."
-                )
-            )
             strength = 1.0
         else:
             try:
@@ -394,19 +388,13 @@ class ElasticNet(Regularizer):
             # since we do not allow array regularization assume we pass a tuple
             regularizer_strength, regularizer_ratio = netreg
             regularizer_strength /= bs.shape[0]
+            lam = regularizer_strength * regularizer_ratio  # hyperparams[0]
+            gam = (1 - regularizer_ratio) / regularizer_ratio  # hyperparams[1]
             # if Ws is a pytree, netreg needs to be a pytree with the same
             # structure
-            regularizer_strength = jax.tree_util.tree_map(
-                lambda x: regularizer_strength * jnp.ones_like(x), Ws
-            )
-            regularizer_ratio = jax.tree_util.tree_map(
-                lambda x: regularizer_ratio * jnp.ones_like(x), Ws
-            )
-            netreg = (
-                regularizer_strength * regularizer_ratio,
-                (1 - regularizer_ratio) / regularizer_ratio,
-            )
-            return jaxopt.prox.prox_elastic_net(Ws, netreg, scaling=scaling), bs
+            lam = jax.tree_util.tree_map(lambda x: lam * jnp.ones_like(x), Ws)
+            gam = jax.tree_util.tree_map(lambda x: gam * jnp.ones_like(x), Ws)
+            return jaxopt.prox.prox_elastic_net(Ws, (lam, gam), scaling=scaling), bs
 
         return prox_op
 
@@ -467,13 +455,6 @@ class ElasticNet(Regularizer):
         self, strength: Union[None, float, Tuple[float, float]]
     ):
         if strength is None:
-            warnings.warn(
-                UserWarning(
-                    "Caution: regularizer strength and regularizer ratio has not been set. Defaulting to (1.0, 0.5). "
-                    "Please see the documentation for best practices in setting regularization strength and "
-                    "regularization ratio."
-                )
-            )
             strength = (1.0, 0.5)
         elif hasattr(strength, "__len__") is False:
             try:
@@ -481,9 +462,9 @@ class ElasticNet(Regularizer):
                 strength = (jax.tree_util.tree_map(float, strength), 0.5)
                 warnings.warn(
                     UserWarning(
-                        "Caution: regularizer ratio has not been set. Defaulting to 0.5. "
-                        "Please see the documentation for best practices in setting regularization strength and "
-                        "regularization ratio."
+                        "Caution: The regularizer strength been set, but no value was passed for the regularizer "
+                        "ratio. Defaulting to 0.5. To set both the regularizer strength and regularizer ratio, "
+                        "pass a tuple of floats, e.g. (1.0, 0.5). "
                     )
                 )
             except ValueError:
@@ -509,7 +490,7 @@ class ElasticNet(Regularizer):
                     f"Invalid regularization ratio: {strength[1]}. Regularization ratio must be a number between "
                     "0 and 1."
                 )
-            elif strength[0] == 0:
+            elif strength[1] == 0:
                 raise ValueError(
                     "Regularization ratio of 0 is not supported. Use Ridge regularization instead."
                 )
