@@ -2,17 +2,13 @@ import pathlib
 
 import numpy as np
 import pytest
+from nemos.fetch import fetch_data
 
 from nemos.hmm_glm import run_baum_welch
 
 
 def test_e_step_regression():
-    data_path = (
-        pathlib.Path(__file__).parent
-        / "regression_test_assets"
-        / "hmm_glm"
-        / "e_step_three_states.npz"
-    )
+    data_path = fetch_data("e_step_three_states.npz")
     data = np.load(data_path)
     X, y = data["X"], data["y"]
     new_sess = data["new_sess"]
