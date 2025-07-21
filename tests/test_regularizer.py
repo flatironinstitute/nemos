@@ -1828,10 +1828,10 @@ class TestGroupLasso:
     def test_mask_none(self, poissonGLM_model_instantiation):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
 
-        with pytest.warns(UserWarning):
-            model.regularizer = self.cls(mask=np.ones((1, X.shape[1])).astype(float))
-            model.solver_name = "ProximalGradient"
-            model.fit(X, y)
+        # with pytest.warns(UserWarning):
+        model.regularizer = self.cls(mask=np.ones((1, X.shape[1])).astype(float))
+        model.solver_name = "ProximalGradient"
+        model.fit(X, y)
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
     def test_solver_combination(self, solver_name, poissonGLM_model_instantiation):

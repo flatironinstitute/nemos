@@ -333,18 +333,19 @@ class Lasso(Regularizer):
 
 
 class ElasticNet(Regularizer):
-    """
+    r"""
     Regularizer class for Elastic Net (L1 + L2 regularization) [3]_ [4]_.
 
     The elasitc net penalty is defined as:
 
     .. math::
-        P(\beta) = = \text{regularizer_strength} * ((1 - \text{regularizer_ratio}) * \frac{1}{2} ||\beta||_{\ell_2}^2 +
-        \text{regularizer_ratio} * ||\beta||_{\ell_1}
+        P(\beta) = \alpha * ((1 - \lambda) * \frac{1}{2} ||\beta||_{\ell_2}^2 +
+        \lambda * ||\beta||_{\ell_1}
 
-    where the `regularizer_ratio` parameter controls the balance between L1 (Lasso) and L2 (Ridge)
-    regularization, where :math:`\text{regularizer_ratio} = 0` is equivalent to Ridge regularization and
-    :math:`\text{regularizer_ratio} = 1` is equivalent to Lasso regularization.
+    where :math:`\alpha` is the regularizer strength, and :math:`\lambda` is the regularizer ratio.
+    The regularizer ratio controls the balance between L1 (Lasso) and L2 (Ridge)
+    regularization, where :math:`\lambda = 0` is equivalent to Ridge regularization and
+    :math:`\lambda = 1` is equivalent to Lasso regularization.
 
     This class equips models with the Elastic Net proximal operator and the
     Elastic Net penalized loss function.
@@ -408,11 +409,13 @@ class ElasticNet(Regularizer):
         Compute the Elastic Net penalization for given parameters. The elasitc net penalty is defined as:
 
         .. math::
-            P_\alpha(\beta) = (1 - \alpha) \frac{1}{2} ||\beta||_{\ell_2}^2 + \alpha ||\beta||_{\ell_1}
+            P(\beta) = \alpha * ((1 - \lambda) * \frac{1}{2} ||\beta||_{\ell_2}^2 +
+            \lambda * ||\beta||_{\ell_1}
 
-        where the `regularizer_strength` parameter :math:`\alpha` controls the balance between L1 (Lasso) and L2 (Ridge)
-        regularization, where :math:`\alpha = 0` is equivalent to Ridge regularization and :math:`\alpha = 1` is
-        equivalent to Lasso regularization.
+        where :math:`\alpha` is the regularizer strength, and :math:`\lambda` is the regularizer ratio.
+        The regularizer ratio controls the balance between L1 (Lasso) and L2 (Ridge)
+        regularization, where :math:`\lambda = 0` is equivalent to Ridge regularization and
+        :math:`\lambda = 1` is equivalent to Lasso regularization.
 
         Parameters
         ----------
