@@ -295,7 +295,6 @@ To set up a Negative Binomial GLM, provide this `observation_model` at initializ
 import nemos as nmo
 
 # set up a Negative Binomial GLM for modeling counts (with scale = 1)
-# note: you should tune the scale parameter (for example, through cross-validation)
 glm = nmo.glm.GLM(observation_model=nmo.observation_models.NegativeBinomialObservations(scale=1))
 
 ```
