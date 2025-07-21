@@ -45,7 +45,7 @@ def collect_similar_parameter_names(package, root_name=None, similarity_cutoff=0
         `package.__name__`.
     similarity_cutoff : float, optional
         Similarity threshold between 0 and 1 used to group parameters based on
-        lexical similarity (default is 0.8).
+        lexical similarity.
 
     Returns
     -------
