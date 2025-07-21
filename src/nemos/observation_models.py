@@ -1174,7 +1174,7 @@ class NegativeBinomialObservations(Observations):
     This model represents a Negative Binomial distribution [3]_ commonly used to model overdispersed
     count data [4]_ [5]_ (i.e., data where the variance exceeds the mean), which cannot be captured by a
     standard Poisson model. The distribution is parameterized by the predicted mean rate
-    (:math:`\mu`) and a fixed dispersion parameter (:math:`\phi`) or "scale" of the model.
+    (:math:`\mu`) and a fixed dispersion parameter (:math:`\phi`) or `scale` of the model.
 
     **Important:** the scale parameter must be estimated from the data for accurately capturing the
     dispersion. In the context of NeMoS GLM, estimation can be achieved by cross-validating the
