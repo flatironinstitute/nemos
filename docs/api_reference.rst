@@ -148,6 +148,7 @@ Implements various regularization techniques to constrain model parameters, whic
     UnRegularized
     Ridge
     Lasso
+    ElasticNet
     GroupLasso
 
 The ``nemos.simulation`` module

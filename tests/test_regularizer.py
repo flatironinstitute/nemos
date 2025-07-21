@@ -238,8 +238,7 @@ class TestUnRegularized:
 
         assert model.regularizer_strength is None
 
-        # changing to ridge, lasso, or grouplasso should raise UserWarning and set to 1.0
-        # with pytest.warns(UserWarning):
+        # changing to ridge, lasso, or grouplasso should set to 1.0
         model.regularizer = "Lasso"
 
         assert model.regularizer_strength == 1.0
@@ -567,19 +566,18 @@ class TestRidge:
 
     def test_regularizer_strength_none(self):
         """Assert regularizer strength handled appropriately."""
-        # if no strength given, should warn and set to 1.0
-        # with pytest.warns(UserWarning):
+        # if no strength given, should set to 1.0
         regularizer = self.cls()
         model = nmo.glm.GLM(regularizer=regularizer)
 
         assert model.regularizer_strength == 1.0
 
         with pytest.warns(UserWarning):
-            # if changed to regularized, is kept to 1.
+            # if changed to regularized, is set to None.
             model.regularizer = "UnRegularized"
         assert model.regularizer_strength == None
 
-        # if changed back, should warn and set to 1.0
+        # if changed back, should set to 1.0
         model.regularizer = "Ridge"
 
         assert model.regularizer_strength == 1.0
@@ -832,9 +830,8 @@ class TestLasso:
 
     def test_regularizer_strength_none(self):
         """Assert regularizer strength handled appropriately."""
-        # if no strength given, should warn and set to 1.0
+        # if no strength given, should set to 1.0
         regularizer = self.cls()
-        # with pytest.warns(UserWarning):
         model = nmo.glm.GLM(regularizer=regularizer)
 
         assert model.regularizer_strength == 1.0
@@ -843,8 +840,7 @@ class TestLasso:
         model.set_params(regularizer="UnRegularized", regularizer_strength=None)
         assert model.regularizer_strength is None
 
-        # if changed back, should warn and set to 1.0
-        # with pytest.warns(UserWarning):
+        # if changed back, should set to 1.0
         model.regularizer = regularizer
 
         assert model.regularizer_strength == 1.0
@@ -1065,9 +1061,8 @@ class TestElasticNet:
 
     def test_regularizer_strength_none(self):
         """Assert regularizer strength handled appropriately."""
-        # if no strength given, should warn and set to 1.0
+        # if no strength given, set to (1.0, 0.5)
         regularizer = self.cls()
-        # with pytest.warns(UserWarning):
         model = nmo.glm.GLM(regularizer=regularizer)
 
         assert model.regularizer_strength == (1.0, 0.5)
@@ -1076,15 +1071,13 @@ class TestElasticNet:
         model.set_params(regularizer="UnRegularized", regularizer_strength=None)
         assert model.regularizer_strength is None
 
-        # if changed back, should warn and set to 1.0
-        # with pytest.warns(UserWarning):
+        # if changed back, set to (1.0, 0.5)
         model.regularizer = regularizer
 
         assert model.regularizer_strength == (1.0, 0.5)
 
     def test_regularizer_strength_float(self):
-        """Assert regularizer strength handled appropriately."""
-        # if no strength given, should warn and set to 1.0
+        """Assert regularizer ratio handled appropriately when only strength provided."""
         regularizer = self.cls()
         with pytest.warns(UserWarning):
             model = nmo.glm.GLM(regularizer=regularizer, regularizer_strength=0.6)
@@ -1227,10 +1220,10 @@ class TestElasticNet:
         """Test that penalized loss converges to the same value as statsmodels and the proximal operator."""
         jax.config.update("jax_enable_x64", True)
         # generate toy data
+        np.random.seed(123)
         num_samples, num_features = 1000, 5
         X = np.random.normal(size=(num_samples, num_features))  # design matrix
-        w = list(np.random.normal(size=(num_features,)))
-        # w = [0.5]  # define some weights
+        w = list(np.random.normal(size=(num_features,)))  # define some weights
         y = np.random.poisson(np.exp(X.dot(w)))  # observed counts
 
         # instantiate and fit GLM with ProximalGradient
@@ -1439,9 +1432,8 @@ class TestGroupLasso:
 
     def test_regularizer_strength_none(self):
         """Assert regularizer strength handled appropriately."""
-        # if no strength given, should warn and set to 1.0
+        # if no strength given, should set to 1.0
         regularizer = self.cls()
-        # with pytest.warns(UserWarning):
         model = nmo.glm.GLM(regularizer=regularizer)
 
         assert model.regularizer_strength == 1.0
@@ -1450,8 +1442,7 @@ class TestGroupLasso:
         model.set_params(regularizer="UnRegularized", regularizer_strength=None)
         assert model.regularizer_strength is None
 
-        # if changed back, should warn and set to 1.0
-        # with pytest.warns(UserWarning):
+        # if changed back, should set to 1.0
         model.regularizer = regularizer
 
         assert model.regularizer_strength == 1.0
