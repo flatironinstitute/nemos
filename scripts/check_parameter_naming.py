@@ -4,8 +4,8 @@ import logging
 import sys
 import types
 import itertools
+from typing import Optional
 
-import nemos as nmo
 
 # Pairs of parameter names that are lexically similar but intentionally allowed.
 
@@ -41,25 +41,28 @@ VALID_PAIRS = [
 ]
 
 
-def collect_similar_parameter_names(package, root_name=None, similarity_cutoff=0.8):
+
+def collect_similar_parameter_names(package, root_name: Optional[str] = None, similarity_cutoff=0.8, valid_pairs: Optional[set[str]]=None):
     """
     Recursively collect and group similar parameter names from functions and methods.
 
     This function traverses the given package and its submodules, extracting parameter
     names from all user-defined functions and methods. Parameter names that are
-    lexically similar (based on `difflib.get_close_matches`) are grouped together.
+    lexically similar (based on difflib.get_close_matches) are grouped together.
     This can be used to detect inconsistent naming conventions across a codebase.
 
     Parameters
     ----------
     package : module
-        The root package to analyze (e.g., `pynapple`).
+        The root package to analyze (e.g., pynapple).
     root_name : str, optional
         The dotted name of the root package. If not provided, it is inferred from
-        `package.__name__`.
+        package.__name__.
     similarity_cutoff : float, optional
         Similarity threshold between 0 and 1 used to group parameters based on
         lexical similarity.
+    valid_pairs :
+        Pairs of similar strings that are allowed as distinct parameter names.
 
     Returns
     -------
@@ -78,6 +81,9 @@ def collect_similar_parameter_names(package, root_name=None, similarity_cutoff=0
     """
     if root_name is None:
         root_name = package.__name__
+
+    if valid_pairs is None:
+        valid_pairs = VALID_PAIRS
 
     results = {}
     visited_ids = set()
@@ -126,7 +132,7 @@ def collect_similar_parameter_names(package, root_name=None, similarity_cutoff=0
                     continue
                 walk(member, f"{path_prefix}.{name}")
 
-    walk(package, package.__name__)
+    walk(package, root_name)
     return results
 
 
