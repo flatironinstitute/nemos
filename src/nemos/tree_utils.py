@@ -54,7 +54,7 @@ def _get_not_nan(array: jnp.ndarray) -> jnp.ndarray:
     return jax.numpy.all(~jnp.isnan(array), axis=range(1, array.ndim))
 
 
-def _get_valid_tree(tree: Any) -> jnp.ndarray:
+def _get_valid_tree(pytree: Any) -> jnp.ndarray:
     """
     Filter valid entries across all leaves in a pytree.
 
@@ -63,7 +63,7 @@ def _get_valid_tree(tree: Any) -> jnp.ndarray:
 
     Parameters
     ----------
-    tree :
+    pytree :
         A pytree with leaves as NDArrays sharing the same size for the first dimension.
 
     Returns
@@ -72,7 +72,7 @@ def _get_valid_tree(tree: Any) -> jnp.ndarray:
         while False indicates an invalid (NaN or infinite) entry.
     """
     valid = jax.tree_util.tree_leaves(
-        jax.tree_util.tree_map(lambda x: _get_not_inf(x) & _get_not_nan(x), tree)
+        jax.tree_util.tree_map(lambda x: _get_not_inf(x) & _get_not_nan(x), pytree)
     )
     return reduce(jnp.logical_and, valid)
 
