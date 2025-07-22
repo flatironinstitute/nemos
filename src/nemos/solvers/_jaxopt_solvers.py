@@ -43,33 +43,26 @@ class JaxoptWrapper(SolverAdapter[JaxoptSolverState, tuple[Params, JaxoptSolverS
 
         self.regularizer_strength = regularizer_strength
 
+        # Prepend the regularizer strength to args for proximal solvers.
+        # Methods of `jaxopt.ProximalGradient` expect `hyperparams_prox` before
+        # the objective function's arguments, while others do not need this.
+        self.hyperparams_prox = (self.regularizer_strength,) if self._proximal else ()
+
         self._solver = self._solver_cls(
             fun=self.fun,
             **solver_init_kwargs,
         )
 
-    def _extend_args(self, args):
-        """
-        Prepend the regularizer strength to args for proximal solvers.
-
-        Methods of `jaxopt.ProximalGradient` expect `hyperparams_prox` before
-        the objective function's arguments, while others do not need this.
-        """
-        if self._proximal:
-            return (self.regularizer_strength, *args)
-        else:
-            return args
-
     def init_state(self, init_params: Params, *args: Any) -> JaxoptSolverState:
-        return self._solver.init_state(init_params, *self._extend_args(args))
+        return self._solver.init_state(init_params, *self.hyperparams_prox, *args)
 
     def update(
         self, params: Params, state: JaxoptSolverState, *args: Any
     ) -> jaxopt.OptStep:
-        return self._solver.update(params, state, *self._extend_args(args))
+        return self._solver.update(params, state, *self.hyperparams_prox, *args)
 
     def run(self, init_params: Params, *args: Any) -> jaxopt.OptStep:
-        return self._solver.run(init_params, *self._extend_args(args))
+        return self._solver.run(init_params, *self.hyperparams_prox, *args)
 
 
 class JaxoptProximalGradient(StochasticMixin, JaxoptWrapper):
