@@ -4,7 +4,7 @@ import itertools
 import logging
 import sys
 import types
-from typing import Optional
+from typing import Dict, List, Optional
 
 # Pairs of parameter names that are lexically similar but intentionally allowed.
 
@@ -27,7 +27,7 @@ VALID_PAIRS = [
     *(
         {a, b}
         for (a, b) in itertools.combinations(
-            ["pytree", "pytree_1", "pytree_2", "pytree_x", "pytree_y"], r=2
+            ["pytree", "pytree_1", "pytree_2", "pytree_x", "pytree_y", "pytrees"], r=2
         )
     ),
     {"args", "kwargs"},
@@ -39,15 +39,50 @@ VALID_PAIRS = [
             ["array", "array_1", "array_2", "arrays"], r=2
         )
     ),
+    {"inputs", "n_inputs"},
+    {"func", "funcs"},
+    {"l_smooth", "l_smooth_max"},
+    {"attr_name", "var_name"},
 ]
+
+
+def handle_matches(
+    current_parameter: str,
+    current_path: str,
+    matches: List[str],
+    results: Dict,
+    valid_pairs: set[str],
+):
+    # a parameter name is valid if no matches or all matches in valid pairs
+    is_valid = all({match, current_parameter} in valid_pairs for match in matches)
+    if is_valid:
+        # if all matches are valid, create a new group for this parameter
+        results[current_parameter] = {
+            "unique_names": {current_parameter},
+            "info": [(current_parameter, current_path)],
+        }
+    else:
+        # if there is an invalid match, then add to existing result entry
+        for k, v in results.items():
+            # Otherwise, add the parameter to any existing groups where it has a match
+            #
+            # Note: We *intentionally allow overlapping groups*. If `current_parameter`
+            # is similar to multiple different parameter groups
+            # (e.g. "timin" may be similar to both "time" and "timing", but "time" and "timing" may
+            # belong to two different groups),
+            # it will be added to each of those groups.
+            is_in_category = any(match in v["unique_names"] for match in matches)
+            if is_in_category:
+                v["info"].append((current_parameter, current_path))
+                v["unique_names"].add(current_parameter)
 
 
 def collect_similar_parameter_names(
     package,
     root_name: Optional[str] = None,
     similarity_cutoff=0.8,
-    valid_pairs: Optional[set[str]] = None,
-):
+    valid_pairs: Optional[List[set[str]]] = None,
+) -> Dict[str, Dict]:
     """
     Recursively collect and group similar parameter names from functions and methods.
 
@@ -92,6 +127,8 @@ def collect_similar_parameter_names(
 
     results = {}
     visited_ids = set()
+    # set of all unique parameter names
+    unique_param_names = set()
 
     def process_function(func, path):
         if "jaxopt." in path:
@@ -101,15 +138,17 @@ def collect_similar_parameter_names(
             param_names = list(sig.parameters)
             for par in param_names:
                 if par in results:
-                    results[par].append((par, path))
+                    results[par]["unique_names"].add(par)
+                    results[par]["info"].append((par, path))
                     continue  # exact name already exists store
+
+                # match with all unique parameters
                 match = difflib.get_close_matches(
-                    par, results.keys(), n=1, cutoff=similarity_cutoff
+                    par, unique_param_names, n=100, cutoff=similarity_cutoff
                 )
-                if match and not {match[0], par} in VALID_PAIRS:
-                    results[match[0]].append((par, path))
-                else:
-                    results[par] = [(par, path)]
+                handle_matches(par, path, match, results, valid_pairs)
+                # add to unique params
+                unique_param_names.add(par)
         except Exception:
             pass  # some built-ins or extension modules may not support signature()
 
@@ -125,16 +164,12 @@ def collect_similar_parameter_names(
         elif inspect.isclass(obj):
             if getattr(obj, "__module__", "").startswith(root_name):
                 for name, member in inspect.getmembers(obj):
-                    if name.startswith("_"):
-                        continue
                     walk(member, f"{path_prefix}.{name}")
 
         elif isinstance(obj, types.ModuleType):
             if not getattr(obj, "__name__", "").startswith(root_name):
                 return  # external module, skip
             for name, member in inspect.getmembers(obj):
-                if name.startswith("_"):
-                    continue
                 walk(member, f"{path_prefix}.{name}")
 
     walk(package, root_name)
@@ -171,17 +206,27 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
     params = collect_similar_parameter_names(pkg, similarity_cutoff=args.threshold)
+    invalid = []
+    for name, occurrences in params.items():
+        if len(occurrences["unique_names"]) > 1:
+            invalid.append(name)
 
-    for name, occurrences in list(params.items()):
-        if all(o == name for o, _ in occurrences):
-            params.pop(name)
-
-    if params:
+    if invalid:
         msg_lines = ["Inconsistency in parameter naming found!\n"]
-        for name, occurrences in params.items():
+        for name in invalid:
             msg_lines.append(f"{name}:\n")
-            for param_name, path in occurrences:
-                msg_lines.append(f"\t- {path}: {param_name}\n")
+
+            # Group all function/method paths by each unique parameter name
+            grouped_info = {}
+            for param_name, path in sorted(params[name]["info"], key=lambda x: x[1]):
+                grouped_info.setdefault(param_name, []).append(path)
+
+            # Report each parameter variant and its locations
+            for param_name in sorted(params[name]["unique_names"]):
+                msg_lines.append(f"\t- {param_name}:\n")
+                for path in grouped_info.get(param_name, []):
+                    msg_lines.append(f"\t\t- {path}\n")
+
             msg_lines.append("\n")
 
         logger.warning("".join(msg_lines))
