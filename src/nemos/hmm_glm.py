@@ -110,11 +110,33 @@ def run_baum_welch(
     #print(xi_numer * transition_prob)
     return gammas, xis, ll, ll_norm, alphas, betas
 
-def run_m_step():
+def run_m_step(
+        gammas: Array,
+        xis: Array,
+        projection_weights: Array,
+        new_sess: Array | None = None
+        ):
+    
+    # Update Initial state probability eq. 13.18
+    tmp_pi = np.mean(gammas[:, new_sess], axis=1)
+    initial_prob = tmp_pi / np.sum(tmp_pi)
+
+    # Update Transition matrix eq. 13.19
+    transition_prob = xis / np.sum(xis, axis=1)
+
+    # Minimize negative log-likelihood to update GLM weights
+    projection_weights = minimize_likelihood()
+
+    return projection_weights
+
+def fit_hmm_glm():
     return None
 
 def compute_likelihood(): 
     # Nemos
+    return None
+
+def minimize_likelihood():
     return None
 
 class HMM: # What else should I create this with?

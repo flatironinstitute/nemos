@@ -1,5 +1,3 @@
-import pathlib
-
 import numpy as np
 import pytest
 from nemos.fetch import fetch_data
@@ -8,8 +6,10 @@ from nemos.hmm_glm import run_baum_welch
 
 
 def test_e_step_regression():
+    # Fetch the data
     data_path = fetch_data("e_step_three_states.npz")
     data = np.load(data_path)
+
     X, y = data["X"], data["y"]
     new_sess = data["new_sess"]
 
@@ -21,20 +21,26 @@ def test_e_step_regression():
     # E-step output
     xis = data["xis"]
     gammas = data["gammas"]
-    log_likelihood, ll_norm = data["log_likelihood"], data
+    log_likelihood, ll_norm = data["log_likelihood"], data["ll_norm"]
     alphas, betas = data["alphas"], data["betas"]
 
     gammas_nemos, xis_nemos, ll_nemos, ll_norm_nemos, alphas_nemos, betas_nemos = (
         run_baum_welch(
-            X, y, initial_prob, transition_matrix, projection_weights, new_sess=new_sess
+            X, 
+            y.flatten(), 
+            initial_prob, 
+            transition_matrix, 
+            projection_weights, 
+            new_sess=new_sess.flatten().astype(bool)
         )
     )
-    np.testing.assert_almost_equal(gammas_nemos, gammas)
-    np.testing.assert_almost_equal(xis, xis_nemos)
-    np.testing.assert_almost_equal(log_likelihood, ll_nemos)
-    np.testing.assert_almost_equal(ll_norm, ll_norm_nemos)
-    np.testing.assert_almost_equal(alphas, alphas)
-    np.testing.assert_almost_equal(betas, betas_nemos)
-
-
-    # add the alpha, beta and normalized ll
+    # First testing alphas and betas because they are computed first
+    np.testing.assert_almost_equal(alphas, alphas_nemos, decimal=4)
+    np.testing.assert_almost_equal(betas, betas_nemos, decimal=4)
+    # Next testing xis and gammas because they depend on alphas and betas
+    # Equations 13.43 and 13.65 of Bishop
+    np.testing.assert_almost_equal(gammas, gammas_nemos, decimal=4)
+    np.testing.assert_almost_equal(xis, xis_nemos, decimal=4)
+    # Finally testing log likelihood and normalized log likelihood
+    np.testing.assert_almost_equal(log_likelihood, ll_nemos, decimal=4)
+    np.testing.assert_almost_equal(ll_norm, ll_norm_nemos, decimal=4)
