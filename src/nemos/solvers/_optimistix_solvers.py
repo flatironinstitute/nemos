@@ -27,7 +27,13 @@ def _current_float_dtype() -> jnp.dtype:
 
 @dataclasses.dataclass
 class OptimistixConfig:
-    """Defaults for common arguments required by optimistix solvers."""
+    """
+    Collection of arguments required by and cached for methods of Optimistix solvers.
+
+    They rarely need to be overwritten, and the defaults here should suffice.
+    The user has the ability to overwrite them with `solver_kwargs`, and on the solver's construction
+    they are saved in `OptimistixAdapter.config` for later use: passing them to `optimistix.optimise`, `init`, `step`.
+    """
 
     # max number of steps
     max_steps: int = DEFAULT_MAX_STEPS
