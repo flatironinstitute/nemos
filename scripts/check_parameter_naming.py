@@ -4,6 +4,7 @@ import itertools
 import logging
 import sys
 import types
+from collections import defaultdict
 from typing import Dict, List, Optional
 
 # Pairs of parameter names that are lexically similar but intentionally allowed.
@@ -51,7 +52,7 @@ def handle_matches(
     current_path: str,
     matches: List[str],
     results: Dict,
-    valid_pairs: set[str],
+    valid_pairs: List[set[str]],
 ):
     # a parameter name is valid if no matches or all matches in valid pairs
     is_valid = all({match, current_parameter} in valid_pairs for match in matches)
@@ -146,6 +147,7 @@ def collect_similar_parameter_names(
                 match = difflib.get_close_matches(
                     par, unique_param_names, n=100, cutoff=similarity_cutoff
                 )
+                # add to result dictionary
                 handle_matches(par, path, match, results, valid_pairs)
                 # add to unique params
                 unique_param_names.add(par)
@@ -217,14 +219,14 @@ if __name__ == "__main__":
             msg_lines.append(f"{name}:\n")
 
             # Group all function/method paths by each unique parameter name
-            grouped_info = {}
+            grouped_info = defaultdict(list)
             for param_name, path in sorted(params[name]["info"], key=lambda x: x[1]):
-                grouped_info.setdefault(param_name, []).append(path)
+                grouped_info[param_name].append(path)
 
             # Report each parameter variant and its locations
             for param_name in sorted(params[name]["unique_names"]):
                 msg_lines.append(f"\t- {param_name}:\n")
-                for path in grouped_info.get(param_name, []):
+                for path in grouped_info[param_name]:
                     msg_lines.append(f"\t\t- {path}\n")
 
             msg_lines.append("\n")
