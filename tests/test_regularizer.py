@@ -1276,16 +1276,18 @@ class TestElasticNet:
         assert np.allclose(res.x, res_sm.params)
         assert np.allclose(glm_res, res_sm.params)
 
-    def test_lasso_pytree(self, poissonGLM_model_instantiation_pytree):
+    def test_elasticnet_pytree(self, poissonGLM_model_instantiation_pytree):
         """Check pytree X can be fit."""
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation_pytree
-        model.set_params(regularizer=nmo.regularizer.Lasso(), regularizer_strength=1.0)
+        model.set_params(
+            regularizer=nmo.regularizer.ElasticNet(), regularizer_strength=1.0
+        )
         model.solver_name = "ProximalGradient"
         model.fit(X, y)
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
     @pytest.mark.parametrize("reg_str", [0.001, 0.01, 0.1, 1, 10])
-    def test_lasso_pytree_match(
+    def test_elasticnet_pytree_match(
         self,
         reg_str,
         solver_name,
@@ -1298,10 +1300,10 @@ class TestElasticNet:
         X_array, y, model_array, _, _ = poissonGLM_model_instantiation
 
         model.set_params(
-            regularizer=nmo.regularizer.Lasso(), regularizer_strength=reg_str
+            regularizer=nmo.regularizer.ElasticNet(), regularizer_strength=reg_str
         )
         model_array.set_params(
-            regularizer=nmo.regularizer.Lasso(), regularizer_strength=reg_str
+            regularizer=nmo.regularizer.ElasticNet(), regularizer_strength=reg_str
         )
         model.solver_name = solver_name
         model_array.solver_name = solver_name
