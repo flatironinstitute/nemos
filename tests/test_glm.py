@@ -1856,27 +1856,17 @@ class TestGLMObservationModel:
             ).union(POPULATION_GLM_EXTRA_PARAMS)
 
             def get_expected_values(model):
+                vals = [
+                    model.feature_mask,
+                    model.observation_model.inverse_link_function,
+                    model.observation_model,
+                    model.regularizer,
+                    model.regularizer_strength,
+                    model.solver_kwargs,
+                    model.solver_name,
+                ]
                 if isinstance(model.observation_model, NegativeBinomialObservations):
-                    vals = [
-                        model.feature_mask,
-                        model.observation_model.inverse_link_function,
-                        model.observation_model.scale,
-                        model.observation_model,
-                        model.regularizer,
-                        model.regularizer_strength,
-                        model.solver_kwargs,
-                        model.solver_name,
-                    ]
-                else:
-                    vals = [
-                        model.feature_mask,
-                        model.observation_model.inverse_link_function,
-                        model.observation_model,
-                        model.regularizer,
-                        model.regularizer_strength,
-                        model.solver_kwargs,
-                        model.solver_name,
-                    ]
+                    vals = vals[:2] + [model.observation_model.scale] + vals[2:]
                 return vals
 
         else:
@@ -1887,25 +1877,16 @@ class TestGLMObservationModel:
             )
 
             def get_expected_values(model):
+                vals = [
+                    model.observation_model.inverse_link_function,
+                    model.observation_model,
+                    model.regularizer,
+                    model.regularizer_strength,
+                    model.solver_kwargs,
+                    model.solver_name,
+                ]
                 if isinstance(model.observation_model, NegativeBinomialObservations):
-                    vals = [
-                        model.observation_model.inverse_link_function,
-                        model.observation_model.scale,
-                        model.observation_model,
-                        model.regularizer,
-                        model.regularizer_strength,
-                        model.solver_kwargs,
-                        model.solver_name,
-                    ]
-                else:
-                    vals = [
-                        model.observation_model.inverse_link_function,
-                        model.observation_model,
-                        model.regularizer,
-                        model.regularizer_strength,
-                        model.solver_kwargs,
-                        model.solver_name,
-                    ]
+                    vals = vals[:1] + [model.observation_model.scale] + vals[1:]
                 return vals
 
         expected_values = get_expected_values(model)
