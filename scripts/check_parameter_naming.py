@@ -7,6 +7,20 @@ import itertools
 
 import nemos as nmo
 
+# Pairs of parameter names that are lexically similar but intentionally allowed.
+
+# During parameter name similarity checks, some pairs of names may be flagged
+# as potentially inconsistent due to their high string similarity. This list
+# enumerates such known, acceptable pairs that should be *excluded* from warnings.
+
+# Each pair is stored as a set of two strings (e.g., {"a", "a_1"}), and comparison
+# is done using set equality, i.e., order does not matter.
+
+# These typically include:
+# - semantically equivalent alternatives (e.g., {"conv_time_series", "time_series"})
+# - mirrored structures (e.g., {"inhib_a", "inhib_b"})
+# - systematic naming conventions (e.g., {"basis1", "basis2"})
+# - commonly used argument patterns (e.g., {"args", "kwargs"})
 VALID_PAIRS = [
     {"conv_time_series", "time_series"},
     {"inhib_a", "inhib_b"},
