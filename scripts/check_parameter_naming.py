@@ -44,6 +44,9 @@ VALID_PAIRS = [
     {"func", "funcs"},
     {"l_smooth", "l_smooth_max"},
     {"attr_name", "var_name"},
+    # jaxopt solvers use fun as kwarg => our SVRG must use fun too
+    # decorators usually have a "func" argument, therefore I'll allow both
+    {"func", "fun"},
 ]
 
 
