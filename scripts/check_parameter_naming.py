@@ -1,11 +1,10 @@
 import difflib
 import inspect
+import itertools
 import logging
 import sys
 import types
-import itertools
 from typing import Optional
-
 
 # Pairs of parameter names that are lexically similar but intentionally allowed.
 
@@ -25,24 +24,30 @@ VALID_PAIRS = [
     {"conv_time_series", "time_series"},
     {"inhib_a", "inhib_b"},
     {"excit_a", "excit_b"},
-    *({a, b} for (a, b) in
-        itertools.combinations(["pytree", "pytree_1", "pytree_2", "pytree_x", "pytree_y"], r=2)
+    *(
+        {a, b}
+        for (a, b) in itertools.combinations(
+            ["pytree", "pytree_1", "pytree_2", "pytree_x", "pytree_y"], r=2
+        )
     ),
     {"args", "kwargs"},
-    *({a, b} for (a, b) in
-      itertools.combinations(["basis", "basis1", "basis2"], r=2)
+    *({a, b} for (a, b) in itertools.combinations(["basis", "basis1", "basis2"], r=2)),
+    *({a, b} for (a, b) in itertools.combinations(["axis", "axis_1", "axis_2"], r=2)),
+    *(
+        {a, b}
+        for (a, b) in itertools.combinations(
+            ["array", "array_1", "array_2", "arrays"], r=2
+        )
     ),
-    *({a, b} for (a, b) in
-      itertools.combinations(["axis", "axis_1", "axis_2"], r=2)
-    ),
-    *({a, b} for (a, b) in
-      itertools.combinations(["array", "array_1", "array_2", "arrays"], r=2)
-    )
 ]
 
 
-
-def collect_similar_parameter_names(package, root_name: Optional[str] = None, similarity_cutoff=0.8, valid_pairs: Optional[set[str]]=None):
+def collect_similar_parameter_names(
+    package,
+    root_name: Optional[str] = None,
+    similarity_cutoff=0.8,
+    valid_pairs: Optional[set[str]] = None,
+):
     """
     Recursively collect and group similar parameter names from functions and methods.
 
