@@ -19,20 +19,16 @@ from ._optimistix_solvers import (
 from ._svrg import WrappedProxSVRG, WrappedSVRG
 
 solver_registry = {
-    # "GradientDescent": JaxoptGradientDescent,
-    "GradientDescent": OptaxOptimistixGradientDescent,
+    "GradientDescent": JaxoptGradientDescent,
     #
     "ProximalGradient": JaxoptProximalGradient,
-    # "ProximalGradient": OptaxOptimistixProximalGradient,
     #
     "LBFGS": OptaxOptimistixLBFGS,
     #
-    # "BFGS": JaxoptBFGS,
-    "BFGS": OptimistixBFGS,
+    "BFGS": JaxoptBFGS,
     #
     "SVRG": WrappedSVRG,
     "ProxSVRG": WrappedProxSVRG,
     #
-    # "NonlinearCG": JaxoptNonlinearCG,
-    "NonlinearCG": OptimistixNonlinearCG,
+    "NonlinearCG": JaxoptNonlinearCG,
 }
