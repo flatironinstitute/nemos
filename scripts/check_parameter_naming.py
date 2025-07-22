@@ -146,7 +146,14 @@ if __name__ == "__main__":
     import importlib
 
     parser = argparse.ArgumentParser(
-        description="Check for inconsistent parameter naming."
+        description="Detect similar but inconsistent parameter names across a package."
+    )
+    parser.add_argument(
+        "--package",
+        "-p",
+        type=str,
+        default="nemos",
+        help="Importable Python package to check (e.g., 'nemos', 'torch', 'my_module').",
     )
     parser.add_argument(
         "--threshold",
@@ -154,13 +161,6 @@ if __name__ == "__main__":
         type=float,
         default=0.8,
         help="Similarity threshold (between 0 and 1) for grouping parameter names (default: 0.8)",
-    )
-    parser.add_argument(
-        "--package",
-        "-p",
-        type=str,
-        default="nemos",
-        help="Package to check.",
     )
     args = parser.parse_args()
 
