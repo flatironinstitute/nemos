@@ -101,7 +101,7 @@ def get_valid_multitree(*pytree: Any) -> jnp.ndarray:
 def pytree_map_and_reduce(
     map_fn: Callable,
     reduce_fn: Callable,
-    *pytree: Any,
+    *pytrees: Any,
     is_leaf: Optional[Callable[[Any], bool]] = None,
 ):
     """
@@ -119,7 +119,7 @@ def pytree_map_and_reduce(
     reduce_fn :
         A function that reduces the mapped results. This function should take an
         iterable and return a single value.
-    *pytree :
+    *pytrees :
         One or more pytrees to which the map and reduce functions are applied.
     is_leaf :
         Callable, returns true if sub-tree is a leaf.
@@ -138,7 +138,7 @@ def pytree_map_and_reduce(
     >>> # Example usage
     >>> result_any = pytree_map_and_reduce(map_fn, any, pytree1, pytree2)
     """
-    cond_tree = jax.tree_util.tree_map(map_fn, *pytree, is_leaf=is_leaf)
+    cond_tree = jax.tree_util.tree_map(map_fn, *pytrees, is_leaf=is_leaf)
     # for some reason, tree_reduce doesn't work well with any.
     return reduce_fn(jax.tree_util.tree_leaves(cond_tree))
 
