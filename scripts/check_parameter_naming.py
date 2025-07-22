@@ -132,6 +132,7 @@ def collect_similar_parameter_names(package, root_name=None, similarity_cutoff=0
 
 if __name__ == "__main__":
     import argparse
+    import importlib
 
     parser = argparse.ArgumentParser(
         description="Check for inconsistent parameter naming."
@@ -141,16 +142,25 @@ if __name__ == "__main__":
         "-t",
         type=float,
         default=0.8,
-        help="Similarity threshold (between 0 and 1) for grouping parameter names (default: 0.9)",
+        help="Similarity threshold (between 0 and 1) for grouping parameter names (default: 0.8)",
+    )
+    parser.add_argument(
+        "--package",
+        "-p",
+        type=str,
+        default="nemos",
+        help="Package to check.",
     )
     args = parser.parse_args()
+
+    package = args.package
+    pkg = importlib.import_module(package)
 
     logger = logging.getLogger("check_parameter_naming")
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
-    params = collect_similar_parameter_names(nmo, similarity_cutoff=args.threshold)
+    params = collect_similar_parameter_names(pkg, similarity_cutoff=args.threshold)
 
-    # Filter out parameter names that occur only once
     for name, occurrences in list(params.items()):
         if all(o == name for o, _ in occurrences):
             params.pop(name)
