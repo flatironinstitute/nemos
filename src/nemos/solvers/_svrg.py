@@ -107,7 +107,7 @@ class ProxSVRG:
 
     def __init__(
         self,
-        func: Callable,
+        fun: Callable,
         prox: Callable,
         maxiter: int = 10_000,
         key: Optional[KeyArrayLike] = None,
@@ -115,7 +115,7 @@ class ProxSVRG:
         tol: float = 1e-3,
         batch_size: int = 1,
     ):
-        self.fun = func
+        self.fun = fun
         self.maxiter = maxiter
         self.key = key
         self.stepsize = stepsize
@@ -643,7 +643,7 @@ class SVRG(ProxSVRG):
 
     def __init__(
         self,
-        func: Callable,
+        fun: Callable,
         maxiter: int = 10_000,
         key: Optional[KeyArrayLike] = None,
         stepsize: float = 1e-3,
@@ -651,7 +651,7 @@ class SVRG(ProxSVRG):
         batch_size: int = 1,
     ):
         super().__init__(
-            func,
+            fun,
             prox_none,
             maxiter,
             key,
