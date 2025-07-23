@@ -194,6 +194,15 @@ class BaseRegressor(Base, abc.ABC):
                     "|Unused parameter `regularizer_strength`.*",
                 )
                 super().set_params(regularizer=reg)
+        # if regularizer is changed without specifying a regularizer_strength, reset the strength
+        elif ("regularizer" in params) and (self.regularizer_strength is not None):
+            warnings.warn(
+                "Caution: Changing the regularizer has reset the regularizer_strength to its default value."
+            )
+            reg = params.pop("regularizer")
+            # override _regularizer_strength to None to avoid setting the default before regularizer is changed
+            self._regularizer_strength = None
+            super().set_params(regularizer=reg)
 
         return super().set_params(**params)
 

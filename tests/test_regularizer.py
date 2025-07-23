@@ -160,6 +160,74 @@ def test_item_assignment_allowed_solvers(regularizer):
         regularizer.allowed_solvers[0] = "my-favourite-solver"
 
 
+@pytest.mark.parametrize(
+    "regularizer, regularizer_strength",
+    [
+        ("Ridge", 2.0),
+        ("Lasso", 2.0),
+        ("GroupLasso", 2.0),
+        ("ElasticNet", (2.0, 0.7)),
+    ],
+)
+def test_set_params_order_change_regularizer(regularizer, regularizer_strength):
+    """Test that set_params() when changing regularizer and regularizer_strength regardless of order."""
+    # start with unregularized
+    model = nmo.glm.GLM()
+    assert model.regularizer_strength is None
+    assert isinstance(model.regularizer, nmo.regularizer.UnRegularized)
+
+    # set regularizer first
+    model.set_params(regularizer=regularizer, regularizer_strength=regularizer_strength)
+    assert model.regularizer_strength == regularizer_strength
+    assert model.regularizer.__class__.__name__ == regularizer
+
+    # set regularizer_strength first
+    model.set_params(regularizer="UnRegularized")
+    assert model.regularizer_strength is None
+
+    model.set_params(regularizer_strength=regularizer_strength, regularizer=regularizer)
+    assert model.regularizer_strength == regularizer_strength
+    assert model.regularizer.__class__.__name__ == regularizer
+
+
+@pytest.mark.parametrize(
+    "regularizer, regularizer_strength",
+    [
+        ("Ridge", 2.0),
+        ("Lasso", 2.0),
+        ("GroupLasso", 2.0),
+        ("ElasticNet", (2.0, 0.7)),
+        ("UnRegularized", None),
+    ],
+)
+@pytest.mark.parametrize(
+    "regularizer2, regularizer2_default",
+    [
+        ("Ridge", 1.0),
+        ("Lasso", 1.0),
+        ("GroupLasso", 1.0),
+        ("ElasticNet", (1.0, 0.5)),
+        ("UnRegularized", None),
+    ],
+)
+def test_change_regularizer_reset_strength(
+    regularizer,
+    regularizer_strength,
+    regularizer2,
+    regularizer2_default,
+):
+    """Test that set_params() when changing regularizer and regularizer_strength regardless of order."""
+    model = nmo.glm.GLM(
+        regularizer=regularizer, regularizer_strength=regularizer_strength
+    )
+    assert model.regularizer_strength == regularizer_strength
+    assert model.regularizer.__class__.__name__ == regularizer
+
+    # check that regularizer_strength is reset when changing regularizer
+    model.set_params(regularizer=regularizer2)
+    assert model.regularizer_strength == regularizer2_default
+
+
 class TestUnRegularized:
     cls = nmo.regularizer.UnRegularized
 
@@ -1115,6 +1183,13 @@ class TestElasticNet:
                 pytest.raises(
                     ValueError,
                     match="Could not convert the regularizer strength and regularizer ratio",
+                ),
+            ),
+            (
+                (1.0, 0.5, 0.1),
+                pytest.raises(
+                    ValueError,
+                    match="regularizer_strength must be a tuple of two floats",
                 ),
             ),
         ],

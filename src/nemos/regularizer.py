@@ -105,7 +105,7 @@ class Regularizer(Base, abc.ABC):
         else:
             try:
                 # force conversion to float to prevent weird GPU issues
-                strength = jax.tree_util.tree_map(float, strength)
+                strength = float(strength)
             except ValueError:
                 # raise a more detailed ValueError
                 raise ValueError(
@@ -462,7 +462,7 @@ class ElasticNet(Regularizer):
         elif hasattr(strength, "__len__") is False:
             try:
                 # force conversion to float to prevent weird GPU issues
-                strength = (jax.tree_util.tree_map(float, strength), 0.5)
+                strength = (float(strength), 0.5)
                 warnings.warn(
                     UserWarning(
                         "Caution: The regularizer strength been set, but no value was passed for the regularizer "
@@ -478,15 +478,17 @@ class ElasticNet(Regularizer):
         else:
             try:
                 # force conversion to float to prevent weird GPU issues
-                strength = (
-                    jax.tree_util.tree_map(float, strength[0]),
-                    jax.tree_util.tree_map(float, strength[1]),
-                )
+                strength = jax.tree_util.tree_map(float, strength)
             except ValueError:
                 # raise a more detailed ValueError
                 raise ValueError(
                     f"Could not convert the regularizer strength and regularizer ratio: {strength} to a tuple of "
                     "floats."
+                )
+            if len(strength) != 2:
+                raise ValueError(
+                    f"Invalid regularization strength and regularizer ratio: {strength}. regularizer_strength must "
+                    "be a tuple of two floats."
                 )
             if (strength[1] > 1) | (strength[1] < 0):
                 raise ValueError(
