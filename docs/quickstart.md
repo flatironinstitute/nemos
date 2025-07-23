@@ -297,7 +297,7 @@ glm = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.1)
 
 ```
 
-For [ElasticNet](nemos.regularizer.ElasticNet) regularization, you can also specify a regularizer ratio, specifies the balance between $L_1$ and $L_2$ regularization, where a ratio of 1 is equivalent to $L_1$ (Lasso) and a value of 0 is equivalent to $L_2$ (Ridge). This can be set by passing a tuple of values to `regularizer_strength`, where the first value is the strength and the second is the ratio.
+For [ElasticNet](nemos.regularizer.ElasticNet) regularization, you can also set a regularizer ratio, specifying the balance between $L_1$ and $L_2$ regularization, where a ratio of 1 is equivalent to $L_1$ (Lasso) and a value of 0 is equivalent to $L_2$ (Ridge). This can be set by passing a tuple of values to `regularizer_strength`, where the first value is the strength and the second is the ratio.
 
 ```{code-cell} ipython3
 

@@ -424,7 +424,7 @@ class ElasticNet(Regularizer):
 
         Returns
         -------
-        float
+        :
             The Elastic Net penalization value.
         """
 
