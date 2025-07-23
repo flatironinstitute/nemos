@@ -7,8 +7,8 @@ with various optimization methods, and they can be applied depending on the mode
 """
 
 import abc
-from typing import Callable, Tuple, Union
 import warnings
+from typing import Callable, Tuple, Union
 
 import jax
 import jax.numpy as jnp
