@@ -84,7 +84,7 @@ def handle_matches(
 def collect_similar_parameter_names(
     package,
     root_name: Optional[str] = None,
-    similarity_cutoff=0.8,
+    similarity_cutoff: float = 0.8,
     valid_pairs: Optional[List[set[str]]] = None,
 ) -> Dict[str, Dict]:
     """
