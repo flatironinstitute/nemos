@@ -75,9 +75,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Make .sh executable
-        run: chmod +x scripts/prevent_absolute_links_to_docs.sh
-
       - name: Check links
         run: ./scripts/prevent_absolute_links_to_docs.sh
 
@@ -90,9 +87,6 @@ jobs:
       - name: Install markdown-link-check
         run: npm install -g markdown-link-check
 
-      - name: Make .sh executable
-        run: chmod +x scripts/check_markdown_links.sh
-
       - name: Check relative links in root Markdown files
         run: ./scripts/check_markdown_links.sh relative
 
@@ -104,9 +98,6 @@ jobs:
 
       - name: Install markdown-link-check
         run: npm install -g markdown-link-check
-
-      - name: Make .sh executable
-        run: chmod +x scripts/check_markdown_links.sh
 
       - name: Check external links in root Markdown files
         run: ./scripts/check_markdown_links.sh external
