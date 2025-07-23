@@ -118,6 +118,7 @@ class TreeUtilTest(test_util.JaxoptTestCase):
 
 
   def test_tree_div(self):
+    jax.config.update("jax_enable_x64", True)
     expected = (self.tree_A[0] / self.tree_B[0], self.tree_A[1] / self.tree_B[1])
     got = tree_util.tree_div(self.tree_A, self.tree_B)
     self.assertAllClose(expected, got)

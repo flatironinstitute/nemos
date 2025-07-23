@@ -246,6 +246,7 @@ def device_under_test():
 
 def _assert_numpy_allclose(a, b, atol=None, rtol=None, err_msg=''):
   if a.dtype == b.dtype == float0:
+    import numpy as np
     np.testing.assert_array_equal(a, b, err_msg=err_msg)
     return
   #a = a.astype(np.float32) if a.dtype == _dtypes.bfloat16 else a
