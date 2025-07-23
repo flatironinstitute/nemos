@@ -53,6 +53,7 @@ class PolyakSgdTest(test_util.JaxoptTestCase):
 
   @parameterized.product(momentum=[0.0, 0.9], sps_variant=['SPS_max', 'SPS+'])
   def test_logreg_with_intercept_manual_loop(self, momentum, sps_variant):
+    jax.config.update("jax_enable_x64", True)
     x, y = datasets.make_classification(n_samples=10, n_features=5, n_classes=3,
                                         n_informative=3, random_state=0)
     data = (x, y)
