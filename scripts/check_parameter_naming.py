@@ -57,6 +57,40 @@ def handle_matches(
     results: Dict,
     valid_pairs: List[set[str]],
 ):
+    """
+    Handle matched parameter names by updating or creating groups in the results dictionary.
+
+    A parameter is considered valid if it has no matches or if all its matches appear in
+    `valid_pairs` as a set with the current parameter. Valid parameters are added as new entries
+    in the results dictionary. Invalid parameters (i.e., those with partial or conflicting matches)
+    are added to existing groups if any of their matches are already present in those groups.
+
+    Note: This function allows overlapping groups. If `current_parameter` is similar to multiple
+    parameter groups (e.g., "timin" may match both "time" and "timing"), it will be added to each
+    of the matching groups independently.
+
+    Parameters
+    ----------
+    current_parameter :
+        The name of the parameter currently being processed.
+
+    current_path :
+        The path or context in which the parameter was found (e.g., a file or data structure path).
+
+    matches :
+        A list of other parameter names that are similar to ``current_parameter``.
+
+    results :
+        A dictionary of grouped parameters. Keys are group names, and values are dictionaries
+        containing:
+            - "unique_names": a set of parameter names in the group.
+            - "info": a list of (parameter, path) tuples for matched entries.
+
+    valid_pairs :
+        A list of valid two-element sets. Each set contains a pair of parameter names that are
+        considered equivalent or compatible.
+
+    """
     # a parameter name is valid if no matches or all matches in valid pairs
     is_valid = all({match, current_parameter} in valid_pairs for match in matches)
     if is_valid:
