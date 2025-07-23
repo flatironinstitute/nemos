@@ -227,6 +227,10 @@ def test_change_regularizer_reset_strength(
     model.set_params(regularizer=regularizer2)
     assert model.regularizer_strength == regularizer2_default
 
+    # make sure there is no conflict when setting back
+    model.set_params(regularizer=regularizer, regularizer_strength=regularizer_strength)
+    assert model.regularizer_strength == regularizer_strength
+
 
 class TestUnRegularized:
     cls = nmo.regularizer.UnRegularized

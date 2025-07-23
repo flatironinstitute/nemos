@@ -182,27 +182,30 @@ class BaseRegressor(Base, abc.ABC):
 
     def set_params(self, **params: Any):
         """Manage warnings in case of multiple parameter settings."""
-        # if both regularizer and regularizer_strength are set, then only
-        # warn in case the strength is not expected for the regularizer type
-        if "regularizer" in params and "regularizer_strength" in params:
-            reg = params.pop("regularizer")
-            with warnings.catch_warnings():
-                warnings.filterwarnings(
-                    "ignore",
-                    category=UserWarning,
-                    message="Caution: regularizer strength.*"
-                    "|Unused parameter `regularizer_strength`.*",
-                )
-                super().set_params(regularizer=reg)
-        # if regularizer is changed without specifying a regularizer_strength, reset the strength
-        elif ("regularizer" in params) and (self.regularizer_strength is not None):
-            warnings.warn(
-                "Caution: Changing the regularizer has reset the regularizer_strength to its default value."
-            )
-            reg = params.pop("regularizer")
-            # override _regularizer_strength to None to avoid setting the default before regularizer is changed
+        if "regularizer" in params:
+            # override _regularizer_strength to None to avoid conficts between regularizers
             self._regularizer_strength = None
-            super().set_params(regularizer=reg)
+
+            if "regularizer_strength" in params:
+                # if both regularizer and regularizer_strength are set, then only
+                # warn in case the strength is not expected for the regularizer type
+                reg = params.pop("regularizer")
+                with warnings.catch_warnings():
+                    warnings.filterwarnings(
+                        "ignore",
+                        category=UserWarning,
+                        message="Caution: regularizer strength.*"
+                        "|Unused parameter `regularizer_strength`.*",
+                    )
+                    super().set_params(regularizer=reg)
+
+            elif self.regularizer_strength is not None:
+                # if regularizer is changed without specifying a regularizer_strength, warn and reset the strength
+                warnings.warn(
+                    "Caution: Changing the regularizer has reset the regularizer_strength to its default value."
+                )
+                reg = params.pop("regularizer")
+                super().set_params(regularizer=reg)
 
         return super().set_params(**params)
 
