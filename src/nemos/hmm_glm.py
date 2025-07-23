@@ -7,6 +7,7 @@ import jax
 import jax.numpy as jnp
 from functools import partial
 Array = NDArray | jax.numpy.ndarray
+jax.config.update("jax_enable_x64", True) 
 
 class HMM_GLM():
     # Currently assuming that it will always be a logistic link as its the case for Bernoulli
@@ -78,8 +79,8 @@ class HMM_GLM():
         tmpy = self.observation_model.inverse_link_function(projection_weights.T @ X.T)
         
         # Data likelihood p(y|z) from emissions model using NeMoS
-        py_z = np.exp(-
-            self.observation_model._negative_log_likelihood(
+        py_z = np.exp(
+            self.observation_model.log_likelihood(
                 y,
                 tmpy,
                aggregate_sample_scores = partial(lambda x: x)
