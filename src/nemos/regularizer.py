@@ -18,7 +18,7 @@ from nemos.third_party.jaxopt import jaxopt
 
 from . import tree_utils
 from .base_class import Base
-from .proximal_operator import prox_group_lasso
+from .proximal_operator import prox_elastic_net, prox_group_lasso
 from .typing import DESIGN_INPUT_TYPE, ProximalOperator
 from .utils import format_repr
 
@@ -339,8 +339,8 @@ class ElasticNet(Regularizer):
     The elasitc net penalty is defined as:
 
     .. math::
-        P(\beta) = \alpha * ((1 - \lambda) * \frac{1}{2} ||\beta||_{\ell_2}^2 +
-        \lambda * ||\beta||_{\ell_1}
+        P(\beta) = \alpha ((1 - \lambda) \frac{1}{2} ||\beta||_{\ell_2}^2 +
+        \lambda ||\beta||_{\ell_1}
 
     where :math:`\alpha` is the regularizer strength, and :math:`\lambda` is the regularizer ratio.
     The regularizer ratio controls the balance between L1 (Lasso) and L2 (Ridge)
@@ -396,7 +396,7 @@ class ElasticNet(Regularizer):
             # structure
             lam = jax.tree_util.tree_map(lambda x: lam * jnp.ones_like(x), Ws)
             gam = jax.tree_util.tree_map(lambda x: gam * jnp.ones_like(x), Ws)
-            return jaxopt.prox.prox_elastic_net(Ws, (lam, gam), scaling=scaling), bs
+            return prox_elastic_net(Ws, (lam, gam), scaling=scaling), bs
 
         return prox_op
 
@@ -409,8 +409,8 @@ class ElasticNet(Regularizer):
         Compute the Elastic Net penalization for given parameters. The elasitc net penalty is defined as:
 
         .. math::
-            P(\beta) = \alpha * ((1 - \lambda) * \frac{1}{2} ||\beta||_{\ell_2}^2 +
-            \lambda * ||\beta||_{\ell_1}
+            P(\beta) = \alpha ((1 - \lambda) \frac{1}{2} ||\beta||_{\ell_2}^2 +
+            \lambda ||\beta||_{\ell_1}
 
         where :math:`\alpha` is the regularizer strength, and :math:`\lambda` is the regularizer ratio.
         The regularizer ratio controls the balance between L1 (Lasso) and L2 (Ridge)
