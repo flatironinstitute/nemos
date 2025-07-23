@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from nemos.fetch import fetch_data
 
-from nemos.hmm_glm import run_baum_welch
+from nemos.hmm_glm import HMM_GLM
 
 
 def test_e_step_regression():
@@ -24,8 +24,11 @@ def test_e_step_regression():
     log_likelihood, ll_norm = data["log_likelihood"], data["ll_norm"]
     alphas, betas = data["alphas"], data["betas"]
 
+    hmm = HMM_GLM()
+
+
     gammas_nemos, xis_nemos, ll_nemos, ll_norm_nemos, alphas_nemos, betas_nemos = (
-        run_baum_welch(
+        hmm.run_baum_welch(
             X, 
             y.flatten(), 
             initial_prob, 
@@ -34,6 +37,7 @@ def test_e_step_regression():
             new_sess=new_sess.flatten().astype(bool)
         )
     )
+    print( y.flatten().shape)
     # First testing alphas and betas because they are computed first
     np.testing.assert_almost_equal(alphas, alphas_nemos, decimal=4)
     np.testing.assert_almost_equal(betas, betas_nemos, decimal=4)

@@ -1,10 +1,11 @@
+from scipy.special import logsumexp
 import numpy as np
 from numpy.typing import NDArray
 from typing import Callable
 from nemos.observation_models import BernoulliObservations
 import jax
 import jax.numpy as jnp
-
+from functools import partial
 Array = NDArray | jax.numpy.ndarray
 
 class HMM_GLM():
@@ -12,9 +13,8 @@ class HMM_GLM():
     def __init__(
         self,
     ):
-        self.inverse_link_function = BernoulliObservations.inverse_link_function
-        self.negative_log_likelihood = BernoulliObservations._negative_log_likelihood
-    
+        self.observation_model = BernoulliObservations()
+
     def run_baum_welch(
             self,
             X: Array, 
@@ -34,14 +34,12 @@ class HMM_GLM():
         X : 
             (n_time_bins x n_features) design matrix
         y : 
-            (1 x n_time_bins) observations
-        model :
-            GLM-HMM model object containing the parameters
-        .w :
+            (n_time_bins,) observations
+        transition_prob : .w
             (n_features x n_states) latent state GLM weights
-        .pi :
+        initial_prob : .pi
             (n_states x 1) initial latent state probability
-        .A :
+        projection_weights : .A
             (n_states x n_states) latent state transition matrix
         new_sess :
             logical array with 1s denoting the start of a new session. If unspecified or empty, treats the full set of trials as a single session.
@@ -71,21 +69,23 @@ class HMM_GLM():
         # there is no hard coding of the observation model
 
         # okay will just to as sara did and then use a function to compute the likelihood later
-        #tmpy = 1 / (1 + np.exp(-projection_weights.T @ X.T))  # f(projection_weights, x[:,0])
-        #py_z = y * tmpy + (1 - y) * (1 - tmpy)  # p(y|z).   negative log likelihood from bernoulli without aggregation
-        tmpy = self.inverse_link_function(-projection_weights.T @ X.T)
+        tmpy_old = 1 / (1 + np.exp(-projection_weights.T @ X.T))  # f(projection_weights, x[:,0])
 
-        py_z = np.exp(
-            self.negative_log_likelihood(
-                self,
+        py_z_old = y * tmpy_old + (1 - y) * (1 - tmpy_old)  # p(y|z).   negative log likelihood from bernoulli without aggregation
+        print("prev", py_z_old)
+
+         # Firing rate
+        tmpy = self.observation_model.inverse_link_function(projection_weights.T @ X.T)
+        
+        # Data likelihood p(y|z) from emissions model using NeMoS
+        py_z = np.exp(-
+            self.observation_model._negative_log_likelihood(
                 y,
                 tmpy,
-                aggregate_sample_scores = jnp.identity
+               aggregate_sample_scores = partial(lambda x: x)
             )
         )   
-
-        # Data likelihood p(y|z) from emissions model using NeMoS
-
+        print("new", py_z)
 
         ###### Forward recursion to compute alphas ######
         # Initialize variables
