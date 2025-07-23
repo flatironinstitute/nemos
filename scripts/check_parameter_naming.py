@@ -100,7 +100,7 @@ def collect_similar_parameter_names(
     package : module
         The root package to analyze (e.g., pynapple).
     root_name : str, optional
-        The dotted name of the root package. If not provided, it is inferred from
+        The dotted name of the root package. If ``None``, it is inferred from
         package.__name__.
     similarity_cutoff : float, optional
         Similarity threshold between 0 and 1 used to group parameters based on
