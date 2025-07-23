@@ -1178,9 +1178,7 @@ class NegativeBinomialObservations(Observations):
 
     **Important:** the scale parameter must be estimated from the data for accurately capturing the
     dispersion. In the context of NeMoS GLM, estimation can be achieved by cross-validating the
-    ``scale`` parameter. One may use scikit-learn
-    `GridSearchCV <../../how_to_guide/plot_06_sklearn_pipeline_cv_demo.html>`_
-    for example.
+    ``scale`` parameter. One may use scikit-learn :ref:`GridSearchCV <sklearn-how-to>` for example.
 
     The variance of the Negative Binomial distribution under this parameterization is:
 
