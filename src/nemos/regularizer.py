@@ -406,7 +406,9 @@ class ElasticNet(Regularizer):
         net_regularization: Tuple[float, float],
     ) -> jnp.ndarray:
         r"""
-        Compute the Elastic Net penalization for given parameters. The elasitc net penalty is defined as:
+        Compute the Elastic Net penalization for given parameters.
+
+        The elastic net penalty is defined as:
 
         .. math::
             P(\beta) = \alpha ((1 - \lambda) \frac{1}{2} ||\beta||_{\ell_2}^2 +
