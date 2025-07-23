@@ -26,3 +26,4 @@ we temporarily vendor JAXopt's last release (0.8.5) until the transition is succ
 - `isotonic.py`: Removed numba njit, which is now incompatible with JAX buffer inputs. Removed `import warnings`.
 - Enabled `float64` in `polyak_sgd_test.py::PolyakSgdTest::test_logreg_with_intercept_manual_loop`, a  solver NeMoS doesn't use and that was not converging consistently.
 - Hardcoded tol `1e-8` in `test_tree_div`  that is failing on python 3.11.
+- Enabled `float64` precision in projection testing or skipped type checking in `test_projection_simplex`, `test_projection_l1_sphere`, `_check_projection_ball`, `test_projection_l1_ball`, `test_projection_l2_sphere`, `test_projection_hyperplane`, `test_projection_polyhedron`, `test_projection_transport` from `projection_test.py`.

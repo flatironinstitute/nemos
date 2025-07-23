@@ -77,11 +77,12 @@ class ProjectionTest(test_util.JaxoptTestCase):
 
 
   def test_projection_simplex(self):
+    jax.config.update("jax_enable_x64", True)
     rng = onp.random.RandomState(0)
 
     for scale in [1.0, 1e9]:
       for _ in range(10):
-        x = scale * rng.randn(50).astype(onp.float32)
+        x = scale * rng.randn(50).astype(onp.float64)
 
         p = projection.projection_simplex(x)
         self.assertAllClose(jnp.sum(p), 1.0)
@@ -162,11 +163,11 @@ class ProjectionTest(test_util.JaxoptTestCase):
     x = rng.randn(50).astype(onp.float32)
 
     p = projection.projection_l1_sphere(x)
-    self.assertAllClose(jnp.sum(jnp.abs(p)), 1.0)
+    self.assertAllClose(jnp.sum(jnp.abs(p)), 1.0, check_dtypes=False)
 
     radius = 3.21
     p = projection.projection_l1_sphere(x, radius)
-    self.assertAllClose(jnp.sum(jnp.abs(p)), radius)
+    self.assertAllClose(jnp.sum(jnp.abs(p)), radius, check_dtypes=False)
 
   def _check_projection_ball(self, ball_fun, sphere_fun, norm, check_pytree):
     rng = onp.random.RandomState(0)
@@ -177,19 +178,19 @@ class ProjectionTest(test_util.JaxoptTestCase):
     # x is already in the ball
     big_radius = norm_value * 2
     p = ball_fun(x, big_radius)
-    self.assertArraysAllClose(x, p)
+    self.assertArraysAllClose(x, p, check_dtypes=False)
     J = jax.jacrev(ball_fun)(x, big_radius)
     self.assertArraysAllClose(J, jnp.eye(len(x)))
     J = jax.jacrev(ball_fun, argnums=1)(x, big_radius)
-    self.assertArraysAllClose(J, jnp.zeros_like(x))
+    self.assertArraysAllClose(J, jnp.zeros_like(x), check_dtypes=False)
 
     # x is at the boundary of the ball
     p = ball_fun(x, norm_value)
-    self.assertArraysAllClose(x, p)
+    self.assertArraysAllClose(x, p, check_dtypes=False)
     J = jax.jacrev(ball_fun)(x, norm_value)
-    self.assertArraysAllClose(J, jnp.eye(len(x)))
+    self.assertArraysAllClose(J, jnp.eye(len(x)), check_dtypes=False)
     J = jax.jacrev(ball_fun, argnums=1)(x, norm_value)
-    self.assertArraysAllClose(J, jnp.zeros_like(x))
+    self.assertArraysAllClose(J, jnp.zeros_like(x), check_dtypes=False)
 
     # x is outside of the ball
     small_radius = norm_value / 2
@@ -220,11 +221,11 @@ class ProjectionTest(test_util.JaxoptTestCase):
     x = rng.randn(50).astype(onp.float32)
 
     p = projection.projection_l2_sphere(x)
-    self.assertAllClose(jnp.sum(p ** 2), 1.0)
+    self.assertAllClose(jnp.sum(p ** 2), 1.0, check_dtypes=False)
 
     radius = 3.21
     p = projection.projection_l2_sphere(x, radius)
-    self.assertAllClose(jnp.sqrt(jnp.sum(p ** 2)), radius)
+    self.assertAllClose(jnp.sqrt(jnp.sum(p ** 2)), radius, check_dtypes=False)
 
   def test_projection_l2_ball(self):
     self._check_projection_ball(projection.projection_l2_ball,
@@ -251,13 +252,13 @@ class ProjectionTest(test_util.JaxoptTestCase):
     b = 1.0
 
     p = projection.projection_hyperplane(x, (a, b))
-    self.assertAllClose(jnp.dot(a, p), b)
+    self.assertAllClose(jnp.dot(a, p), b, check_dtypes=False)
 
     tree_x = (1.0, {"k1": 2.0, "k2": (2.0, 1.0)}, 2.0)
     tree_a = (1.0, {"k1": 1.0, "k2": (1.0, 0.0)}, 1.0)
     p = projection.projection_hyperplane(tree_x, (tree_a, b))
     expected_p = (-0.5, {"k1": 0.5, "k2": (0.5, 1.0)}, 0.5)
-    self.assertAllClose(expected_p, p)
+    self.assertAllClose(expected_p, p, check_dtypes=False)
 
   def test_projection_halfspace(self):
     # For b very large, halfplane projection of x is x.
@@ -295,13 +296,14 @@ class ProjectionTest(test_util.JaxoptTestCase):
     self.assertEqual(jac_b.shape, (5, 3))
 
   def test_projection_polyhedron(self):
+    jax.config.update("jax_enable_x64", True)
     rng = onp.random.RandomState(0)
 
-    x = rng.randn(5).astype(onp.float32)
-    A = rng.randn(3, 5).astype(onp.float32)
-    b = rng.randn(3).astype(onp.float32)
-    G = rng.randn(2, 5).astype(onp.float32)
-    h = rng.randn(2).astype(onp.float32)
+    x = rng.randn(5).astype(onp.float64)
+    A = rng.randn(3, 5).astype(onp.float64)
+    b = rng.randn(3).astype(onp.float64)
+    G = rng.randn(2, 5).astype(onp.float64)
+    h = rng.randn(2).astype(onp.float64)
     params = (A, b, G, h)
 
     p = projection.projection_polyhedron(x, params)
@@ -373,11 +375,11 @@ class ProjectionTest(test_util.JaxoptTestCase):
 
     p = projection.projection_simplex(x)
     p2 = projection.projection_box_section(x, params)
-    self.assertArraysAllClose(p, p2, atol=1e-4)
+    self.assertArraysAllClose(p, p2, atol=1e-4, check_dtypes=False)
 
     J = jax.jacrev(projection.projection_simplex)(x)
     J2 = jax.jacrev(projection.projection_box_section)(x, params)
-    self.assertArraysAllClose(J, J2)
+    self.assertArraysAllClose(J, J2, check_dtypes=False)
 
   def _sinkhorn(self, cost_matrix, marginals_a, marginals_b, maxiter=1000):
     eps = 1.0
@@ -392,6 +394,7 @@ class ProjectionTest(test_util.JaxoptTestCase):
     return exp_f[:, onp.newaxis] * K * exp_g
 
   def test_projection_transport(self):
+    jax.config.update("jax_enable_x64", True)
     rng = onp.random.RandomState(0)
     sim_matrix = rng.rand(5, 6)
     marginals_a = rng.rand(5)
