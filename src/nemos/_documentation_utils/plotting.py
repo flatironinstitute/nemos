@@ -894,7 +894,7 @@ def plot_head_direction_tuning(
 
 def plot_head_direction_tuning_model(
     tuning_curves: pd.DataFrame,
-    predicted_firing_rate: nap.TsdFrame,
+    predicted_rate: nap.TsdFrame,
     spikes: nap.TsGroup,
     angle: nap.Tsd,
     threshold_hz: int = 1,
@@ -910,7 +910,7 @@ def plot_head_direction_tuning_model(
     ----------
     tuning_curves:
         The tuning curve dataframe.
-    predicted_firing_rate:
+    predicted_rate:
         The time series of the predicted rate.
     spikes:
         The spike times.
@@ -979,7 +979,7 @@ def plot_head_direction_tuning_model(
     )
     ax.set_title("Neural Firing Rate")
 
-    fr = predicted_firing_rate.restrict(plot_ep).d
+    fr = predicted_rate.restrict(plot_ep).d
     fr = fr.T / np.max(fr, axis=1)
     ax.imshow(fr[::-1], cmap="Blues", aspect="auto")
     ax.set_ylabel("Sorted Neurons")
