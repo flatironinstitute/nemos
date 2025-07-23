@@ -174,9 +174,7 @@ stimulus that was on the screen. for the whole recording, we'll have many of
 these, which we then average to get this STA, which is the "optimal stimulus"
 / spatial filter.
 
-In practice, we do not just the stimulus on screen, but in some window of
-time around it. (it takes some time for info to travel through the eye/LGN to
-V1). Pynapple makes this easy:
+In practice, we want to consider spikes not only at the exact moment the stimulus appears on the screen, but also within a surrounding time window (it takes some time for info to travel through the eye/LGN to V1). Pynapple makes this easy:
 
 ```{code-cell} ipython3
 sta = nap.compute_event_trigger_average(spikes, stimulus, binsize=0.025,
