@@ -106,7 +106,8 @@ def collect_similar_parameter_names(
         Similarity threshold between 0 and 1 used to group parameters based on
         lexical similarity.
     valid_pairs :
-        Pairs of similar strings that are allowed as distinct parameter names.
+        Pairs of similar strings that are allowed as distinct parameter names. If None,
+        a default ``VALID_PAIRS`` list  is used.
 
     Returns
     -------
