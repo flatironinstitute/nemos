@@ -118,7 +118,7 @@ def _jvp_isotonic_l2_jax_pav(solution, vector, eps=1e-8):
   mask = jnp.pad(jnp.absolute(jnp.diff(x)) <= eps, (1, 0))
   ar = jnp.arange(x.size)
   inds_start = jnp.where(mask == 0, ar, +jnp.inf).sort()
-  one_hot_start = jax.nn.one_hot(inds_start, len(vector))
+  one_hot_start = jax.nn.one_hot(inds_start.astype(int), len(vector))
   A = jnp.cumsum(one_hot_start, axis=-1)
   A = jnp.append(jnp.diff(A[::-1], axis=0)[::-1], A[-1].reshape(1, -1), axis=0)
   B = A.copy()

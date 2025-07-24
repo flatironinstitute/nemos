@@ -62,9 +62,3 @@ from nemos.third_party.jaxopt.jaxopt._src.scipy_wrappers import ScipyLeastSquare
 from nemos.third_party.jaxopt.jaxopt._src.scipy_wrappers import ScipyMinimize
 from nemos.third_party.jaxopt.jaxopt._src.scipy_wrappers import ScipyRootFinding
 from nemos.third_party.jaxopt.jaxopt._src.zoom_linesearch import ZoomLineSearch
-
-warnings.warn(
-    "JAXopt is no longer maintained. See https://docs.jax.dev/en/latest/ for"
-    " alternatives.",
-    DeprecationWarning,
-)
