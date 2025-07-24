@@ -178,6 +178,38 @@ class Observations(Base, abc.ABC):
         """
         pass
 
+    def likelihood(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
+        aggregate_sample_scores: Callable = jnp.mean,
+    ):
+        r"""Compute the observation model likelihood.
+
+        This computes the likelihood of the predicted rates
+        for the observed neural activity including the normalization constant.
+
+        Parameters
+        ----------
+        y :
+            The target activity to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
+        predicted_rate :
+            The predicted rate of the current model. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
+        scale :
+            The scale parameter of the model
+        aggregate_sample_scores :
+            Function that aggregates the log-likelihood of each sample.
+
+        Returns
+        -------
+        :
+            The likelihood. Shape (1,).
+        """
+        return jnp.exp(
+            self.log_likelihood(y, predicted_rate, scale, aggregate_sample_scores)
+        )
+
     @abc.abstractmethod
     def sample_generator(
         self,
@@ -1165,6 +1197,45 @@ class BernoulliObservations(Observations):
             The DOF of the residuals.
         """
         return jnp.ones_like(jnp.atleast_1d(y[0]))
+
+    def likelihood(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
+        aggregate_sample_scores: Callable = jnp.mean,
+    ):
+        r"""Compute the Binomial model likelihood.
+
+        This computes the likelihood of the predicted rates
+        for the observed neural activity including the normalization constant.
+
+        Parameters
+        ----------
+        y :
+            The target activity to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
+        predicted_rate :
+            The predicted rate of the current model. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
+        scale :
+            The scale parameter of the model
+        aggregate_sample_scores :
+            Function that aggregates the log-likelihood of each sample.
+
+        Returns
+        -------
+        :
+            The likelihood. Shape (1,).
+        """
+        predicted_rate = jnp.clip(
+            predicted_rate,
+            min=jnp.finfo(predicted_rate.dtype).eps,
+            max=1.0 - jnp.finfo(predicted_rate.dtype).eps,
+        )
+        # convenient formulation that works for specifically for the Bernoulli
+        # y can be only 0 or 1 and the likelihood
+        # (predicted_rate) ** y * (1 - predicted_rate) ** (1-y)
+        # is equal to the computation below, easily shown by plugging y=0,1
+        return y * predicted_rate + (1 - y) * (1 - predicted_rate)
 
 
 class NegativeBinomialObservations(Observations):
