@@ -36,6 +36,9 @@ def test_e_step_regression():
             new_sess=new_sess.flatten().astype(bool)
         )
     )
+    
+    print(log_likelihood, ll_nemos)
+    print(f"\n{ll_nemos.shape}\n{log_likelihood.shape}")
 
     # First testing alphas and betas because they are computed first
     np.testing.assert_almost_equal(alphas.T, alphas_nemos, decimal=4)

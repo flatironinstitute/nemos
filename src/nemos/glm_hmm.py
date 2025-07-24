@@ -17,7 +17,7 @@ from functools import partial
 Array = NDArray | jax.numpy.ndarray
 from nemos.glm_hmm_utils import forward_pass, backward_pass
 jax.config.update("jax_enable_x64", True) 
-import scipy
+from scipy.optimize import minimize
 
 
 class GLM_HMM():
@@ -143,7 +143,7 @@ class GLM_HMM():
         y: Array,
         initial_prob: Array,
         transition_prob: Array,
-        latent_weights: Array,
+        projection_weights: Array,
         new_sess: Array | None = None,
     ):
         """
@@ -165,7 +165,7 @@ class GLM_HMM():
         transition_prob : .A
             (n_states x n_states) latent state transition matrix
 
-        latent_weights : .w
+        projection_weights : .w
             (n_features x n_states) latent state GLM weights
 
         new_sess :
@@ -195,7 +195,7 @@ class GLM_HMM():
         initial_prob = jnp.asarray(initial_prob)
 
         # Predicted y
-        tmpy = self.observation_model.inverse_link_function(X @ latent_weights)
+        tmpy = self.observation_model.inverse_link_function(X @ projection_weights)
 
         # Compute likelihood given the fixed weights
         # Data likelihood p(y|z) from emissions model
@@ -205,7 +205,7 @@ class GLM_HMM():
                 tmpy,
                aggregate_sample_scores = lambda x: x
             )
-        )   
+        )   # TODO Will this break with other observation models?
         # Compute forward pass
         with jax.disable_jit(False):
             alphas_scan, c_scan = forward_pass(
@@ -225,7 +225,7 @@ class GLM_HMM():
         ###################### POSTERIORS
         # Compute posterior distributions ######
         # Gamma - Equations 13.32, 13.64
-        gammas = alphas_scan.T * betas_scan.T
+        gammas = alphas_scan * betas_scan
 
         # Trials to compute xi
         trials_xi = np.arange(n_time_bins)
@@ -242,19 +242,38 @@ class GLM_HMM():
         xis = xi_numer * transition_prob
         return gammas, xis, ll, ll_norm, alphas_scan, betas_scan
 
+    def func_to_minimize(
+        self,
+        projection_weights, 
+        n_features,
+        n_states,
+        y, 
+        X, 
+        gammas, 
+    ):
+        projection_weights = projection_weights.reshape(n_features, n_states)
+        tmpy = self.observation_model.inverse_link_function(X @ projection_weights)
+        nll = self.observation_model._negative_log_likelihood(
+            y[:, jnp.newaxis],
+            tmpy,
+            aggregate_sample_scores = partial(lambda x: jnp.sum(gammas * x))
+        )
+        return nll
+
     def run_m_step(
         self,
         y: Array,
         X: Array,
-        latent_weights: Array,
         gammas: Array, 
         xis: Array, 
         projection_weights: Array, 
         new_sess: Array | None = None
     ):
-        n_features = latent_weights.shape[0]
-        n_states = latent_weights.shape[1]
+        
+        n_features = projection_weights.shape[0]
+        n_states = projection_weights.shape[1]
         n_time_bins = X.shape[0]
+
         # Update Initial state probability eq. 13.18
         tmp_initial_prob = np.mean(gammas[:, new_sess], axis=1)
         initial_prob = tmp_initial_prob / np.sum(tmp_initial_prob)
@@ -263,23 +282,18 @@ class GLM_HMM():
         transition_prob = xis / np.sum(xis, axis=1)
 
         # Minimize negative log-likelihood to update GLM weights
-        new_projection_weights = minimize_likelihood(
-            new_latent_weights, 
-            y, 
-            X, 
-            gammas,
-            n_features,
-            n_states,
-            n_time_bins
-        )
-        tmpy = self.observation_model.inverse_link_function(X @ latent_weights)
-
-        nll = self.observation_model._negative_log_likelihood(
-            y[:, jnp.newaxis],
-            tmpy,
-            aggregate_sample_scores = lambda x: x
+        res = minimize(
+            self.func_to_minimize, 
+            projection_weights.flatten(),
+            args = (
+                n_features,
+                n_states,
+                y, 
+                X, 
+                gammas
+            ) 
         )
 
-        projection_weights = new_projection_weights
+        projection_weights = res.x
 
         return projection_weights
