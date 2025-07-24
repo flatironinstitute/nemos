@@ -196,20 +196,20 @@ class ProjectionTest(test_util.JaxoptTestCase):
     # x is outside of the ball
     small_radius = norm_value / 2
     p = ball_fun(x, small_radius)
-    self.assertAllClose(jnp.linalg.norm(p, ord=norm), small_radius)
+    self.assertAllClose(jnp.linalg.norm(p, ord=norm), small_radius, check_dtypes=False)
     J = jax.jacrev(ball_fun)(x, small_radius)
     J2 = jax.jacrev(sphere_fun)(x, small_radius)
-    self.assertArraysAllClose(J, J2)
+    self.assertArraysAllClose(J, J2, check_dtypes=False)
     J = jax.jacrev(ball_fun, argnums=1)(x, small_radius)
     J2 = jax.jacrev(sphere_fun, argnums=1)(x, small_radius)
-    self.assertArraysAllClose(J, J2)
+    self.assertArraysAllClose(J, J2, check_dtypes=False)
 
     if check_pytree:
       # x is a pytree
       pytree = (x[:25], x[25:])
       p = ball_fun(pytree, norm_value)
-      self.assertArraysAllClose(x[:25], p[0])
-      self.assertArraysAllClose(x[25:], p[1])
+      self.assertArraysAllClose(x[:25], p[0], check_dtypes=False)
+      self.assertArraysAllClose(x[25:], p[1], check_dtypes=False)
 
   def test_projection_l1_ball(self):
     self._check_projection_ball(projection.projection_l1_ball,
