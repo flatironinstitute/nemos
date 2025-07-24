@@ -321,7 +321,7 @@ class TestBernoulliObservations:
         if not np.allclose(ll_model, ll_scipy):
             raise ValueError("Log-likelihood doesn't match scipy!")
 
-    def test_emission_probability(selfself, bernoulliGLM_model_instantiation):
+    def test_emission_probability(self, bernoulliGLM_model_instantiation):
         """
         Test the poisson emission probability.
 
