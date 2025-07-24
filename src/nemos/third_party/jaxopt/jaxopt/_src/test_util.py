@@ -14,18 +14,15 @@
 
 """Test utilities."""
 
-from absl.testing import parameterized
-
 import functools
 
 import jax
 import jax.numpy as jnp
-
-
 import numpy as onp
 import scipy as osp
-
+from absl.testing import parameterized
 from sklearn import linear_model
+from sklearn import multiclass as skl_multiclass
 from sklearn import svm
 
 
