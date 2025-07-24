@@ -719,3 +719,19 @@ class TestCommonObservationModels:
                 obs.__class__(link_function)
         else:
             obs.__class__(link_function)
+
+    @pytest.mark.parametrize("link_function", [jnp.exp, jax.nn.softplus, 1])
+    def test_initialization_link_is_callable_set_params(
+        self, link_function, observation_model_rate_and_samples
+    ):
+        """Check that the observation model initializes when a callable is passed."""
+        obs, _, _ = observation_model_rate_and_samples
+        raise_exception = not callable(link_function)
+        if raise_exception:
+            with pytest.raises(
+                TypeError,
+                match="The `inverse_link_function` function must be a Callable",
+            ):
+                obs.set_params(inverse_link_function=link_function)
+        else:
+            obs.set_params(inverse_link_function=link_function)
