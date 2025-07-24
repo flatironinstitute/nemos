@@ -1,6 +1,7 @@
 import inspect
 import warnings
 from contextlib import nullcontext as does_not_raise
+from copy import deepcopy
 from typing import Callable
 
 import jax
@@ -14,8 +15,22 @@ from sklearn.linear_model import GammaRegressor, LogisticRegression, PoissonRegr
 from sklearn.model_selection import GridSearchCV
 
 import nemos as nmo
+from nemos.observation_models import NegativeBinomialObservations
 from nemos.pytrees import FeaturePytree
 from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
+
+GLM_COMMON_PARAMS_NAMES = {
+    "observation_model__inverse_link_function",
+    "observation_model",
+    "regularizer",
+    "regularizer_strength",
+    "solver_kwargs",
+    "solver_name",
+}
+OBSERVATION_MODEL_EXTRA_PARAMS_NAMES = {
+    "NegativeBinomialObservations": {"observation_model__scale"},
+}
+POPULATION_GLM_EXTRA_PARAMS = {"feature_mask"}
 
 
 def convert_to_nap(arr, t):
@@ -136,6 +151,7 @@ class TestGLM:
             (nmo.observation_models.PoissonObservations(), does_not_raise()),
             (nmo.observation_models.GammaObservations(), does_not_raise()),
             (nmo.observation_models.BernoulliObservations(), does_not_raise()),
+            (nmo.observation_models.NegativeBinomialObservations(), does_not_raise()),
             (
                 nmo.regularizer.Regularizer,
                 pytest.raises(
@@ -1607,6 +1623,7 @@ class TestGLM:
         "poissonGLM_model_instantiation",
         "gammaGLM_model_instantiation",
         "bernoulliGLM_model_instantiation",
+        "negativeBinomialGLM_model_instantiation",
     ],
 )
 class TestGLMObservationModel:
@@ -1645,6 +1662,18 @@ class TestGLMObservationModel:
             def ll(y, mean_firing):
                 return jax.scipy.stats.bernoulli.logpmf(y, mean_firing).mean()
 
+        elif "negativeBinomial" in model_instantiation:
+
+            def ll(y, mean_firing):
+                if y.ndim == 1:
+                    norm = y.shape[0]
+                elif y.ndim == 2:
+                    norm = y.shape[0] * y.shape[1]
+                return (
+                    sm.families.NegativeBinomial(alpha=1.0).loglike(y, mean_firing)
+                    / norm
+                )
+
         else:
             raise ValueError("Unknown model instantiation")
         return ll
@@ -1667,6 +1696,9 @@ class TestGLMObservationModel:
                 penalty=None,
             )
 
+        elif "negativeBinomial" in model_instantiation:
+            return None
+
         else:
             raise ValueError("Unknown model instantiation")
 
@@ -1683,6 +1715,9 @@ class TestGLMObservationModel:
 
         elif "bernoulli" in model_instantiation:
             return 0.1
+
+        elif "negativeBinomial" in model_instantiation:
+            return 0.01
 
         else:
             raise ValueError("Unknown model instantiation")
@@ -1710,6 +1745,12 @@ class TestGLMObservationModel:
             else:
                 return np.array([3])
 
+        elif "negativeBinomial" in model_instantiation:
+            if "population" in glm_type:
+                return np.array([3, 2, 4])
+            else:
+                return np.array([5])
+
         else:
             raise ValueError("Unknown model instantiation")
 
@@ -1725,6 +1766,9 @@ class TestGLMObservationModel:
             return False
 
         elif "bernoulli" in model_instantiation:
+            return False
+
+        elif "negativeBinomial" in model_instantiation:
             return False
 
         else:
@@ -1752,6 +1796,12 @@ class TestGLMObservationModel:
                 return "PopulationGLM(\n    observation_model=BernoulliObservations(inverse_link_function=logistic),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
             else:
                 return "GLM(\n    observation_model=BernoulliObservations(inverse_link_function=logistic),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
+
+        elif "negative_binomial":
+            if "population" in glm_type:
+                return "PopulationGLM(\n    observation_model=NegativeBinomialObservations(inverse_link_function=exp, scale=1.0),\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
+            else:
+                return "GLM(\n    observation_model=NegativeBinomialObservations(inverse_link_function=exp, scale=1.0),\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
 
         else:
             raise ValueError("Unknown model instantiation")
@@ -1797,19 +1847,16 @@ class TestGLMObservationModel:
         """
         Test that get_params() contains expected values.
         """
+        _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
         if "population" in glm_type:
-            expected_keys = {
-                "feature_mask",
-                "observation_model__inverse_link_function",
-                "observation_model",
-                "regularizer",
-                "regularizer_strength",
-                "solver_kwargs",
-                "solver_name",
-            }
+            expected_keys = GLM_COMMON_PARAMS_NAMES.union(
+                OBSERVATION_MODEL_EXTRA_PARAMS_NAMES.get(
+                    model.observation_model.__class__.__name__, {}
+                )
+            ).union(POPULATION_GLM_EXTRA_PARAMS)
 
             def get_expected_values(model):
-                return [
+                vals = [
                     model.feature_mask,
                     model.observation_model.inverse_link_function,
                     model.observation_model,
@@ -1818,19 +1865,19 @@ class TestGLMObservationModel:
                     model.solver_kwargs,
                     model.solver_name,
                 ]
+                if isinstance(model.observation_model, NegativeBinomialObservations):
+                    vals = vals[:2] + [model.observation_model.scale] + vals[2:]
+                return vals
 
         else:
-            expected_keys = {
-                "observation_model__inverse_link_function",
-                "observation_model",
-                "regularizer",
-                "regularizer_strength",
-                "solver_kwargs",
-                "solver_name",
-            }
+            expected_keys = GLM_COMMON_PARAMS_NAMES.union(
+                OBSERVATION_MODEL_EXTRA_PARAMS_NAMES.get(
+                    model.observation_model.__class__.__name__, {}
+                )
+            )
 
             def get_expected_values(model):
-                return [
+                vals = [
                     model.observation_model.inverse_link_function,
                     model.observation_model,
                     model.regularizer,
@@ -1838,8 +1885,9 @@ class TestGLMObservationModel:
                     model.solver_kwargs,
                     model.solver_name,
                 ]
-
-        _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+                if isinstance(model.observation_model, NegativeBinomialObservations):
+                    vals = vals[:1] + [model.observation_model.scale] + vals[1:]
+                return vals
 
         expected_values = get_expected_values(model)
         assert set(model.get_params().keys()) == expected_keys
@@ -2101,22 +2149,35 @@ class TestGLMObservationModel:
         self, batch_size, request, glm_type, model_instantiation
     ):
         """Test that jit compilation does not affect the update in the presence of nans."""
+        jax.config.update("jax_enable_x64", True)
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
         params = model.initialize_params(X, y)
         state = model.initialize_state(X, y, params)
-
         # extract batch and add nans
         Xnan = X[:batch_size]
         Xnan[: batch_size // 2] = np.nan
 
-        jit_update, _ = model.update(params, state, Xnan, y[:batch_size])
+        # run 3 iterations
+        tot_iter = 3
+        jit_update = deepcopy(params)
+        jit_state = deepcopy(state)
+        for _ in range(tot_iter):
+            jit_update, jit_state = model.update(
+                jit_update, jit_state, Xnan, y[:batch_size]
+            )
         # make sure there is an update
         assert any(~jnp.allclose(p0, jit_update[k]) for k, p0 in enumerate(params))
+
         # update without jitting
+        nojit_update = deepcopy(params)
+        nojit_state = deepcopy(state)
         with jax.disable_jit(True):
-            nojit_update, _ = model.update(params, state, Xnan, y[:batch_size])
+            for _ in range(tot_iter):
+                nojit_update, nojit_state = model.update(
+                    nojit_update, nojit_state, Xnan, y[:batch_size]
+                )
         # check for equivalence update
         assert all(jnp.allclose(p0, jit_update[k]) for k, p0 in enumerate(nojit_update))
 
@@ -2164,6 +2225,7 @@ class TestGLMObservationModel:
         )
         model.coef_ = params[0]
         model.intercept_ = params[1]
+        model.scale_ = model.observation_model.scale
         if "population" in glm_type:
             model._initialize_feature_mask(X, y)
         ysim, ratesim = model.simulate(jax.random.key(123), X)
@@ -2315,6 +2377,8 @@ class TestGLMObservationModel:
         self, solver_name, request, glm_type, model_instantiation, sklearn_model
     ):
         """Test that different solvers converge to the same solution."""
+        if sklearn_model is None:
+            pytest.skip(f"sklearn model is not available for {model_instantiation}")
         jax.config.update("jax_enable_x64", True)
         X, y, model_obs, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
@@ -2737,6 +2801,7 @@ class TestPopulationGLM:
         "population_poissonGLM_model_instantiation",
         "population_gammaGLM_model_instantiation",
         "population_bernoulliGLM_model_instantiation",
+        "population_negativeBinomialGLM_model_instantiation",
     ],
 )
 class TestPopulationGLMObservationModel:
@@ -3122,6 +3187,63 @@ class TestBernoulliGLM:
         )
         model.observation_model.inverse_link_function = inv_link
         model.fit(X, y)
+
+    def test_score_glm(self, inv_link, request, glm_type, model_instantiation):
+        """
+        Ensure that the model can be scored with different link functions.
+        """
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        model.observation_model.inverse_link_function = inv_link
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        if "population" in glm_type:
+            model.scale_ = np.ones((y.shape[1]))
+        else:
+            model.scale_ = 1.0
+        model.score(X, y)
+
+    def test_simulate_glm(self, inv_link, request, glm_type, model_instantiation):
+        """
+        Ensure that data can be simulated with different link functions.
+        """
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        model.observation_model.inverse_link_function = inv_link
+        if "population" in glm_type:
+            model.feature_mask = jnp.ones((X.shape[1], y.shape[1]))
+            model.scale_ = jnp.ones((y.shape[1]))
+        else:
+            model.scale_ = 1.0
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        ysim, ratesim = model.simulate(jax.random.PRNGKey(123), X)
+        assert ysim.shape == y.shape
+        assert ratesim.shape == y.shape
+
+
+@pytest.mark.parametrize("inv_link", [jax.nn.softplus, jax.numpy.exp])
+@pytest.mark.parametrize("glm_type", ["", "population_"])
+@pytest.mark.parametrize(
+    "model_instantiation", ["negativeBinomialGLM_model_instantiation"]
+)
+class TestNegativeBinomialGLM:
+    """
+    Unit tests specific to Negative Binomial GLM.
+    """
+
+    def test_fit_glm(self, inv_link, request, glm_type, model_instantiation):
+        """
+        Ensure that the model can be fit with different link functions.
+        """
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        # intialize to true params
+        model.observation_model.inverse_link_function = inv_link
+        model.fit(X, y, init_params=true_params)
 
     def test_score_glm(self, inv_link, request, glm_type, model_instantiation):
         """
