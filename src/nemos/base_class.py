@@ -3,13 +3,14 @@
 # required to get ArrayLike to render correctly
 from __future__ import annotations
 
-import inspect
 import warnings
 from collections import defaultdict
 from typing import Any
 
+from sklearn.base import BaseEstimator
 
-class Base:
+
+class Base(BaseEstimator):
     """Base class for NeMoS estimators.
 
     A base class for estimators with utilities for getting and setting parameters,
@@ -31,22 +32,17 @@ class Base:
 
         Parameters
         ----------
-        deep
+        deep:
+            If True, will return the parameters for this estimator and
+            contained subobjects that are estimators.
 
         Returns
         -------
-            out:
-                A dictionary containing the parameters. Key is the parameter
-                name, value is the parameter value.
+        :
+            A dictionary containing the parameters. Key is the parameter
+            name, value is the parameter value.
         """
-        out = dict()
-        for key in self._get_param_names():
-            value = getattr(self, key)
-            if deep and hasattr(value, "get_params") and not isinstance(value, type):
-                deep_items = value.get_params().items()
-                out.update((key + "__" + k, val) for k, val in deep_items)
-            out[key] = value
-        return out
+        return super().get_params(deep=deep)
 
     def set_params(self, **params: Any):
         """Set the parameters of this estimator.
@@ -112,43 +108,3 @@ class Base:
             valid_params[key].set_params(**sub_params)
 
         return self
-
-    @classmethod
-    def _get_param_names(cls):
-        """Get parameter names for the estimator."""
-        # fetch the constructor or the original constructor before
-        # deprecation wrapping if any
-        init = getattr(cls.__init__, "deprecated_original", cls.__init__)
-        if init is object.__init__:
-            # No explicit constructor to introspect
-            return []
-
-        # introspect the constructor arguments to find the model parameters
-        # to represent
-        init_signature = inspect.signature(init)
-        # Consider the constructor parameters excluding 'self'
-        parameters = [
-            p
-            for p in init_signature.parameters.values()
-            if p.name != "self" and p.kind != p.VAR_KEYWORD
-        ]
-        for p in parameters:
-            if p.kind == p.VAR_POSITIONAL:
-                raise RuntimeError(
-                    "GLM estimators should always "
-                    "specify their parameters in the signature"
-                    " of their __init__ (no varargs)."
-                    " %s with constructor %s doesn't "
-                    " follow this convention." % (cls, init_signature)
-                )
-
-        # Consider the constructor parameters excluding 'self'
-        parameters = [
-            p.name for p in init_signature.parameters.values() if p.name != "self"
-        ]
-
-        # remove kwargs
-        if "kwargs" in parameters:
-            parameters.remove("kwargs")
-        # Extract and sort argument names excluding 'self'
-        return sorted(parameters)

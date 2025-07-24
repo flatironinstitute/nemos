@@ -13,7 +13,6 @@ Classes for creating Generalized Linear Models (GLMs) for both single neurons an
 
 .. autosummary::
     :toctree: generated/glm
-    :recursive:
     :nosignatures:
 
     GLM
@@ -36,7 +35,6 @@ These classes are the building blocks for the concrete basis classes.
 
 .. autosummary::
     :toctree: generated/_basis
-    :recursive:
     :nosignatures:
 
     Basis
@@ -44,7 +42,6 @@ These classes are the building blocks for the concrete basis classes.
 .. currentmodule:: nemos.basis._spline_basis
 .. autosummary::
     :toctree: generated/_basis
-    :recursive:
     :nosignatures:
 
     SplineBasis
@@ -56,7 +53,6 @@ These classes are the building blocks for the concrete basis classes.
 
 .. autosummary::
     :toctree: generated/basis
-    :recursive:
     :nosignatures:
 
 
@@ -76,7 +72,6 @@ These classes are the building blocks for the concrete basis classes.
 
 .. autosummary::
     :toctree: generated/basis
-    :recursive:
     :nosignatures:
 
     MSplineEval
@@ -93,7 +88,6 @@ These classes are the building blocks for the concrete basis classes.
 
 .. autosummary::
     :toctree: generated/_basis
-    :recursive:
     :nosignatures:
 
     AdditiveBasis
@@ -107,7 +101,6 @@ Define a fully functional basis form a list of functions.
 
 .. autosummary::
     :toctree: generated/_custom_basis
-    :recursive:
     :nosignatures:
 
     CustomBasis
@@ -118,7 +111,6 @@ Define a fully functional basis form a list of functions.
 
 .. autosummary::
     :toctree: generated/_transformer_basis
-    :recursive:
     :nosignatures:
 
     TransformerBasis
@@ -133,7 +125,6 @@ Statistical models to describe the distribution of neural responses or other pre
 
 .. autosummary::
     :toctree: generated/observation_models
-    :recursive:
     :nosignatures:
 
     Observations
@@ -152,7 +143,6 @@ Implements various regularization techniques to constrain model parameters, whic
 
 .. autosummary::
     :toctree: generated/regularizer
-    :recursive:
     :nosignatures:
 
     Regularizer
@@ -169,7 +159,6 @@ Utility functions for simulating spiking activity in recurrently connected neura
 
 .. autosummary::
     :toctree: generated/simulation
-    :recursive:
     :nosignatures:
 
     simulate_recurrent
@@ -185,7 +174,6 @@ Utility functions for running convolution over the sample axis.
 
 .. autosummary::
     :toctree: generated/regularizer
-    :recursive:
     :nosignatures:
 
     create_convolutional_predictor
@@ -200,7 +188,6 @@ solutions.
 
 .. autosummary::
     :toctree: generated/identifiability_constraints
-    :recursive:
     :nosignatures:
 
     apply_identifiability_constraints
@@ -215,7 +202,6 @@ These objects can be provided as input to nemos GLM methods.
 
 .. autosummary::
     :toctree: generated/pytree
-    :recursive:
     :nosignatures:
 
     FeaturePytree

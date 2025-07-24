@@ -112,6 +112,16 @@ class BaseRegressor(Base, abc.ABC):
         self._solver_update = None
         self._solver_run = None
 
+    def __sklearn_tags__(self):
+        """Return regression model specific estimator tags."""
+        tags = super().__sklearn_tags__()
+        tags.estimator_type = "regressor"
+        tags.non_deterministic = True
+        tags.requires_fit = True
+        # conversion happens internally
+        tags.array_api_support = True
+        return tags
+
     @property
     def solver_init_state(self) -> Union[None, SolverInit]:
         """
