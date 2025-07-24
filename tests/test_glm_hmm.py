@@ -15,8 +15,8 @@ def test_e_step_regression():
 
     # E-step initial parameters
     initial_prob = data["initial_prob"]
+    latent_weights = data["projection_weights"]
     transition_matrix = data["transition_matrix"]
-    projection_weights = data["projection_weights"]
 
     # E-step output
     xis = data["xis"]
@@ -32,14 +32,14 @@ def test_e_step_regression():
             y.flatten(), 
             initial_prob, 
             transition_matrix, 
-            projection_weights, 
+            latent_weights, 
             new_sess=new_sess.flatten().astype(bool)
         )
     )
 
     # First testing alphas and betas because they are computed first
-    np.testing.assert_almost_equal(alphas, alphas_nemos, decimal=4)
-    np.testing.assert_almost_equal(betas, betas_nemos, decimal=4)
+    np.testing.assert_almost_equal(alphas.T, alphas_nemos, decimal=4)
+    np.testing.assert_almost_equal(betas.T, betas_nemos, decimal=4)
     # Next testing xis and gammas because they depend on alphas and betas
     # Equations 13.43 and 13.65 of Bishop
     np.testing.assert_almost_equal(gammas, gammas_nemos, decimal=4)

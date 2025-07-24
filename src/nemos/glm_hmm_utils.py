@@ -45,7 +45,7 @@ def forward_pass(
     -------
     alphas :
         A tree of arrays of shape `(n_time_bins, n_states)`, containing the filtered
-        probabilities at each time step.
+        probabilities at each time step. Represents the joint probability of observing all of the given data up to time n (first dimension) and the value n_state (second dimension)
 
     normalizers :
         A tree of arrays of shape `(n_time_bins,)`, representing the normalization constant
@@ -56,12 +56,41 @@ def forward_pass(
     The function assumes all PyTrees (`initial_prob`, `posterior_prob`, etc.) have matching
     structures and compatible shapes. Normalization at each time step is done safely by
     guarding against divide-by-zero errors.
+
+    If this was computed in regular python code, it would look something like:
+    ```
+     # Initialize variables
+    alphas = np.full((n_states, n_time_bins), np.nan)  # forward pass alphas
+    c = np.full(n_time_bins, np.nan)  # variable to store marginal likelihood
+
+    for t in range(n_time_bins):
+        if new_sess[t]:
+            alphas[:, t] = (
+                initial_prob * py_z.T[:, t]
+            )  # Initial alpha. Equation 13.37. Reinitialize for new sessions
+        else:
+            alphas[:, t] = py_z.T[:, t] * (
+                transition_prob.T @ alphas[:, t - 1]
+            )  # Equation 13.36
+
+        c[t] = np.sum(alphas[:, t])  # Store marginal likelihood
+        if (
+            c[t] == 0
+        ):  # This should not happen, but if it does, raise an error if weights are out of control
+            raise ValueError(
+                f"Zero marginal likelihood at time {t} - Weights may be out of control"
+            )
+        alphas[:, t] /= c[t]  # Normalize (Equation 13.59)
+
+    ```
     """
 
     def initial_compute(posterior, _):
+        # Equation 13.37. Reinitialize for new sessions
         return jax.tree_util.tree_map(lambda a, b: a * b, posterior, initial_prob)
 
     def transition_compute(posterior, alpha_previous):
+        # Equation 13.36
         exp_transition = jax.tree_util.tree_map(
             jnp.matmul, transition_prob, alpha_previous
         )
@@ -70,6 +99,9 @@ def forward_pass(
     def body_fn(carry, xs):
         alpha_previous = carry
         posterior, is_new_session = xs
+        # if its a new session, run initial_compute
+        # else, run transition_compute
+        # for both functions, the inputs are posterior and alpha_previous
         alpha = jax.lax.cond(
             is_new_session,
             initial_compute,
@@ -77,10 +109,12 @@ def forward_pass(
             posterior,
             alpha_previous,
         )
-        const = jnp.sum(alpha)
-        # safe divide implementation
+        const = jnp.sum(alpha) # Store marginal likelihood
+
+        # Safe divide implementation so we don't divide over 0
         const = jnp.where(const > 0, const, 1.0)
-        alpha = alpha / const
+        
+        alpha = alpha / const  # Normalize - Equation 13.59
         return alpha, (alpha, const)
 
     init = jax.tree_util.tree_map(lambda x: jnp.zeros_like(x[0]), posterior_prob)
@@ -136,13 +170,34 @@ def backward_pass(
     This implementation assumes all PyTrees share the same structure and compatible shapes.
     It follows the standard HMM backward equations (e.g., Bishop Eq. 13.38–13.39), including
     reinitialization for segmented sequences.
+
+    If this was regular python code, it would look similar to:
+    ```
+    betas = np.full((n_states, n_time_bins), np.nan)  # backward pass betas
+    betas[:, -1] = np.ones(n_states)  # initial beta (Equation 13.39)
+
+    # Solve for remaining betas
+    t0 = perf_counter()
+    for t in range(n_time_bins - 2, -1, -1):
+        if new_sess[t + 1]:
+            betas[:, t] = np.ones(
+                n_states
+            )  # Reinitialize backward pass if end of session
+        else:
+            betas[:, t] = transition_prob @ (
+                betas[:, t + 1] * py_z.T[:, t + 1]
+            )  # Equation 13.38
+            betas[:, t] /= c[t + 1]  # Normalize (Equation 13.62)
+    ```
     """
     init = jax.tree_util.tree_map(lambda x: jnp.ones_like(x[0]), posterior_prob)
 
     def initial_compute(posterior, *_):
+        # Initialize
         return jax.tree_util.tree_map(lambda x: jnp.ones_like(x), posterior)
 
     def backward_step(posterior, beta, normalization):
+        # Normalize (Equation 13.62)
         return jax.tree_util.tree_map(
             lambda m, x, y, z: jnp.matmul(m, x * y) / z,
             transition_prob,
@@ -163,6 +218,8 @@ def backward_pass(
         )
         return beta, carry
 
+    # Keeping the carrys because I am interested in 
+    # all outputs, including the last one.
     _, betas = jax.lax.scan(
         body_fn, init, (posterior_prob, normalizers, new_session), reverse=True
     )
