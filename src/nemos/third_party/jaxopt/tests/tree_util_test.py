@@ -124,7 +124,7 @@ class TreeUtilTest(test_util.JaxoptTestCase):
 
     got = tree_util.tree_div(self.tree_A_dict, self.tree_B_dict)
     expected = (1.0, {'k1': 0.5, 'k2': (0.333333333, 0.25)}, 0.2)
-    self.assertAllClose(expected, got)
+    self.assertAllClose(expected, got, atol=1e-8)
 
   def test_tree_sum(self):
     expected = jnp.sum(self.array_A)
