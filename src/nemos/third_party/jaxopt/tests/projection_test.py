@@ -99,11 +99,12 @@ class ProjectionTest(test_util.JaxoptTestCase):
     self.assertAllClose(p, jnp.array([0.5, 0.5, 0.0]))
 
   def test_projection_simplex_jacobian(self):
+    jax.config.update("jax_enable_x64", True)
     rng = onp.random.RandomState(0)
 
     for scale in [1.0, 1e9]:
-      x = scale * rng.rand(5).astype(onp.float32)
-      v = scale * rng.randn(5).astype(onp.float32)
+      x = scale * rng.rand(5).astype(onp.float64)
+      v = scale * rng.randn(5).astype(onp.float64)
 
       J_rev = jax.jacrev(projection.projection_simplex)(x)
       J_fwd = jax.jacfwd(projection.projection_simplex)(x)
@@ -126,7 +127,7 @@ class ProjectionTest(test_util.JaxoptTestCase):
 
   def test_projection_simplex_vmap(self):
     rng = onp.random.RandomState(0)
-    X = rng.randn(3, 50).astype(onp.float32)
+    X = rng.randn(3, 50).astype(onp.float64)
 
     # Check with default s=1.0.
     P = jax.vmap(projection.projection_simplex)(X)
@@ -416,7 +417,7 @@ class ProjectionTest(test_util.JaxoptTestCase):
         self.assertEqual(T.shape, (5, 6))
         self.assertArraysAllClose(jnp.sum(T, axis=1), marginals_a, atol=1e-3)
         self.assertArraysAllClose(jnp.sum(T, axis=0), marginals_b, atol=1e-5)
-        self.assertAllClose(jnp.sum(T), 1.0)
+        self.assertAllClose(jnp.sum(T), 1.0, atol=1e-12)
 
       # Compare with Sinkhorn.
       T3 = self._sinkhorn(cost_matrix=-sim_matrix, marginals_a=marginals_a,

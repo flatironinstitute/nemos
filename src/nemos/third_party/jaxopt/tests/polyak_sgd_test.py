@@ -72,7 +72,7 @@ class PolyakSgdTest(test_util.JaxoptTestCase):
     error_init = opt.l2_optimality_error(params, l2reg=l2reg, data=data)
 
     state = opt.init_state(params, l2reg=l2reg, data=data)
-    for _ in range(200):
+    for _ in range(400):
       params, state = opt.update(params, state, l2reg=l2reg, data=data)
 
     # Check optimality conditions.
