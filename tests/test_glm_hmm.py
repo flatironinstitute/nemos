@@ -8,6 +8,7 @@ from nemos.observation_models import BernoulliObservations
 
 
 def test_e_step_regression():
+    jax.config.update("jax_enable_x64", True)
     # Fetch the data
     data_path = fetch_data("e_step_three_states.npz")
     data = np.load(data_path)
@@ -23,12 +24,17 @@ def test_e_step_regression():
     # E-step output
     xis = data["xis"]
     gammas = data["gammas"]
-    log_likelihood, ll_norm = data["log_likelihood"], data["ll_norm"]
+    ll_orig, ll_norm_orig = data["log_likelihood"], data["ll_norm"]
     alphas, betas = data["alphas"], data["betas"]
 
     obs = BernoulliObservations()
 
-    log_likelihood = lambda x, y: jax.vmap(obs.log_likelihood())
+    log_likelihood = jax.vmap(
+        lambda x, z: obs.likelihood(x, z, aggregate_sample_scores=lambda w: w),
+        in_axes=(None, 1),
+        out_axes=1,
+    )
+
     gammas_nemos, xis_nemos, ll_nemos, ll_norm_nemos, alphas_nemos, betas_nemos = (
         forward_backward(
             X,
@@ -36,20 +42,25 @@ def test_e_step_regression():
             initial_prob,
             transition_matrix,
             latent_weights,
+            likelihood_func=log_likelihood,
+            inverse_link_function=obs.inverse_link_function,
             is_new_session=new_sess.flatten().astype(bool),
         )
     )
 
     print(log_likelihood, ll_nemos)
-    print(f"\n{ll_nemos.shape}\n{log_likelihood.shape}")
+    print(f"\n{ll_nemos.shape}\n{ll_norm_orig.shape}")
 
     # First testing alphas and betas because they are computed first
     np.testing.assert_almost_equal(alphas.T, alphas_nemos, decimal=4)
     np.testing.assert_almost_equal(betas.T, betas_nemos, decimal=4)
+    # testing log likelihood and normalized log likelihood
+    np.testing.assert_almost_equal(ll_orig, ll_nemos, decimal=4)
+    np.testing.assert_almost_equal(ll_norm_orig, ll_norm_nemos, decimal=4)
+
     # Next testing xis and gammas because they depend on alphas and betas
-    # Equations 13.43 and 13.65 of Bishop
-    np.testing.assert_almost_equal(gammas, gammas_nemos, decimal=4)
-    np.testing.assert_almost_equal(xis, xis_nemos, decimal=4)
-    # Finally testing log likelihood and normalized log likelihood
-    np.testing.assert_almost_equal(log_likelihood, ll_nemos, decimal=4)
-    np.testing.assert_almost_equal(ll_norm, ll_norm_nemos, decimal=4)
+    # Equations 13.43
+    np.testing.assert_almost_equal(gammas.T, gammas_nemos, decimal=4)
+
+    # testing 13.65 of Bishop
+    np.testing.assert_almost_equal(xis.T, xis_nemos, decimal=4)

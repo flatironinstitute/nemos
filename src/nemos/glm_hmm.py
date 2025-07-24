@@ -14,59 +14,32 @@ from .typing import Pytree
 Array = NDArray | jax.numpy.ndarray
 
 
-def compute_xi(alpha, beta, cond, norm, new_sess, trans_prob):
+def compute_xi(alphas, betas, conditionals, norm, new_sess, transition_prob):
     """
     Compute the expected joint posterior (xi) over consecutive latent states.
 
-    Implements the computation of the expected number of transitions between pairs
-    of latent states at each time step, summed over time. This corresponds to the xi
-    statistics used in the Baum-Welch (EM) algorithm for HMMs [1]_.
-
     Parameters
     ----------
-    alpha :
-        Forward messages, array of shape (n_states, n_time_bins).
-
-    beta :
-        Backward messages, array of shape (n_states, n_time_bins).
-
-    cond :
-        Likelihoods p(y_t | z_t), array of shape (n_states, n_time_bins).
-
-    norm :
-        Normalization constants from the forward pass, array of shape (n_time_bins,).
-
-    new_sess :
-        Boolean array of shape (n_time_bins,), True where a new session begins.
-        Ensures no transitions are computed for session boundaries.
-
-    trans_prob :
-        Transition probability matrix, array of shape (n_states, n_states).
+    alphas : (T, n_states)
+        Forward messages.
+    betas : (T, n_states)
+        Backward messages.
+    conditionals : (T, n_states)
+        Observation likelihoods p(y_t | z_t).
+    norm : (T,)
+        Normalization constants from forward pass.
+    new_sess : (T,)
+        Boolean array, True at start of new sessions.
+    transition_prob : (n_states, n_states)
+        Transition probability matrix.
 
     Returns
     -------
-    xi_sum :
-        Sum over time of expected joint posterior between time steps,
-        array of shape (n_states, n_states).
-
-    References
-    ----------
-    .. [1] Bishop, C. M. (2006). *Pattern recognition and machine learning*. Springer.
+    xi_all : (T, n_states, n_states)
+        Expected joint posteriors between time steps.
     """
-    n_states, n_time_bins = alpha.shape
-
-    def body(carry, t):
-        alpha_tm1 = carry
-        a = alpha_tm1 / norm[t]
-        b = cond[:, t] * beta[:, t]
-        xi_t = (a[:, None] * b[None, :]) * trans_prob
-
-        # mask if t is the first of a session
-        xi_t = jnp.where(new_sess[t], jnp.zeros_like(xi_t), xi_t)
-        return alpha[:, t], xi_t
-
-    _, xi_seq = jax.lax.scan(body, alpha[:, 0], jnp.arange(n_time_bins))
-    return jnp.sum(xi_seq, axis=0)
+    # TODO: compute xis
+    return jnp.zeros((*alphas.shape, alphas.shape[1]))  # (T, n_states, n_states)
 
 
 def forward_pass(
@@ -287,7 +260,7 @@ def forward_backward(
     transition_prob: Array,
     projection_weights: Array,
     inverse_link_function: Callable,
-    log_likelihood_func: Callable[[Array, Array], Array],
+    likelihood_func: Callable[[Array, Array], Array],
     is_new_session: Pytree | None = None,
 ):
     """
@@ -317,8 +290,8 @@ def forward_backward(
         Function mapping linear predictors to the mean of the observation distribution
         (e.g., ``jnp.exp`` for Poisson, sigmoid for Bernoulli).
 
-    log_likelihood_func :
-        Function computing the elementwise log-likelihood of observations given predicted mean values.
+    likelihood_func :
+        Function computing the elementwise likelihood of observations given predicted mean values.
         Must return an array of shape ``(n_time_bins, n_states)``.
 
     is_new_session :
@@ -362,7 +335,7 @@ def forward_backward(
     # If new_sess is not provided, assume one session
     if is_new_session is None:
         # default: all False, but first time bin must be True
-        is_new_session = jax.tree_map(
+        is_new_session = jax.tree_util.tree_map(
             lambda x: jax.lax.dynamic_update_index_in_dim(
                 jnp.zeros(x.shape[0], dtype=bool), True, 0, axis=0
             ),
@@ -370,7 +343,7 @@ def forward_backward(
         )
     else:
         # use the user-provided tree, but force the first time bin to be True
-        is_new_session = jax.tree_map(
+        is_new_session = jax.tree_util.tree_map(
             lambda x: jax.lax.dynamic_update_index_in_dim(
                 jnp.asarray(x, dtype=bool), True, 0, axis=0
             ),
@@ -388,7 +361,7 @@ def forward_backward(
     # Compute likelihood given the fixed weights
     # Data likelihood p(y|z) from emissions model
     conditionals = jax.tree_util.tree_map(
-        lambda x, z: jnp.exp(log_likelihood_func(x, z)),
+        lambda x, z: likelihood_func(x, z),
         y,
         predicted_rate_given_state,
     )
@@ -441,12 +414,12 @@ def func_to_minimize(
 ):
     """Minimize expected log-likelihood."""
     # Reshape flat weights into tree of (n_features, n_states)
-    projection_weights = jax.tree_map(
+    projection_weights = jax.tree_util.tree_map(
         lambda w: w.reshape(-1, n_states), projection_weights
     )
 
     # Predict mean from each feature block
-    tmpy = jax.tree_map(
+    tmpy = jax.tree_util.tree_map(
         lambda x, w: inverse_link_function(x @ w), X, projection_weights
     )
 
