@@ -1,8 +1,10 @@
+import jax
 import numpy as np
 import pytest
-from nemos.fetch import fetch_data
 
-from nemos.glm_hmm import GLM_HMM
+from nemos.fetch import fetch_data
+from nemos.glm_hmm import forward_backward
+from nemos.observation_models import BernoulliObservations
 
 
 def test_e_step_regression():
@@ -24,19 +26,20 @@ def test_e_step_regression():
     log_likelihood, ll_norm = data["log_likelihood"], data["ll_norm"]
     alphas, betas = data["alphas"], data["betas"]
 
-    hmm = GLM_HMM()
+    obs = BernoulliObservations()
 
+    log_likelihood = lambda x, y: jax.vmap(obs.log_likelihood())
     gammas_nemos, xis_nemos, ll_nemos, ll_norm_nemos, alphas_nemos, betas_nemos = (
-        hmm.run_baum_welch_jax(
-            X, 
-            y.flatten(), 
-            initial_prob, 
-            transition_matrix, 
-            latent_weights, 
-            new_sess=new_sess.flatten().astype(bool)
+        forward_backward(
+            X,
+            y.flatten(),
+            initial_prob,
+            transition_matrix,
+            latent_weights,
+            is_new_session=new_sess.flatten().astype(bool),
         )
     )
-    
+
     print(log_likelihood, ll_nemos)
     print(f"\n{ll_nemos.shape}\n{log_likelihood.shape}")
 

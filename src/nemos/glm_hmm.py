@@ -1,299 +1,496 @@
-from typing import Tuple
-from .typing import Pytree
-from time import perf_counter
-import jax
-import jax.numpy as jnp
-import numpy as np
-from numpy.typing import NDArray
-Array = NDArray | jax.numpy.ndarray
-from scipy.special import logsumexp
-import numpy as np
-from numpy.typing import NDArray
-from typing import Callable
-from nemos.observation_models import BernoulliObservations
-import jax
-import jax.numpy as jnp
+"""Forward backward pass for a GLM-HMM."""
+
 from functools import partial
+from typing import Callable, Tuple
+
+import jax
+import jax.numpy as jnp
+from numpy.typing import NDArray
+
+from .third_party.jaxopt.jaxopt import LBFGS
+from .tree_utils import pytree_map_and_reduce
+from .typing import Pytree
+
 Array = NDArray | jax.numpy.ndarray
-from nemos.glm_hmm_utils import forward_pass, backward_pass
-jax.config.update("jax_enable_x64", True) 
-from scipy.optimize import minimize
 
 
-class GLM_HMM():
-    # Currently assuming that it will always be a logistic link as its the case for Bernoulli
-    def __init__(
-        self,
-    ):
-        self.observation_model = BernoulliObservations()
+def compute_xi(alpha, beta, cond, norm, new_sess, trans_prob):
+    """
+    Compute the expected joint posterior (xi) over consecutive latent states.
 
-    def run_baum_welch(
-            self,
-            X: Array, 
-            y: Array, 
-            initial_prob: Array, 
-            transition_prob: Array,
-            latent_weights: Array,
-            new_sess: Array | None = None
-    ):
-        """"
-        Baum-Welch algorithm to compute the forward-backward algorithm and return the marginal posterior distribution.
+    Implements the computation of the expected number of transitions between pairs
+    of latent states at each time step, summed over time. This corresponds to the xi
+    statistics used in the Baum-Welch (EM) algorithm for HMMs [1]_.
 
-        According to Bishop's "Pattern Recognition and Machine Learning".
+    Parameters
+    ----------
+    alpha :
+        Forward messages, array of shape (n_states, n_time_bins).
 
-        Parameters
-        ----------
-        X : 
-            (n_time_bins x n_features) design matrix
-        y : 
-            (n_time_bins,) observations
-        initial_prob : .pi
-            (n_states x 1) initial latent state probability
-        latent_weights : .w
-            (n_features x n_states) latent state GLM weights
-        transition_prob : .A
-            (n_states x n_states) latent state transition matrix
-        new_sess :
-            logical array with 1s denoting the start of a new session. If unspecified or empty, treats the full set of trials as a single session.
+    beta :
+        Backward messages, array of shape (n_states, n_time_bins).
 
-        Returns
-        -------   
-        gammas :
-            (n_states x n_time_bins) marginal posterior distribution
-        xis :
-            (n_states x n_states x n_time_bins) joint posterior distribution
-        ll :
-            log-likelihood of the fit
-        """
-        # Initialize variables
-        n_time_bins, n_features = X.shape  # n_time_bins and n_features from dimensions of X
-        n_states = latent_weights.shape[1]  # number of latent states from dimensions of w
+    cond :
+        Likelihoods p(y_t | z_t), array of shape (n_states, n_time_bins).
 
-        # Revise if the data is one single session or multiple sessions. If new_sess is not provided, assume one session
-        if new_sess is None:
-            new_sess = np.zeros_like(y, dtype=bool)
-        new_sess[0] = True
+    norm :
+        Normalization constants from the forward pass, array of shape (n_time_bins,).
 
-        # Firing rate
-        tmpy = self.observation_model.inverse_link_function(X @ latent_weights)
-        print("a", y[:,jnp.newaxis].shape)
-        print("b", tmpy.shape)
-        
-        # Data likelihood p(y|z) from emissions model using NeMoS
-        py_z = jnp.exp(
-            self.observation_model.log_likelihood(
-                y[:,jnp.newaxis],
-                tmpy,
-               aggregate_sample_scores = lambda x: x
-            )
-        )   
-        print("c", py_z.shape)
-        py_z = py_z.T
-        ###### Forward recursion to compute alphas ######
-        # Initialize variables
-        alphas = np.full((n_states, n_time_bins), np.nan) # forward pass alphas
-        c = np.full(n_time_bins, np.nan) # variable to store marginal likelihood
+    new_sess :
+        Boolean array of shape (n_time_bins,), True where a new session begins.
+        Ensures no transitions are computed for session boundaries.
+
+    trans_prob :
+        Transition probability matrix, array of shape (n_states, n_states).
+
+    Returns
+    -------
+    xi_sum :
+        Sum over time of expected joint posterior between time steps,
+        array of shape (n_states, n_states).
+
+    References
+    ----------
+    .. [1] Bishop, C. M. (2006). *Pattern recognition and machine learning*. Springer.
+    """
+    n_states, n_time_bins = alpha.shape
+
+    def body(carry, t):
+        alpha_tm1 = carry
+        a = alpha_tm1 / norm[t]
+        b = cond[:, t] * beta[:, t]
+        xi_t = (a[:, None] * b[None, :]) * trans_prob
+
+        # mask if t is the first of a session
+        xi_t = jnp.where(new_sess[t], jnp.zeros_like(xi_t), xi_t)
+        return alpha[:, t], xi_t
+
+    _, xi_seq = jax.lax.scan(body, alpha[:, 0], jnp.arange(n_time_bins))
+    return jnp.sum(xi_seq, axis=0)
+
+
+def forward_pass(
+    initial_prob: Pytree,
+    transition_prob: Pytree,
+    posterior_prob: Pytree,
+    new_session: Pytree,
+) -> Tuple[Pytree, Pytree]:
+    """
+    Forward pass of a HMM.
+
+    This function performs a recursive forward pass over time using JAX's `lax.scan`,
+    updating filtered probabilities (`alpha`) based on either an initial distribution
+    or a transition matrix, depending on whether a new session starts at a given time step.
+
+    Parameters
+    ----------
+    initial_prob :
+        Initial probability distribution for each leaf in the tree. Each leaf is typically
+        a 1D array of shape `(n_states,)`.
+
+    transition_prob :
+        Transition matrix or tree of transition matrices, where each entry `T[i, j]`
+        represents the probability of transitioning from state `j` to state `i`.
+        The transition matrix should be compatible with `jnp.matmul` applied to the `alpha` vector.
+
+    posterior_prob :
+        A tree of arrays of shape `(n_states, n_time_bins)`, representing the observation likelihood
+        at each time step for each state.
+
+    new_session :
+        A tree of boolean arrays of shape `(n_time_bins,)`, where each element indicates
+        whether a new session starts at that time step (in which case `initial_prob` is used
+        instead of a transition update).
+
+    Returns
+    -------
+    alphas :
+        A tree of arrays of shape `(n_time_bins, n_states)`, containing the filtered
+        probabilities at each time step. Represents the joint probability of observing all
+        of the given data up to time n (first dimension) and the value n_state (second dimension).
+
+    normalizers :
+        A tree of arrays of shape `(n_time_bins,)`, representing the normalization constant
+        (sum of probabilities) at each time step. Can be used for log-likelihood computation.
+
+    Notes
+    -----
+    The function assumes all PyTrees (`initial_prob`, `posterior_prob`, etc.) have matching
+    structures and compatible shapes. Normalization at each time step is done safely by
+    guarding against divide-by-zero errors.
+
+    If this was computed in regular python code, it would look something like:
+
+    .. code-block:: python
+
+        alphas = np.full((n_states, n_time_bins), np.nan)
+        c = np.full(n_time_bins, np.nan)
 
         for t in range(n_time_bins):
             if new_sess[t]:
-                alphas[:, t] = initial_prob * py_z[:, t] # Initial alpha. Equation 13.37. Reinitialize for new sessions
+                alphas[:, t] = (
+                    initial_prob * py_z.T[:, t]
+                )
             else:
-                alphas[:, t] = py_z[:, t] * (transition_prob.T @ alphas[:, t - 1]) # Equation 13.36
+                alphas[:, t] = py_z.T[:, t] * (
+                    transition_prob.T @ alphas[:, t - 1]
+                )
 
-            c[t] = np.sum(alphas[:, t]) # Store marginal likelihood
-            if c[t] == 0: # This should not happen, but if it does, raise an error if weights are out of control
-                raise ValueError(f"Zero marginal likelihood at time {t} - Weights may be out of control")
-            alphas[:, t] /= c[t] # Normalize (Equation 13.59)
+            c[t] = np.sum(alphas[:, t])  # Store marginal likelihood
+            alphas[:, t] /= c[t]
+    """
 
-        ll = np.sum(np.log(c)) # Store log-likelihood
-        ll_norm = np.exp(ll / n_time_bins)
+    def initial_compute(posterior, _):
+        # Equation 13.37. Reinitialize for new sessions
+        return jax.tree_util.tree_map(lambda a, b: a * b, posterior, initial_prob)
 
-        ###### Backward recursion to compute betas ######
-        # Initialize variables
-        betas = np.full((n_states, n_time_bins), np.nan) # backward pass betas
-        betas[:, -1] = np.ones(n_states) # initial beta (Equation 13.39)
+    def transition_compute(posterior, alpha_previous):
+        # Equation 13.36
+        exp_transition = jax.tree_util.tree_map(
+            jnp.matmul, transition_prob, alpha_previous
+        )
+        return jax.tree_util.tree_map(lambda a, b: a * b, posterior, exp_transition)
 
-        # Solve for remaining betas
+    def body_fn(carry, xs):
+        alpha_previous = carry
+        posterior, is_new_session = xs
+        # if it is a new session, run initial_compute
+        # else, run transition_compute
+        # for both functions, the inputs are posterior and alpha_previous
+        alpha = jax.lax.cond(
+            is_new_session,
+            initial_compute,
+            transition_compute,
+            posterior,
+            alpha_previous,
+        )
+        const = jnp.sum(alpha)  # Store marginal likelihood
+
+        # Safe divide implementation so we don't divide over 0
+        const = jnp.where(const > 0, const, 1.0)
+
+        alpha = alpha / const  # Normalize - Equation 13.59
+        return alpha, (alpha, const)
+
+    init = jax.tree_util.tree_map(lambda x: jnp.zeros_like(x[0]), posterior_prob)
+    transition_prob = jax.tree_util.tree_map(lambda x: x.T, transition_prob)
+    _, (alphas, normalizers) = jax.lax.scan(
+        body_fn, init, (posterior_prob, new_session)
+    )
+    return alphas, normalizers
+
+
+def backward_pass(
+    transition_prob: Pytree,
+    posterior_prob: Pytree,
+    normalizers: Pytree,
+    new_session: Pytree,
+):
+    """
+    Run the backward pass of the HMM inference algorithm to compute beta messages.
+
+    This function performs a backward recursion (using `jax.lax.scan` in reverse) to compute
+    the beta messages for a probabilistic model. It supports PyTree-structured state spaces
+    and handles session boundaries by resetting the recursion when a new session starts.
+
+    Parameters
+    ----------
+    transition_prob :
+        A PyTree containing transition matrices of shape `(n_states, n_states)`
+        where `T[i, j]` is the probability of transitioning from state `j` to state `i`.
+        The matrix is internally transposed to match the recursion logic.
+
+    posterior_prob :
+        A PyTree of arrays, each of shape `(n_time_bins, n_states)`, representing the observation
+        likelihoods (posterior probabilities) at each time step for each state.
+
+    normalizers :
+        A PyTree of arrays, each of shape `(n_time_bins,)`, representing the normalization
+        constants from the forward pass (e.g., `alpha.sum()` at each time step). These are used
+        to normalize the beta recursion.
+
+    new_session :
+        A PyTree of boolean arrays of shape `(n_time_bins,)` indicating the start of new sessions.
+        When `new_session[t]` is True, the backward message is reset to a vector of ones at that time step.
+
+    Returns
+    -------
+    betas :
+        A PyTree of arrays, each of shape `(n_time_bins, n_states)`, representing the beta messages
+        at each time step. The output is aligned such that `betas[t]` corresponds to the backward
+        message at time `t`, matching the forward time indexing used in standard HMM inference.
+
+    Notes
+    -----
+    This implementation assumes all PyTrees share the same structure and compatible shapes.
+    It follows the standard HMM backward equations (e.g., Bishop Eq. 13.38–13.39), including
+    reinitialization for segmented sequences.
+
+    If this was regular python code, it would look similar to:
+
+    .. code-block:: python
+
+        betas = np.full((n_states, n_time_bins), np.nan)
+        betas[:, -1] = np.ones(n_states)
+
         for t in range(n_time_bins - 2, -1, -1):
             if new_sess[t + 1]:
-                betas[:, t] = np.ones(n_states) # Reinitialize backward pass if end of session
+                betas[:, t] = np.ones(
+                    n_states
+                )
             else:
-                betas[:, t] = transition_prob @ (betas[:, t + 1] * py_z[:, t + 1]) # Equation 13.38
-                betas[:, t] /= c[t + 1] # Normalize (Equation 13.62)
+                betas[:, t] = transition_prob @ (
+                    betas[:, t + 1] * py_z.T[:, t + 1]
+                )
+                betas[:, t] /= c[t + 1]
+    """
+    init = jax.tree_util.tree_map(lambda x: jnp.ones_like(x[0]), posterior_prob)
 
-        ###### Compute posterior distributions ######
-        gammas = alphas * betas # Gamma - Equations 13.32, 13.64
+    def initial_compute(posterior, *_):
+        # Initialize
+        return jax.tree_util.tree_map(lambda x: jnp.ones_like(x), posterior)
 
-        # Trials to compute xi
-        # Exclude the first trial of every session
-        # Transition matrix
-        trials_xi = np.arange(n_time_bins)
-        trials_xi = trials_xi[~new_sess]
-
-        # Equations 13.43 and 13.65
-        # Xi summed across time steps
-        xi_numer = (alphas[:, trials_xi - 1] / c[trials_xi]) @ (py_z[:, trials_xi] * betas[:, trials_xi]).T
-        xis = xi_numer * transition_prob
-        #print(xi_numer * transition_prob)
-        return gammas, xis, ll, ll_norm, alphas, betas
-                                                                                 
-    def run_baum_welch_jax(
-        self,
-        X: Array,
-        y: Array,
-        initial_prob: Array,
-        transition_prob: Array,
-        projection_weights: Array,
-        new_sess: Array | None = None,
-    ):
-        """
-        Baum-Welch algorithm to compute the forward-backward algorithm and return the marginal posterior distribution.
-
-        According to Bishop's "Pattern Recognition and Machine Learning".
-
-        Parameters
-        ----------
-        X : 
-            (n_time_bins x n_features) design matrix
-
-        y : 
-            (n_time_bins,) observations
-
-        initial_prob : .pi
-            (n_states x 1) initial latent state probability
-
-        transition_prob : .A
-            (n_states x n_states) latent state transition matrix
-
-        projection_weights : .w
-            (n_features x n_states) latent state GLM weights
-
-        new_sess :
-            logical array with 1s denoting the start of a new session. If unspecified or empty, treats the full set of trials as a single session.
-
-        Returns
-        -------
-        gammas :
-            (n_states x n_time_bins) marginal posterior distribution
-
-        xis :
-            (n_states x n_states x n_time_bins) joint posterior distribution
-
-        ll :
-            log-likelihood of the fit
-        """
-        # Initialize variables
-        n_time_bins = X.shape[0]  # n_time_bins and n_features from dimensions of X
-
-        # Revise if the data is one single session or multiple sessions. If new_sess is not provided, assume one session
-        if new_sess is None:
-            new_sess = jnp.zeros_like(y, dtype=bool)
-        new_sess[0] = True
-
-        # Convert new_sess to jax array
-        new_sess = jnp.asarray(new_sess)
-        initial_prob = jnp.asarray(initial_prob)
-
-        # Predicted y
-        tmpy = self.observation_model.inverse_link_function(X @ projection_weights)
-
-        # Compute likelihood given the fixed weights
-        # Data likelihood p(y|z) from emissions model
-        py_z = jnp.exp(
-            self.observation_model.log_likelihood(
-                y[:, jnp.newaxis],
-                tmpy,
-               aggregate_sample_scores = lambda x: x
-            )
-        )   # TODO Will this break with other observation models?
-        # Compute forward pass
-        with jax.disable_jit(False):
-            alphas_scan, c_scan = forward_pass(
-                initial_prob, transition_prob, py_z, new_sess
-            )  # these are equivalent to the forward pass with python loop
-        
-        #t0 = perf_counter() # Counter for benchmarking
-        # Compute backward pass
-        with jax.disable_jit(False):
-            betas_scan = backward_pass(transition_prob, py_z, c_scan, new_sess)
-        #print("\nscan", perf_counter() - t0) # Print duration of backward pass
-
-        ll = jnp.sum(jnp.log(c_scan))  # Store log-likelihood, log of Equation 13.63
-        ll_norm = jnp.exp(ll / n_time_bins) # Normalize - where did this come from?
-        #print("loop", perf_counter() - t0)
-
-        ###################### POSTERIORS
-        # Compute posterior distributions ######
-        # Gamma - Equations 13.32, 13.64
-        gammas = alphas_scan * betas_scan
-
-        # Trials to compute xi
-        trials_xi = np.arange(n_time_bins)
-        # Exclude the first trial of every session
-        trials_xi = trials_xi[~new_sess]
-
-        # Equations 13.43 and 13.65
-        # Xi summed across time steps
-        xi_numer = ((alphas_scan.T[:, trials_xi - 1] /
-                    c_scan[trials_xi]) @ 
-                    (py_z.T[:, trials_xi] * 
-                    betas_scan.T[:, trials_xi]).T
-        )
-        xis = xi_numer * transition_prob
-        return gammas, xis, ll, ll_norm, alphas_scan, betas_scan
-
-    def func_to_minimize(
-        self,
-        projection_weights, 
-        n_features,
-        n_states,
-        y, 
-        X, 
-        gammas, 
-    ):
-        projection_weights = projection_weights.reshape(n_features, n_states)
-        tmpy = self.observation_model.inverse_link_function(X @ projection_weights)
-        nll = self.observation_model._negative_log_likelihood(
-            y[:, jnp.newaxis],
-            tmpy,
-            aggregate_sample_scores = partial(lambda x: jnp.sum(gammas * x))
-        )
-        return nll
-
-    def run_m_step(
-        self,
-        y: Array,
-        X: Array,
-        gammas: Array, 
-        xis: Array, 
-        projection_weights: Array, 
-        new_sess: Array | None = None
-    ):
-        
-        n_features = projection_weights.shape[0]
-        n_states = projection_weights.shape[1]
-        n_time_bins = X.shape[0]
-
-        # Update Initial state probability eq. 13.18
-        tmp_initial_prob = np.mean(gammas[:, new_sess], axis=1)
-        initial_prob = tmp_initial_prob / np.sum(tmp_initial_prob)
-
-        # Update Transition matrix eq. 13.19
-        transition_prob = xis / np.sum(xis, axis=1)
-
-        # Minimize negative log-likelihood to update GLM weights
-        res = minimize(
-            self.func_to_minimize, 
-            projection_weights.flatten(),
-            args = (
-                n_features,
-                n_states,
-                y, 
-                X, 
-                gammas
-            ) 
+    def backward_step(posterior, beta, normalization):
+        # Normalize (Equation 13.62)
+        return jax.tree_util.tree_map(
+            lambda m, x, y, z: jnp.matmul(m, x * y) / z,
+            transition_prob,
+            posterior,
+            beta,
+            normalization,
         )
 
-        projection_weights = res.x
+    def body_fn(carry, xs):
+        posterior, norm, is_new_sess = xs
+        beta = jax.lax.cond(
+            is_new_sess,
+            initial_compute,
+            backward_step,
+            posterior,
+            carry,
+            norm,
+        )
+        return beta, carry
 
-        return projection_weights
+    # Keeping the carrys because I am interested in
+    # all outputs, including the last one.
+    _, betas = jax.lax.scan(
+        body_fn, init, (posterior_prob, normalizers, new_session), reverse=True
+    )
+    return betas
+
+
+def forward_backward(
+    X: Array,
+    y: Array,
+    initial_prob: Array,
+    transition_prob: Array,
+    projection_weights: Array,
+    inverse_link_function: Callable,
+    log_likelihood_func: Callable[[Array, Array], Array],
+    is_new_session: Pytree | None = None,
+):
+    """
+    Run the forward-backward Baum-Welch algorithm.
+
+    Run the forward-backward Baum-Welch algorithm [1]_ that compute a posterior distribution over latent
+    states.
+
+    Parameters
+    ----------
+    X :
+        Design matrix, pytree with leaves of shape ``(n_time_bins, n_features)``.
+
+    y :
+        Observations, pytree with leaves of shape ``(n_time_bins,)``.
+
+    initial_prob :
+        Initial latent state probability, pytree with leaves of shape ``(``n_states, 1)``.
+
+    transition_prob :
+        Latent state transition matrix, pytree with leaves of shape ``(n_states x n_states)``.
+
+    projection_weights :
+        Latent state GLM weights, pytree with leaves of shape ``(n_features, n_states)``.
+
+    inverse_link_function :
+        Function mapping linear predictors to the mean of the observation distribution
+        (e.g., ``jnp.exp`` for Poisson, sigmoid for Bernoulli).
+
+    log_likelihood_func :
+        Function computing the elementwise log-likelihood of observations given predicted mean values.
+        Must return an array of shape ``(n_time_bins, n_states)``.
+
+    is_new_session :
+        Boolean array marking the start of a new session.
+        If unspecified or empty, treats the full set of trials as a single session.
+
+    Returns
+    -------
+    gammas :
+        Marginal posterior distribution over latent states, shape ``(n_states, n_time_bins)``.
+
+    xis :
+        Joint posterior distribution between consecutive time steps, shape ``(n_states, n_states, n_time_bins)``.
+
+    log_likelihood :
+        Total log-likelihood of the observation sequence under the model.
+
+    log_likelihood_norm :
+        A vmapped function that computes the elementwise log-likelihood between observed
+        and predicted values. Must return an array of shape ``(n_time_bins, n_states)``.
+        The vmapping over states must be performed by the caller, outside this function,
+        using `jax.vmap` or equivalent, so that the passed function is already fully
+        vectorized over the state dimension.
+
+    alphas :
+        Forward messages (alpha values), shape ``(n_states, n_time_bins)``.
+
+    betas :
+        Backward messages (beta values), shape ``(n_states, n_time_bins)``.
+
+    References
+    ----------
+    .. [1] Bishop, C. M. (2006). *Pattern recognition and machine learning*. Springer.
+    """
+    # Initialize variables
+    n_time_bins = jax.tree_util.tree_map(
+        lambda x: x.shape[0], X
+    )  # n_time_bins and n_features from dimensions of X
+
+    # Revise if the data is one single session or multiple sessions.
+    # If new_sess is not provided, assume one session
+    if is_new_session is None:
+        # default: all False, but first time bin must be True
+        is_new_session = jax.tree_map(
+            lambda x: jax.lax.dynamic_update_index_in_dim(
+                jnp.zeros(x.shape[0], dtype=bool), True, 0, axis=0
+            ),
+            y,
+        )
+    else:
+        # use the user-provided tree, but force the first time bin to be True
+        is_new_session = jax.tree_map(
+            lambda x: jax.lax.dynamic_update_index_in_dim(
+                jnp.asarray(x, dtype=bool), True, 0, axis=0
+            ),
+            is_new_session,
+        )
+
+    # Convert new_sess to jax array
+    initial_prob = jax.tree_util.tree_map(jnp.asarray, initial_prob)
+
+    # Predicted y
+    predicted_rate_given_state = jax.tree_util.tree_map(
+        lambda x, p: inverse_link_function(x @ p), X, projection_weights
+    )
+
+    # Compute likelihood given the fixed weights
+    # Data likelihood p(y|z) from emissions model
+    conditionals = jax.tree_util.tree_map(
+        lambda x, z: jnp.exp(log_likelihood_func(x, z)),
+        y,
+        predicted_rate_given_state,
+    )
+
+    # Compute forward pass
+    alphas, normalization = forward_pass(
+        initial_prob, transition_prob, conditionals, is_new_session
+    )  # these are equivalent to the forward pass with python loop
+
+    # Compute backward pass
+    betas = backward_pass(transition_prob, conditionals, normalization, is_new_session)
+
+    log_likelihood = jax.tree_util.tree_map(
+        lambda x: jnp.sum(jnp.log(x)), normalization
+    )  # Store log-likelihood, log of Equation 13.63
+
+    log_likelihood_norm = jax.tree_util.tree_map(
+        lambda x, n: jnp.exp(x / n), log_likelihood, n_time_bins
+    )  # Normalize - where did this come from?
+
+    # Posteriors
+    # ----------
+    # Compute posterior distributions
+    # Gamma - Equations 13.32, 13.64 from [1]
+    gammas = jax.tree_util.tree_map(lambda x, z: x * z, alphas, betas)
+
+    # Equations 13.43 and 13.65 from [1]
+    # Xi summed across time steps
+    xis = jax.tree_util.tree_map(
+        lambda a, b, c, i_n_s, n, t_p: compute_xi(a, b, c, i_n_s, n, t_p),
+        alphas,
+        betas,
+        conditionals,
+        is_new_session,
+        normalization,
+        transition_prob,
+    )
+
+    return gammas, xis, log_likelihood, log_likelihood_norm, alphas, betas
+
+
+def func_to_minimize(
+    projection_weights,
+    n_states,
+    y,
+    X,
+    gammas,
+    inverse_link_function,
+    log_likelihood_func,
+):
+    """Minimize expected log-likelihood."""
+    # Reshape flat weights into tree of (n_features, n_states)
+    projection_weights = jax.tree_map(
+        lambda w: w.reshape(-1, n_states), projection_weights
+    )
+
+    # Predict mean from each feature block
+    tmpy = jax.tree_map(
+        lambda x, w: inverse_link_function(x @ w), X, projection_weights
+    )
+
+    # Compute dot products between log-likelihood terms and gammas
+    def tree_dot(a):
+        return pytree_map_and_reduce(lambda x, y: jnp.sum(x * y), sum, a, gammas)
+
+    log_likelihood_func = partial(log_likelihood_func, aggregate_sample_scores=tree_dot)
+
+    nll = log_likelihood_func(
+        y,
+        tmpy,
+    )
+
+    return nll
+
+
+def run_m_step(
+    y: Array,
+    X: Array,
+    gammas: Array,
+    projection_weights: Array,
+    inverse_link_function,
+    log_likelihood_func,
+    solver_kwargs: dict | None = None,
+):
+    """Run M-step."""
+    if solver_kwargs is None:
+        solver_kwargs = {}
+
+    n_states = projection_weights.shape[1]
+
+    objective = partial(
+        func_to_minimize,
+        n_states=n_states,
+        y=y,
+        X=X,
+        gammas=gammas,
+        inverse_link_function=inverse_link_function,
+        log_likelihood_func=log_likelihood_func,
+    )
+
+    # Minimize negative log-likelihood to update GLM weights
+    solver = LBFGS(objective, **solver_kwargs)
+    opt_param, state = solver.run(projection_weights)
+
+    return opt_param, state
