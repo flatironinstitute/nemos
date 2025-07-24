@@ -427,6 +427,7 @@ def func_to_minimize(
     def tree_dot(a):
         return pytree_map_and_reduce(lambda x, y: jnp.sum(x * y), sum, a, gammas)
 
+    # TODO:  probably vmap outside the call so that this function works
     log_likelihood_func = partial(log_likelihood_func, aggregate_sample_scores=tree_dot)
 
     nll = log_likelihood_func(
