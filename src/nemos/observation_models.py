@@ -1171,8 +1171,8 @@ class NegativeBinomialObservations(Observations):
     r"""
     A Negative Binomial model for overdispersed count data using mean-dispersion parameterization.
 
-    This model represents a Negative Binomial distribution [3]_ commonly used to model overdispersed
-    count data [4]_ [5]_ (i.e., data where the variance exceeds the mean), which cannot be captured by a
+    This model represents a Negative Binomial distribution [4]_ commonly used to model overdispersed
+    count data [5]_ [6]_ (i.e., data where the variance exceeds the mean), which cannot be captured by a
     standard Poisson model. The distribution is parameterized by the predicted mean rate
     (:math:`\mu`) and a fixed dispersion parameter (:math:`\phi`) or `scale` of the model.
 
@@ -1212,12 +1212,12 @@ class NegativeBinomialObservations(Observations):
 
     References
     ----------
-    .. [3] https://en.wikipedia.org/wiki/Negative_binomial_distribution
+    .. [4] https://en.wikipedia.org/wiki/Negative_binomial_distribution
 
-    .. [4] Pillow, Jonathan, and James Scott. "Fully Bayesian inference for neural models
+    .. [5] Pillow, Jonathan, and James Scott. "Fully Bayesian inference for neural models
         with negative-binomial spiking." Advances in neural information processing systems 25 (2012).
 
-    .. [5] Wei, Ganchao, et al. "Calibrating Bayesian decoders of neural spiking activity."
+    .. [6] Wei, Ganchao, et al. "Calibrating Bayesian decoders of neural spiking activity."
         Journal of Neuroscience 44.18 (2024).
     """
 
