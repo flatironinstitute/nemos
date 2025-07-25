@@ -164,52 +164,49 @@ def forward_pass(
 
 
 def backward_pass(
-    transition_prob: Pytree,
-    posterior_prob: Pytree,
-    normalizers: Pytree,
-    new_session: Pytree,
+    transition_prob: Array,
+    posterior_prob: Array,
+    normalizers: Array,
+    new_session: Array,
 ):
     """
     Run the backward pass of the HMM inference algorithm to compute beta messages.
 
-    This function performs a backward recursion (using `jax.lax.scan` in reverse) to compute
-    the beta messages for a probabilistic model. It supports PyTree-structured state spaces
-    and handles session boundaries by resetting the recursion when a new session starts.
+    This function performs the backward recursion step of the forward–backward algorithm,
+    using ``jax.lax.scan`` in reverse to compute beta messages at each time step. It handles
+    session boundaries by resetting the beta messages when a new session starts.
 
     Parameters
     ----------
     transition_prob :
-        A PyTree containing transition matrices of shape `(n_states, n_states)`
-        where `T[i, j]` is the probability of transitioning from state `j` to state `i`.
-        The matrix is internally transposed to match the recursion logic.
+        Transition matrix of shape ``(n_states, n_states)``, where entry ``T[i, j]`` is the
+        probability of transitioning from state ``j`` to state ``i``.
 
     posterior_prob :
-        A PyTree of arrays, each of shape `(n_time_bins, n_states)`, representing the observation
-        likelihoods (posterior probabilities) at each time step for each state.
+        Array of shape ``(n_time_bins, n_states)``, representing the observation likelihoods
+        ``p(y_t | z_t)`` at each time step for each state.
 
     normalizers :
-        A PyTree of arrays, each of shape `(n_time_bins,)`, representing the normalization
-        constants from the forward pass (e.g., `alpha.sum()` at each time step). These are used
-        to normalize the beta recursion.
+        Array of shape ``(n_time_bins,)`` containing the normalization constants from the forward
+        pass (e.g., sums of alpha messages). These are used to normalize the backward recursion.
 
     new_session :
-        A PyTree of boolean arrays of shape `(n_time_bins,)` indicating the start of new sessions.
-        When `new_session[t]` is True, the backward message is reset to a vector of ones at that time step.
+        Boolean array of shape ``(n_time_bins,)`` indicating the start of new sessions. When
+        ``new_session[t]`` is True, the backward message at time ``t`` is reset to a vector of ones.
 
     Returns
     -------
     betas :
-        A PyTree of arrays, each of shape `(n_time_bins, n_states)`, representing the beta messages
-        at each time step. The output is aligned such that `betas[t]` corresponds to the backward
-        message at time `t`, matching the forward time indexing used in standard HMM inference.
+        Array of shape ``(n_time_bins, n_states)``, containing the beta messages at each time step.
+        The indexing is aligned with the forward pass, such that ``betas[t]`` corresponds to the
+        backward message at time ``t``.
 
     Notes
     -----
-    This implementation assumes all PyTrees share the same structure and compatible shapes.
-    It follows the standard HMM backward equations (e.g., Bishop Eq. 13.38–13.39), including
-    reinitialization for segmented sequences.
+    This implementation follows the standard HMM backward equations (Bishop, 2006, Eq. 13.38–13.39),
+    including reinitialization for segmented sequences.
 
-    If this was regular python code, it would look similar to:
+    Equivalent pseudocode in standard Python:
 
     .. code-block:: python
 
@@ -227,21 +224,15 @@ def backward_pass(
                 )
                 betas[:, t] /= c[t + 1]
     """
-    init = jax.tree_util.tree_map(lambda x: jnp.ones_like(x[0]), posterior_prob)
+    init = jnp.ones_like(posterior_prob[0])
 
     def initial_compute(posterior, *_):
         # Initialize
-        return jax.tree_util.tree_map(lambda x: jnp.ones_like(x), posterior)
+        return jnp.ones_like(posterior)
 
     def backward_step(posterior, beta, normalization):
         # Normalize (Equation 13.62)
-        return jax.tree_util.tree_map(
-            lambda m, x, y, z: jnp.matmul(m, x * y) / z,
-            transition_prob,
-            posterior,
-            beta,
-            normalization,
-        )
+        return jnp.matmul(transition_prob, posterior * beta) / normalization
 
     def body_fn(carry, xs):
         posterior, norm, is_new_sess = xs
