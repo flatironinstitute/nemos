@@ -59,50 +59,45 @@ def forward_pass(
     new_session: Pytree,
 ) -> Tuple[Pytree, Pytree]:
     """
-    Forward pass of a HMM.
+    Forward pass of an HMM.
 
-    This function performs a recursive forward pass over time using JAX's `lax.scan`,
-    updating filtered probabilities (`alpha`) based on either an initial distribution
-    or a transition matrix, depending on whether a new session starts at a given time step.
+    This function performs the recursive forward pass over time using ``jax.lax.scan``,
+    computing the filtered probabilities (``alpha``) at each time step. At the start of
+    a new session, the recursion is reset using the initial state distribution.
 
     Parameters
     ----------
     initial_prob :
-        Initial probability distribution for each leaf in the tree. Each leaf is typically
-        a 1D array of shape `(n_states,)`.
+        Initial state probability distribution, array of shape ``(n_states,)``.
 
     transition_prob :
-        Transition matrix or tree of transition matrices, where each entry `T[i, j]`
-        represents the probability of transitioning from state `j` to state `i`.
-        The transition matrix should be compatible with `jnp.matmul` applied to the `alpha` vector.
+        Transition matrix of shape ``(n_states, n_states)``, where entry ``T[i, j]`` is the
+        probability of transitioning from state ``j`` to state ``i``.
 
     posterior_prob :
-        A tree of arrays of shape `(n_time_bins, n_states)`, representing the observation likelihood
-        at each time step for each state.
+        Array of shape ``(n_time_bins, n_states)``, representing the observation likelihood
+        ``p(y_t | z_t)`` at each time step for each state.
 
     new_session :
-        A tree of boolean arrays of shape `(n_time_bins,)`, where each element indicates
-        whether a new session starts at that time step (in which case `initial_prob` is used
-        instead of a transition update).
+        Boolean array of shape ``(n_time_bins,)`` indicating the start of new sessions. When
+        ``new_session[t]`` is True, the recursion at time ``t`` is reset using ``initial_prob``.
 
     Returns
     -------
     alphas :
-        A tree of arrays of shape `(n_time_bins, n_states)`, containing the filtered
-        probabilities at each time step. Represents the joint probability of observing all
-        of the given data up to time n (first dimension) and the value n_state (second dimension).
+        Array of shape ``(n_time_bins, n_states)``, containing the filtered probabilities
+        at each time step. ``alphas[t]`` corresponds to the forward message at time ``t``.
 
     normalizers :
-        A tree of arrays of shape `(n_time_bins,)`, representing the normalization constant
-        (sum of probabilities) at each time step. Can be used for log-likelihood computation.
+        Array of shape ``(n_time_bins,)`` containing the normalization constants at each
+        time step. These values can be used to compute the log-likelihood of the sequence.
 
     Notes
     -----
-    The function assumes all PyTrees (`initial_prob`, `posterior_prob`, etc.) have matching
-    structures and compatible shapes. Normalization at each time step is done safely by
-    guarding against divide-by-zero errors.
+    Normalization is performed at each time step to avoid numerical underflow, guarding
+    against divide-by-zero errors.
 
-    If this was computed in regular python code, it would look something like:
+    Equivalent pseudocode in standard Python:
 
     .. code-block:: python
 
@@ -111,15 +106,11 @@ def forward_pass(
 
         for t in range(n_time_bins):
             if new_sess[t]:
-                alphas[:, t] = (
-                    initial_prob * py_z.T[:, t]
-                )
+                alphas[:, t] = initial_prob * py_z.T[:, t]
             else:
-                alphas[:, t] = py_z.T[:, t] * (
-                    transition_prob.T @ alphas[:, t - 1]
-                )
+                alphas[:, t] = py_z.T[:, t] * (transition_prob.T @ alphas[:, t - 1])
 
-            c[t] = np.sum(alphas[:, t])  # Store marginal likelihood
+            c[t] = np.sum(alphas[:, t])
             alphas[:, t] /= c[t]
     """
 
