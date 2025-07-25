@@ -271,7 +271,7 @@ def forward_backward(
     projection_weights: Array,
     inverse_link_function: Callable,
     likelihood_func: Callable[[Array, Array], Array],
-    is_new_session: Pytree | None = None,
+    is_new_session: Array | None = None,
 ):
     """
     Run the forward-backward Baum-Welch algorithm.
@@ -337,44 +337,27 @@ def forward_backward(
     .. [1] Bishop, C. M. (2006). *Pattern recognition and machine learning*. Springer.
     """
     # Initialize variables
-    n_time_bins = jax.tree_util.tree_map(
-        lambda x: x.shape[0], X
-    )  # n_time_bins and n_features from dimensions of X
+    n_time_bins = X.shape[0]
 
     # Revise if the data is one single session or multiple sessions.
     # If new_sess is not provided, assume one session
     if is_new_session is None:
         # default: all False, but first time bin must be True
-        is_new_session = jax.tree_util.tree_map(
-            lambda x: jax.lax.dynamic_update_index_in_dim(
-                jnp.zeros(x.shape[0], dtype=bool), True, 0, axis=0
-            ),
-            y,
+        is_new_session = jax.lax.dynamic_update_index_in_dim(
+            jnp.zeros(y.shape[0], dtype=bool), True, 0, axis=0
         )
     else:
         # use the user-provided tree, but force the first time bin to be True
-        is_new_session = jax.tree_util.tree_map(
-            lambda x: jax.lax.dynamic_update_index_in_dim(
-                jnp.asarray(x, dtype=bool), True, 0, axis=0
-            ),
-            is_new_session,
+        is_new_session = jax.lax.dynamic_update_index_in_dim(
+            jnp.asarray(is_new_session, dtype=bool), True, 0, axis=0
         )
 
-    # Convert new_sess to jax array
-    initial_prob = jax.tree_util.tree_map(jnp.asarray, initial_prob)
-
     # Predicted y
-    predicted_rate_given_state = jax.tree_util.tree_map(
-        lambda x, p: inverse_link_function(x @ p), X, projection_weights
-    )
+    predicted_rate_given_state = inverse_link_function(X @ projection_weights)
 
     # Compute likelihood given the fixed weights
     # Data likelihood p(y|z) from emissions model
-    conditionals = jax.tree_util.tree_map(
-        lambda x, z: likelihood_func(x, z),
-        y,
-        predicted_rate_given_state,
-    )
+    conditionals = likelihood_func(y, predicted_rate_given_state)
 
     # Compute forward pass
     alphas, normalization = forward_pass(
@@ -384,24 +367,23 @@ def forward_backward(
     # Compute backward pass
     betas = backward_pass(transition_prob, conditionals, normalization, is_new_session)
 
-    log_likelihood = jax.tree_util.tree_map(
-        lambda x: jnp.sum(jnp.log(x)), normalization
+    log_likelihood = jnp.sum(
+        jnp.log(normalization)
     )  # Store log-likelihood, log of Equation 13.63
 
-    log_likelihood_norm = jax.tree_util.tree_map(
-        lambda x, n: jnp.exp(x / n), log_likelihood, n_time_bins
+    log_likelihood_norm = jnp.exp(
+        log_likelihood / n_time_bins
     )  # Normalize - where did this come from?
 
     # Posteriors
     # ----------
     # Compute posterior distributions
     # Gamma - Equations 13.32, 13.64 from [1]
-    gammas = jax.tree_util.tree_map(lambda x, z: x * z, alphas, betas)
+    gammas = alphas * betas
 
     # Equations 13.43 and 13.65 from [1]
     # Xi summed across time steps
-    xis = jax.tree_util.tree_map(
-        lambda a, b, c, n, i_n_s, t_p: compute_xi(a, b, c, n, i_n_s, t_p),
+    xis = compute_xi(
         alphas,
         betas,
         conditionals,
@@ -409,17 +391,6 @@ def forward_backward(
         is_new_session,
         transition_prob,
     )
-
-    trials_xi = jnp.arange(n_time_bins)
-    trials_xi = trials_xi[~is_new_session]
-
-    # Equations 13.43 and 13.65
-    # Xi summed across time steps
-    xi_numer = (alphas[trials_xi - 1].T / normalization[trials_xi]) @ (
-        conditionals[trials_xi] * betas[trials_xi]
-    )
-    xis2 = xi_numer * transition_prob
-    print("\nnew - old\n", xis - xis2)
     return gammas, xis, log_likelihood, log_likelihood_norm, alphas, betas
 
 
