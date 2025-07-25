@@ -9,7 +9,6 @@ from numpy.typing import NDArray
 
 from .third_party.jaxopt.jaxopt import LBFGS
 from .tree_utils import pytree_map_and_reduce
-from .typing import Pytree
 
 Array = NDArray | jax.numpy.ndarray
 
@@ -53,11 +52,11 @@ def compute_xi(
 
 
 def forward_pass(
-    initial_prob: Pytree,
-    transition_prob: Pytree,
-    posterior_prob: Pytree,
-    new_session: Pytree,
-) -> Tuple[Pytree, Pytree]:
+    initial_prob: Array,
+    transition_prob: Array,
+    posterior_prob: Array,
+    new_session: Array,
+) -> Tuple[Array, Array]:
     """
     Forward pass of an HMM.
 
