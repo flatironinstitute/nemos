@@ -1203,7 +1203,7 @@ class BernoulliObservations(Observations):
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
-        aggregate_sample_scores: Callable = jnp.mean,
+        aggregate_sample_scores: Callable = jnp.prod,
     ):
         r"""Compute the Binomial model likelihood.
 
@@ -1219,7 +1219,7 @@ class BernoulliObservations(Observations):
         scale :
             The scale parameter of the model
         aggregate_sample_scores :
-            Function that aggregates the log-likelihood of each sample.
+            Function that aggregates the likelihood of each sample.
 
         Returns
         -------
@@ -1235,7 +1235,9 @@ class BernoulliObservations(Observations):
         # y can be only 0 or 1 and the likelihood
         # (predicted_rate) ** y * (1 - predicted_rate) ** (1-y)
         # is equal to the computation below, easily shown by plugging y=0,1
-        return y * predicted_rate + (1 - y) * (1 - predicted_rate)
+        return aggregate_sample_scores(
+            y * predicted_rate + (1 - y) * (1 - predicted_rate)
+        )
 
 
 class NegativeBinomialObservations(Observations):
