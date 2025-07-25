@@ -63,4 +63,4 @@ def test_e_step_regression():
     np.testing.assert_almost_equal(gammas.T, gammas_nemos, decimal=4)
 
     # testing 13.65 of Bishop
-    np.testing.assert_almost_equal(xis.T, xis_nemos, decimal=4)
+    np.testing.assert_almost_equal(xis, xis_nemos, decimal=4)
