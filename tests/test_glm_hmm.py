@@ -50,9 +50,6 @@ def test_e_step_regression(decorator):
         )
     )
 
-    print(log_likelihood, ll_nemos)
-    print(f"\n{ll_nemos.shape}\n{ll_norm_orig.shape}")
-
     # First testing alphas and betas because they are computed first
     np.testing.assert_almost_equal(alphas.T, alphas_nemos, decimal=4)
     np.testing.assert_almost_equal(betas.T, betas_nemos, decimal=4)
