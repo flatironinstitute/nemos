@@ -373,6 +373,9 @@ def forward_backward(
     return gammas, xis, log_likelihood, log_likelihood_norm, alphas, betas
 
 
+# TODO: Rename using bishob convention
+# TODO: do not use partial inside the function, pass the log likelihood already partialized with an identity map
+# and to the score aggregation jnp.sum(nll * gammas) inside.
 def func_to_minimize(
     projection_weights,
     n_states,
@@ -383,6 +386,7 @@ def func_to_minimize(
     log_likelihood_func,
 ):
     """Minimize expected log-likelihood."""
+    #####
     # Reshape flat weights into tree of (n_features, n_states)
     projection_weights = jax.tree_util.tree_map(
         lambda w: w.reshape(-1, n_states), projection_weights
