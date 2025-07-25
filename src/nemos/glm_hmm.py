@@ -364,8 +364,8 @@ def forward_backward(
     # Gamma - Equations 13.32, 13.64 from [1]
     posteriors = alphas * betas
 
-    # Equations 13.43 and 13.65 from [1]
-    # Xi summed across time steps
+    # xis Equations 13.43 and 13.65 from [1]
+    # Posterior over consecutive states summed across time steps
     joint_posterior = compute_xi(
         alphas,
         betas,
