@@ -14,32 +14,42 @@ from .typing import Pytree
 Array = NDArray | jax.numpy.ndarray
 
 
-def compute_xi(alphas, betas, conditionals, norm, new_sess, transition_prob):
+def compute_xi(
+    alphas, betas, conditionals, normalization, is_new_session, transition_prob
+):
     """
     Compute the expected joint posterior (xi) over consecutive latent states.
 
     Parameters
     ----------
-    alphas : (T, n_states)
-        Forward messages.
-    betas : (T, n_states)
-        Backward messages.
-    conditionals : (T, n_states)
-        Observation likelihoods p(y_t | z_t).
-    norm : (T,)
-        Normalization constants from forward pass.
-    new_sess : (T,)
-        Boolean array, True at start of new sessions.
-    transition_prob : (n_states, n_states)
-        Transition probability matrix.
+    alphas :
+        Forward messages, shape ``(n_time_bins, n_states)``
+    betas :
+        Backward messages, shape ``(n_time_bins, n_states)``.
+    conditionals :
+        Observation likelihoods p(y_t | z_t), shape ``(n_time_bins, n_states)``.
+    normalization :
+        Normalization constants from forward pass, shape ``(n_time_bins,)``.
+    is_new_session :
+        Boolean array, True at start of new sessions, shape ``(n_time_bins,)``.
+    transition_prob :
+        Transition probability matrix, shape ``(n_states, n_states)``.
 
     Returns
     -------
     xi_all : (T, n_states, n_states)
         Expected joint posteriors between time steps.
     """
-    # TODO: compute xis
-    return jnp.zeros((*alphas.shape, alphas.shape[1]))  # (T, n_states, n_states)
+    # shift alpha so that alpha[t-1] aligns with beta[t]
+    norm_alpha = alphas[:-1] / normalization[1:, jnp.newaxis]
+
+    # mask out steps where t is a new session
+    norm_alpha = jnp.where(is_new_session[1:, jnp.newaxis], 0.0, norm_alpha)
+
+    # Compute xi sum in one matmul
+    xi_sum = norm_alpha.T @ (conditionals[1:] * betas[1:])
+
+    return xi_sum * transition_prob
 
 
 def forward_pass(
@@ -67,7 +77,7 @@ def forward_pass(
         The transition matrix should be compatible with `jnp.matmul` applied to the `alpha` vector.
 
     posterior_prob :
-        A tree of arrays of shape `(n_states, n_time_bins)`, representing the observation likelihood
+        A tree of arrays of shape `(n_time_bins, n_states)`, representing the observation likelihood
         at each time step for each state.
 
     new_session :
@@ -391,15 +401,25 @@ def forward_backward(
     # Equations 13.43 and 13.65 from [1]
     # Xi summed across time steps
     xis = jax.tree_util.tree_map(
-        lambda a, b, c, i_n_s, n, t_p: compute_xi(a, b, c, i_n_s, n, t_p),
+        lambda a, b, c, n, i_n_s, t_p: compute_xi(a, b, c, n, i_n_s, t_p),
         alphas,
         betas,
         conditionals,
-        is_new_session,
         normalization,
+        is_new_session,
         transition_prob,
     )
 
+    trials_xi = jnp.arange(n_time_bins)
+    trials_xi = trials_xi[~is_new_session]
+
+    # Equations 13.43 and 13.65
+    # Xi summed across time steps
+    xi_numer = (alphas[trials_xi - 1].T / normalization[trials_xi]) @ (
+        conditionals[trials_xi] * betas[trials_xi]
+    )
+    xis2 = xi_numer * transition_prob
+    print("\nnew - old\n", xis - xis2)
     return gammas, xis, log_likelihood, log_likelihood_norm, alphas, betas
 
 
