@@ -1203,7 +1203,7 @@ class BernoulliObservations(Observations):
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
-        aggregate_sample_scores: Callable = jnp.prod,
+        aggregate_sample_scores: Callable = lambda x: jnp.exp(jnp.mean(jnp.log(x))),
     ):
         r"""Compute the Binomial model likelihood.
 
