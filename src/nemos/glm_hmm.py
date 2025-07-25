@@ -125,14 +125,12 @@ def forward_pass(
 
     def initial_compute(posterior, _):
         # Equation 13.37. Reinitialize for new sessions
-        return jax.tree_util.tree_map(lambda a, b: a * b, posterior, initial_prob)
+        return posterior * initial_prob
 
     def transition_compute(posterior, alpha_previous):
         # Equation 13.36
-        exp_transition = jax.tree_util.tree_map(
-            jnp.matmul, transition_prob, alpha_previous
-        )
-        return jax.tree_util.tree_map(lambda a, b: a * b, posterior, exp_transition)
+        exp_transition = jnp.matmul(transition_prob, alpha_previous)
+        return posterior * exp_transition
 
     def body_fn(carry, xs):
         alpha_previous = carry
@@ -155,8 +153,8 @@ def forward_pass(
         alpha = alpha / const  # Normalize - Equation 13.59
         return alpha, (alpha, const)
 
-    init = jax.tree_util.tree_map(lambda x: jnp.zeros_like(x[0]), posterior_prob)
-    transition_prob = jax.tree_util.tree_map(lambda x: x.T, transition_prob)
+    init = jnp.zeros_like(posterior_prob[0])
+    transition_prob = transition_prob.T
     _, (alphas, normalizers) = jax.lax.scan(
         body_fn, init, (posterior_prob, new_session)
     )
