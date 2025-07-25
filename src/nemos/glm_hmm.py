@@ -332,7 +332,7 @@ def forward_backward(
         )
 
     # Predicted y
-    if X.ndim > 2:
+    if projection_weights.ndim > 2:
         predicted_rate_given_state = jnp.einsum("ijk, kjw->ijw", X, projection_weights)
     else:
         predicted_rate_given_state = inverse_link_function(X @ projection_weights)
