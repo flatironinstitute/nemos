@@ -54,7 +54,7 @@ def compute_xi(
 def forward_pass(
     initial_prob: Array,
     transition_prob: Array,
-    posterior_prob: Array,
+    conditional_prob: Array,
     new_session: Array,
 ) -> Tuple[Array, Array]:
     """
@@ -73,7 +73,7 @@ def forward_pass(
         Transition matrix of shape ``(n_states, n_states)``, where entry ``T[i, j]`` is the
         probability of transitioning from state ``j`` to state ``i``.
 
-    posterior_prob :
+    conditional_prob :
         Array of shape ``(n_time_bins, n_states)``, representing the observation likelihood
         ``p(y_t | z_t)`` at each time step for each state.
 
@@ -143,17 +143,17 @@ def forward_pass(
         alpha = alpha / const  # Normalize - Equation 13.59
         return alpha, (alpha, const)
 
-    init = jnp.zeros_like(posterior_prob[0])
+    init = jnp.zeros_like(conditional_prob[0])
     transition_prob = transition_prob.T
     _, (alphas, normalizers) = jax.lax.scan(
-        body_fn, init, (posterior_prob, new_session)
+        body_fn, init, (conditional_prob, new_session)
     )
     return alphas, normalizers
 
 
 def backward_pass(
     transition_prob: Array,
-    posterior_prob: Array,
+    conditional_prob: Array,
     normalizers: Array,
     new_session: Array,
 ):
@@ -170,7 +170,7 @@ def backward_pass(
         Transition matrix of shape ``(n_states, n_states)``, where entry ``T[i, j]`` is the
         probability of transitioning from state ``j`` to state ``i``.
 
-    posterior_prob :
+    conditional_prob :
         Array of shape ``(n_time_bins, n_states)``, representing the observation likelihoods
         ``p(y_t | z_t)`` at each time step for each state.
 
@@ -212,7 +212,7 @@ def backward_pass(
                 )
                 betas[:, t] /= c[t + 1]
     """
-    init = jnp.ones_like(posterior_prob[0])
+    init = jnp.ones_like(conditional_prob[0])
 
     def initial_compute(posterior, *_):
         # Initialize
@@ -237,7 +237,7 @@ def backward_pass(
     # Keeping the carrys because I am interested in
     # all outputs, including the last one.
     _, betas = jax.lax.scan(
-        body_fn, init, (posterior_prob, normalizers, new_session), reverse=True
+        body_fn, init, (conditional_prob, normalizers, new_session), reverse=True
     )
     return betas
 
@@ -289,10 +289,10 @@ def forward_backward(
 
     Returns
     -------
-    gammas :
+    posteriors :
         Marginal posterior distribution over latent states, shape ``(n_states, n_time_bins)``.
 
-    xis :
+    joint_posterior :
         Joint posterior distribution between consecutive time steps, shape ``(n_states, n_states, n_time_bins)``.
 
     log_likelihood :
@@ -336,7 +336,13 @@ def forward_backward(
 
     # Compute likelihood given the fixed weights
     # Data likelihood p(y|z) from emissions model
+
+    # Assume conditional independence of the components
+    # TODO: Generalize this to work with a N-dimensional distribution
+    # such as a multinomial.
     conditionals = likelihood_func(y, predicted_rate_given_state)
+    if conditionals.ndim > 2:
+        conditionals = jnp.prod(conditionals, axis=1)
 
     # Compute forward pass
     alphas, normalization = forward_pass(
@@ -350,19 +356,17 @@ def forward_backward(
         jnp.log(normalization)
     )  # Store log-likelihood, log of Equation 13.63
 
-    log_likelihood_norm = jnp.exp(
-        log_likelihood / n_time_bins
-    )  # Normalize - where did this come from?
+    log_likelihood_norm = jnp.exp(log_likelihood / n_time_bins)  # Normalize
 
     # Posteriors
     # ----------
     # Compute posterior distributions
     # Gamma - Equations 13.32, 13.64 from [1]
-    gammas = alphas * betas
+    posteriors = alphas * betas
 
     # Equations 13.43 and 13.65 from [1]
     # Xi summed across time steps
-    xis = compute_xi(
+    joint_posterior = compute_xi(
         alphas,
         betas,
         conditionals,
@@ -370,7 +374,14 @@ def forward_backward(
         is_new_session,
         transition_prob,
     )
-    return gammas, xis, log_likelihood, log_likelihood_norm, alphas, betas
+    return (
+        posteriors,
+        joint_posterior,
+        log_likelihood,
+        log_likelihood_norm,
+        alphas,
+        betas,
+    )
 
 
 # TODO: Rename using bishob convention
