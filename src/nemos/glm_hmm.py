@@ -332,7 +332,10 @@ def forward_backward(
         )
 
     # Predicted y
-    predicted_rate_given_state = inverse_link_function(X @ projection_weights)
+    if X.ndim > 2:
+        predicted_rate_given_state = jnp.einsum("ijk, kjw->ijw", X, projection_weights)
+    else:
+        predicted_rate_given_state = inverse_link_function(X @ projection_weights)
 
     # Compute likelihood given the fixed weights
     # Data likelihood p(y|z) from emissions model
@@ -340,9 +343,9 @@ def forward_backward(
     # Assume conditional independence of the components
     # TODO: Generalize this to work with a N-dimensional distribution
     # such as a multinomial.
+    # NOTE: for N conditionally independent neurons, define the
+    # likelihood_func = partial(Observations.likelihood, aggregation_score=lambda x: jnp.prod(x, axis=1))
     conditionals = likelihood_func(y, predicted_rate_given_state)
-    if conditionals.ndim > 2:
-        conditionals = jnp.prod(conditionals, axis=1)
 
     # Compute forward pass
     alphas, normalization = forward_pass(
