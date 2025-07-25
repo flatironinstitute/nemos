@@ -899,9 +899,9 @@ def population_bernoulliGLM_model_instantiation():
 def population_bernoulliGLM_model_instantiation_pytree(
     population_bernoulliGLM_model_instantiation,
 ):
-    """Set up a population Poisson GLM for testing purposes.
+    """Set up a population Bernoulli GLM for testing purposes.
 
-    This fixture initializes a Poisson GLM with random parameters, simulates its response, and
+    This fixture initializes a Bernoulli GLM with random parameters, simulates its response, and
     returns the test data, expected output, the model instance, true parameters, and the rate
     of response.
 
