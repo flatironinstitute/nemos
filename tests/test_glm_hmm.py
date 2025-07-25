@@ -5,9 +5,10 @@ import pytest
 from nemos.fetch import fetch_data
 from nemos.glm_hmm import forward_backward
 from nemos.observation_models import BernoulliObservations
+from functools import partial
 
-
-def test_e_step_regression():
+@pytest.mark.parametrize("decorator", [lambda x: x, partial(jax.jit, static_argnames=["likelihood_func", "inverse_link_function"])])
+def test_e_step_regression(decorator):
     jax.config.update("jax_enable_x64", True)
     # Fetch the data
     data_path = fetch_data("e_step_three_states.npz")
@@ -35,8 +36,9 @@ def test_e_step_regression():
         out_axes=1,
     )
 
+    decorated_forward_backward = decorator(forward_backward)
     gammas_nemos, xis_nemos, ll_nemos, ll_norm_nemos, alphas_nemos, betas_nemos = (
-        forward_backward(
+        decorated_forward_backward(
             X,
             y.flatten(),
             initial_prob,
