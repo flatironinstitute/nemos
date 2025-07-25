@@ -356,7 +356,7 @@ def forward_backward(
     #
     #     # vmap over the state axis: apply log_likelihood_func for each state
     #     # Result: shape (S, N, K)
-    #     log_like = jax.vmap(log_likelihood_func, in_axes=(None, 2))(y, rate)
+    #     log_like = jax.vmap(log_likelihood_func, in_axes=(None, 2), out_axes=2)(y, rate)
     #
     #     # Combine neurons assuming conditional independence:
     #     # sum log-likelihoods over neurons (axis=1), then exponentiate for stability
