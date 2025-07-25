@@ -36,8 +36,8 @@ def compute_xi(
 
     Returns
     -------
-    xi_all : (T, n_states, n_states)
-        Expected joint posteriors between time steps.
+    :
+        Expected joint posteriors between time steps, shape ``(n_states, n_states)``.
     """
     # shift alpha so that alpha[t-1] aligns with beta[t]
     norm_alpha = alphas[:-1] / normalization[1:, jnp.newaxis]
