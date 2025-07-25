@@ -339,12 +339,14 @@ def forward_backward(
 
     # Compute likelihood given the fixed weights
     # Data likelihood p(y|z) from emissions model
-
-    # Assume conditional independence of the components
-    # TODO: Generalize this to work with a N-dimensional distribution
-    # such as a multinomial.
-    # NOTE: for N conditionally independent neurons, define the
-    # likelihood_func = partial(Observations.likelihood, aggregation_score=lambda x: jnp.prod(x, axis=1))
+    # NOTE:
+    # For N conditionally independent neurons, define
+    # likelihood_func = partial(
+    #     observation_instance.likelihood,
+    #     aggregate_sample_scores = lambda x: jnp.prod(x, axis=1)
+    # )
+    # where observation_instance is an instance of
+    # nemos.observation_models.Observations
     conditionals = likelihood_func(y, predicted_rate_given_state)
 
     # Compute forward pass
