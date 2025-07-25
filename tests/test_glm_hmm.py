@@ -16,7 +16,7 @@ from nemos.observation_models import BernoulliObservations
         partial(jax.jit, static_argnames=["likelihood_func", "inverse_link_function"]),
     ],
 )
-def test_e_step_regression(decorator):
+def test_forward_backward_regression(decorator):
     jax.config.update("jax_enable_x64", True)
     # Fetch the data
     data_path = fetch_data("e_step_three_states.npz")
@@ -71,3 +71,6 @@ def test_e_step_regression(decorator):
 
     # testing 13.65 of Bishop
     np.testing.assert_almost_equal(xis, xis_nemos, decimal=4)
+
+def test_forward_backward_regression():
+    jax.config.update("jax_enable_x64", True)

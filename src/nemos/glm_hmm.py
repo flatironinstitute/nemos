@@ -373,10 +373,7 @@ def forward_backward(
     return gammas, xis, log_likelihood, log_likelihood_norm, alphas, betas
 
 
-# TODO: Rename using bishob convention
-# TODO: do not use partial inside the function, pass the log likelihood already partialized with an identity map
-# and to the score aggregation jnp.sum(nll * gammas) inside.
-def func_to_minimize(
+def hmm_negative_log_likelihood(
     projection_weights,
     n_states,
     y,
@@ -396,17 +393,15 @@ def func_to_minimize(
         lambda x, w: inverse_link_function(x @ w), X, projection_weights
     )
 
-    # Compute dot products between log-likelihood terms and gammas
-    def tree_dot(a):
-        return pytree_map_and_reduce(lambda x, y: jnp.sum(x * y), sum, a, gammas)
-
-    # TODO:  probably vmap outside the call so that this function works
-    log_likelihood_func = partial(log_likelihood_func, aggregate_sample_scores=tree_dot)
+    log_likelihood_func = partial(log_likelihood_func, aggregate_sample_scores= lambda x: x)
 
     nll = log_likelihood_func(
         y,
         tmpy,
     )
+
+    # Compute dot products between log-likelihood terms and gammas
+    nll = jnp.sum(nll * gammas)
 
     return nll
 
@@ -427,7 +422,7 @@ def run_m_step(
     n_states = projection_weights.shape[1]
 
     objective = partial(
-        func_to_minimize,
+        hmm_negative_log_likelihood,
         n_states=n_states,
         y=y,
         X=X,
