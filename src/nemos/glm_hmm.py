@@ -363,8 +363,8 @@ def forward_backward(
     #     # Final shape: (S, K)
     #     return jnp.exp(jnp.sum(log_like, axis=1))
     #
-    # Here, log_likelihood_func is the `log_likelihood` method from
-    # nemos.observation_models.Observations.
+    # Here, log_likelihood_func is the ``log_likelihood`` method from
+    # nemos.observation_models.Observations with ``aggregate_sample_scores = lambda x:x``
 
     conditionals = likelihood_func(y, predicted_rate_given_state)
 
