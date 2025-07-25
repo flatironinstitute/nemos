@@ -1,3 +1,5 @@
+from functools import partial
+
 import jax
 import numpy as np
 import pytest
@@ -5,9 +7,15 @@ import pytest
 from nemos.fetch import fetch_data
 from nemos.glm_hmm import forward_backward
 from nemos.observation_models import BernoulliObservations
-from functools import partial
 
-@pytest.mark.parametrize("decorator", [lambda x: x, partial(jax.jit, static_argnames=["likelihood_func", "inverse_link_function"])])
+
+@pytest.mark.parametrize(
+    "decorator",
+    [
+        lambda x: x,
+        partial(jax.jit, static_argnames=["likelihood_func", "inverse_link_function"]),
+    ],
+)
 def test_e_step_regression(decorator):
     jax.config.update("jax_enable_x64", True)
     # Fetch the data

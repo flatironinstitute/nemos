@@ -386,7 +386,6 @@ def func_to_minimize(
     log_likelihood_func,
 ):
     """Minimize expected log-likelihood."""
-    #####
     # Reshape flat weights into tree of (n_features, n_states)
     projection_weights = jax.tree_util.tree_map(
         lambda w: w.reshape(-1, n_states), projection_weights
