@@ -413,9 +413,21 @@ def run_m_step(
     projection_weights: Array,
     inverse_link_function,
     log_likelihood_func,
+    is_new_session,
+    xis,
     solver_kwargs: dict | None = None,
 ):
     """Run M-step."""
+
+    # Update Initial state probability eq. 13.18
+    # gammas -> n_time_bins x n_states
+    # take the sum over the time dimension of only the first trial of each session
+    tmp_initial_prob = jnp.mean(gammas, axis=0, where=is_new_session)
+    new_initial_prob = tmp_initial_prob / jnp.sum(tmp_initial_prob)
+
+    # Update Transition matrix eq. 13.19
+    new_transition_prob = xis / jnp.sum(xis, axis=1)
+
     if solver_kwargs is None:
         solver_kwargs = {}
 
@@ -435,4 +447,4 @@ def run_m_step(
     solver = LBFGS(objective, **solver_kwargs)
     opt_param, state = solver.run(projection_weights)
 
-    return opt_param, state
+    return opt_param, new_initial_prob, new_transition_prob, state
