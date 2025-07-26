@@ -409,8 +409,6 @@ def hmm_negative_log_likelihood(
         lambda x, w: inverse_link_function(x @ w), X, projection_weights
     )
 
-    log_likelihood_func = partial(log_likelihood_func, aggregate_sample_scores= lambda x: x)
-
     nll = log_likelihood_func(
         y,
         tmpy,
@@ -423,14 +421,14 @@ def hmm_negative_log_likelihood(
 
 
 def run_m_step(
-    y: Array,
     X: Array,
+    y: Array,
     gammas: Array,
-    projection_weights: Array,
-    inverse_link_function,
-    log_likelihood_func,
-    is_new_session,
     xis,
+    projection_weights: Array,
+    log_likelihood_func,
+    inverse_link_function,
+    is_new_session,
     solver_kwargs: dict | None = None,
 ):
     """Run M-step."""
@@ -438,7 +436,7 @@ def run_m_step(
     # Update Initial state probability eq. 13.18
     # gammas -> n_time_bins x n_states
     # take the sum over the time dimension of only the first trial of each session
-    tmp_initial_prob = jnp.mean(gammas, axis=0, where=is_new_session)
+    tmp_initial_prob = jnp.mean(gammas, axis=0, where=is_new_session[:,jnp.newaxis])
     new_initial_prob = tmp_initial_prob / jnp.sum(tmp_initial_prob)
 
     # Update Transition matrix eq. 13.19

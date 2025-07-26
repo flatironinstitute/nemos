@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from nemos.fetch import fetch_data
-from nemos.glm_hmm import forward_backward
+from nemos.glm_hmm import forward_backward, run_m_step
 from nemos.observation_models import BernoulliObservations
 
 
@@ -27,7 +27,7 @@ def test_forward_backward_regression(decorator):
 
     # E-step initial parameters
     initial_prob = data["initial_prob"]
-    latent_weights = data["projection_weights"]
+    projection_weights = data["projection_weights"]
     transition_matrix = data["transition_matrix"]
 
     # E-step output
@@ -51,7 +51,7 @@ def test_forward_backward_regression(decorator):
             y.flatten(),
             initial_prob,
             transition_matrix,
-            latent_weights,
+            projection_weights,
             likelihood_func=log_likelihood,
             inverse_link_function=obs.inverse_link_function,
             is_new_session=new_sess.flatten().astype(bool),
@@ -68,9 +68,58 @@ def test_forward_backward_regression(decorator):
     # Next testing xis and gammas because they depend on alphas and betas
     # Equations 13.43
     np.testing.assert_almost_equal(gammas.T, gammas_nemos, decimal=4)
-
     # testing 13.65 of Bishop
     np.testing.assert_almost_equal(xis, xis_nemos, decimal=4)
 
-def test_forward_backward_regression():
+
+@pytest.mark.parametrize(
+    "decorator",
+    [
+        lambda x: x,
+        partial(jax.jit, static_argnames=["likelihood_func", "inverse_link_function"]),
+
+    ],
+)
+def test_m_step_regression(decorator):
     jax.config.update("jax_enable_x64", True)
+
+    # Fetch the data
+    data_path = fetch_data("e_step_three_states.npz")
+    data = np.load(data_path)
+
+    X, y = data["X"], data["y"]
+    new_sess = data["new_sess"]
+
+    # E-step initial parameters
+    initial_prob = data["initial_prob"]
+    projection_weights = data["projection_weights"]
+    transition_matrix = data["transition_matrix"]
+
+    # E-step output
+    xis = data["xis"]
+    gammas = data["gammas"]
+    ll_orig, ll_norm_orig = data["log_likelihood"], data["ll_norm"]
+    alphas, betas = data["alphas"], data["betas"]
+
+    obs = BernoulliObservations()
+
+    log_likelihood = jax.vmap(
+        lambda x, z: obs.likelihood(x, z, aggregate_sample_scores=lambda w: w),
+        in_axes=(None, 1),
+        out_axes=1,
+    )
+
+    optimal_weights, new_initial_prob, new_transition_prob, _ = run_m_step(
+        X,
+        y.flatten(),
+        gammas.T,
+        xis,   
+        projection_weights,
+        inverse_link_function=obs.inverse_link_function,
+        log_likelihood_func=log_likelihood,
+        is_new_session=new_sess.flatten().astype(bool),
+    
+    )
+    #np.testing.assert_almost_equal(1, optimal_weights, decimal=4)
+
+
