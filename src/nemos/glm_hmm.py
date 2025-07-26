@@ -333,20 +333,39 @@ def forward_backward(
 
     # Predicted y
     if projection_weights.ndim > 2:
-        predicted_rate_given_state = jnp.einsum("ik, kjw->ijw", X, projection_weights)
+        predicted_rate_given_state = inverse_link_function(
+            jnp.einsum("ik, kjw->ijw", X, projection_weights)
+        )
     else:
         predicted_rate_given_state = inverse_link_function(X @ projection_weights)
 
     # Compute likelihood given the fixed weights
     # Data likelihood p(y|z) from emissions model
     # NOTE:
-    # For N conditionally independent neurons, define
-    # likelihood_func = partial(
-    #     observation_instance.likelihood,
-    #     aggregate_sample_scores = lambda x: jnp.prod(x, axis=1)
-    # )
-    # where observation_instance is an instance of
-    # nemos.observation_models.Observations
+    # For N neurons and S samples, we want the total likelihood
+    # across neurons for each sample and latent state.
+
+    # Example helper:
+    # def combined_likelihood(log_likelihood_func, y, rate):
+    #     # log_likelihood_func takes (y, rate) and returns log-likelihood per neuron:
+    #     #   y:    shape (S, N)
+    #     #   rate: shape (S, N, K)  # K = number of latent states
+    #
+    #     assert y.ndim == 2      # (samples, neurons)
+    #     assert rate.ndim == 3   # (samples, neurons, states)
+    #
+    #     # vmap over the state axis: apply log_likelihood_func for each state
+    #     # Result: shape (S, N, K)
+    #     log_like = jax.vmap(log_likelihood_func, in_axes=(None, 2), out_axes=2)(y, rate)
+    #
+    #     # Combine neurons assuming conditional independence:
+    #     # sum log-likelihoods over neurons (axis=1), then exponentiate for stability
+    #     # Final shape: (S, K)
+    #     return jnp.exp(jnp.sum(log_like, axis=1))
+    #
+    # Here, log_likelihood_func is the ``log_likelihood`` method from
+    # nemos.observation_models.Observations with ``aggregate_sample_scores = lambda x:x``
+
     conditionals = likelihood_func(y, predicted_rate_given_state)
 
     # Compute forward pass
