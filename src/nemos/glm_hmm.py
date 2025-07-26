@@ -455,7 +455,7 @@ def run_m_step(
     # Update Initial state probability eq. 13.18
     # gammas -> n_time_bins x n_states
     # take the sum over the time dimension of only the first trial of each session
-    tmp_initial_prob = jnp.mean(gammas, axis=0, where=is_new_session[:,jnp.newaxis])
+    tmp_initial_prob = jnp.mean(gammas, axis=0, where=is_new_session[:, jnp.newaxis])
     new_initial_prob = tmp_initial_prob / jnp.sum(tmp_initial_prob)
 
     # Update Transition matrix eq. 13.19

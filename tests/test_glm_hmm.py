@@ -77,7 +77,6 @@ def test_forward_backward_regression(decorator):
     [
         lambda x: x,
         partial(jax.jit, static_argnames=["likelihood_func", "inverse_link_function"]),
-
     ],
 )
 def test_m_step_regression(decorator):
@@ -113,13 +112,10 @@ def test_m_step_regression(decorator):
         X,
         y.flatten(),
         gammas.T,
-        xis,   
+        xis,
         projection_weights,
         inverse_link_function=obs.inverse_link_function,
         log_likelihood_func=log_likelihood,
         is_new_session=new_sess.flatten().astype(bool),
-    
     )
-    #np.testing.assert_almost_equal(1, optimal_weights, decimal=4)
-
-
+    # np.testing.assert_almost_equal(1, optimal_weights, decimal=4)
