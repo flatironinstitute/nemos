@@ -1328,7 +1328,10 @@ class PopulationGLM(GLM):
 
     def __init__(
         self,
-        observation_model: obs.Observations | Literal["Poisson", "Gamma"] = "Poisson",
+        observation_model: (
+            obs.Observations
+            | Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial"]
+        ) = "Poisson",
         regularizer: Union[str, Regularizer] = "UnRegularized",
         regularizer_strength: Optional[float] = None,
         solver_name: str = None,
