@@ -187,7 +187,10 @@ class GLM(BaseRegressor):
         self,
         # With python 3.11 Literal[*AVAILABLE_OBSERVATION_MODELS] will be allowed.
         # Replace this manual list after dropping support for 3.10?
-        observation_model: obs.Observations | Literal["Poisson", "Gamma"] = "Poisson",
+        observation_model: (
+            obs.Observations
+            | Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial"]
+        ) = "Poisson",
         regularizer: Optional[Union[str, Regularizer]] = None,
         regularizer_strength: Optional[float] = None,
         solver_name: str = None,
@@ -1396,7 +1399,10 @@ class PopulationGLM(GLM):
 
     def __init__(
         self,
-        observation_model: obs.Observations | Literal["Poisson", "Gamma"] = "Poisson",
+        observation_model: (
+            obs.Observations
+            | Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial"]
+        ) = "Poisson",
         regularizer: Union[str, Regularizer] = "UnRegularized",
         regularizer_strength: Optional[float] = None,
         solver_name: str = None,

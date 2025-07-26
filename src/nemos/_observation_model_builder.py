@@ -1,10 +1,11 @@
 from .observation_models import (
     BernoulliObservations,
     GammaObservations,
+    NegativeBinomialObservations,
     PoissonObservations,
 )
 
-AVAILABLE_OBSERVATION_MODELS = ["Bernoulli", "Gamma", "Poisson"]
+AVAILABLE_OBSERVATION_MODELS = ["Bernoulli", "NegativeBinomial", "Gamma", "Poisson"]
 
 
 def instantiate_observation_model(observation_model: str, **kwargs):
@@ -41,6 +42,8 @@ def instantiate_observation_model(observation_model: str, **kwargs):
         return GammaObservations(**kwargs)
     elif observation_model == "Bernoulli":
         return BernoulliObservations(**kwargs)
+    elif observation_model == "NegativeBinomial":
+        return NegativeBinomialObservations(**kwargs)
     else:
         raise ValueError(
             f"Unknown observation model: {observation_model}. "
