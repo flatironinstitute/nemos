@@ -38,7 +38,7 @@ def test_forward_backward_regression(decorator):
 
     obs = BernoulliObservations()
 
-    log_likelihood = jax.vmap(
+    likelihood = jax.vmap(
         lambda x, z: obs.likelihood(x, z, aggregate_sample_scores=lambda w: w),
         in_axes=(None, 1),
         out_axes=1,
@@ -52,7 +52,7 @@ def test_forward_backward_regression(decorator):
             initial_prob,
             transition_matrix,
             projection_weights,
-            likelihood_func=log_likelihood,
+            likelihood_func=likelihood,
             inverse_link_function=obs.inverse_link_function,
             is_new_session=new_sess.flatten().astype(bool),
         )
