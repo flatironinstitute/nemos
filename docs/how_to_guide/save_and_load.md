@@ -11,6 +11,20 @@ kernelspec:
   name: python3
 ---
 
+```{code-cell} ipython3
+:tags: [hide-input]
+
+import warnings
+
+# Ignore the first specific warning
+warnings.filterwarnings(
+    "ignore",
+    message="Caution: regularizer strength",
+    category=UserWarning,
+)
+
+```
+
 # Saving and Loading
 
 ## Saving and Loading a Model
@@ -29,20 +43,41 @@ model = nmo.glm.GLM(
 
 # save
 model.save_params("ridge_glm_params.npz")
-model
+
+
+# load
+loaded_model = nmo.load_model("ridge_glm_params.npz")
+
+print("Original Model: \n", model)
+print("\nLoaded Model: \n", loaded_model)
+
 ```
 
-The output file is loaded without pickling, because NeMoS does not store objects directly. Instead, it stores only a string representing the object’s class and its parameters. This approach is both more robust and safer than pickling the objects themselves.
+## Saving and Loading a Fitted Model
+
+The same workflow works for fitted models, meaning the learned coefficients and intercepts are also saved and restored:
 
 ```{code-cell}
+import numpy as np
 
-loaded_model = nmo.load_model("ridge_glm_params.npz")
-loaded_model
+# generate some data
+X, weights = np.random.randn(50, 1), np.random.randn(1)
+counts = np.random.poisson(np.exp(X @ weights))
+
+# fit and save
+model.fit(X, counts)
+model.save_params("ridge_glm_params_fitted.npz")
+
+# load
+loaded_model = nmo.load_model("ridge_glm_params_fitted.npz")
+
+print("Original coefficient and intercept:", model.coef_, model.intercept_)
+print("Loaded coefficient and intercept:", loaded_model.coef_, loaded_model.intercept_)
 ```
 
 ## Inspecting the `npz`
-You can check the content of the stored `npz` by calling the `nemos.inspect_npz` function.
-The `inspect_npz` function shows the saved object’s metadata and parameter keys:
+
+You can inspect the contents of a saved `.npz` file with {py:func}`~nemos.io.inspect_npz`, which displays the stored metadata and parameter keys—useful for debugging (e.g., when loading fails) or verifying saved models.
 
 ```{code-cell}
 
@@ -70,6 +105,15 @@ nmo.inspect_npz("custom_regularizer_params.npz")
 ```
 
 As you can see, the regularizer class is stored as a string, `"{object_class.__module__}.{object_class.__name__}"`. This means that trying to load this model directly will result in an error, because NeMoS doesn’t pickle objects and therefore doesn’t know how to recreate the `CustomRegularizer` automatically.
+
+:::{admonition} Why prevent pickling?
+:class: warning
+
+Unpickling typically involves executing code, which can pose a security risk.
+A third party could tamper with a pickled file to insert malicious code that runs whenever the object is unpickled.
+
+For a real-world example, see [this discussion](https://news.ycombinator.com/item?id=41901475).
+:::
 
 ```{code-cell}
 :tags: [raises-exception]
