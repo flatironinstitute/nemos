@@ -118,7 +118,7 @@ Define a fully functional basis form a list of functions.
 
     CustomBasis
 
-**Basis As ``scikit-learn`` Tranformers:**
+**Basis As scikit-learn Tranformers:**
 
 .. currentmodule:: nemos.basis._transformer_basis
 
@@ -162,6 +162,7 @@ Implements various regularization techniques to constrain model parameters, whic
     UnRegularized
     Ridge
     Lasso
+    ElasticNet
     GroupLasso
 
 The ``nemos.simulation`` module

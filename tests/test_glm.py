@@ -139,6 +139,7 @@ class TestGLM:
             ("UnRegularized", does_not_raise()),
             ("Ridge", does_not_raise()),
             ("Lasso", does_not_raise()),
+            ("ElasticNet", does_not_raise()),
             ("GroupLasso", does_not_raise()),
             (
                 nmo.regularizer.Ridge,
@@ -1504,25 +1505,7 @@ class TestGLM:
     # Compare with standard implementation
     #######################################
 
-    @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso"])
-    def test_warning_solver_reg_str(self, reg, request, glm_class_type):
-        # check that a warning is triggered
-        # if no param is passed
-        glm_class = request.getfixturevalue(glm_class_type)
-        with pytest.warns(UserWarning):
-            glm_class(regularizer=reg)
-
-        # # check that the warning is not triggered
-        with warnings.catch_warnings():
-            warnings.simplefilter("error")
-            model = glm_class(regularizer=reg, regularizer_strength=1.0)
-
-        # reset to unregularized
-        model.set_params(regularizer="UnRegularized", regularizer_strength=None)
-        with pytest.warns(UserWarning):
-            glm_class(regularizer=reg)
-
-    @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso"])
+    @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso", "ElasticNet"])
     def test_reg_strength_reset(self, reg, request, glm_class_type):
         glm_class = request.getfixturevalue(glm_class_type)
         model = glm_class(regularizer=reg, regularizer_strength=1.0)
@@ -1531,11 +1514,6 @@ class TestGLM:
             match="Unused parameter `regularizer_strength` for UnRegularized GLM",
         ):
             model.regularizer = "UnRegularized"
-        model.regularizer_strength = None
-        with pytest.warns(
-            UserWarning, match="Caution: regularizer strength has not been set"
-        ):
-            model.regularizer = "Ridge"
 
     @pytest.mark.parametrize(
         "params, warns",
@@ -1543,46 +1521,53 @@ class TestGLM:
             # set regularizer
             (
                 {"regularizer": "Ridge"},
-                pytest.warns(
-                    UserWarning, match="Caution: regularizer strength has not been set"
-                ),
+                does_not_raise(),
             ),
             (
                 {"regularizer": "Lasso"},
-                pytest.warns(
-                    UserWarning, match="Caution: regularizer strength has not been set"
-                ),
+                does_not_raise(),
             ),
             (
                 {"regularizer": "GroupLasso"},
-                pytest.warns(
-                    UserWarning, match="Caution: regularizer strength has not been set"
-                ),
+                does_not_raise(),
+            ),
+            (
+                {"regularizer": "ElasticNet"},
+                does_not_raise(),
             ),
             ({"regularizer": "UnRegularized"}, does_not_raise()),
             # set both None or number
             (
                 {"regularizer": "Ridge", "regularizer_strength": None},
-                pytest.warns(
-                    UserWarning, match="Caution: regularizer strength has not been set"
-                ),
+                does_not_raise(),
             ),
             ({"regularizer": "Ridge", "regularizer_strength": 1.0}, does_not_raise()),
             (
                 {"regularizer": "Lasso", "regularizer_strength": None},
-                pytest.warns(
-                    UserWarning, match="Caution: regularizer strength has not been set"
-                ),
+                does_not_raise(),
             ),
             ({"regularizer": "Lasso", "regularizer_strength": 1.0}, does_not_raise()),
             (
                 {"regularizer": "GroupLasso", "regularizer_strength": None},
-                pytest.warns(
-                    UserWarning, match="Caution: regularizer strength has not been set"
-                ),
+                does_not_raise(),
             ),
             (
                 {"regularizer": "GroupLasso", "regularizer_strength": 1.0},
+                does_not_raise(),
+            ),
+            (
+                {"regularizer": "ElasticNet", "regularizer_strength": None},
+                does_not_raise(),
+            ),
+            (
+                {"regularizer": "ElasticNet", "regularizer_strength": 1.0},
+                pytest.warns(
+                    UserWarning,
+                    match="Caution: The regularizer strength been set, but no value was passed",
+                ),
+            ),
+            (
+                {"regularizer": "ElasticNet", "regularizer_strength": (1.0, 0.5)},
                 does_not_raise(),
             ),
             (
@@ -1620,9 +1605,7 @@ class TestGLM:
             ({"regularizer_strength": 1.0}, does_not_raise()),
             (
                 {"regularizer_strength": None},
-                pytest.warns(
-                    UserWarning, match="Caution: regularizer strength has not been set"
-                ),
+                does_not_raise(),
             ),
         ],
     )
@@ -1635,7 +1618,9 @@ class TestGLM:
         with warns:
             model.set_params(**params)
 
-    @pytest.mark.parametrize("regularizer", ["Ridge", "UnRegularized", "Lasso"])
+    @pytest.mark.parametrize(
+        "regularizer", ["Ridge", "UnRegularized", "Lasso", "ElasticNet"]
+    )
     @pytest.mark.parametrize(
         "obs_model",
         [
@@ -1698,7 +1683,8 @@ class TestGLM:
         if (
             regularizer == "Lasso"
             or regularizer == "GroupLasso"
-            and solver_name not in ["ProximalGradient", "SVRG", "ProxSVRG"]
+            or regularizer == "ElasticNet"
+            and solver_name not in ["ProximalGradient", "ProxSVRG"]
         ):
             pytest.skip(
                 f"Skipping {solver_name} for Lasso type regularizer; not an approximate solver."
@@ -2105,14 +2091,6 @@ class TestGLM:
                     match="Object arrays cannot be loaded when allow_pickle=False",
                 ),
             ),
-            # Replace are picklable with other stuff
-            (
-                "regularizer_strength",
-                "malicious_string",
-                pytest.raises(
-                    ValueError, match="Failed to instantiate model class 'nemos.glm"
-                ),
-            ),
             # Unexpected dtype for class name
             (
                 "regularizer__class",
@@ -2178,6 +2156,32 @@ class TestGLM:
         )
         with pytest.raises(ValueError, match=match):
             nmo.load_model(save_path, mapping_dict=invalid_mapping)
+
+    @pytest.mark.parametrize(
+        "params, warns",
+        [
+            # set regularizer str only
+            (
+                {"regularizer_strength": 1.0},
+                pytest.warns(
+                    UserWarning,
+                    match="Caution: The regularizer strength been set, but no value was passed",
+                ),
+            ),
+            (
+                {"regularizer_strength": None},
+                does_not_raise(),
+            ),
+        ],
+    )
+    @pytest.mark.parametrize("reg", ["ElasticNet"])
+    def test_reg_set_params_reg_str_only_elasticnet(
+        self, params, warns, reg, request, glm_class_type
+    ):
+        glm_class = request.getfixturevalue(glm_class_type)
+        model = glm_class(regularizer=reg, regularizer_strength=1)
+        with warns:
+            model.set_params(**params)
 
 
 @pytest.mark.parametrize("glm_type", ["", "population_"])
@@ -2823,6 +2827,7 @@ class TestGLMObservationModel:
             (nmo.regularizer.UnRegularized, "SVRG"),
             (nmo.regularizer.Ridge, "SVRG"),
             (nmo.regularizer.Lasso, "ProxSVRG"),
+            (nmo.regularizer.ElasticNet, "ProxSVRG"),
             # (nmo.regularizer.GroupLasso, "ProxSVRG"),
         ],
     )
@@ -3053,7 +3058,7 @@ class TestGLMObservationModel:
     @pytest.mark.parametrize("batch_size", [None, 1, 10])
     @pytest.mark.parametrize("stepsize", [None, 0.01])
     @pytest.mark.parametrize(
-        "regularizer", ["UnRegularized", "Ridge", "Lasso", "GroupLasso"]
+        "regularizer", ["UnRegularized", "Ridge", "Lasso", "GroupLasso", "ElasticNet"]
     )
     @pytest.mark.parametrize(
         "solver_name, has_defaults",
@@ -3427,6 +3432,12 @@ class TestPopulationGLMObservationModel:
                 "ProximalGradient",
                 {"tol": 10**-14},
             ),
+            (
+                nmo.regularizer.ElasticNet(),
+                (1.0, 0.5),
+                "ProximalGradient",
+                {"tol": 10**-14},
+            ),
         ],
     )
     @pytest.mark.parametrize(
@@ -3553,6 +3564,7 @@ class TestPoissonGLM:
             ("ProxSVRG", "Ridge"),
             ("ProxSVRG", "UnRegularized"),
             ("ProxSVRG", "Lasso"),
+            ("ProxSVRG", "ElasticNet"),
             ("ProxSVRG", "GroupLasso"),
         ],
     )
@@ -3619,6 +3631,7 @@ class TestPoissonGLM:
         [
             ("UnRegularized", type(None)),
             ("Lasso", type(None)),
+            ("ElasticNet", type(None)),
             ("GroupLasso", type(None)),
             ("Ridge", float),
         ],
