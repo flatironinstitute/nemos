@@ -81,7 +81,7 @@ def test_forward_backward_regression(decorator):
         partial(jax.jit, static_argnames=["negative_log_likelihood_func", "inverse_link_function"]),
     ],
 )
-def test_m_step_regression(decorator):
+def test_run_m_step_regression(decorator):
     jax.config.update("jax_enable_x64", True)
 
     # Fetch the data
@@ -134,3 +134,7 @@ def test_m_step_regression(decorator):
     np.testing.assert_almost_equal(new_transition_prob_nemos, new_transition_prob, decimal=4)
     # Testing output of negative log likelihood
     np.testing.assert_almost_equal(optimized_projection_weights_nemos, optimized_projection_weights, decimal=4)
+
+
+def test_hmm_negative_log_likelihood_regression(decorator):
+    
