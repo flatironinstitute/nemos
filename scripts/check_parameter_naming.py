@@ -67,6 +67,7 @@ VALID_PAIRS = [
     {"glm_pos_theta", "tc_pos_theta"},
     {"predicted_firing_rate", "predicted_firing_rates"},
     {"tuning_curve", "tuning_curves"},
+    {"hyperparams_prox", "hyperparams"},
 ]
 
 
