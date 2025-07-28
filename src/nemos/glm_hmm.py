@@ -241,6 +241,7 @@ def backward_pass(
     return betas
 
 
+@partial(jax.jit, static_argnames=["inverse_link_function", "likelihood_func"])
 def forward_backward(
     X: Array,
     y: Array,
@@ -417,24 +418,19 @@ def hmm_negative_log_likelihood(
     negative_log_likelihood_func: Callable,
 ):
     """Minimize expected log-likelihood."""
-    # Reshape flat weights into tree of (n_features, n_states) #TODO:it's not flat anymore is this necessary?
-    projection_weights = jax.tree_util.tree_map(
-        lambda w: w.reshape(-1, n_states), projection_weights
-    )
 
-    # TODO: make sure I do the necessary corrections so this works for multiple neurons?
-    # TODO: is the treemap necessary? I dont think so.
-    # Predict mean from each feature block
-    # tmpy = jax.tree_util.tree_map(
-    #    lambda x, w: inverse_link_function(x @ w), X, projection_weights
-    # )
-
-    tmpy = inverse_link_function(X @ projection_weights)
-
-    nll = negative_log_likelihood_func(
-        y,
-        tmpy,
-    )
+    if projection_weights.ndim > 2:
+        tmpy = inverse_link_function(jnp.einsum("ik, kjw->ijw", X, projection_weights))
+        nll = negative_log_likelihood_func(
+            y,
+            tmpy,
+        ).sum(axis=1)
+    else:
+        tmpy = inverse_link_function(X @ projection_weights)
+        nll = negative_log_likelihood_func(
+            y,
+            tmpy,
+        )
 
     # Compute dot products between log-likelihood terms and gammas
     nll = jnp.sum(nll * gammas)
@@ -442,6 +438,9 @@ def hmm_negative_log_likelihood(
     return nll
 
 
+@partial(
+    jax.jit, static_argnames=("negative_log_likelihood_func", "inverse_link_function")
+)
 def run_m_step(
     X: Array,
     y: Array,
@@ -467,18 +466,20 @@ def run_m_step(
 
     n_states = projection_weights.shape[1]
 
-    objective = partial(
-        hmm_negative_log_likelihood,
-        n_states=n_states,
-        y=y,
-        X=X,
-        gammas=gammas,
-        inverse_link_function=inverse_link_function,
-        negative_log_likelihood_func=negative_log_likelihood_func,
-    )
+    # Use a lambda instead of partial to avoid re-triggering compilation
+    def partial_hmm_negative_log_likelihood(w):
+        return hmm_negative_log_likelihood(
+            w,
+            X=X,
+            y=y,
+            gammas=gammas,
+            n_states=n_states,
+            inverse_link_function=inverse_link_function,
+            negative_log_likelihood_func=negative_log_likelihood_func,
+        )
 
     # Minimize negative log-likelihood to update GLM weights
-    solver = LBFGS(objective, **solver_kwargs)
+    solver = LBFGS(partial_hmm_negative_log_likelihood, **solver_kwargs)
     optimized_projection_weights, state = solver.run(projection_weights)
 
     return optimized_projection_weights, new_initial_prob, new_transition_prob, state
