@@ -15,7 +15,8 @@ kernelspec:
 
 ## Saving and Loading a Model
 
-In nemos, you can save a model by calling the `save_params` method, which writes `npz` file, a NumPy specific binary.
+In nemos, you can save a model by calling the {py:meth}`~nemos.glm.GLM.save_params` method, which writes a {py:func}`npz file <numpy.savez>`, a NumPy-specific binary format.
+
 
 ```{code-cell}
 import nemos as nmo
