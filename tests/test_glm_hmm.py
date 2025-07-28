@@ -135,6 +135,43 @@ def test_run_m_step_regression(decorator):
     # Testing output of negative log likelihood
     np.testing.assert_almost_equal(optimized_projection_weights_nemos, optimized_projection_weights, decimal=4)
 
-
+@pytest.mark.parametrize(
+    "decorator",
+    [
+        lambda x: x,
+        partial(jax.jit, static_argnames=["negative_log_likelihood_func", "inverse_link_function"]),
+    ],
+)
 def test_hmm_negative_log_likelihood_regression(decorator):
-    
+
+
+
+    jax.config.update("jax_enable_x64", True)
+
+    # Fetch the data
+    # TODO change for fetch after edoardo has uploaded mstep data to server
+    #data_path = fetch_data("e_step_three_states.npz")
+    # TODO write test for inputs and outputs of log likelihood function
+    data_path = "_scripts/data/m_step_three_states.npz"
+    data = np.load(data_path)
+
+    # Design matrix and observed choices
+    X, y = data["X"], data["y"]
+
+    # M-step input
+    gammas = data["gammas"]
+    xis = data["xis"]
+    projection_weights = data["projection_weights"]
+    new_sess = data["new_sess"]
+
+    # Initialize nemos observation model
+    obs = BernoulliObservations()
+
+    # Define negative log likelihood vmap function
+    negative_log_likelihood = jax.vmap(
+        lambda x, z: obs._negative_log_likelihood(x, z, aggregate_sample_scores=lambda w: w),
+        in_axes=(None, 1),
+        out_axes=1,
+    )
+
+
