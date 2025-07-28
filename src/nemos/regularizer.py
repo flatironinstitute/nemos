@@ -334,9 +334,9 @@ class Lasso(Regularizer):
 
 class ElasticNet(Regularizer):
     r"""
-    Regularizer class for Elastic Net (L1 + L2 regularization) [3]_ [4]_.
+    Regularizer class for Elastic Net (L1 + L2 regularization).
 
-    The elasitc net penalty is defined as:
+    The Elasitc Net penalty [3]_ [4]_ is defined as:
 
     .. math::
         P(\beta) = \alpha ((1 - \lambda) \frac{1}{2} ||\beta||_{\ell_2}^2 +
