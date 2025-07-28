@@ -410,30 +410,31 @@ def forward_backward(
 
 def hmm_negative_log_likelihood(
     projection_weights,
-    n_states,
     y,
     X,
-    gammas,
+    posteriors,
     inverse_link_function: Callable,
     negative_log_likelihood_func: Callable,
 ):
     """Minimize expected log-likelihood."""
 
     if projection_weights.ndim > 2:
-        tmpy = inverse_link_function(jnp.einsum("ik, kjw->ijw", X, projection_weights))
+        predicted_rate = inverse_link_function(
+            jnp.einsum("ik, kjw->ijw", X, projection_weights)
+        )
         nll = negative_log_likelihood_func(
             y,
-            tmpy,
+            predicted_rate,
         ).sum(axis=1)
     else:
-        tmpy = inverse_link_function(X @ projection_weights)
+        predicted_rate = inverse_link_function(X @ projection_weights)
         nll = negative_log_likelihood_func(
             y,
-            tmpy,
+            predicted_rate,
         )
 
     # Compute dot products between log-likelihood terms and gammas
-    nll = jnp.sum(nll * gammas)
+    nll = jnp.sum(nll * posteriors)
 
     return nll
 
@@ -444,8 +445,8 @@ def hmm_negative_log_likelihood(
 def run_m_step(
     X: Array,
     y: Array,
-    gammas: Array,
-    xis,
+    posteriors: Array,
+    joint_posterior,
     projection_weights: Array,
     negative_log_likelihood_func: Callable,
     inverse_link_function: Callable,
@@ -455,16 +456,18 @@ def run_m_step(
     """Run M-step."""
 
     # Update Initial state probability Eq. 13.18
-    tmp_initial_prob = jnp.mean(gammas, axis=0, where=is_new_session[:, jnp.newaxis])
+    tmp_initial_prob = jnp.mean(
+        posteriors, axis=0, where=is_new_session[:, jnp.newaxis]
+    )
     new_initial_prob = tmp_initial_prob / jnp.sum(tmp_initial_prob)
 
     # Update Transition matrix Eq. 13.19
-    new_transition_prob = xis / jnp.sum(xis, axis=1)[:, jnp.newaxis]
+    new_transition_prob = (
+        joint_posterior / jnp.sum(joint_posterior, axis=1)[:, jnp.newaxis]
+    )
 
     if solver_kwargs is None:
         solver_kwargs = {}
-
-    n_states = projection_weights.shape[1]
 
     # Use a lambda instead of partial to avoid re-triggering compilation
     def partial_hmm_negative_log_likelihood(w):
@@ -472,8 +475,7 @@ def run_m_step(
             w,
             X=X,
             y=y,
-            gammas=gammas,
-            n_states=n_states,
+            posteriors=posteriors,
             inverse_link_function=inverse_link_function,
             negative_log_likelihood_func=negative_log_likelihood_func,
         )
