@@ -414,25 +414,29 @@ def hmm_negative_log_likelihood(
     y,
     X,
     gammas,
-    inverse_link_function,
+    inverse_link_function: Callable,
     log_likelihood_func,
 ):
     """Minimize expected log-likelihood."""
-    # Reshape flat weights into tree of (n_features, n_states)
+    # Reshape flat weights into tree of (n_features, n_states) #TODO:it's not flat anymore is this necessary?
     projection_weights = jax.tree_util.tree_map(
         lambda w: w.reshape(-1, n_states), projection_weights
     )
 
+    # TODO: make sure I do the necessary corrections so this works for multiple neurons?
+    # TODO: is the treemap necessary? I dont think so.
     # Predict mean from each feature block
-    tmpy = jax.tree_util.tree_map(
-        lambda x, w: inverse_link_function(x @ w), X, projection_weights
-    )
+    #tmpy = jax.tree_util.tree_map(
+    #    lambda x, w: inverse_link_function(x @ w), X, projection_weights
+    #)
+
+    tmpy = inverse_link_function(X @ projection_weights)
 
     nll = log_likelihood_func(
         y,
         tmpy,
     )
-
+    
     # Compute dot products between log-likelihood terms and gammas
     nll = jnp.sum(nll * gammas)
 
@@ -446,7 +450,7 @@ def run_m_step(
     xis,
     projection_weights: Array,
     log_likelihood_func,
-    inverse_link_function,
+    inverse_link_function: Callable,
     is_new_session,
     solver_kwargs: dict | None = None,
 ):
@@ -459,7 +463,7 @@ def run_m_step(
     new_initial_prob = tmp_initial_prob / jnp.sum(tmp_initial_prob)
 
     # Update Transition matrix eq. 13.19
-    new_transition_prob = xis / jnp.sum(xis, axis=1)
+    new_transition_prob = xis / jnp.sum(xis, axis=1)[:,jnp.newaxis]
 
     if solver_kwargs is None:
         solver_kwargs = {}
@@ -478,6 +482,7 @@ def run_m_step(
 
     # Minimize negative log-likelihood to update GLM weights
     solver = LBFGS(objective, **solver_kwargs)
-    opt_param, state = solver.run(projection_weights)
+    optimized_projection_weights, state = solver.run(projection_weights)
 
-    return opt_param, new_initial_prob, new_transition_prob, state
+
+    return optimized_projection_weights, new_initial_prob, new_transition_prob, state

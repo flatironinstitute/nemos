@@ -76,46 +76,57 @@ def test_forward_backward_regression(decorator):
     "decorator",
     [
         lambda x: x,
-        partial(jax.jit, static_argnames=["likelihood_func", "inverse_link_function"]),
+        partial(jax.jit, static_argnames=["negative_log_likelihood_func", "inverse_link_function"]),
     ],
 )
 def test_m_step_regression(decorator):
     jax.config.update("jax_enable_x64", True)
 
     # Fetch the data
-    data_path = fetch_data("e_step_three_states.npz")
+    # TODO change for fetch after edoardo has uploaded mstep data to server
+    #data_path = fetch_data("e_step_three_states.npz")
+    data_path = "_scripts/data/m_step_three_states.npz"
     data = np.load(data_path)
 
+    # Design matrix and observed choices
     X, y = data["X"], data["y"]
-    new_sess = data["new_sess"]
 
-    # E-step initial parameters
-    initial_prob = data["initial_prob"]
+    # M-step input
+    gammas = data["gammas"]
+    xis = data["xis"]
     projection_weights = data["projection_weights"]
     transition_matrix = data["transition_matrix"]
+    new_sess = data["new_sess"]
 
-    # E-step output
-    xis = data["xis"]
-    gammas = data["gammas"]
-    ll_orig, ll_norm_orig = data["log_likelihood"], data["ll_norm"]
-    alphas, betas = data["alphas"], data["betas"]
+    # M-step output
+    optimized_projection_weights = data["optimized_projection_weights"]
+    new_initial_prob = data["new_initial_prob"]
+    new_transition_prob = data["new_transition_prob"]
 
+    # Initialize nemos observation model
     obs = BernoulliObservations()
 
-    log_likelihood = jax.vmap(
-        lambda x, z: obs.likelihood(x, z, aggregate_sample_scores=lambda w: w),
+    # Define log likelihood vmap function
+    negative_log_likelihood = jax.vmap(
+        lambda x, z: obs._negative_log_likelihood(x, z, aggregate_sample_scores=lambda w: w),
         in_axes=(None, 1),
         out_axes=1,
     )
 
-    optimal_weights, new_initial_prob, new_transition_prob, _ = run_m_step(
+    (optimized_projection_weights_nemos, 
+     new_initial_prob_nemos, 
+     new_transition_prob_nemos, _) = run_m_step(
         X,
         y.flatten(),
         gammas.T,
-        xis,
+        xis,   
         projection_weights,
         inverse_link_function=obs.inverse_link_function,
-        log_likelihood_func=log_likelihood,
+        log_likelihood_func=negative_log_likelihood,
         is_new_session=new_sess.flatten().astype(bool),
+    
     )
-    # np.testing.assert_almost_equal(1, optimal_weights, decimal=4)
+    
+    np.testing.assert_almost_equal(new_initial_prob, new_initial_prob_nemos, decimal=4)
+    np.testing.assert_almost_equal(new_transition_prob, new_transition_prob_nemos, decimal=4)
+    np.testing.assert_almost_equal(optimized_projection_weights_nemos, optimized_projection_weights, decimal=4)
