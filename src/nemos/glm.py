@@ -1220,22 +1220,27 @@ class GLM(BaseRegressor):
         regularizer_strength: 0.1
         solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
         solver_name: BFGS
-        >>> # If you want to load the model with a custom mapping for callables and custom classes,
-        >>> # you can use the mapping_dict parameter.
+
+        >>> # Saving and loading a custom inverse link function
+        >>> obs = nmo.observation_models.PoissonObservations(
+        ...     inverse_link_function=lambda x: x**2
+        ... )
+        >>> model = nmo.glm.GLM(observation_model=obs)
+        >>> model.save_params("model_params.npz")
+        >>> # Provide a mapping for the custom link function when loading.
         >>> mapping_dict = {
         ...     "observation_model__inverse_link_function": lambda x: x**2,
-        ...     "regularizer": nmo.regularizer.UnRegularized,
         ... }
         >>> loaded_model = nmo.load_model("model_params.npz", mapping_dict=mapping_dict)
         >>> # Now the loaded model will have the updated solver_name and solver_kwargs
         >>> for key, value in loaded_model.get_params().items():
         ...     print(f"{key}: {value}")
         observation_model__inverse_link_function: <function <lambda> at ...>
-        observation_model: GammaObservations(inverse_link_function=<lambda>)
+        observation_model: PoissonObservations(inverse_link_function=<lambda>)
         regularizer: UnRegularized()
-        regularizer_strength: 0.1
-        solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
-        solver_name: BFGS
+        regularizer_strength: None
+        solver_kwargs: {}
+        solver_name: GradientDescent
         """
 
         # initialize saving dictionary
