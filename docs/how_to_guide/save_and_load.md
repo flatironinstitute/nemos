@@ -77,7 +77,7 @@ As you can see, the regularizer class is stored as a string, `"{object_class.__m
 loaded_model = nmo.load_model("custom_regularizer_params.npz")
 ```
 
-You can circumvent this error, by providing a mapping to the class and to the callable.
+You can tell nemos how to load the custom objects by providing a mapping between the saved string and to the callable.
 
 ```{code-cell}
 
