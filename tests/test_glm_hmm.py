@@ -122,11 +122,11 @@ def test_m_step_regression(decorator):
         xis,   
         projection_weights,
         inverse_link_function=obs.inverse_link_function,
-        log_likelihood_func=negative_log_likelihood,
+        negative_log_likelihood_func=negative_log_likelihood,
         is_new_session=new_sess.flatten().astype(bool),
     
     )
-    
+
     np.testing.assert_almost_equal(new_initial_prob, new_initial_prob_nemos, decimal=4)
     np.testing.assert_almost_equal(new_transition_prob, new_transition_prob_nemos, decimal=4)
     np.testing.assert_almost_equal(optimized_projection_weights_nemos, optimized_projection_weights, decimal=4)

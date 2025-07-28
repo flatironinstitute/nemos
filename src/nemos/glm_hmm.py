@@ -415,7 +415,7 @@ def hmm_negative_log_likelihood(
     X,
     gammas,
     inverse_link_function: Callable,
-    log_likelihood_func,
+    negative_log_likelihood_func: Callable,
 ):
     """Minimize expected log-likelihood."""
     # Reshape flat weights into tree of (n_features, n_states) #TODO:it's not flat anymore is this necessary?
@@ -432,7 +432,7 @@ def hmm_negative_log_likelihood(
 
     tmpy = inverse_link_function(X @ projection_weights)
 
-    nll = log_likelihood_func(
+    nll = negative_log_likelihood_func(
         y,
         tmpy,
     )
@@ -449,7 +449,7 @@ def run_m_step(
     gammas: Array,
     xis,
     projection_weights: Array,
-    log_likelihood_func,
+    negative_log_likelihood_func: Callable,
     inverse_link_function: Callable,
     is_new_session,
     solver_kwargs: dict | None = None,
@@ -477,7 +477,7 @@ def run_m_step(
         X=X,
         gammas=gammas,
         inverse_link_function=inverse_link_function,
-        log_likelihood_func=log_likelihood_func,
+        negative_log_likelihood_func=negative_log_likelihood_func,
     )
 
     # Minimize negative log-likelihood to update GLM weights
