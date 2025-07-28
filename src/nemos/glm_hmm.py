@@ -408,71 +408,78 @@ def forward_backward(
     )
 
 
-# TODO: Rename using bishob convention
-# TODO: do not use partial inside the function, pass the log likelihood already partialized with an identity map
-# and to the score aggregation jnp.sum(nll * gammas) inside.
-def func_to_minimize(
+def hmm_negative_log_likelihood(
     projection_weights,
     n_states,
     y,
     X,
     gammas,
-    inverse_link_function,
-    log_likelihood_func,
+    inverse_link_function: Callable,
+    negative_log_likelihood_func: Callable,
 ):
     """Minimize expected log-likelihood."""
-    # Reshape flat weights into tree of (n_features, n_states)
+    # Reshape flat weights into tree of (n_features, n_states) #TODO:it's not flat anymore is this necessary?
     projection_weights = jax.tree_util.tree_map(
         lambda w: w.reshape(-1, n_states), projection_weights
     )
 
+    # TODO: make sure I do the necessary corrections so this works for multiple neurons?
+    # TODO: is the treemap necessary? I dont think so.
     # Predict mean from each feature block
-    tmpy = jax.tree_util.tree_map(
-        lambda x, w: inverse_link_function(x @ w), X, projection_weights
-    )
+    #tmpy = jax.tree_util.tree_map(
+    #    lambda x, w: inverse_link_function(x @ w), X, projection_weights
+    #)
 
-    # Compute dot products between log-likelihood terms and gammas
-    def tree_dot(a):
-        return pytree_map_and_reduce(lambda x, y: jnp.sum(x * y), sum, a, gammas)
+    tmpy = inverse_link_function(X @ projection_weights)
 
-    # TODO:  probably vmap outside the call so that this function works
-    log_likelihood_func = partial(log_likelihood_func, aggregate_sample_scores=tree_dot)
-
-    nll = log_likelihood_func(
+    nll = negative_log_likelihood_func(
         y,
         tmpy,
     )
+    
+    # Compute dot products between log-likelihood terms and gammas
+    nll = jnp.sum(nll * gammas)
 
     return nll
 
 
 def run_m_step(
-    y: Array,
     X: Array,
+    y: Array,
     gammas: Array,
+    xis,
     projection_weights: Array,
-    inverse_link_function,
-    log_likelihood_func,
+    negative_log_likelihood_func: Callable,
+    inverse_link_function: Callable,
+    is_new_session,
     solver_kwargs: dict | None = None,
 ):
     """Run M-step."""
+
+    # Update Initial state probability Eq. 13.18
+    tmp_initial_prob = jnp.mean(gammas, axis=0, where=is_new_session[:, jnp.newaxis])
+    new_initial_prob = tmp_initial_prob / jnp.sum(tmp_initial_prob)
+
+    # Update Transition matrix Eq. 13.19
+    new_transition_prob = xis / jnp.sum(xis, axis=1)[:,jnp.newaxis]
+
     if solver_kwargs is None:
         solver_kwargs = {}
 
     n_states = projection_weights.shape[1]
 
     objective = partial(
-        func_to_minimize,
+        hmm_negative_log_likelihood,
         n_states=n_states,
         y=y,
         X=X,
         gammas=gammas,
         inverse_link_function=inverse_link_function,
-        log_likelihood_func=log_likelihood_func,
+        negative_log_likelihood_func=negative_log_likelihood_func,
     )
 
     # Minimize negative log-likelihood to update GLM weights
     solver = LBFGS(objective, **solver_kwargs)
-    opt_param, state = solver.run(projection_weights)
+    optimized_projection_weights, state = solver.run(projection_weights)
 
-    return opt_param, state
+    return optimized_projection_weights, new_initial_prob, new_transition_prob, state
