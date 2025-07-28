@@ -64,18 +64,68 @@ def test_forward_backward_regression(decorator):
     )
 
     # First testing alphas and betas because they are computed first
-    np.testing.assert_almost_equal(alphas_nemos, alphas, decimal=4)
-    np.testing.assert_almost_equal(betas_nemos, betas, decimal=4)
+    np.testing.assert_almost_equal(alphas_nemos, alphas,  decimal=8)
+    np.testing.assert_almost_equal(betas_nemos, betas,  decimal=8)
 
     # testing log likelihood and normalized log likelihood
-    np.testing.assert_almost_equal(ll_nemos, ll_orig, decimal=4)
-    np.testing.assert_almost_equal(ll_norm_nemos, ll_norm_orig, decimal=4)
+    np.testing.assert_almost_equal(ll_nemos, ll_orig,  decimal=8)
+    np.testing.assert_almost_equal(ll_norm_nemos, ll_norm_orig, decimal=8)
 
     # Next testing xis and gammas because they depend on alphas and betas
     # Testing Eq. 13.43 of Bishop
-    np.testing.assert_almost_equal(gammas_nemos, gammas, decimal=4)
+    np.testing.assert_almost_equal(gammas_nemos, gammas, decimal=8)
     # Testing Eq. 13.65 of Bishop
-    np.testing.assert_almost_equal(xis_nemos, xis, decimal=4)
+    np.testing.assert_almost_equal(xis_nemos, xis, decimal=8)
+
+@pytest.mark.parametrize(
+    "decorator",
+    [
+        lambda x: x,
+        partial(jax.jit, static_argnames=["negative_log_likelihood_func", "inverse_link_function"]),
+    ],
+)
+def test_hmm_negative_log_likelihood_regression(decorator):
+    jax.config.update("jax_enable_x64", True)
+
+    # Fetch the data
+    # TODO change for fetch after edoardo has uploaded mstep data to server
+    #data_path = fetch_data("e_step_three_states.npz")
+    data_path = "_scripts/data/em_three_states.npz"
+    data = np.load(data_path)
+
+    # Design matrix and observed choices
+    X, y = data["X"], data["y"]
+
+    # Likelihood input
+    gammas = data["gammas"]
+    projection_weights = data["projection_weights_nll"]
+
+    # Negative LL output
+    nll_m_step = data["nll_m_step"]
+
+    # Initialize nemos observation model
+    obs = BernoulliObservations()
+
+    # Define negative log likelihood vmap function
+    negative_log_likelihood = jax.vmap(
+        lambda x, z: obs._negative_log_likelihood(x, z, aggregate_sample_scores=lambda w: w),
+        in_axes=(None, 1),
+        out_axes=1,
+    )
+
+    nll_m_step_nemos = hmm_negative_log_likelihood(
+        projection_weights,
+        X,
+        y,
+        gammas,
+        inverse_link_function=obs.inverse_link_function,
+        negative_log_likelihood_func=negative_log_likelihood
+    )
+    
+    # Testing output of negative log likelihood
+    np.testing.assert_almost_equal(
+        nll_m_step_nemos, nll_m_step, decimal=8
+    )
 
 
 @pytest.mark.parametrize(
@@ -132,72 +182,26 @@ def test_run_m_step_regression(decorator):
     ) = run_m_step(
         X,
         y,
-        gammas,  # TODO having some data transposed and other untransposed is a bit confusing - probably should change that in the data generating function.
+        gammas,
         xis,
         projection_weights,
         inverse_link_function=obs.inverse_link_function,
         negative_log_likelihood_func=negative_log_likelihood,
-        is_new_session=new_sess.astype(
-            bool
-        ),  # TODO same as above todo comment
+        is_new_session=new_sess.astype(bool),  
         solver_kwargs={"tol": 10**-12},
     )
-
+    
     # Testing Eq. 13.18 of Bishop
-    np.testing.assert_almost_equal(new_initial_prob_nemos, new_initial_prob, decimal=4)
+    np.testing.assert_almost_equal(new_initial_prob_nemos, new_initial_prob, decimal=8)
     # Testing Eq. 13.19 of Bishop
+
     np.testing.assert_almost_equal(
-        new_transition_prob_nemos, new_transition_prob, decimal=4
+        new_transition_prob_nemos, new_transition_prob, decimal=8
     )
     # Testing output of negative log likelihood
     np.testing.assert_almost_equal(
-        optimized_projection_weights_nemos, optimized_projection_weights, decimal=4
+        optimized_projection_weights_nemos, optimized_projection_weights, decimal=8
     )
 
-@pytest.mark.parametrize(
-    "decorator",
-    [
-        lambda x: x,
-        partial(jax.jit, static_argnames=["negative_log_likelihood_func", "inverse_link_function"]),
-    ],
-)
-def test_hmm_negative_log_likelihood_regression(decorator):
-    jax.config.update("jax_enable_x64", True)
 
-    # Fetch the data
-    # TODO change for fetch after edoardo has uploaded mstep data to server
-    #data_path = fetch_data("e_step_three_states.npz")
-    # TODO write test for inputs and outputs of log likelihood function
-    data_path = "_scripts/data/em_three_states.npz"
-    data = np.load(data_path)
-
-    # Design matrix and observed choices
-    X, y = data["X"], data["y"]
-
-    # M-step input
-    gammas = data["gammas"]
-    xis = data["xis"]
-    projection_weights = data["projection_weights"]
-    new_sess = data["new_sess"]
-
-    # Initialize nemos observation model
-    obs = BernoulliObservations()
-
-    # Define negative log likelihood vmap function
-    negative_log_likelihood = jax.vmap(
-        lambda x, z: obs._negative_log_likelihood(x, z, aggregate_sample_scores=lambda w: w),
-        in_axes=(None, 1),
-        out_axes=1,
-    )
-
-    nll = hmm_negative_log_likelihood(
-        projection_weights,
-        X,
-        y,
-        projection_weights.shape[1],
-        gammas,
-        inverse_link_function=obs.inverse_link_function,
-        negative_log_likelihood_func=negative_log_likelihood
-    )
-    print(nll)
 
