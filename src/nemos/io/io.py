@@ -212,13 +212,14 @@ def _safe_instantiate(
         return instantiate_observation_model(class_name, **kwargs)
     else:
         # Hit when loading a custom class without mapping
+        if parameter_name == "observation_model":
+            class_type = "observation"
+        else:
+            class_type = "regularization"
         raise ValueError(
             f"The class '{class_basename}' is not a native NeMoS class.\n"
-            "To load custom observation or regularization classes, please provide a mapping:\n\n"
-            "  - For observation models:\n"
-            "      nemos.load_model(save_path, mapping_dict={'observation_model': YourCustomObservations})\n"
-            "  - For regularization:\n"
-            "      nemos.load_model(save_path, mapping_dict={'regularization': YourCustomRegularizer})"
+            f"To load a custom {class_type} class, please provide the following mapping:\n\n"
+            f" - nemos.load_model(save_path, mapping_dict={{'{parameter_name}': {class_basename}}})"
         )
 
 
