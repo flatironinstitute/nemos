@@ -1,11 +1,12 @@
 from functools import partial
 
 import jax
+import jax.numpy as jnp
 import numpy as np
 import pytest
 
 from nemos.fetch import fetch_data
-from nemos.glm_hmm import forward_backward, run_m_step
+from nemos.glm_hmm import forward_backward, run_m_step, hmm_negative_log_likelihood
 from nemos.observation_models import BernoulliObservations
 
 
@@ -21,7 +22,9 @@ def test_forward_backward_regression(decorator):
     jax.config.update("jax_enable_x64", True)
 
     # Fetch the data
-    data_path = fetch_data("e_step_three_states.npz")
+    # TODO replace with fetch when data is uploaded
+    #data_path = fetch_data("e_step_three_states.npz")
+    data_path = "_scripts/data/em_three_states.npz"
     data = np.load(data_path)
 
     X, y = data["X"], data["y"]
@@ -50,19 +53,19 @@ def test_forward_backward_regression(decorator):
     gammas_nemos, xis_nemos, ll_nemos, ll_norm_nemos, alphas_nemos, betas_nemos = (
         decorated_forward_backward(
             X,
-            y.flatten(),
+            y,
             initial_prob,
             transition_matrix,
             projection_weights,
             likelihood_func=likelihood,
             inverse_link_function=obs.inverse_link_function,
-            is_new_session=new_sess.flatten().astype(bool),
+            is_new_session=new_sess.astype(bool),
         )
     )
 
     # First testing alphas and betas because they are computed first
-    np.testing.assert_almost_equal(alphas_nemos, alphas.T, decimal=4)
-    np.testing.assert_almost_equal(betas_nemos, betas.T, decimal=4)
+    np.testing.assert_almost_equal(alphas_nemos, alphas, decimal=4)
+    np.testing.assert_almost_equal(betas_nemos, betas, decimal=4)
 
     # testing log likelihood and normalized log likelihood
     np.testing.assert_almost_equal(ll_nemos, ll_orig, decimal=4)
@@ -70,7 +73,7 @@ def test_forward_backward_regression(decorator):
 
     # Next testing xis and gammas because they depend on alphas and betas
     # Testing Eq. 13.43 of Bishop
-    np.testing.assert_almost_equal(gammas_nemos, gammas.T, decimal=4)
+    np.testing.assert_almost_equal(gammas_nemos, gammas, decimal=4)
     # Testing Eq. 13.65 of Bishop
     np.testing.assert_almost_equal(xis_nemos, xis, decimal=4)
 
@@ -92,7 +95,7 @@ def test_run_m_step_regression(decorator):
     # TODO change for fetch after edoardo has uploaded mstep data to server
     # data_path = fetch_data("m_step_three_states.npz")
     # TODO write test for inputs and outputs of log likelihood function
-    data_path = "_scripts/data/m_step_three_states.npz"
+    data_path = "_scripts/data/em_three_states.npz"
     data = np.load(data_path)
 
     # Design matrix and observed choices
@@ -128,13 +131,13 @@ def test_run_m_step_regression(decorator):
         _,
     ) = run_m_step(
         X,
-        y.flatten(),
-        gammas.T,  # TODO having some data transposed and other untransposed is a bit confusing - probably should change that in the data generating function.
+        y,
+        gammas,  # TODO having some data transposed and other untransposed is a bit confusing - probably should change that in the data generating function.
         xis,
         projection_weights,
         inverse_link_function=obs.inverse_link_function,
         negative_log_likelihood_func=negative_log_likelihood,
-        is_new_session=new_sess.flatten().astype(
+        is_new_session=new_sess.astype(
             bool
         ),  # TODO same as above todo comment
         solver_kwargs={"tol": 10**-12},
@@ -159,16 +162,13 @@ def test_run_m_step_regression(decorator):
     ],
 )
 def test_hmm_negative_log_likelihood_regression(decorator):
-
-
-
     jax.config.update("jax_enable_x64", True)
 
     # Fetch the data
     # TODO change for fetch after edoardo has uploaded mstep data to server
     #data_path = fetch_data("e_step_three_states.npz")
     # TODO write test for inputs and outputs of log likelihood function
-    data_path = "_scripts/data/m_step_three_states.npz"
+    data_path = "_scripts/data/em_three_states.npz"
     data = np.load(data_path)
 
     # Design matrix and observed choices
@@ -190,4 +190,14 @@ def test_hmm_negative_log_likelihood_regression(decorator):
         out_axes=1,
     )
 
+    nll = hmm_negative_log_likelihood(
+        projection_weights,
+        X,
+        y,
+        projection_weights.shape[1],
+        gammas,
+        inverse_link_function=obs.inverse_link_function,
+        negative_log_likelihood_func=negative_log_likelihood
+    )
+    print(nll)
 

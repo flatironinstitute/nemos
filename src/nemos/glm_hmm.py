@@ -408,14 +408,14 @@ def forward_backward(
 
 
 def hmm_negative_log_likelihood(
-    projection_weights,
-    n_states,
-    y,
-    X,
-    gammas,
-    inverse_link_function: Callable,
-    negative_log_likelihood_func: Callable,
-):
+        projection_weights: Array,
+        X: Array,
+        y: Array,
+        n_states,
+        gammas,
+        inverse_link_function: Callable,
+        negative_log_likelihood_func: Callable,
+    ):
     """Minimize expected log-likelihood."""
     # Reshape flat weights into tree of (n_features, n_states) #TODO:it's not flat anymore is this necessary?
     projection_weights = jax.tree_util.tree_map(
@@ -428,7 +428,6 @@ def hmm_negative_log_likelihood(
     # tmpy = jax.tree_util.tree_map(
     #    lambda x, w: inverse_link_function(x @ w), X, projection_weights
     # )
-
     tmpy = inverse_link_function(X @ projection_weights)
 
     nll = negative_log_likelihood_func(
@@ -469,9 +468,9 @@ def run_m_step(
 
     objective = partial(
         hmm_negative_log_likelihood,
-        n_states=n_states,
-        y=y,
         X=X,
+        y=y,
+        n_states=n_states,
         gammas=gammas,
         inverse_link_function=inverse_link_function,
         negative_log_likelihood_func=negative_log_likelihood_func,
