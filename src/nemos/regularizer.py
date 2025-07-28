@@ -339,8 +339,8 @@ class ElasticNet(Regularizer):
     The Elasitc Net penalty [3]_ [4]_ is defined as:
 
     .. math::
-        P(\beta) = \alpha ((1 - \lambda) \frac{1}{2} ||\beta||_{\ell_2}^2 +
-        \lambda ||\beta||_{\ell_1}
+        P(\beta) = \alpha \left((1 - \lambda) \frac{1}{2} ||\beta||_{\ell_2}^2 +
+        \lambda ||\beta||_{\ell_1} \right)
 
     where :math:`\alpha` is the regularizer strength, and :math:`\lambda` is the regularizer ratio.
     The regularizer ratio controls the balance between L1 (Lasso) and L2 (Ridge)
