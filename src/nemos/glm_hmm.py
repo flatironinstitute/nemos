@@ -456,13 +456,11 @@ def run_m_step(
 ):
     """Run M-step."""
 
-    # Update Initial state probability eq. 13.18
-    # gammas -> n_time_bins x n_states
-    # take the sum over the time dimension of only the first trial of each session
+    # Update Initial state probability Eq. 13.18
     tmp_initial_prob = jnp.mean(gammas, axis=0, where=is_new_session[:, jnp.newaxis])
     new_initial_prob = tmp_initial_prob / jnp.sum(tmp_initial_prob)
 
-    # Update Transition matrix eq. 13.19
+    # Update Transition matrix Eq. 13.19
     new_transition_prob = xis / jnp.sum(xis, axis=1)[:,jnp.newaxis]
 
     if solver_kwargs is None:
@@ -483,6 +481,5 @@ def run_m_step(
     # Minimize negative log-likelihood to update GLM weights
     solver = LBFGS(objective, **solver_kwargs)
     optimized_projection_weights, state = solver.run(projection_weights)
-
 
     return optimized_projection_weights, new_initial_prob, new_transition_prob, state
