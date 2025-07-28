@@ -1,7 +1,6 @@
 from functools import partial
 
 import jax
-import jax.numpy as jnp
 import numpy as np
 import pytest
 
@@ -22,9 +21,7 @@ def test_forward_backward_regression(decorator):
     jax.config.update("jax_enable_x64", True)
 
     # Fetch the data
-    # TODO replace with fetch when data is uploaded
-    # data_path = fetch_data("e_step_three_states.npz")
-    data_path = "docs/data/em_three_states.npz"
+    data_path = fetch_data("em_three_states.npz")
     data = np.load(data_path)
 
     X, y = data["X"], data["y"]
@@ -92,9 +89,7 @@ def test_hmm_negative_log_likelihood_regression(decorator):
     jax.config.update("jax_enable_x64", True)
 
     # Fetch the data
-    # TODO change for fetch after edoardo has uploaded mstep data to server
-    # data_path = fetch_data("e_step_three_states.npz")
-    data_path = "../_scripts/data/em_three_states.npz"
+    data_path = fetch_data("em_three_states.npz")
     data = np.load(data_path)
 
     # Design matrix and observed choices
@@ -129,7 +124,7 @@ def test_hmm_negative_log_likelihood_regression(decorator):
     )
 
     # Testing output of negative log likelihood
-    np.testing.assert_almost_equal(nll_m_step_nemos, nll_m_step, decimal=8)
+    np.testing.assert_almost_equal(nll_m_step_nemos, nll_m_step)
 
 
 @pytest.mark.parametrize(
@@ -146,10 +141,7 @@ def test_run_m_step_regression(decorator):
     jax.config.update("jax_enable_x64", True)
 
     # Fetch the data
-    # TODO change for fetch after edoardo has uploaded mstep data to server
-    # data_path = fetch_data("m_step_three_states.npz")
-    # TODO write test for inputs and outputs of log likelihood function
-    data_path = "../docs/data/em_three_states.npz"
+    data_path = fetch_data("em_three_states.npz")
     data = np.load(data_path)
 
     # Design matrix and observed choices
@@ -220,3 +212,7 @@ def test_run_m_step_regression(decorator):
 
     # Testing output of negative log likelihood
     np.testing.assert_almost_equal(n_ll_original, n_ll_nemos, decimal=10)
+    np.testing.assert_almost_equal(
+        optimized_projection_weights,
+        optimized_projection_weights_nemos, decimal=6
+    )

@@ -41,7 +41,7 @@ REGISTRY_DATA = {
     "m691l1.nwb": "1990d8d95a70a29af95dade51e60ffae7a176f6207e80dbf9ccefaf418fe22b6",
     "A2929-200711.nwb": "f698d7319efa5dfeb18fb5fe718ec1a84fdf96b85a158177849a759cd5e396fe",
     "Achilles_10252013_EEG.nwb": "a97a69d231e7e91c07e24890225f8fe4636bac054de50345551f32fc46b9efdd",
-    "e_step_three_states.npz": "49fe8f95c221991c4ee248b832197f7f8d8a57536fab621e49024d5db295c6f3",
+    "em_three_states.npz": "be7cbdb27629969605ac14126f70d88782fd7e9d978e794f2b8eb1e107e78808",
 }
 DOWNLOADABLE_FILES = list(REGISTRY_DATA.keys())
 
@@ -57,7 +57,7 @@ REGISTRY_URLS_DATA = {
     "m691l1.nwb": OSF_TEMPLATE.format("xesdm"),
     "A2929-200711.nwb": OSF_TEMPLATE.format("y7zwd"),
     "Achilles_10252013_EEG.nwb": OSF_TEMPLATE.format("2dfvp"),
-    "e_step_three_states.npz": OSF_TEMPLATE.format("suz4b"),
+    "em_three_states.npz": OSF_TEMPLATE.format("4bxdp"),
 }
 
 _NEMOS_ENV = "NEMOS_DATA_DIR"
