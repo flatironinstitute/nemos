@@ -132,10 +132,6 @@ mapping = {
 loaded_model = nmo.load_model("custom_regularizer_params.npz", mapping_dict=mapping)
 loaded_model
 ```
-::: {tip}
-
-Always keep your custom classes and functions in importable modules if you plan to load saved models later. This makes it easier to share models with collaborators or run them on different machines.
-:::
 
 :::{admonition} Allowed Mappings
 :class: warning
@@ -143,6 +139,7 @@ Always keep your custom classes and functions in importable modules if you plan 
 Mapping is allowed **only** for callables (functions) and classes, because these cannot be stored directly without pickling.
 Other values (like numbers, strings, or arrays) are always stored directly in the `.npz` and cannot be remapped.
 
-⚠️ When mapping a custom class, you must provide the class **type**, not an instance (e.g., `mapping = {"regularizer": CustomRegularizer}` is valid, but `CustomRegularizer()` is not).
-Providing an instance would overwrite the saved parameters, which could lead to inconsistencies.
+⚠️ hen mapping a custom class, you must pass the **class itself** (e.g., `mapping = {"regularizer": CustomRegularizer}`), not an instance (`CustomRegularizer()`).
+Passing an instance would overwrite the saved parameters and could lead to inconsistencies.
+
 :::
