@@ -468,6 +468,10 @@ class TestCommonObservationModels:
         like2 = obs.likelihood(y, rate, aggregate_sample_scores=lambda x: x)
         assert jnp.allclose(like1, like2)
 
+        like1 = jnp.exp(obs.log_likelihood(y, rate))
+        like2 = obs.likelihood(y, rate)
+        assert jnp.allclose(like1, like2)
+
     @pytest.mark.parametrize("shape", [(10,), (10, 5), (10, 5, 2)])
     def test_aggregation_score_mcfadden(
         self, shape, observation_model_string, observation_model_rate_and_samples

@@ -8,7 +8,6 @@ import jax.numpy as jnp
 from numpy.typing import NDArray
 
 from .third_party.jaxopt.jaxopt import LBFGS
-from .tree_utils import pytree_map_and_reduce
 
 Array = NDArray | jax.numpy.ndarray
 
@@ -426,9 +425,9 @@ def hmm_negative_log_likelihood(
     # TODO: make sure I do the necessary corrections so this works for multiple neurons?
     # TODO: is the treemap necessary? I dont think so.
     # Predict mean from each feature block
-    #tmpy = jax.tree_util.tree_map(
+    # tmpy = jax.tree_util.tree_map(
     #    lambda x, w: inverse_link_function(x @ w), X, projection_weights
-    #)
+    # )
 
     tmpy = inverse_link_function(X @ projection_weights)
 
@@ -436,7 +435,7 @@ def hmm_negative_log_likelihood(
         y,
         tmpy,
     )
-    
+
     # Compute dot products between log-likelihood terms and gammas
     nll = jnp.sum(nll * gammas)
 
@@ -461,7 +460,7 @@ def run_m_step(
     new_initial_prob = tmp_initial_prob / jnp.sum(tmp_initial_prob)
 
     # Update Transition matrix Eq. 13.19
-    new_transition_prob = xis / jnp.sum(xis, axis=1)[:,jnp.newaxis]
+    new_transition_prob = xis / jnp.sum(xis, axis=1)[:, jnp.newaxis]
 
     if solver_kwargs is None:
         solver_kwargs = {}
