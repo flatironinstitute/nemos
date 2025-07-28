@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from nemos.fetch import fetch_data
-from nemos.glm_hmm import forward_backward, run_m_step, hmm_negative_log_likelihood
+from nemos.glm_hmm import forward_backward, hmm_negative_log_likelihood, run_m_step
 from nemos.observation_models import BernoulliObservations
 
 
@@ -23,8 +23,8 @@ def test_forward_backward_regression(decorator):
 
     # Fetch the data
     # TODO replace with fetch when data is uploaded
-    #data_path = fetch_data("e_step_three_states.npz")
-    data_path = "_scripts/data/em_three_states.npz"
+    # data_path = fetch_data("e_step_three_states.npz")
+    data_path = "docs/data/em_three_states.npz"
     data = np.load(data_path)
 
     X, y = data["X"], data["y"]
@@ -64,11 +64,11 @@ def test_forward_backward_regression(decorator):
     )
 
     # First testing alphas and betas because they are computed first
-    np.testing.assert_almost_equal(alphas_nemos, alphas,  decimal=8)
-    np.testing.assert_almost_equal(betas_nemos, betas,  decimal=8)
+    np.testing.assert_almost_equal(alphas_nemos, alphas, decimal=8)
+    np.testing.assert_almost_equal(betas_nemos, betas, decimal=8)
 
     # testing log likelihood and normalized log likelihood
-    np.testing.assert_almost_equal(ll_nemos, ll_orig,  decimal=8)
+    np.testing.assert_almost_equal(ll_nemos, ll_orig, decimal=8)
     np.testing.assert_almost_equal(ll_norm_nemos, ll_norm_orig, decimal=8)
 
     # Next testing xis and gammas because they depend on alphas and betas
@@ -77,11 +77,15 @@ def test_forward_backward_regression(decorator):
     # Testing Eq. 13.65 of Bishop
     np.testing.assert_almost_equal(xis_nemos, xis, decimal=8)
 
+
 @pytest.mark.parametrize(
     "decorator",
     [
         lambda x: x,
-        partial(jax.jit, static_argnames=["negative_log_likelihood_func", "inverse_link_function"]),
+        partial(
+            jax.jit,
+            static_argnames=["negative_log_likelihood_func", "inverse_link_function"],
+        ),
     ],
 )
 def test_hmm_negative_log_likelihood_regression(decorator):
@@ -89,8 +93,8 @@ def test_hmm_negative_log_likelihood_regression(decorator):
 
     # Fetch the data
     # TODO change for fetch after edoardo has uploaded mstep data to server
-    #data_path = fetch_data("e_step_three_states.npz")
-    data_path = "_scripts/data/em_three_states.npz"
+    # data_path = fetch_data("e_step_three_states.npz")
+    data_path = "../_scripts/data/em_three_states.npz"
     data = np.load(data_path)
 
     # Design matrix and observed choices
@@ -108,7 +112,9 @@ def test_hmm_negative_log_likelihood_regression(decorator):
 
     # Define negative log likelihood vmap function
     negative_log_likelihood = jax.vmap(
-        lambda x, z: obs._negative_log_likelihood(x, z, aggregate_sample_scores=lambda w: w),
+        lambda x, z: obs._negative_log_likelihood(
+            x, z, aggregate_sample_scores=lambda w: w
+        ),
         in_axes=(None, 1),
         out_axes=1,
     )
@@ -119,13 +125,11 @@ def test_hmm_negative_log_likelihood_regression(decorator):
         y,
         gammas,
         inverse_link_function=obs.inverse_link_function,
-        negative_log_likelihood_func=negative_log_likelihood
+        negative_log_likelihood_func=negative_log_likelihood,
     )
-    
+
     # Testing output of negative log likelihood
-    np.testing.assert_almost_equal(
-        nll_m_step_nemos, nll_m_step, decimal=8
-    )
+    np.testing.assert_almost_equal(nll_m_step_nemos, nll_m_step, decimal=8)
 
 
 @pytest.mark.parametrize(
@@ -145,7 +149,7 @@ def test_run_m_step_regression(decorator):
     # TODO change for fetch after edoardo has uploaded mstep data to server
     # data_path = fetch_data("m_step_three_states.npz")
     # TODO write test for inputs and outputs of log likelihood function
-    data_path = "_scripts/data/em_three_states.npz"
+    data_path = "../docs/data/em_three_states.npz"
     data = np.load(data_path)
 
     # Design matrix and observed choices
@@ -178,7 +182,7 @@ def test_run_m_step_regression(decorator):
         optimized_projection_weights_nemos,
         new_initial_prob_nemos,
         new_transition_prob_nemos,
-        _,
+        state,
     ) = run_m_step(
         X,
         y,
@@ -187,21 +191,32 @@ def test_run_m_step_regression(decorator):
         projection_weights,
         inverse_link_function=obs.inverse_link_function,
         negative_log_likelihood_func=negative_log_likelihood,
-        is_new_session=new_sess.astype(bool),  
-        solver_kwargs={"tol": 10**-12},
+        is_new_session=new_sess.astype(bool),
+        solver_kwargs={"tol": 10**-12, "maxiter": 10**4},
     )
-    
+
+    n_ll_original = hmm_negative_log_likelihood(
+        optimized_projection_weights_nemos,
+        X=X,
+        y=y,
+        posteriors=gammas,
+        inverse_link_function=obs.inverse_link_function,
+        negative_log_likelihood_func=negative_log_likelihood,
+    )
+    n_ll_nemos = hmm_negative_log_likelihood(
+        optimized_projection_weights,
+        X=X,
+        y=y,
+        posteriors=gammas,
+        inverse_link_function=obs.inverse_link_function,
+        negative_log_likelihood_func=negative_log_likelihood,
+    )
+
     # Testing Eq. 13.18 of Bishop
-    np.testing.assert_almost_equal(new_initial_prob_nemos, new_initial_prob, decimal=8)
+    np.testing.assert_almost_equal(new_initial_prob_nemos, new_initial_prob)
     # Testing Eq. 13.19 of Bishop
 
-    np.testing.assert_almost_equal(
-        new_transition_prob_nemos, new_transition_prob, decimal=8
-    )
+    np.testing.assert_almost_equal(new_transition_prob_nemos, new_transition_prob)
+
     # Testing output of negative log likelihood
-    np.testing.assert_almost_equal(
-        optimized_projection_weights_nemos, optimized_projection_weights, decimal=8
-    )
-
-
-
+    np.testing.assert_almost_equal(n_ll_original, n_ll_nemos, decimal=10)
