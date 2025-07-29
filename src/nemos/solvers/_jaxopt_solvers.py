@@ -9,13 +9,13 @@ from ._abstract_solver import Params, StochasticMixin
 from ._solver_adapter import SolverAdapter
 
 JaxoptSolverState: TypeAlias = NamedTuple
-# JaxoptStepResult ~ jaxopt.OptStep
+JaxoptStepResult: TypeAlias = tuple[Params, JaxoptSolverState]
+# JaxoptStepResult: TypeAlias = jaxopt.OptStep
 
 # TODO do we want the JAXopt solvers to use the same tolerance and max_steps as the Optimistix solvers?
 
 
-# class JaxoptWrapper(SolverAdapter[JaxoptSolverState, jaxopt.OptStep]):
-class JaxoptWrapper(SolverAdapter[JaxoptSolverState, tuple[Params, JaxoptSolverState]]):
+class JaxoptWrapper(SolverAdapter[JaxoptSolverState, JaxoptStepResult]):
     """
     Base class for adapters wrapping JAXopt solvers.
 
@@ -58,10 +58,10 @@ class JaxoptWrapper(SolverAdapter[JaxoptSolverState, tuple[Params, JaxoptSolverS
 
     def update(
         self, params: Params, state: JaxoptSolverState, *args: Any
-    ) -> jaxopt.OptStep:
+    ) -> JaxoptStepResult:
         return self._solver.update(params, state, *self.hyperparams_prox, *args)
 
-    def run(self, init_params: Params, *args: Any) -> jaxopt.OptStep:
+    def run(self, init_params: Params, *args: Any) -> JaxoptStepResult:
         return self._solver.run(init_params, *self.hyperparams_prox, *args)
 
 
