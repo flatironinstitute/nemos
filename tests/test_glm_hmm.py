@@ -128,7 +128,7 @@ def test_hmm_negative_log_likelihood_regression(decorator):
     np.testing.assert_almost_equal(nll_m_step_nemos, nll_m_step)
 
 
-def test_run_m_step_regression(decorator):
+def test_run_m_step_regression():
     jax.config.update("jax_enable_x64", True)
 
     # Fetch the data
