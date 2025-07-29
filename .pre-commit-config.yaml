@@ -1,3 +1,5 @@
+exclude: ^src/nemos/third_party/
+
 repos:
 - repo: https://github.com/psf/black
   rev: 25.1.0
@@ -47,3 +49,12 @@ repos:
     - id: ruff
       args: ["--fix", "--config=pyproject.toml"]
       files: ^src/
+
+- repo: local
+  hooks:
+    - id: check-parameter-naming
+      name: Check parameter naming consistency
+      entry: python scripts/check_parameter_naming.py
+      language: system
+      types: [python]
+      pass_filenames: false

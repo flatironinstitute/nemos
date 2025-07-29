@@ -1,15 +1,15 @@
 import copy
 import warnings
+from contextlib import nullcontext as does_not_raise
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
 import statsmodels.api as sm
+from scipy.optimize import minimize
 from sklearn.linear_model import GammaRegressor, PoissonRegressor
 from statsmodels.tools.sm_exceptions import DomainWarning
-from scipy.optimize import minimize
-from contextlib import nullcontext as does_not_raise
 
 import nemos as nmo
 
