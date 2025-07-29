@@ -1226,11 +1226,11 @@ class CompositeBasisMixin(BasisMixin):
                 key_map[self.label + "__" + key] = key
         return parameter_dict, key_map
 
-    def _remove_self_label_from_key(self, map_dict: dict) -> dict:
+    def _remove_self_label_from_key(self, mapping_dict: dict) -> dict:
         initial_string = self.label + "__"
         return {
             k[len(initial_string) :] if k.startswith(initial_string) else k: val
-            for k, val in map_dict.items()
+            for k, val in mapping_dict.items()
         }
 
     def get_params(self, deep=True) -> dict:
