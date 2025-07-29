@@ -3,7 +3,7 @@
 AVAILABLE_REGULARIZERS = ["UnRegularized", "Ridge", "Lasso", "GroupLasso", "ElasticNet"]
 
 
-def create_regularizer(name: str | None):
+def instantiate_regularizer(name: str | None):
     """
     Create a regularizer from a given name.
 
@@ -24,6 +24,10 @@ def create_regularizer(name: str | None):
     ValueError
         If the `name` provided does not match to any available regularizer.
     """
+    # If the name contains a module path, extract the class name
+    if name:
+        name = name.split("nemos.regularizer.")[-1]
+
     if name in ("UnRegularized", None):
         from .regularizer import UnRegularized
 
@@ -47,5 +51,5 @@ def create_regularizer(name: str | None):
     else:
         raise ValueError(
             f"Unknown regularizer: {name}. "
-            f"Regularizer must be one of {AVAILABLE_REGULARIZERS}"
+            f"Regularizer must be one of {AVAILABLE_REGULARIZERS} or their full module path."
         )

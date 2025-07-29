@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import warnings
 from functools import wraps
+from pathlib import Path
 from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
 
 import jax
@@ -1173,6 +1174,81 @@ class GLM(BaseRegressor):
         params = self.get_params(deep=False)
         klass = self.__class__(**params)
         return klass
+
+    def save_params(self, filename: Union[str, Path]):
+        """
+        Save GLM model parameters to a .npz file.
+
+        This method allows to reuse the model parameters. The saved parameters can be loaded back
+        into a GLM instance using the `load_params` function.
+
+        Parameters
+        ----------
+        filename :
+            The name of the file where the model parameters will be saved. The file will be saved in `.npz` format.
+
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> # Create a GLM model with specified parameters
+        >>> solver_args = {"stepsize": 0.1, "maxiter": 1000, "tol": 1e-6}
+        >>> model = nmo.glm.GLM(
+        ...     regularizer="Ridge",
+        ...     regularizer_strength=0.1,
+        ...     observation_model="Gamma",
+        ...     solver_name="BFGS",
+        ...     solver_kwargs=solver_args,
+        ... )
+        >>> for key, value in model.get_params().items():
+        ...     print(f"{key}: {value}")
+        observation_model__inverse_link_function: <function one_over_x at ...>
+        observation_model: GammaObservations(inverse_link_function=one_over_x)
+        regularizer: Ridge()
+        regularizer_strength: 0.1
+        solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
+        solver_name: BFGS
+        >>> # Save the model parameters to a file
+        >>> model.save_params("model_params.npz")
+        >>> # Load the model from the saved file
+        >>> model = nmo.load_model("model_params.npz")
+        >>> # Model has the same parameters before and after load
+        >>> for key, value in model.get_params().items():
+        ...     print(f"{key}: {value}")
+        observation_model__inverse_link_function: <function one_over_x at ...>
+        observation_model: GammaObservations(inverse_link_function=one_over_x)
+        regularizer: Ridge()
+        regularizer_strength: 0.1
+        solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
+        solver_name: BFGS
+
+        >>> # Saving and loading a custom inverse link function
+        >>> obs = nmo.observation_models.PoissonObservations(
+        ...     inverse_link_function=lambda x: x**2
+        ... )
+        >>> model = nmo.glm.GLM(observation_model=obs)
+        >>> model.save_params("model_params.npz")
+        >>> # Provide a mapping for the custom link function when loading.
+        >>> mapping_dict = {
+        ...     "observation_model__inverse_link_function": lambda x: x**2,
+        ... }
+        >>> loaded_model = nmo.load_model("model_params.npz", mapping_dict=mapping_dict)
+        >>> # Now the loaded model will have the updated solver_name and solver_kwargs
+        >>> for key, value in loaded_model.get_params().items():
+        ...     print(f"{key}: {value}")
+        observation_model__inverse_link_function: <function <lambda> at ...>
+        observation_model: PoissonObservations(inverse_link_function=<lambda>)
+        regularizer: UnRegularized()
+        regularizer_strength: None
+        solver_kwargs: {}
+        solver_name: GradientDescent
+        """
+
+        # initialize saving dictionary
+        fit_attrs = self._get_fit_state()
+        fit_attrs.pop("solver_state_")
+        string_attrs = ["inverse_link_function"]
+
+        super().save_params(filename, fit_attrs, string_attrs)
 
 
 class PopulationGLM(GLM):
