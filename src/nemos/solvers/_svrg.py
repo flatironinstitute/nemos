@@ -12,7 +12,7 @@ from nemos.third_party.jaxopt.jaxopt.prox import prox_none
 
 from ..tree_utils import tree_add_scalar_mul, tree_l2_norm, tree_slice, tree_sub
 from ..typing import KeyArrayLike, Pytree
-from ._jaxopt_solvers import JaxoptWrapper
+from ._jaxopt_solvers import JaxoptAdapter
 
 
 class SVRGState(NamedTuple):
@@ -777,13 +777,13 @@ class SVRG(ProxSVRG):
         return self._run(init_params, init_state, None, *args)
 
 
-class WrappedSVRG(JaxoptWrapper):
+class WrappedSVRG(JaxoptAdapter):
     """Adapter for NeMoS's implementation of SVRG following the AbstractSolver interface."""
 
     _solver_cls = SVRG
 
 
-class WrappedProxSVRG(JaxoptWrapper):
+class WrappedProxSVRG(JaxoptAdapter):
     """Adapter for NeMoS's implementation of Prox-SVRG following the AbstractSolver interface."""
 
     _solver_cls = ProxSVRG

@@ -15,7 +15,7 @@ JaxoptStepResult: TypeAlias = tuple[Params, JaxoptSolverState]
 # TODO do we want the JAXopt solvers to use the same tolerance and max_steps as the Optimistix solvers?
 
 
-class JaxoptWrapper(SolverAdapter[JaxoptSolverState, JaxoptStepResult]):
+class JaxoptAdapter(SolverAdapter[JaxoptSolverState, JaxoptStepResult]):
     """
     Base class for adapters wrapping JAXopt solvers.
 
@@ -81,32 +81,32 @@ class JaxoptWrapper(SolverAdapter[JaxoptSolverState, JaxoptStepResult]):
         return self._solver.maxiter
 
 
-class JaxoptProximalGradient(JaxoptWrapper, StochasticMixin):
+class JaxoptProximalGradient(JaxoptAdapter, StochasticMixin):
     """Adapter for jaxopt.ProximalGradient."""
 
     _solver_cls = jaxopt.ProximalGradient
     _proximal = True
 
 
-class JaxoptGradientDescent(JaxoptWrapper, StochasticMixin):
+class JaxoptGradientDescent(JaxoptAdapter, StochasticMixin):
     """Adapter for jaxopt.GradientDescent."""
 
     _solver_cls = jaxopt.GradientDescent
 
 
-class JaxoptBFGS(JaxoptWrapper):
+class JaxoptBFGS(JaxoptAdapter):
     """Adapter for jaxopt.BFGS."""
 
     _solver_cls = jaxopt.BFGS
 
 
-class JaxoptLBFGS(JaxoptWrapper):
+class JaxoptLBFGS(JaxoptAdapter):
     """Adapter for jaxopt.LBFGS."""
 
     _solver_cls = jaxopt.LBFGS
 
 
-class JaxoptNonlinearCG(JaxoptWrapper):
+class JaxoptNonlinearCG(JaxoptAdapter):
     """Adapter for jaxopt.NonlinearCG."""
 
     _solver_cls = jaxopt.NonlinearCG
