@@ -54,7 +54,7 @@ def forward_pass(
     initial_prob: Array,
     transition_prob: Array,
     conditional_prob: Array,
-    new_session: Array,
+    is_new_session: Array,
 ) -> Tuple[Array, Array]:
     """
     Forward pass of an HMM.
@@ -76,9 +76,9 @@ def forward_pass(
         Array of shape ``(n_time_bins, n_states)``, representing the observation likelihood
         ``p(y_t | z_t)`` at each time step for each state.
 
-    new_session :
+    is_new_session :
         Boolean array of shape ``(n_time_bins,)`` indicating the start of new sessions. When
-        ``new_session[t]`` is True, the recursion at time ``t`` is reset using ``initial_prob``.
+        ``is_new_session[t]`` is True, the recursion at time ``t`` is reset using ``initial_prob``.
 
     Returns
     -------
@@ -145,7 +145,7 @@ def forward_pass(
     init = jnp.zeros_like(conditional_prob[0])
     transition_prob = transition_prob.T
     _, (alphas, normalizers) = jax.lax.scan(
-        body_fn, init, (conditional_prob, new_session)
+        body_fn, init, (conditional_prob, is_new_session)
     )
     return alphas, normalizers
 
@@ -154,7 +154,7 @@ def backward_pass(
     transition_prob: Array,
     conditional_prob: Array,
     normalizers: Array,
-    new_session: Array,
+    is_new_session: Array,
 ):
     """
     Run the backward pass of the HMM inference algorithm to compute beta messages.
@@ -177,9 +177,9 @@ def backward_pass(
         Array of shape ``(n_time_bins,)`` containing the normalization constants from the forward
         pass (e.g., sums of alpha messages). These are used to normalize the backward recursion.
 
-    new_session :
+    is_new_session :
         Boolean array of shape ``(n_time_bins,)`` indicating the start of new sessions. When
-        ``new_session[t]`` is True, the backward message at time ``t`` is reset to a vector of ones.
+        ``is_new_session[t]`` is True, the backward message at time ``t`` is reset to a vector of ones.
 
     Returns
     -------
@@ -236,7 +236,7 @@ def backward_pass(
     # Keeping the carrys because I am interested in
     # all outputs, including the last one.
     _, betas = jax.lax.scan(
-        body_fn, init, (conditional_prob, normalizers, new_session), reverse=True
+        body_fn, init, (conditional_prob, normalizers, is_new_session), reverse=True
     )
     return betas
 
