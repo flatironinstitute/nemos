@@ -332,7 +332,14 @@ def test_svrg_glm_fit(
     # set the tolerance such that the solvers never hit their convergence criterion
     # and run until maxiter is reached
     backend = os.getenv("NEMOS_SOLVER_BACKEND")
-    tol = -1.0 if backend == "jaxopt" else 0.0
+    if backend is not None:
+        use_jaxopt_tol = backend == "jaxopt"
+    else:
+        use_jaxopt_tol = (
+            "jaxopt"
+            in str(nmo.solvers._solver_registry.solver_registry[solver_name]).lower()
+        )
+    tol = -1.0 if use_jaxopt_tol else 0.0
     solver_kwargs = {"maxiter": maxiter, "tol": tol}
 
     # only pass mask if it's not None
@@ -363,12 +370,7 @@ def test_svrg_glm_fit(
     solver = glm._solver
     assert solver.maxiter == maxiter
 
-    if hasattr(glm.solver_state_, "iter_num"):
-        assert glm.solver_state_.iter_num == maxiter
-    elif hasattr(glm.solver_state_, "step"):
-        assert glm.solver_state_.step.item() == maxiter
-    else:
-        assert solver.stats["num_steps"].item() == maxiter
+    assert solver.get_optim_info(glm.solver_state_).num_steps == maxiter
 
 
 @pytest.mark.parametrize(
