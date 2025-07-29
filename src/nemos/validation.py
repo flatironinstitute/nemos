@@ -91,14 +91,14 @@ def check_length(x: Any, expected_len: int, err_message: str):
 
 
 def convert_tree_leaves_to_jax_array(
-    tree: Any, err_message: str, data_type: Optional[DTypeLike] = None
+    pytree: Any, err_message: str, data_type: Optional[DTypeLike] = None
 ):
     """
     Convert the leaves of a given pytree to JAX arrays with the specified data type.
 
     Parameters
     ----------
-    tree :
+    pytree :
         Pytree with leaves that are array-like objects.
     data_type :
         Data type to convert the leaves to.
@@ -115,19 +115,21 @@ def convert_tree_leaves_to_jax_array(
         to JAX arrays.
     """
     try:
-        tree = jax.tree_util.tree_map(lambda x: jnp.asarray(x, dtype=data_type), tree)
+        pytree = jax.tree_util.tree_map(
+            lambda x: jnp.asarray(x, dtype=data_type), pytree
+        )
     except (ValueError, TypeError):
         raise TypeError(err_message)
-    return tree
+    return pytree
 
 
-def check_tree_leaves_dimensionality(tree: Any, expected_dim: int, err_message: str):
+def check_tree_leaves_dimensionality(pytree: Any, expected_dim: int, err_message: str):
     """
     Check if the leaves of the pytree have the specified dimensionality.
 
     Parameters
     ----------
-    tree :
+    pytree :
         Pytree to check the dimensionality of its leaves.
     expected_dim :
         Expected dimensionality of the leaves.
@@ -139,7 +141,7 @@ def check_tree_leaves_dimensionality(tree: Any, expected_dim: int, err_message: 
     ValueError
         If any leaf does not match the expected dimensionality.
     """
-    if pytree_map_and_reduce(lambda x: x.ndim != expected_dim, any, tree):
+    if pytree_map_and_reduce(lambda x: x.ndim != expected_dim, any, pytree):
         raise ValueError(err_message)
 
 
@@ -167,14 +169,14 @@ def check_same_shape_on_axis(*arrays: NDArray, axis: int = 0, err_message: str):
 
 
 def check_array_shape_match_tree(
-    tree: Any, array: NDArray, axis: int, err_message: str
+    pytree: Any, array: NDArray, axis: int, err_message: str
 ):
     """
     Check if the shape of an array matches the shape of arrays in a pytree along a specified axis.
 
     Parameters
     ----------
-    tree :
+    pytree :
         Pytree with arrays as leaves.
     array :
         Array to compare the shape with.
@@ -189,7 +191,7 @@ def check_array_shape_match_tree(
         If the array's shape does not match the pytree leaves' shapes along the specified axis.
     """
     if pytree_map_and_reduce(
-        lambda arr: arr.shape[axis] != array.shape[axis], any, tree
+        lambda arr: arr.shape[axis] != array.shape[axis], any, pytree
     ):
         raise ValueError(err_message)
 
@@ -226,8 +228,8 @@ def array_axis_consistency(
 
 
 def check_tree_axis_consistency(
-    tree_1: Any,
-    tree_2: Any,
+    pytree_1: Any,
+    pytree_2: Any,
     axis_1: int,
     axis_2: int,
     err_message: str,
@@ -237,9 +239,9 @@ def check_tree_axis_consistency(
 
     Parameters
     ----------
-    tree_1 :
+    pytree_1 :
         First pytree to check.
-    tree_2 :
+    pytree_2 :
         Second pytree to check.
     axis_1 :
         Axis to check in the first pytree.
@@ -254,19 +256,22 @@ def check_tree_axis_consistency(
         If the pytrees' leaves are inconsistent along the specified axes.
     """
     if pytree_map_and_reduce(
-        lambda x, y: array_axis_consistency(x, y, axis_1, axis_2), any, tree_1, tree_2
+        lambda x, y: array_axis_consistency(x, y, axis_1, axis_2),
+        any,
+        pytree_1,
+        pytree_2,
     ):
         raise ValueError(err_message)
 
 
-def check_tree_structure(tree_1: Any, tree_2: Any, err_message: str):
+def check_tree_structure(pytree_1: Any, pytree_2: Any, err_message: str):
     """Check if two pytrees have the same structure.
 
     Parameters
     ----------
-    tree_1 :
+    pytree_1 :
         First pytree to compare.
-    tree_2 :
+    pytree_2 :
         Second pytree to compare.
     err_message :
         Error message to raise if the structures of the pytrees do not match.
@@ -276,17 +281,17 @@ def check_tree_structure(tree_1: Any, tree_2: Any, err_message: str):
     TypeError
         If the structures of the pytrees do not match.
     """
-    if jax.tree_util.tree_structure(tree_1) != jax.tree_util.tree_structure(tree_2):
+    if jax.tree_util.tree_structure(pytree_1) != jax.tree_util.tree_structure(pytree_2):
         raise TypeError(err_message)
 
 
-def check_fraction_valid_samples(*tree: Any, err_msg: str, warn_msg: str) -> None:
+def check_fraction_valid_samples(*pytree: Any, err_msg: str, warn_msg: str) -> None:
     """
     Check the fraction of entries that are not infinite or NaN.
 
     Parameters
     ----------
-    *tree :
+    *pytree :
         Trees containing arrays with the same sample axis.
     err_msg :
         The exception message.
@@ -303,7 +308,7 @@ def check_fraction_valid_samples(*tree: Any, err_msg: str, warn_msg: str) -> Non
     UserWarning
         If more than 90% of the sample points contain NaNs or Infs.
     """
-    valid = get_valid_multitree(tree)
+    valid = get_valid_multitree(pytree)
     if all(~valid):
         raise ValueError(err_msg)
     elif valid.mean() <= 0.1:

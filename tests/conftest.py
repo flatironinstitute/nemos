@@ -280,7 +280,7 @@ class MockGLM(nmo.glm.GLM):
     def simulate(
         self,
         random_key: jax.Array,
-        feed_forward_input,
+        feedforward_input,
         **kwargs,
     ):
         pass
