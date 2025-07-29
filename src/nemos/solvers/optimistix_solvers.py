@@ -1,14 +1,14 @@
-from .solver_adapter import SolverAdapter
-
-from typing import Type, Callable, Any, TypeAlias, ClassVar
-from jaxtyping import PyTree, ArrayLike
 import dataclasses
 import inspect
+from typing import Any, Callable, ClassVar, Type, TypeAlias
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import optimistix as optx
-import equinox as eqx
+from jaxtyping import PyTree
+
+from .solver_adapter import SolverAdapter
 
 DEFAULT_ATOL = 1e-8
 DEFAULT_RTOL = 0.0

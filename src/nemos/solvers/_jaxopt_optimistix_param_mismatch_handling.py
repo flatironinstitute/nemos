@@ -1,6 +1,6 @@
+import inspect
 import warnings
 from typing import Any, Type
-import inspect
 
 
 def _clean_solver_kwargs(solver_class: Type, solver_init_kwargs: dict[str, Any]):

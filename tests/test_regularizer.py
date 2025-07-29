@@ -2,6 +2,7 @@ import copy
 import warnings
 from contextlib import nullcontext as does_not_raise
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -10,7 +11,6 @@ import statsmodels.api as sm
 from scipy.optimize import minimize
 from sklearn.linear_model import GammaRegressor, PoissonRegressor
 from statsmodels.tools.sm_exceptions import DomainWarning
-import equinox as eqx
 
 import nemos as nmo
 

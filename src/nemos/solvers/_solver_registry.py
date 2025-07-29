@@ -1,27 +1,23 @@
 """Registry for mapping from solver name to concrete implementation."""
 
-from .jaxopt_solvers import (
-    JaxoptGradientDescent,
-    JaxoptProximalGradient,
-    JaxoptBFGS,
-    JaxoptLBFGS,
-    JaxoptNonlinearCG,
-)
-
 from ._svrg import (
     WrappedProxSVRG,
     WrappedSVRG,
 )
-
-from .optimistix_solvers import (
-    OptimistixBFGS,
-    # OptimistixLBFGS,
-    OptimistixNonlinearCG,
+from .jaxopt_solvers import (
+    JaxoptBFGS,
+    JaxoptGradientDescent,
+    JaxoptLBFGS,
+    JaxoptNonlinearCG,
+    JaxoptProximalGradient,
 )
-
 from .optax_optimistix_solvers import (
-    OptaxOptimistixProximalGradient,
     OptaxOptimistixGradientDescent,
+    OptaxOptimistixProximalGradient,
+)
+from .optimistix_solvers import (  # OptimistixLBFGS,
+    OptimistixBFGS,
+    OptimistixNonlinearCG,
 )
 
 solver_registry = {

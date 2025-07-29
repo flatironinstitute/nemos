@@ -1,10 +1,10 @@
 """Base class for adapters wrapping JAXopt solvers."""
 
-from .solver_adapter import SolverAdapter
+from typing import ClassVar, NamedTuple, Type, TypeAlias
 
 import jaxopt
 
-from typing import ClassVar, Type, NamedTuple, TypeAlias
+from .solver_adapter import SolverAdapter
 
 JaxoptSolverState: TypeAlias = NamedTuple
 # JaxoptStepResult ~ jaxopt.OptStep
