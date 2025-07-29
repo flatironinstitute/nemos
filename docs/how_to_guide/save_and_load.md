@@ -121,7 +121,7 @@ For a real-world example, see [this discussion](https://news.ycombinator.com/ite
 loaded_model = nmo.load_model("custom_regularizer_params.npz")
 ```
 
-You can tell nemos how to load the custom objects by providing a mapping between the saved string and to the callable.
+As the error explains, you can tell nemos how to load the custom objects by providing a mapping between the saved string and to the callable.
 
 ```{code-cell}
 
