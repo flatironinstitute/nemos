@@ -667,10 +667,10 @@ def test_run_iterator(solver_class, request):
         (nmo.solvers.JaxoptProximalGradient, does_not_raise()),
         (nmo.solvers.OptaxOptimistixGradientDescent, does_not_raise()),
         (nmo.solvers.OptaxOptimistixProximalGradient, does_not_raise()),
-        (nmo.solvers.JaxoptLBFGS, pytest.raises(NotImplementedError)),
-        (nmo.solvers.JaxoptBFGS, pytest.raises(NotImplementedError)),
-        (nmo.solvers.OptaxOptimistixLBFGS, pytest.raises(NotImplementedError)),
-        (nmo.solvers.OptimistixBFGS, pytest.raises(NotImplementedError)),
+        (nmo.solvers.JaxoptLBFGS, pytest.raises(AttributeError)),
+        (nmo.solvers.JaxoptBFGS, pytest.raises(AttributeError)),
+        (nmo.solvers.OptaxOptimistixLBFGS, pytest.raises(AttributeError)),
+        (nmo.solvers.OptimistixBFGS, pytest.raises(AttributeError)),
     ],
 )
 def test_only_stochastic_solvers_have_run_iterator(solver_class, request, expectation):

@@ -81,7 +81,7 @@ def _make_rate_scaler(
         return stateful_scale_by_learning_rate(stepsize)
 
 
-class OptaxOptimistixGradientDescent(StochasticMixin, OptimistixOptaxSolver):
+class OptaxOptimistixGradientDescent(OptimistixOptaxSolver, StochasticMixin):
     """
     Gradient descent implementation combining Optax and Optimistix.
 
@@ -130,7 +130,7 @@ class OptaxOptimistixGradientDescent(StochasticMixin, OptimistixOptaxSolver):
         return arguments
 
 
-class OptaxOptimistixProximalGradient(StochasticMixin, OptimistixOptaxSolver):
+class OptaxOptimistixProximalGradient(OptimistixOptaxSolver, StochasticMixin):
     """
     ProximalGradient implementation combining Optax and Optimistix.
 

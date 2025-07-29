@@ -102,12 +102,6 @@ class AbstractSolver(abc.ABC, Generic[SolverState, StepResult]):
         """
         pass
 
-    def run_iterator(self, init_params: Params, iterator: Iterator) -> StepResult:
-        raise NotImplementedError(
-            "If the solver is stochastic, i.e. works with mini-batches of data, this method should be implemented."
-            "If the solver is not stochastic, this method should not be called."
-        )
-
     @classmethod
     @abc.abstractmethod
     def get_accepted_arguments(cls) -> set[str]:

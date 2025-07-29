@@ -64,7 +64,6 @@ class JaxoptWrapper(SolverAdapter[JaxoptSolverState, JaxoptStepResult]):
     def run(self, init_params: Params, *args: Any) -> JaxoptStepResult:
         return self._solver.run(init_params, *self.hyperparams_prox, *args)
 
-
     def get_optim_info(self, state: JaxoptSolverState) -> OptimizationInfo:
         num_steps = state.iter_num.item()  # pyright: ignore
         function_val = state.value if hasattr(state, "value") else None  # pyright: ignore
@@ -76,15 +75,20 @@ class JaxoptWrapper(SolverAdapter[JaxoptSolverState, JaxoptStepResult]):
             reached_max_steps=(num_steps == self.maxiter),
         )
 
+    @property
+    def maxiter(self):
+        # explicitly implementing to satisfy StoachasticMixin
+        return self._solver.maxiter
 
-class JaxoptProximalGradient(StochasticMixin, JaxoptWrapper):
+
+class JaxoptProximalGradient(JaxoptWrapper, StochasticMixin):
     """Adapter for jaxopt.ProximalGradient."""
 
     _solver_cls = jaxopt.ProximalGradient
     _proximal = True
 
 
-class JaxoptGradientDescent(StochasticMixin, JaxoptWrapper):
+class JaxoptGradientDescent(JaxoptWrapper, StochasticMixin):
     """Adapter for jaxopt.GradientDescent."""
 
     _solver_cls = jaxopt.GradientDescent
