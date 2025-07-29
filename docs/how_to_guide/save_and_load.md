@@ -139,7 +139,7 @@ loaded_model
 Mapping is allowed **only** for callables (functions) and classes, because these cannot be stored directly without pickling.
 Other values (like numbers, strings, or arrays) are always stored directly in the `.npz` and cannot be remapped.
 
-⚠️ When mapping a custom class, you must pass the **class itself** (e.g., `mapping = {"regularizer": CustomRegularizer}`), not an instance (`CustomRegularizer()`).
+When mapping a custom class, you must pass the **class itself** (e.g., `mapping = {"regularizer": CustomRegularizer}`), not an instance (`CustomRegularizer()`).
 Passing an instance would overwrite the saved parameters and could lead to inconsistencies.
 
 :::
