@@ -5,7 +5,7 @@ from typing import Callable, ClassVar, NamedTuple, Type, TypeAlias, Any
 from nemos.third_party.jaxopt import jaxopt
 
 from ..regularizer import Regularizer
-from ._abstract_solver import Params, StochasticMixin
+from ._abstract_solver import Params, StochasticMixin, OptimizationInfo
 from ._solver_adapter import SolverAdapter
 
 JaxoptSolverState: TypeAlias = NamedTuple
@@ -63,6 +63,18 @@ class JaxoptWrapper(SolverAdapter[JaxoptSolverState, JaxoptStepResult]):
 
     def run(self, init_params: Params, *args: Any) -> JaxoptStepResult:
         return self._solver.run(init_params, *self.hyperparams_prox, *args)
+
+
+    def get_optim_info(self, state: JaxoptSolverState) -> OptimizationInfo:
+        num_steps = state.iter_num.item()  # pyright: ignore
+        function_val = state.value if hasattr(state, "value") else None  # pyright: ignore
+
+        return OptimizationInfo(
+            function_val=function_val,  # pyright: ignore
+            num_steps=num_steps,
+            converged=state.error.item() <= self.tol,  # pyright: ignore
+            reached_max_steps=(num_steps == self.maxiter),
+        )
 
 
 class JaxoptProximalGradient(StochasticMixin, JaxoptWrapper):

@@ -1,7 +1,16 @@
 """Base class defining the interface for solvers that can be used by `BaseRegressor`."""
 
 import abc
-from typing import Callable, Generic, TypeAlias, TypeVar, Iterator, Protocol, Any
+from typing import (
+    Callable,
+    Generic,
+    TypeAlias,
+    TypeVar,
+    Iterator,
+    Protocol,
+    Any,
+    NamedTuple,
+)
 
 import itertools
 
@@ -16,6 +25,19 @@ StepResult = TypeVar("StepResult")
 # TODO If we want to accept solvers that implement this interface,
 # but are not implemented as a subclass of AbstractSolver,
 # we could just create a protocol listing the methods.
+
+
+class OptimizationInfo(NamedTuple):
+    """Basic diagnostic information about finished optimization runs."""
+
+    # TODO Is the function value needed?
+    # Not all JAXopt solvers store the function value.
+    # Not sure how confusing it is to store None when it's not present
+    # because it can be confused with a diverged optimization.
+    function_val: float
+    num_steps: int | None
+    converged: bool
+    reached_max_steps: int
 
 
 class AbstractSolver(abc.ABC, Generic[SolverState, StepResult]):
@@ -94,6 +116,18 @@ class AbstractSolver(abc.ABC, Generic[SolverState, StepResult]):
 
         Used by `BaseRegressor` to determine what arguments
         can be passed to the solver's __init__.
+        """
+        pass
+
+    @abc.abstractmethod
+    def get_optim_info(self, state: SolverState) -> OptimizationInfo:
+        """Extract some commong info about the optimization process.
+
+        Currently, the following info is extracted:
+        - final function value (where available)
+        - number of steps
+        - whether the optimization converged
+        - whether the max number of steps were reached
         """
         pass
 

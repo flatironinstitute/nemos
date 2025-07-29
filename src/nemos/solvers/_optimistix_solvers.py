@@ -9,7 +9,7 @@ import optimistix as optx
 from jaxtyping import PyTree
 
 from ..regularizer import Regularizer
-from ._abstract_solver import Params
+from ._abstract_solver import Params, OptimizationInfo
 from ._solver_adapter import SolverAdapter
 
 DEFAULT_ATOL = 1e-8
@@ -188,6 +188,18 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState, OptimistixStepResul
     @property
     def maxiter(self) -> int:
         return self.config.max_steps
+
+    def get_optim_info(self, state: OptimistixSolverState) -> OptimizationInfo:
+        num_steps = self.stats["num_steps"].item()
+
+        function_val = state.f.item() if hasattr(state, "f") else state.f_info.f.item()  # pyright: ignore
+
+        return OptimizationInfo(
+            function_val=function_val,
+            num_steps=num_steps,
+            converged=state.terminate.item(),  # pyright: ignore
+            reached_max_steps=(num_steps == self.maxiter),
+        )
 
 
 class OptimistixBFGS(OptimistixAdapter):
