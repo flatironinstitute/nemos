@@ -1,6 +1,6 @@
 """Utility functions for creating regularizer object."""
 
-AVAILABLE_REGULARIZERS = ["UnRegularized", "Ridge", "Lasso", "GroupLasso"]
+AVAILABLE_REGULARIZERS = ["UnRegularized", "Ridge", "Lasso", "GroupLasso", "ElasticNet"]
 
 
 def create_regularizer(name: str | None):
@@ -40,6 +40,10 @@ def create_regularizer(name: str | None):
         from .regularizer import GroupLasso
 
         return GroupLasso()
+    elif name == "ElasticNet":
+        from .regularizer import ElasticNet
+
+        return ElasticNet()
     else:
         raise ValueError(
             f"Unknown regularizer: {name}. "

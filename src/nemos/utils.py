@@ -42,7 +42,7 @@ def check_dimensionality(
     return not pytree_map_and_reduce(lambda x: x.ndim != expected_dim, any, pytree)
 
 
-def validate_axis(tree: Any, axis: int):
+def validate_axis(pytree: Any, axis: int):
     """
     Validate the axis for each array in a given tree structure.
 
@@ -51,7 +51,7 @@ def validate_axis(tree: Any, axis: int):
 
     Parameters
     ----------
-    tree :
+    pytree :
         A tree containing arrays.
     axis :
         The axis that should be valid for each array in the tree. This means each array must have at least
@@ -69,7 +69,7 @@ def validate_axis(tree: Any, axis: int):
     if not isinstance(axis, int) or axis < 0:
         raise ValueError("`axis` must be a non negative integer.")
 
-    if pytree_map_and_reduce(lambda x: x.ndim <= axis, any, tree):
+    if pytree_map_and_reduce(lambda x: x.ndim <= axis, any, pytree):
         raise ValueError(
             "'axis' must be smaller than the number of dimensions of any array in 'tree'."
         )

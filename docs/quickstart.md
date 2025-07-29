@@ -304,7 +304,7 @@ glm = nmo.glm.GLM(observation_model=nmo.observation_models.NegativeBinomialObser
 ## **Regularization**
 
 
-NeMoS supports various regularization schemes, including [Ridge](nemos.regularizer.Ridge) ($L_2$), [Lasso](nemos.regularizer.Lasso) ($L_1$), and [Group Lasso](nemos.regularizer.GroupLasso), to prevent overfitting and improve model generalization.
+NeMoS supports various regularization schemes, including [Ridge](nemos.regularizer.Ridge) ($L_2$), [Lasso](nemos.regularizer.Lasso) ($L_1$), [ElasticNet](nemos.regularizer.ElasticNet) ($L_1 + L_2$), and [Group Lasso](nemos.regularizer.GroupLasso), to prevent overfitting and improve model generalization.
 
 You can specify the regularization scheme and its strength when initializing the GLM model:
 
@@ -318,6 +318,14 @@ glm = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.1)
 
 ```
 
+For [ElasticNet](nemos.regularizer.ElasticNet) regularization, you can also set a regularizer ratio, specifying the balance between $L_1$ and $L_2$ regularization, where a ratio of 1 is equivalent to $L_1$ (Lasso) and a value of 0 is equivalent to $L_2$ (Ridge). This can be set by passing a tuple of values to `regularizer_strength`, where the first value is the strength and the second is the ratio.
+
+```{code-cell} ipython3
+
+# set regularizer strength to 0.1 and regularizer ratio to 0.5
+glm = nmo.glm.GLM(regularizer="ElasticNet", regularizer_strength=(0.1,0.5))
+
+```
 
 
 ## **Pre-processing with `pynapple`**
