@@ -23,7 +23,7 @@ solver_registry = {
     #
     "ProximalGradient": JaxoptProximalGradient,
     #
-    "LBFGS": OptaxOptimistixLBFGS,
+    "LBFGS": JaxoptLBFGS,
     #
     "BFGS": JaxoptBFGS,
     #
