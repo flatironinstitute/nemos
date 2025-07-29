@@ -7,6 +7,7 @@ import pytest
 from nemos.fetch import fetch_data
 from nemos.glm_hmm import forward_backward, hmm_negative_log_likelihood, run_m_step
 from nemos.observation_models import BernoulliObservations
+from nemos.third_party.jaxopt.jaxopt import LBFGS
 
 
 # Below are tests for Bernoulli observation 3 states model glm hmm
@@ -127,16 +128,6 @@ def test_hmm_negative_log_likelihood_regression(decorator):
     np.testing.assert_almost_equal(nll_m_step_nemos, nll_m_step)
 
 
-@pytest.mark.parametrize(
-    "decorator",
-    [
-        lambda x: x,
-        partial(
-            jax.jit,
-            static_argnames=["negative_log_likelihood_func", "inverse_link_function"],
-        ),
-    ],
-)
 def test_run_m_step_regression(decorator):
     jax.config.update("jax_enable_x64", True)
 
@@ -170,6 +161,21 @@ def test_run_m_step_regression(decorator):
         out_axes=1,
     )
 
+    # solver
+    def partial_hmm_negative_log_likelihood(
+        weights, design_matrix, observations, posterior_prob
+    ):
+        return hmm_negative_log_likelihood(
+            weights,
+            X=design_matrix,
+            y=observations,
+            posteriors=posterior_prob,
+            inverse_link_function=obs.inverse_link_function,
+            negative_log_likelihood_func=negative_log_likelihood,
+        )
+
+    solver = LBFGS(partial_hmm_negative_log_likelihood, tol=10**-12)
+
     (
         optimized_projection_weights_nemos,
         new_initial_prob_nemos,
@@ -181,27 +187,21 @@ def test_run_m_step_regression(decorator):
         gammas,
         xis,
         projection_weights,
-        inverse_link_function=obs.inverse_link_function,
-        negative_log_likelihood_func=negative_log_likelihood,
         is_new_session=new_sess.astype(bool),
-        solver_kwargs={"tol": 10**-12, "maxiter": 10**4},
+        solver_run=solver.run,
     )
 
-    n_ll_original = hmm_negative_log_likelihood(
+    n_ll_original = partial_hmm_negative_log_likelihood(
         optimized_projection_weights_nemos,
-        X=X,
-        y=y,
-        posteriors=gammas,
-        inverse_link_function=obs.inverse_link_function,
-        negative_log_likelihood_func=negative_log_likelihood,
+        X,
+        y,
+        gammas,
     )
-    n_ll_nemos = hmm_negative_log_likelihood(
+    n_ll_nemos = partial_hmm_negative_log_likelihood(
         optimized_projection_weights,
-        X=X,
-        y=y,
-        posteriors=gammas,
-        inverse_link_function=obs.inverse_link_function,
-        negative_log_likelihood_func=negative_log_likelihood,
+        X,
+        y,
+        gammas,
     )
 
     # Testing Eq. 13.18 of Bishop
@@ -213,6 +213,5 @@ def test_run_m_step_regression(decorator):
     # Testing output of negative log likelihood
     np.testing.assert_almost_equal(n_ll_original, n_ll_nemos, decimal=10)
     np.testing.assert_almost_equal(
-        optimized_projection_weights,
-        optimized_projection_weights_nemos, decimal=6
+        optimized_projection_weights, optimized_projection_weights_nemos, decimal=6
     )

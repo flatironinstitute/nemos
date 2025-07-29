@@ -28,6 +28,7 @@ dependencies = [
     "typing_extensions>=4.6",       # Typing extensions for Python
     "pynapple>=0.6.6",
     "scikit-learn",                 # BaseEstimator and Tags inheritance
+    "equinox",                      # States as pytrees for GLM-GMM
 ]
 
 
