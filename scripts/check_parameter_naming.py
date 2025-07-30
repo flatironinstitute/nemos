@@ -72,6 +72,9 @@ VALID_PAIRS = [
     {"posterior", "posteriors"},
     {"beta", "betas"},
     {"alpha", "alphas"},
+    {"hyperparams_prox", "hyperparams"},
+    {"flat_dict", "flat_map_dict"},
+    {"fit_params", "init_params"},
 ]
 
 

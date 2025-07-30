@@ -9,16 +9,18 @@ import warnings
 from abc import abstractmethod
 from copy import deepcopy
 from functools import wraps
+from pathlib import Path
 from typing import Any, Dict, NamedTuple, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from nemos.third_party.jaxopt import jaxopt
 
 from . import solvers, utils, validation
-from ._regularizer_builder import AVAILABLE_REGULARIZERS, create_regularizer
+from ._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from .base_class import Base
 from .regularizer import Regularizer
 from .typing import (
@@ -28,6 +30,7 @@ from .typing import (
     SolverRun,
     SolverUpdate,
 )
+from .utils import _flatten_dict, _get_name, _unpack_params, get_env_metadata
 
 
 def strip_metadata(arg_num: Optional[int] = None, kwarg_key: Optional[str] = None):
@@ -219,7 +222,7 @@ class BaseRegressor(Base, abc.ABC):
         """Setter for the regularizer attribute."""
         # instantiate regularizer if str
         if isinstance(regularizer, str):
-            self._regularizer = create_regularizer(name=regularizer)
+            self._regularizer = instantiate_regularizer(name=regularizer)
         elif isinstance(regularizer, Regularizer):
             self._regularizer = regularizer
         else:
@@ -378,7 +381,7 @@ class BaseRegressor(Base, abc.ABC):
             fun=loss, **solver_init_kwargs
         )
 
-        self._solver_loss_fun_ = loss
+        self._solver_loss_fun = loss
 
         def solver_run(
             init_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], *run_args: jnp.ndarray
@@ -690,3 +693,64 @@ class BaseRegressor(Base, abc.ABC):
     def _get_optimal_solver_params_config(self):
         """Return the functions for computing default step and batch size for the solver."""
         pass
+
+    @abstractmethod
+    def save_params(
+        self,
+        filename: Union[str, Path],
+        fit_attrs: dict,
+        string_attrs: list = None,
+    ):
+        """
+        Save model parameters and specified attributes to a .npz file.
+
+        This is a private method intended to be used by subclasses to implement.
+        Adds metadata about the jax and nemos versions used to save the model.
+
+        Parameters
+        ----------
+        filename :
+            The output filename.
+        fit_attrs :
+            Dictionary containing the fitting parameters specific to the subclass model.
+        string_attrs :
+            List of attributes to be saved as strings.
+        """
+
+        # extract model parameters
+        model_params = self.get_params(deep=False)
+        model_params = _unpack_params(model_params, string_attrs)
+
+        # append the fit attributes to the model parameters
+        model_params.update(fit_attrs)
+
+        # save jax and nemos versions
+        model_params["save_metadata"] = get_env_metadata()
+
+        # save the model class name
+        model_params["model_class"] = _get_name(self.__class__)
+
+        # flatten the parameters dictionary to ensure it can be saved
+        model_params = _flatten_dict(model_params)
+        np.savez(filename, **model_params)
+
+    def _get_fit_state(self) -> dict:
+        """
+        Collect all attributes that follow the fitted attribute convention.
+
+        Collect all attributes ending with an underscore.
+
+        Returns
+        -------
+        :
+            A dictionary of attribute names and their values.
+        """
+        return {
+            name: getattr(self, name)
+            for name in dir(self)
+            # sklearn has "_repr_html_" and "_repr_mimebundle_" methods
+            # filter callables
+            if name.endswith("_")
+            and not name.endswith("__")
+            and (not callable(getattr(self, name)))
+        }

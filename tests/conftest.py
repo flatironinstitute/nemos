@@ -10,6 +10,7 @@ Note:
 """
 
 import abc
+from collections import namedtuple
 from functools import partial
 
 import jax
@@ -241,6 +242,9 @@ class MockRegressor(nmo.base_regressor.BaseRegressor):
     def _get_optimal_solver_params_config(self):
         return None, None, None
 
+    def save_params(self, *args):
+        pass
+
 
 class MockRegressorNested(MockRegressor):
     def __init__(self, other_param: int, std_param: int = 0):
@@ -357,6 +361,14 @@ def poissonGLM_model_instantiation_pytree(poissonGLM_model_instantiation):
 
 
 @pytest.fixture
+def poissonGLM_fitted_model_instantiation(poissonGLM_model_instantiation):
+    X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+    model.fit(X, y)
+
+    return X, y, model, true_params, firing_rate
+
+
+@pytest.fixture
 def population_poissonGLM_model_instantiation():
     """Set up a population Poisson GLM for testing purposes.
 
@@ -413,6 +425,16 @@ def population_poissonGLM_model_instantiation_pytree(
         observation_model=model.observation_model, regularizer=model.regularizer
     )
     return X_tree, np.random.poisson(rate), model_tree, true_params_tree, rate
+
+
+@pytest.fixture
+def population_poissonGLM_fitted_model_instantiation(
+    population_poissonGLM_model_instantiation,
+):
+    X, y, model, true_params, firing_rate = population_poissonGLM_model_instantiation
+    model.fit(X, y)
+
+    return X, y, model, true_params, firing_rate
 
 
 @pytest.fixture
@@ -923,6 +945,24 @@ def population_bernoulliGLM_model_instantiation_pytree(
         observation_model=model.observation_model, regularizer=model.regularizer
     )
     return X_tree, np.random.binomial(1, rate), model_tree, true_params_tree, rate
+
+
+SizeTerminal = namedtuple("SizeTerminal", ["columns", "lines"])
+
+
+class NestedRegularizer(nmo.regularizer.Ridge):
+    def __init__(self, sub_regularizer, func=np.exp):
+        self.sub_regularizer = sub_regularizer
+        self.func = func
+        super().__init__()
+
+
+@pytest.fixture
+def nested_regularizer():
+    """
+    Nested retularizer for testing save/load.
+    """
+    return NestedRegularizer(nmo.regularizer.Lasso())
 
 
 @pytest.fixture

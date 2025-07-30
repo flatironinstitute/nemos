@@ -18,6 +18,19 @@ Classes for creating Generalized Linear Models (GLMs) for both single neurons an
     GLM
     PopulationGLM
 
+.. _nemos_io:
+
+The NeMoS I/O module
+--------------------
+
+.. currentmodule:: nemos.io
+.. autosummary::
+    :toctree: generated/io
+    :nosignatures:
+
+    load_model
+    inspect_npz
+
 .. _nemos_basis:
 
 The ``nemos.basis`` module

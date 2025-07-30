@@ -1,7 +1,8 @@
 """Collection of methods utilities."""
 
+import difflib
 import warnings
-from typing import Any, Optional, Union
+from typing import Any, List, Optional, Union
 
 import jax
 import jax.numpy as jnp
@@ -433,3 +434,42 @@ def _check_batch_size_larger_than_convolution_window(
             f"The provided batch size is ``{bs}``, while the window size for the convolution is ``{ws}``. "
             "Please increase the batch size."
         )
+
+
+def _suggest_keys(
+    unmatched_keys: List[str], valid_keys: List[str], cutoff: float = 0.6
+):
+    """
+    Suggest the closest matching valid key for each unmatched key using fuzzy string matching.
+
+    This function compares each unmatched key to a list of valid keys and returns a suggestion
+    if a close match is found based on the similarity score.
+
+    Parameters
+    ----------
+    unmatched_keys :
+        Keys that were provided by the user but not found in the expected set.
+    valid_keys :
+        The list of valid/expected keys to compare against.
+    cutoff :
+        The minimum similarity ratio (between 0 and 1) required to consider a match.
+        A higher value means stricter matching. Defaults to 0.6.
+
+    Returns
+    -------
+    :
+        A list of (provided_key, suggested_key) pairs. If no match is found,
+        `suggested_key` will be `None`.
+
+    Examples
+    --------
+    >>> _suggest_keys(["observaton_model"], ["observation_model", "regularization"])
+    [('observaton_model', 'observation_model')]
+    """
+    key_paris = []  # format, (user_provided, similar key)
+    for unmatched_key in unmatched_keys:
+        suggestions = difflib.get_close_matches(
+            unmatched_key, valid_keys, n=1, cutoff=cutoff
+        )
+        key_paris.append((unmatched_key, suggestions[0] if suggestions else None))
+    return key_paris

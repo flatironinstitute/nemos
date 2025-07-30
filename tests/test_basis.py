@@ -1,7 +1,6 @@
 import inspect
 import itertools
 import re
-from collections import namedtuple
 from contextlib import nullcontext as does_not_raise
 from functools import partial
 from unittest.mock import patch
@@ -13,6 +12,7 @@ import pytest
 from conftest import (
     BasisFuncsTesting,
     CombinedBasis,
+    SizeTerminal,
     custom_basis,
     list_all_basis_classes,
 )
@@ -35,8 +35,6 @@ from nemos.basis._raised_cosine_basis import (
 )
 from nemos.basis._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis
 from nemos.utils import pynapple_concatenate_numpy
-
-SizeTerminal = namedtuple("SizeTerminal", ["columns", "lines"])
 
 
 def instantiate_atomic_basis(cls, **kwargs):

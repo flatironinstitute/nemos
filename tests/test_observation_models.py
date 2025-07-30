@@ -16,6 +16,8 @@ from nemos._observation_model_builder import (
     AVAILABLE_OBSERVATION_MODELS,
     instantiate_observation_model,
 )
+from nemos.initialize_regressor import initialize_intercept_matching_mean_rate
+from nemos.observation_models import LINK_NAME_TO_FUNC
 
 
 @pytest.fixture
@@ -94,7 +96,11 @@ def test_glm_instantiation_from_string_at_init(
         ("Poisson", does_not_raise()),
         ("Gamma", does_not_raise()),
         ("Bernoulli", does_not_raise()),
+        ("nemos.observation_models.PoissonObservations", does_not_raise()),
+        ("nemos.observation_models.GammaObservations", does_not_raise()),
+        ("nemos.observation_models.BernoulliObservations", does_not_raise()),
         ("NegativeBinomial", does_not_raise()),
+        ("nemos.observation_models.NegativeBinomial", does_not_raise()),
         (
             "invalid",
             pytest.raises(ValueError, match="Unknown observation model: invalid"),
@@ -111,21 +117,62 @@ def test_glm_setter_observation_model(obs_model_string, glm_class, expectation):
     model = glm_class(observation_model=obs)
     with expectation:
         model.observation_model = obs_model_string
-    if obs_model_string == "Gamma":
+    if (
+        obs_model_string == "Gamma"
+        or obs_model_string == "nemos.observation_models.GammaObservations"
+    ):
         assert isinstance(
             model.observation_model, nmo.observation_models.GammaObservations
         )
-    elif obs_model_string == "Poisson":
+    elif (
+        obs_model_string == "Poisson"
+        or obs_model_string == "nemos.observation_models.PoissonObservations"
+    ):
         assert isinstance(
             model.observation_model, nmo.observation_models.PoissonObservations
         )
-    elif obs_model_string == "Bernoulli":
+    elif (
+        obs_model_string == "Bernoulli"
+        or obs_model_string == "nemos.observation_models.BernoulliObservations"
+    ):
         assert isinstance(
             model.observation_model, nmo.observation_models.BernoulliObservations
         )
     elif obs_model_string == "NegativeBinomial":
         assert isinstance(
             model.observation_model, nmo.observation_models.NegativeBinomialObservations
+        )
+
+
+@pytest.mark.parametrize(
+    "link_func_string, expectation",
+    [
+        *((link_name, does_not_raise()) for link_name in LINK_NAME_TO_FUNC),
+        (
+            "nemos.utils.invalid_link",
+            pytest.raises(ValueError, match="Unknown link function"),
+        ),
+        (
+            "jax.numpy.invalid_link",
+            pytest.raises(ValueError, match="Unknown link function"),
+        ),
+        ("invalid", pytest.raises(ValueError, match="Unknown link function")),
+    ],
+)
+@pytest.mark.parametrize(
+    "obs_model_string",
+    [
+        "Poisson",
+        "Gamma",
+        "Bernoulli",
+    ],
+)
+def test_instantiate_observation_model(link_func_string, obs_model_string, expectation):
+    """Test instantiation of observation model with a link function."""
+    with expectation:
+        obs_model = instantiate_observation_model(
+            obs_model_string,
+            inverse_link_function=link_func_string,
         )
 
 
@@ -174,6 +221,90 @@ class TestPoissonObservations:
             raise ValueError(
                 "The emission probability should output the results of a call to jax.random.poisson."
             )
+
+    @pytest.mark.parametrize(
+        "score_type, expectation",
+        [
+            ("pseudo-r2-McFadden", does_not_raise()),
+            (
+                "not-implemented",
+                pytest.raises(
+                    NotImplementedError, match="Score not-implemented not implemented"
+                ),
+            ),
+        ],
+    )
+    def test_not_implemented_score(
+        self, score_type, expectation, poissonGLM_model_instantiation
+    ):
+        _, y, model, _, firing_rate = poissonGLM_model_instantiation
+        with expectation:
+            model.observation_model.pseudo_r2(y, firing_rate, score_type)
+
+    @pytest.mark.parametrize(
+        "scale, expectation",
+        [
+            (1, does_not_raise()),
+            (
+                "invalid",
+                pytest.raises(
+                    ValueError, match="The `scale` parameter must be of numeric type"
+                ),
+            ),
+        ],
+    )
+    def test_scale_setter(self, scale, expectation, poissonGLM_model_instantiation):
+        _, _, model, _, firing_rate = poissonGLM_model_instantiation
+        with expectation:
+            model.observation_model.scale = scale
+
+    def test_scale_getter(self, poissonGLM_model_instantiation):
+        _, _, model, _, firing_rate = poissonGLM_model_instantiation
+        assert model.observation_model.scale == 1
+
+    def test_non_differentiable_inverse_link(self, poissonGLM_model_instantiation):
+        _, _, model, _, _ = poissonGLM_model_instantiation
+
+        # define a jax non-diff function
+        non_diff = lambda y: jnp.asarray(njit(lambda x: x)(np.atleast_1d(y)))
+
+        with pytest.raises(
+            TypeError,
+            match="The `inverse_link_function` function cannot be differentiated",
+        ):
+            model.observation_model.inverse_link_function = non_diff
+
+    @pytest.mark.parametrize(
+        "test_value",
+        [
+            jnp.array([25.0]),
+            jnp.array([7]),
+            jnp.array([0.0]),
+            jnp.array([1.0]),
+            jnp.array([0.5]),
+        ],
+    )
+    def test_custom_inverse_link_function(
+        self,
+        test_value,
+        poissonGLM_model_instantiation,
+    ):
+        """
+        Test that custom inverse link function can be inverted and works correctly.
+        """
+        # Initialize model
+        _, _, model, _, _ = poissonGLM_model_instantiation
+        model.observation_model.inverse_link_function = lambda x: jnp.power(x, 2)
+
+        # Validate custom link function
+        expected_output = jnp.sqrt(test_value)
+        result = initialize_intercept_matching_mean_rate(
+            model.observation_model.inverse_link_function, test_value
+        )
+
+        assert np.allclose(
+            result, expected_output
+        ), f"Inverse link function result mismatch: expected {expected_output}, got {result}"
 
     def test_pseudo_r2_vs_statsmodels(self, poissonGLM_model_instantiation):
         """
