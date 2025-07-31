@@ -37,6 +37,46 @@ class FourierBasis(AtomicBasisMixin, Basis):
         frequency_mask: jnp.ndarray | None = None,
         label: Optional[str] = None,
     ) -> None:
+        """
+        N-dimensional Fourier basis for feature expansion.
+
+        This class generates a set of sine and cosine basis functions defined over
+        an ``n``-dimensional input space. The basis functions are constructed from
+        a Cartesian product of frequencies specified for each input dimension.
+        Each selected frequency combination contributes two basis functions
+        (cosine and sine), except for the all-zero frequency (DC component),
+        which contributes only a cosine term.
+
+        The class supports flexible frequency specification (integers, ranges, or
+        lists per dimension) and optional masking to include or exclude specific
+        frequency combinations.
+
+        Parameters
+        ----------
+        frequencies : int | tuple[int, int] | list[int] | list[tuple[int, int]]
+            Frequencies to use along each input dimension.
+
+            - ``int``: creates a range ``[0, 1, ..., n-1]`` for **all dimensions**.
+            - ``tuple[int, int]``: creates a range ``[start, ..., stop-1]`` for **all dimensions**.
+            - ``list[int]``: list of integers giving the number of frequencies per dimension.
+            - ``list[tuple[int, int]]``: list of (start, stop) tuples specifying ranges per dimension.
+
+        frequency_mask : array-like of {0, 1}, optional
+            Boolean mask specifying which frequency combinations to include.
+            If ``None``, all possible frequency combinations are used. The mask
+            must have shape ``(len(frequencies[0]), len(frequencies[1]), ...)``.
+
+        label : str, optional
+            Descriptive label for the basis (e.g., to use in plots or summaries).
+
+        Notes
+        -----
+        - If ``frequency_mask`` is provided, only the selected frequency
+          combinations are used to build the basis.
+        - The output of ``compute_features`` contains both cosine and sine components for
+          each active frequency combination, except that the all-zero frequency
+          includes only a cosine term.
+        """
         self.frequencies = frequencies
         self.frequency_mask = frequency_mask
 
