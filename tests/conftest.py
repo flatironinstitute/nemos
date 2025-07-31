@@ -21,9 +21,17 @@ import pytest
 import nemos as nmo
 import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
+from docs.scripts.basis_figs import KWARGS
 from nemos.basis import AdditiveBasis, CustomBasis, MultiplicativeBasis
 from nemos.basis._basis import Basis
 from nemos.basis._transformer_basis import TransformerBasis
+
+DEFAULT_KWARGS = {
+    "n_basis_funcs": 5,
+    "frequencies": 4,
+    "window_size": 11,
+    "decay_rates": np.arange(1, 1 + 5),
+}
 
 # shut-off conversion warnings
 nap.nap_config.suppress_conversion_warnings = True
@@ -107,12 +115,14 @@ class CombinedBasis(BasisFuncsTesting):
         """Instantiate and return two basis of the type specified."""
 
         # Set non-optional args
-        default_kwargs = {
+        new_kwargs = {
             "n_basis_funcs": n_basis,
             "window_size": window_size,
             "decay_rates": np.arange(1, 1 + n_basis),
         }
-        repeated_keys = set(default_kwargs.keys()).intersection(kwargs.keys())
+        default_kwargs = DEFAULT_KWARGS.copy()
+        default_kwargs.update(new_kwargs)
+        repeated_keys = set(new_kwargs.keys()).intersection(kwargs.keys())
         if repeated_keys:
             raise ValueError(
                 "Cannot set `n_basis_funcs, window_size, decay_rates` with kwargs"

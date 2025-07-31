@@ -319,7 +319,8 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         Parameters
         ----------
         n_samples :
-           The number of samples.
+           The number of points in the uniformly spaced grid. A higher number of
+            samples will result in a more detailed visualization of the basis functions.
 
         Returns
         -------
