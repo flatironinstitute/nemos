@@ -48,10 +48,55 @@ class FourierBasis(AtomicBasisMixin, Basis):
 
     @property
     def frequency_mask(self) -> jnp.ndarray | None:
+        """Get or set the frequency mask for the Fourier basis.
+
+        The frequency mask is a boolean array (or array-like of 0s and 1s)
+        that specifies which frequencies to include when evaluating the basis.
+        Its shape must match the number of frequencies along each input dimension.
+
+        - If ``None``, all possible frequency combinations are included.
+        - If provided, entries set to 1 (``True``) enable the corresponding frequency
+          combination, while 0 (``False``) disables it.
+
+        Returns
+        -------
+        :
+            A boolean JAX array indicating the selected frequencies, or ``None``
+            if no mask is applied.
+        """
         return self._frequency_mask
 
     @frequency_mask.setter
     def frequency_mask(self, values: ArrayLike | jnp.ndarray | None) -> None:
+        """Set the frequency mask for the Fourier basis.
+
+        Parameters
+        ----------
+        values :
+            A boolean array (or array-like of 0s and 1s) specifying which
+            frequency combinations to include. Must have shape
+            ``(len(frequencies[0]), len(frequencies[1]), ...)``.
+
+            - If ``None``, all frequency combinations are included.
+            - If provided, each entry set to 1 includes the corresponding
+              frequency combination; entries set to 0 exclude it.
+
+        Raises
+        ------
+        ValueError
+            If the array contains values other than 0 or 1, or if the shape
+            does not match the expected number of frequencies.
+        TypeError
+            If ``values`` cannot be converted to a JAX array.
+
+        Notes
+        -----
+        Setting this property also updates:
+
+        - ``self._frequency_mask``: stores the boolean mask.
+        - ``self._n_basis_funcs``: number of active basis functions.
+        - ``self._eval_freq``: array of selected frequencies for evaluation.
+        """
         if values is None:
             self._frequency_mask = None
 
