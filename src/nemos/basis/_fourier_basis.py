@@ -144,49 +144,50 @@ class FourierBasis(AtomicBasisMixin, Basis):
             grids = jnp.meshgrid(
                 *[jnp.arange(len(freqs)) for freqs in self._frequencies], indexing="ij"
             )
-            idxs = jnp.stack([g.reshape(-1) for g in grids], axis=1)
-            self._eval_freq = jnp.stack(
-                [freqs[idxs[:, d]] for d, freqs in enumerate(self._frequencies)], axis=0
+            idxs = jnp.stack([g.reshape(-1) for g in grids])
+
+        else:
+            try:
+                values = jnp.asarray(values)
+            except Exception:
+                raise ValueError(
+                    "``frequency_mask`` cannot be converted to a jax array of boolean."
+                )
+
+            if not jnp.all((values == 0) | (values == 1)):
+                raise ValueError("Frequency mask must be an array-like of 0s and 1s.")
+
+            values = values.astype(bool)
+
+            if not values.ndim == self._n_input_dimensionality:
+                ndim = self._n_input_dimensionality
+                raise ValueError(
+                    f"The frequency mask for an  {ndim}-dimensional Fourier basis "
+                    f"must be an {ndim}-dimensional array of 0s and 1s. "
+                    f"The provided mask is an {ndim}-dimensional array instead."
+                )
+
+            if tuple(len(freqs) for freqs in self._frequencies) != values.shape:
+                expected_shape = tuple(len(freqs) for freqs in self._frequencies)
+                raise ValueError(
+                    "Invalid shape for ``frequency_mask``. "
+                    f"Expected shape {expected_shape}, "
+                    f"but got {values.shape} instead. The mask must have one entry (0 or 1) for each "
+                    "frequency along every dimension of the Fourier basis."
+                )
+
+            self._frequency_mask = values
+            self._n_basis_funcs = 2 * int(jnp.sum(self._frequency_mask)) - int(
+                self._frequency_mask[(0,) * values.ndim]
             )
-            return
-        try:
-            values = jnp.asarray(values)
-        except Exception:
-            raise ValueError(
-                "``frequency_mask`` cannot be converted to a jax array of boolean."
-            )
 
-        if not jnp.all((values == 0) | (values == 1)):
-            raise ValueError("Frequency mask must be an array-like of 0s and 1s.")
+            idxs = jnp.stack(jnp.where(self._frequency_mask))
 
-        values = values.astype(bool)
-
-        if not values.ndim == self._n_input_dimensionality:
-            ndim = self._n_input_dimensionality
-            raise ValueError(
-                f"The frequency mask for an  {ndim}-dimensional Fourier basis "
-                f"must be an {ndim}-dimensional array of 0s and 1s. "
-                f"The provided mask is an {ndim}-dimensional array instead."
-            )
-
-        if tuple(len(freqs) for freqs in self._frequencies) != values.shape:
-            expected_shape = tuple(len(freqs) for freqs in self._frequencies)
-            raise ValueError(
-                "Invalid shape for ``frequency_mask``. "
-                f"Expected shape {expected_shape}, "
-                f"but got {values.shape} instead. The mask must have one entry (0 or 1) for each "
-                "frequency along every dimension of the Fourier basis."
-            )
-
-        self._frequency_mask = values
-        self._n_basis_funcs = 2 * int(jnp.sum(self._frequency_mask)) - int(
-            self._frequency_mask[(0,) * values.ndim]
-        )
-
-        idxs = jnp.stack(jnp.where(self._frequency_mask), axis=0)
         self._eval_freq = jnp.stack(
             [freqs[idxs[d]] for d, freqs in enumerate(self._frequencies)]
         )
+        # used to drop or not the zero phase
+        self._has_zero_phase = int(jnp.all(self._eval_freq[:, 0] == 0))
 
     @property
     def frequencies(self) -> Tuple[jnp.ndarray, ...]:
@@ -236,7 +237,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
 
     @property
     def n_basis_funcs(self) -> int | None:
-        return self._eval_freq.size
+        return self._eval_freq.size - self._has_zero_phase
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
@@ -280,7 +281,9 @@ class FourierBasis(AtomicBasisMixin, Basis):
 
         sample_pts = _flat_samples_to_angles(sample_pts)
         angles = sample_pts @ self._eval_freq
-        out = jnp.concatenate([jnp.cos(angles), jnp.sin(angles)], axis=1)
+        out = jnp.concatenate(
+            [jnp.cos(angles), jnp.sin(angles[..., self._has_zero_phase :])], axis=1
+        )
         return out.reshape(*shape, out.shape[-1])
 
     def _shift_angles(self, sample_pts: ArrayLike) -> ArrayLike:
