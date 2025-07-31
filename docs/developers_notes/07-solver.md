@@ -25,8 +25,6 @@ This is a generic class parametrized by `SolverState` and `StepResult`.
 `SolverState` in concrete subclasses should be the type of the solver state.
 `StepResult` is the type of what is returned by each step of the solver. Typically this is a tuple of the parameters and the solver state.
 
-If you want to use your own solver in `nemos`, you just have to write a solver that adheres to this interface, and it should be straightforward to plug in.
-Currently, the solver registry defines which implementation to use for each algorithm, so that has to be overwritten, but in the future we are [planning to support passing any solver to `BaseRegressor`](https://github.com/flatironinstitute/nemos/issues/378).
 
 ## Adapters
 Creating adapters for existing solvers can be done in multiple ways.
@@ -72,9 +70,9 @@ Abstract Class AbstractSolver
 │   └─ Concrete Subclass WrappedProxSVRG
 ```
 
-OptaxOptimistixSolver is for using Optax solvers, utilizing optimistix.OptaxMinimiser to run the full optimization loop.
-Optimistix does not have implementations of Nesterov acceleration, so gradient descent is implemented by wrapping optax.sgd which does support it.
-OptaxOptimistixSolver allows using any solver from Optax (e.g., Adam). See `OptaxOptimistixGradientDescent` for a template of how to wrap new Optax solvers.
+`OptaxOptimistixSolver` is for using Optax solvers, utilizing optimistix.OptaxMinimiser to run the full optimization loop.
+Optimistix does not have implementations of Nesterov acceleration, so gradient descent is implemented by wrapping `optax.sgd` which does support it.
+`OptaxOptimistixSolver` allows using any solver from Optax (e.g., Adam). See `OptaxOptimistixGradientDescent` for a template of how to wrap new Optax solvers.
 
 
 ## Optimization info
@@ -82,9 +80,22 @@ Because different libraries store info about the optimization run in different p
 Optimistix saves some things in the stats dict, Optax and Jaxopt store things in their state.
 These are saved in `solver.optimization_info`
 
+## Custom solvers
+If you want to use your own solver in `nemos`, you just have to write a solver that adheres to the `AbstractSolver` interface, and it should be straightforward to plug in.
+Currently, the solver registry defines which implementation to use for each algorithm, so that has to be overwritten, but in the future we are [planning to support passing any solver to `BaseRegressor`](https://github.com/flatironinstitute/nemos/issues/378).
+We might also define something like an `ImplementsSolverInterface` protocol as well to easily check if user-supplied solvers define the methods required for the interface.
+
+## Stochastic optimization
+To run stochastic (~mini-batch) optimization, following JAXopt we will require a `run_iterator` method to be defined.
+Instead of the full input data `run_iterator` accepts a generator / iterator that provides batches of data.
+For solvers in `nemos` that can be used this way, we provide `StochasticMixin` which borrows the implementation from JAXopt.
+
+Note that (Prox-)SVRG is especially well-suited for running stochastic optimization, however it currently requires the optimization loop to be implemented separately as it is a bit more involved than what is done by `run_iterator`.
+A potential solution to this would be to provide a separate method that accepts the full data, and takes care of the batching. That might be a more convenient alternative to the current `run_iterator` as well.
+
 ## Note on line searches vs. fixed stepsize in Optimistix
 By default Optimistix doesn't expose the search attribute of concrete solvers but we might want to flexibly switch between linesearches and constant learning rates depending on whether `stepsize` is passed to the solver.
-A solution to this would be to create short redefinitions of the required solvers with the `search` as an argument `__init__`, and in the adapter dealing with `stepsize` with something like:
+A solution to this would be to create short redefinitions of the required solvers with the `search` as an argument to `__init__`, and in the adapter dealing with `stepsize` with something like:
 ```python
 class BFGS(AbstractBFGS[Y, Aux, _Hessian]):
     rtol: float
