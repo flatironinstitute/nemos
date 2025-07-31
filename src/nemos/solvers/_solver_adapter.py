@@ -1,12 +1,13 @@
 """Base class for adapter wrapping solver from JAXopt and Optimistix."""
 
+import abc
 import inspect
 from typing import Any, ClassVar, Type
 
 from ._abstract_solver import AbstractSolver, SolverState, StepResult
 
 
-class SolverAdapter(AbstractSolver[SolverState, StepResult]):
+class SolverAdapter(AbstractSolver[SolverState, StepResult], abc.ABC):
     """
     Base class for adapters wrapping solvers from JAXopt and Optimistix.
 
