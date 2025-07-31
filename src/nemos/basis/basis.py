@@ -3,14 +3,17 @@
 # required to get ArrayLike to render correctly
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from numbers import Number
+from typing import List, Optional, Sequence, Tuple
 
+import jax
 from numpy.typing import ArrayLike, NDArray
 
 from ..typing import FeatureMatrix
 from ._basis_mixin import AtomicBasisMixin, ConvBasisMixin, EvalBasisMixin
 from ._composition_utils import add_docstring
 from ._decaying_exponential import OrthExponentialBasis
+from ._fourier_basis import FourierBasis
 from ._identity import HistoryBasis, IdentityBasis
 from ._raised_cosine_basis import RaisedCosineBasisLinear, RaisedCosineBasisLog
 from ._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis
@@ -2406,3 +2409,191 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
         self._check_window_size(window_size)
         self._window_size = window_size
         self._n_basis_funcs = window_size
+
+
+class FourierEval(EvalBasisMixin, FourierBasis):
+    r"""Fourier basis.
+
+    Parameters
+    ----------
+    frequencies :
+        Fourier frequencies.
+    bounds :
+        The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
+        minimum and the maximum of the samples provided when evaluating the basis.
+        If a sample is outside the bounds, the basis will return NaN.
+    label :
+        The label of the basis, intended to be descriptive of the task variable being processed.
+        For example: velocity, position, spike_counts.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from nemos.basis import FourierEval
+    >>> n_freq = 5
+    >>> fourier_basis = FourierEval(n_freq)
+    >>> fourier_basis
+    FourierEval(n_frequencies=5, include_constant=False, phase_sign=1.0)
+    >>> sample_points = np.random.randn(100)
+    >>> # convolve the basis
+    >>> features = fourier_basis.compute_features(sample_points)
+    """
+
+    def __init__(
+        self,
+        frequencies: int | Tuple[int, int] | List[int] | List[Tuple[int, int]],
+        ndim: int = 1,
+        bounds: Optional[Tuple[float, float] | Tuple[Tuple[float, float]]] = None,
+        frequency_mask: NDArray[bool] | None = None,
+        label: Optional[str] = "FourierEval",
+    ):
+        self._n_input_dimensionality = ndim
+        EvalBasisMixin.__init__(self, bounds=bounds)
+        FourierBasis.__init__(
+            self,
+            frequencies=frequencies,
+            label=label,
+            frequency_mask=frequency_mask,
+        )
+
+    @add_docstring("evaluate_on_grid", FourierBasis)
+    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
+        """
+        Examples
+        --------
+        .. plot::
+            :include-source: True
+            :caption: FourierEval Basis
+
+            >>> import numpy as np
+            >>> import matplotlib.pyplot as plt
+            >>> from nemos.basis import FourierEval
+            >>> n_frequencies = 5
+            >>> fourier_basis = FourierEval(n_frequencies)
+            >>> sample_points, basis_values = fourier_basis.evaluate_on_grid(100)
+            >>> plt.plot(sample_points, basis_values)
+            [<matplotlib.lines.Line2D object at ...
+            >>> plt.show()
+        """
+        return super().evaluate_on_grid(n_samples)
+
+    @add_docstring("_compute_features", EvalBasisMixin)
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import FourierEval
+
+        >>> # Generate data
+        >>> num_samples = 1000
+        >>> X = np.random.normal(size=(num_samples, ))  # raw time series
+        >>> basis = FourierEval(n_frequencies=10)
+        >>> features = basis.compute_features(X)  # basis transformed time series
+        >>> features.shape
+        (1000, 20)
+
+        """
+        return super().compute_features(xi)
+
+    @add_docstring("split_by_feature", FourierBasis)
+    def split_by_feature(
+        self,
+        x: NDArray,
+        axis: int = 1,
+    ):
+        r"""
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import FourierEval
+        >>> from nemos.glm import GLM
+        >>> basis = FourierEval(n_frequencies=6, label="one_input")
+        >>> X = basis.compute_features(np.random.randn(20,))
+        >>> split_features_multi = basis.split_by_feature(X, axis=1)
+        >>> for feature, sub_dict in split_features_multi.items():
+        ...        print(f"{feature}, shape {sub_dict.shape}")
+        one_input, shape (20, 12)
+
+        """
+        return super().split_by_feature(x, axis=axis)
+
+    @add_docstring("set_input_shape", AtomicBasisMixin)
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
+        """
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> basis = nmo.basis.FourierEval(5)
+        >>> # Configure with an integer input:
+        >>> _ = basis.set_input_shape(3)
+        >>> basis.n_output_features
+        30
+        >>> # Configure with a tuple:
+        >>> _ = basis.set_input_shape((4, 5))
+        >>> basis.n_output_features
+        200
+        >>> # Configure with an array:
+        >>> x = np.ones((10, 4, 5))
+        >>> _ = basis.set_input_shape(x)
+        >>> basis.n_output_features
+        200
+
+        """
+        return AtomicBasisMixin.set_input_shape(self, xi)
+
+    @add_docstring("evaluate", FourierBasis)
+    def evaluate(self, *sample_pts: NDArray) -> NDArray:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import FourierEval
+        >>> basis = FourierEval(n_frequencies=4)
+        >>> out = basis.evaluate(np.random.randn(100, 5, 2))
+        >>> out.shape
+        (100, 5, 2, 8)
+        """
+        # ruff: noqa: D205, D400
+        return super().evaluate(*sample_pts)
+
+    @property
+    def bounds(self) -> Tuple[Tuple[float, float]] | None:
+        return self._bounds
+
+    @bounds.setter
+    def bounds(
+        self, values: Tuple[float, float] | Sequence[Tuple[float, float]] | None
+    ):
+        if values is None:
+            self._bounds = None
+            return
+
+        def _is_leaf(x):
+            return isinstance(x, Sequence) and all(isinstance(xi, Number) for xi in x)
+
+        values = jax.tree_util.tree_leaves(values, is_leaf=_is_leaf)
+
+        if len(values) == 1:
+            values, err = self._format_bounds(values[0])
+            if err is not None:
+                raise err
+            values = (values,) * self.ndim
+
+        elif len(values) != self.ndim:
+            raise ValueError(
+                "If multiple bounds are provided, one must provide a bounds tuple per each dimension. "
+                f"The dimension of the basis is ``{self.ndim}``, but {len(values)} bounds are provided "
+                f"instead.\nList of provided bounds: {values}"
+            )
+        else:
+            out = jax.tree_util.tree_map(self._format_bounds, values, is_leaf=_is_leaf)
+            errs = [err for _, err in out if err is not None]
+
+            if len(errs):
+                raise errs[0]
+
+            values = tuple(vals for vals, _ in out)
+
+        self._bounds = values

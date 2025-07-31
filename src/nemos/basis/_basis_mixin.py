@@ -533,24 +533,52 @@ class EvalBasisMixin:
         """Range of values covered by the basis."""
         return self._bounds
 
+    @staticmethod
+    def _format_bounds(values: Any) -> Tuple[Any, Exception | None]:
+        """Check bounds and cast to tuple."""
+        err = None
+
+        if not hasattr(values, "__len__"):
+            raise TypeError(
+                "Invalid ``bounds`` provided. ``bounds`` must be a tuple of floats."
+                f"``bounds`` {values} of type {type(values)} provided instead."
+            )
+
+        elif values is not None and len(values) != 2:
+            err = ValueError(
+                f"The provided `bounds` must be of length two. The bounds ``{values}`` have length "
+                f"{len(values)} instead!"
+            )
+
+        try:
+            values = values if values is None else tuple(map(float, values))
+        except (ValueError, TypeError):
+            err = TypeError("Could not convert `bounds` to float.")
+
+        if err is not None:
+            return None, err
+
+        if values is not None and values[1] <= values[0]:
+            err = ValueError(
+                f"Invalid bound {values}. Lower bound is greater or equal than the upper bound."
+            )
+
+        return values, err
+
     @bounds.setter
     def bounds(self, values: Union[None, Tuple[float, float]]):
         """Setter for bounds."""
+        if values is None:
+            self._bounds = None
+            return
+        values, err = self._format_bounds(values)
+        if err is not None:
+            raise err
         if values is not None and len(values) != 2:
             raise ValueError(
                 f"The provided `bounds` must be of length two. Length {len(values)} provided instead!"
             )
-
-        # convert to float and store
-        try:
-            self._bounds = values if values is None else tuple(map(float, values))
-        except (ValueError, TypeError):
-            raise TypeError("Could not convert `bounds` to float.")
-
-        if values is not None and values[1] <= values[0]:
-            raise ValueError(
-                f"Invalid bound {values}. Lower bound is greater or equal than the upper bound."
-            )
+        self._bounds = values
 
 
 class ConvBasisMixin:
