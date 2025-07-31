@@ -10,7 +10,7 @@ import jax
 from numpy.typing import ArrayLike, NDArray
 
 from ..typing import FeatureMatrix
-from ._basis_mixin import AtomicBasisMixin, ConvBasisMixin, EvalBasisMixin
+from ._basis_mixin import AtomicBasisMixin, BasisMixin, ConvBasisMixin, EvalBasisMixin
 from ._composition_utils import add_docstring
 from ._decaying_exponential import OrthExponentialBasis
 from ._fourier_basis import FourierBasis
@@ -2478,7 +2478,7 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("_compute_features", EvalBasisMixin)
-    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
+    def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
         """
         Examples
         --------
@@ -2494,7 +2494,7 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         (1000, 20)
 
         """
-        return super().compute_features(xi)
+        return super().compute_features(*xi)
 
     @add_docstring("split_by_feature", FourierBasis)
     def split_by_feature(
@@ -2519,7 +2519,7 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
-    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
+    def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray):
         """
         Examples
         --------
@@ -2541,7 +2541,7 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         200
 
         """
-        return AtomicBasisMixin.set_input_shape(self, xi)
+        return BasisMixin.set_input_shape(self, *xi)
 
     @add_docstring("evaluate", FourierBasis)
     def evaluate(self, *sample_pts: NDArray) -> NDArray:
@@ -2560,6 +2560,11 @@ class FourierEval(EvalBasisMixin, FourierBasis):
 
     @property
     def bounds(self) -> Tuple[Tuple[float, float]] | None:
+        """Bounds.
+
+        Tuple of bounds, one per dimension or None if no bounds are
+        provided.
+        """
         return self._bounds
 
     @bounds.setter

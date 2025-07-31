@@ -4,8 +4,6 @@ from typing import List, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
-import numpy as np
-from numpy._typing import NDArray
 from numpy.typing import ArrayLike
 from pynapple import Tsd, TsdFrame, TsdTensor
 
@@ -13,30 +11,6 @@ from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
 from ._basis import Basis, check_transform_input, min_max_rescale_samples
 from ._basis_mixin import AtomicBasisMixin
-
-
-def rowwise_outer_sum_flatten(N, M):
-    """
-    N: array of shape (T, n)
-    M: array of shape (T, m)
-    Returns: array of shape (T, n * m)
-    """
-    T, n = N.shape
-    _, m = M.shape
-
-    # Expand N and M to enable broadcasting
-    # N: (T, n, 1)
-    # M: (T, 1, m)
-    N_exp = N[:, :, jnp.newaxis]  # (T, n, 1)
-    M_exp = M[:, jnp.newaxis, :]  # (T, 1, m)
-
-    # Compute pairwise sums for each row: (T, n, m)
-    pairwise_sum = N_exp + M_exp
-
-    # Flatten the last two axes: (T, n * m)
-    result = pairwise_sum.reshape(T, n * m)
-
-    return result
 
 
 def make_arange(arg):
@@ -177,12 +151,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
 
     @property
     def n_basis_funcs(self) -> int | None:
-        if self._frequency_mask is None:
-            return 2 * len(self._frequencies) - 1 * (0 in self._frequencies)
-        else:
-            return 2 * int(jnp.sum(self._frequency_mask)) - int(
-                self._frequency_mask[(0,) * self._frequency_mask.ndim]
-            )
+        return self._eval_freq.size
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
