@@ -2587,10 +2587,11 @@ class FourierEval(EvalBasisMixin, FourierBasis):
             values = (values,) * self.ndim
 
         elif len(values) != self.ndim:
-            raise ValueError(
-                "If multiple bounds are provided, one must provide a bounds tuple per each dimension. "
-                f"The dimension of the basis is ``{self.ndim}``, but {len(values)} bounds are provided "
-                f"instead.\nList of provided bounds: {values}"
+            raise TypeError(
+                f"Invalid bounds ``{values}`` provided. "
+                "When provided, the bounds should be one or multiple tuples containing pair of floats.\n"
+                "If multiple tuples are provided, one must provide a tuple per each dimension"
+                "of the basis. "
             )
         else:
             out = jax.tree_util.tree_map(self._format_bounds, values, is_leaf=_is_leaf)

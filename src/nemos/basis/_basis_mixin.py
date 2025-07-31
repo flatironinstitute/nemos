@@ -540,7 +540,7 @@ class EvalBasisMixin:
 
         if not hasattr(values, "__len__"):
             raise TypeError(
-                "Invalid ``bounds`` provided. ``bounds`` must be a tuple of floats."
+                "Invalid bounds provided. ``bounds`` must be a tuple of floats."
                 f"``bounds`` {values} of type {type(values)} provided instead."
             )
 

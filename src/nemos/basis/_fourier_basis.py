@@ -4,17 +4,22 @@ from typing import List, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from numpy._typing import NDArray
 from numpy.typing import ArrayLike
 from pynapple import Tsd, TsdFrame, TsdTensor
 
-from ..type_casting import support_pynapple
+from ..type_casting import is_numpy_array_like, support_pynapple
 from ..typing import FeatureMatrix
 from ._basis import Basis, check_transform_input, min_max_rescale_samples
 from ._basis_mixin import AtomicBasisMixin
 
 
 def make_arange(arg):
+
+    if is_numpy_array_like(arg) and arg.dtype == np.int_:
+        return arg
+
     if isinstance(arg, int):
         if arg <= 0:
             raise ValueError("Integer frequencies must be > 0.")
@@ -34,7 +39,9 @@ class FourierBasis(AtomicBasisMixin, Basis):
 
     def __init__(
         self,
-        frequencies: int | Tuple[int, int] | List[int] | List[Tuple[int, int]],
+        frequencies: (
+            int | Tuple[int, int] | List[int] | List[Tuple[int, int]] | ArrayLike
+        ),
         frequency_mask: jnp.ndarray | None = None,
         label: Optional[str] = None,
     ) -> None:
@@ -196,7 +203,10 @@ class FourierBasis(AtomicBasisMixin, Basis):
 
     @frequencies.setter
     def frequencies(
-        self, frequencies: int | tuple[int, int] | list[int] | list[tuple[int, int]]
+        self,
+        frequencies: (
+            int | tuple[int, int] | List[int] | List[Tuple[int, int]] | tuple[NDArray]
+        ),
     ) -> None:
 
         if isinstance(frequencies, int):
@@ -204,10 +214,21 @@ class FourierBasis(AtomicBasisMixin, Basis):
                 make_arange(frequencies) for _ in range(self._n_input_dimensionality)
             )
 
-        elif isinstance(frequencies, tuple):
+        elif (
+            isinstance(frequencies, tuple)
+            and len(frequencies) == 2
+            and all(isinstance(f, int) for f in frequencies)
+        ):
             self._frequencies = tuple(
                 make_arange(frequencies) for _ in range(self._n_input_dimensionality)
             )
+
+        elif (
+            isinstance(frequencies, tuple)
+            and len(frequencies) == self._n_input_dimensionality
+            and all(is_numpy_array_like(f) for f in frequencies)
+        ):
+            self._frequencies = tuple(f.astype(float) for f in frequencies)
 
         elif isinstance(frequencies, list):
             if len(frequencies) != self._n_input_dimensionality:
@@ -223,6 +244,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
                 "  - tuple[int, int]\n"
                 "  - list[int]\n"
                 "  - list[tuple[int, int]]\n"
+                "  - tuple[NDArray]"
                 f"If a list is provided, the list should be of length ``{self.ndim}``, "
                 f"one entry for each dimension of the Fourier basis."
             )
@@ -238,7 +260,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
 
     @property
     def n_basis_funcs(self) -> int | None:
-        return self._eval_freq.size - self._has_zero_phase
+        return 2 * self._eval_freq.size - self._has_zero_phase
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input

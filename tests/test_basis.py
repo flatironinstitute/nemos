@@ -11,6 +11,7 @@ import numpy as np
 import pynapple as nap
 import pytest
 from conftest import (
+    DEFAULT_KWARGS,
     BasisFuncsTesting,
     CombinedBasis,
     custom_basis,
@@ -20,7 +21,13 @@ from conftest import (
 import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
 import nemos.convolve as convolve
-from nemos.basis import CustomBasis, HistoryConv, IdentityEval, TransformerBasis
+from nemos.basis import (
+    CustomBasis,
+    FourierEval,
+    HistoryConv,
+    IdentityEval,
+    TransformerBasis,
+)
 from nemos.basis._basis import (
     AdditiveBasis,
     MultiplicativeBasis,
@@ -28,6 +35,7 @@ from nemos.basis._basis import (
 )
 from nemos.basis._composition_utils import generate_basis_label_pair
 from nemos.basis._decaying_exponential import OrthExponentialBasis
+from nemos.basis._fourier_basis import FourierBasis
 from nemos.basis._identity import HistoryBasis, IdentityBasis
 from nemos.basis._raised_cosine_basis import (
     RaisedCosineBasisLinear,
@@ -39,10 +47,25 @@ from nemos.utils import pynapple_concatenate_numpy
 SizeTerminal = namedtuple("SizeTerminal", ["columns", "lines"])
 
 
+def compare_bounds(bas, bounds):
+    if isinstance(bas, FourierBasis) and bas.bounds is not None:
+        return all(b == bounds for b in bas.bounds)
+    return bounds == bas.bounds if bounds else bas.bounds is None
+
+
 def instantiate_atomic_basis(cls, **kwargs):
     if cls == CustomBasis:
         return custom_basis(**kwargs)
     names = cls._get_param_names()
+
+    all_defaults = DEFAULT_KWARGS.copy()
+
+    for name in DEFAULT_KWARGS:
+        if name not in names:
+            all_defaults.pop(name)
+        elif name not in kwargs:
+            kwargs[name] = all_defaults.pop(name)
+
     new_kwargs = kwargs.copy()
     for key in kwargs:
         if key not in names:
@@ -50,10 +73,12 @@ def instantiate_atomic_basis(cls, **kwargs):
     return cls(**new_kwargs)
 
 
-def extra_decay_rates(cls, n_basis):
+def extra_kwargs(cls, n_basis):
     name = cls.__name__
     if "OrthExp" in name:
         return dict(decay_rates=np.arange(1, n_basis + 1))
+    elif "Fourier" in name:
+        return dict(frequencies=(1, 1 + n_basis // 2))
     return {}
 
 
@@ -323,13 +348,14 @@ def test_add_docstring():
         ),
         (basis.IdentityEval(), IdentityBasis),
         (basis.HistoryConv(11), HistoryBasis),
+        (basis.FourierEval(11), FourierBasis),
     ],
 )
 def test_expected_output_eval_on_grid(basis_instance, super_class):
     x, y = super_class.evaluate_on_grid(basis_instance, 100)
     xx, yy = basis_instance.evaluate_on_grid(100)
     np.testing.assert_equal(xx, x)
-    np.testing.assert_equal(yy, y)
+    np.testing.assert_equal(np.asarray(yy), np.asarray(y))
 
 
 @pytest.mark.parametrize(
@@ -352,6 +378,7 @@ def test_expected_output_eval_on_grid(basis_instance, super_class):
         ),
         (basis.IdentityEval(), IdentityBasis),
         (basis.HistoryConv(11), HistoryBasis),
+        (basis.FourierEval(10), FourierBasis),
     ],
 )
 def test_expected_output_compute_features(basis_instance, super_class):
@@ -410,6 +437,7 @@ def test_expected_output_compute_features(basis_instance, super_class):
         ),
         (basis.IdentityEval(label="label"), IdentityBasis),
         (basis.HistoryConv(11, label="label"), HistoryBasis),
+        (basis.FourierEval(11, label="label"), FourierBasis),
     ],
 )
 def test_expected_output_split_by_feature(basis_instance, super_class):
@@ -502,7 +530,7 @@ class TestConvBasis:
             cls,
             n_basis_funcs=n_basis,
             window_size=ws,
-            **extra_decay_rates(cls, n_basis),
+            **extra_kwargs(cls, n_basis),
         )
         bas.set_input_shape(inp_num)
         bas2 = bas.__sklearn_clone__()
@@ -529,7 +557,7 @@ class TestConvBasis:
             cls,
             n_basis_funcs=5,
             window_size=10,
-            **extra_decay_rates(cls, 5),
+            **extra_kwargs(cls, 5),
         )
         x = np.random.randn(20, 2)
         bas.compute_features(x)
@@ -577,7 +605,7 @@ class TestConvBasis:
                 n_basis_funcs=5,
                 window_size=200,
                 conv_kwargs=conv_kwargs,
-                **extra_decay_rates(cls, 5),
+                **extra_kwargs(cls, 5),
             )
 
     @pytest.mark.parametrize("n_input", [1, 2, 3])
@@ -586,7 +614,7 @@ class TestConvBasis:
             cls,
             n_basis_funcs=5,
             window_size=10,
-            **extra_decay_rates(cls, 5),
+            **extra_kwargs(cls, 5),
         )
         assert bas.n_output_features is None
         bas.compute_features(np.random.randn(20, n_input))
@@ -619,7 +647,7 @@ class TestConvBasis:
                 n_basis_funcs=5,
                 window_size=5,
                 conv_kwargs=kwargs,
-                **extra_decay_rates(cls, 5),
+                **extra_kwargs(cls, 5),
             )
             basis_obj.compute_features(np.ones(input1_shape))
 
@@ -714,7 +742,7 @@ class TestConvBasis:
                 **extra_args,
                 window_size=10,
                 bounds=bounds,
-                **extra_decay_rates(cls, 5),
+                **extra_kwargs(cls, 5),
             )
 
     def test_convolution_is_performed(self, cls):
@@ -722,7 +750,7 @@ class TestConvBasis:
             cls,
             n_basis_funcs=5,
             window_size=10,
-            **extra_decay_rates(cls, 5),
+            **extra_kwargs(cls, 5),
         )
         x = np.random.normal(size=100)
         conv = bas.compute_features(x)
@@ -736,7 +764,7 @@ class TestConvBasis:
             cls,
             n_basis_funcs=5,
             window_size=30,
-            **extra_decay_rates(cls, 5),
+            **extra_kwargs(cls, 5),
         )
         bas._set_kernel()
         assert bas.kernel_ is not None
@@ -747,7 +775,7 @@ class TestConvBasis:
             cls,
             n_basis_funcs=n_basis,
             window_size=30,
-            **extra_decay_rates(cls, n_basis),
+            **extra_kwargs(cls, n_basis),
         )
         bas._set_kernel()
         assert bas.kernel_.shape == (30, n_basis)
@@ -760,13 +788,13 @@ class TestConvBasis:
         )
 
         with does_not_raise():
-            cls(**kwargs, **extra_decay_rates(cls, 10))
+            cls(**kwargs, **extra_kwargs(cls, 10))
 
         bas = instantiate_atomic_basis(
             cls,
             n_basis_funcs=10,
             window_size=10,
-            **extra_decay_rates(cls, 10),
+            **extra_kwargs(cls, 10),
         )
         with pytest.raises(ValueError, match="You must provide a window_siz"):
             bas.set_params(window_size=None)
@@ -776,7 +804,7 @@ class TestConvBasis:
             cls,
             n_basis_funcs=5,
             window_size=5,
-            **extra_decay_rates(cls, 5),
+            **extra_kwargs(cls, 5),
         )
         with pytest.raises(
             RuntimeError, match="You must call `setup_basis` before `_compute_features`"
@@ -809,7 +837,7 @@ class TestConvBasis:
     def test_init_window_size(self, ws, expectation, cls):
         extra = dict(n_basis_funcs=5) if cls != HistoryConv else {}
         with expectation:
-            cls(**extra, window_size=ws, **extra_decay_rates(cls, 5))
+            cls(**extra, window_size=ws, **extra_kwargs(cls, 5))
 
     def test_set_bounds(self, cls):
         kwargs = (
@@ -820,14 +848,14 @@ class TestConvBasis:
         with pytest.raises(
             TypeError, match="got an unexpected keyword argument 'bounds'"
         ):
-            cls(**kwargs, **extra_decay_rates(cls, 10))
+            cls(**kwargs, **extra_kwargs(cls, 10))
 
         kwargs = {"n_basis_funcs": 10} if cls != IdentityEval else {}
         bas = instantiate_atomic_basis(
             cls,
             **kwargs,
             window_size=20,
-            **extra_decay_rates(cls, 10),
+            **extra_kwargs(cls, 10),
         )
         with pytest.raises(
             ValueError, match="Invalid parameter 'bounds' for estimator"
@@ -846,6 +874,7 @@ class TestConvBasis:
         basis.MSplineEval,
         basis.OrthExponentialEval,
         basis.IdentityEval,
+        basis.FourierEval,
     ],
 )
 class TestEvalBasis:
@@ -883,7 +912,7 @@ class TestEvalBasis:
             cls,
             n_basis_funcs=5,
             bounds=(vmin, vmax),
-            **extra_decay_rates(cls, 5),
+            **extra_kwargs(cls, 5),
         )
         with expectation:
             bas.evaluate(samples)
@@ -896,7 +925,7 @@ class TestEvalBasis:
             cls,
             n_basis_funcs=n_basis,
             bounds=(vmin, vmax),
-            **extra_decay_rates(cls, n_basis),
+            **extra_kwargs(cls, n_basis),
         )
         bas.set_input_shape(inp_num)
         bas2 = bas.__sklearn_clone__()
@@ -907,6 +936,21 @@ class TestEvalBasis:
         )
         f1, f2 = bas.__dict__.pop("_funcs", [True]), bas2.__dict__.pop("_funcs", [True])
         assert all(fi == fj for fi, fj in zip(f1, f2))
+        f1, f2 = bas.__dict__.pop("_frequencies", [True]), bas2.__dict__.pop(
+            "_frequencies", [True]
+        )
+        assert all(np.all(fi == fj) for fi, fj in zip(f1, f2))
+        f1, f2 = bas.__dict__.pop("_frequency_mask", [True]), bas2.__dict__.pop(
+            "_frequency_mask", [True]
+        )
+        if f1 is not None and f2 is not None:
+            assert all(np.all(fi == fj) for fi, fj in zip(f1, f2))
+        else:
+            assert f1 is f2 is None
+        f1, f2 = bas.__dict__.pop("_eval_freq", [True]), bas2.__dict__.pop(
+            "_eval_freq", [True]
+        )
+        assert all(np.all(fi == fj) for fi, fj in zip(f1, f2))
         assert bas.__dict__ == bas2.__dict__
 
     @pytest.mark.parametrize(
@@ -929,13 +973,13 @@ class TestEvalBasis:
             cls,
             n_basis_funcs=5,
             bounds=None,
-            **extra_decay_rates(cls, 5),
+            **extra_kwargs(cls, 5),
         )
         bas = instantiate_atomic_basis(
             cls,
             n_basis_funcs=5,
             bounds=bounds,
-            **extra_decay_rates(cls, 5),
+            **extra_kwargs(cls, 5),
         )
         x1, _ = bas.evaluate_on_grid(10)
         x2, _ = bas_no_range.evaluate_on_grid(10)
@@ -965,13 +1009,13 @@ class TestEvalBasis:
             cls,
             n_basis_funcs=5,
             bounds=None,
-            **extra_decay_rates(cls, 5),
+            **extra_kwargs(cls, 5),
         )
         bas = instantiate_atomic_basis(
             cls,
             n_basis_funcs=5,
             bounds=(vmin, vmax),
-            **extra_decay_rates(cls, 5),
+            **extra_kwargs(cls, 5),
         )
         _, out1 = bas.evaluate_on_grid(10)
         _, out2 = bas_no_range.evaluate_on_grid(10)
@@ -981,12 +1025,27 @@ class TestEvalBasis:
         "bounds, expectation",
         [
             (None, does_not_raise()),
-            ((None, 3), pytest.raises(TypeError, match=r"Could not convert")),
-            ((1, None), pytest.raises(TypeError, match=r"Could not convert")),
+            (
+                (None, 3),
+                pytest.raises(TypeError, match=r"Could not convert|Invalid bounds"),
+            ),
+            (
+                (1, None),
+                pytest.raises(TypeError, match=r"Could not convert|Invalid bounds"),
+            ),
             ((1, 3), does_not_raise()),
-            (("a", 3), pytest.raises(TypeError, match="Could not convert")),
-            ((1, "a"), pytest.raises(TypeError, match="Could not convert")),
-            (("a", "a"), pytest.raises(TypeError, match="Could not convert")),
+            (
+                ("a", 3),
+                pytest.raises(TypeError, match="Could not convert|Invalid bounds"),
+            ),
+            (
+                (1, "a"),
+                pytest.raises(TypeError, match="Could not convert|Invalid bounds"),
+            ),
+            (
+                ("a", "a"),
+                pytest.raises(TypeError, match="Could not convert|Invalid bounds"),
+            ),
             (
                 (1, 2, 3),
                 pytest.raises(
@@ -1003,9 +1062,9 @@ class TestEvalBasis:
                 cls,
                 n_basis_funcs=5,
                 bounds=bounds,
-                **extra_decay_rates(cls, 5),
+                **extra_kwargs(cls, 5),
             )
-            assert bounds == bas.bounds if bounds else bas.bounds is None
+            assert compare_bounds(bas, bounds)
 
     @pytest.mark.parametrize(
         "samples, vmin, vmax, expectation",
@@ -1041,7 +1100,7 @@ class TestEvalBasis:
             cls,
             n_basis_funcs=5,
             bounds=(vmin, vmax),
-            **extra_decay_rates(cls, 5),
+            **extra_kwargs(cls, 5),
         )
         with expectation:
             basis_obj.compute_features(samples)
@@ -1061,7 +1120,7 @@ class TestEvalBasis:
         bas = instantiate_atomic_basis(
             cls,
             n_basis_funcs=n_basis,
-            **extra_decay_rates(cls, n_basis),
+            **extra_kwargs(cls, n_basis),
         )  # Only eval mode is relevant here
         with expectation:
             bas.compute_features(samples)
@@ -1094,9 +1153,9 @@ class TestEvalBasis:
             cls,
             n_basis_funcs=5,
             bounds=bounds,
-            **extra_decay_rates(cls, 5),
+            **extra_kwargs(cls, 5),
         )
-        out = bas.compute_features(samples)
+        out = np.asarray(bas.compute_features(samples))
         assert np.all(np.isnan(out[nan_idx]))
         valid_idx = list(set(samples).difference(nan_idx))
         assert np.all(~np.isnan(out[valid_idx]))
@@ -1105,16 +1164,32 @@ class TestEvalBasis:
         "bounds, expectation",
         [
             (None, does_not_raise()),
-            ((None, 3), pytest.raises(TypeError, match=r"Could not convert")),
-            ((1, None), pytest.raises(TypeError, match=r"Could not convert")),
+            (
+                (None, 3),
+                pytest.raises(TypeError, match=r"Could not convert|Invalid bounds"),
+            ),
+            (
+                (1, None),
+                pytest.raises(TypeError, match=r"Could not convert|Invalid bounds"),
+            ),
             ((1, 3), does_not_raise()),
-            (("a", 3), pytest.raises(TypeError, match="Could not convert")),
-            ((1, "a"), pytest.raises(TypeError, match="Could not convert")),
-            (("a", "a"), pytest.raises(TypeError, match="Could not convert")),
+            (
+                ("a", 3),
+                pytest.raises(TypeError, match="Could not convert|Invalid bounds"),
+            ),
+            (
+                (1, "a"),
+                pytest.raises(TypeError, match="Could not convert|Invalid bounds"),
+            ),
+            (
+                ("a", "a"),
+                pytest.raises(TypeError, match="Could not convert|Invalid bounds"),
+            ),
             (
                 (2, 1),
                 pytest.raises(
-                    ValueError, match=r"Invalid bound \(2, 1\). Lower bound is greater"
+                    ValueError,
+                    match=r"Invalid bound \(2.0, 1.0\). Lower bound is greater",
                 ),
             ),
         ],
@@ -1126,11 +1201,11 @@ class TestEvalBasis:
             cls,
             n_basis_funcs=5,
             bounds=(1, 3),
-            **extra_decay_rates(cls, 5),
+            **extra_kwargs(cls, 5),
         )
         with expectation:
             bas.set_params(bounds=bounds)
-            assert bounds == bas.bounds if bounds else bas.bounds is None
+            assert compare_bounds(bas, bounds)
 
     def test_conv_kwargs_error(self, cls):
         if cls == CustomBasis:
@@ -1138,28 +1213,26 @@ class TestEvalBasis:
         with pytest.raises(
             TypeError, match="got an unexpected keyword argument 'test'"
         ):
-            if cls == IdentityEval:
+            if cls in [IdentityEval, FourierEval]:
                 extra = {}
             else:
                 extra = dict(n_basis_funcs=5)
-            cls(**extra, test="hi", **extra_decay_rates(cls, 5))
+            cls(**extra, test="hi", **extra_kwargs(cls, 5))
 
     def test_set_window_size(self, cls):
         if cls == CustomBasis:
             pytest.skip(f"Skipping test_set_window_size for {cls.__name__}")
-        kwargs = (
-            {"window_size": 10, "n_basis_funcs": 10}
-            if cls != IdentityEval
-            else {"window_size": 10}
-        )
+        if cls not in [IdentityEval, FourierEval]:
+            kwargs = {"window_size": 10, "n_basis_funcs": 10}
+        else:
+            kwargs = {"window_size": 10}
+
         with pytest.raises(
             TypeError, match="got an unexpected keyword argument 'window_size'"
         ):
-            cls(**kwargs, **extra_decay_rates(cls, 10))
+            cls(**kwargs, **extra_kwargs(cls, 10))
 
-        bas = instantiate_atomic_basis(
-            cls, n_basis_funcs=10, **extra_decay_rates(cls, 10)
-        )
+        bas = instantiate_atomic_basis(cls, n_basis_funcs=10, **extra_kwargs(cls, 10))
         with pytest.raises(
             ValueError, match="Invalid parameter 'window_size' for estimator"
         ):
@@ -1187,20 +1260,20 @@ class TestEvalBasis:
     def test_init_window_size(self, ws, expectation, cls):
         if cls == CustomBasis:
             pytest.skip(f"Skipping test_init_window_size for {cls.__name__}")
-        extra = dict(n_basis_funcs=5) if cls != IdentityEval else {}
+        extra = dict(n_basis_funcs=5) if cls not in [IdentityEval, FourierEval] else {}
         with expectation:
-            cls(**extra, window_size=ws, **extra_decay_rates(cls, 5))
+            cls(**extra, window_size=ws, **extra_kwargs(cls, 5))
 
     def test_set_bounds(self, cls):
         if cls == CustomBasis:
             pytest.skip(f"Skipping test_set_bounds for {cls.__name__}")
         kwargs = (
             {"bounds": (1, 2), "n_basis_funcs": 10}
-            if cls != IdentityEval
+            if cls not in [IdentityEval, FourierEval]
             else {"bounds": (1, 2)}
         )
         with does_not_raise():
-            cls(**kwargs, **extra_decay_rates(cls, 10))
+            cls(**kwargs, **extra_kwargs(cls, 10))
 
 
 @pytest.mark.parametrize(
@@ -1224,12 +1297,12 @@ def test_call_equivalent_in_conv(n_basis, cls):
         cls["conv"],
         n_basis_funcs=n_basis,
         window_size=10,
-        **extra_decay_rates(cls["conv"], n_basis),
+        **extra_kwargs(cls["conv"], n_basis),
     )
     bas_eval = instantiate_atomic_basis(
         cls["eval"],
         n_basis_funcs=n_basis,
-        **extra_decay_rates(cls["eval"], n_basis),
+        **extra_kwargs(cls["eval"], n_basis),
     )
     x = np.linspace(0, 1, 10)
     assert np.all(bas_con.evaluate(x) == bas_eval.evaluate(x))
@@ -1285,7 +1358,7 @@ class TestSharedMethods:
             n_basis_funcs=5,
             bounds=(1, 2),
             window_size=10,
-            **extra_decay_rates(cls, 5),
+            **extra_kwargs(cls, 5),
         )
         out = repr(bas)
         assert out.startswith(expected_out.get(cls, ""))
@@ -1319,7 +1392,7 @@ class TestSharedMethods:
             bounds=(1, 2),
             window_size=10,
             label="mylabel",
-            **extra_decay_rates(cls, 5),
+            **extra_kwargs(cls, 5),
         )
         out = repr(bas)
         assert out.startswith(expected_out.get(cls, ""))
@@ -1332,7 +1405,7 @@ class TestSharedMethods:
             cls,
             n_basis_funcs=n_basis,
             window_size=ws,
-            **extra_decay_rates(cls, n_basis),
+            **extra_kwargs(cls, n_basis),
         )
         assert len(bas) == 1
 
@@ -1344,7 +1417,7 @@ class TestSharedMethods:
             cls,
             n_basis_funcs=n_basis,
             window_size=ws,
-            **extra_decay_rates(cls, n_basis),
+            **extra_kwargs(cls, n_basis),
         )
         for b in bas:
             assert id(bas) == id(b)
@@ -1370,7 +1443,7 @@ class TestSharedMethods:
         bas = instantiate_atomic_basis(
             cls,
             n_basis_funcs=5,
-            **extra_decay_rates(cls, 5),
+            **extra_kwargs(cls, 5),
             window_size=10,
         )
         with expectation:
@@ -1386,7 +1459,7 @@ class TestSharedMethods:
             cls,
             n_basis_funcs=5,
             label=label,
-            **extra_decay_rates(cls, 5),
+            **extra_kwargs(cls, 5),
             window_size=10,
         )
         expected_label = str(label) if label is not None else cls.__name__
@@ -1398,7 +1471,7 @@ class TestSharedMethods:
             cls,
             n_basis_funcs=5,
             window_size=10,
-            **extra_decay_rates(cls, 5),
+            **extra_kwargs(cls, 5),
         )
 
         ishape_prod = getattr(bas, "_input_shape_product", None)
@@ -1418,7 +1491,7 @@ class TestSharedMethods:
             cls,
             n_basis_funcs=n_basis,
             window_size=8,
-            **extra_decay_rates(cls, n_basis),
+            **extra_kwargs(cls, n_basis),
         )
         x = np.linspace(0, 1, 10)
         assert bas.evaluate(x).shape[1] == n_basis
@@ -1447,7 +1520,7 @@ class TestSharedMethods:
             cls,
             window_size=8,
             n_basis_funcs=n_basis,
-            **extra_decay_rates(cls, n_basis),
+            **extra_kwargs(cls, n_basis),
         )
         with expectation:
             bas.evaluate(*([np.linspace(0, 1, 10)] * num_input))
@@ -1471,7 +1544,7 @@ class TestSharedMethods:
             cls,
             n_basis_funcs=n_basis,
             window_size=8,
-            **extra_decay_rates(cls, n_basis),
+            **extra_kwargs(cls, n_basis),
         )
         if isinstance(bas, IdentityEval):
             n_basis = 1
@@ -1495,7 +1568,7 @@ class TestSharedMethods:
             cls,
             n_basis_funcs=n_basis,
             window_size=8,
-            **extra_decay_rates(cls, n_basis),
+            **extra_kwargs(cls, n_basis),
         )
         inp = np.random.randn(10, 2, 3)
         inp[2, 0, [0, 2]] = np.nan
@@ -1517,7 +1590,7 @@ class TestSharedMethods:
             cls,
             n_basis_funcs=n_basis,
             window_size=8,
-            **extra_decay_rates(cls, n_basis),
+            **extra_kwargs(cls, n_basis),
         )
         x = np.linspace(0, 1, 10)
         x[3] = np.nan
@@ -1529,7 +1602,7 @@ class TestSharedMethods:
             cls,
             n_basis_funcs=n_basis,
             window_size=8,
-            **extra_decay_rates(cls, n_basis),
+            **extra_kwargs(cls, n_basis),
         )
         meth = bas.compute_features if cls == CustomBasis else bas.evaluate
         with pytest.raises(ValueError, match="All sample provided must"):
@@ -1538,7 +1611,7 @@ class TestSharedMethods:
     @pytest.mark.parametrize("time_axis_shape", [10, 11, 12])
     def test_call_sample_axis(self, time_axis_shape, cls):
         bas = instantiate_atomic_basis(
-            cls, n_basis_funcs=5, window_size=8, **extra_decay_rates(cls, 5)
+            cls, n_basis_funcs=5, window_size=8, **extra_kwargs(cls, 5)
         )
         assert (
             bas.evaluate(np.linspace(0, 1, time_axis_shape)).shape[0] == time_axis_shape
@@ -1553,7 +1626,7 @@ class TestSharedMethods:
     )
     def test_call_sample_range(self, mn, mx, expectation, cls):
         bas = instantiate_atomic_basis(
-            cls, n_basis_funcs=5, window_size=8, **extra_decay_rates(cls, 5)
+            cls, n_basis_funcs=5, window_size=8, **extra_kwargs(cls, 5)
         )
         with expectation:
             bas.evaluate(np.linspace(mn, mx, 10))
@@ -1574,7 +1647,7 @@ class TestSharedMethods:
             cls,
             **args_copy,
             window_size=30,
-            **extra_decay_rates(cls, args_copy["n_basis_funcs"]),
+            **extra_kwargs(cls, args_copy["n_basis_funcs"]),
         )
         eval_basis = basis_obj.compute_features(np.linspace(0, 1, sample_size))
         assert eval_basis.shape[1] == args_copy["n_basis_funcs"], (
@@ -1588,7 +1661,7 @@ class TestSharedMethods:
         if "OrthExp" in cls.__name__ or cls == CustomBasis:
             pytest.skip(f"Skipping test_evaluate_on_grid_basis_size for {cls.__name__}")
         basis_obj = instantiate_atomic_basis(
-            cls, n_basis_funcs=5, window_size=8, **extra_decay_rates(cls, 5)
+            cls, n_basis_funcs=5, window_size=8, **extra_kwargs(cls, 5)
         )
         if sample_size <= 0:
             with pytest.raises(
@@ -1606,7 +1679,7 @@ class TestSharedMethods:
                 f"Skipping test_evaluate_on_grid_input_number for {cls.__name__}"
             )
         basis_obj = instantiate_atomic_basis(
-            cls, n_basis_funcs=5, window_size=5, **extra_decay_rates(cls, 5)
+            cls, n_basis_funcs=5, window_size=5, **extra_kwargs(cls, 5)
         )
         inputs = [10] * n_input
         if n_input == 0:
@@ -1632,7 +1705,7 @@ class TestSharedMethods:
                 f"Skipping test_evaluate_on_grid_meshgrid_size for {cls.__name__}"
             )
         basis_obj = instantiate_atomic_basis(
-            cls, n_basis_funcs=5, window_size=5, **extra_decay_rates(cls, 5)
+            cls, n_basis_funcs=5, window_size=5, **extra_kwargs(cls, 5)
         )
         if sample_size <= 0:
             with pytest.raises(
@@ -1657,20 +1730,20 @@ class TestSharedMethods:
                     cls,
                     n_basis_funcs=5,
                     window_size=5,
-                    **extra_decay_rates(cls, 5),
+                    **extra_kwargs(cls, 5),
                 ).compute_features(samples)
         else:
             instantiate_atomic_basis(
                 cls,
                 n_basis_funcs=5,
                 window_size=5,
-                **extra_decay_rates(cls, 5),
+                **extra_kwargs(cls, 5),
             ).compute_features(samples)
 
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3])
     def test_number_of_required_inputs_compute_features(self, n_input, cls):
         basis_obj = instantiate_atomic_basis(
-            cls, n_basis_funcs=5, window_size=6, **extra_decay_rates(cls, 5)
+            cls, n_basis_funcs=5, window_size=6, **extra_kwargs(cls, 5)
         )
         inputs = [np.linspace(0, 1, 20)] * n_input
         if n_input == 0:
@@ -1691,7 +1764,7 @@ class TestSharedMethods:
 
     def test_pynapple_support(self, cls):
         bas = instantiate_atomic_basis(
-            cls, n_basis_funcs=5, window_size=6, **extra_decay_rates(cls, 5)
+            cls, n_basis_funcs=5, window_size=6, **extra_kwargs(cls, 5)
         )
         x = np.linspace(0, 1, 10)
         x_nap = nap.Tsd(t=np.arange(10), d=x)
@@ -1714,7 +1787,7 @@ class TestSharedMethods:
             cls,
             n_basis_funcs=n_basis,
             window_size=10,
-            **extra_decay_rates(cls, n_basis),
+            **extra_kwargs(cls, n_basis),
         ).compute_features(inp)
         assert isinstance(out, nap.TsdFrame)
         assert np.array_equal(
@@ -1730,7 +1803,7 @@ class TestSharedMethods:
             cls,
             n_basis_funcs=n_basis_funcs,
             window_size=90,
-            **extra_decay_rates(cls, n_basis_funcs),
+            **extra_kwargs(cls, n_basis_funcs),
         )
         eval_basis = basis_obj.compute_features(np.linspace(0, 1, sample_size))
         assert eval_basis.shape[0] == sample_size, (
@@ -1795,7 +1868,7 @@ class TestSharedMethods:
             cls,
             n_basis_funcs=5,
             window_size=10,
-            **extra_decay_rates(cls, 5),
+            **extra_kwargs(cls, 5),
         )
         bas.set_input_shape(*([1] * bas._n_input_dimensionality))
         bas_transformer = bas.to_transformer()
@@ -1867,7 +1940,7 @@ class TestSharedMethods:
     )
     def test_input_shape_validity(self, x, inp_shape, expectation, cls):
         bas = instantiate_atomic_basis(
-            cls, n_basis_funcs=5, window_size=8, **extra_decay_rates(cls, 5)
+            cls, n_basis_funcs=5, window_size=8, **extra_kwargs(cls, 5)
         )
         bas.set_input_shape(inp_shape)
         with expectation:
@@ -1892,7 +1965,7 @@ class TestSharedMethods:
             cls,
             window_size=10,
             n_basis_funcs=5,
-            **extra_decay_rates(cls, 5),
+            **extra_kwargs(cls, 5),
         )
         with expectation:
             bas.set_input_shape(inp_shape)
@@ -1902,7 +1975,7 @@ class TestSharedMethods:
             cls,
             n_basis_funcs=5,
             window_size=6,
-            **extra_decay_rates(cls, 5),
+            **extra_kwargs(cls, 5),
         )
 
         out = tuple(basis_obj._iterate_over_components())
@@ -2606,6 +2679,47 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         """
         basis_obj = self.cls["eval"](n_basis_funcs=5, order=3)
         basis_obj.compute_features(np.linspace(*sample_range, 100))
+
+
+class TestFourierBasis(BasisFuncsTesting):
+    cls = {"eval": FourierEval}
+
+    @pytest.mark.parametrize("mode", ["eval"])
+    @pytest.mark.parametrize(
+        "frequency_mask", [None, np.random.binomial(n=1, p=0.5, size=5)]
+    )
+    def test_sklearn_clone_freq_mask(self, frequency_mask, mode):
+        n_basis = 10 if frequency_mask is None else frequency_mask.shape[0] * 2
+        bas = instantiate_atomic_basis(
+            self.cls[mode],
+            **extra_kwargs(self.cls[mode], n_basis),
+            frequency_mask=frequency_mask,
+        )
+        bas.set_input_shape(1)
+        bas2 = bas.__sklearn_clone__()
+        assert id(bas) != id(bas2)
+        assert np.all(
+            bas.__dict__.pop("decay_rates", True)
+            == bas2.__dict__.pop("decay_rates", True)
+        )
+        f1, f2 = bas.__dict__.pop("_funcs", [True]), bas2.__dict__.pop("_funcs", [True])
+        assert all(fi == fj for fi, fj in zip(f1, f2))
+        f1, f2 = bas.__dict__.pop("_frequencies", [True]), bas2.__dict__.pop(
+            "_frequencies", [True]
+        )
+        assert all(np.all(fi == fj) for fi, fj in zip(f1, f2))
+        f1, f2 = bas.__dict__.pop("_frequency_mask", [True]), bas2.__dict__.pop(
+            "_frequency_mask", [True]
+        )
+        if f1 is not None and f2 is not None:
+            assert all(np.all(fi == fj) for fi, fj in zip(f1, f2))
+        else:
+            assert f1 is f2 is None
+        f1, f2 = bas.__dict__.pop("_eval_freq", [True]), bas2.__dict__.pop(
+            "_eval_freq", [True]
+        )
+        assert all(np.all(fi == fj) for fi, fj in zip(f1, f2))
+        assert bas.__dict__ == bas2.__dict__
 
 
 class TestAdditiveBasis(CombinedBasis):
