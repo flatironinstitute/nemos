@@ -10,7 +10,6 @@ import jax
 from numpy.typing import ArrayLike, NDArray
 
 from ..typing import FeatureMatrix
-from ._basis import Basis
 from ._basis_mixin import AtomicBasisMixin, BasisMixin, ConvBasisMixin, EvalBasisMixin
 from ._composition_utils import add_docstring
 from ._decaying_exponential import OrthExponentialBasis
@@ -2457,7 +2456,7 @@ class FourierEval(EvalBasisMixin, FourierBasis):
             frequency_mask=frequency_mask,
         )
 
-    @add_docstring("evaluate_on_grid", Basis)
+    @add_docstring("evaluate_on_grid", FourierBasis)
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
         """
         Examples

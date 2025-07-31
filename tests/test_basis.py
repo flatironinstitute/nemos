@@ -230,6 +230,7 @@ def test_example_docstrings_add(
         ("RaisedCosineLogConv", "RaisedCosineBasisLog"),
         ("OrthExponentialEval", "OrthExponentialBasis"),
         ("OrthExponentialConv", "OrthExponentialBasis"),
+        ("FourierEval", "FourierBasis"),
     ],
 )
 @pytest.mark.parametrize("method", ["evaluate", "split_by_feature", "evaluate_on_grid"])
