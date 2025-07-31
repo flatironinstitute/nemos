@@ -68,6 +68,9 @@ VALID_PAIRS = [
     {"predicted_firing_rate", "predicted_firing_rates"},
     {"tuning_curve", "tuning_curves"},
     {"hyperparams_prox", "hyperparams"},
+    {"hyperparams_prox", "hyperparams"},
+    {"flat_dict", "flat_map_dict"},
+    {"fit_params", "init_params"},
 ]
 
 

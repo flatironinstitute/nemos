@@ -14,6 +14,16 @@ from nemos import utils
 from nemos.base_class import Base
 
 
+def fake_env_metadata():
+    return {
+        "jax": "x.x.x",
+        "jaxlib": "x.x.x",
+        "scipy": "x.x.x",
+        "scikit-learn": "x.x.x",
+        "nemos": "x.x.x",
+    }
+
+
 @pytest.mark.parametrize(
     "arrays, expected_out",
     [
@@ -635,3 +645,70 @@ def test_shape_param_exclusion():
 
     obj = Example(a=np.arange(3), b=1, c=None)
     assert utils.format_repr(obj) == "Example(b=1, d=1)"
+
+
+@pytest.mark.parametrize(
+    "model_class",
+    [
+        nmo.glm.GLM,
+        nmo.glm.PopulationGLM,
+    ],
+)
+def test_inspect_npz(tmp_path, model_class, monkeypatch, capsys):
+    """
+    Save a model to a .npz file and inspect it.
+
+    This function tests that the function `nmo.inspect_npz` runs correctly
+    """
+    monkeypatch.setattr("nemos.base_regressor.get_env_metadata", fake_env_metadata)
+    monkeypatch.setattr("nemos.io.io.get_env_metadata", fake_env_metadata)
+
+    file_path = tmp_path / f"test_model.npz"
+
+    # Initialize the model with some parameters
+    model = model_class(
+        regularizer="Ridge",
+        regularizer_strength=0.1,
+        solver_name="BFGS",
+    )
+    model.save_params(file_path)
+
+    nmo.inspect_npz(file_path)
+    captured = capsys.readouterr()
+    out = captured.out
+
+    lines = [
+        "Metadata",
+        "--------",
+        "jax version           : x.x.x (installed: x.x.x)",
+        "jaxlib version        : x.x.x (installed: x.x.x)",
+        "scipy version         : x.x.x (installed: x.x.x)",
+        "scikit-learn version  : x.x.x (installed: x.x.x)",
+        "nemos version         : x.x.x (installed: x.x.x)",
+        "",
+        "Model class",
+        "-----------",
+        f"Saved model class     : {model_class.__module__}.{model_class.__name__}",
+        "",
+        "Model parameters",
+        "----------------",
+    ]
+
+    if hasattr(model_class, "feature_mask") or model_class == nmo.glm.PopulationGLM:
+        lines.append("feature_mask          : None")
+
+    lines += [
+        "observation_model     : {'class': 'nemos.observation_models.PoissonObservations', 'params': {'inverse_link_function': 'jax.numpy.exp'}}",
+        "regularizer           : {'class': 'nemos.regularizer.Ridge'}",
+        "regularizer_strength  : 0.1",
+        "solver_name           : BFGS",
+        "",
+        "Model fit parameters",
+        "--------------------",
+        "coef_: None",
+        "dof_resid_: None",
+        "intercept_: None",
+        "scale_: None",
+    ]
+    expected_out = "\n".join(lines) + "\n"
+    assert out == expected_out

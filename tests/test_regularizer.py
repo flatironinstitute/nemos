@@ -25,20 +25,25 @@ import nemos as nmo
         ("GroupLasso", nmo.regularizer.GroupLasso),
         ("ElasticNet", nmo.regularizer.ElasticNet),
         ("not_valid", None),
+        ("nemos.regularizer.UnRegularized", nmo.regularizer.UnRegularized),
+        ("nemos.regularizer.Ridge", nmo.regularizer.Ridge),
+        ("nemos.regularizer.Lasso", nmo.regularizer.Lasso),
+        ("nemos.regularizer.GroupLasso", nmo.regularizer.GroupLasso),
     ],
 )
 def test_regularizer_builder(reg_str, reg_type):
     """Test building a regularizer from a string"""
-    raise_exception = (
-        reg_str is not None
-        and reg_str not in nmo._regularizer_builder.AVAILABLE_REGULARIZERS
+    valid_regularizers = nmo._regularizer_builder.AVAILABLE_REGULARIZERS
+    raise_exception = reg_str is not None and not (
+        reg_str in valid_regularizers
+        or any(reg_str == f"nemos.regularizer.{name}" for name in valid_regularizers)
     )
     if raise_exception:
         with pytest.raises(ValueError, match=f"Unknown regularizer: {reg_str}. "):
-            nmo._regularizer_builder.create_regularizer(reg_str)
+            nmo._regularizer_builder.instantiate_regularizer(reg_str)
     else:
         # build a regularizer by string
-        regularizer = nmo._regularizer_builder.create_regularizer(reg_str)
+        regularizer = nmo._regularizer_builder.instantiate_regularizer(reg_str)
         # assert correct type of regularizer is instantiated
         assert isinstance(regularizer, reg_type)
         # create a regularizer of that type
@@ -63,7 +68,7 @@ def test_regularizer_repr(reg, expected):
 
 def test_regularizer_available():
     for regularizer in nmo._regularizer_builder.AVAILABLE_REGULARIZERS:
-        reg = nmo._regularizer_builder.create_regularizer(regularizer)
+        reg = nmo._regularizer_builder.instantiate_regularizer(regularizer)
         assert reg.__class__.__name__ == regularizer
 
 

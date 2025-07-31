@@ -96,18 +96,16 @@ def _recompute_class_default_labels(
     ----------
     bas:
         Basis component calling the method
-    cls_name : str
-        Class name of the component that is setting a new label.
     """
-    cls_name = bas.__class__.__name__
-    pattern = re.compile(rf"^{cls_name}(_\d+)?$")
+    class_name = bas.__class__.__name__
+    pattern = re.compile(rf"^{class_name}(_\d+)?$")
     root = _get_root(bas)
     bas_id = 0
     # if root is one of our bases it will have the iteration method, if custom from user
     # I assume it is atomic
     for comp_bas in _iterate_over_components(root):
         if re.match(pattern, comp_bas._label):
-            comp_bas._label = f"{cls_name}_{bas_id}" if bas_id else cls_name
+            comp_bas._label = f"{class_name}_{bas_id}" if bas_id else class_name
             bas_id += 1
 
 
@@ -121,19 +119,19 @@ def _recompute_all_default_labels(root: "BasisMixin") -> "BasisMixin":
     return root
 
 
-def _update_label_from_root(bas: "BasisMixin", cls_name: str, cls_label: str):
+def _update_label_from_root(bas: "BasisMixin", class_name: str, class_label: str):
     """
     Subtract 1 to each matching default label with higher ID then current.
 
     Parameters
     ----------
-    cls_name : str
+    class_name : str
         Class name of the component that is setting a new label.
-    cls_label : str
+    class_label : str
         Current component label.
     """
-    pattern = re.compile(rf"^{cls_name}(_\d+)?$")
-    match = re.match(pattern, cls_label)
+    pattern = re.compile(rf"^{class_name}(_\d+)?$")
+    match = re.match(pattern, class_label)
     if match is None:
         return
     # get the "ID" of the label
@@ -145,7 +143,7 @@ def _update_label_from_root(bas: "BasisMixin", cls_name: str, cls_label: str):
         if match:
             bas_id = int(match.group(1)[1:]) if match.group(1) else 0
             bas_id = bas_id - 1 if bas_id > current_id else bas_id
-            bas._label = f"{cls_name}_{bas_id}" if bas_id else cls_name
+            bas._label = f"{class_name}_{bas_id}" if bas_id else class_name
 
 
 def _composite_basis_setter_logic(new: "BasisMixin", current: "BasisMixin"):

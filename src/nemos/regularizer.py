@@ -489,7 +489,7 @@ class ElasticNet(Regularizer):
         else:
             try:
                 # force conversion to float to prevent weird GPU issues
-                strength = jax.tree_util.tree_map(float, strength)
+                strength = jax.tree_util.tree_map(float, tuple(strength))
             except ValueError:
                 # raise a more detailed ValueError
                 raise ValueError(

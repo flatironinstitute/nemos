@@ -21,6 +21,7 @@ we temporarily vendor JAXopt's last release (0.8.5) until the transition is succ
 
 ## Changes made to `JAXopt`
 - Removed docs, examples, benchmarks
+- Removed package deprecation `warning`
 - Changed import paths to import `jaxopt` from `nemos.third_party`
 - Removed Github workflows (`.github`)
 - `isotonic.py`: Removed numba njit, which is now incompatible with JAX buffer inputs. Removed `import warnings`.

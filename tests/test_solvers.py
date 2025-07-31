@@ -279,7 +279,7 @@ def test_svrg_glm_update(
     init_params = glm.initialize_params(X, y)
     state = glm.initialize_state(X, y, init_params)
 
-    loss_gradient = jax.jit(jax.grad(glm._solver_loss_fun_))
+    loss_gradient = jax.jit(jax.grad(glm._solver_loss_fun))
 
     # initialize full gradient at the anchor point
     state = state._replace(
