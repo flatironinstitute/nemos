@@ -1326,6 +1326,7 @@ def test_call_equivalent_in_conv(n_basis, cls):
         basis.OrthExponentialConv,
         basis.IdentityEval,
         basis.HistoryConv,
+        basis.FourierEval,
     ],
 )
 class TestSharedMethods:
@@ -1349,6 +1350,7 @@ class TestSharedMethods:
                 basis.MSplineConv: "MSplineConv(n_basis_funcs=5, window_size=10, order=4)",
                 basis.OrthExponentialConv: "OrthExponentialConv(n_basis_funcs=5, window_size=10)",
                 basis.HistoryConv: "HistoryConv(window_size=10)",
+                basis.FourierEval: "FourierEval(frequencies=(Array([1., 2.], dtype=float32),), ndim=1, bounds=((1.0, 2.0),))"
             }
         ],
     )
@@ -1382,6 +1384,7 @@ class TestSharedMethods:
                 basis.MSplineConv: "'mylabel': MSplineConv(n_basis_funcs=5, window_size=10, order=4)",
                 basis.OrthExponentialConv: "'mylabel': OrthExponentialConv(n_basis_funcs=5, window_size=10)",
                 basis.HistoryConv: "'mylabel': HistoryConv(window_size=10)",
+                basis.FourierEval: "'mylabel': FourierEval(frequencies=(Array([1., 2.], dtype=float32),), ndim=1, bounds=((1.0, 2.0),))"
             }
         ],
     )
@@ -1487,6 +1490,12 @@ class TestSharedMethods:
             n_basis = 1
         elif cls is HistoryConv:
             n_basis = 8
+        elif issubclass(cls, FourierBasis):
+            # In the instantiate_atomic_basis, the number of frequencies is set
+            # to np.arange(1, 1 + n_basis // 2), so only even n_basis works for this
+            # test.
+            n_basis = n_basis + n_basis % 2
+
         bas = instantiate_atomic_basis(
             cls,
             n_basis_funcs=n_basis,
@@ -1502,14 +1511,14 @@ class TestSharedMethods:
             (
                 0,
                 pytest.raises(
-                    TypeError, match="missing 1 required positional argument"
+                    TypeError, match=r"missing 1 required positional argument|This basis requires \d+ input\(s\)"
                 ),
             ),
             (1, does_not_raise()),
             (
                 2,
                 pytest.raises(
-                    TypeError, match="takes 2 positional arguments but 3 were given" ""
+                    TypeError, match=r"takes 2 positional arguments but 3 were given|This basis requires \d+ input\(s\)"
                 ),
             ),
         ],
@@ -1643,6 +1652,8 @@ class TestSharedMethods:
             args_copy["n_basis_funcs"] = 1
         elif cls == HistoryConv:
             args_copy["n_basis_funcs"] = 30
+        elif issubclass(cls, FourierBasis):
+            args_copy["n_basis_funcs"] = args_copy["n_basis_funcs"] + args_copy["n_basis_funcs"] % 2
         basis_obj = instantiate_atomic_basis(
             cls,
             **args_copy,
@@ -1749,12 +1760,12 @@ class TestSharedMethods:
         if n_input == 0:
             expectation = pytest.raises(
                 TypeError,
-                match="missing 1 required positional argument|Input dimensionality mismatch",
+                match=r"missing 1 required positional argument|This basis requires \d+ input\(s\)",
             )
         elif n_input != basis_obj._n_input_dimensionality:
             expectation = pytest.raises(
                 TypeError,
-                match=r"takes 2 positional arguments but \d were given|Input dimensionality mismatch",
+                match=r"takes 2 positional arguments but \d were given|This basis requires \d+ input\(s\)",
             )
         else:
             expectation = does_not_raise()
@@ -1881,8 +1892,11 @@ class TestSharedMethods:
         funcs_orig = params_basis.pop("funcs") if hasattr(bas, "funcs") else None
         rates_1 = params_basis.pop("decay_rates", 1)
         rates_2 = params_transf.pop("decay_rates", 1)
+        freqs_1 = params_basis.pop("frequencies", 1)
+        freqs_2 = params_transf.pop("frequencies", 1)
         assert params_transf == params_basis
         assert np.all(rates_1 == rates_2)
+        assert all(np.all(f1 == f2) for f1, f2 in zip(freqs_1, freqs_2))
         if funcs_orig:
             assert all(
                 f1.keywords == f2.keywords for f1, f2 in zip(funcs_orig, funcs_transf)
@@ -3163,7 +3177,7 @@ class TestAdditiveBasis(CombinedBasis):
         inputs = [np.linspace(0, 1, 20)] * n_input
         if n_input != required_dim:
             expectation = pytest.raises(
-                TypeError, match="Input dimensionality mismatch."
+                TypeError, match=r"This basis requires \d+ input\(s\)."
             )
         else:
             expectation = does_not_raise()
@@ -3272,7 +3286,7 @@ class TestAdditiveBasis(CombinedBasis):
         )
         if n_input != required_dim:
             expectation = pytest.raises(
-                TypeError, match="Input dimensionality mismatch."
+                TypeError, match=r"This basis requires \d+ input\(s\)."
             )
         else:
             expectation = does_not_raise()
@@ -3339,7 +3353,7 @@ class TestAdditiveBasis(CombinedBasis):
             expectation = does_not_raise()
         else:
             expectation = pytest.raises(
-                TypeError, match="Input dimensionality mismatch"
+                TypeError, match=r"This basis requires \d+ input\(s\)"
             )
         with expectation:
             basis_obj.evaluate(*([np.linspace(0, 1, 10)] * num_input))
@@ -4378,7 +4392,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         inputs = [np.linspace(0, 1, 20)] * n_input
         if n_input != required_dim:
             expectation = pytest.raises(
-                TypeError, match="Input dimensionality mismatch."
+                TypeError, match=r"This basis requires \d+ input\(s\)."
             )
         else:
             expectation = does_not_raise()
@@ -4475,7 +4489,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         )
         if n_input != required_dim:
             expectation = pytest.raises(
-                TypeError, match="Input dimensionality mismatch."
+                TypeError, match=r"This basis requires \d+ input\(s\)."
             )
         else:
             expectation = does_not_raise()
@@ -4579,7 +4593,7 @@ class TestMultiplicativeBasis(CombinedBasis):
             expectation = does_not_raise()
         else:
             expectation = pytest.raises(
-                TypeError, match="Input dimensionality mismatch"
+                TypeError, match=r"This basis requires \d+ input\(s\)"
             )
         with expectation:
             basis_obj.evaluate(*([np.linspace(0, 1, 10)] * num_input))

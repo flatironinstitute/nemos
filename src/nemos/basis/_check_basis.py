@@ -40,8 +40,7 @@ def _check_input_dimensionality(bas: "BasisMixin | Basis", xi: Tuple) -> None:
     n_input_dim = infer_input_dimensionality(bas)
     if len(xi) != n_input_dim:
         raise TypeError(
-            f"Input dimensionality mismatch. This basis evaluation requires {n_input_dim} inputs, "
-            f"{len(xi)} inputs provided instead."
+            f"This basis requires {n_input_dim} input(s) for evaluation, but {len(xi)} were provided."
         )
 
 
