@@ -126,6 +126,7 @@ def remap_parameters(method):
 
 
 class BasisMixin:
+
     def __init__(self, label: Optional[str] = None):
         if not hasattr(self, "_input_shape_"):
             self._input_shape_ = None
@@ -378,12 +379,18 @@ class BasisMixin:
 class AtomicBasisMixin(BasisMixin):
     """Mixin class for atomic bases (i.e. non-composite)."""
 
+    _is_complex = False
+
     def __init__(self, n_basis_funcs: int, label: Optional[str] = None):
         super().__init__(label=label)
         self._n_basis_funcs = n_basis_funcs
         check_basis_min = getattr(self, "_check_n_basis_min", None)
         if check_basis_min:
             check_basis_min()
+
+    @property
+    def is_complex(self):
+        return self.__class__._is_complex
 
     @property
     def n_output_features(self) -> int | None:
@@ -834,6 +841,14 @@ class CompositeBasisMixin(BasisMixin):
 
         # trigger label setter
         super().__init__(label=label)
+
+    @property
+    def is_complex(self):
+        # is_complex is used to check if basis can be multiplied with another
+        # allowed multiplications: real x real, real x complex.
+        b1_complex = any(getattr(b, "is_complex", False) for b in self.basis1)
+        b2_complex = any(getattr(b, "is_complex", False) for b in self.basis2)
+        return b1_complex or b2_complex
 
     def _is_basis_like(
         self, basis1: Optional[BasisMixin] = None, basis2: Optional[BasisMixin] = None

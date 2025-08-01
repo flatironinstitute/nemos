@@ -73,6 +73,26 @@ def instantiate_atomic_basis(cls, **kwargs):
     return cls(**new_kwargs)
 
 
+def set_basis_attr(bas, n_basis):
+    if isinstance(bas, FourierBasis):
+        # set frequencies to match the requested n_basis
+        if n_basis % 2 == 0:
+            bas.frequencies = (np.arange(1, 1 + n_basis // 2),)
+        else:
+            bas.frequencies = (np.arange(0, 1 + n_basis // 2 + 1),)
+    elif isinstance(bas, CustomBasis):
+        bas.basis_kwargs = {"n_basis_funcs": n_basis}
+    else:
+        bas.n_basis_funcs = n_basis
+
+
+def get_basis_attr(bas):
+    if isinstance(bas, CustomBasis):
+        return bas.basis_kwargs.get("n_basis_funcs", -1)
+    else:
+        return bas.n_basis_funcs
+
+
 def extra_kwargs(cls, n_basis):
     name = cls.__name__
     if "OrthExp" in name:
@@ -108,10 +128,20 @@ def compare_basis(b1, b2):
         decay_rates_b1 = b1.__dict__.get("_decay_rates", -1)
         decay_rates_b2 = b2.__dict__.get("_decay_rates", -1)
         assert np.array_equal(decay_rates_b1, decay_rates_b2)
+        freqs1 = b1.__dict__.get("_frequencies", [-1])
+        freqs2 = b2.__dict__.get("_frequencies", [-1])
+        assert all(np.all(fi == fj) for fi, fj in zip(freqs1, freqs2))
+        freqs1 = b1.__dict__.get("_eval_freq", -1)
+        freqs2 = b2.__dict__.get("_eval_freq", -1)
+        assert np.all(freqs1 == freqs2)
         f1, f2 = b1.__dict__.pop("_funcs", [True]), b2.__dict__.pop("_funcs", [True])
         assert all(fi == fj for fi, fj in zip(f1, f2))
-        d1 = filter_attributes(b1, exclude_keys=["_decay_rates", "_parent"])
-        d2 = filter_attributes(b2, exclude_keys=["_decay_rates", "_parent"])
+        d1 = filter_attributes(
+            b1, exclude_keys=["_decay_rates", "_parent", "_frequencies", "_eval_freq"]
+        )
+        d2 = filter_attributes(
+            b2, exclude_keys=["_decay_rates", "_parent", "_frequencies", "_eval_freq"]
+        )
         assert d1 == d2
 
 
@@ -1335,7 +1365,7 @@ class TestSharedMethods:
         "expected_out",
         [
             {
-                CustomBasis: "CustomBasis(\n    funcs=[partial(power_func, 1), ..., partial(power_func, 5)],\n    ndim_input=1,\n    pynapple_support=True\n)",
+                CustomBasis: "CustomBasis(\n    funcs=[partial(power_func, 1), ..., partial(power_func, 5)],\n    ndim_input=1,\n    pynapple_support=True,\n    is_complex=False\n)",
                 basis.RaisedCosineLogEval: "RaisedCosineLogEval(n_basis_funcs=5, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True, bounds=(1.0, 2.0))",
                 basis.RaisedCosineLinearEval: "RaisedCosineLinearEval(n_basis_funcs=5, width=2.0, bounds=(1.0, 2.0))",
                 basis.BSplineEval: "BSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
@@ -1350,7 +1380,7 @@ class TestSharedMethods:
                 basis.MSplineConv: "MSplineConv(n_basis_funcs=5, window_size=10, order=4)",
                 basis.OrthExponentialConv: "OrthExponentialConv(n_basis_funcs=5, window_size=10)",
                 basis.HistoryConv: "HistoryConv(window_size=10)",
-                basis.FourierEval: "FourierEval(frequencies=(Array([1., 2.], dtype=float32),), ndim=1, bounds=((1.0, 2.0),))"
+                basis.FourierEval: "FourierEval(frequencies=(Array([1., 2.], dtype=float32),), ndim=1, bounds=((1.0, 2.0),))",
             }
         ],
     )
@@ -1384,7 +1414,7 @@ class TestSharedMethods:
                 basis.MSplineConv: "'mylabel': MSplineConv(n_basis_funcs=5, window_size=10, order=4)",
                 basis.OrthExponentialConv: "'mylabel': OrthExponentialConv(n_basis_funcs=5, window_size=10)",
                 basis.HistoryConv: "'mylabel': HistoryConv(window_size=10)",
-                basis.FourierEval: "'mylabel': FourierEval(frequencies=(Array([1., 2.], dtype=float32),), ndim=1, bounds=((1.0, 2.0),))"
+                basis.FourierEval: "'mylabel': FourierEval(frequencies=(Array([1., 2.], dtype=float32),), ndim=1, bounds=((1.0, 2.0),))",
             }
         ],
     )
@@ -1511,14 +1541,16 @@ class TestSharedMethods:
             (
                 0,
                 pytest.raises(
-                    TypeError, match=r"missing 1 required positional argument|This basis requires \d+ input\(s\)"
+                    TypeError,
+                    match=r"missing 1 required positional argument|This basis requires \d+ input\(s\)",
                 ),
             ),
             (1, does_not_raise()),
             (
                 2,
                 pytest.raises(
-                    TypeError, match=r"takes 2 positional arguments but 3 were given|This basis requires \d+ input\(s\)"
+                    TypeError,
+                    match=r"takes 2 positional arguments but 3 were given|This basis requires \d+ input\(s\)",
                 ),
             ),
         ],
@@ -1653,7 +1685,9 @@ class TestSharedMethods:
         elif cls == HistoryConv:
             args_copy["n_basis_funcs"] = 30
         elif issubclass(cls, FourierBasis):
-            args_copy["n_basis_funcs"] = args_copy["n_basis_funcs"] + args_copy["n_basis_funcs"] % 2
+            args_copy["n_basis_funcs"] = (
+                args_copy["n_basis_funcs"] + args_copy["n_basis_funcs"] % 2
+            )
         basis_obj = instantiate_atomic_basis(
             cls,
             **args_copy,
@@ -1892,8 +1926,8 @@ class TestSharedMethods:
         funcs_orig = params_basis.pop("funcs") if hasattr(bas, "funcs") else None
         rates_1 = params_basis.pop("decay_rates", 1)
         rates_2 = params_transf.pop("decay_rates", 1)
-        freqs_1 = params_basis.pop("frequencies", 1)
-        freqs_2 = params_transf.pop("frequencies", 1)
+        freqs_1 = params_basis.pop("frequencies", [1])
+        freqs_2 = params_transf.pop("frequencies", [1])
         assert params_transf == params_basis
         assert np.all(rates_1 == rates_2)
         assert all(np.all(f1 == f2) for f1, f2 in zip(freqs_1, freqs_2))
@@ -2734,6 +2768,112 @@ class TestFourierBasis(BasisFuncsTesting):
         )
         assert all(np.all(fi == fj) for fi, fj in zip(f1, f2))
         assert bas.__dict__ == bas2.__dict__
+
+    @pytest.mark.parametrize("mode", ["eval"])
+    @pytest.mark.parametrize(
+        "ndim, frequencies, expectation",
+        [
+            (1, 10, does_not_raise()),
+            (1, (1, 10), does_not_raise()),
+            (1, [1, 10], pytest.raises(ValueError, match="Length of frequencies list")),
+            (1, np.arange(1, 10), does_not_raise()),
+            (1, [10], does_not_raise()),
+            (1, [(1, 10)], does_not_raise()),
+            (1, [np.arange(1, 10)], does_not_raise()),
+            (1, (np.arange(1, 10),), does_not_raise()),
+            (2, 10, does_not_raise()),
+            (2, (1, 10), does_not_raise()),
+            (2, [1, 10], does_not_raise()),
+            (2, np.arange(1, 10), does_not_raise()),
+            (2, [10], pytest.raises(ValueError, match="Length of frequencies list")),
+            (
+                2,
+                [(1, 10)],
+                pytest.raises(ValueError, match="Length of frequencies list"),
+            ),
+            (
+                2,
+                [np.arange(1, 10)],
+                pytest.raises(
+                    ValueError,
+                    match=r"Invalid frequencies[\s\S]*The length of provided tuple",
+                ),
+            ),
+            (
+                2,
+                (np.arange(1, 10),),
+                pytest.raises(
+                    ValueError,
+                    match=r"Invalid frequencies[\s\S]*The length of provided tuple",
+                ),
+            ),
+            (2, [10, 10], does_not_raise()),
+            (2, [(1, 10), (1, 10)], does_not_raise()),
+            (2, [np.arange(1, 10), np.arange(1, 10)], does_not_raise()),
+            (2, (np.arange(1, 10), np.arange(1, 10)), does_not_raise()),
+            (1, [(0, 1)], does_not_raise()),
+            (
+                1,
+                [(10, 1)],
+                pytest.raises(ValueError, match="Tuple frequencies must satisfy"),
+            ),
+            (
+                2,
+                [(1, 10), (10, 1)],
+                pytest.raises(ValueError, match="Tuple frequencies must satisfy"),
+            ),
+            (1, -1, pytest.raises(ValueError, match="Integer frequencies must be > 0")),
+            (
+                2,
+                [1, 0],
+                pytest.raises(ValueError, match="Integer frequencies must be > 0"),
+            ),
+            (
+                1,
+                [(-1, 1)],
+                pytest.raises(ValueError, match="Tuple frequencies must satisfy 0"),
+            ),
+            (
+                1,
+                [(0, 2.1)],
+                pytest.raises(TypeError, match="Tuple frequencies must be integers"),
+            ),
+            (
+                1,
+                [np.array([1, 3, 2])],
+                pytest.warns(UserWarning, match="Unsorted frequencies provided"),
+            ),
+            (
+                1,
+                [np.array([-1, 2, 3])],
+                pytest.raises(ValueError, match="frequencies contain negative values"),
+            ),
+            (
+                1,
+                [np.array([0.5, 2, 3])],
+                pytest.raises(ValueError, match="frequency values are not integers"),
+            ),
+            (
+                2,
+                [np.array([1, 2, 3]), np.array([-1, 2, 3])],
+                pytest.raises(ValueError, match="frequencies contain negative values"),
+            ),
+            (
+                2,
+                [np.array([1, 2, 3]), np.array([0.5, 2, 3])],
+                pytest.raises(ValueError, match="frequency values are not integers"),
+            ),
+        ],
+    )
+    def test_frequencies_setter(self, frequencies, expectation, mode, ndim):
+        bas = instantiate_atomic_basis(
+            self.cls[mode],
+            **extra_kwargs(self.cls[mode], 10),
+            ndim=ndim,
+            frequency_mask=None,
+        )
+        with expectation:
+            bas.frequencies = frequencies
 
 
 class TestAdditiveBasis(CombinedBasis):
@@ -3951,27 +4091,15 @@ class TestAdditiveBasis(CombinedBasis):
                 f"Skipping test_call_sample_range for {basis_a.__class__.__name__} and {basis_b.__class__.__name__}"
             )
         # test attributes are not related
-        if isinstance(add.basis1, CustomBasis):
-            basis_a.basis_kwargs = {"n_basis_funcs": 10}
-            assert add.basis1.basis_kwargs == {}
-            add.basis1.basis_kwargs = {"n_basis_funcs": 6}
-            assert basis_a.basis_kwargs == {"n_basis_funcs": 10}
-        else:
-            basis_a.n_basis_funcs = 10
-            assert add.basis1.n_basis_funcs == n_basis_a
-            add.basis1.n_basis_funcs = 6
-            assert basis_a.n_basis_funcs == 10
+        set_basis_attr(basis_a, 10)
+        assert get_basis_attr(add.basis1) != 10
+        set_basis_attr(add.basis1, 6)
+        assert basis_a.n_basis_funcs != 6
 
-        if isinstance(add.basis2, CustomBasis):
-            basis_b.basis_kwargs = {"n_basis_funcs": 10}
-            assert add.basis2.basis_kwargs == {}
-            add.basis2.basis_kwargs = {"n_basis_funcs": 6}
-            assert basis_b.basis_kwargs == {"n_basis_funcs": 10}
-        else:
-            basis_b.n_basis_funcs = 10
-            assert add.basis2.n_basis_funcs == n_basis_b
-            add.basis2.n_basis_funcs = 6
-            assert basis_b.n_basis_funcs == 10
+        set_basis_attr(basis_b, 10)
+        assert get_basis_attr(add.basis2) != 10
+        set_basis_attr(add.basis2, 6)
+        assert basis_b.n_basis_funcs != 6
 
     @pytest.mark.parametrize(
         "basis_a",
@@ -4005,11 +4133,10 @@ class TestAdditiveBasis(CombinedBasis):
         add = basis_a + basis_b
 
         if not isinstance(add.basis1, (HistoryConv, IdentityEval, CustomBasis)):
-            add.basis1.n_basis_funcs = 10
+            set_basis_attr(add.basis1, 10)
             assert add.n_basis_funcs == 10 + n_basis_b
         if not isinstance(add.basis2, (HistoryConv, IdentityEval, CustomBasis)):
-            add.basis2.n_basis_funcs = 10
-            add.basis2.n_basis_funcs = 10
+            set_basis_attr(add.basis2, 10)
             assert add.n_basis_funcs == 10 + add.basis1.n_basis_funcs
 
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())

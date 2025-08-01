@@ -1,6 +1,8 @@
 """Module for ND fourier basis class."""
 
-from typing import List, Optional, Tuple
+import warnings
+from numbers import Number
+from typing import Any, List, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -14,28 +16,110 @@ from ..typing import FeatureMatrix
 from ._basis import Basis, check_transform_input, min_max_rescale_samples
 from ._basis_mixin import AtomicBasisMixin
 
+FREQUENCY_ERROR_MSGS = {
+    "has_incorrect_length": "The length of provided tuple of frequencies doesn't match the basis dimensionality.\n"
+    "The basis dimensionality is {expected}, while {provided} frequency arrays "
+    "were provided instead.",
+    "has_negative_values": "The provided frequencies contain negative values. Valid frequencies must be"
+    "non-negative integers.",
+    "not_int_like": "Some frequency values are not integers. Valid frequencies must be"
+    "non-negative integers.",
+}
 
-def make_arange(arg):
 
-    if is_numpy_array_like(arg) and arg.dtype == np.int_:
+def _to_tuple_of_arange(frequencies: int | Tuple[int, int] | Tuple[int], ndim: int):
+    if hasattr(frequencies, "__len__") and len(frequencies) == 1:
+        frequencies = frequencies[0]
+    return tuple(make_arange(frequencies) for _ in range(ndim))
+
+
+def _check_array_properties(*arrays: ArrayLike, ndim: int = 1):
+    has_correct_length = len(arrays) == ndim
+    is_int_like = all(np.all(f == np.asarray(f, dtype=int)) for f in arrays)
+    is_positive = all(np.all(np.asarray(f) >= 0) for f in arrays)
+    return has_correct_length, is_int_like, is_positive
+
+
+def _format_error_message(
+    ndim: int,
+    frequencies: Tuple[ArrayLike],
+    has_correct_length: bool,
+    is_positive: bool,
+    is_int_like: bool,
+):
+    msg = "Invalid frequencies provided. The following issues were detected:\n\n"
+
+    if not has_correct_length:
+        msg += (
+            "\t- "
+            + FREQUENCY_ERROR_MSGS["has_incorrect_length"]
+            .format(expected=ndim, provided=len(frequencies))
+            .replace("\n", "\n\t  ")
+            + "\n\n"
+        )
+    if not is_positive:
+        msg += (
+            "\t- "
+            + FREQUENCY_ERROR_MSGS["has_negative_values"].replace("\n", "\n\t  ")
+            + "\n\n"
+        )
+    if not is_int_like:
+        msg += (
+            "\t- "
+            + FREQUENCY_ERROR_MSGS["not_int_like"].replace("\n", "\n\t  ")
+            + "\n\n"
+        )
+
+    return msg
+
+
+def _check_and_sort_frequencies(*frequencies, ndim: int = 1):
+    has_correct_length, is_int_like, is_positive = _check_array_properties(
+        *frequencies, ndim=ndim
+    )
+
+    if has_correct_length and is_int_like and is_positive:
+        sorted_freqs = tuple(np.sort(f) for f in frequencies)
+        if any(not np.array_equal(f1, f2) for f1, f2 in zip(frequencies, sorted_freqs)):
+            warnings.warn("Unsorted frequencies provided! Frequencies will be sorted.")
+            return sorted_freqs
+        return frequencies
+
+    raise ValueError(
+        _format_error_message(
+            ndim, frequencies, has_correct_length, is_positive, is_int_like
+        )
+    )
+
+
+def make_arange(arg: NDArray | int | Tuple[int, int]):
+
+    if is_numpy_array_like(arg):
         return arg
 
     if isinstance(arg, int):
         if arg <= 0:
-            raise ValueError("Integer frequencies must be > 0.")
+            raise ValueError(
+                f"Integer frequencies must be > 0, {arg} provided instead."
+            )
         return jnp.arange(arg, dtype=float)
     elif isinstance(arg, tuple) and len(arg) == 2:
         start, stop = arg
         if not (isinstance(start, int) and isinstance(stop, int)):
             raise TypeError("Tuple frequencies must be integers.")
         if start < 0 or stop <= start:
-            raise ValueError("Tuple frequencies must satisfy 0 <= start < stop.")
+            raise ValueError(
+                f"Tuple frequencies must satisfy 0 <= start < stop. "
+                f"Start is ``{start}`` and stop is ``{stop}`` instead."
+            )
         return jnp.arange(start, stop, dtype=float)
     else:
         raise TypeError("Each frequency must be an int or a 2-element tuple of ints.")
 
 
 class FourierBasis(AtomicBasisMixin, Basis):
+
+    _is_complex = True
 
     def __init__(
         self,
@@ -112,7 +196,8 @@ class FourierBasis(AtomicBasisMixin, Basis):
             A boolean JAX array indicating the selected frequencies, or ``None``
             if no mask is applied.
         """
-        return self._frequency_mask
+        # safe get when getter is called at init initialization
+        return getattr(self, "_frequency_mask", None)
 
     @frequency_mask.setter
     def frequency_mask(self, values: ArrayLike | jnp.ndarray | None) -> None:
@@ -205,49 +290,75 @@ class FourierBasis(AtomicBasisMixin, Basis):
     def frequencies(
         self,
         frequencies: (
-            int | tuple[int, int] | List[int] | List[Tuple[int, int]] | tuple[NDArray]
+            int | tuple[int, int] | list[int] | list[tuple[int, int]] | tuple[NDArray]
         ),
     ) -> None:
+        ndim = self._n_input_dimensionality
 
-        if isinstance(frequencies, int):
-            self._frequencies = tuple(
-                make_arange(frequencies) for _ in range(self._n_input_dimensionality)
-            )
-
-        elif (
-            isinstance(frequencies, tuple)
-            and len(frequencies) == 2
-            and all(isinstance(f, int) for f in frequencies)
-        ):
-            self._frequencies = tuple(
-                make_arange(frequencies) for _ in range(self._n_input_dimensionality)
-            )
+        if isinstance(frequencies, Number) and (frequencies == int(frequencies)):
+            frequencies = _to_tuple_of_arange(int(frequencies), ndim)
 
         elif (
             isinstance(frequencies, tuple)
-            and len(frequencies) == self._n_input_dimensionality
-            and all(is_numpy_array_like(f) for f in frequencies)
+            and len(frequencies) in [ndim, 2]
+            and all(isinstance(f, Number) and (f == int(f)) for f in frequencies)
         ):
-            self._frequencies = tuple(f.astype(float) for f in frequencies)
+            frequencies = _to_tuple_of_arange(tuple(frequencies), ndim)
+
+        elif is_numpy_array_like(frequencies):
+            frequencies = _check_and_sort_frequencies(
+                *(frequencies for _ in range(ndim)), ndim=ndim
+            )
+
+        elif isinstance(frequencies, (tuple, list)) and all(
+            is_numpy_array_like(f) for f in frequencies
+        ):
+            frequencies = _check_and_sort_frequencies(*frequencies, ndim=ndim)
 
         elif isinstance(frequencies, list):
+
             if len(frequencies) != self._n_input_dimensionality:
                 raise ValueError(
                     "Length of frequencies list must match input dimensionality."
                 )
-            self._frequencies = tuple(make_arange(f) for f in frequencies)
+
+            frequencies = tuple(make_arange(f) for f in frequencies)
 
         else:
+            if isinstance(frequencies, np.ndarray) and ~np.issubdtype(
+                frequencies.dtype, np.integer
+            ):
+                type_string = f"NDArray[{frequencies.dtype}]"
+            else:
+                type_string = repr(type(frequencies))
             raise TypeError(
-                "Frequencies must be one of:\n"
+                f"Unrecognized type {type_string} for the ``frequencies`` parameter. ``frequencies`` "
+                "must be one of:\n\n"
                 "  - int\n"
                 "  - tuple[int, int]\n"
                 "  - list[int]\n"
                 "  - list[tuple[int, int]]\n"
-                "  - tuple[NDArray]"
-                f"If a list is provided, the list should be of length ``{self.ndim}``, "
-                f"one entry for each dimension of the Fourier basis."
+                "  - tuple[NDArray[int]]\n"
+                "  - NDArray[int]\n\n"
+                f"If a list is provided, the list should be of length ``{ndim}``, "
+                "one entry for each dimension of the Fourier basis."
             )
+
+        # Skip update if same as current
+        current_freqs = getattr(self, "_frequencies", [])
+        if len(frequencies) == len(current_freqs) and all(
+            np.array_equal(f1, f2) for f1, f2 in zip(current_freqs, frequencies)
+        ):
+            return
+
+        self._frequencies = frequencies
+        if self.frequency_mask is not None:
+            warnings.warn(
+                "Resetting ``frequency_mask`` to None (all frequencies will be included).\n"
+                "To sub-select frequencies, please provide a new ``frequency_mask``.",
+                UserWarning,
+            )
+            self.frequency_mask = None
 
     @property
     def ndim(self):
@@ -348,3 +459,22 @@ class FourierBasis(AtomicBasisMixin, Basis):
             The samples as provided, identity function.
         """
         return sample_pts
+
+    def set_params(self, **params: Any):
+        """Set params handling correctly the frequencies and their mask."""
+        # if both frequencies and mask are set ignore warning
+        if "frequencies" in params and "frequency_mask" in params:
+            freq = params.pop("frequencies")
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore",
+                    category=UserWarning,
+                    message="Resetting ``frequency_mask``.*",
+                )
+                # set first frequencies
+                self.frequencies = freq
+                # then set everything else (so that the mask is
+                # checked against the new frequencies)
+                super().set_params(**params)
+        else:
+            super().set_params(**params)

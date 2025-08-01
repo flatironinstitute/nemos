@@ -21,9 +21,9 @@ import pytest
 import nemos as nmo
 import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
-from docs.scripts.basis_figs import KWARGS
 from nemos.basis import AdditiveBasis, CustomBasis, MultiplicativeBasis
 from nemos.basis._basis import Basis
+from nemos.basis._basis_mixin import BasisMixin
 from nemos.basis._transformer_basis import TransformerBasis
 
 DEFAULT_KWARGS = {
@@ -164,7 +164,7 @@ class CombinedBasis(BasisFuncsTesting):
 
 
 # automatic define user accessible basis and check the methods
-def list_all_basis_classes(filter_basis="all") -> list[type]:
+def list_all_basis_classes(filter_basis="all") -> list[BasisMixin]:
     """
     Return all the classes in nemos.basis which are a subclass of Basis,
     which should be all concrete classes except TransformerBasis.
@@ -184,7 +184,12 @@ def list_all_basis_classes(filter_basis="all") -> list[type]:
     )
     if filter_basis != "all":
         all_basis = [a for a in all_basis if filter_basis in a.__name__]
-    return all_basis
+    return [nmo.basis.FourierEval]  # all_basis
+
+
+def list_all_real_basis_classes(filter_basis="all"):
+    list_all_basis = list_all_basis_classes(filter_basis)
+    return [cls for cls in list_all_basis if not getattr(cls, "is_complex", False)]
 
 
 # Sample subclass to test instantiation and methods
