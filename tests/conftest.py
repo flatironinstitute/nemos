@@ -119,6 +119,9 @@ class CombinedBasis(BasisFuncsTesting):
             "n_basis_funcs": n_basis,
             "window_size": window_size,
             "decay_rates": np.arange(1, 1 + n_basis),
+            "frequencies": np.arange(
+                (n_basis + 1) % 2, 1 + (n_basis - n_basis % 2) // 2
+            ),
         }
         default_kwargs = DEFAULT_KWARGS.copy()
         default_kwargs.update(new_kwargs)
@@ -189,7 +192,7 @@ def list_all_basis_classes(filter_basis="all") -> list[BasisMixin]:
 
 def list_all_real_basis_classes(filter_basis="all"):
     list_all_basis = list_all_basis_classes(filter_basis)
-    return [cls for cls in list_all_basis if not getattr(cls, "is_complex", False)]
+    return [cls for cls in list_all_basis if not getattr(cls, "_is_complex", False)]
 
 
 # Sample subclass to test instantiation and methods
