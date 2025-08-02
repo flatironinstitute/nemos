@@ -184,7 +184,7 @@ def list_all_basis_classes(filter_basis="all") -> list[BasisMixin]:
     )
     if filter_basis != "all":
         all_basis = [a for a in all_basis if filter_basis in a.__name__]
-    return [nmo.basis.FourierEval]  # all_basis
+    return all_basis
 
 
 def list_all_real_basis_classes(filter_basis="all"):

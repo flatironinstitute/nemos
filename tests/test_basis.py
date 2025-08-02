@@ -2780,7 +2780,11 @@ class TestFourierBasis(BasisFuncsTesting):
             (1, [10], does_not_raise()),
             (1, [(1, 10)], does_not_raise()),
             (1, [np.arange(1, 10)], does_not_raise()),
-            (1, (np.arange(1, 10),), does_not_raise()),
+            (
+                1,
+                (np.arange(1, 10),),
+                pytest.raises(ValueError, match="Invalid frequencies specification"),
+            ),
             (2, 10, does_not_raise()),
             (2, (1, 10), does_not_raise()),
             (2, [1, 10], does_not_raise()),
@@ -2796,7 +2800,7 @@ class TestFourierBasis(BasisFuncsTesting):
                 [np.arange(1, 10)],
                 pytest.raises(
                     ValueError,
-                    match=r"Invalid frequencies[\s\S]*The length of provided tuple",
+                    match=r"Length of frequencies list",
                 ),
             ),
             (
@@ -2804,13 +2808,17 @@ class TestFourierBasis(BasisFuncsTesting):
                 (np.arange(1, 10),),
                 pytest.raises(
                     ValueError,
-                    match=r"Invalid frequencies[\s\S]*The length of provided tuple",
+                    match=r"Invalid frequencies specification",
                 ),
             ),
             (2, [10, 10], does_not_raise()),
             (2, [(1, 10), (1, 10)], does_not_raise()),
             (2, [np.arange(1, 10), np.arange(1, 10)], does_not_raise()),
-            (2, (np.arange(1, 10), np.arange(1, 10)), does_not_raise()),
+            (
+                2,
+                (np.arange(1, 10), np.arange(1, 10)),
+                pytest.raises(ValueError, match="Invalid frequencies specification"),
+            ),
             (1, [(0, 1)], does_not_raise()),
             (
                 1,
@@ -2822,11 +2830,15 @@ class TestFourierBasis(BasisFuncsTesting):
                 [(1, 10), (10, 1)],
                 pytest.raises(ValueError, match="Tuple frequencies must satisfy"),
             ),
-            (1, -1, pytest.raises(ValueError, match="Integer frequencies must be > 0")),
+            (
+                1,
+                -1,
+                pytest.raises(ValueError, match="Integer frequencies must be >= 0"),
+            ),
             (
                 2,
-                [1, 0],
-                pytest.raises(ValueError, match="Integer frequencies must be > 0"),
+                [1, -1],
+                pytest.raises(ValueError, match="Integer frequencies must be >= 0"),
             ),
             (
                 1,
@@ -2863,6 +2875,24 @@ class TestFourierBasis(BasisFuncsTesting):
                 [np.array([1, 2, 3]), np.array([0.5, 2, 3])],
                 pytest.raises(ValueError, match="frequency values are not integers"),
             ),
+            (
+                2,
+                [np.arange(-1, 3), (1, 3)],
+                pytest.raises(
+                    ValueError,
+                ),
+            ),
+            (
+                2,
+                [np.arange(1, 3), -1],
+                pytest.raises(ValueError, match="Integer frequencies must be >= 0"),
+            ),
+            (
+                2,
+                [np.arange(1, 3), (-1, 2)],
+                pytest.raises(ValueError, match="Tuple frequencies must satisfy 0"),
+            ),
+            (3, [np.arange(1, 3), (1, 3), 10], does_not_raise()),
         ],
     )
     def test_frequencies_setter(self, frequencies, expectation, mode, ndim):

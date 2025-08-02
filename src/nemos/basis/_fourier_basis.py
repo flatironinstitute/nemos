@@ -17,9 +17,6 @@ from ._basis import Basis, check_transform_input, min_max_rescale_samples
 from ._basis_mixin import AtomicBasisMixin
 
 FREQUENCY_ERROR_MSGS = {
-    "has_incorrect_length": "The length of provided tuple of frequencies doesn't match the basis dimensionality.\n"
-    "The basis dimensionality is {expected}, while {provided} frequency arrays "
-    "were provided instead.",
     "has_negative_values": "The provided frequencies contain negative values. Valid frequencies must be"
     "non-negative integers.",
     "not_int_like": "Some frequency values are not integers. Valid frequencies must be"
@@ -30,33 +27,21 @@ FREQUENCY_ERROR_MSGS = {
 def _to_tuple_of_arange(frequencies: int | Tuple[int, int] | Tuple[int], ndim: int):
     if hasattr(frequencies, "__len__") and len(frequencies) == 1:
         frequencies = frequencies[0]
-    return tuple(make_arange(frequencies) for _ in range(ndim))
+    return tuple(arange_constructor(frequencies) for _ in range(ndim))
 
 
-def _check_array_properties(*arrays: ArrayLike, ndim: int = 1):
-    has_correct_length = len(arrays) == ndim
+def _check_array_properties(*arrays: ArrayLike):
     is_int_like = all(np.all(f == np.asarray(f, dtype=int)) for f in arrays)
     is_positive = all(np.all(np.asarray(f) >= 0) for f in arrays)
-    return has_correct_length, is_int_like, is_positive
+    return is_int_like, is_positive
 
 
 def _format_error_message(
-    ndim: int,
-    frequencies: Tuple[ArrayLike],
-    has_correct_length: bool,
     is_positive: bool,
     is_int_like: bool,
 ):
     msg = "Invalid frequencies provided. The following issues were detected:\n\n"
 
-    if not has_correct_length:
-        msg += (
-            "\t- "
-            + FREQUENCY_ERROR_MSGS["has_incorrect_length"]
-            .format(expected=ndim, provided=len(frequencies))
-            .replace("\n", "\n\t  ")
-            + "\n\n"
-        )
     if not is_positive:
         msg += (
             "\t- "
@@ -73,36 +58,77 @@ def _format_error_message(
     return msg
 
 
-def _check_and_sort_frequencies(*frequencies, ndim: int = 1):
-    has_correct_length, is_int_like, is_positive = _check_array_properties(
-        *frequencies, ndim=ndim
-    )
+def _check_and_sort_frequencies(*frequencies):
+    is_int_like, is_positive = _check_array_properties(*frequencies)
 
-    if has_correct_length and is_int_like and is_positive:
+    if is_int_like and is_positive:
         sorted_freqs = tuple(np.sort(f) for f in frequencies)
         if any(not np.array_equal(f1, f2) for f1, f2 in zip(frequencies, sorted_freqs)):
             warnings.warn("Unsorted frequencies provided! Frequencies will be sorted.")
             return sorted_freqs
         return frequencies
 
-    raise ValueError(
-        _format_error_message(
-            ndim, frequencies, has_correct_length, is_positive, is_int_like
-        )
-    )
+    raise ValueError(_format_error_message(is_positive, is_int_like))
 
 
-def make_arange(arg: NDArray | int | Tuple[int, int]):
+def arange_constructor(arg: NDArray | int | Tuple[int, int]):
+    """
+    Create an array of frequencies from different types of input.
 
+    This function accepts either:
+    - An array-like object of frequencies (returned after sorting and checking),
+    - A single positive integer (returns an array from 0 to `arg - 1`),
+    - A tuple of two integers `(start, stop)` (returns an array from `start` to `stop - 1`).
+
+    Parameters
+    ----------
+    arg : array-like of int, int, or tuple of int
+        Specifies how to create the frequency array:
+        * If array-like, it is validated and sorted before returning.
+        * If int, must be > 0, and the result is `jnp.arange(arg, dtype=float)`.
+        * If tuple of two ints `(start, stop)`, must satisfy `0 <= start < stop`,
+          and the result is `jnp.arange(start, stop, dtype=float)`.
+
+    Returns
+    -------
+    jax.Array
+        A 1D array of frequencies as floats.
+
+    Raises
+    ------
+    ValueError
+        If the integer input is not positive, or if the tuple does not satisfy
+        `0 <= start < stop`.
+    TypeError
+        If the tuple elements are not integers or if the input is of an unsupported type.
+
+    Notes
+    -----
+    If an array-like input is provided, it is first validated and sorted using
+    `_check_and_sort_frequencies`.
+
+    Examples
+    --------
+    >>> arange_constructor(3)
+    Array([0., 1., 2.], dtype=float32)
+
+    >>> arange_constructor((2, 5))
+    Array([2., 3., 4.], dtype=float32)
+
+    >>> arange_constructor(jnp.array([3, 1, 2]))
+    Array([1, 2, 3], dtype=int32)
+    """
     if is_numpy_array_like(arg):
+        arg = _check_and_sort_frequencies(arg)
         return arg
 
     if isinstance(arg, int):
-        if arg <= 0:
+        if arg < 0:
             raise ValueError(
-                f"Integer frequencies must be > 0, {arg} provided instead."
+                f"Integer frequencies must be >= 0, {arg} provided instead."
             )
         return jnp.arange(arg, dtype=float)
+
     elif isinstance(arg, tuple) and len(arg) == 2:
         start, stop = arg
         if not (isinstance(start, int) and isinstance(stop, int)):
@@ -296,33 +322,30 @@ class FourierBasis(AtomicBasisMixin, Basis):
         ndim = self._n_input_dimensionality
 
         if isinstance(frequencies, Number) and (frequencies == int(frequencies)):
-            frequencies = _to_tuple_of_arange(int(frequencies), ndim)
+            frequencies = (arange_constructor(frequencies),)
 
-        elif (
-            isinstance(frequencies, tuple)
-            and len(frequencies) in [ndim, 2]
-            and all(isinstance(f, Number) and (f == int(f)) for f in frequencies)
-        ):
-            frequencies = _to_tuple_of_arange(tuple(frequencies), ndim)
+        elif isinstance(frequencies, tuple):
+            if len(frequencies) == 2 and all(
+                isinstance(f, Number) and (f == int(f)) for f in frequencies
+            ):
+                frequencies = (arange_constructor(frequencies),)
+            else:
+                raise ValueError(
+                    "Invalid frequencies specification. If ``frequencies`` are provided as a tuple, "
+                    f"it must be a tuple of 2 positive integers. Tuple {frequencies} provided instead."
+                )
 
         elif is_numpy_array_like(frequencies):
             frequencies = _check_and_sort_frequencies(
-                *(frequencies for _ in range(ndim)), ndim=ndim
+                *(frequencies for _ in range(ndim)),
             )
 
-        elif isinstance(frequencies, (tuple, list)) and all(
-            is_numpy_array_like(f) for f in frequencies
-        ):
-            frequencies = _check_and_sort_frequencies(*frequencies, ndim=ndim)
-
         elif isinstance(frequencies, list):
-
             if len(frequencies) != self._n_input_dimensionality:
                 raise ValueError(
                     "Length of frequencies list must match input dimensionality."
                 )
-
-            frequencies = tuple(make_arange(f) for f in frequencies)
+            frequencies = tuple(arange_constructor(f) for f in frequencies)
 
         else:
             if isinstance(frequencies, np.ndarray) and ~np.issubdtype(
@@ -336,10 +359,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
                 "must be one of:\n\n"
                 "  - int\n"
                 "  - tuple[int, int]\n"
-                "  - list[int]\n"
-                "  - list[tuple[int, int]]\n"
-                "  - tuple[NDArray[int]]\n"
-                "  - NDArray[int]\n\n"
+                "  - NDArray[int]\n  - list[int | tuple[int, int] | NDArray[int] | NDArray[int]]\n\n"
                 f"If a list is provided, the list should be of length ``{ndim}``, "
                 "one entry for each dimension of the Fourier basis."
             )
