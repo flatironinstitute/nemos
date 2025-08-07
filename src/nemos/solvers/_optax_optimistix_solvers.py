@@ -1,7 +1,8 @@
 """Solvers wrapping Optax solvers with Optimistix for use with NeMoS."""
 
-import dataclasses
+import abc
 from typing import Any, Callable, NamedTuple, Union, ClassVar
+import inspect
 
 import equinox as eqx
 import jax
@@ -15,11 +16,59 @@ from ..tree_utils import tree_sub
 from ._optimistix_solvers import (
     DEFAULT_ATOL,
     DEFAULT_RTOL,
-    OptimistixConfig,
-    OptimistixOptaxSolver,
     OptimistixStepResult,
     Params,
+    OptimistixAdapter,
 )
+
+
+class AbstractOptimistixOptaxSolver(OptimistixAdapter, abc.ABC):
+    """Adapter for optimistix.OptaxMinimiser which is an adapter for Optax solvers."""
+
+    _solver_cls = optx.OptaxMinimiser
+    # if defined, the docstring is extended to include the documentation of the wrapped Optax solver
+    _optax_solver: ClassVar[Callable[..., optax.GradientTransformation]]
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+
+        # only append things if the _optax_solver class attribute is defined
+        if not hasattr(cls, "_optax_solver"):
+            return
+
+        doc_so_far = inspect.cleandoc(inspect.getdoc(cls))
+        # delete the part about OptaxMinimiser
+        doc_so_far = doc_so_far.split("\n\nOptaxMinimiser's documentation:", 1)[0]
+
+        init_header = inspect.cleandoc(f"More info from {cls.__name__}.__init__'s doc")
+        init_header += "\n" + "-" * len(init_header)
+        init_doc = inspect.cleandoc(
+            inspect.getdoc(cls.__init__)
+            or f"No documentation found for {cls.__name__}.init"
+        )
+        init_doc = init_header + "\n" + init_doc
+
+        optax_header = inspect.cleandoc(
+            f"""
+            More info from Optax's {cls._optax_solver.__name__} documentation:
+            """
+        )
+        optax_header += "\n" + "-" * len(optax_header)
+        optax_doc = inspect.cleandoc(
+            inspect.getdoc(cls._optax_solver) or "No documentation found in Optax."
+        )
+        optax_doc = optax_header + "\n" + optax_doc
+
+        full_doc = "\n\n".join(
+            (
+                doc_so_far,
+                init_doc,
+                optax_doc,
+            )
+        )
+
+        cls.__doc__ = inspect.cleandoc(full_doc)
+
 
 # NOTE This might be solved in a simpler way using
 # https://optax.readthedocs.io/en/latest/getting_started.html#accessing-learning-rate
@@ -63,7 +112,7 @@ def _make_rate_scaler(
     If `stepsize` is not None, use it as a constant learning rate.
     If `stepsize` is None, create a zoom linesearch with `linesearch_kwargs`.
     """
-    if stepsize is None:
+    if stepsize is None or stepsize <= 0.0:
         if linesearch_kwargs is None:
             linesearch_kwargs = {
                 # "approx_dec_rtol" : None, # setting this to none might be useful
@@ -74,12 +123,14 @@ def _make_rate_scaler(
 
         return optax.scale_by_zoom_linesearch(**linesearch_kwargs)
     else:
+        if linesearch_kwargs:
+            raise ValueError("Only provide stepsize or linesearch_kwargs.")
         # NOTE GradientDescent works with optax.scale_by_learning_rate as well
         # but for ProximalGradient we need to be able to extract the current learning rate
         return stateful_scale_by_learning_rate(stepsize)
 
 
-class OptimistixOptaxGradientDescent(OptimistixOptaxSolver):
+class OptimistixOptaxGradientDescent(AbstractOptimistixOptaxSolver):
     """
     Gradient descent implementation combining Optax and Optimistix.
 
@@ -89,6 +140,8 @@ class OptimistixOptaxGradientDescent(OptimistixOptaxSolver):
     The full optimization loop is handled by the `optimistix.OptaxMinimiser` wrapper.
     """
 
+    _optax_solver = optax.sgd
+
     def __init__(
         self,
         unregularized_loss: Callable,
@@ -97,11 +150,19 @@ class OptimistixOptaxGradientDescent(OptimistixOptaxSolver):
         atol: float = DEFAULT_ATOL,
         rtol: float = DEFAULT_RTOL,
         acceleration: bool = True,
+        stepsize: float | None = None,
+        linesearch_kwargs: dict | None = None,
         **solver_init_kwargs,
     ):
-        stepsize = solver_init_kwargs.get("stepsize", None)
-        linesearch_kwargs = solver_init_kwargs.get("linesearch_kwargs", {})
+        """
+        Create a solver wrapping `optax.sgd`.
 
+        If `acceleration` is True, use Nesterov acceleration.
+
+        Use either `stepsize` or `linesearch_kwargs`.
+        If `stepsize` is not None and larger than 0, it is used as a fixed stepsize,
+        otherwise `optax.zoom_linesearch` is used.
+        """
         _sgd = optax.chain(
             optax.sgd(learning_rate=1.0, nesterov=acceleration),
             _make_rate_scaler(stepsize, linesearch_kwargs),
@@ -122,13 +183,11 @@ class OptimistixOptaxGradientDescent(OptimistixOptaxSolver):
         arguments = super().get_accepted_arguments()
 
         arguments.discard("optim")  # we create this, it can't be passed
-        arguments.add("stepsize")
-        arguments.add("linesearch_kwargs")
 
         return arguments
 
 
-class OptimistixOptaxProximalGradient(OptimistixOptaxSolver):
+class OptimistixOptaxProximalGradient(AbstractOptimistixOptaxSolver):
     """
     ProximalGradient implementation combining Optax and Optimistix.
 
@@ -156,10 +215,21 @@ class OptimistixOptaxProximalGradient(OptimistixOptaxSolver):
         atol: float = DEFAULT_ATOL,
         rtol: float = DEFAULT_RTOL,
         acceleration: bool = True,
+        stepsize: float | None = None,
+        linesearch_kwargs: dict | None = None,
         **solver_init_kwargs,
     ):
-        stepsize = solver_init_kwargs.get("stepsize", None)
-        linesearch_kwargs = solver_init_kwargs.get("linesearch_kwargs", {})
+        """
+        Create a proximal gradient solver using `optax.sgd` and applying the proximal operator `prox` on each update step.
+
+        If `acceleration` is True, use Nesterov acceleration.
+
+        Use either `stepsize` or `linesearch_kwargs`.
+        If `stepsize` is not None and larger than 0, it is used as a fixed stepsize,
+        otherwise `optax.zoom_linesearch` is used.
+        """
+        if linesearch_kwargs is None:
+            linesearch_kwargs = {}
 
         # disable the curvature test
         if "curv_rtol" not in linesearch_kwargs:
@@ -185,8 +255,6 @@ class OptimistixOptaxProximalGradient(OptimistixOptaxSolver):
         arguments = super().get_accepted_arguments()
 
         arguments.discard("optim")  # we create this, it can't be passed
-        arguments.add("stepsize")
-        arguments.add("linesearch_kwargs")
 
         return arguments
 
@@ -279,7 +347,7 @@ class OptimistixOptaxProximalGradient(OptimistixOptaxSolver):
         return self._solver.postprocess(*args, **kwargs)
 
 
-class OptimistixOptaxLBFGS(OptimistixOptaxSolver):
+class OptimistixOptaxLBFGS(AbstractOptimistixOptaxSolver):
     """
     L-BFGS implementation using optax.lbfgs wrapped by optimistix.OptaxMinimiser.
 
@@ -291,6 +359,8 @@ class OptimistixOptaxLBFGS(OptimistixOptaxSolver):
 
     stats: dict[str, PyTree[ArrayLike]]
 
+    _optax_solver = optax.lbfgs
+
     def __init__(
         self,
         unregularized_loss: Callable,
@@ -301,6 +371,11 @@ class OptimistixOptaxLBFGS(OptimistixOptaxSolver):
         stepsize: float | None = None,
         **solver_init_kwargs,
     ):
+        """
+        Create a solver wrapping `optax.lbfgs`.
+
+        `stepsize` is passed for `learning_rate` to `optax.lbfgs`.
+        """
         # TODO might want to expose some more parameters?
         solver_init_kwargs["optim"] = optax.lbfgs(learning_rate=stepsize)
 

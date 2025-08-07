@@ -202,12 +202,6 @@ class OptimistixBFGS(OptimistixAdapter):
     _solver_cls = optx.BFGS
 
 
-class OptimistixOptaxSolver(OptimistixAdapter):
-    """Adapter for optimistix.OptaxMinimiser which is an adapter for Optax solvers."""
-
-    _solver_cls = optx.OptaxMinimiser
-
-
 class OptimistixNonlinearCG(OptimistixAdapter):
     """Adapter for optimistix.NonlinearCG."""
 
