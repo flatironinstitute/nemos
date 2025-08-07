@@ -1,5 +1,4 @@
 import dataclasses
-import inspect
 from typing import Any, Callable, ClassVar, Type, TypeAlias
 
 import equinox as eqx
@@ -20,9 +19,10 @@ OptimistixSolverState: TypeAlias = eqx.Module
 OptimistixStepResult: TypeAlias = tuple[Params, OptimistixSolverState]
 
 
-def _current_float_dtype() -> jnp.dtype:
-    """Return the floating point dtype matching the current JAX precision."""
-    return jnp.float64 if jax.config.jax_enable_x64 else jnp.float32
+def _f_struct_factory():
+    """Create the output shape and dtype of the objective function using the currently set JAX precision."""
+    current_float_dtype = jnp.float64 if jax.config.jax_enable_x64 else jnp.float32
+    return jax.ShapeDtypeStruct((), current_float_dtype)
 
 
 @dataclasses.dataclass
@@ -40,8 +40,10 @@ class OptimistixConfig:
     # options dict passed around within optimistix
     options: dict[str, Any] = dataclasses.field(default_factory=dict)
     # "The shape+dtype of the output of `fn`"
+    # dtype is dynamically determined by calling _f_struct_factory to read the currently
+    # set JAX floating point precision from the config
     f_struct: PyTree[jax.ShapeDtypeStruct] = dataclasses.field(
-        default_factory=lambda: jax.ShapeDtypeStruct((), _current_float_dtype())
+        default_factory=_f_struct_factory
     )
     # this would be the output shape + dtype of the aux variables fn returns
     aux_struct: PyTree[jax.ShapeDtypeStruct] = None
