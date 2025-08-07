@@ -21,8 +21,6 @@ from ._optimistix_solvers import (
     Params,
 )
 
-from ._abstract_solver import StochasticMixin
-
 # NOTE This might be solved in a simpler way using
 # https://optax.readthedocs.io/en/latest/getting_started.html#accessing-learning-rate
 
@@ -81,7 +79,7 @@ def _make_rate_scaler(
         return stateful_scale_by_learning_rate(stepsize)
 
 
-class OptaxOptimistixGradientDescent(OptimistixOptaxSolver, StochasticMixin):
+class OptaxOptimistixGradientDescent(OptimistixOptaxSolver):
     """
     Gradient descent implementation combining Optax and Optimistix.
 
@@ -130,7 +128,7 @@ class OptaxOptimistixGradientDescent(OptimistixOptaxSolver, StochasticMixin):
         return arguments
 
 
-class OptaxOptimistixProximalGradient(OptimistixOptaxSolver, StochasticMixin):
+class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
     """
     ProximalGradient implementation combining Optax and Optimistix.
 

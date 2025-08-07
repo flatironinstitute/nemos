@@ -86,9 +86,12 @@ Currently, the solver registry defines which implementation to use for each algo
 We might also define something like an `ImplementsSolverInterface` protocol as well to easily check if user-supplied solvers define the methods required for the interface.
 
 ## Stochastic optimization
-To run stochastic (~mini-batch) optimization, following JAXopt we will require a `run_iterator` method to be defined.
+To run stochastic (~mini-batch) optimization, JAXopt used a `run_iterator` method.
 Instead of the full input data `run_iterator` accepts a generator / iterator that provides batches of data.
-For solvers in `nemos` that can be used this way, we provide `StochasticMixin` which borrows the implementation from JAXopt.
+
+For solvers defined in `nemos` that can be used this way, we will likely provide `StochasticMixin` which borrows the implementation from JAXopt. (Or some version of it. See below.).
+We will likely define an interface or protocol for this, allowing custom (user-defined) solvers to also implement their own version.
+We will also have to decide on how this will be exposed to users on the level of `BaseRegressor` and `GLM`.
 
 Note that (Prox-)SVRG is especially well-suited for running stochastic optimization, however it currently requires the optimization loop to be implemented separately as it is a bit more involved than what is done by `run_iterator`.
 A potential solution to this would be to provide a separate method that accepts the full data, and takes care of the batching. That might be a more convenient alternative to the current `run_iterator` as well.

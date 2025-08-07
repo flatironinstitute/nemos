@@ -5,7 +5,7 @@ from typing import Callable, ClassVar, NamedTuple, Type, TypeAlias, Any
 from nemos.third_party.jaxopt import jaxopt
 
 from ..regularizer import Regularizer
-from ._abstract_solver import Params, StochasticMixin, OptimizationInfo
+from ._abstract_solver import Params, OptimizationInfo
 from ._solver_adapter import SolverAdapter
 
 JaxoptSolverState: TypeAlias = NamedTuple
@@ -81,14 +81,14 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState, JaxoptStepResult]):
         return self._solver.maxiter
 
 
-class JaxoptProximalGradient(JaxoptAdapter, StochasticMixin):
+class JaxoptProximalGradient(JaxoptAdapter):
     """Adapter for jaxopt.ProximalGradient."""
 
     _solver_cls = jaxopt.ProximalGradient
     _proximal = True
 
 
-class JaxoptGradientDescent(JaxoptAdapter, StochasticMixin):
+class JaxoptGradientDescent(JaxoptAdapter):
     """Adapter for jaxopt.GradientDescent."""
 
     _solver_cls = jaxopt.GradientDescent
