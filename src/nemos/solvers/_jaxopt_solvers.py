@@ -64,6 +64,14 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState, JaxoptStepResult]):
     def run(self, init_params: Params, *args: Any) -> JaxoptStepResult:
         return self._solver.run(init_params, *self.hyperparams_prox, *args)
 
+    @classmethod
+    def get_accepted_arguments(cls) -> set[str]:
+        arguments = super().get_accepted_arguments()
+        # prox is read from the regularizer, not provided as a solver argument
+        if cls._proximal:
+            arguments.remove("prox")
+        return arguments
+
     def get_optim_info(self, state: JaxoptSolverState) -> OptimizationInfo:
         num_steps = state.iter_num.item()  # pyright: ignore
         function_val = state.value if hasattr(state, "value") else None  # pyright: ignore
@@ -82,7 +90,12 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState, JaxoptStepResult]):
 
 
 class JaxoptProximalGradient(JaxoptAdapter):
-    """Adapter for jaxopt.ProximalGradient."""
+    """
+    Adapter for `jaxopt.ProximalGradient`.
+
+    The `prox` argument passed to `jaxopt.ProximalGradient`
+    is read from the regularizer.
+    """
 
     _solver_cls = jaxopt.ProximalGradient
     _proximal = True
