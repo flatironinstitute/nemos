@@ -79,7 +79,7 @@ def _make_rate_scaler(
         return stateful_scale_by_learning_rate(stepsize)
 
 
-class OptaxOptimistixGradientDescent(OptimistixOptaxSolver):
+class OptimistixOptaxGradientDescent(OptimistixOptaxSolver):
     """
     Gradient descent implementation combining Optax and Optimistix.
 
@@ -128,7 +128,7 @@ class OptaxOptimistixGradientDescent(OptimistixOptaxSolver):
         return arguments
 
 
-class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
+class OptimistixOptaxProximalGradient(OptimistixOptaxSolver):
     """
     ProximalGradient implementation combining Optax and Optimistix.
 
@@ -279,7 +279,7 @@ class OptaxOptimistixProximalGradient(OptimistixOptaxSolver):
         return self._solver.postprocess(*args, **kwargs)
 
 
-class OptaxOptimistixLBFGS(OptimistixOptaxSolver):
+class OptimistixOptaxLBFGS(OptimistixOptaxSolver):
     """
     L-BFGS implementation using optax.lbfgs wrapped by optimistix.OptaxMinimiser.
 

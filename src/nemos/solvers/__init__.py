@@ -8,9 +8,9 @@ from ._jaxopt_solvers import (
     JaxoptProximalGradient,
 )
 from ._optax_optimistix_solvers import (
-    OptaxOptimistixGradientDescent,
-    OptaxOptimistixLBFGS,
-    OptaxOptimistixProximalGradient,
+    OptimistixOptaxGradientDescent,
+    OptimistixOptaxLBFGS,
+    OptimistixOptaxProximalGradient,
 )
 from ._optimistix_solvers import (
     OptimistixBFGS,
