@@ -73,11 +73,11 @@ class SolverAdapter(AbstractSolver[SolverState, StepResult], abc.ABC):
 
         # read the underlying solver class's documentation
         solver_doc_header = inspect.cleandoc(
-            """
-            Solver's documentation:
-            -----------------------
+            f"""
+            {solver_cls.__name__}'s documentation:
             """
         )
+        solver_doc_header += "\n" + "-" * len(solver_doc_header)
         solver_doc = inspect.cleandoc(
             inspect.getdoc(solver_cls) or "No class documentation found."
         )
@@ -87,9 +87,9 @@ class SolverAdapter(AbstractSolver[SolverState, StepResult], abc.ABC):
         solver_init_doc_header = inspect.cleandoc(
             f"""
             More info from {solver_cls.__name__}.__init__
-            -----------------------------------------
             """
         )
+        solver_init_doc_header += "\n" + "-" * len(solver_init_doc_header)
         solver_init_doc = inspect.cleandoc(
             inspect.getdoc(solver_cls.__init__) or "No __init__ documentation found."
         )
