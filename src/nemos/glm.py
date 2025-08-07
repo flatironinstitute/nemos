@@ -6,14 +6,12 @@ from __future__ import annotations
 import warnings
 from functools import wraps
 from pathlib import Path
-from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
+from typing import Callable, Literal, NamedTuple, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
 from numpy.typing import ArrayLike
 from sklearn.utils import InputTags, TargetTags
-
-from nemos.third_party.jaxopt import jaxopt
 
 from . import observation_models as obs
 from . import tree_utils, validation
@@ -25,7 +23,7 @@ from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Lasso, Regularizer, Ridge
 from .solvers._compute_defaults import glm_compute_optimal_stepsize_configs
 from .type_casting import jnp_asarray_if, support_pynapple
-from .typing import DESIGN_INPUT_TYPE, RegularizerStrength
+from .typing import DESIGN_INPUT_TYPE, RegularizerStrength, SolverState, StepResult
 from .utils import format_repr
 
 ModelParams = Tuple[jnp.ndarray, jnp.ndarray]
@@ -935,7 +933,7 @@ class GLM(BaseRegressor):
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         init_params: Optional[ModelParams] = None,
-    ) -> Tuple[ModelParams, NamedTuple]:
+    ) -> ModelParams:
         """
         Initialize the model parameters for the optimization process.
 
@@ -1005,7 +1003,7 @@ class GLM(BaseRegressor):
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         init_params,
-    ) -> Union[Any, NamedTuple]:
+    ) -> SolverState:
         """Initialize the solver by instantiating its init_state, update and, run methods.
 
         This method also prepares the solver's state by using the initialized model parameters and data.
@@ -1024,7 +1022,7 @@ class GLM(BaseRegressor):
 
         Returns
         -------
-        NamedTuple
+        SolverState
             The initialized solver state
 
         Examples
@@ -1078,7 +1076,7 @@ class GLM(BaseRegressor):
         *args,
         n_samples: Optional[int] = None,
         **kwargs,
-    ) -> jaxopt.OptStep:
+    ) -> StepResult:
         """
         Update the model parameters and solver state.
 
@@ -1112,7 +1110,7 @@ class GLM(BaseRegressor):
 
         Returns
         -------
-        jaxopt.OptStep
+        StepResult
             A tuple containing the updated parameters and optimization state. This tuple is
             typically used to continue the optimization process in subsequent steps.
 

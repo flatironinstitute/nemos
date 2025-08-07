@@ -5,7 +5,7 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import optimistix as optx
-from jaxtyping import PyTree
+from ..typing import Pytree as PyTree
 
 from ..regularizer import Regularizer
 from ._abstract_solver import Params, OptimizationInfo

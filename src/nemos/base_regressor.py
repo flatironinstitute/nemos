@@ -9,15 +9,13 @@ import warnings
 from abc import abstractmethod
 from copy import deepcopy
 from functools import wraps
-from typing import Any, NamedTuple, Optional, Tuple, Union
+from typing import Any, NamedTuple, Optional, Tuple, Union, Type
 from pathlib import Path
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
-
-from nemos.third_party.jaxopt import jaxopt
 
 from . import solvers, utils, validation
 from ._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
@@ -33,6 +31,7 @@ from .typing import (
 from .utils import _flatten_dict, _get_name, _unpack_params, get_env_metadata
 
 from .solvers._jaxopt_optimistix_param_mismatch_handling import _clean_solver_kwargs
+from .solvers._abstract_solver import StepResult, SolverState
 
 
 def strip_metadata(arg_num: Optional[int] = None, kwarg_key: Optional[str] = None):
@@ -104,7 +103,7 @@ class BaseRegressor(Base, abc.ABC):
         self,
         regularizer: Union[str, Regularizer] = "UnRegularized",
         regularizer_strength: Optional[RegularizerStrength] = None,
-        solver_name: str = None,
+        solver_name: Optional[str] = None,
         solver_kwargs: Optional[dict] = None,
     ):
         self.regularizer = "UnRegularized" if regularizer is None else regularizer
@@ -267,7 +266,7 @@ class BaseRegressor(Base, abc.ABC):
         self._solver_name = solver_name
 
     @staticmethod
-    def _check_solver_kwargs(solver_class, solver_kwargs):
+    def _check_solver_kwargs(solver_class: Type, solver_kwargs: dict[str, Any]) -> None:
         """
         Check if provided solver keyword arguments are valid.
 
@@ -295,9 +294,7 @@ class BaseRegressor(Base, abc.ABC):
                 f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for {solver_class.__name__}!"
             )
 
-    def instantiate_solver(
-        self, *args, solver_kwargs: Optional[dict] = None
-    ) -> BaseRegressor:
+    def instantiate_solver(self, solver_kwargs: Optional[dict] = None) -> BaseRegressor:
         """
         Instantiate the solver with the provided loss function.
 
@@ -315,9 +312,6 @@ class BaseRegressor(Base, abc.ABC):
 
         Parameters
         ----------
-        *args:
-            Positional arguments for the jaxopt `solver.run` method, e.g. the regularizing
-            strength for proximal gradient methods.
         solver_kwargs:
             Optional dictionary with the solver kwargs.
             If nothing is provided, it defaults to self.solver_kwargs.
@@ -484,8 +478,8 @@ class BaseRegressor(Base, abc.ABC):
         y: jnp.ndarray,
         *args,
         **kwargs,
-    ) -> jaxopt.OptStep:
-        """Run a single update step of the jaxopt solver."""
+    ) -> StepResult:
+        """Run a single update step of the underlying solver."""
         pass
 
     @abc.abstractmethod
@@ -504,7 +498,7 @@ class BaseRegressor(Base, abc.ABC):
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         init_params,
-    ) -> Union[Any, NamedTuple]:
+    ) -> SolverState:
         """Initialize the state of the solver for running fit and update."""
         pass
 

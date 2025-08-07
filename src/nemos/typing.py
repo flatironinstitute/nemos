@@ -2,31 +2,35 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, NamedTuple, Tuple, Union
+from typing import Any, Callable, NamedTuple, Tuple, Union, TypeVar, TypeAlias
 
 import jax.numpy as jnp
 import pynapple as nap
 from jax.typing import ArrayLike
 from numpy.typing import NDArray
-
-from nemos.third_party.jaxopt import jaxopt
-
 from .pytrees import FeaturePytree
 
-DESIGN_INPUT_TYPE = Union[jnp.ndarray, FeaturePytree]
+# TODO: Which one do we want to use?
+from jaxtyping import PyTree as Pytree
+# Pytree = Any
 
-Pytree = Any
+Params: TypeAlias = Pytree
+SolverState = TypeVar("SolverState")
+StepResult = TypeVar("StepResult")
+
+DESIGN_INPUT_TYPE = Union[jnp.ndarray, FeaturePytree]
 
 # copying jax.random's annotation
 KeyArrayLike = ArrayLike
 
+# TODO: Update the argument types of these methods
 SolverRun = Callable[
     [
         Any,  # parameters, could be any pytree
         jnp.ndarray,  # Predictors (i.e. model design for GLM)
         jnp.ndarray,
     ],  # Output (neural activity)
-    jaxopt.OptStep,
+    StepResult,
 ]
 
 SolverInit = Callable[
@@ -35,7 +39,7 @@ SolverInit = Callable[
         jnp.ndarray,  # Predictors (i.e. model design for GLM)
         jnp.ndarray,
     ],  # Output (neural activity)
-    NamedTuple,
+    SolverState,
 ]
 
 SolverUpdate = Callable[
@@ -45,7 +49,7 @@ SolverUpdate = Callable[
         jnp.ndarray,  # Predictors (i.e. model design for GLM)
         jnp.ndarray,
     ],  # Output (neural activity)
-    jaxopt.OptStep,
+    StepResult,
 ]
 
 ProximalOperator = Callable[

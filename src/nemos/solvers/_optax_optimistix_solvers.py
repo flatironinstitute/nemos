@@ -8,8 +8,8 @@ import jax
 import jax.numpy as jnp
 import optax
 import optimistix as optx
-from jaxtyping import ArrayLike, PyTree
-
+from jaxtyping import ArrayLike
+from ..typing import Pytree as PyTree
 from ..regularizer import Regularizer
 from ..tree_utils import tree_sub
 from ._optimistix_solvers import (
