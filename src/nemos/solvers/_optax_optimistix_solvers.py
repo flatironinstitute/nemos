@@ -69,7 +69,7 @@ class AbstractOptimistixOptaxSolver(OptimistixAdapter, abc.ABC):
         cls.__doc__ = inspect.cleandoc(full_doc)
 
 
-# NOTE This might be solved in a simpler way using
+# NOTE: This might be solved in a simpler way using
 # https://optax.readthedocs.io/en/latest/getting_started.html#accessing-learning-rate
 
 
@@ -124,7 +124,7 @@ def _make_rate_scaler(
     else:
         if linesearch_kwargs:
             raise ValueError("Only provide stepsize or linesearch_kwargs.")
-        # NOTE GradientDescent works with optax.scale_by_learning_rate as well
+        # NOTE: GradientDescent works with optax.scale_by_learning_rate as well
         # but for ProximalGradient we need to be able to extract the current learning rate
         return stateful_scale_by_learning_rate(stepsize)
 
@@ -377,7 +377,7 @@ class OptimistixOptaxLBFGS(AbstractOptimistixOptaxSolver):
 
         `stepsize` is passed for `learning_rate` to `optax.lbfgs`.
         """
-        # TODO might want to expose some more parameters?
+        # TODO: might want to expose some more parameters?
         solver_init_kwargs["optim"] = optax.lbfgs(learning_rate=stepsize)
 
         super().__init__(

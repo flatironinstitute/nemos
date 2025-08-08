@@ -23,7 +23,7 @@ def _clean_solver_kwargs(
     try:
         accepted_args = solver_class.get_accepted_arguments()
     except AttributeError:
-        # NOTE might want to take the union with solver_class.__init__'s args?
+        # NOTE: might want to take the union with solver_class.__init__'s args?
         accepted_args = set(inspect.getfullargspec(solver_class).args)
 
     solver_init_kwargs = _replace_param(

@@ -6,7 +6,7 @@ from ..typing import Params, SolverState, StepResult
 from ..regularizer import Regularizer
 
 
-# TODO If we want to accept solvers that implement this interface,
+# TODO: If we want to accept solvers that implement this interface,
 # but are not implemented as a subclass of AbstractSolver,
 # we could just create a protocol listing the methods.
 
@@ -14,7 +14,7 @@ from ..regularizer import Regularizer
 class OptimizationInfo(NamedTuple):
     """Basic diagnostic information about finished optimization runs."""
 
-    # TODO Is the function value needed?
+    # TODO: Is the function value needed?
     # Not all JAXopt solvers store the function value.
     # Not sure how confusing it is to store None when it's not present
     # because it can be confused with a diverged optimization.

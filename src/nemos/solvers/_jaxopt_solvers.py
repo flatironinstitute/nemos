@@ -12,7 +12,7 @@ JaxoptSolverState: TypeAlias = NamedTuple
 JaxoptStepResult: TypeAlias = tuple[Params, JaxoptSolverState]
 # JaxoptStepResult: TypeAlias = jaxopt.OptStep
 
-# TODO do we want the JAXopt solvers to use the same tolerance and max_steps as the Optimistix solvers?
+# TODO: do we want the JAXopt solvers to use the same tolerance and max_steps as the Optimistix solvers?
 
 
 class JaxoptAdapter(SolverAdapter[JaxoptSolverState, JaxoptStepResult]):
