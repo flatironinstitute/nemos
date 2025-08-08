@@ -14,14 +14,13 @@ from ..regularizer import Regularizer
 class OptimizationInfo(NamedTuple):
     """Basic diagnostic information about finished optimization runs."""
 
-    # TODO: Is the function value needed?
     # Not all JAXopt solvers store the function value.
     # Not sure how confusing it is to store None when it's not present
     # because it can be confused with a diverged optimization.
-    function_val: float
-    num_steps: int | None
+    function_val: float | None
+    num_steps: int
     converged: bool
-    reached_max_steps: int
+    reached_max_steps: bool
 
 
 class AbstractSolver(abc.ABC, Generic[SolverState, StepResult]):
