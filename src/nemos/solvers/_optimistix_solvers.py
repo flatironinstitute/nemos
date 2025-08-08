@@ -5,7 +5,7 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import optimistix as optx
-from ..typing import Pytree as PyTree
+from ..typing import Pytree
 
 from ..regularizer import Regularizer
 from ._abstract_solver import Params, OptimizationInfo
@@ -42,11 +42,11 @@ class OptimistixConfig:
     # "The shape+dtype of the output of `fn`"
     # dtype is dynamically determined by calling _f_struct_factory to read the currently
     # set JAX floating point precision from the config
-    f_struct: PyTree[jax.ShapeDtypeStruct] = dataclasses.field(
-        default_factory=_f_struct_factory
-    )
+    # f_struct: PyTree[jax.ShapeDtypeStruct] = dataclasses.field(
+    f_struct: Pytree = dataclasses.field(default_factory=_f_struct_factory)
     # this would be the output shape + dtype of the aux variables fn returns
-    aux_struct: PyTree[jax.ShapeDtypeStruct] = None
+    # aux_struct: PyTree[jax.ShapeDtypeStruct] = None
+    aux_struct: Pytree = None
     # "Any Lineax tags describing the structure of the Jacobian matrix d(fn)/dy."
     tags: frozenset = frozenset()
     # sets if the minimisation throws an error if an iterative solver runs out of steps

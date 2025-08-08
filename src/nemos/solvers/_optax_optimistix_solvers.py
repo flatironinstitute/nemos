@@ -9,8 +9,7 @@ import jax
 import jax.numpy as jnp
 import optax
 import optimistix as optx
-from jaxtyping import ArrayLike
-from ..typing import Pytree as PyTree
+from ..typing import Pytree
 from ..regularizer import Regularizer
 from ..tree_utils import tree_sub
 from ._optimistix_solvers import (
@@ -203,7 +202,8 @@ class OptimistixOptaxProximalGradient(AbstractOptimistixOptaxSolver):
     fun_with_aux: Callable
     prox: Callable
 
-    stats: dict[str, PyTree[ArrayLike]]
+    # stats: dict[str, PyTree[ArrayLike]]
+    stats: dict[str, Pytree]
 
     _proximal: ClassVar[bool] = True
 
@@ -270,7 +270,7 @@ class OptimistixOptaxProximalGradient(AbstractOptimistixOptaxSolver):
         self,
         fn: Callable,
         y: Params,
-        args: PyTree,
+        args: Pytree,
         options: dict[str, Any],
         state: optx._solver.optax._OptaxState,
         tags: frozenset[object],
@@ -357,7 +357,8 @@ class OptimistixOptaxLBFGS(AbstractOptimistixOptaxSolver):
     fun: Callable
     fun_with_aux: Callable
 
-    stats: dict[str, PyTree[ArrayLike]]
+    # stats: dict[str, PyTree[ArrayLike]]
+    stats: dict[str, Pytree]
 
     _optax_solver = optax.lbfgs
 

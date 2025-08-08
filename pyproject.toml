@@ -30,7 +30,6 @@ dependencies = [
     "scikit-learn",                 # BaseEstimator and Tags inheritance
     "optimistix @ git+https://github.com/bagibence/optimistix.git@zoom_linesearch", # TODO switch to released version once they have L-BFGS and Zoom linesearch
     "optax>=0.2.5",
-    "jaxtyping",
 ]
 
 

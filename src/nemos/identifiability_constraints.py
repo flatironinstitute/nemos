@@ -8,7 +8,7 @@ from typing import Callable, Tuple
 import jax
 import jax.numpy as jnp
 import numpy as np
-from jaxtyping import ArrayLike as JaxArray
+from jax.typing import ArrayLike as JaxArray
 from numpy.typing import NDArray
 
 from .basis._basis import Basis

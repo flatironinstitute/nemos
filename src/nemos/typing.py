@@ -6,11 +6,12 @@ from typing import Any, Callable, NamedTuple, Tuple, Union, TypeVar, TypeAlias
 
 import jax.numpy as jnp
 import pynapple as nap
-from jaxtyping import ArrayLike, PyTree as Pytree
+from jax.typing import ArrayLike
 from numpy.typing import NDArray
 from .pytrees import FeaturePytree
 
 
+Pytree: TypeAlias = Any
 Params: TypeAlias = Pytree
 SolverState = TypeVar("SolverState")
 StepResult = TypeVar("StepResult")
