@@ -1,5 +1,7 @@
 """Registry for mapping from solver name to concrete implementation."""
 
+from typing import Type
+
 from ._jaxopt_solvers import (
     JaxoptBFGS,
     JaxoptGradientDescent,
@@ -18,7 +20,7 @@ from ._optimistix_solvers import (
 )
 from ._svrg import WrappedProxSVRG, WrappedSVRG
 
-solver_registry = {
+solver_registry: dict[str, Type] = {
     "GradientDescent": JaxoptGradientDescent,
     #
     "ProximalGradient": JaxoptProximalGradient,
