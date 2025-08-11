@@ -5978,6 +5978,40 @@ class TestMultiplicativeBasis(CombinedBasis):
         mul.basis2.set_input_shape(*inps_b)
         assert mul.n_output_features == new_out_num * new_out_num_b
 
+    @pytest.mark.parametrize(
+        "real_cls",
+        list_all_real_basis_classes("Eval")
+        + list_all_real_basis_classes("Conv")
+        + [CustomBasis],
+    )
+    @pytest.mark.parametrize("complex_cls", [basis.FourierEval])
+    def test_multiply_complex(self, real_cls, complex_cls, basis_class_specific_params):
+        basis_real = self.instantiate_basis(
+            5, real_cls, basis_class_specific_params, window_size=10
+        )
+        basis_complex = self.instantiate_basis(
+            5, complex_cls, basis_class_specific_params, window_size=10
+        )
+        new_complex = basis_real * basis_complex
+        assert new_complex.is_complex
+        new_complex = basis_real + basis_complex
+        assert new_complex.is_complex
+
+        with pytest.raises(
+            ValueError, match="Invalid multiplication between two complex bases"
+        ):
+            new_complex * basis_complex
+
+        with pytest.raises(
+            ValueError, match="Invalid multiplication between two complex bases"
+        ):
+            basis_complex * basis_complex
+
+        with pytest.raises(
+            ValueError, match="Invalid multiplication between two complex bases"
+        ):
+            basis_complex * basis_real * basis_complex
+
 
 @pytest.mark.parametrize(
     "exponent", [-1, 0, 0.5, basis.RaisedCosineLogEval(4), 1, 2, 3]
@@ -6504,6 +6538,9 @@ def test_duplicate_keys(bas1, basis_class_specific_params):
     list(itertools.product(*[list_all_basis_classes()] * 3)),
 )
 def test_label_uniqueness_enforcing(bas1, bas2, bas3, basis_class_specific_params):
+
+    if sum(b.is_complex for b in (bas1, bas2, bas3)) > 1:
+        pytest.skip("Cannot multiply more than one complex basis.")
 
     # skip nested
     if any(

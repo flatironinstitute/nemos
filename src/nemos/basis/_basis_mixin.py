@@ -824,6 +824,11 @@ class CompositeBasisMixin(BasisMixin):
             basis1
         ) + infer_input_dimensionality(basis2)
 
+        # set the attribute
+        self._is_complex = getattr(basis1, "is_complex", False) or getattr(
+            basis2, "is_complex", False
+        )
+
         # This step is slow if you add a very large number of bases
         self._basis1 = None
         self._basis2 = None
@@ -849,9 +854,7 @@ class CompositeBasisMixin(BasisMixin):
     def is_complex(self):
         # is_complex is used to check if basis can be multiplied with another
         # allowed multiplications: real x real, real x complex.
-        b1_complex = any(getattr(b, "is_complex", False) for b in self.basis1)
-        b2_complex = any(getattr(b, "is_complex", False) for b in self.basis2)
-        return b1_complex or b2_complex
+        return self._is_complex
 
     def _is_basis_like(
         self, basis1: Optional[BasisMixin] = None, basis2: Optional[BasisMixin] = None

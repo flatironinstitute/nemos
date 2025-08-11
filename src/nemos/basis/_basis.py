@@ -890,6 +890,16 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
     def __init__(
         self, basis1: BasisMixin, basis2: BasisMixin, label: Optional[str] = None
     ) -> None:
+        if getattr(basis1, "is_complex", False) and getattr(
+            basis2, "is_complex", False
+        ):
+            raise ValueError(
+                "Invalid multiplication between two complex bases.\n"
+                "Fourier basis are complex bases, and "
+                "the multiplication of a real basis with a Fourier bases results in a complex basis as well. "
+                "Multiplication between two complex bases is not allowed in NeMoS as it would treat "
+                "real and imaginary columns alike."
+            )
         CompositeBasisMixin.__init__(self, basis1, basis2, label=label)
         Basis.__init__(self)
 
