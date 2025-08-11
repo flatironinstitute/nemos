@@ -460,7 +460,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
         ndim = self._n_input_dimensionality
 
         if isinstance(frequencies, Number) and (frequencies == int(frequencies)):
-            frequencies = (arange_constructor(frequencies),)
+            frequencies = (arange_constructor(frequencies),) * ndim
 
         elif isinstance(frequencies, tuple):
             frequencies = _process_tuple_frequencies(
@@ -531,7 +531,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
 
     @property
     def n_basis_funcs(self) -> int | None:
-        return 2 * self._eval_freq.size - self._has_zero_phase
+        return 2 * self._eval_freq.shape[-1] - self._has_zero_phase
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input

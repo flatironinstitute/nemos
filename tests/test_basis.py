@@ -3306,8 +3306,19 @@ class TestFourierBasis(BasisFuncsTesting):
             bas.ndim = ndim
             assert bas.ndim == ndim
 
-    def test_n_basis_function_compute(self):
-        pass
+    @pytest.mark.parametrize("mode", ["eval"])
+    @pytest.mark.parametrize(
+        "frequency_mask, ndim, expected_output_shape",
+        [
+            (None, 1, (10, 9)), # 5 * 2 -1
+            (None, 2, (10, 49)) # 5 * 5 * 2 -1
+        ]
+    )
+    def test_n_basis_function_compute(self, frequency_mask, ndim, expected_output_shape, mode):
+        bas = self.cls[mode](frequencies=5, ndim=ndim)
+        out = bas.compute_features(*np.ones((ndim, 10)))
+        assert out.shape == expected_output_shape
+        assert bas.n_basis_funcs == expected_output_shape[-1]
 
     def test_bounds_setter(self):
         pass
