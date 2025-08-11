@@ -242,19 +242,30 @@ def _get_frequency_pairs_from_callable(
             ) from e
 
         # Normalize/validate the result to a single boolean
-        if include in (0, 1):
+        is_valid_number = isinstance(include, (Number, np.bool_)) and include in (0, 1)
+        is_valid_array = (
+            isinstance(include, (jnp.ndarray, np.ndarray))
+            and include.size == 1
+            and include in (0, 1)
+        )
+        if is_valid_number or is_valid_array:
             include = bool(include)
         else:
+            string_vals = ", ".join(str(f) for f in freqs)
             raise ValueError(
                 "`frequency_mask(*freqs)` must return a single boolean or 0/1.\n"
-                f"At index {j} with frequencies={freqs!r} got {include!r} "
+                f"``frequency_mask({string_vals})`` returned {include!r} "
                 f"of type {type(include).__name__}."
             )
 
         if include:
             selected.append(jnp.asarray(freqs))
 
-    return jnp.stack(selected, axis=1) if selected else all_pairs[:, :0]
+    return (
+        jnp.stack(selected, axis=1)
+        if selected
+        else jnp.zeros((len(frequencies), 0), dtype=int)
+    )
 
 
 class FourierBasis(AtomicBasisMixin, Basis):
@@ -387,10 +398,10 @@ class FourierBasis(AtomicBasisMixin, Basis):
         else:
             try:
                 values = jnp.asarray(values)
-            except Exception:
+            except Exception as e:
                 raise ValueError(
-                    "``frequency_mask`` cannot be converted to a jax array of boolean."
-                )
+                    f"``frequency_mask`` {values} cannot be converted to a jax array of boolean."
+                ) from e
 
             if not jnp.all((values == 0) | (values == 1)):
                 raise ValueError("Frequency mask must be an array-like of 0s and 1s.")
@@ -400,7 +411,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
             if not values.ndim == self._n_input_dimensionality:
                 ndim = self._n_input_dimensionality
                 raise ValueError(
-                    f"The frequency mask for an  {ndim}-dimensional Fourier basis "
+                    f"The frequency mask for a {ndim}-dimensional Fourier basis "
                     f"must be an {ndim}-dimensional array of 0s and 1s. "
                     f"The provided mask is an {ndim}-dimensional array instead."
                 )
@@ -425,7 +436,11 @@ class FourierBasis(AtomicBasisMixin, Basis):
             )
 
         # used to drop or not the zero phase
-        self._has_zero_phase = int(jnp.all(self._eval_freq[:, 0] == 0))
+        self._has_zero_phase = (
+            False
+            if self._eval_freq.size == 0
+            else int(jnp.all(self._eval_freq[:, 0] == 0))
+        )
 
     @property
     def frequencies(self) -> Tuple[jnp.ndarray, ...]:

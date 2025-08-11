@@ -2934,6 +2934,49 @@ class TestFourierBasis(BasisFuncsTesting):
             (np.array([1, 0, 1]), does_not_raise(), np.array([[1, 3]])),
             (np.array([False, False, True]), does_not_raise(), np.array([[3]])),
             (lambda x: x == 1, does_not_raise(), np.array([[1.0]])),
+            (np.array([1.0, 0.0, 1.0]), does_not_raise(), np.array([[1, 3]])),
+            (
+                "a",
+                pytest.raises(
+                    ValueError, match="cannot be converted to a jax array of"
+                ),
+                None,
+            ),
+            (
+                np.array(["a", "b"]),
+                pytest.raises(
+                    ValueError, match="cannot be converted to a jax array of"
+                ),
+                None,
+            ),
+            (lambda x: float(x == 1), does_not_raise(), np.array([[1.0]])),
+            (
+                lambda x: 1.4,
+                pytest.raises(ValueError, match="must return a single boolean"),
+                None,
+            ),
+            (
+                lambda x: np.array([True, True]),
+                pytest.raises(ValueError, match="must return a single boolean"),
+                None,
+            ),
+            (
+                lambda x: np.array([1, 0]),
+                pytest.raises(ValueError, match="must return a single boolean"),
+                None,
+            ),
+            # force a raise
+            (
+                lambda x: np.array("a") ** 2,
+                pytest.raises(
+                    TypeError, match="Error while applying the callable assigned"
+                ),
+                None,
+            ),
+            (lambda *x: True, does_not_raise(), np.arange(1, 4).reshape(1, -1)),
+            (lambda *x: False, does_not_raise(), np.array([[]])),
+            (lambda *x: np.True_, does_not_raise(), np.arange(1, 4).reshape(1, -1)),
+            (lambda *x: np.False_, does_not_raise(), np.array([[]])),
         ],
     )
     @pytest.mark.parametrize("mode", ["eval"])
@@ -2947,15 +2990,202 @@ class TestFourierBasis(BasisFuncsTesting):
                 ndim=1,
                 frequency_mask=frequency_mask,
             )
-        np.testing.assert_array_equal(bas._eval_freq, output_pairs)
+            np.testing.assert_array_equal(bas._eval_freq, output_pairs)
 
-        # check that mask is reset
-        bas.frequency_mask = None
-        np.testing.assert_array_equal(bas._eval_freq, np.arange(1, 4).reshape(1, -1))
+        bas = instantiate_atomic_basis(
+            self.cls[mode],
+            **extra_kwargs(self.cls[mode], 6),
+            ndim=1,
+            frequency_mask=None,
+        )
+        with expectation:
+            # check setter directly
+            bas.frequency_mask = frequency_mask
+            np.testing.assert_array_equal(bas._eval_freq, output_pairs)
 
-        # check setter directly
-        bas.frequency_mask = frequency_mask
-        np.testing.assert_array_equal(bas._eval_freq, output_pairs)
+    @pytest.mark.parametrize(
+        "frequency_mask, expectation, output_pairs",
+        [
+            (
+                None,
+                does_not_raise(),
+                np.array(
+                    [
+                        [
+                            0,
+                            0,
+                            1,
+                            1,
+                            2,
+                            2,
+                        ],
+                        [
+                            0,
+                            1,
+                            0,
+                            1,
+                            0,
+                            1,
+                        ],
+                    ]
+                ),
+            ),
+            (
+                np.array([[1, 0], [1, 1], [0, 1]]),
+                does_not_raise(),
+                np.array([[0, 1, 1, 2], [0, 0, 1, 1]]),
+            ),
+            (
+                np.array([[False, True], [False, False], [True, True]]),
+                does_not_raise(),
+                np.array([[0, 2, 2], [1, 0, 1]]),
+            ),
+            (
+                lambda *x: x[0] < 2 and x[1] == 1,
+                does_not_raise(),
+                np.array([[0, 1], [1, 1]]),
+            ),
+            (
+                np.array([[1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]),
+                does_not_raise(),
+                np.array([[0, 1, 1, 2], [0, 0, 1, 1]]),
+            ),
+            (
+                np.array([1.0, 0.0, 5.0]),
+                pytest.raises(
+                    ValueError,
+                    match="Frequency mask must be an array-like of 0s and 1s",
+                ),
+                None,
+            ),
+            (
+                "a",
+                pytest.raises(
+                    ValueError, match="cannot be converted to a jax array of"
+                ),
+                None,
+            ),
+            (
+                np.array(["a", "b"]),
+                pytest.raises(
+                    ValueError, match="cannot be converted to a jax array of"
+                ),
+                None,
+            ),
+            (
+                np.array([1, 0]),
+                pytest.raises(
+                    ValueError,
+                    match="The frequency mask for a 2-dimensional Fourier basis must be",
+                ),
+                None,
+            ),
+            (
+                lambda *x: all(xi == 1 for xi in x),
+                does_not_raise(),
+                np.array([[1], [1]]),
+            ),
+            (
+                lambda *x: 1.4,
+                pytest.raises(ValueError, match="must return a single boolean"),
+                None,
+            ),
+            (
+                lambda *x: np.array([True, True]),
+                pytest.raises(ValueError, match="must return a single boolean or 0/1"),
+                None,
+            ),
+            (
+                lambda *x: np.array([1, 0]),
+                pytest.raises(ValueError, match="must return a single boolean or 0/1"),
+                None,
+            ),
+            (
+                lambda *x: [1, 0],
+                pytest.raises(ValueError, match="must return a single boolean or 0/1"),
+                None,
+            ),
+            # force a raise
+            (
+                lambda *x: np.array("a") ** 2,
+                pytest.raises(
+                    TypeError, match="Error while applying the callable assigned"
+                ),
+                None,
+            ),
+            (
+                lambda *x: True,
+                does_not_raise(),
+                np.array(
+                    [
+                        [
+                            0,
+                            0,
+                            1,
+                            1,
+                            2,
+                            2,
+                        ],
+                        [
+                            0,
+                            1,
+                            0,
+                            1,
+                            0,
+                            1,
+                        ],
+                    ]
+                ),
+            ),
+            (lambda *x: False, does_not_raise(), np.array([[], []])),
+            (
+                lambda *x: np.True_,
+                does_not_raise(),
+                np.array(
+                    [
+                        [
+                            0,
+                            0,
+                            1,
+                            1,
+                            2,
+                            2,
+                        ],
+                        [
+                            0,
+                            1,
+                            0,
+                            1,
+                            0,
+                            1,
+                        ],
+                    ]
+                ),
+            ),
+            (lambda *x: np.False_, does_not_raise(), np.array([[], []])),
+        ],
+    )
+    @pytest.mark.parametrize("mode", ["eval"])
+    def test_frequency_mask_setter_2d(
+        self, mode, frequency_mask, expectation, output_pairs
+    ):
+        with expectation:
+            bas = self.cls[mode](
+                frequencies=[np.arange(3), np.arange(2)],
+                ndim=2,
+                frequency_mask=frequency_mask,
+            )
+            np.testing.assert_array_equal(bas._eval_freq, output_pairs)
+
+        bas = self.cls[mode](
+            frequencies=[np.arange(3), np.arange(2)],
+            ndim=2,
+            frequency_mask=None,
+        )
+        with expectation:
+            # check setter directly
+            bas.frequency_mask = frequency_mask
+            np.testing.assert_array_equal(bas._eval_freq, output_pairs)
 
     def test_joint_frequency_and_frequency_mask_set_params(self):
         pass
