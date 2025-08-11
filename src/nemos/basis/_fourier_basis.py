@@ -277,6 +277,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
         frequencies: (
             int | Tuple[int, int] | List[int] | List[Tuple[int, int]] | ArrayLike
         ),
+        ndim: int,
         frequency_mask: jnp.ndarray | None = None,
         label: Optional[str] = None,
     ) -> None:
@@ -303,6 +304,8 @@ class FourierBasis(AtomicBasisMixin, Basis):
             - ``tuple[int, int]``: creates a range ``[start, ..., stop-1]`` for **all dimensions**.
             - ``list[int]``: list of integers giving the number of frequencies per dimension.
             - ``list[tuple[int, int]]``: list of (start, stop) tuples specifying ranges per dimension.
+        ndim :
+            Dimensionality of the basis. Default is 1.
 
         frequency_mask : array-like of {0, 1}, optional
             Boolean mask specifying which frequency combinations to include.
@@ -320,6 +323,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
           each active frequency combination, except that the all-zero frequency
           includes only a cosine term.
         """
+        self.ndim = ndim
         self.frequencies = frequencies
         self.frequency_mask = frequency_mask
 
@@ -514,8 +518,16 @@ class FourierBasis(AtomicBasisMixin, Basis):
 
     @ndim.setter
     def ndim(self, ndim: int) -> None:
-        # TODO: Add an exception handling
-        self._n_input_dimensionality = ndim
+        try:
+            is_int = int(ndim) == ndim
+        except Exception as e:
+            raise TypeError(f"Cannot convert ndim {ndim!r} to type int.") from e
+        is_positive = ndim > 0
+        if not is_int or not is_positive:
+            raise ValueError(
+                f"ndim must be a positive integer. {ndim!r} provided instead."
+            )
+        self._n_input_dimensionality = int(ndim)
 
     @property
     def n_basis_funcs(self) -> int | None:

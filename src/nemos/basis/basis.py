@@ -2418,6 +2418,8 @@ class FourierEval(EvalBasisMixin, FourierBasis):
     ----------
     frequencies :
         Fourier frequencies.
+    ndim :
+        Dimensionality of the basis. Default is 1.
     bounds :
         The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
@@ -2447,13 +2449,13 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         frequency_mask: NDArray[bool] | None = None,
         label: Optional[str] = "FourierEval",
     ):
-        self._n_input_dimensionality = ndim
         EvalBasisMixin.__init__(self, bounds=bounds)
         FourierBasis.__init__(
             self,
             frequencies=frequencies,
             label=label,
             frequency_mask=frequency_mask,
+            ndim=ndim,
         )
 
     @add_docstring("evaluate_on_grid", FourierBasis)
