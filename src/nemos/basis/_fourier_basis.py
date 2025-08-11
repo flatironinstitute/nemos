@@ -1,5 +1,6 @@
 """Module for ND fourier basis class."""
 
+import itertools
 import warnings
 from numbers import Number
 from typing import Any, Callable, List, Optional, Tuple
@@ -200,11 +201,8 @@ def _process_tuple_frequencies(frequencies: tuple, ndim: int):
 
 
 def _get_all_frequency_pairs(frequencies):
-    grids = jnp.meshgrid(
-        *[jnp.arange(len(freqs)) for freqs in frequencies], indexing="ij"
-    )
-    idxs = jnp.stack([g.reshape(-1) for g in grids])
-    return idxs
+    grids = jnp.meshgrid(*[freqs for freqs in frequencies], indexing="ij")
+    return jnp.stack([g.reshape(-1) for g in grids])
 
 
 def _get_frequency_pairs_from_callable(
@@ -225,7 +223,7 @@ def _get_frequency_pairs_from_callable(
     :
         Shape (D, K): columns are the selected frequency tuples.
     """
-    all_pairs = _get_all_frequency_pairs(frequencies)  # shape (D, N)
+    all_pairs = itertools.product(*frequencies)  # shape (D, N)
 
     if not callable(frequency_mask):
         raise TypeError(
@@ -233,7 +231,7 @@ def _get_frequency_pairs_from_callable(
         )
 
     selected = []
-    for j, freqs in enumerate(all_pairs.T):
+    for j, freqs in enumerate(all_pairs):
         try:
             include = frequency_mask(*freqs)
         except Exception as e:
@@ -254,9 +252,9 @@ def _get_frequency_pairs_from_callable(
             )
 
         if include:
-            selected.append(freqs)
+            selected.append(jnp.asarray(freqs))
 
-    return np.stack(selected, axis=1) if selected else all_pairs[:, :0]
+    return jnp.stack(selected, axis=1) if selected else all_pairs[:, :0]
 
 
 class FourierBasis(AtomicBasisMixin, Basis):
@@ -379,10 +377,12 @@ class FourierBasis(AtomicBasisMixin, Basis):
         """
         if values is None:
             self._frequency_mask = None
-            idxs = _get_all_frequency_pairs(self._frequencies)
+            self._eval_freq = _get_all_frequency_pairs(self._frequencies)
 
         elif isinstance(values, Callable):
-            idxs = _get_frequency_pairs_from_callable(values, self._frequencies)
+            self._eval_freq = _get_frequency_pairs_from_callable(
+                values, self._frequencies
+            )
             self._frequency_mask = values
         else:
             try:
@@ -420,10 +420,10 @@ class FourierBasis(AtomicBasisMixin, Basis):
             )
 
             idxs = jnp.stack(jnp.where(self._frequency_mask))
+            self._eval_freq = jnp.stack(
+                [freqs[idxs[d]] for d, freqs in enumerate(self._frequencies)]
+            )
 
-        self._eval_freq = jnp.stack(
-            [freqs[idxs[d]] for d, freqs in enumerate(self._frequencies)]
-        )
         # used to drop or not the zero phase
         self._has_zero_phase = int(jnp.all(self._eval_freq[:, 0] == 0))
 

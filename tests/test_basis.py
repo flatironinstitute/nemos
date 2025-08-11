@@ -2927,8 +2927,35 @@ class TestFourierBasis(BasisFuncsTesting):
         with expectation:
             bas.frequencies = frequencies
 
-    def test_frequency_mask_setter(self):
-        pass
+    @pytest.mark.parametrize(
+        "frequency_mask, expectation, output_pairs",
+        [
+            (None, does_not_raise(), np.arange(1, 4).reshape(1, -1)),
+            (np.array([1, 0, 1]), does_not_raise(), np.array([[1, 3]])),
+            (np.array([False, False, True]), does_not_raise(), np.array([[3]])),
+            (lambda x: x == 1, does_not_raise(), np.array([[1.0]])),
+        ],
+    )
+    @pytest.mark.parametrize("mode", ["eval"])
+    def test_frequency_mask_setter_1d(
+        self, mode, frequency_mask, expectation, output_pairs
+    ):
+        with expectation:
+            bas = instantiate_atomic_basis(
+                self.cls[mode],
+                **extra_kwargs(self.cls[mode], 6),
+                ndim=1,
+                frequency_mask=frequency_mask,
+            )
+        np.testing.assert_array_equal(bas._eval_freq, output_pairs)
+
+        # check that mask is reset
+        bas.frequency_mask = None
+        np.testing.assert_array_equal(bas._eval_freq, np.arange(1, 4).reshape(1, -1))
+
+        # check setter directly
+        bas.frequency_mask = frequency_mask
+        np.testing.assert_array_equal(bas._eval_freq, output_pairs)
 
     def test_joint_frequency_and_frequency_mask_set_params(self):
         pass
