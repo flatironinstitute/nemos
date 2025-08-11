@@ -2927,6 +2927,21 @@ class TestFourierBasis(BasisFuncsTesting):
         with expectation:
             bas.frequencies = frequencies
 
+    def test_frequency_mask_setter(self):
+        pass
+
+    def test_joint_frequency_and_frequency_mask_set_params(self):
+        pass
+
+    def test_ndim_getter_and_setter(self):
+        pass
+
+    def test_n_basis_function_compute(self):
+        pass
+
+    def test_bounds_setter(self):
+        pass
+
 
 class TestAdditiveBasis(CombinedBasis):
     cls = {"eval": AdditiveBasis, "conv": AdditiveBasis}

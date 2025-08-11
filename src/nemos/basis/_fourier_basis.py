@@ -2,7 +2,7 @@
 
 import warnings
 from numbers import Number
-from typing import Any, List, Optional, Tuple
+from typing import Any, Callable, List, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -199,6 +199,66 @@ def _process_tuple_frequencies(frequencies: tuple, ndim: int):
     )
 
 
+def _get_all_frequency_pairs(frequencies):
+    grids = jnp.meshgrid(
+        *[jnp.arange(len(freqs)) for freqs in frequencies], indexing="ij"
+    )
+    idxs = jnp.stack([g.reshape(-1) for g in grids])
+    return idxs
+
+
+def _get_frequency_pairs_from_callable(
+    frequency_mask: Callable[..., bool], frequencies: Tuple[jnp.ndarray, ...]
+):
+    """
+    Apply the callable assigned to `frequency_mask` to all frequency tuples.
+
+    Parameters
+    ----------
+    frequency_mask :
+        A function with signature: frequency_mask(*freqs) -> bool (or 0/1).
+    frequencies :
+        1D arrays of frequencies (one per dimension).
+
+    Returns
+    -------
+    :
+        Shape (D, K): columns are the selected frequency tuples.
+    """
+    all_pairs = _get_all_frequency_pairs(frequencies)  # shape (D, N)
+
+    if not callable(frequency_mask):
+        raise TypeError(
+            "`frequency_mask` must be a callable like frequency_mask(*freqs) -> bool."
+        )
+
+    selected = []
+    for j, freqs in enumerate(all_pairs.T):
+        try:
+            include = frequency_mask(*freqs)
+        except Exception as e:
+            raise TypeError(
+                "Error while applying the callable assigned to `frequency_mask`.\n"
+                "Expected signature: frequency_mask(*frequencies) -> bool.\n"
+                f"Failed at index {j} with frequencies={freqs!r}."
+            ) from e
+
+        # Normalize/validate the result to a single boolean
+        if include in (0, 1):
+            include = bool(include)
+        else:
+            raise ValueError(
+                "`frequency_mask(*freqs)` must return a single boolean or 0/1.\n"
+                f"At index {j} with frequencies={freqs!r} got {include!r} "
+                f"of type {type(include).__name__}."
+            )
+
+        if include:
+            selected.append(freqs)
+
+    return np.stack(selected, axis=1) if selected else all_pairs[:, :0]
+
+
 class FourierBasis(AtomicBasisMixin, Basis):
 
     _is_complex = True
@@ -261,66 +321,69 @@ class FourierBasis(AtomicBasisMixin, Basis):
         )
 
     @property
-    def frequency_mask(self) -> jnp.ndarray | None:
+    def frequency_mask(self) -> Callable | jnp.ndarray | None:
         """Get or set the frequency mask for the Fourier basis.
 
-        The frequency mask is a boolean array (or array-like of 0s and 1s)
-        that specifies which frequencies to include when evaluating the basis.
-        Its shape must match the number of frequencies along each input dimension.
+        The frequency mask can be either:
 
-        - If ``None``, all possible frequency combinations are included.
-        - If provided, entries set to 1 (``True``) enable the corresponding frequency
-          combination, while 0 (``False``) disables it.
+        - a boolean array (or array-like of 0s and 1s) whose shape matches the number
+          of frequencies along each input dimension, or
+        - a callable with signature ``frequency_mask(*freqs) -> bool`` (or 0/1) applied
+          to each frequency tuple, or
+        - ``None``, all possible frequency combinations are included.
 
         Returns
         -------
         :
-            A boolean JAX array indicating the selected frequencies, or ``None``
-            if no mask is applied.
+            The callable used to build the mask, the boolean JAX array mask,
+            or ``None`` if no mask is applied.
         """
         # safe get when getter is called at init initialization
         return getattr(self, "_frequency_mask", None)
 
     @frequency_mask.setter
-    def frequency_mask(self, values: ArrayLike | jnp.ndarray | None) -> None:
+    def frequency_mask(
+        self, values: ArrayLike | jnp.ndarray | Callable[..., bool] | None
+    ) -> None:
         """Set the frequency mask for the Fourier basis.
 
         Parameters
         ----------
         values :
-            A boolean array (or array-like of 0s and 1s) specifying which
-            frequency combinations to include. Must have shape
-            ``(len(frequencies[0]), len(frequencies[1]), ...)``.
-
-            - If ``None``, all frequency combinations are included.
-            - If provided, each entry set to 1 includes the corresponding
-              frequency combination; entries set to 0 exclude it.
+            One of:
+            - **Array / array-like (bool or 0/1)**: Explicit mask over the
+              frequency grid. Must have shape
+              ``(len(frequencies[0]), len(frequencies[1]), ...)`` and contain
+              only booleans or the integers {0, 1}.
+            - **Callable**: A function with signature
+              ``frequency_mask(*freqs) -> bool`` (or 0/1). It is applied to each
+              frequency tuple ``(f1, f2, ..., f_n)`` to build the mask. The callable is
+              **not required to be vectorized**; ``n`` is the input dimensionality.
+            - **None**: Include all frequency combinations.
 
         Raises
         ------
         ValueError
-            If the array contains values other than 0 or 1, or if the shape
-            does not match the expected number of frequencies.
+            If an array mask has values other than {0, 1}/booleans, or if its
+            shape does not match the expected grid shape.
         TypeError
-            If ``values`` cannot be converted to a JAX array.
+            If ``values`` is neither array-like, callable, nor ``None``; or if
+            the callable returns a value that is not a single boolean or 0/1.
 
         Notes
         -----
-        Setting this property also updates:
-
-        - ``self._frequency_mask``: stores the boolean mask.
-        - ``self._n_basis_funcs``: number of active basis functions.
-        - ``self._eval_freq``: array of selected frequencies for evaluation.
+        - Setting this property updates:
+          ``self._frequency_mask`` (callable or boolean mask),
+          ``self._n_basis_funcs`` (number of active basis functions),
+          and ``self._eval_freq`` (selected frequencies for evaluation).
         """
         if values is None:
             self._frequency_mask = None
+            idxs = _get_all_frequency_pairs(self._frequencies)
 
-            # cache all frequencies
-            grids = jnp.meshgrid(
-                *[jnp.arange(len(freqs)) for freqs in self._frequencies], indexing="ij"
-            )
-            idxs = jnp.stack([g.reshape(-1) for g in grids])
-
+        elif isinstance(values, Callable):
+            idxs = _get_frequency_pairs_from_callable(values, self._frequencies)
+            self._frequency_mask = values
         else:
             try:
                 values = jnp.asarray(values)
