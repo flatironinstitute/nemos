@@ -3298,7 +3298,7 @@ class TestFourierBasis(BasisFuncsTesting):
             ({"a"}, pytest.raises(TypeError, match="Cannot convert ndim {'a'}")),
         ],
     )
-    def test_ndim_getter_and_setter(self, mode, ndim, expectation):
+    def test_ndim_checks(self, mode, ndim, expectation):
         with expectation:
             bas = self.cls[mode](frequencies=5, ndim=ndim)
             assert bas.ndim == ndim
