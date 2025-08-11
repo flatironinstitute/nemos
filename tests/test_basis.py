@@ -3304,6 +3304,7 @@ class TestFourierBasis(BasisFuncsTesting):
         bas = self.cls[mode](frequencies=5)
         with expectation:
             bas.ndim = ndim
+            assert bas.ndim == ndim
 
     def test_n_basis_function_compute(self):
         pass
