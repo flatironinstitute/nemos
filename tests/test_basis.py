@@ -5417,15 +5417,15 @@ class TestMultiplicativeBasis(CombinedBasis):
         ):
             return
         # test attributes are not related
-        basis_a.n_basis_funcs = 10
-        basis_b.n_basis_funcs = 10
-        assert mul.basis1.n_basis_funcs == n_basis_a
-        assert mul.basis2.n_basis_funcs == n_basis_b
+        set_basis_attr(basis_a, 10)
+        assert get_basis_attr(mul.basis1) != 10
+        set_basis_attr(mul.basis1, 6)
+        assert basis_a.n_basis_funcs != 6
 
-        mul.basis1.n_basis_funcs = 6
-        mul.basis2.n_basis_funcs = 6
-        assert basis_a.n_basis_funcs == 10
-        assert basis_b.n_basis_funcs == 10
+        set_basis_attr(basis_b, 10)
+        assert get_basis_attr(mul.basis2) != 10
+        set_basis_attr(mul.basis2, 6)
+        assert basis_b.n_basis_funcs != 6
 
     @pytest.mark.parametrize(
         "basis_a, basis_b",
@@ -5459,11 +5459,10 @@ class TestMultiplicativeBasis(CombinedBasis):
 
         mul = basis_a * basis_b
         if not isinstance(mul.basis1, (HistoryConv, IdentityEval, CustomBasis)):
-            mul.basis1.n_basis_funcs = 10
+            set_basis_attr(mul.basis1, 10)
             assert mul.n_basis_funcs == 10 * n_basis_b
         if not isinstance(mul.basis2, (HistoryConv, IdentityEval, CustomBasis)):
-            mul.basis2.n_basis_funcs = 10
-            mul.basis2.n_basis_funcs = 10
+            set_basis_attr(mul.basis2, 10)
             assert mul.n_basis_funcs == 10 * mul.basis1.n_basis_funcs
 
     @pytest.mark.parametrize(
