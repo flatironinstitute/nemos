@@ -3300,10 +3300,7 @@ class TestFourierBasis(BasisFuncsTesting):
     )
     def test_ndim_getter_and_setter(self, mode, ndim, expectation):
         with expectation:
-            self.cls[mode](frequencies=5, ndim=ndim)
-        bas = self.cls[mode](frequencies=5)
-        with expectation:
-            bas.ndim = ndim
+            bas = self.cls[mode](frequencies=5, ndim=ndim)
             assert bas.ndim == ndim
 
     @pytest.mark.parametrize("mode", ["eval"])

@@ -323,7 +323,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
           each active frequency combination, except that the all-zero frequency
           includes only a cosine term.
         """
-        self.ndim = ndim
+        self._n_input_dimensionality = self._check_ndim(ndim)
         self.frequencies = frequencies
         self.frequency_mask = frequency_mask
 
@@ -516,8 +516,8 @@ class FourierBasis(AtomicBasisMixin, Basis):
     def ndim(self):
         return self._n_input_dimensionality
 
-    @ndim.setter
-    def ndim(self, ndim: int) -> None:
+    @staticmethod
+    def _check_ndim(ndim: int) -> int:
         try:
             is_int = int(ndim) == ndim
         except Exception as e:
@@ -527,7 +527,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
             raise ValueError(
                 f"ndim must be a positive integer. {ndim!r} provided instead."
             )
-        self._n_input_dimensionality = int(ndim)
+        return int(ndim)
 
     @property
     def n_basis_funcs(self) -> int | None:
