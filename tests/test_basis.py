@@ -2756,10 +2756,15 @@ class TestFourierBasis(BasisFuncsTesting):
 
     @pytest.mark.parametrize("mode", ["eval"])
     @pytest.mark.parametrize(
-        "frequency_mask", [None, np.random.binomial(n=1, p=0.5, size=5)]
+        "frequency_mask", [None, np.random.binomial(n=1, p=0.5, size=5), lambda x: x < 3]
     )
     def test_sklearn_clone_freq_mask(self, frequency_mask, mode):
-        n_basis = 10 if frequency_mask is None else frequency_mask.shape[0] * 2
+        if frequency_mask is None:
+            n_basis = 10
+        elif callable(frequency_mask):
+            n_basis = 3
+        else:
+            n_basis = frequency_mask.shape[0] * 2
         bas = instantiate_atomic_basis(
             self.cls[mode],
             **extra_kwargs(self.cls[mode], n_basis),
@@ -2781,8 +2786,10 @@ class TestFourierBasis(BasisFuncsTesting):
         f1, f2 = bas.__dict__.pop("_frequency_mask", [True]), bas2.__dict__.pop(
             "_frequency_mask", [True]
         )
-        if f1 is not None and f2 is not None:
+        if f1 is not None and f2 is not None and not callable(f1):
             assert all(np.all(fi == fj) for fi, fj in zip(f1, f2))
+        elif callable(f1):
+            assert f2 is f1
         else:
             assert f1 is f2 is None
         f1, f2 = bas.__dict__.pop("_eval_freq", [True]), bas2.__dict__.pop(

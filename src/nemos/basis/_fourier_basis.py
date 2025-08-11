@@ -390,7 +390,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
             self._frequency_mask = None
             self._eval_freq = _get_all_frequency_pairs(self._frequencies)
 
-        elif isinstance(values, Callable):
+        elif callable(values):
             self._eval_freq = _get_frequency_pairs_from_callable(
                 values, self._frequencies
             )
