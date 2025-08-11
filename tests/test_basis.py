@@ -3194,8 +3194,42 @@ class TestFourierBasis(BasisFuncsTesting):
             bas.frequency_mask = frequency_mask
             np.testing.assert_array_equal(bas._eval_freq, output_pairs)
 
-    def test_joint_frequency_and_frequency_mask_set_params(self):
-        pass
+    @pytest.mark.parametrize("mode", ["eval"])
+    @pytest.mark.parametrize(
+        "frequency_mask, frequencies, expected_eval",
+        [
+            (None, 5, np.array([[0., 1., 2., 3., 4.]], dtype=np.float32)),
+            ([True, False, False, True, True], 5, np.array([[0., 3., 4.]], dtype=np.float32)),
+            (lambda x: x < 3, 5, np.array([[0., 1., 2.]], dtype=np.float32)),
+        ]
+    )
+    def test_joint_frequency_and_frequency_mask_set_params(self, frequency_mask, frequencies, expected_eval, mode):
+        bas = self.cls[mode](frequencies=10, ndim=1, frequency_mask=None)
+        bas.set_params(frequencies=frequencies, frequency_mask=frequency_mask)
+        np.testing.assert_array_equal(bas._eval_freq, expected_eval)
+        bas = self.cls[mode](frequencies=10, ndim=1, frequency_mask=None)
+        bas.set_params(frequency_mask=frequency_mask, frequencies=frequencies)
+        np.testing.assert_array_equal(bas._eval_freq, expected_eval)
+
+
+    @pytest.mark.parametrize("mode", ["eval"])
+    @pytest.mark.parametrize(
+        "frequency_mask, frequencies, new_frequencies, expected_eval, expectation",
+        [
+            (None, 5, 5, np.array([[0., 1., 2., 3., 4.]], dtype=np.float32), does_not_raise()),
+            (None, 5, 6, np.array([[0., 1., 2., 3., 4., 5.]], dtype=np.float32), does_not_raise()),
+            ([True, False, False, True, True], 5, 5, np.array([[0., 3., 4.]], dtype=np.float32), does_not_raise()),
+            ([True, False, False, True, True], 5, 6, np.array([[0., 1., 2., 3., 4., 5.]], dtype=np.float32), pytest.warns(UserWarning, match="Resetting ``frequency_mask`` to None")),
+            (lambda x: x < 3, 5, 6, np.array([[0., 1., 2., 3., 4., 5.]], dtype=np.float32), pytest.warns(UserWarning, match="Resetting ``frequency_mask`` to None")),
+        ]
+    )
+    def test_frequency_mask_resetting_behavior(self, frequency_mask, frequencies, new_frequencies, expected_eval, expectation, mode):
+        bas = self.cls[mode](frequencies=frequencies, ndim=1, frequency_mask=frequency_mask)
+        with expectation:
+            bas.frequencies = new_frequencies
+            np.testing.assert_array_equal(bas._eval_freq, expected_eval)
+            if np.any(new_frequencies != frequencies):
+                assert bas.frequency_mask is None
 
     def test_ndim_getter_and_setter(self):
         pass
