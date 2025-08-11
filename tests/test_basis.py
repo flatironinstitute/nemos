@@ -3351,8 +3351,63 @@ class TestFourierBasis(BasisFuncsTesting):
         assert out.shape == expected_output_shape
         assert bas.n_basis_funcs == expected_output_shape[-1]
 
-    def test_bounds_setter(self):
-        pass
+    @pytest.mark.parametrize(
+        "bounds, ndim, expectation",
+        [
+            (None, 1, does_not_raise()),
+            (
+                (None, np.pi),
+                1,
+                pytest.raises(TypeError, match="Could not convert `bounds` to float"),
+            ),
+            (
+                (np.pi, None),
+                1,
+                pytest.raises(TypeError, match="Could not convert `bounds` to float"),
+            ),
+            ((np.pi / 2, np.pi), 1, does_not_raise()),
+            (
+                (np.pi, np.pi),
+                1,
+                pytest.raises(
+                    ValueError, match=" Lower bound is greater or equal than the"
+                ),
+            ),
+            ([(np.pi / 2, np.pi)], 1, does_not_raise()),
+            (None, 2, does_not_raise()),
+            (
+                [None, None],
+                2,
+                pytest.raises(TypeError, match="Could not convert `bounds` to float"),
+            ),
+            (
+                [(np.pi / 2, np.pi)] * 2,
+                1,
+                pytest.raises(
+                    TypeError, match="When provided, the bounds should be one"
+                ),
+            ),
+            ([(np.pi / 2, np.pi)] * 2, 2, does_not_raise()),
+            (
+                [(np.pi / 2, np.pi), (np.pi, np.pi)],
+                2,
+                pytest.raises(
+                    ValueError, match=" Lower bound is greater or equal than the"
+                ),
+            ),
+            (
+                [(np.pi / 2, np.pi), ("a", np.pi)],
+                2,
+                pytest.raises(
+                    TypeError,
+                    match="the bounds should be one or multiple tuples containing pair of floats",
+                ),
+            ),
+        ],
+    )
+    def test_bounds_setter(self, bounds, ndim, expectation):
+        with expectation:
+            self.cls["eval"](frequencies=5, bounds=bounds, ndim=ndim)
 
 
 class TestAdditiveBasis(CombinedBasis):

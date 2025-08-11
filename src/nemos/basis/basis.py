@@ -2449,7 +2449,6 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         frequency_mask: NDArray[bool] | None = None,
         label: Optional[str] = "FourierEval",
     ):
-        EvalBasisMixin.__init__(self, bounds=bounds)
         FourierBasis.__init__(
             self,
             frequencies=frequencies,
@@ -2457,6 +2456,7 @@ class FourierEval(EvalBasisMixin, FourierBasis):
             frequency_mask=frequency_mask,
             ndim=ndim,
         )
+        EvalBasisMixin.__init__(self, bounds=bounds)
 
     @add_docstring("evaluate_on_grid", FourierBasis)
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -2578,7 +2578,9 @@ class FourierEval(EvalBasisMixin, FourierBasis):
             return
 
         def _is_leaf(x):
-            return isinstance(x, Sequence) and all(isinstance(xi, Number) for xi in x)
+            return isinstance(x, Sequence) and all(
+                isinstance(xi, Number) or xi is None for xi in x
+            )
 
         values = jax.tree_util.tree_leaves(values, is_leaf=_is_leaf)
 

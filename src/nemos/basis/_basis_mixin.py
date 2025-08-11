@@ -560,7 +560,10 @@ class EvalBasisMixin:
         try:
             values = values if values is None else tuple(map(float, values))
         except (ValueError, TypeError):
-            err = TypeError("Could not convert `bounds` to float.")
+            err = TypeError(
+                "Could not convert `bounds` to float. "
+                f"The provided bounds values are '{values}'."
+            )
 
         if err is not None:
             return None, err
