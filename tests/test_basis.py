@@ -3248,14 +3248,14 @@ class TestFourierBasis(BasisFuncsTesting):
                 5,
                 6,
                 np.array([[0.0, 1.0, 2.0, 3.0, 4.0, 5.0]], dtype=np.float32),
-                pytest.warns(UserWarning, match="Resetting ``frequency_mask`` to None"),
+                pytest.warns(UserWarning, match="Resetting 'frequency_mask' to None"),
             ),
             (
                 lambda x: x < 3,
                 5,
                 6,
                 np.array([[0.0, 1.0, 2.0, 3.0, 4.0, 5.0]], dtype=np.float32),
-                pytest.warns(UserWarning, match="Resetting ``frequency_mask`` to None"),
+                pytest.warns(UserWarning, match="Resetting 'frequency_mask' to None"),
             ),
         ],
     )
@@ -3310,13 +3310,44 @@ class TestFourierBasis(BasisFuncsTesting):
     @pytest.mark.parametrize(
         "frequency_mask, ndim, expected_output_shape",
         [
-            (None, 1, (10, 9)), # 5 * 2 -1
-            (None, 2, (10, 49)) # 5 * 5 * 2 -1
-        ]
+            (None, 1, (1, 9)),  # 5 * 2 -1
+            (None, 2, (1, 49)),  # 5 * 5 * 2 -1
+            # drop tree frequencies
+            (jax.numpy.ones(5).at[1:4].set(0), 1, (1, 3)),  # (5 - 3) * 2 - 1
+            # drop tree elements, including 0
+            (jax.numpy.ones(5).at[:3].set(0), 1, (1, 4)),  # (5 - 3) * 2
+            (lambda x: x < 3.1, 1, (1, 7)),  # 4 * 2 - 1
+            # # The lambda func below returns true for 11 values:
+            # - (0, 0), (0, 1), (0, 2), (0, 3)
+            # - (1, 0), (1, 1), (1, 2)
+            # - (2, 0), (2, 1), (2, 2)
+            # - (3, 0)
+            (lambda x, y: np.sqrt(x**2 + y**2) < 3.1, 2, (1, 21)),  # 11 * 2 - 1
+            # set 3 entries to 0 from the 5 x 5 mask
+            (
+                jax.numpy.ones((5, 5))
+                .at[jax.numpy.array([1, 2, 3]), jax.numpy.array([2, 2, 4])]
+                .set(0),
+                2,
+                (10, 43),  # (5 * 5 - 3) * 2 - 1
+            ),
+            # set 3 entries to 0 from the 5 x 5 mask, including (0, 0)
+            (
+                jax.numpy.ones((5, 5))
+                .at[jax.numpy.array([0, 2, 3]), jax.numpy.array([0, 2, 4])]
+                .set(0),
+                2,
+                (1, 44),  # (5 * 5 - 3) * 2
+            ),
+            (jax.numpy.zeros((5,)), 1, (1, 0)),
+            (jax.numpy.zeros((5, 5)), 2, (1, 0)),
+        ],
     )
-    def test_n_basis_function_compute(self, frequency_mask, ndim, expected_output_shape, mode):
-        bas = self.cls[mode](frequencies=5, ndim=ndim)
-        out = bas.compute_features(*np.ones((ndim, 10)))
+    def test_n_basis_function_compute(
+        self, frequency_mask, ndim, expected_output_shape, mode
+    ):
+        bas = self.cls[mode](frequencies=5, ndim=ndim, frequency_mask=frequency_mask)
+        out = bas.compute_features(*np.ones((ndim, expected_output_shape[0])))
         assert out.shape == expected_output_shape
         assert bas.n_basis_funcs == expected_output_shape[-1]
 
