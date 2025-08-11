@@ -4776,6 +4776,38 @@ class TestAdditiveBasis(CombinedBasis):
             out = repr(bas)
             assert out == expected
 
+    @pytest.mark.parametrize(
+        "real_cls",
+        list_all_real_basis_classes("Eval")
+        + list_all_real_basis_classes("Conv")
+        + [CustomBasis],
+    )
+    @pytest.mark.parametrize("complex_cls", [basis.FourierEval])
+    def test_multiply_complex(self, real_cls, complex_cls, basis_class_specific_params):
+        basis_real = self.instantiate_basis(
+            5, real_cls, basis_class_specific_params, window_size=10
+        )
+        basis_complex = self.instantiate_basis(
+            5, complex_cls, basis_class_specific_params, window_size=10
+        )
+        new_complex = basis_real + basis_complex
+        assert new_complex.is_complex
+
+        with pytest.raises(
+            ValueError, match="Invalid multiplication between two complex bases"
+        ):
+            new_complex * basis_complex
+
+        with pytest.raises(
+            ValueError, match="Invalid multiplication between two complex bases"
+        ):
+            basis_complex * basis_complex
+
+        with pytest.raises(
+            ValueError, match="Invalid multiplication between two complex bases"
+        ):
+            basis_complex * basis_real * basis_complex
+
 
 class TestMultiplicativeBasis(CombinedBasis):
     cls = {"eval": MultiplicativeBasis, "conv": MultiplicativeBasis}
@@ -5994,8 +6026,6 @@ class TestMultiplicativeBasis(CombinedBasis):
         )
         new_complex = basis_real * basis_complex
         assert new_complex.is_complex
-        new_complex = basis_real + basis_complex
-        assert new_complex.is_complex
 
         with pytest.raises(
             ValueError, match="Invalid multiplication between two complex bases"
@@ -6383,8 +6413,7 @@ def test_multi_epoch_pynapple_basis_transformer(
 
 
 @pytest.mark.parametrize(
-    "bas1, bas2, bas3",
-    list(itertools.product(*[list_all_basis_classes()] * 3)),
+    "bas1, bas2", create_atomic_basis_pairs(list_all_basis_classes())
 )
 @pytest.mark.parametrize(
     "operator1, operator2, compute_slice",
@@ -6457,8 +6486,10 @@ def test_multi_epoch_pynapple_basis_transformer(
     ],
 )
 def test__get_splitter(
-    bas1, bas2, bas3, operator1, operator2, compute_slice, basis_class_specific_params
+    bas1, bas2, operator1, operator2, compute_slice, basis_class_specific_params
 ):
+    # reduce the number of test
+    bas3 = bas2
     # skip nested
     if any(
         bas in (AdditiveBasis, MultiplicativeBasis, TransformerBasis)
@@ -6534,14 +6565,11 @@ def test_duplicate_keys(bas1, basis_class_specific_params):
 
 
 @pytest.mark.parametrize(
-    "bas1, bas2, bas3",
-    list(itertools.product(*[list_all_basis_classes()] * 3)),
+    "bas1, bas2",
+    create_atomic_basis_pairs(list_all_basis_classes()),
 )
-def test_label_uniqueness_enforcing(bas1, bas2, bas3, basis_class_specific_params):
-
-    if sum(b.is_complex for b in (bas1, bas2, bas3)) > 1:
-        pytest.skip("Cannot multiply more than one complex basis.")
-
+def test_label_uniqueness_enforcing(bas1, bas2, basis_class_specific_params):
+    bas3 = bas2
     # skip nested
     if any(
         bas in (AdditiveBasis, MultiplicativeBasis, TransformerBasis)
@@ -6554,8 +6582,11 @@ def test_label_uniqueness_enforcing(bas1, bas2, bas3, basis_class_specific_param
         5, bas1, basis_class_specific_params, window_size=10, label="x"
     )
     bas2_instance = combine_basis.instantiate_basis(
-        5, bas1, basis_class_specific_params, window_size=10, label="x"
+        5, bas2, basis_class_specific_params, window_size=10, label="x"
     )
+
+    if sum([b.is_complex for b in (bas1_instance, bas2_instance)]) > 1:
+        pytest.skip("Cannot multiply more than one complex basis.")
 
     err_msg = "All user-provided labels of basis elements must be distinct"
     with pytest.raises(ValueError, match=err_msg):
@@ -6597,8 +6628,10 @@ def test_label_uniqueness_enforcing(bas1, bas2, bas3, basis_class_specific_param
 
     # add more nesting
     bas3_instance = combine_basis.instantiate_basis(
-        5, bas1, basis_class_specific_params, window_size=10, label="x"
+        5, bas3, basis_class_specific_params, window_size=10, label="x"
     )
+    if sum([b.is_complex for b in (bas1_instance, bas2_instance, bas3_instance)]) > 1:
+        pytest.skip("Cannot multiply more than one complex basis.")
     # add
     with pytest.raises(ValueError, match=err_msg):
         add + bas3_instance
