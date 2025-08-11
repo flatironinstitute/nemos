@@ -3248,14 +3248,14 @@ class TestFourierBasis(BasisFuncsTesting):
                 5,
                 6,
                 np.array([[0.0, 1.0, 2.0, 3.0, 4.0, 5.0]], dtype=np.float32),
-                pytest.warns(UserWarning, match="Resetting 'frequency_mask' to None"),
+                pytest.warns(UserWarning, match="Resetting ``frequency_mask`` to None"),
             ),
             (
                 lambda x: x < 3,
                 5,
                 6,
                 np.array([[0.0, 1.0, 2.0, 3.0, 4.0, 5.0]], dtype=np.float32),
-                pytest.warns(UserWarning, match="Resetting 'frequency_mask' to None"),
+                pytest.warns(UserWarning, match="Resetting ``frequency_mask`` to None"),
             ),
         ],
     )
