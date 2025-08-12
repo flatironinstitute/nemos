@@ -155,4 +155,20 @@ plot_02_ND_basis_function.md
 ```
 :::
 
+:::{grid-item-card}
+
+```{eval-rst}
+
+.. plot:: scripts/basis_figs.py plot_fourier_basis
+   :show-source-link: False
+   :height: 100px
+```
+
+```{toctree}
+:maxdepth: 2
+
+ndimensional_foureir_basis.md
+```
+:::
+
 ::::

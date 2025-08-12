@@ -44,77 +44,123 @@ warnings.filterwarnings(
 
 ## One-Dimensional Fourier Basis
 
-A one dimensional Fourier basis is a complex basis whose elements takes the form,
+A one-dimensional Fourier basis is a complex basis whose elements are
 
 $$
-a_n(x) = \cos (2 \pi \frac{n}{P} x) + i \cdot \sin  (2 \pi \frac{n}{P}x),
+a_n(x) \;=\; \cos\!\Bigl(2\pi \frac{n}{P}\,x\Bigr) \;+\; i\,\sin\!\Bigl(2\pi \frac{n}{P}\,x\Bigr),
 $$
 
-with $P$ the period of the basis elements, $x$ an angle value, and $n$ is the frequency
-of the basis element.
+where $P>0$ is the period, $x$ is the input variable, and $n\in\mathbb{N}$ is the frequency index.
 
-In NeMoS, you can define a one-dimensional Fourier basis as follows,
+### Fourier Basis in NeMoS
 
+In NeMoS, you can define a `FourierEval` basis object with the following syntax:
 ```{code-cell} ipython3
 from nemos.basis import FourierEval
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 5 frequencies, form 0 to 4
+# 5 frequencies, from 0 to 4
 fourier_1d = FourierEval(frequencies=5)
+
+x = np.linspace(0, 1, 400)
+X = fourier_1d.compute_features(x)
+
+print("frequencies:", fourier_1d.masked_frequencies[0].tolist())
+print("design matrix shape:", X.shape)  # (n_samples, n_features)
 ```
 
-As any other basis, NeMoS `compute_features` method returns a **real** design matrix, with the real and imaginary components - the cosines and sines - of the basis on separate columns. For this reason one may expect to have twice as many output features as the number of frequencies. When 0-th frequency - DC term - is included, the actual number of output features is $2 \times \text{num frequencies} - 1$, where $-1$ is because we drop the sine column corresponding to the DC term which will be a column of zeros, since $\sin(0) = 0$.
+The `compute_features` method of the basis returns a **real** design matrix that splits real and imaginary parts into separate columns, first the cosine columns then the sine.
+
+:::{admonition} How we get this shape (the DC term)
+:class: info
+
+Let the selected frequencies be the sorted set $\mathcal F=\{n_1<\cdots<n_K\}$.
+
+Each frequency contributes a cosine and a sine, so with $K$ frequencies you’d expect $2K$ columns. This is the case when the 0 frequency - DC term - is not included. If the DC term is included, we have that the corresponding column is null, since $\sin(0)=0$. For this reason, the column is omitted — giving $2K-1$.
+
+- $n_1=0$ (with DC):
+
+  $$
+  \bigl[\;1,\,\cos(2\pi \frac{n_2}{P}x),\,\ldots,\,\cos(2\pi \frac{n_K}{P}x),\ \ \sin(2\pi \frac{n_2}{P}x),\,\ldots,\,\sin(2\pi \frac{n_K}{P}x)\;\bigr],
+  $$
+
+  total columns $=2K-1$.
+
+- $n_1>0$ (without DC):
+
+  $$
+  \bigl[\;\cos(2\pi \frac{n_1}{P}x),\,\ldots,\,\cos(2\pi \frac{n_K}{P}x),\ \ \sin(2\pi \frac{n_1}{P}x),\,\ldots,\,\sin(2\pi \frac{n_K}{P}x)\;\bigr],
+  $$
+
+  total columns $=2K$.
+:::
+
+:::{admonition} About the period $P$
+:class: tip
+By default, NeMoS sets the period based on the input range as $P = \max(x) - \min(x)$.
+You can override this by setting a fixed period via `bounds`. See the [section](fourier-period) below for details.
+:::
+
 
 ```{code-cell} ipython3
-
+# NOTE: here and below, '5' = number of frequencies (K in the math)
 print("5 frequencies including the DC term:")
 print("frequencies:", fourier_1d.frequencies)
-print("number of features: 5 * 2 - 1 = ",  fourier_1d.n_basis_funcs)
+print("output features: 5 * 2 - 1 = ",  fourier_1d.n_basis_funcs)
 
+# `evaluate_on_grid` calls `compute_features` on a grid of point
 _, X = fourier_1d.evaluate_on_grid(100)
-f, axs = plt.subplots(1, 5, figsize=(10, 2))
+f, axs = plt.subplots(1, 5, figsize=(10, 2), sharey=True)
 for freq in fourier_1d.frequencies[0]:
+    axs[int(freq)].set_title(f"frequency = {int(freq)}")
     axs[int(freq)].plot(X[:, int(freq)], label="cosine")
     if freq != 0:
         # to get the corresponding sin column
-        # add the num of frequencies, minus dc terms
+        # add the num of frequencies (5), minus dc term (1)
         idx_sin = int(freq) + 5 - 1
         axs[int(freq)].plot(X[:, idx_sin], label="sine")
 plt.legend()
 plt.tight_layout()
 plt.show()
+
 ```
 
-If the DC term is not included then the number of features is actually $2 \times \text{num frequencies}$.
+**Without DC (1..5): same pair**
 
 ```{code-cell} ipython3
 # drop the DC term (5 frequencies)
 fourier_1d = FourierEval(frequencies=(1, 6))
 print("\n5 frequencies without the DC term:")
 print("frequencies:", fourier_1d.frequencies)
-print("number of features: 5 * 2 = ",  fourier_1d.n_basis_funcs)
+print("output features: 5 * 2 = ",  fourier_1d.n_basis_funcs)
 
-f, axs = plt.subplots(1, 5, figsize=(10, 2))
+f, axs = plt.subplots(1, 5, figsize=(10, 2), sharey=True)
+
+# `evaluate_on_grid` calls `compute_features` on a grid of point
 _, X = fourier_1d.evaluate_on_grid(100)
 for freq in fourier_1d.frequencies[0]:
     idx_freq = int(freq) - 1
+    axs[idx_freq].set_title(f"frequency = {int(freq)}")
     axs[idx_freq].plot(X[:, idx_freq], label="cosine")
     # to get the corresponding sin column
-    # add the num of frequencies, no dc term
+    # add the num of frequencies (5), no dc term to subtract
     idx_sin = idx_freq + 5
     axs[idx_freq].plot(X[:, idx_sin], label="sine")
 plt.legend()
 plt.tight_layout()
 plt.show()
+
 ```
 
-### Setting The Domain of The Basis
+(fourier-period)=
+### Fixing the Period of the Basis
 
-When evaluating the basis at some values $\boldsymbol{x} = \{x_1,...,x_t\}$, NeMoS assumes that the domain of the basis is $[\min(\boldsymbol{x}), \max(\boldsymbol{x})]$. The basis element with frequency equal to $n$ will therefore oscillate n-times over the range of values covered by $\boldsymbol{x}$.
+When evaluating the basis at some values $\boldsymbol{x} = \{x_1,...,x_t\}$, NeMoS assumes that the period of the basis is $P = \max(\boldsymbol{x}) - \min(\boldsymbol{x})$. The basis element with frequency equal to $n$ will therefore oscillate $n$ times over the range of values covered by $\boldsymbol{x}$.
 
 
 ```{code-cell} ipython3
+fourier_1d = FourierEval(frequencies=5)
 
 # generate an input ranging [-2, 2]
 x = np.linspace(-2, 2, 100)
@@ -124,7 +170,7 @@ X = fourier_1d.compute_features(x)
 
 f, axs = plt.subplots(1, 3, figsize=(10, 3), sharey=True, sharex=True)
 for freq in [0, 1, 2]:
-    axs[freq].set_title(f"Frequency = {freq}")
+    axs[freq].set_title(f"frequency = {freq}")
     axs[freq].plot(x, X[:, freq])
     axs[freq].set_xlabel("x")
     axs[freq].set_ylabel(f"$a_{{{freq}}}(x)$")
@@ -132,7 +178,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-To fix a domain for the basis, for example $[0, 2 \pi]$, you set provide the `bounds` parameter.
+To fix a domain for the basis, for example $[0, 2 \pi]$, you can provide the `bounds` parameter.
 
 ```{code-cell} ipython3
 
@@ -147,7 +193,7 @@ X = fourier_1d.compute_features(x)
 
 f, axs = plt.subplots(1, 3, figsize=(10, 3), sharey=True, sharex=True)
 for freq in [0, 1, 2]:
-    axs[freq].set_title(f"Frequency = {freq}")
+    axs[freq].set_title(f"frequency = {freq}")
     axs[freq].plot(x, X[:, freq])
     axs[freq].set_xlabel("x")
     axs[freq].set_ylabel(f"$a_{{{freq}}}(x)$")
@@ -155,7 +201,15 @@ for freq in [0, 1, 2]:
 plt.tight_layout()
 plt.show()
 ```
-Bounds can be provided at initialization too, `fourier_1d = FourierEval(5, bounds=(0, 2*np.pi))`.
+
+With `bounds=(0, 2π)` fixed but $\boldsymbol{x} \in [0, \pi]$, each frequency $n$ is defined to complete $n$ cycles over the full domain $[0,2\pi]$. Since we are only sampling **half** the domain, each curve shows only the **first half** of those $n$ cycles (e.g., for $n=2$ you see one full cycle).
+
+The bounds can be provided at initialization as well.
+
+```{code-cell} ipython3
+fourier_1d = FourierEval(5, bounds=(0, 2*np.pi))
+fourier_1d
+```
 
 ### Selecting The Frequencies
 
@@ -179,24 +233,33 @@ print("- frequencies=np.array([1, 3, 5]): ", fourier_1d.frequencies)
 
 ## Multi-Dimensional Fourier Basis
 
-Fourier basis can be extended to multiple dimension. For simplicity, let's focus on the two-dimensional case, but everything discussed below applies to an N-dimensional Fourier basis as well. A two-dimensional basis element $a_{nm}(x,y)$ is defined as follows,
+Fourier bases extend to $D$ dimensions. Let $\mathbf{x}=(x_1,\dots,x_D)$, per-axis periods $\mathbf{P}=(P_1,\dots,P_D)$, and multi-index $\mathbf{n}=(n_1,\dots,n_D)\in\mathbb{N}_0^D$.
+
+A $D$-dimensional **basis element** is
 
 $$
-a_{nm}(x,y) = \cos \left(2 \pi (\frac{n}{P_x} x + \frac{m}{P_y} y) \right) + i \cdot \sin \left(2 \pi (\frac{n}{P_x} x + \frac{m}{P_y} y) \right)
+a_{\mathbf{n}}(\mathbf{x}) \;=\; \cos\!\left( 2\pi \sum_{d=1}^{D} \frac{n_d}{P_d}\, x_d \right)
+\;+\; i\,\sin\!\left( 2\pi \sum_{d=1}^{D} \frac{n_d}{P_d}\, x_d \right).
 $$
 
-Where $P_x$, $P_y$ and $n$, $m$ specifies the periodicity and the frequency of the basis on each axis.
+:::{note}
 
-Defining a two-dimensional Fourier basis follows a similar syntax:
+For simplicity, in the rest of the session we will focus on a 2D example, but everything holds true for a general D-dimensional basis.
+:::
+
+### Definition in NeMoS
+
+First, let's specify the notation to the 2D case used in the examples. We can write $\mathbf{x}=(x,y)$, and $\mathbf{n}=(n,m)$; we’ll use $n$ for the $x$-axis frequency and $m$ for the $y$-axis frequency.
+
+Defining a two-dimensional Fourier basis follows the syntax:
 
 ```{code-cell} ipython3
 
-# define a 2-dimensional basis with
-# n=5 and m=4 frequencies
+# 2D basis with n=5 (x-axis) and m=4 (y-axis) frequencies
 fourier_2d = FourierEval(frequencies=[5, 4], ndim=2)
 ```
 
-The total number of basis is $5 \cdot 4 \cdot 2 - 1 = 39$, and the DC terms corresponds to the frequency pair $n = m = 0$.
+The total number of output features is $5\cdot4\cdot2-1=39$, and the DC term corresponds to the pair $\mathbf{n}=\mathbf{0}=(0,0)$.
 
 ```{code-cell} ipython3
 
@@ -206,7 +269,7 @@ Note that all the frequency pairs are stored in the `masked_frequencies` array o
 
 :::{info}
 
-The reason for the name `masked_frequencies` will become evident in the section about frequency selection with `feature_mask`.
+`masked_frequencies` lists the frequency pairs that are currently active in the basis. If you later restrict the grid of frequencies, this array will update to include only the kept pairs. Details follow in the [frequency selection section](select-fourier-freqs-ndim).
 :::
 
 ```{code-cell} ipython3
@@ -220,9 +283,10 @@ print("shape of the `masked_frequencies` array:", fourier_2d.masked_frequencies.
 You can check for the presence of the DC term by assessing if `fourier_2d.masked_frequencies[:, 0]` is all zeros.
 :::
 
-### Setting the Domain
+### Setting the Periodicities
 
-As for the one-dimensional case, by default the domain is inferred from the input range.
+By default, each axis uses its own input span as the period, reusing the 1D rule per axis:
+$P_d=\max(x_d)-\min(x_d)$.
 
 ```{code-cell} ipython3
 x, y = np.meshgrid(
@@ -239,13 +303,15 @@ idx = np.where(
     (fourier_2d.masked_frequencies[1] == 1)
 )[0][0]
 
-# plot the values
+# plot the output
 f, axs = plt.subplots(1, 3, figsize=(10, 3))
-axs[0].pcolormesh(x, y, X[..., idx], shading='gouraud', cmap='viridis')
-axs[0].set_title("two-dimensional bases")
 
+# 2-dimensional basis
+axs[0].pcolormesh(x, y, X[..., idx], shading='gouraud', cmap='viridis')
+axs[0].set_title("two-dimensional basis")
+
+# 1-dimensional projections
 axs[1].plot(x[0], X[0, :, idx])
-axs[1].set_xlim(0, 2*np.pi)
 axs[1].set_title("x projection\nfrequency = 2")
 
 axs[2].plot(y[:, 0], X[:, 0, idx])
@@ -254,7 +320,9 @@ plt.tight_layout()
 plt.show()
 ```
 
-And it can be fixed by providing a ``single`` bounds tuple that will be applied to all dimension, or a tuple per dimension.
+As we can see, the $x$-projection, the basis element with $n=2$ completes two cycles across the sampled $x$ range, and on the $y$ projection, the basis element with $m=1$ completes one cycle.
+
+One can set the period by providing a single ``bounds`` tuple that applies to all dimension, or one tuple per dimension.
 
 ```{code-cell} ipython3
 
@@ -295,9 +363,12 @@ plt.tight_layout()
 plt.show()
 ```
 
+With bounds $[(0, 2\pi), (0, \pi)]$ and samples on $x \in [0, \pi]$, the $x$-projection for $n=2$ shows only the first half of its defined period (one full cycle over $[0,\pi]$). The $y$-projection covers its full domain $[0,\pi]$, so for $m=2$ it shows two cycles.
+
+(select-fourier-freqs-ndim)=
 ### Selecting The Frequencies
 
-The `frequencies` parameter required at initialization defines the range of frequency spanned by each axis, defining a grid of frequency values. Providing `ndim`-arrays of frequencies defines a grid of frequencies that defines the basis elements.
+The `frequencies` argument specifies, **per axis**, which integer frequencies to use. In $D$ dimensions, pass a list of $D$ arrays (one per axis); their Cartesian product defines the grid of multi-indices $\mathbf{n}$ (and thus the basis elements), which are listed in `masked_frequencies`.
 
 ```{code-cell} ipython3
 
@@ -306,24 +377,33 @@ fourier_2d = FourierEval(frequencies=[np.array([1,2,3]), np.array([4,5])], ndim=
 print(fourier_2d.masked_frequencies)
 ```
 
-In the example snippets, we are defining the following basis elements, $a_{nm}$ for $(n, m) \in \{(1, 4), (1, 5), (2, 4), (2, 5), \dots (3, 5)\}$.
+In these examples we use pairs $(n,m)$ with $n \in N = \{1,2,3\}$ (x-axis frequencies) and $m \in M = \{4,5\}$ (y-axis frequencies).
 
-It is sub-select specific pairs by masking the grid of frequcnies. The mask can be specified in two ways:
+This defines the basis elements $a_{(n,m)}$ for $(n,m) \in \{(1,4),(1,5),(2,4),(2,5),(3,4),(3,5)\}$.
 
-1. As a $n \times m$ boolean array.
-2. As a function that maps frequencies into a boolean, i.e. $f: R^{\text{ndim}} \rightarrow \{0, 1\}$, where `ndim` is the dimensionality of the basis.
+You can subselect specific pairs by **masking** the 2D frequency grid. The mask can be:
 
-For example, if our pairs are
+1. A boolean array of shape $(|N|, |M|) = (3, 2)$ (rows = $n$, columns = $m$).
+2. A callable predicate `f(n, m) -> True/False`.
 
-(1, 4)   (1, 5)
-(2, 4)   (2, 5)
-(3, 4)   (2, 5)
+#### Mask With a Boolean Array
 
-If we want to select the following frequency pairs: (1,4), (2, 4), (2, 5), we can define a mask
+**Pairs grid**
 
-1        0
-1        1
-0        0
+|     | m=4  | m=5  |
+|-----|------|------|
+| n=1 | (1,4) | (1,5) |
+| n=2 | (2,4) | (2,5) |
+| n=3 | (3,4) | (3,5) |
+
+**Example mask selecting $(1,4), (2,4), (2,5)$**
+
+|     | m=4 | m=5 |
+|-----|-----|-----|
+| n=1 | 1   | 0   |
+| n=2 | 1   | 1   |
+| n=3 | 0   | 0   |
+
 
 ```{code-cell} ipython3
 
@@ -339,6 +419,8 @@ print("\nmasked frequencies")
 print(fourier_2d.masked_frequencies)
 ```
 
+#### Mask With a Callable
+
 Alternatively, we can specify complex masking rules by defining a mask function. For example, let's filter for the frequency pairs that lies inside a circle of radius of 4.5.
 
 ```{code-cell} ipython3
@@ -348,3 +430,10 @@ fourier_2d.frequency_mask = frequency_mask
 print("\nmasked frequencies")
 print(fourier_2d.masked_frequencies)
 ```
+
+:::{admonition} More on Masking with Callables
+
+- Write the predicate as `f(n, m)` for 2D. The first argument maps to `masked_frequencies[0]` (x-axis, $n$), the second to `masked_frequencies[1]` (y-axis, $m$). In $D$ dimensions use `f(n1, ..., nD)` in the same row order as `masked_frequencies`.
+- NeMoS applies the predicate over the Cartesian product of per-axis frequencies (conceptually `np.meshgrid(..., indexing='ij')`). Treat inputs as NumPy arrays and use elementwise operations.
+- Return a boolean grid of shape `(len(n_values), len(m_values))`: `True` keeps $(n,m)$, `False` drops it. In $D$ dimensions, return a boolean tensor with one axis per dimension. .
+:::

@@ -188,3 +188,10 @@ intersphinx_mapping = {
     "jax": ("https://jax.readthedocs.io/en/latest/", None),
     "scipy": ("https://docs.scipy.org/doc/scipy/", None),
 }
+
+# requre the bm package for bold symbols
+mathjax3_config = {
+    "tex": {
+        "packages": {"[+]": ["bm"]},
+    }
+}
