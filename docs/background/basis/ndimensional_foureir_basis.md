@@ -72,7 +72,7 @@ print("design matrix shape:", X.shape)  # (n_samples, n_features)
 
 The `compute_features` method of the basis returns a **real** design matrix that splits real and imaginary parts into separate columns, first the cosine columns then the sine.
 
-:::{admonition} How we get this shape (the DC term)
+:::{admonition} How did we get this number of columns in the design matrix?
 :class: info
 
 Let the selected frequencies be the sorted set $\mathcal F=\{n_1<\cdots<n_K\}$.
