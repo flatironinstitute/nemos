@@ -6684,7 +6684,7 @@ def test_label_uniqueness_enforcing(bas1, bas2, basis_class_specific_params):
 
 
 @pytest.mark.parametrize("bas", list_all_basis_classes())
-def test_dynamic_set_label(bas, basis_class_specific_params):
+def test_dynamic_set_label_mul(bas, basis_class_specific_params):
     if bas in (AdditiveBasis, MultiplicativeBasis, TransformerBasis):
         return
 
@@ -6695,21 +6695,17 @@ def test_dynamic_set_label(bas, basis_class_specific_params):
         basis_class_specific_params,
         window_size=10,
     )
+    if bas_instance.is_complex:
+        pytest.skip("Cannot multiply more than one complex basis.")
+
     assert bas_instance.label == bas_instance.__class__.__name__
-    add_12 = bas_instance + bas_instance
     mul_12 = bas_instance * bas_instance
-    assert add_12.basis1.label == bas_instance.__class__.__name__
-    assert add_12.basis2.label == (bas_instance.__class__.__name__ + "_1")
     assert mul_12.basis1.label == bas_instance.__class__.__name__
     assert mul_12.basis2.label == (bas_instance.__class__.__name__ + "_1")
 
     # check labels
-    add_123 = add_12 + bas_instance
     mul_123 = mul_12 * bas_instance
-    mix_123 = add_12 * bas_instance
-    assert add_123.basis1.basis1.label == bas_instance.__class__.__name__
-    assert add_123.basis1.basis2.label == (bas_instance.__class__.__name__ + "_1")
-    assert add_123.basis2.label == (bas_instance.__class__.__name__ + "_2")
+    mix_123 = mul_12 + mul_12
 
     assert mul_123.basis1.basis1.label == bas_instance.__class__.__name__
     assert mul_123.basis1.basis2.label == (bas_instance.__class__.__name__ + "_1")
@@ -6717,16 +6713,9 @@ def test_dynamic_set_label(bas, basis_class_specific_params):
 
     assert mix_123.basis1.basis1.label == bas_instance.__class__.__name__
     assert mix_123.basis1.basis2.label == (bas_instance.__class__.__name__ + "_1")
-    assert mix_123.basis2.label == (bas_instance.__class__.__name__ + "_2")
+    assert mix_123.basis2.basis1.label == (bas_instance.__class__.__name__ + "_2")
+    assert mix_123.basis2.basis2.label == (bas_instance.__class__.__name__ + "_3")
 
-    assert (
-        add_123.basis1.label
-        == "("
-        + bas_instance.__class__.__name__
-        + " + "
-        + bas_instance.__class__.__name__
-        + "_1)"
-    )
     assert (
         mul_123.basis1.label
         == "("
@@ -6739,18 +6728,14 @@ def test_dynamic_set_label(bas, basis_class_specific_params):
         mix_123.basis1.label
         == "("
         + bas_instance.__class__.__name__
-        + " + "
+        + " * "
         + bas_instance.__class__.__name__
         + "_1)"
     )
 
     # change label leaves
-    add_123.basis1.basis1.label = "x"
     mul_123.basis1.basis1.label = "x"
     mix_123.basis1.basis1.label = "x"
-    assert add_123.basis1.basis1.label == "x"
-    assert add_123.basis1.basis2.label == bas_instance.__class__.__name__
-    assert add_123.basis2.label == (bas_instance.__class__.__name__ + "_1")
 
     assert mul_123.basis1.basis1.label == "x"
     assert mul_123.basis1.basis2.label == bas_instance.__class__.__name__
@@ -6758,18 +6743,93 @@ def test_dynamic_set_label(bas, basis_class_specific_params):
 
     assert mix_123.basis1.basis1.label == "x"
     assert mix_123.basis1.basis2.label == bas_instance.__class__.__name__
-    assert mix_123.basis2.label == (bas_instance.__class__.__name__ + "_1")
+    assert mix_123.basis2.basis1.label == (bas_instance.__class__.__name__ + "_1")
+    assert mix_123.basis2.basis2.label == (bas_instance.__class__.__name__ + "_2")
 
-    assert (
-        add_123.basis1.label
-        == "(" + "x" + " + " + bas_instance.__class__.__name__ + ")"
-    )
     assert (
         mul_123.basis1.label
         == "(" + "x" + " * " + bas_instance.__class__.__name__ + ")"
     )
     assert (
         mix_123.basis1.label
+        == "(" + "x" + " * " + bas_instance.__class__.__name__ + ")"
+    )
+
+    assert (
+        mul_123.label
+        == f"((x * {bas_instance.__class__.__name__}) * {bas_instance.__class__.__name__}_1)"
+    )
+    assert (
+        mix_123.label
+        == f"((x * {bas_instance.__class__.__name__}) + ({bas_instance.__class__.__name__}_1 * {bas_instance.__class__.__name__}_2))"
+    )
+
+    # change composite label
+    mul_123.basis1.label = "y"
+    mix_123.basis1.label = "y"
+
+    assert mul_123.basis1.label == "y"
+    assert mix_123.basis1.label == "y"
+
+    assert mul_123.basis1.basis1.label == "x"
+    assert mix_123.basis1.basis1.label == "x"
+
+    assert mul_123.basis1.basis2.label == bas_instance.__class__.__name__
+    assert mix_123.basis1.basis2.label == bas_instance.__class__.__name__
+
+    assert mul_123.label == f"(y * {bas_instance.__class__.__name__}_1)"
+    assert (
+        mix_123.label
+        == f"(y + ({bas_instance.__class__.__name__}_1 * {bas_instance.__class__.__name__}_2))"
+    )
+
+    assert mul_123.basis2.label == f"{bas_instance.__class__.__name__}_1"
+    assert (
+        mix_123.basis2.label
+        == f"({bas_instance.__class__.__name__}_1 * {bas_instance.__class__.__name__}_2)"
+    )
+
+
+@pytest.mark.parametrize("bas", list_all_basis_classes())
+def test_dynamic_set_label_add(bas, basis_class_specific_params):
+    if bas in (AdditiveBasis, MultiplicativeBasis, TransformerBasis):
+        return
+
+    combine_basis = CombinedBasis()
+    bas_instance = combine_basis.instantiate_basis(
+        5,
+        bas,
+        basis_class_specific_params,
+        window_size=10,
+    )
+    assert bas_instance.label == bas_instance.__class__.__name__
+    add_12 = bas_instance + bas_instance
+    assert add_12.basis1.label == bas_instance.__class__.__name__
+    assert add_12.basis2.label == (bas_instance.__class__.__name__ + "_1")
+
+    # check labels
+    add_123 = add_12 + bas_instance
+    assert add_123.basis1.basis1.label == bas_instance.__class__.__name__
+    assert add_123.basis1.basis2.label == (bas_instance.__class__.__name__ + "_1")
+    assert add_123.basis2.label == (bas_instance.__class__.__name__ + "_2")
+
+    assert (
+        add_123.basis1.label
+        == "("
+        + bas_instance.__class__.__name__
+        + " + "
+        + bas_instance.__class__.__name__
+        + "_1)"
+    )
+
+    # change label leaves
+    add_123.basis1.basis1.label = "x"
+    assert add_123.basis1.basis1.label == "x"
+    assert add_123.basis1.basis2.label == bas_instance.__class__.__name__
+    assert add_123.basis2.label == (bas_instance.__class__.__name__ + "_1")
+
+    assert (
+        add_123.basis1.label
         == "(" + "x" + " + " + bas_instance.__class__.__name__ + ")"
     )
 
@@ -6777,39 +6837,19 @@ def test_dynamic_set_label(bas, basis_class_specific_params):
         add_123.label
         == f"((x + {bas_instance.__class__.__name__}) + {bas_instance.__class__.__name__}_1)"
     )
-    assert (
-        mul_123.label
-        == f"((x * {bas_instance.__class__.__name__}) * {bas_instance.__class__.__name__}_1)"
-    )
-    assert (
-        mix_123.label
-        == f"((x + {bas_instance.__class__.__name__}) * {bas_instance.__class__.__name__}_1)"
-    )
 
     # change composite label
     add_123.basis1.label = "y"
-    mul_123.basis1.label = "y"
-    mix_123.basis1.label = "y"
 
     assert add_123.basis1.label == "y"
-    assert mul_123.basis1.label == "y"
-    assert mix_123.basis1.label == "y"
 
     assert add_123.basis1.basis1.label == "x"
-    assert mul_123.basis1.basis1.label == "x"
-    assert mix_123.basis1.basis1.label == "x"
 
     assert add_123.basis1.basis2.label == bas_instance.__class__.__name__
-    assert mul_123.basis1.basis2.label == bas_instance.__class__.__name__
-    assert mix_123.basis1.basis2.label == bas_instance.__class__.__name__
 
     assert add_123.label == f"(y + {bas_instance.__class__.__name__}_1)"
-    assert mul_123.label == f"(y * {bas_instance.__class__.__name__}_1)"
-    assert mix_123.label == f"(y * {bas_instance.__class__.__name__}_1)"
 
     assert add_123.basis2.label == f"{bas_instance.__class__.__name__}_1"
-    assert mul_123.basis2.label == f"{bas_instance.__class__.__name__}_1"
-    assert mix_123.basis2.label == f"{bas_instance.__class__.__name__}_1"
 
 
 @pytest.mark.parametrize("bas", list_all_basis_classes())
