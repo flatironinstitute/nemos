@@ -269,6 +269,85 @@ def _get_frequency_pairs_from_callable(
 
 
 class FourierBasis(AtomicBasisMixin, Basis):
+    """
+    N-dimensional Fourier basis for feature expansion.
+
+    This class generates a set of sine and cosine basis functions defined over
+    an ``n``-dimensional input space. The basis functions are constructed from
+    a Cartesian product of frequencies specified for each input dimension.
+    Each selected frequency combination contributes two basis functions
+    (cosine and sine), except for the all-zero frequency (DC component),
+    which contributes only a cosine term.
+
+    The class supports flexible frequency specification (integers, ranges, or
+    lists per dimension) and optional masking to include or exclude specific
+    frequency combinations.
+
+    Parameters
+    ----------
+    frequencies :
+        Frequency specification(s) for each input dimension.
+
+        - If ``ndim == 1``: a single specification is expected.
+        - If ``ndim > 1``: a list or tuple of length ``ndim`` is expected, with
+          one specification per dimension.
+
+        A single specification can be:
+            * **int** : number of equally spaced frequencies from 0 to the
+              integer (inclusive). Must be >= 0.
+            * **tuple** of two ints ``(low, high)`` : inclusive range of
+              frequencies. Must satisfy ``0 <= low < high``.
+            * **array_like** of ints : explicit list of frequencies (must be
+              sorted ascending; unsorted inputs trigger a ``UserWarning``).
+
+        Validation rules:
+            * Negative integers raise ``ValueError``.
+            * Tuples with ``low >= high`` raise ``ValueError``.
+            * Arrays with negative values raise ``ValueError``.
+            * Arrays containing non-integers raise ``TypeError``.
+            * Mismatch between number of specifications and ``ndim`` raises
+              ``ValueError``.
+
+    ndim :
+        Dimensionality of the basis. Default is 1.
+
+    frequency_mask :
+        Frequency selection mask. Used to filter the evaluated frequencies after
+        construction.
+
+        Accepted forms:
+            * **None** : Keep all frequencies.
+            * **array_like** of {0, 1} or booleans : Shape must match the number
+              of possible frequency combinations for the given ``frequencies``.
+              - In 1D: shape = (n_freq,).
+              - In nD: shape = (n_freq_dim1, n_freq_dim2, ..., n_freq_dimN).
+            * **callable** : A function applied to each tuple of frequency
+              coordinates, returning a single boolean or {0, 1}. For example:
+              ``lambda f1, f2, ...: condition``.
+                - Must return a scalar boolean or integer {0, 1}.
+                - Returning arrays, lists, or non-boolean values raises a
+                  ``ValueError``.
+
+        Validation rules:
+            * Array values must be exactly 0 or 1 (floats are allowed if equal to
+              0.0 or 1.0).
+            * Strings or non-numeric values raise ``ValueError``.
+            * Callable return values must be a single boolean or {0, 1}; anything
+              else raises ``ValueError``.
+            * Errors raised inside the callable are propagated as
+              ``TypeError`` with a descriptive message.
+
+    label : str, optional
+        Descriptive label for the basis (e.g., to use in plots or summaries).
+
+    Notes
+    -----
+    - If ``frequency_mask`` is provided, only the selected frequency
+      combinations are used to build the basis.
+    - The output of ``compute_features`` contains both cosine and sine components for
+      each active frequency combination, except that the all-zero frequency
+      includes only a cosine term.
+    """
 
     _is_complex = True
 
@@ -281,48 +360,6 @@ class FourierBasis(AtomicBasisMixin, Basis):
         frequency_mask: jnp.ndarray | None = None,
         label: Optional[str] = None,
     ) -> None:
-        """
-        N-dimensional Fourier basis for feature expansion.
-
-        This class generates a set of sine and cosine basis functions defined over
-        an ``n``-dimensional input space. The basis functions are constructed from
-        a Cartesian product of frequencies specified for each input dimension.
-        Each selected frequency combination contributes two basis functions
-        (cosine and sine), except for the all-zero frequency (DC component),
-        which contributes only a cosine term.
-
-        The class supports flexible frequency specification (integers, ranges, or
-        lists per dimension) and optional masking to include or exclude specific
-        frequency combinations.
-
-        Parameters
-        ----------
-        frequencies : int | tuple[int, int] | list[int] | list[tuple[int, int]]
-            Frequencies to use along each input dimension.
-
-            - ``int``: creates a range ``[0, 1, ..., n-1]`` for **all dimensions**.
-            - ``tuple[int, int]``: creates a range ``[start, ..., stop-1]`` for **all dimensions**.
-            - ``list[int]``: list of integers giving the number of frequencies per dimension.
-            - ``list[tuple[int, int]]``: list of (start, stop) tuples specifying ranges per dimension.
-        ndim :
-            Dimensionality of the basis. Default is 1.
-
-        frequency_mask : array-like of {0, 1}, optional
-            Boolean mask specifying which frequency combinations to include.
-            If ``None``, all possible frequency combinations are used. The mask
-            must have shape ``(len(frequencies[0]), len(frequencies[1]), ...)``.
-
-        label : str, optional
-            Descriptive label for the basis (e.g., to use in plots or summaries).
-
-        Notes
-        -----
-        - If ``frequency_mask`` is provided, only the selected frequency
-          combinations are used to build the basis.
-        - The output of ``compute_features`` contains both cosine and sine components for
-          each active frequency combination, except that the all-zero frequency
-          includes only a cosine term.
-        """
         self._n_input_dimensionality = self._check_ndim(ndim)
         self.frequencies = frequencies
         self.frequency_mask = frequency_mask
@@ -448,6 +485,14 @@ class FourierBasis(AtomicBasisMixin, Basis):
 
     @property
     def frequencies(self) -> Tuple[jnp.ndarray, ...]:
+        """Frequencies for the basis.
+
+        Returns
+        -------
+        :
+            A tuple of arrays with the fourier frequencies, one per
+            dimension of the basis.
+        """
         return self._frequencies
 
     @frequencies.setter

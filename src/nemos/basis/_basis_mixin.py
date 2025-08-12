@@ -213,6 +213,14 @@ class BasisMixin:
 
     @property
     def input_shape(self):
+        """
+        Expected per-sample input shape.
+
+        Returns
+        -------
+        :
+            If inputs are shaped ``(n_samples, *shape)``, returns ``shape``.
+        """
         return get_input_shape(self)
 
     def _get_feature_slicing(
@@ -390,6 +398,20 @@ class AtomicBasisMixin(BasisMixin):
 
     @property
     def is_complex(self):
+        """
+        Whether the basis is intrinsically complex.
+
+        Returns
+        -------
+        :
+            ``True`` if the basis is complex; ``False`` otherwise.
+
+        Notes
+        -----
+        :meth:`compute_features` always returns a real-valued design matrix. For
+        complex bases (e.g., ``FourierEval``), the real and imaginary parts are
+        returned as separate columns.
+        """
         return self.__class__._is_complex
 
     @property

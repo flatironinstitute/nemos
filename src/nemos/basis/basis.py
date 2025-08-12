@@ -2412,33 +2412,142 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
 
 
 class FourierEval(EvalBasisMixin, FourierBasis):
-    r"""Fourier basis.
+    """
+    N-dimensional Fourier basis for feature expansion.
+
+    This class generates a set of sine and cosine basis functions defined over
+    an ``n``-dimensional input space. The basis functions are constructed from
+    a Cartesian product of frequencies specified for each input dimension.
+    Each selected frequency combination contributes two basis functions
+    (cosine and sine), except for the all-zero frequency (DC component),
+    which contributes only a cosine term.
+
+    The class supports flexible frequency specification (integers, ranges, or
+    arrays per dimension) and optional masking to include or exclude specific
+    frequency combinations.
 
     Parameters
     ----------
     frequencies :
-        Fourier frequencies.
+        Frequency specification(s) for the basis. The expected format depends
+        on ``ndim``:
+
+        - If ``ndim == 1``: a single specification may be given as an integer,
+          a tuple ``(low, high)``, or an array of explicit frequencies.
+        - If ``ndim > 1``: provide a list or tuple of specifications, one for
+          each dimension, each following the single-dimension rules above.
+
+        Integers must be non-negative. Tuples must contain two integers with
+        ``low < high``. Arrays must contain only non-negative integers in
+        ascending order (unsorted arrays trigger a warning).
+
     ndim :
         Dimensionality of the basis. Default is 1.
-    bounds :
-        The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
-        minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bounds, the basis will return NaN.
+
+    bounds:
+        Domain bounds for each dimension.
+
+        - If ``ndim == 1``: provide a single tuple ``(low, high)`` of floats.
+        - If ``ndim > 1``: provide a list of tuples, one for each dimension,
+          each specifying ``(low, high)`` for that dimension.
+        - If ``None``: the domain is inferred from the input data
+          (maximum to minimum values).
+
+        ``low`` must be strictly less than ``high``. All values must be
+        convertible to floats.
+
+    frequency_mask :
+        Optional mask specifying which frequency components to include. Can be:
+
+        - **array_like** of integers {0, 1} or booleans: Selects frequencies to
+          keep (1/True) or exclude (0/False). Shape must match the number of
+          available frequencies for each dimension.
+        - **callable**: A function applied to each frequency index (one index
+          per dimension), returning a single boolean or {0, 1} indicating whether
+          to keep that frequency.
+        - ``None``: All frequencies are kept.
+
+        Values must be 0/1 or boolean. Callables must return a single boolean or
+        {0, 1} value for each frequency coordinate.
+
     label :
-        The label of the basis, intended to be descriptive of the task variable being processed.
-        For example: velocity, position, spike_counts.
+        Descriptive label for the basis (e.g., to use in plots or summaries).
+
+    Notes
+    -----
+    - If ``frequency_mask`` is provided, only the selected frequency
+      combinations are used to build the basis.
+    - The output of ``compute_features`` contains both cosine and sine components for
+      each active frequency combination, except that the all-zero frequency
+      includes only a cosine term.
 
     Examples
     --------
     >>> import numpy as np
     >>> from nemos.basis import FourierEval
+    >>> rng = np.random.default_rng(0)
+
+    **1D: basic usage**
+
     >>> n_freq = 5
-    >>> fourier_basis = FourierEval(n_freq)
-    >>> fourier_basis
-    FourierEval(n_frequencies=5, include_constant=False, phase_sign=1.0)
-    >>> sample_points = np.random.randn(100)
-    >>> # convolve the basis
-    >>> features = fourier_basis.compute_features(sample_points)
+    >>> fourier_1d = FourierEval(n_freq)
+    >>> # cos at 0..4 (5) + sin at 1..4 (4) = 9
+    >>> fourier_1d.n_basis_funcs
+    9
+    >>> x = rng.normal(size=8)
+    >>> X = fourier_1d.compute_features(x)
+    >>> X.shape  # (n_samples, n_basis_funcs)
+    (8, 9)
+
+    **2D: unmasked grid of frequency pairs**
+
+    >>> fourier_2d = FourierEval(n_freq, ndim=2)
+    >>> # (5*5 frequency pairs) * 2 (cos+sin) - 1 (no sine at DC) = 49
+    >>> fourier_2d.n_basis_funcs
+    49
+    >>> x, y = rng.normal(size=(2, 6))
+    >>> X = fourier_2d.compute_features(x, y)
+    >>> X.shape
+    (6, 49)
+
+    **2D: masking with an array (drop 3 pairs)**
+
+    >>> mask = np.ones((5, 5))
+    >>> # drop 3 frequency pairs, including DC term (0,0)
+    >>> mask[[0, 0, 1], [0, 1, 2]] = 0
+    >>> fourier_2d_masked = FourierEval(
+    ...     n_freq,
+    ...     ndim=2,
+    ...     frequency_mask=mask
+    ... )
+    >>> # (5*5-3 frequency pairs) * 2 (cos+sin) = 44
+    >>> fourier_2d_masked.n_basis_funcs
+    44
+
+    **2D: masking with a callable**
+
+    >>> # keep pairs inside a circle of radius 3.5 in frequency space
+    >>> keep_circle = lambda fx, fy: (fx**2 + fy**2) ** 0.5 < 3.5
+    >>> fourier_2d_funcmask = FourierEval(
+    ...     n_freq,
+    ...     ndim=2,
+    ...     frequency_mask=keep_circle
+    ... )
+    >>> fourier_2d_funcmask.n_basis_funcs
+    25
+
+    **Explicit frequency specifications**
+
+    >>> # mix forms per-dimension: an explicit array
+    >>> # and an inclusive tuple (low, high)
+    >>> fourier_mixed = FourierEval(
+    ...     frequencies=[np.arange(3), (1, 4)],
+    ...     ndim=2
+    ... )
+    >>> # (3*3 frequency pairs) * 2 (cos+sin) = 18; no DC term (0, 0)
+    >>> fourier_mixed.n_basis_funcs
+    18
+
     """
 
     def __init__(
