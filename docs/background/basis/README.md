@@ -63,7 +63,7 @@
           :height: 80px
      -
      - :class:`~nemos.basis.FourierEval`
-     - 🔵 Eval
+     - 🟢 Eval
 
    * - **Orthogonalized Exponential Decays**
      - .. plot:: scripts/basis_figs.py plot_orth_exp_basis
