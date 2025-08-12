@@ -323,7 +323,7 @@ plt.show()
 
 As we can see, the $x$-projection, the basis element with $n=2$ completes two cycles across the sampled $x$ range, and on the $y$ projection, the basis element with $m=1$ completes one cycle.
 
-One can set the period by providing a single ``bounds`` tuple that applies to all dimension, or one tuple per dimension.
+One can set the period by providing a single ``bounds`` tuple that applies to all dimensions, or one tuple per dimension.
 
 ```{code-cell} ipython3
 
