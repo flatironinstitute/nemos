@@ -429,10 +429,10 @@ class FourierBasis(AtomicBasisMixin, Basis):
         """
         if values is None:
             self._frequency_mask = None
-            self._eval_freq = _get_all_frequency_pairs(self._frequencies)
+            self._freq_combinations = _get_all_frequency_pairs(self._frequencies)
 
         elif callable(values):
-            self._eval_freq = _get_frequency_pairs_from_callable(
+            self._freq_combinations = _get_frequency_pairs_from_callable(
                 values, self._frequencies
             )
             self._frequency_mask = values
@@ -472,15 +472,15 @@ class FourierBasis(AtomicBasisMixin, Basis):
             )
 
             idxs = jnp.stack(jnp.where(self._frequency_mask))
-            self._eval_freq = jnp.stack(
+            self._freq_combinations = jnp.stack(
                 [freqs[idxs[d]] for d, freqs in enumerate(self._frequencies)]
             )
 
         # used to drop or not the zero phase
         self._has_zero_phase = (
             False
-            if self._eval_freq.size == 0
-            else int(jnp.all(self._eval_freq[:, 0] == 0))
+            if self._freq_combinations.size == 0
+            else int(jnp.all(self._freq_combinations[:, 0] == 0))
         )
 
     @property
@@ -558,6 +558,20 @@ class FourierBasis(AtomicBasisMixin, Basis):
         self.frequency_mask = None
 
     @property
+    def masked_frequencies(self) -> jnp.ndarray:
+        """
+        The frequencies after the masking is applied.
+
+        Returns
+        -------
+            The masked frequencies, shape ``(ndim, n_basis_funcs)``.
+            ``masked_frequencies[:, i]`` is the frequency combination for the
+            i-th basis function.
+
+        """
+        return self._freq_combinations
+
+    @property
     def ndim(self):
         return self._n_input_dimensionality
 
@@ -576,7 +590,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
 
     @property
     def n_basis_funcs(self) -> int | None:
-        return 2 * self._eval_freq.shape[-1] - self._has_zero_phase
+        return 2 * self._freq_combinations.shape[-1] - self._has_zero_phase
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
@@ -619,7 +633,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
             return jnp.stack(scaled_samples, axis=-1)
 
         sample_pts = _flat_samples_to_angles(sample_pts)
-        angles = sample_pts @ self._eval_freq
+        angles = sample_pts @ self._freq_combinations
         out = jnp.concatenate(
             [jnp.cos(angles), jnp.sin(angles[..., self._has_zero_phase :])], axis=1
         )

@@ -129,16 +129,16 @@ def compare_basis(b1, b2):
         freqs1 = b1.__dict__.get("_frequencies", [-1])
         freqs2 = b2.__dict__.get("_frequencies", [-1])
         assert all(np.all(fi == fj) for fi, fj in zip(freqs1, freqs2))
-        freqs1 = b1.__dict__.get("_eval_freq", -1)
-        freqs2 = b2.__dict__.get("_eval_freq", -1)
+        freqs1 = b1.__dict__.get("_freq_combinations", -1)
+        freqs2 = b2.__dict__.get("_freq_combinations", -1)
         assert np.all(freqs1 == freqs2)
         f1, f2 = b1.__dict__.pop("_funcs", [True]), b2.__dict__.pop("_funcs", [True])
         assert all(fi == fj for fi, fj in zip(f1, f2))
         d1 = filter_attributes(
-            b1, exclude_keys=["_decay_rates", "_parent", "_frequencies", "_eval_freq"]
+            b1, exclude_keys=["_decay_rates", "_parent", "_frequencies", "_freq_combinations"]
         )
         d2 = filter_attributes(
-            b2, exclude_keys=["_decay_rates", "_parent", "_frequencies", "_eval_freq"]
+            b2, exclude_keys=["_decay_rates", "_parent", "_frequencies", "_freq_combinations"]
         )
         assert d1 == d2
 
@@ -999,8 +999,8 @@ class TestEvalBasis:
             assert all(np.all(fi == fj) for fi, fj in zip(f1, f2))
         else:
             assert f1 is f2 is None
-        f1, f2 = bas.__dict__.pop("_eval_freq", [True]), bas2.__dict__.pop(
-            "_eval_freq", [True]
+        f1, f2 = bas.__dict__.pop("_freq_combinations", [True]), bas2.__dict__.pop(
+            "_freq_combinations", [True]
         )
         assert all(np.all(fi == fj) for fi, fj in zip(f1, f2))
         assert bas.__dict__ == bas2.__dict__
@@ -2793,8 +2793,8 @@ class TestFourierBasis(BasisFuncsTesting):
             assert f2 is f1
         else:
             assert f1 is f2 is None
-        f1, f2 = bas.__dict__.pop("_eval_freq", [True]), bas2.__dict__.pop(
-            "_eval_freq", [True]
+        f1, f2 = bas.__dict__.pop("_freq_combinations", [True]), bas2.__dict__.pop(
+            "_freq_combinations", [True]
         )
         assert all(np.all(fi == fj) for fi, fj in zip(f1, f2))
         assert bas.__dict__ == bas2.__dict__
@@ -2998,7 +2998,7 @@ class TestFourierBasis(BasisFuncsTesting):
                 ndim=1,
                 frequency_mask=frequency_mask,
             )
-            np.testing.assert_array_equal(bas._eval_freq, output_pairs)
+            np.testing.assert_array_equal(bas._freq_combinations, output_pairs)
 
         bas = instantiate_atomic_basis(
             self.cls[mode],
@@ -3009,7 +3009,7 @@ class TestFourierBasis(BasisFuncsTesting):
         with expectation:
             # check setter directly
             bas.frequency_mask = frequency_mask
-            np.testing.assert_array_equal(bas._eval_freq, output_pairs)
+            np.testing.assert_array_equal(bas._freq_combinations, output_pairs)
 
     @pytest.mark.parametrize(
         "frequency_mask, expectation, output_pairs",
@@ -3183,7 +3183,7 @@ class TestFourierBasis(BasisFuncsTesting):
                 ndim=2,
                 frequency_mask=frequency_mask,
             )
-            np.testing.assert_array_equal(bas._eval_freq, output_pairs)
+            np.testing.assert_array_equal(bas._freq_combinations, output_pairs)
 
         bas = self.cls[mode](
             frequencies=[np.arange(3), np.arange(2)],
@@ -3193,7 +3193,7 @@ class TestFourierBasis(BasisFuncsTesting):
         with expectation:
             # check setter directly
             bas.frequency_mask = frequency_mask
-            np.testing.assert_array_equal(bas._eval_freq, output_pairs)
+            np.testing.assert_array_equal(bas._freq_combinations, output_pairs)
 
     @pytest.mark.parametrize("mode", ["eval"])
     @pytest.mark.parametrize(
@@ -3213,10 +3213,10 @@ class TestFourierBasis(BasisFuncsTesting):
     ):
         bas = self.cls[mode](frequencies=10, ndim=1, frequency_mask=None)
         bas.set_params(frequencies=frequencies, frequency_mask=frequency_mask)
-        np.testing.assert_array_equal(bas._eval_freq, expected_eval)
+        np.testing.assert_array_equal(bas._freq_combinations, expected_eval)
         bas = self.cls[mode](frequencies=10, ndim=1, frequency_mask=None)
         bas.set_params(frequency_mask=frequency_mask, frequencies=frequencies)
-        np.testing.assert_array_equal(bas._eval_freq, expected_eval)
+        np.testing.assert_array_equal(bas._freq_combinations, expected_eval)
 
     @pytest.mark.parametrize("mode", ["eval"])
     @pytest.mark.parametrize(
@@ -3273,7 +3273,7 @@ class TestFourierBasis(BasisFuncsTesting):
         )
         with expectation:
             bas.frequencies = new_frequencies
-            np.testing.assert_array_equal(bas._eval_freq, expected_eval)
+            np.testing.assert_array_equal(bas._freq_combinations, expected_eval)
             if np.any(new_frequencies != frequencies):
                 assert bas.frequency_mask is None
 
