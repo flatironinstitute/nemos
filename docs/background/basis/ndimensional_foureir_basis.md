@@ -255,7 +255,7 @@ Defining a two-dimensional Fourier basis follows the syntax:
 
 ```{code-cell} ipython3
 
-# 2D basis with n=5 (x-axis) and m=4 (y-axis) frequencies
+# 2D basis with n=0,...,5 (x-axis) and m=0,...,4 (y-axis) frequencies
 fourier_2d = FourierEval(frequencies=[5, 4], ndim=2)
 ```
 
