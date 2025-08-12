@@ -255,7 +255,7 @@ Defining a two-dimensional Fourier basis follows the syntax:
 
 ```{code-cell} ipython3
 
-# 2D basis with n=0,...,5 (x-axis) and m=0,...,4 (y-axis) frequencies
+# 2D basis with n=0,...,4 (x-axis) and m=0,...,3 (y-axis) frequencies
 fourier_2d = FourierEval(frequencies=[5, 4], ndim=2)
 ```
 
@@ -268,7 +268,7 @@ fourier_2d.n_basis_funcs
 
 All the frequency pairs are stored in the `masked_frequencies` array of shape `(ndim, n_frequency_pairs)`.
 
-:::{info}
+:::{note}
 
 `masked_frequencies` lists the frequency pairs that are currently active in the basis. If you later restrict the grid of frequencies, this array will update to include only the kept pairs. Details follow in the [frequency selection section](select-fourier-freqs-ndim).
 :::
