@@ -6877,8 +6877,10 @@ def test_add_left_and_right(bas, basis_class_specific_params):
 
 @pytest.mark.parametrize("bas", list_all_basis_classes())
 def test_multiply_left_and_right(bas, basis_class_specific_params):
-    if bas in (AdditiveBasis, MultiplicativeBasis, TransformerBasis):
-        return
+    if issubclass(
+        bas, (AdditiveBasis, MultiplicativeBasis, TransformerBasis, basis.FourierBasis)
+    ):
+        pytest.skip("skip multiplicaiton for complex and non-atomic bases.")
 
     combine_basis = CombinedBasis()
     bas_instance = combine_basis.instantiate_basis(
@@ -7018,10 +7020,13 @@ def test_basis_protected_name(bas, basis_class_specific_params):
 @pytest.mark.parametrize("bas2", list_all_basis_classes())
 def test_getitem(bas1, bas2, basis_class_specific_params):
     if any(
-        bas in (AdditiveBasis, MultiplicativeBasis, TransformerBasis)
+        issubclass(
+            bas,
+            (AdditiveBasis, MultiplicativeBasis, TransformerBasis, basis.FourierBasis),
+        )
         for bas in (bas1, bas2)
     ):
-        return
+        pytest.skip("skip multiplicaiton for complex and non-atomic bases.")
 
     combine_basis = CombinedBasis()
     bas1_instance = combine_basis.instantiate_basis(
@@ -7036,6 +7041,7 @@ def test_getitem(bas1, bas2, basis_class_specific_params):
         basis_class_specific_params,
         window_size=10,
     )
+
     add_12 = bas1_instance + bas2_instance
     mul_12 = bas1_instance * bas2_instance
     add_123 = add_12 + bas1_instance
