@@ -56,6 +56,15 @@
      - :class:`~nemos.basis.RaisedCosineLogEval`  :raw-html:`<br />`
        :class:`~nemos.basis.RaisedCosineLogConv`
      - 🔵 Conv
+
+   * - **Fourier Basis**
+     - .. plot:: scripts/basis_figs.py plot_fourier_basis
+          :show-source-link: False
+          :height: 80px
+     -
+     - :class:`~nemos.basis.FourierEval`
+     - 🔵 Eval
+
    * - **Orthogonalized Exponential Decays**
      - .. plot:: scripts/basis_figs.py plot_orth_exp_basis
           :show-source-link: False

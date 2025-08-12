@@ -79,6 +79,7 @@ These classes are the building blocks for the concrete basis classes.
     CyclicBSplineEval
     RaisedCosineLinearEval
     RaisedCosineLogEval
+    FourierEval
     OrthExponentialEval
     IdentityEval
 
