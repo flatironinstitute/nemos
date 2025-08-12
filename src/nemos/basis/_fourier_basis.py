@@ -372,7 +372,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
 
     @property
     def frequency_mask(self) -> Callable | jnp.ndarray | None:
-        """Get or set the frequency mask for the Fourier basis.
+        """Get the frequency mask for the Fourier basis.
 
         The frequency mask can be either:
 
