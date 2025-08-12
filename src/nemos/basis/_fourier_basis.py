@@ -26,8 +26,8 @@ FREQUENCY_ERROR_MSGS = {
 
 
 def _check_array_properties(*arrays: ArrayLike):
-    is_int_like = all(np.all(f == np.asarray(f, dtype=int)) for f in arrays)
-    is_positive = all(np.all(np.asarray(f) >= 0) for f in arrays)
+    is_int_like = all(jnp.all(f == jnp.asarray(f, dtype=int)) for f in arrays)
+    is_positive = all(jnp.all(jnp.asarray(f) >= 0) for f in arrays)
     return is_int_like, is_positive
 
 
@@ -57,8 +57,10 @@ def _check_and_sort_frequencies(*frequencies):
     is_int_like, is_positive = _check_array_properties(*frequencies)
 
     if is_int_like and is_positive:
-        sorted_freqs = tuple(np.sort(f) for f in frequencies)
-        if any(not np.array_equal(f1, f2) for f1, f2 in zip(frequencies, sorted_freqs)):
+        sorted_freqs = tuple(jnp.sort(f) for f in frequencies)
+        if any(
+            not jnp.array_equal(f1, f2) for f1, f2 in zip(frequencies, sorted_freqs)
+        ):
             warnings.warn("Unsorted frequencies provided! Frequencies will be sorted.")
             return sorted_freqs
         return frequencies
@@ -523,7 +525,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
             frequencies = tuple(arange_constructor(f) for f in frequencies)
 
         else:
-            if isinstance(frequencies, np.ndarray) and ~np.issubdtype(
+            if isinstance(frequencies, (np.ndarray, jnp.ndarray)) and ~np.issubdtype(
                 frequencies.dtype, np.integer
             ):
                 type_string = f"NDArray[{frequencies.dtype}]"

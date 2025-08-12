@@ -135,10 +135,22 @@ def compare_basis(b1, b2):
         f1, f2 = b1.__dict__.pop("_funcs", [True]), b2.__dict__.pop("_funcs", [True])
         assert all(fi == fj for fi, fj in zip(f1, f2))
         d1 = filter_attributes(
-            b1, exclude_keys=["_decay_rates", "_parent", "_frequencies", "_freq_combinations"]
+            b1,
+            exclude_keys=[
+                "_decay_rates",
+                "_parent",
+                "_frequencies",
+                "_freq_combinations",
+            ],
         )
         d2 = filter_attributes(
-            b2, exclude_keys=["_decay_rates", "_parent", "_frequencies", "_freq_combinations"]
+            b2,
+            exclude_keys=[
+                "_decay_rates",
+                "_parent",
+                "_frequencies",
+                "_freq_combinations",
+            ],
         )
         assert d1 == d2
 
