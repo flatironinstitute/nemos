@@ -265,7 +265,8 @@ The total number of output features is $5\cdot4\cdot2-1=39$, and the DC term cor
 
 fourier_2d.n_basis_funcs
 ```
-Note that all the frequency pairs are stored in the `masked_frequencies` array of shape `(ndim, n_frequency_pairs)`.
+
+All the frequency pairs are stored in the `masked_frequencies` array of shape `(ndim, n_frequency_pairs)`.
 
 :::{info}
 
