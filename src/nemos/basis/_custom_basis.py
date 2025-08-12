@@ -180,7 +180,8 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         funcs=[partial(decay_exp, rate=np.float64(0.0)), ..., partial(decay_exp, rate=np.float64(1.0))],
         ndim_input=1,
         basis_kwargs={'shift': 1},
-        pynapple_support=True
+        pynapple_support=True,
+        is_complex=False
     )
     >>> samples = np.linspace(0, 1, 50)
     >>> X = bas.compute_features(samples)

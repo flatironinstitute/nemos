@@ -2599,10 +2599,10 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         >>> # Generate data
         >>> num_samples = 1000
         >>> X = np.random.normal(size=(num_samples, ))  # raw time series
-        >>> basis = FourierEval(n_frequencies=10)
+        >>> basis = FourierEval(10)
         >>> features = basis.compute_features(X)  # basis transformed time series
         >>> features.shape
-        (1000, 20)
+        (1000, 19)
 
         """
         return super().compute_features(*xi)
@@ -2619,12 +2619,12 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         >>> import numpy as np
         >>> from nemos.basis import FourierEval
         >>> from nemos.glm import GLM
-        >>> basis = FourierEval(n_frequencies=6, label="one_input")
+        >>> basis = FourierEval(6, label="one_input")
         >>> X = basis.compute_features(np.random.randn(20,))
         >>> split_features_multi = basis.split_by_feature(X, axis=1)
         >>> for feature, sub_dict in split_features_multi.items():
         ...        print(f"{feature}, shape {sub_dict.shape}")
-        one_input, shape (20, 12)
+        one_input, shape (20, 11)
 
         """
         return super().split_by_feature(x, axis=axis)
@@ -2640,16 +2640,16 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         >>> # Configure with an integer input:
         >>> _ = basis.set_input_shape(3)
         >>> basis.n_output_features
-        30
+        27
         >>> # Configure with a tuple:
         >>> _ = basis.set_input_shape((4, 5))
         >>> basis.n_output_features
-        200
+        180
         >>> # Configure with an array:
         >>> x = np.ones((10, 4, 5))
         >>> _ = basis.set_input_shape(x)
         >>> basis.n_output_features
-        200
+        180
 
         """
         return BasisMixin.set_input_shape(self, *xi)
@@ -2661,10 +2661,10 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         --------
         >>> import numpy as np
         >>> from nemos.basis import FourierEval
-        >>> basis = FourierEval(n_frequencies=4)
+        >>> basis = FourierEval(4)
         >>> out = basis.evaluate(np.random.randn(100, 5, 2))
         >>> out.shape
-        (100, 5, 2, 8)
+        (100, 5, 2, 7)
         """
         # ruff: noqa: D205, D400
         return super().evaluate(*sample_pts)

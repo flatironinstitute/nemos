@@ -177,15 +177,14 @@ def _process_tuple_frequencies(frequencies: tuple, ndim: int):
 
     Examples
     --------
-    >>> _process_tuple_frequencies((2, 5), jnp.arange, 1)
+    >>> _process_tuple_frequencies((2, 5), 1)
     (Array([2., 3., 4.], dtype=float32),)
 
     >>> _process_tuple_frequencies(
     ...     (jnp.array([1, 2]), jnp.array([3, 4])),
-    ...     jnp.arange,
     ...     2
     ... )
-    (Array([0., 1.], dtype=float32), Array([0., 1.], dtype=float32))
+    (Array([1, 2], dtype=int32), Array([3, 4], dtype=int32))
     """
     if len(frequencies) == 2 and all(
         isinstance(f, Number) and (f == int(f)) for f in frequencies
