@@ -78,7 +78,7 @@ def arange_constructor(arg: NDArray | int | Tuple[int, int]):
 
     Parameters
     ----------
-    arg : array-like of int, int, or tuple of int
+    arg :
         Specifies how to create the frequency array:
         * If array-like, it is validated and sorted before returning.
         * If int, must be > 0, and the result is `jnp.arange(arg, dtype=float)`.
@@ -87,7 +87,7 @@ def arange_constructor(arg: NDArray | int | Tuple[int, int]):
 
     Returns
     -------
-    jax.Array
+    :
         A 1D array of frequencies as floats.
 
     Raises
@@ -112,7 +112,7 @@ def arange_constructor(arg: NDArray | int | Tuple[int, int]):
     Array([2., 3., 4.], dtype=float32)
 
     >>> arange_constructor(jnp.array([3, 1, 2]))
-    Array([1, 2, 3], dtype=int32)
+    Array([1., 2., 3.], dtype=float32)
     """
     if is_numpy_array_like(arg):
         arg = _check_and_sort_frequencies(arg)
@@ -183,7 +183,7 @@ def _process_tuple_frequencies(frequencies: tuple, ndim: int):
     ...     (jnp.array([1, 2]), jnp.array([3, 4])),
     ...     2
     ... )
-    (Array([1, 2], dtype=int32), Array([3, 4], dtype=int32))
+    (Array([1., 2.], dtype=float32), Array([3., 4.], dtype=float32))
     """
     if len(frequencies) == 2 and all(
         isinstance(f, Number) and (f == int(f)) for f in frequencies
