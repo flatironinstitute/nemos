@@ -172,7 +172,7 @@ def _process_tuple_frequencies(frequencies: tuple, ndim: int):
     Examples
     --------
     >>> _process_tuple_frequencies((2, 5), 1)
-    (Array([2., 3., 4.], dtype=float32),)
+    [Array([2., 3., 4.], dtype=float32)]
 
     """
     if len(frequencies) == 2 and all(
