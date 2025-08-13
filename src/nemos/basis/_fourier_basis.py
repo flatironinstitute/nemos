@@ -12,7 +12,7 @@ from numpy._typing import NDArray
 from numpy.typing import ArrayLike
 from pynapple import Tsd, TsdFrame, TsdTensor
 
-from ..type_casting import is_numpy_array_like, support_pynapple
+from ..type_casting import is_at_least_1d_numpy_array_like, support_pynapple
 from ..typing import FeatureMatrix
 from ._basis import Basis, check_transform_input, min_max_rescale_samples
 from ._basis_mixin import AtomicBasisMixin
@@ -114,7 +114,7 @@ def arange_constructor(arg: NDArray | int | Tuple[int, int]):
     >>> arange_constructor(jnp.array([3, 1, 2]))
     Array([1., 2., 3.], dtype=float32)
     """
-    if is_numpy_array_like(arg):
+    if is_at_least_1d_numpy_array_like(arg):
         arg = _check_and_sort_frequencies(arg)
         return arg[0]
 
@@ -190,7 +190,9 @@ def _process_tuple_frequencies(frequencies: tuple, ndim: int):
     ):
         return (arange_constructor(frequencies),)
 
-    if len(frequencies) == ndim and all(is_numpy_array_like(f) for f in frequencies):
+    if len(frequencies) == ndim and all(
+        is_at_least_1d_numpy_array_like(f) for f in frequencies
+    ):
         return tuple(map(arange_constructor, frequencies))
 
     raise ValueError(
@@ -517,7 +519,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
                 frequencies, self._n_input_dimensionality
             )
 
-        elif is_numpy_array_like(frequencies):
+        elif is_at_least_1d_numpy_array_like(frequencies):
             frequencies = tuple(_check_and_sort_frequencies(*([frequencies] * ndim)))
 
         elif isinstance(frequencies, list):

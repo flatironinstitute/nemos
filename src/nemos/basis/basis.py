@@ -9,6 +9,7 @@ from typing import List, Optional, Sequence, Tuple
 import jax
 from numpy.typing import ArrayLike, NDArray
 
+from ..type_casting import is_numpy_array_like
 from ..typing import FeatureMatrix
 from ._basis_mixin import AtomicBasisMixin, BasisMixin, ConvBasisMixin, EvalBasisMixin
 from ._composition_utils import add_docstring
@@ -2695,15 +2696,17 @@ class FourierEval(EvalBasisMixin, FourierBasis):
 
         def _is_leaf(x):
             return isinstance(x, Sequence) and all(
-                isinstance(xi, Number) or xi is None for xi in x
+                isinstance(xi, Number)
+                or xi is None
+                or isinstance(xi, jax.numpy.generic)  # NumPy/JAX numpy scalar types
+                or (is_numpy_array_like(xi) and xi.ndim == 0)  # 0-D arrays
+                for xi in x
             )
 
         values = jax.tree_util.tree_leaves(values, is_leaf=_is_leaf)
 
         if len(values) == 1:
-            values, err = self._format_bounds(values[0])
-            if err is not None:
-                raise err
+            values = self._format_bounds(values[0])
             values = (values,) * self.ndim
 
         elif len(values) != self.ndim:
@@ -2714,12 +2717,9 @@ class FourierEval(EvalBasisMixin, FourierBasis):
                 "of the basis. "
             )
         else:
-            out = jax.tree_util.tree_map(self._format_bounds, values, is_leaf=_is_leaf)
-            errs = [err for _, err in out if err is not None]
-
-            if len(errs):
-                raise errs[0]
-
-            values = tuple(vals for vals, _ in out)
+            values = jax.tree_util.tree_map(
+                self._format_bounds, values, is_leaf=_is_leaf
+            )
+            values = tuple(vals for vals in values)
 
         self._bounds = values

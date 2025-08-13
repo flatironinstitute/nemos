@@ -3374,6 +3374,11 @@ class TestFourierBasis(BasisFuncsTesting):
                 pytest.raises(TypeError, match="Could not convert `bounds` to float"),
             ),
             ((np.pi / 2, np.pi), 1, does_not_raise()),
+            # generic numpy scalar
+            ((np.int64(1), np.int64(2)), 1, does_not_raise()),
+            # 0-dim array
+            ((np.array(1), np.array(2)), 1, does_not_raise()),
+            ((jax.numpy.array(1), jax.numpy.array(2)), 1, does_not_raise()),
             (
                 (np.pi, np.pi),
                 1,

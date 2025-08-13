@@ -565,7 +565,6 @@ class EvalBasisMixin:
     @staticmethod
     def _format_bounds(values: Any) -> Tuple[Any, Exception | None]:
         """Check bounds and cast to tuple."""
-        err = None
 
         if not hasattr(values, "__len__"):
             raise TypeError(
@@ -574,28 +573,25 @@ class EvalBasisMixin:
             )
 
         elif values is not None and len(values) != 2:
-            err = ValueError(
+            raise ValueError(
                 f"The provided `bounds` must be of length two. The bounds ``{values}`` have length "
                 f"{len(values)} instead!"
             )
 
         try:
             values = values if values is None else tuple(map(float, values))
-        except (ValueError, TypeError):
-            err = TypeError(
+        except (ValueError, TypeError) as e:
+            raise TypeError(
                 "Could not convert `bounds` to float. "
                 f"The provided bounds values are '{values}'."
-            )
-
-        if err is not None:
-            return None, err
+            ) from e
 
         if values is not None and values[1] <= values[0]:
-            err = ValueError(
+            raise ValueError(
                 f"Invalid bound {values}. Lower bound is greater or equal than the upper bound."
             )
 
-        return values, err
+        return values
 
     @bounds.setter
     def bounds(self, values: Union[None, Tuple[float, float]]):
@@ -603,9 +599,7 @@ class EvalBasisMixin:
         if values is None:
             self._bounds = None
             return
-        values, err = self._format_bounds(values)
-        if err is not None:
-            raise err
+        values = self._format_bounds(values)
         if values is not None and len(values) != 2:
             raise ValueError(
                 f"The provided `bounds` must be of length two. Length {len(values)} provided instead!"
