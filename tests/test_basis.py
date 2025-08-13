@@ -3429,7 +3429,7 @@ class TestFourierBasis(BasisFuncsTesting):
         )
         bas.frequency_mask = np.array([0, 1, 0, 1, 0])
         np.testing.assert_array_equal(bas.masked_frequencies, np.array([[1, 3]]))
-        with pytest.raises(AttributeError, match="has no setter"):
+        with pytest.raises(AttributeError, match="has no setter|can't set attribute"):
             bas.masked_frequencies = np.arange(5).reshape(1, 5)
 
 
