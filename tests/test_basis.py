@@ -3449,6 +3449,36 @@ class TestFourierBasis(BasisFuncsTesting):
         with pytest.raises(AttributeError, match="has no setter|can't set attribute"):
             bas.masked_frequencies = np.arange(5).reshape(1, 5)
 
+    @pytest.mark.parametrize(
+        "frequency_mask, freqs_input, expected_output",
+        [
+            ("all", np.arange(0, 4), np.array([0, 1, 2, 3])),
+            ("no-intercept", np.arange(0, 4), np.array([1, 2, 3])),
+            ("all", np.arange(1, 4), np.array([1, 2, 3])),
+            ("no-intercept", np.arange(1, 4), np.array([1, 2, 3])),
+        ],
+    )
+    def test_string_init(self, frequency_mask, freqs_input, expected_output):
+        bas = self.cls["eval"](
+            frequencies=freqs_input, ndim=1, frequency_mask=frequency_mask
+        )
+        np.array_equal(expected_output, bas.masked_frequencies)
+
+    @pytest.mark.parametrize(
+        "frequency_mask, freqs_input, expected_output",
+        [
+            ("all", np.arange(0, 2), np.array([[0, 0, 1, 1], [0, 1, 0, 1]])),
+            ("no-intercept", np.arange(0, 2), np.array([[0, 1, 1], [1, 0, 1]])),
+            ("all", np.arange(1, 2), np.array([[1], [1]])),
+            ("no-intercept", np.arange(1, 2), np.array([[1], [1]])),
+        ],
+    )
+    def test_string_init_2d(self, frequency_mask, freqs_input, expected_output):
+        bas = self.cls["eval"](
+            frequencies=freqs_input, ndim=2, frequency_mask=frequency_mask
+        )
+        np.array_equal(expected_output, bas.masked_frequencies)
+
 
 class TestAdditiveBasis(CombinedBasis):
     cls = {"eval": AdditiveBasis, "conv": AdditiveBasis}
