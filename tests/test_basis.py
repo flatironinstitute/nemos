@@ -1,7 +1,6 @@
 import inspect
 import itertools
 import re
-from collections import namedtuple
 from contextlib import nullcontext as does_not_raise
 from functools import partial
 from unittest.mock import patch
@@ -14,6 +13,7 @@ from conftest import (
     DEFAULT_KWARGS,
     BasisFuncsTesting,
     CombinedBasis,
+    SizeTerminal,
     custom_basis,
     list_all_basis_classes,
     list_all_real_basis_classes,
@@ -44,8 +44,6 @@ from nemos.basis._raised_cosine_basis import (
 )
 from nemos.basis._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis
 from nemos.utils import pynapple_concatenate_numpy
-
-SizeTerminal = namedtuple("SizeTerminal", ["columns", "lines"])
 
 
 def compare_bounds(bas, bounds):
@@ -3427,7 +3425,7 @@ class TestFourierBasis(BasisFuncsTesting):
         bas.frequency_mask = np.array([0, 1, 0, 1, 0])
         np.testing.assert_array_equal(bas.masked_frequencies, np.array([[1, 3]]))
         with pytest.raises(AttributeError, match="has no setter"):
-            bas.masked_frequencies =  np.arange(5).reshape(1, 5)
+            bas.masked_frequencies = np.arange(5).reshape(1, 5)
 
 
 class TestAdditiveBasis(CombinedBasis):

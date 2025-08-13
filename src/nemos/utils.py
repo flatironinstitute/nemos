@@ -3,6 +3,7 @@
 import inspect
 import os
 import warnings
+from importlib.metadata import version
 from typing import Any, Callable, List, Literal, Optional, Union
 
 import jax
@@ -13,6 +14,20 @@ from numpy.typing import NDArray
 from .base_class import Base
 from .tree_utils import pytree_map_and_reduce
 from .type_casting import is_numpy_array_like, support_pynapple
+
+__all__ = [
+    "check_dimensionality",
+    "validate_axis",
+    "nan_pad",
+    "shift_time_series",
+    "row_wise_kron",
+    "one_over_x",
+]
+
+
+def __dir__() -> list[str]:
+    return __all__
+
 
 SPECIAL_KEY_NAMES = {
     jax.scipy.stats.norm.cdf: "norm.cdf",
@@ -42,7 +57,7 @@ def check_dimensionality(
     return not pytree_map_and_reduce(lambda x: x.ndim != expected_dim, any, pytree)
 
 
-def validate_axis(tree: Any, axis: int):
+def validate_axis(pytree: Any, axis: int):
     """
     Validate the axis for each array in a given tree structure.
 
@@ -51,7 +66,7 @@ def validate_axis(tree: Any, axis: int):
 
     Parameters
     ----------
-    tree :
+    pytree :
         A tree containing arrays.
     axis :
         The axis that should be valid for each array in the tree. This means each array must have at least
@@ -69,7 +84,7 @@ def validate_axis(tree: Any, axis: int):
     if not isinstance(axis, int) or axis < 0:
         raise ValueError("`axis` must be a non negative integer.")
 
-    if pytree_map_and_reduce(lambda x: x.ndim <= axis, any, tree):
+    if pytree_map_and_reduce(lambda x: x.ndim <= axis, any, pytree):
         raise ValueError(
             "'axis' must be smaller than the number of dimensions of any array in 'tree'."
         )
@@ -573,3 +588,181 @@ def _get_terminal_size():
 def one_over_x(x: NDArray):
     """Implement 1/x."""
     return jnp.power(x, -1)
+
+
+def _flatten_dict(nested_dict: dict, parent_key: str = "") -> dict:
+    """
+    Flatten a nested dictionary into a single-level dictionary with keys representing the hierarchy.
+
+    Parameters
+    ----------
+    nested_dict :
+        The dictionary to flatten.
+    parent_key :
+        This key starts blank, but recursively it will be filled with the parent key,
+        which is used to create the hierarchy in the flattened dictionary.
+
+    Returns
+    -------
+    dict :
+        A flattened dictionary where the hierarchy is represented by concatenated keys (using __ as a separator).
+    """
+
+    sep = "__"
+    items = []
+    # Iterate over key-value pairs in the dictionary
+    for k, v in nested_dict.items():
+        new_key = f"{parent_key}{sep}{k}" if parent_key else k
+        # Recursively flatten if the value is a dictionary
+        if isinstance(v, dict):
+            items.extend(_flatten_dict(v, new_key).items())
+        else:
+            # None values and non-standard types are converted to numpy
+            if v is None:
+                v = np.nan
+            elif not isinstance(v, (str, int, float, bool)):
+                v = np.array(v)
+            items.append((new_key, v))
+    return dict(items)
+
+
+def _unflatten_dict(flat_dict: dict, flat_map_dict: Optional[dict] = None) -> dict:
+    """
+    Unflatten a dictionary with keys representing hierarchy into a nested dictionary.
+
+    Parameters
+    ----------
+    flat_dict :
+        The dictionary to unflatten.
+
+    Returns
+    -------
+    out :
+        A nested dictionary with the original hierarchy restored.
+    """
+    if flat_map_dict is None:
+        flat_map_dict = {}
+        add_mapping = False
+    else:
+        add_mapping = True
+
+    sep = "__"
+    nested_dict = {}
+    # Process each key-value pair in the flattened dictionary
+    for k, v in flat_dict.items():
+        keys = k.split(sep)
+
+        if k in flat_map_dict:
+            mapping = [True, flat_map_dict[k]]
+        else:
+            mapping = [False, None]
+
+        dct = nested_dict
+        # Traverse or create nested dictionaries
+        for key in keys[:-1]:
+            if key not in dct:
+                dct[key] = {}
+            dct = dct[key]
+        # Convert numpy string, int, float or nan to their respective types
+        if v.dtype.type is np.str_:
+            v = str(v)
+        elif v.dtype.type is np.int_:
+            v = int(v)
+        elif issubclass(v.dtype.type, np.floating):
+            if v.ndim == 0:
+                v = None if np.isnan(v) else float(v)
+        dct[keys[-1]] = [v, mapping] if add_mapping else v
+    return nested_dict
+
+
+def _get_name(x: object) -> str:
+    """
+    Get the name of an object ``x``, for saving/loading purposes.
+
+    Parameters
+    ----------
+    x :
+        A python object or function.
+
+    Returns
+    -------
+    name :
+        The name of the object, with full module path (e.g.,
+        ``nemos.observation_models.PoissonObservations``).
+    """
+    if x is None:
+        return None
+    if hasattr(x, "__module__") and hasattr(x, "__name__"):
+        # x is a function or class
+        return f"{x.__module__}.{x.__name__}"
+    elif hasattr(x, "__class__"):
+        # x is an instance of a class
+        cls = x.__class__
+        return f"{cls.__module__}.{cls.__name__}"
+    else:
+        raise TypeError(f"Cannot retrieve name of variable {x} of type {type(x)}.")
+
+
+def _is_callable_or_class(obj):
+    """Check if obj is callable or class."""
+    return callable(obj) or inspect.isclass(obj)
+
+
+def _unpack_params(params_dict: dict, string_attrs: list = None) -> dict:
+    """
+    Convert a parameter dictionary into serializable format.
+
+    For objects with `get_params`/`set_params`, extracts the class name and
+    parameters. Some attributes are converted to strings to facilitate saving and loading.
+
+    Parameters
+    ----------
+    params_dict :
+        Dictionary of parameters, possibly containing objects.
+    string_attrs :
+        List of attributes that should be converted to strings (e.g., `inverse_link_function`).
+
+    Returns
+    -------
+    dict :
+        Serializable dictionary with class names and nested parameters.
+    """
+
+    out = dict()
+    for key, value in params_dict.items():
+        # if the parameter is an objet with get_params/set_params,
+        # extract its class name and parameters
+        if hasattr(value, "get_params") and hasattr(value, "set_params"):
+            cls_name = _get_name(value)
+            params = _unpack_params(value.get_params(deep=False), string_attrs)
+            out[key] = {"class": cls_name, "params": params}
+        else:
+            # if the parameter is in string_attrs, store its name
+            if string_attrs is not None and (
+                key in string_attrs or _is_callable_or_class(value)
+            ):
+                out[key] = _get_name(value)
+            else:
+                out[key] = value
+    return out
+
+
+def get_env_metadata() -> dict[str, str]:
+    """Get environment metadata.
+
+    Get the environment metadata relevant to model fitting.
+
+
+    Notes
+    -----
+    ``jax`` and ``jaxlib`` for arrays and linear algebra, ``scipy`` is used at model
+    initialization to find numerical inverse for custom link functions, ``scikit-learn``
+    is used for pipelines and cross-validation.
+    """
+    return {
+        "jax": version("jax"),
+        "jaxlib": version("jaxlib"),
+        "scipy": version("scipy"),
+        "scikit-learn": version("scikit-learn"),
+        "nemos": version("nemos"),
+    }

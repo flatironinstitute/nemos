@@ -406,13 +406,13 @@ def support_pynapple(conv_type: Literal["jax", "numpy"] = "jax") -> Callable:
                     )
                 time, time_support = get_time_info(*args, **kwargs)
 
-                def cast_out(tree, metadata=None):
+                def cast_out(pytree, metadata=None):
                     # cast back to pynapple
                     return jax.tree_util.tree_map(
                         lambda x: cast_to_pynapple(
                             x, time, time_support, metadata=metadata
                         ),
-                        tree,
+                        pytree,
                     )
 
             else:

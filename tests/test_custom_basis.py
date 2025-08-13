@@ -1,9 +1,11 @@
 from contextlib import nullcontext as does_not_raise
+from unittest.mock import patch
 
 import numpy as np
 import pynapple as nap
 import pytest
 from conftest import (
+    SizeTerminal,
     basis_collapse_all_non_vec_axis,
     basis_with_add_kwargs,
     custom_basis,
@@ -269,21 +271,22 @@ def test_n_output_features_match(inp_dim, expected_num, vec_shape):
 @pytest.mark.parametrize("ps", [True, False])
 def test_basis_repr(ps):
     """Check that repr strips the expectation"""
-    bas = custom_basis(5, pynapple_support=ps)
-    assert (
-        repr(bas)
-        == f"CustomBasis(\n    funcs=[partial(power_func, 1), ..., partial(power_func, 5)],\n    ndim_input=1,\n    pynapple_support={ps},\n    is_complex=False\n)"
-    )
-    bas = custom_basis(1, pynapple_support=ps)
-    assert (
-        repr(bas)
-        == f"CustomBasis(\n    funcs=[partial(power_func, 1)],\n    ndim_input=1,\n    pynapple_support={ps},\n    is_complex=False\n)"
-    )
-    # check composite basis repr
-    assert (
-        repr(bas + bas)
-        == f"'(CustomBasis + CustomBasis_1)': AdditiveBasis(\n    basis1=CustomBasis(\n        funcs=[partial(power_func, 1)],\n        ndim_input=1,\n        pynapple_support={ps},\n        is_complex=False\n    ),\n    basis2='CustomBasis_1': CustomBasis(\n        funcs=[partial(power_func, 1)],\n        ndim_input=1,\n        pynapple_support={ps},\n        is_complex=False\n    ),\n)"
-    )
+    with patch("os.get_terminal_size", return_value=SizeTerminal(80, 24)):
+        bas = custom_basis(5, pynapple_support=ps)
+        assert (
+            repr(bas)
+            == f"CustomBasis(\n    funcs=[partial(power_func, 1), ..., partial(power_func, 5)],\n    ndim_input=1,\n    pynapple_support={ps},\n    is_complex=False\n)"
+        )
+        bas = custom_basis(1, pynapple_support=ps)
+        assert (
+            repr(bas)
+            == f"CustomBasis(\n    funcs=[partial(power_func, 1)],\n    ndim_input=1,\n    pynapple_support={ps},\n    is_complex=False\n)"
+        )
+        # check composite basis repr
+        assert (
+            repr(bas + bas)
+            == f"'(CustomBasis + CustomBasis_1)': AdditiveBasis(\n    basis1=CustomBasis(\n        funcs=[partial(power_func, 1)],\n        ndim_input=1,\n        pynapple_support={ps},\n        is_complex=False\n    ),\n    basis2='CustomBasis_1': CustomBasis(\n        funcs=[partial(power_func, 1)],\n        ndim_input=1,\n        pynapple_support={ps},\n        is_complex=False\n    ),\n)"
+        )
 
 
 @pytest.mark.parametrize("input_shape", [(1,), (1, 2), (1, 2, 3), ()])

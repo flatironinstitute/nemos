@@ -131,14 +131,14 @@ def fetch_data(
     return retriever.fetch(dataset_name)
 
 
-def download_dandi_data(dandiset_id: str, filepath: str) -> NWBHDF5IO:
+def download_dandi_data(dandiset_id: str, file_path: str) -> NWBHDF5IO:
     """Download a dataset from the [DANDI Archive](https://dandiarchive.org/).
 
     Parameters
     ----------
     dandiset_id :
         6-character string of numbers giving the ID of the dandiset.
-    filepath :
+    file_path :
         filepath to the specific .nwb file within the dandiset we wish to return.
 
     Returns
@@ -179,7 +179,7 @@ def download_dandi_data(dandiset_id: str, filepath: str) -> NWBHDF5IO:
             "conda to install 'pooch'."
         )
     with DandiAPIClient() as client:
-        asset = client.get_dandiset(dandiset_id, "draft").get_asset_by_path(filepath)
+        asset = client.get_dandiset(dandiset_id, "draft").get_asset_by_path(file_path)
         s3_url = asset.get_content_url(follow_redirects=1, strip_query=True)
 
     # first, create a virtual filesystem based on the http protocol
