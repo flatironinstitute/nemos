@@ -259,8 +259,8 @@ Defining a two-dimensional Fourier basis follows the syntax:
 fourier_2d = FourierEval(frequencies=[5, 4], ndim=2)
 
 # Equvalent definitons
-FourierEval(frequencies=[np.arange(5), np.arange(4)], ndim=2)
-FourierEval(frequencies=[(0, 5), (0, 4)], ndim=2)
+print("Pass a list of tuple:\n", FourierEval(frequencies=[(0, 5), (0, 4)], ndim=2))
+print("Pass a list of arrays:\n", FourierEval(frequencies=[np.arange(5), np.arange(4)], ndim=2))
 
 ```
 

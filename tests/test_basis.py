@@ -2946,6 +2946,7 @@ class TestFourierBasis(BasisFuncsTesting):
         )
         with expectation:
             bas.frequencies = frequencies
+            assert all(np.issubdtype(f, np.floating) for f in bas.frequencies)
 
     @pytest.mark.parametrize(
         "frequency_mask, expectation, output_pairs",

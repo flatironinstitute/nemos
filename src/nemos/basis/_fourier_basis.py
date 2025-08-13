@@ -57,7 +57,7 @@ def _check_and_sort_frequencies(*frequencies):
     is_int_like, is_positive = _check_array_properties(*frequencies)
 
     if is_int_like and is_positive:
-        sorted_freqs = tuple(jnp.sort(f) for f in frequencies)
+        sorted_freqs = tuple(jnp.sort(f).astype(float) for f in frequencies)
         if any(
             not jnp.array_equal(f1, f2) for f1, f2 in zip(frequencies, sorted_freqs)
         ):
