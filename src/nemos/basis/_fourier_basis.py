@@ -62,8 +62,7 @@ def _check_and_sort_frequencies(*frequencies):
             not jnp.array_equal(f1, f2) for f1, f2 in zip(frequencies, sorted_freqs)
         ):
             warnings.warn("Unsorted frequencies provided! Frequencies will be sorted.")
-            return sorted_freqs
-        return frequencies
+        return sorted_freqs
 
     raise ValueError(_format_error_message(is_positive, is_int_like))
 

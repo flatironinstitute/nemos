@@ -257,6 +257,11 @@ Defining a two-dimensional Fourier basis follows the syntax:
 
 # 2D basis with n=0,...,4 (x-axis) and m=0,...,3 (y-axis) frequencies
 fourier_2d = FourierEval(frequencies=[5, 4], ndim=2)
+
+# Equvalent definitons
+FourierEval(frequencies=[np.arange(5), np.arange(4)], ndim=2)
+FourierEval(frequencies=[(0, 5), (0, 4)], ndim=2)
+
 ```
 
 The total number of output features is $5\cdot4\cdot2-1=39$, and the DC term corresponds to the pair $\mathbf{n}=\mathbf{0}=(0,0)$.
