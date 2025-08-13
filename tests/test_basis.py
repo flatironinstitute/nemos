@@ -1412,7 +1412,7 @@ class TestSharedMethods:
                 basis.MSplineConv: "MSplineConv(n_basis_funcs=5, window_size=10, order=4)",
                 basis.OrthExponentialConv: "OrthExponentialConv(n_basis_funcs=5, window_size=10)",
                 basis.HistoryConv: "HistoryConv(window_size=10)",
-                basis.FourierEval: "FourierEval(frequencies=(Array([1., 2.], dtype=float32),), ndim=1, bounds=((1.0, 2.0),))",
+                basis.FourierEval: "FourierEval(frequencies=[Array([1., 2.], dtype=float32)], ndim=1, bounds=((1.0, 2.0),))",
             }
         ],
     )
@@ -1446,7 +1446,7 @@ class TestSharedMethods:
                 basis.MSplineConv: "'mylabel': MSplineConv(n_basis_funcs=5, window_size=10, order=4)",
                 basis.OrthExponentialConv: "'mylabel': OrthExponentialConv(n_basis_funcs=5, window_size=10)",
                 basis.HistoryConv: "'mylabel': HistoryConv(window_size=10)",
-                basis.FourierEval: "'mylabel': FourierEval(frequencies=(Array([1., 2.], dtype=float32),), ndim=1, bounds=((1.0, 2.0),))",
+                basis.FourierEval: "'mylabel': FourierEval(frequencies=[Array([1., 2.], dtype=float32)], ndim=1, bounds=((1.0, 2.0),))",
             }
         ],
     )
@@ -2823,7 +2823,10 @@ class TestFourierBasis(BasisFuncsTesting):
             (
                 1,
                 (np.arange(1, 10),),
-                does_not_raise(),
+                pytest.raises(
+                    ValueError,
+                    match="must be a 2-element tuple of non-negative integers",
+                ),
             ),
             (2, 10, does_not_raise()),
             (2, (1, 10), does_not_raise()),
@@ -2848,7 +2851,7 @@ class TestFourierBasis(BasisFuncsTesting):
                 (np.arange(1, 10),),
                 pytest.raises(
                     ValueError,
-                    match=r"Invalid frequencies specification",
+                    match=r"must be a 2-element tuple of non-negative integers",
                 ),
             ),
             (2, [10, 10], does_not_raise()),
@@ -2857,7 +2860,10 @@ class TestFourierBasis(BasisFuncsTesting):
             (
                 2,
                 (np.arange(1, 10), np.arange(1, 10)),
-                does_not_raise(),
+                pytest.raises(
+                    ValueError,
+                    match=r"must be a 2-element tuple of non-negative integers",
+                ),
             ),
             (1, [(0, 1)], does_not_raise()),
             (
@@ -2945,6 +2951,8 @@ class TestFourierBasis(BasisFuncsTesting):
         with expectation:
             bas.frequencies = frequencies
             assert all(np.issubdtype(f, np.floating) for f in bas.frequencies)
+            assert isinstance(bas.frequencies, list)
+            assert all(isinstance(f, jax.numpy.ndarray) for f in bas.frequencies)
 
     @pytest.mark.parametrize(
         "frequency_mask, expectation, output_pairs",
@@ -3292,15 +3300,18 @@ class TestFourierBasis(BasisFuncsTesting):
     @pytest.mark.parametrize(
         "ndim, expectation",
         [
-            (0, pytest.raises(ValueError, match="ndim must be a positive integer")),
+            (0, pytest.raises(ValueError, match="ndim must be a non-negative integer")),
             (1, does_not_raise()),
             (2, does_not_raise()),
             (2.0, does_not_raise()),
-            (2.1, pytest.raises(ValueError, match="ndim must be a positive integer")),
+            (
+                2.1,
+                pytest.raises(ValueError, match="ndim must be a non-negative integer"),
+            ),
             (np.array(2.0), does_not_raise()),
             (
                 np.array(2.1),
-                pytest.raises(ValueError, match="ndim must be a positive integer"),
+                pytest.raises(ValueError, match="ndim must be a non-negative integer"),
             ),
             (
                 "a",

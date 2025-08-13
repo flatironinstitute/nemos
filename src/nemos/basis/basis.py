@@ -2430,17 +2430,17 @@ class FourierEval(EvalBasisMixin, FourierBasis):
     Parameters
     ----------
     frequencies :
-        Frequency specification(s) for the basis. The expected format depends
-        on ``ndim``:
+        Frequency specification(s).
 
-        - If ``ndim == 1``: a single specification may be given as an integer,
-          a tuple ``(low, high)``, or an array of explicit frequencies.
-        - If ``ndim > 1``: provide a list or tuple of specifications, one for
-          each dimension, each following the single-dimension rules above.
+        **Single specification** (broadcasted to all dimensions when ``ndim > 1``):
+          * ``int k`` with ``k >= 0``.
+          * ``(low, high)``: a 2-element tuple of integers with ``0 <= low < high``.
+          * 1-D NumPy ``ndarray`` of non-negative integers. If not sorted ascending,
+            a ``UserWarning`` is issued.
 
-        Integers must be non-negative. Tuples must contain two integers with
-        ``low < high``. Arrays must contain only non-negative integers in
-        ascending order (unsorted arrays trigger a warning).
+        **Per-dimension container**:
+          * A **list** of length ``ndim`` whose elements are each a valid single specification.
+            For ``ndim == 1``, a length-1 list is also accepted.
 
     ndim :
         Dimensionality of the basis. Default is 1.
@@ -2481,6 +2481,9 @@ class FourierEval(EvalBasisMixin, FourierBasis):
     - The output of ``compute_features`` contains both cosine and sine components for
       each active frequency combination, except that the all-zero frequency
       includes only a cosine term.
+    - When a **tuple** is provided as a frequency, it is interpreted
+      as a single range specification. Tuples that are not exactly a 2-element
+      tuple of non-negative integers are invalid.
 
     Examples
     --------

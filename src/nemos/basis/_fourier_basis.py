@@ -3,7 +3,7 @@
 import itertools
 import warnings
 from numbers import Number
-from typing import Any, Callable, List, Optional, Tuple
+from typing import Any, Callable, List, Literal, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -53,11 +53,11 @@ def _format_error_message(
     return msg
 
 
-def _check_and_sort_frequencies(*frequencies):
+def _check_and_sort_frequencies(*frequencies) -> List[jnp.ndarray]:
     is_int_like, is_positive = _check_array_properties(*frequencies)
 
     if is_int_like and is_positive:
-        sorted_freqs = tuple(jnp.sort(f).astype(float) for f in frequencies)
+        sorted_freqs = [jnp.sort(f).astype(float) for f in frequencies]
         if any(
             not jnp.array_equal(f1, f2) for f1, f2 in zip(frequencies, sorted_freqs)
         ):
@@ -145,20 +145,15 @@ def _process_tuple_frequencies(frequencies: tuple, ndim: int):
 
     This function handles two valid cases for specifying frequencies as a tuple:
 
-    1. A 2-element tuple of integers:
+    - A 2-element tuple of integers:
        - Both elements must be numeric and equal to their integer representation.
        - Returns a single-element tuple containing the result of `arange_constructor(frequencies)`.
 
-    2. A tuple of arrays with length matching `n_input_dimensionality`:
-       - Each element must be array-like.
-       - Returns a tuple where `arange_constructor` is applied to each element.
 
     Parameters
     ----------
     frequencies :
-        The input tuple specifying frequencies. It must either be:
-        - A 2-element tuple of integers, or
-        - A tuple of array-like objects with length equal to `n_input_dimensionality`.
+        The input tuple specifying frequencies. It must be a 2-element tuple of integers.
 
     ndim :
         The expected number of input dimensions. Used to validate the tuple length
@@ -179,26 +174,15 @@ def _process_tuple_frequencies(frequencies: tuple, ndim: int):
     >>> _process_tuple_frequencies((2, 5), 1)
     (Array([2., 3., 4.], dtype=float32),)
 
-    >>> _process_tuple_frequencies(
-    ...     (jnp.array([1, 2]), jnp.array([3, 4])),
-    ...     2
-    ... )
-    (Array([1., 2.], dtype=float32), Array([3., 4.], dtype=float32))
     """
     if len(frequencies) == 2 and all(
         isinstance(f, Number) and (f == int(f)) for f in frequencies
     ):
-        return (arange_constructor(frequencies),)
-
-    if len(frequencies) == ndim and all(
-        is_at_least_1d_numpy_array_like(f) for f in frequencies
-    ):
-        return tuple(map(arange_constructor, frequencies))
+        return [arange_constructor(frequencies)]
 
     raise ValueError(
         "Invalid frequencies specification. If ``frequencies`` are provided as a tuple, "
-        f"it must be either a 2-element tuple of integers or a tuple of array-like "
-        f"objects of length {ndim}. Tuple {frequencies} provided instead."
+        f"it must be a 2-element tuple of non-negative integers. Tuple {frequencies} provided instead."
     )
 
 
@@ -288,27 +272,17 @@ class FourierBasis(AtomicBasisMixin, Basis):
     Parameters
     ----------
     frequencies :
-        Frequency specification(s) for each input dimension.
+        Frequency specification(s).
 
-        - If ``ndim == 1``: a single specification is expected.
-        - If ``ndim > 1``: a list or tuple of length ``ndim`` is expected, with
-          one specification per dimension.
+        **Single specification** (broadcasted to all dimensions when ``ndim > 1``):
+          * ``int k`` with ``k >= 0``.
+          * ``(low, high)``: a 2-element tuple of integers with ``0 <= low < high``.
+          * 1-D NumPy ``ndarray`` of non-negative integers. If not sorted ascending,
+            a ``UserWarning`` is issued.
 
-        A single specification can be:
-            * **int** : number of equally spaced frequencies from 0 to the
-              integer (inclusive). Must be >= 0.
-            * **tuple** of two ints ``(low, high)`` : inclusive range of
-              frequencies. Must satisfy ``0 <= low < high``.
-            * **array** of ints : explicit list of frequencies (must be
-              sorted ascending; unsorted inputs trigger a ``UserWarning``).
-
-        Validation rules:
-            * Negative integers raise ``ValueError``.
-            * Tuples with ``low >= high`` raise ``ValueError``.
-            * Arrays with negative values raise ``ValueError``.
-            * Arrays containing non-integers raise ``TypeError``.
-            * Mismatch between number of specifications and ``ndim`` raises
-              ``ValueError``.
+        **Per-dimension container**:
+          * A **list** of length ``ndim`` whose elements are each a valid single specification.
+            For ``ndim == 1``, a length-1 list is also accepted.
 
     ndim :
         Dimensionality of the basis. Default is 1.
@@ -349,6 +323,9 @@ class FourierBasis(AtomicBasisMixin, Basis):
     - The output of ``compute_features`` contains both cosine and sine components for
       each active frequency combination, except that the all-zero frequency
       includes only a cosine term.
+    - When a **tuple** is provided as a frequency, it is interpreted
+      as a single range specification. Tuples that are not exactly a 2-element
+      tuple of non-negative integers are invalid.
     """
 
     _is_complex = True
@@ -364,7 +341,9 @@ class FourierBasis(AtomicBasisMixin, Basis):
             | List[NDArray]
         ),
         ndim: int,
-        frequency_mask: jnp.ndarray | None = None,
+        frequency_mask: (
+            Literal["all", "no-intercept"] | jnp.ndarray | None
+        ) = "no-intercept",
         label: Optional[str] = None,
     ) -> None:
         self._n_input_dimensionality = self._check_ndim(ndim)
@@ -491,7 +470,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
         )
 
     @property
-    def frequencies(self) -> Tuple[jnp.ndarray, ...]:
+    def frequencies(self) -> List[jnp.ndarray]:
         """Frequencies for the basis.
 
         Returns
@@ -505,14 +484,12 @@ class FourierBasis(AtomicBasisMixin, Basis):
     @frequencies.setter
     def frequencies(
         self,
-        frequencies: (
-            int | tuple[int, int] | list[int] | list[tuple[int, int]] | tuple[NDArray]
-        ),
+        frequencies: int | tuple[int, int] | list[int] | list[tuple[int, int]],
     ) -> None:
         ndim = self._n_input_dimensionality
 
         if isinstance(frequencies, Number) and (frequencies == int(frequencies)):
-            frequencies = (arange_constructor(frequencies),) * ndim
+            frequencies = [arange_constructor(frequencies)] * ndim
 
         elif isinstance(frequencies, tuple):
             frequencies = _process_tuple_frequencies(
@@ -520,14 +497,14 @@ class FourierBasis(AtomicBasisMixin, Basis):
             )
 
         elif is_at_least_1d_numpy_array_like(frequencies):
-            frequencies = tuple(_check_and_sort_frequencies(*([frequencies] * ndim)))
+            frequencies = _check_and_sort_frequencies(*([frequencies] * ndim))
 
         elif isinstance(frequencies, list):
             if len(frequencies) != self._n_input_dimensionality:
                 raise ValueError(
                     "Length of frequencies list must match input dimensionality."
                 )
-            frequencies = tuple(arange_constructor(f) for f in frequencies)
+            frequencies = [arange_constructor(f) for f in frequencies]
 
         else:
             if isinstance(frequencies, (np.ndarray, jnp.ndarray)) and ~np.issubdtype(
@@ -542,7 +519,6 @@ class FourierBasis(AtomicBasisMixin, Basis):
                 "  - int\n"
                 "  - tuple[int, int]\n"
                 "  - NDArray[int]\n"
-                "  - tuple[NDArray[int]]\n"
                 "  - list[int | tuple[int, int] | NDArray[int] | NDArray[int]]\n\n"
                 f"If a list is provided, the list should be of length ``{ndim}``, "
                 "one entry for each dimension of the Fourier basis."
@@ -591,7 +567,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
         is_positive = ndim > 0
         if not is_int or not is_positive:
             raise ValueError(
-                f"ndim must be a positive integer. {ndim!r} provided instead."
+                f"ndim must be a non-negative integer. {ndim!r} provided instead."
             )
         return int(ndim)
 
