@@ -298,7 +298,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
               integer (inclusive). Must be >= 0.
             * **tuple** of two ints ``(low, high)`` : inclusive range of
               frequencies. Must satisfy ``0 <= low < high``.
-            * **array_like** of ints : explicit list of frequencies (must be
+            * **array** of ints : explicit list of frequencies (must be
               sorted ascending; unsorted inputs trigger a ``UserWarning``).
 
         Validation rules:
@@ -355,7 +355,12 @@ class FourierBasis(AtomicBasisMixin, Basis):
     def __init__(
         self,
         frequencies: (
-            int | Tuple[int, int] | List[int] | List[Tuple[int, int]] | ArrayLike
+            int
+            | Tuple[int, int]
+            | List[int]
+            | List[Tuple[int, int]]
+            | NDArray
+            | List[NDArray]
         ),
         ndim: int,
         frequency_mask: jnp.ndarray | None = None,

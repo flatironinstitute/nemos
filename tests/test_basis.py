@@ -3418,6 +3418,16 @@ class TestFourierBasis(BasisFuncsTesting):
         with expectation:
             self.cls["eval"](frequencies=5, bounds=bounds, ndim=ndim)
 
+    def test_masked_frequencies_property(self):
+        bas = self.cls["eval"](frequencies=np.arange(5), ndim=1)
+        np.testing.assert_array_equal(
+            bas.masked_frequencies, np.arange(5).reshape(1, 5)
+        )
+        bas.frequency_mask = np.array([0, 1, 0, 1, 0])
+        np.testing.assert_array_equal(bas.masked_frequencies, np.array([[1, 3]]))
+        with pytest.raises(AttributeError, match="has no setter"):
+            bas.masked_frequencies =  np.arange(5).reshape(1, 5)
+
 
 class TestAdditiveBasis(CombinedBasis):
     cls = {"eval": AdditiveBasis, "conv": AdditiveBasis}

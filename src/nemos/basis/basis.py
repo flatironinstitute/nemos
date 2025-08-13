@@ -2552,7 +2552,14 @@ class FourierEval(EvalBasisMixin, FourierBasis):
 
     def __init__(
         self,
-        frequencies: int | Tuple[int, int] | List[int] | List[Tuple[int, int]],
+        frequencies: (
+            int
+            | Tuple[int, int]
+            | List[int]
+            | List[Tuple[int, int]]
+            | NDArray
+            | List[NDArray]
+        ),
         ndim: int = 1,
         bounds: Optional[Tuple[float, float] | Tuple[Tuple[float, float]]] = None,
         frequency_mask: NDArray[bool] | None = None,
