@@ -6,7 +6,12 @@ from unittest.mock import patch
 
 import numpy as np
 import pytest
-from conftest import CombinedBasis, basis_with_add_kwargs, list_all_basis_classes
+from conftest import (
+    CombinedBasis,
+    basis_with_add_kwargs,
+    list_all_basis_classes,
+    list_all_real_basis_classes,
+)
 from sklearn.base import clone as sk_clone
 from sklearn.pipeline import Pipeline
 
@@ -23,7 +28,6 @@ from nemos.basis import (
 )
 from nemos.basis._composition_utils import generate_basis_label_pair
 from nemos.basis._fourier_basis import FourierBasis
-from tests.conftest import list_all_real_basis_classes
 
 
 @pytest.mark.parametrize(
@@ -154,8 +158,8 @@ def test_basis_to_transformer_makes_a_copy(basis_cls, basis_class_specific_param
         assert len(trans_bas_a.frequencies) == len(bas_a.frequencies)
         # check that the frequencies are different
         assert all(
-            len(f1) != len(f2) or # either the array have different length
-            np.any(f1 != f2)  # or different content
+            len(f1) != len(f2)  # either the array have different length
+            or np.any(f1 != f2)  # or different content
             for f1, f2 in zip(trans_bas_a.basis.frequencies, bas_a.frequencies)
         )
 
@@ -169,8 +173,8 @@ def test_basis_to_transformer_makes_a_copy(basis_cls, basis_class_specific_param
         trans_bas_b.frequencies = np.arange(1, 12)
         assert len(trans_bas_b.frequencies) == len(bas_b.frequencies)
         assert all(
-            len(f1) != len(f2) or  # either the array have different length
-            np.any(f1 != f2)  # or different content
+            len(f1) != len(f2)  # either the array have different length
+            or np.any(f1 != f2)  # or different content
             for f1, f2 in zip(trans_bas_b.basis.frequencies, bas_b.frequencies)
         )
 

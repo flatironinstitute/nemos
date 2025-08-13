@@ -16,6 +16,7 @@ from conftest import (
     CombinedBasis,
     custom_basis,
     list_all_basis_classes,
+    list_all_real_basis_classes,
 )
 
 import nemos._inspect_utils as inspect_utils
@@ -43,7 +44,6 @@ from nemos.basis._raised_cosine_basis import (
 )
 from nemos.basis._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis
 from nemos.utils import pynapple_concatenate_numpy
-from tests.conftest import list_all_real_basis_classes
 
 SizeTerminal = namedtuple("SizeTerminal", ["columns", "lines"])
 
