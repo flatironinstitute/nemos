@@ -4,6 +4,7 @@ from contextlib import nullcontext as does_not_raise
 from copy import deepcopy
 from unittest.mock import patch
 
+import jax
 import numpy as np
 import pytest
 from conftest import (
@@ -1110,11 +1111,12 @@ def test_check_input(inp, expectation, basis_cls, basis_class_specific_params, m
             basis.RaisedCosineLogEval: "Transformer(RaisedCosineLogEval(n_basis_funcs=5, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True))",
             basis.AdditiveBasis: "Transformer('(MSplineEval + RaisedCosineLinearConv)': AdditiveBasis(\n    basis1=MSplineEval(n_basis_funcs=5, order=4),\n    basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n))",
             basis.MultiplicativeBasis: "Transformer('(MSplineEval * RaisedCosineLinearConv)': MultiplicativeBasis(\n    basis1=MSplineEval(n_basis_funcs=5, order=4),\n    basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n))",
-            basis.FourierEval: "Transformer(FourierEval(frequencies=(Array([0., 1., 2.], dtype=float32),), ndim=1))",
+            basis.FourierEval: "Transformer(FourierEval(frequencies=(Array([0., 1., 2.], dtype=float64),), ndim=1))",
         }
     ],
 )
 def test_repr_out(basis_cls, basis_class_specific_params, expected_out):
+    jax.config.update("jax_enable_x64", True)
     with patch("os.get_terminal_size", return_value=(80, 24)):
         bas = CombinedBasis().instantiate_basis(
             5, basis_cls, basis_class_specific_params, window_size=10
