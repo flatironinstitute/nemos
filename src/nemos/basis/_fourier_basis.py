@@ -357,7 +357,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
         )
 
     @property
-    def frequency_mask(self) -> Callable | jnp.ndarray | None:
+    def frequency_mask(self) -> Callable | jnp.ndarray | Literal["all", "no-intercept"]:
         """Get the frequency mask for the Fourier basis.
 
         The frequency mask can be either:
@@ -375,11 +375,18 @@ class FourierBasis(AtomicBasisMixin, Basis):
             or ``None`` if no mask is applied.
         """
         # safe get when getter is called at init initialization
-        return getattr(self, "_frequency_mask", None)
+        return getattr(self, "_frequency_mask", "no-intercept")
 
     @frequency_mask.setter
     def frequency_mask(
-        self, values: ArrayLike | jnp.ndarray | Callable[..., bool] | None
+        self,
+        values: (
+            Literal["all", "no-intercept"]
+            | ArrayLike
+            | jnp.ndarray
+            | Callable[..., bool]
+            | None
+        ),
     ) -> None:
         """Set the frequency mask for the Fourier basis.
 
@@ -387,15 +394,18 @@ class FourierBasis(AtomicBasisMixin, Basis):
         ----------
         values :
             One of:
+            - :class:`Literal <typing.Literal>`: either `"no-intercept"`` - default - which drops
+              the 0-frequency DC term, or ``"all"`` which keeps all the frequencies -
+              equivalent to :class:`None <NoneType>`.
             - **Array / array-like (bool or 0/1)**: Explicit mask over the
               frequency grid. Must have shape
               ``(len(frequencies[0]), len(frequencies[1]), ...)`` and contain
               only booleans or the integers {0, 1}.
-            - **Callable**: A function with signature
+            - :class:`callable`: A function with signature
               ``frequency_mask(*freqs) -> bool`` (or 0/1). It is applied to each
               frequency tuple ``(f1, f2, ..., f_n)`` to build the mask. The callable is
               **not required to be vectorized**; ``n`` is the input dimensionality.
-            - **None**: Include all frequency combinations.
+            - :class:`None <NoneType>`: Include all frequency combinations.
 
         Raises
         ------
@@ -413,8 +423,15 @@ class FourierBasis(AtomicBasisMixin, Basis):
           ``self._n_basis_funcs`` (number of active basis functions),
           and ``self._eval_freq`` (selected frequencies for evaluation).
         """
-        if values is None:
-            self._frequency_mask = None
+
+        if isinstance(values, str) and values == "no-intercept":
+            self._frequency_mask = "no-intercept"
+            self._freq_combinations = _get_all_frequency_pairs(self._frequencies)
+            if jnp.all(self._freq_combinations[..., 0] == 0):
+                self._freq_combinations = self._freq_combinations[..., 1:]
+
+        elif values is None or isinstance(values, str) and values == "all":
+            self._frequency_mask = "all"
             self._freq_combinations = _get_all_frequency_pairs(self._frequencies)
 
         elif callable(values):
@@ -464,7 +481,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
 
         # used to drop or not the zero phase
         self._has_zero_phase = (
-            False
+            0
             if self._freq_combinations.size == 0
             else int(jnp.all(self._freq_combinations[:, 0] == 0))
         )
@@ -532,13 +549,18 @@ class FourierBasis(AtomicBasisMixin, Basis):
             return
 
         self._frequencies = frequencies
-        if self.frequency_mask is not None:
+
+        if not isinstance(self.frequency_mask, str):
             warnings.warn(
-                "Resetting ``frequency_mask`` to None (all frequencies will be included).\n"
+                "Resetting ``frequency_mask`` to ``'no-intercept'`` (all frequencies "
+                "except the intercept - DC term - will be included).\n"
                 "To sub-select frequencies, please provide a new ``frequency_mask``.",
                 UserWarning,
             )
-        self.frequency_mask = None
+            self.frequency_mask = "no-intercept"
+        else:
+            # call the setter to re-calculate frequency pairs
+            self.frequency_mask = self.frequency_mask
 
     @property
     def masked_frequencies(self) -> jnp.ndarray:

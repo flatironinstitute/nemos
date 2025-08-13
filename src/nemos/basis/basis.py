@@ -2439,8 +2439,8 @@ class FourierEval(EvalBasisMixin, FourierBasis):
             a ``UserWarning`` is issue for non-sorted arrays.
 
         **Per-dimension container**:
-          * A **list** of length ``ndim`` whose elements are each a valid single specification.
-            For ``ndim == 1``, a length-1 list is also accepted.
+          * A :class:`list` of length ``ndim`` whose elements are each a valid single specification.
+            For ``ndim == 1``, a length-1 :class:`list` is also accepted.
 
     ndim :
         Dimensionality of the basis. Default is 1.
@@ -2460,13 +2460,16 @@ class FourierEval(EvalBasisMixin, FourierBasis):
     frequency_mask :
         Optional mask specifying which frequency components to include. Can be:
 
-        - **array_like** of integers {0, 1} or booleans: Selects frequencies to
+        - :class:`typing.Literal`: either `"no-intercept"`` - default - which drops
+        the 0-frequency DC term, or ``"all"`` which keeps all the frequencies -
+        equivalent to :class:`None <NoneType>`.
+        - **array-like** of integers {0, 1} or booleans: Selects frequencies to
           keep (1/True) or exclude (0/False). Shape must match the number of
           available frequencies for each dimension.
-        - **callable**: A function applied to each frequency index (one index
+        - :class:`callable`: A function applied to each frequency index (one index
           per dimension), returning a single boolean or {0, 1} indicating whether
           to keep that frequency.
-        - ``None``: All frequencies are kept.
+        - :class:`None <NoneType>`: All frequencies are kept.
 
         Values must be 0/1 or boolean. Callables must return a single boolean or
         {0, 1} value for each frequency coordinate.

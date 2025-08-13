@@ -2957,6 +2957,8 @@ class TestFourierBasis(BasisFuncsTesting):
     @pytest.mark.parametrize(
         "frequency_mask, expectation, output_pairs",
         [
+            ("no-intercept", does_not_raise(), np.arange(1, 4).reshape(1, -1)),
+            ("all", does_not_raise(), np.arange(1, 4).reshape(1, -1)),
             (None, does_not_raise(), np.arange(1, 4).reshape(1, -1)),
             (np.array([1, 0, 1]), does_not_raise(), np.array([[1, 3]])),
             (np.array([False, False, True]), does_not_raise(), np.array([[3]])),
@@ -3266,15 +3268,15 @@ class TestFourierBasis(BasisFuncsTesting):
                 [True, False, False, True, True],
                 5,
                 6,
-                np.array([[0.0, 1.0, 2.0, 3.0, 4.0, 5.0]], dtype=np.float32),
-                pytest.warns(UserWarning, match="Resetting ``frequency_mask`` to None"),
+                np.array([[1.0, 2.0, 3.0, 4.0, 5.0]], dtype=np.float32),
+                pytest.warns(UserWarning, match="Resetting ``frequency_mask`` to "),
             ),
             (
                 lambda x: x < 3,
                 5,
                 6,
-                np.array([[0.0, 1.0, 2.0, 3.0, 4.0, 5.0]], dtype=np.float32),
-                pytest.warns(UserWarning, match="Resetting ``frequency_mask`` to None"),
+                np.array([[1.0, 2.0, 3.0, 4.0, 5.0]], dtype=np.float32),
+                pytest.warns(UserWarning, match="Resetting ``frequency_mask`` to "),
             ),
         ],
     )
@@ -3294,7 +3296,11 @@ class TestFourierBasis(BasisFuncsTesting):
             bas.frequencies = new_frequencies
             np.testing.assert_array_equal(bas._freq_combinations, expected_eval)
             if np.any(new_frequencies != frequencies):
-                assert bas.frequency_mask is None
+                assert (
+                    bas.frequency_mask == "no-intercept"
+                    if frequency_mask is not None
+                    else "all"
+                )
 
     @pytest.mark.parametrize("mode", ["eval"])
     @pytest.mark.parametrize(
