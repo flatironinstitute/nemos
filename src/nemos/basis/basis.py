@@ -2436,7 +2436,7 @@ class FourierEval(EvalBasisMixin, FourierBasis):
           * ``int k`` with ``k >= 0``.
           * ``(low, high)``: a 2-element tuple of integers with ``0 <= low < high``.
           * 1-D NumPy ``ndarray`` of non-negative integers. If not sorted ascending,
-            a ``UserWarning`` is issued.
+            a ``UserWarning`` is issue for non-sorted arrays.
 
         **Per-dimension container**:
           * A **list** of length ``ndim`` whose elements are each a valid single specification.
