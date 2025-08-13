@@ -77,7 +77,7 @@ The `compute_features` method of the basis returns a **real** design matrix that
 
 Let the selected frequencies be the sorted set $\mathcal F=\{n_1<\cdots<n_K\}$.
 
-Each frequency contributes a cosine and a sine, so with $K$ frequencies you’d expect $2K$ columns. This is the case when the 0 frequency - DC term - is not included. If the DC term is included, we have that the corresponding column is null, since $\sin(0)=0$. For this reason, the column is omitted — giving $2K-1$. Summarizing,
+Each frequency contributes a cosine and a sine, so with $K$ frequencies you’d expect $2K$ columns. This is the case when the 0 frequency - DC term - is not included. If the DC term is included, we have that the corresponding column is null, since $\sin(0)=0$. For this reason, the column is omitted — giving $2K-1$. In our example $K=5$ and the DC term is included, we therefore we obtain $2*5-1=9$ columns. Summarizing,
 
 - $n_1=0$ (with DC):
 
