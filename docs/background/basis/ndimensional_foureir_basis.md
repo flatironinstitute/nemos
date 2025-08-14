@@ -202,23 +202,22 @@ fourier_1d.compute_features(np.linspace(0, 1, 10)).shape
 When evaluating the basis at some values $\boldsymbol{x} = \{x_1,...,x_t\}$, NeMoS assumes that the period of the basis is $P = \max(\boldsymbol{x}) - \min(\boldsymbol{x})$. The basis element with frequency equal to $n$ will therefore oscillate $n$ times over the range of values covered by $\boldsymbol{x}$.
 
 
-:::{admonition} More on The Fourier Mapping
-:class:{note}
+:::{dropdown} More on the Fourier Mapping
+:color: info
+:icon: info
 
-More precisely, if we let $\mathbf{x}=(x_1,\ldots,x_T)$, and define
 
-
-For an integer $n\ge 0$, the NeMoS Fourier basis maps each $x_j$ to
+More precisely, let $\boldsymbol{x}=(x_1,\ldots,x_T)$. For an integer $n\ge 0$, the $n$-th Fourier basis element maps each $x_j$ to
 
 $$
 a_n(x_j)
-= \cos\!\left(2\pi\, n\,\frac{x_j-\min(\boldsymbol{x}) }{\max(\boldsymbol{x}) - \min(\boldsymbol{x})}\right)
-\;+\; i\,\sin\!\left(2\pi\, n\,\frac{x_j-\min(\boldsymbol{x})}{\max(\boldsymbol{x}) - \min(\boldsymbol{x})}\right).
+= \cos\!\left(2\pi n\,\frac{x_j-\min(\boldsymbol{x})}{\max(\boldsymbol{x})-\min(\boldsymbol{x})}\right)
+\;+\; i\,\sin\!\left(2\pi n\,\frac{x_j-\min(\boldsymbol{x})}{\max(\boldsymbol{x})-\min(\boldsymbol{x})}\right).
 $$
 
 for $j=1,\ldots,T$.
 
-* The fundamental period over $x$ is $P = \max(\boldsymbol{x}) - \min(\boldsymbol{x})$: the $n$-th basis element completes $n$ full cycles as $x$ runs from $\min(\boldsymbol{x})$ to $\max(\boldsymbol{x})$.
+* The fundamental period over $x$ is $P=\max(\boldsymbol{x})-\min(\boldsymbol{x})$: the $n$-th basis element completes $n$ full cycles as $x$ runs from $\min(\boldsymbol{x})$ to $\max(\boldsymbol{x})$.
 * The phase is zero at $\min(\boldsymbol{x})$: $a_n(\min(\boldsymbol{x}))=1+0i$.
 
 :::
@@ -275,6 +274,32 @@ The bounds can be provided at initialization as well.
 fourier_1d = FourierEval(5, bounds=(0, 2*np.pi))
 fourier_1d
 ```
+:::{dropdown} More on the Bounds
+:color: info
+:icon: info
+
+
+When bounds $b_{\min} < b_{\max}$, are provided, the mapping from input $\boldsymbol{x}=(x_1,\ldots,x_T)$ to the $n\text{-th}$ basis element works as follows.,
+
+$$
+a_n(x_j)
+=
+\begin{cases}
+\cos\!\left(2\pi n\,\frac{x_j-b_{\min}}{b_{\max}-b_{\min}}\right)
+\;+\; i\,\sin\!\left(2\pi n\,\frac{x_j-b_{\min}}{b_{\max}-b_{\min}}\right) && \text{if } x_j \in [b_{\min}, b_{\max}] \\
+\text{NaN} && \text{otherwise}
+\end{cases}
+$$
+
+for $j=1,\ldots,T$.
+
+In other words,
+
+* The fundamental period over $x$ is $P=b_{\max} - b_{\min}$: the $n$-th basis element completes $n$ full cycles as $x$ runs from $b_{\min}$ to $b_{\max}$.
+* The phase is zero at $b_{\min}$: $a_n(b_{\min})=1+0i$.
+* The basis evaluated at samples lying outside the bounds will return a NaN.
+
+:::
 
 ## Multi-Dimensional Fourier Basis
 
