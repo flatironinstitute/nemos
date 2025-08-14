@@ -18,7 +18,7 @@ The `AbstractSolver` interface requires implementing the following methods:
 - `init_state`: Initialize the solver state.
 - `update`: Take one step of the optimization algorithm.
 - `run`: Run a full optimization.
-- `get_accepted_arguments`: Set of argument names that can be passed to `__init__`.
+- `get_accepted_arguments`: Set of argument names that can be passed to `__init__`. These will be the parameters users can change by passing `solver_kwargs` to `BaseRegressor` / `GLM`.
 - `get_optim_info`: Collect diagnostic information about the optimization run into an `OptimizationInfo` namedtuple.
 
 This is a generic class parametrized by `SolverState` and `StepResult`.
