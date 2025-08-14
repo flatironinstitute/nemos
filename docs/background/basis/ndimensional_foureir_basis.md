@@ -296,7 +296,7 @@ for $j=1,\ldots,T$.
 In other words,
 
 * The fundamental period over $x$ is $P=b_{\max} - b_{\min}$: the $n$-th basis element completes $n$ full cycles as $x$ runs from $b_{\min}$ to $b_{\max}$.
-* The phase is zero at $b_{\min}$: $a_n(b_{\min})=1+0i$.
+* The phase is zero at $b_{\min}$: $\;a_n(b_{\min})=1+0i$.
 * The basis evaluated at samples lying outside the bounds will return a NaN.
 
 :::

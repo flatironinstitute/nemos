@@ -1412,7 +1412,7 @@ class TestSharedMethods:
                 basis.MSplineConv: "MSplineConv(n_basis_funcs=5, window_size=10, order=4)",
                 basis.OrthExponentialConv: "OrthExponentialConv(n_basis_funcs=5, window_size=10)",
                 basis.HistoryConv: "HistoryConv(window_size=10)",
-                basis.FourierEval: "FourierEval(frequencies=[Array([1., 2.], dtype=float32)], ndim=1, bounds=((1.0, 2.0),))",
+                basis.FourierEval: "FourierEval(frequencies=[Array([1., 2.], dtype=float32)], ndim=1, bounds=((1.0, 2.0),), frequency_mask='no-intercept')",
             }
         ],
     )
@@ -1446,7 +1446,7 @@ class TestSharedMethods:
                 basis.MSplineConv: "'mylabel': MSplineConv(n_basis_funcs=5, window_size=10, order=4)",
                 basis.OrthExponentialConv: "'mylabel': OrthExponentialConv(n_basis_funcs=5, window_size=10)",
                 basis.HistoryConv: "'mylabel': HistoryConv(window_size=10)",
-                basis.FourierEval: "'mylabel': FourierEval(frequencies=[Array([1., 2.], dtype=float32)], ndim=1, bounds=((1.0, 2.0),))",
+                basis.FourierEval: "'mylabel': FourierEval(frequencies=[Array([1., 2.], dtype=float32)], ndim=1, bounds=((1.0, 2.0),), frequency_mask='no-intercept')",
             }
         ],
     )
@@ -3440,7 +3440,7 @@ class TestFourierBasis(BasisFuncsTesting):
             self.cls["eval"](frequencies=5, bounds=bounds, ndim=ndim)
 
     def test_masked_frequencies_property(self):
-        bas = self.cls["eval"](frequencies=np.arange(5), ndim=1)
+        bas = self.cls["eval"](frequencies=np.arange(5), ndim=1, frequency_mask=None)
         np.testing.assert_array_equal(
             bas.masked_frequencies, np.arange(5).reshape(1, 5)
         )

@@ -123,6 +123,7 @@ class CombinedBasis(BasisFuncsTesting):
             "frequencies": np.arange(
                 (n_basis + 1) % 2, 1 + (n_basis - n_basis % 2) // 2
             ),
+            "frequency_mask": None,
         }
         default_kwargs = DEFAULT_KWARGS.copy()
         default_kwargs.update(new_kwargs)
