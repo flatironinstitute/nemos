@@ -57,7 +57,7 @@
        :class:`~nemos.basis.RaisedCosineLogConv`
      - 🔵 Conv
 
-   * - **Fourier Basis**
+   * - **Fourier Basis** :raw-html:`<sup><a id="fnref-basis-1" href="#fn-basis-1" role="doc-noteref">1</a></sup>`
      - .. plot:: scripts/basis_figs.py plot_fourier_basis
           :show-source-link: False
           :height: 80px
@@ -88,6 +88,21 @@
      - :ref:`Coupled GLM <fully_coupled_glm_how_to>`
      - :class:`~nemos.basis.HistoryConv`  :raw-html:`<br />`
      - 🔵 Conv
+
+
+.. raw:: html
+
+   <div class="footnote-list brackets">
+     <aside class="footnote brackets" id="fn-basis-1" role="doc-footnote">
+       <p>
+         <span class="label">[1]</span>
+         The Fourier basis follows a slightly different API compared to all other bases.
+         See <a class="reference internal" href="ndimensional_foureir_basis.html">documentation page</a>.
+         <a href="#fnref-basis-1" class="footnote-backref" role="doc-backlink">↩</a>
+       </p>
+     </aside>
+   </div>
+
 ```
 
 ## Overview

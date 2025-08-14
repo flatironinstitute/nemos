@@ -39,8 +39,10 @@ warnings.filterwarnings(
     category=RuntimeWarning,
 )
 ```
-
+(fourier-basis-doc)=
 # Fourier Basis
+
+The Fourier basis uses a slightly different API from other bases in NeMoS. This page covers everything you need to use it.
 
 ## One-Dimensional Fourier Basis
 
@@ -443,3 +445,57 @@ print(fourier_2d.masked_frequencies)
 - NeMoS applies the predicate over the Cartesian product of per-axis frequencies (conceptually `np.meshgrid(..., indexing='ij')`). Treat inputs as NumPy arrays and use elementwise operations.
 - Return a boolean grid of shape `(len(n_values), len(m_values))`: `True` keeps $(n,m)$, `False` drops it. In $D$ dimensions, return a boolean tensor with one axis per dimension. .
 :::
+
+## Composing with the Fourier basis
+
+Like other bases, the Fourier basis composes with NeMoS bases—with one important caveat.
+
+* **Addition**
+
+  Unrestricted: you can add a Fourier basis to any other basis (including another Fourier).
+
+```{code-cell} ipython3
+from nemos.basis import BSplineEval
+
+fourier = FourierEval(5)
+bspline = BSplineEval(5)
+
+# adding two fourier is valid
+print(fourier + fourier)
+
+# adding a fourier and any other basis works too
+print(fourier + bspline)
+```
+
+* **Multiplication:**
+
+  A Fourier basis stores **one frequency** as **two columns**: a cosine column and a sine column. Those two together act like **one feature**.
+
+  When you multiply two bases, NeMoS multiplies **every column with every other column**. If both sides are Fourier bases, that means you mix **cos parts with sin parts from different frequencies**. You don’t end up with “one new frequency” — you get **several unrelated columns**, and the cosine/sine pairing is **broken**. The result looks valid but **isn’t the Fourier feature you intended**, so we block it to avoid silent mistakes.
+
+  **Rule:** a product can contain **at most one** Fourier basis.
+
+  **What can be done:**
+    * Need multi-dimensional Fourier features? Use **one** `FourierEval` with `ndim > 1`.
+    * Want to modulate Fourier by something else (splines, RCs, etc.)? Multiply **one** Fourier basis by any **real** basis.
+
+
+```{code-cell} ipython3
+:tags: [raises-exception]
+
+from nemos.basis import BSplineEval, FourierEval
+
+fourier = FourierEval(5)
+bspline = BSplineEval(5)
+
+# multiplying a fourier basis with a real basis works
+mul = fourier * bspline
+print(mul)
+
+# multiplying two objects that both contain a Fourier basis raises:
+#   - fourier * fourier
+#   - fourier * mul
+#   - mul * mul
+#   - (fourier + bspline) * fourier
+mul * mul  # raises by design
+```
