@@ -342,9 +342,13 @@ class BaseRegressor(Base, abc.ABC):
         )
         self._solver = solver
 
-        # check that the loss is Callable
-        utils.assert_is_callable(solver.fun, "solver's loss")
-        self._solver_loss_fun = solver.fun
+        # NOTE: nemos's solvers store a .fun attribute, but it's not necessary for a solver to work.
+        # A test relies on having _solver_loss_fun saved, so still check and save it if possible.
+        # But it's not a problem if .fun doesn't exist in user-defined solvers.
+        if hasattr(solver, "fun"):
+            # check that the loss is Callable
+            utils.assert_is_callable(solver.fun, "solver's loss")
+            self._solver_loss_fun = solver.fun
 
         self._solver_init_state = solver.init_state
         self._solver_update = solver.update
