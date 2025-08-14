@@ -116,7 +116,7 @@ for freq in fourier_1d.frequencies[0]:
         # add the num of frequencies (5), minus dc term (1)
         idx_sin = int(freq) + 5 - 1
         axs[int(freq)].plot(X[:, idx_sin], label="sine")
-plt.legend()
+plt.legend(framealpha=1)
 plt.tight_layout()
 plt.show()
 
@@ -143,7 +143,7 @@ for freq in fourier_1d.frequencies[0]:
     # add the num of frequencies (5), no dc term to subtract
     idx_sin = idx_freq + 5
     axs[idx_freq].plot(X[:, idx_sin], label="sine")
-plt.legend()
+plt.legend(framealpha=1)
 plt.tight_layout()
 plt.show()
 
@@ -200,6 +200,28 @@ fourier_1d.compute_features(np.linspace(0, 1, 10)).shape
 ### Setting the Period of the Basis
 
 When evaluating the basis at some values $\boldsymbol{x} = \{x_1,...,x_t\}$, NeMoS assumes that the period of the basis is $P = \max(\boldsymbol{x}) - \min(\boldsymbol{x})$. The basis element with frequency equal to $n$ will therefore oscillate $n$ times over the range of values covered by $\boldsymbol{x}$.
+
+
+:::{admonition} More on The Fourier Mapping
+:class:{note}
+
+More precisely, if we let $\mathbf{x}=(x_1,\ldots,x_T)$, and define
+
+
+For an integer $n\ge 0$, the NeMoS Fourier basis maps each $x_j$ to
+
+$$
+a_n(x_j)
+= \cos\!\left(2\pi\, n\,\frac{x_j-\min(\boldsymbol{x}) }{\max(\boldsymbol{x}) - \min(\boldsymbol{x})}\right)
+\;+\; i\,\sin\!\left(2\pi\, n\,\frac{x_j-\min(\boldsymbol{x})}{\max(\boldsymbol{x}) - \min(\boldsymbol{x})}\right).
+$$
+
+for $j=1,\ldots,T$.
+
+* The fundamental period over $x$ is $P = \max(\boldsymbol{x}) - \min(\boldsymbol{x})$: the $n$-th basis element completes $n$ full cycles as $x$ runs from $\min(\boldsymbol{x})$ to $\max(\boldsymbol{x})$.
+* The phase is zero at $\min(\boldsymbol{x})$: $a_n(\min(\boldsymbol{x}))=1+0i$.
+
+:::
 
 
 ```{code-cell} ipython3
@@ -391,6 +413,9 @@ By default, each axis uses its own input span as the period, reusing the 1D rule
 $P_d=\max(x_d)-\min(x_d)$.
 
 ```{code-cell} ipython3
+
+fourier_2d = FourierEval(frequencies=[5, 4], ndim=2)
+
 x, y = np.meshgrid(
     np.linspace(-2, 2,100),
     np.linspace(0, 1, 100),
