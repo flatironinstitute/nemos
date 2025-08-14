@@ -1,7 +1,5 @@
 # The `solvers` Module
 
-Note that this is a very rough draft / braindump for now, and will be cleaned up later.
-
 ## Background
 
 In the beginning NeMoS relied on [JAXopt](https://jaxopt.github.io/stable/) as its optimization backend.
