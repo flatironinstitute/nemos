@@ -2432,44 +2432,49 @@ class FourierEval(EvalBasisMixin, FourierBasis):
     frequencies :
         Frequency specification(s).
 
-        **Single specification** (broadcasted to all dimensions when ``ndim > 1``):
-          * ``int k`` with ``k >= 0``.
-          * ``(low, high)``: a 2-element tuple of integers with ``0 <= low < high``.
-          * 1-D NumPy ``ndarray`` of non-negative integers. If not sorted ascending,
-            a ``UserWarning`` is issue for non-sorted arrays.
+        Single specification (broadcasted to all dimensions when ``ndim > 1``):
 
-        **Per-dimension container**:
-          * A :class:`list` of length ``ndim`` whose elements are each a valid single specification.
-            For ``ndim == 1``, a length-1 :class:`list` is also accepted.
+            * :class:`int`: An integer ``k`` with ``k >= 0``.
+
+            * :class:`tuple`: ``(low, high)``, a 2-element tuple of integers with ``0 <= low < high``.
+
+            * :class:`~numpy.ndarray`: 1-D NumPy array of non-negative integers. If not sorted ascending,
+              a ``UserWarning`` is issue for non-sorted arrays.
+
+        Per-dimension container:
+
+            * A :class:`list` of length ``ndim`` whose elements are each a valid single specification.
+              For ``ndim == 1``, a length-1 :class:`list` is also accepted.
 
     ndim :
         Dimensionality of the basis. Default is 1.
 
-    bounds:
+    bounds :
         Domain bounds for each dimension.
 
-        - If ``ndim == 1``: provide a single tuple ``(low, high)`` of floats.
-        - If ``ndim > 1``: provide a list of tuples, one for each dimension,
-          each specifying ``(low, high)`` for that dimension.
-        - If ``None``: the domain is inferred from the input data
-          (maximum to minimum values).
+        * :class:`tuple`: ``(low, high)`` of floats: applies to all dimensions.
+        * :class:`list` of :class:`tuple`: ``[(low, high), ...]``, one tuple per dimension, length must match ``ndim``.
+        * :class:`None <NoneType>`: the domain is inferred from the input data (maximum to minimum values).
 
-        ``low`` must be strictly less than ``high``. All values must be
-        convertible to floats.
+        In all cases, ``low`` must be strictly less than ``high``, and values must be convertible to floats.
 
     frequency_mask :
-        Optional mask specifying which frequency components to include. Can be:
+        Optional mask specifying which frequency components to include.
+        Can be:
 
-        - :class:`typing.Literal`: either `"no-intercept"`` - default - which drops
-        the 0-frequency DC term, or ``"all"`` which keeps all the frequencies -
-        equivalent to :class:`None <NoneType>`.
-        - **array-like** of integers {0, 1} or booleans: Selects frequencies to
+        * :class:`~typing.Literal`: either ``"no-intercept"`` - default - which drops
+          the 0-frequency DC term, or ``"all"`` which keeps all the frequencies -
+          equivalent to :class:`None <NoneType>`.
+
+        * Array-like of integers {0, 1} or booleans: Selects frequencies to
           keep (1/True) or exclude (0/False). Shape must match the number of
           available frequencies for each dimension.
-        - :class:`callable`: A function applied to each frequency index (one index
+
+        * :class:`~typing.Callable`: A function applied to each frequency index (one index
           per dimension), returning a single boolean or {0, 1} indicating whether
           to keep that frequency.
-        - :class:`None <NoneType>`: All frequencies are kept.
+
+        * :class:`None <NoneType>`: All frequencies are kept.
 
         Values must be 0/1 or boolean. Callables must return a single boolean or
         {0, 1} value for each frequency coordinate.
@@ -2484,7 +2489,7 @@ class FourierEval(EvalBasisMixin, FourierBasis):
     - The output of ``compute_features`` contains both cosine and sine components for
       each active frequency combination, except that the all-zero frequency
       includes only a cosine term.
-    - When a **tuple** is provided as a frequency, it is interpreted
+    - When a :class:`tuple` is provided as a frequency, it is interpreted
       as a single range specification. Tuples that are not exactly a 2-element
       tuple of non-negative integers are invalid.
 

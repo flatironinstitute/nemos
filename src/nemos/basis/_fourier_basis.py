@@ -292,6 +292,8 @@ class FourierBasis(AtomicBasisMixin, Basis):
         construction.
 
         Accepted forms:
+            * ``no-intercept``: drop the all-zero frequency (DC component).
+            * ``"all"``: Keep all frequencies
             * **None** : Keep all frequencies.
             * **array_like** of {0, 1} or booleans : Shape must match the number
               of possible frequency combinations for the given ``frequencies``.
