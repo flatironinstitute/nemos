@@ -2507,22 +2507,22 @@ class FourierEval(EvalBasisMixin, FourierBasis):
     >>> fourier_1d = FourierEval(n_freq)
     >>> # cos at 0..4 (5) + sin at 1..4 (4) = 9
     >>> fourier_1d.n_basis_funcs
-    9
+    8
     >>> x = rng.normal(size=8)
     >>> X = fourier_1d.compute_features(x)
     >>> X.shape  # (n_samples, n_basis_funcs)
-    (8, 9)
+    (8, 8)
 
     **2D: unmasked grid of frequency pairs**
 
     >>> fourier_2d = FourierEval(n_freq, ndim=2)
     >>> # (5*5 frequency pairs) * 2 (cos+sin) - 1 (no sine at DC) = 49
     >>> fourier_2d.n_basis_funcs
-    49
+    48
     >>> x, y = rng.normal(size=(2, 6))
     >>> X = fourier_2d.compute_features(x, y)
     >>> X.shape
-    (6, 49)
+    (6, 48)
 
     **2D: masking with an array (drop 3 pairs)**
 
@@ -2625,7 +2625,7 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         >>> basis = FourierEval(10)
         >>> features = basis.compute_features(X)  # basis transformed time series
         >>> features.shape
-        (1000, 19)
+        (1000, 18)
 
         """
         return super().compute_features(*xi)
@@ -2647,7 +2647,7 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         >>> split_features_multi = basis.split_by_feature(X, axis=1)
         >>> for feature, sub_dict in split_features_multi.items():
         ...        print(f"{feature}, shape {sub_dict.shape}")
-        one_input, shape (20, 11)
+        one_input, shape (20, 10)
 
         """
         return super().split_by_feature(x, axis=axis)
@@ -2663,16 +2663,16 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         >>> # Configure with an integer input:
         >>> _ = basis.set_input_shape(3)
         >>> basis.n_output_features
-        27
+        24
         >>> # Configure with a tuple:
         >>> _ = basis.set_input_shape((4, 5))
         >>> basis.n_output_features
-        180
+        160
         >>> # Configure with an array:
         >>> x = np.ones((10, 4, 5))
         >>> _ = basis.set_input_shape(x)
         >>> basis.n_output_features
-        180
+        160
 
         """
         return BasisMixin.set_input_shape(self, *xi)
@@ -2687,7 +2687,7 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         >>> basis = FourierEval(4)
         >>> out = basis.evaluate(np.random.randn(100, 5, 2))
         >>> out.shape
-        (100, 5, 2, 7)
+        (100, 5, 2, 6)
         """
         # ruff: noqa: D205, D400
         return super().evaluate(*sample_pts)
