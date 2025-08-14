@@ -1,4 +1,4 @@
-# The `solver` Module
+# The `solvers` Module
 
 Note that this is a very rough draft / braindump for now, and will be cleaned up later.
 
