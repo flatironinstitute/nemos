@@ -62,8 +62,9 @@ from nemos.basis import FourierEval
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 5 frequencies, from 0 to 4
-fourier_1d = FourierEval(frequencies=5)
+# 5 frequencies, from 0 to 4, no masking
+# (the default behavior is masking-out frequency 0, see below)
+fourier_1d = FourierEval(frequencies=5, frequency_mask=None)
 
 x = np.linspace(0, 1, 400)
 X = fourier_1d.compute_features(x)
@@ -98,17 +99,10 @@ Each frequency contributes a cosine and a sine, so with $K$ frequencies you’d 
   total columns $=2K$.
 :::
 
-:::{admonition} About the period $P$
-:class: tip
-By default, NeMoS sets the period based on the input range as $P = \max(x) - \min(x)$.
-You can override this by setting a fixed period via `bounds`. See the [section](fourier-period) below for details.
-:::
-
-
 ```{code-cell} ipython3
 # NOTE: here and below, '5' = number of frequencies (K in the math)
 print("5 frequencies including the DC term:")
-print("frequencies:", fourier_1d.frequencies)
+print("frequencies:", fourier_1d.frequencies[0])
 print("output features: 5 * 2 - 1 = ",  fourier_1d.n_basis_funcs)
 
 # `evaluate_on_grid` calls `compute_features` on a grid of point
@@ -134,7 +128,7 @@ plt.show()
 # drop the DC term (5 frequencies)
 fourier_1d = FourierEval(frequencies=(1, 6))
 print("\n5 frequencies without the DC term:")
-print("frequencies:", fourier_1d.frequencies)
+print("frequencies:", fourier_1d.frequencies[0])
 print("output features: 5 * 2 = ",  fourier_1d.n_basis_funcs)
 
 f, axs = plt.subplots(1, 5, figsize=(10, 2), sharey=True)
@@ -155,8 +149,55 @@ plt.show()
 
 ```
 
+### Selecting frequencies
+
+You can provide `frequencies` as:
+
+- An integer $n$, that will result in frequencies $0, \ldots, n-1$.
+- A range $(n, m)$, that will result in frequencies $n, \ldots, m-1$.
+- An array of integers.
+
+
+```{code-cell} ipython3
+fourier_1d = FourierEval(frequencies=5)
+print("- frequencies=5: ", fourier_1d.frequencies)
+
+fourier_1d = FourierEval(frequencies=(5, 10))
+print("- frequencies=(5, 10): ", fourier_1d.frequencies)
+
+fourier_1d = FourierEval(frequencies=np.array([1, 3, 5]))
+print("- frequencies=np.array([1, 3, 5]): ", fourier_1d.frequencies)
+```
+
+By default, NeMoS masks out the intercept (the DC term at frequency `0`). This is because NeMoS bases are most often used to build design matrices for GLMs, and NeMoS GLMs already include an intercept; adding another would be redundant.
+
+```{code-cell} ipython3
+# default masking
+fourier_1d = FourierEval(frequencies=5)
+
+# masked frequencies are 1..4
+print("masked frequencies: ", fourier_1d.masked_frequencies[0])
+
+# number of output features: (4 frequencies) * 2 = 8  (cos & sin)
+fourier_1d.compute_features(np.linspace(0, 1, 10)).shape
+```
+
+You can override this behavior by setting `frequency_mask` to `None` or `"all"` to keep the DC term.
+
+```{code-cell} ipython3
+# keep all frequencies, including 0 (DC)
+fourier_1d = FourierEval(frequencies=5, frequency_mask=None)
+
+# masked frequencies are 0..4
+print("masked frequencies: ", fourier_1d.masked_frequencies[0])
+
+# number of output features: (5 frequencies)*2 - 1 = 9
+# (DC contributes only a cosine term; no sine at 0)
+fourier_1d.compute_features(np.linspace(0, 1, 10)).shape
+```
+
 (fourier-period)=
-### Fixing the Period of the Basis
+### Setting the Period of the Basis
 
 When evaluating the basis at some values $\boldsymbol{x} = \{x_1,...,x_t\}$, NeMoS assumes that the period of the basis is $P = \max(\boldsymbol{x}) - \min(\boldsymbol{x})$. The basis element with frequency equal to $n$ will therefore oscillate $n$ times over the range of values covered by $\boldsymbol{x}$.
 
@@ -211,26 +252,6 @@ The bounds can be provided at initialization as well.
 ```{code-cell} ipython3
 fourier_1d = FourierEval(5, bounds=(0, 2*np.pi))
 fourier_1d
-```
-
-### Selecting The Frequencies
-
-Frequencies can be provided as:
-
-- An integer $n$, that will result in frequencies from $0$ to $n-1$.
-- A range $(n, m)$, that will result in frequencies from $n$ to $m-1$.
-- An array of integers.
-
-```{code-cell} ipython3
-
-fourier_1d = FourierEval(frequencies=5)
-print("- frequencies=5: ", fourier_1d.frequencies)
-
-fourier_1d = FourierEval(frequencies=(5, 10))
-print("- frequencies=(5, 10): ", fourier_1d.frequencies)
-
-fourier_1d = FourierEval(frequencies=np.array([1, 3, 5]))
-print("- frequencies=np.array([1, 3, 5]): ", fourier_1d.frequencies)
 ```
 
 ## Multi-Dimensional Fourier Basis
@@ -289,6 +310,79 @@ print("shape of the `masked_frequencies` array:", fourier_2d.masked_frequencies.
 :::{note}
 
 You can check for the presence of the DC term by assessing if `fourier_2d.masked_frequencies[:, 0]` is all zeros.
+:::
+
+(select-fourier-freqs-ndim)=
+### Selecting The Frequencies
+
+The `frequencies` argument specifies, **per axis**, which integer frequencies to use. In $D$ dimensions, pass a list of $D$ arrays (one per axis); their Cartesian product defines the grid of multi-indices $\mathbf{n}$ (and thus the basis elements), which are listed in `masked_frequencies`.
+
+```{code-cell} ipython3
+
+fourier_2d = FourierEval(frequencies=[np.array([1,2,3]), np.array([4,5])], ndim=2)
+
+print(fourier_2d.masked_frequencies)
+```
+
+In these examples we use pairs $(n,m)$ with $n \in N = \{1,2,3\}$ (x-axis frequencies) and $m \in M = \{4,5\}$ (y-axis frequencies).
+
+This defines the basis elements $a_{(n,m)}$ for $(n,m) \in \{(1,4),(1,5),(2,4),(2,5),(3,4),(3,5)\}$.
+
+You can subselect specific pairs by **masking** the 2D frequency grid. The mask can be:
+
+1. A boolean array of shape $(|N|, |M|) = (3, 2)$ (rows = $n$, columns = $m$).
+2. A callable predicate `f(n, m) -> True/False`.
+
+#### Mask With a Boolean Array
+
+**Pairs grid**
+
+|     | m=4  | m=5  |
+|-----|------|------|
+| n=1 | (1,4) | (1,5) |
+| n=2 | (2,4) | (2,5) |
+| n=3 | (3,4) | (3,5) |
+
+**Example mask selecting $(1,4), (2,4), (2,5)$**
+
+|     | m=4 | m=5 |
+|-----|-----|-----|
+| n=1 | 1   | 0   |
+| n=2 | 1   | 1   |
+| n=3 | 0   | 0   |
+
+
+```{code-cell} ipython3
+
+frequency_mask = np.zeros((3,2))
+frequency_mask[:2, 0] = 1
+frequency_mask[1, 1] = 1
+print("frequency mask")
+print(frequency_mask)
+
+
+fourier_2d.frequency_mask = frequency_mask
+print("\nmasked frequencies")
+print(fourier_2d.masked_frequencies)
+```
+
+#### Mask With a Callable
+
+Alternatively, we can specify complex masking rules by defining a mask function. For example, let's filter for the frequency pairs that lies inside a circle of radius of 4.5.
+
+```{code-cell} ipython3
+frequency_mask = lambda x, y: np.sqrt(x**2 + y**2) < 4.5
+fourier_2d.frequency_mask = frequency_mask
+
+print("\nmasked frequencies")
+print(fourier_2d.masked_frequencies)
+```
+
+:::{admonition} More on Masking with Callables
+
+- Write the predicate as `f(n, m)` for 2D. The first argument maps to `masked_frequencies[0]` (x-axis, $n$), the second to `masked_frequencies[1]` (y-axis, $m$). In $D$ dimensions use `f(n1, ..., nD)` in the same row order as `masked_frequencies`.
+- NeMoS applies the predicate over the Cartesian product of per-axis frequencies (conceptually `np.meshgrid(..., indexing='ij')`). Treat inputs as NumPy arrays and use elementwise operations.
+- Return a boolean grid of shape `(len(n_values), len(m_values))`: `True` keeps $(n,m)$, `False` drops it. In $D$ dimensions, return a boolean tensor with one axis per dimension. .
 :::
 
 ### Setting the Periodicities
@@ -373,78 +467,6 @@ plt.show()
 
 With bounds $[(0, 2\pi), (0, \pi)]$ and samples on $x \in [0, \pi]$, the $x$-projection for $n=2$ shows only the first half of its defined period (one full cycle over $[0,\pi]$). The $y$-projection covers its full domain $[0,\pi]$, so for $m=2$ it shows two cycles.
 
-(select-fourier-freqs-ndim)=
-### Selecting The Frequencies
-
-The `frequencies` argument specifies, **per axis**, which integer frequencies to use. In $D$ dimensions, pass a list of $D$ arrays (one per axis); their Cartesian product defines the grid of multi-indices $\mathbf{n}$ (and thus the basis elements), which are listed in `masked_frequencies`.
-
-```{code-cell} ipython3
-
-fourier_2d = FourierEval(frequencies=[np.array([1,2,3]), np.array([4,5])], ndim=2)
-
-print(fourier_2d.masked_frequencies)
-```
-
-In these examples we use pairs $(n,m)$ with $n \in N = \{1,2,3\}$ (x-axis frequencies) and $m \in M = \{4,5\}$ (y-axis frequencies).
-
-This defines the basis elements $a_{(n,m)}$ for $(n,m) \in \{(1,4),(1,5),(2,4),(2,5),(3,4),(3,5)\}$.
-
-You can subselect specific pairs by **masking** the 2D frequency grid. The mask can be:
-
-1. A boolean array of shape $(|N|, |M|) = (3, 2)$ (rows = $n$, columns = $m$).
-2. A callable predicate `f(n, m) -> True/False`.
-
-#### Mask With a Boolean Array
-
-**Pairs grid**
-
-|     | m=4  | m=5  |
-|-----|------|------|
-| n=1 | (1,4) | (1,5) |
-| n=2 | (2,4) | (2,5) |
-| n=3 | (3,4) | (3,5) |
-
-**Example mask selecting $(1,4), (2,4), (2,5)$**
-
-|     | m=4 | m=5 |
-|-----|-----|-----|
-| n=1 | 1   | 0   |
-| n=2 | 1   | 1   |
-| n=3 | 0   | 0   |
-
-
-```{code-cell} ipython3
-
-frequency_mask = np.zeros((3,2))
-frequency_mask[:2, 0] = 1
-frequency_mask[1, 1] = 1
-print("frequency mask")
-print(frequency_mask)
-
-
-fourier_2d.frequency_mask = frequency_mask
-print("\nmasked frequencies")
-print(fourier_2d.masked_frequencies)
-```
-
-#### Mask With a Callable
-
-Alternatively, we can specify complex masking rules by defining a mask function. For example, let's filter for the frequency pairs that lies inside a circle of radius of 4.5.
-
-```{code-cell} ipython3
-frequency_mask = lambda x, y: np.sqrt(x**2 + y**2) < 4.5
-fourier_2d.frequency_mask = frequency_mask
-
-print("\nmasked frequencies")
-print(fourier_2d.masked_frequencies)
-```
-
-:::{admonition} More on Masking with Callables
-
-- Write the predicate as `f(n, m)` for 2D. The first argument maps to `masked_frequencies[0]` (x-axis, $n$), the second to `masked_frequencies[1]` (y-axis, $m$). In $D$ dimensions use `f(n1, ..., nD)` in the same row order as `masked_frequencies`.
-- NeMoS applies the predicate over the Cartesian product of per-axis frequencies (conceptually `np.meshgrid(..., indexing='ij')`). Treat inputs as NumPy arrays and use elementwise operations.
-- Return a boolean grid of shape `(len(n_values), len(m_values))`: `True` keeps $(n,m)$, `False` drops it. In $D$ dimensions, return a boolean tensor with one axis per dimension. .
-:::
 
 ## Composing with the Fourier basis
 

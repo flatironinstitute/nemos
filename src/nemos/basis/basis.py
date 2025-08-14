@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from numbers import Number
-from typing import List, Optional, Sequence, Tuple
+from typing import List, Literal, Optional, Sequence, Tuple
 
 import jax
 from numpy.typing import ArrayLike, NDArray
@@ -2464,7 +2464,9 @@ class FourierEval(EvalBasisMixin, FourierBasis):
 
         * :class:`~typing.Literal`: either ``"no-intercept"`` - default - which drops
           the 0-frequency DC term, or ``"all"`` which keeps all the frequencies -
-          equivalent to :class:`None <NoneType>`.
+          equivalent to :class:`None <NoneType>`. We choose to drop the intecept by default
+          because NeMoS GLMs include an intercept term by default and an extra intecept
+          term in the design matrix would be redundant.
 
         * Array-like of integers {0, 1} or booleans: Selects frequencies to
           keep (1/True) or exclude (0/False). Shape must match the number of
@@ -2574,7 +2576,9 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         ),
         ndim: int = 1,
         bounds: Optional[Tuple[float, float] | Tuple[Tuple[float, float]]] = None,
-        frequency_mask: NDArray[bool] | None = None,
+        frequency_mask: (
+            Literal["all", "no-intercept"] | NDArray[bool] | None
+        ) = "no-intercept",
         label: Optional[str] = "FourierEval",
     ):
         FourierBasis.__init__(
