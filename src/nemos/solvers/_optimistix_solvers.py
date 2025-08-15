@@ -60,7 +60,7 @@ class OptimistixConfig:
     has_aux: bool = False
 
 
-class OptimistixAdapter(SolverAdapter[OptimistixSolverState, OptimistixStepResult]):
+class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
     """
     Base class for adapters wrapping Optimistix minimizers.
 

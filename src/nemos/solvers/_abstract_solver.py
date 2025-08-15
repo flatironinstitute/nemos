@@ -23,7 +23,7 @@ class OptimizationInfo(NamedTuple):
     reached_max_steps: bool
 
 
-class AbstractSolver(abc.ABC, Generic[SolverState, StepResult]):
+class AbstractSolver(abc.ABC, Generic[SolverState]):
     """
     Base class defining the interface for solvers that can be used by `BaseRegressor`.
 

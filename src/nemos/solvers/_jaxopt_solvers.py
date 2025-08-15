@@ -9,13 +9,12 @@ from ._abstract_solver import Params, OptimizationInfo
 from ._solver_adapter import SolverAdapter
 
 JaxoptSolverState: TypeAlias = NamedTuple
-JaxoptStepResult: TypeAlias = tuple[Params, JaxoptSolverState]
-# JaxoptStepResult: TypeAlias = jaxopt.OptStep
+JaxoptStepResult: TypeAlias = jaxopt.OptStep  # this is just a namedtuple(params, state)
 
 # TODO: do we want the JAXopt solvers to use the same tolerance and max_steps as the Optimistix solvers?
 
 
-class JaxoptAdapter(SolverAdapter[JaxoptSolverState, JaxoptStepResult]):
+class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
     """
     Base class for adapters wrapping JAXopt solvers.
 

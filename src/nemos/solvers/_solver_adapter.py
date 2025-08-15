@@ -4,10 +4,10 @@ import abc
 import inspect
 from typing import Any, ClassVar, Type
 
-from ._abstract_solver import AbstractSolver, SolverState, StepResult
+from ._abstract_solver import AbstractSolver, SolverState
 
 
-class SolverAdapter(AbstractSolver[SolverState, StepResult], abc.ABC):
+class SolverAdapter(AbstractSolver[SolverState], abc.ABC):
     """
     Base class for adapters wrapping solvers from JAXopt and Optimistix.
 

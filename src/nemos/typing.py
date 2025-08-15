@@ -14,7 +14,7 @@ from .pytrees import FeaturePytree
 Pytree: TypeAlias = Any
 Params: TypeAlias = Pytree
 SolverState = TypeVar("SolverState")
-StepResult = TypeVar("StepResult")
+StepResult: TypeAlias = Tuple[Params, SolverState]
 
 DESIGN_INPUT_TYPE = Union[jnp.ndarray, FeaturePytree]
 
