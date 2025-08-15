@@ -24,7 +24,7 @@ KeyArrayLike = ArrayLike
 # TODO: Update the argument types of these methods
 SolverRun = Callable[
     [
-        Any,  # parameters, could be any pytree
+        Params,  # parameters, could be any pytree
         jnp.ndarray,  # Predictors (i.e. model design for GLM)
         jnp.ndarray,
     ],  # Output (neural activity)
@@ -33,7 +33,7 @@ SolverRun = Callable[
 
 SolverInit = Callable[
     [
-        Any,  # parameters, could be any pytree
+        Params,  # parameters, could be any pytree
         jnp.ndarray,  # Predictors (i.e. model design for GLM)
         jnp.ndarray,
     ],  # Output (neural activity)
@@ -42,7 +42,7 @@ SolverInit = Callable[
 
 SolverUpdate = Callable[
     [
-        Any,  # parameters, could be any pytree
+        Params,  # parameters, could be any pytree
         NamedTuple,
         jnp.ndarray,  # Predictors (i.e. model design for GLM)
         jnp.ndarray,
@@ -52,7 +52,7 @@ SolverUpdate = Callable[
 
 ProximalOperator = Callable[
     [
-        Any,  # parameters, could be any pytree
+        Params,  # parameters, could be any pytree
         float,  # Regularizer strength (for now float, eventually pytree)
         float,
     ],  # Step-size for optimization (must be a float)
