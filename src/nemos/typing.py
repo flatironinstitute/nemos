@@ -21,7 +21,6 @@ DESIGN_INPUT_TYPE = Union[jnp.ndarray, FeaturePytree]
 # copying jax.random's annotation
 KeyArrayLike = ArrayLike
 
-# TODO: Update the argument types of these methods
 SolverRun = Callable[
     [
         Params,  # parameters, could be any pytree
