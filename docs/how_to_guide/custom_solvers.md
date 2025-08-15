@@ -65,7 +65,7 @@ class ScipySolver:
         regularizer,
         regularizer_strength,
         method: str | None = "L-BFGS-B",
-        max_steps: int | None = 100,
+        max_steps: int = 100,
         tol: float = 1e-8,
     ) -> None:
         """
