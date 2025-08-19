@@ -580,6 +580,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
 
     @property
     def ndim(self):
+        """The dimensionality of the basis."""
         return self._n_input_dimensionality
 
     @staticmethod
