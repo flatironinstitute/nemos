@@ -368,7 +368,8 @@ class FourierBasis(AtomicBasisMixin, Basis):
           of frequencies along each input dimension, or
         - a callable with signature ``frequency_mask(*freqs) -> bool`` (or 0/1) applied
           to each frequency tuple, or
-        - ``None``, all possible frequency combinations are included.
+        - a string, either ``"all"``, if all possible frequency combinations are included, or
+          ``"no-intercept"``, if the intercept term is dropped (DC component).
 
         Returns
         -------
