@@ -100,32 +100,24 @@ def apply_f_vectorized(
     if all(x.ndim == ndim_input for x in xi):
         return func(*xi, **kwargs)[..., np.newaxis]
 
-    # compute the flat shape of the dimension that must be vectorized.
-    flat_vec_dims = (
-        (
-            range(1)
-            if x.ndim == ndim_input
-            else range(int(np.prod(x.shape[ndim_input:])))
-        )
-        for x in xi
-    )
-    xi_reshape = [
-        (
-            x[..., np.newaxis]
-            if x.ndim == ndim_input
-            else x.reshape((*x.shape[:ndim_input], -1))
-        )
-        for x in xi
-    ]
-    return np.concatenate(
-        [
-            func(*(x[..., i] for i, x in zip(index, xi_reshape)), **kwargs)[
-                ..., np.newaxis
-            ]
-            for index in itertools.product(*flat_vec_dims)
-        ],
-        axis=-1,
-    )
+    # Get the vectorized shape (should be the same for all inputs)
+    vec_shape = xi[0].shape[ndim_input:]
+
+    # Generate all combinations of vectorized indices in the correct order
+    vec_indices = itertools.product(*[range(dim) for dim in vec_shape])
+
+    # Collect results for each vectorized index combination
+    results = []
+    for indices in vec_indices:
+        # Extract slices for this combination of indices
+        slices = [x[(slice(None),) * ndim_input + indices] for x in xi]
+
+        # Apply function to the slices
+        result = func(*slices, **kwargs)
+        results.append(result[..., np.newaxis])
+
+    # Concatenate along the last axis
+    return np.concatenate(results, axis=-1)
 
 
 def check_valid_shape(shape):
@@ -343,6 +335,12 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
             raise ValueError(
                 f"Each input must have at least {self.ndim_input} dimensions, as required by this basis. "
                 f"However, some inputs have fewer dimensions: {invalid_dims}."
+            )
+        unique_input_shape = {x.shape for x in xi}
+        if len(unique_input_shape) != 1:
+            raise ValueError(
+                "CustomBasis requires all inputs to be of the same shape.\n"
+                f"Found input shapes: {unique_input_shape}"
             )
         self.set_input_shape(*xi)
         design_matrix = self.evaluate(*xi)
