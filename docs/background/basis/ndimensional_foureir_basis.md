@@ -169,7 +169,7 @@ fourier_1d = FourierEval(frequencies=np.array([1, 3, 5]))
 print("- frequencies=np.array([1, 3, 5]): ", fourier_1d.frequencies)
 ```
 
-By default, NeMoS masks out the intercept (the DC term at frequency `0`). This is because NeMoS bases are most often used to build design matrices for GLMs, and NeMoS GLMs already include an intercept; adding another would be redundant.
+By default, NeMoS **masks out** the intercept (the DC term at frequency `0`). This is because NeMoS bases are most often used to build design matrices for GLMs, and NeMoS GLMs already include an intercept; adding another would be redundant.
 
 ```{code-cell} ipython3
 # default masking
