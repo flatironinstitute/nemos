@@ -991,11 +991,23 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         comp_feature_2 = getattr(
             self.basis2, "_compute_features", self.basis2.compute_features
         )
-        X = kron(
-            comp_feature_1(*xi[: self.basis1._n_input_dimensionality]),
-            comp_feature_2(*xi[self.basis1._n_input_dimensionality :]),
-            transpose=False,
-        )
+        x1 = comp_feature_1(*xi[: self.basis1._n_input_dimensionality])
+        x2 = comp_feature_2(*xi[self.basis1._n_input_dimensionality :])
+        # multiplicative basis inputs are of the same shape, checked and
+        # set just before the call to this method
+        n_samples = x1.shape[0]
+        shape = self.input_shape[0]
+        # flatten on the first axis, so that the rowise kron applies to
+        # each sample and vectorized dimension in a pairwise way
+        X = (
+            kron(
+                x1.reshape(-1, self.basis1.n_basis_funcs),
+                x2.reshape(-1, self.basis2.n_basis_funcs),
+                transpose=False,
+            )
+            .reshape(n_samples, *shape, -1)
+            .reshape(n_samples, -1)
+        )  # reshape to the desired dimension
         return X
 
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
