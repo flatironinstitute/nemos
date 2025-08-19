@@ -5141,6 +5141,70 @@ class TestMultiplicativeBasis(CombinedBasis):
         mul.basis2.set_input_shape(*inps_b)
         assert mul.n_output_features == new_out_num * new_out_num_b
 
+    @pytest.mark.parametrize(
+        "x_shape",
+        [
+            (10, 3),  # 2D inputs (1D vectorization)
+            (10, 3, 4),  # 3D inputs (2D vectorization)
+            (10, 2, 3, 4),  # 4D inputs (3D vectorization)
+        ],
+    )
+    @pytest.mark.parametrize(
+        "bas",
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
+    )
+    def test_vectorization_equivalence(self, bas, x_shape, basis_class_specific_params):
+        """Test that vectorized computation equals explicit nested loops."""
+        bas = (
+            self.instantiate_basis(5, bas, basis_class_specific_params, window_size=10)
+            ** 2
+        )
+        # Seed for reproducibility
+        np.random.seed(42)
+
+        # Create random inputs
+        x = np.random.randn(*x_shape)
+        y = np.random.randn(*x_shape)
+
+        # Create basis (IdentityEval has 1 basis function)
+        n_basis_funcs = bas.n_basis_funcs  # Should be 1 for IdentityEval ** 2
+
+        # Get vectorized result
+        vectorized_result = bas.compute_features(x, y)
+
+        # Compute expected result with explicit loops
+        n_samples = x_shape[0]
+        vec_shape = x_shape[1:]  # vectorized dimensions
+
+        # Initialize output array
+        out = np.empty((*x.shape, n_basis_funcs))
+
+        # Generate all combinations of vectorized indices
+        vec_indices = itertools.product(*[range(dim) for dim in vec_shape])
+
+        for indices in vec_indices:
+            # Extract 1D slices for this combination of indices
+            x_slice = x[(slice(None),) + indices]  # x[:, i, j, ...]
+            y_slice = y[(slice(None),) + indices]  # y[:, i, j, ...]
+
+            # Compute features for this slice
+            slice_result = bas.compute_features(x_slice, y_slice)
+
+            # Store in output array
+            out[(slice(None),) + indices + (slice(None),)] = slice_result
+
+            # Reshape to match expected output format: (n_samples, flattened_features)
+            expected_result = out.reshape(n_samples, -1)
+
+        # Verify equivalence
+        np.testing.assert_array_equal(vectorized_result, expected_result)
+
+        # Also verify shapes are correct
+        expected_n_features = (
+            np.prod(vec_shape) * n_basis_funcs if vec_shape else n_basis_funcs
+        )
+        assert vectorized_result.shape == (n_samples, expected_n_features)
+
 
 @pytest.mark.parametrize(
     "exponent", [-1, 0, 0.5, basis.RaisedCosineLogEval(4), 1, 2, 3]
