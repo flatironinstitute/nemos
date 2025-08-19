@@ -334,7 +334,7 @@ print("Pass a list of arrays:\n", FourierEval(frequencies=[np.arange(5), np.aran
 
 ```
 
-The total number of output features is $5\cdot4\cdot2-1=39$, and the DC term corresponds to the pair $\mathbf{n}=\mathbf{0}=(0,0)$.
+The total number of output features is $(5 \cdot 4 - 1)\cdot 2=38$, where we subtracted one since the DC, which corresponds to the pair $\mathbf{n}=\mathbf{0}=(0,0)$, is dropped by default.
 
 ```{code-cell} ipython3
 
@@ -350,7 +350,7 @@ All the frequency pairs are stored in the `masked_frequencies` array of shape `(
 
 ```{code-cell} ipython3
 
-print("first 5 frequency pairs:\n", fourier_2d.masked_frequencies[:, :5])
+print("first 5 frequency pairs:\n", fourier_2d.masked_frequencies)
 print("shape of the `masked_frequencies` array:", fourier_2d.masked_frequencies.shape)
 ```
 
@@ -378,7 +378,7 @@ This defines the basis elements $a_{(n,m)}$ for $(n,m) \in \{(1,4),(1,5),(2,4),(
 You can subselect specific pairs by **masking** the 2D frequency grid. The mask can be:
 
 1. A boolean array of shape $(|N|, |M|) = (3, 2)$ (rows = $n$, columns = $m$).
-2. A callable predicate `f(n, m) -> True/False`.
+2. A function returning booleans `f(n, m) -> True/False`.
 
 #### Mask With a Boolean Array
 
@@ -427,15 +427,15 @@ print(fourier_2d.masked_frequencies)
 
 :::{admonition} More on Masking with Callables
 
-- Write the predicate as `f(n, m)` for 2D. The first argument maps to `masked_frequencies[0]` (x-axis, $n$), the second to `masked_frequencies[1]` (y-axis, $m$). In $D$ dimensions use `f(n1, ..., nD)` in the same row order as `masked_frequencies`.
-- NeMoS applies the predicate over the Cartesian product of per-axis frequencies (conceptually `np.meshgrid(..., indexing='ij')`). Treat inputs as NumPy arrays and use elementwise operations.
+- Write the function as `f(n, m)` for 2D. The first argument maps to `masked_frequencies[0]` (x-axis, $n$), the second to `masked_frequencies[1]` (y-axis, $m$). In $D$ dimensions use `f(n1, ..., nD)` in the same row order as `masked_frequencies`.
+- NeMoS applies the function over the Cartesian product of per-axis frequencies (conceptually `np.meshgrid(..., indexing='ij')`). Treat inputs as NumPy arrays and use elementwise operations.
 - Return a boolean grid of shape `(len(n_values), len(m_values))`: `True` keeps $(n,m)$, `False` drops it. In $D$ dimensions, return a boolean tensor with one axis per dimension. .
 :::
 
 ### Setting the Periodicities
 
 By default, each axis uses its own input span as the period, reusing the 1D rule per axis:
-$P_d=\max(x_d)-\min(x_d)$.
+$P_d=\max(\boldsymbol{x}_d)-\min(\boldsymbol{x}_d)$.
 
 ```{code-cell} ipython3
 
@@ -549,7 +549,7 @@ print(fourier + bspline)
 
   **What can be done:**
     * Need multi-dimensional Fourier features? Use **one** `FourierEval` with `ndim > 1`.
-    * Want to modulate Fourier by something else (splines, RCs, etc.)? Multiply **one** Fourier basis by any **real** basis.
+    * Want to modulate Fourier by something else (splines, raised cosines, etc.)? Multiply **one** Fourier basis by any **real** basis.
 
 
 ```{code-cell} ipython3
