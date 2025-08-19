@@ -67,7 +67,7 @@ def _check_samples_consistency(*xi: NDArray) -> None:
 
 def _check_shape_consistency(*xi: NDArray, basis: "BasisMixin" = None):
     non_matching_axis = {x.shape for x in xi}
-    if len(non_matching_axis):
+    if len(non_matching_axis) != 1:
         raise ValueError(
             f"Input arrays shape mismatch. The basis object require inputs of the same shape.\n{basis}\n"
             f"The following input shapes were found instead {non_matching_axis}."
