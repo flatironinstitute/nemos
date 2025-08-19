@@ -10,7 +10,7 @@ to JAX arrays and, where applicable, converts outputs back to pynapple TSD objec
 """
 
 from functools import wraps
-from typing import Any, Callable, List, Literal, Optional, Type, Union
+from typing import Any, Callable, List, Literal, Optional, Tuple, Type, Union
 
 import jax
 import jax.numpy as jnp
@@ -24,7 +24,7 @@ from .pytrees import FeaturePytree
 _NAP_TIME_PRECISION = 10 ** (-nap.nap_config.time_index_precision)
 
 
-def is_numpy_array_like(obj) -> bool:
+def is_numpy_array_like(obj) -> Tuple[Any, bool]:
     """
     Check if an object is array-like.
 
@@ -55,7 +55,7 @@ def is_numpy_array_like(obj) -> bool:
     has_shape = hasattr(obj, "shape")
     has_dtype = hasattr(obj, "dtype")
     has_ndim = hasattr(obj, "ndim")
-    return has_shape and has_dtype and has_ndim
+    return obj, has_shape and has_dtype and has_ndim
 
 
 def is_at_least_1d_numpy_array_like(obj) -> bool:
@@ -86,7 +86,7 @@ def is_at_least_1d_numpy_array_like(obj) -> bool:
     numerical operations.
 
     """
-    is_array_like = is_numpy_array_like(obj)
+    obj, is_array_like = is_numpy_array_like(obj)
     # Check for indexability (try to access the first element)
     try:
         obj[0]

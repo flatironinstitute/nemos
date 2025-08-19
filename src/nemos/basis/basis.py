@@ -2714,7 +2714,7 @@ class FourierEval(EvalBasisMixin, FourierBasis):
                 isinstance(xi, Number)
                 or xi is None
                 or isinstance(xi, jax.numpy.generic)  # NumPy/JAX numpy scalar types
-                or (is_numpy_array_like(xi) and xi.ndim == 0)  # 0-D arrays
+                or (is_numpy_array_like(xi)[1] and xi.ndim == 0)  # 0-D arrays
                 for xi in x
             )
 
