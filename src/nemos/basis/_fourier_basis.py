@@ -572,7 +572,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
 
         Returns
         -------
-            The masked frequencies, shape ``(ndim, n_basis_funcs)``.
+            The masked frequencies, shape ``(ndim, n_frequency_combinations)``.
             ``masked_frequencies[:, i]`` is the frequency combination for the
             i-th basis function.
 
