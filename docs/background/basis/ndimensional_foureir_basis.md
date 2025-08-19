@@ -156,6 +156,16 @@ You can provide `frequencies` as:
 - An integer $n$, that will result in frequencies $0, \ldots, n-1$.
 - A range $(n, m)$, that will result in frequencies $n, \ldots, m-1$.
 - An array of integers.
+- A list of length `ndim` of any of the above.
+
+:::{warning}
+**Important distinction between lists and arrays:**
+
+- :class:`~numpy.ndarray` (`np.array([4, 5])`): Specifies the exact frequencies `[4, 5]` (sorted) for **all dimensions**
+- :class:`list` (`[4, 5]`): Specifies different frequency specifications **per dimension** - 4 frequencies `[0,1,2,3]` for dimension 1, and 5 frequencies `[0,1,2,3,4]` for dimension 2
+
+This difference allows flexible specification: use arrays when you want the same custom frequencies across all dimensions, use lists when you want different frequency specifications per dimension.
+:::
 
 
 ```{code-cell} ipython3
