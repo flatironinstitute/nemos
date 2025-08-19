@@ -2464,9 +2464,10 @@ class FourierEval(EvalBasisMixin, FourierBasis):
 
         * :class:`~typing.Literal`: either ``"no-intercept"`` - default - which drops
           the 0-frequency DC term, or ``"all"`` which keeps all the frequencies -
-          equivalent to :class:`None <NoneType>`. We choose to drop the intecept by default
-          because NeMoS GLMs include an intercept term by default and an extra intecept
-          term in the design matrix would be redundant.
+          equivalent to :class:`None <NoneType>`. The default excludes the intercept
+          because these basis objects are most commonly used to generate design matrices
+          for NeMoS GLMs, which already include an intercept term by default, making an
+          additional intercept in the design matrix redundant.
 
         * Array-like of integers {0, 1} or booleans: Selects frequencies to
           keep (1/True) or exclude (0/False). Shape must match the number of
