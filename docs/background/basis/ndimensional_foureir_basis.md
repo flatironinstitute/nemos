@@ -159,10 +159,11 @@ You can provide `frequencies` as:
 - A list of length `ndim` of any of the above.
 
 :::{warning}
+
 **Important distinction between lists and arrays:**
 
-- :class:`~numpy.ndarray` (`np.array([4, 5])`): Specifies the exact frequencies `[4, 5]` (sorted) for **all dimensions**
-- :class:`list` (`[4, 5]`): Specifies different frequency specifications **per dimension** - 4 frequencies `[0,1,2,3]` for dimension 1, and 5 frequencies `[0,1,2,3,4]` for dimension 2
+- An **array** (`np.array([4, 5])`): Specifies the exact frequencies `[4, 5]` (sorted) for **all dimensions**
+- A **list** (`[4, 5]`): Specifies different frequency specifications **per dimension** - 4 frequencies `[0,1,2,3]` for dimension 1, and 5 frequencies `[0,1,2,3,4]` for dimension 2
 
 This difference allows flexible specification: use arrays when you want the same custom frequencies across all dimensions, use lists when you want different frequency specifications per dimension.
 :::
