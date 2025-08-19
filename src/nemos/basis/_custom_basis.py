@@ -394,13 +394,28 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
             apply_func = support_pynapple(conv_type)(apply_f_vectorized)
         else:
             apply_func = apply_f_vectorized
-        return np.concatenate(
-            [
-                apply_func(f, *xi, **self.basis_kwargs, ndim_input=self.ndim_input)
-                for f in self.funcs
-            ],
-            axis=-1,
-        )
+
+        # Get individual function results
+        func_results = [
+            apply_func(f, *xi, **self.basis_kwargs, ndim_input=self.ndim_input)
+            for f in self.funcs
+        ]
+
+        # If no vectorization, just concatenate normally
+        if all(result.shape[-1] == 1 for result in func_results):
+            return np.concatenate(func_results, axis=-1)
+
+        # For vectorized case, we need to reorder to match expected layout
+        n_samples = xi[0].shape[0]
+
+        # Stack functions first, then reorder
+        stacked = np.stack(
+            func_results, axis=-1
+        )  # (n_samples, n_vec_features, n_funcs)
+
+        # Reshape to interleave functions within each vectorized position
+        # (n_samples, n_vec_features * n_funcs) with functions grouped by position
+        return stacked.reshape(n_samples, -1)
 
     @set_input_shape_state(states=("_input_shape_product", "_input_shape_", "_label"))
     def __sklearn_clone__(self) -> "CustomBasis":
