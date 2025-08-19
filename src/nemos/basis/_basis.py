@@ -18,11 +18,13 @@ from ..validation import check_fraction_valid_samples
 from ._basis_mixin import BasisMixin, BasisTransformerMixin, CompositeBasisMixin
 from ._check_basis import (
     _check_input_dimensionality,
+    _check_shape_consistency,
     _check_transform_input,
     _check_zero_samples,
 )
 from ._composition_utils import (
     add_docstring,
+    infer_input_dimensionality,
     is_basis_like,
     multiply_basis_by_integer,
     promote_to_transformer,
@@ -311,7 +313,17 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             - At least one of the samples is empty.
 
         """
-        return _check_transform_input(self, *xi)
+        # standard checks and transform to array
+        inp = _check_transform_input(self, *xi)
+        input_idx = 0
+        for b in self:
+            # check if exact shape matching for multiplicative bases
+            if isinstance(b, MultiplicativeBasis):
+                n_input = infer_input_dimensionality(b)
+                b_input = inp[input_idx : input_idx + n_input]
+                _check_shape_consistency(*b_input, basis=b)
+                input_idx += n_input
+        return inp
 
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.

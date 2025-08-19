@@ -1,5 +1,6 @@
 from typing import TYPE_CHECKING, Literal, Tuple
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -62,6 +63,15 @@ def _check_samples_consistency(*xi: NDArray) -> None:
     if not has_matching_axis_pytree(*xi, axis=0):
         raise ValueError(
             "Sample size mismatch. Input elements have inconsistent sample sizes."
+        )
+
+
+def _check_shape_consistency(*xi: NDArray, basis: "BasisMixin" = None):
+    non_matching_axis = set(jax.tree_util.tree_map(lambda x: x.shape, xi))
+    if len(non_matching_axis):
+        raise ValueError(
+            f"Input arrays shape mismatch. The basis object require inputs of the same shape.\n{basis}\n"
+            f"The following input shapes were found instead {non_matching_axis}."
         )
 
 
