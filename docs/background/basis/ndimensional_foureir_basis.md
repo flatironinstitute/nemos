@@ -224,7 +224,7 @@ for $j=1,\ldots,T$.
 
 
 ```{code-cell} ipython3
-fourier_1d = FourierEval(frequencies=5)
+fourier_1d = FourierEval(frequencies=5, frequency_mask="all")
 
 # generate an input ranging [-2, 2]
 x = np.linspace(-2, 2, 100)
