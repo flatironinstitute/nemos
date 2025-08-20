@@ -346,8 +346,6 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         design_matrix = self.evaluate(
             *xi
         )  # (n_samples, *n_output_shape, n_vec_dim, n_basis)
-        # first dim is samples, the last the concatenated features
-        self.output_shape = design_matrix.shape[1:-2]
         # return a model design
         return design_matrix.reshape((xi[0].shape[0], -1))
 
@@ -388,7 +386,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         >>> # vectorize over 3 inputs
         >>> out = basis.evaluate(np.random.randn(10, 3))
         >>> out.shape
-        (10, 6)
+        (10, 3, 2)
 
         """
         if self._pynapple_support:
@@ -407,7 +405,11 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         stacked = np.stack(
             func_results, axis=-1
         )  # (n_samples, *out_shape, n_vec_features, n_funcs)
+        self.output_shape = stacked.shape[1:-2]
 
+        # no vectorization
+        if all(result.shape[-1] == 1 for result in func_results):
+            stacked = stacked[..., 0, :]
         return stacked
 
     @set_input_shape_state(states=("_input_shape_product", "_input_shape_", "_label"))
