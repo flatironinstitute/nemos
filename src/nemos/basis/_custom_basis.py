@@ -343,9 +343,11 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
                 f"Found input shapes: {unique_input_shape}"
             )
         self.set_input_shape(*xi)
-        design_matrix = self.evaluate(*xi)
+        design_matrix = self.evaluate(
+            *xi
+        )  # (n_samples, *n_output_shape, n_vec_dim, n_basis)
         # first dim is samples, the last the concatenated features
-        self.output_shape = design_matrix.shape[1:-1]
+        self.output_shape = design_matrix.shape[1:-2]
         # return a model design
         return design_matrix.reshape((xi[0].shape[0], -1))
 
@@ -401,21 +403,12 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
             for f in self.funcs
         ]
 
-        # If no vectorization, just concatenate normally
-        if all(result.shape[-1] == 1 for result in func_results):
-            return np.concatenate(func_results, axis=-1)
-
-        # For vectorized case, we need to reorder to match expected layout
-        n_samples = xi[0].shape[0]
-
         # Stack functions first, then reorder
         stacked = np.stack(
             func_results, axis=-1
-        )  # (n_samples, n_vec_features, n_funcs)
+        )  # (n_samples, *out_shape, n_vec_features, n_funcs)
 
-        # Reshape to interleave functions within each vectorized position
-        # (n_samples, n_vec_features * n_funcs) with functions grouped by position
-        return stacked.reshape(n_samples, -1)
+        return stacked
 
     @set_input_shape_state(states=("_input_shape_product", "_input_shape_", "_label"))
     def __sklearn_clone__(self) -> "CustomBasis":
@@ -531,8 +524,8 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
                [[ 3.,  9.],
                 [ 4., 16.]],
         ...
-               [[ 5.,  25.],
-                [6., 36.]]])
+               [[ 5., 25.],
+                [ 6., 36.]]])
         """
         # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
