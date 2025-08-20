@@ -525,14 +525,14 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         >>> X.shape  # (3, 2 * 2)
         (3, 4)
         >>> bas.split_by_feature(X)["CustomBasis"]  # spilt to (3, 2, 2)
-        array([[[ 1.,  2.],
-                [ 1.,  4.]],
+        array([[[ 1.,  1.],
+                [ 2.,  4.]],
         ...
-               [[ 3.,  4.],
-                [ 9., 16.]],
+               [[ 3.,  9.],
+                [ 4., 16.]],
         ...
-               [[ 5.,  6.],
-                [25., 36.]]])
+               [[ 5.,  25.],
+                [6., 36.]]])
         """
         # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
