@@ -325,7 +325,7 @@ def test_pynapple_support_type(ps):
 
 @pytest.mark.parametrize(
     "inp_dim, vec_shape, expected_num",
-    [(1, [], 5), (2, [], 10), (2, [3], 30), (2, [3, 2], 60)],
+    [(1, [1], 5), (1, [], 5), (2, [], 10), (2, [3], 30), (2, [3, 2], 60)],
 )
 def test_n_output_features_match(inp_dim, expected_num, vec_shape):
     shape = [10] + [2] * (inp_dim - 1) + vec_shape
@@ -333,6 +333,25 @@ def test_n_output_features_match(inp_dim, expected_num, vec_shape):
     bas = custom_basis(5, ndim_input=inp_dim)
     out = bas.compute_features(x)
     assert out.shape[1] == bas.n_output_features == expected_num
+
+
+@pytest.mark.parametrize(
+    "inp_dim, vec_shape, expected_out_shape",
+    [
+        (1, [], (10, 5)),
+        (1, [1], (10, 1, 5)),
+        (2, [], (10, 2, 5)),
+        (2, [1], (10, 2, 1, 5)),
+        (2, [3], (10, 2, 3, 5)),
+        (2, [3, 2], (10, 2, 6, 5)),
+    ],
+)
+def test_features_match_evaluate(inp_dim, vec_shape, expected_out_shape):
+    shape = [10] + [2] * (inp_dim - 1) + vec_shape
+    x = np.random.randn(*shape)
+    bas = custom_basis(5, ndim_input=inp_dim)
+    out = bas.evaluate(x)
+    assert out.shape == expected_out_shape
 
 
 @pytest.mark.parametrize("ps", [True, False])

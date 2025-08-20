@@ -408,7 +408,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         self.output_shape = stacked.shape[1:-2]
 
         # no vectorization
-        if all(result.shape[-1] == 1 for result in func_results):
+        if all(x.ndim == self.ndim_input for x in xi):
             stacked = stacked[..., 0, :]
         return stacked
 
