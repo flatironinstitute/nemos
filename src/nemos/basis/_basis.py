@@ -922,7 +922,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
     def n_output_features(self):
         """Return the number of output features."""
         input_shape = self._input_shape_  # returns a list of length 1 or None
-        if input_shape is None:
+        if input_shape is None or any(s is None for s in input_shape):
             return None
         n_basis1 = getattr(self.basis1, "n_basis_funcs")
         n_basis2 = getattr(self.basis2, "n_basis_funcs")
