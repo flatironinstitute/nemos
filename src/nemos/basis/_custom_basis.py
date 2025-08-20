@@ -592,7 +592,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         >>> basis.n_output_features
         90
         """
-        return super().set_input_shape(*xi)
+        return super().set_input_shape(xi[0])
 
     def to_transformer(self) -> "TransformerBasis":
         """
@@ -638,3 +638,8 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         >>> gridsearch = gridsearch.fit(x, y)
         """
         return super().to_transformer()
+
+    @property
+    def _input_shape_(self):
+        input_shape = self.input_shape
+        return input_shape[:1]

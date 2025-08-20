@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import abc
 import copy
+import math
 from functools import wraps
 from typing import Callable, Generator, Optional, Tuple, Union
 
@@ -24,11 +25,13 @@ from ._check_basis import (
 )
 from ._composition_utils import (
     add_docstring,
+    get_input_shape,
     infer_input_dimensionality,
     is_basis_like,
     multiply_basis_by_integer,
     promote_to_transformer,
     raise_basis_to_power,
+    set_input_shape,
 )
 
 
@@ -918,11 +921,12 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
     @property
     def n_output_features(self):
         """Return the number of output features."""
-        out1 = getattr(self.basis1, "n_output_features", None)
-        out2 = getattr(self.basis2, "n_output_features", None)
-        if out1 is None or out2 is None:
+        input_shape = self._input_shape_  # returns a list of length 1 or None
+        if input_shape is None:
             return None
-        return out1 * out2
+        n_basis1 = getattr(self.basis1, "n_basis_funcs")
+        n_basis2 = getattr(self.basis2, "n_basis_funcs")
+        return n_basis1 * n_basis2 * math.prod(input_shape[0])
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
@@ -996,7 +1000,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         # multiplicative basis inputs are of the same shape, checked and
         # set just before the call to this method
         n_samples = x1.shape[0]
-        shape = self.input_shape[0]
+        shape = self._input_shape_[0]
         # flatten on the first axis, so that the rowise kron applies to
         # each sample and vectorized dimension in a pairwise way
         X = (
@@ -1131,4 +1135,42 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
 
         """
         # ruff: noqa: D400, D205
-        return super().set_input_shape(*xi)
+        # all inputs have the same shape. The vectorization
+        # acts on input pairs.
+        super().set_input_shape(*xi)
+        if self._input_shape_ is None:
+            return self
+        shapes = {s for s in self.input_shape}
+        if len(shapes) != 1:
+            raise ValueError(
+                "Multiplicative basis requires inputs of the same shape. "
+                f"Multiple shapes provided: {shapes}"
+            )
+        return self
+
+    @property
+    def _input_shape_(self):
+        """Input shape list.
+
+        Override default list by returning the shape of one of the inputs.
+        Note that:
+        1. The other inputs must have the same shape.
+        2. This is used internally by `split_by_feature()` to know how many
+           inputs are available.
+        """
+        input_shape = self.input_shape
+        if input_shape is not None:
+            input_shape = input_shape[:1]
+        else:
+            input_shape = None
+        return input_shape
+
+    @property
+    def input_shape(self):
+        input_shape = get_input_shape(self)
+        unique_shape = {s for s in input_shape}
+        # at initialization, basis2 can be None
+        if len(unique_shape) != 1 and self.basis2:
+            set_input_shape(self, None)
+            input_shape = [None] * self._n_input_dimensionality
+        return input_shape

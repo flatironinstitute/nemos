@@ -313,9 +313,15 @@ def _check_valid_shape_tuple(shape):
 
 
 def set_input_shape_atomic(
-    bas: "AtomicBasisMixin | CustomBasis", *xis: int | tuple[int, ...] | NDArray
+    bas: "AtomicBasisMixin | CustomBasis", *xis: int | tuple[int, ...] | NDArray | None
 ) -> "AtomicBasisMixin":
     """Set input shape attributes for atomic basis."""
+    # reset all to none
+    if all(xi is None for xi in xis):
+        bas._input_shape_ = None
+        bas._input_shape_product = None
+        return bas
+    # otherwise apply shape
     shapes = []
     n_inputs = ()
     for xi in xis:
@@ -350,12 +356,17 @@ def set_input_shape(bas, *xi):
     )
     # get the attribute if available
     n_input_dim = getattr(bas, "_n_input_dimensionality", n_args)
-    if len(xi) != n_input_dim:
+
+    if len(xi) == 1 and xi[0] is None:
+        xi = (None,) * n_input_dim
+
+    elif len(xi) != n_input_dim:
         expected_inputs = getattr(bas, "_n_input_dimensionality", 1)
         raise ValueError(
             f"set_input_shape expects {expected_inputs} input"
             f"{'s' if expected_inputs > 1 else ''}, but {len(xi)} were provided."
         )
+
     if not hasattr(bas, "basis1"):
         return set_input_shape_atomic(bas, *xi)
 
@@ -384,10 +395,13 @@ def set_input_shape(bas, *xi):
 
     # out1 and out2 will have an _input_shape_product set by the "set_input_shape_atomic" method.
     # here is safe to use the attribute.
-    bas._input_shape_product = (
-        *out1._input_shape_product,
-        *out2._input_shape_product,
-    )
+    if out1._input_shape_product is not None and out2._input_shape_product is not None:
+        bas._input_shape_product = (
+            *out1._input_shape_product,
+            *out2._input_shape_product,
+        )
+    else:
+        bas._input_shape_product = None
     return bas
 
 

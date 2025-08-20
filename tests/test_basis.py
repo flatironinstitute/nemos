@@ -470,10 +470,10 @@ def test_composite_split_by_feature(input_shape_1, input_shape_2):
 @pytest.mark.parametrize(
     "input_shape",
     [
-        (100,),
-        (100, 10),
-        (100, 10, 1),
-        (100, 1, 10),
+        (11,),
+        (11, 10),
+        (11, 10, 1),
+        (11, 1, 10),
     ],
 )
 def test_composite_split_by_feature_multiply(input_shape):
@@ -487,14 +487,10 @@ def test_composite_split_by_feature_multiply(input_shape):
     )
     features = comp_basis.split_by_feature(X)
     # if the user only passes a 1d input, we append the second dim (number of inputs)
-
-    split_shape_1 = tuple(i for i in input_shape + (comp_basis.basis1.n_basis_funcs,))
-    split_shape_2 = tuple(i for i in input_shape + (comp_basis.basis2.n_basis_funcs,))
     # concatenation of shapes except for the last term which is the product of the num bases
     assert features["(RaisedCosineLogEval * CyclicBSplineEval)"].shape == (
-        *split_shape_1[:-1],
-        *split_shape_2[1:-1],
-        split_shape_1[-1] * split_shape_2[-1],
+        *input_shape,
+        comp_basis.basis1.n_basis_funcs * comp_basis.basis2.n_basis_funcs,
     )
 
 
