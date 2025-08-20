@@ -1,3 +1,4 @@
+import itertools
 from contextlib import nullcontext as does_not_raise
 from unittest.mock import patch
 
@@ -97,7 +98,7 @@ def test_vec_function_dims(vectorize_func, x, expectation):
         # no vectorized dimension (mean over all axis except first)
         (2, (np.random.randn(10, 2), np.random.randn(10, 3)), (10, 1)),
         # vectorize 3rd dimension
-        (2, (np.random.randn(10, 2, 3), np.random.randn(10, 2, 2)), (10, 6)),
+        (2, (np.random.randn(10, 2, 3), np.random.randn(10, 2, 3)), (10, 3)),
     ],
     indirect=["vectorize_func"],
 )
@@ -105,6 +106,71 @@ def test_vec_function_output_shape(vectorize_func, x, expected_out_shape):
     vec_f, regular_f = vectorize_func
     out = vec_f(*x)
     assert out.shape == expected_out_shape
+
+
+@pytest.mark.parametrize(
+    "x_shape",
+    [
+        (10, 3),  # 2D inputs (1D vectorization)
+        (10, 3, 4),  # 3D inputs (2D vectorization)
+        (10, 2, 3, 4),  # 4D inputs (3D vectorization)
+    ],
+)
+@pytest.mark.parametrize(
+    "vectorize_func, ndim",
+    [(1, 1), (2, 2)],
+    indirect=["vectorize_func"],
+)
+def test_vectorization_equivalence(x_shape, vectorize_func, ndim):
+    """Test that vectorized computation equals explicit nested loops."""
+    if len(x_shape) <= ndim:
+        pytest.skip("input shape should be > ndim")
+    # Seed for reproducibility
+    np.random.seed(42)
+
+    # Create random inputs
+    xis = [np.random.randn(*x_shape) for x in range(ndim)]
+    n_basis_funcs = 1
+
+    # Get vectorized result
+    vec_f, regular_f = vectorize_func
+    vectorized_result = vec_f(*xis)
+
+    # Compute expected result with explicit loops
+    n_samples = x_shape[0]
+    vec_shape = x_shape[ndim:]  # vectorized dimensions
+
+    # Initialize output array
+    out = np.empty((xis[0].shape[0], *vec_shape, n_basis_funcs))
+
+    # Generate all combinations of vectorized indices
+    vec_indices = itertools.product(*[range(dim) for dim in vec_shape])
+
+    for indices in vec_indices:
+        # Extract 1D slices for this combination of indices
+        x_slices = [
+            xi[(slice(None),) * ndim + indices] for xi in xis
+        ]  # x[:, i, j, ...]
+
+        # Compute features for this slice
+        slice_result = regular_f(*x_slices)
+
+        # Store in output array
+        out[(slice(None),) + indices + (slice(None),)] = (
+            slice_result[:, None] if slice_result.ndim == 1 else slice_result
+        )
+
+        # Reshape to match expected output format: (n_samples, flattened_features)
+        expected_result = out.reshape(n_samples, -1)
+
+    # Verify equivalence
+    np.testing.assert_array_equal(vectorized_result, expected_result)
+
+    # Also verify shapes are correct
+    expected_n_features = (
+        np.prod(vec_shape) * n_basis_funcs if vec_shape else n_basis_funcs
+    )
+    assert vectorized_result.shape == (n_samples, expected_n_features)
 
 
 @pytest.mark.parametrize(
@@ -258,7 +324,8 @@ def test_pynapple_support_type(ps):
 
 
 @pytest.mark.parametrize(
-    "inp_dim, vec_shape, expected_num", [(1, [], 5), (2, [], 10), (2, [3], 30)]
+    "inp_dim, vec_shape, expected_num",
+    [(1, [1], 5), (1, [], 5), (2, [], 10), (2, [3], 30), (2, [3, 2], 60)],
 )
 def test_n_output_features_match(inp_dim, expected_num, vec_shape):
     shape = [10] + [2] * (inp_dim - 1) + vec_shape
@@ -266,6 +333,25 @@ def test_n_output_features_match(inp_dim, expected_num, vec_shape):
     bas = custom_basis(5, ndim_input=inp_dim)
     out = bas.compute_features(x)
     assert out.shape[1] == bas.n_output_features == expected_num
+
+
+@pytest.mark.parametrize(
+    "inp_dim, vec_shape, expected_out_shape",
+    [
+        (1, [], (10, 5)),
+        (1, [1], (10, 1, 5)),
+        (2, [], (10, 2, 5)),
+        (2, [1], (10, 2, 1, 5)),
+        (2, [3], (10, 2, 3, 5)),
+        (2, [3, 2], (10, 2, 6, 5)),
+    ],
+)
+def test_features_match_evaluate(inp_dim, vec_shape, expected_out_shape):
+    shape = [10] + [2] * (inp_dim - 1) + vec_shape
+    x = np.random.randn(*shape)
+    bas = custom_basis(5, ndim_input=inp_dim)
+    out = bas.evaluate(x)
+    assert out.shape == expected_out_shape
 
 
 @pytest.mark.parametrize("ps", [True, False])
@@ -326,3 +412,77 @@ def test_inconsistent_input_num():
         ValueError, match="Each function provided to ``funcs`` in ``CustomBasis``"
     ):
         CustomBasis(invalid_funcs)
+
+
+@pytest.mark.parametrize(
+    "x_shape",
+    [
+        (10, 3),  # 2D inputs (1D vectorization)
+        (10, 3, 4),  # 3D inputs (2D vectorization)
+        (10, 2, 3, 4),  # 4D inputs (3D vectorization)
+    ],
+)
+@pytest.mark.parametrize(
+    "vectorize_func, ndim",
+    [(1, 1), (2, 2)],
+    indirect=["vectorize_func"],
+)
+def test_vectorization_equivalence_basis(x_shape, vectorize_func, ndim):
+    """Test that vectorized computation equals explicit nested loops."""
+    if len(x_shape) <= ndim:
+        pytest.skip("input shape should be > ndim")
+
+    # define a basis
+    def power_func(x, n=1):
+        return np.sum(np.power(x, n), axis=1) if x.ndim > 1 else np.power(x, n)
+
+    from functools import partial
+
+    funcs = [partial(power_func, n=n) for n in range(1, 4 + 1)]
+    bas = CustomBasis(funcs, ndim_input=ndim)
+    # Seed for reproducibility
+    np.random.seed(42)
+
+    # Create random inputs
+    xis = [np.random.randn(*x_shape)]
+    n_basis_funcs = bas.n_basis_funcs
+
+    # Get vectorized result
+    regular_fs = bas.funcs
+    vectorized_result = bas.compute_features(*xis)
+
+    # Compute expected result with explicit loops
+    n_samples = x_shape[0]
+    vec_shape = x_shape[ndim:]  # vectorized dimensions
+
+    # Initialize output array
+    out = np.empty((xis[0].shape[0], *vec_shape, n_basis_funcs))
+
+    # Generate all combinations of vectorized indices
+    vec_indices = itertools.product(*[range(dim) for dim in vec_shape])
+
+    for indices in vec_indices:
+        # Extract 1D slices for this combination of indices
+        x_slices = [
+            xi[(slice(None),) * ndim + indices] for xi in xis
+        ]  # x[:, i, j, ...]
+
+        # Compute features for this slice
+        slice_result = np.stack([f(*x_slices) for f in regular_fs], axis=-1)
+
+        # Store in output array
+        out[(slice(None),) + indices + (slice(None),)] = (
+            slice_result[:, None] if slice_result.ndim == 1 else slice_result
+        )
+
+    # Reshape to match expected output format: (n_samples, flattened_features)
+    expected_result = out.reshape(n_samples, -1)
+
+    # Verify equivalence
+    np.testing.assert_array_equal(vectorized_result, expected_result)
+
+    # Also verify shapes are correct
+    expected_n_features = (
+        np.prod(vec_shape) * n_basis_funcs if vec_shape else n_basis_funcs
+    )
+    assert vectorized_result.shape == (n_samples, expected_n_features)
