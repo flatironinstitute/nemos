@@ -438,7 +438,6 @@ def test_repr_label(label):
         assert out == expected
 
 
-@pytest.mark.parametrize("composite_op", ["add", "multiply"])
 @pytest.mark.parametrize(
     "input_shape_1",
     [
@@ -449,15 +448,13 @@ def test_repr_label(label):
     ],
 )
 @pytest.mark.parametrize("input_shape_2", [(100,), (100, 1), (100, 1, 2), (100, 2, 1)])
-def test_composite_split_by_feature(composite_op, input_shape_1, input_shape_2):
+def test_composite_split_by_feature(input_shape_1, input_shape_2):
     # by default, jax was sorting the dict we use in split_by_feature for the labels to
     # be alphabetical. thus, if the additive basis was made up of basis objects whose
     # n_basis_input values were different AND whose alphabetical sorting was the
     # different from their order in initialization, it would fail
-    if composite_op == "add":
-        comp_basis = basis.RaisedCosineLogEval(10) + basis.CyclicBSplineEval(5)
-    elif composite_op == "multiply":
-        comp_basis = basis.RaisedCosineLogEval(10) * basis.CyclicBSplineEval(5)
+
+    comp_basis = basis.RaisedCosineLogEval(10) + basis.CyclicBSplineEval(5)
     X = comp_basis.compute_features(
         np.random.rand(*input_shape_1), np.random.rand(*input_shape_2)
     )
@@ -466,16 +463,39 @@ def test_composite_split_by_feature(composite_op, input_shape_1, input_shape_2):
 
     split_shape_1 = tuple(i for i in input_shape_1 + (comp_basis.basis1.n_basis_funcs,))
     split_shape_2 = tuple(i for i in input_shape_2 + (comp_basis.basis2.n_basis_funcs,))
-    if composite_op == "add":
-        assert features["RaisedCosineLogEval"].shape == split_shape_1
-        assert features["CyclicBSplineEval"].shape == split_shape_2
-    elif composite_op == "multiply":
-        # concatenation of shapes except for the last term which is the product of the num bases
-        assert features["(RaisedCosineLogEval * CyclicBSplineEval)"].shape == (
-            *split_shape_1[:-1],
-            *split_shape_2[1:-1],
-            split_shape_1[-1] * split_shape_2[-1],
-        )
+    assert features["RaisedCosineLogEval"].shape == split_shape_1
+    assert features["CyclicBSplineEval"].shape == split_shape_2
+
+
+@pytest.mark.parametrize(
+    "input_shape",
+    [
+        (100,),
+        (100, 10),
+        (100, 10, 1),
+        (100, 1, 10),
+    ],
+)
+def test_composite_split_by_feature_multiply(input_shape):
+    # by default, jax was sorting the dict we use in split_by_feature for the labels to
+    # be alphabetical. thus, if the additive basis was made up of basis objects whose
+    # n_basis_input values were different AND whose alphabetical sorting was the
+    # different from their order in initialization, it would fail
+    comp_basis = basis.RaisedCosineLogEval(10) * basis.CyclicBSplineEval(5)
+    X = comp_basis.compute_features(
+        np.random.rand(*input_shape), np.random.rand(*input_shape)
+    )
+    features = comp_basis.split_by_feature(X)
+    # if the user only passes a 1d input, we append the second dim (number of inputs)
+
+    split_shape_1 = tuple(i for i in input_shape + (comp_basis.basis1.n_basis_funcs,))
+    split_shape_2 = tuple(i for i in input_shape + (comp_basis.basis2.n_basis_funcs,))
+    # concatenation of shapes except for the last term which is the product of the num bases
+    assert features["(RaisedCosineLogEval * CyclicBSplineEval)"].shape == (
+        *split_shape_1[:-1],
+        *split_shape_2[1:-1],
+        split_shape_1[-1] * split_shape_2[-1],
+    )
 
 
 @pytest.mark.parametrize(
