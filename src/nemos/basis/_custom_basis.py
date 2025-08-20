@@ -24,7 +24,7 @@ from ..type_casting import support_pynapple
 from ..utils import format_repr
 from . import AdditiveBasis, MultiplicativeBasis
 from ._basis_mixin import BasisMixin, BasisTransformerMixin, set_input_shape_state
-from ._check_basis import _check_transform_input
+from ._check_basis import _check_shape_consistency, _check_transform_input
 from ._composition_utils import (
     _check_valid_shape_tuple,
     add_docstring,
@@ -336,12 +336,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
                 f"Each input must have at least {self.ndim_input} dimensions, as required by this basis. "
                 f"However, some inputs have fewer dimensions: {invalid_dims}."
             )
-        unique_input_shape = {x.shape for x in xi}
-        if len(unique_input_shape) != 1:
-            raise ValueError(
-                "CustomBasis requires all inputs to be of the same shape.\n"
-                f"Found input shapes: {unique_input_shape}"
-            )
+        _check_shape_consistency(*xi, basis=self)
         self.set_input_shape(*xi)
         design_matrix = self.evaluate(
             *xi
