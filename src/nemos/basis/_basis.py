@@ -1001,12 +1001,12 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         # each sample and vectorized dimension in a pairwise way
         X = (
             kron(
-                x1.reshape(-1, self.basis1.n_basis_funcs),
-                x2.reshape(-1, self.basis2.n_basis_funcs),
+                x1.reshape((-1, self.basis1.n_basis_funcs)),
+                x2.reshape((-1, self.basis2.n_basis_funcs)),
                 transpose=False,
             )
-            .reshape(n_samples, *shape, -1)
-            .reshape(n_samples, -1)
+            .reshape((n_samples, *shape, -1))
+            .reshape((n_samples, -1))
         )  # reshape to the desired dimension
         return X
 
