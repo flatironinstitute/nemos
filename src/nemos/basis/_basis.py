@@ -26,7 +26,6 @@ from ._check_basis import (
 )
 from ._composition_utils import (
     add_docstring,
-    get_input_shape,
     infer_input_dimensionality,
     is_basis_like,
     multiply_basis_by_integer,
@@ -932,6 +931,19 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         CompositeBasisMixin.__init__(self, basis1, basis2, label=label)
         Basis.__init__(self)
 
+        # reset input shape if multiplied bases have different input
+        # shapes
+        input_shape = self.input_shape
+        unique_shape = {s for s in input_shape}
+        # at initialization, basis2 can be None
+        if len(unique_shape) != 1 and self.basis2:
+            warnings.warn(
+                category=UserWarning,
+                message="Multiple different input shapes detected. "
+                "Resetting input shape to default (None).",
+            )
+            set_input_shape(self, None)
+
     def _generate_label(self) -> str:
         return "(" + self.basis1.label + " * " + self.basis2.label + ")"
 
@@ -1203,18 +1215,3 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
            inputs are available.
         """
         return self.input_shape[:1]
-
-    @property
-    def input_shape(self):
-        input_shape = get_input_shape(self)
-        unique_shape = {s for s in input_shape}
-        # at initialization, basis2 can be None
-        if len(unique_shape) != 1 and self.basis2:
-            warnings.warn(
-                category=UserWarning,
-                message="Multiple different input shapes detected. "
-                "Resetting input shape to default (None).",
-            )
-            set_input_shape(self, None)
-            input_shape = [None] * self._n_input_dimensionality
-        return input_shape
