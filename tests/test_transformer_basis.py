@@ -1,3 +1,4 @@
+import inspect
 import operator
 import pickle
 from contextlib import nullcontext as does_not_raise
@@ -678,10 +679,17 @@ def test_transformer_fit_input_shape_mismatch(
     "basis_cls",
     list_all_basis_classes(),
 )
-def test_transformer_transform(basis_cls, inp, basis_class_specific_params):
+@pytest.mark.parametrize("ndim", [1, 2, 3])
+def test_transformer_transform(basis_cls, inp, basis_class_specific_params, ndim):
     bas = CombinedBasis().instantiate_basis(
-        5, basis_cls, basis_class_specific_params, window_size=10
+        5, basis_cls, basis_class_specific_params, window_size=10, ndim=ndim
     )
+    sig = inspect.signature(bas.__init__)
+    if "ndim" not in sig.parameters and ndim != 1:
+        pytest.skip(f"basis {bas.__class__.__name__} doesn't have the ndim param")
+    else:
+        # make sure that the basis ndim was set correctly
+        assert getattr(bas, "ndim", ndim) == ndim
     transformer = bas.set_input_shape(
         *([inp] * bas._n_input_dimensionality)
     ).to_transformer()
@@ -692,7 +700,6 @@ def test_transformer_transform(basis_cls, inp, basis_class_specific_params):
 
     out = transformer.transform(X)
     out2 = bas.compute_features(*([inp] * bas._n_input_dimensionality))
-
     assert np.array_equal(out, out2, equal_nan=True)
 
 
