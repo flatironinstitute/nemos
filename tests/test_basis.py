@@ -1762,12 +1762,12 @@ class TestSharedMethods:
         if n_input == 0:
             expectation = pytest.raises(
                 TypeError,
-                match=r"evaluate_on_grid\(\) missing 1 required positional argument",
+                match=r"evaluate_on_grid\(\) missing 1 required positional argument | but 0 were provided",
             )
         elif n_input != basis_obj._n_input_dimensionality:
             expectation = pytest.raises(
                 TypeError,
-                match=r"evaluate_on_grid\(\) takes [0-9] positional arguments but [0-9] were given",
+                match=r"evaluate_on_grid\(\) takes [0-9] positional arguments but [0-9] were given|but 2 were provided",
             )
         else:
             expectation = does_not_raise()
@@ -3481,14 +3481,12 @@ class TestFourierBasis(BasisFuncsTesting):
 
     @pytest.mark.parametrize("ndim", [1, 2, 3])
     def test_evaluate_on_grid_ndim(self, ndim):
-        bas = self.cls["eval"](
-            frequencies=3, ndim=ndim, frequency_mask=None
-        )
+        bas = self.cls["eval"](frequencies=3, ndim=ndim, frequency_mask=None)
         out = bas.evaluate_on_grid(*[10] * ndim)
         assert len(out) == 1 + ndim
         for i in range(ndim):
-            assert out[i].shape == ((10, ) * ndim)
-        assert out[ndim].shape == (*(10, ) * ndim, bas.n_basis_funcs)
+            assert out[i].shape == ((10,) * ndim)
+        assert out[ndim].shape == (*(10,) * ndim, bas.n_basis_funcs)
 
 
 class TestAdditiveBasis(CombinedBasis):

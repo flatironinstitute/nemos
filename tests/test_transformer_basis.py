@@ -631,7 +631,9 @@ def test_to_transformer_and_set_input(
     "basis_cls, ndim",
     get_valid_basis_ndim_combinations(),
 )
-def test_transformer_fit(basis_cls, inp, basis_class_specific_params, expectation, ndim):
+def test_transformer_fit(
+    basis_cls, inp, basis_class_specific_params, expectation, ndim
+):
     bas = CombinedBasis().instantiate_basis(
         5, basis_cls, basis_class_specific_params, window_size=10, ndim=ndim
     )
@@ -647,11 +649,17 @@ def test_transformer_fit(basis_cls, inp, basis_class_specific_params, expectatio
 
     # try and pass segmented time series
     bas_ndim = getattr(bas, "ndim", 1)
-    if isinstance(bas, (basis.AdditiveBasis, basis.MultiplicativeBasis)) or bas_ndim > 1:
+    if (
+        isinstance(bas, (basis.AdditiveBasis, basis.MultiplicativeBasis))
+        or bas_ndim > 1
+    ):
         if inp.ndim == 2 and bas_ndim <= 2:
             expectation = pytest.raises(ValueError, match="Input mismatch: expected ")
         elif bas_ndim > 2:
-            expectation = pytest.raises(TypeError, match=r"TransformerBasis\.fit\(\) takes from \d+ to \d+ positional arguments but \d+ were given")
+            expectation = pytest.raises(
+                TypeError,
+                match=r"TransformerBasis\.fit\(\) takes from \d+ to \d+ positional arguments but \d+ were given",
+            )
 
     with expectation:
         transformer.fit(*([inp] * bas._n_input_dimensionality))
