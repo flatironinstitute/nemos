@@ -3917,16 +3917,10 @@ class TestAdditiveBasis(CombinedBasis):
         add = basis_a + basis_b
         inps_a = [2] * basis_a._n_input_dimensionality
         add.basis1.set_input_shape(*inps_a)
-        if isinstance(basis_a, MultiplicativeBasis):
-            new_out_num = np.prod(inps_a) * add.basis1.n_basis_funcs
-        else:
-            new_out_num = inps_a[0] * add.basis1.n_basis_funcs
+        new_out_num = inps_a[0] * add.basis1.n_basis_funcs
         assert add.n_output_features == new_out_num + add.basis2.n_basis_funcs
         inps_b = [3] * basis_b._n_input_dimensionality
-        if isinstance(basis_b, MultiplicativeBasis):
-            new_out_num_b = np.prod(inps_b) * add.basis2.n_basis_funcs
-        else:
-            new_out_num_b = inps_b[0] * add.basis2.n_basis_funcs
+        new_out_num_b = inps_b[0] * add.basis2.n_basis_funcs
         add.basis2.set_input_shape(*inps_b)
         assert add.n_output_features == new_out_num + new_out_num_b
 
