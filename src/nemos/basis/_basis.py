@@ -1145,7 +1145,8 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
             shapes = [transform_to_shape(x) for x in xi]
         except Exception as e:
             raise ValueError(f"Cannot convert inputs ``{xi}`` to shape tuple.") from e
-        _check_unique_shapes(shapes, self)
+        if shapes:
+            _check_unique_shapes(shapes, self)
         super().set_input_shape(*xi)
         if self._input_shape_ is None:
             return self
