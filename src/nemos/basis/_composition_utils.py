@@ -305,11 +305,12 @@ def label_setter(bas: "BasisMixin", label: str | None) -> None | ValueError:
     return error
 
 
-def _check_valid_shape_tuple(shape):
-    if not all(isinstance(i, int) for i in shape):
-        raise ValueError(
-            f"The tuple provided contains non integer values. Tuple: {shape}."
-        )
+def _check_valid_shape_tuple(*shapes):
+    for shape in shapes:
+        if not all(isinstance(i, int) for i in shape):
+            raise ValueError(
+                f"The tuple provided contains non integer values. Tuple: {shape}."
+            )
 
 
 def transform_to_shape(xi):
@@ -371,6 +372,7 @@ def set_input_shape(bas, *xi, allow_inputs_of_different_shape=True):
 
     if not allow_inputs_of_different_shape:
         _check_unique_shapes(xi, bas)
+    _check_valid_shape_tuple(*xi)
 
     # use 1 as default or number of non-variable args
     n_args = (
