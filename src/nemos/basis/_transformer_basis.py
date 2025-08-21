@@ -9,6 +9,7 @@ import numpy as np
 from ..typing import FeatureMatrix
 from ._composition_utils import (
     _iterate_over_components,
+    get_input_shape,
     infer_input_dimensionality,
     is_basis_like,
 )
@@ -163,10 +164,11 @@ class TransformerBasis:
         """
         n_samples = X.shape[0]
         out = (
-            np.reshape(X[:, cc : cc + n_input], (n_samples, *bas.input_shape))
+            np.reshape(X[:, cc : cc + n_input], (n_samples, *shape))
             for i, (bas, n_input) in enumerate(
                 zip(self._iterate_over_components(), self._input_shape_product)
             )
+            for shape in get_input_shape(bas)
             for cc in [sum(self._input_shape_product[:i])]
         )
         return out

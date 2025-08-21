@@ -387,11 +387,27 @@ def test_split_by_features_shape(input_shape):
     "ishape, n_out_features, expectation",
     [
         ((1, 1), 5, does_not_raise()),
-        ((1, 2), 10, pytest.raises(ValueError, match="CustomBasis basis requires inputs")),
-        ((2, 1), 10, pytest.raises(ValueError, match="CustomBasis basis requires inputs")),
+        (
+            (1, 2),
+            10,
+            pytest.raises(ValueError, match="CustomBasis basis requires inputs"),
+        ),
+        (
+            (2, 1),
+            10,
+            pytest.raises(ValueError, match="CustomBasis basis requires inputs"),
+        ),
         ((2, 2), 10, does_not_raise()),
-        (((2, 2), 1), 20, pytest.raises(ValueError, match="CustomBasis basis requires inputs")),
-        ((1, (2, 2)), 20, pytest.raises(ValueError, match="CustomBasis basis requires inputs")),
+        (
+            ((2, 2), 1),
+            20,
+            pytest.raises(ValueError, match="CustomBasis basis requires inputs"),
+        ),
+        (
+            (1, (2, 2)),
+            20,
+            pytest.raises(ValueError, match="CustomBasis basis requires inputs"),
+        ),
         (((2, 2), (2, 2)), 20, does_not_raise()),
     ],
 )

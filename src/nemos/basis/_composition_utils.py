@@ -460,11 +460,10 @@ def get_input_shape(bas: "BasisMixin") -> List[Tuple | None]:
     """
     input_dim = infer_input_dimensionality(bas)
     if input_dim == 1:
-        ishape = getattr(bas, "_input_shape_", None)
-        return bas._input_shape_[0] if ishape else None
-
+        ishape = getattr(bas, "_input_shape_", [None])
+        return ishape if ishape is not None else [None]
     elif not hasattr(bas, "basis1") and hasattr(bas, "_input_shape_"):
-        return bas._input_shape_
+        return [None] if bas._input_shape_ is None else bas._input_shape_
 
     basis1 = getattr(bas, "_basis1", None)
     basis2 = getattr(bas, "_basis2", None)
