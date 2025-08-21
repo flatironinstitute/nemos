@@ -32,6 +32,27 @@ from nemos.basis._composition_utils import generate_basis_label_pair
 from nemos.basis._fourier_basis import FourierBasis
 
 
+def get_valid_basis_ndim_combinations():
+    """Generate only valid (basis_cls, ndim) combinations."""
+    combinations = []
+    for basis_cls in list_all_basis_classes():
+        # Create a temporary instance to check signature
+        try:
+            sig = inspect.signature(basis_cls.__init__)
+            if "ndim" in sig.parameters:
+                # Supports ndim parameter - add all ndim values
+                for ndim in [1, 2, 3]:
+                    combinations.append((basis_cls, ndim))
+            else:
+                # Only supports ndim=1
+                combinations.append((basis_cls, 1))
+        except Exception:
+            # Fallback: assume only ndim=1 works
+            combinations.append((basis_cls, 1))
+
+    return combinations
+
+
 @pytest.mark.parametrize(
     "basis_cls",
     list_all_basis_classes(),
@@ -125,16 +146,18 @@ def test_to_transformer_and_constructor_are_equivalent(
 
 
 @pytest.mark.parametrize(
-    "basis_cls",
-    list_all_basis_classes(),
+    "basis_cls, ndim",
+    get_valid_basis_ndim_combinations(),
 )
-def test_basis_to_transformer_makes_a_copy(basis_cls, basis_class_specific_params):
+def test_basis_to_transformer_makes_a_copy(
+    basis_cls, basis_class_specific_params, ndim
+):
 
     if basis_cls in [nmo.basis.IdentityEval, nmo.basis.HistoryConv, CustomBasis]:
         pytest.skip(f"{basis_cls} n_basis_funcs is not settable.")
 
     bas_a = CombinedBasis().instantiate_basis(
-        5, basis_cls, basis_class_specific_params, window_size=10
+        5, basis_cls, basis_class_specific_params, window_size=10, ndim=ndim
     )
     trans_bas_a = bas_a.set_input_shape(
         *([1] * bas_a._n_input_dimensionality)
@@ -479,12 +502,12 @@ def test_transformerbasis_exponentiation(
 
 
 @pytest.mark.parametrize(
-    "basis_cls",
-    list_all_basis_classes(),
+    "basis_cls, ndim",
+    get_valid_basis_ndim_combinations(),
 )
-def test_transformerbasis_dir(basis_cls, basis_class_specific_params):
+def test_transformerbasis_dir(basis_cls, basis_class_specific_params, ndim):
     bas = CombinedBasis().instantiate_basis(
-        5, basis_cls, basis_class_specific_params, window_size=10
+        5, basis_cls, basis_class_specific_params, window_size=10, ndim=ndim
     )
     trans_bas = basis.TransformerBasis(
         bas.set_input_shape(*([1] * bas._n_input_dimensionality))
@@ -529,16 +552,16 @@ def test_transformerbasis_sk_clone_kernel_noned(basis_cls, basis_class_specific_
 
 
 @pytest.mark.parametrize(
-    "basis_cls",
-    list_all_basis_classes(),
+    "basis_cls, ndim",
+    get_valid_basis_ndim_combinations(),
 )
 @pytest.mark.parametrize("n_basis_funcs", [5])
 def test_transformerbasis_pickle(
-    tmpdir, basis_cls, n_basis_funcs, basis_class_specific_params
+    tmpdir, basis_cls, n_basis_funcs, basis_class_specific_params, ndim
 ):
 
     bas = CombinedBasis().instantiate_basis(
-        n_basis_funcs, basis_cls, basis_class_specific_params, window_size=10
+        n_basis_funcs, basis_cls, basis_class_specific_params, window_size=10, ndim=ndim
     )
     # the test that tries cross-validation with n_jobs = 2 already should test this
     trans_bas = basis.TransformerBasis(
@@ -570,14 +593,14 @@ def test_transformerbasis_pickle(
     "inp", [np.ones((10,)), np.ones((10, 1)), np.ones((10, 2)), np.ones((10, 2, 3))]
 )
 @pytest.mark.parametrize(
-    "basis_cls",
-    list_all_basis_classes(),
+    "basis_cls, ndim",
+    get_valid_basis_ndim_combinations(),
 )
 def test_to_transformer_and_set_input(
-    basis_cls, inp, set_input, expectation, basis_class_specific_params
+    basis_cls, inp, set_input, expectation, basis_class_specific_params, ndim
 ):
     bas = CombinedBasis().instantiate_basis(
-        5, basis_cls, basis_class_specific_params, window_size=10
+        5, basis_cls, basis_class_specific_params, window_size=10, ndim=ndim
     )
     if set_input:
         bas.set_input_shape(*([inp] * bas._n_input_dimensionality))
@@ -605,12 +628,12 @@ def test_to_transformer_and_set_input(
     ],
 )
 @pytest.mark.parametrize(
-    "basis_cls",
-    list_all_basis_classes(),
+    "basis_cls, ndim",
+    get_valid_basis_ndim_combinations(),
 )
-def test_transformer_fit(basis_cls, inp, basis_class_specific_params, expectation):
+def test_transformer_fit(basis_cls, inp, basis_class_specific_params, expectation, ndim):
     bas = CombinedBasis().instantiate_basis(
-        5, basis_cls, basis_class_specific_params, window_size=10
+        5, basis_cls, basis_class_specific_params, window_size=10, ndim=ndim
     )
     transformer = bas.set_input_shape(
         *([inp] * bas._n_input_dimensionality)
@@ -623,9 +646,12 @@ def test_transformer_fit(basis_cls, inp, basis_class_specific_params, expectatio
         assert transformer.kernel_ is not None
 
     # try and pass segmented time series
-    if isinstance(bas, (basis.AdditiveBasis, basis.MultiplicativeBasis)):
-        if inp.ndim == 2:
+    bas_ndim = getattr(bas, "ndim", 1)
+    if isinstance(bas, (basis.AdditiveBasis, basis.MultiplicativeBasis)) or bas_ndim > 1:
+        if inp.ndim == 2 and bas_ndim <= 2:
             expectation = pytest.raises(ValueError, match="Input mismatch: expected ")
+        elif bas_ndim > 2:
+            expectation = pytest.raises(TypeError, match=r"TransformerBasis\.fit\(\) takes from \d+ to \d+ positional arguments but \d+ were given")
 
     with expectation:
         transformer.fit(*([inp] * bas._n_input_dimensionality))
@@ -676,20 +702,14 @@ def test_transformer_fit_input_shape_mismatch(
     ],
 )
 @pytest.mark.parametrize(
-    "basis_cls",
-    list_all_basis_classes(),
+    "basis_cls, ndim",
+    get_valid_basis_ndim_combinations(),
 )
-@pytest.mark.parametrize("ndim", [1, 2, 3])
 def test_transformer_transform(basis_cls, inp, basis_class_specific_params, ndim):
     bas = CombinedBasis().instantiate_basis(
         5, basis_cls, basis_class_specific_params, window_size=10, ndim=ndim
     )
-    sig = inspect.signature(bas.__init__)
-    if "ndim" not in sig.parameters and ndim != 1:
-        pytest.skip(f"basis {bas.__class__.__name__} doesn't have the ndim param")
-    else:
-        # make sure that the basis ndim was set correctly
-        assert getattr(bas, "ndim", ndim) == ndim
+    assert getattr(bas, "ndim", ndim) == ndim
     transformer = bas.set_input_shape(
         *([inp] * bas._n_input_dimensionality)
     ).to_transformer()
