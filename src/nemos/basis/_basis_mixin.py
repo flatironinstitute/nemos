@@ -207,6 +207,12 @@ class BasisMixin:
 
     def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> BasisMixin:
         """Set the expected input shape for the basis object."""
+        if getattr(self, "_parent", None) is not None:
+            raise ValueError(
+                "Cannot set input shape on a child basis. Set the input shape on the root basis instead.\n"
+                "For example, instead of ``self.basis1.set_input_shape(n); self.basis2.set_input_shape(m)``, "
+                "do ``self.set_input_shape(n, m)``."
+            )
         set_input_shape(self, *xi)
         return self
 

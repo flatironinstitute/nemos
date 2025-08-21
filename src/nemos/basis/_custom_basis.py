@@ -38,6 +38,7 @@ from ._composition_utils import (
     multiply_basis_by_integer,
     promote_to_transformer,
     raise_basis_to_power,
+    set_input_shape,
 )
 
 if TYPE_CHECKING:
@@ -341,7 +342,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
                 f"However, some inputs have fewer dimensions: {invalid_dims}."
             )
         _check_shape_consistency(*xi, basis=self)
-        self.set_input_shape(*xi)
+        set_input_shape(self, *xi)
         design_matrix = self.evaluate(
             *xi
         )  # (n_samples, *n_output_shape, n_vec_dim, n_basis)
@@ -604,7 +605,11 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
             # CustomBasis acts as a multiplicative basis in n-dimension
             # i.e. multiple inputs must have the same shape and are
             # treated in a paired-way in vectorization
-            self._input_shape_ = self._input_shape_[:1]
+            self._input_shape_ = (
+                self._input_shape_
+                if self._input_shape_ is None
+                else self._input_shape_[:1]
+            )
         except Exception as e:
             self._input_shape_ = current_input_shape
             self._input_shape_product = current_input_shape_product

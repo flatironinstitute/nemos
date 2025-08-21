@@ -326,6 +326,7 @@ class BSplineBasis(SplineBasis, abc.ABC):
             label=label,
         )
 
+    # TODO:check if necessary
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     def evaluate(

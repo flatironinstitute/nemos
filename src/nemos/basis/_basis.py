@@ -1001,19 +1001,20 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         # multiplicative basis inputs are of the same shape, checked and
         # set just before the call to this method
         n_samples = x1.shape[0]
-        shape = self._input_shape_[0]
         # flatten on the first axis, so that the rowise kron applies to
         # each sample and vectorized dimension in a pairwise way
-        X = (
-            kron(
-                x1.reshape((-1, self.basis1.n_basis_funcs)),
-                x2.reshape((-1, self.basis2.n_basis_funcs)),
-                transpose=False,
-            )
-            .reshape((n_samples, *shape, -1))
-            .reshape((n_samples, -1))
-        )  # reshape to the desired dimension
-        return X
+
+        n_vec_inputs = self._input_shape_product[0]
+        # note that x1/2 can have shape that doesn't divide self.basis1/2.n_basis_funcs
+        # for example, OrthExponentialEval has an orthogonalization procedure that drops
+        # redundant columns: i.e. the output may be less the nominal n-basis funcs,
+        X = kron(
+            x1.reshape((n_vec_inputs * n_samples, -1)),
+            x2.reshape((n_vec_inputs * n_samples, -1)),
+            transpose=False,
+        )
+        shape = self._input_shape_[0]
+        return X.reshape((n_samples, *shape, -1)).reshape((n_samples, -1))
 
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.

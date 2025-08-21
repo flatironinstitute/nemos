@@ -109,7 +109,9 @@ def _check_transform_input(
     return xi
 
 
-def _check_unique_shapes(input_shapes: List[Tuple[int, ...]], bas: "BasisMixin"):
+def _check_unique_shapes(input_shapes: None | List[Tuple[int, ...]], bas: "BasisMixin"):
+    if input_shapes is None:
+        return
     shapes = {s for s in input_shapes}
     if len(shapes) != 1:
         raise ValueError(

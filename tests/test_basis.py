@@ -26,7 +26,7 @@ from nemos.basis._basis import (
     MultiplicativeBasis,
     add_docstring,
 )
-from nemos.basis._composition_utils import generate_basis_label_pair
+from nemos.basis._composition_utils import generate_basis_label_pair, set_input_shape
 from nemos.basis._decaying_exponential import OrthExponentialBasis
 from nemos.basis._identity import HistoryBasis, IdentityBasis
 from nemos.basis._raised_cosine_basis import (
@@ -3916,12 +3916,12 @@ class TestAdditiveBasis(CombinedBasis):
         ).to_transformer()
         add = basis_a + basis_b
         inps_a = [2] * basis_a._n_input_dimensionality
-        add.basis1.set_input_shape(*inps_a)
+        set_input_shape(add.basis1, *inps_a)
         new_out_num = inps_a[0] * add.basis1.n_basis_funcs
         assert add.n_output_features == new_out_num + add.basis2.n_basis_funcs
         inps_b = [3] * basis_b._n_input_dimensionality
+        set_input_shape(add.basis2, *inps_b)
         new_out_num_b = inps_b[0] * add.basis2.n_basis_funcs
-        add.basis2.set_input_shape(*inps_b)
         assert add.n_output_features == new_out_num + new_out_num_b
 
     @pytest.mark.parametrize(
@@ -4052,8 +4052,12 @@ class TestMultiplicativeBasis(CombinedBasis):
         assert mul._input_shape_product == (1, 1)
         basis_b_obj.set_input_shape((1, 2, 3))
         mul = basis_a_obj * basis_b_obj
-        assert mul._input_shape_product == (1, 6)
-        assert (mul * mul)._input_shape_product == (1, 6, 1, 6)
+        # incompatible shape resets input shape
+        assert mul._input_shape_product is None
+        basis_a_obj.set_input_shape((1, 2, 3))
+        mul = basis_a_obj * basis_b_obj
+        assert mul._input_shape_product == (6, 6)
+        assert (mul * mul)._input_shape_product == (6, 6, 6, 6)
 
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
@@ -4819,61 +4823,85 @@ class TestMultiplicativeBasis(CombinedBasis):
             )
         with context:
             x = [np.linspace(0, 1, 10)] * bas._n_input_dimensionality
+            # needed for re-shaping krons
+            bas.set_input_shape(*x)
             bas._compute_features(*x)
 
-    @pytest.mark.parametrize("n_basis_input1", [1, 2, 3])
-    @pytest.mark.parametrize("n_basis_input2", [1, 2, 3])
-    def test_set_num_output_features(self, n_basis_input1, n_basis_input2):
+    @pytest.mark.parametrize("n_basis_input", [1, 2, 3])
+    def test_set_num_output_features(self, n_basis_input):
         bas1 = basis.RaisedCosineLinearConv(10, window_size=10)
         bas2 = basis.BSplineConv(11, window_size=10)
-        bas_add = bas1 * bas2
-        assert bas_add.n_output_features is None
-        bas_add.compute_features(
-            np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2))
+        bas_mul = bas1 * bas2
+        assert bas_mul.n_output_features is None
+        bas_mul.compute_features(
+            np.ones((20, n_basis_input)), np.ones((20, n_basis_input))
         )
-        assert bas_add.n_output_features == (n_basis_input1 * 10 * n_basis_input2 * 11)
+        assert bas_mul.n_output_features == (n_basis_input * 10 * 11)
 
-    @pytest.mark.parametrize("n_basis_input1", [1, 2, 3])
-    @pytest.mark.parametrize("n_basis_input2", [1, 2, 3])
-    def test_set_num_basis_input(self, n_basis_input1, n_basis_input2):
+    @pytest.mark.parametrize("n_basis_input", [1, 2, 3])
+    def test_set_num_basis_input(self, n_basis_input):
         bas1 = basis.RaisedCosineLinearConv(10, window_size=10)
         bas2 = basis.BSplineConv(10, window_size=10)
-        bas_add = bas1 * bas2
-        assert bas_add._input_shape_product is None
-        bas_add.compute_features(
-            np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2))
+        bas_mul = bas1 * bas2
+        assert bas_mul._input_shape_product is None
+        bas_mul.compute_features(
+            np.ones((20, n_basis_input)), np.ones((20, n_basis_input))
         )
-        assert bas_add._input_shape_product == (n_basis_input1, n_basis_input2)
+        assert bas_mul._input_shape_product == (n_basis_input, n_basis_input)
 
     @pytest.mark.parametrize(
         "n_input, expectation",
         [
-            (3, does_not_raise()),
-            (0, pytest.raises(ValueError, match="Empty array provided")),
-            (1, does_not_raise()),
-            (4, does_not_raise()),
+            (
+                3,
+                pytest.raises(
+                    ValueError,
+                    match="MultiplicativeBasis requires all inputs to be of the same",
+                ),
+            ),
+            (
+                0,
+                pytest.raises(
+                    ValueError,
+                    match="MultiplicativeBasis requires all inputs to be of the same",
+                ),
+            ),
+            (2, does_not_raise()),
+            (
+                1,
+                pytest.raises(
+                    ValueError,
+                    match="MultiplicativeBasis requires all inputs to be of the same",
+                ),
+            ),
+            (
+                4,
+                pytest.raises(
+                    ValueError,
+                    match="MultiplicativeBasis requires all inputs to be of the same",
+                ),
+            ),
         ],
     )
     def test_expected_input_number(self, n_input, expectation):
         bas1 = basis.RaisedCosineLinearConv(10, window_size=10)
         bas2 = basis.BSplineConv(10, window_size=10)
         bas = bas1 * bas2
-        x = np.random.randn(20, 2), np.random.randn(20, 3)
+        x = np.random.randn(20, 2), np.random.randn(20, 2)
         bas.compute_features(*x)
         with expectation:
             x = np.random.randn(30, 2), np.random.randn(30, n_input)
             bas.compute_features(*x)
 
-    @pytest.mark.parametrize("n_basis_input1", [1, 2, 3])
-    @pytest.mark.parametrize("n_basis_input2", [1, 2, 3])
-    def test_input_shape_product(self, n_basis_input1, n_basis_input2):
+    @pytest.mark.parametrize("n_basis_input", [1, 2, 3])
+    def test_input_shape_product(self, n_basis_input):
         bas1 = basis.RaisedCosineLinearConv(10, window_size=10)
         bas2 = basis.BSplineConv(10, window_size=10)
         bas_prod = bas1 * bas2
         bas_prod.compute_features(
-            np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2))
+            np.ones((20, n_basis_input)), np.ones((20, n_basis_input))
         )
-        assert bas_prod._input_shape_product == (n_basis_input1, n_basis_input2)
+        assert bas_prod._input_shape_product == (n_basis_input, n_basis_input)
 
     @pytest.mark.parametrize(
         "basis_a",
@@ -4883,21 +4911,17 @@ class TestMultiplicativeBasis(CombinedBasis):
         "basis_b",
         list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
-    @pytest.mark.parametrize("shape_a", [1, (), np.ones(3)])
-    @pytest.mark.parametrize("shape_b", [1, (), np.ones(3)])
-    @pytest.mark.parametrize("add_shape_a", [(), (1,)])
-    @pytest.mark.parametrize("add_shape_b", [(), (1,)])
+    @pytest.mark.parametrize("shape", [1, (), np.ones(3)])
+    @pytest.mark.parametrize("add_shape", [(), (1,)])
     def test_set_input_shape_type_1d_arrays(
         self,
         basis_a,
         basis_b,
-        shape_a,
-        shape_b,
+        shape,
         basis_class_specific_params,
-        add_shape_a,
-        add_shape_b,
+        add_shape,
     ):
-        x = (np.ones((10, *add_shape_a)), np.ones((10, *add_shape_b)))
+        x = (np.ones((10, *add_shape)), np.ones((10, *add_shape)))
         basis_a = self.instantiate_basis(
             5, basis_a, basis_class_specific_params, window_size=10
         )
@@ -4906,7 +4930,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         )
         mul = basis_a * basis_b
 
-        mul.set_input_shape(shape_a, shape_b)
+        mul.set_input_shape(shape, shape)
         mul.compute_features(*x)
         assert all(
             xi.shape[1:] == ishape if xi.ndim != 1 else () == ishape
@@ -4921,21 +4945,17 @@ class TestMultiplicativeBasis(CombinedBasis):
         "basis_b",
         list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
-    @pytest.mark.parametrize("shape_a", [2, (2,), np.ones((3, 2))])
-    @pytest.mark.parametrize("shape_b", [3, (3,), np.ones((3, 3))])
-    @pytest.mark.parametrize("add_shape_a", [(), (1,)])
-    @pytest.mark.parametrize("add_shape_b", [(), (1,)])
+    @pytest.mark.parametrize("shape", [2, (2,), np.ones((3, 2))])
+    @pytest.mark.parametrize("add_shape", [(), (1,)])
     def test_set_input_shape_type_2d_arrays(
         self,
         basis_a,
         basis_b,
-        shape_a,
-        shape_b,
+        shape,
         basis_class_specific_params,
-        add_shape_a,
-        add_shape_b,
+        add_shape,
     ):
-        x = (np.ones((10, 2, *add_shape_a)), np.ones((10, 3, *add_shape_b)))
+        x = (np.ones((10, 1, *add_shape)), np.ones((10, 1, *add_shape)))
         basis_a = self.instantiate_basis(
             5, basis_a, basis_class_specific_params, window_size=10
         )
@@ -4944,7 +4964,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         )
         mul = basis_a * basis_b
 
-        mul.set_input_shape(shape_a, shape_b)
+        mul.set_input_shape(shape, shape)
         mul.compute_features(*x)
         assert all(
             xi.shape[1:] == ishape if xi.ndim != 1 else () == ishape
@@ -4959,21 +4979,17 @@ class TestMultiplicativeBasis(CombinedBasis):
         "basis_b",
         list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
     )
-    @pytest.mark.parametrize("shape_a", [(2, 2), np.ones((3, 2, 2))])
-    @pytest.mark.parametrize("shape_b", [(3, 1), np.ones((3, 3, 1))])
-    @pytest.mark.parametrize("add_shape_a", [(), (1,)])
-    @pytest.mark.parametrize("add_shape_b", [(), (1,)])
+    @pytest.mark.parametrize("shape", [(2, 2), np.ones((3, 2, 2))])
+    @pytest.mark.parametrize("add_shape", [(), (1,)])
     def test_set_input_shape_type_nd_arrays(
         self,
         basis_a,
         basis_b,
-        shape_a,
-        shape_b,
+        shape,
         basis_class_specific_params,
-        add_shape_a,
-        add_shape_b,
+        add_shape,
     ):
-        x = (np.ones((10, 2, 2, *add_shape_a)), np.ones((10, 3, 1, *add_shape_b)))
+        x = (np.ones((10, 3, 1, *add_shape)), np.ones((10, 3, 1, *add_shape)))
         basis_a = self.instantiate_basis(
             5, basis_a, basis_class_specific_params, window_size=10
         )
@@ -4982,7 +4998,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         )
         mul = basis_a * basis_b
 
-        mul.set_input_shape(shape_a, shape_b)
+        mul.set_input_shape(shape, shape)
         mul.compute_features(*x)
         assert all(
             xi.shape[1:] == ishape if xi.ndim != 1 else () == ishape
@@ -5136,20 +5152,11 @@ class TestMultiplicativeBasis(CombinedBasis):
             *([1] * basis_b._n_input_dimensionality)
         ).to_transformer()
         mul = basis_a * basis_b
-        inps_a = [2] * basis_a._n_input_dimensionality
-        mul.basis1.set_input_shape(*inps_a)
-        if isinstance(basis_a, MultiplicativeBasis):
-            new_out_num = np.prod(inps_a) * mul.basis1.n_basis_funcs
-        else:
-            new_out_num = inps_a[0] * mul.basis1.n_basis_funcs
-        assert mul.n_output_features == new_out_num * mul.basis2.n_basis_funcs
-        inps_b = [3] * basis_b._n_input_dimensionality
-        if isinstance(basis_b, MultiplicativeBasis):
-            new_out_num_b = np.prod(inps_b) * mul.basis2.n_basis_funcs
-        else:
-            new_out_num_b = inps_b[0] * mul.basis2.n_basis_funcs
-        mul.basis2.set_input_shape(*inps_b)
-        assert mul.n_output_features == new_out_num * new_out_num_b
+        mul.set_input_shape(*[2] * mul._n_input_dimensionality)
+        assert (
+            mul.n_output_features
+            == 2 * mul.basis1.n_basis_funcs * mul.basis2.n_basis_funcs
+        )
 
     @pytest.mark.parametrize(
         "x_shape",
@@ -5617,7 +5624,6 @@ def test_multi_epoch_pynapple_basis_transformer(
                     bas1._input_shape_product[0] * bas1.n_basis_funcs
                     + bas2._input_shape_product[0]
                     * bas2.n_basis_funcs
-                    * bas3._input_shape_product[0]
                     * bas3.n_basis_funcs,
                 ),
             },
@@ -5631,10 +5637,7 @@ def test_multi_epoch_pynapple_basis_transformer(
                     0,
                     bas1._input_shape_product[0]
                     * bas1.n_basis_funcs
-                    * (
-                        bas2._input_shape_product[0] * bas2.n_basis_funcs
-                        + bas3._input_shape_product[0] * bas3.n_basis_funcs
-                    ),
+                    * (bas2.n_basis_funcs + bas3.n_basis_funcs),
                 ),
             },
         ),
@@ -5646,16 +5649,14 @@ def test_multi_epoch_pynapple_basis_transformer(
                     0,
                     bas1._input_shape_product[0]
                     * bas1.n_basis_funcs
-                    * bas2._input_shape_product[0]
                     * bas2.n_basis_funcs
-                    * bas3._input_shape_product[0]
                     * bas3.n_basis_funcs,
                 ),
             },
         ),
     ],
 )
-def test__get_splitter(
+def test_get_splitter(
     bas1, bas2, bas3, operator1, operator2, compute_slice, basis_class_specific_params
 ):
     # skip nested
@@ -5678,22 +5679,21 @@ def test__get_splitter(
     bas2_instance = combine_basis.instantiate_basis(
         n_basis[1], bas2, basis_class_specific_params, window_size=10, label="2"
     )
-    bas2_instance.set_input_shape(
-        *([n_input_basis[1]] * bas2_instance._n_input_dimensionality)
-    )
     bas3_instance = combine_basis.instantiate_basis(
         n_basis[2], bas3, basis_class_specific_params, window_size=10, label="3"
-    )
-    bas3_instance.set_input_shape(
-        *([n_input_basis[2]] * bas3_instance._n_input_dimensionality)
     )
 
     func1 = getattr(bas1_instance, operator1)
     func2 = getattr(bas2_instance, operator2)
     bas23 = func2(bas3_instance)
     bas123 = func1(bas23)
-    inps = [np.zeros((1, n)) if n > 1 else np.zeros((1,)) for n in n_input_basis]
+    if "__mul__" in [operator1, operator2]:
+        inps = [np.zeros((1, 2)) for _ in n_input_basis]
+    else:
+        inps = [np.zeros((1, n)) if n > 1 else np.zeros((1,)) for n in n_input_basis]
     bas123.set_input_shape(*inps)
+    for b, i in zip([bas1_instance, bas2_instance, bas3_instance], inps):
+        b.set_input_shape(i)
     splitter_dict, _ = bas123._get_feature_slicing()
     exp_slices = compute_slice(bas1_instance, bas2_instance, bas3_instance)
     assert exp_slices == splitter_dict

@@ -371,17 +371,6 @@ def set_input_shape(bas, *xi):
         return set_input_shape_atomic(bas, *xi)
 
     # here we can assume it is a composite basis
-    set_input_shape1 = getattr(
-        bas.basis1,
-        "set_input_shape",
-        lambda *x: set_input_shape_atomic(bas.basis1, *x),
-    )
-    set_input_shape2 = getattr(
-        bas.basis2,
-        "set_input_shape",
-        lambda *x: set_input_shape_atomic(bas.basis2, *x),
-    )
-
     # grab the input dimensionality
     n_args_1, _ = (
         count_positional_and_var_args(bas.basis1.compute_features)
@@ -390,8 +379,8 @@ def set_input_shape(bas, *xi):
     )
     n_input_dim_1 = getattr(bas.basis1, "_n_input_dimensionality", n_args_1)
 
-    out1 = set_input_shape1(*xi[:n_input_dim_1])
-    out2 = set_input_shape2(*xi[n_input_dim_1:])
+    out1 = set_input_shape(bas.basis1, *xi[:n_input_dim_1])
+    out2 = set_input_shape(bas.basis2, *xi[n_input_dim_1:])
 
     # out1 and out2 will have an _input_shape_product set by the "set_input_shape_atomic" method.
     # here is safe to use the attribute.
