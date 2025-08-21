@@ -307,7 +307,7 @@ def label_setter(bas: "BasisMixin", label: str | None) -> None | ValueError:
 
 def _check_valid_shape_tuple(*shapes):
     for shape in shapes:
-        if not all(isinstance(i, int) for i in shape):
+        if shape is not None and not all(isinstance(i, int) for i in shape):
             raise ValueError(
                 f"The tuple provided contains non integer values. Tuple: {shape}."
             )
@@ -319,7 +319,7 @@ def transform_to_shape(xi):
     elif isinstance(xi, int):
         shape = () if xi == 1 else (xi,)
     else:
-        shape = xi.shape[1:]
+        shape = xi if xi is None else xi.shape[1:]
     return shape
 
 
@@ -362,17 +362,6 @@ def set_input_shape(bas, *xi, allow_inputs_of_different_shape=True):
 
     Set input shape logic, compatible with all bases (composite, atomic, and custom).
     """
-    original_xi = xi
-    try:
-        xi = [transform_to_shape(x) for x in xi]
-    except Exception as e:
-        raise ValueError(
-            f"Cannot convert inputs ``{original_xi}`` to shape tuple."
-        ) from e
-
-    if not allow_inputs_of_different_shape:
-        _check_unique_shapes(xi, bas)
-    _check_valid_shape_tuple(*xi)
 
     # use 1 as default or number of non-variable args
     n_args = (
@@ -392,6 +381,19 @@ def set_input_shape(bas, *xi, allow_inputs_of_different_shape=True):
             f"set_input_shape expects {expected_inputs} input"
             f"{'s' if expected_inputs > 1 else ''}, but {len(xi)} were provided."
         )
+
+    original_xi = xi
+    try:
+        xi = [transform_to_shape(x) for x in xi]
+    except Exception as e:
+        raise ValueError(
+            f"Cannot convert inputs ``{original_xi}`` to shape tuple."
+        ) from e
+
+    if not allow_inputs_of_different_shape:
+        _check_unique_shapes(xi, bas)
+
+    _check_valid_shape_tuple(*xi)
 
     if not hasattr(bas, "basis1"):
         return set_input_shape_atomic(bas, *xi)
