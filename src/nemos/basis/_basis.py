@@ -4,6 +4,7 @@ from __future__ import annotations
 import abc
 import copy
 import math
+import warnings
 from functools import wraps
 from typing import Callable, Generator, Optional, Tuple, Union
 
@@ -33,6 +34,7 @@ from ._composition_utils import (
     promote_to_transformer,
     raise_basis_to_power,
     set_input_shape,
+    transform_to_shape,
 )
 
 
@@ -1139,10 +1141,14 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         # ruff: noqa: D400, D205
         # all inputs have the same shape. The vectorization
         # acts on input pairs.
+        try:
+            shapes = [transform_to_shape(x) for x in xi]
+        except Exception as e:
+            raise ValueError(f"Cannot convert inputs ``{xi}`` to shape tuple.") from e
+        _check_unique_shapes(shapes, self)
         super().set_input_shape(*xi)
         if self._input_shape_ is None:
             return self
-        _check_unique_shapes(self.input_shape, self)
         return self
 
     @property
@@ -1155,12 +1161,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         2. This is used internally by `split_by_feature()` to know how many
            inputs are available.
         """
-        input_shape = self.input_shape
-        if input_shape is not None:
-            input_shape = input_shape[:1]
-        else:
-            input_shape = None
-        return input_shape
+        return self.input_shape[:1]
 
     @property
     def input_shape(self):
@@ -1168,6 +1169,11 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         unique_shape = {s for s in input_shape}
         # at initialization, basis2 can be None
         if len(unique_shape) != 1 and self.basis2:
+            warnings.warn(
+                category=UserWarning,
+                message="Multiple different input shapes detected. "
+                "Resetting input shape to default (None).",
+            )
             set_input_shape(self, None)
             input_shape = [None] * self._n_input_dimensionality
         return input_shape

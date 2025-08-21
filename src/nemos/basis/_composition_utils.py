@@ -312,6 +312,16 @@ def _check_valid_shape_tuple(shape):
         )
 
 
+def transform_to_shape(xi):
+    if isinstance(xi, tuple):
+        shape = xi
+    elif isinstance(xi, int):
+        shape = () if xi == 1 else (xi,)
+    else:
+        shape = xi.shape[1:]
+    return shape
+
+
 def set_input_shape_atomic(
     bas: "AtomicBasisMixin | CustomBasis", *xis: int | tuple[int, ...] | NDArray | None
 ) -> "AtomicBasisMixin":
@@ -327,12 +337,7 @@ def set_input_shape_atomic(
     for xi in xis:
         if isinstance(xi, tuple):
             _check_valid_shape_tuple(xi)
-            shape = xi
-        elif isinstance(xi, int):
-            shape = () if xi == 1 else (xi,)
-        else:
-            shape = xi.shape[1:]
-
+        shape = transform_to_shape(xi)
         n_inputs = (*n_inputs, int(np.prod(shape)))
         shapes.append(shape)
 

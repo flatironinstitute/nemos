@@ -39,6 +39,7 @@ from ._composition_utils import (
     promote_to_transformer,
     raise_basis_to_power,
     set_input_shape,
+    transform_to_shape,
 )
 
 if TYPE_CHECKING:
@@ -597,23 +598,18 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         >>> basis.n_output_features
         90
         """
-        current_input_shape = self._input_shape_
-        current_input_shape_product = self._input_shape_product
         try:
-            super().set_input_shape(*xi)
-            _check_unique_shapes(self._input_shape_, self)
-            # CustomBasis acts as a multiplicative basis in n-dimension
-            # i.e. multiple inputs must have the same shape and are
-            # treated in a paired-way in vectorization
-            self._input_shape_ = (
-                self._input_shape_
-                if self._input_shape_ is None
-                else self._input_shape_[:1]
-            )
+            shapes = [transform_to_shape(x) for x in xi]
         except Exception as e:
-            self._input_shape_ = current_input_shape
-            self._input_shape_product = current_input_shape_product
-            raise e
+            raise ValueError(f"Cannot convert inputs ``{xi}`` to shape tuple.") from e
+        _check_unique_shapes(shapes, self)
+        super().set_input_shape(*shapes)
+        # CustomBasis acts as a multiplicative basis in n-dimension
+        # i.e. multiple inputs must have the same shape and are
+        # treated in a paired-way in vectorization
+        self._input_shape_ = (
+            self._input_shape_ if self._input_shape_ is None else self._input_shape_[:1]
+        )
         return self
 
     def to_transformer(self) -> "TransformerBasis":

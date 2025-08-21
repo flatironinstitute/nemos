@@ -118,6 +118,7 @@ class TransformerBasis:
     def _assign_input_shape(basis):
         # iterate over atomic or custom components
         default_shape = []
+        assign_default = False
         for bas in _iterate_over_components(basis):
             ishape = getattr(bas, "input_shape", None)
             # handles the case of a multi-dim basis with set shape
@@ -129,7 +130,9 @@ class TransformerBasis:
             # handles custom or 1dim with no set shape
             else:
                 default_shape.extend([()] * infer_input_dimensionality(bas))
-        basis.set_input_shape(*default_shape)
+                assign_default = True
+        if assign_default or any(shape is None for shape in default_shape):
+            basis.set_input_shape(*default_shape)
         return basis
 
     @staticmethod
