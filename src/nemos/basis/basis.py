@@ -2592,7 +2592,7 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         EvalBasisMixin.__init__(self, bounds=bounds)
 
     @add_docstring("evaluate_on_grid", FourierBasis)
-    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
+    def evaluate_on_grid(self, *n_samples: int) -> Tuple[NDArray, NDArray]:
         """
         Examples
         --------
@@ -2610,7 +2610,7 @@ class FourierEval(EvalBasisMixin, FourierBasis):
             [<matplotlib.lines.Line2D object at ...
             >>> plt.show()
         """
-        return super().evaluate_on_grid(n_samples)
+        return super().evaluate_on_grid(*n_samples)
 
     @add_docstring("_compute_features", EvalBasisMixin)
     def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:

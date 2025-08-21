@@ -3479,6 +3479,13 @@ class TestFourierBasis(BasisFuncsTesting):
         )
         np.array_equal(expected_output, bas.masked_frequencies)
 
+    @pytest.mark.parametrize("ndim", [1, 2, 3])
+    def test_evaluate_on_grid_ndim(self, ndim):
+        bas = self.cls["eval"](
+            frequencies=3, ndim=ndim, frequency_mask=None
+        )
+        out = bas.evaluate_on_grid(*[10] * ndim)
+        assert len(out) == 1 + ndim
 
 class TestAdditiveBasis(CombinedBasis):
     cls = {"eval": AdditiveBasis, "conv": AdditiveBasis}
