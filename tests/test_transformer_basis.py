@@ -1186,12 +1186,17 @@ def test_basis_operations_type_wrapped_basis():
 
 @pytest.mark.parametrize(
     "shape, expected_input_shape",
-    [(None, [(), ()]), ([(1, 2)], [(1, 2)]), ([(1,), (1, 2)], [(1,), (1, 2)])],
+    [
+        (None, [(), ()]),
+        ([(1, 2), (1,)], [(1, 2), (1,)]),
+        ([(1,), (1, 2)], [(1,), (1, 2)]),
+    ],
 )
 def test_assign_shape_custom_ndim(shape, expected_input_shape):
     class Mock:
         def __init__(self, shape):
             self.input_shape = shape
+            self._input_shape_ = shape if isinstance(shape, list) else [shape, shape]
 
         def compute_features(self, x, y):
             return
