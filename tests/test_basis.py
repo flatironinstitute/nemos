@@ -3486,6 +3486,10 @@ class TestFourierBasis(BasisFuncsTesting):
         )
         out = bas.evaluate_on_grid(*[10] * ndim)
         assert len(out) == 1 + ndim
+        for i in range(ndim):
+            assert out[i].shape == ((10, ) * ndim)
+        assert out[ndim].shape == (*(10, ) * ndim, bas.n_basis_funcs)
+
 
 class TestAdditiveBasis(CombinedBasis):
     cls = {"eval": AdditiveBasis, "conv": AdditiveBasis}
