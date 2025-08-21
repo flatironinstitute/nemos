@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Literal, Tuple
+from typing import TYPE_CHECKING, List, Literal, Tuple
 
 import jax.numpy as jnp
 import numpy as np
@@ -107,3 +107,12 @@ def _check_transform_input(
     _check_samples_consistency(*xi)
 
     return xi
+
+
+def _check_unique_shapes(input_shapes: List[Tuple[int, ...]], bas: "BasisMixin"):
+    shapes = {s for s in input_shapes}
+    if len(shapes) != 1:
+        raise ValueError(
+            f"{bas.__class__.__name__} basis requires inputs of the same shape. "
+            f"Multiple shapes {shapes} provided for basis\n{bas}"
+        )

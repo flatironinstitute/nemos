@@ -24,7 +24,11 @@ from ..type_casting import support_pynapple
 from ..utils import format_repr
 from . import AdditiveBasis, MultiplicativeBasis
 from ._basis_mixin import BasisMixin, BasisTransformerMixin, set_input_shape_state
-from ._check_basis import _check_shape_consistency, _check_transform_input
+from ._check_basis import (
+    _check_shape_consistency,
+    _check_transform_input,
+    _check_unique_shapes,
+)
 from ._composition_utils import (
     _check_valid_shape_tuple,
     add_docstring,
@@ -592,7 +596,20 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         >>> basis.n_output_features
         90
         """
-        return super().set_input_shape(xi[0])
+        current_input_shape = self._input_shape_
+        current_input_shape_product = self._input_shape_product
+        try:
+            super().set_input_shape(*xi)
+            _check_unique_shapes(self._input_shape_, self)
+            # CustomBasis acts as a multiplicative basis in n-dimension
+            # i.e. multiple inputs must have the same shape and are
+            # treated in a paired-way in vectorization
+            self._input_shape_ = self._input_shape_[:1]
+        except Exception as e:
+            self._input_shape_ = current_input_shape
+            self._input_shape_product = current_input_shape_product
+            raise e
+        return self
 
     def to_transformer(self) -> "TransformerBasis":
         """
@@ -640,6 +657,21 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         return super().to_transformer()
 
     @property
-    def _input_shape_(self):
-        input_shape = self.input_shape
-        return input_shape[:1]
+    def input_shape(
+        self,
+    ) -> None | List[None] | Tuple[int, ...] | List[Tuple[int, ...]]:
+        """Input shape as a tuple or list of tuple.
+
+        The property mimics the behavior of atomic bases, and uses the
+        assumption that _input_shape_ for custom bases is a list of
+        length one.
+        """
+        input_shape = self._input_shape_
+        if input_shape is None:
+            if self._n_input_dimensionality == 1:
+                return None
+            else:
+                return [None] * self._n_input_dimensionality
+        if self._n_input_dimensionality == 1:
+            return input_shape[0]
+        return input_shape * self._n_input_dimensionality

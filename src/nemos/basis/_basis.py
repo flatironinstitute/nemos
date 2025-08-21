@@ -21,6 +21,7 @@ from ._check_basis import (
     _check_input_dimensionality,
     _check_shape_consistency,
     _check_transform_input,
+    _check_unique_shapes,
     _check_zero_samples,
 )
 from ._composition_utils import (
@@ -1140,12 +1141,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         super().set_input_shape(*xi)
         if self._input_shape_ is None:
             return self
-        shapes = {s for s in self.input_shape}
-        if len(shapes) != 1:
-            raise ValueError(
-                "Multiplicative basis requires inputs of the same shape. "
-                f"Multiple shapes provided: {shapes}"
-            )
+        _check_unique_shapes(self.input_shape, self)
         return self
 
     @property
