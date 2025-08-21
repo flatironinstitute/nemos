@@ -22,7 +22,6 @@ from ._check_basis import (
     _check_input_dimensionality,
     _check_shape_consistency,
     _check_transform_input,
-    _check_unique_shapes,
     _check_zero_samples,
 )
 from ._composition_utils import (
@@ -34,7 +33,6 @@ from ._composition_utils import (
     promote_to_transformer,
     raise_basis_to_power,
     set_input_shape,
-    transform_to_shape,
 )
 
 
@@ -511,9 +509,35 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
             return None
         return out1 + out2
 
-    @add_docstring("set_input_shape", CompositeBasisMixin)
     def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> Basis:
         """
+        Set the expected input shape for the basis object.
+
+        This method sets the input shape for each component basis in the basis.
+        One ``xi`` must be provided for each basis component, specified as an integer,
+        a tuple of integers, or an array. The method calculates and stores the total number of output features
+        based on the number of basis functions in each component and the provided input shapes.
+
+        Parameters
+        ----------
+        *xi :
+            The input shape specifications. For every k,``xi[k]`` can be:
+            - An integer: Represents the dimensionality of the input. A value of ``1`` is treated as scalar input.
+            - A tuple: Represents the exact input shape excluding the first axis (sample axis).
+              All elements must be integers.
+            - An array: The shape is extracted, excluding the first axis (assumed to be the sample axis).
+
+        Raises
+        ------
+        ValueError
+            If a tuple is provided, and it contains non-integer elements.
+            If not enough inputs are provided.
+
+        Returns
+        -------
+        self :
+            Returns the instance itself to allow method chaining.
+
         Examples
         --------
         >>> # Generate sample data
@@ -1114,9 +1138,35 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
-    @add_docstring("set_input_shape", CompositeBasisMixin)
     def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> Basis:
         """
+        Set the expected input shape for the basis object.
+
+        This method sets the input shape for each component basis in the basis.
+        One ``xi`` must be provided for each basis component, specified as an integer,
+        a tuple of integers, or an array. The method calculates and stores the total number of output features
+        based on the number of basis functions in each component and the provided input shapes.
+
+        Parameters
+        ----------
+        *xi :
+            The input shape specifications. For every k,``xi[k]`` can be:
+            - An integer: Represents the dimensionality of the input. A value of ``1`` is treated as scalar input.
+            - A tuple: Represents the exact input shape excluding the first axis (sample axis).
+              All elements must be integers.
+            - An array: The shape is extracted, excluding the first axis (assumed to be the sample axis).
+
+        Raises
+        ------
+        ValueError
+            If a tuple is provided, and it contains non-integer elements.
+            If not enough inputs are provided.
+
+        Returns
+        -------
+        self :
+            Returns the instance itself to allow method chaining.
+
         Examples
         --------
         >>> # Generate sample data
@@ -1139,17 +1189,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
 
         """
         # ruff: noqa: D400, D205
-        # all inputs have the same shape. The vectorization
-        # acts on input pairs.
-        try:
-            shapes = [transform_to_shape(x) for x in xi]
-        except Exception as e:
-            raise ValueError(f"Cannot convert inputs ``{xi}`` to shape tuple.") from e
-        if shapes:
-            _check_unique_shapes(shapes, self)
-        super().set_input_shape(*xi)
-        if self._input_shape_ is None:
-            return self
+        super().set_input_shape(*xi, allow_inputs_of_different_shape=False)
         return self
 
     @property

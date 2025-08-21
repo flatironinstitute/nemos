@@ -1129,7 +1129,7 @@ def test_multiplicative_basis_input_shape_behavior():
     # test that all access point to set_input_shape are not available
     with pytest.raises(ValueError, match="MultiplicativeBasis basis requires inputs"):
         tbas.set_input_shape(1, 1, (2, 3))
-    with pytest.raises(ValueError, match="MultiplicativeBasis basis requires inputs"):
+    with pytest.raises(ValueError, match="Cannot set input shape on a child basis"):
         tbas.basis1.set_input_shape(1, 2)
     with pytest.raises(ValueError, match="Cannot set input shape on a child basis"):
         tbas.basis1.set_input_shape(2, 2)

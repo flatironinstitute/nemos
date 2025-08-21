@@ -205,7 +205,11 @@ class BasisMixin:
         if error:
             raise error
 
-    def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> BasisMixin:
+    def set_input_shape(
+        self,
+        *xi: int | tuple[int, ...] | NDArray,
+        allow_inputs_of_different_shape: bool = True,
+    ) -> BasisMixin:
         """Set the expected input shape for the basis object."""
         if getattr(self, "_parent", None) is not None:
             raise ValueError(
@@ -213,7 +217,9 @@ class BasisMixin:
                 "For example, instead of ``self.basis1.set_input_shape(n); self.basis2.set_input_shape(m)``, "
                 "do ``self.set_input_shape(n, m)``."
             )
-        set_input_shape(self, *xi)
+        set_input_shape(
+            self, *xi, allow_inputs_of_different_shape=allow_inputs_of_different_shape
+        )
         return self
 
     @property
@@ -909,7 +915,9 @@ class CompositeBasisMixin(BasisMixin):
     def _input_shape_(self):
         return self.input_shape
 
-    def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> BasisMixin:
+    def set_input_shape(
+        self, *xi: int | tuple[int, ...] | NDArray, allow_inputs_of_different_shape=True
+    ) -> BasisMixin:
         """
         Set the expected input shape for the basis object.
 
@@ -927,6 +935,10 @@ class CompositeBasisMixin(BasisMixin):
               All elements must be integers.
             - An array: The shape is extracted, excluding the first axis (assumed to be the sample axis).
 
+        allow_inputs_of_different_shape :
+            True if the composition allows input of different shape (as in addition), False otherwise
+            (as in multiplication).
+
         Raises
         ------
         ValueError
@@ -938,7 +950,9 @@ class CompositeBasisMixin(BasisMixin):
         self :
             Returns the instance itself to allow method chaining.
         """
-        return super().set_input_shape(*xi)
+        return super().set_input_shape(
+            *xi, allow_inputs_of_different_shape=allow_inputs_of_different_shape
+        )
 
     @property
     @abc.abstractmethod

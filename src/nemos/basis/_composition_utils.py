@@ -335,11 +335,8 @@ def set_input_shape_atomic(
     shapes = []
     n_inputs = ()
     for xi in xis:
-        if isinstance(xi, tuple):
-            _check_valid_shape_tuple(xi)
-        shape = transform_to_shape(xi)
-        n_inputs = (*n_inputs, int(np.prod(shape)))
-        shapes.append(shape)
+        n_inputs = (*n_inputs, int(np.prod(xi)))
+        shapes.append(xi)
 
     bas._input_shape_ = shapes
 
@@ -348,11 +345,33 @@ def set_input_shape_atomic(
     return bas
 
 
-def set_input_shape(bas, *xi):
+def _check_unique_shapes(input_shapes: None | List[Tuple[int, ...]], bas: "BasisMixin"):
+    if input_shapes is None:
+        return
+    shapes = {s for s in input_shapes}
+    if len(shapes) != 1:
+        raise ValueError(
+            f"{bas.__class__.__name__} basis requires inputs of the same shape. "
+            f"Multiple shapes {shapes} provided for basis\n{bas}"
+        )
+
+
+def set_input_shape(bas, *xi, allow_inputs_of_different_shape=True):
     """Set input shape.
 
     Set input shape logic, compatible with all bases (composite, atomic, and custom).
     """
+    original_xi = xi
+    try:
+        xi = [transform_to_shape(x) for x in xi]
+    except Exception as e:
+        raise ValueError(
+            f"Cannot convert inputs ``{original_xi}`` to shape tuple."
+        ) from e
+
+    if not allow_inputs_of_different_shape:
+        _check_unique_shapes(xi, bas)
+
     # use 1 as default or number of non-variable args
     n_args = (
         count_positional_and_var_args(bas.compute_features)[0]

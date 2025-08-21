@@ -27,7 +27,6 @@ from ._basis_mixin import BasisMixin, BasisTransformerMixin, set_input_shape_sta
 from ._check_basis import (
     _check_shape_consistency,
     _check_transform_input,
-    _check_unique_shapes,
 )
 from ._composition_utils import (
     _check_valid_shape_tuple,
@@ -39,7 +38,6 @@ from ._composition_utils import (
     promote_to_transformer,
     raise_basis_to_power,
     set_input_shape,
-    transform_to_shape,
 )
 
 if TYPE_CHECKING:
@@ -598,12 +596,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         >>> basis.n_output_features
         90
         """
-        try:
-            shapes = [transform_to_shape(x) for x in xi]
-        except Exception as e:
-            raise ValueError(f"Cannot convert inputs ``{xi}`` to shape tuple.") from e
-        _check_unique_shapes(shapes, self)
-        super().set_input_shape(*shapes)
+        super().set_input_shape(*xi, allow_inputs_of_different_shape=False)
         # CustomBasis acts as a multiplicative basis in n-dimension
         # i.e. multiple inputs must have the same shape and are
         # treated in a paired-way in vectorization
