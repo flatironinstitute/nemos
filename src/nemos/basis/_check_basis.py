@@ -65,15 +65,6 @@ def _check_samples_consistency(*xi: NDArray) -> None:
         )
 
 
-def _check_shape_consistency(*xi: NDArray, basis: "BasisMixin" = None):
-    non_matching_axis = {x.shape for x in xi}
-    if len(non_matching_axis) != 1:
-        raise ValueError(
-            f"{basis.__class__.__name__} requires all inputs to be of the same shape.\nThe basis,\n{basis}\n"
-            f"was evaluated with the input of shapes: {non_matching_axis}."
-        )
-
-
 def _check_transform_input(
     bas: "BasisMixin | Basis",
     *xi: ArrayLike,

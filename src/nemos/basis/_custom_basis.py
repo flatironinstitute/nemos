@@ -25,10 +25,10 @@ from ..utils import format_repr
 from . import AdditiveBasis, MultiplicativeBasis
 from ._basis_mixin import BasisMixin, BasisTransformerMixin, set_input_shape_state
 from ._check_basis import (
-    _check_shape_consistency,
     _check_transform_input,
 )
 from ._composition_utils import (
+    _check_unique_shapes,
     _check_valid_shape_tuple,
     add_docstring,
     count_positional_and_var_args,
@@ -340,7 +340,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
                 f"Each input must have at least {self.ndim_input} dimensions, as required by this basis. "
                 f"However, some inputs have fewer dimensions: {invalid_dims}."
             )
-        _check_shape_consistency(*xi, basis=self)
+        _check_unique_shapes(*xi, basis=self)
         set_input_shape(self, *xi)
         design_matrix = self.evaluate(
             *xi
@@ -588,13 +588,13 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         >>> basis = nmo.basis.CustomBasis([partial(power_add_func, n) for n in range(1, 6)])
         >>> _ = basis.set_input_shape(3, 3)
         >>> basis.n_output_features
-        45
-        >>> _ = basis.set_input_shape((3, 2), 3)
+        15
+        >>> _ = basis.set_input_shape((3, 2), (3, 2))
         >>> basis.n_output_features
-        90
-        >>> _ = basis.set_input_shape(np.ones((10, 3, 2)), 3)
+        30
+        >>> _ = basis.set_input_shape(np.ones((10, 3, 2)), (3, 2))
         >>> basis.n_output_features
-        90
+        30
         """
         super().set_input_shape(*xi, allow_inputs_of_different_shape=False)
         # CustomBasis acts as a multiplicative basis in n-dimension

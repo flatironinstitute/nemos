@@ -20,11 +20,11 @@ from ..validation import check_fraction_valid_samples
 from ._basis_mixin import BasisMixin, BasisTransformerMixin, CompositeBasisMixin
 from ._check_basis import (
     _check_input_dimensionality,
-    _check_shape_consistency,
     _check_transform_input,
     _check_zero_samples,
 )
 from ._composition_utils import (
+    _check_unique_shapes,
     add_docstring,
     get_input_shape,
     infer_input_dimensionality,
@@ -325,7 +325,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             if isinstance(b, MultiplicativeBasis):
                 n_input = infer_input_dimensionality(b)
                 b_input = inp[input_idx : input_idx + n_input]
-                _check_shape_consistency(*b_input, basis=b)
+                _check_unique_shapes(b_input, basis=b)
                 input_idx += n_input
         return inp
 
@@ -1124,7 +1124,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         >>> basis1 = BSplineEval(n_basis_funcs=5, label="one_input")
         >>> basis2 = RaisedCosineLogConv(n_basis_funcs=6, window_size=10, label="two_inputs")
         >>> basis_mul = basis1 * basis2
-        >>> X_multi = basis_mul.compute_features(np.random.randn(20), np.random.randn(20, 2))
+        >>> X_multi = basis_mul.compute_features(np.random.randn(20, 2), np.random.randn(20, 2))
         >>> print(X_multi.shape) # num_features: 60 = 5 * 2 * 6
         (20, 60)
 
@@ -1146,8 +1146,8 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         >>> basis1 = BSplineEval(n_basis_funcs=5, label="one_input")
         >>> basis2 = RaisedCosineLogConv(n_basis_funcs=6, window_size=10, label="two_inputs")
         >>> basis_mul = basis1 * basis2
-        >>> X_multi = basis_mul.compute_features(np.random.randn(20), np.random.randn(20, 2))
-        >>> print(X_multi.shape) # num_features: 60 = 5 * 2 * 6
+        >>> X_multi = basis_mul.compute_features(np.random.randn(20, 2), np.random.randn(20, 2))
+        >>> print(X_multi.shape) # num_features: 20 = 2 * 5 * 6
         (20, 60)
 
         >>> # The multiplicative basis is a single 2D component.
@@ -1202,12 +1202,12 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         >>> multiplicative_basis = basis_1 * basis_2 * basis_3
 
         Specify the input shape using all 3 allowed ways: integer, tuple, array
-        >>> _ = multiplicative_basis.set_input_shape(1, (2, 3), np.ones((10, 4, 5)))
+        >>> _ = multiplicative_basis.set_input_shape((4, 5), (4, 5), np.ones((10, 4, 5)))
 
         Expected output features are:
-        (5 * 6 * 7 bases) * (1 * 6 * 20 inputs) = 25200
+        (5 * 6 * 7 bases) * (20 inputs) = 4200
         >>> multiplicative_basis.n_output_features
-        25200
+        4200
 
         """
         # ruff: noqa: D400, D205
