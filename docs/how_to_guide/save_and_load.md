@@ -11,14 +11,6 @@ kernelspec:
   name: python3
 ---
 
-```{code-cell} ipython3
-:tags: [hide-input]
-
-import warnings
-
-
-```
-
 # Saving and Loading
 
 ## Saving and Loading a Model
