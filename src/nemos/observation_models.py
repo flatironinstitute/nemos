@@ -984,28 +984,60 @@ def check_observation_model(observation_model):
     >>> check_observation_model(model)  # Should pass without error if the model is correctly implemented.
     """
     # Define the checks to be made on each attribute
-    checks = {
-        "inverse_link_function": {
-            "input": [jnp.array([1.0, 1.0, 1.0])],
-            "test_differentiable": True,
-            "test_preserve_shape": False,
-        },
-        "_negative_log_likelihood": {
-            "input": [0.5 * jnp.array([1.0, 1.0, 1.0]), jnp.array([1.0, 1.0, 1.0])],
-            "test_scalar_func": True,
-        },
-        "pseudo_r2": {
-            "input": [0.5 * jnp.array([1.0, 1.0, 1.0]), jnp.array([1.0, 1.0, 1.0])],
-            "test_scalar_func": True,
-        },
-        "sample_generator": {
-            "input": [jax.random.key(123), 0.5 * jnp.array([1.0, 1.0, 1.0]), 1],
-            "test_preserve_shape": True,
-        },
-    }
+
+    is_nemos = isinstance(
+        observation_model,
+        (
+            PoissonObservations,
+            GammaObservations,
+            BernoulliObservations,
+            NegativeBinomialObservations,
+        ),
+    )
+
+    trusted_links = set(LINK_NAME_TO_FUNC.values())
+    check_link = (
+        getattr(observation_model, "inverse_link_function", None) not in trusted_links
+    )
+
+    if check_link:
+        checks = {
+            "inverse_link_function": {
+                "input": [jnp.array([1.0, 1.0, 1.0])],
+                "test_differentiable": True,
+                "test_preserve_shape": False,
+            }
+        }
+    else:
+        checks = {}
+
+    if not is_nemos:
+        checks.update(
+            {
+                "_negative_log_likelihood": {
+                    "input": [
+                        0.5 * jnp.array([1.0, 1.0, 1.0]),
+                        jnp.array([1.0, 1.0, 1.0]),
+                    ],
+                    "test_scalar_func": True,
+                },
+                "pseudo_r2": {
+                    "input": [
+                        0.5 * jnp.array([1.0, 1.0, 1.0]),
+                        jnp.array([1.0, 1.0, 1.0]),
+                    ],
+                    "test_scalar_func": True,
+                },
+                "sample_generator": {
+                    "input": [jax.random.key(123), 0.5 * jnp.array([1.0, 1.0, 1.0]), 1],
+                    "test_preserve_shape": True,
+                },
+            }
+        )
 
     # Perform checks for each attribute
     for attr_name, check_info in checks.items():
+
         # check if the observation model has the attribute
         utils.assert_has_attribute(observation_model, attr_name)
 
