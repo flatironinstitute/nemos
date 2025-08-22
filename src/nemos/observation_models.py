@@ -109,7 +109,7 @@ class Observations(Base, abc.ABC):
                 inverse_link_function
             )
             return
-        if inverse_link_function in LINK_NAME_TO_FUNC.values():
+        elif inverse_link_function in LINK_NAME_TO_FUNC.values():
             self._inverse_link_function = inverse_link_function
             return
         self.check_inverse_link_function(inverse_link_function)
