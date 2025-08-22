@@ -1762,12 +1762,12 @@ class TestSharedMethods:
         if n_input == 0:
             expectation = pytest.raises(
                 TypeError,
-                match=r"evaluate_on_grid\(\) missing 1 required positional argument | but 0 were provided",
+                match=r".*evaluate_on_grid\(\) missing 1 required positional argument| but 0 were provided",
             )
         elif n_input != basis_obj._n_input_dimensionality:
             expectation = pytest.raises(
                 TypeError,
-                match=r"evaluate_on_grid\(\) takes [0-9] positional arguments but [0-9] were given|but 2 were provided",
+                match=r".*evaluate_on_grid\(\) takes [0-9] positional arguments but [0-9] were given|but 2 were provided",
             )
         else:
             expectation = does_not_raise()
