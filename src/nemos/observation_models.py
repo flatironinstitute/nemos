@@ -105,7 +105,13 @@ class Observations(Base, abc.ABC):
     def inverse_link_function(self, inverse_link_function: Callable):
         """Setter for the inverse link function for the model."""
         if isinstance(inverse_link_function, str):
-            inverse_link_function = link_function_from_string(inverse_link_function)
+            self._inverse_link_function = link_function_from_string(
+                inverse_link_function
+            )
+            return
+        if inverse_link_function in LINK_NAME_TO_FUNC.values():
+            self._inverse_link_function = inverse_link_function
+            return
         self.check_inverse_link_function(inverse_link_function)
         self._inverse_link_function = inverse_link_function
 
