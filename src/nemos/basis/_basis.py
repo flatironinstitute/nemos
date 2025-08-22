@@ -933,6 +933,9 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
     ) -> None:
         input_shape1 = get_input_shape(basis1)
         input_shape2 = get_input_shape(basis2)
+        # replace None with default
+        input_shape1 = [() if i is None else i for i in input_shape1]
+        input_shape2 = [() if i is None else i for i in input_shape2]
         have_unique_shapes, _, _ = _have_unique_shapes(input_shape1 + input_shape2)
 
         if not have_unique_shapes:

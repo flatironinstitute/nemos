@@ -4051,7 +4051,8 @@ class TestMultiplicativeBasis(CombinedBasis):
         mul = basis_a_obj * basis_b_obj
         assert mul._input_shape_product == (1, 1)
         basis_b_obj.set_input_shape((1, 2, 3))
-        mul = basis_a_obj * basis_b_obj
+        with pytest.warns(UserWarning, match="Multiple different input shapes detected"):
+            mul = basis_a_obj * basis_b_obj
         # incompatible shape resets input shape
         assert mul._input_shape_product is None
         basis_a_obj.set_input_shape((1, 2, 3))
@@ -5672,9 +5673,6 @@ def test_get_splitter(
     combine_basis = CombinedBasis()
     bas1_instance = combine_basis.instantiate_basis(
         n_basis[0], bas1, basis_class_specific_params, window_size=10, label="1"
-    )
-    bas1_instance.set_input_shape(
-        *([n_input_basis[0]] * bas1_instance._n_input_dimensionality)
     )
     bas2_instance = combine_basis.instantiate_basis(
         n_basis[1], bas2, basis_class_specific_params, window_size=10, label="2"
