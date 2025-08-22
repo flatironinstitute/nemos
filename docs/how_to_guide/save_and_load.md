@@ -16,12 +16,6 @@ kernelspec:
 
 import warnings
 
-# Ignore the first specific warning
-warnings.filterwarnings(
-    "ignore",
-    message="Caution: regularizer strength",
-    category=UserWarning,
-)
 
 ```
 
