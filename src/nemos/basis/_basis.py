@@ -300,7 +300,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         bounds = getattr(self, "bounds", None)
         return get_equi_spaced_samples(*n_samples, bounds=bounds)
 
-    @support_pynapple(conv_type="numpy")
     def _check_transform_input(
         self, *xi: ArrayLike
     ) -> Tuple[Union[NDArray, Tsd, TsdFrame]]:
