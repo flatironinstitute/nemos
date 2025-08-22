@@ -601,7 +601,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         # i.e. multiple inputs must have the same shape and are
         # treated in a paired-way in vectorization
         self._input_shape_ = (
-            self._input_shape_ if self._input_shape_ is None else self._input_shape_[:1]
+            None if self._input_shape_ is None else self._input_shape_[:1]
         )
         return self
 
