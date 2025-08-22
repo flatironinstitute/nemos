@@ -1218,4 +1218,4 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         2. This is used internally by `split_by_feature()` to know how many
            inputs are available.
         """
-        return self.input_shape[:1]
+        return get_input_shape(self)[:1]
