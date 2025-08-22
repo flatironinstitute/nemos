@@ -1001,9 +1001,9 @@ def check_observation_model(observation_model):
         ),
     )
 
-    trusted_links = set(LINK_NAME_TO_FUNC.values())
     check_link = (
-        getattr(observation_model, "inverse_link_function", None) not in trusted_links
+        getattr(observation_model, "inverse_link_function", None)
+        not in LINK_NAME_TO_FUNC.values()
     )
 
     if check_link:
