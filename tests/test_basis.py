@@ -4856,14 +4856,14 @@ class TestMultiplicativeBasis(CombinedBasis):
                 3,
                 pytest.raises(
                     ValueError,
-                    match="MultiplicativeBasis requires all inputs to be of the same",
+                    match="MultiplicativeBasis requires all inputs to have",
                 ),
             ),
             (
                 0,
                 pytest.raises(
                     ValueError,
-                    match="MultiplicativeBasis requires all inputs to be of the same",
+                    match="MultiplicativeBasis requires all inputs to have",
                 ),
             ),
             (2, does_not_raise()),
@@ -4871,14 +4871,14 @@ class TestMultiplicativeBasis(CombinedBasis):
                 1,
                 pytest.raises(
                     ValueError,
-                    match="MultiplicativeBasis requires all inputs to be of the same",
+                    match="MultiplicativeBasis requires all inputs to have",
                 ),
             ),
             (
                 4,
                 pytest.raises(
                     ValueError,
-                    match="MultiplicativeBasis requires all inputs to be of the same",
+                    match="MultiplicativeBasis requires all inputs to have",
                 ),
             ),
         ],

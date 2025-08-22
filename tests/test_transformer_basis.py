@@ -1127,7 +1127,7 @@ def test_input_shape_defaults(bas):
 def test_multiplicative_basis_input_shape_behavior():
     tbas = nmo.basis.TransformerBasis(nmo.basis.BSplineEval(5) ** 3)
     # test that all access point to set_input_shape are not available
-    with pytest.raises(ValueError, match="MultiplicativeBasis basis requires inputs"):
+    with pytest.raises(ValueError, match="MultiplicativeBasis requires all inputs"):
         tbas.set_input_shape(1, 1, (2, 3))
     with pytest.raises(ValueError, match="Cannot set input shape on a child basis"):
         tbas.basis1.set_input_shape(1, 2)
@@ -1135,7 +1135,7 @@ def test_multiplicative_basis_input_shape_behavior():
         tbas.basis1.set_input_shape(2, 2)
     with pytest.raises(ValueError, match="Cannot convert inputs"):
         tbas.set_input_shape("a", "a", "a")
-    with pytest.raises(ValueError, match="MultiplicativeBasis basis requires inputs"):
+    with pytest.raises(ValueError, match="MultiplicativeBasis requires all inputs"):
         tbas.basis.set_input_shape(1, 2, 1)
     with pytest.raises(ValueError, match="Cannot set input shape on a child basis"):
         tbas.basis2.set_input_shape(1)

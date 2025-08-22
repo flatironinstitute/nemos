@@ -390,23 +390,23 @@ def test_split_by_features_shape(input_shape):
         (
             (1, 2),
             10,
-            pytest.raises(ValueError, match="CustomBasis basis requires inputs"),
+            pytest.raises(ValueError, match="CustomBasis requires all inputs"),
         ),
         (
             (2, 1),
             10,
-            pytest.raises(ValueError, match="CustomBasis basis requires inputs"),
+            pytest.raises(ValueError, match="CustomBasis requires all inputs"),
         ),
         ((2, 2), 10, does_not_raise()),
         (
             ((2, 2), 1),
             20,
-            pytest.raises(ValueError, match="CustomBasis basis requires inputs"),
+            pytest.raises(ValueError, match="CustomBasis requires all inputs"),
         ),
         (
             (1, (2, 2)),
             20,
-            pytest.raises(ValueError, match="CustomBasis basis requires inputs"),
+            pytest.raises(ValueError, match="CustomBasis requires all inputs"),
         ),
         (((2, 2), (2, 2)), 20, does_not_raise()),
     ],
