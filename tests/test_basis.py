@@ -4051,7 +4051,9 @@ class TestMultiplicativeBasis(CombinedBasis):
         mul = basis_a_obj * basis_b_obj
         assert mul._input_shape_product == (1, 1)
         basis_b_obj.set_input_shape((1, 2, 3))
-        with pytest.warns(UserWarning, match="Multiple different input shapes detected"):
+        with pytest.warns(
+            UserWarning, match="Multiple different input shapes detected"
+        ):
             mul = basis_a_obj * basis_b_obj
         # incompatible shape resets input shape
         assert mul._input_shape_product is None
