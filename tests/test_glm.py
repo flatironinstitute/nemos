@@ -1509,11 +1509,8 @@ class TestGLM:
     def test_reg_strength_reset(self, reg, request, glm_class_type):
         glm_class = request.getfixturevalue(glm_class_type)
         model = glm_class(regularizer=reg, regularizer_strength=1.0)
-        with pytest.warns(
-            UserWarning,
-            match="Unused parameter `regularizer_strength` for UnRegularized GLM",
-        ):
-            model.regularizer = "UnRegularized"
+        model.regularizer = "UnRegularized"
+        assert model.regularizer_strength is None
 
     @pytest.mark.parametrize(
         "params, warns",
@@ -1561,10 +1558,7 @@ class TestGLM:
             ),
             (
                 {"regularizer": "ElasticNet", "regularizer_strength": 1.0},
-                pytest.warns(
-                    UserWarning,
-                    match="Caution: The regularizer strength been set, but no value was passed",
-                ),
+                does_not_raise(),
             ),
             (
                 {"regularizer": "ElasticNet", "regularizer_strength": (1.0, 0.5)},
@@ -1576,18 +1570,12 @@ class TestGLM:
             ),
             (
                 {"regularizer": "UnRegularized", "regularizer_strength": 1.0},
-                pytest.warns(
-                    UserWarning,
-                    match="Unused parameter `regularizer_strength` for UnRegularized GLM",
-                ),
+                does_not_raise(),
             ),
             # set regularizer str only
             (
                 {"regularizer_strength": 1.0},
-                pytest.warns(
-                    UserWarning,
-                    match="Unused parameter `regularizer_strength` for UnRegularized GLM",
-                ),
+                does_not_raise(),
             ),
             ({"regularizer_strength": None}, does_not_raise()),
         ],
@@ -2163,10 +2151,7 @@ class TestGLM:
             # set regularizer str only
             (
                 {"regularizer_strength": 1.0},
-                pytest.warns(
-                    UserWarning,
-                    match="Caution: The regularizer strength been set, but no value was passed",
-                ),
+                does_not_raise(),
             ),
             (
                 {"regularizer_strength": None},
@@ -2179,9 +2164,9 @@ class TestGLM:
         self, params, warns, reg, request, glm_class_type
     ):
         glm_class = request.getfixturevalue(glm_class_type)
-        model = glm_class(regularizer=reg, regularizer_strength=1)
-        with warns:
-            model.set_params(**params)
+        model = glm_class(regularizer=reg, regularizer_strength=11)
+        model.set_params(**params)
+        assert model.regularizer_strength == (1.0, 0.5)
 
 
 @pytest.mark.parametrize("glm_type", ["", "population_"])

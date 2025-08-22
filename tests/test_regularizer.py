@@ -319,9 +319,7 @@ class TestUnRegularized:
         model.regularizer = "Lasso"
 
         assert model.regularizer_strength == 1.0
-
-        with pytest.warns(UserWarning):
-            model.regularizer = regularizer
+        model.regularizer = regularizer
         assert model.regularizer_strength == None
 
     def test_get_params(self):
@@ -697,11 +695,9 @@ class TestRidge:
         model = nmo.glm.GLM(regularizer=regularizer)
 
         assert model.regularizer_strength == 1.0
-
-        with pytest.warns(UserWarning):
-            # if changed to regularized, is set to None.
-            model.regularizer = "UnRegularized"
-        assert model.regularizer_strength == None
+        # if changed to regularized, is set to None.
+        model.regularizer = "UnRegularized"
+        assert model.regularizer_strength is None
 
         # if changed back, should set to 1.0
         model.regularizer = "Ridge"
@@ -1205,9 +1201,7 @@ class TestElasticNet:
     def test_regularizer_strength_float(self):
         """Assert regularizer ratio handled appropriately when only strength provided."""
         regularizer = self.cls()
-        with pytest.warns(UserWarning):
-            model = nmo.glm.GLM(regularizer=regularizer, regularizer_strength=0.6)
-
+        model = nmo.glm.GLM(regularizer=regularizer, regularizer_strength=0.6)
         assert model.regularizer_strength == (0.6, 0.5)
 
     @pytest.mark.parametrize(

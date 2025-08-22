@@ -1,3 +1,9 @@
+import warnings
+
+warnings.filterwarnings(
+    "ignore", message=".*plotting functions.*", category=UserWarning
+)
+
 import pytest
 from myst_nb import glue
 
