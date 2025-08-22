@@ -346,6 +346,20 @@ def set_input_shape_atomic(
     return bas
 
 
+def _have_unique_shapes(inputs: List[NDArray] | List[Tuple]):
+    if inputs is None:
+        return True
+
+    # Extract shapes whether inputs are arrays or shape tuples
+    if hasattr(inputs[0], "shape"):
+        shapes = {x.shape for x in inputs}
+        context = "was evaluated with"
+    else:
+        shapes = set(inputs)
+        context = "was configured with"
+    return len(shapes) == 1, shapes, context
+
+
 def _check_unique_shapes(inputs: List[NDArray] | List[Tuple], basis: "BasisMixin"):
     """Check that all inputs have the same shape.
 
@@ -359,18 +373,8 @@ def _check_unique_shapes(inputs: List[NDArray] | List[Tuple], basis: "BasisMixin
     ValueError:
         If all the arrays have the same shapes or all the tuples are the same.
     """
-    if inputs is None:
-        return
-
-    # Extract shapes whether inputs are arrays or shape tuples
-    if hasattr(inputs[0], "shape"):
-        shapes = {x.shape for x in inputs}
-        context = "was evaluated with"
-    else:
-        shapes = set(inputs)
-        context = "was configured with"
-
-    if len(shapes) != 1:
+    have_unique_shape, shapes, context = _have_unique_shapes(inputs)
+    if not have_unique_shape:
         raise ValueError(
             f"{basis.__class__.__name__} requires all inputs to have the same shape. "
             f"The basis {context} input shapes: {shapes}.\n{basis}"

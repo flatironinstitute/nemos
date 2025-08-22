@@ -805,12 +805,11 @@ class CompositeBasisMixin(BasisMixin):
         # in the composite basis.
 
         if not self.__class__._shallow_copy:
-            self.basis1 = copy.deepcopy(basis1)
-            self.basis2 = copy.deepcopy(basis2)
-        else:
-            # skip checks and shallow copy
-            self._basis1 = basis1
-            self._basis2 = basis2
+            basis1 = copy.deepcopy(basis1)
+            basis2 = copy.deepcopy(basis2)
+
+        self.basis1 = basis1
+        self.basis2 = basis2
 
         # set parents
         self.basis1._parent = self

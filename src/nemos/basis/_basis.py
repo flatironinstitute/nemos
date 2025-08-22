@@ -5,6 +5,7 @@ import abc
 import copy
 import math
 import warnings
+from copy import deepcopy
 from functools import wraps
 from typing import Callable, Generator, Optional, Tuple, Union
 
@@ -25,6 +26,7 @@ from ._check_basis import (
 )
 from ._composition_utils import (
     _check_unique_shapes,
+    _have_unique_shapes,
     add_docstring,
     get_input_shape,
     infer_input_dimensionality,
@@ -931,28 +933,20 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
     ) -> None:
         input_shape1 = get_input_shape(basis1)
         input_shape2 = get_input_shape(basis2)
-        try:
-            set_input_shape(basis1, None)
-            set_input_shape(basis2, None)
-            CompositeBasisMixin.__init__(self, basis1, basis2, label=label)
-            Basis.__init__(self)
-        finally:
-            for b, i in zip((basis1, basis2), (input_shape1, input_shape2)):
-                set_input_shape(b, *i)
+        have_unique_shapes, _, _ = _have_unique_shapes(input_shape1 + input_shape2)
 
-        # reset input shape if multiplied bases have different input
-        # shapes
-        unique_shape = {s for s in input_shape1 + input_shape2}
-        # at initialization, basis2 can be None
-        if len(unique_shape) != 1 and self.basis2:
+        if not have_unique_shapes:
+            basis1 = set_input_shape(deepcopy(basis1), None)
+            basis2 = set_input_shape(deepcopy(basis2), None)
             warnings.warn(
                 category=UserWarning,
                 message="Multiple different input shapes detected. "
                 "Resetting input shape to default (None).",
             )
-            set_input_shape(self, None)
-        else:
-            set_input_shape(self, *input_shape1, *input_shape2)
+
+        with self._set_shallow_copy(not have_unique_shapes):
+            CompositeBasisMixin.__init__(self, basis1, basis2, label=label)
+        Basis.__init__(self)
 
     def _generate_label(self) -> str:
         return "(" + self.basis1.label + " * " + self.basis2.label + ")"
