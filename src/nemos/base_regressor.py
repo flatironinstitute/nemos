@@ -31,6 +31,8 @@ from .typing import (
 )
 from .utils import _flatten_dict, _get_name, _unpack_params, get_env_metadata
 
+_SOLVER_ARGS_CACHE = {}
+
 
 def strip_metadata(arg_num: Optional[int] = None, kwarg_key: Optional[str] = None):
     """Strip metadata from arg."""
@@ -109,7 +111,7 @@ class BaseRegressor(Base, abc.ABC):
 
         # no solver name provided, use default
         if solver_name is None:
-            self.solver_name = self.regularizer.default_solver
+            self._solver_name = self.regularizer.default_solver
         else:
             self.solver_name = solver_name
 
@@ -260,9 +262,10 @@ class BaseRegressor(Base, abc.ABC):
     @solver_kwargs.setter
     def solver_kwargs(self, solver_kwargs: dict):
         """Setter for the solver_kwargs attribute."""
-        self._check_solver_kwargs(
-            self._get_solver_class(self.solver_name), solver_kwargs
-        )
+        if solver_kwargs:
+            self._check_solver_kwargs(
+                self._get_solver_class(self.solver_name), solver_kwargs
+            )
         self._solver_kwargs = solver_kwargs
 
     @staticmethod
@@ -282,8 +285,13 @@ class BaseRegressor(Base, abc.ABC):
         NameError
             If any of the solver keyword arguments are not valid.
         """
-        solver_args = inspect.getfullargspec(solver_class).args
-        undefined_kwargs = set(solver_kwargs.keys()).difference(solver_args)
+        if solver_class not in _SOLVER_ARGS_CACHE:
+            _SOLVER_ARGS_CACHE[solver_class] = set(
+                inspect.getfullargspec(solver_class).args
+            )
+        undefined_kwargs = set(solver_kwargs.keys()).difference(
+            _SOLVER_ARGS_CACHE[solver_class]
+        )
         if undefined_kwargs:
             raise NameError(
                 f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for {solver_class.__name__}!"
