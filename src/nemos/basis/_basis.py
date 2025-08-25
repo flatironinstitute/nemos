@@ -581,6 +581,12 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         :
             The basis function evaluated at the samples, shape (n_samples, n_basis_funcs)
 
+        Notes
+        -----
+            Each additive component can process inputs of different shapes, as long as the
+            sample axis matches. Input of mis-matched shape cannot be concatenated, therefore
+            we enforce 1-dimensional input only for evaluate.
+
         Examples
         --------
         >>> # Generate sample data
@@ -975,7 +981,6 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    @check_one_dimensional
     def evaluate(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
         """
         Evaluate the basis at the sample points.
@@ -999,13 +1004,20 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         >>> x, y = np.random.randn(2, 30)
         >>> X = mult_basis.evaluate(x, y)
         """
+        # evaluate preserves the shape of the input arrays
+        shape = xi[0].shape
+        x1 = self.basis1.evaluate(*xi[: self.basis1._n_input_dimensionality])
+        x2 = self.basis2.evaluate(*xi[self.basis1._n_input_dimensionality :])
         X = np.asarray(
             row_wise_kron(
-                self.basis1.evaluate(*xi[: self.basis1._n_input_dimensionality]),
-                self.basis2.evaluate(*xi[self.basis1._n_input_dimensionality :]),
+                x1.reshape(-1, x1.shape[-1]),
+                x2.reshape(-1, x2.shape[-1]),
                 transpose=False,
             )
         )
+        # run by the assumption (which is enforced) that the input shape is
+        # shared in a multiplicative basis.
+        X = X.reshape(*shape, -1)
         return X
 
     def _compute_features(
@@ -1057,8 +1069,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
             x2.reshape((n_vec_inputs * n_samples, -1)),
             transpose=False,
         )
-        shape = self._input_shape_[0]
-        return X.reshape((n_samples, *shape, -1)).reshape((n_samples, -1))
+        return X.reshape((n_samples, -1))
 
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.

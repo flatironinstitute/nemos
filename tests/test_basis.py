@@ -4509,10 +4509,11 @@ class TestMultiplicativeBasis(CombinedBasis):
             basis_obj.set_input_shape(*([np.linspace(0, 1, 10)] * num_input))
 
     @pytest.mark.parametrize(
-        "inp, expectation",
+        "inp",
         [
-            (np.linspace(0, 1, 10), does_not_raise()),
-            (np.linspace(0, 1, 10)[:, None], pytest.raises(ValueError)),
+            np.linspace(0, 1, 10),
+            np.linspace(0, 1, 10)[:, None],
+            np.random.randn(10, 2, 3),
         ],
     )
     @pytest.mark.parametrize(" window_size", [8])
@@ -4528,9 +4529,21 @@ class TestMultiplicativeBasis(CombinedBasis):
         basis_b,
         inp,
         window_size,
-        expectation,
         basis_class_specific_params,
     ):
+        does_raise = (
+            any(b == AdditiveBasis for b in (basis_a, basis_b)) and inp.ndim != 1
+        )
+        does_raise |= (
+            any(b == basis.HistoryConv for b in (basis_a, basis_b)) and inp.ndim > 2
+        )
+        if does_raise:
+            expectation = pytest.raises(
+                ValueError,
+                match="Input sample must be one dimensional|`evaluate` for HistoryBasis",
+            )
+        else:
+            expectation = does_not_raise()
         basis_a_obj = self.instantiate_basis(
             n_basis_a, basis_a, basis_class_specific_params, window_size=window_size
         )
@@ -4539,7 +4552,9 @@ class TestMultiplicativeBasis(CombinedBasis):
         )
         basis_obj = basis_a_obj * basis_b_obj
         with expectation:
-            basis_obj.evaluate(*([inp] * basis_obj._n_input_dimensionality))
+            out = basis_obj.evaluate(*([inp] * basis_obj._n_input_dimensionality))
+            assert out.shape[:-1] == inp.shape
+            assert out.shape[-1] == basis_obj.n_basis_funcs
 
     @pytest.mark.parametrize("time_axis_shape", [10, 11, 12])
     @pytest.mark.parametrize(" window_size", [8])
@@ -5224,6 +5239,28 @@ class TestMultiplicativeBasis(CombinedBasis):
             np.prod(vec_shape) * n_basis_funcs if vec_shape else n_basis_funcs
         )
         assert vectorized_result.shape == (n_samples, expected_n_features)
+
+    @pytest.mark.parametrize(
+        "bas",
+        list_all_basis_classes("Eval") + [CustomBasis],
+    )
+    @pytest.mark.parametrize("x, y", [(np.random.randn(10, 2), np.random.randn(10, 2))])
+    def test_eval_and_compute_features_equivalence(
+        self, x, y, bas, basis_class_specific_params
+    ):
+        """
+        Test the evaluate/compute_features equivalence for Eval bases.
+
+        This is not true for Conv bases, where the two methods perform different
+        operations.
+        """
+        bas = (
+            self.instantiate_basis(5, bas, basis_class_specific_params, window_size=10)
+            ** 2
+        )
+        X = bas.compute_features(x, y).reshape(x.shape[0], -1, bas.n_basis_funcs)
+        Y = bas.evaluate(x, y)
+        np.testing.assert_array_equal(X, Y)
 
 
 @pytest.mark.parametrize(
