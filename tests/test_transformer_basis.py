@@ -21,7 +21,7 @@ from nemos.basis import (
     MultiplicativeBasis,
     TransformerBasis,
 )
-from nemos.basis._composition_utils import generate_basis_label_pair
+from nemos.basis._composition_utils import generate_basis_label_pair, set_input_shape
 
 
 @pytest.mark.parametrize(
@@ -1094,18 +1094,6 @@ def test_transformer_init_type(bas, expectation):
         out = nmo.basis.TransformerBasis(bas)
 
 
-def test_top_level_parent_is_reset():
-    bas = nmo.basis.BSplineEval(5) * 3
-    tbas = bas.basis1.to_transformer()
-    assert tbas._parent is None
-    assert tbas.basis1._parent is not None
-    assert tbas.basis2._parent is not None
-    tbas = TransformerBasis(bas)
-    assert tbas._parent is None
-    assert tbas.basis1._parent is not None
-    assert tbas.basis2._parent is not None
-
-
 @pytest.mark.parametrize(
     "bas", [nmo.basis.BSplineEval(5) * 3, nmo.basis.BSplineEval(5) ** 3]
 )
@@ -1116,24 +1104,41 @@ def test_input_shape_defaults(bas):
     tbas = TransformerBasis(bas)
     assert tbas.input_shape == [()] * 3
     assert tbas._input_shape_product == (1, 1, 1)
+    if not isinstance(bas, MultiplicativeBasis):
+        set_input_shape(bas.basis1, 1, (2, 3))
+        tbas = bas.to_transformer()
+        assert tbas.input_shape == [(), (2, 3), ()]
+        assert tbas._input_shape_product == (1, 6, 1)
+        tbas = TransformerBasis(bas)
+        assert tbas.input_shape == [(), (2, 3), ()]
+        assert tbas._input_shape_product == (1, 6, 1)
 
-    bas.basis1.set_input_shape(1, (2, 3))
-    tbas = bas.to_transformer()
-    assert tbas.input_shape == [(), (2, 3), ()]
-    assert tbas._input_shape_product == (1, 6, 1)
-    tbas = TransformerBasis(bas)
-    assert tbas.input_shape == [(), (2, 3), ()]
-    assert tbas._input_shape_product == (1, 6, 1)
+        bas.basis1.basis2._input_shape_ = None
+        set_input_shape(bas.basis1.basis1, (1,))
+        set_input_shape(bas.basis2, (4, 5, 6))
+        tbas = bas.to_transformer()
+        assert tbas.input_shape == [(1,), (), (4, 5, 6)]
+        assert tbas._input_shape_product == (1, 1, 120)
+        tbas = TransformerBasis(bas)
+        assert tbas.input_shape == [(1,), (), (4, 5, 6)]
+        assert tbas._input_shape_product == (1, 1, 120)
 
-    bas.basis1.basis2._input_shape_ = None
-    bas.basis1.basis1.set_input_shape((1,))
-    bas.basis2.set_input_shape((4, 5, 6))
-    tbas = bas.to_transformer()
-    assert tbas.input_shape == [(1,), (), (4, 5, 6)]
-    assert tbas._input_shape_product == (1, 1, 120)
-    tbas = TransformerBasis(bas)
-    assert tbas.input_shape == [(1,), (), (4, 5, 6)]
-    assert tbas._input_shape_product == (1, 1, 120)
+
+def test_multiplicative_basis_input_shape_behavior():
+    tbas = nmo.basis.TransformerBasis(nmo.basis.BSplineEval(5) ** 3)
+    # test that all access point to set_input_shape are not available
+    with pytest.raises(ValueError, match="MultiplicativeBasis requires all inputs"):
+        tbas.set_input_shape(1, 1, (2, 3))
+    with pytest.raises(ValueError, match="Cannot set input shape on a child basis"):
+        tbas.basis1.set_input_shape(1, 2)
+    with pytest.raises(ValueError, match="Cannot set input shape on a child basis"):
+        tbas.basis1.set_input_shape(2, 2)
+    with pytest.raises(ValueError, match="Cannot convert inputs"):
+        tbas.set_input_shape("a", "a", "a")
+    with pytest.raises(ValueError, match="MultiplicativeBasis requires all inputs"):
+        tbas.basis.set_input_shape(1, 2, 1)
+    with pytest.raises(ValueError, match="Cannot set input shape on a child basis"):
+        tbas.basis2.set_input_shape(1)
 
 
 @pytest.mark.parametrize("label", ["x", "y", "(x + y)", "(z * (x + y))"])
@@ -1181,12 +1186,17 @@ def test_basis_operations_type_wrapped_basis():
 
 @pytest.mark.parametrize(
     "shape, expected_input_shape",
-    [(None, [(), ()]), ([(1, 2)], [(1, 2)]), ([(1,), (1, 2)], [(1,), (1, 2)])],
+    [
+        (None, [(), ()]),
+        ([(1, 2), (1,)], [(1, 2), (1,)]),
+        ([(1,), (1, 2)], [(1,), (1, 2)]),
+    ],
 )
 def test_assign_shape_custom_ndim(shape, expected_input_shape):
     class Mock:
         def __init__(self, shape):
             self.input_shape = shape
+            self._input_shape_ = shape if isinstance(shape, list) else [shape, shape]
 
         def compute_features(self, x, y):
             return
