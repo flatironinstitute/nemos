@@ -41,6 +41,7 @@ import scipy.optimize
 import numpy as np
 from typing import NamedTuple
 from nemos.solvers._abstract_solver import OptimizationInfo
+from nemos.utils import get_flattener_unflattener
 
 
 class ScipySolverState(NamedTuple):
@@ -143,13 +144,14 @@ class ScipySolver:
         """
         # `params` is a tuple of (weight_matrix, intercept), but `scipy.optimize.minimize` only
         # accepts a 1D vector of parameters, so flatten all parameters and concatenate them
-        _flat_params, unpacker = self._flat_concat(params)
+        flattener_fun, unflattener_fun = get_flattener_unflattener(params)
+        _flat_params = flattener_fun(params)
 
         # create an objective function that translates from the flat parameters accepted by scipy
         # back to their original form accepted by nemos.glm.GLM's objective function
         # so that it can be evaluated
         def _flat_obj(flat_params, *args):
-            params_in_their_orig_shape = unpacker(flat_params)
+            params_in_their_orig_shape = unflattener_fun(flat_params)
             return self.fun(params_in_their_orig_shape, *args)
 
         # pass the flat parameters and the objective function taking them
@@ -163,30 +165,7 @@ class ScipySolver:
             tol=self.tol,
         )
 
-        return unpacker(res.x), res
-
-    @staticmethod
-    def _flat_concat(params: tuple):
-        """Helper function for wrangling parameter shapes.
-
-        Translates between a GLM's parameters which are stored as tuples of matrices
-        and scipy which only works on 1D vectors.
-
-        Flattens and concatenates parameters, then returns
-        the flat parameters and a function that can reshape them to
-        their original shapes.
-        """
-        orig_shapes = [x.shape for x in params]
-        sizes = [x.size for x in params]
-        split_indices = np.cumsum(sizes)[:-1]
-        flat_params = np.concat([x.flatten() for x in params])
-
-        def unpacker(_flat_params):
-            """Closure for unpacking to the original shapes."""
-            split_params = np.hsplit(_flat_params, split_indices)
-            return tuple(x.reshape(s) for x, s in zip(split_params, orig_shapes))
-
-        return flat_params, unpacker
+        return unflattener_fun(res.x), res
 
     def get_optim_info(self, state):
         """
