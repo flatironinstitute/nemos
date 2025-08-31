@@ -1649,13 +1649,6 @@ class TestGroupLasso:
         # specific namespace attributes
         assert isinstance(state, tuple | eqx.Module)
 
-        # NOTE not testing these anymore since non-JAXopt solvers' state is not necessarily a namedtuple
-        # assert (
-        #    hasattr(state, "_fields")
-        #    and hasattr(state, "_field_defaults")
-        #    and hasattr(state, "_asdict")
-        # )
-
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
     def test_update_solver(self, solver_name, poissonGLM_model_instantiation):
         """Test that the solver initialization returns a state."""
@@ -1684,13 +1677,6 @@ class TestGroupLasso:
         # asses that state is a NamedTuple by checking tuple type and the availability of some NamedTuple
         # specific namespace attributes
         assert isinstance(state, tuple | eqx.Module)
-
-        # NOTE not testing these anymore since non-JAXopt solvers' state is not necessarily a namedtuple
-        # assert (
-        #    hasattr(state, "_fields")
-        #    and hasattr(state, "_field_defaults")
-        #    and hasattr(state, "_asdict")
-        # )
 
         # check params struct and shapes
         assert jax.tree_util.tree_structure(params) == jax.tree_util.tree_structure(
@@ -1731,7 +1717,7 @@ class TestGroupLasso:
 
         if raise_exception:
             with pytest.raises(
-                ValueError, match="Incorrect group assignment. " "Some of the features"
+                ValueError, match="Incorrect group assignment. Some of the features"
             ):
                 model.set_params(
                     regularizer=self.cls(mask=mask), regularizer_strength=1.0
@@ -1877,7 +1863,7 @@ class TestGroupLasso:
 
         if raise_exception:
             with pytest.raises(
-                ValueError, match="Incorrect group assignment. " "Some of the features"
+                ValueError, match="Incorrect group assignment. Some of the features"
             ):
                 regularizer.set_params(mask=mask)
         else:
