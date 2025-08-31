@@ -106,8 +106,12 @@ For solvers defined in `nemos` that can be used this way, we will likely provide
 We will likely define an interface or protocol for this, allowing custom (user-defined) solvers to also implement their own version.
 We will also have to decide on how this will be exposed to users on the level of `BaseRegressor` and `GLM`.
 
+:::{admonition} Stochastic optimization interface for (Prox-)SVRG
+:class: info
+
 Note that (Prox-)SVRG is especially well-suited for running stochastic optimization, however it currently requires the optimization loop to be implemented separately as it is a bit more involved than what is done by `run_iterator`.  
 A potential solution to this would be to provide a separate method that accepts the full data and takes care of the batching. That might be a more convenient alternative to the current `run_iterator` as well.
+:::
 
 ## Note on line searches vs. fixed stepsize in Optimistix
 By default Optimistix doesn't expose the search attribute of concrete solvers but we might want to flexibly switch between linesearches and constant learning rates depending on whether `stepsize` is passed to the solver.
