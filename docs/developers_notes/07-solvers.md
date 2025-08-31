@@ -2,7 +2,7 @@
 
 ## Background
 
-In the beginning NeMoS relied on [JAXopt](https://jaxopt.github.io/stable/) as its optimization backend.
+In the earlier versions, NeMoS relied on [JAXopt](https://jaxopt.github.io/stable/) as its optimization backend.
 As JAXopt is no longer maintained, we added support for alternative optimization backends.
 
 Some of JAXopt's funtionality was ported to [Optax](https://optax.readthedocs.io/en/latest/) by Google, and [Optimistix](Optimistix) was started by the community to fill the gaps after JAXopt's deprecation.
@@ -86,7 +86,7 @@ Abstract Class AbstractSolver
 │   └─ Concrete Subclass WrappedProxSVRG
 ```
 
-`OptaxOptimistixSolver` is for using Optax solvers, utilizing `optimistix.OptaxMinimiser` to run the full optimization loop.
+`OptaxOptimistixSolver` is an adapter for Optax solvers, relying on `optimistix.OptaxMinimiser` to run the full optimization loop.
 Optimistix does not have implementations of Nesterov acceleration, so gradient descent is implemented by wrapping `optax.sgd` which does support it.  
 Note that `OptaxOptimistixSolver` allows using any solver from Optax (e.g., Adam). See `OptaxOptimistixGradientDescent` for a template of how to wrap new Optax solvers.
 
@@ -102,7 +102,7 @@ We might also define something like an `ImplementsSolverInterface` protocol as w
 To run stochastic (~mini-batch) optimization, JAXopt used a `run_iterator` method.
 Instead of the full input data `run_iterator` accepts a generator / iterator that provides batches of data.
 
-For solvers defined in `nemos` that can be used this way, we will likely provide `StochasticMixin` which borrows the implementation from JAXopt. (Or some version of it. See below.).
+For solvers defined in `nemos` that can be used this way, we will likely provide `StochasticMixin` which borrows the implementation from JAXopt (Or some version of it, see below).
 We will likely define an interface or protocol for this, allowing custom (user-defined) solvers to also implement their own version.
 We will also have to decide on how this will be exposed to users on the level of `BaseRegressor` and `GLM`.
 
