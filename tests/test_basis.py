@@ -346,6 +346,7 @@ def test_docstrings_decorator_superclass(public_class, meth_super, method):
         "RaisedCosineLogConv",
         "OrthExponentialEval",
         "OrthExponentialConv",
+        "FourierEval",
     ],
 )
 @pytest.mark.parametrize(
