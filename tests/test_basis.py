@@ -158,7 +158,7 @@ def create_atomic_basis_pairs(full_list):
     Define basis pairs preventing combinatorial explosion.
 
     Returns a list of basis class tuple paring all bases with
-    a conv and eval basis. Pairing oredr matters.
+    a conv and eval basis. Pairing order matters.
     """
     sub_list = []
     cnt_eval, cnt_conv = 0, 0
