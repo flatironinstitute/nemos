@@ -384,25 +384,42 @@ def test_split_by_features_shape(input_shape):
 
 
 @pytest.mark.parametrize(
-    "ishape, n_out_features",
+    "ishape, n_out_features, expectation",
     [
-        ((1, 1), 5),
-        ((1, 2), 10),
-        ((2, 1), 10),
-        ((2, 2), 20),
-        (((2, 2), 1), 20),
-        ((1, (2, 2)), 20),
-        (((2, 2), (2, 2)), 80),
+        ((1, 1), 5, does_not_raise()),
+        (
+            (1, 2),
+            10,
+            pytest.raises(ValueError, match="CustomBasis requires all inputs"),
+        ),
+        (
+            (2, 1),
+            10,
+            pytest.raises(ValueError, match="CustomBasis requires all inputs"),
+        ),
+        ((2, 2), 10, does_not_raise()),
+        (
+            ((2, 2), 1),
+            20,
+            pytest.raises(ValueError, match="CustomBasis requires all inputs"),
+        ),
+        (
+            (1, (2, 2)),
+            20,
+            pytest.raises(ValueError, match="CustomBasis requires all inputs"),
+        ),
+        (((2, 2), (2, 2)), 20, does_not_raise()),
     ],
 )
-def test_set_input_shape_2d(ishape, n_out_features):
+def test_set_input_shape_2d(ishape, n_out_features, expectation):
     """Test that the output features match expectation when setting input shape.
 
     Note that the 1D case is tested in test_basis.py::TestSharedMethods.
     """
     bas = custom_basis_2d(5)
-    bas.set_input_shape(*ishape)
-    assert bas.n_output_features == n_out_features
+    with expectation:
+        bas.set_input_shape(*ishape)
+        assert bas.n_output_features == n_out_features
 
 
 def test_inconsistent_input_num():

@@ -206,9 +206,21 @@ class BasisMixin:
         if error:
             raise error
 
-    def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> BasisMixin:
+    def set_input_shape(
+        self,
+        *xi: int | tuple[int, ...] | NDArray,
+        allow_inputs_of_different_shape: bool = True,
+    ) -> BasisMixin:
         """Set the expected input shape for the basis object."""
-        set_input_shape(self, *xi)
+        if getattr(self, "_parent", None) is not None:
+            raise ValueError(
+                "Cannot set input shape on a child basis. Set the input shape on the root basis instead.\n"
+                "For example, instead of ``self.basis1.set_input_shape(n); self.basis2.set_input_shape(m)``, "
+                "do ``self.set_input_shape(n, m)``."
+            )
+        set_input_shape(
+            self, *xi, allow_inputs_of_different_shape=allow_inputs_of_different_shape
+        )
         return self
 
     @property
@@ -852,12 +864,11 @@ class CompositeBasisMixin(BasisMixin):
         # in the composite basis.
 
         if not self.__class__._shallow_copy:
-            self.basis1 = copy.deepcopy(basis1)
-            self.basis2 = copy.deepcopy(basis2)
-        else:
-            # skip checks and shallow copy
-            self._basis1 = basis1
-            self._basis2 = basis2
+            basis1 = copy.deepcopy(basis1)
+            basis2 = copy.deepcopy(basis2)
+
+        self.basis1 = basis1
+        self.basis2 = basis2
 
         # set parents
         self.basis1._parent = self
@@ -968,7 +979,9 @@ class CompositeBasisMixin(BasisMixin):
     def _input_shape_(self):
         return self.input_shape
 
-    def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> BasisMixin:
+    def set_input_shape(
+        self, *xi: int | tuple[int, ...] | NDArray, allow_inputs_of_different_shape=True
+    ) -> BasisMixin:
         """
         Set the expected input shape for the basis object.
 
@@ -986,6 +999,10 @@ class CompositeBasisMixin(BasisMixin):
               All elements must be integers.
             - An array: The shape is extracted, excluding the first axis (assumed to be the sample axis).
 
+        allow_inputs_of_different_shape :
+            True if the composition allows input of different shape (as in addition), False otherwise
+            (as in multiplication).
+
         Raises
         ------
         ValueError
@@ -997,7 +1014,9 @@ class CompositeBasisMixin(BasisMixin):
         self :
             Returns the instance itself to allow method chaining.
         """
-        return super().set_input_shape(*xi)
+        return super().set_input_shape(
+            *xi, allow_inputs_of_different_shape=allow_inputs_of_different_shape
+        )
 
     @property
     @abc.abstractmethod

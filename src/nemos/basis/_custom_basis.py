@@ -24,8 +24,11 @@ from ..type_casting import support_pynapple
 from ..utils import format_repr
 from . import AdditiveBasis, MultiplicativeBasis
 from ._basis_mixin import BasisMixin, BasisTransformerMixin, set_input_shape_state
-from ._check_basis import _check_transform_input
+from ._check_basis import (
+    _check_transform_input,
+)
 from ._composition_utils import (
+    _check_unique_shapes,
     _check_valid_shape_tuple,
     add_docstring,
     count_positional_and_var_args,
@@ -34,6 +37,7 @@ from ._composition_utils import (
     multiply_basis_by_integer,
     promote_to_transformer,
     raise_basis_to_power,
+    set_input_shape,
 )
 
 if TYPE_CHECKING:
@@ -352,13 +356,8 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
                 f"Each input must have at least {self.ndim_input} dimensions, as required by this basis. "
                 f"However, some inputs have fewer dimensions: {invalid_dims}."
             )
-        unique_input_shape = {x.shape for x in xi}
-        if len(unique_input_shape) != 1:
-            raise ValueError(
-                "CustomBasis requires all inputs to be of the same shape.\n"
-                f"Found input shapes: {unique_input_shape}"
-            )
-        self.set_input_shape(*xi)
+        _check_unique_shapes(*xi, basis=self)
+        set_input_shape(self, *xi)
         design_matrix = self.evaluate(
             *xi
         )  # (n_samples, *n_output_shape, n_vec_dim, n_basis)
@@ -605,15 +604,22 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         >>> basis = nmo.basis.CustomBasis([partial(power_add_func, n) for n in range(1, 6)])
         >>> _ = basis.set_input_shape(3, 3)
         >>> basis.n_output_features
-        45
-        >>> _ = basis.set_input_shape((3, 2), 3)
+        15
+        >>> _ = basis.set_input_shape((3, 2), (3, 2))
         >>> basis.n_output_features
-        90
-        >>> _ = basis.set_input_shape(np.ones((10, 3, 2)), 3)
+        30
+        >>> _ = basis.set_input_shape(np.ones((10, 3, 2)), (3, 2))
         >>> basis.n_output_features
-        90
+        30
         """
-        return super().set_input_shape(*xi)
+        super().set_input_shape(*xi, allow_inputs_of_different_shape=False)
+        # CustomBasis acts as a multiplicative basis in n-dimension
+        # i.e. multiple inputs must have the same shape and are
+        # treated in a paired-way in vectorization
+        self._input_shape_ = (
+            None if self._input_shape_ is None else self._input_shape_[:1]
+        )
+        return self
 
     def to_transformer(self) -> "TransformerBasis":
         """
@@ -659,3 +665,23 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         >>> gridsearch = gridsearch.fit(x, y)
         """
         return super().to_transformer()
+
+    @property
+    def input_shape(
+        self,
+    ) -> None | List[None] | Tuple[int, ...] | List[Tuple[int, ...]]:
+        """Input shape as a tuple or list of tuple.
+
+        The property mimics the behavior of atomic bases, and uses the
+        assumption that _input_shape_ for custom bases is a list of
+        length one.
+        """
+        input_shape = self._input_shape_
+        if input_shape is None:
+            if self._n_input_dimensionality == 1:
+                return None
+            else:
+                return [None] * self._n_input_dimensionality
+        if self._n_input_dimensionality == 1:
+            return input_shape[0]
+        return input_shape * self._n_input_dimensionality
