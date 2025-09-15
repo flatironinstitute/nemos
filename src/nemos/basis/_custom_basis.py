@@ -152,6 +152,13 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         Enable pynapple support if True.
     label:
         The label of the basis function.
+    is_complex : bool, optional
+        Whether the basis should be treated as complex. This flag ensures that
+        multiplication with other bases behaves correctly: two real bases, or a real
+        and a complex basis, can be multiplied, but two complex bases cannot. This
+        restriction exists because after multiplication, ``basis.compute_features``
+        does not distinguish between real and imaginary components, which would lead
+        to incorrect outputs.
 
     Examples
     --------
@@ -169,7 +176,8 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         funcs=[partial(decay_exp, rate=np.float64(0.0)), ..., partial(decay_exp, rate=np.float64(1.0))],
         ndim_input=1,
         basis_kwargs={'shift': 1},
-        pynapple_support=True
+        pynapple_support=True,
+        is_complex=False
     )
     >>> samples = np.linspace(0, 1, 50)
     >>> X = bas.compute_features(samples)
@@ -190,6 +198,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         basis_kwargs: Optional[dict] = None,
         pynapple_support: bool = True,
         label: Optional[str] = None,
+        is_complex: bool = False,
     ):
         self._pynapple_support = bool(pynapple_support)
         self.funcs = funcs
@@ -206,7 +215,14 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         self._n_basis_funcs = len(self.funcs)
 
         self.basis_kwargs = basis_kwargs
+        self._is_complex = bool(is_complex)
         super().__init__(label=label)
+
+    @property
+    def is_complex(self):
+        # custom classes could be complex or real, so the attribute
+        # is an instance attribute not a class attribute
+        return self._is_complex
 
     @property
     def pynapple_support(self) -> bool:

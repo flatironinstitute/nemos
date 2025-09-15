@@ -106,7 +106,8 @@ def min_max_rescale_samples(
 
 
 def get_equi_spaced_samples(
-    *n_samples, bounds: Optional[tuple[float, float]] = None
+    *n_samples,
+    bounds: Optional[tuple[float, float] | tuple[tuple[float, float]]] = None,
 ) -> Generator[NDArray]:
     """Get equi-spaced samples for all the input dimensions.
 
@@ -129,9 +130,11 @@ def get_equi_spaced_samples(
     # (i.e. when we cannot use max and min of samples)
     if bounds is None:
         mn, mx = 0, 1
+    elif all(isinstance(b, tuple) and len(b) == 2 for b in bounds):
+        return (np.linspace(*b, samp) for b, samp in zip(bounds, n_samples))
     else:
         mn, mx = bounds
-    return (np.linspace(mn, mx, n_samples[k]) for k in range(len(n_samples)))
+    return (np.linspace(mn, mx, samp) for samp in n_samples)
 
 
 class Basis(Base, abc.ABC, BasisTransformerMixin):
@@ -936,6 +939,16 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
     def __init__(
         self, basis1: BasisMixin, basis2: BasisMixin, label: Optional[str] = None
     ) -> None:
+        if getattr(basis1, "is_complex", False) and getattr(
+            basis2, "is_complex", False
+        ):
+            raise ValueError(
+                "Invalid multiplication between two complex bases.\n"
+                "Fourier basis are complex bases, and "
+                "the multiplication of a real basis with a Fourier bases results in a complex basis as well. "
+                "Multiplication between two complex bases is not allowed in NeMoS as it would treat "
+                "real and imaginary columns alike."
+            )
         input_shape1 = get_input_shape(basis1)
         input_shape2 = get_input_shape(basis2)
         # replace None with default

@@ -361,17 +361,17 @@ def test_basis_repr(ps):
         bas = custom_basis(5, pynapple_support=ps)
         assert (
             repr(bas)
-            == f"CustomBasis(\n    funcs=[partial(power_func, 1), ..., partial(power_func, 5)],\n    ndim_input=1,\n    pynapple_support={ps}\n)"
+            == f"CustomBasis(\n    funcs=[partial(power_func, 1), ..., partial(power_func, 5)],\n    ndim_input=1,\n    pynapple_support={ps},\n    is_complex=False\n)"
         )
         bas = custom_basis(1, pynapple_support=ps)
         assert (
             repr(bas)
-            == f"CustomBasis(\n    funcs=[partial(power_func, 1)],\n    ndim_input=1,\n    pynapple_support={ps}\n)"
+            == f"CustomBasis(\n    funcs=[partial(power_func, 1)],\n    ndim_input=1,\n    pynapple_support={ps},\n    is_complex=False\n)"
         )
         # check composite basis repr
         assert (
             repr(bas + bas)
-            == f"'(CustomBasis + CustomBasis_1)': AdditiveBasis(\n    basis1=CustomBasis(\n        funcs=[partial(power_func, 1)],\n        ndim_input=1,\n        pynapple_support={ps}\n    ),\n    basis2='CustomBasis_1': CustomBasis(\n        funcs=[partial(power_func, 1)],\n        ndim_input=1,\n        pynapple_support={ps}\n    ),\n)"
+            == f"'(CustomBasis + CustomBasis_1)': AdditiveBasis(\n    basis1=CustomBasis(\n        funcs=[partial(power_func, 1)],\n        ndim_input=1,\n        pynapple_support={ps},\n        is_complex=False\n    ),\n    basis2='CustomBasis_1': CustomBasis(\n        funcs=[partial(power_func, 1)],\n        ndim_input=1,\n        pynapple_support={ps},\n        is_complex=False\n    ),\n)"
         )
 
 

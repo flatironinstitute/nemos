@@ -28,6 +28,7 @@ __PUBLIC_BASES__ = [
     "BSplineConv",
     "CyclicBSplineEval",
     "CyclicBSplineConv",
+    "FourierEval",
     "RaisedCosineLinearEval",
     "RaisedCosineLinearConv",
     "RaisedCosineLogEval",
@@ -486,6 +487,7 @@ def get_input_shape(bas: "BasisMixin") -> List[Tuple | None]:
     if input_dim == 1:
         ishape = getattr(bas, "_input_shape_", [None])
         return ishape if ishape is not None else [None]
+
     elif not hasattr(bas, "basis1") and hasattr(bas, "_input_shape_"):
         return [None] * input_dim if bas._input_shape_ is None else bas._input_shape_
 

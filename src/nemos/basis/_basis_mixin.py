@@ -126,6 +126,7 @@ def remap_parameters(method):
 
 
 class BasisMixin:
+
     def __init__(self, label: Optional[str] = None):
         if not hasattr(self, "_input_shape_"):
             self._input_shape_ = None
@@ -224,6 +225,14 @@ class BasisMixin:
 
     @property
     def input_shape(self):
+        """
+        Expected per-sample input shape.
+
+        Returns
+        -------
+        :
+            If inputs are shaped ``(n_samples, *shape)``, returns ``shape``.
+        """
         return get_input_shape(self)
 
     def _get_feature_slicing(
@@ -390,12 +399,32 @@ class BasisMixin:
 class AtomicBasisMixin(BasisMixin):
     """Mixin class for atomic bases (i.e. non-composite)."""
 
+    _is_complex = False
+
     def __init__(self, n_basis_funcs: int, label: Optional[str] = None):
         super().__init__(label=label)
         self._n_basis_funcs = n_basis_funcs
         check_basis_min = getattr(self, "_check_n_basis_min", None)
         if check_basis_min:
             check_basis_min()
+
+    @property
+    def is_complex(self):
+        """
+        Whether the basis is intrinsically complex.
+
+        Returns
+        -------
+        :
+            ``True`` if the basis is complex; ``False`` otherwise.
+
+        Notes
+        -----
+        :meth:`compute_features` always returns a real-valued design matrix. For
+        complex bases (e.g., ``FourierEval``), the real and imaginary parts are
+        returned as separate columns.
+        """
+        return self.__class__._is_complex
 
     @property
     def n_output_features(self) -> int | None:
@@ -545,24 +574,49 @@ class EvalBasisMixin:
         """Range of values covered by the basis."""
         return self._bounds
 
-    @bounds.setter
-    def bounds(self, values: Union[None, Tuple[float, float]]):
-        """Setter for bounds."""
-        if values is not None and len(values) != 2:
-            raise ValueError(
-                f"The provided `bounds` must be of length two. Length {len(values)} provided instead!"
+    @staticmethod
+    def _format_bounds(values: Any) -> Tuple[Any, Exception | None]:
+        """Check bounds and cast to tuple."""
+
+        if not hasattr(values, "__len__"):
+            raise TypeError(
+                "Invalid bounds provided. ``bounds`` must be a tuple of floats."
+                f"``bounds`` {values} of type {type(values)} provided instead."
             )
 
-        # convert to float and store
+        elif values is not None and len(values) != 2:
+            raise ValueError(
+                f"The provided `bounds` must be of length two. The bounds ``{values}`` have length "
+                f"{len(values)} instead!"
+            )
+
         try:
-            self._bounds = values if values is None else tuple(map(float, values))
-        except (ValueError, TypeError):
-            raise TypeError("Could not convert `bounds` to float.")
+            values = values if values is None else tuple(map(float, values))
+        except (ValueError, TypeError) as e:
+            raise TypeError(
+                "Could not convert `bounds` to float. "
+                f"The provided bounds values are '{values}'."
+            ) from e
 
         if values is not None and values[1] <= values[0]:
             raise ValueError(
                 f"Invalid bound {values}. Lower bound is greater or equal than the upper bound."
             )
+
+        return values
+
+    @bounds.setter
+    def bounds(self, values: Union[None, Tuple[float, float]]):
+        """Setter for bounds."""
+        if values is None:
+            self._bounds = None
+            return
+        values = self._format_bounds(values)
+        if values is not None and len(values) != 2:
+            raise ValueError(
+                f"The provided `bounds` must be of length two. Length {len(values)} provided instead!"
+            )
+        self._bounds = values
 
 
 class ConvBasisMixin:
@@ -798,6 +852,11 @@ class CompositeBasisMixin(BasisMixin):
             basis1
         ) + infer_input_dimensionality(basis2)
 
+        # set the attribute
+        self._is_complex = getattr(basis1, "is_complex", False) or getattr(
+            basis2, "is_complex", False
+        )
+
         # This step is slow if you add a very large number of bases
         self._basis1 = None
         self._basis2 = None
@@ -817,6 +876,12 @@ class CompositeBasisMixin(BasisMixin):
 
         # trigger label setter
         super().__init__(label=label)
+
+    @property
+    def is_complex(self):
+        # is_complex is used to check if basis can be multiplied with another
+        # allowed multiplications: real x real, real x complex.
+        return self._is_complex
 
     def _is_basis_like(
         self, basis1: Optional[BasisMixin] = None, basis2: Optional[BasisMixin] = None
