@@ -6196,7 +6196,7 @@ class TestMultiplicativeBasis(CombinedBasis):
 
     @pytest.mark.parametrize(
         "bas",
-        list_all_basis_classes("Eval") + [CustomBasis],
+        list_all_real_basis_classes("Eval") + [CustomBasis],
     )
     @pytest.mark.parametrize("x, y", [(np.random.randn(10, 2), np.random.randn(10, 2))])
     def test_eval_and_compute_features_equivalence(
