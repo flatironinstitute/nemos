@@ -192,8 +192,8 @@ def download_dandi_data(
 
     # Create a deterministic filename based on dandiset_id and file_path
     # Hash to make sure that there are no problematic characters for filename.
-    dandiset_hash = hashlib.md5(dandiset_id.encode()).hexdigest()
-    filepath_hash = hashlib.md5(file_path.encode()).hexdigest()
+    dandiset_hash = hashlib.md5(str(dandiset_id).encode()).hexdigest()
+    filepath_hash = hashlib.md5(str(file_path).encode()).hexdigest()
     cache_filename = dandiset_hash + filepath_hash + ".nwb"
     cached_file_path = cache_dir / cache_filename
 
