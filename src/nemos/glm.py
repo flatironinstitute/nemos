@@ -5,11 +5,13 @@ from __future__ import annotations
 
 import warnings
 from functools import wraps
+from pathlib import Path
 from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
 from numpy.typing import ArrayLike
+from sklearn.utils import InputTags, TargetTags
 
 from nemos.third_party.jaxopt import jaxopt
 
@@ -23,7 +25,7 @@ from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Lasso, Regularizer, Ridge
 from .solvers._compute_defaults import glm_compute_optimal_stepsize_configs
 from .type_casting import jnp_asarray_if, support_pynapple
-from .typing import DESIGN_INPUT_TYPE
+from .typing import DESIGN_INPUT_TYPE, RegularizerStrength
 from .utils import format_repr
 
 ModelParams = Tuple[jnp.ndarray, jnp.ndarray]
@@ -185,9 +187,12 @@ class GLM(BaseRegressor):
         self,
         # With python 3.11 Literal[*AVAILABLE_OBSERVATION_MODELS] will be allowed.
         # Replace this manual list after dropping support for 3.10?
-        observation_model: obs.Observations | Literal["Poisson", "Gamma"] = "Poisson",
+        observation_model: (
+            obs.Observations
+            | Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial"]
+        ) = "Poisson",
         regularizer: Optional[Union[str, Regularizer]] = None,
-        regularizer_strength: Optional[float] = None,
+        regularizer_strength: Optional[RegularizerStrength] = None,
         solver_name: str = None,
         solver_kwargs: dict = None,
     ):
@@ -207,6 +212,17 @@ class GLM(BaseRegressor):
         self.scale_ = None
         self.dof_resid_ = None
 
+    def __sklearn_tags__(self):
+        """Return GLM specific estimator tags."""
+        tags = super().__sklearn_tags__()
+        # Tags for X
+        tags.input_tags = InputTags(allow_nan=True, two_d_array=True)
+        # Tags for y
+        tags.target_tags = TargetTags(
+            required=True, one_d_labels=True, two_d_labels=False
+        )
+        return tags
+
     @property
     def observation_model(self) -> Union[None, obs.Observations]:
         """Getter for the ``observation_model`` attribute."""
@@ -215,7 +231,8 @@ class GLM(BaseRegressor):
     @observation_model.setter
     def observation_model(self, observation: obs.Observations):
         if isinstance(observation, str):
-            observation = instantiate_observation_model(observation)
+            self._observation_model = instantiate_observation_model(observation)
+            return
         # check that the model has the required attributes
         # and that the attribute can be called
         obs.check_observation_model(observation)
@@ -1159,6 +1176,81 @@ class GLM(BaseRegressor):
         klass = self.__class__(**params)
         return klass
 
+    def save_params(self, filename: Union[str, Path]):
+        """
+        Save GLM model parameters to a .npz file.
+
+        This method allows to reuse the model parameters. The saved parameters can be loaded back
+        into a GLM instance using the `load_params` function.
+
+        Parameters
+        ----------
+        filename :
+            The name of the file where the model parameters will be saved. The file will be saved in `.npz` format.
+
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> # Create a GLM model with specified parameters
+        >>> solver_args = {"stepsize": 0.1, "maxiter": 1000, "tol": 1e-6}
+        >>> model = nmo.glm.GLM(
+        ...     regularizer="Ridge",
+        ...     regularizer_strength=0.1,
+        ...     observation_model="Gamma",
+        ...     solver_name="BFGS",
+        ...     solver_kwargs=solver_args,
+        ... )
+        >>> for key, value in model.get_params().items():
+        ...     print(f"{key}: {value}")
+        observation_model__inverse_link_function: <function one_over_x at ...>
+        observation_model: GammaObservations(inverse_link_function=one_over_x)
+        regularizer: Ridge()
+        regularizer_strength: 0.1
+        solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
+        solver_name: BFGS
+        >>> # Save the model parameters to a file
+        >>> model.save_params("model_params.npz")
+        >>> # Load the model from the saved file
+        >>> model = nmo.load_model("model_params.npz")
+        >>> # Model has the same parameters before and after load
+        >>> for key, value in model.get_params().items():
+        ...     print(f"{key}: {value}")
+        observation_model__inverse_link_function: <function one_over_x at ...>
+        observation_model: GammaObservations(inverse_link_function=one_over_x)
+        regularizer: Ridge()
+        regularizer_strength: 0.1
+        solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
+        solver_name: BFGS
+
+        >>> # Saving and loading a custom inverse link function
+        >>> obs = nmo.observation_models.PoissonObservations(
+        ...     inverse_link_function=lambda x: x**2
+        ... )
+        >>> model = nmo.glm.GLM(observation_model=obs)
+        >>> model.save_params("model_params.npz")
+        >>> # Provide a mapping for the custom link function when loading.
+        >>> mapping_dict = {
+        ...     "observation_model__inverse_link_function": lambda x: x**2,
+        ... }
+        >>> loaded_model = nmo.load_model("model_params.npz", mapping_dict=mapping_dict)
+        >>> # Now the loaded model will have the updated solver_name and solver_kwargs
+        >>> for key, value in loaded_model.get_params().items():
+        ...     print(f"{key}: {value}")
+        observation_model__inverse_link_function: <function <lambda> at ...>
+        observation_model: PoissonObservations(inverse_link_function=<lambda>)
+        regularizer: UnRegularized()
+        regularizer_strength: None
+        solver_kwargs: {}
+        solver_name: GradientDescent
+        """
+
+        # initialize saving dictionary
+        fit_attrs = self._get_fit_state()
+        fit_attrs.pop("solver_state_")
+        string_attrs = ["inverse_link_function"]
+
+        super().save_params(filename, fit_attrs, string_attrs)
+
 
 class PopulationGLM(GLM):
     """
@@ -1313,7 +1405,10 @@ class PopulationGLM(GLM):
 
     def __init__(
         self,
-        observation_model: obs.Observations | Literal["Poisson", "Gamma"] = "Poisson",
+        observation_model: (
+            obs.Observations
+            | Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial"]
+        ) = "Poisson",
         regularizer: Union[str, Regularizer] = "UnRegularized",
         regularizer_strength: Optional[float] = None,
         solver_name: str = None,
@@ -1331,6 +1426,15 @@ class PopulationGLM(GLM):
         )
         self._metadata = None
         self.feature_mask = feature_mask
+
+    def __sklearn_tags__(self):
+        """Return Population GLM specific estimator tags."""
+        tags = super().__sklearn_tags__()
+        # Tags for y
+        tags.target_tags = TargetTags(
+            required=True, one_d_labels=False, two_d_labels=True
+        )
+        return tags
 
     @property
     def feature_mask(self) -> Union[jnp.ndarray, dict]:

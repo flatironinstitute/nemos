@@ -10,7 +10,7 @@ to JAX arrays and, where applicable, converts outputs back to pynapple TSD objec
 """
 
 from functools import wraps
-from typing import Any, Callable, List, Literal, Optional, Type, Union
+from typing import Any, Callable, List, Literal, Optional, Tuple, Type, Union
 
 import jax
 import jax.numpy as jnp
@@ -24,7 +24,41 @@ from .pytrees import FeaturePytree
 _NAP_TIME_PRECISION = 10 ** (-nap.nap_config.time_index_precision)
 
 
-def is_numpy_array_like(obj) -> bool:
+def is_numpy_array_like(obj) -> Tuple[Any, bool]:
+    """
+    Check if an object is array-like.
+
+    This function determines if an object has array-like properties but isn't an _BaseTsd.
+    An object is considered array-like if it has attributes typically associated with arrays
+    (such as `.shape`, `.dtype`, and `.ndim`).
+
+    Parameters
+    ----------
+    obj : object
+        The object to check for array-like properties.
+
+    Returns
+    -------
+    :
+        True if the object is array-like, False otherwise.
+
+    """
+    # if pandas check obj.value
+    obj = (
+        obj.values
+        if all(hasattr(obj, name) for name in ("values", "index"))
+        and not is_pynapple_tsd(obj)
+        else obj
+    )
+
+    # Check for array-like attributes
+    has_shape = hasattr(obj, "shape")
+    has_dtype = hasattr(obj, "dtype")
+    has_ndim = hasattr(obj, "ndim")
+    return obj, has_shape and has_dtype and has_ndim
+
+
+def is_at_least_1d_numpy_array_like(obj) -> bool:
     """
     Check if an object is array-like of at least 1-dimension.
 
@@ -52,19 +86,7 @@ def is_numpy_array_like(obj) -> bool:
     numerical operations.
 
     """
-    # if pandas check obj.value
-    obj = (
-        obj.values
-        if all(hasattr(obj, name) for name in ("values", "index"))
-        and not is_pynapple_tsd(obj)
-        else obj
-    )
-
-    # Check for array-like attributes
-    has_shape = hasattr(obj, "shape")
-    has_dtype = hasattr(obj, "dtype")
-    has_ndim = hasattr(obj, "ndim")
-
+    obj, is_array_like = is_numpy_array_like(obj)
     # Check for indexability (try to access the first element)
     try:
         obj[0]
@@ -79,7 +101,7 @@ def is_numpy_array_like(obj) -> bool:
     except TypeError:
         is_iterable = False
 
-    return has_shape and has_dtype and has_ndim and is_indexable and is_iterable
+    return is_array_like and is_indexable and is_iterable
 
 
 def is_pynapple_tsd(x: Any) -> bool:
@@ -311,7 +333,7 @@ def cast_to_pynapple(
 
 def jnp_asarray_if(
     x: Any,
-    condition: Callable[[Any], bool] = is_numpy_array_like,
+    condition: Callable[[Any], bool] = is_at_least_1d_numpy_array_like,
     dtype: Optional[Type] = None,
 ) -> Any:
     """
@@ -340,7 +362,7 @@ def jnp_asarray_if(
 
 
 def np_asarray_if(
-    x: Any, condition: Callable[[Any], bool] = is_numpy_array_like
+    x: Any, condition: Callable[[Any], bool] = is_at_least_1d_numpy_array_like
 ) -> Any:
     """
     Conditionally convert an object to a numpy array.
@@ -406,13 +428,13 @@ def support_pynapple(conv_type: Literal["jax", "numpy"] = "jax") -> Callable:
                     )
                 time, time_support = get_time_info(*args, **kwargs)
 
-                def cast_out(tree, metadata=None):
+                def cast_out(pytree, metadata=None):
                     # cast back to pynapple
                     return jax.tree_util.tree_map(
                         lambda x: cast_to_pynapple(
                             x, time, time_support, metadata=metadata
                         ),
-                        tree,
+                        pytree,
                     )
 
             else:

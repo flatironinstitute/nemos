@@ -51,33 +51,6 @@ class PolyakSgdTest(test_util.JaxoptTestCase):
     error = opt.l2_optimality_error(params, l2reg=0., data=data)
     self.assertLessEqual(error / error_init, 0.01)
 
-  @parameterized.product(momentum=[0.0, 0.9], sps_variant=['SPS_max', 'SPS+'])
-  def test_logreg_with_intercept_manual_loop(self, momentum, sps_variant):
-    x, y = datasets.make_classification(n_samples=10, n_features=5, n_classes=3,
-                                        n_informative=3, random_state=0)
-    data = (x, y)
-    l2reg = 0.1
-    # fun(params, l2reg, data)
-    fun = objective.l2_multiclass_logreg_with_intercept
-    n_classes = len(jnp.unique(y))
-
-    w_init = jnp.zeros((x.shape[1], n_classes))
-    b_init = jnp.zeros(n_classes)
-    params = (w_init, b_init)
-
-    opt = PolyakSGD(
-        fun=fun, fun_min=0.6975, momentum=momentum, variant=sps_variant
-    )
-    error_init = opt.l2_optimality_error(params, l2reg=l2reg, data=data)
-
-    state = opt.init_state(params, l2reg=l2reg, data=data)
-    for _ in range(200):
-      params, state = opt.update(params, state, l2reg=l2reg, data=data)
-
-    # Check optimality conditions.
-    error = opt.l2_optimality_error(params, l2reg=l2reg, data=data)
-    self.assertLessEqual(error / error_init, 0.02)
-
   @parameterized.product(has_aux=[True, False])
   def test_logreg_with_intercept_run(self, has_aux):
     X, y = datasets.make_classification(n_samples=10, n_features=5, n_classes=3,

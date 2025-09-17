@@ -1,9 +1,21 @@
 """Utility functions for creating regularizer object."""
 
-AVAILABLE_REGULARIZERS = ["UnRegularized", "Ridge", "Lasso", "GroupLasso"]
+from .regularizer import ElasticNet, GroupLasso, Lasso, Ridge, UnRegularized
+
+AVAILABLE_REGULARIZERS = ["UnRegularized", "Ridge", "Lasso", "GroupLasso", "ElasticNet"]
+
+# Mapping for O(1) lookup
+_REGULARIZER_MAP = {
+    "UnRegularized": UnRegularized,
+    "Ridge": Ridge,
+    "Lasso": Lasso,
+    "GroupLasso": GroupLasso,
+    "ElasticNet": ElasticNet,
+    None: UnRegularized,  # Handle None case
+}
 
 
-def create_regularizer(name: str | None):
+def instantiate_regularizer(name: str | None):
     """
     Create a regularizer from a given name.
 
@@ -24,24 +36,14 @@ def create_regularizer(name: str | None):
     ValueError
         If the `name` provided does not match to any available regularizer.
     """
-    if name in ("UnRegularized", None):
-        from .regularizer import UnRegularized
+    # If the name contains a module path, extract the class name
+    if name:
+        name = name.split("nemos.regularizer.")[-1]
 
-        return UnRegularized()
-    elif name == "Ridge":
-        from .regularizer import Ridge
-
-        return Ridge()
-    elif name == "Lasso":
-        from .regularizer import Lasso
-
-        return Lasso()
-    elif name == "GroupLasso":
-        from .regularizer import GroupLasso
-
-        return GroupLasso()
+    if name in _REGULARIZER_MAP:
+        return _REGULARIZER_MAP[name]()
     else:
         raise ValueError(
             f"Unknown regularizer: {name}. "
-            f"Regularizer must be one of {AVAILABLE_REGULARIZERS}"
+            f"Regularizer must be one of {AVAILABLE_REGULARIZERS} or their full module path."
         )

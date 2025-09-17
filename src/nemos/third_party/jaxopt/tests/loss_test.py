@@ -157,7 +157,7 @@ class LossTest(test_util.JaxoptTestCase):
     # Check that correct value is obtained for large inputs.
     if large_inputs_behavior:
       loss_val = loss_fun(0, jnp.array([1e9, 1e9]))
-      expected = loss_fun(0, jnp.array([1, 1]))
+      expected = loss_fun(0, jnp.array([1., 1.]))
       self.assertAllClose(loss_val, expected)
 
     # Check that -inf for incorrect label has no impact.

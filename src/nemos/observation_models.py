@@ -9,6 +9,7 @@ from numpy.typing import NDArray
 
 from . import utils
 from .base_class import Base
+from .utils import one_over_x
 
 __all__ = ["PoissonObservations", "GammaObservations", "BernoulliObservations"]
 
@@ -19,6 +20,50 @@ def __dir__():
 
 def identity_function(x):
     return x
+
+LINK_NAME_TO_FUNC = {
+    "nemos.utils.one_over_x": one_over_x,
+    "jax.numpy.exp": jnp.exp,
+    "jax._src.numpy.ufuncs.exp": jnp.exp,
+    "jax.nn.softplus": jax.nn.softplus,
+    "jax._src.nn.functions.softplus": jax.nn.softplus,
+    "jax.scipy.special.expit": jax.scipy.special.expit,
+    "jax._src.scipy.special.expit": jax.scipy.special.expit,
+    "jax.lax.logistic": jax.lax.logistic,
+    "jax._src.lax.lax.logistic": jax.lax.logistic,
+    "jax.scipy.stats.norm.cdf": jax.scipy.stats.norm.cdf,
+    "jax._src.scipy.stats.norm.cdf": jax.scipy.stats.norm.cdf,
+}
+
+
+def link_function_from_string(link_name: str):
+    """
+    Get a link function from a given name.
+
+    Parameters
+    ----------
+    link_name:
+        A string representation of the link function, e.g. "jax.numpy.exp".
+
+    Returns
+    -------
+    :
+        The link function corresponding to the provided name.
+
+    Raises
+    ------
+    ValueError:
+        If the provided string does not match any known link function.
+    """
+    if link_name in LINK_NAME_TO_FUNC:
+        return LINK_NAME_TO_FUNC[link_name]
+    else:
+        raise ValueError(
+            f"Unknown link function: {link_name}. "
+            f"Link function must be one of {list(LINK_NAME_TO_FUNC.keys())}"
+            f"if you want to use a custom link function, please provide it as a Callable."
+            f"if you think this is a bug, please open an issue at 'https://github.com/flatironinstitute/nemos/issues'."
+        )
 
 
 class Observations(Base, abc.ABC):
@@ -62,6 +107,14 @@ class Observations(Base, abc.ABC):
     @inverse_link_function.setter
     def inverse_link_function(self, inverse_link_function: Callable):
         """Setter for the inverse link function for the model."""
+        if isinstance(inverse_link_function, str):
+            self._inverse_link_function = link_function_from_string(
+                inverse_link_function
+            )
+            return
+        elif inverse_link_function in LINK_NAME_TO_FUNC.values():
+            self._inverse_link_function = inverse_link_function
+            return
         self.check_inverse_link_function(inverse_link_function)
         self._inverse_link_function = inverse_link_function
 
@@ -197,6 +250,38 @@ class Observations(Base, abc.ABC):
         """
         pass
 
+    def likelihood(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
+        aggregate_sample_scores: Callable = jnp.mean,
+    ):
+        r"""Compute the observation model likelihood.
+
+        This computes the likelihood of the predicted rates
+        for the observed neural activity including the normalization constant.
+
+        Parameters
+        ----------
+        y :
+            The target activity to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
+        predicted_rate :
+            The predicted rate of the current model. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
+        scale :
+            The scale parameter of the model
+        aggregate_sample_scores :
+            Function that aggregates the log-likelihood of each sample.
+
+        Returns
+        -------
+        :
+            The likelihood. Shape (1,).
+        """
+        return jnp.exp(
+            self.log_likelihood(y, predicted_rate, scale, aggregate_sample_scores)
+        )
+
     @abc.abstractmethod
     def sample_generator(
         self,
@@ -310,8 +395,8 @@ class Observations(Base, abc.ABC):
     ) -> jnp.ndarray:
         r"""Pseudo-:math:`R^2` calculation for a GLM.
 
-        Compute the pseudo-:math:`R^2` metric for the GLM, as defined by McFadden et al. [1]_
-        or by Cohen et al. [2]_.
+        Compute the pseudo-:math:`R^2` metric for the GLM, as defined by McFadden et al. [2]_
+        or by Cohen et al. [3]_.
 
         This metric evaluates the goodness-of-fit of the model relative to a null (baseline) model that assumes a
         constant mean for the observations. While the pseudo-:math:`R^2` is bounded between 0 and 1 for the
@@ -367,11 +452,11 @@ class Observations(Base, abc.ABC):
 
         References
         ----------
-        .. [1] McFadden D (1979). Quantitative methods for analysing travel behavior of individuals: Some recent
+        .. [2] McFadden D (1979). Quantitative methods for analysing travel behavior of individuals: Some recent
                developments. In D. A. Hensher & P. R. Stopher (Eds.), *Behavioural travel modelling* (pp. 279-318).
                London: Croom Helm.
 
-        .. [2] Jacob Cohen, Patricia Cohen, Steven G. West, Leona S. Aiken.
+        .. [3] Jacob Cohen, Patricia Cohen, Steven G. West, Leona S. Aiken.
                *Applied Multiple Regression/Correlation Analysis for the Behavioral Sciences*.
                3rd edition. Routledge, 2002. p.502. ISBN 978-0-8058-2223-6. (May 2012)
         """
@@ -1044,28 +1129,60 @@ def check_observation_model(observation_model):
     >>> check_observation_model(model)  # Should pass without error if the model is correctly implemented.
     """
     # Define the checks to be made on each attribute
-    checks = {
-        "inverse_link_function": {
-            "input": [jnp.array([1.0, 1.0, 1.0])],
-            "test_differentiable": True,
-            "test_preserve_shape": False,
-        },
-        "_negative_log_likelihood": {
-            "input": [0.5 * jnp.array([1.0, 1.0, 1.0]), jnp.array([1.0, 1.0, 1.0])],
-            "test_scalar_func": True,
-        },
-        "pseudo_r2": {
-            "input": [0.5 * jnp.array([1.0, 1.0, 1.0]), jnp.array([1.0, 1.0, 1.0])],
-            "test_scalar_func": True,
-        },
-        "sample_generator": {
-            "input": [jax.random.key(123), 0.5 * jnp.array([1.0, 1.0, 1.0]), 1],
-            "test_preserve_shape": True,
-        },
-    }
+
+    is_nemos = isinstance(
+        observation_model,
+        (
+            PoissonObservations,
+            GammaObservations,
+            BernoulliObservations,
+            NegativeBinomialObservations,
+        ),
+    )
+
+    check_link = (
+        getattr(observation_model, "inverse_link_function", None)
+        not in LINK_NAME_TO_FUNC.values()
+    )
+
+    if check_link:
+        checks = {
+            "inverse_link_function": {
+                "input": [jnp.array([1.0, 1.0, 1.0])],
+                "test_differentiable": True,
+                "test_preserve_shape": False,
+            }
+        }
+    else:
+        checks = {}
+
+    if not is_nemos:
+        checks.update(
+            {
+                "_negative_log_likelihood": {
+                    "input": [
+                        0.5 * jnp.array([1.0, 1.0, 1.0]),
+                        jnp.array([1.0, 1.0, 1.0]),
+                    ],
+                    "test_scalar_func": True,
+                },
+                "pseudo_r2": {
+                    "input": [
+                        0.5 * jnp.array([1.0, 1.0, 1.0]),
+                        jnp.array([1.0, 1.0, 1.0]),
+                    ],
+                    "test_scalar_func": True,
+                },
+                "sample_generator": {
+                    "input": [jax.random.key(123), 0.5 * jnp.array([1.0, 1.0, 1.0]), 1],
+                    "test_preserve_shape": True,
+                },
+            }
+        )
 
     # Perform checks for each attribute
     for attr_name, check_info in checks.items():
+
         # check if the observation model has the attribute
         utils.assert_has_attribute(observation_model, attr_name)
 
@@ -1342,3 +1459,336 @@ class BernoulliObservations(Observations):
             Inverse link function, if ``None``, then use ``self._inverse_link_function``.
         """
         return jnp.ones_like(jnp.atleast_1d(observations[0]))
+
+
+    def likelihood(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
+        aggregate_sample_scores: Callable = lambda x: jnp.exp(jnp.mean(jnp.log(x))),
+    ):
+        r"""Compute the Binomial model likelihood.
+
+        This computes the likelihood of the predicted rates
+        for the observed neural activity including the normalization constant.
+
+        Parameters
+        ----------
+        y :
+            The target activity to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
+        predicted_rate :
+            The predicted rate of the current model. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
+        scale :
+            The scale parameter of the model
+        aggregate_sample_scores :
+            Function that aggregates the likelihood of each sample.
+
+        Returns
+        -------
+        :
+            The likelihood. Shape (1,).
+        """
+        predicted_rate = jnp.clip(
+            predicted_rate,
+            min=jnp.finfo(predicted_rate.dtype).eps,
+            max=1.0 - jnp.finfo(predicted_rate.dtype).eps,
+        )
+        # convenient formulation that works for specifically for the Bernoulli
+        # y can be only 0 or 1 and the likelihood
+        # (predicted_rate) ** y * (1 - predicted_rate) ** (1-y)
+        # is equal to the computation below, easily shown by plugging y=0,1
+        return aggregate_sample_scores(
+            y * predicted_rate + (1 - y) * (1 - predicted_rate)
+        )
+
+
+class NegativeBinomialObservations(Observations):
+    r"""
+    A Negative Binomial model for overdispersed count data using mean-dispersion parameterization.
+
+    This model represents a Negative Binomial distribution [4]_ commonly used to model overdispersed
+    count data [5]_ [6]_ (i.e., data where the variance exceeds the mean), which cannot be captured by a
+    standard Poisson model. The distribution is parameterized by the predicted mean rate
+    (:math:`\mu`) and a fixed dispersion parameter (:math:`\phi`) or `scale` of the model.
+
+    **Important:** the scale parameter must be estimated from the data for accurately capturing the
+    dispersion. In the context of NeMoS GLM, estimation can be achieved by cross-validating the
+    ``scale`` parameter. One may use scikit-learn :ref:`GridSearchCV <sklearn-how-to>` for example.
+
+    The variance of the Negative Binomial distribution under this parameterization is:
+
+    .. math::
+
+        \mathrm{Var}(Y) = \mu + \phi \mu^2
+
+    where :math:`\mu` is the predicted mean, and :math:`\phi` is the dispersion parameter. This
+    formulation corresponds to the Negative Binomial as a Gamma–Poisson mixture.
+
+    The scale parameter :math:`\phi` is related to the canonical Negative Binomial
+    shape parameter `r` as:
+
+    .. math::
+
+        r = \frac{1}{\phi}
+
+    As :math:`\phi \to 0` (equivalently, :math:`r \to \infty`), the distribution approaches a
+    Poisson distribution. This makes the model flexible for handling both equidispersed
+    (Poisson-like) and overdispersed data.
+
+    Parameters
+    ----------
+    inverse_link_function :
+        Inverse of the link function used to map linear predictors to the predicted mean rate.
+        For count data, this is typically `jax.numpy.exp` or `jax.nn.softplus`.
+    scale :
+        The dispersion parameter :math:`\phi`. Lower values correspond to lower overdispersion, and as
+        :math:`\phi \to 0`, the model behaves like a Poisson. The shape parameter of
+        the Negative Binomial is given by `r = 1 / scale`.
+
+    References
+    ----------
+    .. [4] https://en.wikipedia.org/wiki/Negative_binomial_distribution
+
+    .. [5] Pillow, Jonathan, and James Scott. "Fully Bayesian inference for neural models
+        with negative-binomial spiking." Advances in neural information processing systems 25 (2012).
+
+    .. [6] Wei, Ganchao, et al. "Calibrating Bayesian decoders of neural spiking activity."
+        Journal of Neuroscience 44.18 (2024).
+    """
+
+    def __init__(
+        self,
+        inverse_link_function=jnp.exp,
+        scale=1.0,
+    ):
+        super().__init__(inverse_link_function=inverse_link_function)
+        self.scale = scale
+
+    def _negative_log_likelihood(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        aggregate_sample_scores: Callable = jnp.mean,
+    ) -> jnp.ndarray:
+        r"""Compute the Negative Binomial negative log-likelihood.
+
+        This computes the Negative Binomial negative log-likelihood of the
+        predicted mean rate for the observed counts.
+
+        Parameters
+        ----------
+        y :
+            Observed count data. Shape ``(n_time_bins,)`` or ``(n_time_bins, n_observations)``.
+        predicted_rate :
+            The predicted mean of the Negative Binomial distribution. Shape
+            ``(n_time_bins,)`` or ``(n_time_bins, n_observations)``.
+        aggregate_sample_scores :
+            Function that aggregates the log-likelihood across samples (e.g., ``jnp.mean`` or
+            ``jnp.sum``).
+
+        Returns
+        -------
+        :
+            The Negative Binomial negative log-likelihood. Shape ``(1,)``.
+
+        Notes
+        -----
+        The Negative Binomial distribution models overdispersed count data.
+        The likelihood assumes the mean-parameterized form with dispersion `r = 1 / scale`.
+
+        The log-likelihood is computed (up to a constant) using:
+
+        .. math::
+            \log p(y | \mu, r) = \log \Gamma(y + r) - \log \Gamma(r) - \log y!
+            + r \log\left(\frac{r}{r + \mu}\right)
+            + y \log\left(\frac{\mu}{r + \mu}\right)
+
+        """
+        if self.scale is None:
+            self.estimate_scale(y, predicted_rate, aggregate_sample_scores)
+        predicted_rate = jnp.clip(
+            predicted_rate, min=jnp.finfo(predicted_rate.dtype).eps
+        )
+        factor = 1 / (self.scale * predicted_rate + 1)
+        return -aggregate_sample_scores(
+            y * jnp.log(1 - factor) + jnp.log(factor) / self.scale
+        )
+
+    def log_likelihood(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        scale: Union[float, jnp.ndarray, None] = None,
+        aggregate_sample_scores: Callable = jnp.mean,
+    ):
+        r"""Compute the Negative Binomial log-likelihood.
+
+        This computes the Negative Binomial log-likelihood of the predicted mean
+        rate for the observed counts.
+
+        Parameters
+        ----------
+        y :
+            Observed count data. Shape ``(n_time_bins,)`` or ``(n_time_bins, n_observations)``.
+        predicted_rate :
+            The predicted mean of the Negative Binomial distribution. Shape ``(n_time_bins,)`` or
+            ``(n_time_bins, n_observations)``.
+        scale :
+            The scale (dispersion) parameter of the distribution. It is related to the shape ``r`` as ``r = 1 / scale``.
+            Default is the scale provided at initialization ``self.scale``.
+        aggregate_sample_scores :
+            Function that aggregates the log-likelihood across samples (e.g., jnp.mean or jnp.sum).
+
+        Returns
+        -------
+        :
+            The log-likelihood of the Negative Binomial model. Shape ``(1,)``.
+        """
+        scale = self.scale if scale is None else scale
+        ll_unnormalized = -self._negative_log_likelihood(
+            y, predicted_rate, aggregate_sample_scores
+        )
+        norm = aggregate_sample_scores(
+            jax.scipy.special.gammaln(y + 1 / scale)
+            - jax.scipy.special.gammaln(y + 1)
+            - jax.scipy.special.gammaln(1 / scale)
+        )
+        return ll_unnormalized + norm
+
+    def sample_generator(
+        self,
+        key: jax.Array,
+        predicted_rate: jnp.ndarray,
+        scale: Union[float, jnp.ndarray, None] = None,
+    ) -> jnp.ndarray:
+        r"""
+        Sample from the Negative Binomial distribution.
+
+        This method generates random count data from the Negative Binomial distribution based on the predicted rate
+        and scale (dispersion).
+
+        Parameters
+        ----------
+        key :
+            Random key used for number generation in JAX.
+        predicted_rate :
+            The predicted mean of the Negative Binomial distribution. Shape ``(n_time_bins,)`` or
+            ``(n_time_bins, n_observations)``.
+        scale :
+            Dispersion parameter of the distribution. Smaller values imply higher variance.
+
+        Returns
+        -------
+        :
+            Samples drawn from the Negative Binomial distribution. Same shape as ``predicted_rate``.
+
+        Notes
+        -----
+        This method uses the Gamma--Poisson mixture representation of the Negative Binomial distribution:
+
+        .. math::
+
+            Y \sim \text{Poisson}(\lambda), \quad \lambda \sim \text{Gamma}(r, \beta)
+
+        where :math:`r = 1 / \phi` and :math:`\beta = r / \mu`.
+
+        For more information, see the `Negative Binomial distribution on Wikipedia
+        <https://en.wikipedia.org/wiki/Negative_binomial_distribution#Gamma%E2%80%93Poisson_mixture>`_.
+        """
+        scale = self.scale if scale is None else scale
+        r = 1.0 / scale
+        gamma_key, poisson_key = jax.random.split(key)
+
+        # Gamma with shape=r, rate=r/mu → scale=mu/r
+        gamma_sample = jax.random.gamma(gamma_key, r, shape=predicted_rate.shape) * (
+            predicted_rate / r
+        )
+
+        return jax.random.poisson(poisson_key, gamma_sample)
+
+    def deviance(
+        self,
+        observations: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        scale: Union[float, jnp.ndarray, None] = None,
+    ) -> jnp.ndarray:
+        r"""Compute the residual deviance for a Negative Binomial model.
+
+        The deviance measures how well a statistical model fits the data by
+        quantifying the difference between the observed values and the values
+        predicted by the model. Lower values of deviance indicate a better fit.
+
+        Parameters
+        ----------
+        observations:
+            Observed count data. Shape ``(n_time_bins,)`` or ``(n_time_bins, n_observations).``
+        predicted_rate:
+            Predicted mean count of the Negative Binomial distribution. Shape matches `observations`.
+        scale:
+            Dispersion parameter of the distribution.
+
+        Returns
+        -------
+        :
+            The residual deviance of the model. Shape matches ``observations``.
+
+        Notes
+        -----
+        The deviance is a measure of the goodness of fit of a statistical model.
+        For a Negative Binomial model, the residual deviance is computed as:
+
+        .. math::
+            \begin{aligned}
+                D(y_{tn}, \hat{y}_{tn}) &= 2 \left( \text{LL}\left(y_{tn} | y_{tn}\right) - \text{LL}\left(y_{tn}
+                  | \hat{y}_{tn}\right)\right) \\\
+                &= 2 \left[ y_{tn} \log\left(\frac{y_{tn}}{\hat{y}_{tn}}\right) + (1 - y_{tn}) \log\left(\frac{1
+                  - y_{tn}}{1 - \hat{y}_{tn}}\right) \right]
+            \end{aligned}
+
+        where :math:`y` is the observed data, :math:`\hat{y}` is the predicted data, and :math:`\text{LL}` is
+        the model log-likelihood.
+        """
+        scale = self.scale if scale is None else scale
+        factor = (predicted_rate * scale + 1) / (observations * scale + 1)
+        y_mu = observations / predicted_rate
+        y_mu = jnp.clip(y_mu, min=jnp.finfo(predicted_rate.dtype).eps)
+        term1 = observations * jnp.log(y_mu * factor)
+        term2 = jnp.log(factor) / scale
+        return 2 * (term1 + term2)
+
+    def estimate_scale(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        dof_resid: Union[float, jnp.ndarray],
+    ) -> Union[float, jnp.ndarray]:
+        r"""
+        Return the scale parameter of the distribution.
+
+        The ``scale`` parameter of the Negative Binomial distribution is set
+        at initialization and affect the likelihood landscape. This implies
+        that the ``scale`` parameter cannot be estimated post-hoc without
+        re-fitting a model.
+
+        Note that the arguments of this method are not used but are kept for
+        API consistency—i.e., all ``Observations.estimate_scale`` methods
+        have the same signature.
+
+        Parameters
+        ----------
+        y :
+            Observed spike counts.
+        predicted_rate :
+            The predicted mean of the distribution.
+        dof_resid :
+            The DOF of the residuals.
+
+        Notes
+        -----
+        NeMoS currently does not support joint estimation of scale and mean for the negative binomial.
+        For alternatives, see the R package MASS
+        `glm.nb <https://www.rdocumentation.org/packages/MASS/versions/7.3-65/topics/glm.nb>`_
+        for more details.
+        """
+        return self.scale

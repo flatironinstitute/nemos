@@ -10,6 +10,7 @@ Note:
 """
 
 import abc
+from collections import namedtuple
 from functools import partial
 
 import jax
@@ -23,7 +24,15 @@ import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
 from nemos.basis import AdditiveBasis, CustomBasis, MultiplicativeBasis
 from nemos.basis._basis import Basis
+from nemos.basis._basis_mixin import BasisMixin
 from nemos.basis._transformer_basis import TransformerBasis
+
+DEFAULT_KWARGS = {
+    "n_basis_funcs": 5,
+    "frequencies": 4,
+    "window_size": 11,
+    "decay_rates": np.arange(1, 1 + 5),
+}
 
 # shut-off conversion warnings
 nap.nap_config.suppress_conversion_warnings = True
@@ -107,12 +116,18 @@ class CombinedBasis(BasisFuncsTesting):
         """Instantiate and return two basis of the type specified."""
 
         # Set non-optional args
-        default_kwargs = {
+        new_kwargs = {
             "n_basis_funcs": n_basis,
             "window_size": window_size,
             "decay_rates": np.arange(1, 1 + n_basis),
+            "frequencies": np.arange(
+                (n_basis + 1) % 2, 1 + (n_basis - n_basis % 2) // 2
+            ),
+            "frequency_mask": None,
         }
-        repeated_keys = set(default_kwargs.keys()).intersection(kwargs.keys())
+        default_kwargs = DEFAULT_KWARGS.copy()
+        default_kwargs.update(new_kwargs)
+        repeated_keys = set(new_kwargs.keys()).intersection(kwargs.keys())
         if repeated_keys:
             raise ValueError(
                 "Cannot set `n_basis_funcs, window_size, decay_rates` with kwargs"
@@ -154,7 +169,7 @@ class CombinedBasis(BasisFuncsTesting):
 
 
 # automatic define user accessible basis and check the methods
-def list_all_basis_classes(filter_basis="all") -> list[type]:
+def list_all_basis_classes(filter_basis="all") -> list[BasisMixin]:
     """
     Return all the classes in nemos.basis which are a subclass of Basis,
     which should be all concrete classes except TransformerBasis.
@@ -175,6 +190,11 @@ def list_all_basis_classes(filter_basis="all") -> list[type]:
     if filter_basis != "all":
         all_basis = [a for a in all_basis if filter_basis in a.__name__]
     return all_basis
+
+
+def list_all_real_basis_classes(filter_basis="all"):
+    list_all_basis = list_all_basis_classes(filter_basis)
+    return [cls for cls in list_all_basis if not getattr(cls, "_is_complex", False)]
 
 
 # Sample subclass to test instantiation and methods
@@ -241,6 +261,9 @@ class MockRegressor(nmo.base_regressor.BaseRegressor):
     def _get_optimal_solver_params_config(self):
         return None, None, None
 
+    def save_params(self, *args):
+        pass
+
 
 class MockRegressorNested(MockRegressor):
     def __init__(self, other_param: int, std_param: int = 0):
@@ -276,7 +299,7 @@ class MockGLM(nmo.glm.GLM):
     def simulate(
         self,
         random_key: jax.Array,
-        feed_forward_input,
+        feedforward_input,
         **kwargs,
     ):
         pass
@@ -357,6 +380,14 @@ def poissonGLM_model_instantiation_pytree(poissonGLM_model_instantiation):
 
 
 @pytest.fixture
+def poissonGLM_fitted_model_instantiation(poissonGLM_model_instantiation):
+    X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+    model.fit(X, y)
+
+    return X, y, model, true_params, firing_rate
+
+
+@pytest.fixture
 def population_poissonGLM_model_instantiation():
     """Set up a population Poisson GLM for testing purposes.
 
@@ -413,6 +444,16 @@ def population_poissonGLM_model_instantiation_pytree(
         observation_model=model.observation_model, regularizer=model.regularizer
     )
     return X_tree, np.random.poisson(rate), model_tree, true_params_tree, rate
+
+
+@pytest.fixture
+def population_poissonGLM_fitted_model_instantiation(
+    population_poissonGLM_model_instantiation,
+):
+    X, y, model, true_params, firing_rate = population_poissonGLM_model_instantiation
+    model.fit(X, y)
+
+    return X, y, model, true_params, firing_rate
 
 
 @pytest.fixture
@@ -899,9 +940,9 @@ def population_bernoulliGLM_model_instantiation():
 def population_bernoulliGLM_model_instantiation_pytree(
     population_bernoulliGLM_model_instantiation,
 ):
-    """Set up a population Poisson GLM for testing purposes.
+    """Set up a population Bernoulli GLM for testing purposes.
 
-    This fixture initializes a Poisson GLM with random parameters, simulates its response, and
+    This fixture initializes a Bernoulli GLM with random parameters, simulates its response, and
     returns the test data, expected output, the model instance, true parameters, and the rate
     of response.
 
@@ -923,3 +964,150 @@ def population_bernoulliGLM_model_instantiation_pytree(
         observation_model=model.observation_model, regularizer=model.regularizer
     )
     return X_tree, np.random.binomial(1, rate), model_tree, true_params_tree, rate
+
+
+SizeTerminal = namedtuple("SizeTerminal", ["columns", "lines"])
+
+
+class NestedRegularizer(nmo.regularizer.Ridge):
+    def __init__(self, sub_regularizer, func=np.exp):
+        self.sub_regularizer = sub_regularizer
+        self.func = func
+        super().__init__()
+
+
+@pytest.fixture
+def nested_regularizer():
+    """
+    Nested retularizer for testing save/load.
+    """
+    return NestedRegularizer(nmo.regularizer.Lasso())
+
+
+@pytest.fixture
+def negativeBinomialGLM_model_instantiation():
+    """Set up a Negative Binomial GLM with array inputs for testing purposes.
+
+    This fixture initializes a Negative Binomial GLM with random parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response.
+
+    Returns:
+        tuple: A tuple containing:
+            - X (numpy.ndarray): Simulated input data.
+            - np.random.poisson(rate) (numpy.ndarray): Simulated spike responses.
+            - model (nmo.glm.PoissonGLM): Initialized model instance.
+            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of response.
+    """
+    np.random.seed(123)
+    X = np.random.normal(size=(100, 5))
+    b_true = np.zeros((1,))
+    w_true = np.random.normal(size=(5,))
+    observation_model = nmo.observation_models.NegativeBinomialObservations()
+    regularizer = nmo.regularizer.UnRegularized()
+    model = nmo.glm.GLM(observation_model, regularizer, solver_name="LBFGS")
+    rate = jax.numpy.exp(jax.numpy.einsum("k,tk->t", w_true, X) + b_true)
+    r = 1 / model.observation_model.scale
+    spikes = np.random.poisson(np.random.gamma(shape=r, size=rate.shape) * (r / rate))
+    return X, spikes, model, (w_true, b_true), rate
+
+
+@pytest.fixture
+def negativeBinomialGLM_model_instantiation_pytree(
+    negativeBinomialGLM_model_instantiation,
+):
+    """Set up a Negative Binomial GLM with pytree inputs for testing purposes .
+
+    This fixture initializes a Negative Binomial GLM with random parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response.
+
+    Returns:
+        tuple: A tuple containing:
+            - X (FeaturePytree): Simulated input data.
+            - np.random.poisson(rate) (numpy.ndarray): Simulated spike responses.
+            - model (nmo.glm.PoissonGLM): Initialized model instance.
+            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of response.
+    """
+    X, spikes, model, true_params, rate = negativeBinomialGLM_model_instantiation
+    X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
+    true_params_tree = (
+        dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
+        true_params[1],
+    )
+    model_tree = nmo.glm.GLM(
+        model.observation_model, model.regularizer, solver_name="LBFGS"
+    )
+    return X_tree, np.random.poisson(rate), model_tree, true_params_tree, rate
+
+
+@pytest.fixture
+def population_negativeBinomialGLM_model_instantiation():
+    """Set up a population Negative Binomial GLM for testing purposes.
+
+    This fixture initializes a Negative Binomial GLM with random parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response.
+
+    Returns:
+        tuple: A tuple containing:
+            - X (numpy.ndarray): Simulated input data.
+            - np.random.poisson(rate) (numpy.ndarray): Simulated spike responses.
+            - model (nmo.glm.PoissonGLM): Initialized model instance.
+            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of response.
+    """
+    np.random.seed(123)
+    X = np.random.normal(size=(500, 5))
+    b_true = -2 * np.ones((3,))
+    w_true = 0.1 * np.random.normal(size=(5, 3))
+    observation_model = nmo.observation_models.NegativeBinomialObservations(
+        jax.numpy.exp
+    )
+    regularizer = nmo.regularizer.UnRegularized()
+    model = nmo.glm.PopulationGLM(
+        observation_model=observation_model,
+        regularizer=regularizer,
+        solver_name="LBFGS",
+    )
+    rate = jnp.exp(jnp.einsum("ki,tk->ti", w_true, X) + b_true)
+    spikes = model.observation_model.sample_generator(jax.random.PRNGKey(123), rate)
+    # make sure that at least one entry is non-zero
+    spikes = spikes.at[-1].set(1)
+    return X, spikes, model, (w_true, b_true), rate
+
+
+@pytest.fixture
+def population_negativeBinomialGLM_model_instantiation_pytree(
+    population_negativeBinomialGLM_model_instantiation,
+):
+    """Set up a population Negative Binomial GLM for testing purposes.
+
+    This fixture initializes a Negative Binomial GLM with random parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response.
+
+    Returns:
+        tuple: A tuple containing:
+            - X (numpy.ndarray): Simulated input data.
+            - np.random.poisson(rate) (numpy.ndarray): Simulated spike responses.
+            - model (nmo.glm.PoissonGLM): Initialized model instance.
+            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of response.
+    """
+    X, spikes, model, true_params, rate = (
+        population_negativeBinomialGLM_model_instantiation
+    )
+    X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
+    true_params_tree = (
+        dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
+        true_params[1],
+    )
+    model_tree = nmo.glm.PopulationGLM(
+        observation_model=model.observation_model,
+        regularizer=model.regularizer,
+        solver_name="LBFGS",
+    )
+    return X_tree, np.random.poisson(rate), model_tree, true_params_tree, rate

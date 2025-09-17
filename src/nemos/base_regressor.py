@@ -5,23 +5,33 @@ from __future__ import annotations
 
 import abc
 import inspect
-import warnings
 from abc import abstractmethod
 from copy import deepcopy
 from functools import wraps
+from pathlib import Path
 from typing import Any, Dict, NamedTuple, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from nemos.third_party.jaxopt import jaxopt
 
 from . import solvers, utils, validation
-from ._regularizer_builder import AVAILABLE_REGULARIZERS, create_regularizer
+from ._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from .base_class import Base
-from .regularizer import Regularizer, UnRegularized
-from .typing import DESIGN_INPUT_TYPE, SolverInit, SolverRun, SolverUpdate
+from .regularizer import Regularizer
+from .typing import (
+    DESIGN_INPUT_TYPE,
+    RegularizerStrength,
+    SolverInit,
+    SolverRun,
+    SolverUpdate,
+)
+from .utils import _flatten_dict, _get_name, _unpack_params, get_env_metadata
+
+_SOLVER_ARGS_CACHE = {}
 
 
 def strip_metadata(arg_num: Optional[int] = None, kwarg_key: Optional[str] = None):
@@ -92,7 +102,7 @@ class BaseRegressor(Base, abc.ABC):
     def __init__(
         self,
         regularizer: Union[str, Regularizer] = "UnRegularized",
-        regularizer_strength: Optional[float] = None,
+        regularizer_strength: Optional[RegularizerStrength] = None,
         solver_name: str = None,
         solver_kwargs: Optional[dict] = None,
     ):
@@ -101,7 +111,7 @@ class BaseRegressor(Base, abc.ABC):
 
         # no solver name provided, use default
         if solver_name is None:
-            self.solver_name = self.regularizer.default_solver
+            self._solver_name = self.regularizer.default_solver
         else:
             self.solver_name = solver_name
 
@@ -111,6 +121,16 @@ class BaseRegressor(Base, abc.ABC):
         self._solver_init_state = None
         self._solver_update = None
         self._solver_run = None
+
+    def __sklearn_tags__(self):
+        """Return regression model specific estimator tags."""
+        tags = super().__sklearn_tags__()
+        tags.estimator_type = "regressor"
+        tags.non_deterministic = True
+        tags.requires_fit = True
+        # conversion happens internally
+        tags.array_api_support = True
+        return tags
 
     @property
     def solver_init_state(self) -> Union[None, SolverInit]:
@@ -166,17 +186,18 @@ class BaseRegressor(Base, abc.ABC):
 
     def set_params(self, **params: Any):
         """Manage warnings in case of multiple parameter settings."""
-        # if both regularizer and regularizer_strength are set, then only
-        # warn in case the strength is not expected for the regularizer type
-        if "regularizer" in params and "regularizer_strength" in params:
-            reg = params.pop("regularizer")
-            with warnings.catch_warnings():
-                warnings.filterwarnings(
-                    "ignore",
-                    category=UserWarning,
-                    message="Caution: regularizer strength.*"
-                    "|Unused parameter `regularizer_strength`.*",
-                )
+        if "regularizer" in params:
+            # override _regularizer_strength to None to avoid conficts between regularizers
+            self._regularizer_strength = None
+
+            if "regularizer_strength" in params:
+                # if both regularizer and regularizer_strength are set, then only
+                # warn in case the strength is not expected for the regularizer type
+                reg = params.pop("regularizer")
+                super().set_params(regularizer=reg)
+
+            elif self.regularizer_strength is not None:
+                reg = params.pop("regularizer")
                 super().set_params(regularizer=reg)
 
         return super().set_params(**params)
@@ -191,7 +212,7 @@ class BaseRegressor(Base, abc.ABC):
         """Setter for the regularizer attribute."""
         # instantiate regularizer if str
         if isinstance(regularizer, str):
-            self._regularizer = create_regularizer(name=regularizer)
+            self._regularizer = instantiate_regularizer(name=regularizer)
         elif isinstance(regularizer, Regularizer):
             self._regularizer = regularizer
         else:
@@ -206,39 +227,14 @@ class BaseRegressor(Base, abc.ABC):
             self.regularizer_strength = self._regularizer_strength
 
     @property
-    def regularizer_strength(self) -> float:
+    def regularizer_strength(self) -> RegularizerStrength:
         """Regularizer strength getter."""
         return self._regularizer_strength
 
     @regularizer_strength.setter
-    def regularizer_strength(self, strength: Union[float, None]):
+    def regularizer_strength(self, strength: Union[None, RegularizerStrength]):
         # check regularizer strength
-        if strength is None and not isinstance(self._regularizer, UnRegularized):
-            warnings.warn(
-                UserWarning(
-                    "Caution: regularizer strength has not been set. Defaulting to 1.0. Please see "
-                    "the documentation for best practices in setting regularization strength."
-                )
-            )
-            strength = 1.0
-        elif strength is not None:
-            try:
-                # force conversion to float to prevent weird GPU issues
-                strength = float(strength)
-            except ValueError:
-                # raise a more detailed ValueError
-                raise ValueError(
-                    f"Could not convert the regularizer strength: {strength} to a float."
-                )
-            if isinstance(self._regularizer, UnRegularized):
-                warnings.warn(
-                    UserWarning(
-                        "Unused parameter `regularizer_strength` for UnRegularized GLM. "
-                        "The regularizer strength parameter is not required and won't be used when the regularizer "
-                        "is set to UnRegularized."
-                    )
-                )
-
+        strength = self.regularizer._validate_regularizer_strength(strength)
         self._regularizer_strength = strength
 
     @property
@@ -266,9 +262,10 @@ class BaseRegressor(Base, abc.ABC):
     @solver_kwargs.setter
     def solver_kwargs(self, solver_kwargs: dict):
         """Setter for the solver_kwargs attribute."""
-        self._check_solver_kwargs(
-            self._get_solver_class(self.solver_name), solver_kwargs
-        )
+        if solver_kwargs:
+            self._check_solver_kwargs(
+                self._get_solver_class(self.solver_name), solver_kwargs
+            )
         self._solver_kwargs = solver_kwargs
 
     @staticmethod
@@ -288,8 +285,13 @@ class BaseRegressor(Base, abc.ABC):
         NameError
             If any of the solver keyword arguments are not valid.
         """
-        solver_args = inspect.getfullargspec(solver_class).args
-        undefined_kwargs = set(solver_kwargs.keys()).difference(solver_args)
+        if solver_class not in _SOLVER_ARGS_CACHE:
+            _SOLVER_ARGS_CACHE[solver_class] = set(
+                inspect.getfullargspec(solver_class).args
+            )
+        undefined_kwargs = set(solver_kwargs.keys()).difference(
+            _SOLVER_ARGS_CACHE[solver_class]
+        )
         if undefined_kwargs:
             raise NameError(
                 f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for {solver_class.__name__}!"
@@ -375,7 +377,7 @@ class BaseRegressor(Base, abc.ABC):
             fun=loss, **solver_init_kwargs
         )
 
-        self._solver_loss_fun_ = loss
+        self._solver_loss_fun = loss
 
         def solver_run(
             init_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], *run_args: jnp.ndarray
@@ -475,7 +477,7 @@ class BaseRegressor(Base, abc.ABC):
     def simulate(
         self,
         random_key: jax.Array,
-        feed_forward_input: DESIGN_INPUT_TYPE,
+        feedforward_input: DESIGN_INPUT_TYPE,
     ):
         """Simulate neural activity in response to a feed-forward input and recurrent activity."""
         pass
@@ -687,3 +689,64 @@ class BaseRegressor(Base, abc.ABC):
     def _get_optimal_solver_params_config(self):
         """Return the functions for computing default step and batch size for the solver."""
         pass
+
+    @abstractmethod
+    def save_params(
+        self,
+        filename: Union[str, Path],
+        fit_attrs: dict,
+        string_attrs: list = None,
+    ):
+        """
+        Save model parameters and specified attributes to a .npz file.
+
+        This is a private method intended to be used by subclasses to implement.
+        Adds metadata about the jax and nemos versions used to save the model.
+
+        Parameters
+        ----------
+        filename :
+            The output filename.
+        fit_attrs :
+            Dictionary containing the fitting parameters specific to the subclass model.
+        string_attrs :
+            List of attributes to be saved as strings.
+        """
+
+        # extract model parameters
+        model_params = self.get_params(deep=False)
+        model_params = _unpack_params(model_params, string_attrs)
+
+        # append the fit attributes to the model parameters
+        model_params.update(fit_attrs)
+
+        # save jax and nemos versions
+        model_params["save_metadata"] = get_env_metadata()
+
+        # save the model class name
+        model_params["model_class"] = _get_name(self.__class__)
+
+        # flatten the parameters dictionary to ensure it can be saved
+        model_params = _flatten_dict(model_params)
+        np.savez(filename, **model_params)
+
+    def _get_fit_state(self) -> dict:
+        """
+        Collect all attributes that follow the fitted attribute convention.
+
+        Collect all attributes ending with an underscore.
+
+        Returns
+        -------
+        :
+            A dictionary of attribute names and their values.
+        """
+        return {
+            name: getattr(self, name)
+            for name in dir(self)
+            # sklearn has "_repr_html_" and "_repr_mimebundle_" methods
+            # filter callables
+            if name.endswith("_")
+            and not name.endswith("__")
+            and (not callable(getattr(self, name)))
+        }
