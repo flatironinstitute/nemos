@@ -21,6 +21,7 @@ def __dir__():
 def identity_function(x):
     return x
 
+
 LINK_NAME_TO_FUNC = {
     "nemos.utils.one_over_x": one_over_x,
     "jax.numpy.exp": jnp.exp,
@@ -1459,7 +1460,6 @@ class BernoulliObservations(Observations):
             Inverse link function, if ``None``, then use ``self._inverse_link_function``.
         """
         return jnp.ones_like(jnp.atleast_1d(observations[0]))
-
 
     def likelihood(
         self,

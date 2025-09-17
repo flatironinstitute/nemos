@@ -503,7 +503,6 @@ class TestGammaObservations:
                 f"pseudo-r2 of {pseudo_r2} for the null model. Should be equal to 0!"
             )
 
-
     def test_emission_probability(self, gammaGLM_model_instantiation):
         """
         Test the gamma emission probability.
@@ -607,7 +606,6 @@ class TestGammaObservations:
         )
         assert np.allclose(sm, mn)
 
-
     @pytest.mark.parametrize(
         "link_func, link_func_name",
         [
@@ -685,7 +683,6 @@ class TestBernoulliObservations:
             )
 
     def test_emission_probability(self, bernoulliGLM_model_instantiation):
-
         """
         Test the poisson emission probability.
 
