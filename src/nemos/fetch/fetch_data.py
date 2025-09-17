@@ -192,8 +192,9 @@ def download_dandi_data(
 
     # Create a deterministic filename based on dandiset_id and file_path
     # Hash to make sure that there are no problematic characters for filename.
-    cache_key = f"{dandiset_id}_{file_path}".replace("/", "_").replace("\\", "_")
-    cache_filename = hashlib.md5(cache_key.encode()).hexdigest() + ".nwb"
+    cache_filename = (
+        hashlib.md5(f"{dandiset_id}_{file_path}".encode()).hexdigest() + ".nwb"
+    )
     cached_file_path = cache_dir / cache_filename
 
     # Check if file already exists in cache
