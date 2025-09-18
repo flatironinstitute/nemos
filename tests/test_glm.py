@@ -1053,7 +1053,7 @@ class TestGLM:
         glm_class_type,
         model_instantiation_type,
         # fit_weights_dimensionality_expectation,
-        initialize_solver_weights_dimensionality_expectation # TODO: Switched this to use the fixture defined just above
+        initialize_solver_weights_dimensionality_expectation,  # TODO: Switched this to use the fixture defined just above
     ):
         """
         Test the `initialize_solver` method with weight matrices of different dimensionalities.
