@@ -14,6 +14,9 @@ from statsmodels.tools.sm_exceptions import DomainWarning
 
 import nemos as nmo
 
+# Register every test here as solver-related
+pytestmark = pytest.mark.solver_related
+
 
 @pytest.mark.parametrize(
     "reg_str, reg_type",

@@ -11,6 +11,9 @@ from nemos.solvers._svrg import SVRG, ProxSVRG, SVRGState
 from nemos.third_party.jaxopt import jaxopt
 from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
 
+# Register every test here as solver-related
+pytestmark = pytest.mark.solver_related
+
 
 @pytest.mark.parametrize(
     ("regr_setup", "stepsize"),

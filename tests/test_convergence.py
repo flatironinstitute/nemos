@@ -8,6 +8,9 @@ from scipy.optimize import minimize
 
 import nemos as nmo
 
+# Register every test here as solver-related
+pytestmark = pytest.mark.solver_related
+
 
 @pytest.mark.parametrize(
     "solver_names", [("GradientDescent", "ProximalGradient"), ("SVRG", "ProxSVRG")]
