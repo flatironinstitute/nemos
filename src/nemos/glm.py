@@ -229,7 +229,8 @@ class GLM(BaseRegressor):
     @observation_model.setter
     def observation_model(self, observation: obs.Observations):
         if isinstance(observation, str):
-            observation = instantiate_observation_model(observation)
+            self._observation_model = instantiate_observation_model(observation)
+            return
         # check that the model has the required attributes
         # and that the attribute can be called
         obs.check_observation_model(observation)

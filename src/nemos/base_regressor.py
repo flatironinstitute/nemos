@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import abc
 import inspect
-import warnings
 from abc import abstractmethod
 from copy import deepcopy
 from functools import wraps
@@ -111,7 +110,7 @@ class BaseRegressor(Base, abc.ABC):
 
         # no solver name provided, use default
         if solver_name is None:
-            self.solver_name = self.regularizer.default_solver
+            self._solver_name = self.regularizer.default_solver
         else:
             self.solver_name = solver_name
 
@@ -199,20 +198,9 @@ class BaseRegressor(Base, abc.ABC):
                 # if both regularizer and regularizer_strength are set, then only
                 # warn in case the strength is not expected for the regularizer type
                 reg = params.pop("regularizer")
-                with warnings.catch_warnings():
-                    warnings.filterwarnings(
-                        "ignore",
-                        category=UserWarning,
-                        message="Caution: regularizer strength.*"
-                        "|Unused parameter `regularizer_strength`.*",
-                    )
-                    super().set_params(regularizer=reg)
+                super().set_params(regularizer=reg)
 
             elif self.regularizer_strength is not None:
-                # if regularizer is changed without specifying a regularizer_strength, warn and reset the strength
-                warnings.warn(
-                    "Caution: Changing the regularizer has reset the regularizer_strength to its default value."
-                )
                 reg = params.pop("regularizer")
                 super().set_params(regularizer=reg)
 
@@ -264,6 +252,20 @@ class BaseRegressor(Base, abc.ABC):
         # check if solver str passed is valid for regularizer
         self._regularizer.check_solver(solver_name)
         self._solver_name = solver_name
+
+    @property
+    def solver_kwargs(self):
+        """Getter for the solver_kwargs attribute."""
+        return self._solver_kwargs
+
+    @solver_kwargs.setter
+    def solver_kwargs(self, solver_kwargs: dict):
+        """Setter for the solver_kwargs attribute."""
+        if solver_kwargs:
+            self._check_solver_kwargs(
+                solvers.solver_registry[self.solver_name], solver_kwargs
+            )
+        self._solver_kwargs = solver_kwargs
 
     @staticmethod
     def _check_solver_kwargs(solver_class: Type, solver_kwargs: dict[str, Any]) -> None:

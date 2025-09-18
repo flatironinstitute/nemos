@@ -25,12 +25,12 @@ try:
     import fsspec
     import h5py
     from dandi.dandiapi import DandiAPIClient
-    from fsspec.implementations.cached import CachingFileSystem
     from pynwb import NWBHDF5IO
 except ImportError:
     dandi = None
     NWBHDF5IO = None
 
+import hashlib
 
 # Registry of dataset filenames and their corresponding SHA256 hashes.
 REGISTRY_DATA = {
@@ -131,7 +131,9 @@ def fetch_data(
     return retriever.fetch(dataset_name)
 
 
-def download_dandi_data(dandiset_id: str, file_path: str) -> NWBHDF5IO:
+def download_dandi_data(
+    dandiset_id: str, file_path: str, force_download: bool = False
+) -> NWBHDF5IO:
     """Download a dataset from the [DANDI Archive](https://dandiarchive.org/).
 
     Parameters
@@ -140,6 +142,8 @@ def download_dandi_data(dandiset_id: str, file_path: str) -> NWBHDF5IO:
         6-character string of numbers giving the ID of the dandiset.
     file_path :
         filepath to the specific .nwb file within the dandiset we wish to return.
+    force_download :
+        True if you want to download the dataset even if it already exists, False - default - otherwise.
 
     Returns
     -------
@@ -178,28 +182,60 @@ def download_dandi_data(dandiset_id: str, file_path: str) -> NWBHDF5IO:
             " Please use pip or "
             "conda to install 'pooch'."
         )
-    with DandiAPIClient() as client:
-        asset = client.get_dandiset(dandiset_id, "draft").get_asset_by_path(file_path)
-        s3_url = asset.get_content_url(follow_redirects=1, strip_query=True)
 
-    # first, create a virtual filesystem based on the http protocol
-    fs = fsspec.filesystem("http")
-
-    # create a cache to save downloaded data to disk (optional)
-    # mimicking caching behavior of pooch create
+    # Set up cache directory
     if _NEMOS_ENV in os.environ:
         cache_dir = pathlib.Path(os.environ[_NEMOS_ENV])
     else:
         cache_dir = pooch.os_cache("nemos") / "nwb-cache"
     cache_dir.mkdir(parents=True, exist_ok=True)
 
-    fs = CachingFileSystem(
-        fs=fs,
-        cache_storage=cache_dir.as_posix(),  # Local folder for the cache
-    )
+    # Create a deterministic filename based on dandiset_id and file_path
+    # Hash to make sure that there are no problematic characters for filename.
+    dandiset_hash = hashlib.md5(str(dandiset_id).encode()).hexdigest()
+    filepath_hash = hashlib.md5(str(file_path).encode()).hexdigest()
+    cache_filename = dandiset_hash + filepath_hash + ".nwb"
+    cached_file_path = cache_dir / cache_filename
 
-    # next, open the file
-    file = h5py.File(fs.open(s3_url, "rb"))
+    # Check if file already exists in cache
+    if cached_file_path.exists() and not force_download:
+        # File exists, open it directly
+        file = h5py.File(cached_file_path, "r")
+        io = NWBHDF5IO(file=file, load_namespaces=True)
+        return io
+
+    # File doesn't exist, download it
+    with DandiAPIClient() as client:
+        asset = client.get_dandiset(dandiset_id, "draft").get_asset_by_path(file_path)
+        s3_url = asset.get_content_url(follow_redirects=1, strip_query=True)
+
+    # Download file using fsspec
+    fs = fsspec.filesystem("http")
+
+    # Download to temporary location first, then move to final location
+    temp_file_path = cached_file_path.with_suffix(".tmp")
+
+    try:
+        with fs.open(s3_url, "rb") as remote_file:
+            with open(temp_file_path, "wb") as local_file:
+                chunk_size = 8192 * 1024  # 8MB chunks
+                while True:
+                    chunk = remote_file.read(chunk_size)
+                    if not chunk:
+                        break
+                    local_file.write(chunk)
+
+        # Move completed download to final location
+        temp_file_path.rename(cached_file_path)
+
+    except Exception:
+        # Clean up temp file if download failed
+        if temp_file_path.exists():
+            temp_file_path.unlink()
+        raise
+
+    # Open the downloaded file
+    file = h5py.File(cached_file_path, "r")
     io = NWBHDF5IO(file=file, load_namespaces=True)
 
     return io

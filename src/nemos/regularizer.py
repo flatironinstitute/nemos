@@ -7,7 +7,6 @@ with various optimization methods, and they can be applied depending on the mode
 """
 
 import abc
-import warnings
 from typing import Callable, Tuple, Union
 
 import jax
@@ -168,13 +167,6 @@ class UnRegularized(Regularizer):
         return jaxopt.prox.prox_none
 
     def _validate_regularizer_strength(self, strength: None):
-        warnings.warn(
-            UserWarning(
-                "Unused parameter `regularizer_strength` for UnRegularized GLM. "
-                "The regularizer strength parameter is not required and won't be used when the regularizer "
-                "is set to UnRegularized."
-            )
-        )
         return None
 
 
@@ -474,13 +466,6 @@ class ElasticNet(Regularizer):
             try:
                 # force conversion to float to prevent weird GPU issues
                 strength = (float(strength), 0.5)
-                warnings.warn(
-                    UserWarning(
-                        "Caution: The regularizer strength been set, but no value was passed for the regularizer "
-                        "ratio. Defaulting to 0.5. To set both the regularizer strength and regularizer ratio, "
-                        "pass a tuple of floats, e.g. (1.0, 0.5). "
-                    )
-                )
             except ValueError:
                 # raise a more detailed ValueError
                 raise ValueError(

@@ -105,7 +105,13 @@ class Observations(Base, abc.ABC):
     def inverse_link_function(self, inverse_link_function: Callable):
         """Setter for the inverse link function for the model."""
         if isinstance(inverse_link_function, str):
-            inverse_link_function = link_function_from_string(inverse_link_function)
+            self._inverse_link_function = link_function_from_string(
+                inverse_link_function
+            )
+            return
+        elif inverse_link_function in LINK_NAME_TO_FUNC.values():
+            self._inverse_link_function = inverse_link_function
+            return
         self.check_inverse_link_function(inverse_link_function)
         self._inverse_link_function = inverse_link_function
 
@@ -984,28 +990,60 @@ def check_observation_model(observation_model):
     >>> check_observation_model(model)  # Should pass without error if the model is correctly implemented.
     """
     # Define the checks to be made on each attribute
-    checks = {
-        "inverse_link_function": {
-            "input": [jnp.array([1.0, 1.0, 1.0])],
-            "test_differentiable": True,
-            "test_preserve_shape": False,
-        },
-        "_negative_log_likelihood": {
-            "input": [0.5 * jnp.array([1.0, 1.0, 1.0]), jnp.array([1.0, 1.0, 1.0])],
-            "test_scalar_func": True,
-        },
-        "pseudo_r2": {
-            "input": [0.5 * jnp.array([1.0, 1.0, 1.0]), jnp.array([1.0, 1.0, 1.0])],
-            "test_scalar_func": True,
-        },
-        "sample_generator": {
-            "input": [jax.random.key(123), 0.5 * jnp.array([1.0, 1.0, 1.0]), 1],
-            "test_preserve_shape": True,
-        },
-    }
+
+    is_nemos = isinstance(
+        observation_model,
+        (
+            PoissonObservations,
+            GammaObservations,
+            BernoulliObservations,
+            NegativeBinomialObservations,
+        ),
+    )
+
+    check_link = (
+        getattr(observation_model, "inverse_link_function", None)
+        not in LINK_NAME_TO_FUNC.values()
+    )
+
+    if check_link:
+        checks = {
+            "inverse_link_function": {
+                "input": [jnp.array([1.0, 1.0, 1.0])],
+                "test_differentiable": True,
+                "test_preserve_shape": False,
+            }
+        }
+    else:
+        checks = {}
+
+    if not is_nemos:
+        checks.update(
+            {
+                "_negative_log_likelihood": {
+                    "input": [
+                        0.5 * jnp.array([1.0, 1.0, 1.0]),
+                        jnp.array([1.0, 1.0, 1.0]),
+                    ],
+                    "test_scalar_func": True,
+                },
+                "pseudo_r2": {
+                    "input": [
+                        0.5 * jnp.array([1.0, 1.0, 1.0]),
+                        jnp.array([1.0, 1.0, 1.0]),
+                    ],
+                    "test_scalar_func": True,
+                },
+                "sample_generator": {
+                    "input": [jax.random.key(123), 0.5 * jnp.array([1.0, 1.0, 1.0]), 1],
+                    "test_preserve_shape": True,
+                },
+            }
+        )
 
     # Perform checks for each attribute
     for attr_name, check_info in checks.items():
+
         # check if the observation model has the attribute
         utils.assert_has_attribute(observation_model, attr_name)
 

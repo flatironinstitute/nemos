@@ -56,6 +56,15 @@
      - :class:`~nemos.basis.RaisedCosineLogEval`  :raw-html:`<br />`
        :class:`~nemos.basis.RaisedCosineLogConv`
      - 🔵 Conv
+
+   * - **Fourier Basis** :raw-html:`<sup><a id="fnref-basis-1" href="#fn-basis-1" role="doc-noteref">1</a></sup>`
+     - .. plot:: scripts/basis_figs.py plot_fourier_basis
+          :show-source-link: False
+          :height: 80px
+     -
+     - :class:`~nemos.basis.FourierEval`
+     - 🟢 Eval
+
    * - **Orthogonalized Exponential Decays**
      - .. plot:: scripts/basis_figs.py plot_orth_exp_basis
           :show-source-link: False
@@ -79,6 +88,21 @@
      - :ref:`Coupled GLM <fully_coupled_glm_how_to>`
      - :class:`~nemos.basis.HistoryConv`  :raw-html:`<br />`
      - 🔵 Conv
+
+
+.. raw:: html
+
+   <div class="footnote-list brackets">
+     <aside class="footnote brackets" id="fn-basis-1" role="doc-footnote">
+       <p>
+         <span class="label">[1]</span>
+         The Fourier basis follows a slightly different API compared to all other bases.
+         See <a class="reference internal" href="ndimensional_foureir_basis.html">documentation page</a>.
+         <a href="#fnref-basis-1" class="footnote-backref" role="doc-backlink">↩</a>
+       </p>
+     </aside>
+   </div>
+
 ```
 
 ## Overview
@@ -143,6 +167,22 @@ plot_01_1D_basis_function.md
 :maxdepth: 2
 
 plot_02_ND_basis_function.md
+```
+:::
+
+:::{grid-item-card}
+
+```{eval-rst}
+
+.. plot:: scripts/basis_figs.py plot_fourier_basis
+   :show-source-link: False
+   :height: 100px
+```
+
+```{toctree}
+:maxdepth: 2
+
+ndimensional_foureir_basis.md
 ```
 :::
 

@@ -11,20 +11,6 @@ kernelspec:
   name: python3
 ---
 
-```{code-cell} ipython3
-:tags: [hide-input]
-
-import warnings
-
-# Ignore the first specific warning
-warnings.filterwarnings(
-    "ignore",
-    message="Caution: regularizer strength",
-    category=UserWarning,
-)
-
-```
-
 # Saving and Loading
 
 ## Saving and Loading a Model
