@@ -389,3 +389,9 @@ class OptimistixOptaxLBFGS(AbstractOptimistixOptaxSolver):
             rtol=rtol,
             **solver_init_kwargs,
         )
+
+
+# fix optax.lbfgs doctest failing due to x64 being set in pytest
+OptimistixOptaxLBFGS.__doc__ = (OptimistixOptaxLBFGS.__doc__ or "").replace(
+    "jnp.array([1., 2., 3.])", "jnp.array([1., 2., 3.], dtype=jnp.float32)"
+)
