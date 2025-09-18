@@ -9,13 +9,16 @@ from ._jaxopt_solvers import (
     JaxoptNonlinearCG,
     JaxoptProximalGradient,
 )
-from ._optax_optimistix_solvers import (
-    OptimistixOptaxGradientDescent,
-    OptimistixOptaxLBFGS,
-    OptimistixOptaxProximalGradient,
-)
-from ._optimistix_solvers import OptimistixBFGS, OptimistixNonlinearCG
+
+# from ._optimistix_solvers import OptimistixBFGS, OptimistixNonlinearCG
 from ._svrg import WrappedProxSVRG, WrappedSVRG
+
+# from ._optax_optimistix_solvers import (
+#    OptimistixOptaxGradientDescent,
+#    OptimistixOptaxLBFGS,
+#    OptimistixOptaxProximalGradient,
+# )
+
 
 solver_registry: dict[str, Type] = {
     "GradientDescent": JaxoptGradientDescent,

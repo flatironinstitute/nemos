@@ -221,7 +221,7 @@ class OptimistixOptaxProximalGradient(AbstractOptimistixOptaxSolver):
         **solver_init_kwargs,
     ):
         """
-        Create a proximal gradient solver using `optax.sgd` and applying the proximal operator `prox` on each update step.
+        Create a proximal gradient solver using `optax.sgd` and applying the proximal operator on each update step.
 
         If `acceleration` is True, use Nesterov acceleration.
 
