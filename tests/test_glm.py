@@ -1052,7 +1052,8 @@ class TestGLM:
         request,
         glm_class_type,
         model_instantiation_type,
-        fit_weights_dimensionality_expectation,
+        # fit_weights_dimensionality_expectation,
+        initialize_solver_weights_dimensionality_expectation # TODO: Switched this to use the fixture defined just above
     ):
         """
         Test the `initialize_solver` method with weight matrices of different dimensionalities.
@@ -1061,7 +1062,7 @@ class TestGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation_type
         )
-        expectation = fit_weights_dimensionality_expectation[dim_weights]
+        expectation = initialize_solver_weights_dimensionality_expectation[dim_weights]
         n_samples, n_features = X.shape
         if "population" in glm_class_type:
             n_neurons = 3
