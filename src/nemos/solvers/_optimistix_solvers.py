@@ -5,10 +5,10 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import optimistix as optx
-from ..typing import Pytree
 
 from ..regularizer import Regularizer
-from ._abstract_solver import Params, OptimizationInfo
+from ..typing import Pytree
+from ._abstract_solver import OptimizationInfo, Params
 from ._solver_adapter import SolverAdapter
 
 DEFAULT_ATOL = 1e-8

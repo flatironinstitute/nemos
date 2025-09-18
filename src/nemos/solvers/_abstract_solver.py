@@ -1,10 +1,10 @@
 """Base class defining the interface for solvers that can be used by `BaseRegressor`."""
 
 import abc
-from typing import Callable, Generic, Any, NamedTuple
-from ..typing import Params, SolverState, StepResult
-from ..regularizer import Regularizer
+from typing import Any, Callable, Generic, NamedTuple
 
+from ..regularizer import Regularizer
+from ..typing import Params, SolverState, StepResult
 
 # TODO: If we want to accept solvers that implement this interface,
 # but are not implemented as a subclass of AbstractSolver,

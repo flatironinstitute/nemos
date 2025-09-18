@@ -14,10 +14,7 @@ from ._optax_optimistix_solvers import (
     OptimistixOptaxLBFGS,
     OptimistixOptaxProximalGradient,
 )
-from ._optimistix_solvers import (
-    OptimistixBFGS,
-    OptimistixNonlinearCG,
-)
+from ._optimistix_solvers import OptimistixBFGS, OptimistixNonlinearCG
 from ._svrg import WrappedProxSVRG, WrappedSVRG
 
 solver_registry: dict[str, Type] = {

@@ -1,7 +1,7 @@
-from typing import Type
 import inspect
 import re
 from pydoc import render_doc
+from typing import Type
 
 from ._solver_registry import solver_registry
 

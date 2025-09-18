@@ -8,8 +8,8 @@ import inspect
 from abc import abstractmethod
 from copy import deepcopy
 from functools import wraps
-from typing import Any, NamedTuple, Optional, Tuple, Union, Type
 from pathlib import Path
+from typing import Any, NamedTuple, Optional, Tuple, Type, Union
 
 import jax
 import jax.numpy as jnp
@@ -20,6 +20,8 @@ from . import solvers, utils, validation
 from ._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from .base_class import Base
 from .regularizer import Regularizer
+from .solvers._abstract_solver import SolverState, StepResult
+from .solvers._jaxopt_optimistix_param_mismatch_handling import _clean_solver_kwargs
 from .typing import (
     DESIGN_INPUT_TYPE,
     RegularizerStrength,
@@ -28,9 +30,6 @@ from .typing import (
     SolverUpdate,
 )
 from .utils import _flatten_dict, _get_name, _unpack_params, get_env_metadata
-
-from .solvers._jaxopt_optimistix_param_mismatch_handling import _clean_solver_kwargs
-from .solvers._abstract_solver import StepResult, SolverState
 
 
 def strip_metadata(arg_num: Optional[int] = None, kwarg_key: Optional[str] = None):

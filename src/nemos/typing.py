@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, NamedTuple, Tuple, Union, TypeVar, TypeAlias
+from typing import Any, Callable, NamedTuple, Tuple, TypeAlias, TypeVar, Union
 
 import jax.numpy as jnp
 import pynapple as nap
 from jax.typing import ArrayLike
 from numpy.typing import NDArray
-from .pytrees import FeaturePytree
 
+from .pytrees import FeaturePytree
 
 Pytree: TypeAlias = Any
 Params: TypeAlias = Pytree

@@ -1,23 +1,24 @@
 """Solvers wrapping Optax solvers with Optimistix for use with NeMoS."""
 
 import abc
-from typing import Any, Callable, NamedTuple, Union, ClassVar
 import inspect
+from typing import Any, Callable, ClassVar, NamedTuple, Union
 
 import equinox as eqx
 import jax
 import jax.numpy as jnp
 import optax
 import optimistix as optx
-from ..typing import Pytree
+
 from ..regularizer import Regularizer
 from ..tree_utils import tree_sub
+from ..typing import Pytree
 from ._optimistix_solvers import (
     DEFAULT_ATOL,
     DEFAULT_RTOL,
+    OptimistixAdapter,
     OptimistixStepResult,
     Params,
-    OptimistixAdapter,
 )
 
 
