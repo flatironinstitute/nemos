@@ -186,7 +186,9 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
     def get_optim_info(self, state: OptimistixSolverState) -> OptimizationInfo:
         num_steps = self.stats["num_steps"].item()
 
-        function_val = state.f.item() if hasattr(state, "f") else state.f_info.f.item()  # pyright: ignore
+        function_val = (
+            state.f.item() if hasattr(state, "f") else state.f_info.f.item()
+        )  # pyright: ignore
 
         return OptimizationInfo(
             function_val=function_val,
