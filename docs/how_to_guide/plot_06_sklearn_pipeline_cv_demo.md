@@ -280,8 +280,8 @@ In order to define a parameter grid dictionary for a pipeline, you must structur
 
 - Start with the pipeline label (`"glm"` or `"transformerbasis"` for us). This determines which pipeline step has the relevant hyperparameter.
 - Add `"__"` followed by the hyperparameter name (for example, `"n_basis_funcs"`).
-- If the hyperparameter is itself an object with attributes, add another `"__"` followed by the attribute name. For instance, `"glm__observation_model__inverse_link_function"`
-    would be a valid key for cross-validating over the link function of the GLM's `observation_model` attribute `inverse_link_function`.
+- If the hyperparameter is itself an object with attributes, add another `"__"` followed by the attribute name. For instance, `"glm__regularizer__mask"`
+    would be a valid key for cross-validating over the link function of the GLM's `regularizer` attribute `mask`, which is a parameter of the `GroupLasso` regularizer.
 The values in the dictionary are the parameters to be tested.
 :::
 
