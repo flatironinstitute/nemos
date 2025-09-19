@@ -261,9 +261,9 @@ class BaseRegressor(Base, abc.ABC):
     def solver_kwargs(self, solver_kwargs: dict):
         """Setter for the solver_kwargs attribute."""
         if solver_kwargs:
-            self._check_solver_kwargs(
-                solvers.solver_registry[self.solver_name], solver_kwargs
-            )
+            solver_cls = solvers.solver_registry[self.solver_name]
+            solver_kwargs = _clean_solver_kwargs(solver_cls, solver_kwargs)
+            self._check_solver_kwargs(solver_cls, solver_kwargs)
         self._solver_kwargs = solver_kwargs
 
     @staticmethod
