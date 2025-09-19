@@ -175,7 +175,7 @@ class GLM(BaseRegressor):
     >>> model
     GLM(
         observation_model=PoissonObservations(),
-        inverse_link_function=<PjitFunction of <function exp at ...>,
+        inverse_link_function=exp,
         regularizer=UnRegularized(),
         solver_name='GradientDescent'
     )
@@ -187,7 +187,7 @@ class GLM(BaseRegressor):
     >>> nmo.glm.GLM(observation_model="Gamma")
     GLM(
         observation_model=GammaObservations(),
-        inverse_link_function=<function one_over_x at ...>,
+        inverse_link_function=one_over_x,
         regularizer=UnRegularized(),
         solver_name='GradientDescent'
     )
@@ -195,7 +195,7 @@ class GLM(BaseRegressor):
     >>> nmo.glm.GLM(observation_model=nmo.observation_models.GammaObservations())
     GLM(
         observation_model=GammaObservations(),
-        inverse_link_function=<function one_over_x at ...>,
+        inverse_link_function=one_over_x,
         regularizer=UnRegularized(),
         solver_name='GradientDescent'
     )
@@ -1426,7 +1426,7 @@ class PopulationGLM(GLM):
     >>> model
     PopulationGLM(
         observation_model=PoissonObservations(),
-        inverse_link_function=<PjitFunction of <function exp at ...>,
+        inverse_link_function=exp,
         regularizer=UnRegularized(),
         solver_name='GradientDescent'
     )
