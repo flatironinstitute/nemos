@@ -462,7 +462,7 @@ class TestUnRegularized:
         X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
         # set precision to float64 for accurate matching of the results
         model.data_type = jnp.float64
-        model.observation_model.inverse_link_function = jnp.exp
+        model.inverse_link_function = jnp.exp
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-12}
@@ -495,7 +495,7 @@ class TestUnRegularized:
         X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
         # set precision to float64 for accurate matching of the results
         model.data_type = jnp.float64
-        model.observation_model.inverse_link_function = inv_link_jax
+        model.inverse_link_function = inv_link_jax
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-13}
@@ -823,7 +823,7 @@ class TestRidge:
         X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
         # set precision to float64 for accurate matching of the results
         model.data_type = jnp.float64
-        model.observation_model.inverse_link_function = jnp.exp
+        model.inverse_link_function = jnp.exp
         model.set_params(regularizer=self.cls(), regularizer_strength=1.0)
         model.solver_kwargs = {"tol": 10**-12}
         model.regularizer_strength = 0.1
