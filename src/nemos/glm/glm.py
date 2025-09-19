@@ -15,18 +15,22 @@ from sklearn.utils import InputTags, TargetTags
 
 from nemos.third_party.jaxopt import jaxopt
 
-from . import observation_models as obs
-from . import tree_utils, validation
-from ._observation_model_builder import instantiate_observation_model
-from .base_regressor import BaseRegressor, strip_metadata
-from .exceptions import NotFittedError
-from .initialize_regressor import initialize_intercept_matching_mean_rate
-from .pytrees import FeaturePytree
-from .regularizer import GroupLasso, Lasso, Regularizer, Ridge
-from .solvers._compute_defaults import glm_compute_optimal_stepsize_configs
-from .type_casting import jnp_asarray_if, support_pynapple
-from .typing import DESIGN_INPUT_TYPE, RegularizerStrength
-from .utils import format_repr
+from .. import observation_models as obs
+from .. import tree_utils, validation
+from .._observation_model_builder import instantiate_observation_model
+from ..base_regressor import BaseRegressor, strip_metadata
+from ..exceptions import NotFittedError
+from ..pytrees import FeaturePytree
+from ..regularizer import GroupLasso, Lasso, Regularizer, Ridge
+from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
+from ..type_casting import jnp_asarray_if, support_pynapple
+from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength
+from ..utils import format_repr
+from .initialize_parameters import initialize_intercept_matching_mean_rate
+from .inverse_link_function_utils import (
+    check_inverse_link_function,
+    link_function_from_string,
+)
 
 ModelParams = Tuple[jnp.ndarray, jnp.ndarray]
 
@@ -57,6 +61,21 @@ class GLM(BaseRegressor):
     (like convolved currents or light intensities) and a choice of observation model. It is suitable for scenarios where
     the relationship between predictors and the response variable might be non-linear, and the residuals
     don't follow a normal distribution.
+
+    Below is a table of the default inverse link function for the availabe observation model.
+
+    +---------------------+---------------------------------+
+    | Observation Model   | Default Inverse Link Function   |
+    +=====================+=================================+
+    | Poisson             | :math:`e^x`                     |
+    +---------------------+---------------------------------+
+    | Gamma               | :math:`1/x`                     |
+    +---------------------+---------------------------------+
+    | Binomial            | :math:`1 / (1 + e^{-x})`       |
+    +---------------------+---------------------------------+
+    | NegativeBinomial    | :math:`e^x`                     |
+    +---------------------+---------------------------------+
+
     Below is a table listing the default and available solvers for each regularizer.
 
     +---------------+------------------+-------------------------------------------------------------+
@@ -106,6 +125,9 @@ class GLM(BaseRegressor):
     observation_model :
         Observation model to use. The model describes the distribution of the neural activity.
         Default is the Poisson model.
+    inverse_link_function :
+        A function that maps the linear combination of predictors into a firing rate. The default depends
+        on the observation model, see the table above.
     regularizer :
         Regularization to use for model optimization. Defines the regularization scheme
         and related parameters.
@@ -152,7 +174,8 @@ class GLM(BaseRegressor):
     >>> model = nmo.glm.GLM()
     >>> model
     GLM(
-        observation_model=PoissonObservations(inverse_link_function=exp),
+        observation_model=PoissonObservations(),
+        inverse_link_function=<PjitFunction of <function exp at ...>,
         regularizer=UnRegularized(),
         solver_name='GradientDescent'
     )
@@ -163,14 +186,16 @@ class GLM(BaseRegressor):
     >>> # define a Gamma GLM providing a string
     >>> nmo.glm.GLM(observation_model="Gamma")
     GLM(
-        observation_model=GammaObservations(inverse_link_function=one_over_x),
+        observation_model=GammaObservations(),
+        inverse_link_function=<function one_over_x at ...>,
         regularizer=UnRegularized(),
         solver_name='GradientDescent'
     )
     >>> # or equivalently, passing the observation model object
     >>> nmo.glm.GLM(observation_model=nmo.observation_models.GammaObservations())
     GLM(
-        observation_model=GammaObservations(inverse_link_function=one_over_x),
+        observation_model=GammaObservations(),
+        inverse_link_function=<function one_over_x at ...>,
         regularizer=UnRegularized(),
         solver_name='GradientDescent'
     )
@@ -191,6 +216,7 @@ class GLM(BaseRegressor):
             obs.Observations
             | Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial"]
         ) = "Poisson",
+        inverse_link_function: Optional[Callable] = None,
         regularizer: Optional[Union[str, Regularizer]] = None,
         regularizer_strength: Optional[RegularizerStrength] = None,
         solver_name: str = None,
@@ -204,6 +230,7 @@ class GLM(BaseRegressor):
         )
 
         self.observation_model = observation_model
+        self.inverse_link_function = inverse_link_function
 
         # initialize to None fit output
         self.intercept_ = None
@@ -222,6 +249,29 @@ class GLM(BaseRegressor):
             required=True, one_d_labels=True, two_d_labels=False
         )
         return tags
+
+    @property
+    def inverse_link_function(self):
+        """Getter for the inverse link function for the model."""
+        return self._inverse_link_function
+
+    @inverse_link_function.setter
+    def inverse_link_function(self, inverse_link_function: Callable):
+        """Setter for the inverse link function for the model."""
+        if inverse_link_function is None:
+            self._inverse_link_function = (
+                self.observation_model.default_inverse_link_function
+            )
+            return
+
+        elif isinstance(inverse_link_function, str):
+            self._inverse_link_function = link_function_from_string(
+                inverse_link_function
+            )
+            return
+
+        check_inverse_link_function(inverse_link_function)
+        self._inverse_link_function = inverse_link_function
 
     @property
     def observation_model(self) -> Union[None, obs.Observations]:
@@ -371,7 +421,7 @@ class GLM(BaseRegressor):
             The predicted rates. Shape (n_time_bins, ).
         """
         Ws, bs = params
-        return self._observation_model.inverse_link_function(
+        return self._inverse_link_function(
             # First, multiply each feature by its corresponding coefficient,
             # then sum across all features and add the intercept, before
             # passing to the inverse link function
@@ -666,7 +716,7 @@ class GLM(BaseRegressor):
             data = X
 
         initial_intercept = initialize_intercept_matching_mean_rate(
-            self.observation_model.inverse_link_function, y
+            self._inverse_link_function, y
         )
 
         # Initialize parameters
@@ -1168,7 +1218,9 @@ class GLM(BaseRegressor):
 
     def __repr__(self):
         """Representation of the GLM class."""
-        return format_repr(self, multiline=True)
+        return format_repr(
+            self, multiline=True, use_name_keys=["inverse_link_function"]
+        )
 
     def __sklearn_clone__(self) -> GLM:
         """Clone the PopulationGLM, dropping feature_mask."""
@@ -1202,8 +1254,8 @@ class GLM(BaseRegressor):
         ... )
         >>> for key, value in model.get_params().items():
         ...     print(f"{key}: {value}")
-        observation_model__inverse_link_function: <function one_over_x at ...>
-        observation_model: GammaObservations(inverse_link_function=one_over_x)
+        inverse_link_function: <function one_over_x at ...>
+        observation_model: GammaObservations()
         regularizer: Ridge()
         regularizer_strength: 0.1
         solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
@@ -1215,29 +1267,29 @@ class GLM(BaseRegressor):
         >>> # Model has the same parameters before and after load
         >>> for key, value in model.get_params().items():
         ...     print(f"{key}: {value}")
-        observation_model__inverse_link_function: <function one_over_x at ...>
-        observation_model: GammaObservations(inverse_link_function=one_over_x)
+        inverse_link_function: <function one_over_x at ...>
+        observation_model: GammaObservations()
         regularizer: Ridge()
         regularizer_strength: 0.1
         solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
         solver_name: BFGS
 
         >>> # Saving and loading a custom inverse link function
-        >>> obs = nmo.observation_models.PoissonObservations(
+        >>> model = nmo.glm.GLM(
+        ...     observation_model="Poisson",
         ...     inverse_link_function=lambda x: x**2
         ... )
-        >>> model = nmo.glm.GLM(observation_model=obs)
         >>> model.save_params("model_params.npz")
         >>> # Provide a mapping for the custom link function when loading.
         >>> mapping_dict = {
-        ...     "observation_model__inverse_link_function": lambda x: x**2,
+        ...     "inverse_link_function": lambda x: x**2,
         ... }
         >>> loaded_model = nmo.load_model("model_params.npz", mapping_dict=mapping_dict)
         >>> # Now the loaded model will have the updated solver_name and solver_kwargs
         >>> for key, value in loaded_model.get_params().items():
         ...     print(f"{key}: {value}")
-        observation_model__inverse_link_function: <function <lambda> at ...>
-        observation_model: PoissonObservations(inverse_link_function=<lambda>)
+        inverse_link_function: <function <lambda> at ...>
+        observation_model: PoissonObservations()
         regularizer: UnRegularized()
         regularizer_strength: None
         solver_kwargs: {}
@@ -1311,6 +1363,9 @@ class PopulationGLM(GLM):
     observation_model :
         Observation model to use. The model describes the distribution of the neural activity.
         Default is the Poisson model.
+    inverse_link_function :
+        A function that maps the linear combination of predictors into a firing rate. The default depends
+        on the observation model, see the table above.
     regularizer :
         Regularization to use for model optimization. Defines the regularization scheme
         and related parameters.
@@ -1370,7 +1425,8 @@ class PopulationGLM(GLM):
     >>> model = PopulationGLM(feature_mask=feature_mask).fit(X, y)
     >>> model
     PopulationGLM(
-        observation_model=PoissonObservations(inverse_link_function=exp),
+        observation_model=PoissonObservations(),
+        inverse_link_function=<PjitFunction of <function exp at ...>,
         regularizer=UnRegularized(),
         solver_name='GradientDescent'
     )
@@ -1409,6 +1465,7 @@ class PopulationGLM(GLM):
             obs.Observations
             | Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial"]
         ) = "Poisson",
+        inverse_link_function: Optional[Callable] = None,
         regularizer: Union[str, Regularizer] = "UnRegularized",
         regularizer_strength: Optional[float] = None,
         solver_name: str = None,
@@ -1418,6 +1475,7 @@ class PopulationGLM(GLM):
     ):
         super().__init__(
             observation_model=observation_model,
+            inverse_link_function=inverse_link_function,
             regularizer_strength=regularizer_strength,
             regularizer=regularizer,
             solver_name=solver_name,
@@ -1763,7 +1821,7 @@ class PopulationGLM(GLM):
             The predicted rates. Shape (n_timebins, n_neurons).
         """
         Ws, bs = params
-        return self._observation_model.inverse_link_function(
+        return self.inverse_link_function(
             # First, multiply each feature by its corresponding coefficient,
             # then sum across all features and add the intercept, before
             # passing to the inverse link function

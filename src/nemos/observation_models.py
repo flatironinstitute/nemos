@@ -9,58 +9,17 @@ from numpy.typing import NDArray
 
 from . import utils
 from .base_class import Base
-from .utils import one_over_x
 
-__all__ = ["PoissonObservations", "GammaObservations", "BernoulliObservations"]
+__all__ = [
+    "PoissonObservations",
+    "GammaObservations",
+    "BernoulliObservations",
+    "NegativeBinomialObservations",
+]
 
 
 def __dir__():
     return __all__
-
-
-LINK_NAME_TO_FUNC = {
-    "nemos.utils.one_over_x": one_over_x,
-    "jax.numpy.exp": jnp.exp,
-    "jax._src.numpy.ufuncs.exp": jnp.exp,
-    "jax.nn.softplus": jax.nn.softplus,
-    "jax._src.nn.functions.softplus": jax.nn.softplus,
-    "jax.scipy.special.expit": jax.scipy.special.expit,
-    "jax._src.scipy.special.expit": jax.scipy.special.expit,
-    "jax.lax.logistic": jax.lax.logistic,
-    "jax._src.lax.lax.logistic": jax.lax.logistic,
-    "jax.scipy.stats.norm.cdf": jax.scipy.stats.norm.cdf,
-    "jax._src.scipy.stats.norm.cdf": jax.scipy.stats.norm.cdf,
-}
-
-
-def link_function_from_string(link_name: str):
-    """
-    Get a link function from a given name.
-
-    Parameters
-    ----------
-    link_name:
-        A string representation of the link function, e.g. "jax.numpy.exp".
-
-    Returns
-    -------
-    :
-        The link function corresponding to the provided name.
-
-    Raises
-    ------
-    ValueError:
-        If the provided string does not match any known link function.
-    """
-    if link_name in LINK_NAME_TO_FUNC:
-        return LINK_NAME_TO_FUNC[link_name]
-    else:
-        raise ValueError(
-            f"Unknown link function: {link_name}. "
-            f"Link function must be one of {list(LINK_NAME_TO_FUNC.keys())}"
-            f"if you want to use a custom link function, please provide it as a Callable."
-            f"if you think this is a bug, please open an issue at 'https://github.com/flatironinstitute/nemos/issues'."
-        )
 
 
 class Observations(Base, abc.ABC):
@@ -73,11 +32,6 @@ class Observations(Base, abc.ABC):
     :meth:`~nemos.observation_models.Observations.sample_generator`, and
     :meth:`~nemos.observation_models.Observations.deviance`.
 
-    Attributes
-    ----------
-    inverse_link_function :
-        A function that transforms a set of predictors to the domain of the model parameter.
-
     See Also
     --------
     :class:`~nemos.observation_models.PoissonObservations`
@@ -88,32 +42,17 @@ class Observations(Base, abc.ABC):
         A specific implementation of an observation model using the Bernoulli distribution.
     """
 
-    def __init__(self, inverse_link_function: Callable, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.inverse_link_function = inverse_link_function
         self.scale = 1.0
 
     def __repr__(self):
-        return utils.format_repr(self, use_name_keys=["inverse_link_function"])
+        return utils.format_repr(self)
 
     @property
-    def inverse_link_function(self):
-        """Getter for the inverse link function for the model."""
-        return self._inverse_link_function
-
-    @inverse_link_function.setter
-    def inverse_link_function(self, inverse_link_function: Callable):
-        """Setter for the inverse link function for the model."""
-        if isinstance(inverse_link_function, str):
-            self._inverse_link_function = link_function_from_string(
-                inverse_link_function
-            )
-            return
-        elif inverse_link_function in LINK_NAME_TO_FUNC.values():
-            self._inverse_link_function = inverse_link_function
-            return
-        self.check_inverse_link_function(inverse_link_function)
-        self._inverse_link_function = inverse_link_function
+    @abc.abstractmethod
+    def default_inverse_link_function(self):
+        pass
 
     @property
     def scale(self):
@@ -127,56 +66,6 @@ class Observations(Base, abc.ABC):
             self._scale = float(value)
         except Exception:
             raise ValueError("The `scale` parameter must be of numeric type.")
-
-    @staticmethod
-    def check_inverse_link_function(inverse_link_function: Callable):
-        """
-        Check if the provided inverse_link_function is usable.
-
-        This function verifies if the inverse link function:
-
-        1. Is callable
-        2. Returns a jax.numpy.ndarray
-        3. Is differentiable (via jax)
-
-        Parameters
-        ----------
-        inverse_link_function :
-            The function to be checked.
-
-        Raises
-        ------
-        TypeError
-            If the function is not callable, does not return a jax.numpy.ndarray,
-            or is not differentiable.
-        """
-        # check that it's callable
-        if not callable(inverse_link_function):
-            raise TypeError("The `inverse_link_function` function must be a Callable!")
-
-        # check if the function returns a jax array for a 1D array
-        array_out = inverse_link_function(jnp.array([1.0, 2.0, 3.0]))
-        if not isinstance(array_out, jnp.ndarray):
-            raise TypeError(
-                "The `inverse_link_function` must return a jax.numpy.ndarray!"
-            )
-
-        # Optionally: Check for scalar input
-        scalar_out = inverse_link_function(1.0)
-        if not isinstance(scalar_out, (jnp.ndarray, float, int)):
-            raise TypeError(
-                "The `inverse_link_function` must handle scalar inputs correctly and return a scalar or a "
-                "jax.numpy.ndarray!"
-            )
-
-        # check for autodiff
-        try:
-            gradient_fn = jax.grad(inverse_link_function)
-            gradient_fn(1.0)
-        except Exception as e:
-            raise TypeError(
-                f"The `inverse_link_function` function cannot be differentiated. Error: {e}"
-            )
 
     @abc.abstractmethod
     def _negative_log_likelihood(
@@ -517,16 +406,15 @@ class PoissonObservations(Observations):
     with a given rate. It provides methods for computing the negative log-likelihood, generating samples,
     and computing the residual deviance for the given spike count data.
 
-    Attributes
-    ----------
-    inverse_link_function :
-        A function that maps the predicted rate to the domain of the Poisson parameter. Defaults to ``jax.numpy.exp``.
-
     """
 
-    def __init__(self, inverse_link_function=jnp.exp):
-        super().__init__(inverse_link_function=inverse_link_function)
+    def __init__(self):
+        super().__init__()
         self.scale = 1.0
+
+    @property
+    def default_inverse_link_function(self):
+        return jnp.exp
 
     def _negative_log_likelihood(
         self,
@@ -742,19 +630,17 @@ class GammaObservations(Observations):
     with a given rate. It provides methods for computing the negative log-likelihood, generating samples,
     and computing the residual deviance for the given spike count data.
 
-    Attributes
-    ----------
-    inverse_link_function :
-        A function that maps the predicted rate to the domain of the Poisson parameter. Defaults to jnp.exp.
-
     """
 
     def __init__(
         self,
-        inverse_link_function=utils.one_over_x,
     ):
-        super().__init__(inverse_link_function=inverse_link_function)
+        super().__init__()
         self.scale = 1.0
+
+    @property
+    def default_inverse_link_function(self):
+        return utils.one_over_x
 
     def _negative_log_likelihood(
         self,
@@ -972,8 +858,8 @@ def check_observation_model(observation_model):
     Examples
     --------
     >>> class MyObservationModel:
-    ...     def inverse_link_function(self, x):
-    ...         return jax.scipy.special.expit(x)
+    ...     def default_inverse_link_function(self):
+    ...         return jax.scipy.special.expit
     ...     def _negative_log_likelihood(self, params, y_true, aggregate_sample_scores=jnp.mean):
     ...         return -aggregate_sample_scores(y_true * jax.scipy.special.logit(params) + \
     ...                 (1 - y_true) * jax.scipy.special.logit(1 - params))
@@ -1001,22 +887,7 @@ def check_observation_model(observation_model):
         ),
     )
 
-    check_link = (
-        getattr(observation_model, "inverse_link_function", None)
-        not in LINK_NAME_TO_FUNC.values()
-    )
-
-    if check_link:
-        checks = {
-            "inverse_link_function": {
-                "input": [jnp.array([1.0, 1.0, 1.0])],
-                "test_differentiable": True,
-                "test_preserve_shape": False,
-            }
-        }
-    else:
-        checks = {}
-
+    checks = {}
     if not is_nemos:
         checks.update(
             {
@@ -1076,17 +947,15 @@ class BernoulliObservations(Observations):
     this is equivalent to Logistic Regression. It provides methods for computing the negative log-likelihood,
     generating samples, and computing the residual deviance for the given binary observations.
 
-    Attributes
-    ----------
-    inverse_link_function :
-        A function that maps the success probability to the domain of the Bernoulli parameter.
-        Defaults to ``jax.lax.logistic``.
-
     """
 
-    def __init__(self, inverse_link_function=jax.lax.logistic):
-        super().__init__(inverse_link_function=inverse_link_function)
+    def __init__(self):
+        super().__init__()
         self.scale = 1.0
+
+    @property
+    def default_inverse_link_function(self):
+        return jax.lax.logistic
 
     def _negative_log_likelihood(
         self,
@@ -1361,9 +1230,6 @@ class NegativeBinomialObservations(Observations):
 
     Parameters
     ----------
-    inverse_link_function :
-        Inverse of the link function used to map linear predictors to the predicted mean rate.
-        For count data, this is typically `jax.numpy.exp` or `jax.nn.softplus`.
     scale :
         The dispersion parameter :math:`\phi`. Lower values correspond to lower overdispersion, and as
         :math:`\phi \to 0`, the model behaves like a Poisson. The shape parameter of
@@ -1382,11 +1248,14 @@ class NegativeBinomialObservations(Observations):
 
     def __init__(
         self,
-        inverse_link_function=jnp.exp,
         scale=1.0,
     ):
-        super().__init__(inverse_link_function=inverse_link_function)
+        super().__init__()
         self.scale = scale
+
+    @property
+    def default_inverse_link_function(self):
+        return jnp.exp
 
     def _negative_log_likelihood(
         self,

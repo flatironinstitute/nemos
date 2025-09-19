@@ -22,7 +22,10 @@ from ..glm import GLM, PopulationGLM
 from ..utils import _get_name, _unflatten_dict, get_env_metadata
 from ..validation import _suggest_keys
 
-MODEL_REGISTRY = {"nemos.glm.GLM": GLM, "nemos.glm.PopulationGLM": PopulationGLM}
+MODEL_REGISTRY = {
+    "nemos.glm.glm.GLM": GLM,
+    "nemos.glm.glm.PopulationGLM": PopulationGLM,
+}
 
 ERROR_MSG_OVERRIDE_NOT_ALLOWED = (
     "Cannot override the parameter {key}. "
