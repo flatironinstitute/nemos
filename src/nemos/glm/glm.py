@@ -200,8 +200,7 @@ class GLM(BaseRegressor):
         solver_name='GradientDescent'
     )
     >>> # define GLM model of PoissonObservations model with soft-plus NL
-    >>> observation_models = nmo.observation_models.PoissonObservations(jax.nn.softplus)
-    >>> model = nmo.glm.GLM(observation_model=observation_models, solver_name="LBFGS")
+    >>> model = nmo.glm.GLM(inverse_link_function=jax.nn.softplus, solver_name="LBFGS")
     >>> print("Regularizer type: ", type(model.regularizer))
     Regularizer type:  <class 'nemos.regularizer.UnRegularized'>
     >>> print("Observation model: ", type(model.observation_model))
