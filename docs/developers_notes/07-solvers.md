@@ -5,12 +5,12 @@
 In the earlier versions, NeMoS relied on [JAXopt](https://jaxopt.github.io/stable/) as its optimization backend.
 As JAXopt is no longer maintained, we added support for alternative optimization backends.
 
-Some of JAXopt's funtionality was ported to [Optax](https://optax.readthedocs.io/en/latest/) by Google, and [Optimistix](Optimistix) was started by the community to fill the gaps after JAXopt's deprecation.
+Some of JAXopt's funtionality was ported to [Optax](https://optax.readthedocs.io/en/latest/) by Google, and [Optimistix](https://docs.kidger.site/optimistix/) was started by the community to fill the gaps after JAXopt's deprecation.
 
 To support flexibility and long-term maintenance, NeMoS now has a backend-agnostic solver interface, allowing the use of solvers from different backend libraries with different interfaces.
 
 ## `AbstractSolver` interface
-This interface is defined by [`AbstractSolver`](nemos.solvers.AbstractSolver) and mostly follows the JAXopt API.
+This interface is defined by `AbstractSolver` and mostly follows the JAXopt API.
 All solvers implemented in NeMoS are subclasses of `AbstractSolver`, however subclassing is not required for implementing solvers that can be used with NeMoS. (See [custom solvers](#custom_solvers))
 
 The `AbstractSolver` interface requires implementing the following methods:
@@ -42,7 +42,7 @@ Support for existing solvers from external libraries and the custom implementati
 Creating adapters for existing solvers can be done in multiple ways.
 In our experience wrapping solver objects through adapters provides a clean way of doing that, and recommend adapters for new optimization libraries to follow this pattern.
 
-[`SolverAdapter`](nemos.solvers.SolverAdapter) provides methods for wrapping existing solvers.  
+`SolverAdapter` provides methods for wrapping existing solvers.  
 Each subclass of `SolverAdapter` has to define the methods of `AbstractInterface`, as well as a `_solver_cls` class variable signaling the type of solver wrapped by it.
 During construction it has to set a `_solver` attribute that is a concrete instance of `_solver_cls`.
 
@@ -52,8 +52,8 @@ Default method implementations:
 - `__init_subclass__` generates a docstring for the adapter including accepted arguments and the wrapped solver's documentation.
 
 Currently we provide adapters for two optimization backends:
-- [`OptimistixAdapter`](nemos.solvers.OptimistixAdapter) wraps Optimistix solvers.
-- [`JaxoptAdapter`](nemos.solvers.JaxoptAdapter) wraps JAXopt solvers. As `SVRG` and `ProxSVRG` follow the JAXopt interface, these are also wrapped with `JaxoptAdapter`.
+- `OptimistixAdapter` wraps Optimistix solvers.
+- `JaxoptAdapter` wraps JAXopt solvers. As `SVRG` and `ProxSVRG` follow the JAXopt interface, these are also wrapped with `JaxoptAdapter`.
 
 
 ## List of available solvers
