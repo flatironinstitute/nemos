@@ -137,7 +137,7 @@ def regress_filter(coupling_filters: NDArray, eval_basis: NDArray) -> NDArray:
 
     Returns
     -------
-    weights
+    weights:
         The weights for each neuron. Shape ``(n_basis_funcs, n_neurons_receiver, n_neurons_sender)``
 
     Raises
