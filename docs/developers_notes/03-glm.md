@@ -41,7 +41,7 @@ The [`GLM`](nemos.glm.GLM) class provides a direct implementation of the GLM mod
 - **`intercept_`**: Stores the bias terms' solutions as `jax.ndarray` after the fitting process. It is initialized as `None` during class instantiation.
 - **`dof_resid_`**: The degrees of freedom of the model's residual. this quantity is used to estimate the scale parameter, see below, and compute frequentist confidence intervals.
 - **`scale_`**: The scale parameter of the observation distribution, which together with the rate, uniquely specifies a distribution of the exponential family. Example: a 1D Gaussian is specified by the mean which is the rate, and the standard deviation, which is the scale.
-- **`solver_state_`**: Indicates the solver's state. For specific solver states, refer to the [solver implementations](nemos.solvers).
+- **`solver_state_`**: Indicates the solver's state. For specific solver states, refer to the {mod}`solver implementation <nemos.solvers>`.
 
 Additionally, the [`GLM`](nemos.glm.GLM) class inherits the attributes of `BaseRegressor`, see the [relative note](02-base_regressor.md) for more information.
 

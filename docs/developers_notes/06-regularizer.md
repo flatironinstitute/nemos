@@ -21,7 +21,7 @@ Abstract Class Regularizer
 ```
 
 :::{note}
-If we need advanced adaptive solvers (e.g., Adam, LAMB etc.) in the future, we can use [`Optax`](https://optax.readthedocs.io/en/latest/) solvers through [`OptimistixOptaxSolver`](nemos.solvers._optimistix_solvers.OptimistixOptaxSolver). See [`OptimistixOptaxLBFGS`](nemos.solvers._optax_optimistix_solvers.OptimistixOptaxLBFGS) for an example.
+If we need advanced adaptive solvers (e.g., Adam, LAMB etc.) in the future, we can use [`Optax`](https://optax.readthedocs.io/en/latest/) solvers through `OptimistixOptaxSolver`. See `OptimistixOptaxLBFGS` for an example.
 :::
 
 (the-abstract-class-regularizer)=

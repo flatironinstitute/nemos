@@ -11,7 +11,7 @@ To support flexibility and long-term maintenance, NeMoS now has a backend-agnost
 
 ## `AbstractSolver` interface
 This interface is defined by `AbstractSolver` and mostly follows the JAXopt API.
-All solvers implemented in NeMoS are subclasses of `AbstractSolver`, however subclassing is not required for implementing solvers that can be used with NeMoS. (See [custom solvers](#custom_solvers))
+All solvers implemented in NeMoS are subclasses of `AbstractSolver`, however subclassing is not required for implementing solvers that can be used with NeMoS. (See [custom solvers](#custom-solvers))
 
 The `AbstractSolver` interface requires implementing the following methods:
 - `__init__`: all solver parameters and settings should go here. The other methods only take the solver state, current or initial solution (model parameters), and the input data for the objective function.
@@ -91,6 +91,7 @@ Optimistix does not have implementations of Nesterov acceleration, so gradient d
 (Although what Optax calls Nesterov acceleration is not the [original method developed for convex optimization](https://hengshuaiyao.github.io/papers/nesterov83.pdf) but the [version adapted for training deep networks with SGD](https://proceedings.mlr.press/v28/sutskever13.html). Interestingly, JAXopt did implement the original, but in practice it does not seem to be faster.)
 Note that `OptaxOptimistixSolver` allows using any solver from Optax (e.g., Adam). See `OptaxOptimistixGradientDescent` for a template of how to wrap new Optax solvers.
 
+(custom-solvers)=
 ## Custom solvers
 If you want to use your own solver in `nemos`, you just have to write a solver that adheres to the `AbstractSolver` interface, and it should be straightforward to plug in.  
 While it is not necessary, a way to ensure adherence to the interface is subclassing `AbstractSolver`.
