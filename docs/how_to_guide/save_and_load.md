@@ -83,8 +83,7 @@ class CustomRegularizer(nmo.regularizer.Ridge):
     def __init__(self, new_param):
         self.new_param = new_param
 
-obs_model = nmo.observation_models.PoissonObservations(custom_link)
-model = nmo.glm.GLM(regularizer=CustomRegularizer(10))
+model = nmo.glm.GLM(inverse_link_function=custom_link, regularizer=CustomRegularizer(10))
 model.save_params("custom_regularizer_params.npz")
 
 nmo.inspect_npz("custom_regularizer_params.npz")
@@ -113,7 +112,7 @@ As the error explains, you can tell nemos how to load the custom objects by prov
 
 mapping = {
     "regularizer": CustomRegularizer,
-    "observation_model__inverse_link_function": custom_link
+    "inverse_link_function": custom_link
 }
 loaded_model = nmo.load_model("custom_regularizer_params.npz", mapping_dict=mapping)
 loaded_model

@@ -9,15 +9,14 @@ import pytest
 import scipy as sp
 import scipy.stats as sts
 import statsmodels.api as sm
-from numba import njit
 
 import nemos as nmo
 from nemos._observation_model_builder import (
     AVAILABLE_OBSERVATION_MODELS,
     instantiate_observation_model,
 )
-from nemos.initialize_regressor import initialize_intercept_matching_mean_rate
-from nemos.observation_models import LINK_NAME_TO_FUNC
+from nemos.glm.initialize_parameters import initialize_intercept_matching_mean_rate
+from nemos.glm.inverse_link_function_utils import LINK_NAME_TO_FUNC
 
 
 @pytest.fixture
@@ -145,34 +144,20 @@ def test_glm_setter_observation_model(obs_model_string, glm_class, expectation):
 
 
 @pytest.mark.parametrize(
-    "link_func_string, expectation",
+    "obs_model_string, expectation",
     [
-        *((link_name, does_not_raise()) for link_name in LINK_NAME_TO_FUNC),
-        (
-            "nemos.utils.invalid_link",
-            pytest.raises(ValueError, match="Unknown link function"),
-        ),
-        (
-            "jax.numpy.invalid_link",
-            pytest.raises(ValueError, match="Unknown link function"),
-        ),
-        ("invalid", pytest.raises(ValueError, match="Unknown link function")),
+        ("Poisson", does_not_raise()),
+        ("Gamma", does_not_raise()),
+        ("Bernoulli", does_not_raise()),
+        ("NegativeBinomial", does_not_raise()),
+        ("NB", pytest.raises(ValueError, match="Unknown observation model: NB")),
     ],
 )
-@pytest.mark.parametrize(
-    "obs_model_string",
-    [
-        "Poisson",
-        "Gamma",
-        "Bernoulli",
-    ],
-)
-def test_instantiate_observation_model(link_func_string, obs_model_string, expectation):
+def test_instantiate_observation_model(obs_model_string, expectation):
     """Test instantiation of observation model with a link function."""
     with expectation:
         obs_model = instantiate_observation_model(
             obs_model_string,
-            inverse_link_function=link_func_string,
         )
 
 
@@ -182,9 +167,7 @@ class TestPoissonObservations:
         """Test get_params() returns expected values."""
         observation_model = poisson_observations()
 
-        assert observation_model.get_params() == {
-            "inverse_link_function": observation_model.inverse_link_function
-        }
+        assert observation_model.get_params() == {}
 
     def test_deviance_against_statsmodels(self, poissonGLM_model_instantiation):
         """
@@ -262,18 +245,6 @@ class TestPoissonObservations:
         _, _, model, _, firing_rate = poissonGLM_model_instantiation
         assert model.observation_model.scale == 1
 
-    def test_non_differentiable_inverse_link(self, poissonGLM_model_instantiation):
-        _, _, model, _, _ = poissonGLM_model_instantiation
-
-        # define a jax non-diff function
-        non_diff = lambda y: jnp.asarray(njit(lambda x: x)(np.atleast_1d(y)))
-
-        with pytest.raises(
-            TypeError,
-            match="The `inverse_link_function` function cannot be differentiated",
-        ):
-            model.observation_model.inverse_link_function = non_diff
-
     @pytest.mark.parametrize(
         "test_value",
         [
@@ -325,16 +296,9 @@ class TestPoissonObservations:
         if not np.allclose(pr2_model, pr2_sms):
             raise ValueError("Log-likelihood doesn't match statsmodels!")
 
-    @pytest.mark.parametrize(
-        "link_func, link_func_name", [(jnp.exp, "exp"), (jax.nn.softplus, "softplus")]
-    )
-    def test_repr_out(self, link_func, link_func_name):
-        obs = nmo.observation_models.PoissonObservations(
-            inverse_link_function=link_func
-        )
-        assert (
-            repr(obs) == f"PoissonObservations(inverse_link_function={link_func_name})"
-        )
+    def test_repr_out(self):
+        obs = nmo.observation_models.PoissonObservations()
+        assert repr(obs) == f"PoissonObservations()"
 
 
 class TestGammaObservations:
@@ -343,9 +307,7 @@ class TestGammaObservations:
         """Test get_params() returns expected values."""
         observation_model = gamma_observations()
 
-        assert observation_model.get_params() == {
-            "inverse_link_function": observation_model.inverse_link_function
-        }
+        assert observation_model.get_params() == {}
 
     def test_deviance_against_statsmodels(self, gammaGLM_model_instantiation):
         """
@@ -407,17 +369,9 @@ class TestGammaObservations:
         if not np.allclose(pr2_model, pr2_sms):
             raise ValueError("Log-likelihood doesn't match statsmodels!")
 
-    @pytest.mark.parametrize(
-        "link_func, link_func_name",
-        [
-            (jnp.exp, "exp"),
-            (jax.nn.softplus, "softplus"),
-            (nmo.utils.one_over_x, "one_over_x"),
-        ],
-    )
-    def test_repr_out(self, link_func, link_func_name):
-        obs = nmo.observation_models.GammaObservations(inverse_link_function=link_func)
-        assert repr(obs) == f"GammaObservations(inverse_link_function={link_func_name})"
+    def test_repr_out(self):
+        obs = nmo.observation_models.GammaObservations()
+        assert repr(obs) == f"GammaObservations()"
 
 
 class TestBernoulliObservations:
@@ -426,9 +380,7 @@ class TestBernoulliObservations:
         """Test get_params() returns expected values."""
         observation_model = bernoulli_observations()
 
-        assert observation_model.get_params() == {
-            "inverse_link_function": observation_model.inverse_link_function
-        }
+        assert observation_model.get_params() == {}
 
     def test_deviance_against_statsmodels(self, bernoulliGLM_model_instantiation):
         """
@@ -486,22 +438,9 @@ class TestBernoulliObservations:
         if not np.allclose(pr2_model, pr2_sms):
             raise ValueError("Log-likelihood doesn't match statsmodels!")
 
-    @pytest.mark.parametrize(
-        "link_func, link_func_name",
-        [
-            (jax.lax.logistic, "logistic"),
-            (jax.scipy.special.expit, "expit"),
-            (jax.scipy.stats.norm.cdf, "norm.cdf"),
-        ],
-    )
-    def test_repr_out(self, link_func, link_func_name):
-        obs = nmo.observation_models.BernoulliObservations(
-            inverse_link_function=link_func
-        )
-        assert (
-            repr(obs)
-            == f"BernoulliObservations(inverse_link_function={link_func_name})"
-        )
+    def test_repr_out(self):
+        obs = nmo.observation_models.BernoulliObservations()
+        assert repr(obs) == f"BernoulliObservations()"
 
 
 class TestNegativeBinomialObservations:
@@ -509,7 +448,6 @@ class TestNegativeBinomialObservations:
     def test_get_params(self, negative_binomial_observations):
         observation_model = negative_binomial_observations()
         assert observation_model.get_params() == {
-            "inverse_link_function": observation_model.inverse_link_function,
             "scale": 1.0,
         }
 
@@ -567,21 +505,9 @@ class TestNegativeBinomialObservations:
         if not np.allclose(pr2_model, pr2_sms, atol=1e-5):
             raise ValueError("Pseudo-r2 doesn't match statsmodels!")
 
-    @pytest.mark.parametrize(
-        "link_func, link_func_name",
-        [
-            (jax.nn.softplus, "softplus"),
-            (jax.numpy.exp, "exp"),
-        ],
-    )
-    def test_repr_out(self, link_func, link_func_name):
-        obs = nmo.observation_models.NegativeBinomialObservations(
-            inverse_link_function=link_func
-        )
-        assert (
-            repr(obs)
-            == f"NegativeBinomialObservations(inverse_link_function={link_func_name}, scale=1.0)"
-        )
+    def test_repr_out(self):
+        obs = nmo.observation_models.NegativeBinomialObservations()
+        assert repr(obs) == f"NegativeBinomialObservations(scale=1.0)"
 
 
 @pytest.mark.parametrize("observation_model_string", AVAILABLE_OBSERVATION_MODELS)
@@ -656,21 +582,6 @@ class TestCommonObservationModels:
         sm = obs._negative_log_likelihood(y, rate, jnp.sum)
         mn = obs._negative_log_likelihood(y, rate, jnp.mean)
         assert np.allclose(sm, mn * math.prod(y.shape))
-
-    def test_non_differentiable_inverse_link(
-        self, observation_model_string, observation_model_rate_and_samples
-    ):
-        obs, y, rate = observation_model_rate_and_samples
-
-        from numba import njit
-
-        non_diff = lambda y: jnp.asarray(njit(lambda x: x)(np.atleast_1d(y)))
-
-        with pytest.raises(
-            TypeError,
-            match="The `inverse_link_function` function cannot be differentiated",
-        ):
-            obs.inverse_link_function = non_diff
 
     def test_scale_getter(
         self, observation_model_string, observation_model_rate_and_samples
@@ -749,124 +660,3 @@ class TestCommonObservationModels:
         pseudo_r2 = obs.pseudo_r2(y, rate, score_type=score_type)
         if (pseudo_r2 > 1) or (pseudo_r2 < 0):
             raise ValueError(f"pseudo-r2 of {pseudo_r2} outside the [0,1] range!")
-
-    @pytest.mark.parametrize(
-        "link_function",
-        [
-            jnp.exp,
-            lambda x: jnp.exp(x) if isinstance(x, jnp.ndarray) else "not a number",
-        ],
-    )
-    def test_initialization_link_returns_scalar(
-        self,
-        link_function,
-        observation_model_string,
-        observation_model_rate_and_samples,
-    ):
-        """Check that the observation model initializes when a callable is passed."""
-        raise_exception = not isinstance(link_function(1.0), (jnp.ndarray, float))
-        obs, y, rate = observation_model_rate_and_samples
-        if raise_exception:
-            with pytest.raises(
-                TypeError,
-                match="The `inverse_link_function` must handle scalar inputs correctly",
-            ):
-                obs.set_params(inverse_link_function=link_function)
-        else:
-            obs.set_params(inverse_link_function=link_function)
-
-    @pytest.mark.parametrize(
-        "link_function", [jnp.exp, np.exp, lambda x: 1 / x, sm.families.links.Log()]
-    )
-    def test_initialization_link_is_jax(
-        self, link_function, observation_model_rate_and_samples
-    ):
-        """Check that the observation model initializes when a callable is passed."""
-        obs, y, rate = observation_model_rate_and_samples
-        raise_exception = isinstance(link_function, np.ufunc) | isinstance(
-            link_function, sm.families.links.Link
-        )
-        if raise_exception:
-            with pytest.raises(
-                TypeError,
-                match="The `inverse_link_function` must return a jax.numpy.ndarray",
-            ):
-                obs.__class__(link_function)
-        else:
-            obs.__class__(link_function)
-
-    @pytest.mark.parametrize(
-        "link_function, expectation",
-        [
-            (jax.scipy.special.expit, does_not_raise()),
-            (
-                sp.special.expit,
-                pytest.raises(
-                    TypeError,
-                    match="The `inverse_link_function` must return a jax.numpy.ndarray!",
-                ),
-            ),
-            (jax.scipy.stats.norm.cdf, does_not_raise()),
-            (
-                sts.norm.cdf,
-                pytest.raises(
-                    TypeError,
-                    match="The `inverse_link_function` must return a jax.numpy.ndarray!",
-                ),
-            ),
-            (
-                np.exp,
-                pytest.raises(
-                    TypeError,
-                    match="The `inverse_link_function` must return a jax.numpy.ndarray!",
-                ),
-            ),
-            (lambda x: x, does_not_raise()),
-            (
-                sm.families.links.Log(),
-                pytest.raises(
-                    TypeError,
-                    match="The `inverse_link_function` must return a jax.numpy.ndarray!",
-                ),
-            ),
-        ],
-    )
-    def test_initialization_link_is_jax_set_params(
-        self, link_function, observation_model_rate_and_samples, expectation
-    ):
-        obs, _, _ = observation_model_rate_and_samples
-
-        with expectation:
-            obs.set_params(inverse_link_function=link_function)
-
-    @pytest.mark.parametrize("link_function", [jnp.exp, jax.nn.softplus, 1])
-    def test_initialization_link_is_callable(
-        self, link_function, observation_model_rate_and_samples
-    ):
-        """Check that the observation model initializes when a callable is passed."""
-        obs, _, _ = observation_model_rate_and_samples
-        raise_exception = not callable(link_function)
-        if raise_exception:
-            with pytest.raises(
-                TypeError,
-                match="The `inverse_link_function` function must be a Callable",
-            ):
-                obs.__class__(link_function)
-        else:
-            obs.__class__(link_function)
-
-    @pytest.mark.parametrize("link_function", [jnp.exp, jax.nn.softplus, 1])
-    def test_initialization_link_is_callable_set_params(
-        self, link_function, observation_model_rate_and_samples
-    ):
-        """Check that the observation model initializes when a callable is passed."""
-        obs, _, _ = observation_model_rate_and_samples
-        raise_exception = not callable(link_function)
-        if raise_exception:
-            with pytest.raises(
-                TypeError,
-                match="The `inverse_link_function` function must be a Callable",
-            ):
-                obs.set_params(inverse_link_function=link_function)
-        else:
-            obs.set_params(inverse_link_function=link_function)

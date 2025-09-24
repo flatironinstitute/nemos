@@ -184,7 +184,7 @@ nb_execution_mode = "cache"
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
     "numpy": ("https://numpy.org/doc/stable/", None),
-    "scikit-learn": ("https://scikit-learn.org/stable", None),
+    "scikit-learn": ("https://scikit-learn.org/stable/", None),
     "jax": ("https://jax.readthedocs.io/en/latest/", None),
     "scipy": ("https://docs.scipy.org/doc/scipy/", None),
 }

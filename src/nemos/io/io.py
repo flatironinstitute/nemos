@@ -22,7 +22,10 @@ from ..glm import GLM, PopulationGLM
 from ..utils import _get_name, _unflatten_dict, get_env_metadata
 from ..validation import _suggest_keys
 
-MODEL_REGISTRY = {"nemos.glm.GLM": GLM, "nemos.glm.PopulationGLM": PopulationGLM}
+MODEL_REGISTRY = {
+    "nemos.glm.glm.GLM": GLM,
+    "nemos.glm.glm.PopulationGLM": PopulationGLM,
+}
 
 ERROR_MSG_OVERRIDE_NOT_ALLOWED = (
     "Cannot override the parameter {key}. "
@@ -67,8 +70,8 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     ... )
     >>> for key, value in model.get_params().items():
     ...     print(f"{key}: {value}")
-    observation_model__inverse_link_function: <function one_over_x at ...>
-    observation_model: GammaObservations(inverse_link_function=one_over_x)
+    inverse_link_function: <function one_over_x at ...>
+    observation_model: GammaObservations()
     regularizer: Ridge()
     regularizer_strength: 0.1
     solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
@@ -80,29 +83,26 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     >>> # Model has the same parameters before and after load
     >>> for key, value in model.get_params().items():
     ...     print(f"{key}: {value}")
-    observation_model__inverse_link_function: <function one_over_x at ...>
-    observation_model: GammaObservations(inverse_link_function=one_over_x)
+    inverse_link_function: <function one_over_x at ...>
+    observation_model: GammaObservations()
     regularizer: Ridge()
     regularizer_strength: 0.1
     solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
     solver_name: BFGS
 
     >>> # Loading a custom inverse link function
-    >>> obs = nmo.observation_models.PoissonObservations(
-    ...     inverse_link_function=lambda x: x**2
-    ... )
-    >>> model = nmo.glm.GLM(observation_model=obs)
+    >>> model = nmo.glm.GLM(inverse_link_function=lambda x: x**2)
     >>> model.save_params("model_params.npz")
     >>> # Provide a mapping for the custom link function when loading.
     >>> mapping_dict = {
-    ...     "observation_model__inverse_link_function": lambda x: x**2,
+    ...     "inverse_link_function": lambda x: x**2,
     ... }
     >>> loaded_model = nmo.load_model("model_params.npz", mapping_dict=mapping_dict)
     >>> # Now the loaded model will have the updated solver_name and solver_kwargs
     >>> for key, value in loaded_model.get_params().items():
     ...     print(f"{key}: {value}")
-    observation_model__inverse_link_function: <function <lambda> at ...>
-    observation_model: PoissonObservations(inverse_link_function=<lambda>)
+    inverse_link_function: <function <lambda> at ...>
+    observation_model: PoissonObservations()
     regularizer: UnRegularized()
     regularizer_strength: None
     solver_kwargs: {}
