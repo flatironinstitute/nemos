@@ -13,7 +13,7 @@ from numpy.typing import NDArray
 
 from .base_class import Base
 from .tree_utils import pytree_map_and_reduce
-from .type_casting import is_numpy_array_like, support_pynapple
+from .type_casting import is_at_least_1d_numpy_array_like, support_pynapple
 
 __all__ = [
     "check_dimensionality",
@@ -224,7 +224,7 @@ def nan_pad(
     # validate the axis
     validate_axis(conv_time_series, axis)
 
-    if is_numpy_array_like(conv_time_series):
+    if is_at_least_1d_numpy_array_like(conv_time_series):
         if not np.issubdtype(conv_time_series.dtype, np.floating):
             raise ValueError("conv_time_series must have a float dtype!")
         return _pad_dimension(
@@ -322,7 +322,7 @@ def shift_time_series(
     # convert to jax ndarray
     time_series = jax.tree_util.tree_map(jnp.asarray, time_series)
 
-    if is_numpy_array_like(time_series):
+    if is_at_least_1d_numpy_array_like(time_series):
 
         if not np.issubdtype(time_series.dtype, np.floating):
             raise ValueError("time_series must have a float dtype!")

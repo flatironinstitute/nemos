@@ -25,6 +25,7 @@ import nemos as nmo
     "output_y",
     [np.random.uniform(0, 1, size=(10,)), np.random.uniform(0, 1, size=(10, 2))],
 )
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 def test_invert_non_linearity(non_linearity, output_y):
     inv_y = nmo.initialize_regressor.initialize_intercept_matching_mean_rate(
         inverse_link_function=non_linearity, y=output_y

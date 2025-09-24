@@ -75,6 +75,7 @@ VALID_PAIRS = [
     {"hyperparams_prox", "hyperparams"},
     {"flat_dict", "flat_map_dict"},
     {"fit_params", "init_params"},
+    {"args", "arg"},
 ]
 
 

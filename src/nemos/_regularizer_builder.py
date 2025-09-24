@@ -1,6 +1,18 @@
 """Utility functions for creating regularizer object."""
 
+from .regularizer import ElasticNet, GroupLasso, Lasso, Ridge, UnRegularized
+
 AVAILABLE_REGULARIZERS = ["UnRegularized", "Ridge", "Lasso", "GroupLasso", "ElasticNet"]
+
+# Mapping for O(1) lookup
+_REGULARIZER_MAP = {
+    "UnRegularized": UnRegularized,
+    "Ridge": Ridge,
+    "Lasso": Lasso,
+    "GroupLasso": GroupLasso,
+    "ElasticNet": ElasticNet,
+    None: UnRegularized,  # Handle None case
+}
 
 
 def instantiate_regularizer(name: str | None):
@@ -28,26 +40,8 @@ def instantiate_regularizer(name: str | None):
     if name:
         name = name.split("nemos.regularizer.")[-1]
 
-    if name in ("UnRegularized", None):
-        from .regularizer import UnRegularized
-
-        return UnRegularized()
-    elif name == "Ridge":
-        from .regularizer import Ridge
-
-        return Ridge()
-    elif name == "Lasso":
-        from .regularizer import Lasso
-
-        return Lasso()
-    elif name == "GroupLasso":
-        from .regularizer import GroupLasso
-
-        return GroupLasso()
-    elif name == "ElasticNet":
-        from .regularizer import ElasticNet
-
-        return ElasticNet()
+    if name in _REGULARIZER_MAP:
+        return _REGULARIZER_MAP[name]()
     else:
         raise ValueError(
             f"Unknown regularizer: {name}. "

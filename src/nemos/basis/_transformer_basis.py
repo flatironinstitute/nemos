@@ -9,7 +9,7 @@ import numpy as np
 from ..typing import FeatureMatrix
 from ._composition_utils import (
     _iterate_over_components,
-    infer_input_dimensionality,
+    get_input_shape,
     is_basis_like,
 )
 
@@ -118,18 +118,14 @@ class TransformerBasis:
     def _assign_input_shape(basis):
         # iterate over atomic or custom components
         default_shape = []
+        assign_default = False
         for bas in _iterate_over_components(basis):
-            ishape = getattr(bas, "input_shape", None)
-            # handles the case of a multi-dim basis with set shape
-            if isinstance(ishape, list):
-                default_shape.extend(ishape)
-            # handles the case of a 1dim basis with set shape
-            elif ishape is not None:
-                default_shape.append(ishape)
-            # handles custom or 1dim with no set shape
-            else:
-                default_shape.extend([()] * infer_input_dimensionality(bas))
-        basis.set_input_shape(*default_shape)
+            ishape = get_input_shape(bas)
+            assign_default |= any(i is None for i in ishape)
+            ishape = [i if i is not None else () for i in ishape]
+            default_shape.extend(ishape)
+        if assign_default:
+            basis.set_input_shape(*default_shape)
         return basis
 
     @staticmethod
@@ -160,10 +156,11 @@ class TransformerBasis:
         """
         n_samples = X.shape[0]
         out = (
-            np.reshape(X[:, cc : cc + n_input], (n_samples, *bas.input_shape))
+            np.reshape(X[:, cc : cc + n_input], (n_samples, *shape))
             for i, (bas, n_input) in enumerate(
                 zip(self._iterate_over_components(), self._input_shape_product)
             )
+            for shape in get_input_shape(bas)
             for cc in [sum(self._input_shape_product[:i])]
         )
         return out
