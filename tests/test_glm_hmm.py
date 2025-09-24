@@ -56,7 +56,7 @@ def test_forward_backward_regression(decorator):
             transition_matrix,
             projection_weights,
             likelihood_func=likelihood,
-            inverse_link_function=obs.inverse_link_function,
+            inverse_link_function=obs.default_inverse_link_function,
             is_new_session=new_sess.astype(bool),
         )
     )
@@ -120,7 +120,7 @@ def test_hmm_negative_log_likelihood_regression(decorator):
         X,
         y,
         gammas,
-        inverse_link_function=obs.inverse_link_function,
+        inverse_link_function=obs.default_inverse_link_function,
         negative_log_likelihood_func=negative_log_likelihood,
     )
 
@@ -170,7 +170,7 @@ def test_run_m_step_regression():
             X=design_matrix,
             y=observations,
             posteriors=posterior_prob,
-            inverse_link_function=obs.inverse_link_function,
+            inverse_link_function=obs.default_inverse_link_function,
             negative_log_likelihood_func=negative_log_likelihood,
         )
 
