@@ -9,6 +9,7 @@ import numpy as np
 import pynapple as nap
 from numpy.typing import ArrayLike, NDArray
 
+from ..observation_models import Observations
 from ..base_regressor import BaseRegressor
 from ..regularizer import Regularizer
 from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength
@@ -43,18 +44,26 @@ class GLMHMM(BaseRegressor):
     def __init__(
         self,
         n_states: int,
-        regularizer: Union[str, Regularizer] = "UnRegularized",
-        regularizer_strength: Optional[RegularizerStrength] = None,
+        observation_model: Observations,
+        inverse_link_function: Callable,
+        regularizer: Union[str, Regularizer] = "UnRegularized",  # how does it work for the analytical M-step?
+                                                                 # do all regularization make sense for this?
+        regularizer_strength: Optional[RegularizerStrength] = None, # do we regularize all params or only projection?
+                                                                    # - there is regularization but doesn't follow the current logic.
+                                                                    # - one prior for transition and initial proba, to get an analytical m-step still
+
+        dirichlet_prior_init_state: jnp.ndarray | None = None,  # (n_state, )
+        dirichlet_prior_transition: jnp.ndarray | None = None,  # (n_state, n_state)
         solver_name: str = None,
         solver_kwargs: Optional[dict] = None,
         initialize_init_proba: (
-            Callable[[DESIGN_INPUT_TYPE, NDArray], NDArray] | NDArray
+            Callable[[DESIGN_INPUT_TYPE, NDArray], NDArray] | NDArray | Literal
         ) = uniform_initial_proba_init,
         initialize_transition_proba: (
-            Callable[[DESIGN_INPUT_TYPE, NDArray], NDArray] | NDArray
+            Callable[[DESIGN_INPUT_TYPE, NDArray], NDArray] | NDArray | Literal
         ) = sticky_transition_proba_init,
         initialize_projections: (
-            Callable[[DESIGN_INPUT_TYPE, NDArray], NDArray] | NDArray
+            Callable[[DESIGN_INPUT_TYPE, NDArray], NDArray] | NDArray | Literal
         ) = random_projection_init,
     ):
         super().__init__(
@@ -64,7 +73,7 @@ class GLMHMM(BaseRegressor):
             solver_kwargs=solver_kwargs,
         )
 
-    def fit(self, X: DESIGN_INPUT_TYPE, y: Union[NDArray, jnp.ndarray]) -> "GLMHMM":
+    def fit(self, X: DESIGN_INPUT_TYPE, y: Union[NDArray, jnp.ndarray, nap.Tsd]) -> "GLMHMM":
         """Fit the GLM-HMM model to the data."""
         pass
 
@@ -92,8 +101,8 @@ class GLMHMM(BaseRegressor):
         self,
         random_key: jax.Array,
         feedforward_input: DESIGN_INPUT_TYPE,
-    ) -> jnp.ndarray | nap.Tsd:
-        """Simulate spikes from the model."""
+    ) -> Tuple[jnp.ndarray, jnp.ndarray] | Tuple[nap.Tsd, nap.Tsd]:
+        """Simulate spikes from the model, returns neural activity and states."""
         pass
 
     def predict_proba(
@@ -103,10 +112,11 @@ class GLMHMM(BaseRegressor):
         """Compute the smoothing posteriors over states."""
         pass
 
-    def decode(
+    def decode_state(
         self, X: Union[DESIGN_INPUT_TYPE, ArrayLike], y: ArrayLike
     ) -> jnp.ndarray | nap.TsdFrame:
         """Compute the most likely states over samples."""
+        pass
 
     def _predict_and_compute_loss(
         self,
