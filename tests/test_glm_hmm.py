@@ -5,7 +5,11 @@ import numpy as np
 import pytest
 
 from nemos.fetch import fetch_data
-from nemos.glm_hmm import forward_backward, hmm_negative_log_likelihood, run_m_step
+from nemos.glm_hmm.expectation_maximization import (
+    forward_backward,
+    hmm_negative_log_likelihood,
+    run_m_step,
+)
 from nemos.observation_models import BernoulliObservations
 from nemos.third_party.jaxopt.jaxopt import LBFGS
 

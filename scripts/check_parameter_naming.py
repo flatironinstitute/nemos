@@ -60,6 +60,7 @@ VALID_PAIRS = [
     {"state", "states"},
     {"state", "start"},
     {"states", "start"},
+    {"n_states", "states"},
     {"feature_mask", "features"},
     {"observation", "observations"},
     # doc utils
@@ -76,6 +77,7 @@ VALID_PAIRS = [
     {"flat_dict", "flat_map_dict"},
     {"fit_params", "init_params"},
     {"args", "arg"},
+    {"initialize_init_proba", "initialize_transition_proba"},
 ]
 
 

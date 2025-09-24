@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import NDArray
 
-from .third_party.jaxopt.jaxopt import LBFGS
+from ..third_party.jaxopt.jaxopt import LBFGS
 
 Array = NDArray | jax.numpy.ndarray
 
