@@ -5,7 +5,6 @@ from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 import pynapple as nap
 from numpy.typing import ArrayLike, NDArray
 
@@ -35,7 +34,7 @@ def sticky_transition_proba_init(n_states: int, prob_stay=0.95):
 def uniform_initial_proba_init(n_states: int, random_key=jax.random.PRNGKey(124)):
     """Initialize initial state probabilities."""
     prob = jax.random.uniform(random_key, (n_states,), minval=0, maxval=1)
-    return prob / np.sum(prob)
+    return prob / jnp.sum(prob)
 
 
 class GLMHMM(BaseRegressor):
