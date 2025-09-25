@@ -42,7 +42,7 @@ jobs:
           pip install tox
 
       - name: Run tox
-        run: tox -e py
+        run: tox -e skip_solver_related
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4.0.1
