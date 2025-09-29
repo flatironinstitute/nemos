@@ -59,13 +59,13 @@ class GLMHMM(BaseRegressor):
         solver_name: str = None,
         solver_kwargs: Optional[dict] = None,
         initialize_init_proba: (
-            Callable[[DESIGN_INPUT_TYPE, NDArray], NDArray] | NDArray | Literal
+            Callable[[DESIGN_INPUT_TYPE, NDArray], NDArray] | NDArray | str
         ) = uniform_initial_proba_init,
         initialize_transition_proba: (
-            Callable[[DESIGN_INPUT_TYPE, NDArray], NDArray] | NDArray | Literal
+            Callable[[DESIGN_INPUT_TYPE, NDArray], NDArray] | NDArray | str
         ) = sticky_transition_proba_init,
         initialize_projections: (
-            Callable[[DESIGN_INPUT_TYPE, NDArray], NDArray] | NDArray | Literal
+            Callable[[DESIGN_INPUT_TYPE, NDArray], NDArray] | NDArray | str
         ) = random_projection_init,
     ):
         super().__init__(
