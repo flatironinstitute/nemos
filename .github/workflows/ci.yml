@@ -18,7 +18,7 @@ on:
       - main
 
 jobs:
-  tox_tests:
+  tox_tests_not_solver_related:
     if: ${{ !github.event.pull_request.draft }}
     strategy:
       matrix:
@@ -49,7 +49,7 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-  tox_backend_jaxopt:
+  tox_solver_related_jaxopt_backend:
     if: ${{ !github.event.pull_request.draft }}
     strategy:
       matrix:
@@ -74,7 +74,12 @@ jobs:
       - name: Run solver-dependent tests with JAXopt backend
         run: tox -e backend-jaxopt
 
-  tox_backend_optimistix:
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4.0.1
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  tox_solver_related_optimistix_backend:
     if: ${{ !github.event.pull_request.draft }}
     strategy:
       matrix:
@@ -98,6 +103,11 @@ jobs:
 
       - name: Run solver-dependent tests with Optimistix backend
         run: tox -e backend-optimistix
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4.0.1
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   tox_check:
     if: ${{ !github.event.pull_request.draft }}
@@ -156,12 +166,12 @@ jobs:
   check:
     if: ${{ !github.event.pull_request.draft }}
     needs:
-      - tox_tests
+      - tox_tests_not_solver_related
       - prevent_docs_absolute_links
       - tox_check
       - check-relative-links
-      # - tox_backend_jaxopt
-      # - tox_backend_optimistix
+      - tox_solver_related_jaxopt_backend
+      - tox_solver_related_optimistix_backend
     runs-on: ubuntu-latest
     steps:
       - name: Decide whether all tests and notebooks succeeded
