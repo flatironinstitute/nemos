@@ -19,12 +19,13 @@ The `AbstractSolver` interface requires implementing the following methods:
 - `update`: Take one step of the optimization algorithm.
 - `run`: Run a full optimization.
 - `get_accepted_arguments`: Set of argument names that can be passed to `__init__`. These will be the parameters users can change by passing `solver_kwargs` to NeMoS models (e.g., `GLM`).
-- `get_optim_info`: Collect diagnostic information about the optimization run into an `OptimizationInfo` namedtuple.
+- `get_optim_info`: Collect diagnostic information about the optimization run into an `OptimizationInfo` namedtuple, [described in the next section](#optimization-info).
 
 This is a generic class parametrized by `SolverState` and `StepResult`.
 `SolverState` in concrete subclasses should be the type of the solver state.
 `StepResult` is the type of what is returned by each step of the solver. Typically this is a tuple of the parameters and the solver state.
 
+(optimization-info)=
 ### Optimization info
 Because different libraries store info about the optimization run in different places, we decided to standardize some common diagnostics.  
 Optimistix saves some things in the stats dict, Optax and Jaxopt store things in their state.
@@ -97,8 +98,6 @@ If you want to use your own solver in `nemos`, you just have to write a solver t
 While it is not necessary, a way to ensure adherence to the interface is subclassing `AbstractSolver`.
 
 Currently, the solver registry defines which implementation to use for each algorithm, so that has to be overwritten in order to tell `nemos` to use this custom class, but in the future we are [planning to support passing any solver to `BaseRegressor`](https://github.com/flatironinstitute/nemos/issues/378).
-
-We might also define something like an `ImplementsSolverInterface` protocol as well to easily check if user-supplied solvers define the methods required for the interface.
 
 ## Stochastic optimization
 To run stochastic (mini-batch) optimization, JAXopt used a `run_iterator` method.
