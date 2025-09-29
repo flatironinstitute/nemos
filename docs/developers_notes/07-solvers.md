@@ -5,9 +5,9 @@
 In the earlier versions, NeMoS relied on [JAXopt](https://jaxopt.github.io/stable/) as its optimization backend.
 As JAXopt is no longer maintained, we added support for alternative optimization backends.
 
-Some of JAXopt's funtionality was ported to [Optax](https://optax.readthedocs.io/en/latest/) by Google, and [Optimistix](https://docs.kidger.site/optimistix/) was started by the community to fill the gaps after JAXopt's deprecation.
-
 To support flexibility and long-term maintenance, NeMoS now has a backend-agnostic solver interface, allowing the use of solvers from different backend libraries with different interfaces.
+
+In particular, NeMoS's solvers interface is designed to be compatible with solvers from Google's [Optax](https://optax.readthedocs.io/en/latest/) by Google, and the community-run [Optimistix](https://docs.kidger.site/optimistix/).
 
 ## `AbstractSolver` interface
 This interface is defined by `AbstractSolver` and mostly follows the JAXopt API.
@@ -18,7 +18,7 @@ The `AbstractSolver` interface requires implementing the following methods:
 - `init_state`: Initialize the solver state.
 - `update`: Take one step of the optimization algorithm.
 - `run`: Run a full optimization.
-- `get_accepted_arguments`: Set of argument names that can be passed to `__init__`. These will be the parameters users can change by passing `solver_kwargs` to `BaseRegressor` / `GLM`.
+- `get_accepted_arguments`: Set of argument names that can be passed to `__init__`. These will be the parameters users can change by passing `solver_kwargs` to NeMoS models (e.g., `GLM`).
 - `get_optim_info`: Collect diagnostic information about the optimization run into an `OptimizationInfo` namedtuple.
 
 This is a generic class parametrized by `SolverState` and `StepResult`.
@@ -28,7 +28,7 @@ This is a generic class parametrized by `SolverState` and `StepResult`.
 ### Optimization info
 Because different libraries store info about the optimization run in different places, we decided to standardize some common diagnostics.  
 Optimistix saves some things in the stats dict, Optax and Jaxopt store things in their state.
-These are saved in `solver.optimization_info` which is of type `OptimizationInfo`.
+These are saved in the `optimization_info` attribute, which is of type `OptimizationInfo`.
 
 `OptimizationInfo` holds the following fields:
 - `function_val`: The final value of the objective function. As not all solvers store this by default, and it's potentially expensive to evaluate, this field is optional.
@@ -40,7 +40,7 @@ These are saved in `solver.optimization_info` which is of type `OptimizationInfo
 Support for existing solvers from external libraries and the custom implementation of (Prox-)SVRG is done through adapters that "translate" between the interfaces of these external solvers and the `AbstractSolver` interface.
 
 Creating adapters for existing solvers can be done in multiple ways.
-In our experience wrapping solver objects through adapters provides a clean way of doing that, and recommend adapters for new optimization libraries to follow this pattern.
+In our experience wrapping solver objects through adapters provides a clean way of doing that, and we recommend adapters for new optimization libraries to follow this pattern.
 
 `SolverAdapter` provides methods for wrapping existing solvers.  
 Each subclass of `SolverAdapter` has to define the methods of `AbstractInterface`, as well as a `_solver_cls` class variable signaling the type of solver wrapped by it.
@@ -101,7 +101,7 @@ Currently, the solver registry defines which implementation to use for each algo
 We might also define something like an `ImplementsSolverInterface` protocol as well to easily check if user-supplied solvers define the methods required for the interface.
 
 ## Stochastic optimization
-To run stochastic (~mini-batch) optimization, JAXopt used a `run_iterator` method.
+To run stochastic (mini-batch) optimization, JAXopt used a `run_iterator` method.
 Instead of the full input data `run_iterator` accepts a generator / iterator that provides batches of data.
 
 For solvers defined in `nemos` that can be used this way, we will likely provide `StochasticMixin` which borrows the implementation from JAXopt (Or some version of it, see below).

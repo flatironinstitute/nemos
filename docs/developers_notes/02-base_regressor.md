@@ -45,7 +45,7 @@ Typically, in `YourRegressor` you will call `self.solver_init_state` at the para
 :::{admonition} Solvers
 :class: note
 
-We implement a set of standard solvers in NeMoS, relying on various backends. In the future we are planning to add support for user-defined solvers, because in principle any object that adheres to the `AbstractSolver` interface should be compatible with NeMoS. For more information about the solver interface and solvers, see the [developer notes about solvers](07-solvers.md).
+We implement a set of standard solvers in NeMoS, relying on various backends. In the future we are planning to add support for user-defined solvers, because in principle any object that adheres to our `AbstractSolver` interface should be compatible with NeMoS. For more information about the solver interface and solvers, see the [developer notes about solvers](07-solvers.md).
 :::
 
 ## Contributor Guidelines

@@ -18,7 +18,7 @@ def _clean_solver_kwargs(
     If `atol` and `rtol` are passed to a JAXopt solver, `atol` is used for `tol`.
     If `tol` is passed to an Optimistix solver, it is used to set `atol` and `rtol` is set to 0.
 
-    In all cases a warning is raise about the unexpected argument.
+    In all cases a warning is raised about the unexpected argument.
     """
     try:
         accepted_args = solver_class.get_accepted_arguments()
