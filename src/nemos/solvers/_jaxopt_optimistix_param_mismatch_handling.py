@@ -1,4 +1,3 @@
-import inspect
 import warnings
 from typing import Any, Type
 
@@ -20,11 +19,7 @@ def _clean_solver_kwargs(
 
     In all cases a warning is raised about the unexpected argument.
     """
-    try:
-        accepted_args = solver_class.get_accepted_arguments()
-    except AttributeError:
-        # NOTE: might want to take the union with solver_class.__init__'s args?
-        accepted_args = set(inspect.getfullargspec(solver_class).args)
+    accepted_args = solver_class.get_accepted_arguments()
 
     solver_init_kwargs = _replace_param(
         solver_init_kwargs, accepted_args, "maxiter", "max_steps"
