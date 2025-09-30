@@ -6,10 +6,6 @@ from typing import Any, Callable, Generic, NamedTuple
 from ..regularizer import Regularizer
 from ..typing import Params, SolverState, StepResult
 
-# TODO: If we want to accept solvers that implement this interface,
-# but are not implemented as a subclass of AbstractSolver,
-# we could just create a protocol listing the methods.
-
 
 class OptimizationInfo(NamedTuple):
     """Basic diagnostic information about finished optimization runs."""

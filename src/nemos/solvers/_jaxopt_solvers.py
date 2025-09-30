@@ -11,8 +11,6 @@ from ._solver_adapter import SolverAdapter
 JaxoptSolverState: TypeAlias = NamedTuple
 JaxoptStepResult: TypeAlias = jaxopt.OptStep  # this is just a namedtuple(params, state)
 
-# TODO: do we want the JAXopt solvers to use the same tolerance and max_steps as the Optimistix solvers?
-
 
 class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
     """
