@@ -6,7 +6,6 @@ from typing import Type
 from ._solver_registry import solver_registry
 
 
-# TODO: Add a short how-to guide about this.
 def get_solver_documentation(solver: str | Type, show_help: bool = False) -> str:
     """
     Get the documentation of a specified solver, including accepted arguments and the docstring of its `__init__`.
@@ -17,7 +16,28 @@ def get_solver_documentation(solver: str | Type, show_help: bool = False) -> str
         `solver` can be a string or a type (e.g. `nemos.solvers.JaxoptGradientDescent`).
         If `solver` is a string, the corresponding solver will be read from the solver registry.
     show_help:
-        Instead of the docstring, show the full output that be produced by `help(solver)` where `solver` is a type.
+        Instead of the docstring, show the full output that would be produced by `help(solver)` where `solver` is a type.
+
+    Example
+    -------
+    >>> import nemos as nmo
+    >>> print(nmo.solvers.get_solver_documentation("SVRG"))
+    Showing docstring of nemos.solvers._svrg.WrappedSVRG.
+    For potentially more info, use `show_help=True`.
+    <BLANKLINE>
+    Adapter for NeMoS's implementation of SVRG following the AbstractSolver interface.
+    <BLANKLINE>
+    Accepted arguments:
+    -------------------
+    - batch_size
+    - fun
+    - key
+    - maxiter
+    - stepsize
+    - tol
+    <BLANKLINE>
+    SVRG's documentation:
+    ...
     """
     if isinstance(solver, str):
         solver = solver_registry[solver]
