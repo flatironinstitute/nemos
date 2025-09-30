@@ -114,9 +114,7 @@ def _make_rate_scaler(
     """
     if stepsize is None or stepsize <= 0.0:
         if linesearch_kwargs is None:
-            linesearch_kwargs = {
-                # "approx_dec_rtol" : None, # setting this to none might be useful
-            }
+            linesearch_kwargs = {}
 
         if "max_linesearch_steps" not in linesearch_kwargs:
             linesearch_kwargs["max_linesearch_steps"] = 15
