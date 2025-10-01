@@ -10,14 +10,7 @@ from ._jaxopt_solvers import (
     JaxoptProximalGradient,
 )
 
-# from ._optimistix_solvers import OptimistixBFGS, OptimistixNonlinearCG
 from ._svrg import WrappedProxSVRG, WrappedSVRG
-
-# from ._optax_optimistix_solvers import (
-#    OptimistixOptaxGradientDescent,
-#    OptimistixOptaxLBFGS,
-#    OptimistixOptaxProximalGradient,
-# )
 
 
 solver_registry: dict[str, Type] = {
@@ -34,3 +27,16 @@ solver_registry: dict[str, Type] = {
     #
     "NonlinearCG": JaxoptNonlinearCG,
 }
+
+
+def available_solvers():
+    """
+    List the available solvers that can be used for fitting models.
+
+    Example
+    -------
+    >>> import nemos as nmo
+    >>> nmo.solvers.available_solvers()
+    ['GradientDescent', 'ProximalGradient', 'LBFGS', 'BFGS', 'SVRG', 'ProxSVRG', 'NonlinearCG']
+    """
+    return list(solver_registry.keys())
