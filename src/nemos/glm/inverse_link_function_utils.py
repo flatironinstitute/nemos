@@ -19,6 +19,12 @@ LINK_NAME_TO_FUNC = {
     "jax._src.lax.lax.logistic": jax.lax.logistic,
     "jax.scipy.stats.norm.cdf": jax.scipy.stats.norm.cdf,
     "jax._src.scipy.stats.norm.cdf": jax.scipy.stats.norm.cdf,
+    "softplus": jax.nn.softplus,
+    "exp": jax.numpy.exp,
+    "one_over_x": one_over_x,
+    "logistic": jax.lax.logistic,
+    "norm.cdf": jax.scipy.stats.norm.cdf,
+    "expit": jax.scipy.special.expit,
 }
 
 
@@ -70,7 +76,9 @@ def check_inverse_link_function(inverse_link_function: Callable):
     Raises
     ------
     TypeError
-        If the function is not callable, does not return a jax.numpy.ndarray,
+        If the function is not callable.
+    ValueError
+        If the function does not return a jax.numpy.ndarray,
         or is not differentiable.
     """
     if inverse_link_function in LINK_NAME_TO_FUNC.values():
@@ -83,12 +91,12 @@ def check_inverse_link_function(inverse_link_function: Callable):
     # check if the function returns a jax array for a 1D array
     array_out = inverse_link_function(jnp.array([1.0, 2.0, 3.0]))
     if not isinstance(array_out, jnp.ndarray):
-        raise TypeError("The `inverse_link_function` must return a jax.numpy.ndarray!")
+        raise ValueError("The `inverse_link_function` must return a jax.numpy.ndarray!")
 
     # Optionally: Check for scalar input
     scalar_out = inverse_link_function(1.0)
     if not isinstance(scalar_out, (jnp.ndarray, float, int)):
-        raise TypeError(
+        raise ValueError(
             "The `inverse_link_function` must handle scalar inputs correctly and return a scalar or a "
             "jax.numpy.ndarray!"
         )
@@ -98,6 +106,6 @@ def check_inverse_link_function(inverse_link_function: Callable):
         gradient_fn = jax.grad(inverse_link_function)
         gradient_fn(1.0)
     except Exception as e:
-        raise TypeError(
+        raise ValueError(
             f"The `inverse_link_function` function cannot be differentiated. Error: {e}"
         ) from e

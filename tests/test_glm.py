@@ -142,12 +142,12 @@ class TestGLM:
         non_diff = lambda y: jnp.asarray(njit(lambda x: x)(np.atleast_1d(y)))
 
         with pytest.raises(
-            TypeError,
+            ValueError,
             match="The `inverse_link_function` function cannot be differentiated",
         ):
             model.inverse_link_function = non_diff
         with pytest.raises(
-            TypeError,
+            ValueError,
             match="The `inverse_link_function` function cannot be differentiated",
         ):
             glm_class(inverse_link_function=non_diff)
@@ -171,7 +171,7 @@ class TestGLM:
 
         if raise_exception:
             with pytest.raises(
-                TypeError,
+                ValueError,
                 match="The `inverse_link_function` must handle scalar inputs correctly",
             ):
                 model.set_params(inverse_link_function=link_function)
@@ -196,7 +196,7 @@ class TestGLM:
         )
         if raise_exception:
             with pytest.raises(
-                TypeError,
+                ValueError,
                 match="The `inverse_link_function` must return a jax.numpy.ndarray",
             ):
                 glm_class(inverse_link_function=link_function)
@@ -210,7 +210,7 @@ class TestGLM:
             (
                 sp.special.expit,
                 pytest.raises(
-                    TypeError,
+                    ValueError,
                     match="The `inverse_link_function` must return a jax.numpy.ndarray!",
                 ),
             ),
@@ -218,14 +218,14 @@ class TestGLM:
             (
                 sts.norm.cdf,
                 pytest.raises(
-                    TypeError,
+                    ValueError,
                     match="The `inverse_link_function` must return a jax.numpy.ndarray!",
                 ),
             ),
             (
                 np.exp,
                 pytest.raises(
-                    TypeError,
+                    ValueError,
                     match="The `inverse_link_function` must return a jax.numpy.ndarray!",
                 ),
             ),
@@ -233,7 +233,7 @@ class TestGLM:
             (
                 sm.families.links.Log(),
                 pytest.raises(
-                    TypeError,
+                    ValueError,
                     match="The `inverse_link_function` must return a jax.numpy.ndarray!",
                 ),
             ),
