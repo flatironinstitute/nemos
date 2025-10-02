@@ -107,12 +107,12 @@ class GLMHMM(BaseRegressor):
                 f"Transition probability matrix shape mismatch: expected ({self._n_states}, {self._n_states}), "
                 f"but got {transition_prob.shape}."
             )
-        if not jnp.allclose(jnp.sum(transition_prob, axis=0), 1):
-            col_sums = jnp.sum(transition_prob, axis=0)
+        if not jnp.allclose(jnp.sum(transition_prob, axis=1), 1):
+            row_sums = jnp.sum(transition_prob, axis=1)
             raise ValueError(
-                f"Transition probability matrix columns must sum to 1. "
-                f"Each column j represents the probability distribution of transitioning from state j. "
-                f"Column sums: {col_sums}"
+                f"Transition probability matrix rows must sum to 1. "
+                f"Each row i represents the probability distribution of transitioning from state i. "
+                f"Row sums: {row_sums}"
             )
 
     def _check_init_state_proba(self, initial_prob: jax.numpy.ndarray):
