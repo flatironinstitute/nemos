@@ -20,6 +20,7 @@ from .. import tree_utils, validation
 from .._observation_model_builder import instantiate_observation_model
 from ..base_regressor import BaseRegressor, strip_metadata
 from ..exceptions import NotFittedError
+from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..pytrees import FeaturePytree
 from ..regularizer import GroupLasso, Lasso, Regularizer, Ridge
 from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
@@ -27,10 +28,6 @@ from ..type_casting import jnp_asarray_if, support_pynapple
 from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength
 from ..utils import format_repr
 from .initialize_parameters import initialize_intercept_matching_mean_rate
-from .inverse_link_function_utils import (
-    check_inverse_link_function,
-    link_function_from_string,
-)
 
 ModelParams = Tuple[jnp.ndarray, jnp.ndarray]
 
@@ -257,20 +254,9 @@ class GLM(BaseRegressor):
     @inverse_link_function.setter
     def inverse_link_function(self, inverse_link_function: Callable):
         """Setter for the inverse link function for the model."""
-        if inverse_link_function is None:
-            self._inverse_link_function = (
-                self.observation_model.default_inverse_link_function
-            )
-            return
-
-        elif isinstance(inverse_link_function, str):
-            self._inverse_link_function = link_function_from_string(
-                inverse_link_function
-            )
-            return
-
-        check_inverse_link_function(inverse_link_function)
-        self._inverse_link_function = inverse_link_function
+        self._inverse_link_function = resolve_inverse_link_function(
+            inverse_link_function, self._observation_model
+        )
 
     @property
     def observation_model(self) -> Union[None, obs.Observations]:

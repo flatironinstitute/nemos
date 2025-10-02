@@ -1,5 +1,6 @@
 """API for the GLM-HMM model."""
 
+from numbers import Number
 from pathlib import Path
 from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
 
@@ -8,33 +9,18 @@ import jax.numpy as jnp
 import pynapple as nap
 from numpy.typing import ArrayLike, NDArray
 
+from .. import observation_models as obs
+from .._observation_model_builder import instantiate_observation_model
 from ..base_regressor import BaseRegressor
+from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..observation_models import Observations
 from ..regularizer import Regularizer
 from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength
-
-
-def random_projection_init(
-    n_states: int, X: DESIGN_INPUT_TYPE, y: NDArray, random_key=jax.random.PRNGKey(123)
-):
-    """Initialize projections."""
-    n_features = X.shape[1]
-    return 0.1 * jax.random.normal(random_key, (n_features, n_states))
-
-
-def sticky_transition_proba_init(n_states: int, prob_stay=0.95):
-    """Initialize transition probabilities."""
-    # assume n_state is > 1
-    prob_leave = (1 - prob_stay) / (n_states - 1)
-    return jnp.full((n_states, n_states), prob_leave) + jnp.diag(
-        (prob_stay - prob_leave) * jnp.ones(n_states)
-    )
-
-
-def uniform_initial_proba_init(n_states: int, random_key=jax.random.PRNGKey(124)):
-    """Initialize initial state probabilities."""
-    prob = jax.random.uniform(random_key, (n_states,), minval=0, maxval=1)
-    return prob / jnp.sum(prob)
+from .parameters_initialization import (
+    random_projection_init,
+    sticky_transition_proba_init,
+    uniform_initial_proba_init,
+)
 
 
 class GLMHMM(BaseRegressor):
@@ -74,6 +60,72 @@ class GLMHMM(BaseRegressor):
             solver_name=solver_name,
             solver_kwargs=solver_kwargs,
         )
+        self._n_states = n_states
+        self.observation_model = observation_model
+
+    @property
+    def n_states(self) -> int:
+        """Number of hidden states of the HMM."""
+        return self._n_states
+
+    @n_states.setter
+    def n_states(self, n_states: int):
+        if not isinstance(n_states, Number):
+            raise TypeError(
+                f"n_states must be a positive integer. "
+                f"n_states is of type `{type(n_states)}` instead."
+            )
+        int_n_states = int(n_states)
+        if int_n_states != int(n_states):
+            raise TypeError(
+                f"n_states must be a positive integer. `{n_states}` provided instead."
+            )
+        if int_n_states < 1:
+            raise ValueError(
+                f"n_states must be a positive integer. `{n_states}` provided instead."
+            )
+        self._n_states = int_n_states
+
+    @property
+    def observation_model(self) -> Union[None, obs.Observations]:
+        """Getter for the ``observation_model`` attribute."""
+        return self._observation_model
+
+    @observation_model.setter
+    def observation_model(self, observation: obs.Observations):
+        if isinstance(observation, str):
+            self._observation_model = instantiate_observation_model(observation)
+            return
+        # check that the model has the required attributes
+        # and that the attribute can be called
+        obs.check_observation_model(observation)
+        self._observation_model = observation
+
+    @property
+    def inverse_link_function(self):
+        """Getter for the inverse link function for the model."""
+        return self._inverse_link_function
+
+    @inverse_link_function.setter
+    def inverse_link_function(self, inverse_link_function: Callable):
+        """Setter for the inverse link function for the model."""
+        self._inverse_link_function = resolve_inverse_link_function(
+            inverse_link_function, self._observation_model
+        )
+
+    def _set_up_initialization_funcs(
+        self,
+        initialize_init_proba: (
+            Callable[[DESIGN_INPUT_TYPE, NDArray], NDArray] | NDArray | str
+        ),
+        initialize_transition_proba: (
+            Callable[[DESIGN_INPUT_TYPE, NDArray], NDArray] | NDArray | str
+        ),
+        initialize_projections: (
+            Callable[[DESIGN_INPUT_TYPE, NDArray], NDArray] | NDArray | str
+        ),
+    ):
+        pass
 
     def fit(
         self, X: DESIGN_INPUT_TYPE, y: Union[NDArray, jnp.ndarray, nap.Tsd]
