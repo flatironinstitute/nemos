@@ -346,9 +346,9 @@ def poissonGLM_model_instantiation():
     X = np.random.normal(size=(100, 5))
     b_true = np.zeros((1,))
     w_true = np.random.normal(size=(5,))
-    observation_model = nmo.observation_models.PoissonObservations(jnp.exp)
+    observation_model = nmo.observation_models.PoissonObservations()
     regularizer = nmo.regularizer.UnRegularized()
-    model = nmo.glm.GLM(observation_model, regularizer)
+    model = nmo.glm.GLM(observation_model, regularizer=regularizer)
     rate = jax.numpy.exp(jax.numpy.einsum("k,tk->t", w_true, X) + b_true)
     return X, np.random.poisson(rate), model, (w_true, b_true), rate
 
@@ -375,7 +375,7 @@ def poissonGLM_model_instantiation_pytree(poissonGLM_model_instantiation):
         dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
         true_params[1],
     )
-    model_tree = nmo.glm.GLM(model.observation_model, model.regularizer)
+    model_tree = nmo.glm.GLM(model.observation_model, regularizer=model.regularizer)
     return X_tree, np.random.poisson(rate), model_tree, true_params_tree, rate
 
 
@@ -407,7 +407,7 @@ def population_poissonGLM_model_instantiation():
     X = np.random.normal(size=(500, 5))
     b_true = -2 * np.ones((3,))
     w_true = np.random.normal(size=(5, 3))
-    observation_model = nmo.observation_models.PoissonObservations(jnp.exp)
+    observation_model = nmo.observation_models.PoissonObservations()
     regularizer = nmo.regularizer.UnRegularized()
     model = nmo.glm.PopulationGLM(
         observation_model=observation_model, regularizer=regularizer
@@ -551,9 +551,9 @@ def poissonGLM_model_instantiation_group_sparse():
     mask = np.zeros((2, 5))
     mask[0, 1:4] = 1
     mask[1, [0, 4]] = 1
-    observation_model = nmo.observation_models.PoissonObservations(jnp.exp)
+    observation_model = nmo.observation_models.PoissonObservations()
     regularizer = nmo.regularizer.UnRegularized()
-    model = nmo.glm.GLM(observation_model, regularizer)
+    model = nmo.glm.GLM(observation_model, regularizer=regularizer)
     rate = jax.numpy.exp(jax.numpy.einsum("k,tk->t", w_true, X) + b_true)
     return X, np.random.poisson(rate), model, (w_true, b_true), rate, mask
 
@@ -582,9 +582,9 @@ def population_poissonGLM_model_instantiation_group_sparse():
     mask = np.zeros((2, 5))
     mask[0, 1:4] = 1
     mask[1, [0, 4]] = 1
-    observation_model = nmo.observation_models.PoissonObservations(jnp.exp)
+    observation_model = nmo.observation_models.PoissonObservations()
     regularizer = nmo.regularizer.UnRegularized()
-    model = nmo.glm.PopulationGLM(observation_model, regularizer)
+    model = nmo.glm.PopulationGLM(observation_model, regularizer=regularizer)
     rate = jax.numpy.exp(jax.numpy.einsum("kn,tk->tn", w_true, X) + b_true)
     return X, np.random.poisson(rate), model, (w_true, b_true), rate, mask
 
@@ -684,7 +684,7 @@ def gammaGLM_model_instantiation():
     w_true = np.random.uniform(size=(5,))
     observation_model = nmo.observation_models.GammaObservations()
     regularizer = nmo.regularizer.UnRegularized()
-    model = nmo.glm.GLM(observation_model, regularizer)
+    model = nmo.glm.GLM(observation_model, regularizer=regularizer)
     rate = (jax.numpy.einsum("k,tk->t", w_true, X) + b_true) ** -1
     theta = 3
     k = rate / theta
@@ -714,7 +714,7 @@ def gammaGLM_model_instantiation_pytree(gammaGLM_model_instantiation):
         dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
         true_params[1],
     )
-    model_tree = nmo.glm.GLM(model.observation_model, model.regularizer)
+    model_tree = nmo.glm.GLM(model.observation_model, regularizer=model.regularizer)
     return X_tree, spikes, model_tree, true_params_tree, rate
 
 
@@ -874,9 +874,9 @@ def bernoulliGLM_model_instantiation():
     X = np.random.normal(size=(100, 5))
     b_true = np.zeros((1,))
     w_true = np.random.normal(size=(5,))
-    observation_model = nmo.observation_models.BernoulliObservations(jax.lax.logistic)
+    observation_model = nmo.observation_models.BernoulliObservations()
     regularizer = nmo.regularizer.UnRegularized()
-    model = nmo.glm.GLM(observation_model, regularizer)
+    model = nmo.glm.GLM(observation_model, regularizer=regularizer)
     rate = jax.lax.logistic(jnp.einsum("k,tk->t", w_true, X) + b_true)
     return X, np.random.binomial(1, rate), model, (w_true, b_true), rate
 
@@ -903,7 +903,7 @@ def bernoulliGLM_model_instantiation_pytree(bernoulliGLM_model_instantiation):
         dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
         true_params[1],
     )
-    model_tree = nmo.glm.GLM(model.observation_model, model.regularizer)
+    model_tree = nmo.glm.GLM(model.observation_model, regularizer=model.regularizer)
     return X_tree, np.random.binomial(1, rate), model_tree, true_params_tree, rate
 
 
@@ -927,7 +927,7 @@ def population_bernoulliGLM_model_instantiation():
     X = np.random.normal(size=(500, 5))
     b_true = np.zeros((3,))
     w_true = np.random.normal(size=(5, 3))
-    observation_model = nmo.observation_models.BernoulliObservations(jax.lax.logistic)
+    observation_model = nmo.observation_models.BernoulliObservations()
     regularizer = nmo.regularizer.UnRegularized()
     model = nmo.glm.PopulationGLM(
         observation_model=observation_model, regularizer=regularizer
@@ -1006,7 +1006,7 @@ def negativeBinomialGLM_model_instantiation():
     w_true = np.random.normal(size=(5,))
     observation_model = nmo.observation_models.NegativeBinomialObservations()
     regularizer = nmo.regularizer.UnRegularized()
-    model = nmo.glm.GLM(observation_model, regularizer, solver_name="LBFGS")
+    model = nmo.glm.GLM(observation_model, regularizer=regularizer, solver_name="LBFGS")
     rate = jax.numpy.exp(jax.numpy.einsum("k,tk->t", w_true, X) + b_true)
     r = 1 / model.observation_model.scale
     spikes = np.random.poisson(np.random.gamma(shape=r, size=rate.shape) * (r / rate))
@@ -1038,7 +1038,7 @@ def negativeBinomialGLM_model_instantiation_pytree(
         true_params[1],
     )
     model_tree = nmo.glm.GLM(
-        model.observation_model, model.regularizer, solver_name="LBFGS"
+        model.observation_model, regularizer=model.regularizer, solver_name="LBFGS"
     )
     return X_tree, np.random.poisson(rate), model_tree, true_params_tree, rate
 
@@ -1063,9 +1063,7 @@ def population_negativeBinomialGLM_model_instantiation():
     X = np.random.normal(size=(500, 5))
     b_true = -2 * np.ones((3,))
     w_true = 0.1 * np.random.normal(size=(5, 3))
-    observation_model = nmo.observation_models.NegativeBinomialObservations(
-        jax.numpy.exp
-    )
+    observation_model = nmo.observation_models.NegativeBinomialObservations()
     regularizer = nmo.regularizer.UnRegularized()
     model = nmo.glm.PopulationGLM(
         observation_model=observation_model,

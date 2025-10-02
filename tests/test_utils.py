@@ -608,10 +608,10 @@ class ComplexParam(Base):
         (Example(a=0, b=[], c={}), None, [], "Example(a=0, d=1)"),
         # function without the __name__
         (
-            nmo.observation_models.PoissonObservations(deepcopy(jax.numpy.exp)),
+            nmo.glm.GLM(inverse_link_function=deepcopy(jax.numpy.exp)),
             None,
             [],
-            "PoissonObservations(inverse_link_function=<PjitFunction>)",
+            "GLM(observation_model=PoissonObservations(), inverse_link_function=<PjitFunction>, regularizer=UnRegularized(), solver_name='GradientDescent')",
         ),
     ],
 )
@@ -680,28 +680,29 @@ def test_inspect_npz(tmp_path, model_class, monkeypatch, capsys):
     lines = [
         "Metadata",
         "--------",
-        "jax version           : x.x.x (installed: x.x.x)",
-        "jaxlib version        : x.x.x (installed: x.x.x)",
-        "scipy version         : x.x.x (installed: x.x.x)",
-        "scikit-learn version  : x.x.x (installed: x.x.x)",
-        "nemos version         : x.x.x (installed: x.x.x)",
+        "jax version            : x.x.x (installed: x.x.x)",
+        "jaxlib version         : x.x.x (installed: x.x.x)",
+        "scipy version          : x.x.x (installed: x.x.x)",
+        "scikit-learn version   : x.x.x (installed: x.x.x)",
+        "nemos version          : x.x.x (installed: x.x.x)",
         "",
         "Model class",
         "-----------",
-        f"Saved model class     : {model_class.__module__}.{model_class.__name__}",
+        f"Saved model class      : {model_class.__module__}.{model_class.__name__}",
         "",
         "Model parameters",
         "----------------",
     ]
 
     if hasattr(model_class, "feature_mask") or model_class == nmo.glm.PopulationGLM:
-        lines.append("feature_mask          : None")
+        lines.append("feature_mask           : None")
 
     lines += [
-        "observation_model     : {'class': 'nemos.observation_models.PoissonObservations', 'params': {'inverse_link_function': 'jax.numpy.exp'}}",
-        "regularizer           : {'class': 'nemos.regularizer.Ridge'}",
-        "regularizer_strength  : 0.1",
-        "solver_name           : BFGS",
+        "inverse_link_function  : jax.numpy.exp",
+        "observation_model      : {'class': 'nemos.observation_models.PoissonObservations'}",
+        "regularizer            : {'class': 'nemos.regularizer.Ridge'}",
+        "regularizer_strength   : 0.1",
+        "solver_name            : BFGS",
         "",
         "Model fit parameters",
         "--------------------",

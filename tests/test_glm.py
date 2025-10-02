@@ -8,8 +8,11 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+import scipy as sp
+import scipy.stats as sts
 import sklearn
 import statsmodels.api as sm
+from numba import njit
 from pynapple import Tsd, TsdFrame
 from sklearn.linear_model import GammaRegressor, LogisticRegression, PoissonRegressor
 from sklearn.model_selection import GridSearchCV
@@ -17,13 +20,14 @@ from sklearn.model_selection import GridSearchCV
 import nemos as nmo
 from nemos._observation_model_builder import instantiate_observation_model
 from nemos._regularizer_builder import instantiate_regularizer
+from nemos.glm.inverse_link_function_utils import LINK_NAME_TO_FUNC
 from nemos.observation_models import NegativeBinomialObservations
 from nemos.pytrees import FeaturePytree
 from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
 from nemos.utils import _get_name
 
 GLM_COMMON_PARAMS_NAMES = {
-    "observation_model__inverse_link_function",
+    "inverse_link_function",
     "observation_model",
     "regularizer",
     "regularizer_strength",
@@ -130,6 +134,151 @@ class TestGLM:
         with expectation:
             glm_class(solver_name=solver_name)
 
+    def test_non_differentiable_inverse_link(self, request, glm_class_type):
+        glm_class = request.getfixturevalue(glm_class_type)
+        model = glm_class()
+
+        # define a jax non-diff function
+        non_diff = lambda y: jnp.asarray(njit(lambda x: x)(np.atleast_1d(y)))
+
+        with pytest.raises(
+            ValueError,
+            match="The `inverse_link_function` function cannot be differentiated",
+        ):
+            model.inverse_link_function = non_diff
+        with pytest.raises(
+            ValueError,
+            match="The `inverse_link_function` function cannot be differentiated",
+        ):
+            glm_class(inverse_link_function=non_diff)
+
+    @pytest.mark.parametrize(
+        "link_function",
+        [
+            jnp.exp,
+            lambda x: jnp.exp(x) if isinstance(x, jnp.ndarray) else "not a number",
+        ],
+    )
+    def test_initialization_link_returns_scalar(
+        self,
+        link_function,
+        request,
+        glm_class_type,
+    ):
+        """Check that the observation model initializes when a callable is passed."""
+        raise_exception = not isinstance(link_function(1.0), (jnp.ndarray, float))
+        model = request.getfixturevalue(glm_class_type)()
+
+        if raise_exception:
+            with pytest.raises(
+                ValueError,
+                match="The `inverse_link_function` must handle scalar inputs correctly",
+            ):
+                model.set_params(inverse_link_function=link_function)
+        else:
+            model.set_params(inverse_link_function=link_function)
+
+    @pytest.mark.parametrize(
+        "link_function",
+        [jnp.exp, np.exp, lambda x: 1 / x, sm.families.links.Log()],
+    )
+    def test_initialization_link_is_jax(
+        self,
+        link_function,
+        request,
+        glm_class_type,
+    ):
+        """Check that the observation model initializes when a callable is passed."""
+        glm_class = request.getfixturevalue(glm_class_type)
+
+        raise_exception = isinstance(link_function, np.ufunc) | isinstance(
+            link_function, sm.families.links.Link
+        )
+        if raise_exception:
+            with pytest.raises(
+                ValueError,
+                match="The `inverse_link_function` must return a jax.numpy.ndarray",
+            ):
+                glm_class(inverse_link_function=link_function)
+        else:
+            glm_class(inverse_link_function=link_function)
+
+    @pytest.mark.parametrize(
+        "link_function, expectation",
+        [
+            (jax.scipy.special.expit, does_not_raise()),
+            (
+                sp.special.expit,
+                pytest.raises(
+                    ValueError,
+                    match="The `inverse_link_function` must return a jax.numpy.ndarray!",
+                ),
+            ),
+            (jax.scipy.stats.norm.cdf, does_not_raise()),
+            (
+                sts.norm.cdf,
+                pytest.raises(
+                    ValueError,
+                    match="The `inverse_link_function` must return a jax.numpy.ndarray!",
+                ),
+            ),
+            (
+                np.exp,
+                pytest.raises(
+                    ValueError,
+                    match="The `inverse_link_function` must return a jax.numpy.ndarray!",
+                ),
+            ),
+            (lambda x: x, does_not_raise()),
+            (
+                sm.families.links.Log(),
+                pytest.raises(
+                    ValueError,
+                    match="The `inverse_link_function` must return a jax.numpy.ndarray!",
+                ),
+            ),
+        ],
+    )
+    def test_initialization_link_is_jax_set_params(
+        self, link_function, request, glm_class_type, expectation
+    ):
+        glm_class = request.getfixturevalue(glm_class_type)
+
+        with expectation:
+            glm_class().set_params(inverse_link_function=link_function)
+
+    @pytest.mark.parametrize("link_function", [jnp.exp, jax.nn.softplus, 1])
+    def test_initialization_link_is_callable(
+        self, link_function, request, glm_class_type
+    ):
+        """Check that the observation model initializes when a callable is passed."""
+        glm_class = request.getfixturevalue(glm_class_type)
+        raise_exception = not callable(link_function)
+        if raise_exception:
+            with pytest.raises(
+                TypeError,
+                match="The `inverse_link_function` function must be a Callable",
+            ):
+                glm_class(inverse_link_function=link_function)
+        else:
+            glm_class(inverse_link_function=link_function)
+
+    @pytest.mark.parametrize("link_function", [jnp.exp, jax.nn.softplus, 1])
+    def test_initialization_link_is_callable_set_params(
+        self, link_function, request, glm_class_type
+    ):
+        """Check that the observation model initializes when a callable is passed."""
+        glm_class = request.getfixturevalue(glm_class_type)
+        raise_exception = not callable(link_function)
+        if raise_exception:
+            with pytest.raises(
+                TypeError,
+                match="The `inverse_link_function` function must be a Callable",
+            ):
+                glm_class().set_params(inverse_link_function=link_function)
+        else:
+            glm_class().set_params(inverse_link_function=link_function)
+
     @pytest.mark.parametrize(
         "regularizer, expectation",
         [
@@ -213,7 +362,7 @@ class TestGLM:
         if "population" in glm_class_type:
             expected_keys = {
                 "feature_mask",
-                "observation_model__inverse_link_function",
+                "inverse_link_function",
                 "observation_model",
                 "regularizer",
                 "regularizer_strength",
@@ -222,7 +371,7 @@ class TestGLM:
             }
         else:
             expected_keys = {
-                "observation_model__inverse_link_function",
+                "inverse_link_function",
                 "observation_model",
                 "regularizer",
                 "regularizer_strength",
@@ -236,7 +385,7 @@ class TestGLM:
             if "population" in glm_class_type:
                 return [
                     model.feature_mask,
-                    model.observation_model.inverse_link_function,
+                    model.inverse_link_function,
                     model.observation_model,
                     model.regularizer,
                     model.regularizer_strength,
@@ -246,7 +395,7 @@ class TestGLM:
 
             else:
                 return [
-                    model.observation_model.inverse_link_function,
+                    model.inverse_link_function,
                     model.observation_model,
                     model.regularizer,
                     model.regularizer_strength,
@@ -1779,7 +1928,7 @@ class TestGLM:
                 {
                     "observation_model": nmo.observation_models.GammaObservations,
                     "regularizer": nmo.regularizer.Lasso,
-                    "observation_model__inverse_link_function": lambda x: x**2,
+                    "inverse_link_function": lambda x: x**2,
                 },
                 pytest.warns(
                     UserWarning, match="The following keys have been replaced"
@@ -1789,7 +1938,7 @@ class TestGLM:
                 {
                     "observation_model": nmo.observation_models.GammaObservations(),  # fails, only class or callable
                     "regularizer": nmo.regularizer.Lasso,
-                    "observation_model__inverse_link_function": lambda x: x**2,
+                    "inverse_link_function": lambda x: x**2,
                 },
                 pytest.raises(ValueError, match="Invalid map parameter types detected"),
             ),
@@ -2132,14 +2281,14 @@ class TestGLM:
         invalid_mapping = {
             "regulsriaer": nmo.regularizer.Ridge,
             "observatino_mdels": nmo.observation_models.GammaObservations,
-            "observaiton_models__inv_link_function": jax.numpy.exp,
+            "inv_link_function": jax.numpy.exp,
             "total_nonsense": jax.numpy.exp,
         }
         match = (
             r"The following keys in your mapping do not match any parameters in the loaded model:\n\n"
             r"\t- 'regulsriaer', did you mean 'regularizer'\?\n"
             r"\t- 'observatino_mdels', did you mean 'observation_model'\?\n"
-            r"\t- 'observaiton_models__inv_link_function', did you mean 'observation_model__inverse_link_function'\?\n"
+            r"\t- 'inv_link_function', did you mean 'inverse_link_function'\?\n"
             r"\t- 'total_nonsense'\n"
         )
         with pytest.raises(ValueError, match=match):
@@ -2187,6 +2336,28 @@ class TestGLMObservationModel:
 
     For new observation models, add it in the class parameterization above, and add cases for the fixtures below.
     """
+
+    @pytest.mark.parametrize(
+        "link_func_string, expectation",
+        [
+            *((link_name, does_not_raise()) for link_name in LINK_NAME_TO_FUNC),
+            (
+                "nemos.utils.invalid_link",
+                pytest.raises(ValueError, match="Unknown link function"),
+            ),
+            (
+                "jax.numpy.invalid_link",
+                pytest.raises(ValueError, match="Unknown link function"),
+            ),
+            ("invalid", pytest.raises(ValueError, match="Unknown link function")),
+        ],
+    )
+    def test_glm_link_func_from_string(
+        self, link_func_string, expectation, model_instantiation, glm_type, request
+    ):
+        _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        with expectation:
+            model.__class__(inverse_link_function=link_func_string)
 
     ########################################################
     # Observation model specific fixtures for shared tests #
@@ -2334,27 +2505,27 @@ class TestGLMObservationModel:
         """
         if "poisson" in model_instantiation:
             if "population" in glm_type:
-                return "PopulationGLM(\n    observation_model=PoissonObservations(inverse_link_function=exp),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
+                return "PopulationGLM(\n    observation_model=PoissonObservations(),\n    inverse_link_function=exp,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
             else:
-                return "GLM(\n    observation_model=PoissonObservations(inverse_link_function=exp),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
+                return "GLM(\n    observation_model=PoissonObservations(),\n    inverse_link_function=exp,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
 
         elif "gamma" in model_instantiation:
             if "population" in glm_type:
-                return "PopulationGLM(\n    observation_model=GammaObservations(inverse_link_function=one_over_x),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
+                return "PopulationGLM(\n    observation_model=GammaObservations(),\n    inverse_link_function=one_over_x,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
             else:
-                return "GLM(\n    observation_model=GammaObservations(inverse_link_function=one_over_x),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
+                return "GLM(\n    observation_model=GammaObservations(),\n    inverse_link_function=one_over_x,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
 
         elif "bernoulli" in model_instantiation:
             if "population" in glm_type:
-                return "PopulationGLM(\n    observation_model=BernoulliObservations(inverse_link_function=logistic),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
+                return "PopulationGLM(\n    observation_model=BernoulliObservations(),\n    inverse_link_function=logistic,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
             else:
-                return "GLM(\n    observation_model=BernoulliObservations(inverse_link_function=logistic),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
+                return "GLM(\n    observation_model=BernoulliObservations(),\n    inverse_link_function=logistic,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
 
         elif "negative_binomial":
             if "population" in glm_type:
-                return "PopulationGLM(\n    observation_model=NegativeBinomialObservations(inverse_link_function=exp, scale=1.0),\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
+                return "PopulationGLM(\n    observation_model=NegativeBinomialObservations(scale=1.0),\n    inverse_link_function=exp,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
             else:
-                return "GLM(\n    observation_model=NegativeBinomialObservations(inverse_link_function=exp, scale=1.0),\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
+                return "GLM(\n    observation_model=NegativeBinomialObservations(scale=1.0),\n    inverse_link_function=exp,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
 
         else:
             raise ValueError("Unknown model instantiation")
@@ -2411,7 +2582,7 @@ class TestGLMObservationModel:
             def get_expected_values(model):
                 vals = [
                     model.feature_mask,
-                    model.observation_model.inverse_link_function,
+                    model.inverse_link_function,
                     model.observation_model,
                     model.regularizer,
                     model.regularizer_strength,
@@ -2431,7 +2602,7 @@ class TestGLMObservationModel:
 
             def get_expected_values(model):
                 vals = [
-                    model.observation_model.inverse_link_function,
+                    model.inverse_link_function,
                     model.observation_model,
                     model.regularizer,
                     model.regularizer_strength,
@@ -2947,7 +3118,7 @@ class TestGLMObservationModel:
 
         # set gamma inverse link function to match sklearn
         if "gamma" in model_instantiation:
-            model.observation_model.inverse_link_function = jnp.exp
+            model.inverse_link_function = jnp.exp
 
         # set precision to float64 for accurate matching of the results
         model.data_type = jnp.float64
@@ -3080,7 +3251,7 @@ class TestGLMObservationModel:
         )
 
         obs = model.observation_model
-        obs.inverse_link_function = inv_link
+        model.inverse_link_function = inv_link
         solver_kwargs = dict(stepsize=stepsize, batch_size=batch_size)
         # use glm static methods to check if the solver is batchable
         # if not pop the batch_size kwarg
@@ -3095,6 +3266,7 @@ class TestGLMObservationModel:
             model = nmo.glm.GLM(
                 regularizer=regularizer,
                 solver_name=solver_name,
+                inverse_link_function=inv_link,
                 observation_model=obs,
                 solver_kwargs=solver_kwargs,
                 regularizer_strength=None if regularizer == "UnRegularized" else 1.0,
@@ -3530,9 +3702,8 @@ class TestPoissonGLM:
     ):
         glm_class = request.getfixturevalue(glm_class_type)
         model = glm_class(
-            observation_model=nmo.observation_models.PoissonObservations(
-                inverse_link_function=inv_link
-            )
+            observation_model=nmo.observation_models.PoissonObservations(),
+            inverse_link_function=inv_link,
         )
         X, y = example_X_y_high_firing_rates
         if "population" in glm_class_type:
@@ -3555,11 +3726,7 @@ class TestPoissonGLM:
     )
     @pytest.mark.parametrize(
         "obs",
-        [
-            nmo.observation_models.PoissonObservations(
-                inverse_link_function=jax.nn.softplus
-            )
-        ],
+        [nmo.observation_models.PoissonObservations()],
     )
     @pytest.mark.parametrize("batch_size", [None, 1, 10])
     @pytest.mark.parametrize("stepsize", [None, 0.01])
@@ -3590,6 +3757,7 @@ class TestPoissonGLM:
                 reg = nmo.regularizer.GroupLasso(mask=jnp.ones((1, X.shape[1])))
         model = glm_class(
             solver_name=solver_name,
+            inverse_link_function=jax.nn.softplus,
             solver_kwargs=dict(batch_size=batch_size, stepsize=stepsize),
             observation_model=obs,
             regularizer=reg,
@@ -3648,13 +3816,12 @@ class TestPoissonGLM:
     ):
         """Test that 'required_params' is a dictionary."""
         glm_class = request.getfixturevalue(glm_class_type)
-        obs = nmo.observation_models.PoissonObservations(
-            inverse_link_function=inv_link_func
-        )
+        obs = nmo.observation_models.PoissonObservations()
 
         # if the regularizer is not allowed for the solver type, return
         try:
             model = glm_class(
+                inverse_link_function=inv_link_func,
                 regularizer=regularizer,
                 solver_name=solver_name,
                 observation_model=obs,
@@ -3747,7 +3914,7 @@ class TestBernoulliGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
-        model.observation_model.inverse_link_function = inv_link
+        model.inverse_link_function = inv_link
         model.fit(X, y)
 
     def test_score_glm(self, inv_link, request, glm_type, model_instantiation):
@@ -3757,7 +3924,7 @@ class TestBernoulliGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
-        model.observation_model.inverse_link_function = inv_link
+        model.inverse_link_function = inv_link
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
         if "population" in glm_type:
@@ -3773,7 +3940,7 @@ class TestBernoulliGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
-        model.observation_model.inverse_link_function = inv_link
+        model.inverse_link_function = inv_link
         if "population" in glm_type:
             model.feature_mask = jnp.ones((X.shape[1], y.shape[1]))
             model.scale_ = jnp.ones((y.shape[1]))
@@ -3804,7 +3971,7 @@ class TestNegativeBinomialGLM:
             glm_type + model_instantiation
         )
         # intialize to true params
-        model.observation_model.inverse_link_function = inv_link
+        model.inverse_link_function = inv_link
         model.fit(X, y, init_params=true_params)
 
     def test_score_glm(self, inv_link, request, glm_type, model_instantiation):
@@ -3814,7 +3981,7 @@ class TestNegativeBinomialGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
-        model.observation_model.inverse_link_function = inv_link
+        model.inverse_link_function = inv_link
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
         if "population" in glm_type:
@@ -3830,7 +3997,7 @@ class TestNegativeBinomialGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
-        model.observation_model.inverse_link_function = inv_link
+        model.inverse_link_function = inv_link
         if "population" in glm_type:
             model.feature_mask = jnp.ones((X.shape[1], y.shape[1]))
             model.scale_ = jnp.ones((y.shape[1]))

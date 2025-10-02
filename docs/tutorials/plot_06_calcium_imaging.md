@@ -194,7 +194,8 @@ model = nmo.glm.GLM(
     solver_kwargs=dict(tol=10**-13),
     regularizer="Ridge",
     regularizer_strength=0.02,
-    observation_model=nmo.observation_models.GammaObservations(inverse_link_function=jax.nn.softplus)
+    observation_model="Gamma",
+    inverse_link_function=jax.nn.softplus,
 )
 ```
 
