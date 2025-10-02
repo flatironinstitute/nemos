@@ -23,7 +23,11 @@ class GLMHMMState(eqx.Module):
     iterations: int
 
 
-def _analytical_m_step_initial_prob(posteriors: jnp.ndarray, is_new_session: jnp.ndarray, dirichlet_prior_alphas: Optional[jnp.ndarray] = None):
+def _analytical_m_step_initial_prob(
+    posteriors: jnp.ndarray,
+    is_new_session: jnp.ndarray,
+    dirichlet_prior_alphas: Optional[jnp.ndarray] = None,
+):
     """
     Calculate the M-step for initial probabilities.
 
@@ -38,23 +42,24 @@ def _analytical_m_step_initial_prob(posteriors: jnp.ndarray, is_new_session: jnp
     -------
         Updated initial parameters.
     """
-    tmp_initial_prob = jnp.sum(
-        posteriors, axis=0, where=is_new_session[:, jnp.newaxis]
-    )
+    tmp_initial_prob = jnp.sum(posteriors, axis=0, where=is_new_session[:, jnp.newaxis])
     if dirichlet_prior_alphas is not None:
-        tmp_initial_prob += (dirichlet_prior_alphas - 1)
+        tmp_initial_prob += dirichlet_prior_alphas - 1
 
     new_initial_prob = tmp_initial_prob / jnp.sum(tmp_initial_prob)
     return new_initial_prob
 
 
-def _analytical_m_step_transition_prob(joint_posterior: jnp.ndarray, dirichlet_prior_alphas: Optional[jnp.ndarray] = None):
+def _analytical_m_step_transition_prob(
+    joint_posterior: jnp.ndarray, dirichlet_prior_alphas: Optional[jnp.ndarray] = None
+):
     if dirichlet_prior_alphas is not None:
         new_transition_prob = joint_posterior + dirichlet_prior_alphas - 1
     else:
         new_transition_prob = joint_posterior
     new_transition_prob /= jnp.sum(new_transition_prob, axis=0)[jnp.newaxis]
     return new_transition_prob
+
 
 def compute_xi(
     alphas, betas, conditionals, normalization, is_new_session, transition_prob
@@ -89,7 +94,7 @@ def compute_xi(
     norm_alpha = jnp.where(is_new_session[1:, jnp.newaxis], 0.0, norm_alpha)
 
     # Compute xi sum in one matmul
-    xi_sum = (conditionals[1:] * betas[1:]).T @ norm_alpha
+    xi_sum = norm_alpha.T @ (conditionals[1:] * betas[1:])
 
     return xi_sum * transition_prob
 
@@ -150,7 +155,7 @@ def forward_pass(
             if new_sess[t]:
                 alphas[:, t] = initial_prob * py_z.T[:, t]
             else:
-                alphas[:, t] = py_z.T[:, t] * (transition_prob @ alphas[:, t - 1])
+                alphas[:, t] = py_z.T[:, t] * (transition_prob.T @ alphas[:, t - 1])
 
             c[t] = np.sum(alphas[:, t])
             alphas[:, t] /= c[t]
@@ -187,6 +192,7 @@ def forward_pass(
         return alpha, (alpha, const)
 
     init = jnp.zeros_like(conditional_prob[0])
+    transition_prob = transition_prob.T
     _, (alphas, normalizers) = jax.lax.scan(
         body_fn, init, (conditional_prob, is_new_session)
     )
@@ -249,13 +255,12 @@ def backward_pass(
                     n_states
                 )
             else:
-                betas[:, t] = transition_prob.T @ (
+                betas[:, t] = transition_prob @ (
                     betas[:, t + 1] * py_z.T[:, t + 1]
                 )
                 betas[:, t] /= c[t + 1]
     """
     init = jnp.ones_like(conditional_prob[0])
-    transition_prob_transposed = transition_prob.T
 
     def initial_compute(posterior, *_):
         # Initialize
@@ -263,7 +268,7 @@ def backward_pass(
 
     def backward_step(posterior, beta, normalization):
         # Normalize (Equation 13.62)
-        return jnp.matmul(transition_prob_transposed, posterior * beta) / normalization
+        return jnp.matmul(transition_prob, posterior * beta) / normalization
 
     def body_fn(carry, xs):
         posterior, norm, is_new_sess = xs
@@ -435,7 +440,7 @@ def forward_backward(
     posteriors = alphas * betas
 
     # xis Equations 13.43 and 13.65 from [1]
-    # Posterior over consecutive states averaged across time steps
+    # Posterior over consecutive states summed across time steps
     joint_posterior = compute_xi(
         alphas,
         betas,
@@ -519,10 +524,10 @@ def run_m_step(
     posteriors: Array,
     joint_posterior: Array,
     projection_weights: Array,
-    dirichlet_prior_alphas_initial_prob: Array,
-    dirichlet_prior_alphas_transition_prob: Array,
     is_new_session: Array,
     solver_run: Callable[[Array, Array, Array, Array], Array],
+    dirichlet_prior_alphas_init_prob: Array | None = None,
+    dirichlet_prior_alphas_transition: Array | None = None,
 ) -> Tuple[Array, Array, Array, Any]:
     r"""
     Perform the M-step of the EM algorithm for GLM-HMM.
@@ -540,15 +545,15 @@ def run_m_step(
         :math:`P(z_{t-1}, z_t \mid X, y, \theta_{\text{old}})`.
     projection_weights:
         Current projection weights.
-    dirichlet_prior_alphas_initial_prob:
-        Prior for the initial states.
-    dirichlet_prior_alphas_transition_prob:
-        Prior for the transition probabilities.
     is_new_session:
         Boolean mask for the first observation of each session.
     solver_run:
         Callable performing a full optimization loop for the GLM weights.
         Note that the prior for the projection weights is baked in the solver run.
+    dirichlet_prior_alphas_init_prob:
+        Prior for the initial states.
+    dirichlet_prior_alphas_transition:
+        Prior for the transition probabilities.
 
     Returns
     -------
@@ -563,10 +568,14 @@ def run_m_step(
     """
 
     # Update Initial state probability Eq. 13.18
-    new_initial_prob = _analytical_m_step_initial_prob(posteriors, is_new_session, dirichlet_prior_alphas=dirichlet_prior_alphas_initial_prob)
-
-    # Update Transition matrix Eq. 13.19
-    new_transition_prob = _analytical_m_step_transition_prob(joint_posterior, dirichlet_prior_alphas=dirichlet_prior_alphas_transition_prob)
+    new_transition_prob = _analytical_m_step_initial_prob(
+        posteriors,
+        is_new_session=is_new_session,
+        dirichlet_prior_alphas=dirichlet_prior_alphas_init_prob,
+    )
+    new_initial_prob = _analytical_m_step_transition_prob(
+        joint_posterior, dirichlet_prior_alphas=dirichlet_prior_alphas_transition
+    )
 
     # Minimize negative log-likelihood to update GLM weights
     optimized_projection_weights, state = solver_run(

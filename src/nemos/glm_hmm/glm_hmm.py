@@ -42,8 +42,10 @@ class GLMHMM(BaseRegressor):
         ] = None,  # do we regularize all params or only projection?
         # - there is regularization but doesn't follow the current logic.
         # - one prior for transition and initial proba, to get an analytical m-step still
-        dirichlet_prior_init_state: jnp.ndarray | None = None,  # (n_state, )
-        dirichlet_prior_transition: jnp.ndarray | None = None,  # (n_state, n_state)
+        dirichlet_prior_alphas_init_prob: jnp.ndarray | None = None,  # (n_state, )
+        dirichlet_prior_alphas_transition: (
+            jnp.ndarray | None
+        ) = None,  # (n_state, n_state)
         solver_name: str = None,
         solver_kwargs: Optional[dict] = None,
         initialize_init_proba: (
