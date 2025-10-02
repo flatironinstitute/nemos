@@ -18,6 +18,9 @@ from ..regularizer import Regularizer
 from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength
 from .parameters_initialization import (
     random_projection_init,
+    resolve_initial_state_proba_init_function,
+    resolve_projection_init_function,
+    resolve_transition_proba_init_function,
     sticky_transition_proba_init,
     uniform_initial_proba_init,
 )
@@ -62,6 +65,67 @@ class GLMHMM(BaseRegressor):
         )
         self._n_states = n_states
         self.observation_model = observation_model
+
+        # check and store initialization hyper-parameters.
+        self._initialize_projections = resolve_projection_init_function(
+            initialize_projections
+        )
+        if isinstance(self._initialize_projections, jnp.ndarray):
+            self._check_initial_proj(self._initialize_projections)
+
+        self._initialize_transition_proba = resolve_transition_proba_init_function(
+            initialize_transition_proba
+        )
+        if isinstance(self._initialize_transition_proba, jnp.ndarray):
+            self._check_initial_proj(self._initialize_transition_proba)
+
+        self._initialize_init_state_proba = resolve_initial_state_proba_init_function(
+            initialize_init_proba
+        )
+        if isinstance(self._initialize_init_state_proba, jnp.ndarray):
+            self._check_init_state_proba(self._initialize_init_state_proba)
+
+    def _check_initial_proj(
+        self, projection_array: jax.numpy.ndarray, X: Optional[DESIGN_INPUT_TYPE] = None
+    ):
+        if self._n_states != projection_array.shape[1]:
+            raise ValueError(
+                f"Projection weights shape mismatch: the second dimension must match the number of HMM states.\n"
+                f"Expected shape[1] = {self._n_states} (n_states), but got shape[1] = {projection_array.shape[1]}.\n"
+                f"Projection weights shape: {projection_array.shape}"
+            )
+        if X is not None and projection_array.shape[0] != X.shape[1]:
+            raise ValueError(
+                f"Projection weights shape mismatch: the first dimension must match the number of GLM features.\n"
+                f"Expected shape[0] = {X.shape[1]} (n_features), but got shape[0] = {projection_array.shape[0]}.\n"
+                f"Projection weights shape: {projection_array.shape}"
+            )
+
+    def _check_transition_proba(self, transition_prob: jax.numpy.ndarray):
+        if transition_prob.shape != (self._n_states, self._n_states):
+            raise ValueError(
+                f"Transition probability matrix shape mismatch: expected ({self._n_states}, {self._n_states}), "
+                f"but got {transition_prob.shape}."
+            )
+        if not jnp.allclose(jnp.sum(transition_prob, axis=0), 1):
+            col_sums = jnp.sum(transition_prob, axis=0)
+            raise ValueError(
+                f"Transition probability matrix columns must sum to 1. "
+                f"Each column j represents the probability distribution of transitioning from state j. "
+                f"Column sums: {col_sums}"
+            )
+
+    def _check_init_state_proba(self, initial_prob: jax.numpy.ndarray):
+        if initial_prob.shape != (self._n_states,):
+            raise ValueError(
+                f"Initial state probability vector shape mismatch: expected ({self._n_states},), "
+                f"but got {initial_prob.shape}."
+            )
+        if not jnp.allclose(initial_prob.sum(), 1):
+            raise ValueError(
+                f"Initial state probabilities must sum to 1, but got sum = {initial_prob.sum()}. "
+                f"Probabilities: {initial_prob}"
+            )
 
     @property
     def n_states(self) -> int:

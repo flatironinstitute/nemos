@@ -281,7 +281,7 @@ def forward_backward(
         Initial latent state probability, pytree with leaves of shape ``(``n_states, 1)``.
 
     transition_prob :
-        Latent state transition matrix, pytree with leaves of shape ``(n_states x n_states)``.
+        Latent state transition matrix, pytree with leaves of shape ``(n_states, n_states)``.
 
     projection_weights :
         Latent state GLM weights, pytree with leaves of shape ``(n_features, n_states)``.
