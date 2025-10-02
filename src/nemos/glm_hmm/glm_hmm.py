@@ -36,8 +36,7 @@ class GLMHMM(BaseRegressor):
         inverse_link_function: Callable = jax.lax.logistic,
         regularizer: Union[
             str, Regularizer
-        ] = "UnRegularized",  # how does it work for the analytical M-step?
-        # do all regularization make sense for this?
+        ] = "UnRegularized",  # this applies only for the regularization of the weights.
         regularizer_strength: Optional[
             RegularizerStrength
         ] = None,  # do we regularize all params or only projection?
@@ -65,8 +64,9 @@ class GLMHMM(BaseRegressor):
         )
         self._n_states = n_states
         self.observation_model = observation_model
+        self.inverse_link_function = inverse_link_function
 
-        # check and store initialization hyper-parameters.
+        # check and store initialization hyperparameters.
         self._initialize_projections = resolve_projection_init_function(
             initialize_projections
         )
