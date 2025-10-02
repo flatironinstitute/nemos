@@ -35,7 +35,7 @@ def test_forward_backward_regression(decorator):
     # E-step initial parameters
     initial_prob = data["initial_prob"]
     projection_weights = data["projection_weights"]
-    transition_matrix = data["transition_matrix"]
+    transition_prob = data["transition_prob"]
 
     # E-step output
     xis = data["xis"]
@@ -57,7 +57,7 @@ def test_forward_backward_regression(decorator):
             X,
             y,
             initial_prob,
-            transition_matrix,
+            transition_prob,
             projection_weights,
             likelihood_func=likelihood,
             inverse_link_function=obs.default_inverse_link_function,

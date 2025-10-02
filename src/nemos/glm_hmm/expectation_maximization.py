@@ -56,7 +56,7 @@ def compute_xi(
     norm_alpha = jnp.where(is_new_session[1:, jnp.newaxis], 0.0, norm_alpha)
 
     # Compute xi sum in one matmul
-    xi_sum = norm_alpha.T @ (conditionals[1:] * betas[1:])
+    xi_sum = (conditionals[1:] * betas[1:]).T @ norm_alpha
 
     return xi_sum * transition_prob
 
@@ -81,7 +81,7 @@ def forward_pass(
 
     transition_prob :
         Transition matrix of shape ``(n_states, n_states)``, where entry ``T[i, j]`` is the
-        probability of transitioning from state ``j`` to state ``i``.
+        probability of transitioning from state ``i`` to state ``j``.
 
     conditional_prob :
         Array of shape ``(n_time_bins, n_states)``, representing the observation likelihood
@@ -117,7 +117,7 @@ def forward_pass(
             if new_sess[t]:
                 alphas[:, t] = initial_prob * py_z.T[:, t]
             else:
-                alphas[:, t] = py_z.T[:, t] * (transition_prob.T @ alphas[:, t - 1])
+                alphas[:, t] = py_z.T[:, t] * (transition_prob @ alphas[:, t - 1])
 
             c[t] = np.sum(alphas[:, t])
             alphas[:, t] /= c[t]
@@ -154,7 +154,6 @@ def forward_pass(
         return alpha, (alpha, const)
 
     init = jnp.zeros_like(conditional_prob[0])
-    transition_prob = transition_prob.T
     _, (alphas, normalizers) = jax.lax.scan(
         body_fn, init, (conditional_prob, is_new_session)
     )
@@ -178,7 +177,7 @@ def backward_pass(
     ----------
     transition_prob :
         Transition matrix of shape ``(n_states, n_states)``, where entry ``T[i, j]`` is the
-        probability of transitioning from state ``j`` to state ``i``.
+        probability of transitioning from state ``i`` to state ``j``.
 
     conditional_prob :
         Array of shape ``(n_time_bins, n_states)``, representing the observation likelihoods
@@ -217,12 +216,13 @@ def backward_pass(
                     n_states
                 )
             else:
-                betas[:, t] = transition_prob @ (
+                betas[:, t] = transition_prob.T @ (
                     betas[:, t + 1] * py_z.T[:, t + 1]
                 )
                 betas[:, t] /= c[t + 1]
     """
     init = jnp.ones_like(conditional_prob[0])
+    transition_prob_transposed = transition_prob.T
 
     def initial_compute(posterior, *_):
         # Initialize
@@ -230,7 +230,7 @@ def backward_pass(
 
     def backward_step(posterior, beta, normalization):
         # Normalize (Equation 13.62)
-        return jnp.matmul(transition_prob, posterior * beta) / normalization
+        return jnp.matmul(transition_prob_transposed, posterior * beta) / normalization
 
     def body_fn(carry, xs):
         posterior, norm, is_new_sess = xs
@@ -282,6 +282,7 @@ def forward_backward(
 
     transition_prob :
         Latent state transition matrix, pytree with leaves of shape ``(n_states, n_states)``.
+        ``transition_prob[i, j]`` is the probability of transitioning from state ``i`` to state ``j``.
 
     projection_weights :
         Latent state GLM weights, pytree with leaves of shape ``(n_features, n_states)``.
@@ -528,7 +529,7 @@ def run_m_step(
 
     # Update Transition matrix Eq. 13.19
     new_transition_prob = (
-        joint_posterior / jnp.sum(joint_posterior, axis=1)[:, jnp.newaxis]
+        joint_posterior / jnp.sum(joint_posterior, axis=0)[jnp.newaxis]
     )
 
     # Minimize negative log-likelihood to update GLM weights
