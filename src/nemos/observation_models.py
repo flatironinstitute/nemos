@@ -1030,7 +1030,7 @@ class BernoulliObservations(Observations):
         Returns
         -------
         :
-            The Bernoulli negative log-likehood. Shape (1,).
+            The Bernoulli negative log-likelihood. Shape (1,).
 
         Notes
         -----
