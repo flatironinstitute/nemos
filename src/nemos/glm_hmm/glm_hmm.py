@@ -15,6 +15,7 @@ from ..base_regressor import BaseRegressor
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..observation_models import Observations
 from ..regularizer import Regularizer
+from ..type_casting import is_numpy_array_like
 from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength
 from .parameters_initialization import (
     random_projection_init,
@@ -86,6 +87,76 @@ class GLMHMM(BaseRegressor):
         )
         if isinstance(self._initialize_init_state_proba, jnp.ndarray):
             self._check_init_state_proba(self._initialize_init_state_proba)
+
+        # set the prior params
+        self.dirichlet_prior_alphas_init_prob = dirichlet_prior_alphas_init_prob
+        self.dirichlet_prior_alphas_transition = dirichlet_prior_alphas_transition
+
+    @property
+    def dirichlet_prior_alphas_init_prob(self) -> jnp.ndarray | None:
+        """Alpha parameters of the Dirichlet prior over the initial probabilities of HMM states.
+
+        If ``None``, a flat prior is assumed.
+        """
+        return self._dirichlet_prior_alphas_init_prob
+
+    @dirichlet_prior_alphas_init_prob.setter
+    def dirichlet_prior_alphas_init_prob(self, value: jnp.ndarray | None):
+        if value is None:
+            self._dirichlet_prior_alphas_init_prob = None
+        elif is_numpy_array_like(value)[1]:
+            value = jnp.asarray(value, dtype=float)
+            if value.shape != (self._n_states,):
+                raise ValueError(
+                    f"Dirichlet prior alpha parameters for initial state probabilities "
+                    f"must have shape ({self._n_states},), "
+                    f"but got shape {value.shape}."
+                )
+            if not jnp.all(value > 0):
+                raise ValueError(
+                    f"Dirichlet prior alpha parameters must be strictly positive, but got values with "
+                    f"zero or negative entries: {value}"
+                )
+            self._dirichlet_prior_alphas_init_prob = value
+        else:
+            raise TypeError(
+                f"Invalid type for Dirichlet prior alpha parameters: {type(value).__name__}. "
+                f"Must be None or an array-like object of shape ({self._n_states},) with strictly positive values."
+            )
+
+    @property
+    def dirichlet_prior_alphas_transition(self) -> jnp.ndarray | None:
+        """Alpha parameters of the Dirichlet prior over the initial probabilities of HMM states.
+
+        If ``None``, a flat prior is assumed.
+        """
+        return self._dirichlet_prior_alphas_transition
+
+    @dirichlet_prior_alphas_transition.setter
+    def dirichlet_prior_alphas_transition(self, value: jnp.ndarray | None):
+        if value is None:
+            self._dirichlet_prior_alphas_transition = None
+        elif is_numpy_array_like(value)[1]:
+            value = jnp.asarray(value, dtype=float)
+            if value.shape != (self._n_states, self.n_states):
+                raise ValueError(
+                    "Dirichlet prior alpha parameters for transition probabilities must "
+                    f"have shape ({self._n_states}, {self._n_states}), "
+                    f"but got shape {value.shape}."
+                )
+            if not jnp.all(value > 0):
+                raise ValueError(
+                    f"Dirichlet prior alpha parameters must be strictly positive, but got values with "
+                    f"zero or negative entries: {value}"
+                )
+            self._dirichlet_prior_alphas_transition = value
+        else:
+            raise TypeError(
+                f"Invalid type for Dirichlet prior alpha parameters for transition probabilities: "
+                f"{type(value).__name__}. "
+                f"Must be None or an array-like object of shape ({self._n_states}, {self._n_states}) "
+                f"with strictly positive values."
+            )
 
     def _check_initial_proj(
         self, projection_array: jax.numpy.ndarray, X: Optional[DESIGN_INPUT_TYPE] = None
