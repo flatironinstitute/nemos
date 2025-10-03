@@ -3,7 +3,7 @@
 ## Background
 
 In the earlier versions, NeMoS relied on [JAXopt](https://jaxopt.github.io/stable/) as its optimization backend.
-As JAXopt is no longer maintained, we added support for alternative optimization backends.
+As [JAXopt is no longer maintained](https://github.com/google/jaxopt?tab=readme-ov-file#status), we added support for alternative optimization backends.
 
 To support flexibility and long-term maintenance, NeMoS now has a backend-agnostic solver interface, allowing the use of solvers from different backend libraries with different interfaces.
 
@@ -103,15 +103,12 @@ Currently, the solver registry defines which implementation to use for each algo
 To run stochastic (mini-batch) optimization, JAXopt used a `run_iterator` method.
 Instead of the full input data `run_iterator` accepts a generator / iterator that provides batches of data.
 
-For solvers defined in `nemos` that can be used this way, we will likely provide `StochasticMixin` which borrows the implementation from JAXopt (Or some version of it, see below).
-We will likely define an interface or protocol for this, allowing custom (user-defined) solvers to also implement their own version.
-We will also have to decide on how this will be exposed to users on the level of `BaseRegressor` and `GLM`.
+For information on how stochastic optimization is planned to be supported in NeMOS, see the [issue tracking the stochastic optimization interface](https://github.com/flatironinstitute/nemos/issues/376).
 
 :::{admonition} Stochastic optimization interface for (Prox-)SVRG
 :class: warning
 
 Note that (Prox-)SVRG is especially well-suited for running stochastic optimization, however it currently requires the optimization loop to be implemented separately as it is a bit more involved than what is done by `run_iterator`.  
-A potential solution to this would be to provide a separate method that accepts the full data and takes care of the batching. That might be a more convenient alternative to the current `run_iterator` as well.
 :::
 
 ## Note on line searches vs. fixed stepsize in Optimistix
