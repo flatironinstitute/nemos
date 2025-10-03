@@ -314,7 +314,7 @@ def forward_backward(
     y: Array,
     initial_prob: Array,
     transition_prob: Array,
-    projection_weights: Array,
+    glm_params: Tuple[Array, Array],
     inverse_link_function: Callable,
     likelihood_func: Callable[[Array, Array], Array],
     is_new_session: Array | None = None,
@@ -341,8 +341,9 @@ def forward_backward(
         Latent state transition matrix, pytree with leaves of shape ``(n_states, n_states)``.
         ``transition_prob[i, j]`` is the probability of transitioning from state ``i`` to state ``j``.
 
-    projection_weights :
-        Latent state GLM weights, pytree with leaves of shape ``(n_features, n_states)``.
+    glm_params :
+        Length two tuple with the GLM coefficients of shape ``(n_features, n_states)``
+        and intercept of shape ``(n_states,)``.
 
     inverse_link_function :
         Function mapping linear predictors to the mean of the observation distribution
@@ -381,6 +382,7 @@ def forward_backward(
     ----------
     .. [1] Bishop, C. M. (2006). *Pattern recognition and machine learning*. Springer.
     """
+    coef, intercept = glm_params
     # Initialize variables
     n_time_bins = X.shape[0]
 
@@ -398,12 +400,12 @@ def forward_backward(
         )
 
     # Predicted y
-    if projection_weights.ndim > 2:
+    if coef.ndim > 2:
         predicted_rate_given_state = inverse_link_function(
-            jnp.einsum("ik, kjw->ijw", X, projection_weights)
+            jnp.einsum("ik, kjw->ijw", X, coef) + intercept
         )
     else:
-        predicted_rate_given_state = inverse_link_function(X @ projection_weights)
+        predicted_rate_given_state = inverse_link_function(X @ coef + intercept)
 
     # Compute likelihood given the fixed weights
     # Data likelihood p(y|z) from emissions model
