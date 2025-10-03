@@ -292,20 +292,11 @@ class OptimistixOptaxProximalGradient(AbstractOptimistixOptaxSolver):
         # recheck convergence criteria with the projected point
         updates = tree_sub(new_params, y)
 
-        terminate = optx._misc.cauchy_termination(
-            self._solver.rtol,
-            self._solver.atol,
-            self._solver.norm,
-            y,
-            updates,
-            new_state.f,
-            new_state.f - state.f,
+        # replicating the jaxopt stopping criterion
+        terminate = (
+            optx.two_norm(updates) / self.get_learning_rate(new_state)
+            < self._solver.atol
         )
-        # we could also replicate the jaxopt stopping criterion
-        # terminate = (
-        #    optx.two_norm(updates) / self.get_learning_rate(new_state)
-        #    < self._solver.atol
-        # )
 
         new_state = eqx.tree_at(lambda s: s.terminate, new_state, terminate)
 
