@@ -1,13 +1,63 @@
 """Forward backward pass for a GLM-HMM."""
 
 from functools import partial
-from typing import Callable, Tuple
+from typing import Any, Callable, Optional, Tuple
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 from numpy.typing import NDArray
 
 Array = NDArray | jax.numpy.ndarray
+
+
+class GLMHMMState(eqx.Module):
+    """State class for the GLMHHM EM-algorithm."""
+
+    initial_prob: Array
+    transition_matrix: Array
+    projection_weights: Array
+    data_log_likelihood: float | Array
+    iterations: int
+
+
+def _analytical_m_step_initial_prob(
+    posteriors: jnp.ndarray,
+    is_new_session: jnp.ndarray,
+    dirichlet_prior_alphas: Optional[jnp.ndarray] = None,
+):
+    """
+    Calculate the M-step for initial probabilities.
+
+    Parameters
+    ----------
+    posteriors:
+        The posterior distribution over latent states, shape ``(n_time_bins, n_states)``.
+    dirichlet_prior_alphas:
+        The parameters of the Dirichlet prior, if available. Flat prior otherwise.
+
+    Returns
+    -------
+        Updated initial parameters.
+    """
+    tmp_initial_prob = jnp.sum(posteriors, axis=0, where=is_new_session[:, jnp.newaxis])
+    if dirichlet_prior_alphas is not None:
+        tmp_initial_prob += dirichlet_prior_alphas - 1
+
+    new_initial_prob = tmp_initial_prob / jnp.sum(tmp_initial_prob)
+    return new_initial_prob
+
+
+def _analytical_m_step_transition_prob(
+    joint_posterior: jnp.ndarray, dirichlet_prior_alphas: Optional[jnp.ndarray] = None
+):
+    if dirichlet_prior_alphas is not None:
+        new_transition_prob = joint_posterior + dirichlet_prior_alphas - 1
+    else:
+        new_transition_prob = joint_posterior
+
+    new_transition_prob /= jnp.sum(joint_posterior, axis=1)[:, jnp.newaxis]
+    return new_transition_prob
 
 
 def compute_xi(
@@ -422,3 +472,129 @@ def forward_backward(
         alphas,
         betas,
     )
+
+
+@partial(
+    jax.jit, static_argnames=["inverse_link_function", "negative_log_likelihood_func"]
+)
+def hmm_negative_log_likelihood(
+    projection_weights: Array,
+    X: Array,
+    y: Array,
+    posteriors: Array,
+    inverse_link_function: Callable,
+    negative_log_likelihood_func: Callable,
+):
+    """
+    Compute the negative log-likelihood of the GLM-HMM.
+
+    Compute the negative log-likelihood as a function of the projection weights.
+
+    Parameters
+    ----------
+    projection_weights:
+        Projection weights for the GLM.
+    X:
+        Design matrix of observations.
+    y:
+        Target responses.
+    posteriors:
+        Posterior probabilities over states.
+    inverse_link_function:
+        Function mapping linear predictors to rates.
+    negative_log_likelihood_func:
+        Function to compute the negative log-likelihood.
+
+    Returns
+    -------
+    nll:
+        The scalar negative log-likelihood weighted by the posteriors.
+    """
+
+    if projection_weights.ndim > 2:
+        predicted_rate = inverse_link_function(
+            jnp.einsum("ik, kjw->ijw", X, projection_weights)
+        )
+        nll = negative_log_likelihood_func(
+            y,
+            predicted_rate,
+        ).sum(axis=1)
+    else:
+        predicted_rate = inverse_link_function(X @ projection_weights)
+        nll = negative_log_likelihood_func(
+            y,
+            predicted_rate,
+        )
+
+    # Compute dot products between log-likelihood terms and gammas
+    nll = jnp.sum(nll * posteriors)
+
+    return nll
+
+
+@partial(jax.jit, static_argnames=["solver_run"])
+def run_m_step(
+    X: Array,
+    y: Array,
+    posteriors: Array,
+    joint_posterior: Array,
+    projection_weights: Array,
+    is_new_session: Array,
+    solver_run: Callable[[Array, Array, Array, Array], Array],
+    dirichlet_prior_alphas_init_prob: Array | None = None,
+    dirichlet_prior_alphas_transition: Array | None = None,
+) -> Tuple[Array, Array, Array, Any]:
+    r"""
+    Perform the M-step of the EM algorithm for GLM-HMM.
+
+    Parameters
+    ----------
+    X:
+        Design matrix of observations.
+    y:
+        Target responses.
+    posteriors:
+        Posterior probabilities over states.
+    joint_posterior:
+        Joint posterior probabilities over pairs of states
+        :math:`P(z_{t-1}, z_t \mid X, y, \theta_{\text{old}})`.
+    projection_weights:
+        Current projection weights.
+    is_new_session:
+        Boolean mask for the first observation of each session.
+    solver_run:
+        Callable performing a full optimization loop for the GLM weights.
+        Note that the prior for the projection weights is baked in the solver run.
+    dirichlet_prior_alphas_init_prob:
+        Prior for the initial states.
+    dirichlet_prior_alphas_transition:
+        Prior for the transition probabilities.
+
+    Returns
+    -------
+    optimized_projection_weights:
+        Updated projection weights after optimization.
+    new_initial_prob:
+        Updated initial state distribution.
+    new_transition_prob:
+        Updated transition matrix.
+    state:
+        State returned by the solver.
+    """
+
+    # # Update Initial state probability Eq. 13.18
+    new_initial_prob = _analytical_m_step_initial_prob(
+        posteriors,
+        is_new_session=is_new_session,
+        dirichlet_prior_alphas=dirichlet_prior_alphas_init_prob,
+    )
+    new_transition_prob = _analytical_m_step_transition_prob(
+        joint_posterior, dirichlet_prior_alphas=dirichlet_prior_alphas_transition
+    )
+
+    # Minimize negative log-likelihood to update GLM weights
+    optimized_projection_weights, state = solver_run(
+        projection_weights, X, y, posteriors
+    )
+
+    return optimized_projection_weights, new_initial_prob, new_transition_prob, state

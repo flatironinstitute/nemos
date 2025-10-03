@@ -77,6 +77,18 @@ VALID_PAIRS = [
     {"flat_dict", "flat_map_dict"},
     {"fit_params", "init_params"},
     {"args", "arg"},
+    {"initialize_init_proba", "initialize_transition_proba"},
+    *(
+        {a, b}
+        for (a, b) in itertools.combinations(
+            [
+                "dirichlet_prior_alphas_init_prob",
+                "dirichlet_prior_alphas_transition",
+                "dirichlet_prior_alphas",
+            ],
+            r=2,
+        )
+    ),
 ]
 
 
