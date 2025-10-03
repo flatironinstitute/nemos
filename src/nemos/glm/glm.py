@@ -1113,7 +1113,9 @@ class GLM(BaseRegressor):
         opt_solver_kwargs = self._optimize_solver_params(data, y)
 
         #  set up the solver init/run/update attrs
-        self.instantiate_solver(solver_kwargs=opt_solver_kwargs)
+        self.instantiate_solver(
+            self._predict_and_compute_loss, solver_kwargs=opt_solver_kwargs
+        )
 
         opt_state = self.solver_init_state(init_params, data, y)
         return opt_state
