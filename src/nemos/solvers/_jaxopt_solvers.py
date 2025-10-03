@@ -84,7 +84,6 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
 
     @property
     def maxiter(self):
-        # explicitly implementing to satisfy StoachasticMixin
         return self._solver.maxiter
 
 

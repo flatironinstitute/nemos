@@ -8,9 +8,6 @@ def _clean_solver_kwargs(
     """
     Clean up the arguments passed to the solver accounting for some mismatches between JAXopt and Optimistix.
 
-    The maximum number of iterations: JAXopt solvers use `maxiter`, `Optimistix` uses `max_steps.`
-    If the unexpected parameter name is given, just rename it in `solver_init_kwargs`.
-
     The tolerances for the convergence criterion are defined differently.
     JAXopt solvers typically have a single `tol` parameter, while Optimistix passes `atol` and `rtol`
     to their Cauchy criterion.
@@ -20,14 +17,6 @@ def _clean_solver_kwargs(
     In all cases a warning is raised about the unexpected argument.
     """
     accepted_args = solver_class.get_accepted_arguments()
-
-    solver_init_kwargs = _replace_param(
-        solver_init_kwargs, accepted_args, "maxiter", "max_steps"
-    )
-
-    solver_init_kwargs = _replace_param(
-        solver_init_kwargs, accepted_args, "max_steps", "maxiter"
-    )
 
     solver_init_kwargs = _replace_tol(solver_init_kwargs, accepted_args)
     solver_init_kwargs = _replace_atol_rtol(solver_init_kwargs, accepted_args)

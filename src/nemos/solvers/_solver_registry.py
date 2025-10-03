@@ -9,9 +9,7 @@ from ._jaxopt_solvers import (
     JaxoptNonlinearCG,
     JaxoptProximalGradient,
 )
-
 from ._svrg import WrappedProxSVRG, WrappedSVRG
-
 
 solver_registry: dict[str, Type] = {
     "GradientDescent": JaxoptGradientDescent,

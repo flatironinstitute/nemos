@@ -323,7 +323,7 @@ class OptimistixOptaxProximalGradient(AbstractOptimistixOptaxSolver):
             args=args,
             options=self.config.options,
             has_aux=self.config.has_aux,
-            max_steps=self.config.max_steps,
+            max_steps=self.config.maxiter,
             adjoint=self.config.adjoint,
             throw=self.config.throw,
             tags=self.config.tags,

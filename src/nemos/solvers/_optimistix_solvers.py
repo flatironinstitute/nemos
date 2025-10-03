@@ -36,7 +36,7 @@ class OptimistixConfig:
     """
 
     # max number of steps
-    max_steps: int = DEFAULT_MAX_STEPS
+    maxiter: int = DEFAULT_MAX_STEPS
     # options dict passed around within optimistix
     options: dict[str, Any] = dataclasses.field(default_factory=dict)
     # "The shape+dtype of the output of `fn`"
@@ -156,7 +156,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
             args=args,
             options=self.config.options,
             has_aux=self.config.has_aux,
-            max_steps=self.config.max_steps,
+            max_steps=self.config.maxiter,
             adjoint=self.config.adjoint,
             throw=self.config.throw,
             tags=self.config.tags,
@@ -181,7 +181,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
 
     @property
     def maxiter(self) -> int:
-        return self.config.max_steps
+        return self.config.maxiter
 
     def get_optim_info(self, state: OptimistixSolverState) -> OptimizationInfo:
         num_steps = self.stats["num_steps"].item()
