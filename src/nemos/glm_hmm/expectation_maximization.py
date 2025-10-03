@@ -292,7 +292,8 @@ def forward_backward(
         ``transition_prob[i, j]`` is the probability of transitioning from state ``i`` to state ``j``.
 
     glm_params :
-        Latent state GLM weights, pytree with leaves of shape ``(n_features, n_states)``.
+        Length two tuple with the GLM coefficients of shape ``(n_features, n_states)``
+        and intercept of shape ``(n_states,)``.
 
     inverse_link_function :
         Function mapping linear predictors to the mean of the observation distribution
