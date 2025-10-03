@@ -16,7 +16,8 @@ def get_solver_documentation(solver: str | Type, show_help: bool = False) -> str
         `solver` can be a string or a type (e.g. `nemos.solvers.JaxoptGradientDescent`).
         If `solver` is a string, the corresponding solver will be read from the solver registry.
     show_help:
-        Instead of the docstring, show the full output that would be produced by `help(solver)` where `solver` is a type.
+        Instead of the docstring, show the full output that would be produced by `help(solver)`
+        where `solver` is a type.
 
     Example
     -------
