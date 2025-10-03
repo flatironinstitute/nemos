@@ -36,7 +36,11 @@ def random_projection_and_intercept_init(
     return random_param[:-1], random_param[-1:]
 
 
-def sticky_transition_proba_init(n_states: int, prob_stay=0.95):
+def sticky_transition_proba_init(
+    n_states: int,
+    random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
+    prob_stay=0.95,
+):
     """
     Initialize transition probabilities with sticky dynamics.
 
@@ -46,6 +50,8 @@ def sticky_transition_proba_init(n_states: int, prob_stay=0.95):
     ----------
     n_states :
         Number of HMM states. Must be greater than 1.
+    random_key :
+        Random key, unused for this particular initialization, but added for API consistency.
     prob_stay :
         Probability of staying in the current state. Default is 0.95.
 
@@ -249,7 +255,7 @@ def resolve_projection_and_intercept_init_function(
 
 def resolve_transition_proba_init_function(
     transition_prob: Callable | str | ArrayLike | Any,
-) -> Callable[[int], jnp.ndarray] | jnp.ndarray:
+) -> Callable[[int, jax.random.PRNGKey], jnp.ndarray] | jnp.ndarray:
     """
     Validate and resolve a transition probability initialization specification.
 
@@ -335,22 +341,22 @@ def resolve_transition_proba_init_function(
         n_params = len(sig.parameters)
 
         # Check minimum number of parameters
-        if n_params < 1:
+        if n_params < 2:
             raise ValueError(
-                f"Transition probability initialization function must have at least 1 parameter: "
-                f"(n_states), but got {n_params} parameter(s).\n"
-                f"Signature should be: Callable[[int], NDArray]"
+                f"Transition probability initialization function must have at least 2 parameters: "
+                f"(n_states , key), but got {n_params} parameter(s).\n"
+                f"Signature should be: (n_states: int, key, **kwargs) -> NDArray"
             )
 
         # Check that extra parameters have defaults
         params = list(sig.parameters.values())
         params_without_defaults = [
-            p.name for p in params[1:] if p.default is inspect.Parameter.empty
+            p.name for p in params[2:] if p.default is inspect.Parameter.empty
         ]
 
         if params_without_defaults:
             raise ValueError(
-                f"All parameters beyond the required 1 (n_states) must have default values.\n"
+                f"All parameters beyond the required 2 (n_states, key) must have default values.\n"
                 f"Parameters without defaults: {params_without_defaults}"
             )
 
@@ -366,7 +372,7 @@ def resolve_transition_proba_init_function(
             "The transition probability initialization must be one of:\n"
             f"  - A string from: {valid_strings_str}\n"
             "  - An array-like object with shape (n_states, n_states)\n"
-            "  - A callable with signature: (n_states: int, **kwargs) -> NDArray"
+            "  - A callable with signature: (n_states: int, key, **kwargs) -> NDArray"
         )
 
 

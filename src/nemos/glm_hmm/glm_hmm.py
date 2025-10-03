@@ -10,10 +10,13 @@ import pynapple as nap
 from numpy.typing import ArrayLike, NDArray
 
 from .. import observation_models as obs
+from .. import validation
 from .._observation_model_builder import instantiate_observation_model
 from ..base_regressor import BaseRegressor
+from ..glm import GLM
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..observation_models import Observations
+from ..pytrees import FeaturePytree
 from ..regularizer import Regularizer
 from ..type_casting import cast_to_jax, is_numpy_array_like
 from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength
@@ -60,6 +63,7 @@ class GLMHMM(BaseRegressor[ModelParams]):
         initialize_projections_and_intercept: (
             Callable[[DESIGN_INPUT_TYPE, NDArray], NDArray] | NDArray | str
         ) = random_projection_and_intercept_init,
+        seed=jax.random.PRNGKey(123),
     ):
         super().__init__(
             regularizer=regularizer,
@@ -101,6 +105,7 @@ class GLMHMM(BaseRegressor[ModelParams]):
         # set the prior params
         self.dirichlet_prior_alphas_init_prob = dirichlet_prior_alphas_init_prob
         self.dirichlet_prior_alphas_transition = dirichlet_prior_alphas_transition
+        self._seed = seed
 
     @property
     def initialize_projections_and_intercept(self):
@@ -195,26 +200,38 @@ class GLMHMM(BaseRegressor[ModelParams]):
 
     def _check_initial_proj_and_intercept(
         self,
-        params: Tuple[jax.numpy.ndarray, jax.numpy.ndarray],
-        X: Optional[DESIGN_INPUT_TYPE] = None,
+        params: Tuple[DESIGN_INPUT_TYPE | dict, jax.numpy.ndarray],
     ):
         projection_array, intercept = params
-        if self._n_states != projection_array.shape[1]:
-            raise ValueError(
-                f"Projection weights shape mismatch: the second dimension must match the number of HMM states.\n"
-                f"Expected shape[1] = {self._n_states} (n_states), but got shape[1] = {projection_array.shape[1]}.\n"
-                f"Projection weights shape: {projection_array.shape}"
+        # check the dimensionality of coeff
+        err_message_shape = (
+            "params[0] (GLM coefficients) must be a two-dimensional array "
+            f"or nemos.pytree.FeaturePytree with array leafs of shape "
+            f"(n_features, {self._n_states})."
+        )
+        validation.check_tree_leaves_dimensionality(
+            params[0],
+            expected_dim=2,
+            err_message=err_message_shape,
+        )
+
+        shape_coef = set(
+            jax.tree_util.tree_map(
+                lambda x: x.shape[1], jax.tree_util.tree_leaves(params[0])
             )
-        if X is not None and projection_array.shape[0] != X.shape[1]:
+        )
+        if len(shape_coef) != 1 or shape_coef != {self._n_states}:
+            raise ValueError(err_message_shape)
+
+        if not isinstance(intercept, jnp.ndarray):
             raise ValueError(
-                f"Projection weights shape mismatch: the first dimension must match the number of GLM features.\n"
-                f"Expected shape[0] = {X.shape[1]} (n_features), but got shape[0] = {projection_array.shape[0]}.\n"
-                f"Projection weights shape: {projection_array.shape}"
+                f"params[1] (intercept) should be a 1-dimensional array of shape ({self._n_states},). "
+                f"Provided params[1] is of type {type(intercept)} instead."
             )
-        if not intercept.shape == (1,):
+        elif not intercept.shape == (self._n_states,):
             raise ValueError(
-                "Intercept should be a 1-dimensional array. "
-                f"Provided intercept is of shape {intercept.shape} instead."
+                f"params[1] (intercept) should be a 1-dimensional array of shape ({self._n_states},). "
+                f"Provided params[1] is of shape {intercept.shape} instead."
             )
 
     def _check_transition_proba(self, transition_prob: jax.numpy.ndarray):
@@ -386,11 +403,28 @@ class GLMHMM(BaseRegressor[ModelParams]):
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
-        init_params: Optional = None,
     ) -> ModelParams:
         """GLM-HMM initialization."""
-        if init_params is None:
-            pass
+
+        key = self._seed
+        init_proj_and_intercept = self._initialize_projections_and_intercept
+        if callable(init_proj_and_intercept):
+            key, subkey = jax.random.split(key)
+            coef, intercept = init_proj_and_intercept(self._n_states, X, subkey)
+        else:
+            coef, intercept = init_proj_and_intercept
+
+        init_transition_proba = self._initialize_transition_proba
+        if callable(init_transition_proba):
+            key, subkey = jax.random.split(key)
+            init_transition_proba = init_transition_proba(self._n_states, subkey)
+
+        init_proba = self._initialize_init_state_proba
+        if callable(init_proba):
+            key, subkey = jax.random.split(key)
+            init_proba = init_proba(self._n_states, subkey)
+
+        return coef, intercept, init_transition_proba, init_proba
 
     def initialize_state(
         self,
@@ -402,8 +436,8 @@ class GLMHMM(BaseRegressor[ModelParams]):
         pass
 
     # CHECKS FOR PARAMS AND INPUTS
-    @staticmethod
     def _check_params(
+        self,
         params: Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike],
         data_type: Optional[jnp.dtype] = None,
     ) -> Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]:
@@ -415,18 +449,35 @@ class GLMHMM(BaseRegressor[ModelParams]):
         It ensures that the parameters and data are compatible for the model.
 
         """
-        pass
+        # check that params has length 4 (coeff, intercept, transition_proba, initial_proba)
+        validation.check_length(
+            params,
+            4,
+            "GLM-HMM requires four parameters: "
+            "(coef, intercept, transition_proba, initial_proba).",
+        )
+        # convert to jax array (specify type if needed)
+        params = validation.convert_tree_leaves_to_jax_array(
+            params,
+            "Initial parameters must be array-like objects (or pytrees of array-like objects) "
+            "with numeric data-type!",
+            data_type,
+        )
+        self._check_initial_proj_and_intercept(params[:2])
+        self._check_transition_proba(params[2])
+        self._check_init_state_proba(params[3])
+        return params
 
     @staticmethod
     def _check_input_dimensionality(
         X: Optional[Union[DESIGN_INPUT_TYPE, jnp.ndarray]] = None,
         y: Optional[jnp.ndarray] = None,
     ):
-        pass
+        GLM._check_input_dimensionality(X=X, y=y)
 
     @staticmethod
     def _check_input_and_params_consistency(
-        params,  # TODO: Add signature
+        params: ModelParams,  # TODO: Add signature
         X: Optional[Union[DESIGN_INPUT_TYPE, jnp.ndarray]] = None,
         y: Optional[jnp.ndarray] = None,
     ):
@@ -439,7 +490,31 @@ class GLMHMM(BaseRegressor[ModelParams]):
               (when provided).
 
         """
-        pass
+        if X is not None:
+            # check that X and params[0] have the same structure
+            if isinstance(X, FeaturePytree):
+                data = X.data
+            else:
+                data = X
+
+            struct1 = jax.tree_util.tree_structure(data)
+            struct2 = jax.tree_util.tree_structure(params[0])
+            if struct1 != struct2:
+                raise ValueError(
+                    f"X and params[0] (GLM coefficients) must be the tree with the same structure.\n"
+                    f"X has structure {struct1} and params[0] has structure {struct2}. "
+                )
+
+            # check the consistency of the feature axis
+            validation.check_tree_axis_consistency(
+                params[0],
+                data,
+                axis_1=0,
+                axis_2=1,
+                err_message="Inconsistent number of features. "
+                f"GLM coefficients have {jax.tree_util.tree_map(lambda p: p.shape[0], params[0])} features, "
+                f"X has {jax.tree_util.tree_map(lambda x: x.shape[1], X)} features instead!",
+            )
 
     # Save
     def save_params(

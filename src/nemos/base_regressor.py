@@ -612,7 +612,6 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
-        init_params: Optional = None,
     ) -> ParamsT:
         """Model specific initialization logic."""
         pass

@@ -637,7 +637,6 @@ class GLM(BaseRegressor[ModelParams]):
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
-        init_params: Optional[Tuple[ArrayLike, ArrayLike]] = None,
     ) -> ModelParams:
         """Initialize the parameters based on the structure and dimensions X and y.
 
