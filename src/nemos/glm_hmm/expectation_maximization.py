@@ -14,7 +14,10 @@ def compute_xi(
     alphas, betas, conditionals, normalization, is_new_session, transition_prob
 ):
     """
-    Compute the expected joint posterior (xi) over consecutive latent states.
+    Compute the sum of the joint posterior (xi) over consecutive latent states.
+
+    Compute the sum of the joint posterior (xis, eqn. 13.14 of [1]_) over samples, implementing
+    the summation required in the eqn. 13.19 of [1]_.
 
     Parameters
     ----------
@@ -35,6 +38,11 @@ def compute_xi(
     -------
     :
         Expected joint posteriors between time steps, shape ``(n_states, n_states)``.
+
+    References
+    ----------
+    .. [1] Bishop, C. M. (2006). Pattern recognition and machine learning. Springer.
+
     """
     # shift alpha so that alpha[t-1] aligns with beta[t]
     norm_alpha = alphas[:-1] / normalization[1:, jnp.newaxis]
@@ -58,8 +66,8 @@ def forward_pass(
     Forward pass of an HMM.
 
     This function performs the recursive forward pass over time using ``jax.lax.scan``,
-    computing the filtered probabilities (``alpha``) at each time step. At the start of
-    a new session, the recursion is reset using the initial state distribution.
+    computing the filtered probabilities (``alpha``, eqn. 13.34 and 13.36 of [1]_) at each time step.
+    At the start of a new session, the recursion is reset using the initial state distribution.
 
     Parameters
     ----------
@@ -108,6 +116,11 @@ def forward_pass(
 
             c[t] = np.sum(alphas[:, t])
             alphas[:, t] /= c[t]
+
+    References
+    ----------
+    .. [1] Bishop, C. M. (2006). Pattern recognition and machine learning. Springer.
+
     """
 
     def initial_compute(posterior, _):
@@ -158,8 +171,9 @@ def backward_pass(
     Run the backward pass of the HMM inference algorithm to compute beta messages.
 
     This function performs the backward recursion step of the forward–backward algorithm,
-    using ``jax.lax.scan`` in reverse to compute beta messages at each time step. It handles
-    session boundaries by resetting the beta messages when a new session starts.
+    using ``jax.lax.scan`` in reverse to compute beta messages at each time step, computing
+    the ``beta`` parameters, see eqn. 13.35 and 13.38 of [1]_.
+    It handles session boundaries by resetting the beta messages when a new session starts.
 
     Parameters
     ----------
@@ -208,6 +222,11 @@ def backward_pass(
                     betas[:, t + 1] * py_z.T[:, t + 1]
                 )
                 betas[:, t] /= c[t + 1]
+
+    References
+    ----------
+    .. [1] Bishop, C. M. (2006). Pattern recognition and machine learning. Springer.
+
     """
     init = jnp.ones_like(conditional_prob[0])
 
@@ -254,7 +273,8 @@ def forward_backward(
     Run the forward-backward Baum-Welch algorithm.
 
     Run the forward-backward Baum-Welch algorithm [1]_ that compute a posterior distribution over latent
-    states.
+    states. It handles session boundaries by resetting the ``alpha`` and ``beta`` messages when a new
+    session starts.
 
     Parameters
     ----------
@@ -265,7 +285,7 @@ def forward_backward(
         Observations, pytree with leaves of shape ``(n_time_bins,)``.
 
     initial_prob :
-        Initial latent state probability, pytree with leaves of shape ``(``n_states, 1)``.
+        Initial latent state probability, pytree with leaves of shape ``(n_states, 1)``.
 
     transition_prob :
         Latent state transition matrix, pytree with leaves of shape ``(n_states, n_states)``.
@@ -276,7 +296,7 @@ def forward_backward(
 
     inverse_link_function :
         Function mapping linear predictors to the mean of the observation distribution
-        (e.g., ``jnp.exp`` for Poisson, sigmoid for Bernoulli).
+        (e.g., exp for Poisson, sigmoid for Bernoulli).
 
     likelihood_func :
         Function computing the elementwise likelihood of observations given predicted mean values.
@@ -299,11 +319,7 @@ def forward_backward(
         Total log-likelihood of the observation sequence under the model.
 
     log_likelihood_norm :
-        A vmapped function that computes the elementwise log-likelihood between observed
-        and predicted values. Must return an array of shape ``(n_time_bins, n_states)``.
-        The vmapping over states must be performed by the caller, outside this function,
-        using `jax.vmap` or equivalent, so that the passed function is already fully
-        vectorized over the state dimension.
+        The normalized total likelihood.
 
     alphas :
         Forward messages (alpha values), shape ``(n_time_bins, n_states)``.
@@ -380,7 +396,7 @@ def forward_backward(
         jnp.log(normalization)
     )  # Store log-likelihood, log of Equation 13.63
 
-    log_likelihood_norm = jnp.exp(log_likelihood / n_time_bins)  # Normalize
+    likelihood_norm = jnp.exp(log_likelihood / n_time_bins)  # Normalize
 
     # Posteriors
     # ----------
@@ -402,7 +418,7 @@ def forward_backward(
         posteriors,
         joint_posterior,
         log_likelihood,
-        log_likelihood_norm,
+        likelihood_norm,
         alphas,
         betas,
     )
