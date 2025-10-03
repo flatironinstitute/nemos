@@ -1,7 +1,7 @@
 """Initialization functions and related utility functions."""
 
 import inspect
-from typing import Any, Callable
+from typing import Any, Callable, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -11,9 +11,9 @@ from ..type_casting import is_numpy_array_like
 from ..typing import DESIGN_INPUT_TYPE
 
 
-def random_projection_init(
+def random_projection_and_intercept_init(
     n_states: int, X: DESIGN_INPUT_TYPE, random_key=jax.random.PRNGKey(123)
-):
+) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """
     Initialize projection weights with random normal values.
 
@@ -32,7 +32,8 @@ def random_projection_init(
         Projection weight matrix of shape (n_features, n_states).
     """
     n_features = X.shape[1]
-    return 0.1 * jax.random.normal(random_key, (n_features, n_states))
+    random_param = 0.1 * jax.random.normal(random_key, (n_features + 1, n_states))
+    return random_param[:-1], random_param[-1:]
 
 
 def sticky_transition_proba_init(n_states: int, prob_stay=0.95):
@@ -103,20 +104,27 @@ def uniform_initial_proba_init(n_states: int, random_key=jax.random.PRNGKey(124)
     return prob / jnp.sum(prob)
 
 
-AVAILABLE_PROJECTION_INIT = [random_projection_init]
+AVAILABLE_PROJECTION_AND_INTERCEPT_INIT = [random_projection_and_intercept_init]
 AVAILABLE_TRANSITION_PROBA_INIT = [sticky_transition_proba_init]
 AVAILABLE_INITIAL_PROBA_INIT = [uniform_initial_proba_init]
 
 INIT_FUNCTION_MAPPING = {
-    "projection_init": {"random_projection": random_projection_init},
+    "projection_init": {
+        "random_projection_and_intercept": random_projection_and_intercept_init
+    },
     "transition_proba": {"sticky_transition_proba": sticky_transition_proba_init},
     "initial_proba": {"uniform": uniform_initial_proba_init},
 }
 
 
-def resolve_projection_init_function(
-    projection_init: Callable | str | ArrayLike | Any,
-) -> Callable[[int, DESIGN_INPUT_TYPE, jax.random.PRNGKey], jnp.ndarray] | jnp.ndarray:
+def resolve_projection_and_intercept_init_function(
+    projection_and_intercept_init: Callable | str | ArrayLike | Any,
+) -> (
+    Callable[
+        [int, DESIGN_INPUT_TYPE, jax.random.PRNGKey], Tuple[jnp.ndarray, jnp.ndarray]
+    ]
+    | Tuple[jnp.ndarray, jnp.ndarray]
+):
     """
     Validate and resolve a projection weight initialization specification.
 
@@ -126,10 +134,10 @@ def resolve_projection_init_function(
 
     Parameters
     ----------
-    projection_init :
-        The projection weight initialization specification. Can be:
+    projection_and_intercept_init :
+        The projection weights and intercept initialization specification. Can be:
         - A pre-defined initialization function from AVAILABLE_PROJECTION_INIT
-        - str: name of a standard initialization method (e.g., "xavier", "zeros")
+        - str: name of a standard initialization method (e.g., "random")
         - array-like: explicit projection weight values (n_features, n_states)
         - Callable: custom initialization function with signature
           (n_states: int, X: DESIGN_INPUT_TYPE, key: jax.random.PRNGKey, **kwargs) -> NDArray
@@ -153,18 +161,18 @@ def resolve_projection_init_function(
     --------
     >>> import jax.numpy as jnp
     >>> import jax
-    >>> from nemos.glm_hmm.parameters_initialization import resolve_projection_init_function
+    >>> from nemos.glm_hmm.initialize_parameters import resolve_projection_and_intercept_init_function
     >>>
     >>> n_features, n_states = 4, 3
     >>>
     >>> # Use a named initialization method
-    >>> init_fn = resolve_projection_init_function("random_projection")
+    >>> init_fn = resolve_projection_and_intercept_init_function("random_projection")
     >>> callable(init_fn)
     True
     >>>
     >>> # Use explicit weights
     >>> weights = jnp.zeros((n_features, n_states))
-    >>> init_array = resolve_projection_init_function(weights)
+    >>> init_array = resolve_projection_and_intercept_init_function(weights)
     >>> init_array
     Array([[0., 0., 0.],
        [0., 0., 0.],
@@ -174,32 +182,32 @@ def resolve_projection_init_function(
     >>> # Use custom function with optional parameters
     >>> def custom_init(n_states, X, key, scale=1.0):
     ...     return jax.random.normal(key, (n_states, X.shape[1])) * scale
-    >>> init_fn = resolve_projection_init_function(custom_init)
+    >>> init_fn = resolve_projection_and_intercept_init_function(custom_init)
     >>> callable(init_fn)
     True
     """
     # Check if it's a pre-defined function
-    if projection_init in AVAILABLE_PROJECTION_INIT:
-        return projection_init
+    if projection_and_intercept_init in AVAILABLE_PROJECTION_AND_INTERCEPT_INIT:
+        return projection_and_intercept_init
 
     # Handle string names
-    elif isinstance(projection_init, str):
+    elif isinstance(projection_and_intercept_init, str):
         mapping = INIT_FUNCTION_MAPPING["projection_init"]
-        if projection_init not in mapping:
+        if projection_and_intercept_init not in mapping:
             available = ", ".join(f"'{k}'" for k in mapping.keys())
             raise ValueError(
-                f"Unknown projection initialization method: '{projection_init}'.\n"
+                f"Unknown projection initialization method: '{projection_and_intercept_init}'.\n"
                 f"Available methods are: {available}"
             )
-        return mapping[projection_init]
+        return mapping[projection_and_intercept_init]
 
     # Handle array-like inputs
-    elif is_numpy_array_like(projection_init)[1]:
-        return jnp.asarray(projection_init, float)
+    elif is_numpy_array_like(projection_and_intercept_init)[1]:
+        return jnp.asarray(projection_and_intercept_init, float)
 
     # Handle callable inputs
-    elif callable(projection_init):
-        sig = inspect.signature(projection_init)
+    elif callable(projection_and_intercept_init):
+        sig = inspect.signature(projection_and_intercept_init)
         n_params = len(sig.parameters)
 
         # Check minimum number of parameters
@@ -223,14 +231,14 @@ def resolve_projection_init_function(
                 f"Parameters without defaults: {params_without_defaults}"
             )
 
-        return projection_init
+        return projection_and_intercept_init
 
     # Invalid type
     valid_strings_formatted = ", ".join(
         f"'{s}'" for s in INIT_FUNCTION_MAPPING["projection_init"].keys()
     )
     raise TypeError(
-        f"Invalid projection weight initialization type: {type(projection_init).__name__}.\n"
+        f"Invalid projection weight initialization type: {type(projection_and_intercept_init).__name__}.\n"
         "The projection weight initialization must be one of:\n"
         f"  - A string from: {valid_strings_formatted}\n"
         "  - An array-like object with shape (n_states, n_features)\n"
@@ -279,7 +287,7 @@ def resolve_transition_proba_init_function(
     --------
     >>> import jax.numpy as jnp
     >>> import jax
-    >>> from nemos.glm_hmm.parameters_initialization import resolve_transition_proba_init_function
+    >>> from nemos.glm_hmm.initialize_parameters import resolve_transition_proba_init_function
     >>>
     >>> n_states = 3
     >>> # Use a named initialization method
@@ -403,7 +411,7 @@ def resolve_initial_state_proba_init_function(
     --------
     >>> import jax
     >>> import jax.numpy as jnp
-    >>> from nemos.glm_hmm.parameters_initialization import resolve_initial_state_proba_init_function
+    >>> from nemos.glm_hmm.initialize_parameters import resolve_initial_state_proba_init_function
     >>>
     >>> n_states = 3
     >>>

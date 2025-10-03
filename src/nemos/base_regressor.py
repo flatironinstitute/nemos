@@ -9,7 +9,7 @@ from abc import abstractmethod
 from copy import deepcopy
 from functools import wraps
 from pathlib import Path
-from typing import Any, Dict, NamedTuple, Optional, Tuple, Union
+from typing import Any, Dict, Generic, NamedTuple, Optional, Tuple, TypeVar, Union
 
 import jax
 import jax.numpy as jnp
@@ -22,6 +22,7 @@ from . import solvers, utils, validation
 from ._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from .base_class import Base
 from .regularizer import Regularizer
+from .type_casting import cast_to_jax
 from .typing import (
     DESIGN_INPUT_TYPE,
     RegularizerStrength,
@@ -32,6 +33,8 @@ from .typing import (
 from .utils import _flatten_dict, _get_name, _unpack_params, get_env_metadata
 
 _SOLVER_ARGS_CACHE = {}
+
+ParamsT = TypeVar("ParamsT")
 
 
 def strip_metadata(arg_num: Optional[int] = None, kwarg_key: Optional[str] = None):
@@ -56,7 +59,7 @@ def strip_metadata(arg_num: Optional[int] = None, kwarg_key: Optional[str] = Non
     return decorator
 
 
-class BaseRegressor(Base, abc.ABC):
+class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
     """Abstract base class for GLM regression models.
 
     This class encapsulates the common functionality for Generalized Linear Models (GLM)
@@ -582,14 +585,36 @@ class BaseRegressor(Base, abc.ABC):
         """Run a single update step of the jaxopt solver."""
         pass
 
-    @abc.abstractmethod
+    @cast_to_jax
     def initialize_params(
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
-        params: Optional = None,
-    ) -> Union[Any, NamedTuple]:
+        init_params: Optional = None,
+    ) -> ParamsT:
         """Initialize the solver's state and optionally sets initial model parameters for the optimization."""
+        if init_params is None:
+            init_params = self._initialize_parameters(X, y)  # initialize
+        else:
+            err_message = "Initial parameters must be array-like objects (or pytrees of array-like objects) "
+            "with numeric data-type!"
+            init_params = validation.convert_tree_leaves_to_jax_array(
+                init_params, err_message=err_message, data_type=float
+            )
+
+        # validate input
+        self._validate(X, y, init_params)
+
+        return init_params
+
+    @abc.abstractmethod
+    def _initialize_parameters(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        init_params: Optional = None,
+    ) -> ParamsT:
+        """Model specific initialization logic."""
         pass
 
     @abc.abstractmethod

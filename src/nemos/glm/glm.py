@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import warnings
-from functools import wraps
 from pathlib import Path
 from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
 
@@ -24,7 +23,7 @@ from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..pytrees import FeaturePytree
 from ..regularizer import GroupLasso, Lasso, Regularizer, Ridge
 from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
-from ..type_casting import jnp_asarray_if, support_pynapple
+from ..type_casting import cast_to_jax, support_pynapple
 from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength
 from ..utils import format_repr
 from .initialize_parameters import initialize_intercept_matching_mean_rate
@@ -32,26 +31,7 @@ from .initialize_parameters import initialize_intercept_matching_mean_rate
 ModelParams = Tuple[jnp.ndarray, jnp.ndarray]
 
 
-def cast_to_jax(func):
-    """Cast argument to jax."""
-
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            args, kwargs = jax.tree_util.tree_map(
-                lambda x: jnp_asarray_if(x, dtype=float), (args, kwargs)
-            )
-        except Exception:
-            raise TypeError(
-                "X and y should be array-like object (or trees of array like object) "
-                "with numeric data type!"
-            )
-        return func(*args, **kwargs)
-
-    return wrapper
-
-
-class GLM(BaseRegressor):
+class GLM(BaseRegressor[ModelParams]):
     r"""Generalized Linear Model (GLM) for neural activity data.
 
     This GLM implementation allows users to model neural activity based on a combination of exogenous inputs
@@ -654,8 +634,11 @@ class GLM(BaseRegressor):
         return score
 
     def _initialize_parameters(
-        self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray
-    ) -> Tuple[Union[dict, jnp.ndarray], jnp.ndarray]:
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        init_params: Optional[Tuple[ArrayLike, ArrayLike]] = None,
+    ) -> ModelParams:
         """Initialize the parameters based on the structure and dimensions X and y.
 
         This method initializes the coefficients (spike basis coefficients) and intercepts (bias terms)
@@ -965,7 +948,6 @@ class GLM(BaseRegressor):
             rank = jnp.linalg.matrix_rank(X)
             return (n_samples - rank - 1) * jnp.ones_like(params[1])
 
-    @cast_to_jax
     def initialize_params(
         self,
         X: DESIGN_INPUT_TYPE,
@@ -1021,19 +1003,7 @@ class GLM(BaseRegressor):
         >>> opt_state = model.initialize_state(X, y, params)
         >>> # Now ready to run optimization or update steps
         """
-        if init_params is None:
-            init_params = self._initialize_parameters(X, y)  # initialize
-        else:
-            err_message = "Initial parameters must be array-like objects (or pytrees of array-like objects) "
-            "with numeric data-type!"
-            init_params = validation.convert_tree_leaves_to_jax_array(
-                init_params, err_message=err_message, data_type=float
-            )
-
-        # validate input
-        self._validate(X, y, init_params)
-
-        return init_params
+        return super().initialize_params(X, y, init_params)
 
     @cast_to_jax
     def initialize_state(

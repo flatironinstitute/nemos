@@ -15,19 +15,21 @@ from ..base_regressor import BaseRegressor
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..observation_models import Observations
 from ..regularizer import Regularizer
-from ..type_casting import is_numpy_array_like
+from ..type_casting import cast_to_jax, is_numpy_array_like
 from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength
-from .parameters_initialization import (
-    random_projection_init,
+from .initialize_parameters import (
+    random_projection_and_intercept_init,
     resolve_initial_state_proba_init_function,
-    resolve_projection_init_function,
+    resolve_projection_and_intercept_init_function,
     resolve_transition_proba_init_function,
     sticky_transition_proba_init,
     uniform_initial_proba_init,
 )
 
+ModelParams = Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]
 
-class GLMHMM(BaseRegressor):
+
+class GLMHMM(BaseRegressor[ModelParams]):
     """GLM-HMM model."""
 
     def __init__(
@@ -55,9 +57,9 @@ class GLMHMM(BaseRegressor):
         initialize_transition_proba: (
             Callable[[DESIGN_INPUT_TYPE, NDArray], NDArray] | NDArray | str
         ) = sticky_transition_proba_init,
-        initialize_projections: (
+        initialize_projections_and_intercept: (
             Callable[[DESIGN_INPUT_TYPE, NDArray], NDArray] | NDArray | str
-        ) = random_projection_init,
+        ) = random_projection_and_intercept_init,
     ):
         super().__init__(
             regularizer=regularizer,
@@ -70,17 +72,25 @@ class GLMHMM(BaseRegressor):
         self.inverse_link_function = inverse_link_function
 
         # check and store initialization hyperparameters.
-        self._initialize_projections = resolve_projection_init_function(
-            initialize_projections
+        self.initialize_projections_and_intercept = initialize_projections_and_intercept
+        check_values = (
+            isinstance(self.initialize_projections_and_intercept, tuple)
+            and len(self.initialize_projections_and_intercept) == 2
+            and all(
+                isinstance(arr, jax.numpy.ndarray)
+                for arr in self.initialize_projections_and_intercept
+            )
         )
-        if isinstance(self._initialize_projections, jnp.ndarray):
-            self._check_initial_proj(self._initialize_projections)
+        if check_values:
+            self._check_initial_proj_and_intercept(
+                self._initialize_projections_and_intercept
+            )
 
         self._initialize_transition_proba = resolve_transition_proba_init_function(
             initialize_transition_proba
         )
         if isinstance(self._initialize_transition_proba, jnp.ndarray):
-            self._check_initial_proj(self._initialize_transition_proba)
+            self._check_transition_proba(self._initialize_transition_proba)
 
         self._initialize_init_state_proba = resolve_initial_state_proba_init_function(
             initialize_init_proba
@@ -91,6 +101,31 @@ class GLMHMM(BaseRegressor):
         # set the prior params
         self.dirichlet_prior_alphas_init_prob = dirichlet_prior_alphas_init_prob
         self.dirichlet_prior_alphas_transition = dirichlet_prior_alphas_transition
+
+    @property
+    def initialize_projections_and_intercept(self):
+        """Initialization of projection weights and intercept for the GLM."""
+        return self._initialize_projections_and_intercept
+
+    @initialize_projections_and_intercept.setter
+    def initialize_projections_and_intercept(
+        self, initialize_projections_and_intercept
+    ):
+        self._initialize_projections_and_intercept = (
+            resolve_projection_and_intercept_init_function(
+                initialize_projections_and_intercept
+            )
+        )
+
+    @property
+    def initialize_init_state_proba(self):
+        """Initialization of initial state probabilities."""
+        return self._initialize_init_state_proba
+
+    @property
+    def initialize_transition_proba(self):
+        """Initialization of the transition probabilities."""
+        return self._initialize_transition_proba
 
     @property
     def dirichlet_prior_alphas_init_prob(self) -> jnp.ndarray | None:
@@ -158,9 +193,12 @@ class GLMHMM(BaseRegressor):
                 f"with strictly positive values."
             )
 
-    def _check_initial_proj(
-        self, projection_array: jax.numpy.ndarray, X: Optional[DESIGN_INPUT_TYPE] = None
+    def _check_initial_proj_and_intercept(
+        self,
+        params: Tuple[jax.numpy.ndarray, jax.numpy.ndarray],
+        X: Optional[DESIGN_INPUT_TYPE] = None,
     ):
+        projection_array, intercept = params
         if self._n_states != projection_array.shape[1]:
             raise ValueError(
                 f"Projection weights shape mismatch: the second dimension must match the number of HMM states.\n"
@@ -172,6 +210,11 @@ class GLMHMM(BaseRegressor):
                 f"Projection weights shape mismatch: the first dimension must match the number of GLM features.\n"
                 f"Expected shape[0] = {X.shape[1]} (n_features), but got shape[0] = {projection_array.shape[0]}.\n"
                 f"Projection weights shape: {projection_array.shape}"
+            )
+        if not intercept.shape == (1,):
+            raise ValueError(
+                "Intercept should be a 1-dimensional array. "
+                f"Provided intercept is of shape {intercept.shape} instead."
             )
 
     def _check_transition_proba(self, transition_prob: jax.numpy.ndarray):
@@ -264,8 +307,14 @@ class GLMHMM(BaseRegressor):
     ):
         pass
 
+    @cast_to_jax
     def fit(
-        self, X: DESIGN_INPUT_TYPE, y: Union[NDArray, jnp.ndarray, nap.Tsd]
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: Union[NDArray, jnp.ndarray, nap.Tsd],
+        init_params: Optional[
+            Tuple[Union[dict, ArrayLike], ArrayLike, ArrayLike, ArrayLike]
+        ] = None,
     ) -> "GLMHMM":
         """Fit the GLM-HMM model to the data."""
         pass
@@ -325,10 +374,23 @@ class GLMHMM(BaseRegressor):
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
-        params: Optional = None,
+        init_params: Optional[Tuple[ArrayLike, ArrayLike, ArrayLike, ArrayLike]] = None,
     ) -> Union[Any, NamedTuple]:
-        """Initialize the solver's state and optionally sets initial model parameters for the optimization."""
-        pass
+        """Initialize the solver's state and optionally sets initial model parameters for the optimization.
+
+        TODO: fill up docstrings.
+        """
+        return super().initialize_params(X, y, init_params)
+
+    def _initialize_parameters(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        init_params: Optional = None,
+    ) -> ModelParams:
+        """GLM-HMM initialization."""
+        if init_params is None:
+            pass
 
     def initialize_state(
         self,
