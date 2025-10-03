@@ -77,7 +77,9 @@ def check_inverse_link_function(inverse_link_function: Callable):
     Raises
     ------
     TypeError
-        If the function is not callable, does not return a jax.numpy.ndarray,
+        If the function is not callable.
+    ValueError
+        If the function does not return a jax.numpy.ndarray,
         or is not differentiable.
     """
     if inverse_link_function in LINK_NAME_TO_FUNC.values():
