@@ -27,9 +27,14 @@ def test_forward_backward_regression(decorator):
     X, y = data["X"], data["y"]
     new_sess = data["new_sess"]
 
+    # assert first column is intercept, otherwise this will break
+    # nemos assumption (existence of an intercept term)
+    np.testing.assert_array_equal(X[:, 0], 1)
+
     # E-step initial parameters
     initial_prob = data["initial_prob"]
     projection_weights = data["projection_weights"]
+    intercept, coef = data["projection_weights"][:1], data["projection_weights"][1:]
     transition_prob = data["transition_prob"]
 
     # E-step output
@@ -49,11 +54,11 @@ def test_forward_backward_regression(decorator):
     decorated_forward_backward = decorator(forward_backward)
     gammas_nemos, xis_nemos, ll_nemos, ll_norm_nemos, alphas_nemos, betas_nemos = (
         decorated_forward_backward(
-            X,
+            X[:, 1:],  # drop intercept
             y,
             initial_prob,
             transition_prob,
-            projection_weights,
+            (coef, intercept),
             likelihood_func=likelihood,
             inverse_link_function=obs.default_inverse_link_function,
             is_new_session=new_sess.astype(bool),
