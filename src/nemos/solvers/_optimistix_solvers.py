@@ -66,7 +66,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
 
     Subclasses must define the `_solver_cls` class attribute.
     The `_solver` and `stats` attributes are assumed to exist after construction,
-    so if a subclass is overwriting ``__init__`, these must be created.
+    so if a subclass is overwriting `__init__`, these must be created.
     """
 
     _solver_cls: ClassVar[Type]
