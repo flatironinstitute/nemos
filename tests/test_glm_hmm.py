@@ -5,9 +5,12 @@ import numpy as np
 import pytest
 
 from nemos.fetch import fetch_data
+from nemos.glm import GLM
 from nemos.glm_hmm.expectation_maximization import (
+    em_glm_hmm,
     forward_backward,
     hmm_negative_log_likelihood,
+    prepare_likelihood_func,
     run_m_step,
 )
 from nemos.observation_models import BernoulliObservations
@@ -32,9 +35,13 @@ def test_forward_backward_regression(decorator):
     X, y = data["X"], data["y"]
     new_sess = data["new_sess"]
 
+    # assert first column is intercept, otherwise this will break
+    # nemos assumption (existence of an intercept term)
+    np.testing.assert_array_equal(X[:, 0], 1)
+
     # E-step initial parameters
     initial_prob = data["initial_prob"]
-    projection_weights = data["projection_weights"]
+    intercept, coef = data["projection_weights"][:1], data["projection_weights"][1:]
     transition_prob = data["transition_prob"]
 
     # E-step output
@@ -54,11 +61,11 @@ def test_forward_backward_regression(decorator):
     decorated_forward_backward = decorator(forward_backward)
     gammas_nemos, xis_nemos, ll_nemos, ll_norm_nemos, alphas_nemos, betas_nemos = (
         decorated_forward_backward(
-            X,
+            X[:, 1:],  # drop intercept
             y,
             initial_prob,
             transition_prob,
-            projection_weights,
+            (coef, intercept),
             likelihood_func=likelihood,
             inverse_link_function=obs.default_inverse_link_function,
             is_new_session=new_sess.astype(bool),
@@ -103,6 +110,7 @@ def test_hmm_negative_log_likelihood_regression(decorator):
     # Likelihood input
     gammas = data["gammas"]
     projection_weights = data["projection_weights_nll"]
+    intercept, coef = projection_weights[:1], projection_weights[1:]
 
     # Negative LL output
     nll_m_step = data["nll_m_step"]
@@ -120,8 +128,8 @@ def test_hmm_negative_log_likelihood_regression(decorator):
     )
 
     nll_m_step_nemos = hmm_negative_log_likelihood(
-        projection_weights,
-        X,
+        (coef, intercept),
+        X[:, 1:],  # drop intercept column
         y,
         gammas,
         inverse_link_function=obs.default_inverse_link_function,
@@ -146,10 +154,15 @@ def test_run_m_step_regression():
     gammas = data["gammas"]
     xis = data["xis"]
     projection_weights = data["projection_weights"]
+    intercept, coef = projection_weights[:1], projection_weights[1:]
     new_sess = data["new_sess"]
 
     # M-step output
     optimized_projection_weights = data["optimized_projection_weights"]
+    opt_intercept, opt_coef = (
+        optimized_projection_weights[:1],
+        optimized_projection_weights[1:],
+    )
     new_initial_prob = data["new_initial_prob"]
     new_transition_prob = data["new_transition_prob"]
 
@@ -178,7 +191,7 @@ def test_run_m_step_regression():
             negative_log_likelihood_func=negative_log_likelihood,
         )
 
-    solver = LBFGS(partial_hmm_negative_log_likelihood, tol=10**-12)
+    solver = LBFGS(partial_hmm_negative_log_likelihood, tol=10**-13)
 
     (
         optimized_projection_weights_nemos,
@@ -186,24 +199,24 @@ def test_run_m_step_regression():
         new_transition_prob_nemos,
         state,
     ) = run_m_step(
-        X,
+        X[:, 1:],  # drop intercept column
         y,
         gammas,
         xis,
-        projection_weights,
+        (coef, intercept),
         is_new_session=new_sess.astype(bool),
         solver_run=solver.run,
     )
 
-    n_ll_original = partial_hmm_negative_log_likelihood(
+    n_ll_nemos = partial_hmm_negative_log_likelihood(
         optimized_projection_weights_nemos,
-        X,
+        X[:, 1:],
         y,
         gammas,
     )
-    n_ll_nemos = partial_hmm_negative_log_likelihood(
-        optimized_projection_weights,
-        X,
+    n_ll_original = partial_hmm_negative_log_likelihood(
+        (opt_coef, opt_intercept),
+        X[:, 1:],
         y,
         gammas,
     )
@@ -216,6 +229,69 @@ def test_run_m_step_regression():
 
     # Testing output of negative log likelihood
     np.testing.assert_almost_equal(n_ll_original, n_ll_nemos, decimal=10)
-    np.testing.assert_almost_equal(
-        optimized_projection_weights, optimized_projection_weights_nemos, decimal=6
+
+    # Testing projection weights
+    jax.tree_util.tree_map(
+        lambda x, y: np.testing.assert_almost_equal(x, y, decimal=6),
+        (opt_coef, opt_intercept),
+        optimized_projection_weights_nemos,
+    )
+
+
+@pytest.mark.parametrize("regularization", ["UnRegularized", "Ridge", "Lasso"])
+def test_run_em(regularization):
+    jax.config.update("jax_enable_x64", True)
+
+    # Fetch the data
+    data_path = fetch_data("em_three_states.npz")
+    data = np.load(data_path)
+
+    # Design matrix and observed choices
+    X, y = data["X"], data["y"]
+
+    # Initial parameters
+    initial_prob = data["initial_prob"]
+    transition_prob = data["transition_prob"]
+    projection_weights = data["projection_weights"]
+    intercept, coef = projection_weights[:1], projection_weights[1:]
+    new_sess = data["new_sess"]
+
+    # Start of the preparatory steps that will be carried out by the GLMHMM class.
+    is_population_glm = projection_weights.ndim > 2
+    obs = BernoulliObservations()
+    likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
+        is_population_glm, obs.log_likelihood, obs._negative_log_likelihood, is_log=True
+    )
+    inverse_link_function = obs.default_inverse_link_function
+
+    # closure for the static callables
+    # NOTE: this is the _predict_and_compute_loss equivalent (aka, what it is used in
+    # the numerical M-step).
+    def partial_hmm_negative_log_likelihood(
+        weights, design_matrix, observations, posterior_prob
+    ):
+        return hmm_negative_log_likelihood(
+            weights,
+            X=design_matrix,
+            y=observations,
+            posteriors=posterior_prob,
+            inverse_link_function=inverse_link_function,
+            negative_log_likelihood_func=negative_log_likelihood_func,
+        )
+
+    # use the BaseRegressor initialize_solver (this will be avaialble also in the GLMHHM class)
+    glm = GLM(observation_model=obs, regularizer=regularization, solver_name="LBFGS")
+    glm.instantiate_solver(partial_hmm_negative_log_likelihood)
+    solver_run = glm._solver_run
+    # End of preparatory step.
+    out = em_glm_hmm(
+        X[:, 1:],
+        y,
+        initial_prob=initial_prob,
+        transition_prob=transition_prob,
+        glm_params=(coef, intercept),
+        is_new_session=new_sess.astype(bool),
+        inverse_link_function=inverse_link_function,
+        likelihood_func=likelihood_func,
+        solver_run=solver_run,
     )
