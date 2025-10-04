@@ -5,7 +5,6 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-import nemos as nmo
 from nemos.glm.initialize_parameters import initialize_intercept_matching_mean_rate
 
 
