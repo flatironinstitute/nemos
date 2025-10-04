@@ -7,7 +7,7 @@ import pytest
 from nemos.fetch import fetch_data
 from nemos.glm import GLM
 from nemos.glm_hmm.expectation_maximization import (
-    em_glm_hmm_simplified,
+    em_glm_hmm,
     forward_backward,
     hmm_negative_log_likelihood,
     prepare_likelihood_func,
@@ -280,11 +280,11 @@ def test_run_em(regularization):
         )
 
     # use the BaseRegressor initialize_solver (this will be avaialble also in the GLMHHM class)
-    glm = GLM(regularizer=regularization)
+    glm = GLM(observation_model=obs, regularizer=regularization, solver_name="LBFGS")
     glm.instantiate_solver(partial_hmm_negative_log_likelihood)
     solver_run = glm._solver_run
     # End of preparatory step.
-    em_glm_hmm_simplified(
+    out = em_glm_hmm(
         X[:, 1:],
         y,
         initial_prob=initial_prob,
