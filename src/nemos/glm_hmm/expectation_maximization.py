@@ -663,6 +663,9 @@ def prepare_likelihood_func(
     return likelihood, vmap_nll
 
 
+@partial(
+    jax.jit, static_argnames=["inverse_link_function", "likelihood_func", "solver_run"]
+)
 def em_glm_hmm(
     X: Array,
     y: Array,
