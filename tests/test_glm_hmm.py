@@ -38,7 +38,6 @@ def test_forward_backward_regression(decorator):
 
     # E-step initial parameters
     initial_prob = data["initial_prob"]
-    projection_weights = data["projection_weights"]
     intercept, coef = data["projection_weights"][:1], data["projection_weights"][1:]
     transition_prob = data["transition_prob"]
 
@@ -108,6 +107,7 @@ def test_hmm_negative_log_likelihood_regression(decorator):
     # Likelihood input
     gammas = data["gammas"]
     projection_weights = data["projection_weights_nll"]
+    intercept, coef = projection_weights[:1], projection_weights[1:]
 
     # Negative LL output
     nll_m_step = data["nll_m_step"]
@@ -125,8 +125,8 @@ def test_hmm_negative_log_likelihood_regression(decorator):
     )
 
     nll_m_step_nemos = hmm_negative_log_likelihood(
-        projection_weights,
-        X,
+        (coef, intercept),
+        X[:, 1:],  # drop intercept column
         y,
         gammas,
         inverse_link_function=obs.default_inverse_link_function,
@@ -151,10 +151,15 @@ def test_run_m_step_regression():
     gammas = data["gammas"]
     xis = data["xis"]
     projection_weights = data["projection_weights"]
+    intercept, coef = projection_weights[:1], projection_weights[1:]
     new_sess = data["new_sess"]
 
     # M-step output
     optimized_projection_weights = data["optimized_projection_weights"]
+    opt_intercept, opt_coef = (
+        optimized_projection_weights[:1],
+        optimized_projection_weights[1:],
+    )
     new_initial_prob = data["new_initial_prob"]
     new_transition_prob = data["new_transition_prob"]
 
@@ -183,7 +188,7 @@ def test_run_m_step_regression():
             negative_log_likelihood_func=negative_log_likelihood,
         )
 
-    solver = LBFGS(partial_hmm_negative_log_likelihood, tol=10**-12)
+    solver = LBFGS(partial_hmm_negative_log_likelihood, tol=10**-13)
 
     (
         optimized_projection_weights_nemos,
@@ -191,28 +196,29 @@ def test_run_m_step_regression():
         new_transition_prob_nemos,
         state,
     ) = run_m_step(
-        X,
+        X[:, 1:],  # drop intercept column
         y,
         gammas,
         xis,
-        projection_weights,
+        (coef, intercept),
         is_new_session=new_sess.astype(bool),
         solver_run=solver.run,
     )
 
-    n_ll_original = partial_hmm_negative_log_likelihood(
+    n_ll_nemos = partial_hmm_negative_log_likelihood(
         optimized_projection_weights_nemos,
-        X,
+        X[:, 1:],
         y,
         gammas,
     )
-    n_ll_nemos = partial_hmm_negative_log_likelihood(
-        optimized_projection_weights,
-        X,
+    n_ll_original = partial_hmm_negative_log_likelihood(
+        (opt_coef, opt_intercept),
+        X[:, 1:],
         y,
         gammas,
     )
 
+    # concatenate back to match original parametrization
     # Testing Eq. 13.18 of Bishop
     np.testing.assert_almost_equal(new_initial_prob_nemos, new_initial_prob)
     # Testing Eq. 13.19 of Bishop
@@ -221,6 +227,9 @@ def test_run_m_step_regression():
 
     # Testing output of negative log likelihood
     np.testing.assert_almost_equal(n_ll_original, n_ll_nemos, decimal=10)
-    np.testing.assert_almost_equal(
-        optimized_projection_weights, optimized_projection_weights_nemos, decimal=6
+
+    jax.tree_util.tree_map(
+        lambda x, y: np.testing.assert_almost_equal(x, y, decimal=6),
+        (opt_coef, opt_intercept),
+        optimized_projection_weights_nemos,
     )

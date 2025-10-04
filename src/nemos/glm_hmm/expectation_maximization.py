@@ -480,7 +480,7 @@ def forward_backward(
     jax.jit, static_argnames=["inverse_link_function", "negative_log_likelihood_func"]
 )
 def hmm_negative_log_likelihood(
-    projection_weights: Array,
+    glm_params: Array,
     X: Array,
     y: Array,
     posteriors: Array,
@@ -494,8 +494,8 @@ def hmm_negative_log_likelihood(
 
     Parameters
     ----------
-    projection_weights:
-        Projection weights for the GLM.
+    glm_params:
+        Projection coefficients and intercept for the GLM.
     X:
         Design matrix of observations.
     y:
@@ -512,17 +512,17 @@ def hmm_negative_log_likelihood(
     nll:
         The scalar negative log-likelihood weighted by the posteriors.
     """
-
-    if projection_weights.ndim > 2:
+    coef, intercept = glm_params
+    if coef.ndim > 2:
         predicted_rate = inverse_link_function(
-            jnp.einsum("ik, kjw->ijw", X, projection_weights)
+            jnp.einsum("ik, kjw->ijw", X, coef) + intercept
         )
         nll = negative_log_likelihood_func(
             y,
             predicted_rate,
         ).sum(axis=1)
     else:
-        predicted_rate = inverse_link_function(X @ projection_weights)
+        predicted_rate = inverse_link_function(X @ coef + intercept)
         nll = negative_log_likelihood_func(
             y,
             predicted_rate,
@@ -540,7 +540,7 @@ def run_m_step(
     y: Array,
     posteriors: Array,
     joint_posterior: Array,
-    projection_weights: Array,
+    glm_params: Tuple[Array, Array],
     is_new_session: Array,
     solver_run: Callable[[Array, Array, Array, Array], Array],
     dirichlet_prior_alphas_init_prob: Array | None = None,
@@ -560,8 +560,8 @@ def run_m_step(
     joint_posterior:
         Joint posterior probabilities over pairs of states
         :math:`P(z_{t-1}, z_t \mid X, y, \theta_{\text{old}})`.
-    projection_weights:
-        Current projection weights.
+    glm_params:
+        Current projection coefficients and intercept terms.
     is_new_session:
         Boolean mask for the first observation of each session.
     solver_run:
@@ -595,8 +595,6 @@ def run_m_step(
     )
 
     # Minimize negative log-likelihood to update GLM weights
-    optimized_projection_weights, state = solver_run(
-        projection_weights, X, y, posteriors
-    )
+    optimized_projection_weights, state = solver_run(glm_params, X, y, posteriors)
 
     return optimized_projection_weights, new_initial_prob, new_transition_prob, state
