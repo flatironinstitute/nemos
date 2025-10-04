@@ -89,6 +89,7 @@ VALID_PAIRS = [
             r=2,
         )
     ),
+    {"glm_params_init", "glm_params"},
 ]
 
 

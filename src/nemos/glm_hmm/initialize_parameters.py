@@ -11,11 +11,11 @@ from ..type_casting import is_numpy_array_like
 from ..typing import DESIGN_INPUT_TYPE
 
 
-def random_projection_and_intercept_init(
+def random_glm_params_init(
     n_states: int, X: DESIGN_INPUT_TYPE, random_key=jax.random.PRNGKey(123)
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """
-    Initialize projection weights with random normal values.
+    Initialize GLM coefficients and intercept with random normal values.
 
     Parameters
     ----------
@@ -29,7 +29,7 @@ def random_projection_and_intercept_init(
     Returns
     -------
     :
-        Projection weight matrix of shape (n_features, n_states).
+        Projection weight coef and intercept of shape (n_features, n_states) and (n_states,).
     """
     n_features = X.shape[1]
     random_param = 0.1 * jax.random.normal(random_key, (n_features + 1, n_states))
@@ -110,21 +110,19 @@ def uniform_initial_proba_init(n_states: int, random_key=jax.random.PRNGKey(124)
     return prob / jnp.sum(prob)
 
 
-AVAILABLE_PROJECTION_AND_INTERCEPT_INIT = [random_projection_and_intercept_init]
+AVAILABLE_GLM_PARAMS_INIT = [random_glm_params_init]
 AVAILABLE_TRANSITION_PROBA_INIT = [sticky_transition_proba_init]
 AVAILABLE_INITIAL_PROBA_INIT = [uniform_initial_proba_init]
 
 INIT_FUNCTION_MAPPING = {
-    "projection_init": {
-        "random_projection_and_intercept": random_projection_and_intercept_init
-    },
+    "glm_params_init": {"random_glm_params_init": random_glm_params_init},
     "transition_proba": {"sticky_transition_proba": sticky_transition_proba_init},
     "initial_proba": {"uniform": uniform_initial_proba_init},
 }
 
 
-def resolve_projection_and_intercept_init_function(
-    projection_and_intercept_init: Callable | str | ArrayLike | Any,
+def resolve_glm_params_init_function(
+    glm_params_init: Callable | str | ArrayLike | Any,
 ) -> (
     Callable[
         [int, DESIGN_INPUT_TYPE, jax.random.PRNGKey], Tuple[jnp.ndarray, jnp.ndarray]
@@ -140,7 +138,7 @@ def resolve_projection_and_intercept_init_function(
 
     Parameters
     ----------
-    projection_and_intercept_init :
+    glm_params_init :
         The projection weights and intercept initialization specification. Can be:
         - A pre-defined initialization function from AVAILABLE_PROJECTION_INIT
         - str: name of a standard initialization method (e.g., "random")
@@ -167,18 +165,18 @@ def resolve_projection_and_intercept_init_function(
     --------
     >>> import jax.numpy as jnp
     >>> import jax
-    >>> from nemos.glm_hmm.initialize_parameters import resolve_projection_and_intercept_init_function
+    >>> from nemos.glm_hmm.initialize_parameters import resolve_glm_params_init_function
     >>>
     >>> n_features, n_states = 4, 3
     >>>
     >>> # Use a named initialization method
-    >>> init_fn = resolve_projection_and_intercept_init_function("random_projection")
+    >>> init_fn = resolve_glm_params_init_function("random_glm_params_init")
     >>> callable(init_fn)
     True
     >>>
     >>> # Use explicit weights
     >>> weights = jnp.zeros((n_features, n_states))
-    >>> init_array = resolve_projection_and_intercept_init_function(weights)
+    >>> init_array = resolve_glm_params_init_function(weights)
     >>> init_array
     Array([[0., 0., 0.],
        [0., 0., 0.],
@@ -188,32 +186,32 @@ def resolve_projection_and_intercept_init_function(
     >>> # Use custom function with optional parameters
     >>> def custom_init(n_states, X, key, scale=1.0):
     ...     return jax.random.normal(key, (n_states, X.shape[1])) * scale
-    >>> init_fn = resolve_projection_and_intercept_init_function(custom_init)
+    >>> init_fn = resolve_glm_params_init_function(custom_init)
     >>> callable(init_fn)
     True
     """
     # Check if it's a pre-defined function
-    if projection_and_intercept_init in AVAILABLE_PROJECTION_AND_INTERCEPT_INIT:
-        return projection_and_intercept_init
+    if glm_params_init in AVAILABLE_GLM_PARAMS_INIT:
+        return glm_params_init
 
     # Handle string names
-    elif isinstance(projection_and_intercept_init, str):
-        mapping = INIT_FUNCTION_MAPPING["projection_init"]
-        if projection_and_intercept_init not in mapping:
+    elif isinstance(glm_params_init, str):
+        mapping = INIT_FUNCTION_MAPPING["glm_params_init"]
+        if glm_params_init not in mapping:
             available = ", ".join(f"'{k}'" for k in mapping.keys())
             raise ValueError(
-                f"Unknown projection initialization method: '{projection_and_intercept_init}'.\n"
+                f"Unknown projection initialization method: '{glm_params_init}'.\n"
                 f"Available methods are: {available}"
             )
-        return mapping[projection_and_intercept_init]
+        return mapping[glm_params_init]
 
     # Handle array-like inputs
-    elif is_numpy_array_like(projection_and_intercept_init)[1]:
-        return jnp.asarray(projection_and_intercept_init, float)
+    elif is_numpy_array_like(glm_params_init)[1]:
+        return jnp.asarray(glm_params_init, dtype=float)
 
     # Handle callable inputs
-    elif callable(projection_and_intercept_init):
-        sig = inspect.signature(projection_and_intercept_init)
+    elif callable(glm_params_init):
+        sig = inspect.signature(glm_params_init)
         n_params = len(sig.parameters)
 
         # Check minimum number of parameters
@@ -222,7 +220,8 @@ def resolve_projection_and_intercept_init_function(
             raise ValueError(
                 f"Projection initialization function must have at least 3 parameters: "
                 f"(n_states, X, key), but got {n_params} parameter(s): {param_names}.\n"
-                f"Signature should be: Callable[[int, DESIGN_INPUT_TYPE, jax.random.PRNGKey], NDArray]"
+                f"Signature should be: "
+                f"Callable[[int, DESIGN_INPUT_TYPE, jax.random.PRNGKey], Tuple[NDArray, NDArray, NDArray]]"
             )
 
         # Check that extra parameters have defaults
@@ -237,14 +236,14 @@ def resolve_projection_and_intercept_init_function(
                 f"Parameters without defaults: {params_without_defaults}"
             )
 
-        return projection_and_intercept_init
+        return glm_params_init
 
     # Invalid type
     valid_strings_formatted = ", ".join(
-        f"'{s}'" for s in INIT_FUNCTION_MAPPING["projection_init"].keys()
+        f"'{s}'" for s in INIT_FUNCTION_MAPPING["glm_params_init"].keys()
     )
     raise TypeError(
-        f"Invalid projection weight initialization type: {type(projection_and_intercept_init).__name__}.\n"
+        f"Invalid projection weight initialization type: {type(glm_params_init).__name__}.\n"
         "The projection weight initialization must be one of:\n"
         f"  - A string from: {valid_strings_formatted}\n"
         "  - An array-like object with shape (n_states, n_features)\n"

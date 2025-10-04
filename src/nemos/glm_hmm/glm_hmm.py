@@ -21,15 +21,15 @@ from ..regularizer import Regularizer
 from ..type_casting import cast_to_jax, is_numpy_array_like
 from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength
 from .initialize_parameters import (
-    random_projection_and_intercept_init,
+    random_glm_params_init,
+    resolve_glm_params_init_function,
     resolve_initial_state_proba_init_function,
-    resolve_projection_and_intercept_init_function,
     resolve_transition_proba_init_function,
     sticky_transition_proba_init,
     uniform_initial_proba_init,
 )
 
-ModelParams = Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]
+ModelParams = Tuple[Tuple[jnp.ndarray, jnp.ndarray], jnp.ndarray, jnp.ndarray]
 
 
 class GLMHMM(BaseRegressor[ModelParams]):
@@ -42,12 +42,11 @@ class GLMHMM(BaseRegressor[ModelParams]):
         inverse_link_function: Callable = jax.lax.logistic,
         regularizer: Union[
             str, Regularizer
-        ] = "UnRegularized",  # this applies only for the regularization of the weights.
+        ] = "UnRegularized",  # this applies only for the regularization of the glm coefficients.
         regularizer_strength: Optional[
             RegularizerStrength
-        ] = None,  # do we regularize all params or only projection?
-        # - there is regularization but doesn't follow the current logic.
-        # - one prior for transition and initial proba, to get an analytical m-step still
+        ] = None,  # this is used to regularize GLM coef.
+        # prior to regularize init prob and transition
         dirichlet_prior_alphas_init_prob: jnp.ndarray | None = None,  # (n_state, )
         dirichlet_prior_alphas_transition: (
             jnp.ndarray | None
@@ -60,9 +59,9 @@ class GLMHMM(BaseRegressor[ModelParams]):
         initialize_transition_proba: (
             Callable[[DESIGN_INPUT_TYPE, NDArray], NDArray] | NDArray | str
         ) = sticky_transition_proba_init,
-        initialize_projections_and_intercept: (
+        initialize_glm_params: (
             Callable[[DESIGN_INPUT_TYPE, NDArray], NDArray] | NDArray | str
-        ) = random_projection_and_intercept_init,
+        ) = random_glm_params_init,
         seed=jax.random.PRNGKey(123),
     ):
         super().__init__(
@@ -76,19 +75,16 @@ class GLMHMM(BaseRegressor[ModelParams]):
         self.inverse_link_function = inverse_link_function
 
         # check and store initialization hyperparameters.
-        self.initialize_projections_and_intercept = initialize_projections_and_intercept
+        self.initialize_glm_params = initialize_glm_params
         check_values = (
-            isinstance(self.initialize_projections_and_intercept, tuple)
-            and len(self.initialize_projections_and_intercept) == 2
+            isinstance(self.initialize_glm_params, tuple)
+            and len(self.initialize_glm_params) == 2
             and all(
-                isinstance(arr, jax.numpy.ndarray)
-                for arr in self.initialize_projections_and_intercept
+                isinstance(arr, jax.numpy.ndarray) for arr in self.initialize_glm_params
             )
         )
         if check_values:
-            self._check_initial_proj_and_intercept(
-                self._initialize_projections_and_intercept
-            )
+            self._check_initial_glm_params(self._initialize_glm_params)
 
         self._initialize_transition_proba = resolve_transition_proba_init_function(
             initialize_transition_proba
@@ -108,19 +104,13 @@ class GLMHMM(BaseRegressor[ModelParams]):
         self._seed = seed
 
     @property
-    def initialize_projections_and_intercept(self):
-        """Initialization of projection weights and intercept for the GLM."""
-        return self._initialize_projections_and_intercept
+    def initialize_glm_params(self):
+        """Initialization of glm coef and intercept for the GLM."""
+        return self._initialize_glm_params
 
-    @initialize_projections_and_intercept.setter
-    def initialize_projections_and_intercept(
-        self, initialize_projections_and_intercept
-    ):
-        self._initialize_projections_and_intercept = (
-            resolve_projection_and_intercept_init_function(
-                initialize_projections_and_intercept
-            )
-        )
+    @initialize_glm_params.setter
+    def initialize_glm_params(self, glm_params):
+        self._initialize_glm_params = resolve_glm_params_init_function(glm_params)
 
     @property
     def initialize_init_state_proba(self):
@@ -198,11 +188,11 @@ class GLMHMM(BaseRegressor[ModelParams]):
                 f"with strictly positive values."
             )
 
-    def _check_initial_proj_and_intercept(
+    def _check_initial_glm_params(
         self,
         params: Tuple[DESIGN_INPUT_TYPE | dict, jax.numpy.ndarray],
     ):
-        projection_array, intercept = params
+        coef, intercept = params
         # check the dimensionality of coeff
         err_message_shape = (
             "params[0] (GLM coefficients) must be a two-dimensional array "
@@ -310,20 +300,6 @@ class GLMHMM(BaseRegressor[ModelParams]):
             inverse_link_function, self._observation_model
         )
 
-    def _set_up_initialization_funcs(
-        self,
-        initialize_init_proba: (
-            Callable[[DESIGN_INPUT_TYPE, NDArray], NDArray] | NDArray | str
-        ),
-        initialize_transition_proba: (
-            Callable[[DESIGN_INPUT_TYPE, NDArray], NDArray] | NDArray | str
-        ),
-        initialize_projections: (
-            Callable[[DESIGN_INPUT_TYPE, NDArray], NDArray] | NDArray | str
-        ),
-    ):
-        pass
-
     @cast_to_jax
     def fit(
         self,
@@ -391,7 +367,9 @@ class GLMHMM(BaseRegressor[ModelParams]):
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
-        init_params: Optional[Tuple[ArrayLike, ArrayLike, ArrayLike, ArrayLike]] = None,
+        init_params: Optional[
+            Tuple[Tuple[ArrayLike, ArrayLike], ArrayLike, ArrayLike]
+        ] = None,
     ) -> Union[Any, NamedTuple]:
         """Initialize the solver's state and optionally sets initial model parameters for the optimization.
 
@@ -407,12 +385,10 @@ class GLMHMM(BaseRegressor[ModelParams]):
         """GLM-HMM initialization."""
 
         key = self._seed
-        init_proj_and_intercept = self._initialize_projections_and_intercept
-        if callable(init_proj_and_intercept):
+        init_glm_params = self._initialize_glm_params
+        if callable(init_glm_params):
             key, subkey = jax.random.split(key)
-            coef, intercept = init_proj_and_intercept(self._n_states, X, subkey)
-        else:
-            coef, intercept = init_proj_and_intercept
+            init_glm_params = init_glm_params(self._n_states, X, subkey)
 
         init_transition_proba = self._initialize_transition_proba
         if callable(init_transition_proba):
@@ -424,7 +400,7 @@ class GLMHMM(BaseRegressor[ModelParams]):
             key, subkey = jax.random.split(key)
             init_proba = init_proba(self._n_states, subkey)
 
-        return coef, intercept, init_transition_proba, init_proba
+        return init_glm_params, init_transition_proba, init_proba
 
     def initialize_state(
         self,
@@ -452,9 +428,15 @@ class GLMHMM(BaseRegressor[ModelParams]):
         # check that params has length 4 (coeff, intercept, transition_proba, initial_proba)
         validation.check_length(
             params,
-            4,
-            "GLM-HMM requires four parameters: "
-            "(coef, intercept, transition_proba, initial_proba).",
+            3,
+            "GLM-HMM requires three parameters: "
+            "``(glm_params, transition_proba, initial_proba)``.\n ``glm_params`` must be a "
+            "length 2 tuple ``(coef, intercept)``.",
+        )
+        validation.check_length(
+            params[0],
+            2,
+            "The GLM params must be a length two tuple, ``(coef, intercept)``.",
         )
         # convert to jax array (specify type if needed)
         params = validation.convert_tree_leaves_to_jax_array(
@@ -463,9 +445,9 @@ class GLMHMM(BaseRegressor[ModelParams]):
             "with numeric data-type!",
             data_type,
         )
-        self._check_initial_proj_and_intercept(params[:2])
-        self._check_transition_proba(params[2])
-        self._check_init_state_proba(params[3])
+        self._check_initial_glm_params(params[0])
+        self._check_transition_proba(params[1])
+        self._check_init_state_proba(params[2])
         return params
 
     @staticmethod
@@ -496,23 +478,23 @@ class GLMHMM(BaseRegressor[ModelParams]):
                 data = X.data
             else:
                 data = X
-
+            coef, intercept = params[0]
             struct1 = jax.tree_util.tree_structure(data)
-            struct2 = jax.tree_util.tree_structure(params[0])
+            struct2 = jax.tree_util.tree_structure(coef)
             if struct1 != struct2:
                 raise ValueError(
-                    f"X and params[0] (GLM coefficients) must be the tree with the same structure.\n"
-                    f"X has structure {struct1} and params[0] has structure {struct2}. "
+                    f"X GLM coefficients must be the tree with the same structure.\n"
+                    f"X has structure {struct1} and coefficients have structure {struct2}. "
                 )
 
             # check the consistency of the feature axis
             validation.check_tree_axis_consistency(
-                params[0],
+                coef,
                 data,
                 axis_1=0,
                 axis_2=1,
                 err_message="Inconsistent number of features. "
-                f"GLM coefficients have {jax.tree_util.tree_map(lambda p: p.shape[0], params[0])} features, "
+                f"GLM coefficients have {jax.tree_util.tree_map(lambda p: p.shape[0], coef)} features, "
                 f"X has {jax.tree_util.tree_map(lambda x: x.shape[1], X)} features instead!",
             )
 
