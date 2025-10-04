@@ -218,7 +218,6 @@ def test_run_m_step_regression():
         gammas,
     )
 
-    # concatenate back to match original parametrization
     # Testing Eq. 13.18 of Bishop
     np.testing.assert_almost_equal(new_initial_prob_nemos, new_initial_prob)
     # Testing Eq. 13.19 of Bishop
