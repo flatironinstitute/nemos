@@ -27,14 +27,14 @@ solver_registry: dict[str, Type] = {
 }
 
 
-def available_solvers():
+def list_available_solvers():
     """
     List the available solvers that can be used for fitting models.
 
     Example
     -------
     >>> import nemos as nmo
-    >>> nmo.solvers.available_solvers()
+    >>> nmo.solvers.list_available_solvers()
     ['GradientDescent', 'ProximalGradient', 'LBFGS', 'BFGS', 'SVRG', 'ProxSVRG', 'NonlinearCG']
     """
     return list(solver_registry.keys())

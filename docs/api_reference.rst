@@ -205,6 +205,7 @@ JAX-based optimizers used for parameter fitting.
     :nosignatures:
 
     get_solver_documentation
+    list_available_solvers
 
 
 The ``nemos.identifiability_constraints`` module
