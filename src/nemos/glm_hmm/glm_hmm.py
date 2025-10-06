@@ -10,7 +10,7 @@ import pynapple as nap
 from numpy.typing import ArrayLike, NDArray
 
 from .. import observation_models as obs
-from .. import validation
+from .. import tree_utils, validation
 from .._observation_model_builder import instantiate_observation_model
 from ..base_regressor import BaseRegressor
 from ..glm import GLM
@@ -18,8 +18,12 @@ from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..observation_models import Observations
 from ..pytrees import FeaturePytree
 from ..regularizer import Regularizer
-from ..type_casting import cast_to_jax, is_numpy_array_like
+from ..type_casting import is_numpy_array_like, is_pynapple_tsd, jnp_asarray_if
 from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength
+from .expectation_maximization import (
+    hmm_negative_log_likelihood,
+    prepare_likelihood_func,
+)
 from .initialize_parameters import (
     random_glm_params_init,
     resolve_glm_params_init_function,
@@ -30,6 +34,15 @@ from .initialize_parameters import (
 )
 
 ModelParams = Tuple[Tuple[jnp.ndarray, jnp.ndarray], jnp.ndarray, jnp.ndarray]
+
+
+def compute_is_new_session(time: NDArray, time_support_start: NDArray) -> jnp.ndarray:
+    """Compute new session indicator vector."""
+    return (
+        jax.numpy.zeros_like(time)
+        .at[jax.numpy.searchsorted(time, time_support_start)]
+        .set(1)
+    )
 
 
 class GLMHMM(BaseRegressor[ModelParams]):
@@ -300,7 +313,6 @@ class GLMHMM(BaseRegressor[ModelParams]):
             inverse_link_function, self._observation_model
         )
 
-    @cast_to_jax
     def fit(
         self,
         X: DESIGN_INPUT_TYPE,
@@ -310,7 +322,36 @@ class GLMHMM(BaseRegressor[ModelParams]):
         ] = None,
     ) -> "GLMHMM":
         """Fit the GLM-HMM model to the data."""
-        pass
+
+        # define new session array
+        if is_pynapple_tsd(y):
+            is_new_session = compute_is_new_session(y.t, y.time_support.start)
+        elif is_pynapple_tsd(X):
+            is_new_session = compute_is_new_session(X.t, X.time_support.start)
+        else:
+            is_new_session = None
+
+        # cast to jax
+        X, y = jax.tree_util.tree_map(lambda x: jnp_asarray_if(x, dtype=float), (X, y))
+
+        # validate the inputs & initialize solver
+        init_params = self.initialize_params(X, y, init_params=init_params)
+
+        # find non-nans
+        is_valid = tree_utils.get_valid_multitree(X, y)
+
+        # drop nans
+        X = jax.tree_util.tree_map(lambda x: x[is_valid], X)
+        y = jax.tree_util.tree_map(lambda x: x[is_valid], y)
+
+        # grab data if needed (tree map won't function because param is never a FeaturePytree).
+        if isinstance(X, FeaturePytree):
+            data = X.data
+        else:
+            data = X
+
+        # run EM.
+        return self
 
     def predict(
         self,
@@ -402,6 +443,33 @@ class GLMHMM(BaseRegressor[ModelParams]):
 
         return init_glm_params, init_transition_proba, init_proba
 
+    def _get_m_step_loss_function(self, is_population_glm: bool):
+        """Prepare the loss function for the M-step of the GLM params."""
+        # prepare the loss function
+        likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
+            is_population_glm,
+            self.observation_model.log_likelihood,
+            self.observation_model._negative_log_likelihood,
+            is_log=True,
+        )
+        inverse_link_function = self.inverse_link_function
+
+        # closure for the static callable solver.run
+        # NOTE: this is the loss function used in the numerical M-step that learns coefficient and intercept.
+        def partial_hmm_negative_log_likelihood(
+            glm_params, design_matrix, observations, posterior_prob
+        ):
+            return hmm_negative_log_likelihood(
+                glm_params,
+                X=design_matrix,
+                y=observations,
+                posteriors=posterior_prob,
+                inverse_link_function=inverse_link_function,
+                negative_log_likelihood_func=negative_log_likelihood_func,
+            )
+
+        return partial_hmm_negative_log_likelihood
+
     def initialize_state(
         self,
         X: DESIGN_INPUT_TYPE,
@@ -409,7 +477,12 @@ class GLMHMM(BaseRegressor[ModelParams]):
         init_params,
     ) -> Union[Any, NamedTuple]:
         """Initialize the state of the solver for running fit and update."""
-        pass
+        partial_hmm_negative_log_likelihood = self._get_m_step_loss_function(y.ndim > 1)
+        self.instantiate_solver(
+            partial_hmm_negative_log_likelihood, solver_kwargs=self.solver_kwargs
+        )
+        opt_state = self.solver_init_state(init_params, X, y)
+        return opt_state
 
     # CHECKS FOR PARAMS AND INPUTS
     def _check_params(
