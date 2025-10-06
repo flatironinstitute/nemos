@@ -672,10 +672,10 @@ def em_glm_hmm(
     initial_prob: Array,
     transition_prob: Array,
     glm_params: Tuple[Array, Array],
-    is_new_session: Array,
     inverse_link_function: Callable,
     likelihood_func: Callable,
     solver_run: Callable,
+    is_new_session: Optional[Array] = None,
     maxiter: int = 10**3,
     tol: float = 1e-8,
 ) -> Tuple[Array, Array, Array, Array, Tuple[Array, Array]]:
@@ -695,8 +695,6 @@ def em_glm_hmm(
     glm_params:
         Initial projection coefficients and intercept for the GLM, shape``(n_features, n_states)``
         and ``(n_states,)``, respectively.
-    is_new_session:
-        Boolean mask for the first observation of each session.
     inverse_link_function:
         Elementwise function mapping linear predictors to rates.
     likelihood_func:
@@ -708,6 +706,8 @@ def em_glm_hmm(
         Callable that runs the M step for the projection coefficients.
         Note that it must receive as parameters: (coefficients, X, y, posteriors), see
         run_m_step.
+    is_new_session:
+        Boolean mask for the first observation of each session.
     maxiter:
         Maximum number of EM iterations.
     tol:
@@ -733,6 +733,18 @@ def em_glm_hmm(
         data_log_likelihood=-jnp.array(jnp.inf),
         iterations=0,
     )
+
+    # setup new session
+    if is_new_session is None:
+        # default: all False, but first time bin must be True
+        is_new_session = jax.lax.dynamic_update_index_in_dim(
+            jnp.zeros(y.shape[0], dtype=bool), True, 0, axis=0
+        )
+    else:
+        # use the user-provided tree, but force the first time bin to be True
+        is_new_session = jax.lax.dynamic_update_index_in_dim(
+            jnp.asarray(is_new_session, dtype=bool), True, 0, axis=0
+        )
 
     def em_step(carry, xs):
         _, previous_state = carry

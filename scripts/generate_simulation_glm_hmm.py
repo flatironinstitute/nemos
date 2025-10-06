@@ -307,7 +307,7 @@ def main(
             counts=results["counts"],
             rates=results["rates"],
             latent_states=results["latent_states"],
-            projection_weights=results["projection_weights"],
+            projection_weights=jnp.squeeze(results["projection_weights"]),
             transition_prob=results["transition_prob"],
             initial_prob=results["initial_prob"],
             design_matrix=results["design_matrix"],

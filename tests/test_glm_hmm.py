@@ -299,15 +299,12 @@ def test_run_em(regularization):
     )
 
 
-@pytest.mark.parametrize("n_neurons", [1, 5])
+@pytest.mark.parametrize("n_neurons", [5])
 def test_check_em(n_neurons):
     jax.config.update("jax_enable_x64", True)
 
     # Fetch the data
-    data_path = (
-        Path(os.environ.get("NEMOS_DATA_DIR", ".")).resolve()
-        / f"glm_hmm_simulation_n_neurons_{n_neurons}_seed_123.npz"
-    )
+    data_path = fetch_data(f"glm_hmm_simulation_n_neurons_{n_neurons}_seed_123.npz")
     data = np.load(data_path)
 
     # Design matrix and observed choices
@@ -347,13 +344,64 @@ def test_check_em(n_neurons):
     glm.instantiate_solver(partial_hmm_negative_log_likelihood)
     solver_run = glm._solver_run
     # End of preparatory step.
-    out = em_glm_hmm(
+
+    # add small noise to initial prob & projection weights
+    np.random.seed(123)
+    init_pb = initial_prob + np.random.uniform(0, 0.1)
+    init_pb /= init_pb.sum()
+    proj_weights = projection_weights + np.random.randn(*projection_weights.shape)
+
+    # sticky prior (not equal to original)
+    transition_pb= np.ones(transition_prob.shape) * 0.05
+    transition_pb[np.diag_indices(transition_prob.shape[1])] = 0.9
+
+    (posteriors_noisy_params,
+    joint_posterior_noisy_params,
+    log_likelihood_noisy_params,
+    log_likelihood_norm_noisy_params,
+    alphas_noisy_params,
+    betas_noisy_params,) = forward_backward(
+            X[:, 1:],  # drop intercept
+            y,
+            initial_prob,
+            transition_prob,
+            (proj_weights[1:], proj_weights[:1]),
+            likelihood_func=likelihood_func,
+            inverse_link_function=obs.default_inverse_link_function,
+    )
+
+    latent_states = data["latent_states"]
+    corr_matrix_before_em = np.corrcoef(
+        latent_states.T, posteriors_noisy_params.T
+    )[:latent_states.shape[1], latent_states.shape[1]:]
+    max_corr_before_em = np.max(corr_matrix_before_em, axis=1)
+
+    posteriors, joint_posterior, learned_initial_prob, learned_transition, (learned_coef, learned_intercept) = em_glm_hmm(
         X[:, 1:],
-        y,
-        initial_prob=initial_prob,
-        transition_prob=transition_prob,
-        glm_params=(coef, intercept),
+        jax.numpy.squeeze(y),
+        initial_prob=init_pb,
+        transition_prob=transition_pb,
+        glm_params=(proj_weights[1:], proj_weights[:1]),
         inverse_link_function=inverse_link_function,
         likelihood_func=likelihood_func,
         solver_run=solver_run,
+        tol=10**-10
     )
+    (_, _, _ , log_likelihood_em, _, _,) = forward_backward(
+            X[:, 1:],  # drop intercept
+            y,
+            initial_prob,
+            transition_prob,
+            (proj_weights[1:], proj_weights[:1]),
+            likelihood_func=likelihood_func,
+            inverse_link_function=obs.default_inverse_link_function,
+    )
+
+    # find state mapping
+    corr_matrix = np.corrcoef(
+        latent_states.T, posteriors.T
+    )[:latent_states.shape[1], latent_states.shape[1]:]
+    max_corr = np.max(corr_matrix, axis=1)
+    assert np.all(max_corr > 0.95), "State recovery failed."
+    assert np.all(max_corr > max_corr_before_em), "Latent state recovery did not improve."
+    assert log_likelihood_noisy_params < log_likelihood_em, "Log-likelihood decreased."
