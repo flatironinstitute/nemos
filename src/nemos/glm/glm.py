@@ -632,12 +632,7 @@ class GLM(BaseRegressor):
         self._check_input_n_timepoints(X, y)
         self._check_input_and_params_consistency(params, X=X, y=y)
 
-        # get valid entries
-        is_valid = tree_utils.get_valid_multitree(X, y)
-
-        # filter for valid
-        X = jax.tree_util.tree_map(lambda x: x[is_valid], X)
-        y = jax.tree_util.tree_map(lambda x: x[is_valid], y)
+        X, y = tree_utils.drop_nans(X, y)
 
         if isinstance(X, FeaturePytree):
             data = X.data
@@ -795,12 +790,8 @@ class GLM(BaseRegressor):
         # validate the inputs & initialize solver
         init_params = self.initialize_params(X, y, init_params=init_params)
 
-        # find non-nans
-        is_valid = tree_utils.get_valid_multitree(X, y)
-
-        # drop nans
-        X = jax.tree_util.tree_map(lambda x: x[is_valid], X)
-        y = jax.tree_util.tree_map(lambda x: x[is_valid], y)
+        # filter for non-nans
+        X, y = tree_utils.drop_nans(X, y)
 
         # grab data if needed (tree map won't function because param is never a FeaturePytree).
         if isinstance(X, FeaturePytree):
@@ -808,7 +799,7 @@ class GLM(BaseRegressor):
         else:
             data = X
 
-        self.initialize_state(data, y, init_params)
+        self.initialize_state(data, y, init_params, cast_to_jax_and_drop_nans=False)
 
         params, state = self.solver_run(init_params, data, y)
 
@@ -1049,12 +1040,12 @@ class GLM(BaseRegressor):
 
         return init_params
 
-    @cast_to_jax
     def initialize_state(
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         init_params,
+        cast_to_jax_and_drop_nans: bool = True,
     ) -> Union[Any, NamedTuple]:
         """Initialize the solver by instantiating its init_state, update and, run methods.
 
@@ -1071,6 +1062,13 @@ class GLM(BaseRegressor):
             they are not provided.
         init_params :
             Initial parameters for the model.
+        cast_to_jax_and_drop_nans :
+            Whether to cast inputs to JAX arrays and remove NaN values. Set to True when calling
+            this method directly (applies necessary preprocessing). Set to False when called
+            internally from ``self.fit`` (preprocessing already done, avoids redundant operations).
+            Users may set this to False when implementing custom stochastic optimization loops
+            where they initialize the solver state once with this method, then repeatedly call
+            ``self.update``.
 
         Returns
         -------
@@ -1087,15 +1085,17 @@ class GLM(BaseRegressor):
         >>> opt_state = model.initialize_state(X, y, params)
         >>> # Now ready to run optimization or update steps
         """
-        # find non-nans
-        is_valid = tree_utils.get_valid_multitree(X, y)
-
-        # drop nans
-        X = jax.tree_util.tree_map(lambda x: x[is_valid], X)
-        y = jax.tree_util.tree_map(lambda x: x[is_valid], y)
-
-        # grab the data
-        data = X.data if isinstance(X, FeaturePytree) else X
+        if cast_to_jax_and_drop_nans:
+            # cast to jax
+            X, y = jax.tree_util.tree_map(
+                lambda x: jnp_asarray_if(x, dtype=float), (X, y)
+            )
+            # filter for non-nans
+            X, y = tree_utils.drop_nans(X, y)
+            # grab the data
+            data = X.data if isinstance(X, FeaturePytree) else X
+        else:
+            data = X
 
         # check if mask has been set is using group lasso
         # if mask has not been set, use a single group as default
@@ -1185,11 +1185,7 @@ class GLM(BaseRegressor):
 
         """
         # find non-nans
-        is_valid = tree_utils.get_valid_multitree(X, y)
-
-        # drop nans
-        X = jax.tree_util.tree_map(lambda x: x[is_valid], X)
-        y = jax.tree_util.tree_map(lambda x: x[is_valid], y)
+        X, y = tree_utils.drop_nans(X, y)
 
         # grab the data
         data = X.data if isinstance(X, FeaturePytree) else X
