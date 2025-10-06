@@ -140,12 +140,15 @@ class OptimistixOptaxGradientDescent(AbstractOptimistixOptaxSolver):
 
     _optax_solver = optax.sgd
 
+    # TODO: Update docstring to mention that Nesterov needs momentum
+    # TODO: Update docstring to mention that linesearch_kwargs is passed to optax.zoom_linesearch
+    # TODO: Update docstring to mention that max_linesearch_steps is 15 by default. Where does that number come from?
     def __init__(
         self,
         unregularized_loss: Callable,
         regularizer: Regularizer,
         regularizer_strength: float | None,
-        atol: float = DEFAULT_ATOL,
+        tol: float = DEFAULT_ATOL,
         rtol: float = DEFAULT_RTOL,
         acceleration: bool = True,
         stepsize: float | None = None,
@@ -171,7 +174,7 @@ class OptimistixOptaxGradientDescent(AbstractOptimistixOptaxSolver):
             unregularized_loss,
             regularizer,
             regularizer_strength,
-            atol=atol,
+            tol=tol,
             rtol=rtol,
             **solver_init_kwargs,
         )
@@ -211,7 +214,7 @@ class OptimistixOptaxProximalGradient(AbstractOptimistixOptaxSolver):
         unregularized_loss: Callable,
         regularizer: Regularizer,
         regularizer_strength: float | None,
-        atol: float = DEFAULT_ATOL,
+        tol: float = DEFAULT_ATOL,
         rtol: float = DEFAULT_RTOL,
         acceleration: bool = True,
         stepsize: float | None = None,
@@ -244,7 +247,7 @@ class OptimistixOptaxProximalGradient(AbstractOptimistixOptaxSolver):
             unregularized_loss,
             regularizer,
             regularizer_strength,
-            atol=atol,
+            tol=tol,
             rtol=rtol,
             **solver_init_kwargs,
         )
@@ -357,7 +360,7 @@ class OptimistixOptaxLBFGS(AbstractOptimistixOptaxSolver):
         unregularized_loss: Callable,
         regularizer: Regularizer,
         regularizer_strength: float | None,
-        atol: float = DEFAULT_ATOL,
+        tol: float = DEFAULT_ATOL,
         rtol: float = DEFAULT_RTOL,
         stepsize: float | None = None,
         **solver_init_kwargs,
@@ -374,7 +377,7 @@ class OptimistixOptaxLBFGS(AbstractOptimistixOptaxSolver):
             unregularized_loss,
             regularizer,
             regularizer_strength,
-            atol=atol,
+            tol=tol,
             rtol=rtol,
             **solver_init_kwargs,
         )

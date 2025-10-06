@@ -83,10 +83,13 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
         unregularized_loss: Callable,
         regularizer: Regularizer,
         regularizer_strength: float | None,
-        atol: float = DEFAULT_ATOL,
+        tol: float = DEFAULT_ATOL,
         rtol: float = DEFAULT_RTOL,
         **solver_init_kwargs,
     ):
+        if "atol" in solver_init_kwargs:
+            raise TypeError("Please use tol instead of atol.")
+
         if self._proximal:
             loss_fn = unregularized_loss
             self.prox = regularizer.get_proximal_operator()
@@ -108,7 +111,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
         self.config = OptimistixConfig(**user_args)
 
         self._solver = self._solver_cls(
-            atol=atol,
+            atol=tol,
             rtol=rtol,
             norm=self.config.norm,
             **solver_init_kwargs,
@@ -169,15 +172,24 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:
         own_and_solver_args = super().get_accepted_arguments()
+
+        # atol is added from wrapped optimistix solvers
+        # but currently throughout nemos tol is used
+        own_and_solver_args.remove("atol")
+
         common_optx_arguments = set(
             [f.name for f in dataclasses.fields(OptimistixConfig)]
         )
         all_arguments = own_and_solver_args | common_optx_arguments
 
-        # in case we decide to create a LearningRate search from stepsize
-        # all_arguments.add("stepsize")
-
         return all_arguments
+
+    @classmethod
+    def _note_about_accepted_arguments(cls) -> str:
+        return """
+        Note that for backward compatibility the `atol` parameter used in Optimistix
+        is referred to as `tol` in NeMoS.
+        """
 
     @property
     def maxiter(self) -> int:
