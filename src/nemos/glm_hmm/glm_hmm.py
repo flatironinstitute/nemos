@@ -83,7 +83,7 @@ class GLMHMM(BaseRegressor[ModelParams]):
             Callable[[DESIGN_INPUT_TYPE, NDArray], NDArray] | NDArray | str
         ) = sticky_transition_proba_init,
         initialize_glm_params: (
-            Callable[[DESIGN_INPUT_TYPE, NDArray], NDArray] | NDArray | str
+            Callable[[DESIGN_INPUT_TYPE, NDArray], ModelParams] | ModelParams | str
         ) = random_glm_params_init,
         maxiter: int = 1000,
         tol: float = 1e-8,
