@@ -3,7 +3,6 @@
 # required to get ArrayLike to render correctly
 from __future__ import annotations
 
-import warnings
 from pathlib import Path
 from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
 
@@ -1040,26 +1039,9 @@ class GLM(BaseRegressor[ModelParams]):
         >>> opt_state = model.initialize_state(X, y, params)
         >>> # Now ready to run optimization or update steps
         """
-        if cast_to_jax_and_drop_nans:
-            # filter for non-nans
-            X, y = cast_to_jax(tree_utils.drop_nans)(X, y)
-            # grab the data
-            data = X.data if isinstance(X, FeaturePytree) else X
-        else:
-            data = X
-
-        # check if mask has been set is using group lasso
-        # if mask has not been set, use a single group as default
-        if isinstance(self.regularizer, GroupLasso):
-            if self.regularizer.mask is None:
-                warnings.warn(
-                    UserWarning(
-                        "Mask has not been set. Defaulting to a single group for all parameters. "
-                        "Please see the documentation on GroupLasso regularization for defining a "
-                        "mask."
-                    )
-                )
-                self.regularizer.mask = jnp.ones((1, data.shape[1]))
+        data, y = self._preprocess_inputs(
+            X, y, cast_to_jax_and_drop_nans=cast_to_jax_and_drop_nans
+        )
 
         opt_solver_kwargs = self._optimize_solver_params(data, y)
 

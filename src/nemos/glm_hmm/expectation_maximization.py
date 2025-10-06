@@ -664,7 +664,14 @@ def prepare_likelihood_func(
 
 
 @partial(
-    jax.jit, static_argnames=["inverse_link_function", "likelihood_func", "solver_run"]
+    jax.jit,
+    static_argnames=[
+        "inverse_link_function",
+        "likelihood_func",
+        "solver_run",
+        "maxiter",
+        "tol",
+    ],
 )
 def em_glm_hmm(
     X: Array,

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import abc
 import inspect
+import warnings
 from abc import abstractmethod
 from copy import deepcopy
 from functools import wraps
@@ -18,13 +19,14 @@ from numpy.typing import ArrayLike, NDArray
 
 from nemos.third_party.jaxopt import jaxopt
 
-from . import solvers, utils, validation
+from . import solvers, tree_utils, utils, validation
 from ._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from .base_class import Base
-from .regularizer import Regularizer
+from .regularizer import GroupLasso, Regularizer
 from .type_casting import cast_to_jax
 from .typing import (
     DESIGN_INPUT_TYPE,
+    FeaturePytree,
     RegularizerStrength,
     SolverInit,
     SolverRun,
@@ -617,6 +619,29 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
     ) -> ParamsT:
         """Model specific initialization logic."""
         pass
+
+    def _preprocess_inputs(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        cast_to_jax_and_drop_nans: bool = True,
+    ) -> Tuple[dict | jnp.ndarray, jnp.ndarray]:
+        """Preprocess inputs before initializing state."""
+        if cast_to_jax_and_drop_nans:
+            X, y = cast_to_jax(tree_utils.drop_nans)(X, y)
+            data = X.data if isinstance(X, FeaturePytree) else X
+        else:
+            data = X
+
+        if isinstance(self.regularizer, GroupLasso):
+            if self.regularizer.mask is None:
+                warnings.warn(
+                    "Mask has not been set. Defaulting to a single group for all parameters. "
+                    "Please see the documentation on GroupLasso regularization for defining a mask."
+                )
+                self.regularizer.mask = jnp.ones((1, data.shape[1]))
+
+        return X, y
 
     @abc.abstractmethod
     def initialize_state(

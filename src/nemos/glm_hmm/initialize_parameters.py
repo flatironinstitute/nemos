@@ -12,13 +12,18 @@ from ..typing import DESIGN_INPUT_TYPE
 
 
 def random_glm_params_init(
-    n_states: int, X: DESIGN_INPUT_TYPE, random_key=jax.random.PRNGKey(123)
+    n_neurons: int,
+    n_states: int,
+    X: DESIGN_INPUT_TYPE,
+    random_key=jax.random.PRNGKey(123),
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """
     Initialize GLM coefficients and intercept with random normal values.
 
     Parameters
     ----------
+    n_states :
+        Number of neurons to be fit.
     n_states :
         Number of HMM states.
     X :
@@ -32,8 +37,10 @@ def random_glm_params_init(
         Projection weight coef and intercept of shape (n_features, n_states) and (n_states,).
     """
     n_features = X.shape[1]
-    random_param = 0.1 * jax.random.normal(random_key, (n_features + 1, n_states))
-    return random_param[:-1], random_param[-1:]
+    random_param = 0.1 * jax.random.normal(
+        random_key, (n_features + 1, n_neurons, n_states)
+    )
+    return random_param[:-1], random_param[-1]
 
 
 def sticky_transition_proba_init(
@@ -125,7 +132,8 @@ def resolve_glm_params_init_function(
     glm_params_init: Callable | str | ArrayLike | Any,
 ) -> (
     Callable[
-        [int, DESIGN_INPUT_TYPE, jax.random.PRNGKey], Tuple[jnp.ndarray, jnp.ndarray]
+        [int, int, DESIGN_INPUT_TYPE, jax.random.PRNGKey],
+        Tuple[jnp.ndarray, jnp.ndarray],
     ]
     | Tuple[jnp.ndarray, jnp.ndarray]
 ):
@@ -142,9 +150,9 @@ def resolve_glm_params_init_function(
         The projection weights and intercept initialization specification. Can be:
         - A pre-defined initialization function from AVAILABLE_PROJECTION_INIT
         - str: name of a standard initialization method (e.g., "random")
-        - array-like: explicit projection weight values (n_features, n_states)
+        - array-like: explicit projection weight values (n_features, n_states) or (n_features, n_neurons, n_states)
         - Callable: custom initialization function with signature
-          (n_states: int, X: DESIGN_INPUT_TYPE, key: jax.random.PRNGKey, **kwargs) -> NDArray
+          (n_neurons: int, n_states: int, X: DESIGN_INPUT_TYPE, key: jax.random.PRNGKey, **kwargs) -> NDArray
           where any additional keyword arguments must have default values
 
     Returns
@@ -156,7 +164,7 @@ def resolve_glm_params_init_function(
     ------
     ValueError
         - If the string name is not recognized
-        - If a callable has fewer than 3 required parameters
+        - If a callable has fewer than 4 required parameters
         - If a callable has extra parameters without default values
     TypeError
         If the input is not a recognized type (string, callable, or array-like).
@@ -215,24 +223,24 @@ def resolve_glm_params_init_function(
         n_params = len(sig.parameters)
 
         # Check minimum number of parameters
-        if n_params < 3:
+        if n_params < 4:
             param_names = list(sig.parameters.keys())
             raise ValueError(
-                f"Projection initialization function must have at least 3 parameters: "
-                f"(n_states, X, key), but got {n_params} parameter(s): {param_names}.\n"
+                f"Projection initialization function must have at least 4 parameters: "
+                f"(n_neurons, n_states, X, key), but got {n_params} parameter(s): {param_names}.\n"
                 f"Signature should be: "
-                f"Callable[[int, DESIGN_INPUT_TYPE, jax.random.PRNGKey], Tuple[NDArray, NDArray, NDArray]]"
+                f"Callable[[int, int, DESIGN_INPUT_TYPE, jax.random.PRNGKey], Tuple[NDArray, NDArray, NDArray]]"
             )
 
         # Check that extra parameters have defaults
         params = list(sig.parameters.values())
         params_without_defaults = [
-            p.name for p in params[3:] if p.default is inspect.Parameter.empty
+            p.name for p in params[4:] if p.default is inspect.Parameter.empty
         ]
 
         if params_without_defaults:
             raise ValueError(
-                f"All parameters beyond the required 3 (n_states, X, key) must have default values.\n"
+                f"All parameters beyond the required 4 (n_neurons, n_states, X, key) must have default values.\n"
                 f"Parameters without defaults: {params_without_defaults}"
             )
 
@@ -246,8 +254,9 @@ def resolve_glm_params_init_function(
         f"Invalid projection weight initialization type: {type(glm_params_init).__name__}.\n"
         "The projection weight initialization must be one of:\n"
         f"  - A string from: {valid_strings_formatted}\n"
-        "  - An array-like object with shape (n_states, n_features)\n"
-        "  - A callable with signature: (n_states: int, X: DESIGN_INPUT_TYPE, "
+        "  - An array-like object with shape (n_states, n_features) for GLM or "
+        "(n_states, n_states, n_features) for PopulationGLM\n"
+        "  - A callable with signature: (n_neurons: int, n_states: int, X: DESIGN_INPUT_TYPE, "
         "key: jax.random.PRNGKey, **kwargs) -> NDArray"
     )
 

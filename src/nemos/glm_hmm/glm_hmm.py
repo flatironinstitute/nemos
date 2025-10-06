@@ -18,9 +18,15 @@ from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..observation_models import Observations
 from ..pytrees import FeaturePytree
 from ..regularizer import Regularizer
-from ..type_casting import is_numpy_array_like, is_pynapple_tsd, jnp_asarray_if
+from ..third_party.jaxopt import jaxopt
+from ..type_casting import (
+    is_numpy_array_like,
+    is_pynapple_tsd,
+    jnp_asarray_if,
+)
 from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength
 from .expectation_maximization import (
+    em_glm_hmm,
     hmm_negative_log_likelihood,
     prepare_likelihood_func,
 )
@@ -36,13 +42,17 @@ from .initialize_parameters import (
 ModelParams = Tuple[Tuple[jnp.ndarray, jnp.ndarray], jnp.ndarray, jnp.ndarray]
 
 
-def compute_is_new_session(time: NDArray, time_support_start: NDArray) -> jnp.ndarray:
-    """Compute new session indicator vector."""
-    return (
-        jax.numpy.zeros_like(time)
-        .at[jax.numpy.searchsorted(time, time_support_start)]
-        .set(1)
-    )
+def compute_is_new_session(time: NDArray, start: NDArray) -> jnp.ndarray:
+    """Compute new session indicator vector.
+
+    Parameters
+    ----------
+    time:
+        The timestamp associated to each sample.
+    start:
+        Start times of each new epoch/session.
+    """
+    return jax.numpy.zeros_like(time).at[jax.numpy.searchsorted(time, start)].set(1)
 
 
 class GLMHMM(BaseRegressor[ModelParams]):
@@ -75,6 +85,8 @@ class GLMHMM(BaseRegressor[ModelParams]):
         initialize_glm_params: (
             Callable[[DESIGN_INPUT_TYPE, NDArray], NDArray] | NDArray | str
         ) = random_glm_params_init,
+        maxiter: int = 1000,
+        tol: float = 1e-8,
         seed=jax.random.PRNGKey(123),
     ):
         super().__init__(
@@ -115,6 +127,91 @@ class GLMHMM(BaseRegressor[ModelParams]):
         self.dirichlet_prior_alphas_init_prob = dirichlet_prior_alphas_init_prob
         self.dirichlet_prior_alphas_transition = dirichlet_prior_alphas_transition
         self._seed = seed
+        self.maxiter = maxiter
+        self.tol = tol
+        # Model log-likelihood
+        # inputs: (y, firing_rate)
+        # input shapes:
+        #     - y: (n_samples,)
+        #     - firing_rate: (n_samples,)
+        # returns: a 0-dim jnp.ndarray
+        self._likelihood_func: (
+            Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray] | None
+        ) = None
+        # expected negative log-likelihood as function of the GLM parameters.
+        # inputs: ((coef, intercept), X, y, posteriors)
+        # input shapes:
+        #     - (coef, intercept): ( (n_features, n_states), (n_states,) )
+        #     - X: (n_samples, n_features)
+        #     - y: (n_samples,)
+        #     - posteriors: (n_samples, n_states)
+        self._expected_negative_log_likelihood: (
+            Callable[
+                [
+                    Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+                    jnp.ndarray,
+                    jnp.ndarray,
+                    jnp.ndarray,
+                ],
+                jnp.ndarray,
+            ]
+            | None
+        ) = None
+        # parameters
+        self.glm_params_: Tuple[dict | jnp.ndarray, jnp.ndarray] | None = None
+        self.transition_prob_: jnp.ndarray | None = None
+        self.initial_prob_: jnp.ndarray | None = None
+
+    @property
+    def coef_(self):
+        """The GLM coefficients."""
+        if self.glm_params_ is not None:
+            return self.glm_params_[0]
+        return None
+
+    @property
+    def intercept_(self):
+        """The GLM intercepts."""
+        if self.glm_params_ is not None:
+            return self.glm_params_[1]
+        return None
+
+    @property
+    def maxiter(self):
+        """EM maximum number of iterations."""
+        return self._maxiter
+
+    @maxiter.setter
+    def maxiter(self, maxiter: int):
+
+        if not isinstance(maxiter, Number) or maxiter != int(maxiter) or maxiter <= 0:
+            raise ValueError(
+                f"``maxiter`` must be a strictly positive integer. {maxiter} provided."
+            )
+        self._maxiter = int(maxiter)
+
+    @property
+    def tol(self):
+        """Tolerance for the EM algorithm convergence criterion.
+
+        The algorithm stops when the absolute change in log-likelihood between
+        consecutive iterations falls below this threshold:
+        |log_likelihood_current - log_likelihood_previous| < tol
+
+        Returns
+        -------
+            float: Convergence tolerance value.
+        """
+        return self._tol
+
+    @tol.setter
+    def tol(self, tol: float):
+
+        if not isinstance(tol, Number) or tol <= 0:
+            raise ValueError(
+                f"``maxiter`` must be a strictly positive float. {tol} provided."
+            )
+        self._tol = float(tol)
 
     @property
     def initialize_glm_params(self):
@@ -350,7 +447,32 @@ class GLMHMM(BaseRegressor[ModelParams]):
         else:
             data = X
 
-        # run EM.
+        self._likelihood_func, self._expected_negative_log_likelihood = (
+            self._get_m_step_loss_function(y.ndim > 1)
+        )
+        self.initialize_state(data, y, init_params=init_params)
+
+        # run EM
+        glm_params, transition_prob, initial_prob = init_params
+        (
+            _,
+            _,
+            self.initial_prob_,
+            self.transition_prob_,
+            self.glm_params_,
+        ) = em_glm_hmm(
+            data,
+            y,
+            initial_prob,
+            transition_prob,
+            glm_params,
+            self._inverse_link_function,
+            self._likelihood_func,
+            self._solver_run,
+            is_new_session,
+            self._maxiter,
+            self._tol,
+        )
         return self
 
     def predict(
@@ -429,7 +551,12 @@ class GLMHMM(BaseRegressor[ModelParams]):
         init_glm_params = self._initialize_glm_params
         if callable(init_glm_params):
             key, subkey = jax.random.split(key)
-            init_glm_params = init_glm_params(self._n_states, X, subkey)
+            coef, intercept = init_glm_params(
+                1 if y.ndim == 1 else y.shape[1], self._n_states, X, subkey
+            )
+            if y.ndim == 1:
+                coef, intercept = jnp.squeeze(coef), jnp.squeeze(intercept)
+            init_glm_params = coef, intercept
 
         init_transition_proba = self._initialize_transition_proba
         if callable(init_transition_proba):
@@ -456,7 +583,7 @@ class GLMHMM(BaseRegressor[ModelParams]):
 
         # closure for the static callable solver.run
         # NOTE: this is the loss function used in the numerical M-step that learns coefficient and intercept.
-        def partial_hmm_negative_log_likelihood(
+        def expected_negative_log_likelihood(
             glm_params, design_matrix, observations, posterior_prob
         ):
             return hmm_negative_log_likelihood(
@@ -468,18 +595,25 @@ class GLMHMM(BaseRegressor[ModelParams]):
                 negative_log_likelihood_func=negative_log_likelihood_func,
             )
 
-        return partial_hmm_negative_log_likelihood
+        return likelihood_func, expected_negative_log_likelihood
 
     def initialize_state(
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         init_params,
+        cast_to_jax_and_drop_nans: bool = True,
     ) -> Union[Any, NamedTuple]:
         """Initialize the state of the solver for running fit and update."""
-        partial_hmm_negative_log_likelihood = self._get_m_step_loss_function(y.ndim > 1)
+        X, y = self._preprocess_inputs(
+            X, y, cast_to_jax_and_drop_nans=cast_to_jax_and_drop_nans
+        )
+        if self._expected_negative_log_likelihood is None:
+            self._likelihood_func, self._expected_negative_log_likelihood = (
+                self._get_m_step_loss_function(y.ndim > 1)
+            )
         self.instantiate_solver(
-            partial_hmm_negative_log_likelihood, solver_kwargs=self.solver_kwargs
+            self._expected_negative_log_likelihood, solver_kwargs=self.solver_kwargs
         )
         opt_state = self.solver_init_state(init_params, X, y)
         return opt_state
@@ -585,3 +719,23 @@ class GLMHMM(BaseRegressor[ModelParams]):
     def _get_optimal_solver_params_config(self):
         """No optimal parameters known for SVRG in HMMGLM."""
         return None, None, None
+
+    def _get_coef_and_intercept(self) -> Tuple[Any, Any]:
+        if self.glm_params_ is not None:
+            return self.glm_params_
+        return None, None
+
+    def _set_coef_and_intercept(self, params):
+        self.glm_params_ = params
+
+    def update(
+        self,
+        params: Tuple[jnp.ndarray, jnp.ndarray],
+        opt_state: NamedTuple,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        *args,
+        **kwargs,
+    ) -> jaxopt.OptStep:
+        """Run a single update step of the jaxopt solver."""
+        pass
