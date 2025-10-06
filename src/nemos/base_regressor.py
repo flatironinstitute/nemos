@@ -301,7 +301,7 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
             )
 
     def instantiate_solver(
-        self, *args, solver_kwargs: Optional[dict] = None
+        self, loss, *args, solver_kwargs: Optional[dict] = None
     ) -> BaseRegressor:
         """
         Instantiate the solver with the provided loss function.
@@ -318,6 +318,8 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
 
         Parameters
         ----------
+        loss:
+            The un-regularized loss function.
         *args:
             Positional arguments for the jaxopt `solver.run` method, e.g. the regularizing
             strength for proximal gradient methods.
@@ -342,11 +344,7 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         # In proximal method you must use the unpenalized loss independently
         # of what regularizer you are using.
         if self.solver_name not in ("ProximalGradient", "ProxSVRG"):
-            loss = self.regularizer.penalized_loss(
-                self._predict_and_compute_loss, self.regularizer_strength
-            )
-        else:
-            loss = self._predict_and_compute_loss
+            loss = self.regularizer.penalized_loss(loss, self.regularizer_strength)
 
         if solver_kwargs is None:
             # copy dictionary of kwargs to avoid modifying user settings
@@ -383,9 +381,13 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         self._solver_loss_fun = loss
 
         def solver_run(
-            init_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], *run_args: jnp.ndarray
+            init_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+            *run_args: jnp.ndarray,
+            **run_kwargs,
         ) -> jaxopt.OptStep:
-            return solver.run(init_params, *args, *run_args, **solver_run_kwargs)
+            return solver.run(
+                init_params, *args, *run_args, **run_kwargs, **solver_run_kwargs
+            )
 
         def solver_update(params, state, *run_args, **run_kwargs) -> jaxopt.OptStep:
             return solver.update(
