@@ -7,7 +7,7 @@ As [JAXopt is no longer maintained](https://github.com/google/jaxopt?tab=readme-
 
 To support flexibility and long-term maintenance, NeMoS now has a backend-agnostic solver interface, allowing the use of solvers from different backend libraries with different interfaces.
 
-In particular, NeMoS's solvers interface is designed to be compatible with solvers from Google's [Optax](https://optax.readthedocs.io/en/latest/) by Google, and the community-run [Optimistix](https://docs.kidger.site/optimistix/).
+In particular, NeMoS's solvers interface is designed to be compatible with solvers from Google's [Optax](https://optax.readthedocs.io/en/latest/) and the community-run [Optimistix](https://docs.kidger.site/optimistix/).
 
 ## `AbstractSolver` interface
 This interface is defined by `AbstractSolver` and mostly follows the JAXopt API.
@@ -27,9 +27,8 @@ This is a generic class parametrized by `SolverState` and `StepResult`.
 
 (optimization-info)=
 ### Optimization info
-Because different libraries store info about the optimization run in different places, we decided to standardize some common diagnostics.  
-Optimistix saves some things in the stats dict, Optax and Jaxopt store things in their state.
-These are saved in the `optimization_info` attribute, which is of type `OptimizationInfo`.
+Because different libraries store info about the optimization run in different places, we decided to standardize some common diagnostics.
+These are accessed using the `get_optim_info` method which takes the solver state and returns an `OptimizationInfo`.
 
 `OptimizationInfo` holds the following fields:
 - `function_val`: The final value of the objective function. As not all solvers store this by default, and it's potentially expensive to evaluate, this field is optional.
@@ -90,14 +89,13 @@ Abstract Class AbstractSolver
 `OptaxOptimistixSolver` is an adapter for Optax solvers, relying on `optimistix.OptaxMinimiser` to run the full optimization loop.
 Optimistix does not have implementations of Nesterov acceleration, so gradient descent is implemented by wrapping `optax.sgd` which does support it.
 (Although what Optax calls Nesterov acceleration is not the [original method developed for convex optimization](https://hengshuaiyao.github.io/papers/nesterov83.pdf) but the [version adapted for training deep networks with SGD](https://proceedings.mlr.press/v28/sutskever13.html). Interestingly, JAXopt did implement the original, but in practice it does not seem to be faster.)
-Note that `OptaxOptimistixSolver` allows using any solver from Optax (e.g., Adam). See `OptaxOptimistixGradientDescent` for a template of how to wrap new Optax solvers.
 
 (custom-solvers)=
 ## Custom solvers
 If you want to use your own solver in `nemos`, you just have to write a solver that adheres to the `AbstractSolver` interface, and it should be straightforward to plug in.  
 While it is not necessary, a way to ensure adherence to the interface is subclassing `AbstractSolver`.
 
-Currently, the solver registry defines which implementation to use for each algorithm, so that has to be overwritten in order to tell `nemos` to use this custom class, but in the future we are [planning to support passing any solver to `BaseRegressor`](https://github.com/flatironinstitute/nemos/issues/378).
+Currently, the solver registry defines which implementation to use for each algorithm, but in the future we are [planning to support passing any solver to `BaseRegressor`](https://github.com/flatironinstitute/nemos/issues/378).
 
 ## Stochastic optimization
 To run stochastic (mini-batch) optimization, JAXopt used a `run_iterator` method.
@@ -110,44 +108,3 @@ For information on how stochastic optimization is planned to be supported in NeM
 
 Note that (Prox-)SVRG is especially well-suited for running stochastic optimization, however it currently requires the optimization loop to be implemented separately as it is a bit more involved than what is done by `run_iterator`.  
 :::
-
-## Note on line searches vs. fixed stepsize in Optimistix
-By default Optimistix doesn't expose the search attribute of concrete solvers but we might want to flexibly switch between linesearches and constant learning rates depending on whether `stepsize` is passed to the solver.
-A solution to this would be to create short redefinitions of the required solvers with the `search` as an argument to `__init__`, and in the adapter dealing with `stepsize` with something like:
-```python
-class BFGS(AbstractBFGS[Y, Aux, _Hessian]):
-    rtol: float
-    atol: float
-    norm: Callable[[PyTree], Scalar]
-    use_inverse: bool
-    descent: NewtonDescent
-    search: AbstractSearch
-    verbose: frozenset[str]
-
-    def __init__(
-        self,
-        rtol: float,
-        atol: float,
-        norm: Callable[[PyTree], Scalar] = max_norm,
-        use_inverse: bool = True,
-        verbose: frozenset[str] = frozenset(),
-        search: AbstractSearch = Zoom(initial_guess_strategy="one"),
-    ):
-        self.rtol = rtol
-        self.atol = atol
-        self.norm = norm
-        self.use_inverse = use_inverse
-        self.descent = NewtonDescent(linear_solver=lx.Cholesky())
-        self.search = search
-        self.verbose = verbose
-```
-
-and
-
-```python
-if "stepsize" in solver_init_kwargs:
-   assert "search" not in solver_init_kwargs, "Specify either search or stepsize"
-   solver_init_kwargs["search"] = optx.LearningRate(
-       solver_init_kwargs.pop("stepsize")
-   )
-```
