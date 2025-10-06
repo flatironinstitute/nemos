@@ -1,5 +1,3 @@
-"""Base class for adapter wrapping solver from JAXopt and Optimistix."""
-
 import abc
 import inspect
 from typing import Any, ClassVar, Type
@@ -47,6 +45,11 @@ class SolverAdapter(AbstractSolver[SolverState], abc.ABC):
 
         return all_arguments
 
+    @classmethod
+    def _note_about_accepted_arguments(cls) -> str:
+        """Add a potential note about the accepted arguments in the docstring."""
+        return ""
+
     def __init_subclass__(cls, **kw):
         """Generate the docstring including accepted arguments and the wrapped solver's documentation."""
         super().__init_subclass__(**kw)
@@ -70,6 +73,11 @@ class SolverAdapter(AbstractSolver[SolverState], abc.ABC):
         )
         accepted_doc = "\n".join(f"- {a}" for a in sorted(cls.get_accepted_arguments()))
         accepted_doc = accepted_doc_header + "\n" + accepted_doc
+
+        # potentially add a note about the accepted arguments
+        after_accepted = inspect.cleandoc(cls._note_about_accepted_arguments()).strip()
+        if after_accepted:
+            accepted_doc = accepted_doc + "\n\n" + after_accepted
 
         # read the underlying solver class's documentation
         solver_doc_header = inspect.cleandoc(

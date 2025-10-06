@@ -67,6 +67,9 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
     Subclasses must define the `_solver_cls` class attribute.
     The `_solver` and `stats` attributes are assumed to exist after construction,
     so if a subclass is overwriting `__init__`, these must be created.
+
+    Note that for backward compatibility the `atol` parameter used in Optimistix
+    is referred to as `tol` in NeMoS.
     """
 
     _solver_cls: ClassVar[Type]
