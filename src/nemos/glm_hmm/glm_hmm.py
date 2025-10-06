@@ -117,16 +117,16 @@ class GLMHMM(BaseRegressor[ModelParams]):
         if isinstance(self._initialize_transition_proba, jnp.ndarray):
             self._check_transition_proba(self._initialize_transition_proba)
 
-        self._initialize_init_state_proba = resolve_initial_state_proba_init_function(
+        self._initialize_init_proba = resolve_initial_state_proba_init_function(
             initialize_init_proba
         )
-        if isinstance(self._initialize_init_state_proba, jnp.ndarray):
-            self._check_init_state_proba(self._initialize_init_state_proba)
+        if isinstance(self._initialize_init_proba, jnp.ndarray):
+            self._check_init_state_proba(self._initialize_init_proba)
 
         # set the prior params
         self.dirichlet_prior_alphas_init_prob = dirichlet_prior_alphas_init_prob
         self.dirichlet_prior_alphas_transition = dirichlet_prior_alphas_transition
-        self._seed = seed
+        self.seed = seed
         self.maxiter = maxiter
         self.tol = tol
         # Model log-likelihood
@@ -223,9 +223,9 @@ class GLMHMM(BaseRegressor[ModelParams]):
         self._initialize_glm_params = resolve_glm_params_init_function(glm_params)
 
     @property
-    def initialize_init_state_proba(self):
+    def initialize_init_proba(self):
         """Initialization of initial state probabilities."""
-        return self._initialize_init_state_proba
+        return self._initialize_init_proba
 
     @property
     def initialize_transition_proba(self):
@@ -547,7 +547,7 @@ class GLMHMM(BaseRegressor[ModelParams]):
     ) -> ModelParams:
         """GLM-HMM initialization."""
 
-        key = self._seed
+        key = self.seed
         init_glm_params = self._initialize_glm_params
         if callable(init_glm_params):
             key, subkey = jax.random.split(key)
@@ -563,7 +563,7 @@ class GLMHMM(BaseRegressor[ModelParams]):
             key, subkey = jax.random.split(key)
             init_transition_proba = init_transition_proba(self._n_states, subkey)
 
-        init_proba = self._initialize_init_state_proba
+        init_proba = self._initialize_init_proba
         if callable(init_proba):
             key, subkey = jax.random.split(key)
             init_proba = init_proba(self._n_states, subkey)
