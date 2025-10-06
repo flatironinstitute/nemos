@@ -41,18 +41,18 @@ These are saved in the `optimization_info` attribute, which is of type `Optimiza
 Support for existing solvers from external libraries and the custom implementation of (Prox-)SVRG is done through adapters that "translate" between the interfaces of these external solvers and the `AbstractSolver` interface.
 
 Creating adapters for existing solvers can be done in multiple ways.
-In our experience wrapping solver objects through adapters provides a clean way of doing that, and we recommend adapters for new optimization libraries to follow this pattern.
+In our experience wrapping solver objects through adapters provides a clean way of doing that, and adapters in NeMoS follow this pattern.
 
-`SolverAdapter` provides methods for wrapping existing solvers.  
-Each subclass of `SolverAdapter` has to define the methods of `AbstractInterface`, as well as a `_solver_cls` class variable signaling the type of solver wrapped by it.
-During construction it has to set a `_solver` attribute that is a concrete instance of `_solver_cls`.
+`SolverAdapter` provides methods for wrapping existing solvers.
+Each subclass of `SolverAdapter` defines the methods of `AbstractInterface`, as well as a `_solver_cls` class variable signaling the type of solver wrapped by it.
+During construction they set a `_solver` attribute that is a concrete instance of `_solver_cls`.
 
-Default method implementations:
-- A default implementation of `get_accepted_arguments` is provided, returning the arguments to `__init__`, `_solver_cls`, and `_solver_cls.__init__`, and discarding the ones required by `AbstractSolver.__init__`.
+Default method implementations in `SolverAdapter`:
+- `get_accepted_arguments` returns the arguments to `__init__`, `_solver_cls`, and `_solver_cls.__init__`, and discarding the ones required by `AbstractSolver.__init__`.
 - `__getattr__` dispatches every attribute call to the wrapped `_solver`.
-- `__init_subclass__` generates a docstring for the adapter including accepted arguments and the wrapped solver's documentation.
+- `__init_subclass__` generates a docstring for the adapter including accepted arguments and the wrapped solver's documentation. Extra notes about accepted arguments can be included in docstrings of subclasses using `_note_about_accepted_arguments`. This is used by `OptimistixAdapter` to add a note about the different naming of the tolerance parameter.
 
-Currently we provide adapters for two optimization backends:
+Currently there are adapters implemented for two optimization backends:
 - `OptimistixAdapter` wraps Optimistix solvers.
 - `JaxoptAdapter` wraps JAXopt solvers. As `SVRG` and `ProxSVRG` follow the JAXopt interface, these are also wrapped with `JaxoptAdapter`.
 
