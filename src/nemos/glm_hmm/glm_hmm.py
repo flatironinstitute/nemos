@@ -101,27 +101,8 @@ class GLMHMM(BaseRegressor[ModelParams]):
 
         # check and store initialization hyperparameters.
         self.initialize_glm_params = initialize_glm_params
-        check_values = (
-            isinstance(self.initialize_glm_params, tuple)
-            and len(self.initialize_glm_params) == 2
-            and all(
-                isinstance(arr, jax.numpy.ndarray) for arr in self.initialize_glm_params
-            )
-        )
-        if check_values:
-            self._check_initial_glm_params(self._initialize_glm_params)
-
-        self._initialize_transition_proba = resolve_transition_proba_init_function(
-            initialize_transition_proba
-        )
-        if isinstance(self._initialize_transition_proba, jnp.ndarray):
-            self._check_transition_proba(self._initialize_transition_proba)
-
-        self._initialize_init_proba = resolve_initial_state_proba_init_function(
-            initialize_init_proba
-        )
-        if isinstance(self._initialize_init_proba, jnp.ndarray):
-            self._check_init_state_proba(self._initialize_init_proba)
+        self.initialize_transition_proba = initialize_transition_proba
+        self._initialize_init_proba = initialize_init_proba
 
         # set the prior params
         self.dirichlet_prior_alphas_init_prob = dirichlet_prior_alphas_init_prob
@@ -220,17 +201,39 @@ class GLMHMM(BaseRegressor[ModelParams]):
 
     @initialize_glm_params.setter
     def initialize_glm_params(self, glm_params):
-        self._initialize_glm_params = resolve_glm_params_init_function(glm_params)
+        glm_params = resolve_glm_params_init_function(glm_params)
+        check_values = (
+            isinstance(glm_params, tuple)
+            and len(glm_params) == 2
+            and all(isinstance(arr, jax.numpy.ndarray) for arr in glm_params)
+        )
+        if check_values:
+            self._check_initial_glm_params(glm_params)
+        self._initialize_glm_params = glm_params
 
     @property
     def initialize_init_proba(self):
         """Initialization of initial state probabilities."""
         return self._initialize_init_proba
 
+    @initialize_init_proba.setter
+    def initialize_init_proba(self, initial_prob):
+        initial_prob = resolve_initial_state_proba_init_function(initial_prob)
+        if isinstance(initial_prob, jnp.ndarray):
+            self._check_init_state_proba(initial_prob)
+        self._initialize_init_proba = initial_prob
+
     @property
     def initialize_transition_proba(self):
         """Initialization of the transition probabilities."""
         return self._initialize_transition_proba
+
+    @initialize_transition_proba.setter
+    def initialize_transition_proba(self, transition_prob):
+        transition_prob = resolve_transition_proba_init_function(transition_prob)
+        if isinstance(transition_prob, jnp.ndarray):
+            self._check_init_state_proba(transition_prob)
+        self._initialize_transition_proba = transition_prob
 
     @property
     def dirichlet_prior_alphas_init_prob(self) -> jnp.ndarray | None:
