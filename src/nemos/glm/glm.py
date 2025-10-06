@@ -1041,12 +1041,8 @@ class GLM(BaseRegressor[ModelParams]):
         >>> # Now ready to run optimization or update steps
         """
         if cast_to_jax_and_drop_nans:
-            # cast to jax
-            X, y = jax.tree_util.tree_map(
-                lambda x: jnp_asarray_if(x, dtype=float), (X, y)
-            )
             # filter for non-nans
-            X, y = tree_utils.drop_nans(X, y)
+            X, y = cast_to_jax(tree_utils.drop_nans)(X, y)
             # grab the data
             data = X.data if isinstance(X, FeaturePytree) else X
         else:
