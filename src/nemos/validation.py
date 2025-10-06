@@ -100,6 +100,8 @@ def convert_tree_leaves_to_jax_array(
     ----------
     pytree :
         Pytree with leaves that are array-like objects.
+    err_message:
+        The error message to raise if the leaves do not have the specified data type.
     data_type :
         Data type to convert the leaves to.
 
