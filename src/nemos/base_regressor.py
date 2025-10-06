@@ -21,7 +21,6 @@ from ._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularize
 from .base_class import Base
 from .regularizer import Regularizer
 from .solvers._abstract_solver import SolverState, StepResult
-from .solvers._jaxopt_optimistix_param_mismatch_handling import _clean_solver_kwargs
 from .typing import (
     DESIGN_INPUT_TYPE,
     RegularizerStrength,
