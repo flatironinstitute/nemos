@@ -214,8 +214,8 @@ def resolve_glm_params_init_function(
         return mapping[glm_params_init]
 
     # Handle array-like inputs
-    elif is_numpy_array_like(glm_params_init)[1]:
-        return jnp.asarray(glm_params_init, dtype=float)
+    elif all(is_numpy_array_like(p)[1] for p in glm_params_init):
+        return tuple(jnp.asarray(p, dtype=float) for p in glm_params_init)
 
     # Handle callable inputs
     elif callable(glm_params_init):
