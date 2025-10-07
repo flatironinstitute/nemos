@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 import pytest
+from nemos._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
 
-import nemos as nmo
 
 INSTANTIATE_MODEL_ONLY = [
     {"obs_model": "Poisson", "simulate": False},
@@ -16,6 +16,16 @@ INSTANTIATE_MODEL_AND_SIMULATE = [
     {"obs_model": "NegativeBinomial", "simulate": True},
     {"obs_model": "Gamma", "simulate": True},
 ]
+
+
+def test_instantiate_all_obs_models():
+    obs_model_checked = set()
+    assert len(INSTANTIATE_MODEL_ONLY) == len(INSTANTIATE_MODEL_AND_SIMULATE)
+    for d1, d2 in zip(INSTANTIATE_MODEL_ONLY, INSTANTIATE_MODEL_AND_SIMULATE):
+        assert d1["obs_model"] == d2["obs_model"]
+        assert d1["simulate"] == (not d2["simulate"])
+        obs_model_checked.add(d1.get("obs_model"))
+    assert obs_model_checked == set(AVAILABLE_OBSERVATION_MODELS)
 
 
 @pytest.mark.parametrize(
