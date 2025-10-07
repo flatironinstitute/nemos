@@ -533,3 +533,82 @@ class TestModelSimulation:
             X = np.zeros((X.shape[0], 1, X.shape[1]))
         with expectation:
             model.fit(X, y, init_params=true_params)
+
+    @pytest.mark.parametrize(
+        "delta_dim, expectation",
+        [
+            (-1, pytest.raises(ValueError, match=r"y must be (one|two)-dimensional")),
+            (0, does_not_raise()),
+            (1, pytest.raises(ValueError, match=r"y must be (one|two)-dimensional")),
+        ],
+    )
+    def test_fit_y_dimensionality(
+        self, delta_dim, expectation, instantiate_base_regressor_subclass
+    ):
+        """
+        Test the `fit` method with y target data of different dimensionalities. Ensure correct dimensionality for y.
+        """
+        X, y, model, true_params = instantiate_base_regressor_subclass[:4]
+        if "Population" in model.__class__.__name__:
+            if delta_dim == -1:
+                y = y[:, 0]
+            elif delta_dim == 1:
+                y = np.zeros((*y.shape, 1))
+        else:
+            if delta_dim == -1:
+                y = np.zeros([])
+            elif delta_dim == 1:
+                y = np.zeros((y.shape[0], 1))
+        with expectation:
+            model.fit(X, y, init_params=true_params)
+
+    @pytest.mark.parametrize(
+        "delta_n_features, expectation",
+        [
+            (-1, pytest.raises(ValueError, match="Inconsistent number of features")),
+            (0, does_not_raise()),
+            (1, pytest.raises(ValueError, match="Inconsistent number of features")),
+        ],
+    )
+    def test_fit_n_feature_consistency_x(
+        self,
+        delta_n_features,
+        expectation,
+        instantiate_base_regressor_subclass,
+    ):
+        """
+        Test the `fit` method for inconsistencies between data features and model's expectations.
+        Ensure the number of features in X aligns.
+        """
+        X, y, model, true_params = instantiate_base_regressor_subclass[:4]
+        if delta_n_features == 1:
+            X = jnp.concatenate((X, jnp.zeros((X.shape[0], 1))), axis=1)
+        elif delta_n_features == -1:
+            X = X[..., :-1]
+        with expectation:
+            model.fit(X, y, init_params=true_params)
+
+    @pytest.mark.parametrize(
+        "delta_tp, expectation",
+        [
+            (
+                -1,
+                pytest.raises(ValueError, match="The number of time-points in X and y"),
+            ),
+            (0, does_not_raise()),
+            (
+                1,
+                pytest.raises(ValueError, match="The number of time-points in X and y"),
+            ),
+        ],
+    )
+    def test_fit_time_points_x(
+        self, delta_tp, expectation, instantiate_base_regressor_subclass
+    ):
+        """
+        Test the `fit` method for inconsistencies in time-points in data X. Ensure the correct number of time-points.
+        """
+        X, y, model, true_params = instantiate_base_regressor_subclass[:4]
+        X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
+        with expectation:
+            model.fit(X, y, init_params=true_params)
