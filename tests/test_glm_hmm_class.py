@@ -1,31 +1,16 @@
+from contextlib import nullcontext as does_not_raise
+
 import jax.numpy as jnp
+import numpy as np
 import pytest
+import statsmodels.api as sm
+from numba import njit
+from test_base_regressor_subclasses import (
+    INSTANTIATE_MODEL_AND_SIMULATE,
+    INSTANTIATE_MODEL_ONLY,
+)
+
 from nemos._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
-
-
-INSTANTIATE_MODEL_ONLY = [
-    {"obs_model": "Poisson", "simulate": False},
-    {"obs_model": "Bernoulli", "simulate": False},
-    {"obs_model": "NegativeBinomial", "simulate": False},
-    {"obs_model": "Gamma", "simulate": False},
-]
-
-INSTANTIATE_MODEL_AND_SIMULATE = [
-    {"obs_model": "Poisson", "simulate": True},
-    {"obs_model": "Bernoulli", "simulate": True},
-    {"obs_model": "NegativeBinomial", "simulate": True},
-    {"obs_model": "Gamma", "simulate": True},
-]
-
-
-def test_instantiate_all_obs_models():
-    obs_model_checked = set()
-    assert len(INSTANTIATE_MODEL_ONLY) == len(INSTANTIATE_MODEL_AND_SIMULATE)
-    for d1, d2 in zip(INSTANTIATE_MODEL_ONLY, INSTANTIATE_MODEL_AND_SIMULATE):
-        assert d1["obs_model"] == d2["obs_model"]
-        assert d1["simulate"] == (not d2["simulate"])
-        obs_model_checked.add(d1.get("obs_model"))
-    assert obs_model_checked == set(AVAILABLE_OBSERVATION_MODELS)
 
 
 @pytest.mark.parametrize(
@@ -89,3 +74,1879 @@ def test_validate_higher_dimensional_data_X(instantiate_glm_hmm):
     y = jnp.array([1, 2])
     with pytest.raises(ValueError, match="X must be two-dimensional"):
         model._validate(X, y, model._initialize_parameters(X, y))
+
+
+@pytest.mark.parametrize(
+    "instantiate_glm_hmm",
+    INSTANTIATE_MODEL_ONLY,
+    indirect=True,
+)
+class TestGLMHMM:
+    """
+    Unit tests for the GLMHMM class that do not depend on the observation model.
+    i.e. tests that do not call observation model methods, or tests that do not check the output when
+    observation model methods are called (e.g. error testing for input validation)
+    """
+
+    # #######################
+    # # Test model.fit
+    # #######################
+
+    # @pytest.fixture
+    # def fit_weights_dimensionality_expectation(self, glm_class_type):
+    #     """
+    #     Fixture to define the expected behavior for test_fit_weights_dimensionality based on the type of GLM class.
+    #     """
+    #     if "population" in glm_class_type:
+    #         return {
+    #             0: pytest.raises(
+    #                 ValueError,
+    #                 match=r"params\[0\] must be an array or .* of shape \(n_features",
+    #             ),
+    #             1: pytest.raises(
+    #                 ValueError,
+    #                 match=r"params\[0\] must be an array or .* of shape \(n_features",
+    #             ),
+    #             2: does_not_raise(),
+    #             3: pytest.raises(
+    #                 ValueError,
+    #                 match=r"params\[0\] must be an array or .* of shape \(n_features",
+    #             ),
+    #         }
+    #     else:
+    #         return {
+    #             0: pytest.raises(
+    #                 ValueError,
+    #                 match=r"Inconsistent number of features",
+    #             ),
+    #             1: does_not_raise(),
+    #             2: pytest.raises(
+    #                 ValueError,
+    #                 match=r"params\[0\] must be an array or .* of shape \(n_features",
+    #             ),
+    #             3: pytest.raises(
+    #                 ValueError,
+    #                 match=r"params\[0\] must be an array or .* of shape \(n_features",
+    #             ),
+    #         }
+    #
+    # @pytest.mark.parametrize("dim_weights", [0, 1, 2, 3])
+    # def test_fit_weights_dimensionality(
+    #     self,
+    #     dim_weights,
+    #     request,
+    #     glm_class_type,
+    #     model_instantiation_type,
+    #     fit_weights_dimensionality_expectation,
+    # ):
+    #     """
+    #     Test the `fit` method with weight matrices of different dimensionalities.
+    #     Check for correct dimensionality.
+    #     """
+    #     expectation = fit_weights_dimensionality_expectation[dim_weights]
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     n_samples, n_features = X.shape
+    #     if "population" in glm_class_type:
+    #         n_neurons = 3
+    #     else:
+    #         n_neurons = 4
+    #     if dim_weights == 0:
+    #         init_w = jnp.array([])
+    #     elif dim_weights == 1:
+    #         init_w = jnp.zeros((n_features,))
+    #     elif dim_weights == 2:
+    #         init_w = jnp.zeros((n_features, n_neurons))
+    #     else:
+    #         init_w = jnp.zeros((n_features, n_neurons) + (1,) * (dim_weights - 2))
+    #     with expectation:
+    #         model.fit(X, y, init_params=(init_w, true_params[1]))
+    #
+    # @pytest.mark.parametrize(
+    #     "dim_intercepts, expectation",
+    #     [
+    #         (0, pytest.raises(ValueError, match=r"params\[1\] must be of shape")),
+    #         (1, does_not_raise()),
+    #         (2, pytest.raises(ValueError, match=r"params\[1\] must be of shape")),
+    #         (3, pytest.raises(ValueError, match=r"params\[1\] must be of shape")),
+    #     ],
+    # )
+    # def test_fit_intercepts_dimensionality(
+    #     self,
+    #     dim_intercepts,
+    #     expectation,
+    #     request,
+    #     glm_class_type,
+    #     model_instantiation_type,
+    # ):
+    #     """
+    #     Test the `fit` method with intercepts of different dimensionalities. Check for correct dimensionality.
+    #     """
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     n_samples, n_features = X.shape
+    #
+    #     if "population" in glm_class_type:
+    #         init_b = jnp.zeros((y.shape[1],) * dim_intercepts)
+    #         init_w = jnp.zeros((n_features, y.shape[1]))
+    #     else:
+    #         init_b = jnp.zeros((1,) * dim_intercepts)
+    #         init_w = jnp.zeros((n_features,))
+    #
+    #     with expectation:
+    #         model.fit(X, y, init_params=(init_w, init_b))
+    #
+    # """
+    # Parameterization used by test_fit_init_params_type and test_initialize_solver_init_params_type
+    # Contains the expected behavior and separate initial parameters for regular and population GLMs
+    # """
+    # fit_init_params_type_init_params = (
+    #     "expectation, init_params_glm, init_params_population_glm",
+    #     [
+    #         (
+    #             does_not_raise(),
+    #             [jnp.zeros((5,)), jnp.zeros((1,))],
+    #             [jnp.zeros((5, 3)), jnp.zeros((3,))],
+    #         ),
+    #         (
+    #             pytest.raises(ValueError, match="Params must have length two."),
+    #             [[jnp.zeros((1, 5)), jnp.zeros((1,))]],
+    #             [[jnp.zeros((1, 5)), jnp.zeros((3,))]],
+    #         ),
+    #         (
+    #             pytest.raises(KeyError),
+    #             dict(p1=jnp.zeros((5,)), p2=jnp.zeros((1,))),
+    #             dict(p1=jnp.zeros((3, 3)), p2=jnp.zeros((3, 2))),
+    #         ),
+    #         (
+    #             pytest.raises(
+    #                 TypeError, match=r"X and params\[0\] must be the same type"
+    #             ),
+    #             [dict(p1=jnp.zeros((5,)), p2=jnp.zeros((1,))), jnp.zeros((1,))],
+    #             [dict(p1=jnp.zeros((3, 3)), p2=jnp.zeros((2, 3))), jnp.zeros((3,))],
+    #         ),
+    #         (
+    #             pytest.raises(
+    #                 TypeError, match=r"X and params\[0\] must be the same type"
+    #             ),
+    #             [
+    #                 FeaturePytree(p1=jnp.zeros((5,)), p2=jnp.zeros((5,))),
+    #                 jnp.zeros((1,)),
+    #             ],
+    #             [
+    #                 FeaturePytree(p1=jnp.zeros((3, 3)), p2=jnp.zeros((3, 2))),
+    #                 jnp.zeros((3,)),
+    #             ],
+    #         ),
+    #         (pytest.raises(ValueError, match="Params must have length two."), 0, 0),
+    #         (
+    #             pytest.raises(TypeError, match="Initial parameters must be array-like"),
+    #             {0, 1},
+    #             {0, 1},
+    #         ),
+    #         (
+    #             pytest.raises(TypeError, match="Initial parameters must be array-like"),
+    #             [jnp.zeros((1, 5)), ""],
+    #             [jnp.zeros((1, 5)), ""],
+    #         ),
+    #         (
+    #             pytest.raises(TypeError, match="Initial parameters must be array-like"),
+    #             ["", jnp.zeros((1,))],
+    #             ["", jnp.zeros((1,))],
+    #         ),
+    #     ],
+    # )
+    #
+    # @pytest.mark.parametrize(*fit_init_params_type_init_params)
+    # def test_fit_init_params_type(
+    #     self,
+    #     request,
+    #     glm_class_type,
+    #     model_instantiation_type,
+    #     expectation,
+    #     init_params_glm,
+    #     init_params_population_glm,
+    # ):
+    #     """
+    #     Test the `fit` method with various types of initial parameters. Ensure that the provided initial parameters
+    #     are array-like.
+    #     """
+    #     if "population" in glm_class_type:
+    #         init_params = init_params_population_glm
+    #     else:
+    #         init_params = init_params_glm
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     with expectation:
+    #         model.fit(X, y, init_params=init_params)
+    #
+    # @pytest.mark.parametrize(
+    #     "delta_dim, expectation",
+    #     [
+    #         (-1, pytest.raises(ValueError, match="X must be two-dimensional")),
+    #         (0, does_not_raise()),
+    #         (1, pytest.raises(ValueError, match="X must be two-dimensional")),
+    #     ],
+    # )
+    # def test_fit_x_dimensionality(
+    #     self, delta_dim, expectation, request, glm_class_type, model_instantiation_type
+    # ):
+    #     """
+    #     Test the `fit` method with X input data of different dimensionalities. Ensure correct dimensionality for X.
+    #     """
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     if delta_dim == -1:
+    #         X = np.zeros((X.shape[0],))
+    #     elif delta_dim == 1:
+    #         X = np.zeros((X.shape[0], 1, X.shape[1]))
+    #     with expectation:
+    #         model.fit(X, y, init_params=true_params)
+    #
+    # @pytest.mark.parametrize(
+    #     "delta_dim, expectation",
+    #     [
+    #         (-1, pytest.raises(ValueError, match=r"y must be (one|two)-dimensional")),
+    #         (0, does_not_raise()),
+    #         (1, pytest.raises(ValueError, match=r"y must be (one|two)-dimensional")),
+    #     ],
+    # )
+    # def test_fit_y_dimensionality(
+    #     self,
+    #     delta_dim,
+    #     expectation,
+    #     request,
+    #     glm_class_type,
+    #     model_instantiation_type,
+    # ):
+    #     """
+    #     Test the `fit` method with y target data of different dimensionalities. Ensure correct dimensionality for y.
+    #     """
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     if "population" in glm_class_type:
+    #         if delta_dim == -1:
+    #             y = y[:, 0]
+    #         elif delta_dim == 1:
+    #             y = np.zeros((*y.shape, 1))
+    #     else:
+    #         if delta_dim == -1:
+    #             y = np.zeros([])
+    #         elif delta_dim == 1:
+    #             y = np.zeros((y.shape[0], 1))
+    #     with expectation:
+    #         model.fit(X, y, init_params=true_params)
+    #
+    # @pytest.mark.parametrize(
+    #     "delta_n_features, expectation",
+    #     [
+    #         (-1, pytest.raises(ValueError, match="Inconsistent number of features")),
+    #         (0, does_not_raise()),
+    #         (1, pytest.raises(ValueError, match="Inconsistent number of features")),
+    #     ],
+    # )
+    # def test_fit_n_feature_consistency_weights(
+    #     self,
+    #     delta_n_features,
+    #     expectation,
+    #     request,
+    #     glm_class_type,
+    #     model_instantiation_type,
+    # ):
+    #     """
+    #     Test the `fit` method for inconsistencies between data features and initial weights provided.
+    #     Ensure the number of features align.
+    #     """
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     if "population" in glm_class_type:
+    #         init_w = jnp.zeros((X.shape[1] + delta_n_features, y.shape[1]))
+    #         init_b = jnp.zeros(
+    #             y.shape[1],
+    #         )
+    #     else:
+    #         init_w = jnp.zeros((X.shape[1] + delta_n_features))
+    #         init_b = jnp.zeros(
+    #             1,
+    #         )
+    #     with expectation:
+    #         model.fit(X, y, init_params=(init_w, init_b))
+    #
+    # @pytest.mark.parametrize(
+    #     "delta_n_features, expectation",
+    #     [
+    #         (-1, pytest.raises(ValueError, match="Inconsistent number of features")),
+    #         (0, does_not_raise()),
+    #         (1, pytest.raises(ValueError, match="Inconsistent number of features")),
+    #     ],
+    # )
+    # def test_fit_n_feature_consistency_x(
+    #     self,
+    #     delta_n_features,
+    #     expectation,
+    #     request,
+    #     glm_class_type,
+    #     model_instantiation_type,
+    # ):
+    #     """
+    #     Test the `fit` method for inconsistencies between data features and model's expectations.
+    #     Ensure the number of features in X aligns.
+    #     """
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     if delta_n_features == 1:
+    #         X = jnp.concatenate((X, jnp.zeros((X.shape[0], 1))), axis=1)
+    #     elif delta_n_features == -1:
+    #         X = X[..., :-1]
+    #     with expectation:
+    #         model.fit(X, y, init_params=true_params)
+    #
+    # @pytest.mark.parametrize(
+    #     "delta_tp, expectation",
+    #     [
+    #         (
+    #             -1,
+    #             pytest.raises(ValueError, match="The number of time-points in X and y"),
+    #         ),
+    #         (0, does_not_raise()),
+    #         (
+    #             1,
+    #             pytest.raises(ValueError, match="The number of time-points in X and y"),
+    #         ),
+    #     ],
+    # )
+    # def test_fit_time_points_x(
+    #     self, delta_tp, expectation, request, glm_class_type, model_instantiation_type
+    # ):
+    #     """
+    #     Test the `fit` method for inconsistencies in time-points in data X. Ensure the correct number of time-points.
+    #     """
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
+    #     with expectation:
+    #         model.fit(X, y, init_params=true_params)
+    #
+    # @pytest.mark.parametrize(
+    #     "delta_tp, expectation",
+    #     [
+    #         (
+    #             -1,
+    #             pytest.raises(ValueError, match="The number of time-points in X and y"),
+    #         ),
+    #         (0, does_not_raise()),
+    #         (
+    #             1,
+    #             pytest.raises(ValueError, match="The number of time-points in X and y"),
+    #         ),
+    #     ],
+    # )
+    # def test_fit_time_points_y(
+    #     self, delta_tp, expectation, request, glm_class_type, model_instantiation_type
+    # ):
+    #     """
+    #     Test the `fit` method for inconsistencies in time-points in y. Ensure the correct number of time-points.
+    #     """
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     y = jnp.zeros((y.shape[0] + delta_tp,) + y.shape[1:])
+    #     with expectation:
+    #         model.fit(X, y, init_params=true_params)
+    #
+    # @pytest.mark.parametrize(
+    #     "fill_val, expectation",
+    #     [
+    #         (0, does_not_raise()),
+    #         (
+    #             jnp.inf,
+    #             pytest.raises(
+    #                 ValueError, match="At least a NaN or an Inf at all sample points"
+    #             ),
+    #         ),
+    #         (
+    #             jnp.nan,
+    #             pytest.raises(
+    #                 ValueError, match="At least a NaN or an Inf at all sample points"
+    #             ),
+    #         ),
+    #     ],
+    # )
+    # def test_fit_all_invalid_X(
+    #     self, fill_val, expectation, request, glm_class_type, model_instantiation_type
+    # ):
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     X.fill(fill_val)
+    #     with expectation:
+    #         model.fit(X, y)
+    #
+    # #######################
+    # # Test model.score
+    # #######################
+    # @pytest.mark.parametrize(
+    #     "delta_dim, expectation",
+    #     [
+    #         (-1, pytest.raises(ValueError, match="X must be two-dimensional")),
+    #         (0, does_not_raise()),
+    #         (1, pytest.raises(ValueError, match="X must be two-dimensional")),
+    #     ],
+    # )
+    # def test_score_x_dimensionality(
+    #     self, delta_dim, expectation, request, glm_class_type, model_instantiation_type
+    # ):
+    #     """
+    #     Test the `score` method with X input data of different dimensionalities. Ensure correct dimensionality for X.
+    #     """
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     model.coef_ = true_params[0]
+    #     model.intercept_ = true_params[1]
+    #     if delta_dim == -1:
+    #         X = np.zeros((X.shape[0],))
+    #     elif delta_dim == 1:
+    #         X = np.zeros((X.shape[0], X.shape[1], 1))
+    #     with expectation:
+    #         model.score(X, y)
+    #
+    # @pytest.mark.parametrize(
+    #     "delta_dim, expectation",
+    #     [
+    #         (
+    #             -1,
+    #             pytest.raises(
+    #                 ValueError, match=r"y must be (one|two)-dimensional, with shape"
+    #             ),
+    #         ),
+    #         (0, does_not_raise()),
+    #         (
+    #             1,
+    #             pytest.raises(
+    #                 ValueError, match=r"y must be (one|two)-dimensional, with shape"
+    #             ),
+    #         ),
+    #     ],
+    # )
+    # def test_score_y_dimensionality(
+    #     self, delta_dim, expectation, request, glm_class_type, model_instantiation_type
+    # ):
+    #     """
+    #     Test the `score` method with y of different dimensionalities.
+    #     Ensure correct dimensionality for y.
+    #     """
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     model.coef_ = true_params[0]
+    #     model.intercept_ = true_params[1]
+    #     if "population" in glm_class_type:
+    #         if delta_dim == -1:
+    #             y = y[:, 0]
+    #         elif delta_dim == 1:
+    #             y = np.zeros((*y.shape, 1))
+    #     else:
+    #         if delta_dim == -1:
+    #             y = np.zeros([])
+    #         elif delta_dim == 1:
+    #             y = np.zeros((X.shape[0], X.shape[1]))
+    #     with expectation:
+    #         model.score(X, y)
+    #
+    # @pytest.mark.parametrize(
+    #     "delta_n_features, expectation",
+    #     [
+    #         (-1, pytest.raises(ValueError, match="Inconsistent number of features")),
+    #         (0, does_not_raise()),
+    #         (1, pytest.raises(ValueError, match="Inconsistent number of features")),
+    #     ],
+    # )
+    # def test_score_n_feature_consistency_x(
+    #     self,
+    #     delta_n_features,
+    #     expectation,
+    #     request,
+    #     glm_class_type,
+    #     model_instantiation_type,
+    # ):
+    #     """
+    #     Test the `score` method for inconsistencies in features of X.
+    #     Ensure the number of features in X aligns with the model params.
+    #     """
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     model.coef_ = true_params[0]
+    #     model.intercept_ = true_params[1]
+    #     if delta_n_features == 1:
+    #         X = jnp.concatenate((X, jnp.zeros((X.shape[0], 1))), axis=1)
+    #     elif delta_n_features == -1:
+    #         X = X[..., :-1]
+    #     with expectation:
+    #         model.score(X, y)
+    #
+    # @pytest.mark.parametrize(
+    #     "delta_tp, expectation",
+    #     [
+    #         (
+    #             -1,
+    #             pytest.raises(ValueError, match="The number of time-points in X and y"),
+    #         ),
+    #         (0, does_not_raise()),
+    #         (
+    #             1,
+    #             pytest.raises(ValueError, match="The number of time-points in X and y"),
+    #         ),
+    #     ],
+    # )
+    # def test_score_time_points_x(
+    #     self, delta_tp, expectation, request, glm_class_type, model_instantiation_type
+    # ):
+    #     """
+    #     Test the `score` method for inconsistencies in time-points in X.
+    #     Ensure that the number of time-points in X and y matches.
+    #     """
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     model.coef_ = true_params[0]
+    #     model.intercept_ = true_params[1]
+    #     X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
+    #     with expectation:
+    #         model.score(X, y)
+    #
+    # @pytest.mark.parametrize(
+    #     "delta_tp, expectation",
+    #     [
+    #         (
+    #             -1,
+    #             pytest.raises(ValueError, match="The number of time-points in X and y"),
+    #         ),
+    #         (0, does_not_raise()),
+    #         (
+    #             1,
+    #             pytest.raises(ValueError, match="The number of time-points in X and y"),
+    #         ),
+    #     ],
+    # )
+    # def test_score_time_points_y(
+    #     self, delta_tp, expectation, request, glm_class_type, model_instantiation_type
+    # ):
+    #     """
+    #     Test the `score` method for inconsistencies in time-points in y.
+    #     Ensure that the number of time-points in X and y matches.
+    #     """
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     model.coef_ = true_params[0]
+    #     model.intercept_ = true_params[1]
+    #     y = jnp.zeros((y.shape[0] + delta_tp,) + y.shape[1:])
+    #     with expectation:
+    #         model.score(X, y)
+    #
+    # #######################
+    # # Test model.predict
+    # #######################
+    # @pytest.mark.parametrize(
+    #     "is_fit, expectation",
+    #     [
+    #         (True, does_not_raise()),
+    #         (
+    #             False,
+    #             pytest.raises(ValueError, match="This GLM instance is not fitted yet"),
+    #         ),
+    #     ],
+    # )
+    # def test_predict_is_fit(
+    #     self, is_fit, expectation, request, glm_class_type, model_instantiation_type
+    # ):
+    #     """
+    #     Test the `score` method on models based on their fit status.
+    #     Ensure scoring is only possible on fitted models.
+    #     """
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     if is_fit:
+    #         model.fit(X, y)
+    #     with expectation:
+    #         model.predict(X)
+    #
+    # @pytest.mark.parametrize(
+    #     "delta_dim, expectation",
+    #     [
+    #         (-1, pytest.raises(ValueError, match="X must be two-dimensional")),
+    #         (0, does_not_raise()),
+    #         (1, pytest.raises(ValueError, match="X must be two-dimensional")),
+    #     ],
+    # )
+    # def test_predict_x_dimensionality(
+    #     self, delta_dim, expectation, request, glm_class_type, model_instantiation_type
+    # ):
+    #     """
+    #     Test the `predict` method with x input data of different dimensionalities.
+    #     Ensure correct dimensionality for x.
+    #     """
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     model.coef_ = true_params[0]
+    #     model.intercept_ = true_params[1]
+    #     if "population" in glm_class_type:
+    #         model._initialize_feature_mask(X, y)
+    #     if delta_dim == -1:
+    #         X = np.zeros((X.shape[0],))
+    #     elif delta_dim == 1:
+    #         X = np.zeros((X.shape[0], X.shape[1], 1))
+    #     with expectation:
+    #         model.predict(X)
+    #
+    # @pytest.mark.parametrize(
+    #     "delta_n_features, expectation",
+    #     [
+    #         (-1, pytest.raises(ValueError, match="Inconsistent number of features")),
+    #         (0, does_not_raise()),
+    #         (1, pytest.raises(ValueError, match="Inconsistent number of features")),
+    #     ],
+    # )
+    # def test_predict_n_feature_consistency_x(
+    #     self,
+    #     delta_n_features,
+    #     expectation,
+    #     request,
+    #     glm_class_type,
+    #     model_instantiation_type,
+    # ):
+    #     """
+    #     Test the `predict` method ensuring the number of features in x input data
+    #     is consistent with the model's `model.coef_`.
+    #     """
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     model.coef_ = true_params[0]
+    #     model.intercept_ = true_params[1]
+    #     if "population" in glm_class_type:
+    #         model._initialize_feature_mask(X, y)
+    #     if delta_n_features == 1:
+    #         X = jnp.concatenate((X, jnp.zeros((X.shape[0], 1))), axis=1)
+    #     elif delta_n_features == -1:
+    #         X = X[..., :-1]
+    #     with expectation:
+    #         model.predict(X)
+    #
+    # ##############################
+    # # Test model.initialize_solver
+    # ##############################
+    # @pytest.mark.parametrize(
+    #     "n_params, expectation",
+    #     [
+    #         (0, pytest.raises(ValueError, match="Params must have length two.")),
+    #         (1, pytest.raises(ValueError, match="Params must have length two.")),
+    #         (2, does_not_raise()),
+    #         (3, pytest.raises(ValueError, match="Params must have length two.")),
+    #     ],
+    # )
+    # def test_initialize_solver_param_length(
+    #     self, n_params, expectation, request, glm_class_type, model_instantiation_type
+    # ):
+    #     """
+    #     Test the `initialize_solver` method with different numbers of initial parameters.
+    #     Check for correct number of parameters.
+    #     """
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     if n_params == 0:
+    #         init_params = tuple()
+    #     elif n_params == 1:
+    #         init_params = (true_params[0],)
+    #     else:
+    #         init_params = true_params + (true_params[0],) * (n_params - 2)
+    #     with expectation:
+    #         params = model.initialize_params(X, y, init_params=init_params)
+    #         # check that params are set
+    #         init_state = model.initialize_state(X, y, params)
+    #         assert init_state.velocity == params
+    #
+    # @pytest.fixture
+    # def initialize_solver_weights_dimensionality_expectation(self, glm_class_type):
+    #     if "population" in glm_class_type:
+    #         return {
+    #             0: pytest.raises(
+    #                 ValueError,
+    #                 match=r"params\[0\] must be an array or .* of shape \(n_features",
+    #             ),
+    #             1: pytest.raises(
+    #                 ValueError,
+    #                 match=r"params\[0\] must be an array or .* of shape \(n_features",
+    #             ),
+    #             2: does_not_raise(),
+    #             3: pytest.raises(
+    #                 ValueError,
+    #                 match=r"params\[0\] must be an array or .* of shape \(n_features",
+    #             ),
+    #         }
+    #     else:
+    #         return {
+    #             0: pytest.raises(
+    #                 ValueError,
+    #                 match=r"Inconsistent number of features",
+    #             ),
+    #             1: does_not_raise(),
+    #             2: pytest.raises(
+    #                 ValueError,
+    #                 match=r"params\[0\] must be an array or .* of shape \(n_features",
+    #             ),
+    #             3: pytest.raises(
+    #                 ValueError,
+    #                 match=r"params\[0\] must be an array or .* of shape \(n_features",
+    #             ),
+    #         }
+    #
+    # @pytest.mark.parametrize("dim_weights", [0, 1, 2, 3])
+    # def test_initialize_solver_weights_dimensionality(
+    #     self,
+    #     dim_weights,
+    #     request,
+    #     glm_class_type,
+    #     model_instantiation_type,
+    #     fit_weights_dimensionality_expectation,
+    # ):
+    #     """
+    #     Test the `initialize_solver` method with weight matrices of different dimensionalities.
+    #     Check for correct dimensionality.
+    #     """
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     expectation = fit_weights_dimensionality_expectation[dim_weights]
+    #     n_samples, n_features = X.shape
+    #     if "population" in glm_class_type:
+    #         n_neurons = 3
+    #     else:
+    #         n_neurons = 4
+    #     if dim_weights == 0:
+    #         init_w = jnp.array([])
+    #     elif dim_weights == 1:
+    #         init_w = jnp.zeros((n_features,))
+    #     elif dim_weights == 2:
+    #         init_w = jnp.zeros((n_features, n_neurons))
+    #     else:
+    #         init_w = jnp.zeros((n_features, n_neurons) + (1,) * (dim_weights - 2))
+    #     with expectation:
+    #         params = model.initialize_params(X, y, init_params=(init_w, true_params[1]))
+    #         # check that params are set
+    #         init_state = model.initialize_state(X, y, params)
+    #         assert init_state.velocity == params
+    #
+    # @pytest.mark.parametrize(
+    #     "dim_intercepts, expectation",
+    #     [
+    #         (0, pytest.raises(ValueError, match=r"params\[1\] must be of shape")),
+    #         (1, does_not_raise()),
+    #         (2, pytest.raises(ValueError, match=r"params\[1\] must be of shape")),
+    #         (3, pytest.raises(ValueError, match=r"params\[1\] must be of shape")),
+    #     ],
+    # )
+    # def test_initialize_solver_intercepts_dimensionality(
+    #     self,
+    #     dim_intercepts,
+    #     expectation,
+    #     request,
+    #     glm_class_type,
+    #     model_instantiation_type,
+    # ):
+    #     """
+    #     Test the `initialize_solver` method with intercepts of different dimensionalities.
+    #
+    #     Check for correct dimensionality.
+    #     """
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     n_samples, n_features = X.shape
+    #     if "population" in glm_class_type:
+    #         init_b = jnp.zeros((y.shape[1],) * dim_intercepts)
+    #         init_w = jnp.zeros((n_features, y.shape[1]))
+    #     else:
+    #         init_b = jnp.zeros((1,) * dim_intercepts)
+    #         init_w = jnp.zeros((n_features,))
+    #     with expectation:
+    #         params = model.initialize_params(X, y, init_params=(init_w, init_b))
+    #         # check that params are set
+    #         init_state = model.initialize_state(X, y, params)
+    #         assert init_state.velocity == params
+    #
+    # @pytest.mark.parametrize(*fit_init_params_type_init_params)
+    # def test_initialize_solver_init_params_type(
+    #     self,
+    #     request,
+    #     glm_class_type,
+    #     model_instantiation_type,
+    #     expectation,
+    #     init_params_glm,
+    #     init_params_population_glm,
+    # ):
+    #     """
+    #     Test the `initialize_solver` method with various types of initial parameters.
+    #
+    #     Ensure that the provided initial parameters are array-like.
+    #     """
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     if "population" in glm_class_type:
+    #         init_params = init_params_population_glm
+    #     else:
+    #         init_params = init_params_glm
+    #     with expectation:
+    #         params = model.initialize_params(X, y, init_params=init_params)
+    #         # check that params are set
+    #         init_state = model.initialize_state(X, y, params)
+    #         assert init_state.velocity == params
+    #
+    # @pytest.mark.parametrize(
+    #     "delta_dim, expectation",
+    #     [
+    #         (-1, pytest.raises(ValueError, match="X must be two-dimensional")),
+    #         (0, does_not_raise()),
+    #         (1, pytest.raises(ValueError, match="X must be two-dimensional")),
+    #     ],
+    # )
+    # def test_initialize_solver_x_dimensionality(
+    #     self, delta_dim, expectation, request, glm_class_type, model_instantiation_type
+    # ):
+    #     """
+    #     Test the `initialize_solver` method with X input data of different dimensionalities.
+    #
+    #     Ensure correct dimensionality for X.
+    #     """
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     if delta_dim == -1:
+    #         X = np.zeros((X.shape[0],))
+    #     elif delta_dim == 1:
+    #         X = np.zeros((X.shape[0], 1, X.shape[1]))
+    #     with expectation:
+    #         params = model.initialize_params(X, y, init_params=true_params)
+    #         # check that params are set
+    #         init_state = model.initialize_state(X, y, params)
+    #         assert init_state.velocity == params
+    #
+    # @pytest.mark.parametrize(
+    #     "delta_dim, expectation",
+    #     [
+    #         (-1, pytest.raises(ValueError, match="y must be ...-dimensional")),
+    #         (0, does_not_raise()),
+    #         (1, pytest.raises(ValueError, match="y must be ...-dimensional")),
+    #     ],
+    # )
+    # def test_initialize_solver_y_dimensionality(
+    #     self, delta_dim, expectation, request, glm_class_type, model_instantiation_type
+    # ):
+    #     """
+    #     Test the `initialize_solver` method with y target data of different dimensionalities.
+    #
+    #     Ensure correct dimensionality for y.
+    #     """
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     if "population" in glm_class_type:
+    #         if delta_dim == -1:
+    #             y = y[:, 0]
+    #         elif delta_dim == 1:
+    #             y = np.zeros((*y.shape, 1))
+    #     else:
+    #         if delta_dim == -1:
+    #             y = np.zeros([])
+    #         elif delta_dim == 1:
+    #             y = np.zeros((y.shape[0], 1))
+    #     with expectation:
+    #         params = model.initialize_params(X, y, init_params=true_params)
+    #         # check that params are set
+    #         init_state = model.initialize_state(X, y, params)
+    #         assert init_state.velocity == params
+    #
+    # @pytest.mark.parametrize(
+    #     "delta_n_features, expectation",
+    #     [
+    #         (-1, pytest.raises(ValueError, match="Inconsistent number of features")),
+    #         (0, does_not_raise()),
+    #         (1, pytest.raises(ValueError, match="Inconsistent number of features")),
+    #     ],
+    # )
+    # def test_initialize_solver_n_feature_consistency_weights(
+    #     self,
+    #     delta_n_features,
+    #     expectation,
+    #     request,
+    #     glm_class_type,
+    #     model_instantiation_type,
+    # ):
+    #     """
+    #     Test the `initialize_solver` method for inconsistencies between data features and initial weights provided.
+    #     Ensure the number of features align.
+    #     """
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     if "population" in glm_class_type:
+    #         init_w = jnp.zeros((X.shape[1] + delta_n_features, y.shape[1]))
+    #         init_b = jnp.zeros(
+    #             y.shape[1],
+    #         )
+    #     else:
+    #         init_w = jnp.zeros((X.shape[1] + delta_n_features))
+    #         init_b = jnp.zeros(
+    #             1,
+    #         )
+    #     with expectation:
+    #         params = model.initialize_params(X, y, init_params=(init_w, init_b))
+    #         # check that params are set
+    #         init_state = model.initialize_state(X, y, params)
+    #         assert init_state.velocity == params
+    #
+    # @pytest.mark.parametrize(
+    #     "delta_n_features, expectation",
+    #     [
+    #         (-1, pytest.raises(ValueError, match="Inconsistent number of features")),
+    #         (0, does_not_raise()),
+    #         (1, pytest.raises(ValueError, match="Inconsistent number of features")),
+    #     ],
+    # )
+    # def test_initialize_solver_n_feature_consistency_x(
+    #     self,
+    #     delta_n_features,
+    #     expectation,
+    #     request,
+    #     glm_class_type,
+    #     model_instantiation_type,
+    # ):
+    #     """
+    #     Test the `initialize_solver` method for inconsistencies between data features and model's expectations.
+    #     Ensure the number of features in X aligns.
+    #     """
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     if delta_n_features == 1:
+    #         X = jnp.concatenate((X, jnp.zeros((X.shape[0], 1))), axis=1)
+    #     elif delta_n_features == -1:
+    #         X = X[..., :-1]
+    #     with expectation:
+    #         params = model.initialize_params(X, y, init_params=true_params)
+    #         # check that params are set
+    #         init_state = model.initialize_state(X, y, params)
+    #         assert init_state.velocity == params
+    #
+    # @pytest.mark.parametrize(
+    #     "delta_tp, expectation",
+    #     [
+    #         (
+    #             -1,
+    #             pytest.raises(ValueError, match="The number of time-points in X and y"),
+    #         ),
+    #         (0, does_not_raise()),
+    #         (
+    #             1,
+    #             pytest.raises(ValueError, match="The number of time-points in X and y"),
+    #         ),
+    #     ],
+    # )
+    # def test_initialize_solver_time_points_x(
+    #     self, delta_tp, expectation, request, glm_class_type, model_instantiation_type
+    # ):
+    #     """
+    #     Test the `initialize_solver` method for inconsistencies in time-points in data X.
+    #
+    #     Ensure the correct number of time-points.
+    #     """
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
+    #     with expectation:
+    #         params = model.initialize_params(X, y, init_params=true_params)
+    #         # check that params are set
+    #         init_state = model.initialize_state(X, y, params)
+    #         assert init_state.velocity == params
+    #
+    # @pytest.mark.parametrize(
+    #     "delta_tp, expectation",
+    #     [
+    #         (
+    #             -1,
+    #             pytest.raises(ValueError, match="The number of time-points in X and y"),
+    #         ),
+    #         (0, does_not_raise()),
+    #         (
+    #             1,
+    #             pytest.raises(ValueError, match="The number of time-points in X and y"),
+    #         ),
+    #     ],
+    # )
+    # def test_initialize_solver_time_points_y(
+    #     self, delta_tp, expectation, request, glm_class_type, model_instantiation_type
+    # ):
+    #     """
+    #     Test the `initialize_solver` method for inconsistencies in time-points in y.
+    #
+    #     Ensure the correct number of time-points.
+    #     """
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     y = jnp.zeros((y.shape[0] + delta_tp,) + y.shape[1:])
+    #     with expectation:
+    #         params = model.initialize_params(X, y, init_params=true_params)
+    #         # check that params are set
+    #         init_state = model.initialize_state(X, y, params)
+    #         assert init_state.velocity == params
+    #
+    # def test_initialize_solver_mask_grouplasso(
+    #     self, request, glm_class_type, model_instantiation_type
+    # ):
+    #     """Test that the group lasso initialize_solver goes through"""
+    #     X, y, model, params, rate, mask = request.getfixturevalue(
+    #         model_instantiation_type + "_group_sparse"
+    #     )
+    #     model.set_params(
+    #         regularizer=nmo.regularizer.GroupLasso(mask=mask),
+    #         solver_name="ProximalGradient",
+    #         regularizer_strength=1.0,
+    #     )
+    #     params = model.initialize_params(X, y)
+    #     init_state = model.initialize_state(X, y, params)
+    #     assert init_state.velocity == params
+    #
+    # @pytest.mark.parametrize(
+    #     "fill_val, expectation",
+    #     [
+    #         (0, does_not_raise()),
+    #         (
+    #             jnp.inf,
+    #             pytest.raises(
+    #                 ValueError, match="At least a NaN or an Inf at all sample points"
+    #             ),
+    #         ),
+    #         (
+    #             jnp.nan,
+    #             pytest.raises(
+    #                 ValueError, match="At least a NaN or an Inf at all sample points"
+    #             ),
+    #         ),
+    #     ],
+    # )
+    # def test_initialize_solver_all_invalid_X(
+    #     self, fill_val, expectation, request, glm_class_type, model_instantiation_type
+    # ):
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     X.fill(fill_val)
+    #     with expectation:
+    #         params = model.initialize_params(X, y)
+    #         init_state = model.initialize_state(X, y, params)
+    #         assert init_state.velocity == params
+    #
+    # #######################
+    # # Test model.simulate
+    # #######################
+    # @pytest.mark.parametrize(
+    #     "delta_dim, expectation",
+    #     [
+    #         (-1, pytest.raises(ValueError, match="X must be two-dimensional")),
+    #         (0, does_not_raise()),
+    #         (1, pytest.raises(ValueError, match="X must be two-dimensional")),
+    #     ],
+    # )
+    # def test_simulate_input_dimensionality(
+    #     self, delta_dim, expectation, request, glm_class_type, model_instantiation_type
+    # ):
+    #     """
+    #     Test the `simulate` method with input data of different dimensionalities.
+    #     Ensure correct dimensionality for input.
+    #     """
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     model.coef_ = true_params[0]
+    #     model.intercept_ = true_params[1]
+    #     if "population" in glm_class_type:
+    #         model._initialize_feature_mask(X, y)
+    #     if delta_dim == -1:
+    #         X = np.zeros(X.shape[:-1])
+    #     elif delta_dim == 1:
+    #         X = np.zeros(X.shape + (1,))
+    #     with expectation:
+    #         model.simulate(
+    #             random_key=jax.random.key(123),
+    #             feedforward_input=X,
+    #         )
+    #
+    # @pytest.mark.parametrize(
+    #     "is_fit, expectation",
+    #     [
+    #         (True, does_not_raise()),
+    #         (
+    #             False,
+    #             pytest.raises(ValueError, match="This GLM instance is not fitted yet"),
+    #         ),
+    #     ],
+    # )
+    # def test_simulate_is_fit(
+    #     self, is_fit, expectation, request, glm_class_type, model_instantiation_type
+    # ):
+    #     """
+    #     Test if the model raises a ValueError when trying to simulate before it's fitted.
+    #     """
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     if is_fit:
+    #         model.coef_ = true_params[0]
+    #         model.intercept_ = true_params[1]
+    #         if "population" in glm_class_type:
+    #             model._initialize_feature_mask(X, y)
+    #     with expectation:
+    #         model.simulate(
+    #             random_key=jax.random.key(123),
+    #             feedforward_input=X,
+    #         )
+    #
+    # @pytest.mark.parametrize(
+    #     "delta_features, expectation",
+    #     [
+    #         (
+    #             -1,
+    #             pytest.raises(
+    #                 ValueError,
+    #                 match="Inconsistent number of features. spike basis coefficients has",
+    #             ),
+    #         ),
+    #         (0, does_not_raise()),
+    #         (
+    #             1,
+    #             pytest.raises(
+    #                 ValueError,
+    #                 match="Inconsistent number of features. spike basis coefficients has",
+    #             ),
+    #         ),
+    #     ],
+    # )
+    # def test_simulate_feature_consistency_input(
+    #     self,
+    #     delta_features,
+    #     expectation,
+    #     request,
+    #     glm_class_type,
+    #     model_instantiation_type,
+    # ):
+    #     """
+    #     Test the `simulate` method ensuring the number of features in `feedforward_input` is
+    #     consistent with the model's expected number of features.
+    #
+    #     Notes
+    #     -----
+    #     The total feature number `model.coef_.shape[1]` must be equal to
+    #     `feedforward_input.shape[2] + coupling_basis.shape[1]*n_neurons`
+    #     """
+    #     X, y, model, true_params, firing_rate = request.getfixturevalue(
+    #         model_instantiation_type
+    #     )
+    #     model.coef_ = true_params[0]
+    #     model.intercept_ = true_params[1]
+    #     if "population" in glm_class_type:
+    #         model._initialize_feature_mask(X, y)
+    #     feedforward_input = jnp.zeros(
+    #         (
+    #             X.shape[0],
+    #             X.shape[1] + delta_features,
+    #         )
+    #     )
+    #     with expectation:
+    #         model.simulate(
+    #             random_key=jax.random.key(123),
+    #             feedforward_input=feedforward_input,
+    #         )
+    #
+    # #######################################
+    # # Compare with standard implementation
+    # #######################################
+    #
+    # @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso", "ElasticNet"])
+    # def test_reg_strength_reset(self, reg, request, glm_class_type):
+    #     glm_class = request.getfixturevalue(glm_class_type)
+    #     model = glm_class(regularizer=reg, regularizer_strength=1.0)
+    #     model.regularizer = "UnRegularized"
+    #     assert model.regularizer_strength is None
+    #
+    # @pytest.mark.parametrize(
+    #     "params, warns",
+    #     [
+    #         # set regularizer
+    #         (
+    #             {"regularizer": "Ridge"},
+    #             does_not_raise(),
+    #         ),
+    #         (
+    #             {"regularizer": "Lasso"},
+    #             does_not_raise(),
+    #         ),
+    #         (
+    #             {"regularizer": "GroupLasso"},
+    #             does_not_raise(),
+    #         ),
+    #         (
+    #             {"regularizer": "ElasticNet"},
+    #             does_not_raise(),
+    #         ),
+    #         ({"regularizer": "UnRegularized"}, does_not_raise()),
+    #         # set both None or number
+    #         (
+    #             {"regularizer": "Ridge", "regularizer_strength": None},
+    #             does_not_raise(),
+    #         ),
+    #         ({"regularizer": "Ridge", "regularizer_strength": 1.0}, does_not_raise()),
+    #         (
+    #             {"regularizer": "Lasso", "regularizer_strength": None},
+    #             does_not_raise(),
+    #         ),
+    #         ({"regularizer": "Lasso", "regularizer_strength": 1.0}, does_not_raise()),
+    #         (
+    #             {"regularizer": "GroupLasso", "regularizer_strength": None},
+    #             does_not_raise(),
+    #         ),
+    #         (
+    #             {"regularizer": "GroupLasso", "regularizer_strength": 1.0},
+    #             does_not_raise(),
+    #         ),
+    #         (
+    #             {"regularizer": "ElasticNet", "regularizer_strength": None},
+    #             does_not_raise(),
+    #         ),
+    #         (
+    #             {"regularizer": "ElasticNet", "regularizer_strength": 1.0},
+    #             does_not_raise(),
+    #         ),
+    #         (
+    #             {"regularizer": "ElasticNet", "regularizer_strength": (1.0, 0.5)},
+    #             does_not_raise(),
+    #         ),
+    #         (
+    #             {"regularizer": "UnRegularized", "regularizer_strength": None},
+    #             does_not_raise(),
+    #         ),
+    #         (
+    #             {"regularizer": "UnRegularized", "regularizer_strength": 1.0},
+    #             does_not_raise(),
+    #         ),
+    #         # set regularizer str only
+    #         (
+    #             {"regularizer_strength": 1.0},
+    #             does_not_raise(),
+    #         ),
+    #         ({"regularizer_strength": None}, does_not_raise()),
+    #     ],
+    # )
+    # def test_reg_set_params(self, params, warns, request, glm_class_type):
+    #     glm_class = request.getfixturevalue(glm_class_type)
+    #     model = glm_class()
+    #     with warns:
+    #         model.set_params(**params)
+    #
+    # @pytest.mark.parametrize(
+    #     "params, warns",
+    #     [
+    #         # set regularizer str only
+    #         ({"regularizer_strength": 1.0}, does_not_raise()),
+    #         (
+    #             {"regularizer_strength": None},
+    #             does_not_raise(),
+    #         ),
+    #     ],
+    # )
+    # @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso"])
+    # def test_reg_set_params_reg_str_only(
+    #     self, params, warns, reg, request, glm_class_type
+    # ):
+    #     glm_class = request.getfixturevalue(glm_class_type)
+    #     model = glm_class(regularizer=reg, regularizer_strength=1)
+    #     with warns:
+    #         model.set_params(**params)
+    #
+    # @pytest.mark.parametrize(
+    #     "regularizer", ["Ridge", "UnRegularized", "Lasso", "ElasticNet"]
+    # )
+    # @pytest.mark.parametrize(
+    #     "obs_model",
+    #     [
+    #         "PoissonObservations",
+    #         "BernoulliObservations",
+    #         "GammaObservations",
+    #     ],
+    # )
+    # @pytest.mark.parametrize(
+    #     "solver_name",
+    #     [
+    #         "GradientDescent",
+    #         "BFGS",
+    #         "LBFGS",
+    #         "NonlinearCG",
+    #         "ProximalGradient",
+    #         "SVRG",
+    #         "ProxSVRG",
+    #     ],
+    # )
+    # @pytest.mark.parametrize(
+    #     "model_class, fit_state_attrs",
+    #     [
+    #         (
+    #             nmo.glm.GLM,
+    #             {
+    #                 "coef_": jnp.zeros(
+    #                     3,
+    #                 ),
+    #                 "intercept_": jnp.array([1.0]),
+    #                 "scale_": 2.0,
+    #                 "dof_resid_": 3,
+    #             },
+    #         ),
+    #         (
+    #             nmo.glm.PopulationGLM,
+    #             {
+    #                 "coef_": jnp.zeros((3, 1)),
+    #                 "intercept_": jnp.array([1.0]),
+    #                 "scale_": 2.0,
+    #                 "dof_resid_": 3,
+    #             },
+    #         ),
+    #     ],
+    # )
+    # def test_save_and_load(
+    #     self,
+    #     regularizer,
+    #     obs_model,
+    #     solver_name,
+    #     tmp_path,
+    #     glm_class_type,
+    #     fit_state_attrs,
+    #     model_class,
+    # ):
+    #     """
+    #     Test saving and loading a model with various observation models and regularizers.
+    #     Ensure all parameters are preserved.
+    #     """
+    #     if (
+    #         regularizer == "Lasso"
+    #         or regularizer == "GroupLasso"
+    #         or regularizer == "ElasticNet"
+    #         and solver_name not in ["ProximalGradient", "ProxSVRG"]
+    #     ):
+    #         pytest.skip(
+    #             f"Skipping {solver_name} for Lasso type regularizer; not an approximate solver."
+    #         )
+    #
+    #     kwargs = dict(
+    #         observation_model=obs_model,
+    #         solver_name=solver_name,
+    #         regularizer=regularizer,
+    #         regularizer_strength=2.0,
+    #         solver_kwargs={"tol": 10**-6},
+    #     )
+    #
+    #     if regularizer == "UnRegularized":
+    #         kwargs.pop("regularizer_strength")
+    #
+    #     model = model_class(**kwargs)
+    #
+    #     initial_params = model.get_params()
+    #     # set fit states
+    #     for key, val in fit_state_attrs.items():
+    #         setattr(model, key, val)
+    #         initial_params[key] = val
+    #
+    #     # Save
+    #     save_path = tmp_path / "test_model.npz"
+    #     model.save_params(save_path)
+    #
+    #     # Load
+    #     loaded_model = nmo.load_model(save_path)
+    #     loaded_params = loaded_model.get_params()
+    #     fit_state = loaded_model._get_fit_state()
+    #     fit_state.pop("solver_state_")
+    #     loaded_params.update(fit_state)
+    #
+    #     # Assert matching keys and values
+    #     assert (
+    #         initial_params.keys() == loaded_params.keys()
+    #     ), "Parameter keys mismatch after load."
+    #
+    #     for key in initial_params:
+    #         init_val = initial_params[key]
+    #         load_val = loaded_params[key]
+    #         if isinstance(init_val, (int, float, str, type(None))):
+    #             assert init_val == load_val, f"{key} mismatch: {init_val} != {load_val}"
+    #         elif isinstance(init_val, dict):
+    #             assert (
+    #                 init_val == load_val
+    #             ), f"{key} dict mismatch: {init_val} != {load_val}"
+    #         elif isinstance(init_val, (np.ndarray, jnp.ndarray)):
+    #             assert np.allclose(
+    #                 np.array(init_val), np.array(load_val)
+    #             ), f"{key} array mismatch"
+    #         elif isinstance(init_val, Callable):
+    #             assert _get_name(init_val) == _get_name(
+    #                 load_val
+    #             ), f"{key} function mismatch: {_get_name(init_val)} != {_get_name(load_val)}"
+    #
+    # @pytest.mark.parametrize("regularizer", ["Ridge"])
+    # @pytest.mark.parametrize(
+    #     "obs_model",
+    #     [
+    #         "PoissonObservations",
+    #     ],
+    # )
+    # @pytest.mark.parametrize(
+    #     "solver_name",
+    #     [
+    #         "ProxSVRG",
+    #     ],
+    # )
+    # @pytest.mark.parametrize(
+    #     "model_class, fit_state_attrs",
+    #     [
+    #         (
+    #             nmo.glm.GLM,
+    #             {
+    #                 "coef_": jnp.zeros(
+    #                     3,
+    #                 ),
+    #                 "intercept_": jnp.array([1.0]),
+    #                 "scale_": 2.0,
+    #                 "dof_resid_": 3,
+    #             },
+    #         ),
+    #         (
+    #             nmo.glm.PopulationGLM,
+    #             {
+    #                 "coef_": jnp.zeros(
+    #                     (3, 1),
+    #                 ),
+    #                 "intercept_": jnp.array([1.0]),
+    #                 "scale_": 2.0,
+    #                 "dof_resid_": 3,
+    #             },
+    #         ),
+    #     ],
+    # )
+    # @pytest.mark.parametrize(
+    #     "mapping_dict, expectation",
+    #     [
+    #         ({}, does_not_raise()),
+    #         (
+    #             {
+    #                 "observation_model": nmo.observation_models.GammaObservations,
+    #                 "regularizer": nmo.regularizer.Lasso,
+    #                 "inverse_link_function": lambda x: x**2,
+    #             },
+    #             pytest.warns(
+    #                 UserWarning, match="The following keys have been replaced"
+    #             ),
+    #         ),
+    #         (
+    #             {
+    #                 "observation_model": nmo.observation_models.GammaObservations(),  # fails, only class or callable
+    #                 "regularizer": nmo.regularizer.Lasso,
+    #                 "inverse_link_function": lambda x: x**2,
+    #             },
+    #             pytest.raises(ValueError, match="Invalid map parameter types detected"),
+    #         ),
+    #         (
+    #             {
+    #                 "observation_model": "GammaObservations",  # fails, only class or callable
+    #                 "regularizer": nmo.regularizer.Lasso,
+    #             },
+    #             pytest.raises(ValueError, match="Invalid map parameter types detected"),
+    #         ),
+    #         (
+    #             {
+    #                 "regularizer": nmo.regularizer.Lasso,
+    #                 "regularizer_strength": 3.0,  # fails, only class or callable
+    #             },
+    #             pytest.raises(ValueError, match="Invalid map parameter types detected"),
+    #         ),
+    #         (
+    #             {
+    #                 "solver_kwargs": {"tol": 10**-1},
+    #             },
+    #             pytest.raises(ValueError, match="Invalid map parameter types detected"),
+    #         ),
+    #         (
+    #             {
+    #                 "some__nested__dictionary": {"tol": 10**-1},
+    #             },
+    #             pytest.raises(
+    #                 ValueError,
+    #                 match="Invalid map parameter types detected",
+    #             ),
+    #         ),
+    #         # valid mapping dtype, invalid name
+    #         (
+    #             {
+    #                 "some__nested__dictionary": nmo.regularizer.Ridge,
+    #             },
+    #             pytest.raises(
+    #                 ValueError,
+    #                 match="The following keys in your mapping do not match ",
+    #             ),
+    #         ),
+    #     ],
+    # )
+    # def test_save_and_load_with_custom_mapping(
+    #     self,
+    #     regularizer,
+    #     obs_model,
+    #     solver_name,
+    #     mapping_dict,
+    #     tmp_path,
+    #     glm_class_type,
+    #     fit_state_attrs,
+    #     model_class,
+    #     expectation,
+    # ):
+    #     """
+    #     Test saving and loading a model with various observation models and regularizers.
+    #     Ensure all parameters are preserved.
+    #     """
+    #
+    #     if (
+    #         regularizer == "Lasso"
+    #         or regularizer == "GroupLasso"
+    #         and solver_name not in ["ProximalGradient", "SVRG", "ProxSVRG"]
+    #     ):
+    #         pytest.skip(
+    #             f"Skipping {solver_name} for Lasso type regularizer; not an approximate solver."
+    #         )
+    #
+    #     model = model_class(
+    #         observation_model=obs_model,
+    #         solver_name=solver_name,
+    #         regularizer=regularizer,
+    #         regularizer_strength=2.0,
+    #     )
+    #
+    #     initial_params = model.get_params()
+    #     # set fit states
+    #     for key, val in fit_state_attrs.items():
+    #         setattr(model, key, val)
+    #         initial_params[key] = val
+    #
+    #     # Save
+    #     save_path = tmp_path / "test_model.npz"
+    #     model.save_params(save_path)
+    #
+    #     # Load
+    #     with expectation:
+    #         loaded_model = nmo.load_model(save_path, mapping_dict=mapping_dict)
+    #         loaded_params = loaded_model.get_params()
+    #         fit_state = loaded_model._get_fit_state()
+    #         fit_state.pop("solver_state_")
+    #         loaded_params.update(fit_state)
+    #
+    #         # Assert matching keys and values
+    #         assert (
+    #             initial_params.keys() == loaded_params.keys()
+    #         ), "Parameter keys mismatch after load."
+    #
+    #         unexpected_keys = set(mapping_dict) - set(initial_params)
+    #         raise_exception = bool(unexpected_keys)
+    #         if raise_exception:
+    #             with pytest.raises(
+    #                 ValueError, match="mapping_dict contains unexpected keys"
+    #             ):
+    #                 raise ValueError(
+    #                     f"mapping_dict contains unexpected keys: {unexpected_keys}"
+    #                 )
+    #
+    #         for key in initial_params:
+    #             init_val = initial_params[key]
+    #             load_val = loaded_params[key]
+    #
+    #             if key == "observation_model__inverse_link_function":
+    #                 if "observation_model" in mapping_dict:
+    #                     continue
+    #             if key in mapping_dict:
+    #                 if key == "observation_model":
+    #                     if isinstance(mapping_dict[key], str):
+    #                         mapping_obs = instantiate_observation_model(
+    #                             mapping_dict[key]
+    #                         )
+    #                     else:
+    #                         mapping_obs = mapping_dict[key]
+    #                     assert _get_name(mapping_obs) == _get_name(
+    #                         load_val
+    #                     ), f"{key} observation model mismatch: {mapping_dict[key]} != {load_val}"
+    #                 elif key == "regularizer":
+    #                     if isinstance(mapping_dict[key], str):
+    #                         mapping_reg = instantiate_regularizer(mapping_dict[key])
+    #                     else:
+    #                         mapping_reg = mapping_dict[key]
+    #                     assert _get_name(mapping_reg) == _get_name(
+    #                         load_val
+    #                     ), f"{key} regularizer mismatch: {mapping_dict[key]} != {load_val}"
+    #                 elif key == "solver_name":
+    #                     assert (
+    #                         mapping_dict[key] == load_val
+    #                     ), f"{key} solver name mismatch: {mapping_dict[key]} != {load_val}"
+    #                 elif key == "regularizer_strength":
+    #                     assert (
+    #                         mapping_dict[key] == load_val
+    #                     ), f"{key} regularizer strength mismatch: {mapping_dict[key]} != {load_val}"
+    #                 continue
+    #
+    #         if isinstance(init_val, (int, float, str, type(None))):
+    #             assert init_val == load_val, f"{key} mismatch: {init_val} != {load_val}"
+    #
+    #         elif isinstance(init_val, dict):
+    #             assert (
+    #                 init_val == load_val
+    #             ), f"{key} dict mismatch: {init_val} != {load_val}"
+    #
+    #         elif isinstance(init_val, (np.ndarray, jnp.ndarray)):
+    #             assert np.allclose(
+    #                 np.array(init_val), np.array(load_val)
+    #             ), f"{key} array mismatch"
+    #
+    #         elif isinstance(init_val, Callable):
+    #             assert _get_name(init_val) == _get_name(
+    #                 load_val
+    #             ), f"{key} function mismatch: {_get_name(init_val)} != {_get_name(load_val)}"
+    #
+    # def test_save_and_load_nested_class(
+    #     self, nested_regularizer, tmp_path, glm_class_type
+    # ):
+    #     """Test that save and load works with nested classes."""
+    #     model = nmo.glm.GLM(regularizer=nested_regularizer, regularizer_strength=1.0)
+    #     save_path = tmp_path / "test_model.npz"
+    #     model.save_params(save_path)
+    #
+    #     mapping_dict = {
+    #         "regularizer": nested_regularizer.__class__,
+    #         "regularizer__func": jnp.exp,
+    #     }
+    #     with pytest.warns(UserWarning, match="The following keys have been replaced"):
+    #         loaded_model = nmo.load_model(save_path, mapping_dict=mapping_dict)
+    #
+    #     assert isinstance(loaded_model.regularizer, nested_regularizer.__class__)
+    #     assert isinstance(
+    #         loaded_model.regularizer.sub_regularizer,
+    #         nested_regularizer.sub_regularizer.__class__,
+    #     )
+    #     assert loaded_model.regularizer.func == mapping_dict["regularizer__func"]
+    #
+    #     # change mapping
+    #     mapping_dict = {
+    #         "regularizer": nested_regularizer.__class__,
+    #         "regularizer__sub_regularizer": nmo.regularizer.Ridge,
+    #         "regularizer__func": lambda x: x**2,
+    #     }
+    #     with pytest.warns(UserWarning, match="The following keys have been replaced"):
+    #         loaded_model = nmo.load_model(save_path, mapping_dict=mapping_dict)
+    #     assert isinstance(loaded_model.regularizer, nested_regularizer.__class__)
+    #     assert isinstance(
+    #         loaded_model.regularizer.sub_regularizer, nmo.regularizer.Ridge
+    #     )
+    #     assert loaded_model.regularizer.func == mapping_dict["regularizer__func"]
+    #
+    # @pytest.mark.parametrize(
+    #     "fitted_glm_type",
+    #     [
+    #         "poissonGLM_fitted_model_instantiation",
+    #         "population_poissonGLM_fitted_model_instantiation",
+    #     ],
+    # )
+    # def test_save_and_load_fitted_model(
+    #     self, request, fitted_glm_type, glm_class_type, tmp_path
+    # ):
+    #     """
+    #     Test saving and loading a fitted model with various observation models and regularizers.
+    #     Ensure all parameters are preserved.
+    #     """
+    #     _, _, fitted_model, _, _ = request.getfixturevalue(fitted_glm_type)
+    #
+    #     initial_params = fitted_model.get_params()
+    #     fit_state = fitted_model._get_fit_state()
+    #     fit_state.pop("solver_state_")
+    #     initial_params.update(fit_state)
+    #
+    #     # Save
+    #     save_path = tmp_path / "test_model.npz"
+    #     fitted_model.save_params(save_path)
+    #
+    #     # Load
+    #     loaded_model = nmo.load_model(save_path)
+    #     loaded_params = loaded_model.get_params()
+    #     fit_state = loaded_model._get_fit_state()
+    #     fit_state.pop("solver_state_")
+    #     loaded_params.update(fit_state)
+    #
+    #     # Assert states are close
+    #     for k, v in fit_state.items():
+    #         assert np.allclose(initial_params[k], v), f"{k} mismatch after load."
+    #
+    # @pytest.mark.parametrize(
+    #     "fitted_glm_type",
+    #     [
+    #         "poissonGLM_fitted_model_instantiation",
+    #         "population_poissonGLM_fitted_model_instantiation",
+    #     ],
+    # )
+    # @pytest.mark.parametrize(
+    #     "param_name, param_value, expectation",
+    #     [
+    #         # Replace observation model class name  with a string
+    #         (
+    #             "observation_model__class",
+    #             "InvalidObservations",
+    #             pytest.raises(
+    #                 ValueError, match="The class '[A-z]+' is not a native NeMoS"
+    #             ),
+    #         ),
+    #         # Full path string
+    #         (
+    #             "observation_model__class",
+    #             "nemos.observation_models.InvalidObservations",
+    #             pytest.raises(
+    #                 ValueError, match="The class '[A-z]+' is not a native NeMoS"
+    #             ),
+    #         ),
+    #         # Replace observation model class name  with an instance
+    #         (
+    #             "observation_model__class",
+    #             nmo.observation_models.GammaObservations(),
+    #             pytest.raises(
+    #                 ValueError,
+    #                 match="Object arrays cannot be loaded when allow_pickle=False",
+    #             ),
+    #         ),
+    #         # Replace observation model class name with class
+    #         (
+    #             "observation_model__class",
+    #             nmo.observation_models.GammaObservations,
+    #             pytest.raises(
+    #                 ValueError,
+    #                 match="Object arrays cannot be loaded when allow_pickle=False",
+    #             ),
+    #         ),
+    #         # Replace link function with another callable
+    #         (
+    #             "observation_model__params__inverse_link_function",
+    #             np.exp,
+    #             pytest.raises(
+    #                 ValueError,
+    #                 match="Object arrays cannot be loaded when allow_pickle=False",
+    #             ),
+    #         ),
+    #         # Unexpected dtype for class name
+    #         (
+    #             "regularizer__class",
+    #             1,
+    #             pytest.raises(
+    #                 ValueError, match="Parameter ``regularizer`` cannot be initialized"
+    #             ),
+    #         ),
+    #         # Invalid fit parameter
+    #         (
+    #             "scales_",  # wrong name for the params
+    #             1,
+    #             pytest.raises(ValueError, match="Unrecognized attribute 'scales_'"),
+    #         ),
+    #     ],
+    # )
+    # def test_modified_saved_file_raises(
+    #     self,
+    #     param_name,
+    #     param_value,
+    #     expectation,
+    #     glm_class_type,
+    #     fitted_glm_type,
+    #     request,
+    #     tmp_path,
+    # ):
+    #     _, _, fitted_model, _, _ = request.getfixturevalue(fitted_glm_type)
+    #     save_path = tmp_path / "test_model.npz"
+    #     fitted_model.save_params(save_path)
+    #     # load and edit
+    #     data = np.load(save_path, allow_pickle=True)
+    #     load_data = dict((k, v) for k, v in data.items())
+    #     load_data[param_name] = param_value
+    #     np.savez(save_path, **load_data, allow_pickle=True)
+    #
+    #     with expectation:
+    #         nmo.load_model(save_path)
+    #
+    # @pytest.mark.parametrize(
+    #     "fitted_glm_type",
+    #     [
+    #         "poissonGLM_fitted_model_instantiation",
+    #         "population_poissonGLM_fitted_model_instantiation",
+    #     ],
+    # )
+    # def test_key_suggestions(self, fitted_glm_type, request, glm_class_type, tmp_path):
+    #     _, _, fitted_model, _, _ = request.getfixturevalue(fitted_glm_type)
+    #     save_path = tmp_path / "test_model.npz"
+    #     fitted_model.save_params(save_path)
+    #
+    #     invalid_mapping = {
+    #         "regulsriaer": nmo.regularizer.Ridge,
+    #         "observatino_mdels": nmo.observation_models.GammaObservations,
+    #         "inv_link_function": jax.numpy.exp,
+    #         "total_nonsense": jax.numpy.exp,
+    #     }
+    #     match = (
+    #         r"The following keys in your mapping do not match any parameters in the loaded model:\n\n"
+    #         r"\t- 'regulsriaer', did you mean 'regularizer'\?\n"
+    #         r"\t- 'observatino_mdels', did you mean 'observation_model'\?\n"
+    #         r"\t- 'inv_link_function', did you mean 'inverse_link_function'\?\n"
+    #         r"\t- 'total_nonsense'\n"
+    #     )
+    #     with pytest.raises(ValueError, match=match):
+    #         nmo.load_model(save_path, mapping_dict=invalid_mapping)
+    #
+    # @pytest.mark.parametrize(
+    #     "params, warns",
+    #     [
+    #         # set regularizer str only
+    #         (
+    #             {"regularizer_strength": 1.0},
+    #             does_not_raise(),
+    #         ),
+    #         (
+    #             {"regularizer_strength": None},
+    #             does_not_raise(),
+    #         ),
+    #     ],
+    # )
+    # @pytest.mark.parametrize("reg", ["ElasticNet"])
+    # def test_reg_set_params_reg_str_only_elasticnet(
+    #     self, params, warns, reg, request, glm_class_type
+    # ):
+    #     glm_class = request.getfixturevalue(glm_class_type)
+    #     model = glm_class(regularizer=reg, regularizer_strength=11)
+    #     model.set_params(**params)
+    #     assert model.regularizer_strength == (1.0, 0.5)
+    #
