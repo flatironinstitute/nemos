@@ -1288,6 +1288,7 @@ def instantiate_population_glm_func(
     model.coef_ = np.random.randn(n_features, n_neurons)
     model.intercept_ = np.random.randn(n_neurons)
     if simulate:
+        model._initialize_feature_mask(X, np.empty(shape=(X.shape[0], n_neurons)))
         counts, rates = model.simulate(jax.random.PRNGKey(1234), X)
     else:
         counts, rates = None, None
@@ -1317,6 +1318,7 @@ def instantiate_base_regressor_subclass(request):
     model_name: str = request.param["model"]
     obs_model: str | nmo.observation_models.Observations = request.param["obs_model"]
     simulate: bool = request.param["simulate"]
+    print(model_name, obs_model, simulate)
     if model_name == "GLM":
         return instantiate_glm_func(obs_model=obs_model, simulate=simulate)
     elif model_name == "PopulationGLM":

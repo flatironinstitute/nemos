@@ -21,6 +21,12 @@ MODEL_REGISTRY = {
     "GLMHMM": nmo.glm_hmm.GLMHMM,
 }
 
+INIT_PARAM_LENGTH = {
+    "GLM": 2,
+    "PopulationGLM": 2,
+    "GLMHMM": 3,
+}
+
 HARD_CODED_GET_PARAMS_KEYS = {
     "GLMHMM": {
         "dirichlet_prior_alphas_init_prob",
@@ -233,6 +239,15 @@ class TestModelCommons:
             regularizer="Ridge",
             regularizer_strength=1.0,
         )
+        expected_values = {
+            par_name: getattr(model, par_name) for par_name in expected_keys
+        }
+        actual_values = model.get_params()
+        assert set(model.get_params().keys()) == expected_keys
+        assert all(np.all(actual_values[k] == v) for k, v in expected_values.items())
+
+        # changing solver
+        model.solver_name = "ProximalGradient"
         expected_values = {
             par_name: getattr(model, par_name) for par_name in expected_keys
         }
@@ -456,3 +471,65 @@ class TestObservationModel:
         model_cls = instantiate_base_regressor_subclass[2].__class__
         with expectation:
             model_cls(**DEFAULTS[model_cls.__name__], observation_model=observation)
+
+
+@pytest.mark.parametrize(
+    "instantiate_base_regressor_subclass",
+    [
+        {"model": m, "obs_model": "Poisson", "simulate": True}
+        for m in MODEL_REGISTRY.keys()
+    ],
+    indirect=True,
+)
+class TestModelSimulation:
+
+    @pytest.mark.parametrize(
+        "n_params",
+        [0, 1, 2, 3, 4],
+    )
+    def test_fit_param_length(self, n_params, instantiate_base_regressor_subclass):
+        """
+        Test the `fit` method with different numbers of initial parameters.
+        Check for correct number of parameters.
+        """
+        X, y, model, true_params = instantiate_base_regressor_subclass[:4]
+        model_name = model.__class__.__name__
+        expectation = (
+            pytest.raises(
+                ValueError,
+                match="Params must have length.|GLM-HMM requires three parameters",
+            )
+            if n_params != INIT_PARAM_LENGTH[model_name]
+            else does_not_raise()
+        )
+
+        if n_params < INIT_PARAM_LENGTH[model_name]:
+            init_params = true_params[:n_params]
+        else:
+            init_params = true_params + (true_params[0],) * (
+                n_params - INIT_PARAM_LENGTH[model_name]
+            )
+        with expectation:
+            model.fit(X, y, init_params=init_params)
+
+    @pytest.mark.parametrize(
+        "delta_dim, expectation",
+        [
+            (-1, pytest.raises(ValueError, match="X must be two-dimensional")),
+            (0, does_not_raise()),
+            (1, pytest.raises(ValueError, match="X must be two-dimensional")),
+        ],
+    )
+    def test_fit_x_dimensionality(
+        self, delta_dim, expectation, instantiate_base_regressor_subclass
+    ):
+        """
+        Test the `fit` method with X input data of different dimensionalities. Ensure correct dimensionality for X.
+        """
+        X, y, model, true_params = instantiate_base_regressor_subclass[:4]
+        if delta_dim == -1:
+            X = np.zeros((X.shape[0],))
+        elif delta_dim == 1:
+            X = np.zeros((X.shape[0], 1, X.shape[1]))
+        with expectation:
+            model.fit(X, y, init_params=true_params)
