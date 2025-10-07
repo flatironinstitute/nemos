@@ -61,7 +61,9 @@ class GLMHMM(BaseRegressor[ModelParams]):
     def __init__(
         self,
         n_states: int,
-        observation_model: Observations = "Bernoulli",
+        observation_model: (
+            Observations | Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial"]
+        ) = "Bernoulli",
         inverse_link_function: Callable = jax.lax.logistic,
         regularizer: Union[
             str, Regularizer
@@ -83,7 +85,9 @@ class GLMHMM(BaseRegressor[ModelParams]):
             Callable[[DESIGN_INPUT_TYPE, NDArray], NDArray] | NDArray | str
         ) = sticky_transition_proba_init,
         initialize_glm_params: (
-            Callable[[DESIGN_INPUT_TYPE, NDArray], ModelParams] | ModelParams | str
+            Callable[[DESIGN_INPUT_TYPE, NDArray], Tuple[jnp.ndarray, jnp.ndarray]]
+            | Tuple[jnp.ndarray, jnp.ndarray]
+            | str
         ) = random_glm_params_init,
         maxiter: int = 1000,
         tol: float = 1e-8,
@@ -232,7 +236,7 @@ class GLMHMM(BaseRegressor[ModelParams]):
     def initialize_transition_proba(self, transition_prob):
         transition_prob = resolve_transition_proba_init_function(transition_prob)
         if isinstance(transition_prob, jnp.ndarray):
-            self._check_init_state_proba(transition_prob)
+            self._check_transition_proba(transition_prob)
         self._initialize_transition_proba = transition_prob
 
     @property
