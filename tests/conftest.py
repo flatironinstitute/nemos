@@ -1228,22 +1228,100 @@ def instantiate_glm_hmm_func(
     )
 
 
+def instantiate_glm_func(
+    obs_model: (
+        Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial"]
+        | nmo.observation_models.Observations
+    ) = "Bernoulli",
+    regularizer: str = "UnRegularized",
+    solver_name: str = None,
+    simulate=False,
+):
+    jax.config.update("jax_enable_x64", True)
+    np.random.seed(123)
+    n_features = 2
+    X = np.ones((500, n_features))
+    X[:250, 0] = 0
+    X[np.arange(500) % 2 == 1, 1] = 0
+    model = nmo.glm.GLM(
+        observation_model=obs_model,
+        regularizer=regularizer,
+        solver_name=solver_name,
+    )
+    model.coef_ = np.random.randn(n_features)
+    model.intercept_ = np.random.randn(1)
+    if simulate:
+        counts, rates = model.simulate(jax.random.PRNGKey(1234), X)
+    else:
+        counts, rates = None, None
+    return (
+        X,
+        counts,
+        model,
+        (model.coef_, model.intercept_),
+        rates,
+        None,
+    )
+
+
+def instantiate_population_glm_func(
+    n_neurons=3,
+    obs_model: (
+        Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial"]
+        | nmo.observation_models.Observations
+    ) = "Bernoulli",
+    regularizer: str = "UnRegularized",
+    solver_name: str = None,
+    simulate=False,
+):
+    jax.config.update("jax_enable_x64", True)
+    np.random.seed(123)
+    n_features = 2
+    X = np.ones((500, n_features))
+    X[:250, 0] = 0
+    X[np.arange(500) % 2 == 1, 1] = 0
+    model = nmo.glm.PopulationGLM(
+        observation_model=obs_model,
+        regularizer=regularizer,
+        solver_name=solver_name,
+    )
+    model.coef_ = np.random.randn(n_features, n_neurons)
+    model.intercept_ = np.random.randn(n_neurons)
+    if simulate:
+        counts, rates = model.simulate(jax.random.PRNGKey(1234), X)
+    else:
+        counts, rates = None, None
+    return (
+        X,
+        counts,
+        model,
+        (model.coef_, model.intercept_),
+        rates,
+        None,
+    )
+
+
 @pytest.fixture
-def instantiate_glm_hmm(request):
+def instantiate_base_regressor_subclass(request):
     """
-    Instantiate the glm-hmm class and return input and, if requested, simulations.
+    Instantiate the concrete BaseRegressor sub-classes.
 
     Parameters
     ----------
     request:
         A pytest fixture. request.param should be a dictionary with keys:
+        - "model": string, the model type to be instantiated.
         - "obs_model": value is the observation model for the glm-hmm
         - "simulate": value is a boolean
-
-    Returns
-    -------
-
     """
+    model_name: str = request.param["model"]
     obs_model: str | nmo.observation_models.Observations = request.param["obs_model"]
     simulate: bool = request.param["simulate"]
-    return instantiate_glm_hmm_func(obs_model=obs_model, simulate=simulate)
+    if model_name == "GLM":
+        return instantiate_glm_func(obs_model=obs_model, simulate=simulate)
+    elif model_name == "PopulationGLM":
+        return instantiate_population_glm_func(obs_model=obs_model, simulate=simulate)
+    elif model_name == "GLMHMM":
+        return instantiate_glm_hmm_func(obs_model=obs_model, simulate=simulate)
+    else:
+        raise ValueError("model_name {} unknown".format(model_name))
