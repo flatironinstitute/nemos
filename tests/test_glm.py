@@ -20,7 +20,7 @@ from sklearn.model_selection import GridSearchCV
 import nemos as nmo
 from nemos._observation_model_builder import instantiate_observation_model
 from nemos._regularizer_builder import instantiate_regularizer
-from nemos.glm.inverse_link_function_utils import LINK_NAME_TO_FUNC
+from nemos.inverse_link_function_utils import LINK_NAME_TO_FUNC
 from nemos.observation_models import NegativeBinomialObservations
 from nemos.pytrees import FeaturePytree
 from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
@@ -72,7 +72,7 @@ def test_validate_lower_dimensional_data_X(mock_glm):
 @pytest.fixture
 def model_instantiation_type(glm_class_type):
     """
-    Fixure to grab the appropriate model instantiation function based on the type of GLM class.
+    Fixture to grab the appropriate model instantiation function based on the type of GLM class.
     Used by TestGLM and TestPoissonGLM classes.
     """
     if "population" in glm_class_type:
@@ -3156,7 +3156,7 @@ class TestGLMObservationModel:
                 raise ValueError("GLM.fit estimate does not match sklearn!")
 
     #####################
-    # Test redidual DOF #
+    # Test residual DOF #
     #####################
     @pytest.mark.parametrize(
         "reg, dof, strength",
