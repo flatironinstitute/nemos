@@ -27,6 +27,12 @@ INIT_PARAM_LENGTH = {
     "GLMHMM": 3,
 }
 
+DEFAULT_OBS_SHAPE = {
+    "GLM": (500,),
+    "PopulationGLM": (500, 3),
+    "GLMHMM": (500,),
+}
+
 HARD_CODED_GET_PARAMS_KEYS = {
     "GLMHMM": {
         "dirichlet_prior_alphas_init_prob",
@@ -254,6 +260,242 @@ class TestModelCommons:
         actual_values = model.get_params()
         assert set(model.get_params().keys()) == expected_keys
         assert all(np.all(actual_values[k] == v) for k, v in expected_values.items())
+
+    @pytest.mark.parametrize(
+        "n_params",
+        [0, 1, 2, 3, 4],
+    )
+    def test_initialize_solver_param_length(
+        self, n_params, instantiate_base_regressor_subclass
+    ):
+        """
+        Test the `initialize_solver` method with different numbers of initial parameters.
+        Check for correct number of parameters.
+        """
+        X, _, model, true_params = instantiate_base_regressor_subclass[:4]
+
+        model_name = model.__class__.__name__
+        y = np.zeros(DEFAULT_OBS_SHAPE[model_name])
+        expectation = (
+            pytest.raises(
+                ValueError,
+                match="Params must have length.|GLM-HMM requires three parameters",
+            )
+            if n_params != INIT_PARAM_LENGTH[model_name]
+            else does_not_raise()
+        )
+
+        if n_params < INIT_PARAM_LENGTH[model_name]:
+            init_params = true_params[:n_params]
+        else:
+            init_params = true_params + (true_params[0],) * (
+                n_params - INIT_PARAM_LENGTH[model_name]
+            )
+        with expectation:
+            params = model.initialize_params(X, y, init_params=init_params)
+            # check that params are set
+            init_state = model.initialize_state(X, y, params)
+            assert init_state.velocity == params
+
+    @pytest.mark.parametrize(
+        "delta_dim, expectation",
+        [
+            (-1, pytest.raises(ValueError, match="X must be two-dimensional")),
+            (0, does_not_raise()),
+            (1, pytest.raises(ValueError, match="X must be two-dimensional")),
+        ],
+    )
+    def test_initialize_solver_x_dimensionality(
+        self, delta_dim, expectation, instantiate_base_regressor_subclass
+    ):
+        """
+        Test the `initialize_solver` method with X input data of different dimensionalities.
+
+        Ensure correct dimensionality for X.
+        """
+        X, _, model, true_params = instantiate_base_regressor_subclass[:4]
+        y = np.zeros(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        if delta_dim == -1:
+            X = np.zeros((X.shape[0],))
+        elif delta_dim == 1:
+            X = np.zeros((X.shape[0], 1, X.shape[1]))
+        with expectation:
+            params = model.initialize_params(X, y, init_params=true_params)
+            # check that params are set
+            init_state = model.initialize_state(X, y, params)
+            assert init_state.velocity == params
+
+    @pytest.mark.parametrize(
+        "delta_dim, expectation",
+        [
+            (-1, pytest.raises(ValueError, match="y must be ...-dimensional")),
+            (0, does_not_raise()),
+            (1, pytest.raises(ValueError, match="y must be ...-dimensional")),
+        ],
+    )
+    def test_initialize_solver_y_dimensionality(
+        self, delta_dim, expectation, instantiate_base_regressor_subclass
+    ):
+        """
+        Test the `initialize_solver` method with y target data of different dimensionalities.
+
+        Ensure correct dimensionality for y.
+        """
+        X, _, model, true_params = instantiate_base_regressor_subclass[:4]
+        y = np.zeros(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        if "Population" in model.__class__.__name__:
+            if delta_dim == -1:
+                y = y[:, 0]
+            elif delta_dim == 1:
+                y = np.zeros((*y.shape, 1))
+        else:
+            if delta_dim == -1:
+                y = np.zeros([])
+            elif delta_dim == 1:
+                y = np.zeros((y.shape[0], 1))
+        with expectation:
+            params = model.initialize_params(X, y, init_params=true_params)
+            # check that params are set
+            init_state = model.initialize_state(X, y, params)
+            assert init_state.velocity == params
+
+    @pytest.mark.parametrize(
+        "delta_n_features, expectation",
+        [
+            (-1, pytest.raises(ValueError, match="Inconsistent number of features")),
+            (0, does_not_raise()),
+            (1, pytest.raises(ValueError, match="Inconsistent number of features")),
+        ],
+    )
+    def test_initialize_solver_n_feature_consistency_x(
+        self, delta_n_features, expectation, instantiate_base_regressor_subclass
+    ):
+        """
+        Test the `initialize_solver` method for inconsistencies between data features and model's expectations.
+        Ensure the number of features in X aligns.
+        """
+        X, _, model, true_params = instantiate_base_regressor_subclass[:4]
+        y = np.zeros(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        if delta_n_features == 1:
+            X = jnp.concatenate((X, jnp.zeros((X.shape[0], 1))), axis=1)
+        elif delta_n_features == -1:
+            X = X[..., :-1]
+        with expectation:
+            params = model.initialize_params(X, y, init_params=true_params)
+            # check that params are set
+            init_state = model.initialize_state(X, y, params)
+            assert init_state.velocity == params
+
+    @pytest.mark.parametrize(
+        "delta_tp, expectation",
+        [
+            (
+                -1,
+                pytest.raises(ValueError, match="The number of time-points in X and y"),
+            ),
+            (0, does_not_raise()),
+            (
+                1,
+                pytest.raises(ValueError, match="The number of time-points in X and y"),
+            ),
+        ],
+    )
+    def test_initialize_solver_time_points_x(
+        self, delta_tp, expectation, instantiate_base_regressor_subclass
+    ):
+        """
+        Test the `initialize_solver` method for inconsistencies in time-points in data X.
+
+        Ensure the correct number of time-points.
+        """
+        X, _, model, true_params = instantiate_base_regressor_subclass[:4]
+        y = np.zeros(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
+        with expectation:
+            params = model.initialize_params(X, y, init_params=true_params)
+            # check that params are set
+            init_state = model.initialize_state(X, y, params)
+            assert init_state.velocity == params
+
+    @pytest.mark.parametrize(
+        "delta_tp, expectation",
+        [
+            (
+                -1,
+                pytest.raises(ValueError, match="The number of time-points in X and y"),
+            ),
+            (0, does_not_raise()),
+            (
+                1,
+                pytest.raises(ValueError, match="The number of time-points in X and y"),
+            ),
+        ],
+    )
+    def test_initialize_solver_time_points_y(
+        self, delta_tp, expectation, instantiate_base_regressor_subclass
+    ):
+        """
+        Test the `initialize_solver` method for inconsistencies in time-points in y.
+
+        Ensure the correct number of time-points.
+        """
+        X, y, model, true_params = instantiate_base_regressor_subclass[:4]
+        shape = DEFAULT_OBS_SHAPE[model.__class__.__name__]
+        y = jnp.zeros((shape[0] + delta_tp,) + shape[1:])
+        with expectation:
+            params = model.initialize_params(X, y, init_params=true_params)
+            # check that params are set
+            init_state = model.initialize_state(X, y, params)
+            assert init_state.velocity == params
+
+    def test_initialize_solver_mask_grouplasso(
+        self, instantiate_base_regressor_subclass
+    ):
+        """Test that the group lasso initialize_solver goes through"""
+        X, _, model, params = instantiate_base_regressor_subclass[:4]
+        y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        n_groups = 2
+        n_features = X.shape[1]
+        mask = np.ones((n_groups, n_features), dtype=float)
+        mask[0, : n_features // 2] = 0
+        mask[1, n_features // 2 :] = 0
+        model.set_params(
+            regularizer=nmo.regularizer.GroupLasso(mask=mask),
+            solver_name="ProximalGradient",
+            regularizer_strength=1.0,
+        )
+        params = model.initialize_params(X, y)
+        init_state = model.initialize_state(X, y, params)
+        assert init_state.velocity == params
+
+    @pytest.mark.parametrize(
+        "fill_val, expectation",
+        [
+            (0, does_not_raise()),
+            (
+                jnp.inf,
+                pytest.raises(
+                    ValueError, match="At least a NaN or an Inf at all sample points"
+                ),
+            ),
+            (
+                jnp.nan,
+                pytest.raises(
+                    ValueError, match="At least a NaN or an Inf at all sample points"
+                ),
+            ),
+        ],
+    )
+    def test_initialize_solver_all_invalid_X(
+        self, fill_val, expectation, instantiate_base_regressor_subclass
+    ):
+        X, _, model, true_params = instantiate_base_regressor_subclass[:4]
+        y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        X.fill(fill_val)
+        with expectation:
+            params = model.initialize_params(X, y)
+            init_state = model.initialize_state(X, y, params)
+            assert init_state.velocity == params
 
 
 @pytest.mark.parametrize(
@@ -612,3 +854,54 @@ class TestModelSimulation:
         X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
         with expectation:
             model.fit(X, y, init_params=true_params)
+
+    @pytest.mark.parametrize(
+        "delta_tp, expectation",
+        [
+            (
+                -1,
+                pytest.raises(ValueError, match="The number of time-points in X and y"),
+            ),
+            (0, does_not_raise()),
+            (
+                1,
+                pytest.raises(ValueError, match="The number of time-points in X and y"),
+            ),
+        ],
+    )
+    def test_fit_time_points_y(
+        self, delta_tp, expectation, instantiate_base_regressor_subclass
+    ):
+        """
+        Test the `fit` method for inconsistencies in time-points in y. Ensure the correct number of time-points.
+        """
+        X, y, model, true_params = instantiate_base_regressor_subclass[:4]
+        y = jnp.zeros((y.shape[0] + delta_tp,) + y.shape[1:])
+        with expectation:
+            model.fit(X, y, init_params=true_params)
+
+    @pytest.mark.parametrize(
+        "fill_val, expectation",
+        [
+            (0, does_not_raise()),
+            (
+                jnp.inf,
+                pytest.raises(
+                    ValueError, match="At least a NaN or an Inf at all sample points"
+                ),
+            ),
+            (
+                jnp.nan,
+                pytest.raises(
+                    ValueError, match="At least a NaN or an Inf at all sample points"
+                ),
+            ),
+        ],
+    )
+    def test_fit_all_invalid_X(
+        self, fill_val, expectation, instantiate_base_regressor_subclass
+    ):
+        X, y, model, true_params = instantiate_base_regressor_subclass[:4]
+        X.fill(fill_val)
+        with expectation:
+            model.fit(X, y)
