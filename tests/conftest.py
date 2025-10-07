@@ -328,7 +328,7 @@ def mock_regressor_nested():
 
 
 @pytest.fixture
-def mock_glm():
+def instantiate_glm_hmmmock_glm():
     return MockGLM(std_param=2)
 
 
@@ -1189,6 +1189,7 @@ def instantiate_glm_hmm_func(
     ) = "Bernoulli",
     regularizer: str = "UnRegularized",
     solver_name: str = None,
+    simulate=False,
 ):
     jax.config.update("jax_enable_x64", True)
     np.random.seed(123)
@@ -1213,8 +1214,10 @@ def instantiate_glm_hmm_func(
         initialize_glm_params=glm_params,
         initialize_init_proba=init_prob,
     )
-
-    counts, rates, latent_states = run_simulation_glm_hmm(X, model, seed=1234)
+    if simulate:
+        counts, rates, latent_states = run_simulation_glm_hmm(X, model, seed=1234)
+    else:
+        counts, rates, latent_states = None, None, None
     return (
         X,
         counts,
@@ -1226,6 +1229,21 @@ def instantiate_glm_hmm_func(
 
 
 @pytest.fixture
-def instantiate_hmm_glm(request):
-    obs_model: str | nmo.observation_models.Observations = request.param
-    return instantiate_glm_hmm_func(obs_model=obs_model)
+def instantiate_glm_hmm(request):
+    """
+    Instantiate the glm-hmm class and return input and, if requested, simulations.
+
+    Parameters
+    ----------
+    request:
+        A pytest fixture. request.param should be a dictionary with keys:
+        - "obs_model": value is the observation model for the glm-hmm
+        - "simulate": value is a boolean
+
+    Returns
+    -------
+
+    """
+    obs_model: str | nmo.observation_models.Observations = request.param["obs_model"]
+    simulate: bool = request.param["simulate"]
+    return instantiate_glm_hmm_func(obs_model=obs_model, simulate=simulate)
