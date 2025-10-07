@@ -93,7 +93,9 @@ def create_projection_weights(
         inactive_states = np.arange(n_states)[np.arange(n_states) != active_state]
         for i in inactive_states:
             delta = np.random.randint(0, 4)
-            projection_weights = projection_weights.at[0, j, np.arange(n_states) == i].set(-6 + delta)
+            projection_weights = projection_weights.at[
+                0, j, np.arange(n_states) == i
+            ].set(-6 + delta)
         projection_weights = projection_weights.at[0, j, active_state].set(2)
 
     return projection_weights
