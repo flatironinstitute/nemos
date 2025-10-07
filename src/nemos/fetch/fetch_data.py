@@ -42,7 +42,7 @@ REGISTRY_DATA = {
     "A2929-200711.nwb": "f698d7319efa5dfeb18fb5fe718ec1a84fdf96b85a158177849a759cd5e396fe",
     "Achilles_10252013_EEG.nwb": "a97a69d231e7e91c07e24890225f8fe4636bac054de50345551f32fc46b9efdd",
     "em_three_states.npz": "92e9fe7990e98f3d23536a40658e258acbc83c26d773f78336431abc12e01951",
-    "glm_hmm_simulation_n_neurons_5_seed_123.npz": "69fba1977fafa93556934238e5f677bb6d94da4351f867945939c60b651a98ba",
+    "glm_hmm_simulation_n_neurons_5_seed_123.npz": "563f74ddf7b99c5a07c2d9a1b53ef8b22f9cd2272b52031ecda82d420d047baf",
 }
 DOWNLOADABLE_FILES = list(REGISTRY_DATA.keys())
 
@@ -59,7 +59,7 @@ REGISTRY_URLS_DATA = {
     "A2929-200711.nwb": OSF_TEMPLATE.format("y7zwd"),
     "Achilles_10252013_EEG.nwb": OSF_TEMPLATE.format("2dfvp"),
     "em_three_states.npz": OSF_TEMPLATE.format("wdz7j"),
-    "glm_hmm_simulation_n_neurons_5_seed_123.npz": OSF_TEMPLATE.format("3kheu"),
+    "glm_hmm_simulation_n_neurons_5_seed_123.npz": OSF_TEMPLATE.format("3ebdh"),
 }
 
 _NEMOS_ENV = "NEMOS_DATA_DIR"
