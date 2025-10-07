@@ -1152,6 +1152,7 @@ def run_simulation_glm_hmm(
     # Set initial weights and simulate first timepoint
     glm.coef_ = coef[..., initial_state].reshape(coef.shape[0], n_neurons)
     glm.intercept_ = intercept[..., initial_state].reshape((n_neurons,))
+    glm.scale_ = 1.0
     glm._initialize_feature_mask(design_matrix, rates)
 
     key = jax.random.PRNGKey(seed)
@@ -1172,10 +1173,15 @@ def run_simulation_glm_hmm(
         key, subkey = jax.random.split(key)
         counts[t], rates[t] = glm.simulate(subkey, design_matrix[t : t + 1])
 
+    if isinstance(model, nmo.glm_hmm.GLMHMM):
+        counts = jnp.squeeze(counts)
+        rates = jnp.squeeze(rates)
+        counts = jnp.squeeze(counts)
+
     return counts, rates, latent_states
 
 
-def instantiate_glm_hmm(
+def instantiate_glm_hmm_func(
     n_states: int = 3,
     obs_model: (
         Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial"]
@@ -1220,5 +1226,6 @@ def instantiate_glm_hmm(
 
 
 @pytest.fixture
-def instantiate_poisson_hmm_glm(obs_model: str | nmo.observation_models.Observations):
-    return instantiate_glm_hmm(obs_model=obs_model)
+def instantiate_hmm_glm(request):
+    obs_model: str | nmo.observation_models.Observations = request.param
+    return instantiate_glm_hmm_func(obs_model=obs_model)
