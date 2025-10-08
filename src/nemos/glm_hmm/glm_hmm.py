@@ -106,7 +106,7 @@ class GLMHMM(BaseRegressor[ModelParams]):
         # check and store initialization hyperparameters.
         self.initialize_glm_params = initialize_glm_params
         self.initialize_transition_proba = initialize_transition_proba
-        self._initialize_init_proba = initialize_init_proba
+        self.initialize_init_proba = initialize_init_proba
 
         # set the prior params
         self.dirichlet_prior_alphas_init_prob = dirichlet_prior_alphas_init_prob
@@ -146,6 +146,8 @@ class GLMHMM(BaseRegressor[ModelParams]):
         self.glm_params_: Tuple[dict | jnp.ndarray, jnp.ndarray] | None = None
         self.transition_prob_: jnp.ndarray | None = None
         self.initial_prob_: jnp.ndarray | None = None
+        self.solver_state_: NamedTuple | None = None
+        self.scale_: float | None = None
 
     @property
     def coef_(self):
@@ -154,12 +156,28 @@ class GLMHMM(BaseRegressor[ModelParams]):
             return self.glm_params_[0]
         return None
 
+    @coef_.setter
+    def coef_(self, value):
+        intercept = self.intercept_
+        if value is None and intercept is None:
+            self.glm_params_ = None
+        else:
+            self.glm_params_ = (value, intercept)
+
     @property
     def intercept_(self):
         """The GLM intercepts."""
         if self.glm_params_ is not None:
             return self.glm_params_[1]
         return None
+
+    @intercept_.setter
+    def intercept_(self, value):
+        coef = self.coef_
+        if value is None and coef is None:
+            self.glm_params_ = None
+        else:
+            self.glm_params_ = (coef, value)
 
     @property
     def maxiter(self):
@@ -714,11 +732,26 @@ class GLMHMM(BaseRegressor[ModelParams]):
     def save_params(
         self,
         filename: Union[str, Path],
-        fit_attrs: dict,
-        string_attrs: list = None,
     ):
         """Save model params."""
-        pass
+        # initialize saving dictionary
+        fit_attrs = self._get_fit_state()
+        # redundant and hard to unpack (tuple of arrays)
+        # coef_ and intercept_ will be saved separately and the setter will
+        # take care of creating the glm_params_ tuple.
+        fit_attrs.pop("glm_params_")
+        fit_attrs.pop("solver_state_")
+        string_attrs = ["inverse_link_function"]
+        putative_func = [
+            "initialize_init_proba",
+            "initialize_transition_proba",
+            "initialize_glm_params",
+        ]
+        for var_name in putative_func:
+            var = getattr(self, var_name)
+            if callable(var):
+                string_attrs.append(var_name)
+        super().save_params(filename, fit_attrs, string_attrs)
 
     # SVRG specific optimization not available.
     def _get_optimal_solver_params_config(self):
