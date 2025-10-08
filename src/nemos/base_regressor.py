@@ -339,7 +339,7 @@ class BaseRegressor(Base, abc.ABC):
         )
         self._solver = solver
 
-        # NOTE: nemos's solvers store a .fun attribute, but it's not necessary for a solver to work.
+        # nemos's solvers store a .fun attribute, but it's not necessary for a solver to work.
         # A test relies on having _solver_loss_fun saved, so still check and save it if possible.
         # But it's not a problem if .fun doesn't exist in user-defined solvers.
         if hasattr(solver, "fun"):

@@ -70,10 +70,6 @@ class AbstractOptimistixOptaxSolver(OptimistixAdapter, abc.ABC):
         cls.__doc__ = inspect.cleandoc(full_doc)
 
 
-# NOTE: This might be solved in a simpler way using
-# https://optax.readthedocs.io/en/latest/getting_started.html#accessing-learning-rate
-
-
 class ScaleByLearningRateState(NamedTuple):
     learning_rate: Union[float, jax.Array]
 
