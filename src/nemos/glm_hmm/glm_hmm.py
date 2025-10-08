@@ -332,12 +332,12 @@ class GLMHMM(BaseRegressor[ModelParams]):
 
         if not isinstance(intercept, jnp.ndarray):
             raise ValueError(
-                f"params[1] (intercept) should be a 1-dimensional array of shape ({self._n_states},). "
+                f"params[1] (GLM intercepts) must be a 1-dimensional array of shape ({self._n_states},). "
                 f"Provided params[1] is of type {type(intercept)} instead."
             )
         elif not intercept.shape == (self._n_states,):
             raise ValueError(
-                f"params[1] (intercept) should be a 1-dimensional array of shape ({self._n_states},). "
+                f"params[1] (GLM intercepts) must be a 1-dimensional array of shape ({self._n_states},). "
                 f"Provided params[1] is of shape {intercept.shape} instead."
             )
 
