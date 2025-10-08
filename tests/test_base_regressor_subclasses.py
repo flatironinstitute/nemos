@@ -14,6 +14,7 @@ from numba import njit
 
 import nemos as nmo
 from nemos._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
+from nemos.inverse_link_function_utils import LINK_NAME_TO_FUNC
 
 MODEL_REGISTRY = {
     "GLM": nmo.glm.GLM,
@@ -468,6 +469,23 @@ class TestModelCommons:
         init_state = model.initialize_state(X, y, params)
         assert init_state.velocity == params
 
+    def test_fit_mask_grouplasso(self, instantiate_base_regressor_subclass):
+        """Test that the group lasso fit goes through"""
+
+        X, _, model = instantiate_base_regressor_subclass[:3]
+        y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        n_groups = 2
+        n_features = X.shape[1]
+        mask = np.ones((n_groups, n_features), dtype=float)
+        mask[0, : n_features // 2] = 0
+        mask[1, n_features // 2 :] = 0
+        model.set_params(
+            regularizer=nmo.regularizer.GroupLasso(mask=mask),
+            solver_name="ProximalGradient",
+            regularizer_strength=1.0,
+        )
+        model.fit(X, y)
+
     @pytest.mark.parametrize(
         "fill_val, expectation",
         [
@@ -626,6 +644,23 @@ class TestModelCommons:
         )
         model.set_params(**params)
         assert model.regularizer_strength == (1.0, 0.5)
+
+    ################################
+    # Test model.initialize_solver #
+    ################################
+    def test_initializer_solver_set_solver_callable(
+        self, instantiate_base_regressor_subclass
+    ):
+        X, _, model, true_params = instantiate_base_regressor_subclass[:4]
+        y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        assert model.solver_init_state is None
+        assert model.solver_update is None
+        assert model.solver_run is None
+        init_params = model.initialize_params(X, y)
+        model.initialize_state(X, y, init_params)
+        assert callable(model.solver_init_state)
+        assert callable(model.solver_update)
+        assert callable(model.solver_run)
 
 
 @pytest.mark.parametrize(
@@ -798,6 +833,30 @@ class TestLinkFunctionModels:
         else:
             model_cls(**DEFAULTS[model_cls.__name__]).set_params(
                 inverse_link_function=link_function
+            )
+
+    @pytest.mark.parametrize(
+        "link_func_string, expectation",
+        [
+            *((link_name, does_not_raise()) for link_name in LINK_NAME_TO_FUNC),
+            (
+                "nemos.utils.invalid_link",
+                pytest.raises(ValueError, match="Unknown link function"),
+            ),
+            (
+                "jax.numpy.invalid_link",
+                pytest.raises(ValueError, match="Unknown link function"),
+            ),
+            ("invalid", pytest.raises(ValueError, match="Unknown link function")),
+        ],
+    )
+    def test_link_func_from_string(
+        self, link_func_string, expectation, instantiate_base_regressor_subclass
+    ):
+        model_cls = instantiate_base_regressor_subclass[2].__class__
+        with expectation:
+            model_cls(
+                **DEFAULTS[model_cls.__name__], inverse_link_function=link_func_string
             )
 
 

@@ -1459,7 +1459,7 @@ class TestGLMObservationModel:
             ("invalid", pytest.raises(ValueError, match="Unknown link function")),
         ],
     )
-    def test_glm_link_func_from_string(
+    def test_link_func_from_string(
         self, link_func_string, expectation, model_instantiation, glm_type, request
     ):
         _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
