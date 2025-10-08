@@ -1302,7 +1302,7 @@ def instantiate_population_glm_func(
     )
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def instantiate_base_regressor_subclass(request):
     """
     Instantiate the concrete BaseRegressor sub-classes.
