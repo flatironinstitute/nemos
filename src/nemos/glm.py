@@ -118,8 +118,8 @@ class GLM(BaseRegressor):
         Please see table above for regularizer/optimizer pairings.
     solver_kwargs :
         Optional dictionary for keyword arguments that are passed to the solver when instantiated.
-        E.g. stepsize, acceleration, value_and_grad, etc.
-         See the jaxopt documentation for details on each solver's kwargs: https://jaxopt.github.io/stable/
+        E.g. stepsize, tol, acceleration, etc.
+         For details on each solver's kwargs, see `get_accepted_arguments` and `get_solver_documentation`.
 
     Attributes
     ----------
@@ -1323,8 +1323,8 @@ class PopulationGLM(GLM):
         Please see table above for regularizer/optimizer pairings.
     solver_kwargs :
         Optional dictionary for keyword arguments that are passed to the solver when instantiated.
-        E.g. stepsize, acceleration, value_and_grad, etc.
-         See the jaxopt documentation for details on each solver's kwargs: https://jaxopt.github.io/stable/
+        E.g. stepsize, tol, acceleration, etc.
+         For details on each solver's kwargs, see `get_accepted_arguments` and `get_solver_documentation`.
     feature_mask :
         Either a matrix of shape (num_features, num_neurons) or a :meth:`nemos.pytrees.FeaturePytree` of 0s and 1s, with
         ``feature_mask[feature_name]`` of shape (num_neurons, ).
