@@ -19,12 +19,14 @@ from .._observation_model_builder import (
 )
 from .._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from ..glm import GLM, PopulationGLM
+from ..glm_hmm import GLMHMM
 from ..utils import _get_name, _unflatten_dict, get_env_metadata
 from ..validation import _suggest_keys
 
 MODEL_REGISTRY = {
     "nemos.glm.glm.GLM": GLM,
     "nemos.glm.glm.PopulationGLM": PopulationGLM,
+    "nemos.glm_hmm.glm_hmm.GLMHMM": GLMHMM,
 }
 
 ERROR_MSG_OVERRIDE_NOT_ALLOWED = (
@@ -177,11 +179,11 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     # Create the model instance
     try:
         model = model_class(**config_params)
-    except Exception:
+    except Exception as e:
         raise ValueError(
             f"Failed to instantiate model class '{model_name}' with parameters: {config_params}. "
             f"Use `nmo.inspect_npz('{filename}')` to inspect the saved object."
-        )
+        ) from e
 
     # Set the rest of the parameters as attributes if recognized
     _set_fit_params(model, fit_params, filename)
