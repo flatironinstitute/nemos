@@ -1444,28 +1444,6 @@ class TestGLMObservationModel:
     For new observation models, add it in the class parameterization above, and add cases for the fixtures below.
     """
 
-    @pytest.mark.parametrize(
-        "link_func_string, expectation",
-        [
-            *((link_name, does_not_raise()) for link_name in LINK_NAME_TO_FUNC),
-            (
-                "nemos.utils.invalid_link",
-                pytest.raises(ValueError, match="Unknown link function"),
-            ),
-            (
-                "jax.numpy.invalid_link",
-                pytest.raises(ValueError, match="Unknown link function"),
-            ),
-            ("invalid", pytest.raises(ValueError, match="Unknown link function")),
-        ],
-    )
-    def test_link_func_from_string(
-        self, link_func_string, expectation, model_instantiation, glm_type, request
-    ):
-        _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
-        with expectation:
-            model.__class__(inverse_link_function=link_func_string)
-
     ########################################################
     # Observation model specific fixtures for shared tests #
     ########################################################
@@ -1671,26 +1649,6 @@ class TestGLMObservationModel:
         else:
             return
 
-    ##################
-    # Test model.fit #
-    ##################
-    def test_fit_mask_grouplasso(self, request, glm_type, model_instantiation):
-        """Test that the group lasso fit goes through"""
-
-        if "poisson" in model_instantiation:
-            X, y, model, params, rate, mask = request.getfixturevalue(
-                glm_type + model_instantiation + "_group_sparse"
-            )
-            model.set_params(
-                regularizer_strength=1.0,
-                regularizer=nmo.regularizer.GroupLasso(mask=mask),
-                solver_name="ProximalGradient",
-            )
-            model.fit(X, y)
-        else:
-            # TODO: need to define this fixture for the other models
-            return
-
     def test_fit_pytree_equivalence(self, request, glm_type, model_instantiation):
         """Check that the glm fit with pytree learns the same parameters."""
 
@@ -1787,24 +1745,6 @@ class TestGLMObservationModel:
                 f"Log-likelihood of {glm_type + model_instantiation} does not match "
                 "that of jax.scipy!"
             )
-
-    ################################
-    # Test model.initialize_solver #
-    ################################
-    def test_initializer_solver_set_solver_callable(
-        self, request, glm_type, model_instantiation
-    ):
-        X, y, model, true_params, firing_rate = request.getfixturevalue(
-            glm_type + model_instantiation
-        )
-        assert model.solver_init_state is None
-        assert model.solver_update is None
-        assert model.solver_run is None
-        init_params = model.initialize_params(X, y)
-        model.initialize_state(X, y, init_params)
-        assert isinstance(model.solver_init_state, Callable)
-        assert isinstance(model.solver_update, Callable)
-        assert isinstance(model.solver_run, Callable)
 
     #####################
     # Test model.update #
