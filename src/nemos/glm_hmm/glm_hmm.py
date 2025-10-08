@@ -695,7 +695,7 @@ class GLMHMM(BaseRegressor[ModelParams]):
             struct2 = jax.tree_util.tree_structure(coef)
             if struct1 != struct2:
                 raise ValueError(
-                    f"X GLM coefficients must be the tree with the same structure.\n"
+                    f"X and the GLM coefficients must be PyTrees with the same structure.\n"
                     f"X has structure {struct1} and coefficients have structure {struct2}. "
                 )
 
