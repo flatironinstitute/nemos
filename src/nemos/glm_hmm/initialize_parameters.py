@@ -122,9 +122,28 @@ AVAILABLE_TRANSITION_PROBA_INIT = [sticky_transition_proba_init]
 AVAILABLE_INITIAL_PROBA_INIT = [uniform_initial_proba_init]
 
 INIT_FUNCTION_MAPPING = {
-    "glm_params_init": {"random_glm_params_init": random_glm_params_init},
-    "transition_proba": {"sticky_transition_proba": sticky_transition_proba_init},
-    "initial_proba": {"uniform": uniform_initial_proba_init},
+    "glm_params_init": {
+        "random_glm_params_init": random_glm_params_init,
+    },
+    "transition_proba": {
+        "sticky_transition_proba": sticky_transition_proba_init,
+    },
+    "initial_proba": {
+        "uniform": uniform_initial_proba_init,
+    },
+}
+
+# this is used by save/load, not intended to be user exposed
+INIT_FUNCTION_MAPPING_MODULE = {
+    "glm_params_init": {
+        "nemos.glm_hmm.initialize_parameters.random_glm_params_init": random_glm_params_init,
+    },
+    "transition_proba": {
+        "nemos.glm_hmm.initialize_parameters.sticky_transition_proba_init": sticky_transition_proba_init,
+    },
+    "initial_proba": {
+        "nemos.glm_hmm.initialize_parameters.uniform_initial_proba_init": uniform_initial_proba_init,
+    },
 }
 
 
@@ -199,19 +218,23 @@ def resolve_glm_params_init_function(
     True
     """
     # Check if it's a pre-defined function
-    if glm_params_init in AVAILABLE_GLM_PARAMS_INIT:
+    if callable(glm_params_init) and glm_params_init in AVAILABLE_GLM_PARAMS_INIT:
         return glm_params_init
 
     # Handle string names
     elif isinstance(glm_params_init, str):
         mapping = INIT_FUNCTION_MAPPING["glm_params_init"]
-        if glm_params_init not in mapping:
+        mapping_module = INIT_FUNCTION_MAPPING_MODULE["glm_params_init"]
+        if glm_params_init in mapping:
+            return mapping[glm_params_init]
+        elif glm_params_init in mapping_module:
+            return mapping_module[glm_params_init]
+        else:
             available = ", ".join(f"'{k}'" for k in mapping.keys())
             raise ValueError(
                 f"Unknown projection initialization method: '{glm_params_init}'.\n"
                 f"Available methods are: {available}"
             )
-        return mapping[glm_params_init]
 
     # Handle array-like inputs
     elif all(is_numpy_array_like(p)[1] for p in glm_params_init):
@@ -325,19 +348,23 @@ def resolve_transition_proba_init_function(
     True
     """
     # Check if it's a pre-defined function
-    if transition_prob in AVAILABLE_TRANSITION_PROBA_INIT:
+    if callable(transition_prob) and transition_prob in AVAILABLE_TRANSITION_PROBA_INIT:
         return transition_prob
 
     # Handle string names
     elif isinstance(transition_prob, str):
         mapping = INIT_FUNCTION_MAPPING["transition_proba"]
-        if transition_prob not in mapping:
+        mapping_module = INIT_FUNCTION_MAPPING_MODULE["transition_proba"]
+        if transition_prob in mapping:
+            return mapping[transition_prob]
+        elif transition_prob in mapping_module:
+            return mapping_module[transition_prob]
+        else:
             available = ", ".join(f"'{k}'" for k in mapping.keys())
             raise ValueError(
                 f"Unknown transition probability initialization method: '{transition_prob}'.\n"
                 f"Available methods are: {available}"
             )
-        return mapping[transition_prob]
 
     # Handle array-like inputs
     elif is_numpy_array_like(transition_prob)[1]:
@@ -449,19 +476,26 @@ def resolve_initial_state_proba_init_function(
     True
     """
     # Check if it's a pre-defined function
-    if initial_state_proba_init in AVAILABLE_INITIAL_PROBA_INIT:
+    if (
+        callable(initial_state_proba_init)
+        and initial_state_proba_init in AVAILABLE_INITIAL_PROBA_INIT
+    ):
         return initial_state_proba_init
 
     # Handle string names
     elif isinstance(initial_state_proba_init, str):
         mapping = INIT_FUNCTION_MAPPING["initial_proba"]
-        if initial_state_proba_init not in mapping:
+        mapping_module = INIT_FUNCTION_MAPPING_MODULE["initial_proba"]
+        if initial_state_proba_init in mapping:
+            return mapping[initial_state_proba_init]
+        elif initial_state_proba_init in mapping_module:
+            return mapping_module[initial_state_proba_init]
+        else:
             available = ", ".join(f"'{k}'" for k in mapping.keys())
             raise ValueError(
                 f"Unknown initial state initialization method: '{initial_state_proba_init}'.\n"
                 f"Available methods are: {available}"
             )
-        return mapping[initial_state_proba_init]
 
     # Handle array-like inputs
     elif is_numpy_array_like(initial_state_proba_init)[1]:
