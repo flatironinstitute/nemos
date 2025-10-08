@@ -11,6 +11,7 @@ Note:
 
 import abc
 from collections import namedtuple
+from copy import deepcopy
 from functools import partial
 from typing import Literal
 
@@ -1302,28 +1303,52 @@ def instantiate_population_glm_func(
     )
 
 
-@pytest.fixture(scope="class")
+_MODEL_CACHE = {}
+
+
+@pytest.fixture
 def instantiate_base_regressor_subclass(request):
     """
-    Instantiate the concrete BaseRegressor sub-classes.
-
-    Parameters
-    ----------
-    request:
-        A pytest fixture. request.param should be a dictionary with keys:
-        - "model": string, the model type to be instantiated.
-        - "obs_model": value is the observation model for the glm-hmm
-        - "simulate": value is a boolean
+    Instantiate the concrete BaseRegressor sub-classes with caching.
     """
     model_name: str = request.param["model"]
     obs_model: str | nmo.observation_models.Observations = request.param["obs_model"]
     simulate: bool = request.param["simulate"]
-    print(model_name, obs_model, simulate)
-    if model_name == "GLM":
-        return instantiate_glm_func(obs_model=obs_model, simulate=simulate)
-    elif model_name == "PopulationGLM":
-        return instantiate_population_glm_func(obs_model=obs_model, simulate=simulate)
-    elif model_name == "GLMHMM":
-        return instantiate_glm_hmm_func(obs_model=obs_model, simulate=simulate)
-    else:
-        raise ValueError("model_name {} unknown".format(model_name))
+
+    # Create cache key (class-scoped)
+    cache_key = (
+        model_name,
+        str(obs_model),
+        simulate,
+        id(request.cls) if request.cls else id(request.module),
+    )
+
+    # Check cache
+    if cache_key not in _MODEL_CACHE:
+        if model_name == "GLM":
+            result = instantiate_glm_func(obs_model=obs_model, simulate=simulate)
+        elif model_name == "PopulationGLM":
+            result = instantiate_population_glm_func(
+                obs_model=obs_model, simulate=simulate
+            )
+        elif model_name == "GLMHMM":
+            result = instantiate_glm_hmm_func(obs_model=obs_model, simulate=simulate)
+        else:
+            raise ValueError("model_name {} unknown".format(model_name))
+        _MODEL_CACHE[cache_key] = result
+        return result
+
+    # Get cached data and return a complete deepcopy of everything
+    # this is different from a function level fixture because it
+    # would not re-run any potentially heavy setup code (like model.simulate).
+    cached_result = deepcopy(_MODEL_CACHE[cache_key])
+    return cached_result
+
+
+# Auto-clear cache after each test module run
+@pytest.fixture(scope="module", autouse=True)
+def _clear_model_cache():
+    """Clear model cache after each test class."""
+    yield
+    print("CLEARING MODEL CACHE")
+    _MODEL_CACHE.clear()
