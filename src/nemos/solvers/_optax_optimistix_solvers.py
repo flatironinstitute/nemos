@@ -109,8 +109,13 @@ def _make_rate_scaler(
     """
     Make an Optax transformation for setting the learning rate.
 
-    If `stepsize` is not None, use it as a constant learning rate.
-    If `stepsize` is None, create a zoom linesearch with `linesearch_kwargs`.
+    If `stepsize` is not None and larger than 0, use it as a constant learning rate.
+    Otherwise `optax.scale_by_zoom_linesearch` is used with `linesearch_kwargs`.
+    By default the curvature condition is disabled, which reduces to a backtracking
+    linesearch where the stepsizes are chosen using the cubic or quadratic interpolation
+    used in zoom linesearch.
+    By default, 15 linesearch steps are used, which can be overwritten with
+    `max_linesearch_steps` in `linesearch_kwargs`.
     """
     if stepsize is None or stepsize <= 0.0:
         if linesearch_kwargs is None:
@@ -119,11 +124,14 @@ def _make_rate_scaler(
         if "max_linesearch_steps" not in linesearch_kwargs:
             linesearch_kwargs["max_linesearch_steps"] = 15
 
+        if "curv_rtol" not in linesearch_kwargs:
+            linesearch_kwargs["curv_rtol"] = jnp.inf
+
         return optax.scale_by_zoom_linesearch(**linesearch_kwargs)
     else:
         if linesearch_kwargs:
             raise ValueError("Only provide stepsize or linesearch_kwargs.")
-        # NOTE: GradientDescent works with optax.scale_by_learning_rate as well
+        # GradientDescent works with optax.scale_by_learning_rate as well
         # but for ProximalGradient we need to be able to extract the current learning rate
         return stateful_scale_by_learning_rate(stepsize)
 
@@ -132,17 +140,13 @@ class OptimistixOptaxGradientDescent(AbstractOptimistixOptaxSolver):
     """
     Gradient descent implementation combining Optax and Optimistix.
 
-    Uses Optax's SGD with Nesterov acceleration combined with Optax's
-    zoom linesearch or a constant learning rate.
+    Uses Optax's SGD combined with Optax's zoom linesearch or a constant learning rate.
 
     The full optimization loop is handled by the `optimistix.OptaxMinimiser` wrapper.
     """
 
     _optax_solver = optax.sgd
 
-    # TODO: Update docstring to mention that Nesterov needs momentum
-    # TODO: Update docstring to mention that linesearch_kwargs is passed to optax.zoom_linesearch
-    # TODO: Update docstring to mention that max_linesearch_steps is 15 by default. Where does that number come from?
     def __init__(
         self,
         unregularized_loss: Callable,
@@ -150,6 +154,7 @@ class OptimistixOptaxGradientDescent(AbstractOptimistixOptaxSolver):
         regularizer_strength: float | None,
         tol: float = DEFAULT_ATOL,
         rtol: float = DEFAULT_RTOL,
+        momentum: float | None = None,
         acceleration: bool = True,
         stepsize: float | None = None,
         linesearch_kwargs: dict | None = None,
@@ -158,14 +163,26 @@ class OptimistixOptaxGradientDescent(AbstractOptimistixOptaxSolver):
         """
         Create a solver wrapping `optax.sgd`.
 
-        If `acceleration` is True, use Nesterov acceleration.
+        If `acceleration` is True, use the Nesterov acceleration as defined by Sutskever et al. 2013.
+        Note that this is different from the Nesterov acceleration implemented by JAXopt and
+        only has an effect if `momentum` is used as well.
 
-        Use either `stepsize` or `linesearch_kwargs`.
-        If `stepsize` is not None and larger than 0, it is used as a fixed stepsize,
-        otherwise `optax.zoom_linesearch` is used.
+        If `stepsize` is not None and larger than 0, use it as a constant learning rate.
+        Otherwise `optax.scale_by_zoom_linesearch` is used with the curvature condition
+        disabled, which reduces to a backtracking linesearch where the stepsizes are chosen
+        using the cubic or quadratic interpolation used in zoom linesearch.
+        By default, 15 linesearch steps are used, which can be overwritten with
+        `max_linesearch_steps` in `linesearch_kwargs`.
+
+        References
+        ----------
+        [1] [Sutskever, I., Martens, J., Dahl, G. &amp; Hinton, G.. (2013).
+        "On the importance of initialization and momentum in deep learning."
+        Proceedings of the 30th International Conference on Machine Learning, PMLR 28(3):1139-1147, 2013.
+        ](https://proceedings.mlr.press/v28/sutskever13.html)
         """
         _sgd = optax.chain(
-            optax.sgd(learning_rate=1.0, nesterov=acceleration),
+            optax.sgd(learning_rate=1.0, momentum=momentum, nesterov=acceleration),
             _make_rate_scaler(stepsize, linesearch_kwargs),
         )
         solver_init_kwargs["optim"] = _sgd
@@ -187,13 +204,23 @@ class OptimistixOptaxGradientDescent(AbstractOptimistixOptaxSolver):
 
         return arguments
 
+    @classmethod
+    def _note_about_accepted_arguments(cls) -> str:
+        note = super()._note_about_accepted_arguments()
+        accel_nesterov = inspect.cleandoc(
+            """
+            `acceleration` is passed to `optax.sgd` as the `nesterov` parameter.
+            Note that this only has an effect if `momentum` is used as well.
+            """
+        )
+        return inspect.cleandoc(note + "\n" + accel_nesterov)
+
 
 class OptimistixOptaxProximalGradient(AbstractOptimistixOptaxSolver):
     """
     ProximalGradient implementation combining Optax and Optimistix.
 
-    Uses Optax's SGD with Nesterov acceleration combined with Optax's
-    zoom linesearch or a constant learning rate.
+    Uses Optax's SGD combined with Optax's zoom linesearch or a constant learning rate.
     Then uses the learning rate given by Optax to scale the proximal
     operator's update and check for convergence using Optimistix's criterion.
 
@@ -216,6 +243,7 @@ class OptimistixOptaxProximalGradient(AbstractOptimistixOptaxSolver):
         regularizer_strength: float | None,
         tol: float = DEFAULT_ATOL,
         rtol: float = DEFAULT_RTOL,
+        momentum: float | None = None,
         acceleration: bool = True,
         stepsize: float | None = None,
         linesearch_kwargs: dict | None = None,
@@ -224,21 +252,26 @@ class OptimistixOptaxProximalGradient(AbstractOptimistixOptaxSolver):
         """
         Create a proximal gradient solver using `optax.sgd` and applying the proximal operator on each update step.
 
-        If `acceleration` is True, use Nesterov acceleration.
+        If `acceleration` is True, use the Nesterov acceleration as defined by Sutskever et al. 2013.
+        Note that this is different from the Nesterov acceleration implemented by JAXopt and
+        only has an effect if `momentum` is used as well.
 
-        Use either `stepsize` or `linesearch_kwargs`.
-        If `stepsize` is not None and larger than 0, it is used as a fixed stepsize,
-        otherwise `optax.zoom_linesearch` is used.
+        If `stepsize` is not None and larger than 0, use it as a constant learning rate.
+        Otherwise `optax.scale_by_zoom_linesearch` is used with the curvature condition
+        disabled, which reduces to a backtracking linesearch where the stepsizes are chosen
+        using the cubic or quadratic interpolation used in zoom linesearch.
+        By default, 15 linesearch steps are used, which can be overwritten with
+        `max_linesearch_steps` in `linesearch_kwargs`.
+
+        References
+        ----------
+        [1] [Sutskever, I., Martens, J., Dahl, G. &amp; Hinton, G.. (2013).
+        "On the importance of initialization and momentum in deep learning."
+        Proceedings of the 30th International Conference on Machine Learning, PMLR 28(3):1139-1147, 2013.
+        ](https://proceedings.mlr.press/v28/sutskever13.html)
         """
-        if linesearch_kwargs is None:
-            linesearch_kwargs = {}
-
-        # disable the curvature test
-        if "curv_rtol" not in linesearch_kwargs:
-            linesearch_kwargs["curv_rtol"] = jnp.inf
-
         _sgd = optax.chain(
-            optax.sgd(learning_rate=1.0, nesterov=acceleration),
+            optax.sgd(learning_rate=1.0, momentum=momentum, nesterov=acceleration),
             _make_rate_scaler(stepsize, linesearch_kwargs),
         )
         solver_init_kwargs["optim"] = _sgd
@@ -339,12 +372,23 @@ class OptimistixOptaxProximalGradient(AbstractOptimistixOptaxSolver):
         # so that when passing self to optx.minimise, postprocess can be called
         return self._solver.postprocess(*args, **kwargs)
 
+    @classmethod
+    def _note_about_accepted_arguments(cls) -> str:
+        note = super()._note_about_accepted_arguments()
+        accel_nesterov = inspect.cleandoc(
+            """
+            `acceleration` is passed to `optax.sgd` as the `nesterov` parameter.
+            Note that this only has an effect if `momentum` is used as well.
+            """
+        )
+        return inspect.cleandoc(note + "\n" + accel_nesterov)
+
 
 class OptimistixOptaxLBFGS(AbstractOptimistixOptaxSolver):
     """
     L-BFGS implementation using optax.lbfgs wrapped by optimistix.OptaxMinimiser.
 
-    Convergence criterion is implemented by Optimistix, so it's their Cauchy criterion.
+    Convergence criterion is implemented by Optimistix, so the Cauchy criterion is used.
     """
 
     fun: Callable
