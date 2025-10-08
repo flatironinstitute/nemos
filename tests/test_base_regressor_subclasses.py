@@ -497,6 +497,136 @@ class TestModelCommons:
             init_state = model.initialize_state(X, y, params)
             assert init_state.velocity == params
 
+    @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso", "ElasticNet"])
+    def test_reg_strength_reset(self, reg, instantiate_base_regressor_subclass):
+        model_cls = instantiate_base_regressor_subclass[2].__class__
+        model = model_cls(
+            **DEFAULTS[model_cls.__name__], regularizer=reg, regularizer_strength=1.0
+        )
+        model.regularizer = "UnRegularized"
+        assert model.regularizer_strength is None
+
+    @pytest.mark.parametrize(
+        "params, warns",
+        [
+            # set regularizer
+            (
+                {"regularizer": "Ridge"},
+                does_not_raise(),
+            ),
+            (
+                {"regularizer": "Lasso"},
+                does_not_raise(),
+            ),
+            (
+                {"regularizer": "GroupLasso"},
+                does_not_raise(),
+            ),
+            (
+                {"regularizer": "ElasticNet"},
+                does_not_raise(),
+            ),
+            ({"regularizer": "UnRegularized"}, does_not_raise()),
+            # set both None or number
+            (
+                {"regularizer": "Ridge", "regularizer_strength": None},
+                does_not_raise(),
+            ),
+            ({"regularizer": "Ridge", "regularizer_strength": 1.0}, does_not_raise()),
+            (
+                {"regularizer": "Lasso", "regularizer_strength": None},
+                does_not_raise(),
+            ),
+            ({"regularizer": "Lasso", "regularizer_strength": 1.0}, does_not_raise()),
+            (
+                {"regularizer": "GroupLasso", "regularizer_strength": None},
+                does_not_raise(),
+            ),
+            (
+                {"regularizer": "GroupLasso", "regularizer_strength": 1.0},
+                does_not_raise(),
+            ),
+            (
+                {"regularizer": "ElasticNet", "regularizer_strength": None},
+                does_not_raise(),
+            ),
+            (
+                {"regularizer": "ElasticNet", "regularizer_strength": 1.0},
+                does_not_raise(),
+            ),
+            (
+                {"regularizer": "ElasticNet", "regularizer_strength": (1.0, 0.5)},
+                does_not_raise(),
+            ),
+            (
+                {"regularizer": "UnRegularized", "regularizer_strength": None},
+                does_not_raise(),
+            ),
+            (
+                {"regularizer": "UnRegularized", "regularizer_strength": 1.0},
+                does_not_raise(),
+            ),
+            # set regularizer str only
+            (
+                {"regularizer_strength": 1.0},
+                does_not_raise(),
+            ),
+            ({"regularizer_strength": None}, does_not_raise()),
+        ],
+    )
+    def test_reg_set_params(self, params, warns, instantiate_base_regressor_subclass):
+        model_cls = instantiate_base_regressor_subclass[2].__class__
+        model = model_cls(**DEFAULTS[model_cls.__name__])
+        with warns:
+            model.set_params(**params)
+
+    @pytest.mark.parametrize(
+        "params, warns",
+        [
+            # set regularizer str only
+            ({"regularizer_strength": 1.0}, does_not_raise()),
+            (
+                {"regularizer_strength": None},
+                does_not_raise(),
+            ),
+        ],
+    )
+    @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso"])
+    def test_reg_set_params_reg_str_only(
+        self, params, warns, reg, instantiate_base_regressor_subclass
+    ):
+        model_cls = instantiate_base_regressor_subclass[2].__class__
+        model = model_cls(
+            **DEFAULTS[model_cls.__name__], regularizer=reg, regularizer_strength=1
+        )
+        with warns:
+            model.set_params(**params)
+
+    @pytest.mark.parametrize(
+        "params, warns",
+        [
+            # set regularizer str only
+            (
+                {"regularizer_strength": 1.0},
+                does_not_raise(),
+            ),
+            (
+                {"regularizer_strength": None},
+                does_not_raise(),
+            ),
+        ],
+    )
+    @pytest.mark.parametrize("reg", ["ElasticNet"])
+    def test_reg_set_params_reg_str_only_elasticnet(
+        self, params, warns, reg, instantiate_base_regressor_subclass
+    ):
+        model_cls = instantiate_base_regressor_subclass[2].__class__
+        model = model_cls(
+            **DEFAULTS[model_cls.__name__], regularizer=reg, regularizer_strength=11
+        )
+        model.set_params(**params)
+        assert model.regularizer_strength == (1.0, 0.5)
+
 
 @pytest.mark.parametrize(
     "instantiate_base_regressor_subclass",
