@@ -407,15 +407,24 @@ class OptimistixOptaxLBFGS(AbstractOptimistixOptaxSolver):
         tol: float = DEFAULT_ATOL,
         rtol: float = DEFAULT_RTOL,
         stepsize: float | None = None,
+        memory_size: int = 10,
+        scale_init_precond: bool = True,
         **solver_init_kwargs,
     ):
         """
         Create a solver wrapping `optax.lbfgs`.
 
         `stepsize` is passed for `learning_rate` to `optax.lbfgs`.
+          If None, a zoom linesearch is used (recommended).
+        `memory_size` and `scale_init_precond` are passed to `optax.lbfgs`.
+
+        For more information on these parameters, see `get_solver_documentation`.
         """
-        # TODO: might want to expose some more parameters?
-        solver_init_kwargs["optim"] = optax.lbfgs(learning_rate=stepsize)
+        solver_init_kwargs["optim"] = optax.lbfgs(
+            learning_rate=stepsize,
+            memory_size=memory_size,
+            scale_init_precond=scale_init_precond,
+        )
 
         super().__init__(
             unregularized_loss,
