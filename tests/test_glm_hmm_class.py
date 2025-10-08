@@ -120,24 +120,39 @@ class TestGLMHMM:
         elif dim_weights == 2:
             init_w = jnp.zeros(DEFAULT_GLM_COEF_SHAPE[model.__class__.__name__])
         else:
-            init_w = jnp.zeros(DEFAULT_GLM_COEF_SHAPE[model.__class__.__name__] + (1,) * (dim_weights - 2))
+            init_w = jnp.zeros(
+                DEFAULT_GLM_COEF_SHAPE[model.__class__.__name__]
+                + (1,) * (dim_weights - 2)
+            )
         with expectation:
             model.fit(X, y, init_params=((init_w, true_params[0][1]), *true_params[1:]))
 
     @pytest.mark.parametrize(
         "dim_intercepts, expectation",
         [
-            (0, pytest.raises(ValueError, match=r"params\[1\] \(GLM intercepts\) must be")),
+            (
+                0,
+                pytest.raises(
+                    ValueError, match=r"params\[1\] \(GLM intercepts\) must be"
+                ),
+            ),
             (1, does_not_raise()),
-            (2, pytest.raises(ValueError, match=r"params\[1\] \(GLM intercepts\) must be")),
-            (3, pytest.raises(ValueError, match=r"params\[1\] \(GLM intercepts\) must be")),
+            (
+                2,
+                pytest.raises(
+                    ValueError, match=r"params\[1\] \(GLM intercepts\) must be"
+                ),
+            ),
+            (
+                3,
+                pytest.raises(
+                    ValueError, match=r"params\[1\] \(GLM intercepts\) must be"
+                ),
+            ),
         ],
     )
     def test_fit_intercepts_dimensionality(
-        self,
-        dim_intercepts,
-        expectation,
-        instantiate_base_regressor_subclass
+        self, dim_intercepts, expectation, instantiate_base_regressor_subclass
     ):
         """
         Test the `fit` method with intercepts of different dimensionalities. Check for correct dimensionality.
@@ -158,56 +173,55 @@ class TestGLMHMM:
         "expectation, init_params_glm, init_params_population_glm",
         [
             (
-                            does_not_raise(),
-                            [jnp.zeros((2, 3)), jnp.zeros((3,))],
-                            [jnp.zeros((2, 3, 3)), jnp.zeros((3, 3))],
-                        ),
-                        (
-                            pytest.raises(ValueError, match="The GLM params must be a length"),
-                            [[jnp.zeros((1, 2, 3)), jnp.zeros((3,))]],
-                            [[jnp.zeros((1, 2, 3)), jnp.zeros((3, 3))]],
-                        ),
-                        (
-                            pytest.raises(KeyError),
-                            dict(p1=jnp.zeros((1, 3)), p2=jnp.zeros((1, 3))),
-                            dict(p1=jnp.zeros((2, 3, 3)), p2=jnp.zeros((2, 2, 3))),
-                        ),
-                        (
-                            pytest.raises(
-                                ValueError, match=r"X and the GLM coefficients must be"
-                            ),
-                            [dict(p1=jnp.zeros((1, 3)), p2=jnp.zeros((1, 3))), jnp.zeros((3,))],
-                            [dict(p1=jnp.zeros((1, 3, 3)), p2=jnp.zeros((1, 3, 3))), jnp.zeros((3, 3))],
-                        ),
-                        (
-                            pytest.raises(
-                                ValueError, match=r"X and the GLM coefficients must be"
-                            ),
-                            [
-                                FeaturePytree(p1=jnp.zeros((1, 3)), p2=jnp.zeros((1, 3))),
-                                jnp.zeros((3,)),
-                            ],
-                            [
-                                FeaturePytree(p1=jnp.zeros((1, 3, 3)), p2=jnp.zeros((1, 2, 3))),
-                                jnp.zeros((3, 3)),
-                            ],
-                        ),
-                        (pytest.raises(ValueError, match="The GLM params must be a length"), 0, 0),
-                        (
-                            pytest.raises(TypeError, match="Initial parameters must be array-like"),
-                            {0, 1},
-                            {0, 1},
-                        ),
-                        (
-                            pytest.raises(TypeError, match="Initial parameters must be array-like"),
-                            [jnp.zeros((1, 5)), ""],
-                            [jnp.zeros((1, 5)), ""],
-                        ),
-                        (
-                            pytest.raises(TypeError, match="Initial parameters must be array-like"),
-                            ["", jnp.zeros((1,))],
-                            ["", jnp.zeros((1,))],
-                        ),
+                does_not_raise(),
+                [jnp.zeros((2, 3)), jnp.zeros((3,))],
+                [jnp.zeros((2, 3, 3)), jnp.zeros((3, 3))],
+            ),
+            (
+                pytest.raises(ValueError, match="The GLM params must be a length"),
+                [[jnp.zeros((1, 2, 3)), jnp.zeros((3,))]],
+                [[jnp.zeros((1, 2, 3)), jnp.zeros((3, 3))]],
+            ),
+            (
+                pytest.raises(KeyError),
+                dict(p1=jnp.zeros((1, 3)), p2=jnp.zeros((1, 3))),
+                dict(p1=jnp.zeros((2, 3, 3)), p2=jnp.zeros((2, 2, 3))),
+            ),
+            (
+                pytest.raises(ValueError, match=r"X and the GLM coefficients must be"),
+                [dict(p1=jnp.zeros((1, 3)), p2=jnp.zeros((1, 3))), jnp.zeros((3,))],
+                [
+                    dict(p1=jnp.zeros((1, 3, 3)), p2=jnp.zeros((1, 3, 3))),
+                    jnp.zeros((3, 3)),
+                ],
+            ),
+            (
+                pytest.raises(ValueError, match=r"X and the GLM coefficients must be"),
+                [
+                    FeaturePytree(p1=jnp.zeros((1, 3)), p2=jnp.zeros((1, 3))),
+                    jnp.zeros((3,)),
+                ],
+                [
+                    FeaturePytree(p1=jnp.zeros((1, 3, 3)), p2=jnp.zeros((1, 2, 3))),
+                    jnp.zeros((3, 3)),
+                ],
+            ),
+            (pytest.raises(ValueError, match="The GLM params must be a length"), 0, 0),
+            (
+                pytest.raises(TypeError, match="Initial parameters must be array-like"),
+                {0, 1},
+                {0, 1},
+            ),
+            (
+                pytest.raises(TypeError, match="Initial parameters must be array-like"),
+                [jnp.zeros((1, 5)), ""],
+                [jnp.zeros((1, 5)), ""],
+            ),
+            (
+                pytest.raises(TypeError, match="Initial parameters must be array-like"),
+                ["", jnp.zeros((1,))],
+                ["", jnp.zeros((1,))],
+            ),
         ],
     )
 
@@ -255,12 +269,16 @@ class TestGLMHMM:
             raise RuntimeError("Fill in the test case for population glmhmm")
         else:
             init_w = jnp.zeros((X.shape[1] + delta_n_features, 3))
-            init_b = jnp.ones(3,)
+            init_b = jnp.ones(
+                3,
+            )
         with expectation:
             model.fit(X, y, init_params=((init_w, init_b), *true_params[1:]))
 
     @pytest.fixture
-    def initialize_solver_weights_dimensionality_expectation(self, instantiate_base_regressor_subclass):
+    def initialize_solver_weights_dimensionality_expectation(
+        self, instantiate_base_regressor_subclass
+    ):
         name = instantiate_base_regressor_subclass[2].__class__.__name__
         if "Population" in name:
             return {
@@ -294,6 +312,7 @@ class TestGLMHMM:
                     match=r"params\[0\] must be an array or .* of shape \(n_features",
                 ),
             }
+
     #
     @pytest.mark.parametrize("dim_weights", [0, 1, 2, 3])
     def test_initialize_solver_weights_dimensionality(
@@ -321,13 +340,16 @@ class TestGLMHMM:
         else:
             init_w = jnp.zeros((n_features, 3) + (1,) * (dim_weights - 2))
         with expectation:
-            params = model.initialize_params(X, y, init_params=((init_w, true_params[0][1]), *true_params[1:]))
+            params = model.initialize_params(
+                X, y, init_params=((init_w, true_params[0][1]), *true_params[1:])
+            )
             # check that params are set
             init_state = model.initialize_state(X, y, params)
             assert init_state.velocity == params
 
     @pytest.mark.parametrize(
-        "dim_intercepts", [0,1,2,3],
+        "dim_intercepts",
+        [0, 1, 2, 3],
     )
     def test_initialize_solver_intercepts_dimensionality(
         self,
@@ -342,17 +364,27 @@ class TestGLMHMM:
         X, y, model, true_params = instantiate_base_regressor_subclass[:4]
         n_samples, n_features = X.shape
         is_population = "Population" in model.__class__.__name__
-        if (dim_intercepts == 2 and is_population) or (dim_intercepts == 1 and not is_population):
+        if (dim_intercepts == 2 and is_population) or (
+            dim_intercepts == 1 and not is_population
+        ):
             expectation = does_not_raise()
         else:
-            expectation = pytest.raises(ValueError, match=r"params\[1\] \(GLM intercepts\) must be")
+            expectation = pytest.raises(
+                ValueError, match=r"params\[1\] \(GLM intercepts\) must be"
+            )
         if is_population:
             raise RuntimeError("Fill in the test case for population glmhmm")
         else:
-            init_b = jnp.zeros((3,) + (1,) * (dim_intercepts - 1)) if dim_intercepts > 0 else jnp.array([])
+            init_b = (
+                jnp.zeros((3,) + (1,) * (dim_intercepts - 1))
+                if dim_intercepts > 0
+                else jnp.array([])
+            )
             init_w = jnp.zeros((n_features, 3))
         with expectation:
-            params = model.initialize_params(X, y, init_params=((init_w, init_b), *true_params[1:]))
+            params = model.initialize_params(
+                X, y, init_params=((init_w, init_b), *true_params[1:])
+            )
             # check that params are set
             init_state = model.initialize_state(X, y, params)
             assert init_state.velocity == params
@@ -376,7 +408,9 @@ class TestGLMHMM:
         else:
             init_params = init_params_glm
         with expectation:
-            params = model.initialize_params(X, y, init_params=(init_params, *true_params[1:]))
+            params = model.initialize_params(
+                X, y, init_params=(init_params, *true_params[1:])
+            )
             # check that params are set
             init_state = model.initialize_state(X, y, params)
             assert init_state.velocity == params
@@ -406,7 +440,9 @@ class TestGLMHMM:
             init_w = jnp.zeros((X.shape[1] + delta_n_features, 3))
             init_b = jnp.ones(3)
         with expectation:
-            params = model.initialize_params(X, y, init_params=((init_w, init_b), *true_params[1:]))
+            params = model.initialize_params(
+                X, y, init_params=((init_w, init_b), *true_params[1:])
+            )
             # check that params are set
             init_state = model.initialize_state(X, y, params)
             assert init_state.velocity == params
