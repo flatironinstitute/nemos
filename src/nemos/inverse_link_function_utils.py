@@ -1,11 +1,13 @@
 """Validation and construction of inverse link functions."""
 
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 import jax
 import jax.numpy as jnp
 
-from .observation_models import Observations
+if TYPE_CHECKING:
+    from .observation_models import Observations
+
 from .utils import one_over_x
 
 LINK_NAME_TO_FUNC = {
@@ -27,6 +29,27 @@ LINK_NAME_TO_FUNC = {
     "norm.cdf": jax.scipy.stats.norm.cdf,
     "expit": jax.scipy.special.expit,
 }
+
+
+# Define named wrapper functions for all inverse link functions
+def exp(x):
+    """Exponential link function."""
+    return jnp.exp(x)
+
+
+def softplus(x):
+    """Softplus link function."""
+    return jax.nn.softplus(x)
+
+
+def logistic(x):
+    """Logistic (sigmoid) link function."""
+    return jax.scipy.special.expit(x)
+
+
+def norm_cdf(x):
+    """Norm CDF link function."""
+    return jax.scipy.stats.norm.cdf(x)
 
 
 def link_function_from_string(link_name: str):
@@ -113,7 +136,7 @@ def check_inverse_link_function(inverse_link_function: Callable):
 
 
 def resolve_inverse_link_function(
-    inverse_link_function: Any, observation_model: Observations
+    inverse_link_function: Any, observation_model: "Observations"
 ) -> Callable:
     """
     Validate and resolve an inverse link function specification.
