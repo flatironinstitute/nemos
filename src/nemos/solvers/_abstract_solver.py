@@ -11,8 +11,7 @@ class OptimizationInfo(NamedTuple):
     """Basic diagnostic information about finished optimization runs."""
 
     # Not all JAXopt solvers store the function value.
-    # Not sure how confusing it is to store None when it's not present
-    # because it can be confused with a diverged optimization.
+    # None means missing value, while NaN usually indicates a diverged optimization
     function_val: float | None
     num_steps: int
     converged: bool
