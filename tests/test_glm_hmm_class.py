@@ -32,12 +32,12 @@ DEFAULT_GLM_COEF_SHAPE = {
 
 
 @pytest.mark.parametrize(
-    "instantiate_glm_hmm",
+    "instantiate_base_regressor_subclass",
     INSTANTIATE_MODEL_AND_SIMULATE,
     indirect=True,
 )
-def test_get_fit_attrs(instantiate_glm_hmm):
-    X, y, model, params, rates, latents = instantiate_glm_hmm
+def test_get_fit_attrs(instantiate_base_regressor_subclass):
+    X, y, model, params = instantiate_base_regressor_subclass[:4]
     expected_state = {
         "coef_": None,
         "glm_params_": None,
