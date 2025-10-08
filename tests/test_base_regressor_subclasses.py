@@ -135,6 +135,57 @@ def test_all_defaults_assigned():
     INSTANTIATE_MODEL_ONLY,
     indirect=True,
 )
+def test_validate_lower_dimensional_data_X(instantiate_base_regressor_subclass):
+    """Test behavior with lower-dimensional input data."""
+    model = instantiate_base_regressor_subclass[2]
+    X = jnp.array([1, 2, 3])
+    y = jnp.array([0, 1, 1])
+    if "Population" in model.__class__.__name__:
+        y = y[None]
+    err_msg = "X must be two-dimensional"
+    with pytest.raises(ValueError, match=err_msg):
+        model._validate(X, y, model._initialize_parameters(X, y))
+
+
+@pytest.mark.parametrize(
+    "instantiate_base_regressor_subclass",
+    INSTANTIATE_MODEL_ONLY,
+    indirect=True,
+)
+def test_preprocess_fit_higher_dimensional_data_y(instantiate_base_regressor_subclass):
+    """Test behavior with higher-dimensional input data."""
+    model = instantiate_base_regressor_subclass[2]
+    X = jnp.array([[[1, 2], [3, 4]]])
+    y = jnp.array([[[1.0, 1.0, 1.0]]])
+    if "Population" in model.__class__.__name__:
+        err_msg = "y must be two-dimensional"
+    else:
+        err_msg = "y must be one-dimensional"
+    with pytest.raises(ValueError, match=err_msg):
+        model._validate(X, y, model._initialize_parameters(X, y))
+
+
+@pytest.mark.parametrize(
+    "instantiate_base_regressor_subclass",
+    INSTANTIATE_MODEL_ONLY,
+    indirect=True,
+)
+def test_validate_higher_dimensional_data_X(instantiate_base_regressor_subclass):
+    """Test behavior with higher-dimensional input data."""
+    model = instantiate_base_regressor_subclass[2]
+    X = jnp.array([[[[1, 2], [3, 4]]]])
+    y = jnp.array([1, 1])
+    if "Population" in model.__class__.__name__:
+        y = y[None]
+    with pytest.raises(ValueError, match="X must be two-dimensional"):
+        model._validate(X, y, model._initialize_parameters(X, y))
+
+
+@pytest.mark.parametrize(
+    "instantiate_base_regressor_subclass",
+    INSTANTIATE_MODEL_ONLY,
+    indirect=True,
+)
 class TestModelCommons:
     """
     Unit tests for methods common to all BaseRegressor subclasses.

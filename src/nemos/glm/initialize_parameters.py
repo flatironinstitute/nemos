@@ -7,6 +7,8 @@ import jax.numpy as jnp
 from numpy.typing import ArrayLike
 from scipy.optimize import root_scalar
 
+from ..utils import one_over_x
+
 # dictionary of known inverse link functions.
 INVERSE_FUNCS = {
     jnp.exp: jnp.log,
@@ -14,6 +16,7 @@ INVERSE_FUNCS = {
     jax.scipy.special.expit: jax.scipy.special.logit,
     jax.lax.logistic: jax.scipy.special.logit,
     jax.scipy.stats.norm.cdf: jax.scipy.stats.norm.ppf,
+    one_over_x: one_over_x,
 }
 
 
