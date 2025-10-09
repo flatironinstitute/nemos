@@ -12,6 +12,8 @@ from optimistix._custom_types import Aux, Y
 
 from ._optimistix_solvers import OptimistixAdapter
 
+# TODO: Add detailed docstrings
+
 
 def prox_none(x, hyperparams=None, scaling: float = 1.0):
     """Identity proximal operator."""
