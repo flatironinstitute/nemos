@@ -1,0 +1,36 @@
+name: Watch Optimistix release
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 0 * * 1"
+
+jobs:
+  check_optimistix_version_without_install:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch latest release and fail if newer than baseline
+        env:
+          BASELINE_OPTX_VERSION: "0.0.10"
+        shell: python
+        run: |
+          import os, sys
+          from packaging.version import Version
+          import json, urllib.request
+
+          baseline = os.environ["BASELINE_OPTX_VERSION"].strip()
+
+          data = json.load(urllib.request.urlopen("https://pypi.org/pypi/optimistix/json"))
+          pypi = data["info"]["version"].strip()
+
+          if Version(pypi) > Version(baseline):
+            print(f"::error::New upstream release detected: {pypi} > {baseline}.")
+            print("::notice::Switch from the tidy-dev branch to this release if it contains the needed features and remove this workflow.")
+            sys.exit(1)
+
+          print(f"::notice::No new upstream release (PyPI has {pypi}, not newer than {baseline}).")
