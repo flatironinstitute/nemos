@@ -131,7 +131,7 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     if key_not_found:
         available_keys = get_user_keys_from_nested_dict(saved_params)
         requested_keys = get_user_keys_from_nested_dict(mapping_dict)
-        not_available = list(set(requested_keys).difference(available_keys))
+        not_available = sorted(set(requested_keys).difference(available_keys))
         suggested_pairs = _suggest_keys(not_available, available_keys)
         suggestions = "".join(
             [
@@ -552,25 +552,27 @@ def _get_invalid_mappings(mapping_dict: dict | None) -> List:
     """
     if mapping_dict is None:
         return []
+
     invalid = []
-    for key in mapping_dict.keys():
-        v = mapping_dict[key]
+
+    for key, v in mapping_dict.items():
         if isinstance(v, dict) and "class" in v:
-            if inspect.isclass(v):
-                # the class is overwritten, class passing params is allowed.
+            if inspect.isclass(v["class"]):
+                # Valid class - skip all validation including params
                 continue
             else:
+                # Invalid class - mark it
                 invalid.append(key)
+                # But still validate params if present, for completeness in the error message
                 if "params" in v:
                     invalid_sub = _get_invalid_mappings(v["params"])
-                    invalid_sub = [key + "__" + k for k in invalid_sub]
-                    invalid = invalid + invalid_sub
-        if isinstance(v, dict) and "params" in v:
-            # hit here if params are provided but not class.
-            # recursively validate sub-params
+                    invalid.extend(f"{key}__{k}" for k in invalid_sub)
+        # Handle dict with "params" key (but no "class" or already processed)
+        elif isinstance(v, dict) and "params" in v:
             invalid_sub = _get_invalid_mappings(v["params"])
-            invalid_sub = [key + "__" + k for k in invalid_sub]
-            invalid = invalid + invalid_sub
-        elif (not inspect.isclass(v)) and not callable(v):
+            invalid.extend(f"{key}__{k}" for k in invalid_sub)
+        # Handle non-dict values
+        elif not inspect.isclass(v) and not callable(v):
             invalid.append(key)
+
     return invalid

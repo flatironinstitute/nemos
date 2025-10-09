@@ -702,6 +702,7 @@ def test_inspect_npz(tmp_path, model_class, monkeypatch, capsys):
         "observation_model      : {'class': 'nemos.observation_models.PoissonObservations'}",
         "regularizer            : {'class': 'nemos.regularizer.Ridge'}",
         "regularizer_strength   : 0.1",
+        "solver_kwargs          : None",
         "solver_name            : BFGS",
         "",
         "Model fit parameters",
