@@ -598,6 +598,7 @@ class BaseRegressor(Base, abc.ABC):
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         init_params,
+        cast_to_jax_and_drop_nans: bool = True,
     ) -> Union[Any, NamedTuple]:
         """Initialize the state of the solver for running fit and update."""
         pass
