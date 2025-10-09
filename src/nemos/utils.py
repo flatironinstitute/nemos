@@ -668,12 +668,12 @@ def _unflatten_dict(flat_dict: dict) -> dict:
     for key, value in flat_dict.items():
         # Replace np.nan back to None
         # Convert numpy string, int, float or nan to their respective types
-        if value.dtype.type is np.str_:
-            value = str(value)
-        elif value.dtype.type is np.int_:
-            value = int(value)
-        elif issubclass(value.dtype.type, np.floating):
-            if value.ndim == 0:
+        if value.ndim == 0:
+            if value.dtype.type is np.str_:
+                value = str(value)
+            elif value.dtype.type is np.int_:
+                value = int(value)
+            elif issubclass(value.dtype.type, np.floating):
                 value = None if np.isnan(value) else float(value)
 
         # split correctly `varname_` type of params
