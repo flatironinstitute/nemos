@@ -734,7 +734,7 @@ def test_serialization_complex_params(tmp_path):
     leaves_orig, struct_orig = jax.tree_util.tree_flatten(complex_params)
     leaves_rec, struct_rec = jax.tree_util.tree_flatten(reconstructed)
     assert (
-        struct_rec == struct_rec
+        struct_orig == struct_rec
     ), f"Tree structure mismatch!\nOriginal:\n{struct_orig}\nReconstructed:\n{struct_rec}"
     for l1, l2 in zip(leaves_orig, leaves_rec):
         if hasattr(l1, "ndim"):
