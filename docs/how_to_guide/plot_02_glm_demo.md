@@ -135,13 +135,10 @@ These parameters can be configured at initialization and/or
 set after the model is initialized with the following syntax:
 
 ```{code-cell} ipython3
-# Poisson observation model with soft-plus NL
-observation_models = nmo.observation_models.PoissonObservations(jax.nn.softplus)
-
-
-# define the GLM
+# Poisson GLM with soft-plus NL
 model = nmo.glm.GLM(
-    observation_model=observation_models,
+    observation_model="Poisson",
+    inverse_link_function=jax.nn.softplus,
     solver_name="LBFGS",
     solver_kwargs={"tol":10**-10},
 )
@@ -155,11 +152,11 @@ Hyperparameters can be set at any moment via the [`set_params`](nemos.glm.GLM.se
 ```{code-cell} ipython3
 model.set_params(
     regularizer=nmo.regularizer.Lasso(),
-    observation_model__inverse_link_function=jax.numpy.exp
+    inverse_link_function=jax.numpy.exp
 )
 
 print("Updated regularizer: ", model.regularizer)
-print("Updated NL: ", model.observation_model.inverse_link_function)
+print("Updated NL: ", model.inverse_link_function)
 ```
 
 :::{warning}

@@ -41,6 +41,8 @@
 
 ## Installation Steps
 After creating you virtual environment, follow one of the following sections below, depending on whether you need GPU support or not:
+
+(cpu-installation)=
 ### CPU Installation
 
 To install NeMoS on a system without a GPU, run this command from within your activated environment,

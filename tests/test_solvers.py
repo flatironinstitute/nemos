@@ -221,7 +221,8 @@ def test_svrg_glm_initialize_state(
     glm = glm_class(
         regularizer=reg,
         solver_name=solver_class.__name__,
-        observation_model=nmo.observation_models.PoissonObservations(jax.nn.softplus),
+        inverse_link_function=jax.nn.softplus,
+        observation_model=nmo.observation_models.PoissonObservations(),
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
         **kwargs,
     )
@@ -274,7 +275,8 @@ def test_svrg_glm_update(
     glm = glm_class(
         regularizer=reg,
         solver_name=solver_class.__name__,
-        observation_model=nmo.observation_models.PoissonObservations(jax.nn.softplus),
+        inverse_link_function=jax.nn.softplus,
+        observation_model=nmo.observation_models.PoissonObservations(),
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
         **kwargs,
     )
@@ -359,7 +361,8 @@ def test_svrg_glm_fit(
     glm = glm_class(
         regularizer=reg,
         solver_name=solver_name,
-        observation_model=nmo.observation_models.PoissonObservations(jax.nn.softplus),
+        inverse_link_function=jax.nn.softplus,
+        observation_model=nmo.observation_models.PoissonObservations(),
         solver_kwargs=solver_kwargs,
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
         **kwargs,
@@ -404,8 +407,9 @@ def test_svrg_glm_update_needs_full_grad_at_reference_point(
         reg = reg_cls()
     kwargs = dict(
         regularizer=reg,
+        inverse_link_function=jax.nn.softplus,
         solver_name=solver_class.__name__,
-        observation_model=nmo.observation_models.PoissonObservations(jax.nn.softplus),
+        observation_model=nmo.observation_models.PoissonObservations(),
         regularizer_strength=None if regularizer_name == "UnRegularized" else 0.1,
     )
 

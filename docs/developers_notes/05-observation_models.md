@@ -35,7 +35,7 @@ In statistics, a statistic is sufficient with respect to a statistical model and
 ### Public Methods
 
 - [`pseudo_r2`](nemos.observation_models.Observations.pseudo_r2): Method for computing the pseudo-$R^2$ of the model based on the residual deviance. There is no consensus definition for the pseudo-$R^2$, what we used here is the definition by Cohen at al. 2003[$^{[2]}$](#ref-2).
-- [`check_inverse_link_function`](nemos.observation_models.Observations.check_inverse_link_function): Check that the link function is a auto-differentiable, vectorized function form $\mathbb{R} \longrightarrow \mathbb{R}$.
+
 
 ## Contributor Guidelines
 
@@ -45,7 +45,7 @@ To implement an observation model class you
 
 - **Must** provide a concrete implementation of the abstract methods, see above.
 
-- **Should not** reimplement the [`pseudo_r2`](nemos.observation_models.Observations.pseudo_r2) method as well as the [`check_inverse_link_function`](nemos.observation_models.Observations.check_inverse_link_function) auxiliary method.
+- **Should not** reimplement the [`pseudo_r2`](nemos.observation_models.Observations.pseudo_r2) method.
 
 ## References
 <p id="ref-1">[1]
