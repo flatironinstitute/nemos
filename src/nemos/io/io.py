@@ -556,8 +556,15 @@ def _get_invalid_mappings(mapping_dict: dict | None) -> List:
     for key in mapping_dict.keys():
         v = mapping_dict[key]
         if isinstance(v, dict) and "class" in v:
-            # the class is overwritten, class passing params is allowed.
-            continue
+            if inspect.isclass(v):
+                # the class is overwritten, class passing params is allowed.
+                continue
+            else:
+                invalid.append(key)
+                if "params" in v:
+                    invalid_sub = _get_invalid_mappings(v["params"])
+                    invalid_sub = [key + "__" + k for k in invalid_sub]
+                    invalid = invalid + invalid_sub
         if isinstance(v, dict) and "params" in v:
             # hit here if params are provided but not class.
             # recursively validate sub-params
