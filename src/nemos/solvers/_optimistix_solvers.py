@@ -93,6 +93,9 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
         if "atol" in solver_init_kwargs:
             raise TypeError("Please use tol instead of atol.")
 
+        if "max_steps" in solver_init_kwargs:
+            raise TypeError("Please use maxiter instead of max_steps.")
+
         if self._proximal:
             loss_fn = unregularized_loss
             self.prox = regularizer.get_proximal_operator()
