@@ -13,7 +13,7 @@ from nemos.third_party.jaxopt import jaxopt
 
 from .pytrees import FeaturePytree
 
-DESIGN_INPUT_TYPE = Union[jnp.ndarray, FeaturePytree]
+DESIGN_INPUT_TYPE = Union[jnp.ndarray, FeaturePytree, nap.TsdFrame]
 
 Pytree = Any
 
