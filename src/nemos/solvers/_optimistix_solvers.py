@@ -189,6 +189,10 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
         )
         all_arguments = own_and_solver_args | common_optx_arguments
 
+        # prox is read from the regularizer, not provided as a solver argument
+        if cls._proximal:
+            all_arguments.remove("prox")
+
         return all_arguments
 
     @classmethod
