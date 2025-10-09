@@ -452,6 +452,12 @@ def get_user_keys_from_nested_dict(nested_dict: dict, filter_keys=True) -> list:
         are joined with double underscores (e.g., 'observation_model__class', 'solver_kwargs__tol').
         The 'save_metadata' key is excluded from the output.
 
+    Notes
+    -----
+    - Keys are formatted using double underscores ('__') as separators to match sklearn conventions
+    - The 'save_metadata' key is automatically excluded from results
+    - Internal structure keys ('__params') are filtered out when filter_keys=True
+
     Examples
     --------
     >>> params = {
@@ -459,18 +465,7 @@ def get_user_keys_from_nested_dict(nested_dict: dict, filter_keys=True) -> list:
     ...     'solver_kwargs': {'tol': 1e-7, 'maxiter': 100}
     ... }
     >>> get_user_keys_from_nested_dict(params)
-    ['regularizer',
-     'regularizer__mask',
-     'solver_kwargs',
-     'solver_kwargs__maxiter',
-     'solver_kwargs__tol']
-
-
-    Notes
-    -----
-    - Keys are formatted using double underscores ('__') as separators to match sklearn conventions
-    - The 'save_metadata' key is automatically excluded from results
-    - Internal structure keys ('__params') are filtered out when filter_keys=True
+    ['regularizer', 'regularizer__mask', 'solver_kwargs', 'solver_kwargs__maxiter', 'solver_kwargs__tol']
     """
     valid_keys = list(nested_dict.keys())
     sep = "__"
