@@ -1,7 +1,7 @@
 """Adaptation of JAXopt's ProximalGradient (FISTA) as an Optimistix IterativeSolver."""
 
 import operator
-from typing import Any, Callable
+from typing import Any, Callable, ClassVar
 
 import equinox as eqx
 import jax
@@ -11,6 +11,12 @@ from jaxtyping import Array, Bool, Float, Int, PyTree
 from optimistix._custom_types import Aux, Y
 
 from ._optimistix_solvers import OptimistixAdapter
+
+
+def prox_none(x, hyperparams=None, scaling: float = 1.0):
+    """Identity proximal operator."""
+    del hyperparams, scaling
+    return x
 
 
 def tree_sub(x, y):
@@ -37,12 +43,12 @@ class ProxGradState(eqx.Module):
 
 
 class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
-    prox: Callable
-    regularizer_strength: float
-
     atol: float
     rtol: float
     norm: Callable
+
+    prox: Callable
+    regularizer_strength: float | None
 
     stepsize: float | None = None
     maxls: int = 15
@@ -140,8 +146,7 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
             next_t = state.t
             next_vel = state.velocity
 
-        # NOTE do we want to use Cauchy for consistency with other solvers
-        # or the other to be consistent with JAXopt?
+        # use Cauchy for consistency with other solvers
         terminate = optx._misc.cauchy_termination(
             self.rtol,
             self.atol,
@@ -151,7 +156,6 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
             state.f,
             new_fun_val - state.f,
         )
-        # terminate = (optx.two_norm(diff_y) / new_stepsize) < self.atol
 
         next_state = ProxGradState(
             iter_num=state.iter_num + 1,
@@ -302,10 +306,20 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
         return y, aux, {}
 
 
+class GradientDescent(FISTA):
+    prox: ClassVar[Callable] = staticmethod(prox_none)
+    regularizer_strength: float | None = None
+
+
 class OptimistixFISTA(OptimistixAdapter):
+    """Port of JAXopt's ProximalGradient to the Optimistix API."""
+
     _solver_cls = FISTA
     _proximal = True
 
-    @property
-    def maxiter(self):
-        return self.config.maxiter
+
+class OptimistixGradientDescent(OptimistixAdapter):
+    """Port of JAXopt's accelerated GradientDescent to the Optimistix API."""
+
+    _solver_cls = GradientDescent
+    _proximal = False
