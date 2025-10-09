@@ -112,7 +112,14 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     filename = Path(filename)
     data = np.load(filename, allow_pickle=False)
 
-    invalid_keys = _get_invalid_mappings(mapping_dict)
+    # unflatten dictionary
+    saved_params = _unflatten_dict(data)
+    # "save_metadata" is used to store versions of Nemos and Jax, not needed for loading
+    saved_params.pop("save_metadata")
+    # unflatten user map
+    nested_map_dict, key_not_found = _unflattened_user_map(mapping_dict, saved_params)
+
+    invalid_keys = _get_invalid_mappings(nested_map_dict)
     if len(invalid_keys) > 0:
         raise ValueError(
             "Invalid map parameter types detected. "
@@ -120,20 +127,11 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
             "Only callables and classes can be mapped."
         )
 
-    flat_map_dict = (
-        {}
-        if mapping_dict is None
-        else {_expand_user_keys(k, data): v for k, v in mapping_dict.items()}
-    )
-
-    # check for keys that are not in the parameters
-    if mapping_dict is not None:
-        not_available = [
-            key_user
-            for key_expanded, key_user in zip(flat_map_dict.keys(), mapping_dict.keys())
-            if key_expanded not in data.keys()
-        ]
-        available_keys = [re.sub("(__class|__params)", "", key) for key in data.keys()]
+    # backtrack all errors
+    if key_not_found:
+        available_keys = get_user_keys_from_nested_dict(saved_params)
+        requested_keys = get_user_keys_from_nested_dict(mapping_dict)
+        not_available = list(set(requested_keys).difference(available_keys))
         suggested_pairs = _suggest_keys(not_available, available_keys)
         suggestions = "".join(
             [
@@ -145,22 +143,14 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
                 for provided, suggested in suggested_pairs
             ]
         )
-        if len(not_available) > 0:
-            raise ValueError(
-                "The following keys in your mapping do not match any parameters in the loaded model:\n\n"
-                f"{suggestions}\n"
-                "Please double-check your mapping dictionary."
-            )
-
-    # Unflatten the dictionary to restore the original structure
-    saved_params = _unflatten_dict(data, flat_map_dict)
-
-    # "save_metadata" is used to store versions of Nemos and Jax, not needed for loading
-    saved_params.pop("save_metadata")
-
+        raise ValueError(
+            "The following keys in your mapping do not match any parameters in the loaded model:\n\n"
+            f"{suggestions}\n"
+            "Please double-check your mapping dictionary."
+        )
     # if any value from saved_params is a key in mapping_dict,
     # replace it with the corresponding value from mapping_dict
-    saved_params, updated_keys = _apply_custom_map(saved_params)
+    saved_params, updated_keys = _apply_custom_map(saved_params, nested_map_dict)
 
     if len(updated_keys) > 0:
         warnings.warn(
@@ -207,7 +197,7 @@ def _safe_instantiate(
         )
     class_basename = class_name.split(".")[-1]
     if class_basename in AVAILABLE_REGULARIZERS:
-        return instantiate_regularizer(class_name)
+        return instantiate_regularizer(class_name, **kwargs)
     elif any(class_basename.startswith(obs) for obs in AVAILABLE_OBSERVATION_MODELS):
         return instantiate_observation_model(class_name, **kwargs)
     else:
@@ -223,21 +213,8 @@ def _safe_instantiate(
         )
 
 
-def _unwrap_param(value):
-    """
-    Recursively unwrap a mapped param structure.
-
-    - If it’s a param leaf [orig, [is_mapped, mapped]] → return orig.
-    - If it’s a dict → recurse on each value.
-    """
-    if isinstance(value, dict):
-        # Nested dict: unwrap each leaf.
-        return {k: _unwrap_param(v) for k, v in value.items()}
-    return value[0]
-
-
 def _apply_custom_map(
-    params: dict, updated_keys: List | None = None
+    params: dict, mapping_dict: dict, updated_keys: List | None = None
 ) -> Tuple[dict, List]:
     """
     Recursively apply user-defined mappings to a saved parameter structure.
@@ -267,6 +244,8 @@ def _apply_custom_map(
         The nested saved parameters to process. Each entry is either:
           - A leaf in the form [value, [is_mapped, mapped_value]], or
           - A nested dict representing classes.
+    mapping_dict:
+        A dict of mappings following the same keypath that params follows (a nested dict).
     updated_keys :
         List of keys that have already been updated, used for accumulating changes
         across recursive calls.
@@ -305,27 +284,30 @@ def _apply_custom_map(
         if _is_param(val):
             if isinstance(val, dict):
                 # dict cannot be mapped, so store original params
-                orig_param = _unwrap_param(val)
-                updated_params[key] = orig_param
+                updated_params[key] = val
             else:
-                # unpack mapping info and val
-                orig_param, (is_mapped, mapped_param) = val
+                mapped_val = mapping_dict.get(key, None)
+                is_mapped = mapped_val is not None
                 if is_mapped:
-                    updated_params[key] = mapped_param
+                    updated_params[key] = mapped_val
                     updated_keys.append(key)
                 else:
-                    updated_params[key] = orig_param
+                    updated_params[key] = val
 
         else:
             # if val is a class, it must be a dict with a "class" key
-            class_name, (is_mapped, mapped_class) = val.pop("class")
+            class_name = val.pop("class")
+            mapped_val = mapping_dict.get(key, {})
+            is_mapped = "class" in mapped_val
+            mapped_params = mapped_val.get("params", {})
             if not is_mapped:
                 # check for nested callable/classes save instantiate based on the string
                 new_params, updated_keys = _apply_custom_map(
-                    val.pop("params", {}), updated_keys=updated_keys
+                    val.pop("params", {}), mapped_params, updated_keys=updated_keys
                 )
                 updated_params[key] = _safe_instantiate(key, class_name, **new_params)
             else:
+                mapped_class = mapped_val["class"]
                 updated_keys.append(key)
                 # Should not be hit ever, assertion for developers
                 assert inspect.isclass(mapped_class), (
@@ -335,7 +317,7 @@ def _apply_custom_map(
                 )
                 # map callables and nested classes
                 new_params, updated_keys = _apply_custom_map(
-                    val.pop("params", {}), updated_keys=updated_keys
+                    val.pop("params", {}), mapped_params, updated_keys=updated_keys
                 )
                 # try instantiating it with the params
                 # this executes code, but we are assuming that the mapped_class is safe
@@ -412,37 +394,176 @@ def inspect_npz(file_path: Union[str, Path]):
         print(f"{param}: {data[param]}")
 
 
-def _expand_user_keys(user_key, flat_keys):
+def _unflattened_user_map(
+    mapping_dict: dict | None, nested_dict: dict
+) -> Tuple[dict, bool]:
     """Expand user key mapping path to match saved keys."""
-    parts = user_key.split("__")
+    if mapping_dict is None:
+        return {}, False
+    nested_mapping = {}
+    for user_key, mapped_value in mapping_dict.items():
+        current = nested_mapping
+        subdict = nested_dict
+        parts = [k[::-1] for k in user_key[::-1].split("__")][::-1]
+        for part in parts[:-1]:
+            if part not in subdict:
+                return {}, True
+            subdict = nested_dict[part]
+            if part not in current:
+                current[part] = {}
+            current = current[part]
+            # in we hit this case, this is a parameter (this is not the last
+            # part of the key, but the class is always the last element)
+            if isinstance(subdict, dict) and "class" in subdict:
+                subdict = subdict["params"]
+                if "params" not in current:
+                    current["params"] = {}
+                current = current["params"]
 
-    # flat key (one level only)
-    if len(parts) == 1:
-        # either it is a class or a param
-        if f"{parts[0]}__class" in flat_keys:
-            return "__".join([parts[0], "class"])
-        return parts[0]
+        if parts[-1] not in subdict:
+            return None, True
+        elif isinstance(subdict[parts[-1]], dict) and "class" in subdict[parts[-1]]:
+            current[parts[-1]] = {"class": mapped_value}
+        else:
+            current[parts[-1]] = mapped_value
+    return nested_mapping, False
 
-    # interleave params, this assumes that the only nesting allowed
-    # is: class__params__class__params... but not dictionaries.
-    path = []
-    for part in parts[:-1]:
-        path.extend([part, "params"])
 
-    flat_key = "__".join(path) + f"__{parts[-1]}__class"
-    if flat_key in flat_keys:
-        return flat_key
-    else:
-        path.append(parts[-1])
-        flat_key = "__".join(path)
-    return flat_key
+def get_user_keys_from_nested_dict(nested_dict: dict, filter_keys=True) -> list:
+    """
+    Get the user-formatted keys from a nested dictionary.
+
+    Retrieve user-formatted keys from a nested parameter dictionary. The formatting matches the
+    sklearn-style parameter naming convention (e.g., 'regularizer__solver_name'). This format
+    should be used when providing a ``mapping_dict`` to ``load_model`` to override saved parameters.
+
+    Parameters
+    ----------
+    nested_dict : dict
+        A nested parameter dictionary, typically from a saved model.
+    filter_keys : bool, optional
+        If True, remove internal keys ('__class' and '__params') from the output and return
+        only user-facing parameter names. Default is True.
+
+    Returns
+    -------
+    list of str
+        A sorted list of user-formatted keys in sklearn parameter style, where nested attributes
+        are joined with double underscores (e.g., 'observation_model__class', 'solver_kwargs__tol').
+        The 'save_metadata' key is excluded from the output.
+
+    Examples
+    --------
+    >>> params = {
+    ...     'regularizer': {'class': 'GroupLasso', 'params': {'mask': None}},
+    ...     'solver_kwargs': {'tol': 1e-7, 'maxiter': 100}
+    ... }
+    >>> get_user_keys_from_nested_dict(params)
+    ['regularizer',
+     'regularizer__mask',
+     'solver_kwargs',
+     'solver_kwargs__maxiter',
+     'solver_kwargs__tol']
+
+
+    Notes
+    -----
+    - Keys are formatted using double underscores ('__') as separators to match sklearn conventions
+    - The 'save_metadata' key is automatically excluded from results
+    - Internal structure keys ('__params') are filtered out when filter_keys=True
+    """
+    valid_keys = list(nested_dict.keys())
+    sep = "__"
+    for key in nested_dict.keys():
+        if isinstance(nested_dict[key], dict):
+            new_keys = get_user_keys_from_nested_dict(nested_dict[key], False)
+            valid_keys.extend([key + sep + new for new in new_keys if new != "class"])
+    if filter_keys:
+        valid_keys = sorted(list({re.sub("(__params)", "", key) for key in valid_keys}))
+    return valid_keys
 
 
 def _get_invalid_mappings(mapping_dict: dict | None) -> List:
+    """
+    Recursively identify invalid entries in a model mapping dictionary.
+
+    Validate a nested mapping dictionary by collecting keys whose values are not classes, callables,
+    or valid nested mappings. This function is used during model deserialization (e.g., in
+    ``nmo.load_model``) to validate a user-provided ``mapping_dict`` that maps
+    symbolic model components to actual Python objects such as classes,
+    callables, or parameter specifications.
+
+    A mapping entry is considered **valid** if:
+        * Its value is a class (``inspect.isclass(v)``), or
+        * Its value is callable (e.g., a function or lambda), or
+        * It is a dictionary containing a ``"class"`` key — in which case all
+          of its subparameters (e.g., under ``"params"``) are accepted without
+          validation, since they are assumed to be constructor arguments for
+          the specified class.
+        * It is a dictionary containing only a ``"params"`` key, in which case
+          the function recursively validates each entry in ``v["params"]``.
+
+    Any entry that does not meet these criteria is considered **invalid** and
+    its key (or nested key path) is returned.
+
+    Parameters
+    ----------
+    mapping_dict : dict or None
+        A (possibly nested) dictionary defining how symbolic model components
+        should be mapped to Python classes or callables. May contain nested
+        entries with the special keys ``"class"`` and/or ``"params"``.
+
+    Returns
+    -------
+    list of str
+        A list of invalid key paths. For nested invalid entries, keys are joined
+        with double underscores (``"__"``) to indicate hierarchy, e.g.,
+        ``"regularizer__mask"``.
+
+    Notes
+    -----
+    This function allows a ``"class"`` entry to bypass validation of its
+    parameters because those parameters are intended to be passed to the class
+    constructor during model instantiation.
+
+    Examples
+    --------
+    >>> import nemos as nmo
+    >>> def square(x):
+    ...     return x**2
+    ...
+    >>> class MyRegularizer(nmo.regularizer.GroupLasso):
+    ...     def __init__(self, mask=None, new_param=1):
+    ...         super().__init__(mask=mask)
+    ...         self.new_param = new_param
+    ...
+    >>> invalid = _get_invalid_mappings({
+    ...     "inverse_link_function": square,
+    ...     "regularizer": {"class": MyRegularizer, "params": {"regularizer__new_param": 10.}}
+    ... })
+    >>> invalid
+    []
+    >>> invalid = _get_invalid_mappings({
+    ...     "inverse_link_function": square,
+    ...     "regularizer": {"params": {"new_param": 10.}}
+    ... })
+    >>> invalid
+    ['regularizer__new_param']
+    """
     if mapping_dict is None:
         return []
-    return [
-        k
-        for k, v in mapping_dict.items()
-        if (not inspect.isclass(v)) and not callable(v)
-    ]
+    invalid = []
+    for key in mapping_dict.keys():
+        v = mapping_dict[key]
+        if isinstance(v, dict) and "class" in v:
+            # the class is overwritten, class passing params is allowed.
+            continue
+        if isinstance(v, dict) and "params" in v:
+            # hit here if params are provided but not class.
+            # recursively validate sub-params
+            invalid_sub = _get_invalid_mappings(v["params"])
+            invalid_sub = [key + "__" + k for k in invalid_sub]
+            invalid = invalid + invalid_sub
+        elif (not inspect.isclass(v)) and not callable(v):
+            invalid.append(key)
+    return invalid
