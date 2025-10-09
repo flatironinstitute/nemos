@@ -52,7 +52,7 @@ class OptimistixConfig:
     # sets if the minimisation throws an error if an iterative solver runs out of steps
     throw: bool = False
     # norm used in the Cauchy convergence criterion. Required by all Optimistix solvers.
-    norm: Callable = optx.max_norm
+    norm: Callable = optx.two_norm
     # way of autodifferentiation: https://docs.kidger.site/optimistix/api/adjoints/
     adjoint: optx.AbstractAdjoint = optx.ImplicitAdjoint()
     # whether the objective function returns any auxiliary results.
