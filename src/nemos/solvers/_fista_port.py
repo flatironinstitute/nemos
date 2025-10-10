@@ -103,7 +103,8 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
     ) -> tuple[Y, ProxGradState, Aux]:
         del tags
 
-        # Some clarification on variable names because Optimistix's and the FISTA paper's / JAXopt's notation are different:
+        # Some clarification on variable names because Optimistix's and the FISTA paper's / JAXopt's
+        # notation are different:
         #
         # In the paper x_{i} are the parameters, y_{i} the points after the momentum step.
         # The updates:
@@ -198,9 +199,8 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
 
         if self.stepsize is None or self.stepsize <= 0.0:
             # do linesearch to find the new stepsize
-            fun_without_aux = lambda params, args: fn(params, args)[0]
             new_y, new_stepsize = self.fista_line_search(
-                fun_without_aux,
+                lambda params, args: fn(params, args)[0],
                 update_point,
                 f_at_point,
                 grad_at_point,

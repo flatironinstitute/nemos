@@ -83,6 +83,7 @@ VALID_PAIRS = [
     {"solver_kwargs", "solver_init_kwargs"},
     {"unaccepted_name", "accepted_name"},
     {"fn", "fun"},
+    {"ax", "aux"},
 ]
 
 
