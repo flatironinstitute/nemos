@@ -97,7 +97,7 @@ def uniform_initial_proba_init(n_states: int, random_key=jax.random.PRNGKey(124)
     --------
     >>> import jax
     >>> import jax.numpy as jnp
-    >>> from nemos.glm_hmm.parameters_initialization import uniform_initial_proba_init
+    >>> from nemos.glm_hmm.initialize_parameters import uniform_initial_proba_init
     >>>
     >>> # Generate initial probabilities for 3 states
     >>> n_states = 3
@@ -192,6 +192,7 @@ def resolve_glm_params_init_function(
     --------
     >>> import jax.numpy as jnp
     >>> import jax
+    >>> jax.config.update("jax_enable_x64", True)
     >>> from nemos.glm_hmm.initialize_parameters import resolve_glm_params_init_function
     >>>
     >>> n_features, n_states = 4, 3
@@ -202,17 +203,17 @@ def resolve_glm_params_init_function(
     True
     >>>
     >>> # Use explicit weights
-    >>> weights = jnp.zeros((n_features, n_states))
-    >>> init_array = resolve_glm_params_init_function(weights)
+    >>> glm_params = (jnp.zeros((n_features, n_states)), jnp.zeros(n_states))
+    >>> init_array = resolve_glm_params_init_function(glm_params)
     >>> init_array
-    Array([[0., 0., 0.],
-       [0., 0., 0.],
-       [0., 0., 0.],
-       [0., 0., 0.]], dtype=float32)
+    (Array([[0., 0., 0.],
+           [0., 0., 0.],
+           [0., 0., 0.],
+           [0., 0., 0.]], dtype=float64), Array([0., 0., 0.], dtype=float64))
     >>>
     >>> # Use custom function with optional parameters
     >>> def custom_init(n_states, X, key, scale=1.0):
-    ...     return jax.random.normal(key, (n_states, X.shape[1])) * scale
+    ...     return jax.random.normal(key, (n_states, X.shape[1])) * scale, jax.random.normal(key, (n_states,))
     >>> init_fn = resolve_glm_params_init_function(custom_init)
     >>> callable(init_fn)
     True
@@ -235,10 +236,6 @@ def resolve_glm_params_init_function(
                 f"Unknown projection initialization method: '{glm_params_init}'.\n"
                 f"Available methods are: {available}"
             )
-
-    # Handle array-like inputs
-    elif all(is_numpy_array_like(p)[1] for p in glm_params_init):
-        return tuple(jnp.asarray(p, dtype=float) for p in glm_params_init)
 
     # Handle callable inputs
     elif callable(glm_params_init):
@@ -268,6 +265,10 @@ def resolve_glm_params_init_function(
             )
 
         return glm_params_init
+
+    # Handle array-like inputs
+    elif all(is_numpy_array_like(p)[1] for p in glm_params_init):
+        return tuple(jnp.asarray(p, dtype=float) for p in glm_params_init)
 
     # Invalid type
     valid_strings_formatted = ", ".join(
@@ -324,6 +325,7 @@ def resolve_transition_proba_init_function(
     --------
     >>> import jax.numpy as jnp
     >>> import jax
+    >>> jax.config.update("jax_enable_x64", True)
     >>> from nemos.glm_hmm.initialize_parameters import resolve_transition_proba_init_function
     >>>
     >>> n_states = 3
@@ -336,9 +338,9 @@ def resolve_transition_proba_init_function(
     >>> trans_matrix = jnp.eye(n_states) * 0.9 + 0.1 / n_states
     >>> init_array = resolve_transition_proba_init_function(trans_matrix)
     >>> init_array
-    Array([[0.93333334, 0.03333334, 0.03333334],
-       [0.03333334, 0.93333334, 0.03333334],
-       [0.03333334, 0.03333334, 0.93333334]], dtype=float32)
+    Array([[0.93333333, 0.03333333, 0.03333333],
+           [0.03333333, 0.93333333, 0.03333333],
+           [0.03333333, 0.03333333, 0.93333333]], dtype=float64)
     >>>
     >>> # Use custom function with optional parameters
     >>> def custom_init(n_states, diagonal_weight=0.8):
@@ -451,6 +453,7 @@ def resolve_initial_state_proba_init_function(
     Examples
     --------
     >>> import jax
+    >>> jax.config.update("jax_enable_x64", True)
     >>> import jax.numpy as jnp
     >>> from nemos.glm_hmm.initialize_parameters import resolve_initial_state_proba_init_function
     >>>
@@ -465,7 +468,7 @@ def resolve_initial_state_proba_init_function(
     >>> init_probs = jnp.array([0.5, 0.3, 0.2])
     >>> init_array = resolve_initial_state_proba_init_function(init_probs)
     >>> init_array
-    Array([0.5, 0.3, 0.2], dtype=float32)
+    Array([0.5, 0.3, 0.2], dtype=float64)
     >>>
     >>> # Use custom function with optional parameters
     >>> def custom_init(n_states, key, temperature=1.0):

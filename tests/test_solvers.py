@@ -133,7 +133,7 @@ def test_svrg_glm_instantiate_solver(regularizer_name, solver_class, mask):
         solver_name=solver_name,
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
     )
-    glm.instantiate_solver()
+    glm.instantiate_solver(glm._predict_and_compute_loss)
 
     solver = inspect.getclosurevars(glm._solver_run).nonlocals["solver"]
     assert glm.solver_name == solver_name
@@ -168,7 +168,7 @@ def test_svrg_glm_passes_solver_kwargs(regularizer_name, solver_name, mask, glm_
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
         **kwargs,
     )
-    glm.instantiate_solver()
+    glm.instantiate_solver(glm._predict_and_compute_loss)
 
     solver = inspect.getclosurevars(glm._solver_run).nonlocals["solver"]
     assert solver.stepsize == solver_kwargs["stepsize"]

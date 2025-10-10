@@ -377,7 +377,7 @@ class TestUnRegularized:
         # set regularizer and solver name
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
-        model.instantiate_solver()
+        model.instantiate_solver(model._predict_and_compute_loss)
         model.solver_run((true_params[0] * 0.0, true_params[1]), X, y)
 
     @pytest.mark.parametrize(
@@ -392,7 +392,7 @@ class TestUnRegularized:
         # set regularizer and solver name
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
-        model.instantiate_solver()
+        model.instantiate_solver(model._predict_and_compute_loss)
         model.solver_run(
             (jax.tree_util.tree_map(jnp.zeros_like, true_params[0]), true_params[1]),
             X.data,
@@ -410,12 +410,12 @@ class TestUnRegularized:
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-12}
-        model.instantiate_solver()
+        model.instantiate_solver(model._predict_and_compute_loss)
 
         # update solver name
         model_bfgs = copy.deepcopy(model)
         model_bfgs.solver_name = "BFGS"
-        model_bfgs.instantiate_solver()
+        model_bfgs.instantiate_solver(model_bfgs._predict_and_compute_loss)
         weights_gd, intercepts_gd = model.solver_run(
             (true_params[0] * 0.0, true_params[1]), X, y
         )[0]
@@ -441,7 +441,7 @@ class TestUnRegularized:
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-12}
-        model.instantiate_solver()
+        model.instantiate_solver(model._predict_and_compute_loss)
         weights_bfgs, intercepts_bfgs = model.solver_run(
             (true_params[0] * 0.0, true_params[1]), X, y
         )[0]
@@ -466,7 +466,7 @@ class TestUnRegularized:
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-12}
-        model.instantiate_solver()
+        model.instantiate_solver(model._predict_and_compute_loss)
         weights_bfgs, intercepts_bfgs = model.solver_run(
             (true_params[0] * 0.0, true_params[1]), X, y
         )[0]
@@ -499,7 +499,7 @@ class TestUnRegularized:
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-13}
-        model.instantiate_solver()
+        model.instantiate_solver(model._predict_and_compute_loss)
         weights_bfgs, intercepts_bfgs = model.solver_run(
             model._initialize_parameters(X, y), X, y
         )[0]
@@ -544,7 +544,7 @@ class TestUnRegularized:
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-13}
-        model.instantiate_solver()
+        model.instantiate_solver(model._predict_and_compute_loss)
         weights_bfgs, intercepts_bfgs = model.solver_run(
             model._initialize_parameters(X, y), X, y
         )[0]
@@ -735,7 +735,7 @@ class TestRidge:
         # set regularizer and solver name
         model.set_params(regularizer=self.cls(), regularizer_strength=1.0)
         model.solver_name = solver_name
-        runner = model.instantiate_solver().solver_run
+        runner = model.instantiate_solver(model._predict_and_compute_loss).solver_run
         runner((true_params[0] * 0.0, true_params[1]), X, y)
 
     @pytest.mark.parametrize(
@@ -750,7 +750,7 @@ class TestRidge:
         # set regularizer and solver name
         model.set_params(regularizer=self.cls(), regularizer_strength=1.0)
         model.solver_name = solver_name
-        runner = model.instantiate_solver().solver_run
+        runner = model.instantiate_solver(model._predict_and_compute_loss).solver_run
         runner(
             (jax.tree_util.tree_map(jnp.zeros_like, true_params[0]), true_params[1]),
             X.data,
@@ -773,8 +773,10 @@ class TestRidge:
         model_bfgs = copy.deepcopy(model)
         model_bfgs.solver_name = "BFGS"
 
-        runner_gd = model.instantiate_solver().solver_run
-        runner_bfgs = model_bfgs.instantiate_solver().solver_run
+        runner_gd = model.instantiate_solver(model._predict_and_compute_loss).solver_run
+        runner_bfgs = model_bfgs.instantiate_solver(
+            model_bfgs._predict_and_compute_loss
+        ).solver_run
 
         weights_gd, intercepts_gd = runner_gd(
             (true_params[0] * 0.0, true_params[1]), X, y
@@ -801,7 +803,9 @@ class TestRidge:
         model.solver_kwargs = {"tol": 10**-12}
         model.solver_name = "BFGS"
 
-        runner_bfgs = model.instantiate_solver().solver_run
+        runner_bfgs = model.instantiate_solver(
+            model._predict_and_compute_loss
+        ).solver_run
         weights_bfgs, intercepts_bfgs = runner_bfgs(
             (true_params[0] * 0.0, true_params[1]), X, y
         )[0]
@@ -828,7 +832,9 @@ class TestRidge:
         model.solver_kwargs = {"tol": 10**-12}
         model.regularizer_strength = 0.1
         model.solver_name = "BFGS"
-        runner_bfgs = model.instantiate_solver().solver_run
+        runner_bfgs = model.instantiate_solver(
+            model._predict_and_compute_loss
+        ).solver_run
         weights_bfgs, intercepts_bfgs = runner_bfgs(
             (true_params[0] * 0.0, true_params[1]), X, y
         )[0]
@@ -994,7 +1000,7 @@ class TestLasso:
 
         model.set_params(regularizer=self.cls(), regularizer_strength=1)
         model.solver_name = solver_name
-        runner = model.instantiate_solver().solver_run
+        runner = model.instantiate_solver(model._predict_and_compute_loss).solver_run
         runner((true_params[0] * 0.0, true_params[1]), X, y)
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
@@ -1006,7 +1012,7 @@ class TestLasso:
         # set regularizer and solver name
         model.set_params(regularizer=self.cls(), regularizer_strength=1)
         model.solver_name = solver_name
-        runner = model.instantiate_solver().solver_run
+        runner = model.instantiate_solver(model._predict_and_compute_loss).solver_run
         runner(
             (jax.tree_util.tree_map(jnp.zeros_like, true_params[0]), true_params[1]),
             X.data,
@@ -1026,7 +1032,7 @@ class TestLasso:
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-12}
 
-        runner = model.instantiate_solver().solver_run
+        runner = model.instantiate_solver(model._predict_and_compute_loss).solver_run
         weights, intercepts = runner((true_params[0] * 0.0, true_params[1]), X, y)[0]
 
         # instantiate the glm with statsmodels
@@ -1281,7 +1287,7 @@ class TestElasticNet:
 
         model.set_params(regularizer=self.cls(), regularizer_strength=(1, 0.5))
         model.solver_name = solver_name
-        runner = model.instantiate_solver().solver_run
+        runner = model.instantiate_solver(model._predict_and_compute_loss).solver_run
         runner((true_params[0] * 0.0, true_params[1]), X, y)
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
@@ -1293,7 +1299,7 @@ class TestElasticNet:
         # set regularizer and solver name
         model.set_params(regularizer=self.cls(), regularizer_strength=(1, 0.5))
         model.solver_name = solver_name
-        runner = model.instantiate_solver().solver_run
+        runner = model.instantiate_solver(model._predict_and_compute_loss).solver_run
         runner(
             (jax.tree_util.tree_map(jnp.zeros_like, true_params[0]), true_params[1]),
             X.data,
@@ -1318,7 +1324,7 @@ class TestElasticNet:
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-12, "maxiter": 10000}
 
-        runner = model.instantiate_solver().solver_run
+        runner = model.instantiate_solver(model._predict_and_compute_loss).solver_run
         weights, intercepts = runner((true_params[0] * 0.0, true_params[1]), X, y)[0]
 
         model.fit(X, y)
@@ -1618,7 +1624,7 @@ class TestGroupLasso:
         model.set_params(regularizer=self.cls(mask=mask), regularizer_strength=1.0)
         model.solver_name = solver_name
 
-        model.instantiate_solver()
+        model.instantiate_solver(model._predict_and_compute_loss)
         model.solver_run((true_params[0] * 0.0, true_params[1]), X, y)
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
@@ -1636,7 +1642,7 @@ class TestGroupLasso:
         model.set_params(regularizer=self.cls(mask=mask), regularizer_strength=1.0)
         model.solver_name = solver_name
 
-        model.instantiate_solver()
+        model.instantiate_solver(model._predict_and_compute_loss)
         state = model.solver_init_state(true_params, X, y)
         # asses that state is a NamedTuple by checking tuple type and the availability of some NamedTuple
         # specific namespace attributes
@@ -1662,7 +1668,7 @@ class TestGroupLasso:
         model.set_params(regularizer=self.cls(mask=mask), regularizer_strength=1.0)
         model.solver_name = solver_name
 
-        model.instantiate_solver()
+        model.instantiate_solver(model._predict_and_compute_loss)
 
         state = model.solver_init_state((true_params[0] * 0.0, true_params[1]), X, y)
 
@@ -1824,7 +1830,7 @@ class TestGroupLasso:
         model.set_params(regularizer=self.cls(mask=mask), regularizer_strength=1.0)
         model.solver_name = "ProximalGradient"
 
-        runner = model.instantiate_solver().solver_run
+        runner = model.instantiate_solver(model._predict_and_compute_loss).solver_run
         params, _ = runner((true_params[0] * 0.0, true_params[1]), X, y)
 
         zeros_est = params[0] == 0

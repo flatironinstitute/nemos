@@ -1,5 +1,6 @@
 """Validation and construction of inverse link functions."""
 
+import functools
 from typing import TYPE_CHECKING, Any, Callable
 
 import jax
@@ -10,46 +11,68 @@ if TYPE_CHECKING:
 
 from .utils import one_over_x
 
+
+def _make_wrapper(func, name, description):
+    """Create a wrapper function with combined docstrings."""
+
+    @functools.wraps(func)
+    def wrapper(x):
+        return func(x)
+
+    # Combine the custom description with original docstring
+    original_doc = func.__doc__ or "No docstring available."
+    wrapper.__doc__ = f"""{description}
+
+Wrapper of `{func.__module__}.{func.__name__}`. Below the original jax docstring.
+
+{original_doc}"""
+
+    wrapper.__name__ = name
+    return wrapper
+
+
+exp = _make_wrapper(jnp.exp, "exp", "Exponential link function.")
+
+softplus = _make_wrapper(jax.nn.softplus, "softplus", "Softplus link function.")
+
+logistic = _make_wrapper(
+    jax.lax.logistic, "logistic", "Logistic (sigmoid) link function."
+)
+
+norm_cdf = _make_wrapper(
+    jax.scipy.stats.norm.cdf, "norm_cdf", "Norm CDF link function."
+)
+
+expit = _make_wrapper(
+    jax.scipy.special.expit, "expit", "Expit (sigmoid) link function."
+)
+
 LINK_NAME_TO_FUNC = {
-    "nemos.utils.one_over_x": one_over_x,
-    "jax.numpy.exp": jnp.exp,
-    "jax._src.numpy.ufuncs.exp": jnp.exp,
-    "jax.nn.softplus": jax.nn.softplus,
+    "exp": exp,
+    "expit": expit,
+    "jax._src.lax.lax.logistic": jax.scipy.special.expit,
     "jax._src.nn.functions.softplus": jax.nn.softplus,
-    "jax.scipy.special.expit": jax.scipy.special.expit,
+    "jax._src.numpy.ufuncs.exp": jnp.exp,
     "jax._src.scipy.special.expit": jax.scipy.special.expit,
-    "jax.lax.logistic": jax.lax.logistic,
-    "jax._src.lax.lax.logistic": jax.lax.logistic,
-    "jax.scipy.stats.norm.cdf": jax.scipy.stats.norm.cdf,
     "jax._src.scipy.stats.norm.cdf": jax.scipy.stats.norm.cdf,
-    "softplus": jax.nn.softplus,
-    "exp": jax.numpy.exp,
+    "jax.lax.logistic": jax.lax.logistic,
+    "jax._src.scipy.special.logistic": jax.lax.logistic,
+    "jax.nn.softplus": jax.nn.softplus,
+    "jax.numpy.exp": jnp.exp,
+    "jax.scipy.special.expit": jax.scipy.special.expit,
+    "jax.scipy.stats.norm.cdf": jax.scipy.stats.norm.cdf,
+    "logistic": logistic,
+    "nemos.inverse_link_function_utils.exp": exp,
+    "nemos.inverse_link_function_utils.expit": expit,
+    "nemos.inverse_link_function_utils.logistic": logistic,
+    "nemos.inverse_link_function_utils.norm_cdf": norm_cdf,
+    "nemos.inverse_link_function_utils.one_over_x": one_over_x,
+    "nemos.inverse_link_function_utils.softplus": softplus,
+    "nemos.utils.one_over_x": one_over_x,
+    "norm.cdf": norm_cdf,
     "one_over_x": one_over_x,
-    "logistic": jax.lax.logistic,
-    "norm.cdf": jax.scipy.stats.norm.cdf,
-    "expit": jax.scipy.special.expit,
+    "softplus": softplus,
 }
-
-
-# Define named wrapper functions for all inverse link functions
-def exp(x):
-    """Exponential link function."""
-    return jnp.exp(x)
-
-
-def softplus(x):
-    """Softplus link function."""
-    return jax.nn.softplus(x)
-
-
-def logistic(x):
-    """Logistic (sigmoid) link function."""
-    return jax.scipy.special.expit(x)
-
-
-def norm_cdf(x):
-    """Norm CDF link function."""
-    return jax.scipy.stats.norm.cdf(x)
 
 
 def link_function_from_string(link_name: str):
