@@ -15,8 +15,7 @@ Pytree: TypeAlias = Any
 Params: TypeAlias = Pytree
 SolverState = TypeVar("SolverState")
 StepResult: TypeAlias = Tuple[Params, SolverState]
-
-DESIGN_INPUT_TYPE = Union[jnp.ndarray, FeaturePytree]
+DESIGN_INPUT_TYPE = Union[jnp.ndarray, FeaturePytree, nap.TsdFrame]
 
 # copying jax.random's annotation
 KeyArrayLike = ArrayLike

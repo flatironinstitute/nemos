@@ -499,6 +499,7 @@ class BaseRegressor(Base, abc.ABC):
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         init_params,
+        cast_to_jax_and_drop_nans: bool = True,
     ) -> SolverState:
         """Initialize the state of the solver for running fit and update."""
         pass
@@ -588,6 +589,10 @@ class BaseRegressor(Base, abc.ABC):
 
         # append the fit attributes to the model parameters
         model_params.update(fit_attrs)
+
+        # set solver_kwargs to None so tha it can be saved in the npz
+        if model_params["solver_kwargs"] == {}:
+            model_params["solver_kwargs"] = None
 
         # save jax and nemos versions
         model_params["save_metadata"] = get_env_metadata()
