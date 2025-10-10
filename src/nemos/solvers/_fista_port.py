@@ -35,6 +35,8 @@ def tree_nan_like(x: PyTree):
 
 
 class ProxGradState(eqx.Module):
+    """ProximalGradient (FISTA) solver state."""
+
     iter_num: Int[Array, ""]
     stepsize: Float[Array, ""]
     velocity: PyTree
@@ -45,6 +47,17 @@ class ProxGradState(eqx.Module):
 
 
 class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
+    """
+    Accelerated Proximal Gradient (FISTA) as an Optimistix minimiser. Adapted from JAXopt.
+
+    References
+    ----------
+    .. [1] Beck, A., & Teboulle, M. (2009).
+    "A Fast Iterative Shrinkage-Thresholding Algorithm for Linear Inverse Problems."
+    *SIAM Journal on Imaging Sciences*, 2(1), 183–202.
+    https://doi.org/10.1137/080716542
+    """
+
     atol: float
     rtol: float
     norm: Callable
@@ -309,6 +322,8 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
 
 
 class GradientDescent(FISTA):
+    """Gradient descent with Nesterov acceleration. Adapted from JAXopt."""
+
     prox: ClassVar[Callable] = staticmethod(prox_none)
     regularizer_strength: float | None = None
 
