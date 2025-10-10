@@ -8,8 +8,8 @@ import jax.numpy as jnp
 import optimistix as optx
 from jaxtyping import Array, Bool, Float, Int, PyTree
 from optimistix._custom_types import Aux, Y
-from ..tree_utils import tree_sub
 
+from ..tree_utils import tree_add_scalar_mul, tree_sub
 from ._optimistix_solvers import OptimistixAdapter
 
 # TODO: Add detailed docstrings
@@ -19,11 +19,6 @@ def prox_none(x, hyperparams=None, scaling: float = 1.0):
     """Identity proximal operator."""
     del hyperparams, scaling
     return x
-
-
-# adapted from jaxopt
-def tree_add_scalar_mul(tree_x: PyTree, scalar, tree_y):
-    return jax.tree.map(lambda x, y: x + scalar * y, tree_x, tree_y)
 
 
 def tree_nan_like(x: PyTree):
