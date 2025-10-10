@@ -15,6 +15,7 @@ from ..tree_utils import tree_sub
 from ..typing import Pytree
 from ._optimistix_solvers import (
     DEFAULT_ATOL,
+    DEFAULT_MAX_STEPS,
     DEFAULT_RTOL,
     OptimistixAdapter,
     OptimistixStepResult,
@@ -150,6 +151,7 @@ class OptimistixOptaxGradientDescent(AbstractOptimistixOptaxSolver):
         regularizer_strength: float | None,
         tol: float = DEFAULT_ATOL,
         rtol: float = DEFAULT_RTOL,
+        maxiter: int = DEFAULT_MAX_STEPS,
         momentum: float | None = None,
         acceleration: bool = True,
         stepsize: float | None = None,
@@ -189,6 +191,7 @@ class OptimistixOptaxGradientDescent(AbstractOptimistixOptaxSolver):
             regularizer_strength,
             tol=tol,
             rtol=rtol,
+            maxiter=maxiter,
             **solver_init_kwargs,
         )
 
@@ -239,6 +242,7 @@ class OptimistixOptaxProximalGradient(AbstractOptimistixOptaxSolver):
         regularizer_strength: float | None,
         tol: float = DEFAULT_ATOL,
         rtol: float = DEFAULT_RTOL,
+        maxiter: float = DEFAULT_MAX_STEPS,
         momentum: float | None = None,
         acceleration: bool = True,
         stepsize: float | None = None,
@@ -278,6 +282,7 @@ class OptimistixOptaxProximalGradient(AbstractOptimistixOptaxSolver):
             regularizer_strength,
             tol=tol,
             rtol=rtol,
+            maxiter=maxiter,
             **solver_init_kwargs,
         )
 
@@ -402,6 +407,7 @@ class OptimistixOptaxLBFGS(AbstractOptimistixOptaxSolver):
         regularizer_strength: float | None,
         tol: float = DEFAULT_ATOL,
         rtol: float = DEFAULT_RTOL,
+        maxiter: int = DEFAULT_MAX_STEPS,
         stepsize: float | None = None,
         memory_size: int = 10,
         scale_init_precond: bool = True,
@@ -428,6 +434,7 @@ class OptimistixOptaxLBFGS(AbstractOptimistixOptaxSolver):
             regularizer_strength,
             tol=tol,
             rtol=rtol,
+            maxiter=maxiter,
             **solver_init_kwargs,
         )
 

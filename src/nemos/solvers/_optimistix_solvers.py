@@ -36,7 +36,7 @@ class OptimistixConfig:
     """
 
     # max number of steps
-    maxiter: int = DEFAULT_MAX_STEPS
+    maxiter: int
     # options dict passed around within optimistix
     options: dict[str, Any] = dataclasses.field(default_factory=dict)
     # "The shape+dtype of the output of `fn`"
@@ -88,6 +88,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
         regularizer_strength: float | None,
         tol: float = DEFAULT_ATOL,
         rtol: float = DEFAULT_RTOL,
+        maxiter: int = DEFAULT_MAX_STEPS,
         **solver_init_kwargs,
     ):
         if "atol" in solver_init_kwargs:
@@ -114,7 +115,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
             kw = f.name
             if kw in solver_init_kwargs:
                 user_args[kw] = solver_init_kwargs.pop(kw)
-        self.config = OptimistixConfig(**user_args)
+        self.config = OptimistixConfig(maxiter=maxiter, **user_args)
 
         self._solver = self._solver_cls(
             atol=tol,
