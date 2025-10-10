@@ -72,8 +72,7 @@ Abstract Class AbstractSolver
 │ │ └─ Abstract Subclass AbstractOptimistixOptaxSolver
 │ │   │
 │ │   ├─ Concrete Subclass OptimistixOptaxLBFGS
-│ │   ├─ Concrete Subclass OptimistixOptaxGradientDescent
-│ │   └─ Concrete Subclass OptimistixOptaxProximalGradient
+│ │   └─ Concrete Subclass OptimistixOptaxGradientDescent
 │ │
 │ └─ Abstract Subclass JaxoptAdapter
 │   │

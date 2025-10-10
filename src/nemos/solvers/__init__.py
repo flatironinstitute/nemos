@@ -10,7 +10,6 @@ from ._jaxopt_solvers import (
 from ._optax_optimistix_solvers import (
     OptimistixOptaxGradientDescent,
     OptimistixOptaxLBFGS,
-    OptimistixOptaxProximalGradient,
 )
 from ._optimistix_solvers import OptimistixBFGS, OptimistixNonlinearCG
 from ._solver_doc_helper import get_solver_documentation
