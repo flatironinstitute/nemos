@@ -1,6 +1,6 @@
-import pytest
 import jax
 import jax.numpy as jnp
+import pytest
 
 import nemos.solvers as solvers
 
