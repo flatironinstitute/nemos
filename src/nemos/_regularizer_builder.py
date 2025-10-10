@@ -15,7 +15,7 @@ _REGULARIZER_MAP = {
 }
 
 
-def instantiate_regularizer(name: str | None):
+def instantiate_regularizer(name: str | None, **kwargs):
     """
     Create a regularizer from a given name.
 
@@ -25,6 +25,8 @@ def instantiate_regularizer(name: str | None):
         The string name of the regularizer to create.
         Must be one of: 'UnRegularized', 'Ridge', 'Lasso','GroupLasso', None.
         If set to None, it will behave as 'Unregularized'.
+    **kwargs :
+        Additional keyword arguments are passed to the regularizer constructor.
 
     Returns
     -------
@@ -41,7 +43,7 @@ def instantiate_regularizer(name: str | None):
         name = name.split("nemos.regularizer.")[-1]
 
     if name in _REGULARIZER_MAP:
-        return _REGULARIZER_MAP[name]()
+        return _REGULARIZER_MAP[name](**kwargs)
     else:
         raise ValueError(
             f"Unknown regularizer: {name}. "

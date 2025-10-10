@@ -612,10 +612,30 @@ def _flatten_dict(nested_dict: dict, parent_key: str = "") -> dict:
     items = []
     # Iterate over key-value pairs in the dictionary
     for k, v in nested_dict.items():
-        new_key = f"{parent_key}{sep}{k}" if parent_key else k
+        # containers (tuple, dict, list for our purposes are labeled)
+        if isinstance(v, dict):
+            container_label = "dict"
+        elif isinstance(v, list):
+            container_label = "list"
+        elif isinstance(v, tuple):
+            container_label = "tuple"
+        else:
+            container_label = "item"
+
+        new_key = (
+            f"{parent_key}{sep}{container_label}{sep}{k}"
+            if parent_key
+            else f"{container_label}{sep}{k}"
+        )
+
         # Recursively flatten if the value is a dictionary
         if isinstance(v, dict):
             items.extend(_flatten_dict(v, new_key).items())
+        # if tuple or list, convert to dict using item index and recursively flatten
+        elif isinstance(v, (list, tuple)):
+            items.extend(
+                _flatten_dict({f"{i}": vi for i, vi in enumerate(v)}, new_key).items()
+            )
         else:
             # None values and non-standard types are converted to numpy
             if v is None:
@@ -626,53 +646,83 @@ def _flatten_dict(nested_dict: dict, parent_key: str = "") -> dict:
     return dict(items)
 
 
-def _unflatten_dict(flat_dict: dict, flat_map_dict: Optional[dict] = None) -> dict:
+def _unflatten_dict(flat_dict: dict) -> dict:
     """
-    Unflatten a dictionary with keys representing hierarchy into a nested dictionary.
+    Unflatten a dictionary that was flattened using _flatten_dict, and saved as npz.
+
+    Note that all leaves are expected to be numpy arrays.
 
     Parameters
     ----------
     flat_dict :
-        The dictionary to unflatten.
+        The flattened dictionary with keys containing type information and hierarchy and leaves numpy arrays.
 
     Returns
     -------
-    out :
-        A nested dictionary with the original hierarchy restored.
+    dict :
+        The reconstructed nested dictionary with original structure and types.
     """
-    if flat_map_dict is None:
-        flat_map_dict = {}
-        add_mapping = False
-    else:
-        add_mapping = True
-
     sep = "__"
-    nested_dict = {}
-    # Process each key-value pair in the flattened dictionary
-    for k, v in flat_dict.items():
-        keys = k.split(sep)
+    root = {}
 
-        if k in flat_map_dict:
-            mapping = [True, flat_map_dict[k]]
-        else:
-            mapping = [False, None]
-
-        dct = nested_dict
-        # Traverse or create nested dictionaries
-        for key in keys[:-1]:
-            if key not in dct:
-                dct[key] = {}
-            dct = dct[key]
+    for key, value in flat_dict.items():
+        # Replace np.nan back to None
         # Convert numpy string, int, float or nan to their respective types
-        if v.dtype.type is np.str_:
-            v = str(v)
-        elif v.dtype.type is np.int_:
-            v = int(v)
-        elif issubclass(v.dtype.type, np.floating):
-            if v.ndim == 0:
-                v = None if np.isnan(v) else float(v)
-        dct[keys[-1]] = [v, mapping] if add_mapping else v
-    return nested_dict
+        if value.ndim == 0:
+            if value.dtype.type is np.str_:
+                value = str(value)
+            elif value.dtype.type is np.int_:
+                value = int(value)
+            elif issubclass(value.dtype.type, np.floating):
+                value = None if np.isnan(value) else float(value)
+
+        # split correctly `varname_` type of params
+        parts = [part[::-1] for part in key[::-1].split(sep)[::-1]]
+
+        current = root
+
+        # Walk the path - but handle the last pair differently if it's an 'item'
+        pairs = list(zip(parts[::2], parts[1::2]))
+
+        # Navigate through all pairs except potentially the last one
+        for i, (container_type, container_key) in enumerate(pairs):
+            is_last = i == len(pairs) - 1
+
+            # If this is the last pair and it's an 'item', just set the value directly
+            if is_last and container_type == "item":
+                current[container_key] = value
+                break
+
+            # Otherwise, create/navigate into the container
+            if container_key not in current:
+                current[container_key] = {"__container_type__": container_type}
+
+            current = current[container_key]
+        else:
+            # This else clause runs if we didn't break (i.e., no 'item' leaf)
+            # This shouldn't happen with your flatten structure, but just in case
+            final_key = parts[-1]
+            current[final_key] = value
+
+    return reconstruct_object_from_structured_dict(root)
+
+
+# Convert to proper types
+def reconstruct_object_from_structured_dict(obj):
+    if not isinstance(obj, dict):
+        return obj
+
+    container_type = obj.pop("__container_type__", None)
+
+    # Check if numeric keys (list/tuple)
+    keys = [k for k in obj.keys() if k != "__container_type__"]
+    if keys and all(k.isdigit() for k in keys):
+        sorted_items = sorted(obj.items(), key=lambda x: int(x[0]))
+        items = [reconstruct_object_from_structured_dict(v) for k, v in sorted_items]
+        return tuple(items) if container_type == "tuple" else items
+
+    # Regular dict
+    return {k: reconstruct_object_from_structured_dict(v) for k, v in obj.items()}
 
 
 def _get_name(x: object) -> str:

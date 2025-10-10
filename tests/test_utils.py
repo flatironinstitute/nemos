@@ -702,6 +702,7 @@ def test_inspect_npz(tmp_path, model_class, monkeypatch, capsys):
         "observation_model      : {'class': 'nemos.observation_models.PoissonObservations'}",
         "regularizer            : {'class': 'nemos.regularizer.Ridge'}",
         "regularizer_strength   : 0.1",
+        "solver_kwargs          : None",
         "solver_name            : BFGS",
         "",
         "Model fit parameters",
@@ -713,3 +714,30 @@ def test_inspect_npz(tmp_path, model_class, monkeypatch, capsys):
     ]
     expected_out = "\n".join(lines) + "\n"
     assert out == expected_out
+
+
+def test_serialization_complex_params(tmp_path):
+    # trailing '_', nesting and various types
+    complex_params = {
+        "coef_": {
+            "layers": [
+                ({"weights": np.array([1, 2, 3]), "bias": 0.5}, "relu"),
+                ({"weights": np.array([4.0, 5.0, 6.0]), "bias": 0.3}, "sigmoid"),
+            ]
+        },
+        "regularizer_strength": 1.0,
+    }
+    flat_dict = utils._flatten_dict(complex_params)
+    np.savez(tmp_path / "serialzied_complex_params.npz", **flat_dict)
+    dat = np.load(tmp_path / "serialzied_complex_params.npz")
+    reconstructed = utils._unflatten_dict(dat)
+    leaves_orig, struct_orig = jax.tree_util.tree_flatten(complex_params)
+    leaves_rec, struct_rec = jax.tree_util.tree_flatten(reconstructed)
+    assert (
+        struct_orig == struct_rec
+    ), f"Tree structure mismatch!\nOriginal:\n{struct_orig}\nReconstructed:\n{struct_rec}"
+    for l1, l2 in zip(leaves_orig, leaves_rec):
+        if hasattr(l1, "ndim"):
+            np.testing.assert_equal(l1, l2)
+        else:
+            assert l1 == l2
