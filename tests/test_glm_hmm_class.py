@@ -45,9 +45,12 @@ def test_get_fit_attrs(instantiate_base_regressor_subclass):
     X, y, model, params = instantiate_base_regressor_subclass[:4]
     expected_state = {
         "coef_": None,
+        "dof_resid_": None,
         "glm_params_": None,
         "initial_prob_": None,
         "intercept_": None,
+        "scale_": None,
+        "solver_state_": None,
         "transition_prob_": None,
     }
     assert model._get_fit_state() == expected_state
@@ -601,13 +604,14 @@ class TestGLMHMM:
         (
             nmo.glm_hmm.GLMHMM,
             {
+                "glm_params_": (jnp.zeros((2, 3)), jnp.array([1.0, 1.0, 1.0])),
                 "coef_": jnp.zeros((2, 3)),
                 "intercept_": jnp.array([1.0, 1.0, 1.0]),
                 "scale_": 2.0,
                 "solver_state_": None,
                 "transition_prob_": None,
-                "glm_params_": (jnp.zeros((2, 3)), jnp.array([1.0, 1.0, 1.0])),
                 "initial_prob_": None,
+                "dof_resid_": None,
             },
         ),
     ],
@@ -665,8 +669,8 @@ def test_save_and_load(
     loaded_params.update(fit_state)
 
     # Assert matching keys and values
-    assert (
-        initial_params.keys() == loaded_params.keys()
+    assert set(initial_params.keys()) == set(
+        loaded_params.keys()
     ), "Parameter keys mismatch after load."
 
     for key in initial_params:
@@ -710,6 +714,7 @@ def test_save_and_load(
                 "coef_": jnp.zeros((2, 3)),
                 "intercept_": jnp.array([1.0, 1.0, 1.0]),
                 "scale_": 2.0,
+                "dof_resid_": None,
                 "solver_state_": None,
                 "transition_prob_": None,
                 "glm_params_": (jnp.zeros((2, 3)), jnp.array([1.0, 1.0, 1.0])),
@@ -764,7 +769,7 @@ def test_save_and_load(
             },
             pytest.raises(
                 ValueError,
-                match="Invalid map parameter types detected",
+                match="The following keys in your mapping do not match",
             ),
         ),
         # valid mapping dtype, invalid name
@@ -829,8 +834,8 @@ def test_save_and_load_with_custom_mapping(
         loaded_params.update(fit_state)
 
         # Assert matching keys and values
-        assert (
-            initial_params.keys() == loaded_params.keys()
+        assert set(initial_params.keys()) == set(
+            loaded_params.keys()
         ), "Parameter keys mismatch after load."
 
         unexpected_keys = set(mapping_dict) - set(initial_params)

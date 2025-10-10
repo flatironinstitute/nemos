@@ -685,7 +685,7 @@ def em_glm_hmm(
     is_new_session: Optional[Array] = None,
     maxiter: int = 10**3,
     tol: float = 1e-8,
-) -> Tuple[Array, Array, Array, Array, Tuple[Array, Array]]:
+) -> Tuple[Array, Array, Array, Array, Tuple[Array, Array], GLMHMMState]:
     """
     Perform EM optimization for a GLM-HMM.
 
@@ -831,4 +831,5 @@ def em_glm_hmm(
         state.initial_prob,
         state.transition_matrix,
         state.glm_params,
+        state,
     )
