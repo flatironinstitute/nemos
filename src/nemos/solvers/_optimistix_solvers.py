@@ -11,7 +11,7 @@ from ..typing import Pytree
 from ._abstract_solver import OptimizationInfo, Params
 from ._solver_adapter import SolverAdapter
 
-DEFAULT_ATOL = 1e-8
+DEFAULT_ATOL = 1e-4
 DEFAULT_RTOL = 0.0
 DEFAULT_MAX_STEPS = 100_000
 
