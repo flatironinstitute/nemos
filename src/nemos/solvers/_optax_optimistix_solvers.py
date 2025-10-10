@@ -2,24 +2,18 @@
 
 import abc
 import inspect
-from typing import Any, Callable, ClassVar, NamedTuple, Union
+from typing import Any, Callable, ClassVar
 
-import equinox as eqx
-import jax
-import jax.numpy as jnp
 import optax
 import optimistix as optx
 
 from ..regularizer import Regularizer
-from ..tree_utils import tree_sub
 from ..typing import Pytree
 from ._optimistix_solvers import (
     DEFAULT_ATOL,
     DEFAULT_MAX_STEPS,
     DEFAULT_RTOL,
     OptimistixAdapter,
-    OptimistixStepResult,
-    Params,
 )
 
 
@@ -71,34 +65,7 @@ class AbstractOptimistixOptaxSolver(OptimistixAdapter, abc.ABC):
         cls.__doc__ = inspect.cleandoc(full_doc)
 
 
-class ScaleByLearningRateState(NamedTuple):
-    learning_rate: Union[float, jax.Array]
-
-
-def stateful_scale_by_learning_rate(
-    stepsize: float, flip_sign: bool = True
-) -> optax.GradientTransformation:
-    """
-    Reimplementation of optax.scale_by_learning_rate, just storing the learning rate in the state.
-
-    Required for setting the scaling appropriately when used with
-    proximal gradient descent.
-    """
-    m = -1 if flip_sign else 1
-
-    def init_fn(params):
-        del params
-        return ScaleByLearningRateState(jnp.array(stepsize))
-
-    def update_fn(updates, state, params=None):
-        del params
-        updates = jax.tree.map(lambda g: m * stepsize * g, updates)
-
-        return updates, state
-
-    return optax.GradientTransformation(init_fn, update_fn)  # pyright: ignore
-
-
+# TODO: Figure out how to test both OptimistixOptaxGradientDescent and OptimistixNAG
 def _make_rate_scaler(
     stepsize: float | None,
     linesearch_kwargs: dict[str, Any] | None,
@@ -107,37 +74,30 @@ def _make_rate_scaler(
     Make an Optax transformation for setting the learning rate.
 
     If `stepsize` is not None and larger than 0, use it as a constant learning rate.
-    Otherwise `optax.scale_by_zoom_linesearch` is used with `linesearch_kwargs`.
-    By default the curvature condition is disabled, which reduces to a backtracking
-    linesearch where the stepsizes are chosen using the cubic or quadratic interpolation
-    used in zoom linesearch.
+    Otherwise `optax.scale_by_backtracking_linesearch` is used with `linesearch_kwargs`.
     By default, 15 linesearch steps are used, which can be overwritten with
-    `max_linesearch_steps` in `linesearch_kwargs`.
+    `max_backtracking_steps` in `linesearch_kwargs`.
     """
     if stepsize is None or stepsize <= 0.0:
         if linesearch_kwargs is None:
             linesearch_kwargs = {}
 
-        if "max_linesearch_steps" not in linesearch_kwargs:
-            linesearch_kwargs["max_linesearch_steps"] = 15
+        if "max_backtracking_steps" not in linesearch_kwargs:
+            linesearch_kwargs["max_backtracking_steps"] = 15
 
-        if "curv_rtol" not in linesearch_kwargs:
-            linesearch_kwargs["curv_rtol"] = jnp.inf
-
-        return optax.scale_by_zoom_linesearch(**linesearch_kwargs)
+        return optax.scale_by_backtracking_linesearch(**linesearch_kwargs)
     else:
         if linesearch_kwargs:
             raise ValueError("Only provide stepsize or linesearch_kwargs.")
-        # GradientDescent works with optax.scale_by_learning_rate as well
-        # but for ProximalGradient we need to be able to extract the current learning rate
-        return stateful_scale_by_learning_rate(stepsize)
+
+        return optax.scale_by_learning_rate(stepsize)
 
 
 class OptimistixOptaxGradientDescent(AbstractOptimistixOptaxSolver):
     """
     Gradient descent implementation combining Optax and Optimistix.
 
-    Uses Optax's SGD combined with Optax's zoom linesearch or a constant learning rate.
+    Uses Optax's SGD combined with Optax's backtracking linesearch or a constant learning rate.
 
     The full optimization loop is handled by the `optimistix.OptaxMinimiser` wrapper.
     """
@@ -166,11 +126,9 @@ class OptimistixOptaxGradientDescent(AbstractOptimistixOptaxSolver):
         only has an effect if `momentum` is used as well.
 
         If `stepsize` is not None and larger than 0, use it as a constant learning rate.
-        Otherwise `optax.scale_by_zoom_linesearch` is used with the curvature condition
-        disabled, which reduces to a backtracking linesearch where the stepsizes are chosen
-        using the cubic or quadratic interpolation used in zoom linesearch.
+        Otherwise `optax.scale_by_backtracking_linesearch` is used.
         By default, 15 linesearch steps are used, which can be overwritten with
-        `max_linesearch_steps` in `linesearch_kwargs`.
+        `max_backtracking_steps` in `linesearch_kwargs`.
 
         References
         ----------
