@@ -1968,7 +1968,7 @@ class TestGLM:
                 },
                 pytest.raises(
                     ValueError,
-                    match="Invalid map parameter types detected",
+                    match="The following keys in your mapping do not match",
                 ),
             ),
             # valid mapping dtype, invalid name
@@ -1978,7 +1978,7 @@ class TestGLM:
                 },
                 pytest.raises(
                     ValueError,
-                    match="The following keys in your mapping do not match ",
+                    match="The following keys in your mapping do not match",
                 ),
             ),
         ],
@@ -2230,7 +2230,7 @@ class TestGLM:
             ),
             # Unexpected dtype for class name
             (
-                "regularizer__class",
+                "dict__regularizer__item__class",
                 1,
                 pytest.raises(
                     ValueError, match="Parameter ``regularizer`` cannot be initialized"
@@ -2286,11 +2286,16 @@ class TestGLM:
         }
         match = (
             r"The following keys in your mapping do not match any parameters in the loaded model:\n\n"
-            r"\t- 'regulsriaer', did you mean 'regularizer'\?\n"
-            r"\t- 'observatino_mdels', did you mean 'observation_model'\?\n"
             r"\t- 'inv_link_function', did you mean 'inverse_link_function'\?\n"
-            r"\t- 'total_nonsense'\n"
+            r"\t- 'observatino_mdels', did you mean 'observation_model'\?\n"
+            r"\t- 'regulsriaer', did you mean 'regularizer'\?\n"
+            r"\t- 'total_nonsense'\n\n"
+            r"Please double-check your mapping dictionary\."
         )
+
+        with pytest.raises(ValueError, match=match):
+            nmo.load_model(save_path, mapping_dict=invalid_mapping)
+
         with pytest.raises(ValueError, match=match):
             nmo.load_model(save_path, mapping_dict=invalid_mapping)
 
