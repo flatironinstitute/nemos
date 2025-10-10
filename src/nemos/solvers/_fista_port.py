@@ -335,8 +335,8 @@ class OptimistixFISTA(OptimistixAdapter):
     _proximal = True
 
 
-class OptimistixGradientDescent(OptimistixAdapter):
-    """Port of JAXopt's accelerated GradientDescent to the Optimistix API."""
+class OptimistixNAG(OptimistixAdapter):
+    """Port of Nesterov's accelerated gradient descent from JAXopt to the Optimistix API."""
 
     _solver_cls = GradientDescent
     _proximal = False

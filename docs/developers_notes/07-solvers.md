@@ -66,6 +66,8 @@ Abstract Class AbstractSolver
 │ │ │
 │ │ ├─ Concrete Subclass OptimistixBFGS
 │ │ ├─ Concrete Subclass OptimistixLBFGS
+│ │ ├─ Concrete Subclass OptimistixFISTA
+│ │ ├─ Concrete Subclass OptimistixNAG
 │ │ ├─ Concrete Subclass OptimistixNonlinearCG
 │ │ └─ Abstract Subclass AbstractOptimistixOptaxSolver
 │ │   │
