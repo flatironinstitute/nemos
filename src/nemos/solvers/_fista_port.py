@@ -1,6 +1,5 @@
 """Adaptation of JAXopt's ProximalGradient (FISTA) as an Optimistix IterativeSolver."""
 
-import operator
 from typing import Any, Callable, ClassVar
 
 import equinox as eqx
@@ -9,6 +8,7 @@ import jax.numpy as jnp
 import optimistix as optx
 from jaxtyping import Array, Bool, Float, Int, PyTree
 from optimistix._custom_types import Aux, Y
+from ..tree_utils import tree_sub
 
 from ._optimistix_solvers import OptimistixAdapter
 
@@ -19,10 +19,6 @@ def prox_none(x, hyperparams=None, scaling: float = 1.0):
     """Identity proximal operator."""
     del hyperparams, scaling
     return x
-
-
-def tree_sub(x, y):
-    return jax.tree.map(operator.sub, x, y)
 
 
 # adapted from jaxopt
