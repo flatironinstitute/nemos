@@ -5,8 +5,41 @@ import numpy as np
 import pytest
 
 from nemos.fetch import fetch_data
-from nemos.glm_hmm.expectation_maximization import forward_backward
+from nemos.glm_hmm.expectation_maximization import (
+    backward_pass,
+    forward_backward,
+    forward_pass,
+)
 from nemos.observation_models import BernoulliObservations
+
+
+def forward_step_numpy(py_z, new_sess, initial_prob, transition_prob):
+    n_time_bins, n_states = py_z.shape
+    alphas = np.full((n_time_bins, n_states), np.nan)
+    c = np.full(n_time_bins, np.nan)
+    for t in range(n_time_bins):
+        if new_sess[t]:
+            alphas[t] = initial_prob * py_z[t]
+        else:
+            alphas[t] = py_z[t] * (transition_prob.T @ alphas[t - 1])
+
+        c[t] = np.sum(alphas[t])
+        alphas[t] /= c[t]
+    return alphas, c
+
+
+def backward_step_numpy(py_z, c, new_sess, transition_prob):
+    n_time_bins, n_states = py_z.shape
+    betas = np.full((n_time_bins, n_states), np.nan)
+    betas[-1] = np.ones(n_states)
+
+    for t in range(n_time_bins - 2, -1, -1):
+        if new_sess[t + 1]:
+            betas[t] = np.ones(n_states)
+        else:
+            betas[t] = transition_prob @ (betas[t + 1] * py_z[t + 1])
+            betas[t] /= c[t + 1]
+    return betas
 
 
 # Below are tests for Bernoulli observation 3 states model glm hmm
@@ -33,7 +66,6 @@ def test_forward_backward_regression(decorator):
 
     # E-step initial parameters
     initial_prob = data["initial_prob"]
-    projection_weights = data["projection_weights"]
     intercept, coef = data["projection_weights"][:1], data["projection_weights"][1:]
     transition_prob = data["transition_prob"]
 
@@ -78,3 +110,81 @@ def test_forward_backward_regression(decorator):
     np.testing.assert_almost_equal(gammas_nemos, gammas, decimal=8)
     # Testing Eq. 13.65 of Bishop
     np.testing.assert_almost_equal(xis_nemos, xis, decimal=8)
+
+
+def test_for_loop_forward_step():
+    jax.config.update("jax_enable_x64", True)
+
+    # Fetch the data
+    data_path = fetch_data("em_three_states.npz")
+    data = np.load(data_path)
+
+    X, y = data["X"], data["y"]
+    new_sess = data["new_sess"]
+
+    # E-step initial parameters
+    initial_prob = data["initial_prob"]
+    intercept, coef = data["projection_weights"][:1], data["projection_weights"][1:]
+    transition_prob = data["transition_prob"]
+
+    obs = BernoulliObservations()
+
+    likelihood = jax.vmap(
+        lambda x, z: obs.likelihood(x, z, aggregate_sample_scores=lambda w: w),
+        in_axes=(None, 1),
+        out_axes=1,
+    )
+
+    predicted_rate_given_state = obs.default_inverse_link_function(
+        X[:, 1:] @ coef + intercept
+    )
+    conditionals = likelihood(y, predicted_rate_given_state)
+
+    alphas, normalization = forward_pass(
+        initial_prob, transition_prob, conditionals, new_sess
+    )
+
+    alphas_numpy, normalization_numpy = forward_step_numpy(
+        conditionals, new_sess, initial_prob, transition_prob
+    )
+    np.testing.assert_almost_equal(alphas_numpy, alphas)
+    np.testing.assert_almost_equal(normalization_numpy, normalization)
+
+
+def test_for_loop_backward_step():
+    jax.config.update("jax_enable_x64", True)
+
+    # Fetch the data
+    data_path = fetch_data("em_three_states.npz")
+    data = np.load(data_path)
+
+    X, y = data["X"], data["y"]
+    new_sess = data["new_sess"]
+
+    # E-step initial parameters
+    initial_prob = data["initial_prob"]
+    intercept, coef = data["projection_weights"][:1], data["projection_weights"][1:]
+    transition_prob = data["transition_prob"]
+
+    obs = BernoulliObservations()
+
+    likelihood = jax.vmap(
+        lambda x, z: obs.likelihood(x, z, aggregate_sample_scores=lambda w: w),
+        in_axes=(None, 1),
+        out_axes=1,
+    )
+
+    predicted_rate_given_state = obs.default_inverse_link_function(
+        X[:, 1:] @ coef + intercept
+    )
+    conditionals = likelihood(y, predicted_rate_given_state)
+
+    alphas, normalization = forward_pass(
+        initial_prob, transition_prob, conditionals, new_sess
+    )
+
+    betas = backward_pass(transition_prob, conditionals, normalization, new_sess)
+    betas_numpy = backward_step_numpy(
+        conditionals, normalization, new_sess, transition_prob
+    )
+    np.testing.assert_almost_equal(betas_numpy, betas)
