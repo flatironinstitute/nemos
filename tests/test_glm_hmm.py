@@ -114,21 +114,30 @@ def test_forward_backward_regression(decorator):
 
 
 def test_for_loop_forward_step():
+    np.random.seed(44)
     jax.config.update("jax_enable_x64", True)
 
-    # Fetch the data
-    data_path = fetch_data("em_three_states.npz")
-    data = np.load(data_path)
-
-    X, y = data["X"], data["y"]
-    new_sess = data["new_sess"]
-
     # E-step initial parameters
-    initial_prob = data["initial_prob"]
-    intercept, coef = data["projection_weights"][:1], data["projection_weights"][1:]
-    transition_prob = data["transition_prob"]
+    n_states, n_samples = 5, 100
+    initial_prob = np.random.uniform(size=(n_states))
+    initial_prob /= np.sum(initial_prob)
+    transition_prob = np.random.uniform(size=(n_states, n_states))
+    transition_prob /= np.sum(transition_prob, axis=0)
+    transition_prob = transition_prob.T
+    coef, intercept = np.random.randn(2, n_states), np.random.randn(n_states)
 
-    obs = BernoulliObservations()
+    X = np.random.randn(n_samples, 2)
+    y = np.zeros(n_samples)
+    for i, k in enumerate(range(0, 100, 10)):
+        sl = slice(k, k + 10)
+        state = i % n_states
+        rate = np.exp(X[sl].dot(coef[:, state]) + intercept[state])
+        y[sl] = np.random.poisson(rate)
+
+    new_sess = np.zeros(n_samples)
+    new_sess[[0, 10, 90]] = 1
+
+    obs = PoissonObservations()
 
     likelihood = jax.vmap(
         lambda x, z: obs.likelihood(x, z, aggregate_sample_scores=lambda w: w),
@@ -136,9 +145,7 @@ def test_for_loop_forward_step():
         out_axes=1,
     )
 
-    predicted_rate_given_state = obs.default_inverse_link_function(
-        X[:, 1:] @ coef + intercept
-    )
+    predicted_rate_given_state = obs.default_inverse_link_function(X @ coef + intercept)
     conditionals = likelihood(y, predicted_rate_given_state)
 
     alphas, normalization = forward_pass(
@@ -153,21 +160,30 @@ def test_for_loop_forward_step():
 
 
 def test_for_loop_backward_step():
+    np.random.seed(43)
     jax.config.update("jax_enable_x64", True)
 
-    # Fetch the data
-    data_path = fetch_data("em_three_states.npz")
-    data = np.load(data_path)
-
-    X, y = data["X"], data["y"]
-    new_sess = data["new_sess"]
-
     # E-step initial parameters
-    initial_prob = data["initial_prob"]
-    intercept, coef = data["projection_weights"][:1], data["projection_weights"][1:]
-    transition_prob = data["transition_prob"]
+    n_states, n_samples = 5, 100
+    initial_prob = np.random.uniform(size=(n_states))
+    initial_prob /= np.sum(initial_prob)
+    transition_prob = np.random.uniform(size=(n_states, n_states))
+    transition_prob /= np.sum(transition_prob, axis=0)
+    transition_prob = transition_prob.T
+    coef, intercept = np.random.randn(2, n_states), np.random.randn(n_states)
 
-    obs = BernoulliObservations()
+    X = np.random.randn(n_samples, 2)
+    y = np.zeros(n_samples)
+    for i, k in enumerate(range(0, 100, 10)):
+        sl = slice(k, k + 10)
+        state = i % n_states
+        rate = np.exp(X[sl].dot(coef[:, state]) + intercept[state])
+        y[sl] = np.random.poisson(rate)
+
+    new_sess = np.zeros(n_samples)
+    new_sess[[0, 10, 90]] = 1
+
+    obs = PoissonObservations()
 
     likelihood = jax.vmap(
         lambda x, z: obs.likelihood(x, z, aggregate_sample_scores=lambda w: w),
@@ -175,9 +191,7 @@ def test_for_loop_backward_step():
         out_axes=1,
     )
 
-    predicted_rate_given_state = obs.default_inverse_link_function(
-        X[:, 1:] @ coef + intercept
-    )
+    predicted_rate_given_state = obs.default_inverse_link_function(X @ coef + intercept)
     conditionals = likelihood(y, predicted_rate_given_state)
 
     alphas, normalization = forward_pass(
