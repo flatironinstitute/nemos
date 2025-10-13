@@ -191,7 +191,7 @@ def test_for_loop_backward_step():
     np.testing.assert_almost_equal(betas_numpy, betas)
 
 
-def test_single_state_forward_pass():
+def test_single_state_estep():
     """Single state forward pass posteriors reduces to ones (there is a single state)."""
     np.random.seed(42)
     initial_prob = np.ones(1)
