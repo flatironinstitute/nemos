@@ -215,12 +215,12 @@ def test_single_state_forward_pass():
     betas = backward_pass(transition_prob, conditionals, norm, new_sess)
 
     # check that the normalization factor reduces to the p(x_t | z_t)
-    np.testing.assert_almost_equal(norm, conditionals[:, 0])
+    np.testing.assert_array_almost_equal(norm, conditionals[:, 0])
 
     # Note: alphas * betas is p(z_t | X), so it's automatically ones if the
     # two assertions passes, no need to check explicitly for  p(z_t | X).
-    np.testing.assert_almost_equal(np.ones_like(alphas), alphas)
-    np.testing.assert_almost_equal(np.ones_like(betas), betas)
+    np.testing.assert_array_almost_equal(np.ones_like(alphas), alphas)
+    np.testing.assert_array_almost_equal(np.ones_like(betas), betas)
 
     # xis are a sum of the ones over valid entires
     xis = compute_xi(
@@ -231,6 +231,6 @@ def test_single_state_forward_pass():
         new_sess,
         transition_prob,
     )
-    np.testing.assert_almost_equal(
+    np.testing.assert_array_almost_equal(
         np.array([[alphas.shape[0] - sum(new_sess)]]).astype(xis), xis
     )
