@@ -7,10 +7,11 @@ import pytest
 from nemos.fetch import fetch_data
 from nemos.glm_hmm.expectation_maximization import (
     backward_pass,
+    compute_xi,
     forward_backward,
     forward_pass,
 )
-from nemos.observation_models import BernoulliObservations
+from nemos.observation_models import BernoulliObservations, PoissonObservations
 
 
 def forward_step_numpy(py_z, new_sess, initial_prob, transition_prob):
@@ -188,3 +189,48 @@ def test_for_loop_backward_step():
         conditionals, normalization, new_sess, transition_prob
     )
     np.testing.assert_almost_equal(betas_numpy, betas)
+
+
+def test_single_state_forward_pass():
+    """Single state forward pass posteriors reduces to ones (there is a single state)."""
+    np.random.seed(42)
+    initial_prob = np.ones(1)
+    transition_prob = np.ones((1, 1))
+    coef, intercept = np.random.randn(2, 1), np.random.randn(1)
+    X = np.random.randn(10, 2)
+    rate = np.exp(X.dot(coef) + intercept)
+    y = np.random.poisson(rate[:, 0])
+
+    obs = PoissonObservations()
+
+    likelihood = jax.vmap(
+        lambda x, z: obs.likelihood(x, z, aggregate_sample_scores=lambda w: w),
+        in_axes=(None, 1),
+        out_axes=1,
+    )
+    conditionals = likelihood(y, rate)
+    new_sess = np.zeros(10)
+    new_sess[0] = 1
+    alphas, norm = forward_pass(initial_prob, transition_prob, conditionals, new_sess)
+    betas = backward_pass(transition_prob, conditionals, norm, new_sess)
+
+    # check that the normalization factor reduces to the p(x_t | z_t)
+    np.testing.assert_almost_equal(norm, conditionals[:, 0])
+
+    # Note: alphas * betas is p(z_t | X), so it's automatically ones if the
+    # two assertions passes, no need to check explicitly for  p(z_t | X).
+    np.testing.assert_almost_equal(np.ones_like(alphas), alphas)
+    np.testing.assert_almost_equal(np.ones_like(betas), betas)
+
+    # xis are a sum of the ones over valid entires
+    xis = compute_xi(
+        alphas,
+        betas,
+        conditionals,
+        norm,
+        new_sess,
+        transition_prob,
+    )
+    np.testing.assert_almost_equal(
+        np.array([[alphas.shape[0] - sum(new_sess)]]).astype(xis), xis
+    )
