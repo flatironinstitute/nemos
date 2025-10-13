@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import abc
-import inspect
 from abc import abstractmethod
 from copy import deepcopy
 from functools import wraps
@@ -280,10 +279,7 @@ class BaseRegressor(Base, abc.ABC):
         NameError
             If any of the solver keyword arguments are not valid.
         """
-        try:
-            accepted_args = solver_class.get_accepted_arguments()
-        except AttributeError:
-            accepted_args = inspect.getfullargspec(solver_class).args
+        accepted_args = solver_class.get_accepted_arguments()
 
         undefined_kwargs = set(solver_kwargs.keys()) - set(accepted_args)
 
