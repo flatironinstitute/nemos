@@ -60,6 +60,7 @@ VALID_PAIRS = [
     {"state", "states"},
     {"state", "start"},
     {"states", "start"},
+    {"n_states", "states"},
     {"feature_mask", "features"},
     {"observation", "observations"},
     # doc utils
@@ -68,6 +69,10 @@ VALID_PAIRS = [
     {"predicted_firing_rate", "predicted_firing_rates"},
     {"tuning_curve", "tuning_curves"},
     {"hyperparams_prox", "hyperparams"},
+    {"condition", "conditionals"},
+    {"posterior", "posteriors"},
+    {"beta", "betas"},
+    {"alpha", "alphas"},
     {"hyperparams_prox", "hyperparams"},
     {"flat_dict", "flat_map_dict"},
     {"fit_params", "init_params"},
