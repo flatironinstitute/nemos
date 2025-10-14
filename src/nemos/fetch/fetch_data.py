@@ -47,7 +47,7 @@ REGISTRY_DATA = {
 DOWNLOADABLE_FILES = list(REGISTRY_DATA.keys())
 
 # URL templates for downloading datasets and utility scripts.
-OSF_TEMPLATE = "https://osf.io/{}/download"
+OSF_TEMPLATE = "https://osf.io/download/{}/"
 
 # Mapping of dataset filenames to their download URLs.
 REGISTRY_URLS_DATA = {
