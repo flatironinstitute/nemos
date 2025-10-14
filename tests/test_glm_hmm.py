@@ -434,7 +434,7 @@ def test_run_m_step_regression():
     #    This is the grad of the loss at the probabilities.
     lagrange_multiplier = -jax.grad(expected_log_likelihood_wrt_transitions)(
         new_transition_prob, xis
-    )[:, 0]
+    ).mean(axis=1) # note that the lagrange mult makes the gradient all the same for each prob.
     # 2) Check that the gradient of the loss is zero
     grad_objective = jax.grad(lagrange_mult_loss)
     (grad_at_transition, grad_at_lagr) = grad_objective(
@@ -452,7 +452,7 @@ def test_run_m_step_regression():
     sum_gammas = np.sum(gammas[np.where(new_sess)[0]], axis=0)
     lagrange_multiplier = -jax.grad(expected_log_likelihood_wrt_initial_prob)(
         new_initial_prob, sum_gammas
-    )[0]
+    ).mean()  # note that the lagrange mult makes the gradient all the same for each prob.
     grad_objective = jax.grad(lagrange_mult_loss)
     (grad_at_init, grad_at_lagr) = grad_objective(
         (new_initial_prob, lagrange_multiplier),
