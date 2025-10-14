@@ -1408,21 +1408,31 @@ def check_observation_model(observation_model, force_checks=False):
 
     Examples
     --------
+    >>> import jax
+    >>> import jax.numpy as jnp
     >>> class MyObservationModel:
+    ...     @property
     ...     def default_inverse_link_function(self):
     ...         return jax.scipy.special.expit
-    ...     def _negative_log_likelihood(self, params, y_true, aggregate_sample_scores=jnp.mean):
-    ...         return -aggregate_sample_scores(y_true * jax.scipy.special.logit(params) + \
-    ...                 (1 - y_true) * jax.scipy.special.logit(1 - params))
-    ...     def pseudo_r2(self, params, y_true, aggregate_sample_scores=jnp.mean):
-    ...         return 1 - (self._negative_log_likelihood(y_true, params, aggregate_sample_scores) /
-    ...                     jnp.sum((y_true - y_true.mean()) ** 2))
-    ...     def sample_generator(self, key, params, scale=1.):
-    ...         return jax.random.bernoulli(key, params)
+    ...     def _negative_log_likelihood(self, y, rate, aggregate_sample_scores=jnp.mean):
+    ...         return -aggregate_sample_scores(y * jax.scipy.special.logit(rate) + \
+    ...                                         (1 - y) * jax.scipy.special.logit(1 - rate))
+    ...     def pseudo_r2(self, y, rate, aggregate_sample_scores=jnp.mean):
+    ...         return 1 - (self._negative_log_likelihood(y, rate, aggregate_sample_scores) /
+    ...                     jnp.sum((y - y.mean()) ** 2))
+    ...     def sample_generator(self, key, rate, scale=1.):
+    ...         return jax.random.bernoulli(key, rate)
     ...     def estimate_scale(self, y, predicted_rate, dof_resid):
-    ...         return 1
-    ...     def log_likelihood(self, params, y_true, aggregate_sample_scores=jnp.mean):
-    ...         return -self._negative_log_likelihood(params, y_true, aggregate_sample_scores)
+    ...         return jnp.array(1.)
+    ...     def log_likelihood(self, y, rate, aggregate_sample_scores=jnp.mean):
+    ...         return -self._negative_log_likelihood(y, rate, aggregate_sample_scores)
+    ...     def likelihood(self, y, rate, aggregate_sample_scores=jnp.mean):
+    ...         return jnp.exp(self.log_likelihood(y, rate, aggregate_sample_scores))
+    ...     def deviance(self, y, rate, scale=1.0):
+    ...         identity = lambda x: x
+    ...         return 2 * (
+    ...                 self.log_likelihood(y, rate, identity) -
+    ...                 self.log_likelihood(y.mean()*jnp.ones_like(y), rate, identity))
     >>> model = MyObservationModel()
     >>> check_observation_model(model)  # Should pass without error if the model is correctly implemented.
     """
