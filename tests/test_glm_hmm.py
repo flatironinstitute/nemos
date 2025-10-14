@@ -144,6 +144,35 @@ def generate_data_multi_state():
     return new_sess, initial_prob, transition_prob, coef, intercept, X, y
 
 
+@pytest.fixture(scope="module")
+def generate_data_multi_state_population():
+    np.random.seed(44)
+    jax.config.update("jax_enable_x64", True)
+
+    # E-step initial parameters
+    n_states, n_neurons, n_samples = 5, 3, 100
+    initial_prob = np.random.uniform(size=(n_states))
+    initial_prob /= np.sum(initial_prob)
+    transition_prob = np.random.uniform(size=(n_states, n_states))
+    transition_prob /= np.sum(transition_prob, axis=0)
+    transition_prob = transition_prob.T
+    coef, intercept = np.random.randn(2, n_neurons, n_states), np.random.randn(
+        n_neurons, n_states
+    )
+
+    X = np.random.randn(n_samples, 2)
+    y = np.zeros((n_samples, n_neurons))
+    for i, k in enumerate(range(0, 100, 10)):
+        sl = slice(k, k + 10)
+        state = i % n_states
+        rate = np.exp(X[sl].dot(coef[..., state]) + intercept[..., state])
+        y[sl] = np.random.poisson(rate)
+
+    new_sess = np.zeros(n_samples)
+    new_sess[[0, 10, 90]] = 1
+    return new_sess, initial_prob, transition_prob, coef, intercept, X, y
+
+
 def test_for_loop_forward_step(generate_data_multi_state):
     new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
         generate_data_multi_state
@@ -655,4 +684,83 @@ def test_maximization_with_prior(generate_data_multi_state):
     np.testing.assert_array_almost_equal(grad_at_init, np.zeros_like(new_initial_prob))
     np.testing.assert_array_almost_equal(
         grad_at_lagr, np.zeros_like(lagrange_multiplier)
+    )
+
+
+def test_e_and_m_step_for_population(generate_data_multi_state_population):
+    """Run E and M step fitting a population."""
+    new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
+        generate_data_multi_state_population
+    )
+    obs = PoissonObservations()
+
+    # Wrap likelihood_func to avoid aggregating over samples
+    def likelihood_per_sample(x, z):
+        return obs.log_likelihood(x, z, aggregate_sample_scores=lambda s: s)
+
+    def negative_log_likelihood_per_sample(x, z):
+        return obs._negative_log_likelihood(x, z, aggregate_sample_scores=lambda s: s)
+
+    # Vectorize over the states axis
+    state_axes = 2
+    likelihood_per_sample = jax.vmap(
+        likelihood_per_sample,
+        in_axes=(None, state_axes),
+        out_axes=state_axes,
+    )
+
+    def likelihood(y, rate):
+        log_like = likelihood_per_sample(y, rate)
+        # Multi-neuron case: sum log-likelihoods across neurons
+        log_like = log_like.sum(axis=1)
+        return jax.numpy.exp(log_like)
+
+    gammas, xis, _, _, _, _ = forward_backward(
+        X,
+        y,
+        initial_prob,
+        transition_prob,
+        (coef, intercept),
+        likelihood_func=likelihood,
+        inverse_link_function=obs.default_inverse_link_function,
+        is_new_session=new_sess.astype(bool),
+    )
+
+    vmap_nll = jax.vmap(
+        negative_log_likelihood_per_sample,
+        in_axes=(None, state_axes),
+        out_axes=state_axes,
+    )
+
+    # solver
+    def partial_hmm_negative_log_likelihood(
+        weights, design_matrix, observations, posterior_prob
+    ):
+        return hmm_negative_log_likelihood(
+            weights,
+            X=design_matrix,
+            y=observations,
+            posteriors=posterior_prob,
+            inverse_link_function=obs.default_inverse_link_function,
+            negative_log_likelihood_func=vmap_nll,
+        )
+
+    alphas_transition = np.random.uniform(1, 3, size=transition_prob.shape)
+    alphas_init = np.random.uniform(1, 3, size=initial_prob.shape)
+    solver = LBFGS(partial_hmm_negative_log_likelihood, tol=10**-13)
+    (
+        optimized_projection_weights_nemos,
+        new_initial_prob,
+        new_transition_prob,
+        state,
+    ) = run_m_step(
+        X,
+        y,
+        gammas,
+        xis,
+        (np.zeros_like(coef), np.zeros_like(intercept)),
+        is_new_session=new_sess.astype(bool),
+        solver_run=solver.run,
+        dirichlet_prior_alphas_transition=alphas_transition,
+        dirichlet_prior_alphas_init_prob=alphas_init,
     )
