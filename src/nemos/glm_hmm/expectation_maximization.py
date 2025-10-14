@@ -155,17 +155,18 @@ def forward_pass(
 
     .. code-block:: python
 
-        alphas = np.full((n_states, n_time_bins), np.nan)
+        n_time_bins, n_states = py_z.shape
+        alphas = np.full((n_time_bins, n_states), np.nan)
         c = np.full(n_time_bins, np.nan)
 
         for t in range(n_time_bins):
             if new_sess[t]:
-                alphas[:, t] = initial_prob * py_z.T[:, t]
+                alphas[t] = initial_prob * py_z[t]
             else:
-                alphas[:, t] = py_z.T[:, t] * (transition_prob.T @ alphas[:, t - 1])
+                alphas[t] = py_z[t] * (transition_prob.T @ alphas[t - 1])
 
-            c[t] = np.sum(alphas[:, t])
-            alphas[:, t] /= c[t]
+            c[t] = np.sum(alphas[t])
+            alphas[t] /= c[t]
 
     References
     ----------
@@ -259,19 +260,18 @@ def backward_pass(
 
     .. code-block:: python
 
-        betas = np.full((n_states, n_time_bins), np.nan)
-        betas[:, -1] = np.ones(n_states)
+        n_time_bins, n_states = py_z.shape
+        betas = np.full((n_time_bins, n_states), np.nan)
+        betas[-1] = np.ones(n_states)
 
         for t in range(n_time_bins - 2, -1, -1):
             if new_sess[t + 1]:
-                betas[:, t] = np.ones(
-                    n_states
-                )
+                betas[t] = np.ones(n_states)
             else:
-                betas[:, t] = transition_prob @ (
-                    betas[:, t + 1] * py_z.T[:, t + 1]
+                betas[t] = transition_prob @ (
+                        betas[t + 1] * py_z[t + 1]
                 )
-                betas[:, t] /= c[t + 1]
+                betas[t] /= c[t + 1]
 
     References
     ----------
