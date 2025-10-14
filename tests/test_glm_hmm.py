@@ -516,12 +516,11 @@ def test_single_state_mstep(single_state_inputs):
         )
 
     solver = LBFGS(partial_hmm_negative_log_likelihood, tol=10**-13)
-
     (
-        optimized_projection_weights_nemos,
-        new_initial_prob_nemos,
-        new_transition_prob_nemos,
-        state,
+    optimized_projection_weights_nemos,
+    new_initial_prob_nemos,
+    new_transition_prob_nemos,
+    state,
     ) = run_m_step(
         X,
         y,
@@ -601,8 +600,8 @@ def test_maximization_with_prior(generate_data_multi_state):
             negative_log_likelihood_func=negative_log_likelihood,
         )
 
-    alphas_transition = np.random.uniform(0.1, 1, size=transition_prob.shape)
-    alphas_init = np.random.uniform(0.1, 1, size=initial_prob.shape)
+    alphas_transition = np.random.uniform(1, 3, size=transition_prob.shape)
+    alphas_init = np.random.uniform(1, 3, size=initial_prob.shape)
     solver = LBFGS(partial_hmm_negative_log_likelihood, tol=10**-13)
     (
         optimized_projection_weights_nemos,

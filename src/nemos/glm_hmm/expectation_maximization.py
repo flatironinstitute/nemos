@@ -56,7 +56,7 @@ def _analytical_m_step_transition_prob(
     else:
         new_transition_prob = joint_posterior
 
-    new_transition_prob /= jnp.sum(joint_posterior, axis=1)[:, jnp.newaxis]
+    new_transition_prob /= jnp.sum(new_transition_prob, axis=1)[:, jnp.newaxis]
     return new_transition_prob
 
 
