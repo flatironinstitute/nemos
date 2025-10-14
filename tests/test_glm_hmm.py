@@ -9,6 +9,7 @@ from nemos.glm import GLM
 from nemos.glm_hmm.expectation_maximization import (
     backward_pass,
     compute_xi,
+    em_glm_hmm,
     forward_backward,
     forward_pass,
     hmm_negative_log_likelihood,
