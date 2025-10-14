@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 from nemos.fetch import fetch_data
+from nemos.glm import GLM
 from nemos.glm_hmm.expectation_maximization import (
     backward_pass,
     compute_xi,
@@ -208,8 +209,8 @@ def test_for_loop_backward_step():
     np.testing.assert_almost_equal(betas_numpy, betas)
 
 
-def test_single_state_estep():
-    """Single state forward pass posteriors reduces to ones (there is a single state)."""
+@pytest.fixture
+def single_state_inputs():
     np.random.seed(42)
     initial_prob = np.ones(1)
     transition_prob = np.ones((1, 1))
@@ -217,7 +218,13 @@ def test_single_state_estep():
     X = np.random.randn(10, 2)
     rate = np.exp(X.dot(coef) + intercept)
     y = np.random.poisson(rate[:, 0])
+    return initial_prob, transition_prob, coef, intercept, X, rate, y
 
+
+def test_single_state_estep(single_state_inputs):
+    """Single state forward pass posteriors reduces to ones (there is a single state)."""
+
+    initial_prob, transition_prob, coef, intercept, X, rate, y = single_state_inputs
     obs = PoissonObservations()
 
     likelihood = jax.vmap(
@@ -304,6 +311,25 @@ def test_hmm_negative_log_likelihood_regression(decorator):
 
     # Testing output of negative log likelihood
     np.testing.assert_almost_equal(nll_m_step_nemos, nll_m_step)
+
+
+def expected_log_likelihood_wrt_transitions(transition_prob, xis):
+    return jax.numpy.sum(xis * jax.numpy.log(transition_prob))
+
+
+def expected_log_likelihood_wrt_initial_prob(initial_prob, gammas):
+    return jax.numpy.sum(gammas * jax.numpy.log(initial_prob))
+
+
+def lagrange_mult_loss(param, args, loss):
+    proba, lam = param
+    n_states = proba.shape[0]
+    if proba.ndim == 2:
+        constraint = proba.sum(axis=1) - jax.numpy.ones(n_states)
+    else:
+        constraint = proba.sum() - 1
+    lagrange_mult_term = (lam * constraint).sum()
+    return loss(proba, args) + lagrange_mult_term
 
 
 def test_run_m_step_regression():
@@ -401,3 +427,128 @@ def test_run_m_step_regression():
         (opt_coef, opt_intercept),
         optimized_projection_weights_nemos,
     )
+
+    # check maximization analytical
+    # Transition Probability:
+    # 1) Compute the lagrange multiplier at the maximum
+    #    This is the grad of the loss at the probabilities.
+    lagrange_multiplier = -jax.grad(expected_log_likelihood_wrt_transitions)(
+        new_transition_prob, xis
+    )[:, 0]
+    # 2) Check that the gradient of the loss is zero
+    grad_objective = jax.grad(lagrange_mult_loss)
+    (grad_at_transition, grad_at_lagr) = grad_objective(
+        (new_transition_prob, lagrange_multiplier),
+        xis,
+        expected_log_likelihood_wrt_transitions,
+    )
+    np.testing.assert_array_almost_equal(
+        grad_at_transition, np.zeros_like(new_transition_prob)
+    )
+    np.testing.assert_array_almost_equal(
+        grad_at_lagr, np.zeros_like(lagrange_multiplier)
+    )
+    # Initial probability:
+    sum_gammas = np.sum(gammas[np.where(new_sess)[0]], axis=0)
+    lagrange_multiplier = -jax.grad(expected_log_likelihood_wrt_initial_prob)(
+        new_initial_prob, sum_gammas
+    )[0]
+    grad_objective = jax.grad(lagrange_mult_loss)
+    (grad_at_init, grad_at_lagr) = grad_objective(
+        (new_initial_prob, lagrange_multiplier),
+        sum_gammas,
+        expected_log_likelihood_wrt_initial_prob,
+    )
+    np.testing.assert_array_almost_equal(grad_at_init, np.zeros_like(new_initial_prob))
+    np.testing.assert_array_almost_equal(
+        grad_at_lagr, np.zeros_like(lagrange_multiplier)
+    )
+
+
+def test_single_state_mstep(single_state_inputs):
+    """Single state forward pass posteriors reduces to a GLM."""
+    initial_prob, transition_prob, coef, intercept, X, rate, y = single_state_inputs
+    obs = PoissonObservations()
+
+    likelihood = jax.vmap(
+        lambda x, z: obs.likelihood(x, z, aggregate_sample_scores=lambda w: w),
+        in_axes=(None, 1),
+        out_axes=1,
+    )
+    conditionals = likelihood(y, rate)
+    new_sess = np.zeros(10)
+    new_sess[0] = 1
+    alphas, norm = forward_pass(initial_prob, transition_prob, conditionals, new_sess)
+    betas = backward_pass(transition_prob, conditionals, norm, new_sess)
+
+    # xis are a sum of the ones over valid entires
+    xis = compute_xi(
+        alphas,
+        betas,
+        conditionals,
+        norm,
+        new_sess,
+        transition_prob,
+    )
+
+    # Define negative log likelihood vmap function
+    negative_log_likelihood = jax.vmap(
+        lambda x, z: obs._negative_log_likelihood(
+            x, z, aggregate_sample_scores=lambda w: w
+        ),
+        in_axes=(None, 1),
+        out_axes=1,
+    )
+
+    # solver
+    def partial_hmm_negative_log_likelihood(
+        weights, design_matrix, observations, posterior_prob
+    ):
+        return hmm_negative_log_likelihood(
+            weights,
+            X=design_matrix,
+            y=observations,
+            posteriors=posterior_prob,
+            inverse_link_function=obs.default_inverse_link_function,
+            negative_log_likelihood_func=negative_log_likelihood,
+        )
+
+    solver = LBFGS(partial_hmm_negative_log_likelihood, tol=10**-13)
+
+    (
+        optimized_projection_weights_nemos,
+        new_initial_prob_nemos,
+        new_transition_prob_nemos,
+        state,
+    ) = run_m_step(
+        X,  # drop intercept column
+        y,
+        alphas * betas,
+        xis,
+        (np.zeros_like(coef), np.zeros_like(intercept)),
+        is_new_session=new_sess.astype(bool),
+        solver_run=solver.run,
+    )
+    glm = GLM(
+        observation_model=obs, solver_name="LBFGS", solver_kwargs={"tol": 10**-13}
+    )
+    glm.fit(X, y)
+    # test that the glm coeff and intercept matches with the m-step output
+    np.testing.assert_array_almost_equal(
+        glm.coef_, optimized_projection_weights_nemos[0].flatten()
+    )
+    np.testing.assert_array_almost_equal(
+        glm.intercept_, optimized_projection_weights_nemos[1].flatten()
+    )
+
+    # test that the transition and initial probabilities are all ones.
+    np.testing.assert_array_equal(new_initial_prob_nemos, np.ones_like(initial_prob))
+    np.testing.assert_array_equal(
+        new_transition_prob_nemos, np.ones_like(new_transition_prob_nemos)
+    )
+
+    # check expected shapes
+    assert new_transition_prob_nemos.shape == (1, 1)
+    assert new_initial_prob_nemos.shape == (1,)
+    assert optimized_projection_weights_nemos[0].shape == (2, 1)
+    assert optimized_projection_weights_nemos[1].shape == (1,)
