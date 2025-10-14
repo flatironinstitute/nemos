@@ -117,7 +117,8 @@ def test_forward_backward_regression(decorator):
     np.testing.assert_almost_equal(xis_nemos, xis, decimal=8)
 
 
-def test_for_loop_forward_step():
+@pytest.fixture(scope="module")
+def generate_data_multi_state():
     np.random.seed(44)
     jax.config.update("jax_enable_x64", True)
 
@@ -140,6 +141,13 @@ def test_for_loop_forward_step():
 
     new_sess = np.zeros(n_samples)
     new_sess[[0, 10, 90]] = 1
+    return new_sess, initial_prob, transition_prob, coef, intercept, X, y
+
+
+def test_for_loop_forward_step(generate_data_multi_state):
+    new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
+        generate_data_multi_state
+    )
 
     obs = PoissonObservations()
 
@@ -163,30 +171,10 @@ def test_for_loop_forward_step():
     np.testing.assert_almost_equal(normalization_numpy, normalization)
 
 
-def test_for_loop_backward_step():
-    np.random.seed(43)
-    jax.config.update("jax_enable_x64", True)
-
-    # E-step initial parameters
-    n_states, n_samples = 5, 100
-    initial_prob = np.random.uniform(size=(n_states))
-    initial_prob /= np.sum(initial_prob)
-    transition_prob = np.random.uniform(size=(n_states, n_states))
-    transition_prob /= np.sum(transition_prob, axis=0)
-    transition_prob = transition_prob.T
-    coef, intercept = np.random.randn(2, n_states), np.random.randn(n_states)
-
-    X = np.random.randn(n_samples, 2)
-    y = np.zeros(n_samples)
-    for i, k in enumerate(range(0, 100, 10)):
-        sl = slice(k, k + 10)
-        state = i % n_states
-        rate = np.exp(X[sl].dot(coef[:, state]) + intercept[state])
-        y[sl] = np.random.poisson(rate)
-
-    new_sess = np.zeros(n_samples)
-    new_sess[[0, 10, 90]] = 1
-
+def test_for_loop_backward_step(generate_data_multi_state):
+    new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
+        generate_data_multi_state
+    )
     obs = PoissonObservations()
 
     likelihood = jax.vmap(
@@ -313,15 +301,27 @@ def test_hmm_negative_log_likelihood_regression(decorator):
     np.testing.assert_almost_equal(nll_m_step_nemos, nll_m_step)
 
 
-def expected_log_likelihood_wrt_transitions(transition_prob, xis):
-    return jax.numpy.sum(xis * jax.numpy.log(transition_prob))
+def expected_log_likelihood_wrt_transitions(
+    transition_prob, xis, dirichlet_alphas=None
+):
+    likelihood = jax.numpy.sum(xis * jax.numpy.log(transition_prob))
+    if dirichlet_alphas is None:
+        return likelihood
+    prior = (jax.numpy.log(transition_prob) * (dirichlet_alphas - 1)).sum()
+    return likelihood + prior
 
 
-def expected_log_likelihood_wrt_initial_prob(initial_prob, gammas):
-    return jax.numpy.sum(gammas * jax.numpy.log(initial_prob))
+def expected_log_likelihood_wrt_initial_prob(
+    initial_prob, gammas, dirichlet_alphas=None
+):
+    likelihood = jax.numpy.sum(gammas * jax.numpy.log(initial_prob))
+    if dirichlet_alphas is None:
+        return likelihood
+    prior = (jax.numpy.log(initial_prob) * (dirichlet_alphas - 1)).sum()
+    return likelihood + prior
 
 
-def lagrange_mult_loss(param, args, loss):
+def lagrange_mult_loss(param, args, loss, **kwargs):
     proba, lam = param
     n_states = proba.shape[0]
     if proba.ndim == 2:
@@ -329,7 +329,7 @@ def lagrange_mult_loss(param, args, loss):
     else:
         constraint = proba.sum() - 1
     lagrange_mult_term = (lam * constraint).sum()
-    return loss(proba, args) + lagrange_mult_term
+    return loss(proba, args, **kwargs) + lagrange_mult_term
 
 
 def test_run_m_step_regression():
@@ -434,7 +434,9 @@ def test_run_m_step_regression():
     #    This is the grad of the loss at the probabilities.
     lagrange_multiplier = -jax.grad(expected_log_likelihood_wrt_transitions)(
         new_transition_prob, xis
-    ).mean(axis=1) # note that the lagrange mult makes the gradient all the same for each prob.
+    ).mean(
+        axis=1
+    )  # note that the lagrange mult makes the gradient all the same for each prob.
     # 2) Check that the gradient of the loss is zero
     grad_objective = jax.grad(lagrange_mult_loss)
     (grad_at_transition, grad_at_lagr) = grad_objective(
@@ -521,7 +523,7 @@ def test_single_state_mstep(single_state_inputs):
         new_transition_prob_nemos,
         state,
     ) = run_m_step(
-        X,  # drop intercept column
+        X,
         y,
         alphas * betas,
         xis,
@@ -552,3 +554,106 @@ def test_single_state_mstep(single_state_inputs):
     assert new_initial_prob_nemos.shape == (1,)
     assert optimized_projection_weights_nemos[0].shape == (2, 1)
     assert optimized_projection_weights_nemos[1].shape == (1,)
+
+
+def test_maximization_with_prior(generate_data_multi_state):
+    new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
+        generate_data_multi_state
+    )
+
+    obs = PoissonObservations()
+
+    likelihood = jax.vmap(
+        lambda x, z: obs.likelihood(x, z, aggregate_sample_scores=lambda w: w),
+        in_axes=(None, 1),
+        out_axes=1,
+    )
+    gammas, xis, _, _, _, _ = forward_backward(
+        X,
+        y,
+        initial_prob,
+        transition_prob,
+        (coef, intercept),
+        likelihood_func=likelihood,
+        inverse_link_function=obs.default_inverse_link_function,
+        is_new_session=new_sess.astype(bool),
+    )
+
+    # Define negative log likelihood vmap function
+    negative_log_likelihood = jax.vmap(
+        lambda x, z: obs._negative_log_likelihood(
+            x, z, aggregate_sample_scores=lambda w: w
+        ),
+        in_axes=(None, 1),
+        out_axes=1,
+    )
+
+    # solver
+    def partial_hmm_negative_log_likelihood(
+        weights, design_matrix, observations, posterior_prob
+    ):
+        return hmm_negative_log_likelihood(
+            weights,
+            X=design_matrix,
+            y=observations,
+            posteriors=posterior_prob,
+            inverse_link_function=obs.default_inverse_link_function,
+            negative_log_likelihood_func=negative_log_likelihood,
+        )
+
+    alphas_transition = np.random.uniform(0.1, 1, size=transition_prob.shape)
+    alphas_init = np.random.uniform(0.1, 1, size=initial_prob.shape)
+    solver = LBFGS(partial_hmm_negative_log_likelihood, tol=10**-13)
+    (
+        optimized_projection_weights_nemos,
+        new_initial_prob,
+        new_transition_prob,
+        state,
+    ) = run_m_step(
+        X,
+        y,
+        gammas,
+        xis,
+        (np.zeros_like(coef), np.zeros_like(intercept)),
+        is_new_session=new_sess.astype(bool),
+        solver_run=solver.run,
+        dirichlet_prior_alphas_transition=alphas_transition,
+        dirichlet_prior_alphas_init_prob=alphas_init,
+    )
+
+    lagrange_multiplier = -jax.grad(expected_log_likelihood_wrt_transitions)(
+        new_transition_prob, xis, dirichlet_alphas=alphas_transition
+    ).mean(
+        axis=1
+    )  # note that the lagrange mult makes the gradient all the same for each prob.
+    # 2) Check that the gradient of the loss is zero
+    grad_objective = jax.grad(lagrange_mult_loss)
+    (grad_at_transition, grad_at_lagr) = grad_objective(
+        (new_transition_prob, lagrange_multiplier),
+        xis,
+        expected_log_likelihood_wrt_transitions,
+        dirichlet_alphas=alphas_transition,
+    )
+    np.testing.assert_array_almost_equal(
+        grad_at_transition, np.zeros_like(new_transition_prob)
+    )
+    np.testing.assert_array_almost_equal(
+        grad_at_lagr, np.zeros_like(lagrange_multiplier)
+    )
+    # Initial probabilities:
+    sum_gammas = np.sum(gammas[np.where(new_sess)[0]], axis=0)
+    lagrange_multiplier = -jax.grad(expected_log_likelihood_wrt_initial_prob)(
+        new_initial_prob, sum_gammas, dirichlet_alphas=alphas_init
+    ).mean()  # note that the lagrange mult makes the gradient all the same for each prob.
+    # 2) Check that the gradient of the loss is zero
+    grad_objective = jax.grad(lagrange_mult_loss)
+    (grad_at_init, grad_at_lagr) = grad_objective(
+        (new_initial_prob, lagrange_multiplier),
+        sum_gammas,
+        expected_log_likelihood_wrt_initial_prob,
+        dirichlet_alphas=alphas_init,
+    )
+    np.testing.assert_array_almost_equal(grad_at_init, np.zeros_like(new_initial_prob))
+    np.testing.assert_array_almost_equal(
+        grad_at_lagr, np.zeros_like(lagrange_multiplier)
+    )
