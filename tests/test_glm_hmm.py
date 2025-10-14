@@ -517,10 +517,10 @@ def test_single_state_mstep(single_state_inputs):
 
     solver = LBFGS(partial_hmm_negative_log_likelihood, tol=10**-13)
     (
-    optimized_projection_weights_nemos,
-    new_initial_prob_nemos,
-    new_transition_prob_nemos,
-    state,
+        optimized_projection_weights_nemos,
+        new_initial_prob_nemos,
+        new_transition_prob_nemos,
+        state,
     ) = run_m_step(
         X,
         y,
