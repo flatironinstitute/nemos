@@ -490,7 +490,8 @@ def hmm_negative_log_likelihood(
     """
     Compute the negative log-likelihood of the GLM-HMM.
 
-    Compute the negative log-likelihood as a function of the projection weights.
+    Compute the expected negative log-likelihood as a function of
+    the projection weights. The expectation is taken over the posteriors.
 
     Parameters
     ----------
@@ -514,6 +515,7 @@ def hmm_negative_log_likelihood(
     """
     coef, intercept = glm_params
     if coef.ndim > 2:
+        # coef.shape is (n_features, n_neurons, n_states)
         predicted_rate = inverse_link_function(
             jnp.einsum("ik, kjw->ijw", X, coef) + intercept
         )
@@ -542,7 +544,7 @@ def run_m_step(
     joint_posterior: Array,
     glm_params: Tuple[Array, Array],
     is_new_session: Array,
-    solver_run: Callable[[Array, Array, Array, Array], Array],
+    solver_run: Callable[[Tuple[Array, Array], Array, Array, Array], Array],
     dirichlet_prior_alphas_init_prob: Array | None = None,
     dirichlet_prior_alphas_transition: Array | None = None,
 ) -> Tuple[Array, Array, Array, Any]:
@@ -552,25 +554,27 @@ def run_m_step(
     Parameters
     ----------
     X:
-        Design matrix of observations.
+        Design matrix of observations, shape (n_samples, n_features).
     y:
-        Target responses.
+        Target responses, shape ``(n_samples,)`` or ``(n_samples, n_neurons)``.
     posteriors:
-        Posterior probabilities over states.
+        Posterior probabilities over states, shape ``(n_samples, n_states)``.
     joint_posterior:
-        Joint posterior probabilities over pairs of states
-        :math:`P(z_{t-1}, z_t \mid X, y, \theta_{\text{old}})`.
+        Joint posterior probabilities over pairs of states summed over samples. Shape ``(n_states, n_states)``.
+        :math:`\sum_t P(z_{t-1}, z_t \mid X, y, \theta_{\text{old}})`.
     glm_params:
-        Current projection coefficients and intercept terms.
+        Current GLM coefficients and intercept terms. Coefficients have shape ``(n_features, n_states)`` for
+        single observation fits and ``(n_features, n_neurons, n_states)`` for population fits. Intercepts have
+        shape ``(n_states,)`` for single observation fits and ``(n_states, n_neurons)`` for population fits.
     is_new_session:
-        Boolean mask for the first observation of each session.
+        Boolean mask marking the first observation of each session. Shape ``(n_samples,)``.
     solver_run:
         Callable performing a full optimization loop for the GLM weights.
         Note that the prior for the projection weights is baked in the solver run.
     dirichlet_prior_alphas_init_prob:
-        Prior for the initial states.
+        Prior for the initial states, shape ``(n_states,)``.
     dirichlet_prior_alphas_transition:
-        Prior for the transition probabilities.
+        Prior for the transition probabilities, shape ``(n_states, n_states)``.
 
     Returns
     -------
@@ -582,6 +586,10 @@ def run_m_step(
         Updated transition matrix.
     state:
         State returned by the solver.
+
+    Notes
+    -----
+    In the current implementation all Dirichlet alpha coefficients must be greater than one.
     """
 
     # # Update Initial state probability Eq. 13.18
