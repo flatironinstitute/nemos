@@ -3,7 +3,7 @@ name: ci
 on:
   workflow_dispatch:
   schedule:
-    - cron: 0 0 1 * 0     # monthly
+    - cron: 0 0 1 * *     # monthly
   pull_request:
     branches:
       - main

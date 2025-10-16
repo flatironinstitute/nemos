@@ -829,115 +829,6 @@ class GammaObservations(Observations):
         )  # pearson residuals
 
 
-def check_observation_model(observation_model):
-    r"""
-    Check the attributes of an observation model for compliance.
-
-    This function ensures that the observation model has the required attributes and that each
-    attribute is a callable function. Additionally, it checks if these functions return
-    jax.numpy.ndarray objects, and in the case of 'inverse_link_function', whether it is
-    differentiable.
-
-    Parameters
-    ----------
-    observation_model : object
-        An instance of an observation model that should have specific attributes.
-
-    Raises
-    ------
-    AttributeError
-        If the `observation_model` does not have one of the required attributes.
-
-    TypeError
-        If an attribute is not a callable function.
-    TypeError
-        If a function does not return a jax.numpy.ndarray.
-    TypeError
-        If 'inverse_link_function' is not differentiable.
-
-    Examples
-    --------
-    >>> class MyObservationModel:
-    ...     def default_inverse_link_function(self):
-    ...         return jax.scipy.special.expit
-    ...     def _negative_log_likelihood(self, params, y_true, aggregate_sample_scores=jnp.mean):
-    ...         return -aggregate_sample_scores(y_true * jax.scipy.special.logit(params) + \
-    ...                 (1 - y_true) * jax.scipy.special.logit(1 - params))
-    ...     def pseudo_r2(self, params, y_true, aggregate_sample_scores=jnp.mean):
-    ...         return 1 - (self._negative_log_likelihood(y_true, params, aggregate_sample_scores) /
-    ...                     jnp.sum((y_true - y_true.mean()) ** 2))
-    ...     def sample_generator(self, key, params, scale=1.):
-    ...         return jax.random.bernoulli(key, params)
-    ...     def estimate_scale(self, y, predicted_rate, dof_resid):
-    ...         return 1
-    ...     def log_likelihood(self, params, y_true, aggregate_sample_scores=jnp.mean):
-    ...         return -self._negative_log_likelihood(params, y_true, aggregate_sample_scores)
-    >>> model = MyObservationModel()
-    >>> check_observation_model(model)  # Should pass without error if the model is correctly implemented.
-    """
-    # Define the checks to be made on each attribute
-
-    is_nemos = isinstance(
-        observation_model,
-        (
-            PoissonObservations,
-            GammaObservations,
-            BernoulliObservations,
-            NegativeBinomialObservations,
-        ),
-    )
-
-    checks = {}
-    if not is_nemos:
-        checks.update(
-            {
-                "_negative_log_likelihood": {
-                    "input": [
-                        0.5 * jnp.array([1.0, 1.0, 1.0]),
-                        jnp.array([1.0, 1.0, 1.0]),
-                    ],
-                    "test_scalar_func": True,
-                },
-                "pseudo_r2": {
-                    "input": [
-                        0.5 * jnp.array([1.0, 1.0, 1.0]),
-                        jnp.array([1.0, 1.0, 1.0]),
-                    ],
-                    "test_scalar_func": True,
-                },
-                "sample_generator": {
-                    "input": [jax.random.key(123), 0.5 * jnp.array([1.0, 1.0, 1.0]), 1],
-                    "test_preserve_shape": True,
-                },
-            }
-        )
-
-    # Perform checks for each attribute
-    for attr_name, check_info in checks.items():
-
-        # check if the observation model has the attribute
-        utils.assert_has_attribute(observation_model, attr_name)
-
-        # check if the attribute is a callable
-        func = getattr(observation_model, attr_name)
-        utils.assert_is_callable(func, attr_name)
-
-        # check that the callable returns an array
-        utils.assert_returns_ndarray(func, check_info["input"], attr_name)
-
-        if check_info.get("test_differentiable"):
-            utils.assert_differentiable(func, attr_name)
-
-        if "test_preserve_shape" in check_info:
-            index = int(check_info["test_preserve_shape"])
-            utils.assert_preserve_shape(
-                func, check_info["input"], attr_name, input_index=index
-            )
-
-        if check_info.get("test_scalar_func"):
-            utils.assert_scalar_func(func, check_info["input"], attr_name)
-
-
 class BernoulliObservations(Observations):
     """
     Model observations as Bernoulli random variables.
@@ -1030,7 +921,7 @@ class BernoulliObservations(Observations):
         Returns
         -------
         :
-            The Bernoulli negative log-likehood. Shape (1,).
+            The Bernoulli negative log-likelihood. Shape (1,).
 
         Notes
         -----
@@ -1483,4 +1374,159 @@ class NegativeBinomialObservations(Observations):
         `glm.nb <https://www.rdocumentation.org/packages/MASS/versions/7.3-65/topics/glm.nb>`_
         for more details.
         """
-        return self.scale
+        return jnp.array(self.scale)
+
+
+def check_observation_model(observation_model, force_checks=False):
+    r"""
+    Check the attributes of an observation model for compliance.
+
+    This function ensures that the observation model has the required attributes and that each
+    attribute is a callable function. Additionally, it checks if these functions return
+    jax.numpy.ndarray objects, and in the case of 'inverse_link_function', whether it is
+    differentiable.
+
+    Parameters
+    ----------
+    observation_model : object
+        An instance of an observation model that should have specific attributes.
+    force_checks:
+        If true, always checks. This is intended for testing purposes, to make sure
+        that the check passes for native nemos observation models.
+
+    Raises
+    ------
+    AttributeError
+        If the `observation_model` does not have one of the required attributes.
+
+    TypeError
+        If an attribute is not a callable function.
+    TypeError
+        If a function does not return a jax.numpy.ndarray.
+    TypeError
+        If 'inverse_link_function' is not differentiable.
+
+    Examples
+    --------
+    >>> import jax
+    >>> import jax.numpy as jnp
+    >>> class MyObservationModel:
+    ...     @property
+    ...     def default_inverse_link_function(self):
+    ...         return jax.scipy.special.expit
+    ...     def _negative_log_likelihood(self, y, rate, aggregate_sample_scores=jnp.mean):
+    ...         return -aggregate_sample_scores(y * jax.scipy.special.logit(rate) + \
+    ...                                         (1 - y) * jax.scipy.special.logit(1 - rate))
+    ...     def pseudo_r2(self, y, rate, aggregate_sample_scores=jnp.mean):
+    ...         return 1 - (self._negative_log_likelihood(y, rate, aggregate_sample_scores) /
+    ...                     jnp.sum((y - y.mean()) ** 2))
+    ...     def sample_generator(self, key, rate, scale=1.):
+    ...         return jax.random.bernoulli(key, rate)
+    ...     def estimate_scale(self, y, predicted_rate, dof_resid):
+    ...         return jnp.array(1.)
+    ...     def log_likelihood(self, y, rate, aggregate_sample_scores=jnp.mean):
+    ...         return -self._negative_log_likelihood(y, rate, aggregate_sample_scores)
+    ...     def likelihood(self, y, rate, aggregate_sample_scores=jnp.mean):
+    ...         return jnp.exp(self.log_likelihood(y, rate, aggregate_sample_scores))
+    ...     def deviance(self, y, rate, scale=1.0):
+    ...         identity = lambda x: x
+    ...         return 2 * (
+    ...                 self.log_likelihood(y, rate, identity) -
+    ...                 self.log_likelihood(y.mean()*jnp.ones_like(y), rate, identity))
+    >>> model = MyObservationModel()
+    >>> check_observation_model(model)  # Should pass without error if the model is correctly implemented.
+    """
+    # Define the checks to be made on each attribute
+
+    is_nemos = isinstance(
+        observation_model,
+        (
+            PoissonObservations,
+            GammaObservations,
+            BernoulliObservations,
+            NegativeBinomialObservations,
+        ),
+    )
+
+    checks = {}
+    if not is_nemos or force_checks:
+        checks.update(
+            {
+                "_negative_log_likelihood": {
+                    "input": [
+                        0.5 * jnp.array([1.0, 1.0, 1.0]),
+                        jnp.array([1.0, 1.0, 1.0]),
+                    ],
+                    "test_scalar_func": True,
+                },
+                "pseudo_r2": {
+                    "input": [
+                        0.5 * jnp.array([1.0, 1.0, 1.0]),
+                        jnp.array([1.0, 1.0, 1.0]),
+                    ],
+                    "test_scalar_func": True,
+                },
+                "log_likelihood": {
+                    "input": [
+                        0.5 * jnp.array([1.0, 1.0, 1.0]),
+                        jnp.array([1.0, 1.0, 1.0]),
+                    ],
+                    "test_scalar_func": True,
+                },
+                "likelihood": {
+                    "input": [
+                        0.5 * jnp.array([1.0, 1.0, 1.0]),
+                        jnp.array([1.0, 1.0, 1.0]),
+                    ],
+                    "test_scalar_func": True,
+                },
+                "deviance": {
+                    "input": [
+                        0.5 * jnp.array([1.0, 1.0, 1.0]),
+                        jnp.array([1.0, 1.0, 1.0]),
+                    ],
+                    "test_scalar_func": False,
+                },
+                "estimate_scale": {
+                    "input": [
+                        0.5 * jnp.array([1.0, 1.0, 1.0]),
+                        jnp.array([1.0, 1.0, 1.0]),
+                        1,
+                    ],
+                    "test_scalar_func": False,
+                },
+                "sample_generator": {
+                    "input": [jax.random.key(123), 0.5 * jnp.array([1.0, 1.0, 1.0]), 1],
+                    "test_preserve_shape": True,
+                },
+                "default_inverse_link_function": {
+                    "input": [jnp.array([1.0, 1.0, 1.0])],
+                    "test_preserve_shape": False,
+                },
+            }
+        )
+
+    # Perform checks for each attribute
+    for attr_name, check_info in checks.items():
+
+        # check if the observation model has the attribute
+        utils.assert_has_attribute(observation_model, attr_name)
+
+        # check if the attribute is a callable
+        func = getattr(observation_model, attr_name)
+        utils.assert_is_callable(func, attr_name)
+
+        # check that the callable returns an array
+        utils.assert_returns_ndarray(func, check_info["input"], attr_name)
+
+        if check_info.get("test_differentiable"):
+            utils.assert_differentiable(func, attr_name)
+
+        if "test_preserve_shape" in check_info:
+            index = int(check_info["test_preserve_shape"])
+            utils.assert_preserve_shape(
+                func, check_info["input"], attr_name, input_index=index
+            )
+
+        if check_info.get("test_scalar_func"):
+            utils.assert_scalar_func(func, check_info["input"], attr_name)
