@@ -1212,7 +1212,7 @@ class GLM(BaseRegressor):
         )
 
     def __sklearn_clone__(self) -> GLM:
-        """Clone the PopulationGLM, dropping feature_mask."""
+        """Clone the GLM."""
         params = self.get_params(deep=False)
         klass = self.__class__(**params)
         return klass
