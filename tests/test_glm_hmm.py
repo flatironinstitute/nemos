@@ -1,3 +1,4 @@
+import itertools
 from functools import partial
 
 import jax
@@ -16,6 +17,52 @@ from nemos.glm_hmm.expectation_maximization import (
 )
 from nemos.observation_models import BernoulliObservations, PoissonObservations
 from nemos.third_party.jaxopt.jaxopt import LBFGS
+
+
+def prepare_solver_for_m_step_single_neuron(
+    X, y, initial_prob, transition_prob, glm_params, new_sess, obs
+):
+    (coef, intercept) = glm_params
+    likelihood = jax.vmap(
+        lambda x, z: obs.likelihood(x, z, aggregate_sample_scores=lambda w: w),
+        in_axes=(None, 1),
+        out_axes=1,
+    )
+    gammas, xis, _, _, _, _ = forward_backward(
+        X,
+        y,
+        initial_prob,
+        transition_prob,
+        (coef, intercept),
+        likelihood_func=likelihood,
+        inverse_link_function=obs.default_inverse_link_function,
+        is_new_session=new_sess.astype(bool),
+    )
+
+    # Define negative log likelihood vmap function
+    negative_log_likelihood = jax.vmap(
+        lambda x, z: obs._negative_log_likelihood(
+            x, z, aggregate_sample_scores=lambda w: w
+        ),
+        in_axes=(None, 1),
+        out_axes=1,
+    )
+
+    # solver
+    def partial_hmm_negative_log_likelihood(
+        weights, design_matrix, observations, posterior_prob
+    ):
+        return hmm_negative_log_likelihood(
+            weights,
+            X=design_matrix,
+            y=observations,
+            posteriors=posterior_prob,
+            inverse_link_function=obs.default_inverse_link_function,
+            negative_log_likelihood_func=negative_log_likelihood,
+        )
+
+    solver = LBFGS(partial_hmm_negative_log_likelihood, tol=10**-13)
+    return solver, gammas, xis
 
 
 def forward_step_numpy(py_z, new_sess, initial_prob, transition_prob):
@@ -590,48 +637,13 @@ def test_maximization_with_prior(generate_data_multi_state):
     )
 
     obs = PoissonObservations()
-
-    likelihood = jax.vmap(
-        lambda x, z: obs.likelihood(x, z, aggregate_sample_scores=lambda w: w),
-        in_axes=(None, 1),
-        out_axes=1,
+    solver, gammas, xis = prepare_solver_for_m_step_single_neuron(
+        X, y, initial_prob, transition_prob, (coef, intercept), new_sess, obs
     )
-    gammas, xis, _, _, _, _ = forward_backward(
-        X,
-        y,
-        initial_prob,
-        transition_prob,
-        (coef, intercept),
-        likelihood_func=likelihood,
-        inverse_link_function=obs.default_inverse_link_function,
-        is_new_session=new_sess.astype(bool),
-    )
-
-    # Define negative log likelihood vmap function
-    negative_log_likelihood = jax.vmap(
-        lambda x, z: obs._negative_log_likelihood(
-            x, z, aggregate_sample_scores=lambda w: w
-        ),
-        in_axes=(None, 1),
-        out_axes=1,
-    )
-
-    # solver
-    def partial_hmm_negative_log_likelihood(
-        weights, design_matrix, observations, posterior_prob
-    ):
-        return hmm_negative_log_likelihood(
-            weights,
-            X=design_matrix,
-            y=observations,
-            posteriors=posterior_prob,
-            inverse_link_function=obs.default_inverse_link_function,
-            negative_log_likelihood_func=negative_log_likelihood,
-        )
 
     alphas_transition = np.random.uniform(1, 3, size=transition_prob.shape)
     alphas_init = np.random.uniform(1, 3, size=initial_prob.shape)
-    solver = LBFGS(partial_hmm_negative_log_likelihood, tol=10**-13)
+
     (
         optimized_projection_weights_nemos,
         new_initial_prob,
@@ -763,4 +775,190 @@ def test_e_and_m_step_for_population(generate_data_multi_state_population):
         solver_run=solver.run,
         dirichlet_prior_alphas_transition=alphas_transition,
         dirichlet_prior_alphas_init_prob=alphas_init,
+    )
+
+
+@pytest.mark.parametrize("state_idx", range(5))
+def test_m_step_set_alpha_init_to_inf(generate_data_multi_state, state_idx):
+    new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
+        generate_data_multi_state
+    )
+
+    obs = PoissonObservations()
+    solver, gammas, xis = prepare_solver_for_m_step_single_neuron(
+        X, y, initial_prob, transition_prob, (coef, intercept), new_sess, obs
+    )
+
+    alphas_transition = np.random.uniform(1, 3, size=transition_prob.shape)
+    alphas_init = np.random.uniform(1, 3, size=initial_prob.shape)
+    alphas_init[state_idx] = 10**20
+
+    (
+        optimized_projection_weights_nemos,
+        new_initial_prob,
+        new_transition_prob,
+        state,
+    ) = run_m_step(
+        X,
+        y,
+        gammas,
+        xis,
+        (np.zeros_like(coef), np.zeros_like(intercept)),
+        is_new_session=new_sess.astype(bool),
+        solver_run=solver.run,
+        dirichlet_prior_alphas_transition=alphas_transition,
+        dirichlet_prior_alphas_init_prob=alphas_init,
+    )
+    np.testing.assert_array_almost_equal(
+        new_initial_prob, np.eye(new_initial_prob.shape[0])[state_idx]
+    )
+
+
+@pytest.mark.parametrize("row, col", itertools.product(range(3), range(3)))
+def test_m_step_set_alpha_transition_to_inf(generate_data_multi_state, row, col):
+    new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
+        generate_data_multi_state
+    )
+
+    obs = PoissonObservations()
+    solver, gammas, xis = prepare_solver_for_m_step_single_neuron(
+        X, y, initial_prob, transition_prob, (coef, intercept), new_sess, obs
+    )
+
+    alphas_transition = np.random.uniform(1, 3, size=transition_prob.shape)
+    alphas_init = np.random.uniform(1, 3, size=initial_prob.shape)
+    alphas_transition[row, col] = 10**20
+
+    (
+        optimized_projection_weights_nemos,
+        new_initial_prob,
+        new_transition_prob,
+        state,
+    ) = run_m_step(
+        X,
+        y,
+        gammas,
+        xis,
+        (np.zeros_like(coef), np.zeros_like(intercept)),
+        is_new_session=new_sess.astype(bool),
+        solver_run=solver.run,
+        dirichlet_prior_alphas_transition=alphas_transition,
+        dirichlet_prior_alphas_init_prob=alphas_init,
+    )
+    np.testing.assert_array_almost_equal(
+        new_transition_prob[row, :], np.eye(new_initial_prob.shape[0])[col]
+    )
+
+
+def test_m_step_set_alpha_init_to_1(generate_data_multi_state):
+    new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
+        generate_data_multi_state
+    )
+
+    obs = PoissonObservations()
+    solver, gammas, xis = prepare_solver_for_m_step_single_neuron(
+        X, y, initial_prob, transition_prob, (coef, intercept), new_sess, obs
+    )
+
+    alphas_transition = np.random.uniform(1, 3, size=transition_prob.shape)
+    alphas_init = np.ones(initial_prob.shape)
+
+    (
+        prior_optimized_projection_weights_nemos,
+        prior_initial_prob,
+        prior_transition_prob,
+        state,
+    ) = run_m_step(
+        X,
+        y,
+        gammas,
+        xis,
+        (np.zeros_like(coef), np.zeros_like(intercept)),
+        is_new_session=new_sess.astype(bool),
+        solver_run=solver.run,
+        dirichlet_prior_alphas_transition=alphas_transition,
+        dirichlet_prior_alphas_init_prob=alphas_init,
+    )
+    (
+        optimized_projection_weights_nemos,
+        no_prior_initial_prob,
+        no_prior_transition_prob,
+        state,
+    ) = run_m_step(
+        X,
+        y,
+        gammas,
+        xis,
+        (np.zeros_like(coef), np.zeros_like(intercept)),
+        is_new_session=new_sess.astype(bool),
+        solver_run=solver.run,
+        dirichlet_prior_alphas_transition=alphas_transition,
+        dirichlet_prior_alphas_init_prob=None,
+    )
+    np.testing.assert_array_equal(no_prior_initial_prob, prior_initial_prob)
+    np.testing.assert_array_equal(no_prior_transition_prob, prior_transition_prob)
+    np.testing.assert_array_equal(
+        optimized_projection_weights_nemos[0],
+        prior_optimized_projection_weights_nemos[0],
+    )
+    np.testing.assert_array_equal(
+        optimized_projection_weights_nemos[1],
+        prior_optimized_projection_weights_nemos[1],
+    )
+
+
+def test_m_step_set_alpha_transition_to_1(generate_data_multi_state):
+    new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
+        generate_data_multi_state
+    )
+
+    obs = PoissonObservations()
+    solver, gammas, xis = prepare_solver_for_m_step_single_neuron(
+        X, y, initial_prob, transition_prob, (coef, intercept), new_sess, obs
+    )
+
+    alphas_transition = np.ones(transition_prob.shape)
+    alphas_init = np.random.uniform(1, 3, size=initial_prob.shape)
+
+    (
+        prior_optimized_projection_weights_nemos,
+        prior_initial_prob,
+        prior_transition_prob,
+        state,
+    ) = run_m_step(
+        X,
+        y,
+        gammas,
+        xis,
+        (np.zeros_like(coef), np.zeros_like(intercept)),
+        is_new_session=new_sess.astype(bool),
+        solver_run=solver.run,
+        dirichlet_prior_alphas_transition=alphas_transition,
+        dirichlet_prior_alphas_init_prob=alphas_init,
+    )
+    (
+        optimized_projection_weights_nemos,
+        no_prior_initial_prob,
+        no_prior_transition_prob,
+        state,
+    ) = run_m_step(
+        X,
+        y,
+        gammas,
+        xis,
+        (np.zeros_like(coef), np.zeros_like(intercept)),
+        is_new_session=new_sess.astype(bool),
+        solver_run=solver.run,
+        dirichlet_prior_alphas_transition=None,
+        dirichlet_prior_alphas_init_prob=alphas_init,
+    )
+    np.testing.assert_array_equal(no_prior_initial_prob, prior_initial_prob)
+    np.testing.assert_array_equal(no_prior_transition_prob, prior_transition_prob)
+    np.testing.assert_array_equal(
+        optimized_projection_weights_nemos[0],
+        prior_optimized_projection_weights_nemos[0],
+    )
+    np.testing.assert_array_equal(
+        optimized_projection_weights_nemos[1],
+        prior_optimized_projection_weights_nemos[1],
     )
