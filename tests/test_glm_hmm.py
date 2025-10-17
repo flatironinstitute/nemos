@@ -896,7 +896,9 @@ def test_m_step_set_alpha_init_to_1(generate_data_multi_state):
         dirichlet_prior_alphas_init_prob=None,
     )
     np.testing.assert_array_almost_equal(no_prior_initial_prob, prior_initial_prob)
-    np.testing.assert_array_almost_equal(no_prior_transition_prob, prior_transition_prob)
+    np.testing.assert_array_almost_equal(
+        no_prior_transition_prob, prior_transition_prob
+    )
     np.testing.assert_array_almost_equal(
         optimized_projection_weights_nemos[0],
         prior_optimized_projection_weights_nemos[0],
@@ -953,7 +955,9 @@ def test_m_step_set_alpha_transition_to_1(generate_data_multi_state):
         dirichlet_prior_alphas_init_prob=alphas_init,
     )
     np.testing.assert_array_almost_equal(no_prior_initial_prob, prior_initial_prob)
-    np.testing.assert_array_almost_equal(no_prior_transition_prob, prior_transition_prob)
+    np.testing.assert_array_almost_equal(
+        no_prior_transition_prob, prior_transition_prob
+    )
     np.testing.assert_array_almost_equal(
         optimized_projection_weights_nemos[0],
         prior_optimized_projection_weights_nemos[0],
