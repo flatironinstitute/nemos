@@ -308,6 +308,38 @@ def backward_pass(
     return betas
 
 
+def initialize_new_session(n_samples, is_new_session):
+    """Initialize new session indicator."""
+    # Revise if the data is one single session or multiple sessions.
+    # If new_sess is not provided, assume one session
+    if is_new_session is None:
+        # default: all False, but first time bin must be True
+        is_new_session = jax.lax.dynamic_update_index_in_dim(
+            jnp.zeros(n_samples, dtype=bool), True, 0, axis=0
+        )
+    else:
+        # use the user-provided tree, but force the first time bin to be True
+        is_new_session = jax.lax.dynamic_update_index_in_dim(
+            jnp.asarray(is_new_session, dtype=bool), True, 0, axis=0
+        )
+
+    return is_new_session
+
+
+def compute_rate_per_state(X, glm_params, inverse_link_function):
+    """Compute the GLM mean per state."""
+    coef, intercept = glm_params
+
+    # Predicted y
+    if coef.ndim > 2:
+        predicted_rate_given_state = inverse_link_function(
+            jnp.einsum("ik, kjw->ijw", X, coef) + intercept
+        )
+    else:
+        predicted_rate_given_state = inverse_link_function(X @ coef + intercept)
+    return predicted_rate_given_state
+
+
 @partial(jax.jit, static_argnames=["inverse_link_function", "likelihood_func"])
 def forward_backward(
     X: Array,
@@ -382,30 +414,12 @@ def forward_backward(
     ----------
     .. [1] Bishop, C. M. (2006). *Pattern recognition and machine learning*. Springer.
     """
-    coef, intercept = glm_params
     # Initialize variables
     n_time_bins = X.shape[0]
-
-    # Revise if the data is one single session or multiple sessions.
-    # If new_sess is not provided, assume one session
-    if is_new_session is None:
-        # default: all False, but first time bin must be True
-        is_new_session = jax.lax.dynamic_update_index_in_dim(
-            jnp.zeros(y.shape[0], dtype=bool), True, 0, axis=0
-        )
-    else:
-        # use the user-provided tree, but force the first time bin to be True
-        is_new_session = jax.lax.dynamic_update_index_in_dim(
-            jnp.asarray(is_new_session, dtype=bool), True, 0, axis=0
-        )
-
-    # Predicted y
-    if coef.ndim > 2:
-        predicted_rate_given_state = inverse_link_function(
-            jnp.einsum("ik, kjw->ijw", X, coef) + intercept
-        )
-    else:
-        predicted_rate_given_state = inverse_link_function(X @ coef + intercept)
+    is_new_session = initialize_new_session(y.shape[0], is_new_session)
+    predicted_rate_given_state = compute_rate_per_state(
+        X, glm_params, inverse_link_function
+    )
 
     # Compute likelihood given the fixed weights
     # Data likelihood p(y|z) from emissions model
@@ -606,3 +620,64 @@ def run_m_step(
     optimized_projection_weights, state = solver_run(glm_params, X, y, posteriors)
 
     return optimized_projection_weights, new_initial_prob, new_transition_prob, state
+
+
+def max_sum(
+    X: Array,
+    y: Array,
+    initial_prob: Array,
+    transition_prob: Array,
+    glm_params: Tuple[Array, Array],
+    inverse_link_function: Callable,
+    log_likelihood_func: Callable[[Array, Array], Array],
+    is_new_session: Array | None = None,
+):
+    """
+    Find maximum a posteriori (MAP) state path via the max-sum algorithm.
+
+    Parameters
+    ----------
+    X
+    y
+    initial_prob
+    transition_prob
+    glm_params
+    inverse_link_function
+    log_likelihood_func
+    is_new_session
+
+    Returns
+    -------
+    :
+        The MAP state path.
+
+    """
+    is_new_session = initialize_new_session(y.shape[0], is_new_session)
+    predicted_rate_given_state = compute_rate_per_state(
+        X, glm_params, inverse_link_function
+    )
+    log_emission = log_likelihood_func(y, predicted_rate_given_state)
+    log_transition = jnp.log(transition_prob)
+    log_init = jnp.log(initial_prob)
+    n_states = initial_prob.shape[0]
+    states = jnp.arange(n_states, dtype=int)
+
+    def forward_max_sum(omega, log_em):
+        step = log_em[None] + log_transition + omega[:, None]
+        max_prob_state = jnp.argmax(step, axis=0)
+        omega = step[max_prob_state, states]
+        return omega, max_prob_state
+
+    init_omega = log_init + log_emission[0]
+    omega, max_prob_state = jax.lax.scan(forward_max_sum, init_omega, log_emission[1:])
+
+    map_init = jnp.zeros(n_states, dtype=int).at[jnp.argmax(omega)].set(1)
+
+    def backward_max_sum(current_map, max_prob_st):
+        prev_state = max_prob_st[jnp.argmax(current_map)]
+        current_map = jnp.zeros(n_states, dtype=int).at[prev_state].set(1)
+        return current_map, current_map
+
+    _, map_path = jax.lax.scan(backward_max_sum, map_init, max_prob_state, reverse=True)
+
+    return jnp.concatenate([map_path, map_init[None]])

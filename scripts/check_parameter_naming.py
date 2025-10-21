@@ -89,6 +89,8 @@ VALID_PAIRS = [
             r=2,
         )
     ),
+    {"likelihood_func", "log_likelihood_func"},
+    {"negative_log_likelihood_func", "log_likelihood_func"},
 ]
 
 
