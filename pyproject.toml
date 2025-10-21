@@ -26,7 +26,7 @@ dependencies = [
     "numpy>1.20",                   # Numerical computing library
     "scipy>=1.10",                  # Scientific computing library
     "typing_extensions>=4.6",       # Typing extensions for Python
-    "pynapple>=0.6.6",
+    "pynapple @ git+ssh://git@github.com/pynapple-org/pynapple.git@dev",
     "scikit-learn",                 # BaseEstimator and Tags inheritance
 ]
 
