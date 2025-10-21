@@ -7,11 +7,7 @@ from typing import TYPE_CHECKING, Generator
 import numpy as np
 
 from ..typing import FeatureMatrix
-from ._composition_utils import (
-    _iterate_over_components,
-    get_input_shape,
-    is_basis_like,
-)
+from ._composition_utils import _iterate_over_components, get_input_shape, is_basis_like
 
 if TYPE_CHECKING:
     from ._basis import Basis
