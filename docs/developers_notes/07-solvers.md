@@ -90,7 +90,7 @@ Optimistix does not have implementations of Nesterov acceleration, so gradient d
 (Although what Optax calls Nesterov acceleration is not the [original method developed for convex optimization](https://hengshuaiyao.github.io/papers/nesterov83.pdf) but the [version adapted for training deep networks with SGD](https://proceedings.mlr.press/v28/sutskever13.html). JAXopt did implement the original method, and [a port of this is planned to be added to NeMoS](https://github.com/flatironinstitute/nemos/issues/380).)
 
 Available solvers and which implementation they dispatch to are defined in the solver registry.
-A list of available solvers is provided by `list_available_solvers`, and extended documentation about each solver can be accessed using `get_solver_documentation`.
+A list of available solvers is provided by {py:func}`nemos.solvers.list_available_solvers`, and extended documentation about each solver can be accessed using {py:func}`nemos.solvers.get_solver_documentation`.
 
 (custom-solvers)=
 ## Custom solvers
