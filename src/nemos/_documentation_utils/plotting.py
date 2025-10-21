@@ -520,10 +520,11 @@ def plot_coupling(
     alpha=0.5,
     cmap_label="hsv",
 ):
-    pref_ang = tuning.idxmax()
+    raw_feature_dim_name = list(tuning.dims)[1]
+    pref_ang = tuning.idxmax(dim=raw_feature_dim_name)
     cmap_tun = plt.colormaps[cmap_label]
-    color_tun = (pref_ang.values - pref_ang.values.min()) / (
-        pref_ang.values.max() - pref_ang.values.min()
+    color_tun = (pref_ang.data - pref_ang.data.min()) / (
+        pref_ang.data.max() - pref_ang.data.min()
     )
 
     # plot heatmap
@@ -575,9 +576,9 @@ def plot_coupling(
         )  # Add new polar axis
 
         axs[rec, send + 1].fill_between(
-            tuning.iloc[:, rec].index,
-            np.zeros(len(tuning)),
-            tuning.iloc[:, rec].values,
+            tuning[:, rec][raw_feature_dim_name],
+            np.zeros(tuning.shape[0]),
+            tuning[:, rec],
             color=cmap_tun(color_tun[rec]),
             alpha=0.5,
         )
