@@ -20,10 +20,6 @@ Abstract Class Regularizer
 └─ Concrete Class GroupLasso
 ```
 
-:::{note}
-If we need advanced adaptive solvers (e.g., Adam, LAMB etc.) in the future, we can use [`Optax`](https://optax.readthedocs.io/en/latest/) solvers through `OptimistixOptaxSolver`. See `OptimistixOptaxLBFGS` for an example.
-:::
-
 (the-abstract-class-regularizer)=
 ## The Abstract Class `Regularizer`
 
