@@ -706,32 +706,38 @@ def plot_basis(n_basis_funcs=8, window_size_sec=0.8):
 
 
 def plot_position_phase_speed_tuning(
-    pf, glm_pf, tc_speed, glm_speed, tc_pos_theta, glm_pos_theta, xybins
+    pf,
+    glm_pf,
+    tc_speed,
+    glm_speed,
+    tc_pos_theta,
+    glm_pos_theta,
 ):
     fig = plt.figure()
     gs = plt.GridSpec(2, 2)
     plt.subplot(gs[0, 0])
-    plt.plot(pf)
-    plt.plot(glm_pf, label="GLM")
+    dim_name = list(glm_pf.dims)[0]
+    plt.plot(pf[dim_name], pf)
+    plt.plot(glm_pf[dim_name], glm_pf, label="GLM")
     plt.xlabel("Position (cm)")
     plt.ylabel("Firing rate (Hz)")
     plt.legend()
 
     plt.subplot(gs[0, 1])
-    plt.plot(tc_speed)
-    plt.plot(glm_speed, label="GLM")
+    dim_name = list(tc_speed.dims)[0]
+    plt.plot(tc_speed[dim_name], tc_speed)
+    plt.plot(glm_speed[dim_name], glm_speed, label="GLM")
     plt.xlabel("Speed (cm/s)")
     plt.ylabel("Firing rate (Hz)")
     plt.legend()
 
     plt.subplot(gs[1, 0])
-    extent = (xybins[0][0], xybins[0][-1], xybins[1][0], xybins[1][-1])
-    plt.imshow(tc_pos_theta.T, aspect="auto", origin="lower", extent=extent)
+    plt.imshow(tc_pos_theta.T, aspect="auto", origin="lower")
     plt.xlabel("Position (cm)")
     plt.ylabel("Theta Phase (rad)")
 
     plt.subplot(gs[1, 1])
-    plt.imshow(glm_pos_theta.T, aspect="auto", origin="lower", extent=extent)
+    plt.imshow(glm_pos_theta.T, aspect="auto", origin="lower")
     plt.xlabel("Position (cm)")
     plt.ylabel("Theta Phase (rad)")
     plt.title("GLM")
@@ -744,16 +750,18 @@ def plot_position_phase_speed_tuning(
 def plot_position_speed_tuning(axis, tc, pf, tc_speed, m):
     gs = axis.subgridspec(1, 2)
     plt.subplot(gs[0, 0])
-    plt.plot(pf, "--", label="Observed")
-    plt.plot(tc["position"][0])
+    dim_name = list(pf.dims)[0]
+    plt.plot(pf[dim_name], pf, "--", label="Observed")
+    plt.plot(tc["position"][0][dim_name], tc["position"][0])
     plt.xlabel("Position (cm)")
     plt.ylabel("Firing rate (Hz)")
     plt.title("Model : {}".format(m))
     plt.legend()
 
     plt.subplot(gs[0, 1])
-    plt.plot(tc_speed, "--")
-    plt.plot(tc["speed"][0])
+    dim_name = list(tc_speed.dims)[0]
+    plt.plot(tc_speed[dim_name], tc_speed, "--")
+    plt.plot(tc["speed"][0][dim_name], tc["speed"][0])
     plt.xlabel("Speed (cm/s)")
 
 

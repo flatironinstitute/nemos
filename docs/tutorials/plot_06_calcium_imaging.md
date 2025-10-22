@@ -118,7 +118,7 @@ You can see that the calcium signals are both nonnegative, and noisy. One (neuro
 
 
 
-We can also plot tuning curves, plotting mean calcium activity as a function of head direction, using the function [`compute_1d_tuning_curves_continuous`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_1d_tuning_curves_continuous).
+We can also plot tuning curves, plotting mean calcium activity as a function of head direction, using the function [`compute_tuning_curves_continuous`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_tuning_curves).
 Here `data['ry']` is a [`Tsd`](https://pynapple.org/generated/pynapple.Tsd.html) that contains the angular head-direction of the animal between 0 and 2$\pi$.
 
 ```{code-cell} ipython3

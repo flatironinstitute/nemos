@@ -4,11 +4,11 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.16.4
+    jupytext_version: 1.18.1
 kernelspec:
-  display_name: Python 3 (ipykernel)
+  name: nemos_312
+  display_name: Python (nemos)
   language: python
-  name: python3
 ---
 
 ```{code-cell} ipython3
@@ -110,13 +110,13 @@ spikes = spikes.getby_threshold("rate", 0.3)
 Let's plot some data. We start by making place fields i.e firing rate as a function of position.
 
 ```{code-cell} ipython3
-pf = nap.compute_1d_tuning_curves(spikes, position, 50, position.time_support)
+pf = nap.compute_tuning_curves(spikes, position, 50, epochs=position.time_support, feature_names=["pos"])
 ```
 
 Let's do a quick sort of the place fields for display
 
 ```{code-cell} ipython3
-order = pf.idxmax().sort_values().index.values
+order = np.argsort(pf.idxmax(dim="pos"))
 ```
 
 Here each row is one neuron
@@ -126,7 +126,7 @@ fig = plt.figure(figsize=(12, 10))
 gs = plt.GridSpec(len(spikes), 1)
 for i, n in enumerate(order):
     plt.subplot(gs[i, 0])
-    plt.fill_between(pf.index.values, np.zeros(len(pf)), pf[n].values)
+    plt.fill_between(pf.pos, np.zeros(pf.shape[1]), pf[n])
     if i < len(spikes) - 1:
         plt.xticks([])
     else:
@@ -181,7 +181,7 @@ data = nap.TsdFrame(
 print(data)
 ```
 
-`data` is a [`TsdFrame`](https://pynapple.org/generated/pynapple.TsdTensor.html) that contains the position and phase. Before calling [`compute_2d_tuning_curves`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_2d_tuning_curves) from pynapple to observe the theta phase precession, we will restrict the analysis to the place field of one neuron.
+`data` is a [`TsdFrame`](https://pynapple.org/generated/pynapple.TsdTensor.html) that contains the position and phase. Before calling [`compute_tuning_curves`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_tuning_curves) from pynapple to observe the theta phase precession, we will restrict the analysis to the place field of one neuron.
 
 There are a lot of neurons but for this analysis, we will focus on one neuron only.
 
@@ -189,7 +189,7 @@ There are a lot of neurons but for this analysis, we will focus on one neuron on
 neuron = 175
 
 plt.figure(figsize=(5,3))
-plt.fill_between(pf[neuron].index.values, np.zeros(len(pf)), pf[neuron].values)
+plt.fill_between(pf.sel(unit=neuron).pos, np.zeros(pf.shape[1]), pf.sel(unit=neuron))
 plt.xlabel("Position (cm)")
 plt.ylabel("Firing rate (Hz)")
 ```
@@ -203,7 +203,7 @@ within_ep = position.threshold(60.0, method="below").time_support
 `within_ep` is an [`IntervalSet`](https://pynapple.org/generated/pynapple.IntervalSet.html). We can now give it to [`compute_2d_tuning_curves`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_2d_tuning_curves) along with the spiking activity and the position-phase features.
 
 ```{code-cell} ipython3
-tc_pos_theta, xybins = nap.compute_2d_tuning_curves(spikes, data, 20, within_ep)
+tc_pos_theta = nap.compute_tuning_curves(spikes, data, 20, epochs=within_ep)
 ```
 
 To show the theta phase precession, we can also display the spike as a function of both position and theta. In this case, we use the function `value_from` from pynapple.
@@ -218,13 +218,13 @@ Now we can plot everything together :
 plt.figure()
 gs = plt.GridSpec(2, 2)
 plt.subplot(gs[0, 0])
-plt.fill_between(pf[neuron].index.values, np.zeros(len(pf)), pf[neuron].values)
+plt.fill_between(pf.sel(unit=neuron).pos, np.zeros(pf.shape[1]), pf.sel(unit=neuron))
 plt.xlabel("Position (cm)")
 plt.ylabel("Firing rate (Hz)")
 
 plt.subplot(gs[1, 0])
-extent = (xybins[0][0], xybins[0][-1], xybins[1][0], xybins[1][-1])
-plt.imshow(gaussian_filter(tc_pos_theta[neuron].T, 1), aspect="auto", origin="lower", extent=extent)
+tc_pos_theta_filt = gaussian_filter(tc_pos_theta.sel(unit=neuron).T, 1)
+plt.imshow(tc_pos_theta_filt, aspect="auto", origin="lower")
 plt.xlabel("Position (cm)")
 plt.ylabel("Theta Phase (rad)")
 
@@ -255,7 +255,7 @@ speed = nap.Tsd(t=data.t, d=np.hstack(speed), time_support=data.time_support)
 Now that we have the speed of the animal, we can compute the tuning curves for speed modulation. Here we call pynapple [`compute_1d_tuning_curves`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_1d_tuning_curves):
 
 ```{code-cell} ipython3
-tc_speed = nap.compute_1d_tuning_curves(spikes, speed, 20)
+tc_speed = nap.compute_tuning_curves(spikes, speed, 20, feature_names=["speed"])
 ```
 
 To assess the variabilty in speed when the animal is travering the linear track, we can compute the average speed and estimate the standard deviation. Here we use numpy only and put the results in a pandas [`DataFrame`](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html):
@@ -286,7 +286,7 @@ plt.ylabel("Speed (cm/s)")
 plt.title("Animal speed")
 plt.subplot(122)
 plt.fill_between(
-    tc_speed.index.values, np.zeros(len(tc_speed)), tc_speed[neuron].values
+    tc_speed.speed, np.zeros(tc_speed.shape[1]), tc_speed.sel(unit=neuron)
 )
 plt.xlabel("Speed (cm/s)")
 plt.ylabel("Firing rate (Hz)")
@@ -367,24 +367,23 @@ Let's check first if our model can accurately predict the different tuning curve
 ```{code-cell} ipython3
 predicted_rate = glm.predict(X) / bin_size
 
-glm_pf = nap.compute_1d_tuning_curves_continuous(predicted_rate[:, np.newaxis], position, 50)
-glm_pos_theta, xybins = nap.compute_2d_tuning_curves_continuous(
-    predicted_rate[:, np.newaxis], data, 30, ep=within_ep
+glm_pf = nap.compute_tuning_curves(predicted_rate[:, np.newaxis], position, 50, feature_names=["pos"])
+glm_pos_theta = nap.compute_tuning_curves(
+    predicted_rate[:, np.newaxis], data, 30, epochs=within_ep
 )
-glm_speed = nap.compute_1d_tuning_curves_continuous(predicted_rate[:, np.newaxis], speed, 30)
+glm_speed = nap.compute_tuning_curves(predicted_rate[:, np.newaxis], speed, 30, feature_names=["speed"])
 ```
 
 Let's display both tuning curves together.
 
 ```{code-cell} ipython3
 fig = doc_plots.plot_position_phase_speed_tuning(
-    pf[neuron],
+    pf.sel(unit=neuron),
     glm_pf[0],
-    tc_speed[neuron],
+    tc_speed.sel(unit=neuron),
     glm_speed[0],
-    tc_pos_theta[neuron],
+    tc_pos_theta.sel(unit=neuron),
     glm_pos_theta[0],
-    xybins
     )
 ```
 
@@ -473,17 +472,17 @@ tuning_curves = {}
 
 for m in models:
     tuning_curves[m] = {
-        "position": nap.compute_1d_tuning_curves_continuous(
-            predicted_rates[m][:, np.newaxis], position, 50, ep=test_iset
+        "position": nap.compute_tuning_curves(
+            predicted_rates[m], position, 50, epochs=test_iset, feature_names=["pos"]
         ),
-        "speed": nap.compute_1d_tuning_curves_continuous(
-            predicted_rates[m][:, np.newaxis], speed, 20, ep=test_iset
+        "speed": nap.compute_tuning_curves(
+            predicted_rates[m], speed, 20, epochs=test_iset, feature_names=["speed"]
         ),
     }
 
 # recompute tuning from spikes restricting to the test-set
-pf = nap.compute_1d_tuning_curves(spikes, position, 50, ep=test_iset)
-tc_speed = nap.compute_1d_tuning_curves(spikes, speed, 20, ep=test_iset)
+pf = nap.compute_tuning_curves(spikes, position, 50, epochs=test_iset, feature_names=["pos"])
+tc_speed = nap.compute_tuning_curves(spikes, speed, 20, epochs=test_iset, feature_names=["speed"])
 
 
 fig = plt.figure(figsize=(8, 4))
@@ -492,8 +491,8 @@ for i, m in enumerate(models):
     doc_plots.plot_position_speed_tuning(
         outer_grid[i // 2, i % 2],
         tuning_curves[m],
-        pf[neuron],
-        tc_speed[neuron],
+        pf.sel(unit=neuron),
+        tc_speed.sel(unit=neuron),
         m)
 
 plt.tight_layout()
