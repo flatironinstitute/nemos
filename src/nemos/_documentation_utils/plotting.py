@@ -32,6 +32,7 @@ import pynapple as nap
 from matplotlib.animation import FuncAnimation
 from matplotlib.patches import Rectangle
 from numpy.typing import NDArray
+from xarray import DataArray
 
 from ..basis import RaisedCosineLogEval
 
@@ -558,9 +559,9 @@ def plot_coupling(
                 )  # Add new polar axis
 
                 axs[n_row, send].fill_between(
-                    tuning.iloc[:, send].index,
-                    np.zeros(len(tuning)),
-                    tuning.iloc[:, send].values,
+                    tuning[send][raw_feature_dim_name],
+                    np.zeros(tuning.shape[1]),
+                    tuning[send],
                     color=cmap_tun(color_tun[send]),
                     alpha=0.5,
                 )
@@ -576,9 +577,9 @@ def plot_coupling(
         )  # Add new polar axis
 
         axs[rec, send + 1].fill_between(
-            tuning[:, rec][raw_feature_dim_name],
-            np.zeros(tuning.shape[0]),
-            tuning[:, rec],
+            tuning[rec][raw_feature_dim_name],
+            np.zeros(tuning.shape[1]),
+            tuning[rec],
             color=cmap_tun(color_tun[rec]),
             alpha=0.5,
         )
@@ -793,7 +794,7 @@ def plot_heatmap_cv_results(cvdf_wide, label=None):
 
 
 def plot_head_direction_tuning(
-    tuning_curves: pd.DataFrame,
+    tuning_curves: DataArray,
     spikes: nap.TsGroup,
     angle: nap.Tsd,
     threshold_hz: int = 1,
@@ -832,15 +833,18 @@ def plot_head_direction_tuning(
     index_keep = spikes.restrict(plot_ep).getby_threshold("rate", threshold_hz).index
 
     # filter neurons
-    tuning_curves = tuning_curves.loc[:, index_keep]
-    pref_ang = tuning_curves.idxmax().loc[index_keep]
+    raw_feature_dim_name = list(tuning_curves.dims)[1]
+    tuning_curves = tuning_curves.sel(unit=index_keep)
+    pref_ang = tuning_curves.idxmax(dim=raw_feature_dim_name)
     spike_tsd = (
-        spikes.restrict(plot_ep).getby_threshold("rate", threshold_hz).to_tsd(pref_ang)
+        spikes.restrict(plot_ep)
+        .getby_threshold("rate", threshold_hz)
+        .to_tsd(pref_ang.data)
     )
 
     # plot raster and heading
     cmap = plt.colormaps[cmap_label]
-    unq_angles = np.unique(pref_ang.values)
+    unq_angles = np.unique(pref_ang.data)
     n_subplots = len(unq_angles)
     relative_color_levs = (unq_angles - unq_angles[0]) / (
         unq_angles[-1] - unq_angles[0]
@@ -871,7 +875,7 @@ def plot_head_direction_tuning(
     ax.set_xlabel("Time (s)")
 
     for i, ang in enumerate(unq_angles):
-        neu_idx = np.argsort(pref_ang.values)[i]
+        neu_idx = np.argsort(pref_ang.data)[i]
         ax = plt.subplot2grid(
             (3, n_subplots),
             loc=(2 + i // n_subplots, i % n_subplots),
@@ -881,9 +885,9 @@ def plot_head_direction_tuning(
             projection="polar",
         )
         ax.fill_between(
-            tuning_curves.iloc[:, neu_idx].index,
-            np.zeros(len(tuning_curves)),
-            tuning_curves.iloc[:, neu_idx].values,
+            tuning_curves[neu_idx][raw_feature_dim_name],
+            np.zeros(tuning_curves.shape[1]),
+            tuning_curves[neu_idx],
             color=cmap(relative_color_levs[i]),
             alpha=0.5,
         )
@@ -937,15 +941,18 @@ def plot_head_direction_tuning_model(
     index_keep = spikes.restrict(plot_ep).getby_threshold("rate", threshold_hz).index
 
     # filter neurons
-    tuning_curves = tuning_curves.loc[:, index_keep]
-    pref_ang = tuning_curves.idxmax().loc[index_keep]
+    raw_feature_dim_name = list(tuning_curves.dims)[1]
+    tuning_curves = tuning_curves.sel(unit=index_keep)
+    pref_ang = tuning_curves.idxmax(dim=raw_feature_dim_name)
     spike_tsd = (
-        spikes.restrict(plot_ep).getby_threshold("rate", threshold_hz).to_tsd(pref_ang)
+        spikes.restrict(plot_ep)
+        .getby_threshold("rate", threshold_hz)
+        .to_tsd(pref_ang.data)
     )
 
     # plot raster and heading
     cmap = plt.colormaps[cmap_label]
-    unq_angles = np.unique(pref_ang.values)
+    unq_angles = np.unique(pref_ang.data)
     n_subplots = len(unq_angles)
     relative_color_levs = (unq_angles - unq_angles[0]) / (
         unq_angles[-1] - unq_angles[0]
@@ -987,7 +994,7 @@ def plot_head_direction_tuning_model(
     ax.set_xlabel("Time (s)")
 
     for i, ang in enumerate(unq_angles):
-        neu_idx = np.argsort(pref_ang.values)[i]
+        neu_idx = np.argsort(pref_ang.data)[i]
         ax = plt.subplot2grid(
             (4, n_subplots),
             loc=(3 + i // n_subplots, i % n_subplots),
@@ -997,9 +1004,9 @@ def plot_head_direction_tuning_model(
             projection="polar",
         )
         ax.fill_between(
-            tuning_curves.iloc[:, neu_idx].index,
-            np.zeros(len(tuning_curves)),
-            tuning_curves.iloc[:, neu_idx].values,
+            tuning_curves[neu_idx][raw_feature_dim_name],
+            np.zeros(tuning_curves.shape[1]),
+            tuning_curves[neu_idx],
             color=cmap(relative_color_levs[i]),
             alpha=0.5,
         )

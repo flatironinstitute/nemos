@@ -4,11 +4,11 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.16.4
+    jupytext_version: 1.18.1
 kernelspec:
-  display_name: Python 3 (ipykernel)
+  name: nemos_312
+  display_name: Python (nemos)
   language: python
-  name: python3
 ---
 
 ```{code-cell} ipython3
@@ -116,8 +116,8 @@ angle = angle.restrict(wake_ep)
 First let's check that they are head-direction neurons.
 
 ```{code-cell} ipython3
-tuning_curves = nap.compute_1d_tuning_curves(
-    group=spikes, feature=angle, nb_bins=61, minmax=(0, 2 * np.pi)
+tuning_curves = nap.compute_tuning_curves(
+    spikes, features=angle, bins=61, range=(0, 2 * np.pi), feature_names=["angles"]
 )
 ```
 
@@ -126,10 +126,10 @@ Let's plot the tuning curve of the first two neurons.
 
 ```{code-cell} ipython3
 fig, ax = plt.subplots(1, 2, figsize=(12, 4))
-ax[0].plot(tuning_curves.iloc[:, 0])
+ax[0].plot(tuning_curves[0])
 ax[0].set_xlabel("Angle (rad)")
 ax[0].set_ylabel("Firing rate (Hz)")
-ax[1].plot(tuning_curves.iloc[:, 1])
+ax[1].plot(tuning_curves[1])
 ax[1].set_xlabel("Angle (rad)")
 plt.tight_layout()
 ```
@@ -165,11 +165,11 @@ count = spikes.count(bin_size, ep=wake_ep)
 Here we are going to rearrange neurons order based on their prefered directions.
 
 ```{code-cell} ipython3
-pref_ang = tuning_curves.idxmax()
+pref_ang = tuning_curves.idxmax(dim="angles")
 
 count = nap.TsdFrame(
     t=count.t,
-    d=count.values[:, np.argsort(pref_ang.values)],
+    d=count.values[:, np.argsort(pref_ang)],
 )
 ```
 
@@ -629,10 +629,13 @@ fig = doc_plots.plot_rates_and_smoothed_counts(
 Compute the tuning curve form the predicted rates.
 
 ```{code-cell} ipython3
-tuning = nap.compute_1d_tuning_curves_continuous(predicted_firing_rate,
-                                                 feature=angle,
-                                                 nb_bins=61,
-                                                 minmax=(0, 2 * np.pi))
+tuning = nap.compute_tuning_curves(
+    predicted_firing_rate,
+    features=angle,
+    bins=61,
+    range=(0, 2 * np.pi),
+    feature_names=["angles"]
+)
 ```
 
 Extract the weights and store it in a `(n_neurons, n_neurons, n_basis_funcs)` array.
