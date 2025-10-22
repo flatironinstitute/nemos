@@ -1128,6 +1128,7 @@ _solver_registry_per_backend = {
     },
     "optimistix": {
         **_common_solvers,
+        # TODO: OptaxOptimistixGradientDescent is not tested
         "GradientDescent": nmo.solvers.OptimistixNAG,
         "ProximalGradient": nmo.solvers.OptimistixFISTA,
         "LBFGS": nmo.solvers.OptimistixOptaxLBFGS,
