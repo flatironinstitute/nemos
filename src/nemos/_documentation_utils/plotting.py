@@ -177,8 +177,8 @@ def lnp_schematic(
 
 def tuning_curve_plot(tuning_curve: pd.DataFrame):
     fig, ax = plt.subplots(1, 1)
-    tc_idx = tuning_curve.index.to_numpy()
-    tc_val = tuning_curve.values.flatten()
+    tc_idx = tuning_curve.current.data
+    tc_val = tuning_curve.data.flatten()
     width = tc_idx[1] - tc_idx[0]
     ax.bar(
         tc_idx,
