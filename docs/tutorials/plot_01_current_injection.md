@@ -367,7 +367,7 @@ firing rate within those bins:
 :::{admonition} Tuning curve in `pynapple`
 :class: note
 
-[`compute_1d_tuning_curves`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_1d_tuning_curves) : compute the firing rate as a function of a 1-dimensional feature.
+[`compute_tuning_curves`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_tuning_curves) : compute the firing rate as a function of a 1-dimensional feature.
 :::
 
 ```{code-cell} ipython3
