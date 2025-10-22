@@ -200,7 +200,7 @@ This neurons place field is between 0 and 60 cm within the linear track. Here we
 within_ep = position.threshold(60.0, method="below").time_support
 ```
 
-`within_ep` is an [`IntervalSet`](https://pynapple.org/generated/pynapple.IntervalSet.html). We can now give it to [`compute_2d_tuning_curves`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_2d_tuning_curves) along with the spiking activity and the position-phase features.
+`within_ep` is an [`IntervalSet`](https://pynapple.org/generated/pynapple.IntervalSet.html). We can now give it to [`compute_tuning_curves`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_2d_tuning_curves) along with the spiking activity and the position-phase features.
 
 ```{code-cell} ipython3
 tc_pos_theta = nap.compute_tuning_curves(spikes, data, 20, epochs=within_ep)
@@ -252,7 +252,7 @@ for s, e in data.time_support.values: # Time support contains the epochs
 speed = nap.Tsd(t=data.t, d=np.hstack(speed), time_support=data.time_support)
 ```
 
-Now that we have the speed of the animal, we can compute the tuning curves for speed modulation. Here we call pynapple [`compute_1d_tuning_curves`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_1d_tuning_curves):
+Now that we have the speed of the animal, we can compute the tuning curves for speed modulation. Here we call pynapple [`compute_tuning_curves`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_1d_tuning_curves):
 
 ```{code-cell} ipython3
 tc_speed = nap.compute_tuning_curves(spikes, speed, 20, feature_names=["speed"])
