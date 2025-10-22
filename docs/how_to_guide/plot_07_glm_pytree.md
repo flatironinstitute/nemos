@@ -4,11 +4,11 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.16.4
+    jupytext_version: 1.18.1
 kernelspec:
-  display_name: Python 3 (ipykernel)
+  name: nemos_312
+  display_name: Python (nemos)
   language: python
-  name: python3
 ---
 
 ```{code-cell} ipython3
@@ -63,9 +63,9 @@ import nemos as nmo
 np.random.seed(111)
 ```
 
-
 ```{code-cell} ipython3
 :tags: [hide-input]
+
 # Truncate arrays: show only 10 elements per dimension with '...'
 np.set_printoptions(threshold=10)  # total number of elements before summarizing
 ```
@@ -231,13 +231,8 @@ diff = nwb['SpatialSeriesLED1'].values-nwb['SpatialSeriesLED2'].values
 head_dir = np.arctan2(*diff.T)
 head_dir = nap.Tsd(nwb['SpatialSeriesLED1'].index, head_dir)
 
-tune_head = nap.compute_1d_tuning_curves(nwb['units'], head_dir.dropna(), 30)
-
-fig, axes = plt.subplots(3, 3, figsize=(9, 9), subplot_kw={'projection': 'polar'})
-for i, ax in zip(tune_head.columns, axes.flatten()):
-    ax.plot(tune_head.index, tune_head[i])
-    ax.set_title("Unit {}".format(i))
-axes[-1,-1].remove()
+tune_head = nap.compute_tuning_curves(nwb['units'], head_dir.dropna(), 30, feature_names=["angles"])
+tune_head.plot(col='unit', col_wrap=4)
 ```
 
 ```{code-cell} ipython3
