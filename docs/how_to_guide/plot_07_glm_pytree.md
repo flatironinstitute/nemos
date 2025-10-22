@@ -311,7 +311,7 @@ tune_head_model = nap.compute_tuning_curves(rates_nap, head_dir, 30, feature_nam
 tune_head_model *= rates_nap.rate
 # compare model prediction with data
 fig, ax = plt.subplots(1, 1, subplot_kw={'projection': 'polar'})
-ax.plot(tune_head.sel(unit=7).angles, tune_head.sel(unit=7), label="counts")
+ax.plot(tune_head.angles, tune_head.sel(unit=7), label="counts")
 # multiply by the sampling rate for converting to spike/sec.
 ax.plot(tune_head_model.angles, tune_head_model[0], label="model")
 
