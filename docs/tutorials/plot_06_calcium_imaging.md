@@ -6,9 +6,9 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.18.1
 kernelspec:
-  name: nemos_312
-  display_name: Python (nemos)
+  display_name: Python 3 (ipykernel)
   language: python
+  name: python3
 ---
 
 ```{code-cell} ipython3
