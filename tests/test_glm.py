@@ -82,6 +82,7 @@ def model_instantiation_type(glm_class_type):
 
 
 @pytest.mark.parametrize("glm_class_type", ["", "population"])
+@pytest.mark.solver_related
 def test_get_fit_attrs(request, glm_class_type, model_instantiation_type):
     X, y, model = request.getfixturevalue(model_instantiation_type)[:3]
     expected_state = {
@@ -440,6 +441,7 @@ class TestGLM:
             (3, pytest.raises(ValueError, match="Params must have length two.")),
         ],
     )
+    @pytest.mark.solver_related
     def test_fit_param_length(
         self, n_params, expectation, request, glm_class_type, model_instantiation_type
     ):
@@ -498,6 +500,7 @@ class TestGLM:
             }
 
     @pytest.mark.parametrize("dim_weights", [0, 1, 2, 3])
+    @pytest.mark.solver_related
     def test_fit_weights_dimensionality(
         self,
         dim_weights,
@@ -539,6 +542,7 @@ class TestGLM:
             (3, pytest.raises(ValueError, match=r"params\[1\] must be of shape")),
         ],
     )
+    @pytest.mark.solver_related
     def test_fit_intercepts_dimensionality(
         self,
         dim_intercepts,
@@ -627,6 +631,7 @@ class TestGLM:
     )
 
     @pytest.mark.parametrize(*fit_init_params_type_init_params)
+    @pytest.mark.solver_related
     def test_fit_init_params_type(
         self,
         request,
@@ -658,6 +663,7 @@ class TestGLM:
             (1, pytest.raises(ValueError, match="X must be two-dimensional")),
         ],
     )
+    @pytest.mark.solver_related
     def test_fit_x_dimensionality(
         self, delta_dim, expectation, request, glm_class_type, model_instantiation_type
     ):
@@ -682,6 +688,7 @@ class TestGLM:
             (1, pytest.raises(ValueError, match=r"y must be (one|two)-dimensional")),
         ],
     )
+    @pytest.mark.solver_related
     def test_fit_y_dimensionality(
         self,
         delta_dim,
@@ -717,6 +724,7 @@ class TestGLM:
             (1, pytest.raises(ValueError, match="Inconsistent number of features")),
         ],
     )
+    @pytest.mark.solver_related
     def test_fit_n_feature_consistency_weights(
         self,
         delta_n_features,
@@ -753,6 +761,7 @@ class TestGLM:
             (1, pytest.raises(ValueError, match="Inconsistent number of features")),
         ],
     )
+    @pytest.mark.solver_related
     def test_fit_n_feature_consistency_x(
         self,
         delta_n_features,
@@ -789,6 +798,7 @@ class TestGLM:
             ),
         ],
     )
+    @pytest.mark.solver_related
     def test_fit_time_points_x(
         self, delta_tp, expectation, request, glm_class_type, model_instantiation_type
     ):
@@ -816,6 +826,7 @@ class TestGLM:
             ),
         ],
     )
+    @pytest.mark.solver_related
     def test_fit_time_points_y(
         self, delta_tp, expectation, request, glm_class_type, model_instantiation_type
     ):
@@ -847,6 +858,7 @@ class TestGLM:
             ),
         ],
     )
+    @pytest.mark.solver_related
     def test_fit_all_invalid_X(
         self, fill_val, expectation, request, glm_class_type, model_instantiation_type
     ):
@@ -1112,9 +1124,9 @@ class TestGLM:
         with expectation:
             model.predict(X)
 
-    ##############################
-    # Test model.initialize_solver
-    ##############################
+    #############################
+    # Test model.initialize_state
+    #############################
     @pytest.mark.parametrize(
         "n_params, expectation",
         [
@@ -1124,6 +1136,7 @@ class TestGLM:
             (3, pytest.raises(ValueError, match="Params must have length two.")),
         ],
     )
+    @pytest.mark.solver_related
     def test_initialize_solver_param_length(
         self, n_params, expectation, request, glm_class_type, model_instantiation_type
     ):
@@ -1144,7 +1157,6 @@ class TestGLM:
             params = model.initialize_params(X, y, init_params=init_params)
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
 
     @pytest.fixture
     def initialize_solver_weights_dimensionality_expectation(self, glm_class_type):
@@ -1182,13 +1194,14 @@ class TestGLM:
             }
 
     @pytest.mark.parametrize("dim_weights", [0, 1, 2, 3])
+    @pytest.mark.solver_related
     def test_initialize_solver_weights_dimensionality(
         self,
         dim_weights,
         request,
         glm_class_type,
         model_instantiation_type,
-        fit_weights_dimensionality_expectation,
+        initialize_solver_weights_dimensionality_expectation,
     ):
         """
         Test the `initialize_solver` method with weight matrices of different dimensionalities.
@@ -1197,7 +1210,7 @@ class TestGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation_type
         )
-        expectation = fit_weights_dimensionality_expectation[dim_weights]
+        expectation = initialize_solver_weights_dimensionality_expectation[dim_weights]
         n_samples, n_features = X.shape
         if "population" in glm_class_type:
             n_neurons = 3
@@ -1215,7 +1228,6 @@ class TestGLM:
             params = model.initialize_params(X, y, init_params=(init_w, true_params[1]))
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
 
     @pytest.mark.parametrize(
         "dim_intercepts, expectation",
@@ -1226,6 +1238,7 @@ class TestGLM:
             (3, pytest.raises(ValueError, match=r"params\[1\] must be of shape")),
         ],
     )
+    @pytest.mark.solver_related
     def test_initialize_solver_intercepts_dimensionality(
         self,
         dim_intercepts,
@@ -1253,9 +1266,9 @@ class TestGLM:
             params = model.initialize_params(X, y, init_params=(init_w, init_b))
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
 
     @pytest.mark.parametrize(*fit_init_params_type_init_params)
+    @pytest.mark.solver_related
     def test_initialize_solver_init_params_type(
         self,
         request,
@@ -1281,7 +1294,6 @@ class TestGLM:
             params = model.initialize_params(X, y, init_params=init_params)
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
 
     @pytest.mark.parametrize(
         "delta_dim, expectation",
@@ -1291,6 +1303,7 @@ class TestGLM:
             (1, pytest.raises(ValueError, match="X must be two-dimensional")),
         ],
     )
+    @pytest.mark.solver_related
     def test_initialize_solver_x_dimensionality(
         self, delta_dim, expectation, request, glm_class_type, model_instantiation_type
     ):
@@ -1310,7 +1323,6 @@ class TestGLM:
             params = model.initialize_params(X, y, init_params=true_params)
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
 
     @pytest.mark.parametrize(
         "delta_dim, expectation",
@@ -1320,6 +1332,7 @@ class TestGLM:
             (1, pytest.raises(ValueError, match="y must be ...-dimensional")),
         ],
     )
+    @pytest.mark.solver_related
     def test_initialize_solver_y_dimensionality(
         self, delta_dim, expectation, request, glm_class_type, model_instantiation_type
     ):
@@ -1345,7 +1358,6 @@ class TestGLM:
             params = model.initialize_params(X, y, init_params=true_params)
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -1355,6 +1367,7 @@ class TestGLM:
             (1, pytest.raises(ValueError, match="Inconsistent number of features")),
         ],
     )
+    @pytest.mark.solver_related
     def test_initialize_solver_n_feature_consistency_weights(
         self,
         delta_n_features,
@@ -1384,7 +1397,6 @@ class TestGLM:
             params = model.initialize_params(X, y, init_params=(init_w, init_b))
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -1394,6 +1406,7 @@ class TestGLM:
             (1, pytest.raises(ValueError, match="Inconsistent number of features")),
         ],
     )
+    @pytest.mark.solver_related
     def test_initialize_solver_n_feature_consistency_x(
         self,
         delta_n_features,
@@ -1417,7 +1430,6 @@ class TestGLM:
             params = model.initialize_params(X, y, init_params=true_params)
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
 
     @pytest.mark.parametrize(
         "delta_tp, expectation",
@@ -1433,6 +1445,7 @@ class TestGLM:
             ),
         ],
     )
+    @pytest.mark.solver_related
     def test_initialize_solver_time_points_x(
         self, delta_tp, expectation, request, glm_class_type, model_instantiation_type
     ):
@@ -1449,7 +1462,6 @@ class TestGLM:
             params = model.initialize_params(X, y, init_params=true_params)
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
 
     @pytest.mark.parametrize(
         "delta_tp, expectation",
@@ -1465,6 +1477,7 @@ class TestGLM:
             ),
         ],
     )
+    @pytest.mark.solver_related
     def test_initialize_solver_time_points_y(
         self, delta_tp, expectation, request, glm_class_type, model_instantiation_type
     ):
@@ -1481,8 +1494,8 @@ class TestGLM:
             params = model.initialize_params(X, y, init_params=true_params)
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
 
+    @pytest.mark.solver_related
     def test_initialize_solver_mask_grouplasso(
         self, request, glm_class_type, model_instantiation_type
     ):
@@ -1497,7 +1510,6 @@ class TestGLM:
         )
         params = model.initialize_params(X, y)
         init_state = model.initialize_state(X, y, params)
-        assert init_state.velocity == params
 
     @pytest.mark.parametrize(
         "fill_val, expectation",
@@ -1517,6 +1529,7 @@ class TestGLM:
             ),
         ],
     )
+    @pytest.mark.solver_related
     def test_initialize_solver_all_invalid_X(
         self, fill_val, expectation, request, glm_class_type, model_instantiation_type
     ):
@@ -1527,7 +1540,6 @@ class TestGLM:
         with expectation:
             params = model.initialize_params(X, y)
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
 
     #######################
     # Test model.simulate
@@ -2650,6 +2662,7 @@ class TestGLMObservationModel:
     ##################
     # Test model.fit #
     ##################
+    @pytest.mark.solver_related
     def test_fit_mask_grouplasso(self, request, glm_type, model_instantiation):
         """Test that the group lasso fit goes through"""
 
@@ -2667,6 +2680,7 @@ class TestGLMObservationModel:
             # TODO: need to define this fixture for the other models
             return
 
+    @pytest.mark.solver_related
     def test_fit_pytree_equivalence(self, request, glm_type, model_instantiation):
         """Check that the glm fit with pytree learns the same parameters."""
 
@@ -2764,9 +2778,10 @@ class TestGLMObservationModel:
                 "that of jax.scipy!"
             )
 
-    ################################
-    # Test model.initialize_solver #
-    ################################
+    ###############################
+    # Test model.initialize_state #
+    ###############################
+    @pytest.mark.solver_related
     def test_initializer_solver_set_solver_callable(
         self, request, glm_type, model_instantiation
     ):
@@ -2798,6 +2813,7 @@ class TestGLMObservationModel:
         ],
     )
     @pytest.mark.parametrize("batch_size", [1, 10])
+    @pytest.mark.solver_related
     def test_update_n_samples(
         self, n_samples, expectation, batch_size, request, glm_type, model_instantiation
     ):
@@ -2812,6 +2828,7 @@ class TestGLMObservationModel:
             )
 
     @pytest.mark.parametrize("batch_size", [1, 10])
+    @pytest.mark.solver_related
     def test_update_params_stored(
         self, batch_size, request, glm_type, model_instantiation
     ):
@@ -2834,6 +2851,7 @@ class TestGLMObservationModel:
     @pytest.mark.parametrize(
         "solver_name", ["ProximalGradient", "GradientDescent", "LBFGS"]
     )
+    @pytest.mark.solver_related
     def test_update_params_are_finite(
         self, nan_inputs, solver_name, request, glm_type, model_instantiation
     ):
@@ -2874,6 +2892,7 @@ class TestGLMObservationModel:
         assert jnp.all(jnp.isfinite(model.scale_))
 
     @pytest.mark.parametrize("batch_size", [2, 10])
+    @pytest.mark.solver_related
     def test_update_nan_drop_at_jit_comp(
         self, batch_size, request, glm_type, model_instantiation
     ):
@@ -2969,6 +2988,7 @@ class TestGLMObservationModel:
     ########################################
     # Compare with standard implementation #
     ########################################
+    @pytest.mark.solver_related
     def test_compatibility_with_sklearn_cv(
         self, request, glm_type, model_instantiation
     ):
@@ -2992,6 +3012,7 @@ class TestGLMObservationModel:
             # (nmo.regularizer.GroupLasso, "ProxSVRG"),
         ],
     )
+    @pytest.mark.solver_related
     def test_glm_update_consistent_with_fit_with_svrg(
         self,
         request,
@@ -3103,6 +3124,7 @@ class TestGLMObservationModel:
         )
 
     @pytest.mark.parametrize("solver_name", ["GradientDescent", "SVRG"])
+    @pytest.mark.solver_related
     def test_glm_fit_matches_sklearn(
         self, solver_name, request, glm_type, model_instantiation, sklearn_model
     ):
@@ -3177,6 +3199,7 @@ class TestGLMObservationModel:
         ],
     )
     @pytest.mark.parametrize("n_samples", [1, 20])
+    @pytest.mark.solver_related
     def test_estimate_dof_resid(
         self,
         n_samples,
@@ -3235,6 +3258,7 @@ class TestGLMObservationModel:
         "inv_link, link_has_defaults",
         [(jax.nn.softplus, True), (jax.numpy.exp, False), (jax.lax.logistic, False)],
     )
+    @pytest.mark.solver_related
     def test_optimize_solver_params(
         self,
         batch_size,
@@ -3261,7 +3285,7 @@ class TestGLMObservationModel:
         # use glm static methods to check if the solver is batchable
         # if not pop the batch_size kwarg
         try:
-            slv_class = nmo.glm.GLM._get_solver_class(solver_name)
+            slv_class = nmo.solvers.solver_registry[solver_name]
             nmo.glm.GLM._check_solver_kwargs(slv_class, solver_kwargs)
         except NameError:
             solver_kwargs.pop("batch_size")
@@ -3472,6 +3496,7 @@ class TestPopulationGLM:
             "population_poissonGLM_model_instantiation_pytree",
         ],
     )
+    @pytest.mark.solver_related
     def test_metadata_pynapple_fit(self, reg_setup, request):
         X, y, model, true_params, firing_rate = request.getfixturevalue(reg_setup)
         y = TsdFrame(
@@ -3489,6 +3514,7 @@ class TestPopulationGLM:
             "population_poissonGLM_model_instantiation_pytree",
         ],
     )
+    @pytest.mark.solver_related
     def test_metadata_pynapple_is_deepcopied(self, reg_setup, request):
         X, y, model, true_params, firing_rate = request.getfixturevalue(reg_setup)
         y = TsdFrame(
@@ -3509,6 +3535,7 @@ class TestPopulationGLM:
             "population_poissonGLM_model_instantiation_pytree",
         ],
     )
+    @pytest.mark.solver_related
     def test_metadata_pynapple_predict(self, reg_setup, request):
         X, y, model, true_params, firing_rate = request.getfixturevalue(reg_setup)
         y = TsdFrame(
@@ -3587,10 +3614,21 @@ class TestPopulationGLMObservationModel:
                 "LBFGS",
                 {"tol": 10**-14},
             ),
-            (nmo.regularizer.Ridge(), 1.0, "LBFGS", {"stepsize": 0.1, "tol": 10**-14}),
+            (
+                nmo.regularizer.Ridge(),
+                1.0,
+                "LBFGS",
+                {"stepsize": 0.1, "tol": 10**-14},
+            ),
             (
                 nmo.regularizer.Lasso(),
                 0.001,
+                "ProximalGradient",
+                {"tol": 10**-14},
+            ),
+            (
+                nmo.regularizer.Lasso(),
+                0.1,
                 "ProximalGradient",
                 {"tol": 10**-14},
             ),
@@ -3617,6 +3655,7 @@ class TestPopulationGLMObservationModel:
             {"input_1": np.array([0, 1, 0]), "input_2": np.array([1, 0, 1])},
         ],
     )
+    @pytest.mark.solver_related
     def test_masked_fit_vs_loop(
         self,
         regularizer,
@@ -3735,6 +3774,7 @@ class TestPoissonGLM:
     )
     @pytest.mark.parametrize("batch_size", [None, 1, 10])
     @pytest.mark.parametrize("stepsize", [None, 0.01])
+    @pytest.mark.solver_related
     def test_glm_optimal_config_set_initial_state(
         self,
         solver_name,
@@ -3769,7 +3809,7 @@ class TestPoissonGLM:
             regularizer_strength=None if reg == "UnRegularized" else 1.0,
         )
         opt_state = model.initialize_state(X, y, true_params)
-        solver = inspect.getclosurevars(model._solver_run).nonlocals["solver"]
+        solver = model._solver
 
         if stepsize is not None:
             assert opt_state.stepsize == stepsize
@@ -3858,6 +3898,7 @@ class TestGammaGLM:
     Unit tests specific to Gamma GLM.
     """
 
+    @pytest.mark.solver_related
     def test_fit_glm(self, inv_link, request, glm_type, model_instantiation):
         """
         Ensure that the model can be fit with different link functions.
@@ -3912,6 +3953,7 @@ class TestBernoulliGLM:
     Unit tests specific to Bernoulli GLM.
     """
 
+    @pytest.mark.solver_related
     def test_fit_glm(self, inv_link, request, glm_type, model_instantiation):
         """
         Ensure that the model can be fit with different link functions.
@@ -3968,6 +4010,7 @@ class TestNegativeBinomialGLM:
     Unit tests specific to Negative Binomial GLM.
     """
 
+    @pytest.mark.solver_related
     def test_fit_glm(self, inv_link, request, glm_type, model_instantiation):
         """
         Ensure that the model can be fit with different link functions.

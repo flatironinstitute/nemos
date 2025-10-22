@@ -24,9 +24,7 @@ from ..type_casting import support_pynapple
 from ..utils import format_repr
 from . import AdditiveBasis, MultiplicativeBasis
 from ._basis_mixin import BasisMixin, BasisTransformerMixin, set_input_shape_state
-from ._check_basis import (
-    _check_transform_input,
-)
+from ._check_basis import _check_transform_input
 from ._composition_utils import (
     _check_unique_shapes,
     _check_valid_shape_tuple,

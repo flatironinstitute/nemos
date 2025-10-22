@@ -85,7 +85,7 @@ We suggest to use it for batching.
 
 :::{note}
 You must shutdown the dynamic update of the step for fitting a batched (also called stochastic) gradient descent.
-In jaxopt, this can be done by setting the parameters `acceleration` to False and setting the `stepsize`.
+For the `GradientDescent` solver, this can be done by setting the parameters `acceleration` to False and setting the `stepsize`.
 :::
 
 ```{code-cell} ipython3

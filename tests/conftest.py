@@ -10,6 +10,7 @@ Note:
 """
 
 import abc
+import os
 from collections import namedtuple
 from functools import partial
 
@@ -1109,3 +1110,59 @@ def population_negativeBinomialGLM_model_instantiation_pytree(
         solver_name="LBFGS",
     )
     return X_tree, np.random.poisson(rate), model_tree, true_params_tree, rate
+
+
+# Select solver backend for tests if requested via environment variable
+_common_solvers = {
+    "SVRG": nmo.solvers.WrappedSVRG,
+    "ProxSVRG": nmo.solvers.WrappedProxSVRG,
+}
+_solver_registry_per_backend = {
+    "jaxopt": {
+        **_common_solvers,
+        "GradientDescent": nmo.solvers.JaxoptGradientDescent,
+        "ProximalGradient": nmo.solvers.JaxoptProximalGradient,
+        "LBFGS": nmo.solvers.JaxoptLBFGS,
+        "BFGS": nmo.solvers.JaxoptBFGS,
+        "NonlinearCG": nmo.solvers.JaxoptNonlinearCG,
+    },
+    "optimistix": {
+        **_common_solvers,
+        "GradientDescent": nmo.solvers.OptimistixOptaxGradientDescent,
+        "ProximalGradient": nmo.solvers.OptimistixOptaxProximalGradient,
+        "LBFGS": nmo.solvers.OptimistixOptaxLBFGS,
+        "BFGS": nmo.solvers.OptimistixBFGS,
+        "NonlinearCG": nmo.solvers.OptimistixNonlinearCG,
+    },
+}
+
+
+@pytest.fixture(autouse=True, scope="session")
+def configure_solver_backend():
+    """
+    Patch the solver registry depending on ``NEMOS_SOLVER_BACKEND``.
+
+    Used for running solver-dependent tests in separate tox environments
+    for the JAXopt and the Optimistix backends.
+    """
+    backend = os.getenv("NEMOS_SOLVER_BACKEND")
+    if not backend:
+        yield  # run with default solver registry
+        return  # don't execute the remainder on teardown
+
+    try:
+        _backend_solver_registry = _solver_registry_per_backend[backend]
+    except KeyError:
+        available = ", ".join(_solver_registry_per_backend.keys())
+        pytest.fail(f"Unknown solver backend: {backend}. Available: {available}")
+
+    # save the original registry so that we can restore it after
+    original = nmo.solvers.solver_registry.copy()
+    nmo.solvers.solver_registry.clear()
+    nmo.solvers.solver_registry.update(_backend_solver_registry)
+
+    try:
+        yield
+    finally:
+        nmo.solvers.solver_registry.clear()
+        nmo.solvers.solver_registry.update(original)
