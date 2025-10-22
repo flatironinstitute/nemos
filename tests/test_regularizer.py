@@ -2,6 +2,7 @@ import copy
 import warnings
 from contextlib import nullcontext as does_not_raise
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -12,6 +13,9 @@ from sklearn.linear_model import GammaRegressor, PoissonRegressor
 from statsmodels.tools.sm_exceptions import DomainWarning
 
 import nemos as nmo
+
+# Register every test here as solver-related
+pytestmark = pytest.mark.solver_related
 
 
 @pytest.mark.parametrize(
@@ -1640,12 +1644,7 @@ class TestGroupLasso:
         state = model.solver_init_state(true_params, X, y)
         # asses that state is a NamedTuple by checking tuple type and the availability of some NamedTuple
         # specific namespace attributes
-        assert isinstance(state, tuple)
-        assert (
-            hasattr(state, "_fields")
-            and hasattr(state, "_field_defaults")
-            and hasattr(state, "_asdict")
-        )
+        assert isinstance(state, tuple | eqx.Module)
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
     def test_update_solver(self, solver_name, poissonGLM_model_instantiation):
@@ -1674,12 +1673,8 @@ class TestGroupLasso:
         params, state = model.solver_update(true_params, state, X, y)
         # asses that state is a NamedTuple by checking tuple type and the availability of some NamedTuple
         # specific namespace attributes
-        assert isinstance(state, tuple)
-        assert (
-            hasattr(state, "_fields")
-            and hasattr(state, "_field_defaults")
-            and hasattr(state, "_asdict")
-        )
+        assert isinstance(state, tuple | eqx.Module)
+
         # check params struct and shapes
         assert jax.tree_util.tree_structure(params) == jax.tree_util.tree_structure(
             true_params
@@ -1719,7 +1714,7 @@ class TestGroupLasso:
 
         if raise_exception:
             with pytest.raises(
-                ValueError, match="Incorrect group assignment. " "Some of the features"
+                ValueError, match="Incorrect group assignment. Some of the features"
             ):
                 model.set_params(
                     regularizer=self.cls(mask=mask), regularizer_strength=1.0
@@ -1865,7 +1860,7 @@ class TestGroupLasso:
 
         if raise_exception:
             with pytest.raises(
-                ValueError, match="Incorrect group assignment. " "Some of the features"
+                ValueError, match="Incorrect group assignment. Some of the features"
             ):
                 regularizer.set_params(mask=mask)
         else:

@@ -28,6 +28,8 @@ dependencies = [
     "typing_extensions>=4.6",       # Typing extensions for Python
     "pynapple @ git+ssh://git@github.com/pynapple-org/pynapple.git@dev",
     "scikit-learn",                 # BaseEstimator and Tags inheritance
+    "optimistix>=0.0.11",
+    "optax>=0.2.5",
 ]
 
 
@@ -149,6 +151,11 @@ filterwarnings = [
     # mpl must be non-interctive for testing otherwise doctests will freeze
     'ignore:FigureCanvasAgg is non-interactive, and thus cannot be shown:UserWarning',
 ]
+markers = [
+  "solver_related: tests that interact with solvers",
+]
+addopts = "--strict-markers"
+
 
 [tool.coverage.run]
 omit = [

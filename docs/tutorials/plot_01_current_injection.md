@@ -423,8 +423,9 @@ counts it operates on have the following properties:
 for automatic differentiation. It has all sorts of neat features, but the
 most relevant of which for NeMoS is its GPU-compatibility and
 just-in-time compilation (both of which make code faster with little
-overhead!), as well as the collection of optimizers present in
-[jaxopt](https://jaxopt.github.io/stable/).
+overhead!).
+`JAX`-based optimizers are supplied by
+[JAXopt](https://jaxopt.github.io/stable/), [Optax](https://optax.readthedocs.io), and [Optimistix](https://docs.kidger.site/optimistix/).
 :::
 
 First, we require that our predictors and our spike counts have the same

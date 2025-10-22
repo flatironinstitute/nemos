@@ -12,6 +12,7 @@
 04-basis_module.md
 05-observation_models.md
 06-regularizer.md
+07-solvers.md
 ```
 
 ## Introduction
