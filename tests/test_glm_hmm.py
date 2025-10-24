@@ -41,7 +41,7 @@ def prepare_partial_hmm_nll_single_neuron(obs):
             inverse_link_function=obs.default_inverse_link_function,
             negative_log_likelihood_func=negative_log_likelihood,
         )
-    
+
     solver = LBFGS(partial_hmm_negative_log_likelihood, tol=10**-13)
 
     return partial_hmm_negative_log_likelihood, solver
@@ -442,29 +442,9 @@ def test_run_m_step_regression():
     # Initialize nemos observation model
     obs = BernoulliObservations()
 
-    # Define negative log likelihood vmap function
-    negative_log_likelihood = jax.vmap(
-        lambda x, z: obs._negative_log_likelihood(
-            x, z, aggregate_sample_scores=lambda w: w
-        ),
-        in_axes=(None, 1),
-        out_axes=1,
+    partial_hmm_negative_log_likelihood, solver = prepare_partial_hmm_nll_single_neuron(
+        obs
     )
-
-    # solver
-    def partial_hmm_negative_log_likelihood(
-        weights, design_matrix, observations, posterior_prob
-    ):
-        return hmm_negative_log_likelihood(
-            weights,
-            X=design_matrix,
-            y=observations,
-            posteriors=posterior_prob,
-            inverse_link_function=obs.default_inverse_link_function,
-            negative_log_likelihood_func=negative_log_likelihood,
-        )
-
-    solver = LBFGS(partial_hmm_negative_log_likelihood, tol=10**-13)
 
     (
         optimized_projection_weights_nemos,
@@ -574,29 +554,10 @@ def test_single_state_mstep(single_state_inputs):
         transition_prob,
     )
 
-    # Define negative log likelihood vmap function
-    negative_log_likelihood = jax.vmap(
-        lambda x, z: obs._negative_log_likelihood(
-            x, z, aggregate_sample_scores=lambda w: w
-        ),
-        in_axes=(None, 1),
-        out_axes=1,
+    partial_hmm_negative_log_likelihood, solver = prepare_partial_hmm_nll_single_neuron(
+        obs
     )
 
-    # solver
-    def partial_hmm_negative_log_likelihood(
-        weights, design_matrix, observations, posterior_prob
-    ):
-        return hmm_negative_log_likelihood(
-            weights,
-            X=design_matrix,
-            y=observations,
-            posteriors=posterior_prob,
-            inverse_link_function=obs.default_inverse_link_function,
-            negative_log_likelihood_func=negative_log_likelihood,
-        )
-
-    solver = LBFGS(partial_hmm_negative_log_likelihood, tol=10**-13)
     (
         optimized_projection_weights_nemos,
         new_initial_prob_nemos,
@@ -642,7 +603,9 @@ def test_maximization_with_prior(generate_data_multi_state):
     )
 
     obs = PoissonObservations()
-    solver, gammas, xis = prepare_solver_for_m_step_single_neuron(
+    _, solver = prepare_partial_hmm_nll_single_neuron(obs)
+
+    gammas, xis = prepare_gammas_and_xis_for_m_step_single_neuron(
         X, y, initial_prob, transition_prob, (coef, intercept), new_sess, obs
     )
 
@@ -790,7 +753,10 @@ def test_m_step_set_alpha_init_to_inf(generate_data_multi_state, state_idx):
     )
 
     obs = PoissonObservations()
-    solver, gammas, xis = prepare_solver_for_m_step_single_neuron(
+
+    _, solver = prepare_partial_hmm_nll_single_neuron(obs)
+
+    gammas, xis = prepare_gammas_and_xis_for_m_step_single_neuron(
         X, y, initial_prob, transition_prob, (coef, intercept), new_sess, obs
     )
 
@@ -826,7 +792,10 @@ def test_m_step_set_alpha_transition_to_inf(generate_data_multi_state, row, col)
     )
 
     obs = PoissonObservations()
-    solver, gammas, xis = prepare_solver_for_m_step_single_neuron(
+
+    _, solver = prepare_partial_hmm_nll_single_neuron(obs)
+
+    gammas, xis = prepare_gammas_and_xis_for_m_step_single_neuron(
         X, y, initial_prob, transition_prob, (coef, intercept), new_sess, obs
     )
 
@@ -861,7 +830,9 @@ def test_m_step_set_alpha_init_to_1(generate_data_multi_state):
     )
 
     obs = PoissonObservations()
-    solver, gammas, xis = prepare_solver_for_m_step_single_neuron(
+    _, solver = prepare_partial_hmm_nll_single_neuron(obs)
+
+    gammas, xis = prepare_gammas_and_xis_for_m_step_single_neuron(
         X, y, initial_prob, transition_prob, (coef, intercept), new_sess, obs
     )
 
@@ -920,10 +891,11 @@ def test_m_step_set_alpha_transition_to_1(generate_data_multi_state):
     )
 
     obs = PoissonObservations()
-    solver, gammas, xis = prepare_solver_for_m_step_single_neuron(
+    _, solver = prepare_partial_hmm_nll_single_neuron(obs)
+
+    gammas, xis = prepare_gammas_and_xis_for_m_step_single_neuron(
         X, y, initial_prob, transition_prob, (coef, intercept), new_sess, obs
     )
-
     alphas_transition = np.ones(transition_prob.shape)
     alphas_init = np.random.uniform(1, 3, size=initial_prob.shape)
 
@@ -1019,7 +991,9 @@ def test_run_m_step_regression_priors_simulation(data_name):
     obs = BernoulliObservations()
 
     # Prepare nll function & solver
-    partial_hmm_negative_log_likelihood, solver = prepare_partial_hmm_nll_single_neuron(obs)
+    partial_hmm_negative_log_likelihood, solver = prepare_partial_hmm_nll_single_neuron(
+        obs
+    )
 
     (
         optimized_projection_weights_nemos,
