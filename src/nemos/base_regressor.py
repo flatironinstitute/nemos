@@ -4,24 +4,22 @@
 from __future__ import annotations
 
 import abc
-import inspect
 from abc import abstractmethod
 from copy import deepcopy
 from functools import wraps
 from pathlib import Path
-from typing import Any, Dict, NamedTuple, Optional, Tuple, Union
+from typing import Any, NamedTuple, Optional, Tuple, Type, Union
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from nemos.third_party.jaxopt import jaxopt
-
 from . import solvers, utils, validation
 from ._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from .base_class import Base
 from .regularizer import Regularizer
+from .solvers._abstract_solver import SolverState, StepResult
 from .typing import (
     DESIGN_INPUT_TYPE,
     RegularizerStrength,
@@ -30,8 +28,6 @@ from .typing import (
     SolverUpdate,
 )
 from .utils import _flatten_dict, _get_name, _unpack_params, get_env_metadata
-
-_SOLVER_ARGS_CACHE = {}
 
 
 def strip_metadata(arg_num: Optional[int] = None, kwarg_key: Optional[str] = None):
@@ -88,8 +84,8 @@ class BaseRegressor(Base, abc.ABC):
         Please see table above for regularizer/optimizer pairings.
     solver_kwargs :
         Optional dictionary for keyword arguments that are passed to the solver when instantiated.
-        E.g. stepsize, acceleration, value_and_grad, etc.
-         See the jaxopt documentation for details on each solver's kwargs: https://jaxopt.github.io/stable/
+        E.g. stepsize, tol, acceleration, etc.
+         For details on each solver's kwargs, see `get_accepted_arguments` and `get_solver_documentation`.
 
     See Also
     --------
@@ -103,7 +99,7 @@ class BaseRegressor(Base, abc.ABC):
         self,
         regularizer: Union[str, Regularizer] = "UnRegularized",
         regularizer_strength: Optional[RegularizerStrength] = None,
-        solver_name: str = None,
+        solver_name: Optional[str] = None,
         solver_kwargs: Optional[dict] = None,
     ):
         self.regularizer = "UnRegularized" if regularizer is None else regularizer
@@ -117,6 +113,10 @@ class BaseRegressor(Base, abc.ABC):
 
         if solver_kwargs is None:
             solver_kwargs = dict()
+
+        solver_class = solvers.solver_registry[self.solver_name]
+        self._check_solver_kwargs(solver_class, solver_kwargs)
+
         self.solver_kwargs = solver_kwargs
         self._solver_init_state = None
         self._solver_update = None
@@ -246,12 +246,7 @@ class BaseRegressor(Base, abc.ABC):
     def solver_name(self, solver_name: str):
         """Setter for the solver_name attribute."""
         # check if solver str passed is valid for regularizer
-        if solver_name not in self._regularizer.allowed_solvers:
-            raise ValueError(
-                f"The solver: {solver_name} is not allowed for "
-                f"{self._regularizer.__class__.__name__} regularization. Allowed solvers are "
-                f"{self._regularizer.allowed_solvers}."
-            )
+        self._regularizer.check_solver(solver_name)
         self._solver_name = solver_name
 
     @property
@@ -263,13 +258,12 @@ class BaseRegressor(Base, abc.ABC):
     def solver_kwargs(self, solver_kwargs: dict):
         """Setter for the solver_kwargs attribute."""
         if solver_kwargs:
-            self._check_solver_kwargs(
-                self._get_solver_class(self.solver_name), solver_kwargs
-            )
+            solver_cls = solvers.solver_registry[self.solver_name]
+            self._check_solver_kwargs(solver_cls, solver_kwargs)
         self._solver_kwargs = solver_kwargs
 
     @staticmethod
-    def _check_solver_kwargs(solver_class, solver_kwargs):
+    def _check_solver_kwargs(solver_class: Type, solver_kwargs: dict[str, Any]) -> None:
         """
         Check if provided solver keyword arguments are valid.
 
@@ -285,21 +279,16 @@ class BaseRegressor(Base, abc.ABC):
         NameError
             If any of the solver keyword arguments are not valid.
         """
-        if solver_class not in _SOLVER_ARGS_CACHE:
-            _SOLVER_ARGS_CACHE[solver_class] = set(
-                inspect.getfullargspec(solver_class).args
-            )
-        undefined_kwargs = set(solver_kwargs.keys()).difference(
-            _SOLVER_ARGS_CACHE[solver_class]
-        )
+        accepted_args = solver_class.get_accepted_arguments()
+
+        undefined_kwargs = set(solver_kwargs.keys()) - set(accepted_args)
+
         if undefined_kwargs:
             raise NameError(
                 f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for {solver_class.__name__}!"
             )
 
-    def instantiate_solver(
-        self, *args, solver_kwargs: Optional[dict] = None
-    ) -> BaseRegressor:
+    def instantiate_solver(self, solver_kwargs: Optional[dict] = None) -> BaseRegressor:
         """
         Instantiate the solver with the provided loss function.
 
@@ -307,17 +296,16 @@ class BaseRegressor(Base, abc.ABC):
         that initialize the solver state, update the model parameters, and run the optimization
         as attributes.
 
-        This method creates a solver instance from nemos.solvers or the jaxopt library, tailored to
+        This method creates a solver instance from the solver registry, tailored to
         the specific loss function and regularization approach defined by the Regularizer instance.
         It also handles the proximal operator if required for the optimization method. The returned
         functions are directly usable in optimization loops, simplifying the syntax by pre-setting
         common arguments like regularization strength and other hyperparameters.
 
+        Solvers are expected to adhere to the `AbstractSolver` API.
+
         Parameters
         ----------
-        *args:
-            Positional arguments for the jaxopt `solver.run` method, e.g. the regularizing
-            strength for proximal gradient methods.
         solver_kwargs:
             Optional dictionary with the solver kwargs.
             If nothing is provided, it defaults to self.solver_kwargs.
@@ -328,129 +316,38 @@ class BaseRegressor(Base, abc.ABC):
             The instance itself for method chaining.
         """
         # final check that solver is valid for chosen regularizer
-        if self.solver_name not in self.regularizer.allowed_solvers:
-            raise ValueError(
-                f"The solver: {self.solver_name} is not allowed for "
-                f"{self._regularizer.__class__.__name__} regularization. Allowed solvers are "
-                f"{self._regularizer.allowed_solvers}."
-            )
-
-        # only use penalized loss if not using proximal gradient descent
-        # In proximal method you must use the unpenalized loss independently
-        # of what regularizer you are using.
-        if self.solver_name not in ("ProximalGradient", "ProxSVRG"):
-            loss = self.regularizer.penalized_loss(
-                self._predict_and_compute_loss, self.regularizer_strength
-            )
-        else:
-            loss = self._predict_and_compute_loss
+        self._regularizer.check_solver(self.solver_name)
 
         if solver_kwargs is None:
             # copy dictionary of kwargs to avoid modifying user settings
             solver_kwargs = deepcopy(self.solver_kwargs)
 
-        # check that the loss is Callable
-        utils.assert_is_callable(loss, "loss")
-
-        # some parsing to make sure solver gets instantiated properly
-        if self.solver_name in ("ProximalGradient", "ProxSVRG"):
-            if "prox" in self.solver_kwargs:
-                raise ValueError(
-                    "Proximal operator specification is not permitted. "
-                    "The proximal operator is automatically determined based on the selected regularizer. "
-                    "Please remove the 'prox' argument from the `solver_kwargs` "
-                )
-
-            solver_kwargs.update(prox=self.regularizer.get_proximal_operator())
-            # add self.regularizer_strength to args
-            args += (self.regularizer_strength,)
-
-        (
-            solver_run_kwargs,
-            solver_init_state_kwargs,
-            solver_update_kwargs,
-            solver_init_kwargs,
-        ) = self._inspect_solver_kwargs(solver_kwargs)
-
         # instantiate the solver
-        solver = self._get_solver_class(self.solver_name)(
-            fun=loss, **solver_init_kwargs
+        solver_cls = solvers.solver_registry[self.solver_name]
+
+        self._check_solver_kwargs(solver_cls, solver_kwargs)
+
+        solver = solver_cls(
+            self._predict_and_compute_loss,
+            self.regularizer,
+            self.regularizer_strength,
+            **solver_kwargs,
         )
+        self._solver = solver
 
-        self._solver_loss_fun = loss
+        # nemos's solvers store a .fun attribute, but it's not necessary for a solver to work.
+        # A test relies on having _solver_loss_fun saved, so still check and save it if possible.
+        # But it's not a problem if .fun doesn't exist in user-defined solvers.
+        if hasattr(solver, "fun"):
+            # check that the loss is Callable
+            utils.assert_is_callable(solver.fun, "solver's loss")
+            self._solver_loss_fun = solver.fun
 
-        def solver_run(
-            init_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], *run_args: jnp.ndarray
-        ) -> jaxopt.OptStep:
-            return solver.run(init_params, *args, *run_args, **solver_run_kwargs)
+        self._solver_init_state = solver.init_state
+        self._solver_update = solver.update
+        self._solver_run = solver.run
 
-        def solver_update(params, state, *run_args, **run_kwargs) -> jaxopt.OptStep:
-            return solver.update(
-                params, state, *args, *run_args, **solver_update_kwargs, **run_kwargs
-            )
-
-        def solver_init_state(params, *run_args, **run_kwargs) -> NamedTuple:
-            return solver.init_state(
-                params,
-                *run_args,
-                **run_kwargs,
-                **solver_init_state_kwargs,
-            )
-
-        self._solver_init_state = solver_init_state
-        self._solver_update = solver_update
-        self._solver_run = solver_run
         return self
-
-    def _inspect_solver_kwargs(
-        self, solver_kwargs: dict
-    ) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
-        """Inspect and categorize the solver keyword arguments.
-
-        This method inspects the provided `solver_kwargs` dictionary and categorizes
-        the keyword arguments based on which solver functions they apply to:
-        `run`, `init_state`, `update`, and `__init__`. This ensures that the
-        appropriate arguments are passed to each function when the solver is used.
-
-        Parameters
-        ----------
-        solver_kwargs :
-            Dictionary containing keyword arguments for the solver.
-
-        Returns
-        -------
-        :
-            A tuple containing four dictionaries:
-            - solver_run_kwargs: Arguments for the solver's `run` method.
-            - solver_init_state_kwargs: Arguments for the solver's `init_state` method.
-            - solver_update_kwargs: Arguments for the solver's `update` method.
-            - solver_init_kwargs: Arguments for the solver's `__init__` constructor.
-        """
-        solver_run_kwargs = dict()
-        solver_init_state_kwargs = dict()
-        solver_update_kwargs = dict()
-        solver_init_kwargs = dict()
-
-        if solver_kwargs:
-            # instantiate a solver to then inspect the params of its various functions
-            solver = self._get_solver_class(self.solver_name)
-
-            for key, value in solver_kwargs.items():
-                if key in inspect.getfullargspec(solver.run).args:
-                    solver_run_kwargs[key] = value
-                if key in inspect.getfullargspec(solver.init_state).args:
-                    solver_init_state_kwargs[key] = value
-                if key in inspect.getfullargspec(solver.update).args:
-                    solver_update_kwargs[key] = value
-                if key in inspect.getfullargspec(solver.__init__).args:
-                    solver_init_kwargs[key] = value
-
-        return (
-            solver_run_kwargs,
-            solver_init_state_kwargs,
-            solver_update_kwargs,
-            solver_init_kwargs,
-        )
 
     @abc.abstractmethod
     def fit(self, X: DESIGN_INPUT_TYPE, y: Union[NDArray, jnp.ndarray]):
@@ -578,8 +475,8 @@ class BaseRegressor(Base, abc.ABC):
         y: jnp.ndarray,
         *args,
         **kwargs,
-    ) -> jaxopt.OptStep:
-        """Run a single update step of the jaxopt solver."""
+    ) -> StepResult:
+        """Run a single update step of the underlying solver."""
         pass
 
     @abc.abstractmethod
@@ -599,41 +496,9 @@ class BaseRegressor(Base, abc.ABC):
         y: jnp.ndarray,
         init_params,
         cast_to_jax_and_drop_nans: bool = True,
-    ) -> Union[Any, NamedTuple]:
+    ) -> SolverState:
         """Initialize the state of the solver for running fit and update."""
         pass
-
-    @staticmethod
-    def _get_solver_class(solver_name: str):
-        """
-        Find a solver class first looking in nemos.solvers, then in jaxopt.
-
-        Parameters
-        ----------
-        solver_name : str
-            Name of the solver class to load.
-
-        Returns
-        -------
-        solver_class :
-            Solver class ready to be instantiated.
-
-        Raises
-        ------
-        AttributeError
-            If a solver class with that name is not found.
-        """
-        try:
-            solver_class = getattr(solvers, solver_name)
-        except AttributeError:
-            try:
-                solver_class = getattr(jaxopt, solver_name)
-            except AttributeError:
-                raise AttributeError(
-                    f"Could not find {solver_name} in nemos.solvers or jaxopt"
-                )
-
-        return solver_class
 
     def _optimize_solver_params(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray) -> dict:
         """
