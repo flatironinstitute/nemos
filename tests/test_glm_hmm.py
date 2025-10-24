@@ -19,7 +19,35 @@ from nemos.observation_models import BernoulliObservations, PoissonObservations
 from nemos.third_party.jaxopt.jaxopt import LBFGS
 
 
-def prepare_solver_for_m_step_single_neuron(
+def prepare_partial_hmm_nll_single_neuron(obs):
+    # Define nll vmap function
+    negative_log_likelihood = jax.vmap(
+        lambda x, z: obs._negative_log_likelihood(
+            x, z, aggregate_sample_scores=lambda w: w
+        ),
+        in_axes=(None, 1),
+        out_axes=1,
+    )
+
+    # Solver
+    def partial_hmm_negative_log_likelihood(
+        weights, design_matrix, observations, posterior_prob
+    ):
+        return hmm_negative_log_likelihood(
+            weights,
+            X=design_matrix,
+            y=observations,
+            posteriors=posterior_prob,
+            inverse_link_function=obs.default_inverse_link_function,
+            negative_log_likelihood_func=negative_log_likelihood,
+        )
+    
+    solver = LBFGS(partial_hmm_negative_log_likelihood, tol=10**-13)
+
+    return partial_hmm_negative_log_likelihood, solver
+
+
+def prepare_gammas_and_xis_for_m_step_single_neuron(
     X, y, initial_prob, transition_prob, glm_params, new_sess, obs
 ):
     (coef, intercept) = glm_params
@@ -39,30 +67,7 @@ def prepare_solver_for_m_step_single_neuron(
         is_new_session=new_sess.astype(bool),
     )
 
-    # Define negative log likelihood vmap function
-    negative_log_likelihood = jax.vmap(
-        lambda x, z: obs._negative_log_likelihood(
-            x, z, aggregate_sample_scores=lambda w: w
-        ),
-        in_axes=(None, 1),
-        out_axes=1,
-    )
-
-    # solver
-    def partial_hmm_negative_log_likelihood(
-        weights, design_matrix, observations, posterior_prob
-    ):
-        return hmm_negative_log_likelihood(
-            weights,
-            X=design_matrix,
-            y=observations,
-            posteriors=posterior_prob,
-            inverse_link_function=obs.default_inverse_link_function,
-            negative_log_likelihood_func=negative_log_likelihood,
-        )
-
-    solver = LBFGS(partial_hmm_negative_log_likelihood, tol=10**-13)
-    return solver, gammas, xis
+    return gammas, xis
 
 
 def forward_step_numpy(py_z, new_sess, initial_prob, transition_prob):
@@ -1013,29 +1018,8 @@ def test_run_m_step_regression_priors_simulation(data_name):
     # Initialize nemos observation model
     obs = BernoulliObservations()
 
-    # Define nll vmap function
-    negative_log_likelihood = jax.vmap(
-        lambda x, z: obs._negative_log_likelihood(
-            x, z, aggregate_sample_scores=lambda w: w
-        ),
-        in_axes=(None, 1),
-        out_axes=1,
-    )
-
-    # Solver
-    def partial_hmm_negative_log_likelihood(
-        weights, design_matrix, observations, posterior_prob
-    ):
-        return hmm_negative_log_likelihood(
-            weights,
-            X=design_matrix,
-            y=observations,
-            posteriors=posterior_prob,
-            inverse_link_function=obs.default_inverse_link_function,
-            negative_log_likelihood_func=negative_log_likelihood,
-        )
-
-    solver = LBFGS(partial_hmm_negative_log_likelihood, tol=10**-13)
+    # Prepare nll function & solver
+    partial_hmm_negative_log_likelihood, solver = prepare_partial_hmm_nll_single_neuron(obs)
 
     (
         optimized_projection_weights_nemos,
