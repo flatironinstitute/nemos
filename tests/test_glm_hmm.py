@@ -980,14 +980,9 @@ def test_m_step_set_alpha_transition_to_1(generate_data_multi_state):
 def test_run_m_step_regression_priors_simulation(data_name):
     jax.config.update("jax_enable_x64", True)
 
-    # Fetch data
-    ### Change after uploading to osf - this is where the data temporarily lives
-    data_path = pathlib.Path(__file__).parent.parent / "_scripts" / "julia/"
-    data = np.load(data_path.joinpath(data_name))
-    ###
-
-    # data_path = fetch_data(data_name)
-    # data = np.load(data_path)
+    # Fetch the data
+    data_path = fetch_data(data_name)
+    data = np.load(data_path)
 
     # Design matrix and observed choices
     X, y = data["X"], data["y"]
