@@ -87,8 +87,13 @@ Abstract Class AbstractSolver
 ```
 
 `OptaxOptimistixSolver` is an adapter for Optax solvers, relying on `optimistix.OptaxMinimiser` to run the full optimization loop.
-Optimistix does not have implementations of Nesterov acceleration, so gradient descent is implemented by wrapping `optax.sgd` which does support it.
-(Although what Optax calls Nesterov acceleration is not the [original method developed for convex optimization](https://hengshuaiyao.github.io/papers/nesterov83.pdf) but the [version adapted for training deep networks with SGD](https://proceedings.mlr.press/v28/sutskever13.html). JAXopt did implement the original method, and [a port of this is planned to be added to NeMoS](https://github.com/flatironinstitute/nemos/issues/380).)
+
+Gradient descent is implemented by two classes:
+- One is wrapping `optax.sgd` which supports momentum and acceleration.
+Note that what Optax calls Nesterov acceleration is not the [original method developed for convex optimization](https://hengshuaiyao.github.io/papers/nesterov83.pdf) but the [version adapted for training deep networks with SGD](https://proceedings.mlr.press/v28/sutskever13.html).
+- As JAXopt implemented the original method, a [port of JAXopt's `GradientDescent` was added to NeMoS](https://github.com/flatironinstitute/nemos/pull/411) as `OptimistixNAG`.
+
+Similarly to NAG, an accelerated proximal gradient algorithm ([FISTA](https://www.ceremade.dauphine.fr/~carlier/FISTA)) was [ported from JAXopt](https://github.com/flatironinstitute/nemos/pull/411) as `OptimistixFISTA`.
 
 Available solvers and which implementation they dispatch to are defined in the solver registry.
 A list of available solvers is provided by {py:func}`nemos.solvers.list_available_solvers`, and extended documentation about each solver can be accessed using {py:func}`nemos.solvers.get_solver_documentation`.
