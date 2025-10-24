@@ -134,7 +134,7 @@ def fetch_data(
 
 
 def download_dandi_data(
-        dandiset_id: str, file_path: str, force_download: bool = False
+    dandiset_id: str, file_path: str, force_download: bool = False
 ) -> NWBHDF5IO:
     """Download a dataset from the [DANDI Archive](https://dandiarchive.org/).
 
@@ -221,16 +221,16 @@ def download_dandi_data(
         # Get file size for progress bar
         with fs.open(s3_url, "rb") as remote_file:
             # Try to get content length from headers
-            file_size = getattr(remote_file, 'size', None)
+            file_size = getattr(remote_file, "size", None)
 
         with fs.open(s3_url, "rb") as remote_file:
             # Initialize progress bar
             with tqdm(
-                    total=file_size,
-                    unit='B',
-                    unit_scale=True,
-                    unit_divisor=1024,
-                    desc=f"Downloading {file_path.split('/')[-1]}"
+                total=file_size,
+                unit="B",
+                unit_scale=True,
+                unit_divisor=1024,
+                desc=f"Downloading {file_path.split('/')[-1]}",
             ) as pbar:
                 with open(temp_file_path, "wb") as local_file:
                     chunk_size = 8192 * 1024  # 8MB chunks
