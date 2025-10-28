@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.16.4
+    jupytext_version: 1.18.1
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -367,17 +367,15 @@ firing rate within those bins:
 :::{admonition} Tuning curve in `pynapple`
 :class: note
 
-[`compute_1d_tuning_curves`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_1d_tuning_curves) : compute the firing rate as a function of a 1-dimensional feature.
+[`compute_tuning_curves`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_tuning_curves) : compute the firing rate as a function of a 1-dimensional feature.
 :::
 
 ```{code-cell} ipython3
-tuning_curve = nap.compute_1d_tuning_curves(spikes, current, nb_bins=15)
+tuning_curve = nap.compute_tuning_curves(spikes, current, bins=15, feature_names=["current"])
 tuning_curve
 ```
 
-`tuning_curve` is a pandas DataFrame where each column is a neuron (one
-neuron in this case) and each row is a bin over the feature (here, the input
-current). We can easily plot the tuning curve of the neuron:
+`tuning_curve` is a xarray [DataArray](https://docs.xarray.dev/en/stable/api/datatree.html) with two dimensions labeled `"unit"` (the neurons) and `"current"` (the feature name we provided). We can easily plot the tuning curve of the neuron:
 
 ```{code-cell} ipython3
 doc_plots.tuning_curve_plot(tuning_curve);
@@ -666,9 +664,9 @@ beginning of this notebook. Pynapple can help us again with this:
 ```{code-cell} ipython3
 # pynapple expects the input to this function to be 2d,
 # so let's add a singleton dimension
-tuning_curve_model = nap.compute_1d_tuning_curves_continuous(predicted_fr[:, np.newaxis], current, 15)
+tuning_curve_model = nap.compute_tuning_curves(predicted_fr[:, np.newaxis], current, 15, feature_names=["current"])
 fig = doc_plots.tuning_curve_plot(tuning_curve)
-fig.axes[0].plot(tuning_curve_model, color="tomato", label="glm")
+fig.axes[0].plot(tuning_curve_model[0].current, tuning_curve_model[0], color="tomato", label="glm")
 fig.axes[0].legend()
 ```
 
@@ -926,10 +924,10 @@ And our tuning curves:
 
 ```{code-cell} ipython3
 # Visualize tuning curve
-tuning_curve_history_model = nap.compute_1d_tuning_curves_continuous(smooth_history_pred_fr, current, 15)
+tuning_curve_history_model = nap.compute_tuning_curves(smooth_history_pred_fr, current, 15, feature_names=["current"])
 fig = doc_plots.tuning_curve_plot(tuning_curve)
-fig.axes[0].plot(tuning_curve_history_model, color="tomato", label="glm (current history)")
-fig.axes[0].plot(tuning_curve_model, color="tomato", linestyle='--', label="glm (instantaneous current)")
+fig.axes[0].plot(tuning_curve_history_model[0].current, tuning_curve_history_model[0], color="tomato", label="glm (current history)")
+fig.axes[0].plot(tuning_curve_model[0].current, tuning_curve_model[0], color="tomato", linestyle='--', label="glm (instantaneous current)")
 fig.axes[0].legend()
 ```
 

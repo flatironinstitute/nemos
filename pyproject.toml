@@ -26,7 +26,7 @@ dependencies = [
     "numpy>1.20",                   # Numerical computing library
     "scipy>=1.10",                  # Scientific computing library
     "typing_extensions>=4.6",       # Typing extensions for Python
-    "pynapple>=0.6.6",
+    'pynapple>=0.10',               # On this version, changed tuning curve API
     "scikit-learn",                 # BaseEstimator and Tags inheritance
     "optimistix>=0.0.11",
     "optax>=0.2.5",
