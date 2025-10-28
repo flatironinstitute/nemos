@@ -27,18 +27,26 @@ def _analytical_m_step_initial_prob(
     dirichlet_prior_alphas: Optional[jnp.ndarray] = None,
 ):
     """
-    Calculate the M-step for initial probabilities.
+    Calculate the M-step for initial state probabilities.
+
+    Computes the maximum likelihood estimate (or MAP estimate with prior) of the
+    initial state distribution by summing posterior probabilities at session starts.
 
     Parameters
     ----------
-    posteriors:
+    posteriors :
         The posterior distribution over latent states, shape ``(n_time_bins, n_states)``.
-    dirichlet_prior_alphas:
-        The parameters of the Dirichlet prior, if available. Flat prior otherwise.
+    is_new_session :
+        Boolean array indicating session start points, shape ``(n_time_bins,)``.
+    dirichlet_prior_alphas :
+        The parameters of the Dirichlet prior for the initial distribution,
+        shape ``(n_states,)``. If None, uses a flat (uniform) prior.
 
     Returns
     -------
-        Updated initial parameters.
+    new_initial_prob :
+        Updated initial state probabilities, shape ``(n_states,)``.
+        Normalized to sum to 1.
     """
     tmp_initial_prob = jnp.sum(posteriors, axis=0, where=is_new_session[:, jnp.newaxis])
     if dirichlet_prior_alphas is not None:
@@ -51,6 +59,28 @@ def _analytical_m_step_initial_prob(
 def _analytical_m_step_transition_prob(
     joint_posterior: jnp.ndarray, dirichlet_prior_alphas: Optional[jnp.ndarray] = None
 ):
+    """
+    Calculate the M-step for state transition probabilities.
+
+    Computes the maximum likelihood estimate (or MAP estimate with prior) of the
+    transition matrix by normalizing expected transition counts from the joint posterior.
+
+    Parameters
+    ----------
+    joint_posterior:
+        Expected counts of transitions from state i to state j,
+        shape ``(n_states, n_states)``. Typically computed from the forward-backward
+        algorithm as the sum over time of P(z_t=i, z_{t+1}=j | data).
+    dirichlet_prior_alphas:
+        The parameters of the Dirichlet prior for each row of the transition matrix,
+        shape ``(n_states, n_states)``. If None, uses a flat (uniform) prior.
+
+    Returns
+    -------
+    new_transition_prob:
+        Updated transition probability matrix, shape ``(n_states, n_states)``.
+        Each row sums to 1, where entry [i, j] is P(z_{t+1}=j | z_t=i).
+    """
     if dirichlet_prior_alphas is not None:
         new_transition_prob = joint_posterior + dirichlet_prior_alphas - 1
     else:
