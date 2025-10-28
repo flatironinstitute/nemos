@@ -9,7 +9,6 @@ calculate hashes for local files and manage file paths.
 
 import os
 import pathlib
-import sys
 from typing import Optional, Union
 
 try:
@@ -131,18 +130,9 @@ def fetch_data(
         )
     retriever = _create_retriever(path)
     # Fetch the dataset using pooch.
-    use_ascii = bool(sys.platform == "win32")
     return retriever.fetch(
         dataset_name,
-        progressbar=tqdm(
-            total=1,
-            ncols=79,
-            unit_scale=True,
-            delay=1e-5,
-            leave=True,
-            unit="B",
-            ascii=use_ascii,
-        ),
+        progressbar=True,
     )
 
 
