@@ -367,7 +367,7 @@ firing rate within those bins:
 :::{admonition} Tuning curve in `pynapple`
 :class: note
 
-[`compute_tuning_curves`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_tuning_curves) : compute the firing rate as a function of a 1-dimensional feature.
+[`compute_tuning_curves`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_tuning_curves) : compute the firing rate as a function of a $n$-dimensional feature, with $n \geq 1$.
 :::
 
 ```{code-cell} ipython3
@@ -375,7 +375,7 @@ tuning_curve = nap.compute_tuning_curves(spikes, current, bins=15, feature_names
 tuning_curve
 ```
 
-`tuning_curve` is a xarray [DataArray](https://docs.xarray.dev/en/stable/api/datatree.html) with two dimensions labeled `"unit"` (the neurons) and `"current"` (the feature name we provided). We can easily plot the tuning curve of the neuron:
+`tuning_curve` is a xarray [DataArray](https://docs.xarray.dev/en/stable/api/datatree.html) with two dimensions labeled `"unit"` (the neuron) and `"current"` (the feature name we provided). We can easily plot the tuning curve of the neuron:
 
 ```{code-cell} ipython3
 doc_plots.tuning_curve_plot(tuning_curve);
@@ -666,7 +666,7 @@ beginning of this notebook. Pynapple can help us again with this:
 # so let's add a singleton dimension
 tuning_curve_model = nap.compute_tuning_curves(predicted_fr[:, np.newaxis], current, 15, feature_names=["current"])
 fig = doc_plots.tuning_curve_plot(tuning_curve)
-fig.axes[0].plot(tuning_curve_model[0].current, tuning_curve_model[0], color="tomato", label="glm")
+fig.axes[0].plot(tuning_curve_model.current, tuning_curve_model.sel(unit=0), color="tomato", label="glm")
 fig.axes[0].legend()
 ```
 
@@ -926,8 +926,8 @@ And our tuning curves:
 # Visualize tuning curve
 tuning_curve_history_model = nap.compute_tuning_curves(smooth_history_pred_fr, current, 15, feature_names=["current"])
 fig = doc_plots.tuning_curve_plot(tuning_curve)
-fig.axes[0].plot(tuning_curve_history_model[0].current, tuning_curve_history_model[0], color="tomato", label="glm (current history)")
-fig.axes[0].plot(tuning_curve_model[0].current, tuning_curve_model[0], color="tomato", linestyle='--', label="glm (instantaneous current)")
+fig.axes[0].plot(tuning_curve_history_model.current, tuning_curve_history_model.sel(unit=0), color="tomato", label="glm (current history)")
+fig.axes[0].plot(tuning_curve_model.current, tuning_curve_model.sel(unit=0), color="tomato", linestyle='--', label="glm (instantaneous current)")
 fig.axes[0].legend()
 ```
 
