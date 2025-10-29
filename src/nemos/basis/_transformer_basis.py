@@ -87,6 +87,8 @@ class TransformerBasis:
     def __init__(self, basis: Basis):
         self._wrapped_methods = {}  # Cache for wrapped methods
         self._basis = None
+        if isinstance(basis, TransformerBasis):
+            basis = basis.basis
         self.basis = copy.deepcopy(basis)
         self.basis._parent = None
 
