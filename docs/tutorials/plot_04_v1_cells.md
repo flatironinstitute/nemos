@@ -251,7 +251,7 @@ this and our spike counts into the proper format for NeMoS:
 # resolution
 bin_size = .001
 # <<<<<< TODO
-# REMOVE THIS AFTER RELEASE
+# REMOVE THIS AFTER PYNAPPLE RELEASE
 counts = nap.TsdFrame(t=stimulus.t, d=filtered_stimulus, time_support=stimulus.time_support)
 # >>>>>> END TODO
 counts = spikes[34].restrict(filtered_stimulus.time_support).count(bin_size)
