@@ -260,6 +260,7 @@ this and our spike counts into the proper format for NeMoS:
 # resolution
 bin_size = .001
 counts = spikes[34].restrict(filtered_stimulus.time_support).count(bin_size)
+
 print(counts.rate)
 print(filtered_stimulus.rate)
 ```
@@ -281,7 +282,7 @@ we want to "fill forward" the values of our input, and we have pynapple
 convenience function to do so:
 
 ```{code-cell} ipython3
-filtered_stimulus = fill_forward(counts, filtered_stimulus)
+filtered_stimulus = counts.value_from(filtered_stimulus, mode="before")
 filtered_stimulus
 ```
 
