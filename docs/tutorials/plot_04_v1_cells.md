@@ -222,6 +222,15 @@ different matrix operations:
 
 ```{code-cell} ipython3
 filtered_stimulus = np.einsum('t h w, h w -> t', stimulus, receptive_field)
+# <<<<<< TODO
+# REMOVE THIS AFTER PYNAPPLE RELEASE
+if tuple(map(int, nap.__version__.split('.')[:3])) > (0, 10, 0):
+    raise RuntimeError(
+        "pynapple has been updated past 0.10.0. "
+        "Please remove this temporary workaround block."
+    )
+filtered_stimulus = nap.TsdFrame(t=stimulus.t, d=filtered_stimulus, time_support=stimulus.time_support)
+# >>>>>> END TODO
 ```
 
 This notation says: take these arrays with dimensions `(t,h,w)` and `(h,w)`
@@ -250,10 +259,6 @@ this and our spike counts into the proper format for NeMoS:
 # grab spikes from when we were showing our stimulus, and bin at 1 msec
 # resolution
 bin_size = .001
-# <<<<<< TODO
-# REMOVE THIS AFTER PYNAPPLE RELEASE
-counts = nap.TsdFrame(t=stimulus.t, d=filtered_stimulus, time_support=stimulus.time_support)
-# >>>>>> END TODO
 counts = spikes[34].restrict(filtered_stimulus.time_support).count(bin_size)
 
 print(counts.rate)
