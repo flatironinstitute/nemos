@@ -1301,6 +1301,7 @@ def test_assign_shape_custom_ndim(shape, expected_input_shape):
     out = TransformerBasis._assign_input_shape(Mock(shape))
     assert out.input_shape == expected_input_shape
 
+
 def test_double_transformer():
     tbas = nmo.basis.TransformerBasis(nmo.basis.MSplineEval(4))
     tbas2 = nmo.basis.TransformerBasis(tbas)
