@@ -1307,3 +1307,4 @@ def test_double_transformer():
     assert isinstance(tbas2.basis, nmo.basis.MSplineEval)
     with pytest.raises(AttributeError, match="'TransformerBasis' object has no "):
         tbas.to_transformer()
+    assert id(tbas.basis) != id(tbas2.basis), "The basis was shallow copied!"
