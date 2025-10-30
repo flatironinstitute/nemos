@@ -581,6 +581,16 @@ class GLMHMM(BaseRegressor[ModelParams]):
         predict_type: Literal["most-likely", "per-state", "average"] = "most-likely",
     ) -> jnp.ndarray | nap.Tsd | nap.TsdFrame:
         """Compute predicted firing rate pet state."""
+        # output state
+        # per state
+        # (t, neu, states) pop
+        # (t, states) single neu
+        # most likely
+        # (t, neu) pop
+        # (t,) single neu
+        # average
+        # (t, neu)  pop
+        # (t,) single neu
         pass
 
     def score(
@@ -604,11 +614,11 @@ class GLMHMM(BaseRegressor[ModelParams]):
         pass
 
     def predict_proba(
-        self,  #
+        self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: NDArray,
     ) -> jnp.ndarray | nap.TsdFrame:
-        """Compute the smoothing posteriors over states."""
+        """Compute the smoothing posteriors over-states."""
         pass
 
     def decode_state(
