@@ -327,6 +327,7 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         :
             The instance itself for method chaining.
         """
+        # final check that solver is valid for chosen regularizer
         self._regularizer.check_solver(self.solver_name)
 
         if solver_kwargs is None:

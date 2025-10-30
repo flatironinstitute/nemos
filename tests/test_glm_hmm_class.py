@@ -2,10 +2,10 @@ from contextlib import nullcontext as does_not_raise
 from numbers import Number
 from typing import Callable
 
-
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from conftest import instantiate_base_regressor_subclass
 from test_base_regressor_subclasses import (
     INSTANTIATE_MODEL_AND_SIMULATE,
     INSTANTIATE_MODEL_ONLY,
@@ -18,7 +18,6 @@ from nemos._observation_model_builder import (
 from nemos._regularizer_builder import instantiate_regularizer
 from nemos.typing import FeaturePytree
 from nemos.utils import _get_name
-from conftest import instantiate_base_regressor_subclass
 
 # FILTER FOR GLM HMM
 INSTANTIATE_MODEL_ONLY = INSTANTIATE_MODEL_ONLY.copy()
