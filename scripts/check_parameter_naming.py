@@ -83,6 +83,18 @@ VALID_PAIRS = [
     {"solver_kwargs", "solver_init_kwargs"},
     {"unaccepted_name", "accepted_name"},
     {"fn", "fun"},
+    {"initialize_init_proba", "initialize_transition_proba"},
+    *(
+        {a, b}
+        for (a, b) in itertools.combinations(
+            [
+                "dirichlet_prior_alphas_init_prob",
+                "dirichlet_prior_alphas_transition",
+                "dirichlet_prior_alphas",
+            ],
+            r=2,
+        )
+    ),
 ]
 
 
@@ -138,6 +150,7 @@ def handle_matches(
             "info": [(current_parameter, current_path)],
         }
     else:
+
         # if there is an invalid match, then add to existing result entry
         for k, v in results.items():
             # Otherwise, add the parameter to any existing groups where it has a match
@@ -161,6 +174,7 @@ def extract_parameters_from_ast(
     unique_param_names: set,
     similarity_cutoff: float,
 ):
+
     class ParamVisitor(ast.NodeVisitor):
         def __init__(self):
             self.class_name = None
