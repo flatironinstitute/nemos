@@ -1,4 +1,5 @@
 import inspect
+import os
 from contextlib import nullcontext as does_not_raise
 
 import jax
@@ -9,6 +10,9 @@ import nemos as nmo
 from nemos.solvers._svrg import SVRG, ProxSVRG, SVRGState
 from nemos.third_party.jaxopt import jaxopt
 from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
+
+# Register every test here as solver-related
+pytestmark = pytest.mark.solver_related
 
 
 @pytest.mark.parametrize(
@@ -133,9 +137,10 @@ def test_svrg_glm_instantiate_solver(regularizer_name, solver_class, mask):
         solver_name=solver_name,
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
     )
-    glm.instantiate_solver()
+    glm.instantiate_solver(glm._predict_and_compute_loss)
 
-    solver = inspect.getclosurevars(glm._solver_run).nonlocals["solver"]
+    # currently glm._solver is a Wrapped(Prox)SVRG
+    solver = glm._solver._solver
     assert glm.solver_name == solver_name
     assert isinstance(solver, solver_class)
 
@@ -168,9 +173,10 @@ def test_svrg_glm_passes_solver_kwargs(regularizer_name, solver_name, mask, glm_
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
         **kwargs,
     )
-    glm.instantiate_solver()
+    glm.instantiate_solver(glm._predict_and_compute_loss)
 
-    solver = inspect.getclosurevars(glm._solver_run).nonlocals["solver"]
+    # currently glm._solver is a Wrapped(Prox)SVRG
+    solver = glm._solver._solver
     assert solver.stepsize == solver_kwargs["stepsize"]
     assert solver.maxiter == solver_kwargs["maxiter"]
 
@@ -227,7 +233,7 @@ def test_svrg_glm_initialize_state(
     assert state.reference_point == init_params
 
     for f in (glm._solver_init_state, glm._solver_update, glm._solver_run):
-        assert isinstance(inspect.getclosurevars(f).nonlocals["solver"], solver_class)
+        assert isinstance(f.__self__._solver, solver_class)
     assert isinstance(state, SVRGState)
 
 
@@ -328,11 +334,18 @@ def test_svrg_glm_fit(
 ):
     X, y, model, (w_true, b_true), rate = poissonGLM_model_instantiation
 
-    # set tolerance to -1 so that doesn't stop the iteration
-    solver_kwargs = {
-        "maxiter": maxiter,
-        "tol": -1.0,
-    }
+    # set the tolerance such that the solvers never hit their convergence criterion
+    # and run until maxiter is reached
+    backend = os.getenv("NEMOS_SOLVER_BACKEND")
+    if backend is not None:
+        use_jaxopt_tol = backend == "jaxopt"
+    else:
+        use_jaxopt_tol = (
+            "jaxopt"
+            in str(nmo.solvers._solver_registry.solver_registry[solver_name]).lower()
+        )
+    tol = -1.0 if use_jaxopt_tol else 0.0
+    solver_kwargs = {"maxiter": maxiter, "tol": tol}
 
     # only pass mask if it's not None
     reg_cls = getattr(nmo.regularizer, regularizer_name)
@@ -360,9 +373,10 @@ def test_svrg_glm_fit(
 
     glm.fit(X, y)
 
-    solver = inspect.getclosurevars(glm._solver_run).nonlocals["solver"]
+    solver = glm._solver
     assert solver.maxiter == maxiter
-    assert glm.solver_state_.iter_num == maxiter
+
+    assert solver.get_optim_info(glm.solver_state_).num_steps == maxiter
 
 
 @pytest.mark.parametrize(
@@ -608,3 +622,17 @@ def test_svrg_wrong_shapes(shapes, expected_context):
     with expected_context:
         svrg = SVRG(loss_fn)
         svrg.run(init_params, X, y)
+
+
+def test_all_solvers_accept_tol_and_not_atol():
+    """All solvers should accept tol and not accept atol."""
+    for solver_class in nmo.solvers._solver_registry.solver_registry.values():
+        assert "tol" in solver_class.get_accepted_arguments()
+        assert "atol" not in solver_class.get_accepted_arguments()
+
+
+def test_all_solvers_accept_maxiter_and_not_max_steps():
+    """All solvers should accept maxiter and not accept max_steps."""
+    for solver_class in nmo.solvers._solver_registry.solver_registry.values():
+        assert "maxiter" in solver_class.get_accepted_arguments()
+        assert "max_steps" not in solver_class.get_accepted_arguments()

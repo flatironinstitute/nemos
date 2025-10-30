@@ -10,8 +10,11 @@ Note:
 """
 
 import abc
+import os
 from collections import namedtuple
+from copy import deepcopy
 from functools import partial
+from typing import Literal
 
 import jax
 import jax.numpy as jnp
@@ -253,6 +256,9 @@ class MockRegressor(nmo.base_regressor.BaseRegressor):
         pass
 
     def initialize_params(self, *args, **kwargs):
+        pass
+
+    def _initialize_parameters(self, *args, **kwargs):
         pass
 
     def _predict_and_compute_loss(self, params, X, y):
@@ -1109,3 +1115,184 @@ def population_negativeBinomialGLM_model_instantiation_pytree(
         solver_name="LBFGS",
     )
     return X_tree, np.random.poisson(rate), model_tree, true_params_tree, rate
+
+
+def instantiate_glm_func(
+    obs_model: (
+        Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial"]
+        | nmo.observation_models.Observations
+    ) = "Bernoulli",
+    regularizer: str = "UnRegularized",
+    solver_name: str = None,
+    simulate=False,
+):
+    jax.config.update("jax_enable_x64", True)
+    np.random.seed(123)
+    n_features = 2
+    X = np.ones((500, n_features))
+    X[:250, 0] = 0
+    X[np.arange(500) % 2 == 1, 1] = 0
+    model = nmo.glm.GLM(
+        observation_model=obs_model,
+        regularizer=regularizer,
+        solver_name=solver_name,
+    )
+    model.coef_ = np.random.randn(n_features)
+    model.intercept_ = np.random.randn(1)
+    if simulate:
+        counts, rates = model.simulate(jax.random.PRNGKey(1234), X)
+    else:
+        counts, rates = None, None
+    return (
+        X,
+        counts,
+        model,
+        (model.coef_, model.intercept_),
+        rates,
+        None,
+    )
+
+
+def instantiate_population_glm_func(
+    n_neurons=3,
+    obs_model: (
+        Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial"]
+        | nmo.observation_models.Observations
+    ) = "Bernoulli",
+    regularizer: str = "UnRegularized",
+    solver_name: str = None,
+    simulate=False,
+):
+    jax.config.update("jax_enable_x64", True)
+    np.random.seed(123)
+    n_features = 2
+    X = np.ones((500, n_features))
+    X[:250, 0] = 0
+    X[np.arange(500) % 2 == 1, 1] = 0
+    model = nmo.glm.PopulationGLM(
+        observation_model=obs_model,
+        regularizer=regularizer,
+        solver_name=solver_name,
+    )
+    model.coef_ = np.random.randn(n_features, n_neurons)
+    model.intercept_ = np.random.randn(n_neurons)
+    if simulate:
+        model._initialize_feature_mask(X, np.empty(shape=(X.shape[0], n_neurons)))
+        counts, rates = model.simulate(jax.random.PRNGKey(1234), X)
+    else:
+        counts, rates = None, None
+    return (
+        X,
+        counts,
+        model,
+        (model.coef_, model.intercept_),
+        rates,
+        None,
+    )
+
+
+_MODEL_CACHE = {}
+
+
+@pytest.fixture
+def instantiate_base_regressor_subclass(request):
+    """
+    Instantiate the concrete BaseRegressor sub-classes with caching.
+    """
+    model_name: str = request.param["model"]
+    obs_model: str | nmo.observation_models.Observations = request.param["obs_model"]
+    simulate: bool = request.param["simulate"]
+
+    # Create cache key (class-scoped)
+    cache_key = (
+        model_name,
+        str(obs_model),
+        simulate,
+        id(request.cls) if request.cls else id(request.module),
+    )
+
+    # Check cache
+    if cache_key not in _MODEL_CACHE:
+        if model_name == "GLM":
+            result = instantiate_glm_func(obs_model=obs_model, simulate=simulate)
+        elif model_name == "PopulationGLM":
+            result = instantiate_population_glm_func(
+                obs_model=obs_model, simulate=simulate
+            )
+        elif model_name == "GLMHMM":
+            result = instantiate_glm_hmm_func(obs_model=obs_model, simulate=simulate)
+        else:
+            raise ValueError("model_name {} unknown".format(model_name))
+        _MODEL_CACHE[cache_key] = result
+        return result
+
+    # Get cached data and return a complete deepcopy of everything
+    # this is different from a function level fixture because it
+    # would not re-run any potentially heavy setup code (like model.simulate).
+    cached_result = deepcopy(_MODEL_CACHE[cache_key])
+    return cached_result
+
+
+# Auto-clear cache after each test module run
+@pytest.fixture(scope="module", autouse=True)
+def _clear_model_cache():
+    """Clear model cache after each test class."""
+    yield
+    print("CLEARING MODEL CACHE")
+    _MODEL_CACHE.clear()
+
+
+# Select solver backend for tests if requested via environment variable
+_common_solvers = {
+    "SVRG": nmo.solvers.WrappedSVRG,
+    "ProxSVRG": nmo.solvers.WrappedProxSVRG,
+}
+_solver_registry_per_backend = {
+    "jaxopt": {
+        **_common_solvers,
+        "GradientDescent": nmo.solvers.JaxoptGradientDescent,
+        "ProximalGradient": nmo.solvers.JaxoptProximalGradient,
+        "LBFGS": nmo.solvers.JaxoptLBFGS,
+        "BFGS": nmo.solvers.JaxoptBFGS,
+        "NonlinearCG": nmo.solvers.JaxoptNonlinearCG,
+    },
+    "optimistix": {
+        **_common_solvers,
+        "GradientDescent": nmo.solvers.OptimistixOptaxGradientDescent,
+        "ProximalGradient": nmo.solvers.OptimistixOptaxProximalGradient,
+        "LBFGS": nmo.solvers.OptimistixOptaxLBFGS,
+        "BFGS": nmo.solvers.OptimistixBFGS,
+        "NonlinearCG": nmo.solvers.OptimistixNonlinearCG,
+    },
+}
+
+
+@pytest.fixture(autouse=True, scope="session")
+def configure_solver_backend():
+    """
+    Patch the solver registry depending on ``NEMOS_SOLVER_BACKEND``.
+
+    Used for running solver-dependent tests in separate tox environments
+    for the JAXopt and the Optimistix backends.
+    """
+    backend = os.getenv("NEMOS_SOLVER_BACKEND")
+    if not backend:
+        yield  # run with default solver registry
+        return  # don't execute the remainder on teardown
+
+    try:
+        _backend_solver_registry = _solver_registry_per_backend[backend]
+    except KeyError:
+        available = ", ".join(_solver_registry_per_backend.keys())
+        pytest.fail(f"Unknown solver backend: {backend}. Available: {available}")
+
+    # save the original registry so that we can restore it after
+    original = nmo.solvers.solver_registry.copy()
+    nmo.solvers.solver_registry.clear()
+    nmo.solvers.solver_registry.update(_backend_solver_registry)
+
+    try:
+        yield
+    finally:
+        nmo.solvers.solver_registry.clear()
+        nmo.solvers.solver_registry.update(original)

@@ -3,58 +3,32 @@
 # required to get ArrayLike to render correctly
 from __future__ import annotations
 
-import warnings
-from functools import wraps
 from pathlib import Path
-from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
+from typing import Callable, Literal, NamedTuple, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
 from numpy.typing import ArrayLike
 from sklearn.utils import InputTags, TargetTags
 
-from nemos.third_party.jaxopt import jaxopt
-
 from .. import observation_models as obs
 from .. import tree_utils, validation
 from .._observation_model_builder import instantiate_observation_model
 from ..base_regressor import BaseRegressor, strip_metadata
 from ..exceptions import NotFittedError
+from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..pytrees import FeaturePytree
 from ..regularizer import GroupLasso, Lasso, Regularizer, Ridge
 from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
-from ..type_casting import jnp_asarray_if, support_pynapple
-from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength
+from ..type_casting import cast_to_jax, support_pynapple
+from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength, SolverState, StepResult
 from ..utils import format_repr
 from .initialize_parameters import initialize_intercept_matching_mean_rate
-from .inverse_link_function_utils import (
-    check_inverse_link_function,
-    link_function_from_string,
-)
 
 ModelParams = Tuple[jnp.ndarray, jnp.ndarray]
 
 
-def cast_to_jax(func):
-    """Cast argument to jax."""
-
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            args, kwargs = jax.tree_util.tree_map(
-                lambda x: jnp_asarray_if(x, dtype=float), (args, kwargs)
-            )
-        except Exception:
-            raise TypeError(
-                "X and y should be array-like object (or trees of array like object) "
-                "with numeric data type!"
-            )
-        return func(*args, **kwargs)
-
-    return wrapper
-
-
-class GLM(BaseRegressor):
+class GLM(BaseRegressor[ModelParams]):
     r"""Generalized Linear Model (GLM) for neural activity data.
 
     This GLM implementation allows users to model neural activity based on a combination of exogenous inputs
@@ -142,8 +116,8 @@ class GLM(BaseRegressor):
         Please see table above for regularizer/optimizer pairings.
     solver_kwargs :
         Optional dictionary for keyword arguments that are passed to the solver when instantiated.
-        E.g. stepsize, acceleration, value_and_grad, etc.
-         See the jaxopt documentation for details on each solver's kwargs: https://jaxopt.github.io/stable/
+        E.g. stepsize, tol, acceleration, etc.
+         For details on each solver's kwargs, see `get_accepted_arguments` and `get_solver_documentation`.
 
     Attributes
     ----------
@@ -257,20 +231,9 @@ class GLM(BaseRegressor):
     @inverse_link_function.setter
     def inverse_link_function(self, inverse_link_function: Callable):
         """Setter for the inverse link function for the model."""
-        if inverse_link_function is None:
-            self._inverse_link_function = (
-                self.observation_model.default_inverse_link_function
-            )
-            return
-
-        elif isinstance(inverse_link_function, str):
-            self._inverse_link_function = link_function_from_string(
-                inverse_link_function
-            )
-            return
-
-        check_inverse_link_function(inverse_link_function)
-        self._inverse_link_function = inverse_link_function
+        self._inverse_link_function = resolve_inverse_link_function(
+            inverse_link_function, self._observation_model
+        )
 
     @property
     def observation_model(self) -> Union[None, obs.Observations]:
@@ -663,8 +626,10 @@ class GLM(BaseRegressor):
         return score
 
     def _initialize_parameters(
-        self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray
-    ) -> Tuple[Union[dict, jnp.ndarray], jnp.ndarray]:
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+    ) -> ModelParams:
         """Initialize the parameters based on the structure and dimensions X and y.
 
         This method initializes the coefficients (spike basis coefficients) and intercepts (bias terms)
@@ -970,13 +935,12 @@ class GLM(BaseRegressor):
             rank = jnp.linalg.matrix_rank(X)
             return (n_samples - rank - 1) * jnp.ones_like(params[1])
 
-    @cast_to_jax
     def initialize_params(
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         init_params: Optional[ModelParams] = None,
-    ) -> Tuple[ModelParams, NamedTuple]:
+    ) -> ModelParams:
         """
         Initialize the model parameters for the optimization process.
 
@@ -1026,19 +990,7 @@ class GLM(BaseRegressor):
         >>> opt_state = model.initialize_state(X, y, params)
         >>> # Now ready to run optimization or update steps
         """
-        if init_params is None:
-            init_params = self._initialize_parameters(X, y)  # initialize
-        else:
-            err_message = "Initial parameters must be array-like objects (or pytrees of array-like objects) "
-            "with numeric data-type!"
-            init_params = validation.convert_tree_leaves_to_jax_array(
-                init_params, err_message=err_message, data_type=float
-            )
-
-        # validate input
-        self._validate(X, y, init_params)
-
-        return init_params
+        return super().initialize_params(X, y, init_params)
 
     def initialize_state(
         self,
@@ -1046,7 +998,7 @@ class GLM(BaseRegressor):
         y: jnp.ndarray,
         init_params,
         cast_to_jax_and_drop_nans: bool = True,
-    ) -> Union[Any, NamedTuple]:
+    ) -> SolverState:
         """Initialize the solver by instantiating its init_state, update and, run methods.
 
         This method also prepares the solver's state by using the initialized model parameters and data.
@@ -1072,7 +1024,7 @@ class GLM(BaseRegressor):
 
         Returns
         -------
-        NamedTuple
+        SolverState
             The initialized solver state
 
         Examples
@@ -1085,26 +1037,9 @@ class GLM(BaseRegressor):
         >>> opt_state = model.initialize_state(X, y, params)
         >>> # Now ready to run optimization or update steps
         """
-        if cast_to_jax_and_drop_nans:
-            # filter for non-nans
-            X, y = cast_to_jax(tree_utils.drop_nans)(X, y)
-            # grab the data
-            data = X.data if isinstance(X, FeaturePytree) else X
-        else:
-            data = X
-
-        # check if mask has been set is using group lasso
-        # if mask has not been set, use a single group as default
-        if isinstance(self.regularizer, GroupLasso):
-            if self.regularizer.mask is None:
-                warnings.warn(
-                    UserWarning(
-                        "Mask has not been set. Defaulting to a single group for all parameters. "
-                        "Please see the documentation on GroupLasso regularization for defining a "
-                        "mask."
-                    )
-                )
-                self.regularizer.mask = jnp.ones((1, data.shape[1]))
+        data, y = self._preprocess_inputs(
+            X, y, cast_to_jax_and_drop_nans=cast_to_jax_and_drop_nans
+        )
 
         opt_solver_kwargs = self._optimize_solver_params(data, y)
 
@@ -1126,7 +1061,7 @@ class GLM(BaseRegressor):
         *args,
         n_samples: Optional[int] = None,
         **kwargs,
-    ) -> jaxopt.OptStep:
+    ) -> StepResult:
         """
         Update the model parameters and solver state.
 
@@ -1160,7 +1095,7 @@ class GLM(BaseRegressor):
 
         Returns
         -------
-        jaxopt.OptStep
+        StepResult
             A tuple containing the updated parameters and optimization state. This tuple is
             typically used to continue the optimization process in subsequent steps.
 
@@ -1216,7 +1151,7 @@ class GLM(BaseRegressor):
         )
 
     def __sklearn_clone__(self) -> GLM:
-        """Clone the PopulationGLM, dropping feature_mask."""
+        """Clone the GLM."""
         params = self.get_params(deep=False)
         klass = self.__class__(**params)
         return klass
@@ -1373,8 +1308,8 @@ class PopulationGLM(GLM):
         Please see table above for regularizer/optimizer pairings.
     solver_kwargs :
         Optional dictionary for keyword arguments that are passed to the solver when instantiated.
-        E.g. stepsize, acceleration, value_and_grad, etc.
-         See the jaxopt documentation for details on each solver's kwargs: https://jaxopt.github.io/stable/
+        E.g. stepsize, tol, acceleration, etc.
+         For details on each solver's kwargs, see `get_accepted_arguments` and `get_solver_documentation`.
     feature_mask :
         Either a matrix of shape (num_features, num_neurons) or a :meth:`nemos.pytrees.FeaturePytree` of 0s and 1s, with
         ``feature_mask[feature_name]`` of shape (num_neurons, ).

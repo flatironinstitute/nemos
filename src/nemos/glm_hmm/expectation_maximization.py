@@ -27,18 +27,26 @@ def _analytical_m_step_initial_prob(
     dirichlet_prior_alphas: Optional[jnp.ndarray] = None,
 ):
     """
-    Calculate the M-step for initial probabilities.
+    Calculate the M-step for initial state probabilities.
+
+    Computes the maximum likelihood estimate (or MAP estimate with prior) of the
+    initial state distribution by summing posterior probabilities at session starts.
 
     Parameters
     ----------
-    posteriors:
+    posteriors :
         The posterior distribution over latent states, shape ``(n_time_bins, n_states)``.
-    dirichlet_prior_alphas:
-        The parameters of the Dirichlet prior, if available. Flat prior otherwise.
+    is_new_session :
+        Boolean array indicating session start points, shape ``(n_time_bins,)``.
+    dirichlet_prior_alphas :
+        The parameters of the Dirichlet prior for the initial distribution,
+        shape ``(n_states,)``. If None, uses a flat (uniform) prior.
 
     Returns
     -------
-        Updated initial parameters.
+    new_initial_prob :
+        Updated initial state probabilities, shape ``(n_states,)``.
+        Normalized to sum to 1.
     """
     tmp_initial_prob = jnp.sum(posteriors, axis=0, where=is_new_session[:, jnp.newaxis])
     if dirichlet_prior_alphas is not None:
@@ -51,12 +59,34 @@ def _analytical_m_step_initial_prob(
 def _analytical_m_step_transition_prob(
     joint_posterior: jnp.ndarray, dirichlet_prior_alphas: Optional[jnp.ndarray] = None
 ):
+    """
+    Calculate the M-step for state transition probabilities.
+
+    Computes the maximum likelihood estimate (or MAP estimate with prior) of the
+    transition matrix by normalizing expected transition counts from the joint posterior.
+
+    Parameters
+    ----------
+    joint_posterior:
+        Expected counts of transitions from state i to state j,
+        shape ``(n_states, n_states)``. Typically computed from the forward-backward
+        algorithm as the sum over time of P(z_t=i, z_{t+1}=j | data).
+    dirichlet_prior_alphas:
+        The parameters of the Dirichlet prior for each row of the transition matrix,
+        shape ``(n_states, n_states)``. If None, uses a flat (uniform) prior.
+
+    Returns
+    -------
+    new_transition_prob:
+        Updated transition probability matrix, shape ``(n_states, n_states)``.
+        Each row sums to 1, where entry [i, j] is P(z_{t+1}=j | z_t=i).
+    """
     if dirichlet_prior_alphas is not None:
         new_transition_prob = joint_posterior + dirichlet_prior_alphas - 1
     else:
         new_transition_prob = joint_posterior
 
-    new_transition_prob /= jnp.sum(joint_posterior, axis=1)[:, jnp.newaxis]
+    new_transition_prob /= jnp.sum(new_transition_prob, axis=1)[:, jnp.newaxis]
     return new_transition_prob
 
 
@@ -490,7 +520,8 @@ def hmm_negative_log_likelihood(
     """
     Compute the negative log-likelihood of the GLM-HMM.
 
-    Compute the negative log-likelihood as a function of the projection weights.
+    Compute the expected negative log-likelihood as a function of
+    the projection weights. The expectation is taken over the posteriors.
 
     Parameters
     ----------
@@ -514,6 +545,7 @@ def hmm_negative_log_likelihood(
     """
     coef, intercept = glm_params
     if coef.ndim > 2:
+        # coef.shape is (n_features, n_neurons, n_states)
         predicted_rate = inverse_link_function(
             jnp.einsum("ik, kjw->ijw", X, coef) + intercept
         )
@@ -542,7 +574,7 @@ def run_m_step(
     joint_posterior: Array,
     glm_params: Tuple[Array, Array],
     is_new_session: Array,
-    solver_run: Callable[[Array, Array, Array, Array], Array],
+    solver_run: Callable[[Tuple[Array, Array], Array, Array, Array], Array],
     dirichlet_prior_alphas_init_prob: Array | None = None,
     dirichlet_prior_alphas_transition: Array | None = None,
 ) -> Tuple[Tuple[Array, Array], Array, Array, Any]:
@@ -552,25 +584,27 @@ def run_m_step(
     Parameters
     ----------
     X:
-        Design matrix of observations.
+        Design matrix of observations, shape (n_samples, n_features).
     y:
-        Target responses.
+        Target responses, shape ``(n_samples,)`` or ``(n_samples, n_neurons)``.
     posteriors:
-        Posterior probabilities over states.
+        Posterior probabilities over states, shape ``(n_samples, n_states)``.
     joint_posterior:
-        Joint posterior probabilities over pairs of states
-        :math:`P(z_{t-1}, z_t \mid X, y, \theta_{\text{old}})`.
+        Joint posterior probabilities over pairs of states summed over samples. Shape ``(n_states, n_states)``.
+        :math:`\sum_t P(z_{t-1}, z_t \mid X, y, \theta_{\text{old}})`.
     glm_params:
-        Current projection coefficients and intercept terms.
+        Current GLM coefficients and intercept terms. Coefficients have shape ``(n_features, n_states)`` for
+        single observation fits and ``(n_features, n_neurons, n_states)`` for population fits. Intercepts have
+        shape ``(n_states,)`` for single observation fits and ``(n_states, n_neurons)`` for population fits.
     is_new_session:
-        Boolean mask for the first observation of each session.
+        Boolean mask marking the first observation of each session. Shape ``(n_samples,)``.
     solver_run:
         Callable performing a full optimization loop for the GLM weights.
         Note that the prior for the projection weights is baked in the solver run.
     dirichlet_prior_alphas_init_prob:
-        Prior for the initial states.
+        Prior for the initial states, shape ``(n_states,)``.
     dirichlet_prior_alphas_transition:
-        Prior for the transition probabilities.
+        Prior for the transition probabilities, shape ``(n_states, n_states)``.
 
     Returns
     -------
@@ -582,6 +616,10 @@ def run_m_step(
         Updated transition matrix.
     state:
         State returned by the solver.
+
+    Notes
+    -----
+    In the current implementation all Dirichlet alpha coefficients must be greater than one.
     """
 
     # Update Initial state probability Eq. 13.18
@@ -664,7 +702,14 @@ def prepare_likelihood_func(
 
 
 @partial(
-    jax.jit, static_argnames=["inverse_link_function", "likelihood_func", "solver_run"]
+    jax.jit,
+    static_argnames=[
+        "inverse_link_function",
+        "likelihood_func",
+        "solver_run",
+        "maxiter",
+        "tol",
+    ],
 )
 def em_glm_hmm(
     X: Array,
@@ -678,7 +723,7 @@ def em_glm_hmm(
     is_new_session: Optional[Array] = None,
     maxiter: int = 10**3,
     tol: float = 1e-8,
-) -> Tuple[Array, Array, Array, Array, Tuple[Array, Array]]:
+) -> Tuple[Array, Array, Array, Array, Tuple[Array, Array], GLMHMMState]:
     """
     Perform EM optimization for a GLM-HMM.
 
@@ -824,4 +869,5 @@ def em_glm_hmm(
         state.initial_prob,
         state.transition_matrix,
         state.glm_params,
+        state,
     )
