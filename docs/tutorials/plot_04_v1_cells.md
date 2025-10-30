@@ -55,47 +55,6 @@ import nemos as nmo
 
 # configure plots some
 plt.style.use(nmo.styles.plot_style)
-
-
-# utility for filling a time series
-def fill_forward(time_series, data, ep=None, out_of_range=np.nan):
-    """
-    Fill a time series forward in time with data.
-
-    Parameters
-    ----------
-    time_series:
-        The time series to match.
-    data: Tsd, TsdFrame, or TsdTensor
-        The time series with data to be extend.
-
-    Returns
-    -------
-    : Tsd, TsdFrame, or TsdTensor
-        The data time series filled forward.
-
-    """
-    assert isinstance(data, (nap.Tsd, nap.TsdFrame, nap.TsdTensor))
-
-    if ep is None:
-        ep = time_series.time_support
-    else:
-        assert isinstance(ep, nap.IntervalSet)
-        time_series.restrict(ep)
-
-    data = data.restrict(ep)
-    starts = ep.start
-    ends = ep.end
-
-    filled_d = np.full((time_series.t.shape[0], *data.shape[1:]), out_of_range, dtype=data.dtype)
-    fill_idx = 0
-    for start, end in zip(starts, ends):
-        data_ep = data.get(start, end)
-        ts_ep = time_series.get(start, end)
-        idxs = np.searchsorted(data_ep.t, ts_ep.t, side="right") - 1
-        filled_d[fill_idx:fill_idx + ts_ep.t.shape[0]][idxs >= 0] = data_ep.d[idxs[idxs>=0]]
-        fill_idx += ts_ep.t.shape[0]
-    return type(data)(t=time_series.t, d=filled_d, time_support=ep)
 ```
 
 ## Data Streaming
@@ -153,7 +112,7 @@ How could we predict neuron's response to white noise stimulus?
   independently on each frame, fit (x, y, t) over, say 100 msecs. and then
   fit each of these independently (like in head direction example)
 
-- that's a lot of parameters! can simplify by assumping that the response is
+- that's a lot of parameters! can simplify by assuming that the response is
   separable: fit a single (x, y) filter and then modulate it over time. this
   wouldn't catch e.g., direction-selectivity because it assumes that phase
   preference is constant over time
@@ -263,6 +222,15 @@ different matrix operations:
 
 ```{code-cell} ipython3
 filtered_stimulus = np.einsum('t h w, h w -> t', stimulus, receptive_field)
+# <<<<<< TODO
+# REMOVE THIS AFTER PYNAPPLE RELEASE
+if tuple(map(int, nap.__version__.split('.')[:3])) > (0, 10, 0):
+    raise RuntimeError(
+        "pynapple has been updated past 0.10.0. "
+        "Please remove this temporary workaround block."
+    )
+filtered_stimulus = nap.TsdFrame(t=stimulus.t, d=filtered_stimulus, time_support=stimulus.time_support)
+# >>>>>> END TODO
 ```
 
 This notation says: take these arrays with dimensions `(t,h,w)` and `(h,w)`
@@ -292,6 +260,7 @@ this and our spike counts into the proper format for NeMoS:
 # resolution
 bin_size = .001
 counts = spikes[34].restrict(filtered_stimulus.time_support).count(bin_size)
+
 print(counts.rate)
 print(filtered_stimulus.rate)
 ```
@@ -313,7 +282,7 @@ we want to "fill forward" the values of our input, and we have pynapple
 convenience function to do so:
 
 ```{code-cell} ipython3
-filtered_stimulus = fill_forward(counts, filtered_stimulus)
+filtered_stimulus = counts.value_from(filtered_stimulus, mode="before")
 filtered_stimulus
 ```
 

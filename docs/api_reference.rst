@@ -194,6 +194,20 @@ Utility functions for running convolution over the sample axis.
     create_convolutional_predictor
 
 
+The ``nemos.solvers`` module
+----------------------------
+JAX-based optimizers used for parameter fitting.
+
+.. currentmodule:: nemos.solvers
+
+.. autosummary::
+    :toctree: generated/solvers
+    :nosignatures:
+
+    get_solver_documentation
+    list_available_solvers
+
+
 The ``nemos.identifiability_constraints`` module
 ------------------------------------------------
 Functions to apply identifiability constraints to rank-deficient feature matrices, ensuring the uniqueness of model

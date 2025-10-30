@@ -91,6 +91,12 @@ VALID_PAIRS = [
     ),
     {"likelihood_func", "log_likelihood_func"},
     {"negative_log_likelihood_func", "log_likelihood_func"},
+    {"tol", "atol"},
+    {"tol", "rtol"},
+    {"fit_params", "flat_params"},
+    {"solver_kwargs", "solver_init_kwargs"},
+    {"unaccepted_name", "accepted_name"},
+    {"fn", "fun"},
 ]
 
 

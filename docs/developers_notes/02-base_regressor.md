@@ -34,7 +34,7 @@ Public attributes are stored as properties:
 
 - `regularizer`: An instance of the [`nemos.regularizer.Regularizer`](nemos.regularizer.Regularizer) class. The setter for this property accepts either the instance directly or a string that is used to instantiate the appropriate regularizer.
 - `regularizer_strength`: A float quantifying the amount of regularization.
-- `solver_name`: One of the `jaxopt` solver supported solvers, currently "GradientDescent", "BFGS", "LBFGS", "ProximalGradient" and, "NonlinearCG".
+- `solver_name`: One of the supported solvers in the solver registry, currently "GradientDescent", "BFGS", "LBFGS", "ProximalGradient", "SVRG", and "NonlinearCG".
 - `solver_kwargs`: Extra keyword arguments to be passed at solver initialization.
 - `solver_init_state`, `solver_update`, `solver_run`: Read-only property with a partially evaluated `solver.init_state`, `solver.update` and, `solver.run` methods. The partial evaluation guarantees a consistent API for all solvers.
 
@@ -45,8 +45,7 @@ Typically, in `YourRegressor` you will call `self.solver_init_state` at the para
 :::{admonition} Solvers
 :class: note
 
-Solvers are typically optimizers from the `jaxopt` package, but in principle they could be custom optimization routines as long as they respect the `jaxopt` api (i.e., have a `run`, `init_state`, and [`update`](nemos.glm.GLM.update) method with the appropriate input/output types).
-We rely on `jaxopt` because it provides a comprehensive set of robust, GPU accelerated, batchable and differentiable optimizers in JAX, that are highly customizable. In the future we may provide a number of custom solvers optimized for convex stochastic optimization.
+We implement a set of standard solvers in NeMoS, relying on various backends. In the future we are planning to add support for user-defined solvers, because in principle any object that adheres to our `AbstractSolver` interface should be compatible with NeMoS. For more information about the solver interface and solvers, see the [developer notes about solvers](07-solvers.md).
 :::
 
 ## Contributor Guidelines
