@@ -947,6 +947,7 @@ def test_save_and_load_fitted_model(instantiate_base_regressor_subclass, tmp_pat
     fitted_model.transition_prob_ = true_params[1]
     fitted_model.initial_prob_ = true_params[2]
     fitted_model.scale_ = 11.0
+    fitted_model.dof_resid_ = 1.
     initial_params = fitted_model.get_params()
     fit_state = fitted_model._get_fit_state()
     initial_params.update(fit_state)
