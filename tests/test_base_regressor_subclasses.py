@@ -317,6 +317,7 @@ class TestModelCommons:
         "n_params",
         [0, 1, 2, 3, 4],
     )
+    @pytest.mark.solver_related
     def test_initialize_solver_param_length(
         self, n_params, instantiate_base_regressor_subclass
     ):
@@ -357,6 +358,7 @@ class TestModelCommons:
             (1, pytest.raises(ValueError, match="X must be two-dimensional")),
         ],
     )
+    @pytest.mark.solver_related
     def test_initialize_solver_x_dimensionality(
         self, delta_dim, expectation, instantiate_base_regressor_subclass
     ):
@@ -385,6 +387,7 @@ class TestModelCommons:
             (1, pytest.raises(ValueError, match="y must be ...-dimensional")),
         ],
     )
+    @pytest.mark.solver_related
     def test_initialize_solver_y_dimensionality(
         self, delta_dim, expectation, instantiate_base_regressor_subclass
     ):
@@ -419,6 +422,7 @@ class TestModelCommons:
             (1, pytest.raises(ValueError, match="Inconsistent number of features")),
         ],
     )
+    @pytest.mark.solver_related
     def test_initialize_solver_n_feature_consistency_x(
         self, delta_n_features, expectation, instantiate_base_regressor_subclass
     ):
@@ -452,6 +456,7 @@ class TestModelCommons:
             ),
         ],
     )
+    @pytest.mark.solver_related
     def test_initialize_solver_time_points_x(
         self, delta_tp, expectation, instantiate_base_regressor_subclass
     ):
@@ -483,6 +488,7 @@ class TestModelCommons:
             ),
         ],
     )
+    @pytest.mark.solver_related
     def test_initialize_solver_time_points_y(
         self, delta_tp, expectation, instantiate_base_regressor_subclass
     ):
@@ -500,6 +506,7 @@ class TestModelCommons:
             init_state = model.initialize_state(X, y, params)
             assert init_state.velocity == params
 
+    @pytest.mark.solver_related
     def test_initialize_solver_mask_grouplasso(
         self, instantiate_base_regressor_subclass
     ):
@@ -520,6 +527,7 @@ class TestModelCommons:
         init_state = model.initialize_state(X, y, params)
         assert init_state.velocity == params
 
+    @pytest.mark.solver_related
     def test_fit_mask_grouplasso(self, instantiate_base_regressor_subclass):
         """Test that the group lasso fit goes through"""
 
@@ -555,6 +563,7 @@ class TestModelCommons:
             ),
         ],
     )
+    @pytest.mark.solver_related
     def test_initialize_solver_all_invalid_X(
         self, fill_val, expectation, instantiate_base_regressor_subclass
     ):
@@ -699,6 +708,7 @@ class TestModelCommons:
     ################################
     # Test model.initialize_solver #
     ################################
+    @pytest.mark.solver_related
     def test_initializer_solver_set_solver_callable(
         self, instantiate_base_regressor_subclass
     ):
@@ -969,6 +979,7 @@ class TestModelSimulation:
         "n_params",
         [0, 1, 2, 3, 4],
     )
+    @pytest.mark.solver_related
     def test_fit_param_length(self, n_params, instantiate_base_regressor_subclass):
         """
         Test the `fit` method with different numbers of initial parameters.
@@ -1002,6 +1013,7 @@ class TestModelSimulation:
             (1, pytest.raises(ValueError, match="X must be two-dimensional")),
         ],
     )
+    @pytest.mark.solver_related
     def test_fit_x_dimensionality(
         self, delta_dim, expectation, instantiate_base_regressor_subclass
     ):
@@ -1024,6 +1036,7 @@ class TestModelSimulation:
             (1, pytest.raises(ValueError, match=r"y must be (one|two)-dimensional")),
         ],
     )
+    @pytest.mark.solver_related
     def test_fit_y_dimensionality(
         self, delta_dim, expectation, instantiate_base_regressor_subclass
     ):
@@ -1052,6 +1065,7 @@ class TestModelSimulation:
             (1, pytest.raises(ValueError, match="Inconsistent number of features")),
         ],
     )
+    @pytest.mark.solver_related
     def test_fit_n_feature_consistency_x(
         self,
         delta_n_features,
@@ -1084,6 +1098,7 @@ class TestModelSimulation:
             ),
         ],
     )
+    @pytest.mark.solver_related
     def test_fit_time_points_x(
         self, delta_tp, expectation, instantiate_base_regressor_subclass
     ):
@@ -1109,6 +1124,7 @@ class TestModelSimulation:
             ),
         ],
     )
+    @pytest.mark.solver_related
     def test_fit_time_points_y(
         self, delta_tp, expectation, instantiate_base_regressor_subclass
     ):
@@ -1138,6 +1154,7 @@ class TestModelSimulation:
             ),
         ],
     )
+    @pytest.mark.solver_related
     def test_fit_all_invalid_X(
         self, fill_val, expectation, instantiate_base_regressor_subclass
     ):

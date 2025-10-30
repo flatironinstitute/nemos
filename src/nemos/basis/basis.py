@@ -820,21 +820,22 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         .. plot::
             :include-source: True
             :caption: M-Spline
-            >>> import numpy as np
-            >>> import matplotlib.pyplot as plt
-            >>> from nemos.basis import MSplineEval
-            >>> mspline_basis = MSplineEval(n_basis_funcs=4, order=3)
-            >>> sample_points, basis_values = mspline_basis.evaluate_on_grid(100)
-            >>> for i in range(4):
-            ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
-            >>> plt.title('M-Spline Basis Functions')
-            Text(0.5, 1.0, 'M-Spline Basis Functions')
-            >>> plt.xlabel('Domain')
-            Text(0.5, 0, 'Domain')
-            >>> plt.ylabel('Basis Function Value')
-            Text(0, 0.5, 'Basis Function Value')
-            >>> l = plt.legend()
-            >>> plt.show()
+
+        >>> import numpy as np
+        >>> import matplotlib.pyplot as plt
+        >>> from nemos.basis import MSplineEval
+        >>> mspline_basis = MSplineEval(n_basis_funcs=4, order=3)
+        >>> sample_points, basis_values = mspline_basis.evaluate_on_grid(100)
+        >>> for i in range(4):
+        ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
+        >>> plt.title('M-Spline Basis Functions')
+        Text(0.5, 1.0, 'M-Spline Basis Functions')
+        >>> plt.xlabel('Domain')
+        Text(0.5, 0, 'Domain')
+        >>> plt.ylabel('Basis Function Value')
+        Text(0, 0.5, 'Basis Function Value')
+        >>> l = plt.legend()
+        >>> plt.show()
         """
         # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)

@@ -8,6 +8,9 @@ from scipy.optimize import minimize
 
 import nemos as nmo
 
+# Register every test here as solver-related
+pytestmark = pytest.mark.solver_related
+
 
 @pytest.mark.parametrize(
     "solver_names", [("GradientDescent", "ProximalGradient"), ("SVRG", "ProxSVRG")]
@@ -161,7 +164,7 @@ def test_group_lasso_convergence(solver_name):
     # instantiate and fit GLM with ProximalGradient
     model_PG = nmo.glm.GLM(
         regularizer=nmo.regularizer.GroupLasso(mask=mask),
-        solver_kwargs=dict(tol=10**-14, maxiter=10000),
+        solver_kwargs=dict(tol=10**-14, maxiter=100_000),
         regularizer_strength=0.2,
         solver_name=solver_name,
     )

@@ -10,6 +10,7 @@ Note:
 """
 
 import abc
+import os
 from collections import namedtuple
 from copy import deepcopy
 from functools import partial
@@ -259,6 +260,9 @@ class MockRegressor(nmo.base_regressor.BaseRegressor):
     def initialize_state(self, *args, **kwargs):
         pass
 
+    def initialize_params(self, *args, **kwargs):
+        pass
+
     def _initialize_parameters(self, *args, **kwargs):
         pass
 
@@ -329,7 +333,7 @@ def mock_regressor_nested():
 
 
 @pytest.fixture
-def instantiate_glm_hmmmock_glm():
+def mock_glm():
     return MockGLM(std_param=2)
 
 
@@ -1352,3 +1356,59 @@ def _clear_model_cache():
     yield
     print("CLEARING MODEL CACHE")
     _MODEL_CACHE.clear()
+
+
+# Select solver backend for tests if requested via environment variable
+_common_solvers = {
+    "SVRG": nmo.solvers.WrappedSVRG,
+    "ProxSVRG": nmo.solvers.WrappedProxSVRG,
+}
+_solver_registry_per_backend = {
+    "jaxopt": {
+        **_common_solvers,
+        "GradientDescent": nmo.solvers.JaxoptGradientDescent,
+        "ProximalGradient": nmo.solvers.JaxoptProximalGradient,
+        "LBFGS": nmo.solvers.JaxoptLBFGS,
+        "BFGS": nmo.solvers.JaxoptBFGS,
+        "NonlinearCG": nmo.solvers.JaxoptNonlinearCG,
+    },
+    "optimistix": {
+        **_common_solvers,
+        "GradientDescent": nmo.solvers.OptimistixOptaxGradientDescent,
+        "ProximalGradient": nmo.solvers.OptimistixOptaxProximalGradient,
+        "LBFGS": nmo.solvers.OptimistixOptaxLBFGS,
+        "BFGS": nmo.solvers.OptimistixBFGS,
+        "NonlinearCG": nmo.solvers.OptimistixNonlinearCG,
+    },
+}
+
+
+@pytest.fixture(autouse=True, scope="session")
+def configure_solver_backend():
+    """
+    Patch the solver registry depending on ``NEMOS_SOLVER_BACKEND``.
+
+    Used for running solver-dependent tests in separate tox environments
+    for the JAXopt and the Optimistix backends.
+    """
+    backend = os.getenv("NEMOS_SOLVER_BACKEND")
+    if not backend:
+        yield  # run with default solver registry
+        return  # don't execute the remainder on teardown
+
+    try:
+        _backend_solver_registry = _solver_registry_per_backend[backend]
+    except KeyError:
+        available = ", ".join(_solver_registry_per_backend.keys())
+        pytest.fail(f"Unknown solver backend: {backend}. Available: {available}")
+
+    # save the original registry so that we can restore it after
+    original = nmo.solvers.solver_registry.copy()
+    nmo.solvers.solver_registry.clear()
+    nmo.solvers.solver_registry.update(_backend_solver_registry)
+
+    try:
+        yield
+    finally:
+        nmo.solvers.solver_registry.clear()
+        nmo.solvers.solver_registry.update(original)

@@ -20,10 +20,6 @@ Abstract Class Regularizer
 └─ Concrete Class GroupLasso
 ```
 
-:::{note}
-If we need advanced adaptive solvers (e.g., Adam, LAMB etc.) in the future, we should consider adding [`Optax`](https://optax.readthedocs.io/en/latest/) as a dependency, which is compatible with `jaxopt`, see [here](https://jaxopt.github.io/stable/_autosummary/jaxopt.OptaxSolver.html#jaxopt.OptaxSolver).
-:::
-
 (the-abstract-class-regularizer)=
 ## The Abstract Class `Regularizer`
 

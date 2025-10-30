@@ -15,7 +15,7 @@ Our design aligns with the `scikit-learn` API, facilitating seamless integration
 
 The classes provided here are modular by design offering a standard foundation for any GLM variant.
 
-Instantiating a specific GLM simply requires providing an observation model (Gamma, Poisson, etc.), a regularization strategies (Ridge, Lasso, etc.) and an optimization scheme during initialization. This is done using the [`nemos.observation_models.Observations`](nemos.observation_models.Observations), [`nemos.regularizer.Regularizer`](nemos.regularizer.Regularizer) objects as well as the compatible `jaxopt` solvers, respectively.
+Instantiating a specific GLM simply requires providing an observation model (Gamma, Poisson, etc.), a regularization strategies (Ridge, Lasso, etc.) and an optimization scheme during initialization. This is done using the [`nemos.observation_models.Observations`](nemos.observation_models.Observations), [`nemos.regularizer.Regularizer`](nemos.regularizer.Regularizer) objects as well as the compatible solvers, respectively.
 
 
 <figure markdown>
@@ -41,7 +41,7 @@ The [`GLM`](nemos.glm.GLM) class provides a direct implementation of the GLM mod
 - **`intercept_`**: Stores the bias terms' solutions as `jax.ndarray` after the fitting process. It is initialized as `None` during class instantiation.
 - **`dof_resid_`**: The degrees of freedom of the model's residual. this quantity is used to estimate the scale parameter, see below, and compute frequentist confidence intervals.
 - **`scale_`**: The scale parameter of the observation distribution, which together with the rate, uniquely specifies a distribution of the exponential family. Example: a 1D Gaussian is specified by the mean which is the rate, and the standard deviation, which is the scale.
-- **`solver_state_`**: Indicates the solver's state. For specific solver states, refer to the [`jaxopt` documentation](https://jaxopt.github.io/stable/index.html#).
+- **`solver_state_`**: Indicates the solver's state. For specific solver states, refer to the solver implementations in `nemos.solvers`.
 
 Additionally, the [`GLM`](nemos.glm.GLM) class inherits the attributes of `BaseRegressor`, see the [relative note](02-base_regressor.md) for more information.
 

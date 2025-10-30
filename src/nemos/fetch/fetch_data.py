@@ -43,6 +43,9 @@ REGISTRY_DATA = {
     "Achilles_10252013_EEG.nwb": "a97a69d231e7e91c07e24890225f8fe4636bac054de50345551f32fc46b9efdd",
     "em_three_states.npz": "92e9fe7990e98f3d23536a40658e258acbc83c26d773f78336431abc12e01951",
     "glm_hmm_simulation_n_neurons_5_seed_123.npz": "563f74ddf7b99c5a07c2d9a1b53ef8b22f9cd2272b52031ecda82d420d047baf",
+    "julia_regression_mstep_no_prior.npz": "412430a4e0d0bbc0abb224a3a8516f660266e3e5bc0d840c4ee6fd80b5501faa",
+    "julia_regression_mstep_good_prior.npz": "e5bf87ca2f48b4904b0ce1c0e258f91c44033b05163e039f79b9b48c2c3e484d",
+    "julia_regression_mstep_flat_prior.npz": "fdd1117c521945f25595f78f220256d37cb7bf37834403bd1cc04941e3203b22",
 }
 DOWNLOADABLE_FILES = list(REGISTRY_DATA.keys())
 
@@ -60,6 +63,9 @@ REGISTRY_URLS_DATA = {
     "Achilles_10252013_EEG.nwb": OSF_TEMPLATE.format("2dfvp"),
     "em_three_states.npz": OSF_TEMPLATE.format("wdz7j"),
     "glm_hmm_simulation_n_neurons_5_seed_123.npz": OSF_TEMPLATE.format("3ebdh"),
+    "julia_regression_mstep_no_prior.npz": OSF_TEMPLATE.format("3ky6m"),
+    "julia_regression_mstep_good_prior.npz": OSF_TEMPLATE.format("w586p"),
+    "julia_regression_mstep_flat_prior.npz": OSF_TEMPLATE.format("umz4d"),
 }
 
 _NEMOS_ENV = "NEMOS_DATA_DIR"
@@ -132,7 +138,10 @@ def fetch_data(
         )
     retriever = _create_retriever(path)
     # Fetch the dataset using pooch.
-    return retriever.fetch(dataset_name)
+    return retriever.fetch(
+        dataset_name,
+        progressbar=True,
+    )
 
 
 def download_dandi_data(
@@ -220,14 +229,28 @@ def download_dandi_data(
     temp_file_path = cached_file_path.with_suffix(".tmp")
 
     try:
+        # Get file size for progress bar
         with fs.open(s3_url, "rb") as remote_file:
-            with open(temp_file_path, "wb") as local_file:
-                chunk_size = 8192 * 1024  # 8MB chunks
-                while True:
-                    chunk = remote_file.read(chunk_size)
-                    if not chunk:
-                        break
-                    local_file.write(chunk)
+            # Try to get content length from headers
+            file_size = getattr(remote_file, "size", None)
+
+        with fs.open(s3_url, "rb") as remote_file:
+            # Initialize progress bar
+            with tqdm(
+                total=file_size,
+                unit="B",
+                unit_scale=True,
+                unit_divisor=1024,
+                desc=f"Downloading {file_path.split('/')[-1]}",
+            ) as pbar:
+                with open(temp_file_path, "wb") as local_file:
+                    chunk_size = 8192 * 1024  # 8MB chunks
+                    while True:
+                        chunk = remote_file.read(chunk_size)
+                        if not chunk:
+                            break
+                        local_file.write(chunk)
+                        pbar.update(len(chunk))
 
         # Move completed download to final location
         temp_file_path.rename(cached_file_path)

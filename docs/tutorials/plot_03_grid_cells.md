@@ -93,12 +93,12 @@ head_dir = nap.Tsd(dataset["SpatialSeriesLED1"].index, head_dir).dropna()
 Let's quickly compute some tuning curves for head-direction and spatial position.
 
 ```{code-cell} ipython3
-hd_tuning = nap.compute_1d_tuning_curves(
-    group=spikes, feature=head_dir, nb_bins=61, minmax=(0, 2 * np.pi)
+hd_tuning = nap.compute_tuning_curves(
+    spikes, features=head_dir, bins=61, range=(0, 2 * np.pi), feature_names=["angles"]
 )
 
-pos_tuning, binsxy = nap.compute_2d_tuning_curves(
-    group=spikes, features=position, nb_bins=12
+pos_tuning = nap.compute_tuning_curves(
+    spikes, features=position, bins=12, feature_names=["x","y"]
 )
 ```
 
@@ -109,7 +109,7 @@ fig = plt.figure(figsize=(12, 4))
 gs = plt.GridSpec(2, len(spikes))
 for i in range(len(spikes)):
     ax = plt.subplot(gs[0, i], projection="polar")
-    ax.plot(hd_tuning.loc[:, i])
+    ax.plot(hd_tuning[i].angles, hd_tuning[i])
 
     ax = plt.subplot(gs[1, i])
     ax.imshow(gaussian_filter(pos_tuning[i], sigma=1))
@@ -233,8 +233,8 @@ rate_pos = model.predict(position_basis)
 And compute the tuning curves/
 
 ```{code-cell} ipython3
-model_tuning, binsxy = nap.compute_2d_tuning_curves_continuous(
-    tsdframe=rate_pos[:, np.newaxis] * rate_pos.rate, features=position, nb_bins=12
+model_tuning = nap.compute_tuning_curves(
+    rate_pos * rate_pos.rate, features=position, bins=12, feature_names=["x", "y"]
 )
 ```
 
@@ -288,8 +288,8 @@ Let's predict and compute the tuning curves once again.
 best_rate_pos = best_model.predict(position_basis)
 
 # compute the 2D tuning
-best_model_tuning, binsxy = nap.compute_2d_tuning_curves_continuous(
-    tsdframe=best_rate_pos[:, np.newaxis] * best_rate_pos.rate, features=position, nb_bins=12
+best_model_tuning = nap.compute_tuning_curves(
+    best_rate_pos * best_rate_pos.rate, features=position, bins=12, feature_names=["x", "y"]
 )
 ```
 

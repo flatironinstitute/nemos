@@ -95,6 +95,15 @@ class Regularizer(Base, abc.ABC):
         """
         pass
 
+    def check_solver(self, solver_name: str):
+        """Raise an error if the given solver is not allowed."""
+        if solver_name not in self._allowed_solvers:
+            raise ValueError(
+                f"The solver: {solver_name} is not allowed for "
+                f"{self.__class__.__name__} regularization. Allowed solvers are "
+                f"{self.allowed_solvers}."
+            )
+
     def __repr__(self):
         return format_repr(self)
 

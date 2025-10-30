@@ -25,6 +25,7 @@ from nemos.observation_models import NegativeBinomialObservations
 from nemos.pytrees import FeaturePytree
 from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
 from nemos.utils import _get_name
+from nemos import solvers
 
 GLM_COMMON_PARAMS_NAMES = {
     "inverse_link_function",
@@ -280,6 +281,7 @@ class TestGLM:
             (1, pytest.raises(ValueError, match="Inconsistent number of features")),
         ],
     )
+    @pytest.mark.solver_related
     def test_fit_n_feature_consistency_weights(
         self,
         delta_n_features,
@@ -670,9 +672,9 @@ class TestGLM:
             params = model.initialize_params(X, y, init_params=(init_w, init_b))
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
 
     @pytest.mark.parametrize(*fit_init_params_type_init_params)
+    @pytest.mark.solver_related
     def test_initialize_solver_init_params_type(
         self,
         request,
@@ -698,7 +700,6 @@ class TestGLM:
             params = model.initialize_params(X, y, init_params=init_params)
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -708,6 +709,7 @@ class TestGLM:
             (1, pytest.raises(ValueError, match="Inconsistent number of features")),
         ],
     )
+    @pytest.mark.solver_related
     def test_initialize_solver_n_feature_consistency_weights(
         self,
         delta_n_features,
@@ -737,7 +739,6 @@ class TestGLM:
             params = model.initialize_params(X, y, init_params=(init_w, init_b))
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
 
     #######################
     # Test model.simulate
@@ -2205,7 +2206,7 @@ class TestGLMObservationModel:
         # use glm static methods to check if the solver is batchable
         # if not pop the batch_size kwarg
         try:
-            slv_class = nmo.glm.GLM._get_solver_class(solver_name)
+            slv_class = solvers.solver_registry[solver_name]
             nmo.glm.GLM._check_solver_kwargs(slv_class, solver_kwargs)
         except NameError:
             solver_kwargs.pop("batch_size")
@@ -2713,7 +2714,7 @@ class TestPoissonGLM:
             regularizer_strength=None if reg == "UnRegularized" else 1.0,
         )
         opt_state = model.initialize_state(X, y, true_params)
-        solver = inspect.getclosurevars(model._solver_run).nonlocals["solver"]
+        solver = model._solver
 
         if stepsize is not None:
             assert opt_state.stepsize == stepsize

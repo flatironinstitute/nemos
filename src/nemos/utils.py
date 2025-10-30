@@ -14,6 +14,7 @@ from numpy.typing import NDArray
 from .base_class import Base
 from .tree_utils import pytree_map_and_reduce
 from .type_casting import is_at_least_1d_numpy_array_like, support_pynapple
+from .typing import Pytree
 
 __all__ = [
     "check_dimensionality",
@@ -22,6 +23,7 @@ __all__ = [
     "shift_time_series",
     "row_wise_kron",
     "one_over_x",
+    "get_flattener_unflattener",
 ]
 
 
@@ -323,7 +325,6 @@ def shift_time_series(
     time_series = jax.tree_util.tree_map(jnp.asarray, time_series)
 
     if is_at_least_1d_numpy_array_like(time_series):
-
         if not np.issubdtype(time_series.dtype, np.floating):
             raise ValueError("time_series must have a float dtype!")
         return _pad_dimension(
@@ -816,3 +817,34 @@ def get_env_metadata() -> dict[str, str]:
         "scikit-learn": version("scikit-learn"),
         "nemos": version("nemos"),
     }
+
+
+def get_flattener_unflattener(parameter_tree: Pytree):
+    """
+    Create functions for flattening parameter pytrees and reshaping them to their original shape.
+
+    Parameters
+    ----------
+    parameter_tree :
+        Pytree to flatten. Usually model parameters.
+
+    Returns
+    -------
+    (flattener, unflattener):
+        Tuple of two functions: first one flattens the parameters, second one resshapes the flat ones.
+    """
+    flat, struct = jax.tree_util.tree_flatten(parameter_tree)
+    shapes = [x.shape for x in flat]
+    sizes = jnp.array([x.size for x in flat], dtype=int)
+    split_indices = jnp.cumsum(sizes[:-1])
+
+    def flattener(parameter_tree):
+        flat = jax.tree_util.tree_leaves(parameter_tree)
+        return jnp.concatenate([x.flatten() for x in flat])
+
+    def unflattener(flat_params):
+        split_params = jnp.split(flat_params, split_indices)
+        split_params = [x.reshape(s) for x, s in zip(split_params, shapes)]
+        return jax.tree_util.tree_unflatten(struct, split_params)
+
+    return flattener, unflattener

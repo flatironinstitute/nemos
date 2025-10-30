@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Callable, NamedTuple, Optional, Union
+from typing import Any, Callable, NamedTuple, Optional, Union
 
 import jax
 import jax.flatten_util
@@ -12,6 +12,7 @@ from nemos.third_party.jaxopt.jaxopt.prox import prox_none
 
 from ..tree_utils import tree_add_scalar_mul, tree_l2_norm, tree_slice, tree_sub
 from ..typing import KeyArrayLike, Pytree
+from ._jaxopt_solvers import JaxoptAdapter
 
 
 class SVRGState(NamedTuple):
@@ -127,7 +128,7 @@ class ProxSVRG:
     def init_state(
         self,
         init_params: Pytree,
-        *args,
+        *args: Any,
     ) -> SVRGState:
         """
         Initialize the solver state.
@@ -171,7 +172,7 @@ class ProxSVRG:
         full_grad_at_reference_point: Pytree,
         stepsize: float,
         hyperparams_prox: Union[float, None],
-        *args,
+        *args: Any,
     ) -> Pytree:
         """
         Body of the inner loop of Prox-SVRG that takes a step.
@@ -235,7 +236,7 @@ class ProxSVRG:
         params: Pytree,
         state: SVRGState,
         hyperparams_prox: Union[float, None],
-        *args,
+        *args: Any,
     ) -> OptStep:
         """
         Perform a single parameter update on the data (no random sampling or loops) and increment `state.iter_num`.
@@ -293,7 +294,7 @@ class ProxSVRG:
         params: Pytree,
         state: SVRGState,
         hyperparams_prox: Union[float, None],
-        *args,
+        *args: Any,
     ) -> OptStep:
         """
         Update parameters given a mini-batch of data and increment iteration/epoch number in state.
@@ -350,7 +351,7 @@ class ProxSVRG:
         self,
         init_params: Pytree,
         hyperparams_prox: Union[float, None],
-        *args,
+        *args: Any,
     ) -> OptStep:
         """
         Run a whole optimization until convergence or until `maxiter` epochs are reached.
@@ -398,7 +399,7 @@ class ProxSVRG:
         init_params: Pytree,
         init_state: SVRGState,
         hyperparams_prox: Union[float, None],
-        *args,
+        *args: Any,
     ) -> OptStep:
         """
         Run a whole optimization until convergence or until `maxiter` epochs are reached.
@@ -491,7 +492,7 @@ class ProxSVRG:
         params: Pytree,
         state: SVRGState,
         hyperparams_prox: Union[float, None],
-        *args,
+        *args: Any,
     ) -> OptStep:
         """
         Perform the inner loop of Prox-SVRG.
@@ -660,7 +661,7 @@ class SVRG(ProxSVRG):
             batch_size,
         )
 
-    def init_state(self, init_params: Pytree, *args, **kwargs) -> SVRGState:
+    def init_state(self, init_params: Pytree, *args: Any, **kwargs) -> SVRGState:
         """
         Initialize the solver state.
 
@@ -687,7 +688,7 @@ class SVRG(ProxSVRG):
         return super().init_state(init_params, *args, **kwargs)
 
     @partial(jit, static_argnums=(0,))
-    def update(self, params: Pytree, state: SVRGState, *args, **kwargs) -> OptStep:
+    def update(self, params: Pytree, state: SVRGState, *args: Any, **kwargs) -> OptStep:
         """
         Perform a single parameter update on the data (no random sampling or loops) and increment `state.iter_num`.
 
@@ -736,7 +737,7 @@ class SVRG(ProxSVRG):
     def run(
         self,
         init_params: Pytree,
-        *args,
+        *args: Any,
     ) -> OptStep:
         """
         Run a whole optimization until convergence or until `maxiter` epochs are reached.
@@ -774,3 +775,16 @@ class SVRG(ProxSVRG):
 
         # substitute None for hyperparams_prox
         return self._run(init_params, init_state, None, *args)
+
+
+class WrappedSVRG(JaxoptAdapter):
+    """Adapter for NeMoS's implementation of SVRG following the AbstractSolver interface."""
+
+    _solver_cls = SVRG
+
+
+class WrappedProxSVRG(JaxoptAdapter):
+    """Adapter for NeMoS's implementation of Prox-SVRG following the AbstractSolver interface."""
+
+    _solver_cls = ProxSVRG
+    _proximal = True

@@ -415,20 +415,22 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # tuning curves
-raw_tuning = nap.compute_1d_tuning_curves(spikes, head_dir, nb_bins=100)[6]
+raw_tuning = nap.compute_tuning_curves(spikes, head_dir, bins=100, feature_names=["angles"])
+raw_tuning = raw_tuning.sel(unit=6)
 
 # model based tuning curve
-model_tuning = nap.compute_1d_tuning_curves_continuous(
+model_tuning = nap.compute_tuning_curves(
     model.predict(X)[:, np.newaxis] * X.rate,  # scale by the sampling rate
     head_dir,
-    nb_bins=100
- )[0]
+    bins=100,
+    feature_names=["angles"]
+ ).sel(unit=0)
 
 
 # plot results
 sub = plt.subplot(111, projection="polar")
-plt1 = plt.plot(raw_tuning.index, raw_tuning.values, label="raw")
-plt2 = plt.plot(model_tuning.index, model_tuning.values, label="glm")
+plt1 = plt.plot(raw_tuning.angles, raw_tuning, label="raw")
+plt2 = plt.plot(model_tuning.angles, model_tuning, label="glm")
 legend = plt.yticks([])
 xlab = plt.xlabel("heading angle")
 

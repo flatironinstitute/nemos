@@ -47,7 +47,8 @@ The same workflow works for fitted models, meaning the learned coefficients and 
 import numpy as np
 
 # generate some data
-X, weights = np.random.randn(50, 1), np.random.randn(1)
+np.random.seed(123)
+X, weights = np.random.randn(50, 1), 0.1 * np.random.randn(1)
 counts = np.random.poisson(np.exp(X @ weights))
 
 # fit and save
