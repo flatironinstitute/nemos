@@ -1081,9 +1081,48 @@ def test_viterbi_against_hmmlearn(use_new_sess):
         inverse_link_function,
         log_like_func,
         is_new_session=new_session,
+        return_index=True,
     )
     hmmlearn_map_path = viterbi_with_hmmlearn(
         log_emission_array, transition_prob, initial_prob, is_new_session=new_session
     )
-    map_path_id = np.where(map_path)[1]
-    np.testing.assert_array_equal(map_path_id, hmmlearn_map_path)
+    np.testing.assert_array_equal(map_path, hmmlearn_map_path)
+
+
+@pytest.mark.parametrize("use_new_sess", [True, False])
+@pytest.mark.parametrize("return_index", [True, False])
+def test_viterbi_return_index(use_new_sess, return_index):
+    data = np.load(fetch_data("em_three_states.npz"))
+    initial_prob = data["initial_prob"]
+    transition_prob = data["transition_prob"]
+    X, y = data["X"], data["y"]
+    new_session = data["new_sess"][:100] if use_new_sess else None
+    intercept, coef = data["projection_weights"][:1], data["projection_weights"][1:]
+
+    obs = BernoulliObservations()
+    inverse_link_function = obs.default_inverse_link_function
+
+    n_states = initial_prob.shape[0]
+
+    log_like_func = jax.vmap(
+        lambda x, z: obs.log_likelihood(x, z, aggregate_sample_scores=lambda w: w),
+        in_axes=(None, 1),
+        out_axes=1,
+    )
+    map_path = max_sum(
+        X[:100, 1:],
+        y[:100],
+        initial_prob,
+        transition_prob,
+        (coef, intercept),
+        inverse_link_function,
+        log_like_func,
+        is_new_session=new_session,
+        return_index=return_index,
+    )
+    if return_index:
+        assert map_path.shape == (100,)
+        set(np.unique(map_path)).issubset(np.arange(n_states))
+    else:
+        assert map_path.shape == (100, n_states)
+        np.testing.assert_array_equal(np.unique(map_path), np.array([0, 1]))

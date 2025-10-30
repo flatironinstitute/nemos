@@ -631,6 +631,7 @@ def max_sum(
     inverse_link_function: Callable,
     log_likelihood_func: Callable[[Array, Array], Array],
     is_new_session: Array | None = None,
+    return_index: bool = False,
 ):
     """
     Find maximum a posteriori (MAP) state path via the max-sum algorithm.
@@ -660,13 +661,12 @@ def max_sum(
         Function mapping linear predictors to the mean of the observation distribution
         (e.g., exp for Poisson, sigmoid for Bernoulli).
 
-    likelihood_func :
-        Function computing the elementwise likelihood of observations given predicted mean values.
-        Must return an array of shape ``(n_time_bins, n_states)``.
-
     is_new_session :
         Boolean array marking the start of a new session.
         If unspecified or empty, treats the full set of trials as a single session.
+
+    return_index:
+        If False, return 1-hot encoded map states, if True, return map state indices.
 
     Returns
     -------
@@ -744,14 +744,14 @@ def max_sum(
 
         return prev_state_idx, prev_state_idx
 
-    _, map_path_indices = jax.lax.scan(
+    _, map_path = jax.lax.scan(
         backward_max_sum, best_final_state, (max_prob_states, omegas), reverse=True
     )
 
     # Append the final state
-    map_path_indices = jnp.concatenate(
-        [map_path_indices, jnp.array([best_final_state])]
-    )
-    map_path = jax.nn.one_hot(map_path_indices, n_states, dtype=jnp.int32)
+    map_path = jnp.concatenate([map_path, jnp.array([best_final_state])])
+
+    if not return_index:
+        map_path = jax.nn.one_hot(map_path, n_states, dtype=jnp.int32)
 
     return map_path
