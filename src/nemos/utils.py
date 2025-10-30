@@ -353,7 +353,7 @@ def shift_time_series(
 
 
 def row_wise_kron(
-    A: jnp.ndarray, C: jnp.ndarray, jit=False, transpose=True
+    A: jnp.ndarray, C: jnp.ndarray, jit: bool = False, transpose: bool = True
 ) -> jnp.ndarray:
     r"""Compute the row-wise Kronecker product.
 
@@ -366,9 +366,9 @@ def row_wise_kron(
         The first matrix.
     C : jax.numpy.ndarray
         The second matrix.
-    jit : bool, optional
+    jit :
         Activate Just-in-Time (JIT) compilation. Default is False.
-    transpose : bool, optional
+    transpose :
         Transpose matrices A and C before computation. Default is True.
 
     Returns

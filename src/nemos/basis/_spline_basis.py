@@ -32,7 +32,7 @@ class SplineBasis(AtomicBasisMixin, Basis, abc.ABC):
 
     Attributes
     ----------
-    order : int
+    order :
         Spline order.
     """
 
