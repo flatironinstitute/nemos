@@ -1721,6 +1721,7 @@ class PopulationGLM(GLM):
             log of the mean neural activity. coefficients is an array of shape
             (n_features, n_neurons) or pytree of the same shape, intercepts is an array
             of shape (n_neurons, )
+
         Returns
         -------
         :
