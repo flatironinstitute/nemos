@@ -38,9 +38,9 @@ class Regularizer(Base, abc.ABC):
 
     Attributes
     ----------
-    allowed_solvers :
+    allowed_solvers : Tuple[str]
         Tuple of solver names that are allowed for use with this regularizer.
-    default_solver :
+    default_solver : str
         String of the default solver name allowed for use with this regularizer.
     """
 
