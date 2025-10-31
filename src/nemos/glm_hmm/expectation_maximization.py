@@ -720,9 +720,7 @@ def max_sum(
         def reset_chain(omega_prev, log_em):
             # New session: reset to initial distribution
             omega = log_init + log_em
-            max_prob_state = jnp.full(
-                n_states, -1, dtype=jnp.integer
-            )  # Boundary marker
+            max_prob_state = jnp.full(n_states, -1)  # Boundary marker
             return omega, max_prob_state
 
         def continue_chain(omega_prev, log_em):
@@ -757,7 +755,7 @@ def max_sum(
 
         def session_boundary(state_idx, max_prob, omega):
             # Hit a session start, pick best state at this boundary
-            return jnp.argmax(omega).astype(jnp.integer)
+            return jnp.argmax(omega)
 
         def continue_backward(state_idx, max_prob, omega):
             # Normal backtracking
