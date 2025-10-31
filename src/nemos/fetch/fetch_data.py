@@ -14,10 +14,13 @@ from typing import Optional, Union
 try:
     import pooch
     from pooch import Pooch
-    from tqdm.auto import tqdm
 except ImportError:
     pooch = None
     Pooch = None
+
+try:
+    from tqdm.auto import tqdm
+except ImportError:
     tqdm = None
 
 try:
@@ -103,6 +106,35 @@ def _create_retriever(path: Optional[pathlib.Path] = None) -> Pooch:
     )
 
 
+def _check_dependencies(needs_dandi: bool = False):
+    """Check optional dependencies."""
+    if needs_dandi and dandi is None:
+        raise ImportError(
+            "Missing optional dependency 'dandi'."
+            " Please use pip or "
+            "conda to install 'dandi'."
+        )
+
+    if pooch is None and tqdm is None:
+        raise ImportError(
+            "Missing optional dependencies 'pooch' and 'tqdm'."
+            " Please use pip or "
+            "conda to install 'pooch' and 'tqdm'."
+        )
+    elif pooch is None:
+        raise ImportError(
+            "Missing optional dependency 'pooch'."
+            " Please use pip or "
+            "conda to install 'pooch'."
+        )
+    elif tqdm is None:
+        raise ImportError(
+            "Missing optional dependency 'tqdm'."
+            " Please use pip or "
+            "conda to install 'tqdm'."
+        )
+
+
 def fetch_data(
     dataset_name: str, path: Optional[Union[pathlib.Path, str]] = None
 ) -> str:
@@ -128,17 +160,12 @@ def fetch_data(
     :
         The path to the downloaded file or directory.
     """
-    if pooch is None:
-        raise ImportError(
-            "Missing optional dependency 'pooch'."
-            " Please use pip or "
-            "conda to install 'pooch'."
-        )
+    _check_dependencies()
     retriever = _create_retriever(path)
     # Fetch the dataset using pooch.
     return retriever.fetch(
         dataset_name,
-        progressbar=True,
+        progressbar=True if tqdm else False,
     )
 
 
@@ -181,18 +208,7 @@ def download_dandi_data(
     ┕━━━━━━━━━━━━━━━━━━━━━┷━━━━━━━━━━┙
 
     """
-    if dandi is None:
-        raise ImportError(
-            "Missing optional dependency 'dandi'."
-            " Please use pip or "
-            "conda to install 'dandi'."
-        )
-    if pooch is None:
-        raise ImportError(
-            "Missing optional dependency 'pooch'."
-            " Please use pip or "
-            "conda to install 'pooch'."
-        )
+    _check_dependencies(needs_dandi=True)
 
     # Set up cache directory
     if _NEMOS_ENV in os.environ:
@@ -234,6 +250,7 @@ def download_dandi_data(
 
         with fs.open(s3_url, "rb") as remote_file:
             # Initialize progress bar
+
             with tqdm(
                 total=file_size,
                 unit="B",

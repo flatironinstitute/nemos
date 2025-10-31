@@ -87,6 +87,7 @@ docs = [
     "ipywidgets",
     "ipykernel",
     "patsy",
+    "tqdm",
 ]
 examples = [
     "scikit-learn",
@@ -96,6 +97,7 @@ examples = [
     "pooch",
     "fsspec",
     "patsy",
+    "tqdm",
 ]
 # jaxopt 0.8.5 is included in src/nemos/third_party/jaxopt
 jaxopt_dev = [
