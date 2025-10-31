@@ -19,7 +19,7 @@ def _get_not_inf(array: jnp.ndarray) -> jnp.ndarray:
 
     Parameters
     ----------
-    array : jnp.ndarray
+    array :
         Input array to check for infinite values.
 
     Returns
@@ -88,7 +88,7 @@ def get_valid_multitree(*pytree: Any) -> jnp.ndarray:
 
     Parameters
     ----------
-    pytree :
+    *pytree :
         Variable number of pytrees with NDArrays as leaves, each having a consistent first dimension size.
 
     Returns
@@ -203,12 +203,12 @@ def tree_add_scalar_mul(pytree_x, scalar, pytree_y):
 
     Parameters
     ----------
-    tree_x :
+    pytree_x :
         A pytree with leaves as NDArrays.
     scalar :
-        A scalar multiplier applied to each element of tree_y.
-    tree_y :
-        A pytree with the same structure as tree_x.
+        A scalar multiplier applied to each element of pytree_y.
+    pytree_y :
+        A pytree with the same structure as pytree_x.
 
     Returns
     -------
@@ -309,6 +309,18 @@ def has_matching_axis_pytree(*pytree: Any, axis: int = 0):
 
 
 def drop_nans(*pytree):
-    """Drop all NaNs from trees."""
+    """
+    Drop all NaNs from trees.
+
+    Parameters
+    ----------
+    *pytree :
+        A variable number of pytrees with leaves as NDArrays.
+
+    Returns
+    -------
+    :
+        A generator of pytrees with NaN entries removed from all leaves.
+    """
     is_valid = get_valid_multitree(*pytree)
     return (jax.tree_util.tree_map(lambda x: x[is_valid], par) for par in pytree)
