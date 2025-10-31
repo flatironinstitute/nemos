@@ -26,6 +26,7 @@ from . import AdditiveBasis, MultiplicativeBasis
 from ._basis_mixin import BasisMixin, BasisTransformerMixin, set_input_shape_state
 from ._check_basis import _check_transform_input
 from ._composition_utils import (
+    _check_unique_shapes,
     _check_valid_shape_tuple,
     add_docstring,
     count_positional_and_var_args,
@@ -34,6 +35,7 @@ from ._composition_utils import (
     multiply_basis_by_integer,
     promote_to_transformer,
     raise_basis_to_power,
+    set_input_shape,
 )
 
 if TYPE_CHECKING:
@@ -100,32 +102,24 @@ def apply_f_vectorized(
     if all(x.ndim == ndim_input for x in xi):
         return func(*xi, **kwargs)[..., np.newaxis]
 
-    # compute the flat shape of the dimension that must be vectorized.
-    flat_vec_dims = (
-        (
-            range(1)
-            if x.ndim == ndim_input
-            else range(int(np.prod(x.shape[ndim_input:])))
-        )
-        for x in xi
-    )
-    xi_reshape = [
-        (
-            x[..., np.newaxis]
-            if x.ndim == ndim_input
-            else x.reshape((*x.shape[:ndim_input], -1))
-        )
-        for x in xi
-    ]
-    return np.concatenate(
-        [
-            func(*(x[..., i] for i, x in zip(index, xi_reshape)), **kwargs)[
-                ..., np.newaxis
-            ]
-            for index in itertools.product(*flat_vec_dims)
-        ],
-        axis=-1,
-    )
+    # Get the vectorized shape (should be the same for all inputs)
+    vec_shape = xi[0].shape[ndim_input:]
+
+    # Generate all combinations of vectorized indices in the correct order
+    vec_indices = itertools.product(*[range(dim) for dim in vec_shape])
+
+    # Collect results for each vectorized index combination
+    results = []
+    for indices in vec_indices:
+        # Extract slices for this combination of indices
+        slices = [x[(slice(None),) * ndim_input + indices] for x in xi]
+
+        # Apply function to the slices
+        result = func(*slices, **kwargs)
+        results.append(result[..., np.newaxis])
+
+    # Concatenate along the last axis
+    return np.concatenate(results, axis=-1)
 
 
 def check_valid_shape(shape):
@@ -156,6 +150,13 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         Enable pynapple support if True.
     label:
         The label of the basis function.
+    is_complex : bool, optional
+        Whether the basis should be treated as complex. This flag ensures that
+        multiplication with other bases behaves correctly: two real bases, or a real
+        and a complex basis, can be multiplied, but two complex bases cannot. This
+        restriction exists because after multiplication, ``basis.compute_features``
+        does not distinguish between real and imaginary components, which would lead
+        to incorrect outputs.
 
     Examples
     --------
@@ -173,7 +174,8 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         funcs=[partial(decay_exp, rate=np.float64(0.0)), ..., partial(decay_exp, rate=np.float64(1.0))],
         ndim_input=1,
         basis_kwargs={'shift': 1},
-        pynapple_support=True
+        pynapple_support=True,
+        is_complex=False
     )
     >>> samples = np.linspace(0, 1, 50)
     >>> X = bas.compute_features(samples)
@@ -194,6 +196,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         basis_kwargs: Optional[dict] = None,
         pynapple_support: bool = True,
         label: Optional[str] = None,
+        is_complex: bool = False,
     ):
         self._pynapple_support = bool(pynapple_support)
         self.funcs = funcs
@@ -210,7 +213,14 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         self._n_basis_funcs = len(self.funcs)
 
         self.basis_kwargs = basis_kwargs
+        self._is_complex = bool(is_complex)
         super().__init__(label=label)
+
+    @property
+    def is_complex(self):
+        # custom classes could be complex or real, so the attribute
+        # is an instance attribute not a class attribute
+        return self._is_complex
 
     @property
     def pynapple_support(self) -> bool:
@@ -344,10 +354,11 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
                 f"Each input must have at least {self.ndim_input} dimensions, as required by this basis. "
                 f"However, some inputs have fewer dimensions: {invalid_dims}."
             )
-        self.set_input_shape(*xi)
-        design_matrix = self.evaluate(*xi)
-        # first dim is samples, the last the concatenated features
-        self.output_shape = design_matrix.shape[1:-1]
+        _check_unique_shapes(*xi, basis=self)
+        set_input_shape(self, *xi)
+        design_matrix = self.evaluate(
+            *xi
+        )  # (n_samples, *n_output_shape, n_vec_dim, n_basis)
         # return a model design
         return design_matrix.reshape((xi[0].shape[0], -1))
 
@@ -388,7 +399,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         >>> # vectorize over 3 inputs
         >>> out = basis.evaluate(np.random.randn(10, 3))
         >>> out.shape
-        (10, 6)
+        (10, 3, 2)
 
         """
         if self._pynapple_support:
@@ -396,13 +407,23 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
             apply_func = support_pynapple(conv_type)(apply_f_vectorized)
         else:
             apply_func = apply_f_vectorized
-        return np.concatenate(
-            [
-                apply_func(f, *xi, **self.basis_kwargs, ndim_input=self.ndim_input)
-                for f in self.funcs
-            ],
-            axis=-1,
-        )
+
+        # Get individual function results
+        func_results = [
+            apply_func(f, *xi, **self.basis_kwargs, ndim_input=self.ndim_input)
+            for f in self.funcs
+        ]
+
+        # Stack functions first, then reorder
+        stacked = np.stack(
+            func_results, axis=-1
+        )  # (n_samples, *out_shape, n_vec_features, n_funcs)
+        self.output_shape = stacked.shape[1:-2]
+
+        # no vectorization
+        if all(x.ndim == self.ndim_input for x in xi):
+            stacked = stacked[..., 0, :]
+        return stacked
 
     @set_input_shape_state(states=("_input_shape_product", "_input_shape_", "_label"))
     def __sklearn_clone__(self) -> "CustomBasis":
@@ -512,14 +533,14 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         >>> X.shape  # (3, 2 * 2)
         (3, 4)
         >>> bas.split_by_feature(X)["CustomBasis"]  # spilt to (3, 2, 2)
-        array([[[ 1.,  2.],
-                [ 1.,  4.]],
+        array([[[ 1.,  1.],
+                [ 2.,  4.]],
         ...
-               [[ 3.,  4.],
-                [ 9., 16.]],
+               [[ 3.,  9.],
+                [ 4., 16.]],
         ...
-               [[ 5.,  6.],
-                [25., 36.]]])
+               [[ 5., 25.],
+                [ 6., 36.]]])
         """
         # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
@@ -581,15 +602,22 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         >>> basis = nmo.basis.CustomBasis([partial(power_add_func, n) for n in range(1, 6)])
         >>> _ = basis.set_input_shape(3, 3)
         >>> basis.n_output_features
-        45
-        >>> _ = basis.set_input_shape((3, 2), 3)
+        15
+        >>> _ = basis.set_input_shape((3, 2), (3, 2))
         >>> basis.n_output_features
-        90
-        >>> _ = basis.set_input_shape(np.ones((10, 3, 2)), 3)
+        30
+        >>> _ = basis.set_input_shape(np.ones((10, 3, 2)), (3, 2))
         >>> basis.n_output_features
-        90
+        30
         """
-        return super().set_input_shape(*xi)
+        super().set_input_shape(*xi, allow_inputs_of_different_shape=False)
+        # CustomBasis acts as a multiplicative basis in n-dimension
+        # i.e. multiple inputs must have the same shape and are
+        # treated in a paired-way in vectorization
+        self._input_shape_ = (
+            None if self._input_shape_ is None else self._input_shape_[:1]
+        )
+        return self
 
     def to_transformer(self) -> "TransformerBasis":
         """
@@ -635,3 +663,23 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         >>> gridsearch = gridsearch.fit(x, y)
         """
         return super().to_transformer()
+
+    @property
+    def input_shape(
+        self,
+    ) -> None | List[None] | Tuple[int, ...] | List[Tuple[int, ...]]:
+        """Input shape as a tuple or list of tuple.
+
+        The property mimics the behavior of atomic bases, and uses the
+        assumption that _input_shape_ for custom bases is a list of
+        length one.
+        """
+        input_shape = self._input_shape_
+        if input_shape is None:
+            if self._n_input_dimensionality == 1:
+                return None
+            else:
+                return [None] * self._n_input_dimensionality
+        if self._n_input_dimensionality == 1:
+            return input_shape[0]
+        return input_shape * self._n_input_dimensionality

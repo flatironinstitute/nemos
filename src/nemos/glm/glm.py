@@ -5,26 +5,30 @@ from __future__ import annotations
 
 import warnings
 from functools import wraps
+from pathlib import Path
 from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
 from numpy.typing import ArrayLike
+from sklearn.utils import InputTags, TargetTags
 
-from nemos.third_party.jaxopt import jaxopt
-
-from . import observation_models as obs
-from . import tree_utils, validation
-from ._observation_model_builder import instantiate_observation_model
-from .base_regressor import BaseRegressor, strip_metadata
-from .exceptions import NotFittedError
-from .initialize_regressor import initialize_intercept_matching_mean_rate
-from .pytrees import FeaturePytree
-from .regularizer import GroupLasso, Lasso, Regularizer, Ridge
-from .solvers._compute_defaults import glm_compute_optimal_stepsize_configs
-from .type_casting import jnp_asarray_if, support_pynapple
-from .typing import DESIGN_INPUT_TYPE
-from .utils import format_repr
+from .. import observation_models as obs
+from .. import tree_utils, validation
+from .._observation_model_builder import instantiate_observation_model
+from ..base_regressor import BaseRegressor, strip_metadata
+from ..exceptions import NotFittedError
+from ..pytrees import FeaturePytree
+from ..regularizer import GroupLasso, Lasso, Regularizer, Ridge
+from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
+from ..type_casting import jnp_asarray_if, support_pynapple
+from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength, SolverState, StepResult
+from ..utils import format_repr
+from .initialize_parameters import initialize_intercept_matching_mean_rate
+from .inverse_link_function_utils import (
+    check_inverse_link_function,
+    link_function_from_string,
+)
 
 ModelParams = Tuple[Union[FeaturePytree, jnp.ndarray], jnp.ndarray]
 
@@ -55,6 +59,21 @@ class GLM(BaseRegressor):
     (like convolved currents or light intensities) and a choice of observation model. It is suitable for scenarios where
     the relationship between predictors and the response variable might be non-linear, and the residuals
     don't follow a normal distribution.
+
+    Below is a table of the default inverse link function for the availabe observation model.
+
+    +---------------------+---------------------------------+
+    | Observation Model   | Default Inverse Link Function   |
+    +=====================+=================================+
+    | Poisson             | :math:`e^x`                     |
+    +---------------------+---------------------------------+
+    | Gamma               | :math:`1/x`                     |
+    +---------------------+---------------------------------+
+    | Bernoulli            | :math:`1 / (1 + e^{-x})`       |
+    +---------------------+---------------------------------+
+    | NegativeBinomial    | :math:`e^x`                     |
+    +---------------------+---------------------------------+
+
     Below is a table listing the default and available solvers for each regularizer.
 
     +---------------+------------------+-------------------------------------------------------------+
@@ -104,6 +123,9 @@ class GLM(BaseRegressor):
     observation_model :
         Observation model to use. The model describes the distribution of the neural activity.
         Default is the Poisson model.
+    inverse_link_function :
+        A function that maps the linear combination of predictors into a firing rate. The default depends
+        on the observation model, see the table above.
     regularizer :
         Regularization to use for model optimization. Defines the regularization scheme
         and related parameters.
@@ -118,8 +140,8 @@ class GLM(BaseRegressor):
         Please see table above for regularizer/optimizer pairings.
     solver_kwargs :
         Optional dictionary for keyword arguments that are passed to the solver when instantiated.
-        E.g. stepsize, acceleration, value_and_grad, etc.
-         See the jaxopt documentation for details on each solver's kwargs: https://jaxopt.github.io/stable/
+        E.g. stepsize, tol, acceleration, etc.
+         For details on each solver's kwargs, see `get_accepted_arguments` and `get_solver_documentation`.
 
     Attributes
     ----------
@@ -150,7 +172,8 @@ class GLM(BaseRegressor):
     >>> model = nmo.glm.GLM()
     >>> model
     GLM(
-        observation_model=PoissonObservations(inverse_link_function=exp),
+        observation_model=PoissonObservations(),
+        inverse_link_function=exp,
         regularizer=UnRegularized(),
         solver_name='GradientDescent'
     )
@@ -161,20 +184,21 @@ class GLM(BaseRegressor):
     >>> # define a Gamma GLM providing a string
     >>> nmo.glm.GLM(observation_model="Gamma")
     GLM(
-        observation_model=GammaObservations(inverse_link_function=one_over_x),
+        observation_model=GammaObservations(),
+        inverse_link_function=one_over_x,
         regularizer=UnRegularized(),
         solver_name='GradientDescent'
     )
     >>> # or equivalently, passing the observation model object
     >>> nmo.glm.GLM(observation_model=nmo.observation_models.GammaObservations())
     GLM(
-        observation_model=GammaObservations(inverse_link_function=one_over_x),
+        observation_model=GammaObservations(),
+        inverse_link_function=one_over_x,
         regularizer=UnRegularized(),
         solver_name='GradientDescent'
     )
     >>> # define GLM model of PoissonObservations model with soft-plus NL
-    >>> observation_models = nmo.observation_models.PoissonObservations(jax.nn.softplus)
-    >>> model = nmo.glm.GLM(observation_model=observation_models, solver_name="LBFGS")
+    >>> model = nmo.glm.GLM(inverse_link_function=jax.nn.softplus, solver_name="LBFGS")
     >>> print("Regularizer type: ", type(model.regularizer))
     Regularizer type:  <class 'nemos.regularizer.UnRegularized'>
     >>> print("Observation model: ", type(model.observation_model))
@@ -185,9 +209,13 @@ class GLM(BaseRegressor):
         self,
         # With python 3.11 Literal[*AVAILABLE_OBSERVATION_MODELS] will be allowed.
         # Replace this manual list after dropping support for 3.10?
-        observation_model: obs.Observations | Literal["Poisson", "Gamma"] = "Poisson",
+        observation_model: (
+            obs.Observations
+            | Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial"]
+        ) = "Poisson",
+        inverse_link_function: Optional[Callable] = None,
         regularizer: Optional[Union[str, Regularizer]] = None,
-        regularizer_strength: Optional[float] = None,
+        regularizer_strength: Optional[RegularizerStrength] = None,
         solver_name: str = None,
         solver_kwargs: dict = None,
     ):
@@ -199,6 +227,7 @@ class GLM(BaseRegressor):
         )
 
         self.observation_model = observation_model
+        self.inverse_link_function = inverse_link_function
 
         # initialize to None fit output
         self.intercept_ = None
@@ -206,6 +235,40 @@ class GLM(BaseRegressor):
         self.solver_state_ = None
         self.scale_ = None
         self.dof_resid_ = None
+
+    def __sklearn_tags__(self):
+        """Return GLM specific estimator tags."""
+        tags = super().__sklearn_tags__()
+        # Tags for X
+        tags.input_tags = InputTags(allow_nan=True, two_d_array=True)
+        # Tags for y
+        tags.target_tags = TargetTags(
+            required=True, one_d_labels=True, two_d_labels=False
+        )
+        return tags
+
+    @property
+    def inverse_link_function(self):
+        """Getter for the inverse link function for the model."""
+        return self._inverse_link_function
+
+    @inverse_link_function.setter
+    def inverse_link_function(self, inverse_link_function: Callable):
+        """Setter for the inverse link function for the model."""
+        if inverse_link_function is None:
+            self._inverse_link_function = (
+                self.observation_model.default_inverse_link_function
+            )
+            return
+
+        elif isinstance(inverse_link_function, str):
+            self._inverse_link_function = link_function_from_string(
+                inverse_link_function
+            )
+            return
+
+        check_inverse_link_function(inverse_link_function)
+        self._inverse_link_function = inverse_link_function
 
     @property
     def observation_model(self) -> Union[None, obs.Observations]:
@@ -215,9 +278,10 @@ class GLM(BaseRegressor):
     @observation_model.setter
     def observation_model(self, observation: obs.Observations):
         if isinstance(observation, str):
-            observation = instantiate_observation_model(observation)
-        # Check that the model has the required attributes
-        # And that the attribute can be called
+            self._observation_model = instantiate_observation_model(observation)
+            return
+        # check that the model has the required attributes
+        # and that the attribute can be called
         obs.check_observation_model(observation)
         self._observation_model = observation
 
@@ -352,7 +416,7 @@ class GLM(BaseRegressor):
             The predicted rates. Shape (n_time_bins, ).
         """
         Ws, bs = params
-        return self._observation_model.inverse_link_function(
+        return self._inverse_link_function(
             # First, multiply each feature by its corresponding coefficient,
             # then sum across all features and add the intercept, before
             # passing to the inverse link function
@@ -564,12 +628,7 @@ class GLM(BaseRegressor):
         self._check_input_n_timepoints(X, y)
         self._check_input_and_params_consistency(params, X=X, y=y)
 
-        # get valid entries
-        is_valid = tree_utils.get_valid_multitree(X, y)
-
-        # filter for valid
-        X = jax.tree_util.tree_map(lambda x: x[is_valid], X)
-        y = jax.tree_util.tree_map(lambda x: x[is_valid], y)
+        X, y = tree_utils.drop_nans(X, y)
 
         if isinstance(X, FeaturePytree):
             data = X.data
@@ -647,7 +706,7 @@ class GLM(BaseRegressor):
             data = X
 
         initial_intercept = initialize_intercept_matching_mean_rate(
-            self.observation_model.inverse_link_function, y
+            self._inverse_link_function, y
         )
 
         # Initialize parameters
@@ -727,12 +786,8 @@ class GLM(BaseRegressor):
         # validate the inputs & initialize solver
         init_params = self.initialize_params(X, y, init_params=init_params)
 
-        # find non-nans
-        is_valid = tree_utils.get_valid_multitree(X, y)
-
-        # drop nans
-        X = jax.tree_util.tree_map(lambda x: x[is_valid], X)
-        y = jax.tree_util.tree_map(lambda x: x[is_valid], y)
+        # filter for non-nans
+        X, y = tree_utils.drop_nans(X, y)
 
         # grab data if needed (tree map won't function because param is never a FeaturePytree).
         if isinstance(X, FeaturePytree):
@@ -740,7 +795,7 @@ class GLM(BaseRegressor):
         else:
             data = X
 
-        self.initialize_state(data, y, init_params)
+        self.initialize_state(data, y, init_params, cast_to_jax_and_drop_nans=False)
 
         params, state = self.solver_run(init_params, data, y)
 
@@ -917,7 +972,7 @@ class GLM(BaseRegressor):
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         init_params: Optional[ModelParams] = None,
-    ) -> Tuple[ModelParams, NamedTuple]:
+    ) -> ModelParams:
         """
         Initialize the model parameters for the optimization process.
 
@@ -981,13 +1036,13 @@ class GLM(BaseRegressor):
 
         return init_params
 
-    @cast_to_jax
     def initialize_state(
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
-        init_params: Tuple[Union[FeaturePytree, jnp.ndarray], jnp.ndarray],
-    ) -> Union[Any, NamedTuple]:
+        init_params,
+        cast_to_jax_and_drop_nans: bool = True,
+    ) -> SolverState:
         """Initialize the solver by instantiating its init_state, update and, run methods.
 
         This method also prepares the solver's state by using the initialized model parameters and data.
@@ -1003,10 +1058,17 @@ class GLM(BaseRegressor):
             they are not provided.
         init_params :
             Initial parameters for the model.
+        cast_to_jax_and_drop_nans :
+            Whether to cast inputs to JAX arrays and remove NaN values. Set to True when calling
+            this method directly (applies necessary preprocessing). Set to False when called
+            internally from ``self.fit`` (preprocessing already done, avoids redundant operations).
+            Users may set this to False when implementing custom stochastic optimization loops
+            where they initialize the solver state once with this method, then repeatedly call
+            ``self.update``.
 
         Returns
         -------
-        NamedTuple
+        SolverState
             The initialized solver state
 
         Examples
@@ -1019,15 +1081,13 @@ class GLM(BaseRegressor):
         >>> opt_state = model.initialize_state(X, y, params)
         >>> # Now ready to run optimization or update steps
         """
-        # find non-nans
-        is_valid = tree_utils.get_valid_multitree(X, y)
-
-        # drop nans
-        X = jax.tree_util.tree_map(lambda x: x[is_valid], X)
-        y = jax.tree_util.tree_map(lambda x: x[is_valid], y)
-
-        # grab the data
-        data = X.data if isinstance(X, FeaturePytree) else X
+        if cast_to_jax_and_drop_nans:
+            # filter for non-nans
+            X, y = cast_to_jax(tree_utils.drop_nans)(X, y)
+            # grab the data
+            data = X.data if isinstance(X, FeaturePytree) else X
+        else:
+            data = X
 
         # check if mask has been set is using group lasso
         # if mask has not been set, use a single group as default
@@ -1059,8 +1119,8 @@ class GLM(BaseRegressor):
         y: jnp.ndarray,
         *args: Any,
         n_samples: Optional[int] = None,
-        **kwargs: Any,
-    ) -> jaxopt.OptStep:
+        **kwargs,
+    ) -> StepResult:
         """
         Update the model parameters and solver state.
 
@@ -1094,7 +1154,7 @@ class GLM(BaseRegressor):
 
         Returns
         -------
-        jaxopt.OptStep
+        StepResult
             A tuple containing the updated parameters and optimization state. This tuple is
             typically used to continue the optimization process in subsequent steps.
 
@@ -1117,11 +1177,7 @@ class GLM(BaseRegressor):
 
         """
         # find non-nans
-        is_valid = tree_utils.get_valid_multitree(X, y)
-
-        # drop nans
-        X = jax.tree_util.tree_map(lambda x: x[is_valid], X)
-        y = jax.tree_util.tree_map(lambda x: x[is_valid], y)
+        X, y = tree_utils.drop_nans(X, y)
 
         # grab the data
         data = X.data if isinstance(X, FeaturePytree) else X
@@ -1151,13 +1207,90 @@ class GLM(BaseRegressor):
 
     def __repr__(self) -> str:
         """Representation of the GLM class."""
-        return format_repr(self, multiline=True)
+        return format_repr(
+            self, multiline=True, use_name_keys=["inverse_link_function"]
+        )
 
     def __sklearn_clone__(self) -> GLM:
-        """Clone the PopulationGLM, dropping feature_mask."""
+        """Clone the GLM."""
         params = self.get_params(deep=False)
         klass = self.__class__(**params)
         return klass
+
+    def save_params(self, filename: Union[str, Path]):
+        """
+        Save GLM model parameters to a .npz file.
+
+        This method allows to reuse the model parameters. The saved parameters can be loaded back
+        into a GLM instance using the `load_params` function.
+
+        Parameters
+        ----------
+        filename :
+            The name of the file where the model parameters will be saved. The file will be saved in `.npz` format.
+
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> # Create a GLM model with specified parameters
+        >>> solver_args = {"stepsize": 0.1, "maxiter": 1000, "tol": 1e-6}
+        >>> model = nmo.glm.GLM(
+        ...     regularizer="Ridge",
+        ...     regularizer_strength=0.1,
+        ...     observation_model="Gamma",
+        ...     solver_name="BFGS",
+        ...     solver_kwargs=solver_args,
+        ... )
+        >>> for key, value in model.get_params().items():
+        ...     print(f"{key}: {value}")
+        inverse_link_function: <function one_over_x at ...>
+        observation_model: GammaObservations()
+        regularizer: Ridge()
+        regularizer_strength: 0.1
+        solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
+        solver_name: BFGS
+        >>> # Save the model parameters to a file
+        >>> model.save_params("model_params.npz")
+        >>> # Load the model from the saved file
+        >>> model = nmo.load_model("model_params.npz")
+        >>> # Model has the same parameters before and after load
+        >>> for key, value in model.get_params().items():
+        ...     print(f"{key}: {value}")
+        inverse_link_function: <function one_over_x at ...>
+        observation_model: GammaObservations()
+        regularizer: Ridge()
+        regularizer_strength: 0.1
+        solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
+        solver_name: BFGS
+
+        >>> # Saving and loading a custom inverse link function
+        >>> model = nmo.glm.GLM(
+        ...     observation_model="Poisson",
+        ...     inverse_link_function=lambda x: x**2
+        ... )
+        >>> model.save_params("model_params.npz")
+        >>> # Provide a mapping for the custom link function when loading.
+        >>> mapping_dict = {
+        ...     "inverse_link_function": lambda x: x**2,
+        ... }
+        >>> loaded_model = nmo.load_model("model_params.npz", mapping_dict=mapping_dict)
+        >>> # Now the loaded model will have the updated solver_name and solver_kwargs
+        >>> for key, value in loaded_model.get_params().items():
+        ...     print(f"{key}: {value}")
+        inverse_link_function: <function <lambda> at ...>
+        observation_model: PoissonObservations()
+        regularizer: UnRegularized()
+        regularizer_strength: None
+        solver_kwargs: {}
+        solver_name: GradientDescent
+        """
+
+        # initialize saving dictionary
+        fit_attrs = self._get_fit_state()
+        fit_attrs.pop("solver_state_")
+        string_attrs = ["inverse_link_function"]
+
+        super().save_params(filename, fit_attrs, string_attrs)
 
 
 class PopulationGLM(GLM):
@@ -1219,6 +1352,9 @@ class PopulationGLM(GLM):
     observation_model :
         Observation model to use. The model describes the distribution of the neural activity.
         Default is the Poisson model.
+    inverse_link_function :
+        A function that maps the linear combination of predictors into a firing rate. The default depends
+        on the observation model, see the table above.
     regularizer :
         Regularization to use for model optimization. Defines the regularization scheme
         and related parameters.
@@ -1233,8 +1369,8 @@ class PopulationGLM(GLM):
         Please see table above for regularizer/optimizer pairings.
     solver_kwargs :
         Optional dictionary for keyword arguments that are passed to the solver when instantiated.
-        E.g. stepsize, acceleration, value_and_grad, etc.
-         See the jaxopt documentation for details on each solver's kwargs: https://jaxopt.github.io/stable/
+        E.g. stepsize, tol, acceleration, etc.
+         For details on each solver's kwargs, see `get_accepted_arguments` and `get_solver_documentation`.
     feature_mask :
         Either a matrix of shape (num_features, num_neurons) or a :meth:`nemos.pytrees.FeaturePytree` of 0s and 1s, with
         ``feature_mask[feature_name]`` of shape (num_neurons, ).
@@ -1269,16 +1405,17 @@ class PopulationGLM(GLM):
     >>> weights = np.array([[ 0.5,  0. ], [-0.5, -0.5], [ 0. ,  1. ]])
     >>> y = np.random.poisson(np.exp(X.dot(weights)))
     >>> # Define a feature mask, shape (num_features, num_neurons)
-    >>> feature_mask = jnp.array([[1, 0], [1, 1], [0, 1]])
+    >>> feature_mask = np.array([[1, 0], [1, 1], [0, 1]])
     >>> feature_mask
-    Array([[1, 0],
+    array([[1, 0],
            [1, 1],
-           [0, 1]], dtype=int32)
+           [0, 1]])
     >>> # Create and fit the model
     >>> model = PopulationGLM(feature_mask=feature_mask).fit(X, y)
     >>> model
     PopulationGLM(
-        observation_model=PoissonObservations(inverse_link_function=exp),
+        observation_model=PoissonObservations(),
+        inverse_link_function=exp,
         regularizer=UnRegularized(),
         solver_name='GradientDescent'
     )
@@ -1297,7 +1434,10 @@ class PopulationGLM(GLM):
     >>> rate = np.exp(X["feature_1"].dot(weights["feature_1"]) + X["feature_2"].dot(weights["feature_2"]))
     >>> y = np.random.poisson(rate)
     >>> # Define a feature mask with arrays of shape (num_neurons, )
-    >>> feature_mask = FeaturePytree(feature_1=jnp.array([0, 1]), feature_2=jnp.array([1, 0]))
+    >>> feature_mask = FeaturePytree(
+    ...     feature_1=jnp.array([0, 1], dtype=jnp.int32),
+    ...     feature_2=jnp.array([1, 0], dtype=jnp.int32)
+    ... )
     >>> print(feature_mask)
     feature_1: shape (2,), dtype int32
     feature_2: shape (2,), dtype int32
@@ -1310,7 +1450,11 @@ class PopulationGLM(GLM):
 
     def __init__(
         self,
-        observation_model: obs.Observations | Literal["Poisson", "Gamma"] = "Poisson",
+        observation_model: (
+            obs.Observations
+            | Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial"]
+        ) = "Poisson",
+        inverse_link_function: Optional[Callable] = None,
         regularizer: Union[str, Regularizer] = "UnRegularized",
         regularizer_strength: Optional[float] = None,
         solver_name: str = None,
@@ -1320,6 +1464,7 @@ class PopulationGLM(GLM):
     ):
         super().__init__(
             observation_model=observation_model,
+            inverse_link_function=inverse_link_function,
             regularizer_strength=regularizer_strength,
             regularizer=regularizer,
             solver_name=solver_name,
@@ -1328,6 +1473,15 @@ class PopulationGLM(GLM):
         )
         self._metadata = None
         self.feature_mask = feature_mask
+
+    def __sklearn_tags__(self):
+        """Return Population GLM specific estimator tags."""
+        tags = super().__sklearn_tags__()
+        # Tags for y
+        tags.target_tags = TargetTags(
+            required=True, one_d_labels=False, two_d_labels=True
+        )
+        return tags
 
     @property
     def feature_mask(self) -> Union[jnp.ndarray, dict]:
@@ -1626,15 +1780,6 @@ class PopulationGLM(GLM):
         return super().fit(X, y, init_params)
 
     def _initialize_feature_mask(self, X: FeaturePytree, y: jnp.ndarray):
-        """
-
-        Parameters
-        ----------
-
-        Returns
-        -------
-
-        """
         if self.feature_mask is None:
             # static checker does not realize conversion to ndarray happened in cast_to_jax.
             if isinstance(X, FeaturePytree):
@@ -1674,7 +1819,7 @@ class PopulationGLM(GLM):
             The predicted rates. Shape (n_timebins, n_neurons).
         """
         Ws, bs = params
-        return self._observation_model.inverse_link_function(
+        return self.inverse_link_function(
             # First, multiply each feature by its corresponding coefficient,
             # then sum across all features and add the intercept, before
             # passing to the inverse link function

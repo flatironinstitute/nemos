@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.16.4
+    jupytext_version: 1.18.1
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -61,6 +61,13 @@ import numpy as np
 import nemos as nmo
 
 np.random.seed(111)
+```
+
+```{code-cell} ipython3
+:tags: [hide-input]
+
+# Truncate arrays: show only 10 elements per dimension with '...'
+np.set_printoptions(threshold=10)  # total number of elements before summarizing
 ```
 
 ## FeaturePytrees
@@ -211,26 +218,16 @@ Let's compute some simple tuning curves to see if we can find a cell that
 looks tuned for both.
 
 ```{code-cell} ipython3
-tc, binsxy = nap.compute_2d_tuning_curves(nwb['units'], nwb['SpatialSeriesLED1'].dropna(), 20)
-fig, axes = plt.subplots(3, 3, figsize=(9, 9))
-for i, ax in zip(tc.keys(), axes.flatten()):
-    ax.imshow(tc[i], origin="lower", aspect="auto")
-    ax.set_title("Unit {}".format(i))
-axes[-1,-1].remove()
-plt.tight_layout()
+tc = nap.compute_tuning_curves(nwb['units'], nwb['SpatialSeriesLED1'].dropna(), 20)
+fig = tc.plot(x='x', y='y', col='unit', col_wrap=4, cmap='viridis')
 
 # compute head direction.
 diff = nwb['SpatialSeriesLED1'].values-nwb['SpatialSeriesLED2'].values
 head_dir = np.arctan2(*diff.T)
 head_dir = nap.Tsd(nwb['SpatialSeriesLED1'].index, head_dir)
 
-tune_head = nap.compute_1d_tuning_curves(nwb['units'], head_dir.dropna(), 30)
-
-fig, axes = plt.subplots(3, 3, figsize=(9, 9), subplot_kw={'projection': 'polar'})
-for i, ax in zip(tune_head.columns, axes.flatten()):
-    ax.plot(tune_head.index, tune_head[i])
-    ax.set_title("Unit {}".format(i))
-axes[-1,-1].remove()
+tune_head = nap.compute_tuning_curves(nwb['units'], head_dir.dropna(), 30, feature_names=["angles"])
+tune_head.plot(col='unit', col_wrap=4, subplot_kws={'projection': 'polar'})
 ```
 
 ```{code-cell} ipython3
@@ -252,7 +249,7 @@ if root or Path("../assets/stylesheets").exists():
    path.mkdir(parents=True, exist_ok=True)
 
 if path.exists():
-  fig.savefig(path / "plot_07_glm_pytree.svg")
+  fig.fig.savefig(path / "plot_07_glm_pytree.svg")
 ```
 
 Okay, let's use unit number 7.
@@ -291,7 +288,7 @@ X = nmo.pytrees.FeaturePytree(head_direction=basis.compute_features(head_dir))
 Now we'll fit our GLM and then see what our head direction tuning looks like:
 
 ```{code-cell} ipython3
-model = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.001)
+model = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.001, solver_name="LBFGS")
 model.fit(X, spikes)
 print(model.coef_['head_direction'])
 
@@ -310,12 +307,13 @@ firing rates with that estimated from the counts.
 # predict rates and convert back to pynapple
 rates_nap = nap.TsdFrame(t=head_dir.t, d=np.asarray(model.predict(X)))
 # compute tuning function
-tune_head_model = nap.compute_1d_tuning_curves_continuous(rates_nap, head_dir, 30)
+tune_head_model = nap.compute_tuning_curves(rates_nap, head_dir, 30, feature_names=["angles"])
+tune_head_model *= rates_nap.rate
 # compare model prediction with data
 fig, ax = plt.subplots(1, 1, subplot_kw={'projection': 'polar'})
-ax.plot(tune_head[7], label="counts")
+ax.plot(tune_head.angles, tune_head.sel(unit=7), label="counts")
 # multiply by the sampling rate for converting to spike/sec.
-ax.plot(tune_head_model * rates_nap.rate, label="model")
+ax.plot(tune_head_model.angles, tune_head_model[0], label="model")
 
 # Let's compare this to using arrays, to see what it looks like:
 

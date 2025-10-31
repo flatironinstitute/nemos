@@ -32,6 +32,7 @@ import pynapple as nap
 from matplotlib.animation import FuncAnimation
 from matplotlib.patches import Rectangle
 from numpy.typing import NDArray
+from xarray import DataArray
 
 from ..basis import RaisedCosineLogEval
 
@@ -176,8 +177,8 @@ def lnp_schematic(
 
 def tuning_curve_plot(tuning_curve: pd.DataFrame):
     fig, ax = plt.subplots(1, 1)
-    tc_idx = tuning_curve.index.to_numpy()
-    tc_val = tuning_curve.values.flatten()
+    tc_idx = tuning_curve.current.data
+    tc_val = tuning_curve.data.flatten()
     width = tc_idx[1] - tc_idx[0]
     ax.bar(
         tc_idx,
@@ -520,10 +521,11 @@ def plot_coupling(
     alpha=0.5,
     cmap_label="hsv",
 ):
-    pref_ang = tuning.idxmax()
+    raw_feature_dim_name = list(tuning.dims)[1]
+    pref_ang = tuning.idxmax(dim=raw_feature_dim_name)
     cmap_tun = plt.colormaps[cmap_label]
-    color_tun = (pref_ang.values - pref_ang.values.min()) / (
-        pref_ang.values.max() - pref_ang.values.min()
+    color_tun = (pref_ang.data - pref_ang.data.min()) / (
+        pref_ang.data.max() - pref_ang.data.min()
     )
 
     # plot heatmap
@@ -557,9 +559,9 @@ def plot_coupling(
                 )  # Add new polar axis
 
                 axs[n_row, send].fill_between(
-                    tuning.iloc[:, send].index,
-                    np.zeros(len(tuning)),
-                    tuning.iloc[:, send].values,
+                    tuning[send][raw_feature_dim_name],
+                    np.zeros(tuning.shape[1]),
+                    tuning[send],
                     color=cmap_tun(color_tun[send]),
                     alpha=0.5,
                 )
@@ -575,9 +577,9 @@ def plot_coupling(
         )  # Add new polar axis
 
         axs[rec, send + 1].fill_between(
-            tuning.iloc[:, rec].index,
-            np.zeros(len(tuning)),
-            tuning.iloc[:, rec].values,
+            tuning[rec][raw_feature_dim_name],
+            np.zeros(tuning.shape[1]),
+            tuning[rec],
             color=cmap_tun(color_tun[rec]),
             alpha=0.5,
         )
@@ -704,32 +706,38 @@ def plot_basis(n_basis_funcs=8, window_size_sec=0.8):
 
 
 def plot_position_phase_speed_tuning(
-    pf, glm_pf, tc_speed, glm_speed, tc_pos_theta, glm_pos_theta, xybins
+    pf,
+    glm_pf,
+    tc_speed,
+    glm_speed,
+    tc_pos_theta,
+    glm_pos_theta,
 ):
     fig = plt.figure()
     gs = plt.GridSpec(2, 2)
     plt.subplot(gs[0, 0])
-    plt.plot(pf)
-    plt.plot(glm_pf, label="GLM")
+    dim_name = list(glm_pf.dims)[0]
+    plt.plot(pf[dim_name], pf)
+    plt.plot(glm_pf[dim_name], glm_pf, label="GLM")
     plt.xlabel("Position (cm)")
     plt.ylabel("Firing rate (Hz)")
     plt.legend()
 
     plt.subplot(gs[0, 1])
-    plt.plot(tc_speed)
-    plt.plot(glm_speed, label="GLM")
+    dim_name = list(tc_speed.dims)[0]
+    plt.plot(tc_speed[dim_name], tc_speed)
+    plt.plot(glm_speed[dim_name], glm_speed, label="GLM")
     plt.xlabel("Speed (cm/s)")
     plt.ylabel("Firing rate (Hz)")
     plt.legend()
 
     plt.subplot(gs[1, 0])
-    extent = (xybins[0][0], xybins[0][-1], xybins[1][0], xybins[1][-1])
-    plt.imshow(tc_pos_theta.T, aspect="auto", origin="lower", extent=extent)
+    plt.imshow(tc_pos_theta.T, aspect="auto", origin="lower")
     plt.xlabel("Position (cm)")
     plt.ylabel("Theta Phase (rad)")
 
     plt.subplot(gs[1, 1])
-    plt.imshow(glm_pos_theta.T, aspect="auto", origin="lower", extent=extent)
+    plt.imshow(glm_pos_theta.T, aspect="auto", origin="lower")
     plt.xlabel("Position (cm)")
     plt.ylabel("Theta Phase (rad)")
     plt.title("GLM")
@@ -742,16 +750,18 @@ def plot_position_phase_speed_tuning(
 def plot_position_speed_tuning(axis, tc, pf, tc_speed, m):
     gs = axis.subgridspec(1, 2)
     plt.subplot(gs[0, 0])
-    plt.plot(pf, "--", label="Observed")
-    plt.plot(tc["position"][0])
+    dim_name = list(pf.dims)[0]
+    plt.plot(pf[dim_name], pf, "--", label="Observed")
+    plt.plot(tc["position"][0][dim_name], tc["position"][0])
     plt.xlabel("Position (cm)")
     plt.ylabel("Firing rate (Hz)")
     plt.title("Model : {}".format(m))
     plt.legend()
 
     plt.subplot(gs[0, 1])
-    plt.plot(tc_speed, "--")
-    plt.plot(tc["speed"][0])
+    dim_name = list(tc_speed.dims)[0]
+    plt.plot(tc_speed[dim_name], tc_speed, "--")
+    plt.plot(tc["speed"][0][dim_name], tc["speed"][0])
     plt.xlabel("Speed (cm/s)")
 
 
@@ -792,7 +802,7 @@ def plot_heatmap_cv_results(cvdf_wide, label=None):
 
 
 def plot_head_direction_tuning(
-    tuning_curves: pd.DataFrame,
+    tuning_curves: DataArray,
     spikes: nap.TsGroup,
     angle: nap.Tsd,
     threshold_hz: int = 1,
@@ -831,15 +841,18 @@ def plot_head_direction_tuning(
     index_keep = spikes.restrict(plot_ep).getby_threshold("rate", threshold_hz).index
 
     # filter neurons
-    tuning_curves = tuning_curves.loc[:, index_keep]
-    pref_ang = tuning_curves.idxmax().loc[index_keep]
+    raw_feature_dim_name = list(tuning_curves.dims)[1]
+    tuning_curves = tuning_curves.sel(unit=index_keep)
+    pref_ang = tuning_curves.idxmax(dim=raw_feature_dim_name)
     spike_tsd = (
-        spikes.restrict(plot_ep).getby_threshold("rate", threshold_hz).to_tsd(pref_ang)
+        spikes.restrict(plot_ep)
+        .getby_threshold("rate", threshold_hz)
+        .to_tsd(pref_ang.data)
     )
 
     # plot raster and heading
     cmap = plt.colormaps[cmap_label]
-    unq_angles = np.unique(pref_ang.values)
+    unq_angles = np.unique(pref_ang.data)
     n_subplots = len(unq_angles)
     relative_color_levs = (unq_angles - unq_angles[0]) / (
         unq_angles[-1] - unq_angles[0]
@@ -870,7 +883,7 @@ def plot_head_direction_tuning(
     ax.set_xlabel("Time (s)")
 
     for i, ang in enumerate(unq_angles):
-        neu_idx = np.argsort(pref_ang.values)[i]
+        neu_idx = np.argsort(pref_ang.data)[i]
         ax = plt.subplot2grid(
             (3, n_subplots),
             loc=(2 + i // n_subplots, i % n_subplots),
@@ -880,9 +893,9 @@ def plot_head_direction_tuning(
             projection="polar",
         )
         ax.fill_between(
-            tuning_curves.iloc[:, neu_idx].index,
-            np.zeros(len(tuning_curves)),
-            tuning_curves.iloc[:, neu_idx].values,
+            tuning_curves[neu_idx][raw_feature_dim_name],
+            np.zeros(tuning_curves.shape[1]),
+            tuning_curves[neu_idx],
             color=cmap(relative_color_levs[i]),
             alpha=0.5,
         )
@@ -894,7 +907,7 @@ def plot_head_direction_tuning(
 
 def plot_head_direction_tuning_model(
     tuning_curves: pd.DataFrame,
-    predicted_firing_rate: nap.TsdFrame,
+    predicted_rate: nap.TsdFrame,
     spikes: nap.TsGroup,
     angle: nap.Tsd,
     threshold_hz: int = 1,
@@ -910,7 +923,7 @@ def plot_head_direction_tuning_model(
     ----------
     tuning_curves:
         The tuning curve dataframe.
-    predicted_firing_rate:
+    predicted_rate:
         The time series of the predicted rate.
     spikes:
         The spike times.
@@ -936,15 +949,18 @@ def plot_head_direction_tuning_model(
     index_keep = spikes.restrict(plot_ep).getby_threshold("rate", threshold_hz).index
 
     # filter neurons
-    tuning_curves = tuning_curves.loc[:, index_keep]
-    pref_ang = tuning_curves.idxmax().loc[index_keep]
+    raw_feature_dim_name = list(tuning_curves.dims)[1]
+    tuning_curves = tuning_curves.sel(unit=index_keep)
+    pref_ang = tuning_curves.idxmax(dim=raw_feature_dim_name)
     spike_tsd = (
-        spikes.restrict(plot_ep).getby_threshold("rate", threshold_hz).to_tsd(pref_ang)
+        spikes.restrict(plot_ep)
+        .getby_threshold("rate", threshold_hz)
+        .to_tsd(pref_ang.data)
     )
 
     # plot raster and heading
     cmap = plt.colormaps[cmap_label]
-    unq_angles = np.unique(pref_ang.values)
+    unq_angles = np.unique(pref_ang.data)
     n_subplots = len(unq_angles)
     relative_color_levs = (unq_angles - unq_angles[0]) / (
         unq_angles[-1] - unq_angles[0]
@@ -979,14 +995,14 @@ def plot_head_direction_tuning_model(
     )
     ax.set_title("Neural Firing Rate")
 
-    fr = predicted_firing_rate.restrict(plot_ep).d
+    fr = predicted_rate.restrict(plot_ep).d
     fr = fr.T / np.max(fr, axis=1)
     ax.imshow(fr[::-1], cmap="Blues", aspect="auto")
     ax.set_ylabel("Sorted Neurons")
     ax.set_xlabel("Time (s)")
 
     for i, ang in enumerate(unq_angles):
-        neu_idx = np.argsort(pref_ang.values)[i]
+        neu_idx = np.argsort(pref_ang.data)[i]
         ax = plt.subplot2grid(
             (4, n_subplots),
             loc=(3 + i // n_subplots, i % n_subplots),
@@ -996,9 +1012,9 @@ def plot_head_direction_tuning_model(
             projection="polar",
         )
         ax.fill_between(
-            tuning_curves.iloc[:, neu_idx].index,
-            np.zeros(len(tuning_curves)),
-            tuning_curves.iloc[:, neu_idx].values,
+            tuning_curves[neu_idx][raw_feature_dim_name],
+            np.zeros(tuning_curves.shape[1]),
+            tuning_curves[neu_idx],
             color=cmap(relative_color_levs[i]),
             alpha=0.5,
         )

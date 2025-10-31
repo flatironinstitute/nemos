@@ -126,6 +126,7 @@ def remap_parameters(method):
 
 
 class BasisMixin:
+
     def __init__(self, label: Optional[str] = None):
         if not hasattr(self, "_input_shape_"):
             self._input_shape_ = None
@@ -205,13 +206,33 @@ class BasisMixin:
         if error:
             raise error
 
-    def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> BasisMixin:
+    def set_input_shape(
+        self,
+        *xi: int | tuple[int, ...] | NDArray,
+        allow_inputs_of_different_shape: bool = True,
+    ) -> BasisMixin:
         """Set the expected input shape for the basis object."""
-        set_input_shape(self, *xi)
+        if getattr(self, "_parent", None) is not None:
+            raise ValueError(
+                "Cannot set input shape on a child basis. Set the input shape on the root basis instead.\n"
+                "For example, instead of ``self.basis1.set_input_shape(n); self.basis2.set_input_shape(m)``, "
+                "do ``self.set_input_shape(n, m)``."
+            )
+        set_input_shape(
+            self, *xi, allow_inputs_of_different_shape=allow_inputs_of_different_shape
+        )
         return self
 
     @property
     def input_shape(self):
+        """
+        Expected per-sample input shape.
+
+        Returns
+        -------
+        :
+            If inputs are shaped ``(n_samples, *shape)``, returns ``shape``.
+        """
         return get_input_shape(self)
 
     def _get_feature_slicing(
@@ -378,12 +399,32 @@ class BasisMixin:
 class AtomicBasisMixin(BasisMixin):
     """Mixin class for atomic bases (i.e. non-composite)."""
 
+    _is_complex = False
+
     def __init__(self, n_basis_funcs: int, label: Optional[str] = None):
         super().__init__(label=label)
         self._n_basis_funcs = n_basis_funcs
         check_basis_min = getattr(self, "_check_n_basis_min", None)
         if check_basis_min:
             check_basis_min()
+
+    @property
+    def is_complex(self):
+        """
+        Whether the basis is intrinsically complex.
+
+        Returns
+        -------
+        :
+            ``True`` if the basis is complex; ``False`` otherwise.
+
+        Notes
+        -----
+        :meth:`compute_features` always returns a real-valued design matrix. For
+        complex bases (e.g., ``FourierEval``), the real and imaginary parts are
+        returned as separate columns.
+        """
+        return self.__class__._is_complex
 
     @property
     def n_output_features(self) -> int | None:
@@ -533,24 +574,49 @@ class EvalBasisMixin:
         """Range of values covered by the basis."""
         return self._bounds
 
-    @bounds.setter
-    def bounds(self, values: Union[None, Tuple[float, float]]):
-        """Setter for bounds."""
-        if values is not None and len(values) != 2:
-            raise ValueError(
-                f"The provided `bounds` must be of length two. Length {len(values)} provided instead!"
+    @staticmethod
+    def _format_bounds(values: Any) -> Tuple[Any, Exception | None]:
+        """Check bounds and cast to tuple."""
+
+        if not hasattr(values, "__len__"):
+            raise TypeError(
+                "Invalid bounds provided. ``bounds`` must be a tuple of floats."
+                f"``bounds`` {values} of type {type(values)} provided instead."
             )
 
-        # convert to float and store
+        elif values is not None and len(values) != 2:
+            raise ValueError(
+                f"The provided `bounds` must be of length two. The bounds ``{values}`` have length "
+                f"{len(values)} instead!"
+            )
+
         try:
-            self._bounds = values if values is None else tuple(map(float, values))
-        except (ValueError, TypeError):
-            raise TypeError("Could not convert `bounds` to float.")
+            values = values if values is None else tuple(map(float, values))
+        except (ValueError, TypeError) as e:
+            raise TypeError(
+                "Could not convert `bounds` to float. "
+                f"The provided bounds values are '{values}'."
+            ) from e
 
         if values is not None and values[1] <= values[0]:
             raise ValueError(
                 f"Invalid bound {values}. Lower bound is greater or equal than the upper bound."
             )
+
+        return values
+
+    @bounds.setter
+    def bounds(self, values: Union[None, Tuple[float, float]]):
+        """Setter for bounds."""
+        if values is None:
+            self._bounds = None
+            return
+        values = self._format_bounds(values)
+        if values is not None and len(values) != 2:
+            raise ValueError(
+                f"The provided `bounds` must be of length two. Length {len(values)} provided instead!"
+            )
+        self._bounds = values
 
 
 class ConvBasisMixin:
@@ -786,6 +852,11 @@ class CompositeBasisMixin(BasisMixin):
             basis1
         ) + infer_input_dimensionality(basis2)
 
+        # set the attribute
+        self._is_complex = getattr(basis1, "is_complex", False) or getattr(
+            basis2, "is_complex", False
+        )
+
         # This step is slow if you add a very large number of bases
         self._basis1 = None
         self._basis2 = None
@@ -793,12 +864,11 @@ class CompositeBasisMixin(BasisMixin):
         # in the composite basis.
 
         if not self.__class__._shallow_copy:
-            self.basis1 = copy.deepcopy(basis1)
-            self.basis2 = copy.deepcopy(basis2)
-        else:
-            # skip checks and shallow copy
-            self._basis1 = basis1
-            self._basis2 = basis2
+            basis1 = copy.deepcopy(basis1)
+            basis2 = copy.deepcopy(basis2)
+
+        self.basis1 = basis1
+        self.basis2 = basis2
 
         # set parents
         self.basis1._parent = self
@@ -806,6 +876,12 @@ class CompositeBasisMixin(BasisMixin):
 
         # trigger label setter
         super().__init__(label=label)
+
+    @property
+    def is_complex(self):
+        # is_complex is used to check if basis can be multiplied with another
+        # allowed multiplications: real x real, real x complex.
+        return self._is_complex
 
     def _is_basis_like(
         self, basis1: Optional[BasisMixin] = None, basis2: Optional[BasisMixin] = None
@@ -903,7 +979,9 @@ class CompositeBasisMixin(BasisMixin):
     def _input_shape_(self):
         return self.input_shape
 
-    def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> BasisMixin:
+    def set_input_shape(
+        self, *xi: int | tuple[int, ...] | NDArray, allow_inputs_of_different_shape=True
+    ) -> BasisMixin:
         """
         Set the expected input shape for the basis object.
 
@@ -921,6 +999,10 @@ class CompositeBasisMixin(BasisMixin):
               All elements must be integers.
             - An array: The shape is extracted, excluding the first axis (assumed to be the sample axis).
 
+        allow_inputs_of_different_shape :
+            True if the composition allows input of different shape (as in addition), False otherwise
+            (as in multiplication).
+
         Raises
         ------
         ValueError
@@ -932,7 +1014,9 @@ class CompositeBasisMixin(BasisMixin):
         self :
             Returns the instance itself to allow method chaining.
         """
-        return super().set_input_shape(*xi)
+        return super().set_input_shape(
+            *xi, allow_inputs_of_different_shape=allow_inputs_of_different_shape
+        )
 
     @property
     @abc.abstractmethod
@@ -1226,11 +1310,11 @@ class CompositeBasisMixin(BasisMixin):
                 key_map[self.label + "__" + key] = key
         return parameter_dict, key_map
 
-    def _remove_self_label_from_key(self, map_dict: dict) -> dict:
+    def _remove_self_label_from_key(self, mapping_dict: dict) -> dict:
         initial_string = self.label + "__"
         return {
             k[len(initial_string) :] if k.startswith(initial_string) else k: val
-            for k, val in map_dict.items()
+            for k, val in mapping_dict.items()
         }
 
     def get_params(self, deep=True) -> dict:

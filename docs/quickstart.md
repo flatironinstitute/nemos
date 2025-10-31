@@ -245,7 +245,10 @@ X_multi.shape
 
 For additional information on one-dimensional convolutions, see [here](convolution_background).
 
-## **Continuous Observations**
+
+## **Other Observation Models**
+
+### **Continuous Observations**
 
 
 By default, NeMoS' GLM uses [Poisson observations](nemos.observation_models.PoissonObservations), which are a natural choice for spike counts. However, the package also supports a [Gamma](nemos.observation_models.GammaObservations) GLM, which is more appropriate for modeling continuous, non-negative observations such as calcium transients.
@@ -265,7 +268,7 @@ glm = nmo.glm.GLM(observation_model=nmo.observation_models.GammaObservations())
 
 Take a look at our [tutorial](tutorial-calcium-imaging) for a detailed example.
 
-## **Binary Observations**
+### **Binary Observations**
 
 
 NeMoS additionally supports a [Bernoulli observation model](nemos.observation_models.BernoulliObservations), which is useful for modeling binary observations, such as a binary choices or singular spikes. To use this observation model, set the `observation_model` argument during model initialization.
@@ -280,10 +283,28 @@ glm = nmo.glm.GLM(observation_model=nmo.observation_models.BernoulliObservations
 
 ```
 
+### **Counts with Supra-Poisson Variability**
+
+A [Negative Binomial observation model](nemos.observation_models.NegativeBinomialObservations) is appropriate for describing a counting process (such as neural spike counts) that exhibits supra-Poisson variability — that is, it is over-dispersed relative to a Poisson model (equivalently, the variance of the counts is larger than the mean).
+
+To set up a Negative Binomial GLM, provide this `observation_model` at initialization. The degree of overdispersion can be controlled via the `scale` parameter: larger values of `scale` result in greater variability compared to a Poisson model, while as `scale` approaches zero, the distribution converges to a Poisson. An appropriate value for `scale` depends on the distribution of the observed spike counts and should be tuned, for example through [cross-validation](sklearn-how-to).
+
+
+```{code-cell} ipython3
+
+import nemos as nmo
+
+# set up a Negative Binomial GLM for modeling counts (with scale = 1)
+glm = nmo.glm.GLM(observation_model=nmo.observation_models.NegativeBinomialObservations(scale=1))
+
+```
+
+
+
 ## **Regularization**
 
 
-NeMoS supports various regularization schemes, including [Ridge](nemos.regularizer.Ridge) ($L_2$), [Lasso](nemos.regularizer.Lasso) ($L_1$), and [Group Lasso](nemos.regularizer.GroupLasso), to prevent overfitting and improve model generalization.
+NeMoS supports various regularization schemes, including [Ridge](nemos.regularizer.Ridge) ($L_2$), [Lasso](nemos.regularizer.Lasso) ($L_1$), [ElasticNet](nemos.regularizer.ElasticNet) ($L_1 + L_2$), and [Group Lasso](nemos.regularizer.GroupLasso), to prevent overfitting and improve model generalization.
 
 You can specify the regularization scheme and its strength when initializing the GLM model:
 
@@ -297,6 +318,14 @@ glm = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.1)
 
 ```
 
+For [ElasticNet](nemos.regularizer.ElasticNet) regularization, you can also set a regularizer ratio, specifying the balance between $L_1$ and $L_2$ regularization, where a ratio of 1 is equivalent to $L_1$ (Lasso) and a value of 0 is equivalent to $L_2$ (Ridge). This can be set by passing a tuple of values to `regularizer_strength`, where the first value is the strength and the second is the ratio.
+
+```{code-cell} ipython3
+
+# set regularizer strength to 0.1 and regularizer ratio to 0.5
+glm = nmo.glm.GLM(regularizer="ElasticNet", regularizer_strength=(0.1,0.5))
+
+```
 
 
 ## **Pre-processing with `pynapple`**
@@ -386,20 +415,22 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # tuning curves
-raw_tuning = nap.compute_1d_tuning_curves(spikes, head_dir, nb_bins=100)[6]
+raw_tuning = nap.compute_tuning_curves(spikes, head_dir, bins=100, feature_names=["angles"])
+raw_tuning = raw_tuning.sel(unit=6)
 
 # model based tuning curve
-model_tuning = nap.compute_1d_tuning_curves_continuous(
+model_tuning = nap.compute_tuning_curves(
     model.predict(X)[:, np.newaxis] * X.rate,  # scale by the sampling rate
     head_dir,
-    nb_bins=100
- )[0]
+    bins=100,
+    feature_names=["angles"]
+ ).sel(unit=0)
 
 
 # plot results
 sub = plt.subplot(111, projection="polar")
-plt1 = plt.plot(raw_tuning.index, raw_tuning.values, label="raw")
-plt2 = plt.plot(model_tuning.index, model_tuning.values, label="glm")
+plt1 = plt.plot(raw_tuning.angles, raw_tuning, label="raw")
+plt2 = plt.plot(model_tuning.angles, model_tuning, label="glm")
 legend = plt.yticks([])
 xlab = plt.xlabel("heading angle")
 

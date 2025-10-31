@@ -1,3 +1,5 @@
+exclude: ^src/nemos/third_party/
+
 repos:
 - repo: https://github.com/psf/black
   rev: 25.1.0
@@ -24,7 +26,7 @@ repos:
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v5.0.0
   # note: pre-commit runs top-to-bottom, so put the hooks that modify content first,
-  # followed by checks that might be more likely to pass after the modifactaion hooks (like flake8)
+  # followed by checks that might be more likely to pass after the modification hooks (like flake8)
   hooks:
   # Checks for large files added to the repository, typically to prevent accidental inclusion of large binaries or datasets.
   - id: check-added-large-files
@@ -34,7 +36,7 @@ repos:
   - id: check-merge-conflict
   # Validates YAML files for syntax errors.
   - id: check-yaml
-  # Detects debug statments (e.g., print, console.log, etc.) left in code.
+  # Detects debug statements (e.g., print, console.log, etc.) left in code.
   - id: debug-statements
   # Ensures files have a newline at the end.
   - id: end-of-file-fixer
@@ -50,3 +52,20 @@ repos:
               tests/|
               docs/
           )
+
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.11.5
+  hooks:
+    - id: ruff
+      args: ["--fix", "--config=pyproject.toml"]
+      files: ^src/
+
+- repo: local
+  hooks:
+    - id: check-parameter-naming
+      name: Check parameter naming consistency
+      entry: python scripts/check_parameter_naming.py
+      language: system
+      types: [python]
+      pass_filenames: false
+

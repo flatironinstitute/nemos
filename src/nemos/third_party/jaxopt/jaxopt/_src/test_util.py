@@ -14,18 +14,15 @@
 
 """Test utilities."""
 
-from absl.testing import parameterized
-
 import functools
 
 import jax
 import jax.numpy as jnp
-
-
 import numpy as onp
 import scipy as osp
-
+from absl.testing import parameterized
 from sklearn import linear_model
+from sklearn import multiclass as skl_multiclass
 from sklearn import svm
 
 
@@ -105,16 +102,22 @@ def logreg_skl(X, y, lam, tol=1e-5, fit_intercept=False,
 
   if multiclass:
     solver = "lbfgs"
-    multiclass = "multinomial"
+    logreg =  linear_model.LogisticRegression(fit_intercept=fit_intercept,
+                                      C=1. / (lam * X.shape[0]), tol=tol,
+                                      solver=solver, penalty=penalty,
+                                      random_state=0)
+
   else:
     solver = "liblinear"
-    multiclass = "ovr"
-  logreg = linear_model.LogisticRegression(fit_intercept=fit_intercept,
-                                           C=1. / (lam * X.shape[0]), tol=tol,
-                                           solver=solver, penalty=penalty,
-                                           multi_class=multiclass,
-                                           random_state=0)
+    logreg = skl_multiclass.OneVsOneClassifier(
+      linear_model.LogisticRegression(fit_intercept=fit_intercept,
+                                             C=1. / (lam * X.shape[0]), tol=tol,
+                                             solver=solver, penalty=penalty,
+                                             random_state=0)
+    )
   logreg = logreg.fit(X, y)
+  if hasattr(logreg, "estimators_"):
+    logreg = logreg.estimators_[0]
   if fit_intercept:
     return _reshape_coef(logreg.coef_), logreg.intercept_
   else:
@@ -246,6 +249,7 @@ def device_under_test():
 
 def _assert_numpy_allclose(a, b, atol=None, rtol=None, err_msg=''):
   if a.dtype == b.dtype == float0:
+    import numpy as np
     np.testing.assert_array_equal(a, b, err_msg=err_msg)
     return
   #a = a.astype(np.float32) if a.dtype == _dtypes.bfloat16 else a

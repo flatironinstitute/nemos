@@ -66,8 +66,7 @@ def difference_of_gammas(
 
     References
     ----------
-    .. [1] SciPy Docs -
-       :meth:`scipy.stats.gamma <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.gamma.html>`
+    .. [1] SciPy Docs - :obj:`scipy.stats.gamma`
 
     Examples
     --------
@@ -396,7 +395,14 @@ def simulate_recurrent(
         # 1. The first dimension is time, and 1 is by construction since we are simulating 1
         #    sample
         # 2. Flatten to shape (n_neuron * n_basis_coupling, )
-        conv_act = convolve.tensor_convolve(activity, coupling_basis_matrix).reshape(
+        # Convolution in safe mode (no vectorization)
+        conv_act = convolve._tensor_convolve(
+            activity,
+            coupling_basis_matrix,
+            batch_size_samples=feedforward_input.shape[0],
+            batch_size_channels=1,
+            batch_size_basis=1,
+        ).reshape(
             -1,
         )
 

@@ -1,14 +1,21 @@
 """Utility functions for creating regularizer object."""
 
-from typing import TYPE_CHECKING
+from .regularizer import ElasticNet, GroupLasso, Lasso, Ridge, UnRegularized, Regularizer
 
-if TYPE_CHECKING:
-    from .regularizer import Regularizer
+AVAILABLE_REGULARIZERS = ["UnRegularized", "Ridge", "Lasso", "GroupLasso", "ElasticNet"]
 
-AVAILABLE_REGULARIZERS = ["UnRegularized", "Ridge", "Lasso", "GroupLasso"]
+# Mapping for O(1) lookup
+_REGULARIZER_MAP = {
+    "UnRegularized": UnRegularized,
+    "Ridge": Ridge,
+    "Lasso": Lasso,
+    "GroupLasso": GroupLasso,
+    "ElasticNet": ElasticNet,
+    None: UnRegularized,  # Handle None case
+}
 
 
-def create_regularizer(name: str | None) -> Regularizer:
+def instantiate_regularizer(name: str | None, **kwargs) -> Regularizer:
     """
     Create a regularizer from a given name.
 
@@ -18,6 +25,8 @@ def create_regularizer(name: str | None) -> Regularizer:
         The string name of the regularizer to create.
         Must be one of: 'UnRegularized', 'Ridge', 'Lasso','GroupLasso', None.
         If set to None, it will behave as 'Unregularized'.
+    **kwargs :
+        Additional keyword arguments are passed to the regularizer constructor.
 
     Returns
     -------
@@ -29,24 +38,14 @@ def create_regularizer(name: str | None) -> Regularizer:
     ValueError
         If the `name` provided does not match to any available regularizer.
     """
-    if name in ("UnRegularized", None):
-        from .regularizer import UnRegularized
+    # If the name contains a module path, extract the class name
+    if name:
+        name = name.split("nemos.regularizer.")[-1]
 
-        return UnRegularized()
-    elif name == "Ridge":
-        from .regularizer import Ridge
-
-        return Ridge()
-    elif name == "Lasso":
-        from .regularizer import Lasso
-
-        return Lasso()
-    elif name == "GroupLasso":
-        from .regularizer import GroupLasso
-
-        return GroupLasso()
+    if name in _REGULARIZER_MAP:
+        return _REGULARIZER_MAP[name](**kwargs)
     else:
         raise ValueError(
             f"Unknown regularizer: {name}. "
-            f"Regularizer must be one of {AVAILABLE_REGULARIZERS}"
+            f"Regularizer must be one of {AVAILABLE_REGULARIZERS} or their full module path."
         )

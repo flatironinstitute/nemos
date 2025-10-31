@@ -62,7 +62,7 @@ def glm_compute_optimal_stepsize_configs(
         compute_optimal_params = svrg_optimal_batch_and_stepsize
 
     # get the smoothness parameter compute function
-    if model.observation_model.inverse_link_function is jax.nn.softplus and isinstance(
+    if model.inverse_link_function is jax.nn.softplus and isinstance(
         model.observation_model, PoissonObservations
     ):
         compute_smoothness = glm_softplus_poisson_l_max_and_l

@@ -132,7 +132,7 @@ flake8 --config=tox.ini src
 > If some files were reformatted after running `black`, make sure to commit those changes and push them to your feature branch as well.
 
 Now you are ready to make a Pull Request (PR). You can open a pull request by clicking on the big `Compare & pull request` button that appears at the top of the `nemos` repo
-after pushing to your branch (see [here](https://intersect-training.org/collaborative-git/03-pr/index.html) for a tutorial).
+after pushing to your branch (see [here](https://intersect-training.org/collaborative-git/pr.html) for a tutorial).
 
 Your pull request should include the following:
 - A summary including information on what you changed and why
@@ -172,6 +172,12 @@ There are several options for how to run a subset of tests:
 - Run tests from one file: `pytest tests/test_glm.py`
 - Run a specific test within a specific module: `pytests tests/test_glm.py::test_func`
 - Another example specifying a test method via the command line: `pytest tests/test_glm.py::GLMClass::test_func`
+
+To run tests with solvers implemented with either the `jaxopt` or the `optimistix` backend, set the `NEMOS_SOLVER_BACKEND` environment variable. E.g. setting for a single test run:
+`NEMOS_SOLVER_BACKEND=jaxopt pytest`
+
+There are also dedicated tox environments that do this automatically and run a subset of tests that depend on the solvers:
+`tox -e backend-jaxopt,backend-optimistix` will run solver-dependent tests with both backends separately.
 
 #### Adding tests
 

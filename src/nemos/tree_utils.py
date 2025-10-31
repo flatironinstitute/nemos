@@ -55,7 +55,7 @@ def _get_not_nan(array: jnp.ndarray) -> jnp.ndarray:
     return jax.numpy.all(~jnp.isnan(array), axis=range(1, array.ndim))
 
 
-def _get_valid_tree(tree: Any) -> jnp.ndarray:
+def _get_valid_tree(pytree: Any) -> jnp.ndarray:
     """
     Filter valid entries across all leaves in a pytree.
 
@@ -64,7 +64,7 @@ def _get_valid_tree(tree: Any) -> jnp.ndarray:
 
     Parameters
     ----------
-    tree :
+    pytree :
         A pytree with leaves as NDArrays sharing the same size for the first dimension.
 
     Returns
@@ -74,12 +74,12 @@ def _get_valid_tree(tree: Any) -> jnp.ndarray:
         while False indicates an invalid (NaN or infinite) entry.
     """
     valid = jax.tree_util.tree_leaves(
-        jax.tree_util.tree_map(lambda x: _get_not_inf(x) & _get_not_nan(x), tree)
+        jax.tree_util.tree_map(lambda x: _get_not_inf(x) & _get_not_nan(x), pytree)
     )
     return reduce(jnp.logical_and, valid)
 
 
-def get_valid_multitree(*tree: Any) -> jnp.ndarray:
+def get_valid_multitree(*pytree: Any) -> jnp.ndarray:
     """
     Filter valid entries across multiple pytrees.
 
@@ -88,7 +88,7 @@ def get_valid_multitree(*tree: Any) -> jnp.ndarray:
 
     Parameters
     ----------
-    *tree :
+    pytree :
         Variable number of pytrees with NDArrays as leaves, each having a consistent first dimension size.
 
     Returns
@@ -97,7 +97,7 @@ def get_valid_multitree(*tree: Any) -> jnp.ndarray:
         A boolean array indicating the validity of each entry across all leaves in all pytrees. True for valid entries,
         False for invalid ones.
     """
-    return reduce(jnp.logical_and, map(_get_valid_tree, tree))
+    return reduce(jnp.logical_and, map(_get_valid_tree, pytree))
 
 
 def pytree_map_and_reduce(
@@ -177,7 +177,7 @@ tree_sub = partial(jax.tree_util.tree_map, operator.sub)
 tree_sub.__doc__ = "Tree subtraction."
 
 
-def tree_scalar_mul(scalar, tree_x):
+def tree_scalar_mul(scalar, pytree_x):
     """
     Compute scalar * tree_x.
 
@@ -185,7 +185,7 @@ def tree_scalar_mul(scalar, tree_x):
     ----------
     scalar :
         A scalar multiplier applied to each element of tree_x.
-    tree_x :
+    pytree_x :
         A pytree with leaves as NDArrays.
 
     Returns
@@ -194,11 +194,10 @@ def tree_scalar_mul(scalar, tree_x):
         A pytree with the same structure as tree_x, where each leaf is computed as:
         scalar * tree_x.
     """
+    return jax.tree_util.tree_map(lambda x: scalar * x, pytree_x)
 
-    return jax.tree_util.tree_map(lambda x: scalar * x, tree_x)
 
-
-def tree_add_scalar_mul(tree_x, scalar, tree_y):
+def tree_add_scalar_mul(pytree_x, scalar, pytree_y):
     """
     Compute tree_x + scalar * tree_y.
 
@@ -217,16 +216,16 @@ def tree_add_scalar_mul(tree_x, scalar, tree_y):
         A pytree with the same structure as the inputs, where each leaf is computed as:
         x + scalar * y.
     """
-    return jax.tree_util.tree_map(lambda x, y: x + scalar * y, tree_x, tree_y)
+    return jax.tree_util.tree_map(lambda x, y: x + scalar * y, pytree_x, pytree_y)
 
 
-def tree_sum(tree_x):
+def tree_sum(pytree_x):
     """
-    Compute sum(tree_x).
+    Compute sum(pytree_x).
 
     Parameters
     ----------
-    tree_x : Any
+    pytree_x : Any
         A pytree with leaves as NDArrays.
 
     Returns
@@ -234,20 +233,20 @@ def tree_sum(tree_x):
     scalar:
         A scalar representing the sum of all elements across the PyTree.
     """
-    sums = jax.tree_util.tree_map(jnp.sum, tree_x)
+    sums = jax.tree_util.tree_map(jnp.sum, pytree_x)
     return jax.tree_util.tree_reduce(operator.add, sums)
 
 
-def tree_l2_norm(tree_x: Any, squared=False):
+def tree_l2_norm(pytree_x, squared=False):
     """
-    Compute the L2 norm (Euclidean norm) of a PyTree of arrays, ||tree_x||.
+    Compute the L2 norm (Euclidean norm) of a PyTree of arrays, ||pytree_x||.
 
     This function supports real and complex-valued arrays. For complex values,
     it computes the squared magnitude as real² + imag².
 
     Parameters
     ----------
-    tree_x : Any
+    pytree_x : Any
         A pytree with leaves as NDArrays.
 
     squared :
@@ -260,7 +259,7 @@ def tree_l2_norm(tree_x: Any, squared=False):
         A scalar representing the L2 norm (or squared L2 norm) of the pytree.
     """
     squared_tree = jax.tree_util.tree_map(
-        lambda leaf: jnp.square(leaf.real) + jnp.square(leaf.imag), tree_x
+        lambda leaf: jnp.square(leaf.real) + jnp.square(leaf.imag), pytree_x
     )
     sqnorm = tree_sum(squared_tree)
     if squared:
@@ -269,30 +268,30 @@ def tree_l2_norm(tree_x: Any, squared=False):
         return jnp.sqrt(sqnorm)
 
 
-def tree_zeros_like(tree_x: Any):
+def tree_zeros_like(pytree_x):
     """
-    Create an all-zero tree with the same structure as tree_x.
+    Create an all-zero tree with the same structure as pytree_x.
 
     Parameters
     ----------
-    tree_x :
+    pytree_x :
         A pytree with leaves as NDArrays.
 
     Returns
     -------
-    tree :
+    :
         All-zero tree with same structure as tree_x.
     """
-    return jax.tree_util.tree_map(jnp.zeros_like, tree_x)
+    return jax.tree_util.tree_map(jnp.zeros_like, pytree_x)
 
 
-def has_matching_axis_pytree(*trees: Any, axis: int = 0):
+def has_matching_axis_pytree(*pytree: Any, axis: int = 0):
     """
     Check if an arbitrary number of trees have matching axis length.
 
     Parameters
     ----------
-    *trees :
+    *pytree :
         A variable number of pytrees with leaves as NDArrays.
 
     axis :
@@ -304,6 +303,12 @@ def has_matching_axis_pytree(*trees: Any, axis: int = 0):
         True if there's only one unique length, meaning all arrays have the same size along that axis.
     """
     ax_lengths = {
-        xi.shape[axis] for tree in trees for xi in jax.tree_util.tree_leaves(tree)
+        xi.shape[axis] for tree in pytree for xi in jax.tree_util.tree_leaves(tree)
     }
     return len(ax_lengths) == 1
+
+
+def drop_nans(*pytree):
+    """Drop all NaNs from trees."""
+    is_valid = get_valid_multitree(*pytree)
+    return (jax.tree_util.tree_map(lambda x: x[is_valid], par) for par in pytree)
