@@ -720,7 +720,7 @@ def max_sum(
         def reset_chain(omega_prev, log_em):
             # New session: reset to initial distribution
             omega = log_init + log_em
-            max_prob_state = jnp.full(n_states, -1, dtype=jnp.int32)  # Boundary marker
+            max_prob_state = jnp.full(n_states, -1)  # Boundary marker
             return omega, max_prob_state
 
         def continue_chain(omega_prev, log_em):
