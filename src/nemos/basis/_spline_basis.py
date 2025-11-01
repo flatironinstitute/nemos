@@ -304,7 +304,7 @@ class BSplineBasis(SplineBasis, abc.ABC):
 
     Attributes
     ----------
-    order :
+    order : int
         Spline order.
 
 
