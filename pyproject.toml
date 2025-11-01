@@ -22,14 +22,15 @@ classifiers = [
 
 # Define dependencies for the project
 dependencies = [
-    "jax>=0.4.28",                     # Numerical computing library
-    "jaxopt>=0.6",                  # Optimization library built on JAX
+    "jax>=0.4.28",                  # Numerical computing library
     "numpy>1.20",                   # Numerical computing library
     "scipy>=1.10",                  # Scientific computing library
     "typing_extensions>=4.6",       # Typing extensions for Python
-    "pynapple>=0.6.6",
+    'pynapple>=0.10.1',               # On this version, changed tuning curve API
+    "scikit-learn",                 # BaseEstimator and Tags inheritance
+    "optimistix>=0.0.11",
+    "optax>=0.2.5",
 ]
-
 
 
 # Configure package discovery for setuptools
@@ -47,6 +48,7 @@ dev = [
     "black",                        # Code formatter
     "isort",                        # Import sorter
     "pip-tools",                    # Dependency management
+    "ruff",                         # Lint docstrings for now, eventually switch to ruff for all linting
     "pytest",                       # Testing framework
     "pytest-xdist",                 # Parallelize pytest
     "flake8",                       # Code linter
@@ -85,6 +87,7 @@ docs = [
     "ipywidgets",
     "ipykernel",
     "patsy",
+    "tqdm",
 ]
 examples = [
     "scikit-learn",
@@ -94,6 +97,17 @@ examples = [
     "pooch",
     "fsspec",
     "patsy",
+    "tqdm",
+]
+# jaxopt 0.8.5 is included in src/nemos/third_party/jaxopt
+jaxopt_dev = [
+    "pytest",
+    "absl-py>=0.7.0",
+    "cvxpy>=1.1.11",
+    "optax>=0.0.9",
+    "pytest-xdist",
+    "scikit-learn>=0.24.1",
+    "cvxopt",
 ]
 
 
@@ -117,13 +131,15 @@ exclude = '''
     | buck-out
     | build
     | dist
-    | examples))'''
+    | examples
+    | src/nemos/third_party/jaxopt))'''
 
 # Configure isort
 [tool.isort]
 multi_line_output = 3             # Use three-line style for multi-line imports
 include_trailing_comma = true     # Include trailing comma in multi-line imports
 profile = "black"
+skip = ["src/nemos/third_party/jaxopt"]
 
 # Configure pytest
 [tool.pytest.ini_options]
@@ -137,6 +153,11 @@ filterwarnings = [
     # mpl must be non-interctive for testing otherwise doctests will freeze
     'ignore:FigureCanvasAgg is non-interactive, and thus cannot be shown:UserWarning',
 ]
+markers = [
+  "solver_related: tests that interact with solvers",
+]
+addopts = "--strict-markers"
+
 
 [tool.coverage.run]
 omit = [
@@ -149,3 +170,16 @@ exclude_lines = [
     "@abc.abstractmethod",
     "if __name__ == .__main__.:"
 ]
+
+
+[tool.ruff]
+exclude = ["src/nemos/_documentation_utils", "src/nemos/third_party"]
+
+
+[tool.ruff.lint]
+select = ["D"]
+ignore = ["D202"]  # this conflicts with black
+
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"

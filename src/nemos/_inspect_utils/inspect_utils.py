@@ -18,7 +18,7 @@ def reimplements_method(
         The class object to check.
     base_class_obj :
         The base class object against which the check is performed.
-    method_name : str
+    method_name :
         The name of the method to check for.
 
     Returns
@@ -26,7 +26,6 @@ def reimplements_method(
     bool
         True if the method is defined in the subclass and not inherited from the base class, False otherwise.
     """
-
     subclass_method = getattr(class_obj, method_name, None)
     superclass_method = getattr(base_class_obj, method_name, None)
     return subclass_method != superclass_method

@@ -13,11 +13,23 @@ Classes for creating Generalized Linear Models (GLMs) for both single neurons an
 
 .. autosummary::
     :toctree: generated/glm
-    :recursive:
     :nosignatures:
 
     GLM
     PopulationGLM
+
+.. _nemos_io:
+
+The NeMoS I/O module
+--------------------
+
+.. currentmodule:: nemos.io
+.. autosummary::
+    :toctree: generated/io
+    :nosignatures:
+
+    load_model
+    inspect_npz
 
 .. _nemos_basis:
 
@@ -36,7 +48,6 @@ These classes are the building blocks for the concrete basis classes.
 
 .. autosummary::
     :toctree: generated/_basis
-    :recursive:
     :nosignatures:
 
     Basis
@@ -44,7 +55,6 @@ These classes are the building blocks for the concrete basis classes.
 .. currentmodule:: nemos.basis._spline_basis
 .. autosummary::
     :toctree: generated/_basis
-    :recursive:
     :nosignatures:
 
     SplineBasis
@@ -56,7 +66,6 @@ These classes are the building blocks for the concrete basis classes.
 
 .. autosummary::
     :toctree: generated/basis
-    :recursive:
     :nosignatures:
 
 
@@ -76,7 +85,6 @@ These classes are the building blocks for the concrete basis classes.
 
 .. autosummary::
     :toctree: generated/basis
-    :recursive:
     :nosignatures:
 
     MSplineEval
@@ -84,6 +92,7 @@ These classes are the building blocks for the concrete basis classes.
     CyclicBSplineEval
     RaisedCosineLinearEval
     RaisedCosineLogEval
+    FourierEval
     OrthExponentialEval
     IdentityEval
 
@@ -93,7 +102,6 @@ These classes are the building blocks for the concrete basis classes.
 
 .. autosummary::
     :toctree: generated/_basis
-    :recursive:
     :nosignatures:
 
     AdditiveBasis
@@ -107,18 +115,16 @@ Define a fully functional basis form a list of functions.
 
 .. autosummary::
     :toctree: generated/_custom_basis
-    :recursive:
     :nosignatures:
 
     CustomBasis
 
-**Basis As ``scikit-learn`` Tranformers:**
+**Basis As scikit-learn Tranformers:**
 
 .. currentmodule:: nemos.basis._transformer_basis
 
 .. autosummary::
     :toctree: generated/_transformer_basis
-    :recursive:
     :nosignatures:
 
     TransformerBasis
@@ -133,11 +139,11 @@ Statistical models to describe the distribution of neural responses or other pre
 
 .. autosummary::
     :toctree: generated/observation_models
-    :recursive:
     :nosignatures:
 
     Observations
     PoissonObservations
+    NegativeBinomialObservations
     GammaObservations
     BernoulliObservations
 
@@ -151,13 +157,13 @@ Implements various regularization techniques to constrain model parameters, whic
 
 .. autosummary::
     :toctree: generated/regularizer
-    :recursive:
     :nosignatures:
 
     Regularizer
     UnRegularized
     Ridge
     Lasso
+    ElasticNet
     GroupLasso
 
 The ``nemos.simulation`` module
@@ -168,7 +174,6 @@ Utility functions for simulating spiking activity in recurrently connected neura
 
 .. autosummary::
     :toctree: generated/simulation
-    :recursive:
     :nosignatures:
 
     simulate_recurrent
@@ -184,11 +189,23 @@ Utility functions for running convolution over the sample axis.
 
 .. autosummary::
     :toctree: generated/regularizer
-    :recursive:
     :nosignatures:
 
     create_convolutional_predictor
-    tensor_convolve
+
+
+The ``nemos.solvers`` module
+----------------------------
+JAX-based optimizers used for parameter fitting.
+
+.. currentmodule:: nemos.solvers
+
+.. autosummary::
+    :toctree: generated/solvers
+    :nosignatures:
+
+    get_solver_documentation
+    list_available_solvers
 
 
 The ``nemos.identifiability_constraints`` module
@@ -200,7 +217,6 @@ solutions.
 
 .. autosummary::
     :toctree: generated/identifiability_constraints
-    :recursive:
     :nosignatures:
 
     apply_identifiability_constraints
@@ -215,7 +231,6 @@ These objects can be provided as input to nemos GLM methods.
 
 .. autosummary::
     :toctree: generated/pytree
-    :recursive:
     :nosignatures:
 
     FeaturePytree

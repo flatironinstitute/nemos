@@ -11,16 +11,17 @@ from typing import Callable, Tuple, Union
 
 import jax
 import jax.numpy as jnp
-import jaxopt
 from numpy.typing import NDArray
+
+from nemos.third_party.jaxopt import jaxopt
 
 from . import tree_utils
 from .base_class import Base
-from .proximal_operator import prox_group_lasso
+from .proximal_operator import prox_elastic_net, prox_group_lasso
 from .typing import DESIGN_INPUT_TYPE, ProximalOperator
 from .utils import format_repr
 
-__all__ = ["UnRegularized", "Ridge", "Lasso", "GroupLasso"]
+__all__ = ["UnRegularized", "Ridge", "Lasso", "GroupLasso", "ElasticNet"]
 
 
 def __dir__() -> list[str]:
@@ -37,9 +38,9 @@ class Regularizer(Base, abc.ABC):
 
     Attributes
     ----------
-    allowed_solvers :
+    allowed_solvers : Tuple[str]
         Tuple of solver names that are allowed for use with this regularizer.
-    default_solver :
+    default_solver : str
         String of the default solver name allowed for use with this regularizer.
     """
 
@@ -94,8 +95,31 @@ class Regularizer(Base, abc.ABC):
         """
         pass
 
+    def check_solver(self, solver_name: str):
+        """Raise an error if the given solver is not allowed."""
+        if solver_name not in self._allowed_solvers:
+            raise ValueError(
+                f"The solver: {solver_name} is not allowed for "
+                f"{self.__class__.__name__} regularization. Allowed solvers are "
+                f"{self.allowed_solvers}."
+            )
+
     def __repr__(self):
         return format_repr(self)
+
+    def _validate_regularizer_strength(self, strength: Union[None, float]):
+        if strength is None:
+            strength = 1.0
+        else:
+            try:
+                # force conversion to float to prevent weird GPU issues
+                strength = float(strength)
+            except ValueError:
+                # raise a more detailed ValueError
+                raise ValueError(
+                    f"Could not convert the regularizer strength: {strength} to a float."
+                )
+        return strength
 
 
 class UnRegularized(Regularizer):
@@ -125,7 +149,7 @@ class UnRegularized(Regularizer):
 
     def penalized_loss(self, loss: Callable, regularizer_strength: float):
         """
-        Returns the original loss function unpenalized.
+        Return the original loss function unpenalized.
 
         Unregularized regularization method does not add any penalty.
         """
@@ -135,13 +159,15 @@ class UnRegularized(Regularizer):
         self,
     ) -> ProximalOperator:
         """
-        Returns the identity operator.
+        Return the identity operator.
 
         Unregularized method corresponds to an identity proximal operator, since no
         shrinkage factor is applied.
         """
-
         return jaxopt.prox.prox_none
+
+    def _validate_regularizer_strength(self, strength: None):
+        return None
 
 
 class Ridge(Regularizer):
@@ -201,7 +227,7 @@ class Ridge(Regularizer):
         )
 
     def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
-        """Returns the penalized loss function for Ridge regularization."""
+        """Return the penalized loss function for Ridge regularization."""
 
         def _penalized_loss(params, X, y):
             return loss(params, X, y) + self._penalization(params, regularizer_strength)
@@ -299,12 +325,178 @@ class Lasso(Regularizer):
         )
 
     def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
-        """Returns a function for calculating the penalized loss using Lasso regularization."""
+        """Return a function for calculating the penalized loss using Lasso regularization."""
 
         def _penalized_loss(params, X, y):
             return loss(params, X, y) + self._penalization(params, regularizer_strength)
 
         return _penalized_loss
+
+
+class ElasticNet(Regularizer):
+    r"""
+    Regularizer class for Elastic Net (L1 + L2 regularization).
+
+    The Elasitc Net penalty [3]_ [4]_ is defined as:
+
+    .. math::
+        P(\beta) = \alpha \left((1 - \lambda) \frac{1}{2} ||\beta||_{\ell_2}^2 +
+        \lambda ||\beta||_{\ell_1} \right)
+
+    where :math:`\alpha` is the regularizer strength, and :math:`\lambda` is the regularizer ratio.
+    The regularizer ratio controls the balance between L1 (Lasso) and L2 (Ridge)
+    regularization, where :math:`\lambda = 0` is equivalent to Ridge regularization and
+    :math:`\lambda = 1` is equivalent to Lasso regularization.
+
+    This class equips models with the Elastic Net proximal operator and the
+    Elastic Net penalized loss function.
+
+    References
+    ----------
+    .. [3] Zou, H., & Hastie, T. (2005).
+        Regularization and variable selection via the elastic net.
+        Journal of the Royal Statistical Society: Series B (Statistical Methodology), 67(2), 301-320.
+        https://doi.org/10.1111/j.1467-9868.2005.00503.x
+
+    .. [4] https://en.wikipedia.org/wiki/Elastic_net_regularization
+    """
+
+    _allowed_solvers = (
+        "ProximalGradient",
+        "ProxSVRG",
+    )
+
+    _default_solver = "ProximalGradient"
+
+    def __init__(
+        self,
+    ):
+        super().__init__()
+
+    def get_proximal_operator(
+        self,
+    ) -> ProximalOperator:
+        """
+        Retrieve the proximal operator for Elastic Net regularization (L1 + L2 penalty).
+
+        Returns
+        -------
+        :
+            The proximal operator, applying L1 + L2 regularization to the provided parameters. The intercept
+            term is not regularized.
+        """
+
+        def prox_op(params, netreg, scaling=1.0):
+            Ws, bs = params
+            # since we do not allow array regularization assume we pass a tuple
+            regularizer_strength, regularizer_ratio = netreg
+            regularizer_strength /= bs.shape[0]
+            lam = regularizer_strength * regularizer_ratio  # hyperparams[0]
+            gam = (1 - regularizer_ratio) / regularizer_ratio  # hyperparams[1]
+            # if Ws is a pytree, netreg needs to be a pytree with the same
+            # structure
+            lam = jax.tree_util.tree_map(lambda x: lam * jnp.ones_like(x), Ws)
+            gam = jax.tree_util.tree_map(lambda x: gam * jnp.ones_like(x), Ws)
+            return prox_elastic_net(Ws, (lam, gam), scaling=scaling), bs
+
+        return prox_op
+
+    @staticmethod
+    def _penalization(
+        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+        net_regularization: Tuple[float, float],
+    ) -> jnp.ndarray:
+        r"""
+        Compute the Elastic Net penalization for given parameters.
+
+        The elastic net penalty is defined as:
+
+        .. math::
+            P(\beta) = \alpha ((1 - \lambda) \frac{1}{2} ||\beta||_{\ell_2}^2 +
+            \lambda ||\beta||_{\ell_1}
+
+        where :math:`\alpha` is the regularizer strength, and :math:`\lambda` is the regularizer ratio.
+        The regularizer ratio controls the balance between L1 (Lasso) and L2 (Ridge)
+        regularization, where :math:`\lambda = 0` is equivalent to Ridge regularization and
+        :math:`\lambda = 1` is equivalent to Lasso regularization.
+
+        Parameters
+        ----------
+        params :
+            Model parameters for which to compute the penalization.
+
+        Returns
+        -------
+        :
+            The Elastic Net penalization value.
+        """
+
+        def net_penalty(coeff: jnp.ndarray, intercept: jnp.ndarray) -> jnp.ndarray:
+            regularizer_strength, regularizer_ratio = net_regularization
+            return (
+                regularizer_strength
+                * (
+                    0.5 * (1 - regularizer_ratio) * jnp.sum(jnp.power(coeff, 2))
+                    + regularizer_ratio * jnp.sum(jnp.abs(coeff))
+                )
+                / intercept.shape[0]
+            )
+
+        # tree map the computation and sum over leaves
+        return tree_utils.pytree_map_and_reduce(
+            lambda x: net_penalty(x, params[1]), sum, params[0]
+        )
+
+    def penalized_loss(
+        self, loss: Callable, regularizer_strength: Tuple[float, float]
+    ) -> Callable:
+        """Return a function for calculating the penalized loss using Elastic Net regularization."""
+
+        def _penalized_loss(params, X, y):
+            return loss(params, X, y) + self._penalization(params, regularizer_strength)
+
+        return _penalized_loss
+
+    def _validate_regularizer_strength(
+        self, strength: Union[None, float, Tuple[float, float]]
+    ):
+        if strength is None:
+            strength = (1.0, 0.5)
+        elif hasattr(strength, "__len__") is False:
+            try:
+                # force conversion to float to prevent weird GPU issues
+                strength = (float(strength), 0.5)
+            except ValueError:
+                # raise a more detailed ValueError
+                raise ValueError(
+                    f"Could not convert the regularizer strength: {strength} to a float."
+                )
+        else:
+            try:
+                # force conversion to float to prevent weird GPU issues
+                strength = jax.tree_util.tree_map(float, tuple(strength))
+            except ValueError:
+                # raise a more detailed ValueError
+                raise ValueError(
+                    f"Could not convert the regularizer strength and regularizer ratio: {strength} to a tuple of "
+                    "floats."
+                )
+            if len(strength) != 2:
+                raise ValueError(
+                    f"Invalid regularization strength and regularizer ratio: {strength}. regularizer_strength must "
+                    "be a tuple of two floats."
+                )
+            if (strength[1] > 1) | (strength[1] < 0):
+                raise ValueError(
+                    f"Invalid regularization ratio: {strength[1]}. Regularization ratio must be a number between "
+                    "0 and 1."
+                )
+            elif strength[1] == 0:
+                raise ValueError(
+                    "Regularization ratio of 0 is not supported. Use Ridge regularization instead."
+                )
+
+        return strength
 
 
 class GroupLasso(Regularizer):
@@ -434,7 +626,6 @@ class GroupLasso(Regularizer):
         where :math:`g` is the number of groups, :math:`\dim(\cdot)` is the dimension of the vector,
         i.e. the number of coefficient in each :math:`\beta_j`, and :math:`||\cdot||_2` is the euclidean norm.
         """
-
         # conform to shape (1, n_features) if param is (n_features,) or (n_neurons, n_features) if
         # param is (n_features, n_neurons)
         param_with_extra_axis = jnp.atleast_2d(params[0].T)
@@ -458,7 +649,7 @@ class GroupLasso(Regularizer):
         return penalty * regularizer_strength
 
     def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
-        """Returns a function for calculating the penalized loss using Group Lasso regularization."""
+        """Return a function for calculating the penalized loss using Group Lasso regularization."""
 
         def _penalized_loss(params, X, y):
             return loss(params, X, y) + self._penalization(params, regularizer_strength)

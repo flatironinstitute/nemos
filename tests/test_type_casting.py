@@ -226,7 +226,7 @@ def test_predict_nap_output(iset, poissonGLM_model_instantiation):
 )
 def test_is_numpy_array_like(inp, expected):
     """Check if various objects are correctly identified as numpy array-like or not."""
-    assert nmo.type_casting.is_numpy_array_like(inp) == expected
+    assert nmo.type_casting.is_at_least_1d_numpy_array_like(inp) == expected
 
 
 @pytest.mark.parametrize(

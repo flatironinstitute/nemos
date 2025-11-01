@@ -19,6 +19,20 @@ pip install nemos[examples]
 :::{grid-item-card}
 
 <figure>
+<img src="../_static/thumbnail_save_load.svg" style="height: 100px", alt="Save and Load."/>
+</figure>
+
+```{toctree}
+:maxdepth: 2
+
+save_and_load.md
+```
+
+:::
+
+:::{grid-item-card}
+
+<figure>
 <img src="../_static/thumbnails/how_to_guide/plot_02_glm_demo.svg" style="height: 100px", alt="GLM demo."/>
 </figure>
 
@@ -175,6 +189,22 @@ raw_history_feature.md
 :maxdepth: 2
 
 handling_composite_bases.md
+```
+
+:::
+
+:::{grid-item-card}
+
+<figure>
+<a href="convolve_large_arrays.html">
+<img src="../_static/convolve_batching_scheme.svg" style="height: 100px", alt="Batching scheme."/>
+</a>
+</figure>
+
+```{toctree}
+:maxdepth: 2
+
+convolve_large_arrays.md
 ```
 
 :::

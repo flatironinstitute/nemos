@@ -1,16 +1,18 @@
 from functools import partial
-from typing import Callable, NamedTuple, Optional, Union
+from typing import Any, Callable, NamedTuple, Optional, Union
 
 import jax
 import jax.flatten_util
 import jax.numpy as jnp
 from jax import grad, jit, lax, random
-from jaxopt import OptStep
-from jaxopt._src import loop
-from jaxopt.prox import prox_none
+
+from nemos.third_party.jaxopt.jaxopt import OptStep
+from nemos.third_party.jaxopt.jaxopt._src import loop
+from nemos.third_party.jaxopt.jaxopt.prox import prox_none
 
 from ..tree_utils import tree_add_scalar_mul, tree_l2_norm, tree_slice, tree_sub
 from ..typing import KeyArrayLike, Pytree
+from ._jaxopt_solvers import JaxoptAdapter
 
 
 class SVRGState(NamedTuple):
@@ -51,7 +53,7 @@ class SVRGState(NamedTuple):
 
 class ProxSVRG:
     """
-    Prox-SVRG solver
+    Prox-SVRG solver.
 
     Borrowing from jaxopt.ProximalGradient, this solver minimizes:
 
@@ -60,9 +62,9 @@ class ProxSVRG:
 
     Attributes
     ----------
-    fun: Callable
+    fun : Callable
         Smooth function of the form ``fun(x, *args, **kwargs)``.
-    prox: Callable
+    prox : Callable
         Proximal operator associated with the function ``non_smooth``.
         It should be of the form ``prox(params, hyperparams_prox, scale=1.0)``.
         See ``jaxopt.prox`` for examples.
@@ -72,16 +74,16 @@ class ProxSVRG:
         jax PRNGKey to start with. Used for sampling random data points.
     stepsize : float
         Constant step size to use.
-    tol: float
+    tol : float
         Tolerance level for the error when comparing parameters
         at the end of consecutive epochs to check for convergence.
-    batch_size: int
+    batch_size : int
         Number of data points to sample per inner loop iteration.
 
     Examples
     --------
     >>> import numpy as np
-    >>> from jaxopt.prox import prox_lasso
+    >>> from nemos.third_party.jaxopt.jaxopt.prox import prox_lasso
     >>> loss_fn = lambda params, X, y: ((X.dot(params) - y)**2).sum()
     >>> svrg = ProxSVRG(loss_fn, prox_lasso)
     >>> hyperparams_prox = 0.1
@@ -126,10 +128,10 @@ class ProxSVRG:
     def init_state(
         self,
         init_params: Pytree,
-        *args,
+        *args: Any,
     ) -> SVRGState:
         """
-        Initialize the solver state
+        Initialize the solver state.
 
         Parameters
         ----------
@@ -170,7 +172,7 @@ class ProxSVRG:
         full_grad_at_reference_point: Pytree,
         stepsize: float,
         hyperparams_prox: Union[float, None],
-        *args,
+        *args: Any,
     ) -> Pytree:
         """
         Body of the inner loop of Prox-SVRG that takes a step.
@@ -234,11 +236,10 @@ class ProxSVRG:
         params: Pytree,
         state: SVRGState,
         hyperparams_prox: Union[float, None],
-        *args,
+        *args: Any,
     ) -> OptStep:
         """
-        Perform a single parameter update on the passed data (no random sampling or loops)
-        and increment `state.iter_num`.
+        Perform a single parameter update on the data (no random sampling or loops) and increment `state.iter_num`.
 
         Please note that this gets called by `BaseRegressor._solver_update` (e.g., as called by `GLM.update`),
         but repeated calls to `(Prox)SVRG.update` (so in turn e.g. to `GLM.update`) on mini-batches passed to it
@@ -293,7 +294,7 @@ class ProxSVRG:
         params: Pytree,
         state: SVRGState,
         hyperparams_prox: Union[float, None],
-        *args,
+        *args: Any,
     ) -> OptStep:
         """
         Update parameters given a mini-batch of data and increment iteration/epoch number in state.
@@ -350,10 +351,11 @@ class ProxSVRG:
         self,
         init_params: Pytree,
         hyperparams_prox: Union[float, None],
-        *args,
+        *args: Any,
     ) -> OptStep:
         """
         Run a whole optimization until convergence or until `maxiter` epochs are reached.
+
         Called by `BaseRegressor._solver_run` (e.g. as called by `GLM.fit`) and assumes
         that X and y are the full data set.
 
@@ -397,10 +399,11 @@ class ProxSVRG:
         init_params: Pytree,
         init_state: SVRGState,
         hyperparams_prox: Union[float, None],
-        *args,
+        *args: Any,
     ) -> OptStep:
         """
         Run a whole optimization until convergence or until `maxiter` epochs are reached.
+
         Called by `BaseRegressor._solver_run` (e.g. as called by `GLM.fit`) and assumes that
         X and y are the full data set.
         Assumes the state has been initialized, which works a bit differently for SVRG and ProxSVRG.
@@ -423,14 +426,14 @@ class ProxSVRG:
                     Input data.
                 y : jnp.ndarray
                     Output data.
+
         Returns
         -------
-        OptStep
-            final_params :
-                Parameters at the end of the last innner loop.
-                (... or the average of the parameters over the last inner loop)
-            final_state :
-                Final optimizer state.
+        final_params :
+            Parameters at the end of the last innner loop.
+            (... or the average of the parameters over the last inner loop)
+        final_state :
+            Final optimizer state.
         """
 
         # this method assumes that args hold the full data
@@ -489,10 +492,12 @@ class ProxSVRG:
         params: Pytree,
         state: SVRGState,
         hyperparams_prox: Union[float, None],
-        *args,
+        *args: Any,
     ) -> OptStep:
         """
-        Performs the inner loop of Prox-SVRG sweeping through approximately one full epoch,
+        Perform the inner loop of Prox-SVRG.
+
+        Performs the inner loop of Prox-SVRG  sweeping through approximately one full epoch,
         updating the parameters after sampling a mini-batch on each iteration.
 
         Parameters
@@ -576,6 +581,7 @@ class ProxSVRG:
     def _error(x, x_prev, stepsize):
         """
         Calculate the magnitude of the update relative to the stepsize.
+
         Used for terminating the algorithm if a certain tolerance is reached.
 
         Params
@@ -601,7 +607,7 @@ class SVRG(ProxSVRG):
 
     Attributes
     ----------
-    fun: Callable
+    fun : Callable
         smooth function of the form ``fun(x, *args, **kwargs)``.
     maxiter : int
         Maximum number of epochs to run the optimization for.
@@ -609,10 +615,10 @@ class SVRG(ProxSVRG):
         jax PRNGKey to start with. Used for sampling random data points.
     stepsize : float
         Constant step size to use.
-    tol: float
+    tol : float
         Tolerance level for the error when comparing parameters
         at the end of consecutive epochs to check for convergence.
-    batch_size: int
+    batch_size : int
         Number of data points to sample per inner loop iteration.
 
     Examples
@@ -655,9 +661,9 @@ class SVRG(ProxSVRG):
             batch_size,
         )
 
-    def init_state(self, init_params: Pytree, *args, **kwargs) -> SVRGState:
+    def init_state(self, init_params: Pytree, *args: Any, **kwargs) -> SVRGState:
         """
-        Initialize the solver state
+        Initialize the solver state.
 
         Parameters
         ----------
@@ -682,10 +688,9 @@ class SVRG(ProxSVRG):
         return super().init_state(init_params, *args, **kwargs)
 
     @partial(jit, static_argnums=(0,))
-    def update(self, params: Pytree, state: SVRGState, *args, **kwargs) -> OptStep:
+    def update(self, params: Pytree, state: SVRGState, *args: Any, **kwargs) -> OptStep:
         """
-        Perform a single parameter update on the passed data (no random sampling or loops)
-        and increment `state.iter_num`.
+        Perform a single parameter update on the data (no random sampling or loops) and increment `state.iter_num`.
 
         Please note that this gets called by `BaseRegressor._solver_update` (e.g., as called by `GLM.update`),
         but repeated calls to `(Prox)SVRG.update` (so in turn e.g. to `GLM.update`) on mini-batches passed to it
@@ -732,10 +737,11 @@ class SVRG(ProxSVRG):
     def run(
         self,
         init_params: Pytree,
-        *args,
+        *args: Any,
     ) -> OptStep:
         """
         Run a whole optimization until convergence or until `maxiter` epochs are reached.
+
         Called by `BaseRegressor._solver_run` (e.g. as called by `GLM.fit`) and assumes that
         X and y are the full data set.
 
@@ -769,3 +775,16 @@ class SVRG(ProxSVRG):
 
         # substitute None for hyperparams_prox
         return self._run(init_params, init_state, None, *args)
+
+
+class WrappedSVRG(JaxoptAdapter):
+    """Adapter for NeMoS's implementation of SVRG following the AbstractSolver interface."""
+
+    _solver_cls = SVRG
+
+
+class WrappedProxSVRG(JaxoptAdapter):
+    """Adapter for NeMoS's implementation of Prox-SVRG following the AbstractSolver interface."""
+
+    _solver_cls = ProxSVRG
+    _proximal = True

@@ -28,6 +28,7 @@ __PUBLIC_BASES__ = [
     "BSplineConv",
     "CyclicBSplineEval",
     "CyclicBSplineConv",
+    "FourierEval",
     "RaisedCosineLinearEval",
     "RaisedCosineLinearConv",
     "RaisedCosineLogEval",
@@ -65,7 +66,8 @@ def _iterate_over_components(basis: "BasisMixin"):
 
 
 def _get_root(bas: "BasisMixin"):
-    """Get the basis root"""
+    """Get the basis root."""
+
     parent = bas
     while hasattr(parent, "_parent") and parent._parent is not None:
         parent = parent._parent
@@ -95,18 +97,16 @@ def _recompute_class_default_labels(
     ----------
     bas:
         Basis component calling the method
-    cls_name : str
-        Class name of the component that is setting a new label.
     """
-    cls_name = bas.__class__.__name__
-    pattern = re.compile(rf"^{cls_name}(_\d+)?$")
+    class_name = bas.__class__.__name__
+    pattern = re.compile(rf"^{class_name}(_\d+)?$")
     root = _get_root(bas)
     bas_id = 0
     # if root is one of our bases it will have the iteration method, if custom from user
     # I assume it is atomic
     for comp_bas in _iterate_over_components(root):
         if re.match(pattern, comp_bas._label):
-            comp_bas._label = f"{cls_name}_{bas_id}" if bas_id else cls_name
+            comp_bas._label = f"{class_name}_{bas_id}" if bas_id else class_name
             bas_id += 1
 
 
@@ -120,19 +120,19 @@ def _recompute_all_default_labels(root: "BasisMixin") -> "BasisMixin":
     return root
 
 
-def _update_label_from_root(bas: "BasisMixin", cls_name: str, cls_label: str):
+def _update_label_from_root(bas: "BasisMixin", class_name: str, class_label: str):
     """
     Subtract 1 to each matching default label with higher ID then current.
 
     Parameters
     ----------
-    cls_name : str
+    class_name : str
         Class name of the component that is setting a new label.
-    cls_label : str
+    class_label : str
         Current component label.
     """
-    pattern = re.compile(rf"^{cls_name}(_\d+)?$")
-    match = re.match(pattern, cls_label)
+    pattern = re.compile(rf"^{class_name}(_\d+)?$")
+    match = re.match(pattern, class_label)
     if match is None:
         return
     # get the "ID" of the label
@@ -144,7 +144,7 @@ def _update_label_from_root(bas: "BasisMixin", cls_name: str, cls_label: str):
         if match:
             bas_id = int(match.group(1)[1:]) if match.group(1) else 0
             bas_id = bas_id - 1 if bas_id > current_id else bas_id
-            bas._label = f"{cls_name}_{bas_id}" if bas_id else cls_name
+            bas._label = f"{class_name}_{bas_id}" if bas_id else class_name
 
 
 def _composite_basis_setter_logic(new: "BasisMixin", current: "BasisMixin"):
@@ -306,30 +306,39 @@ def label_setter(bas: "BasisMixin", label: str | None) -> None | ValueError:
     return error
 
 
-def _check_valid_shape_tuple(shape):
-    if not all(isinstance(i, int) for i in shape):
-        raise ValueError(
-            f"The tuple provided contains non integer values. Tuple: {shape}."
-        )
+def _check_valid_shape_tuple(*shapes):
+    for shape in shapes:
+        if shape is not None and not all(isinstance(i, int) for i in shape):
+            raise ValueError(
+                f"The tuple provided contains non integer values. Tuple: {shape}."
+            )
+
+
+def transform_to_shape(xi):
+    if isinstance(xi, tuple):
+        shape = xi
+    elif isinstance(xi, int):
+        shape = () if xi == 1 else (xi,)
+    else:
+        shape = xi if xi is None else xi.shape[1:]
+    return shape
 
 
 def set_input_shape_atomic(
-    bas: "AtomicBasisMixin | CustomBasis", *xis: int | tuple[int, ...] | NDArray
+    bas: "AtomicBasisMixin | CustomBasis", *xis: int | tuple[int, ...] | NDArray | None
 ) -> "AtomicBasisMixin":
     """Set input shape attributes for atomic basis."""
+    # reset all to none
+    if all(xi is None for xi in xis):
+        bas._input_shape_ = None
+        bas._input_shape_product = None
+        return bas
+    # otherwise apply shape
     shapes = []
     n_inputs = ()
     for xi in xis:
-        if isinstance(xi, tuple):
-            _check_valid_shape_tuple(xi)
-            shape = xi
-        elif isinstance(xi, int):
-            shape = () if xi == 1 else (xi,)
-        else:
-            shape = xi.shape[1:]
-
-        n_inputs = (*n_inputs, int(np.prod(shape)))
-        shapes.append(shape)
+        n_inputs = (*n_inputs, int(np.prod(xi)))
+        shapes.append(xi)
 
     bas._input_shape_ = shapes
 
@@ -338,11 +347,47 @@ def set_input_shape_atomic(
     return bas
 
 
-def set_input_shape(bas, *xi):
+def _have_unique_shapes(inputs: List[NDArray] | List[Tuple]):
+    if inputs is None:
+        return True
+
+    # Extract shapes whether inputs are arrays or shape tuples
+    if hasattr(inputs[0], "shape"):
+        shapes = {x.shape for x in inputs}
+        context = "was evaluated with"
+    else:
+        shapes = set(inputs)
+        context = "was configured with"
+    return len(shapes) == 1, shapes, context
+
+
+def _check_unique_shapes(inputs: List[NDArray] | List[Tuple], basis: "BasisMixin"):
+    """Check that all inputs have the same shape.
+
+    Parameters
+    ----------
+    inputs: Either a list of shape tuples or actual arrays
+    basis: The basis object for error context
+
+    Raises
+    ------
+    ValueError:
+        If all the arrays have the same shapes or all the tuples are the same.
+    """
+    have_unique_shape, shapes, context = _have_unique_shapes(inputs)
+    if not have_unique_shape:
+        raise ValueError(
+            f"{basis.__class__.__name__} requires all inputs to have the same shape. "
+            f"The basis {context} input shapes: {shapes}.\n{basis}"
+        )
+
+
+def set_input_shape(bas, *xi, allow_inputs_of_different_shape=True):
     """Set input shape.
 
     Set input shape logic, compatible with all bases (composite, atomic, and custom).
     """
+
     # use 1 as default or number of non-variable args
     n_args = (
         count_positional_and_var_args(bas.compute_features)[0]
@@ -351,27 +396,34 @@ def set_input_shape(bas, *xi):
     )
     # get the attribute if available
     n_input_dim = getattr(bas, "_n_input_dimensionality", n_args)
-    if len(xi) != n_input_dim:
+
+    if len(xi) == 1 and xi[0] is None:
+        xi = (None,) * n_input_dim
+
+    elif len(xi) != n_input_dim:
         expected_inputs = getattr(bas, "_n_input_dimensionality", 1)
         raise ValueError(
             f"set_input_shape expects {expected_inputs} input"
             f"{'s' if expected_inputs > 1 else ''}, but {len(xi)} were provided."
         )
+
+    original_xi = xi
+    try:
+        xi = [transform_to_shape(x) for x in xi]
+    except Exception as e:
+        raise ValueError(
+            f"Cannot convert inputs ``{original_xi}`` to shape tuple."
+        ) from e
+
+    if not allow_inputs_of_different_shape:
+        _check_unique_shapes(xi, bas)
+
+    _check_valid_shape_tuple(*xi)
+
     if not hasattr(bas, "basis1"):
         return set_input_shape_atomic(bas, *xi)
 
     # here we can assume it is a composite basis
-    set_input_shape1 = getattr(
-        bas.basis1,
-        "set_input_shape",
-        lambda *x: set_input_shape_atomic(bas.basis1, *x),
-    )
-    set_input_shape2 = getattr(
-        bas.basis2,
-        "set_input_shape",
-        lambda *x: set_input_shape_atomic(bas.basis2, *x),
-    )
-
     # grab the input dimensionality
     n_args_1, _ = (
         count_positional_and_var_args(bas.basis1.compute_features)
@@ -380,15 +432,18 @@ def set_input_shape(bas, *xi):
     )
     n_input_dim_1 = getattr(bas.basis1, "_n_input_dimensionality", n_args_1)
 
-    out1 = set_input_shape1(*xi[:n_input_dim_1])
-    out2 = set_input_shape2(*xi[n_input_dim_1:])
+    out1 = set_input_shape(bas.basis1, *xi[:n_input_dim_1])
+    out2 = set_input_shape(bas.basis2, *xi[n_input_dim_1:])
 
     # out1 and out2 will have an _input_shape_product set by the "set_input_shape_atomic" method.
     # here is safe to use the attribute.
-    bas._input_shape_product = (
-        *out1._input_shape_product,
-        *out2._input_shape_product,
-    )
+    if out1._input_shape_product is not None and out2._input_shape_product is not None:
+        bas._input_shape_product = (
+            *out1._input_shape_product,
+            *out2._input_shape_product,
+        )
+    else:
+        bas._input_shape_product = None
     return bas
 
 
@@ -430,11 +485,11 @@ def get_input_shape(bas: "BasisMixin") -> List[Tuple | None]:
     """
     input_dim = infer_input_dimensionality(bas)
     if input_dim == 1:
-        ishape = getattr(bas, "_input_shape_", None)
-        return bas._input_shape_[0] if ishape else None
+        ishape = getattr(bas, "_input_shape_", [None])
+        return ishape if ishape is not None else [None]
 
     elif not hasattr(bas, "basis1") and hasattr(bas, "_input_shape_"):
-        return bas._input_shape_
+        return [None] * input_dim if bas._input_shape_ is None else bas._input_shape_
 
     basis1 = getattr(bas, "_basis1", None)
     basis2 = getattr(bas, "_basis2", None)
@@ -538,7 +593,7 @@ def is_transformer(bas: Any):
 
 
 def promote_to_transformer(method):
-    """Apply operations to basis within transformer and transform output,"""
+    """Apply operations to basis within transformer and transform output."""
 
     @wraps(method)
     def wrapper(*args, **kwargs):

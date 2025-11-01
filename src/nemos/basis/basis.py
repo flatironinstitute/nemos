@@ -3,14 +3,18 @@
 # required to get ArrayLike to render correctly
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from numbers import Number
+from typing import List, Literal, Optional, Sequence, Tuple
 
+import jax
 from numpy.typing import ArrayLike, NDArray
 
+from ..type_casting import is_numpy_array_like
 from ..typing import FeatureMatrix
-from ._basis_mixin import AtomicBasisMixin, ConvBasisMixin, EvalBasisMixin
+from ._basis_mixin import AtomicBasisMixin, BasisMixin, ConvBasisMixin, EvalBasisMixin
 from ._composition_utils import add_docstring
 from ._decaying_exponential import OrthExponentialBasis
+from ._fourier_basis import FourierBasis
 from ._identity import HistoryBasis, IdentityBasis
 from ._raised_cosine_basis import RaisedCosineBasisLinear, RaisedCosineBasisLog
 from ._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis
@@ -41,7 +45,7 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
 
     References
     ----------
-    .. [1] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline
+    .. [2] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline
         Techniques. Mathematics and Visualization. Springer, Berlin, Heidelberg.
         https://doi.org/10.1007/978-3-662-04919-8_5
 
@@ -113,6 +117,7 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("evaluate_on_grid", BSplineBasis)
@@ -140,6 +145,7 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
             >>> l = plt.legend()
             >>> plt.show()
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", BSplineBasis)
@@ -154,6 +160,7 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
         >>> out.shape
         (100, 5, 2, 4)
         """
+        # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -179,6 +186,7 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -210,7 +218,7 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
 
     References
     ----------
-    .. [1] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In:
+    .. [2] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In:
         Bézier and B-Spline Techniques. Mathematics and Visualization. Springer, Berlin, Heidelberg.
         https://doi.org/10.1007/978-3-662-04919-8_5
 
@@ -263,6 +271,7 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
         two_inputs, shape (20, 2, 6)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("_compute_features", ConvBasisMixin)
@@ -282,6 +291,7 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("evaluate_on_grid", BSplineBasis)
@@ -309,6 +319,7 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
             >>> l = plt.legend()
             >>> plt.show()
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", BSplineBasis)
@@ -323,6 +334,7 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
         >>> out.shape
         (100, 5, 2, 4)
         """
+        # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -348,6 +360,7 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -419,6 +432,7 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         one_input, shape (20, 6)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("_compute_features", EvalBasisMixin)
@@ -438,6 +452,7 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("evaluate_on_grid", CyclicBSplineBasis)
@@ -467,6 +482,7 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
             >>> l = plt.legend()
             >>> plt.show()
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", CyclicBSplineBasis)
@@ -481,6 +497,7 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         >>> out.shape
         (100, 5, 2, 4)
         """
+        # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -506,6 +523,7 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -582,6 +600,7 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
         two_inputs, shape (20, 2, 6)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("_compute_features", ConvBasisMixin)
@@ -601,6 +620,7 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("evaluate_on_grid", CyclicBSplineBasis)
@@ -630,6 +650,7 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
             >>> l = plt.legend()
             >>> plt.show()
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", CyclicBSplineBasis)
@@ -644,6 +665,7 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
         >>> out.shape
         (100, 5, 2, 4)
         """
+        # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -669,6 +691,7 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -705,7 +728,7 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
 
     References
     ----------
-    .. [1] Ramsay, J. O. (1988). Monotone regression splines in action. Statistical science,
+    .. [2] Ramsay, J. O. (1988). Monotone regression splines in action. Statistical science,
         3(4), 425-441.
 
     Notes
@@ -764,6 +787,7 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         one_input, shape (20, 6)
 
         """
+        # ruff: noqa: D205, D400
         return MSplineBasis.split_by_feature(self, x, axis=axis)
 
     @add_docstring("_compute_features", EvalBasisMixin)
@@ -783,6 +807,7 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("evaluate_on_grid", MSplineBasis)
@@ -795,22 +820,24 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         .. plot::
             :include-source: True
             :caption: M-Spline
-            >>> import numpy as np
-            >>> import matplotlib.pyplot as plt
-            >>> from nemos.basis import MSplineEval
-            >>> mspline_basis = MSplineEval(n_basis_funcs=4, order=3)
-            >>> sample_points, basis_values = mspline_basis.evaluate_on_grid(100)
-            >>> for i in range(4):
-            ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
-            >>> plt.title('M-Spline Basis Functions')
-            Text(0.5, 1.0, 'M-Spline Basis Functions')
-            >>> plt.xlabel('Domain')
-            Text(0.5, 0, 'Domain')
-            >>> plt.ylabel('Basis Function Value')
-            Text(0, 0.5, 'Basis Function Value')
-            >>> l = plt.legend()
-            >>> plt.show()
+
+        >>> import numpy as np
+        >>> import matplotlib.pyplot as plt
+        >>> from nemos.basis import MSplineEval
+        >>> mspline_basis = MSplineEval(n_basis_funcs=4, order=3)
+        >>> sample_points, basis_values = mspline_basis.evaluate_on_grid(100)
+        >>> for i in range(4):
+        ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
+        >>> plt.title('M-Spline Basis Functions')
+        Text(0.5, 1.0, 'M-Spline Basis Functions')
+        >>> plt.xlabel('Domain')
+        Text(0.5, 0, 'Domain')
+        >>> plt.ylabel('Basis Function Value')
+        Text(0, 0.5, 'Basis Function Value')
+        >>> l = plt.legend()
+        >>> plt.show()
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", MSplineBasis)
@@ -825,6 +852,7 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         >>> out.shape
         (100, 5, 2, 4)
         """
+        # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -850,6 +878,7 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -890,7 +919,7 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
 
     References
     ----------
-    .. [1] Ramsay, J. O. (1988). Monotone regression splines in action. Statistical science,
+    .. [2] Ramsay, J. O. (1988). Monotone regression splines in action. Statistical science,
         3(4), 425-441.
 
     Notes
@@ -950,6 +979,7 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         two_inputs, shape (20, 2, 6)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("_compute_features", ConvBasisMixin)
@@ -969,6 +999,7 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("evaluate_on_grid", MSplineBasis)
@@ -997,6 +1028,7 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         Text(0, 0.5, 'Basis Function Value')
         >>> l = plt.legend()
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", MSplineBasis)
@@ -1011,6 +1043,7 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         >>> out.shape
         (100, 5, 2, 4)
         """
+        # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -1036,6 +1069,7 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -1062,7 +1096,7 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
 
     References
     ----------
-    .. [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+    .. [2] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
         C. E. (2005). Prediction and decoding of retinal ganglion cell responses
         with a probabilistic spiking model. Journal of Neuroscience, 25(47),
         11003–11013.
@@ -1116,6 +1150,7 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
             >>> plt.show()
 
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", RaisedCosineBasisLinear)
@@ -1130,6 +1165,7 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
         >>> out.shape
         (100, 5, 2, 4)
         """
+        # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", EvalBasisMixin)
@@ -1149,6 +1185,7 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("split_by_feature", RaisedCosineBasisLinear)
@@ -1171,6 +1208,7 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
         one_input, shape (20, 6)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -1196,6 +1234,7 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -1226,7 +1265,7 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
 
     References
     ----------
-    .. [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+    .. [2] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
         C. E. (2005). Prediction and decoding of retinal ganglion cell responses
         with a probabilistic spiking model. Journal of Neuroscience, 25(47),
         11003–11013.
@@ -1282,6 +1321,7 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
             >>> plt.show()
 
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", RaisedCosineBasisLinear)
@@ -1296,6 +1336,7 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
         >>> out.shape
         (100, 5, 2, 4)
         """
+        # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", ConvBasisMixin)
@@ -1315,6 +1356,7 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("split_by_feature", RaisedCosineBasisLinear)
@@ -1337,6 +1379,7 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
         two_inputs, shape (20, 2, 6)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -1362,6 +1405,7 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -1392,7 +1436,7 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
 
     References
     ----------
-    .. [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+    .. [2] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
        C. E. (2005). Prediction and decoding of retinal ganglion cell responses
        with a probabilistic spiking model. Journal of Neuroscience, 25(47),
        11003–11013.
@@ -1451,6 +1495,7 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
             >>> plt.show()
 
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", RaisedCosineBasisLog)
@@ -1465,6 +1510,7 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         >>> out.shape
         (100, 5, 2, 4)
         """
+        # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", EvalBasisMixin)
@@ -1484,6 +1530,7 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("split_by_feature", RaisedCosineBasisLog)
@@ -1506,6 +1553,7 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         one_input, shape (20, 6)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -1531,6 +1579,7 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -1569,7 +1618,7 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
 
     References
     ----------
-    .. [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+    .. [2] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
        C. E. (2005). Prediction and decoding of retinal ganglion cell responses
        with a probabilistic spiking model. Journal of Neuroscience, 25(47),
        11003–11013.
@@ -1629,6 +1678,7 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
             >>> plt.show()
 
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", RaisedCosineBasisLog)
@@ -1643,6 +1693,7 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
         >>> out.shape
         (100, 5, 2, 4)
         """
+        # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", ConvBasisMixin)
@@ -1662,6 +1713,7 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("split_by_feature", RaisedCosineBasisLog)
@@ -1684,6 +1736,7 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
         two_inputs, shape (20, 2, 6)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -1709,6 +1762,7 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -1784,6 +1838,7 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
             >>> plt.show()
 
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples=n_samples)
 
     @add_docstring("evaluate", OrthExponentialBasis)
@@ -1799,6 +1854,7 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         >>> out.shape
         (100, 5, 2, 5)
         """
+        # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", EvalBasisMixin)
@@ -1818,6 +1874,7 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("split_by_feature", OrthExponentialBasis)
@@ -1844,6 +1901,7 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         feature: shape (20, 5)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -1869,6 +1927,7 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -1950,6 +2009,7 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
             >>> plt.show()
 
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", OrthExponentialBasis)
@@ -1965,6 +2025,7 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         >>> out.shape
         (100, 5, 2, 5)
         """
+        # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", ConvBasisMixin)
@@ -1984,6 +2045,7 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("split_by_feature", OrthExponentialBasis)
@@ -2011,6 +2073,7 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         two_inputs, shape (20, 2, 6)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -2036,10 +2099,11 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         100
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
     def _check_window_size(self, window_size: int):
-        """OrthExponentialBasis specific window size check."""
+        """Specific window size check for ``Orthexponentialbasis``."""
         super()._check_window_size(window_size)
         # if n_basis_funcs is not yet initialized, skip check
         n_basis = getattr(self, "n_basis_funcs", None)
@@ -2101,6 +2165,7 @@ class IdentityEval(EvalBasisMixin, IdentityBasis):
             >>> plt.show()
 
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples=n_samples)
 
     @add_docstring("evaluate", IdentityBasis)
@@ -2115,6 +2180,7 @@ class IdentityEval(EvalBasisMixin, IdentityBasis):
         >>> out.shape
         (100, 5, 2, 1)
         """
+        # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", EvalBasisMixin)
@@ -2134,6 +2200,7 @@ class IdentityEval(EvalBasisMixin, IdentityBasis):
         (1000, 1)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("split_by_feature", IdentityBasis)
@@ -2160,6 +2227,7 @@ class IdentityEval(EvalBasisMixin, IdentityBasis):
         feature: shape (20, 1)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -2185,6 +2253,7 @@ class IdentityEval(EvalBasisMixin, IdentityBasis):
         20
 
         """
+        # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
@@ -2241,6 +2310,7 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
             >>> plt.show()
 
         """
+        # ruff: noqa: D205, D400
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("evaluate", HistoryBasis)
@@ -2256,6 +2326,7 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
         >>> out.shape
         (100, 20)
         """
+        # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
     @add_docstring("_compute_features", ConvBasisMixin)
@@ -2275,6 +2346,7 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
         (1000, 10)
 
         """
+        # ruff: noqa: D205, D400
         return super().compute_features(xi)
 
     @add_docstring("split_by_feature", IdentityBasis)
@@ -2301,6 +2373,7 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
         feature: shape (20, 5)
 
         """
+        # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", AtomicBasisMixin)
@@ -2324,12 +2397,13 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
         >>> _ = basis.set_input_shape(x)
         >>> basis.n_output_features
         100
-
         """
+        # ruff: noqa: D400, D205
         return AtomicBasisMixin.set_input_shape(self, xi)
 
     @property
     def window_size(self):
+        """Window size for the history basis."""
         return self._window_size
 
     @window_size.setter
@@ -2337,3 +2411,332 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
         self._check_window_size(window_size)
         self._window_size = window_size
         self._n_basis_funcs = window_size
+
+
+class FourierEval(EvalBasisMixin, FourierBasis):
+    """
+    N-dimensional Fourier basis for feature expansion.
+
+    This class generates a set of sine and cosine basis functions defined over
+    an ``n``-dimensional input space. The basis functions are constructed from
+    a Cartesian product of frequencies specified for each input dimension.
+    Each selected frequency combination contributes two basis functions
+    (cosine and sine), except for the all-zero frequency (DC component),
+    which contributes only a cosine term.
+
+    The class supports flexible frequency specification (integers, ranges, or
+    arrays per dimension) and optional masking to include or exclude specific
+    frequency combinations.
+
+    Parameters
+    ----------
+    frequencies :
+        Frequency specification(s).
+
+        Single specification (broadcasted to all dimensions when ``ndim > 1``):
+
+            * :class:`int`: An integer ``k`` with ``k >= 0``.
+
+            * :class:`tuple`: ``(low, high)``, a 2-element tuple of integers with ``0 <= low < high``.
+
+            * :class:`~numpy.ndarray`: 1-D NumPy array of non-negative integers. If not sorted ascending,
+              a ``UserWarning`` is issue for non-sorted arrays.
+
+        Per-dimension container:
+
+            * A :class:`list` of length ``ndim`` whose elements are each a valid single specification.
+              For ``ndim == 1``, a length-1 :class:`list` is also accepted.
+
+    ndim :
+        Dimensionality of the basis. Default is 1.
+
+    bounds :
+        Domain bounds for each dimension.
+
+        * :class:`tuple`: ``(low, high)`` of floats: applies to all dimensions.
+        * :class:`list` of :class:`tuple`: ``[(low, high), ...]``, one tuple per dimension, length must match ``ndim``.
+        * :class:`None <NoneType>`: the domain is inferred from the input data (maximum to minimum values).
+
+        In all cases, ``low`` must be strictly less than ``high``, and values must be convertible to floats.
+
+    frequency_mask :
+        Optional mask specifying which frequency components to include.
+        Can be:
+
+        * :class:`~typing.Literal`: either ``"no-intercept"`` - default - which drops
+          the 0-frequency DC term, or ``"all"`` which keeps all the frequencies -
+          equivalent to :class:`None <NoneType>`. The default excludes the intercept
+          because these basis objects are most commonly used to generate design matrices
+          for NeMoS GLMs, which already include an intercept term by default, making an
+          additional intercept in the design matrix redundant.
+
+        * Array-like of integers {0, 1} or booleans: Selects frequencies to
+          keep (1/True) or exclude (0/False). Shape must match the number of
+          available frequencies for each dimension.
+
+        * :class:`~typing.Callable`: A function applied to each frequency index (one index
+          per dimension), returning a single boolean or {0, 1} indicating whether
+          to keep that frequency.
+
+        * :class:`None <NoneType>`: All frequencies are kept.
+
+        Values must be 0/1 or boolean. Callables must return a single boolean or
+        {0, 1} value for each frequency coordinate.
+
+    label :
+        Descriptive label for the basis (e.g., to use in plots or summaries).
+
+    Notes
+    -----
+    - If ``frequency_mask`` is provided, only the selected frequency
+      combinations are used to build the basis.
+    - The output of ``compute_features`` contains both cosine and sine components for
+      each active frequency combination, except that the all-zero frequency
+      includes only a cosine term.
+    - When a :class:`tuple` is provided as a frequency, it is interpreted
+      as a single range specification. Tuples that are not exactly a 2-element
+      tuple of non-negative integers are invalid.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from nemos.basis import FourierEval
+    >>> rng = np.random.default_rng(0)
+
+    **1D: basic usage**
+
+    >>> n_freq = 5
+    >>> fourier_1d = FourierEval(n_freq)
+    >>> # cos at 0..4 (5) + sin at 1..4 (4) = 9
+    >>> fourier_1d.n_basis_funcs
+    8
+    >>> x = rng.normal(size=8)
+    >>> X = fourier_1d.compute_features(x)
+    >>> X.shape  # (n_samples, n_basis_funcs)
+    (8, 8)
+
+    **2D: unmasked grid of frequency pairs**
+
+    >>> fourier_2d = FourierEval(n_freq, ndim=2)
+    >>> # (5*5 frequency pairs) * 2 (cos+sin) - 1 (no sine at DC) = 49
+    >>> fourier_2d.n_basis_funcs
+    48
+    >>> x, y = rng.normal(size=(2, 6))
+    >>> X = fourier_2d.compute_features(x, y)
+    >>> X.shape
+    (6, 48)
+
+    **2D: masking with an array (drop 3 pairs)**
+
+    >>> mask = np.ones((5, 5))
+    >>> # drop 3 frequency pairs, including DC term (0,0)
+    >>> mask[[0, 0, 1], [0, 1, 2]] = 0
+    >>> fourier_2d_masked = FourierEval(
+    ...     n_freq,
+    ...     ndim=2,
+    ...     frequency_mask=mask
+    ... )
+    >>> # (5*5-3 frequency pairs) * 2 (cos+sin) = 44
+    >>> fourier_2d_masked.n_basis_funcs
+    44
+
+    **2D: masking with a callable**
+
+    >>> # keep pairs inside a circle of radius 3.5 in frequency space
+    >>> keep_circle = lambda fx, fy: (fx**2 + fy**2) ** 0.5 < 3.5
+    >>> fourier_2d_funcmask = FourierEval(
+    ...     n_freq,
+    ...     ndim=2,
+    ...     frequency_mask=keep_circle
+    ... )
+    >>> fourier_2d_funcmask.n_basis_funcs
+    25
+
+    **Explicit frequency specifications**
+
+    >>> # mix forms per-dimension: an explicit array
+    >>> # and an inclusive tuple (low, high)
+    >>> fourier_mixed = FourierEval(
+    ...     frequencies=[np.arange(3), (1, 4)],
+    ...     ndim=2
+    ... )
+    >>> # (3*3 frequency pairs) * 2 (cos+sin) = 18; no DC term (0, 0)
+    >>> fourier_mixed.n_basis_funcs
+    18
+
+    """
+
+    def __init__(
+        self,
+        frequencies: (
+            int
+            | Tuple[int, int]
+            | List[int]
+            | List[Tuple[int, int]]
+            | NDArray
+            | List[NDArray]
+        ),
+        ndim: int = 1,
+        bounds: Optional[Tuple[float, float] | Tuple[Tuple[float, float]]] = None,
+        frequency_mask: (
+            Literal["all", "no-intercept"] | NDArray[bool] | None
+        ) = "no-intercept",
+        label: Optional[str] = "FourierEval",
+    ):
+        FourierBasis.__init__(
+            self,
+            frequencies=frequencies,
+            label=label,
+            frequency_mask=frequency_mask,
+            ndim=ndim,
+        )
+        EvalBasisMixin.__init__(self, bounds=bounds)
+
+    @add_docstring("evaluate_on_grid", FourierBasis)
+    def evaluate_on_grid(self, *n_samples: int) -> Tuple[NDArray, NDArray]:
+        """
+        Examples
+        --------
+        .. plot::
+            :include-source: True
+            :caption: FourierEval
+
+            >>> import numpy as np
+            >>> import matplotlib.pyplot as plt
+            >>> from nemos.basis import FourierEval
+            >>> n_frequencies = 5
+            >>> fourier_basis = FourierEval(n_frequencies)
+            >>> sample_points, basis_values = fourier_basis.evaluate_on_grid(100)
+            >>> plt.plot(sample_points, basis_values)
+            [<matplotlib.lines.Line2D object at ...
+            >>> plt.show()
+        """
+        return super().evaluate_on_grid(*n_samples)
+
+    @add_docstring("_compute_features", EvalBasisMixin)
+    def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import FourierEval
+
+        >>> # Generate data
+        >>> num_samples = 1000
+        >>> X = np.random.normal(size=(num_samples, ))  # raw time series
+        >>> basis = FourierEval(10)
+        >>> features = basis.compute_features(X)  # basis transformed time series
+        >>> features.shape
+        (1000, 18)
+
+        """
+        return super().compute_features(*xi)
+
+    @add_docstring("split_by_feature", FourierBasis)
+    def split_by_feature(
+        self,
+        x: NDArray,
+        axis: int = 1,
+    ):
+        r"""
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import FourierEval
+        >>> from nemos.glm import GLM
+        >>> basis = FourierEval(6, label="one_input")
+        >>> X = basis.compute_features(np.random.randn(20,))
+        >>> split_features_multi = basis.split_by_feature(X, axis=1)
+        >>> for feature, sub_dict in split_features_multi.items():
+        ...        print(f"{feature}, shape {sub_dict.shape}")
+        one_input, shape (20, 10)
+
+        """
+        return super().split_by_feature(x, axis=axis)
+
+    @add_docstring("set_input_shape", AtomicBasisMixin)
+    def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray):
+        """
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> basis = nmo.basis.FourierEval(5)
+        >>> # Configure with an integer input:
+        >>> _ = basis.set_input_shape(3)
+        >>> basis.n_output_features
+        24
+        >>> # Configure with a tuple:
+        >>> _ = basis.set_input_shape((4, 5))
+        >>> basis.n_output_features
+        160
+        >>> # Configure with an array:
+        >>> x = np.ones((10, 4, 5))
+        >>> _ = basis.set_input_shape(x)
+        >>> basis.n_output_features
+        160
+
+        """
+        return BasisMixin.set_input_shape(self, *xi)
+
+    @add_docstring("evaluate", FourierBasis)
+    def evaluate(self, *sample_pts: NDArray) -> NDArray:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import FourierEval
+        >>> basis = FourierEval(4)
+        >>> out = basis.evaluate(np.random.randn(100, 5, 2))
+        >>> out.shape
+        (100, 5, 2, 6)
+        """
+        # ruff: noqa: D205, D400
+        return super().evaluate(*sample_pts)
+
+    @property
+    def bounds(self) -> Tuple[Tuple[float, float]] | None:
+        """Bounds.
+
+        Tuple of bounds, one per dimension or None if no bounds are
+        provided.
+        """
+        return self._bounds
+
+    @bounds.setter
+    def bounds(
+        self, values: Tuple[float, float] | Sequence[Tuple[float, float]] | None
+    ):
+        if values is None:
+            self._bounds = None
+            return
+
+        def _is_leaf(x):
+            return isinstance(x, Sequence) and all(
+                isinstance(xi, Number)
+                or xi is None
+                or isinstance(xi, jax.numpy.generic)  # NumPy/JAX numpy scalar types
+                or (is_numpy_array_like(xi)[1] and xi.ndim == 0)  # 0-D arrays
+                for xi in x
+            )
+
+        values = jax.tree_util.tree_leaves(values, is_leaf=_is_leaf)
+
+        if len(values) == 1:
+            values = self._format_bounds(values[0])
+            values = (values,) * self.ndim
+
+        elif len(values) != self.ndim:
+            raise TypeError(
+                f"Invalid bounds ``{values}`` provided. "
+                "When provided, the bounds should be one or multiple tuples containing pair of floats.\n"
+                "If multiple tuples are provided, one must provide a tuple per each dimension"
+                "of the basis. "
+            )
+        else:
+            values = jax.tree_util.tree_map(
+                self._format_bounds, values, is_leaf=_is_leaf
+            )
+            values = tuple(vals for vals in values)
+
+        self._bounds = values

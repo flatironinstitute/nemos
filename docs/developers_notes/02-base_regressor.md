@@ -10,7 +10,7 @@ The current package version includes a concrete class named [`nemos.glm.GLM`](ne
 As a `BaseRegressor`, it **must** implement the [`fit`](nemos.glm.GLM.fit), [`score`](nemos.glm.GLM.score), [`predict`](nemos.glm.GLM.predict) and the other abstract methods of this class, see below.
 :::
 
-### Abstract Methods
+## Abstract Methods
 
 For subclasses derived from `BaseRegressor` to function correctly, they must implement the following:
 
@@ -28,13 +28,13 @@ For subclasses derived from `BaseRegressor` to function correctly, they must imp
 All the `_check_<method-name>` methods are called by the `_validate` method which checks that the provided
 input and parameters conform with the model requirements.
 
-### Attributes
+## Attributes
 
 Public attributes are stored as properties:
 
 - `regularizer`: An instance of the [`nemos.regularizer.Regularizer`](nemos.regularizer.Regularizer) class. The setter for this property accepts either the instance directly or a string that is used to instantiate the appropriate regularizer.
 - `regularizer_strength`: A float quantifying the amount of regularization.
-- `solver_name`: One of the `jaxopt` solver supported solvers, currently "GradientDescent", "BFGS", "LBFGS", "ProximalGradient" and, "NonlinearCG".
+- `solver_name`: One of the supported solvers in the solver registry, currently "GradientDescent", "BFGS", "LBFGS", "ProximalGradient", "SVRG", and "NonlinearCG".
 - `solver_kwargs`: Extra keyword arguments to be passed at solver initialization.
 - `solver_init_state`, `solver_update`, `solver_run`: Read-only property with a partially evaluated `solver.init_state`, `solver.update` and, `solver.run` methods. The partial evaluation guarantees a consistent API for all solvers.
 
@@ -45,8 +45,7 @@ Typically, in `YourRegressor` you will call `self.solver_init_state` at the para
 :::{admonition} Solvers
 :class: note
 
-Solvers are typically optimizers from the `jaxopt` package, but in principle they could be custom optimization routines as long as they respect the `jaxopt` api (i.e., have a `run`, `init_state`, and [`update`](nemos.glm.GLM.update) method with the appropriate input/output types).
-We rely on `jaxopt` because it provides a comprehensive set of robust, GPU accelerated, batchable and differentiable optimizers in JAX, that are highly customizable. In the future we may provide a number of custom solvers optimized for convex stochastic optimization.
+We implement a set of standard solvers in NeMoS, relying on various backends. In the future we are planning to add support for user-defined solvers, because in principle any object that adheres to our `AbstractSolver` interface should be compatible with NeMoS. For more information about the solver interface and solvers, see the [developer notes about solvers](07-solvers.md).
 :::
 
 ## Contributor Guidelines
@@ -59,7 +58,16 @@ When devising a new model subclass based on the `BaseRegressor` abstract class, 
 - **Must** realize the abstract methods, see above.
 - **Should not** overwrite the `get_params` and `set_params` methods, inherited from `Base`.
 - **May** introduce auxiliary methods for added utility.
+- **May** re-implement the `__sklearn_tags__` method to add metadata that is relevant to the specific estimator implemented. See the [`scikit-learn` documentation](https://scikit-learn.org/stable/modules/generated/sklearn.utils.Tags.html#sklearn.utils.Tags) for the available tagging options.
 
+:::{admonition} Tags
+:class: note
+
+Tags are not needed for estimators to function correctly, as long as the required methods (`fit`, `predict`,...) are implemented. Citing the `scikit-learn` [documentation for the estimator API](https://scikit-learn.org/stable/developers/develop.html#estimator-tags),
+
+> Scikit-learn introduced estimator tags in version 0.21 as a private API and mostly used in tests. However, these tags expanded over time and many third party developers also need to use them. Therefore in version 1.6 the API for the tags was revamped and exposed as public API.
+
+:::
 
 ## Glossary
 

@@ -1,3 +1,5 @@
+"""Basis module."""
+
 from ._basis import AdditiveBasis, MultiplicativeBasis
 from ._composition_utils import __PUBLIC_BASES__
 from ._custom_basis import CustomBasis
@@ -7,6 +9,7 @@ from .basis import (
     BSplineEval,
     CyclicBSplineConv,
     CyclicBSplineEval,
+    FourierEval,
     HistoryConv,
     IdentityEval,
     MSplineConv,

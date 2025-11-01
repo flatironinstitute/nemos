@@ -16,7 +16,7 @@ from ._basis import Basis, check_transform_input, min_max_rescale_samples
 from ._basis_mixin import AtomicBasisMixin
 
 
-class SplineBasis(Basis, AtomicBasisMixin, abc.ABC):
+class SplineBasis(AtomicBasisMixin, Basis, abc.ABC):
     """
     SplineBasis class inherits from the Basis class and represents spline basis functions.
 
@@ -43,10 +43,10 @@ class SplineBasis(Basis, AtomicBasisMixin, abc.ABC):
         label: Optional[str] = None,
     ) -> None:
         self.order = order
-        AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, label=label)
         Basis.__init__(
             self,
         )
+        AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, label=label)
 
         self._n_input_dimensionality = 1
 
@@ -304,7 +304,7 @@ class BSplineBasis(SplineBasis, abc.ABC):
 
     Attributes
     ----------
-    order :
+    order : int
         Spline order.
 
 

@@ -7,17 +7,15 @@ from typing import TYPE_CHECKING, Generator
 import numpy as np
 
 from ..typing import FeatureMatrix
-from ._composition_utils import (
-    _iterate_over_components,
-    infer_input_dimensionality,
-    is_basis_like,
-)
+from ._composition_utils import _iterate_over_components, get_input_shape, is_basis_like
 
 if TYPE_CHECKING:
     from ._basis import Basis
 
 
 def transformer_chaining(func):
+    """Apply chainable methods and return self."""
+
     @wraps(func)
     def wrapper(self, *args, **kwargs):
         # Call the wrapped function and capture its return value
@@ -89,11 +87,14 @@ class TransformerBasis:
     def __init__(self, basis: Basis):
         self._wrapped_methods = {}  # Cache for wrapped methods
         self._basis = None
+        if isinstance(basis, TransformerBasis):
+            basis = basis.basis
         self.basis = copy.deepcopy(basis)
         self.basis._parent = None
 
     @property
     def basis(self):
+        """Return the wrapped basis."""
         return self._basis
 
     @basis.setter
@@ -115,18 +116,14 @@ class TransformerBasis:
     def _assign_input_shape(basis):
         # iterate over atomic or custom components
         default_shape = []
+        assign_default = False
         for bas in _iterate_over_components(basis):
-            ishape = getattr(bas, "input_shape", None)
-            # handles the case of a multi-dim basis with set shape
-            if isinstance(ishape, list):
-                default_shape.extend(ishape)
-            # handles the case of a 1dim basis with set shape
-            elif ishape is not None:
-                default_shape.append(ishape)
-            # handles custom or 1dim with no set shape
-            else:
-                default_shape.extend([()] * infer_input_dimensionality(bas))
-        basis.set_input_shape(*default_shape)
+            ishape = get_input_shape(bas)
+            assign_default |= any(i is None for i in ishape)
+            ishape = [i if i is not None else () for i in ishape]
+            default_shape.extend(ishape)
+        if assign_default:
+            basis.set_input_shape(*default_shape)
         return basis
 
     @staticmethod
@@ -157,10 +154,11 @@ class TransformerBasis:
         """
         n_samples = X.shape[0]
         out = (
-            np.reshape(X[:, cc : cc + n_input], (n_samples, *bas.input_shape))
+            np.reshape(X[:, cc : cc + n_input], (n_samples, *shape))
             for i, (bas, n_input) in enumerate(
                 zip(self._iterate_over_components(), self._input_shape_product)
             )
+            for shape in get_input_shape(bas)
             for cc in [sum(self._input_shape_product[:i])]
         )
         return out
@@ -395,6 +393,7 @@ class TransformerBasis:
             )
 
     def __getitem__(self, name: str):
+        """Get the basis from label and wrap into a transformer."""
         return self.__class__(self.basis.__getitem__(name))
 
     def __sklearn_clone__(self) -> TransformerBasis:
@@ -415,6 +414,7 @@ class TransformerBasis:
         return cloned_obj
 
     def __repr__(self):
+        """Repr for Transformer wrapped basis."""
         return f"Transformer({self.basis})"
 
     def set_params(self, **parameters) -> TransformerBasis:
@@ -484,6 +484,7 @@ class TransformerBasis:
         return TransformerBasis(self.basis + add)
 
     def __rmul__(self, other: TransformerBasis | Basis | int) -> TransformerBasis:
+        """Right multiplication operator for basis."""
         return self.__mul__(other)
 
     def __mul__(self, other: TransformerBasis | Basis | int) -> TransformerBasis:

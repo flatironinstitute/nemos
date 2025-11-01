@@ -13,7 +13,7 @@ from .. import pytrees
 
 def _convert_to_float(func):
     """
-    Decorator to convert all inputs to float before passing them to the function.
+    Convert all inputs to float before passing them to the function.
 
     Ensures that calculations within the function are performed with floating-point precision.
 
@@ -247,7 +247,6 @@ def _glm_softplus_poisson_l_smooth_with_power_iteration(
     :
         The largest eigenvalue of X.T @ D @ X.
     """
-
     if batch_size is None:
         batch_size = X.shape[0]
 
@@ -371,7 +370,7 @@ def _glm_softplus_poisson_l_smooth_max(
 
 @_convert_to_float
 def _calculate_stepsize_svrg(
-    batch_size: int, num_samples: int, l_smooth_max: float, l_smooth: float
+    batch_size: int, n_samples: int, l_smooth_max: float, l_smooth: float
 ):
     """
     Calculate optimal step size for SVRG according to [1].
@@ -380,7 +379,7 @@ def _calculate_stepsize_svrg(
     ----------
     batch_size :
         Mini-batch size.
-    num_samples :
+    n_samples :
         Overall number of data points.
     l_smooth_max :
         Maximum smoothness constant among f_{i}.
@@ -397,16 +396,16 @@ def _calculate_stepsize_svrg(
     [1] Sebbouh, Othmane, et al. "Towards closing the gap between the theory and practice of SVRG."
     Advances in neural information processing systems 32 (2019).
     """
-    numerator = 0.5 * batch_size * (num_samples - 1)
+    numerator = 0.5 * batch_size * (n_samples - 1)
     denominator = (
-        3 * (num_samples - batch_size) * l_smooth_max
-        + num_samples * (batch_size - 1) * l_smooth
+        3 * (n_samples - batch_size) * l_smooth_max
+        + n_samples * (batch_size - 1) * l_smooth
     )
     return numerator / denominator
 
 
 def _calculate_optimal_batch_size_svrg(
-    num_samples: int,
+    n_samples: int,
     l_smooth_max: float,
     l_smooth: float,
     strong_convexity: Optional[float] = None,
@@ -419,7 +418,7 @@ def _calculate_optimal_batch_size_svrg(
 
     Parameters
     ----------
-    num_samples:
+    n_samples:
         The number of samples.
     l_smooth_max:
         The $L_{\text{max}}$ smoothness constant.
@@ -446,29 +445,29 @@ def _calculate_optimal_batch_size_svrg(
         batch_size = 1
     else:
         # Compute optimal batch size according to Table 1.
-        if num_samples >= 3 * l_smooth_max / strong_convexity:
+        if n_samples >= 3 * l_smooth_max / strong_convexity:
             batch_size = 1
-        elif num_samples > l_smooth / strong_convexity:
+        elif n_samples > l_smooth / strong_convexity:
             b_tilde = _calculate_b_tilde(
-                num_samples, l_smooth_max, l_smooth, strong_convexity
+                n_samples, l_smooth_max, l_smooth, strong_convexity
             )
-            if l_smooth_max < num_samples * l_smooth / 3:
-                b_hat = _calculate_b_hat(num_samples, l_smooth_max, l_smooth)
+            if l_smooth_max < n_samples * l_smooth / 3:
+                b_hat = _calculate_b_hat(n_samples, l_smooth_max, l_smooth)
                 batch_size = int(jnp.floor(jnp.minimum(b_hat, b_tilde)))
             else:
                 batch_size = int(jnp.floor(b_tilde))
         else:
-            if l_smooth_max < num_samples * l_smooth / 3:
+            if l_smooth_max < n_samples * l_smooth / 3:
                 batch_size = int(
-                    jnp.floor(_calculate_b_hat(num_samples, l_smooth_max, l_smooth))
+                    jnp.floor(_calculate_b_hat(n_samples, l_smooth_max, l_smooth))
                 )
             else:
-                batch_size = int(num_samples)  # reset this to int
+                batch_size = int(n_samples)  # reset this to int
     return batch_size
 
 
 @_convert_to_float
-def _calculate_b_hat(num_samples: int, l_smooth_max: float, l_smooth: float):
+def _calculate_b_hat(n_samples: int, l_smooth_max: float, l_smooth: float):
     r"""
     Calculate the optimal `b_hat` batch size parameter for SVRG.
 
@@ -477,7 +476,7 @@ def _calculate_b_hat(num_samples: int, l_smooth_max: float, l_smooth: float):
 
     Parameters
     ----------
-    num_samples :
+    n_samples :
         Total number of data points.
     l_smooth_max :
         Maximum smoothness constant $L_{\text{max}}$.
@@ -494,13 +493,13 @@ def _calculate_b_hat(num_samples: int, l_smooth_max: float, l_smooth: float):
     [1] Sebbouh, Othmane, et al. "Towards closing the gap between the theory and practice of SVRG."
     Advances in neural information processing systems 32 (2019).
     """
-    numerator = num_samples / 2 * (3 * l_smooth_max - l_smooth)
-    denominator = num_samples * l_smooth - 3 * l_smooth_max
+    numerator = n_samples / 2 * (3 * l_smooth_max - l_smooth)
+    denominator = n_samples * l_smooth - 3 * l_smooth_max
     return jnp.sqrt(numerator / denominator)
 
 
 @_convert_to_float
-def _calculate_b_tilde(num_samples, l_smooth_max, l_smooth, strong_convexity):
+def _calculate_b_tilde(n_samples, l_smooth_max, l_smooth, strong_convexity):
     r"""
     Calculate the optimal $\tilde{b}$ batch size parameter for SVRG.
 
@@ -509,7 +508,7 @@ def _calculate_b_tilde(num_samples, l_smooth_max, l_smooth, strong_convexity):
 
     Parameters
     ----------
-    num_samples :
+    n_samples :
         Total number of data points.
     l_smooth_max :
         Maximum smoothness constant `L_max`.
@@ -528,10 +527,10 @@ def _calculate_b_tilde(num_samples, l_smooth_max, l_smooth, strong_convexity):
     [1] Sebbouh, Othmane, et al. "Towards closing the gap between the theory and practice of SVRG."
     Advances in neural information processing systems 32 (2019).
     """
-    numerator = (3 * l_smooth_max - l_smooth) * num_samples
+    numerator = (3 * l_smooth_max - l_smooth) * n_samples
     denominator = (
-        num_samples * (num_samples - 1) * strong_convexity
-        - num_samples * l_smooth
+        n_samples * (n_samples - 1) * strong_convexity
+        - n_samples * l_smooth
         + 3 * l_smooth_max
     )
     return numerator / denominator

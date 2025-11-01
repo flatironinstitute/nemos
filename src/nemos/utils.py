@@ -3,6 +3,7 @@
 import inspect
 import os
 import warnings
+from importlib.metadata import version
 from typing import Any, Callable, List, Literal, Optional, Union
 
 import jax
@@ -12,7 +13,23 @@ from numpy.typing import NDArray
 
 from .base_class import Base
 from .tree_utils import pytree_map_and_reduce
-from .type_casting import is_numpy_array_like, support_pynapple
+from .type_casting import is_at_least_1d_numpy_array_like, support_pynapple
+from .typing import Pytree
+
+__all__ = [
+    "check_dimensionality",
+    "validate_axis",
+    "nan_pad",
+    "shift_time_series",
+    "row_wise_kron",
+    "one_over_x",
+    "get_flattener_unflattener",
+]
+
+
+def __dir__() -> list[str]:
+    return __all__
+
 
 SPECIAL_KEY_NAMES = {
     jax.scipy.stats.norm.cdf: "norm.cdf",
@@ -42,7 +59,7 @@ def check_dimensionality(
     return not pytree_map_and_reduce(lambda x: x.ndim != expected_dim, any, pytree)
 
 
-def validate_axis(tree: Any, axis: int):
+def validate_axis(pytree: Any, axis: int):
     """
     Validate the axis for each array in a given tree structure.
 
@@ -51,7 +68,7 @@ def validate_axis(tree: Any, axis: int):
 
     Parameters
     ----------
-    tree :
+    pytree :
         A tree containing arrays.
     axis :
         The axis that should be valid for each array in the tree. This means each array must have at least
@@ -69,7 +86,7 @@ def validate_axis(tree: Any, axis: int):
     if not isinstance(axis, int) or axis < 0:
         raise ValueError("`axis` must be a non negative integer.")
 
-    if pytree_map_and_reduce(lambda x: x.ndim <= axis, any, tree):
+    if pytree_map_and_reduce(lambda x: x.ndim <= axis, any, pytree):
         raise ValueError(
             "'axis' must be smaller than the number of dimensions of any array in 'tree'."
         )
@@ -94,34 +111,6 @@ def check_non_empty(pytree: Any, pytree_name: str):
     if pytree_map_and_reduce(lambda x: 0 in x.shape, any, pytree):
         raise ValueError(
             f"Empty array provided. At least one of dimension in {pytree_name} is empty."
-        )
-
-
-def check_trials_longer_than_time_window(
-    time_series: Any, window_size: int, axis: int = 0
-):
-    """
-    Check if the duration of each trial in the time series is at least as long as the window size.
-
-    Parameters
-    ----------
-    time_series :
-        A pytree of trial data.
-    window_size :
-        The size of the window to be used in convolution.
-    axis :
-        The axis in the arrays representing the time dimension.
-
-    Raises
-    ------
-    ValueError
-        If any trial in the time series is shorter than the window size.
-    """
-    # Check window size
-    if pytree_map_and_reduce(lambda x: x.shape[axis] < window_size, any, time_series):
-        raise ValueError(
-            "Insufficient trial duration. The number of time points in each trial must "
-            "be greater or equal to the window size."
         )
 
 
@@ -237,7 +226,7 @@ def nan_pad(
     # validate the axis
     validate_axis(conv_time_series, axis)
 
-    if is_numpy_array_like(conv_time_series):
+    if is_at_least_1d_numpy_array_like(conv_time_series):
         if not np.issubdtype(conv_time_series.dtype, np.floating):
             raise ValueError("conv_time_series must have a float dtype!")
         return _pad_dimension(
@@ -335,8 +324,7 @@ def shift_time_series(
     # convert to jax ndarray
     time_series = jax.tree_util.tree_map(jnp.asarray, time_series)
 
-    if is_numpy_array_like(time_series):
-
+    if is_at_least_1d_numpy_array_like(time_series):
         if not np.issubdtype(time_series.dtype, np.floating):
             raise ValueError("time_series must have a float dtype!")
         return _pad_dimension(
@@ -365,7 +353,7 @@ def shift_time_series(
 
 
 def row_wise_kron(
-    A: jnp.ndarray, C: jnp.ndarray, jit=False, transpose=True
+    A: jnp.ndarray, C: jnp.ndarray, jit: bool = False, transpose: bool = True
 ) -> jnp.ndarray:
     r"""Compute the row-wise Kronecker product.
 
@@ -378,9 +366,9 @@ def row_wise_kron(
         The first matrix.
     C : jax.numpy.ndarray
         The second matrix.
-    jit : bool, optional
+    jit :
         Activate Just-in-Time (JIT) compilation. Default is False.
-    transpose : bool, optional
+    transpose :
         Transpose matrices A and C before computation. Default is True.
 
     Returns
@@ -576,7 +564,7 @@ pynapple_concatenate_numpy = support_pynapple(conv_type="numpy")(np.concatenate)
 
 
 def _get_terminal_size():
-    """Helper to get terminal size for __repr__
+    """Get the terminal size for __repr__.
 
     Returns
     -------
@@ -598,5 +586,265 @@ def _get_terminal_size():
     return cols, rows
 
 
-def one_over_x(x):
+def one_over_x(x: NDArray):
+    """Implement 1/x."""
     return jnp.power(x, -1)
+
+
+def _flatten_dict(nested_dict: dict, parent_key: str = "") -> dict:
+    """
+    Flatten a nested dictionary into a single-level dictionary with keys representing the hierarchy.
+
+    Parameters
+    ----------
+    nested_dict :
+        The dictionary to flatten.
+    parent_key :
+        This key starts blank, but recursively it will be filled with the parent key,
+        which is used to create the hierarchy in the flattened dictionary.
+
+    Returns
+    -------
+    dict :
+        A flattened dictionary where the hierarchy is represented by concatenated keys (using __ as a separator).
+    """
+
+    sep = "__"
+    items = []
+    # Iterate over key-value pairs in the dictionary
+    for k, v in nested_dict.items():
+        # containers (tuple, dict, list for our purposes are labeled)
+        if isinstance(v, dict):
+            container_label = "dict"
+        elif isinstance(v, list):
+            container_label = "list"
+        elif isinstance(v, tuple):
+            container_label = "tuple"
+        else:
+            container_label = "item"
+
+        new_key = (
+            f"{parent_key}{sep}{container_label}{sep}{k}"
+            if parent_key
+            else f"{container_label}{sep}{k}"
+        )
+
+        # Recursively flatten if the value is a dictionary
+        if isinstance(v, dict):
+            items.extend(_flatten_dict(v, new_key).items())
+        # if tuple or list, convert to dict using item index and recursively flatten
+        elif isinstance(v, (list, tuple)):
+            items.extend(
+                _flatten_dict({f"{i}": vi for i, vi in enumerate(v)}, new_key).items()
+            )
+        else:
+            # None values and non-standard types are converted to numpy
+            if v is None:
+                v = np.nan
+            elif not isinstance(v, (str, int, float, bool)):
+                v = np.array(v)
+            items.append((new_key, v))
+    return dict(items)
+
+
+def _unflatten_dict(flat_dict: dict) -> dict:
+    """
+    Unflatten a dictionary that was flattened using _flatten_dict, and saved as npz.
+
+    Note that all leaves are expected to be numpy arrays.
+
+    Parameters
+    ----------
+    flat_dict :
+        The flattened dictionary with keys containing type information and hierarchy and leaves numpy arrays.
+
+    Returns
+    -------
+    dict :
+        The reconstructed nested dictionary with original structure and types.
+    """
+    sep = "__"
+    root = {}
+
+    for key, value in flat_dict.items():
+        # Replace np.nan back to None
+        # Convert numpy string, int, float or nan to their respective types
+        if value.ndim == 0:
+            if value.dtype.type is np.str_:
+                value = str(value)
+            elif value.dtype.type is np.int_:
+                value = int(value)
+            elif issubclass(value.dtype.type, np.floating):
+                value = None if np.isnan(value) else float(value)
+
+        # split correctly `varname_` type of params
+        parts = [part[::-1] for part in key[::-1].split(sep)[::-1]]
+
+        current = root
+
+        # Walk the path - but handle the last pair differently if it's an 'item'
+        pairs = list(zip(parts[::2], parts[1::2]))
+
+        # Navigate through all pairs except potentially the last one
+        for i, (container_type, container_key) in enumerate(pairs):
+            is_last = i == len(pairs) - 1
+
+            # If this is the last pair and it's an 'item', just set the value directly
+            if is_last and container_type == "item":
+                current[container_key] = value
+                break
+
+            # Otherwise, create/navigate into the container
+            if container_key not in current:
+                current[container_key] = {"__container_type__": container_type}
+
+            current = current[container_key]
+        else:
+            # This else clause runs if we didn't break (i.e., no 'item' leaf)
+            # This shouldn't happen with your flatten structure, but just in case
+            final_key = parts[-1]
+            current[final_key] = value
+
+    return reconstruct_object_from_structured_dict(root)
+
+
+# Convert to proper types
+def reconstruct_object_from_structured_dict(obj):
+    if not isinstance(obj, dict):
+        return obj
+
+    container_type = obj.pop("__container_type__", None)
+
+    # Check if numeric keys (list/tuple)
+    keys = [k for k in obj.keys() if k != "__container_type__"]
+    if keys and all(k.isdigit() for k in keys):
+        sorted_items = sorted(obj.items(), key=lambda x: int(x[0]))
+        items = [reconstruct_object_from_structured_dict(v) for k, v in sorted_items]
+        return tuple(items) if container_type == "tuple" else items
+
+    # Regular dict
+    return {k: reconstruct_object_from_structured_dict(v) for k, v in obj.items()}
+
+
+def _get_name(x: object) -> str:
+    """
+    Get the name of an object ``x``, for saving/loading purposes.
+
+    Parameters
+    ----------
+    x :
+        A python object or function.
+
+    Returns
+    -------
+    name :
+        The name of the object, with full module path (e.g.,
+        ``nemos.observation_models.PoissonObservations``).
+    """
+    if x is None:
+        return None
+    if hasattr(x, "__module__") and hasattr(x, "__name__"):
+        # x is a function or class
+        return f"{x.__module__}.{x.__name__}"
+    elif hasattr(x, "__class__"):
+        # x is an instance of a class
+        cls = x.__class__
+        return f"{cls.__module__}.{cls.__name__}"
+    else:
+        raise TypeError(f"Cannot retrieve name of variable {x} of type {type(x)}.")
+
+
+def _is_callable_or_class(obj):
+    """Check if obj is callable or class."""
+    return callable(obj) or inspect.isclass(obj)
+
+
+def _unpack_params(params_dict: dict, string_attrs: list = None) -> dict:
+    """
+    Convert a parameter dictionary into serializable format.
+
+    For objects with `get_params`/`set_params`, extracts the class name and
+    parameters. Some attributes are converted to strings to facilitate saving and loading.
+
+    Parameters
+    ----------
+    params_dict :
+        Dictionary of parameters, possibly containing objects.
+    string_attrs :
+        List of attributes that should be converted to strings (e.g., `inverse_link_function`).
+
+    Returns
+    -------
+    dict :
+        Serializable dictionary with class names and nested parameters.
+    """
+
+    out = dict()
+    for key, value in params_dict.items():
+        # if the parameter is an objet with get_params/set_params,
+        # extract its class name and parameters
+        if hasattr(value, "get_params") and hasattr(value, "set_params"):
+            cls_name = _get_name(value)
+            params = _unpack_params(value.get_params(deep=False), string_attrs)
+            out[key] = {"class": cls_name, "params": params}
+        else:
+            # if the parameter is in string_attrs, store its name
+            if string_attrs is not None and (
+                key in string_attrs or _is_callable_or_class(value)
+            ):
+                out[key] = _get_name(value)
+            else:
+                out[key] = value
+    return out
+
+
+def get_env_metadata() -> dict[str, str]:
+    """Get environment metadata.
+
+    Get the environment metadata relevant to model fitting.
+
+
+    Notes
+    -----
+    ``jax`` and ``jaxlib`` for arrays and linear algebra, ``scipy`` is used at model
+    initialization to find numerical inverse for custom link functions, ``scikit-learn``
+    is used for pipelines and cross-validation.
+    """
+    return {
+        "jax": version("jax"),
+        "jaxlib": version("jaxlib"),
+        "scipy": version("scipy"),
+        "scikit-learn": version("scikit-learn"),
+        "nemos": version("nemos"),
+    }
+
+
+def get_flattener_unflattener(parameter_tree: Pytree):
+    """
+    Create functions for flattening parameter pytrees and reshaping them to their original shape.
+
+    Parameters
+    ----------
+    parameter_tree :
+        Pytree to flatten. Usually model parameters.
+
+    Returns
+    -------
+    (flattener, unflattener):
+        Tuple of two functions: first one flattens the parameters, second one resshapes the flat ones.
+    """
+    flat, struct = jax.tree_util.tree_flatten(parameter_tree)
+    shapes = [x.shape for x in flat]
+    sizes = jnp.array([x.size for x in flat], dtype=int)
+    split_indices = jnp.cumsum(sizes[:-1])
+
+    def flattener(parameter_tree):
+        flat = jax.tree_util.tree_leaves(parameter_tree)
+        return jnp.concatenate([x.flatten() for x in flat])
+
+    def unflattener(flat_params):
+        split_params = jnp.split(flat_params, split_indices)
+        split_params = [x.reshape(s) for x, s in zip(split_params, shapes)]
+        return jax.tree_util.tree_unflatten(struct, split_params)
+
+    return flattener, unflattener

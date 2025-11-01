@@ -173,6 +173,12 @@ There are several options for how to run a subset of tests:
 - Run a specific test within a specific module: `pytests tests/test_glm.py::test_func`
 - Another example specifying a test method via the command line: `pytest tests/test_glm.py::GLMClass::test_func`
 
+To run tests with solvers implemented with either the `jaxopt` or the `optimistix` backend, set the `NEMOS_SOLVER_BACKEND` environment variable. E.g. setting for a single test run:
+`NEMOS_SOLVER_BACKEND=jaxopt pytest`
+
+There are also dedicated tox environments that do this automatically and run a subset of tests that depend on the solvers:
+`tox -e backend-jaxopt,backend-optimistix` will run solver-dependent tests with both backends separately.
+
 #### Adding tests
 
 New tests can be added in any of the existing `tests/test_*.py` scripts. Tests should be functions, contained within classes. The class contains a bunch of related tests
@@ -282,3 +288,6 @@ properly documented as outlined below.
 
 > [!NOTE]
 > All internal links to NeMoS documentation pages **must be relative**. Using absolute links can lead to broken references whenever the documentation structure is altered. Any presence of absolute links to documentation pages will cause the continuous integration checks to fail. Please ensure all links follow the relative format before submitting your PR.
+
+### Modifying vendored libraries
+All changes made to vendored libraries should be documented in the [changelog](./src/nemos/third_party/README.md).

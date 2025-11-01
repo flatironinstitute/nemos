@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 import nemos as nmo
+from nemos.glm.initialize_parameters import initialize_intercept_matching_mean_rate
 
 
 @pytest.mark.parametrize(
@@ -25,8 +26,9 @@ import nemos as nmo
     "output_y",
     [np.random.uniform(0, 1, size=(10,)), np.random.uniform(0, 1, size=(10, 2))],
 )
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 def test_invert_non_linearity(non_linearity, output_y):
-    inv_y = nmo.initialize_regressor.initialize_intercept_matching_mean_rate(
+    inv_y = initialize_intercept_matching_mean_rate(
         inverse_link_function=non_linearity, y=output_y
     )
     assert jnp.allclose(non_linearity(inv_y), jnp.mean(output_y, axis=0), rtol=10**-5)
@@ -72,7 +74,7 @@ def test_initialization_error_nan_input(non_linearity, expectation):
     """Initialize invalid."""
     output_y = np.full((10, 2), np.nan)
     with expectation:
-        nmo.initialize_regressor.initialize_intercept_matching_mean_rate(
+        initialize_intercept_matching_mean_rate(
             inverse_link_function=non_linearity, y=output_y
         )
 
@@ -89,6 +91,6 @@ def test_initialization_error_non_invertible():
             warnings.filterwarnings(
                 "ignore", category=RuntimeWarning, message="Tolerance of"
             )
-            nmo.initialize_regressor.initialize_intercept_matching_mean_rate(
+            initialize_intercept_matching_mean_rate(
                 inverse_link_function=inv_link, y=output_y
             )
