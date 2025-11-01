@@ -18,7 +18,7 @@ def reimplements_method(
         The class object to check.
     base_class_obj :
         The base class object against which the check is performed.
-    method_name : str
+    method_name :
         The name of the method to check for.
 
     Returns

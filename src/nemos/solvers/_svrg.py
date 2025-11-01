@@ -62,9 +62,9 @@ class ProxSVRG:
 
     Attributes
     ----------
-    fun: Callable
+    fun : Callable
         Smooth function of the form ``fun(x, *args, **kwargs)``.
-    prox: Callable
+    prox : Callable
         Proximal operator associated with the function ``non_smooth``.
         It should be of the form ``prox(params, hyperparams_prox, scale=1.0)``.
         See ``jaxopt.prox`` for examples.
@@ -74,10 +74,10 @@ class ProxSVRG:
         jax PRNGKey to start with. Used for sampling random data points.
     stepsize : float
         Constant step size to use.
-    tol: float
+    tol : float
         Tolerance level for the error when comparing parameters
         at the end of consecutive epochs to check for convergence.
-    batch_size: int
+    batch_size : int
         Number of data points to sample per inner loop iteration.
 
     Examples
@@ -607,7 +607,7 @@ class SVRG(ProxSVRG):
 
     Attributes
     ----------
-    fun: Callable
+    fun : Callable
         smooth function of the form ``fun(x, *args, **kwargs)``.
     maxiter : int
         Maximum number of epochs to run the optimization for.
@@ -615,10 +615,10 @@ class SVRG(ProxSVRG):
         jax PRNGKey to start with. Used for sampling random data points.
     stepsize : float
         Constant step size to use.
-    tol: float
+    tol : float
         Tolerance level for the error when comparing parameters
         at the end of consecutive epochs to check for convergence.
-    batch_size: int
+    batch_size : int
         Number of data points to sample per inner loop iteration.
 
     Examples

@@ -929,7 +929,7 @@ class BernoulliObservations(Observations):
         The formula for the Bernoulli mean log-likelihood is the following,
 
         .. math::
-            \text{LL}(p | y) &= \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T}
+            \text{LL}(p | y) = \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T}
             [y_{tn} \log(p_{tn}) + (1 - y_{tn}) \log(1 - p_{tn})]
 
         where :math:`p` is the predicted success probability, given by the inverse link function, and :math:`y` is the

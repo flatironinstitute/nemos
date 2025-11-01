@@ -167,7 +167,7 @@ def prox_lasso(x: Any, l1reg: Optional[Any] = None, scaling: float = 1.0) -> Any
         Input pytree.
     l1reg :
         Regularization strength, float or pytree with the same structure as `x`. Default is None.
-    scaling : float, optional
+    scaling :
         A scaling factor. Default is 1.0.
 
     Returns
