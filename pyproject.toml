@@ -8,7 +8,7 @@ dynamic = ["version"]
 authors = [{name = "nemos authors"}]
 description = "NEural MOdelS, a statistical modeling framework for neuroscience."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.14"
 keywords = ["neuroscience", "Poisson-GLM"]
 license = { file = "LICENSE" }
 classifiers = [
@@ -26,7 +26,7 @@ dependencies = [
     "numpy>1.20",                   # Numerical computing library
     "scipy>=1.10",                  # Scientific computing library
     "typing_extensions>=4.6",       # Typing extensions for Python
-    'pynapple>=0.10',               # On this version, changed tuning curve API
+    'pynapple>=0.10.1',               # On this version, changed tuning curve API
     "scikit-learn",                 # BaseEstimator and Tags inheritance
     "optimistix>=0.0.11",
     "optax>=0.2.5",
@@ -88,6 +88,7 @@ docs = [
     "ipywidgets",
     "ipykernel",
     "patsy",
+    "tqdm",
 ]
 examples = [
     "scikit-learn",
@@ -97,6 +98,7 @@ examples = [
     "pooch",
     "fsspec",
     "patsy",
+    "tqdm",
 ]
 # jaxopt 0.8.5 is included in src/nemos/third_party/jaxopt
 jaxopt_dev = [
