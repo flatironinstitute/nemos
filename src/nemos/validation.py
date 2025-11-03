@@ -406,7 +406,10 @@ def _check_trials_longer_than_time_window(
             lambda x: x.shape[axis] < window_size, any, time_series
         )
     # Check window size
-    if insufficient_window_size:
+    all_empty_or_valid = pytree_map_and_reduce(
+        lambda x: x.shape[axis] == 0 or x.shape[axis] >= window_size, all, time_series
+    )
+    if insufficient_window_size and not all_empty_or_valid:
         warnings.warn(
             f"One or more trials are shorter than the convolution window size "
             f"({window_size} samples). These trials will produce NaN values in the output.",
