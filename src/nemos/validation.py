@@ -407,9 +407,11 @@ def _check_trials_longer_than_time_window(
         )
     # Check window size
     if insufficient_window_size:
-        raise ValueError(
-            "Insufficient trial duration. The number of time points in each trial must "
-            "be greater or equal to the window size."
+        warnings.warn(
+            f"One or more trials are shorter than the convolution window size "
+            f"({window_size} samples). These trials will produce NaN values in the output.",
+            category=UserWarning,
+            stacklevel=2,
         )
 
 
