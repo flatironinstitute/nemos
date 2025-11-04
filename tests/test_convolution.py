@@ -731,3 +731,69 @@ def test_tensor_convolve(input_shape, basis_shape, batch_sizes):
     expected = numpy_tensor_convolve(np.array(array), np.array(eval_basis))
 
     np.testing.assert_allclose(np.array(result), expected, rtol=1e-5, atol=1e-5)
+
+
+@pytest.mark.parametrize(
+    "tsd, nan_placement",
+    [
+        # epochs: invalid, valid
+        (
+            nap.Tsd(
+                t=np.arange(10),
+                d=np.ones(10),
+                time_support=nap.IntervalSet([0, 2], [1.5, 10]),
+            ),
+            [0, 1, 2, 3, 4],
+        ),
+        # epochs: valid, invalid
+        (
+            nap.Tsd(
+                t=np.arange(10),
+                d=np.ones(10),
+                time_support=nap.IntervalSet([0, 9], [7, 11]),
+            ),
+            [0, 1, 2, 8],
+        ),
+        # epochs: invalid, invalid
+        (
+            nap.Tsd(
+                t=np.arange(10),
+                d=np.ones(10),
+                time_support=nap.IntervalSet([0, 7.5], [1.5, 11]),
+            ),
+            [0, 1, 2, 3],
+        ),
+    ],
+)
+@pytest.mark.parametrize("kern", [np.random.randn(3, 1)])
+def test_convolve_nap_short_iset(tsd, nan_placement, kern):
+    with pytest.warns(UserWarning, match="One or more trials are shorter"):
+        out = convolve.create_convolutional_predictor(kern, tsd)
+        assert np.all(np.isnan(out.d[nan_placement]))
+        non_nan_idx = np.setxor1d(np.arange(out.shape[0]), nan_placement)
+        assert not np.any(np.isnan(out.d[non_nan_idx]))
+
+
+@pytest.mark.parametrize(
+    "slice_up_to, expectation",
+    [
+        (5, does_not_raise()),
+        (2, pytest.warns(UserWarning, match="One or more trials are shorter")),
+    ],
+)
+@pytest.mark.parametrize("kern", [np.random.randn(3, 1)])
+def test_convolve_sliced_tsd(slice_up_to, expectation, kern):
+    tsd = nap.Tsd(
+        t=np.arange(10), d=np.ones(10), time_support=nap.IntervalSet([0, 6], [5, 10])
+    )
+    sliced_tsd = tsd[:slice_up_to]
+    with expectation:
+        convolve.create_convolutional_predictor(kern, [sliced_tsd, tsd])
+
+
+def test_convolve_short_arrays():
+    kern = np.random.randn(3, 1)
+    arrs = [np.ones(2), np.ones(1)]
+    with pytest.warns(UserWarning, match="One or more trials are shorter"):
+        out = convolve.create_convolutional_predictor(kern, arrs)
+        assert all(np.all(np.isnan(o)) for o in out)
