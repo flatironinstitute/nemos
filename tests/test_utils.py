@@ -161,13 +161,12 @@ class TestPadding:
                 utils.nan_pad(array, pad_size, "anti-causal")
         else:
             padded = utils.nan_pad(array, pad_size, "anti-causal")
-            assert (
-                np.isnan(padded[padded.shape[0] - pad_size :]).all()
-            ), "Missing NaNs at the end of the array!"
-            assert (
-                not np.isnan(padded[: padded.shape[0] - pad_size]).any()
-
-            ), "Found NaNs at the beginning of the array!"
+            assert np.isnan(
+                padded[padded.shape[0] - pad_size :]
+            ).all(), "Missing NaNs at the end of the array!"
+            assert not np.isnan(
+                padded[: padded.shape[0] - pad_size]
+            ).any(), "Found NaNs at the beginning of the array!"
             assert (
                 padded.shape[0] == array.shape[0] + pad_size
             ), "Size after padding doesn't match expectation. Should be T + window_size - 1."
@@ -194,13 +193,13 @@ class TestPadding:
             assert np.isnan(padded[:init_nan]).all(), (
                 "Missing NaNs at the " "beginning of the array!"
             )
-            assert (
-                np.isnan(padded[padded.shape[0] - end_nan :]).all()
-            ), "Missing NaNs at the end of the array!"
+            assert np.isnan(
+                padded[padded.shape[0] - end_nan :]
+            ).all(), "Missing NaNs at the end of the array!"
 
-            assert (
-                not np.isnan(padded[init_nan : padded.shape[0] - end_nan]).any()
-            ), "Found NaNs in the middle of the array!"
+            assert not np.isnan(
+                padded[init_nan : padded.shape[0] - end_nan]
+            ).any(), "Found NaNs in the middle of the array!"
             assert (
                 padded.shape[0] == array.shape[0] + pad_size
             ), "Size after padding doesn't match expectation. Should be T + window_size - 1."
