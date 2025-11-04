@@ -676,9 +676,14 @@ def _convolve_pynapple(
     validation._check_trials_longer_than_time_window(
         time_series, basis_matrix.shape[0], axis
     )
-    validation._check_batch_size_larger_than_convolution_window(
-        batch_size=batch_size_samples, window_size=basis_matrix.shape[0]
+
+    all_short = pytree_map_and_reduce(
+        lambda x: x.shape[axis] < basis_matrix.shape[0], all, time_series
     )
+    if not all_short:
+        validation._check_batch_size_larger_than_convolution_window(
+            batch_size=batch_size_samples, window_size=basis_matrix.shape[0]
+        )
 
     def apply_convolution(x, bs, bc):
         if x.shape[axis] < basis_matrix.shape[0]:
