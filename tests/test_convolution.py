@@ -180,15 +180,16 @@ class TestCreateConvolutionalPredictor:
         ],
     )
     def test_sufficient_trial_duration(self, basis_matrix, trial_counts):
-        raise_exception = trial_counts.shape[1] < basis_matrix.shape[0]
-        if raise_exception:
-            with pytest.raises(
-                ValueError,
-                match="Insufficient trial duration. The number of time points",
+        warns = trial_counts.shape[1] < basis_matrix.shape[0]
+        if warns:
+            with pytest.warns(
+                UserWarning,
+                match="One or more trials are shorter",
             ):
-                convolve.create_convolutional_predictor(
+                res = convolve.create_convolutional_predictor(
                     basis_matrix, trial_counts, axis=1
                 )
+                assert np.all(np.isnan(res))
         else:
             convolve.create_convolutional_predictor(basis_matrix, trial_counts, axis=1)
 

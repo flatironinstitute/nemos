@@ -14,6 +14,7 @@ import jax.numpy as jnp
 from numpy.typing import ArrayLike, NDArray
 
 from . import type_casting, utils, validation
+from .tree_utils import pytree_map_and_reduce
 
 
 def _resolve_shift_default(shift, predictor_causality):
@@ -554,11 +555,17 @@ def create_convolutional_predictor(
         validation._check_trials_longer_than_time_window(
             time_series, basis_matrix.shape[0], axis
         )
-        validation._check_batch_size_larger_than_convolution_window(
-            batch_size=batch_size_samples, window_size=basis_matrix.shape[0]
+        all_short = pytree_map_and_reduce(
+            lambda x: x.shape[axis] < basis_matrix.shape[0], all, time_series
         )
+        if not all_short:
+            validation._check_batch_size_larger_than_convolution_window(
+                batch_size=batch_size_samples, window_size=basis_matrix.shape[0]
+            )
 
         def apply_convolution(x, bs, bc):
+            if x.shape[axis] < basis_matrix.shape[0]:
+                return jnp.full((*x.shape, basis_matrix.shape[1]), jnp.nan)
             return _convolve_pad_and_shift(
                 basis_matrix,
                 x,
