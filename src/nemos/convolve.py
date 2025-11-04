@@ -7,14 +7,13 @@ import re
 import warnings
 from functools import partial
 from math import prod
-from typing import Any, Callable, Literal, Optional
+from typing import Any, Callable, List, Literal, Optional
 
 import jax
 import jax.numpy as jnp
 from numpy.typing import ArrayLike, NDArray
 
 from . import type_casting, utils, validation
-from .tree_utils import pytree_map_and_reduce
 
 
 def _resolve_shift_default(shift, predictor_causality):
@@ -529,6 +528,11 @@ def create_convolutional_predictor(
             lambda x: min([x.shape[axis], batch_size_samples]), time_series
         )
 
+        # check that the batch size is big enough
+        validation._check_batch_size_larger_than_convolution_window(
+            batch_size=batch_size_samples, window_size=basis_matrix.shape[0]
+        )
+
     if batch_size_channels is None:
         batch_size_channels = jax.tree_util.tree_map(
             lambda x: prod(x.shape[:axis] + x.shape[axis + 1 :]), time_series
@@ -555,13 +559,6 @@ def create_convolutional_predictor(
         validation._check_trials_longer_than_time_window(
             time_series, basis_matrix.shape[0], axis
         )
-        all_short = pytree_map_and_reduce(
-            lambda x: x.shape[axis] < basis_matrix.shape[0], all, time_series
-        )
-        if not all_short:
-            validation._check_batch_size_larger_than_convolution_window(
-                batch_size=batch_size_samples, window_size=basis_matrix.shape[0]
-            )
 
         def apply_convolution(x, bs, bc):
             if x.shape[axis] < basis_matrix.shape[0]:
@@ -596,15 +593,15 @@ def create_convolutional_predictor(
 
 
 def _convolve_pynapple(
-    basis_matrix,
-    time_series,
-    is_nap,
-    axis,
-    shift,
-    predictor_causality,
-    batch_size_channels,
-    batch_size_samples,
-    batch_size_basis,
+    basis_matrix: NDArray | jnp.ndarray,
+    time_series: Any,
+    is_nap: List[bool],
+    axis: int,
+    shift: bool,
+    predictor_causality: Literal["causal", "acausal", "anti-causal"],
+    batch_size_channels: List[int],
+    batch_size_samples: List[int],
+    batch_size_basis: int,
 ):
     """
     Convolve a PyTree containing pynapple time series.
@@ -676,14 +673,6 @@ def _convolve_pynapple(
     validation._check_trials_longer_than_time_window(
         time_series, basis_matrix.shape[0], axis
     )
-
-    all_short = pytree_map_and_reduce(
-        lambda x: x.shape[axis] < basis_matrix.shape[0], all, time_series
-    )
-    if not all_short:
-        validation._check_batch_size_larger_than_convolution_window(
-            batch_size=batch_size_samples, window_size=basis_matrix.shape[0]
-        )
 
     def apply_convolution(x, bs, bc):
         if x.shape[axis] < basis_matrix.shape[0]:
