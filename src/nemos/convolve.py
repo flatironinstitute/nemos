@@ -7,7 +7,7 @@ import re
 import warnings
 from functools import partial
 from math import prod
-from typing import Any, Callable, Literal, Optional
+from typing import Any, Callable, List, Literal, Optional
 
 import jax
 import jax.numpy as jnp
@@ -257,13 +257,13 @@ def _batch_over_basis_convolve(
 
 
 def _shift_time_axis_and_convolve(
-    array: NDArray,
+    array: jnp.ndarray,
     eval_basis: NDArray,
     axis: int,
     batch_size_samples: int,
     batch_size_channels: int,
     batch_size_basis: int,
-):
+) -> jnp.ndarray:
     """
     Shifts the specified axis to the first position, applies convolution, and then reverses the shift.
 
@@ -339,14 +339,14 @@ def _list_epochs(tsd: Any):
 
 def _convolve_pad_and_shift(
     basis_matrix: ArrayLike,
-    time_series: Any,
+    time_series: jnp.ndarray,
     batch_size_samples: int,
     batch_size_channels: Any,
     batch_size_basis: int,
     predictor_causality: Literal["causal", "acausal", "anti-causal"] = "causal",
     axis: int = 0,
     shift: Optional[bool] = None,
-):
+) -> jnp.ndarray:
     """
     Create predictor by convolving basis_matrix with time_series.
 
@@ -367,7 +367,7 @@ def _convolve_pad_and_shift(
         `(window_size, n_basis_funcs)`.
     time_series :
         The time series to convolve with the basis matrix. This variable should
-        be a pytree with arrays of at least one-dimension as leaves.
+        be an array of at least one-dimension.
     batch_size_samples:
         Size of the batches in samples.
     batch_size_channels :
@@ -389,20 +389,14 @@ def _convolve_pad_and_shift(
     predictor :
         Predictor of with same shape and structure as `time_series`
     """
-
     # apply convolution
-    def conv(x, bs, bc):
-        return _shift_time_axis_and_convolve(
-            x,
-            basis_matrix,
-            axis=axis,
-            batch_size_samples=bs,
-            batch_size_channels=bc,
-            batch_size_basis=batch_size_basis,
-        )
-
-    predictor = jax.tree_util.tree_map(
-        conv, time_series, batch_size_samples, batch_size_channels
+    predictor = _shift_time_axis_and_convolve(
+        time_series,
+        basis_matrix,
+        axis=axis,
+        batch_size_samples=batch_size_samples,
+        batch_size_channels=batch_size_channels,
+        batch_size_basis=batch_size_basis,
     )
 
     with warnings.catch_warnings(record=True) as warns:
@@ -534,6 +528,11 @@ def create_convolutional_predictor(
             lambda x: min([x.shape[axis], batch_size_samples]), time_series
         )
 
+        # check that the batch size is big enough
+        validation._check_batch_size_larger_than_convolution_window(
+            batch_size=batch_size_samples, window_size=basis_matrix.shape[0]
+        )
+
     if batch_size_channels is None:
         batch_size_channels = jax.tree_util.tree_map(
             lambda x: prod(x.shape[:axis] + x.shape[axis + 1 :]), time_series
@@ -555,6 +554,95 @@ def create_convolutional_predictor(
     # find pynapple
     is_nap = list(type_casting.is_pynapple_tsd(x) for x in time_series)
 
+    if not any(is_nap):
+        # no pynapple, validate shape and run convolutions
+        validation._check_trials_longer_than_time_window(
+            time_series, basis_matrix.shape[0], axis
+        )
+
+        def apply_convolution(x, bs, bc):
+            if x.shape[axis] < basis_matrix.shape[0]:
+                return jnp.full((*x.shape, basis_matrix.shape[1]), jnp.nan)
+            return _convolve_pad_and_shift(
+                basis_matrix,
+                x,
+                batch_size_samples=bs,
+                batch_size_channels=bc,
+                batch_size_basis=batch_size_basis,
+                predictor_causality=predictor_causality,
+                axis=axis,
+                shift=shift,
+            )
+
+        flat_stack = jax.tree_util.tree_map(
+            apply_convolution, time_series, batch_size_samples, batch_size_channels
+        )
+    else:
+        flat_stack = _convolve_pynapple(
+            basis_matrix,
+            time_series,
+            is_nap,
+            axis,
+            shift,
+            predictor_causality,
+            batch_size_channels,
+            batch_size_samples,
+            batch_size_basis,
+        )
+    return jax.tree_util.tree_unflatten(struct, flat_stack)
+
+
+def _convolve_pynapple(
+    basis_matrix: NDArray | jnp.ndarray,
+    time_series: Any,
+    is_nap: List[bool],
+    axis: int,
+    shift: bool,
+    predictor_causality: Literal["causal", "acausal", "anti-causal"],
+    batch_size_channels: List[int],
+    batch_size_samples: List[int],
+    batch_size_basis: int,
+):
+    """
+    Convolve a PyTree containing pynapple time series.
+
+    Parameters
+    ----------
+    basis_matrix:
+        The basis matrix for the convolution as a 2D array.
+    time_series :
+        The time series data to convolve with the basis matrix, after tree-flattening (i.e. it is a list of arrays).
+    is_nap :
+        A list of the same length of time_series of boolean, marking which time series is a pynapple object.
+    axis :
+        The axis along which the convolution is applied.
+    shift :
+        Determines whether to shift the convolution result based on the causality.
+        If None, it defaults to True for 'causal' and 'anti-causal' and to False for 'acausal'.
+    predictor_causality :
+        The causality of the predictor, determining how the padding and shifting
+        should be applied to the convolution result.
+        - 'causal': Pads and/or shifts the result to be causal with respect to the input.
+        - 'acausal': Applies padding equally on both sides without shifting.
+        - 'anti-causal': Pads and/or shifts the result to be anti-causal with respect to the input.
+    batch_size_samples :
+        Batch size for the convolution in terms of number of sample points.
+        If this parameter is set, the convolution will be applied sequentially
+        over a fixed-length chunks of the time_series.
+    batch_size_channels :
+        Batch size for the convolution in terms of number of input channels.
+        If this parameter is set, the convolution will be vectorized over batches
+        of input channels. Default vectorizes over all channels.
+    batch_size_basis :
+        Batch size for the convolution in terms of number of basis kernels.
+        If this parameter is set, the convolution will be vectorized over batches
+        of kernels. Default vectorizes over all basis kernels.
+
+    Returns
+    -------
+    :
+        A list with the convolved time series.
+    """
     # retrieve time info
     time_info = [
         type_casting.get_time_info(ts) if is_nap[i] else None
@@ -578,27 +666,31 @@ def create_convolutional_predictor(
     )
     time_series = jax.tree_util.tree_map(_list_epochs, time_series)
 
+    # convert to array
+    time_series = jax.tree_util.tree_map(jnp.asarray, time_series)
+
     # check trial size (after splitting)
     validation._check_trials_longer_than_time_window(
         time_series, basis_matrix.shape[0], axis
     )
-    validation._check_batch_size_larger_than_convolution_window(
-        batch_size=batch_size_samples, window_size=basis_matrix.shape[0]
-    )
 
-    # convert to array
-    time_series = jax.tree_util.tree_map(jnp.asarray, time_series)
+    def apply_convolution(x, bs, bc):
+        if x.shape[axis] < basis_matrix.shape[0]:
+            return jnp.full((*x.shape, basis_matrix.shape[1]), jnp.nan)
+        else:
+            return _convolve_pad_and_shift(
+                basis_matrix,
+                x,
+                batch_size_samples=bs,
+                batch_size_channels=bc,
+                batch_size_basis=batch_size_basis,
+                predictor_causality=predictor_causality,
+                axis=axis,
+                shift=shift,
+            )
 
-    # convolve
-    conv = _convolve_pad_and_shift(
-        basis_matrix,
-        time_series,
-        batch_size_samples=batch_size_samples,
-        batch_size_channels=batch_size_channels,
-        batch_size_basis=batch_size_basis,
-        predictor_causality=predictor_causality,
-        axis=axis,
-        shift=shift,
+    conv = jax.tree_util.tree_map(
+        apply_convolution, time_series, batch_size_samples, batch_size_channels
     )
 
     #  concatenate back
@@ -611,4 +703,4 @@ def create_convolutional_predictor(
     ]
 
     # recreate tree
-    return jax.tree_util.tree_unflatten(struct, flat_stack)
+    return flat_stack
