@@ -15,8 +15,8 @@ from nemos.glm_hmm.expectation_maximization import (
     forward_backward,
     forward_pass,
     hmm_negative_log_likelihood,
-    prepare_likelihood_func,
     max_sum,
+    prepare_likelihood_func,
     run_m_step,
 )
 from nemos.observation_models import BernoulliObservations, PoissonObservations
