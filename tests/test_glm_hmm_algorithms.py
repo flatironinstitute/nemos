@@ -4,6 +4,7 @@ from functools import partial
 import jax
 import numpy as np
 import pytest
+from hmmlearn import hmm
 
 from nemos.fetch import fetch_data
 from nemos.glm import GLM
@@ -15,10 +16,117 @@ from nemos.glm_hmm.expectation_maximization import (
     forward_pass,
     hmm_negative_log_likelihood,
     prepare_likelihood_func,
+    max_sum,
     run_m_step,
 )
 from nemos.observation_models import BernoulliObservations, PoissonObservations
 from nemos.third_party.jaxopt.jaxopt import LBFGS
+
+
+def viterbi_with_hmmlearn(
+    log_emission, transition_proba, init_proba, is_new_session=None
+):
+    """
+    Use hmmlearn's Viterbi algorithm with custom log probabilities.
+
+    Parameters
+    ----------
+    log_emission : np.ndarray, shape (T, K)
+        Log emission probabilities for each time step and state
+    transition_proba : np.ndarray, shape (K, K)
+        Log transition probability matrix [from_state, to_state]
+    init_proba : np.ndarray, shape (K,)
+        Log initial state probabilities
+    is_new_session:
+        Either None or array of shape (T,) of 0s and 1s, where 1s mark
+        the beginning of a new session.
+
+    Returns
+    -------
+    state_sequence : np.ndarray, shape (T,)
+        Most likely state sequence (as integer indices 0 to K-1)
+    """
+    K = log_emission.shape[1]
+    # Create a CategoricalHMM (this is what replaced MultinomialHMM)
+    model = hmm.CategoricalHMM(n_components=K)
+
+    # Set the HMM parameters (convert from log space)
+    model.startprob_ = init_proba
+    model.transmat_ = transition_proba
+    # Set dummy emission probabilities (required but will be overridden)
+    model.emissionprob_ = np.ones((K, 2)) / 2
+    if is_new_session is None:
+        slices = [slice(None)]
+    else:
+        session_start = np.where(is_new_session)[0]
+        session_end = np.concatenate([session_start[1:], [len(is_new_session)]])
+        slices = [slice(s, e) for s, e in zip(session_start, session_end)]
+
+    map_path = []
+    for sl in slices:
+        map_path.append(single_session_viterbi_with_hmmlearn(model, log_emission[sl]))
+    return np.concatenate(map_path)
+
+
+def single_session_viterbi_with_hmmlearn(model, log_emission):
+    """
+    Use hmmlearn's Viterbi algorithm with custom log probabilities.
+
+    Parameters
+    ----------
+    model:
+        The hmm model to be patched.
+    log_emission : np.ndarray, shape (T, K)
+        Log emission probabilities for each time step and state
+    log_transition : np.ndarray, shape (K, K)
+        Log transition probability matrix [from_state, to_state]
+    log_init : np.ndarray, shape (K,)
+        Log initial state probabilities
+
+    Returns
+    -------
+    state_sequence : np.ndarray, shape (T,)
+        Most likely state sequence (as integer indices 0 to K-1)
+    """
+    T, K = log_emission.shape
+
+    # Create dummy observations
+    X = np.zeros((T, 1), dtype=np.int32)
+
+    # Override the log-likelihood computation to use our custom emissions
+    original_method = model._compute_log_likelihood
+    model._compute_log_likelihood = lambda X: log_emission
+
+    try:
+        # Run Viterbi decoding
+        _, state_sequence = model.decode(X, algorithm="viterbi")
+        return state_sequence
+    finally:
+        # Restore original method
+        model._compute_log_likelihood = original_method
+
+
+def prepare_solver_for_m_step_single_neuron(
+    X, y, initial_prob, transition_prob, glm_params, new_sess, obs
+):
+    (coef, intercept) = glm_params
+    likelihood = jax.vmap(
+        lambda x, z: obs.likelihood(x, z, aggregate_sample_scores=lambda w: w),
+        in_axes=(None, 1),
+        out_axes=1,
+    )
+    gammas, xis, _, _, _, _ = forward_backward(
+        X,
+        y,
+        initial_prob,
+        transition_prob,
+        (coef, intercept),
+        likelihood_func=likelihood,
+        inverse_link_function=obs.default_inverse_link_function,
+        is_new_session=new_sess.astype(bool),
+    )
+
+    # Define negative log likelihood vmap function
 
 
 def prepare_partial_hmm_nll_single_neuron(obs):
@@ -1277,3 +1385,82 @@ def test_run_m_step_regression_priors_simulation(data_name):
         (opt_coef, opt_intercept),
         optimized_projection_weights_nemos,
     )
+
+
+@pytest.mark.parametrize("use_new_sess", [True, False])
+def test_viterbi_against_hmmlearn(use_new_sess):
+    data = np.load(fetch_data("em_three_states.npz"))
+    initial_prob = data["initial_prob"]
+    transition_prob = data["transition_prob"]
+    X, y = data["X"], data["y"]
+    new_session = data["new_sess"] if use_new_sess else None
+    intercept, coef = data["projection_weights"][:1], data["projection_weights"][1:]
+
+    obs = BernoulliObservations()
+    inverse_link_function = obs.default_inverse_link_function
+    predicted_rate_given_state = inverse_link_function(X[..., 1:] @ coef + intercept)
+
+    log_like_func = jax.vmap(
+        lambda x, z: obs.log_likelihood(x, z, aggregate_sample_scores=lambda w: w),
+        in_axes=(None, 1),
+        out_axes=1,
+    )
+    log_emission_array = log_like_func(y, predicted_rate_given_state)
+    map_path = max_sum(
+        X[:, 1:],
+        y,
+        initial_prob,
+        transition_prob,
+        (coef, intercept),
+        inverse_link_function,
+        log_like_func,
+        is_new_session=new_session,
+        return_index=True,
+    )
+    hmmlearn_map_path = viterbi_with_hmmlearn(
+        log_emission_array, transition_prob, initial_prob, is_new_session=new_session
+    )
+    np.testing.assert_array_equal(
+        map_path.astype(np.int32), hmmlearn_map_path.astype(np.int32)
+    )
+
+
+@pytest.mark.parametrize("use_new_sess", [True, False])
+@pytest.mark.parametrize("return_index", [True, False])
+def test_viterbi_return_index(use_new_sess, return_index):
+    data = np.load(fetch_data("em_three_states.npz"))
+    initial_prob = data["initial_prob"]
+    transition_prob = data["transition_prob"]
+    X, y = data["X"], data["y"]
+    new_session = data["new_sess"][:100] if use_new_sess else None
+    intercept, coef = data["projection_weights"][:1], data["projection_weights"][1:]
+
+    obs = BernoulliObservations()
+    inverse_link_function = obs.default_inverse_link_function
+
+    n_states = initial_prob.shape[0]
+
+    log_like_func = jax.vmap(
+        lambda x, z: obs.log_likelihood(x, z, aggregate_sample_scores=lambda w: w),
+        in_axes=(None, 1),
+        out_axes=1,
+    )
+    map_path = max_sum(
+        X[:100, 1:],
+        y[:100],
+        initial_prob,
+        transition_prob,
+        (coef, intercept),
+        inverse_link_function,
+        log_like_func,
+        is_new_session=new_session,
+        return_index=return_index,
+    )
+    if return_index:
+        assert map_path.shape == (100,)
+        set(np.unique(map_path).astype(np.int32)).issubset(np.arange(n_states))
+    else:
+        assert map_path.shape == (100, n_states)
+        np.testing.assert_array_equal(
+            np.unique(map_path).astype(np.int32), np.array([0, 1])
+        )

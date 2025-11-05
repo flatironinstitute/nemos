@@ -77,12 +77,6 @@ VALID_PAIRS = [
     {"flat_dict", "flat_map_dict"},
     {"fit_params", "init_params"},
     {"args", "arg"},
-    {"tol", "atol"},
-    {"tol", "rtol"},
-    {"fit_params", "flat_params"},
-    {"solver_kwargs", "solver_init_kwargs"},
-    {"unaccepted_name", "accepted_name"},
-    {"fn", "fun"},
     {"initialize_init_proba", "initialize_transition_proba"},
     *(
         {a, b}
@@ -95,6 +89,14 @@ VALID_PAIRS = [
             r=2,
         )
     ),
+    {"likelihood_func", "log_likelihood_func"},
+    {"negative_log_likelihood_func", "log_likelihood_func"},
+    {"tol", "atol"},
+    {"tol", "rtol"},
+    {"fit_params", "flat_params"},
+    {"solver_kwargs", "solver_init_kwargs"},
+    {"unaccepted_name", "accepted_name"},
+    {"fn", "fun"},
     {"glm_params_init", "glm_params"},
 ]
 
