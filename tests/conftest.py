@@ -1128,7 +1128,6 @@ _solver_registry_per_backend = {
     },
     "optimistix": {
         **_common_solvers,
-        # TODO: OptaxOptimistixGradientDescent is not tested
         "GradientDescent": nmo.solvers.OptimistixNAG,
         "ProximalGradient": nmo.solvers.OptimistixFISTA,
         "LBFGS": nmo.solvers.OptimistixOptaxLBFGS,
@@ -1147,20 +1146,29 @@ def configure_solver_backend():
     for the JAXopt and the Optimistix backends.
     """
     backend = os.getenv("NEMOS_SOLVER_BACKEND")
-    if not backend:
-        yield  # run with default solver registry
-        return  # don't execute the remainder on teardown
 
-    try:
-        _backend_solver_registry = _solver_registry_per_backend[backend]
-    except KeyError:
-        available = ", ".join(_solver_registry_per_backend.keys())
-        pytest.fail(f"Unknown solver backend: {backend}. Available: {available}")
+    if backend is None:
+        _solver_registry_to_use = nmo.solvers.solver_registry.copy()
+    else:
+        try:
+            _solver_registry_to_use = _solver_registry_per_backend[backend]
+        except KeyError:
+            available = ", ".join(_solver_registry_per_backend.keys())
+            pytest.fail(f"Unknown solver backend: {backend}. Available: {available}")
+
+    algo_name = os.getenv("NEMOS_OVERRIDE_ALGO")
+    impl_name = os.getenv("NEMOS_OVERRIDE_IMPL")
+    if algo_name and impl_name:
+        _solver_registry_to_use[algo_name] = getattr(nmo.solvers, impl_name)
+    elif algo_name or impl_name:
+        raise ValueError(
+            "Either both NEMOS_OVERRIDE_ALGO and NEMOS_OVERRIDE_IMPL have to be set or neither."
+        )
 
     # save the original registry so that we can restore it after
     original = nmo.solvers.solver_registry.copy()
     nmo.solvers.solver_registry.clear()
-    nmo.solvers.solver_registry.update(_backend_solver_registry)
+    nmo.solvers.solver_registry.update(_solver_registry_to_use)
 
     try:
         yield
