@@ -1,4 +1,4 @@
-"""Adaptation of JAXopt's ProximalGradient (FISTA) as an Optimistix IterativeSolver."""
+"""Implementation of the FISTA algorithm as an Optimistix IterativeSolver. Adapted from JAXopt."""
 
 from typing import Any, Callable, ClassVar
 
