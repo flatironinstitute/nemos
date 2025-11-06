@@ -15,7 +15,7 @@ from ._optimistix_solvers import OptimistixAdapter
 # TODO: Add detailed docstrings
 
 
-def prox_none(x, hyperparams=None, scaling: float = 1.0):
+def prox_none(x: PyTree, hyperparams=None, scaling: float = 1.0):
     """Identity proximal operator."""
     del hyperparams, scaling
     return x
