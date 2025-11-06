@@ -104,6 +104,9 @@ jobs:
       - name: Run solver-dependent tests with Optimistix backend
         run: tox -e backend-optimistix
 
+      - name: Rerun tests using GradientDescent with the OptimistixOptaxGradientDescent implementation
+        run: tox -e backend-optimistix-optax-gd
+
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4.0.1
         env:
