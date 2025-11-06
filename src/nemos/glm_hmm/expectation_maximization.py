@@ -790,6 +790,7 @@ def check_log_likelihood_increment(state: GLMHMMState, tol: float) -> Array:
         "solver_run",
         "maxiter",
         "check_convergence",
+        "tol",
     ],
 )
 def em_glm_hmm(
@@ -914,6 +915,10 @@ def em_glm_hmm(
     )
 
 
+@partial(
+    jax.jit,
+    static_argnames=["inverse_link_function", "log_likelihood_func", "return_index"],
+)
 def max_sum(
     X: Array,
     y: Array,
