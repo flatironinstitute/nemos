@@ -729,7 +729,7 @@ def _em_step(
     """Single EM iteration step."""
     previous_state = carry
 
-    (posteriors, joint_posterior, _, _, alphas, _) = forward_backward(
+    (posteriors, joint_posterior, _, new_log_like, alphas, _) = forward_backward(
         X,
         y,
         previous_state.initial_prob,
@@ -739,8 +739,6 @@ def _em_step(
         likelihood_func,
         is_new_session,
     )
-
-    new_log_like = jnp.log(alphas[-1].sum())
 
     glm_params_update, init_prob, trans_matrix, _ = run_m_step(
         X,
