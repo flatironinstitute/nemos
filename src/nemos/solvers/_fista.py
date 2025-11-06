@@ -12,8 +12,6 @@ from optimistix._custom_types import Aux, Y
 from ..tree_utils import tree_add_scalar_mul, tree_sub
 from ._optimistix_solvers import OptimistixAdapter
 
-# TODO: Add detailed docstrings
-
 
 def prox_none(x: PyTree, hyperparams=None, scaling: float = 1.0):
     """Identity proximal operator."""
@@ -39,7 +37,34 @@ class ProxGradState(eqx.Module):
 
 class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
     """
-    Accelerated Proximal Gradient (FISTA) as an Optimistix minimiser. Adapted from JAXopt.
+    Accelerated Proximal Gradient (FISTA) [1] as an Optimistix minimiser. Adapted from JAXopt.
+
+    Parameters
+    ----------
+    atol:
+        Absolute tolerance for Cauchy termination.
+    rtol:
+        Relative tolerance for Cauchy termination.
+    norm:
+        Norm to use in Cauchy termination.
+    prox:
+        Proximal operator function.
+    regularizer_strength:
+        Regularizer strength passed to the proximal operator.
+    stepsize:
+        If None (default), use backtracking linesearch to determine an
+        appropriate stepsize on each iteration.
+        If a float, value for a constant stepsize.
+    maxls:
+        Maximum number of linesearch iterations.
+    decrease_factor:
+        Backtracking linesearch's decrease factor.
+    max_stepsize:
+        Maximum allowed stepsize.
+        If None, no maximum is used.
+    acceleration:
+        Whether to use Nesterov acceleration.
+
 
     References
     ----------
