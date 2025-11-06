@@ -81,7 +81,7 @@ def test_transformer_has_the_same_public_attributes_as_basis(
         "basis",
     }
 
-    assert public_attrs_basis - public_attrs_transformerbasis == {"to_transformer"}
+    assert public_attrs_basis - public_attrs_transformerbasis == set()
 
 
 @pytest.mark.parametrize(
@@ -885,13 +885,22 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
     y[~np.isnan(log_mu)] = np.random.poisson(
         np.exp(log_mu[~np.isnan(log_mu)] - np.nanmean(log_mu))
     )
-    model = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.001).fit(X, y)
+    model = nmo.glm.GLM(
+        regularizer="Ridge", regularizer_strength=0.001, solver_kwargs={"maxiter": 3}
+    ).fit(X, y)
 
     # pipeline
     pipe = Pipeline(
         [
             ("bas", transformer),
-            ("glm", nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.001)),
+            (
+                "glm",
+                nmo.glm.GLM(
+                    regularizer="Ridge",
+                    regularizer_strength=0.001,
+                    solver_kwargs={"maxiter": 3},
+                ),
+            ),
         ]
     )
     x = np.concatenate(
@@ -1023,13 +1032,8 @@ def test_to_transformer_not_an_attribute_of_transformer_basis(
         5, basis_cls, basis_class_specific_params, window_size=10
     )
     bas = bas.to_transformer()
-    assert "to_transformer" not in bas.__dir__()
-
-    with pytest.raises(
-        AttributeError,
-        match="'TransformerBasis' object has no attribute 'to_transformer'",
-    ):
-        bas.to_transformer()
+    bas2 = bas.to_transformer()
+    assert id(bas) != id(bas2)
 
 
 @pytest.mark.parametrize(
@@ -1061,12 +1065,10 @@ def test_dir_transformer(basis_cls, basis_class_specific_params):
     # check all reimplemented methods
     dict_reimplemented_method = get_subclass_methods(basis_cls)
     for meth in dict_reimplemented_method:
-        if meth[0] == "to_transformer":
-            continue
         assert meth[0] in lst
 
     # check that it is a trnasformer
-    for meth in ["fit", "transform", "fit_transform"]:
+    for meth in ["fit", "transform", "fit_transform", "to_transformer"]:
         assert meth in lst
 
 
@@ -1306,6 +1308,7 @@ def test_double_transformer():
     tbas = nmo.basis.TransformerBasis(nmo.basis.MSplineEval(4))
     tbas2 = nmo.basis.TransformerBasis(tbas)
     assert isinstance(tbas2.basis, nmo.basis.MSplineEval)
-    with pytest.raises(AttributeError, match="'TransformerBasis' object has no "):
-        tbas.to_transformer()
-    assert id(tbas.basis) != id(tbas2.basis), "The basis was shallow copied!"
+    tbas3 = tbas.to_transformer()
+    assert (
+        id(tbas.basis) != id(tbas2.basis) != id(tbas3)
+    ), "The basis was shallow copied!"
