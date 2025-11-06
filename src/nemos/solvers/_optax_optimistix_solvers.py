@@ -65,7 +65,6 @@ class AbstractOptimistixOptaxSolver(OptimistixAdapter, abc.ABC):
         cls.__doc__ = inspect.cleandoc(full_doc)
 
 
-# TODO: Figure out how to test both OptimistixOptaxGradientDescent and OptimistixNAG
 def _make_rate_scaler(
     stepsize: float | None,
     linesearch_kwargs: dict[str, Any] | None,
