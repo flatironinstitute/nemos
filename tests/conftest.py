@@ -1138,7 +1138,7 @@ _solver_registry_per_backend = {
 
 
 @pytest.fixture(autouse=True, scope="session")
-def configure_solver_backend():
+def configure_solver_backend(request):
     """
     Patch the solver registry depending on ``NEMOS_SOLVER_BACKEND``.
 
@@ -1156,14 +1156,15 @@ def configure_solver_backend():
             available = ", ".join(_solver_registry_per_backend.keys())
             pytest.fail(f"Unknown solver backend: {backend}. Available: {available}")
 
-    algo_name = os.getenv("NEMOS_OVERRIDE_ALGO")
-    impl_name = os.getenv("NEMOS_OVERRIDE_IMPL")
-    if algo_name and impl_name:
+    override_solver = request.config.getini("override_solver")
+    if override_solver:
+        try:
+            algo_name, impl_name = override_solver.split(":", 1)
+        except ValueError:
+            raise ValueError(
+                f"override_solver must be in format 'algo:implementation', got: {override_solver}"
+            )
         _solver_registry_to_use[algo_name] = getattr(nmo.solvers, impl_name)
-    elif algo_name or impl_name:
-        raise ValueError(
-            "Either both NEMOS_OVERRIDE_ALGO and NEMOS_OVERRIDE_IMPL have to be set or neither."
-        )
 
     # save the original registry so that we can restore it after
     original = nmo.solvers.solver_registry.copy()
@@ -1175,3 +1176,9 @@ def configure_solver_backend():
     finally:
         nmo.solvers.solver_registry.clear()
         nmo.solvers.solver_registry.update(original)
+
+
+def pytest_addoption(parser):
+    """Register custom ini options."""
+    parser.addini("solver_backend", "Solver backend to use")
+    parser.addini("override_solver", "Override solver as 'algorithm:implementation'")
