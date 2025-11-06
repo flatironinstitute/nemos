@@ -1140,10 +1140,13 @@ _solver_registry_per_backend = {
 @pytest.fixture(autouse=True, scope="session")
 def configure_solver_backend(request):
     """
-    Patch the solver registry depending on ``NEMOS_SOLVER_BACKEND``.
+    Patch the solver registry depending on `NEMOS_SOLVER_BACKEND` and `override_solver`.
 
-    Used for running solver-dependent tests in separate tox environments
-    for the JAXopt and the Optimistix backends.
+    The `NEMOS_SOLVER_BACKEND` env variable is used for running solver-dependent tests
+    in separate tox environments for the JAXopt and the Optimistix backends.
+
+    The `override_solver` pytest option is used to set a given solver algorithm's
+    implementation to a class available in nemos.solvers.
     """
     backend = os.getenv("NEMOS_SOLVER_BACKEND")
 
