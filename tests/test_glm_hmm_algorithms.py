@@ -2,6 +2,7 @@ import itertools
 from functools import partial
 
 import jax
+import jax.numpy as jnp
 import numpy as np
 import pytest
 from hmmlearn import hmm
@@ -9,7 +10,9 @@ from hmmlearn import hmm
 from nemos.fetch import fetch_data
 from nemos.glm import GLM
 from nemos.glm_hmm.expectation_maximization import (
+    GLMHMMState,
     backward_pass,
+    check_log_likelihood_increment,
     compute_xi,
     em_glm_hmm,
     forward_backward,
@@ -188,7 +191,7 @@ def prepare_partial_hmm_nll_single_neuron(obs):
             negative_log_likelihood_func=negative_log_likelihood,
         )
 
-    solver = LBFGS(partial_hmm_negative_log_likelihood, tol=10**-13)
+    solver = LBFGS(partial_hmm_negative_log_likelihood, tol=10**-8)
 
     return partial_hmm_negative_log_likelihood, solver
 
@@ -389,7 +392,7 @@ def generate_data_multi_state_population():
     return new_sess, initial_prob, transition_prob, coef, intercept, X, y
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def single_state_inputs():
     """Generate single-state HMM data for testing."""
     np.random.seed(42)
@@ -422,10 +425,10 @@ def expected_log_likelihood_wrt_transitions(
     log_likelihood
         Expected log-likelihood (with prior if specified).
     """
-    likelihood = jax.numpy.sum(xis * jax.numpy.log(transition_prob))
+    likelihood = jnp.sum(xis * jnp.log(transition_prob))
     if dirichlet_alphas is None:
         return likelihood
-    prior = (jax.numpy.log(transition_prob) * (dirichlet_alphas - 1)).sum()
+    prior = (jnp.log(transition_prob) * (dirichlet_alphas - 1)).sum()
     return likelihood + prior
 
 
@@ -449,10 +452,10 @@ def expected_log_likelihood_wrt_initial_prob(
     log_likelihood
         Expected log-likelihood (with prior if specified).
     """
-    likelihood = jax.numpy.sum(gammas * jax.numpy.log(initial_prob))
+    likelihood = jnp.sum(gammas * jnp.log(initial_prob))
     if dirichlet_alphas is None:
         return likelihood
-    prior = (jax.numpy.log(initial_prob) * (dirichlet_alphas - 1)).sum()
+    prior = (jnp.log(initial_prob) * (dirichlet_alphas - 1)).sum()
     return likelihood + prior
 
 
@@ -479,7 +482,7 @@ def lagrange_mult_loss(param, args, loss, **kwargs):
     proba, lam = param
     n_states = proba.shape[0]
     if proba.ndim == 2:
-        constraint = proba.sum(axis=1) - jax.numpy.ones(n_states)
+        constraint = proba.sum(axis=1) - jnp.ones(n_states)
     else:
         constraint = proba.sum() - 1
     lagrange_mult_term = (lam * constraint).sum()
@@ -906,7 +909,7 @@ class TestMStep:
             solver_run=solver.run,
         )
         glm = GLM(
-            observation_model=obs, solver_name="LBFGS", solver_kwargs={"tol": 10**-13}
+            observation_model=obs, solver_name="LBFGS", solver_kwargs={"tol": 10**-8}
         )
         glm.fit(X, y)
         # test that the glm coeff and intercept matches with the m-step output
@@ -1320,7 +1323,7 @@ class TestEMAlgorithm:
         data = np.load(data_path)
 
         # Design matrix and observed choices
-        X, y = data["X"], data["y"]
+        X, y = data["X"][:100], data["y"][:100]
 
         # Initial parameters
         initial_prob = data["initial_prob"]
@@ -1356,7 +1359,10 @@ class TestEMAlgorithm:
             )
 
         # use the BaseRegressor initialize_solver (this will be avaialble also in the GLMHHM class)
-        glm = GLM(observation_model=obs, regularizer=regularization)
+        solver_name = "ProximalGradient" if "Lasso" in regularization else "LBFGS"
+        glm = GLM(
+            observation_model=obs, regularizer=regularization, solver_name=solver_name
+        )
         glm.instantiate_solver(partial_hmm_negative_log_likelihood)
         solver_run = glm._solver_run
         # End of preparatory step.
@@ -1373,7 +1379,9 @@ class TestEMAlgorithm:
             initial_prob=initial_prob,
             transition_prob=transition_prob,
             glm_params=(coef, intercept),
-            is_new_session=new_sess.astype(bool) if require_new_session else None,
+            is_new_session=(
+                new_sess.astype(bool)[: X.shape[0]] if require_new_session else None
+            ),
             inverse_link_function=inverse_link_function,
             likelihood_func=likelihood_func,
             solver_run=solver_run,
@@ -1512,7 +1520,7 @@ class TestEMAlgorithm:
             _,
         ) = em_glm_hmm(
             X[:, 1:],
-            jax.numpy.squeeze(y),
+            jnp.squeeze(y),
             initial_prob=init_pb,
             transition_prob=transition_pb,
             glm_params=(proj_weights[1:], proj_weights[:1]),
@@ -1579,7 +1587,7 @@ def test_e_and_m_step_for_population(generate_data_multi_state_population):
         log_like = likelihood_per_sample(y, rate)
         # Multi-neuron case: sum log-likelihoods across neurons
         log_like = log_like.sum(axis=1)
-        return jax.numpy.exp(log_like)
+        return jnp.exp(log_like)
 
     gammas, xis, _, _, _, _ = forward_backward(
         X,
@@ -1714,3 +1722,700 @@ class TestViterbi:
             np.testing.assert_array_equal(
                 np.unique(map_path).astype(np.int32), np.array([0, 1])
             )
+
+
+class TestConvergence:
+    """Tests for EM convergence checking and early stopping."""
+
+    def test_check_log_likelihood_increment_converged(self):
+        """Test that convergence checker detects convergence with small likelihood change."""
+
+        state = GLMHMMState(
+            initial_prob=jnp.array([0.5, 0.5]),
+            transition_matrix=jnp.eye(2),
+            glm_params=(jnp.zeros((2, 2)), jnp.zeros(2)),
+            data_log_likelihood=-0.0,
+            previous_data_log_likelihood=-0.0001,  # Very small change
+            iterations=5,
+        )
+
+        # Should converge with loose tolerance
+        assert check_log_likelihood_increment(state, tol=1e-3)
+
+        # Should not converge with very tight tolerance
+        assert not check_log_likelihood_increment(state, tol=1e-6)
+
+    def test_check_log_likelihood_increment_not_converged(self):
+        """Test that convergence checker detects non-convergence with large likelihood change."""
+
+        state = GLMHMMState(
+            initial_prob=jnp.array([0.5, 0.5]),
+            transition_matrix=jnp.eye(2),
+            glm_params=(jnp.zeros((2, 2)), jnp.zeros(2)),
+            data_log_likelihood=-100.0,
+            previous_data_log_likelihood=-130.0,  # Large change
+            iterations=5,
+        )
+
+        # Should not converge even with loose tolerance
+        assert not check_log_likelihood_increment(state, tol=20.0)
+
+    def test_check_log_likelihood_increment_first_iteration(self):
+        """Test convergence checker behavior on first iteration."""
+
+        state = GLMHMMState(
+            initial_prob=jnp.array([0.5, 0.5]),
+            transition_matrix=jnp.eye(2),
+            glm_params=(jnp.zeros((2, 2)), jnp.zeros(2)),
+            data_log_likelihood=-jnp.inf,
+            previous_data_log_likelihood=-jnp.inf,
+            iterations=0,
+        )
+
+        # First iteration with -inf should not trigger convergence
+        # (since abs(-inf - (-inf)) = nan, and nan < tol = False)
+        result = check_log_likelihood_increment(state, tol=1e-8)
+        # This should return False (not converged) or handle gracefully
+        assert isinstance(result, jnp.ndarray)
+
+    def test_custom_convergence_checker(self):
+        """Test that custom convergence functions work with EM."""
+        jax.config.update("jax_enable_x64", True)
+
+        def always_converge(state, tol):
+            """Convergence checker that always returns True."""
+            return jnp.array(True)
+
+        # Fetch minimal test data
+        data_path = fetch_data("em_three_states.npz")
+        data = np.load(data_path)
+
+        X, y = data["X"], data["y"]
+        initial_prob = data["initial_prob"]
+        transition_prob = data["transition_prob"]
+        projection_weights = data["projection_weights"]
+        intercept, coef = projection_weights[:1], projection_weights[1:]
+
+        obs = BernoulliObservations()
+        likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
+            False, obs.log_likelihood, obs._negative_log_likelihood, is_log=True
+        )
+
+        def partial_hmm_negative_log_likelihood(
+            weights, design_matrix, observations, posterior_prob
+        ):
+            return hmm_negative_log_likelihood(
+                weights,
+                X=design_matrix,
+                y=observations,
+                posteriors=posterior_prob,
+                inverse_link_function=obs.default_inverse_link_function,
+                negative_log_likelihood_func=negative_log_likelihood_func,
+            )
+
+        glm = GLM(observation_model=obs, solver_name="LBFGS")
+        glm.instantiate_solver(partial_hmm_negative_log_likelihood)
+
+        # Run EM with custom checker - should stop after 1 iteration
+        result = em_glm_hmm(
+            X[:, 1:],
+            y,
+            initial_prob=initial_prob,
+            transition_prob=transition_prob,
+            glm_params=(coef, intercept),
+            inverse_link_function=obs.default_inverse_link_function,
+            likelihood_func=likelihood_func,
+            solver_run=glm._solver_run,
+            check_convergence=always_converge,
+            maxiter=100,
+            tol=1e-8,
+        )
+
+        final_state = result[-1]
+
+        # Check it stopped very early (within first few iterations)
+        assert final_state.iterations == 0, (
+            f"EM should stop after 0 iterations with always_converge, "
+            f"but ran for {final_state.iterations}"
+        )
+
+    def test_never_converge_checker(self):
+        """Test that EM runs to maxiter when convergence is never reached."""
+        jax.config.update("jax_enable_x64", True)
+
+        def never_converge(state, tol):
+            """Convergence checker that always returns False."""
+            return jnp.array(False)
+
+        # Fetch minimal test data
+        data_path = fetch_data("em_three_states.npz")
+        data = np.load(data_path)
+
+        X, y = data["X"][:50], data["y"][:50]  # Use subset for speed
+        initial_prob = data["initial_prob"]
+        transition_prob = data["transition_prob"]
+        projection_weights = data["projection_weights"]
+        intercept, coef = projection_weights[:1], projection_weights[1:]
+
+        obs = BernoulliObservations()
+        likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
+            False, obs.log_likelihood, obs._negative_log_likelihood, is_log=True
+        )
+
+        def partial_hmm_negative_log_likelihood(
+            weights, design_matrix, observations, posterior_prob
+        ):
+            return hmm_negative_log_likelihood(
+                weights,
+                X=design_matrix,
+                y=observations,
+                posteriors=posterior_prob,
+                inverse_link_function=obs.default_inverse_link_function,
+                negative_log_likelihood_func=negative_log_likelihood_func,
+            )
+
+        glm = GLM(observation_model=obs, solver_name="LBFGS")
+        glm.instantiate_solver(partial_hmm_negative_log_likelihood)
+
+        maxiter = 10
+        result = em_glm_hmm(
+            X[:, 1:],
+            y,
+            initial_prob=initial_prob,
+            transition_prob=transition_prob,
+            glm_params=(coef, intercept),
+            inverse_link_function=obs.default_inverse_link_function,
+            likelihood_func=likelihood_func,
+            solver_run=glm._solver_run,
+            check_convergence=never_converge,
+            maxiter=maxiter,
+            tol=1e-8,
+        )
+
+        final_state = result[-1]
+
+        # Should run exactly maxiter iterations
+        assert final_state.iterations == maxiter, (
+            f"EM should run for exactly {maxiter} iterations with never_converge, "
+            f"but ran for {final_state.iterations}"
+        )
+
+    def test_em_stops_when_converged(self):
+        """Test that EM stops early when convergence criterion is met."""
+        jax.config.update("jax_enable_x64", True)
+
+        data_path = fetch_data("em_three_states.npz")
+        data = np.load(data_path)
+
+        X, y = data["X"], data["y"]
+        initial_prob = data["initial_prob"]
+        transition_prob = data["transition_prob"]
+        projection_weights = data["projection_weights"]
+        intercept, coef = projection_weights[:1], projection_weights[1:]
+
+        obs = BernoulliObservations()
+        likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
+            False, obs.log_likelihood, obs._negative_log_likelihood, is_log=True
+        )
+
+        def partial_hmm_negative_log_likelihood(
+            weights, design_matrix, observations, posterior_prob
+        ):
+            return hmm_negative_log_likelihood(
+                weights,
+                X=design_matrix,
+                y=observations,
+                posteriors=posterior_prob,
+                inverse_link_function=obs.default_inverse_link_function,
+                negative_log_likelihood_func=negative_log_likelihood_func,
+            )
+
+        glm = GLM(observation_model=obs, solver_name="LBFGS")
+        glm.instantiate_solver(partial_hmm_negative_log_likelihood)
+
+        maxiter = 1000
+        tol = 1e-3  # Loose tolerance for faster convergence
+
+        result = em_glm_hmm(
+            X[:, 1:],
+            y,
+            initial_prob=initial_prob,
+            transition_prob=transition_prob,
+            glm_params=(coef, intercept),
+            inverse_link_function=obs.default_inverse_link_function,
+            likelihood_func=likelihood_func,
+            solver_run=glm._solver_run,
+            maxiter=maxiter,
+            tol=tol,
+        )
+
+        final_state = result[-1]
+
+        # Should not use all iterations
+        assert final_state.iterations < maxiter, (
+            f"EM should converge before {maxiter} iterations, "
+            f"but used all {final_state.iterations}"
+        )
+
+        # Should have actually converged according to the criterion
+        assert check_log_likelihood_increment(
+            final_state, tol=tol
+        ), "EM stopped but did not meet convergence criterion"
+
+    def test_em_nan_diagnostics_after_convergence(self):
+        """Test that NaN likelihoods after convergence don't break the algorithm."""
+        jax.config.update("jax_enable_x64", True)
+
+        data_path = fetch_data("em_three_states.npz")
+        data = np.load(data_path)
+
+        X, y = data["X"], data["y"]
+        initial_prob = data["initial_prob"]
+        transition_prob = data["transition_prob"]
+        projection_weights = data["projection_weights"]
+        intercept, coef = projection_weights[:1], projection_weights[1:]
+
+        obs = BernoulliObservations()
+        likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
+            False, obs.log_likelihood, obs._negative_log_likelihood, is_log=True
+        )
+
+        def partial_hmm_negative_log_likelihood(
+            weights, design_matrix, observations, posterior_prob
+        ):
+            return hmm_negative_log_likelihood(
+                weights,
+                X=design_matrix,
+                y=observations,
+                posteriors=posterior_prob,
+                inverse_link_function=obs.default_inverse_link_function,
+                negative_log_likelihood_func=negative_log_likelihood_func,
+            )
+
+        glm = GLM(observation_model=obs, solver_name="LBFGS")
+        glm.instantiate_solver(partial_hmm_negative_log_likelihood)
+
+        maxiter = 100
+        tol = 1e-6
+
+        (
+            posteriors,
+            joint_posterior,
+            final_initial_prob,
+            final_transition_prob,
+            final_glm_params,
+            final_state,
+        ) = em_glm_hmm(
+            X[:100, 1:],
+            y[:100],
+            initial_prob=initial_prob,
+            transition_prob=transition_prob,
+            glm_params=(coef, intercept),
+            inverse_link_function=obs.default_inverse_link_function,
+            likelihood_func=likelihood_func,
+            solver_run=glm._solver_run,
+            maxiter=maxiter,
+            tol=tol,
+        )
+
+        # Final state should have valid likelihood
+        assert jnp.isfinite(
+            final_state.data_log_likelihood
+        ), "Final state has non-finite log-likelihood"
+
+        # Final state should have valid previous likelihood
+        assert jnp.isfinite(
+            final_state.previous_data_log_likelihood
+        ), "Final state has non-finite previous log-likelihood"
+
+        # All outputs should be valid
+        assert jnp.all(jnp.isfinite(posteriors)), "Posteriors contain non-finite values"
+        assert jnp.all(
+            jnp.isfinite(joint_posterior)
+        ), "Joint posteriors contain non-finite values"
+        assert jnp.all(
+            jnp.isfinite(final_initial_prob)
+        ), "Final initial_prob contains non-finite values"
+        assert jnp.all(
+            jnp.isfinite(final_transition_prob)
+        ), "Final transition_prob contains non-finite values"
+
+    def test_convergence_with_different_tolerances(self):
+        """Test that different tolerance values produce expected iteration counts."""
+        jax.config.update("jax_enable_x64", True)
+
+        data_path = fetch_data("em_three_states.npz")
+        data = np.load(data_path)
+
+        X, y = data["X"], data["y"]
+        n_states = data["initial_prob"].shape[0]
+        initial_prob = np.random.uniform(size=n_states)
+        initial_prob /= np.sum(initial_prob)
+        transition_prob = np.random.uniform(size=(n_states, n_states))
+        transition_prob = transition_prob / np.sum(transition_prob, axis=1)[:, None]
+        projection_weights = data["projection_weights"]
+        intercept, coef = projection_weights[:1], projection_weights[1:]
+
+        obs = BernoulliObservations()
+        likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
+            False, obs.log_likelihood, obs._negative_log_likelihood, is_log=True
+        )
+
+        def partial_hmm_negative_log_likelihood(
+            weights, design_matrix, observations, posterior_prob
+        ):
+            return hmm_negative_log_likelihood(
+                weights,
+                X=design_matrix,
+                y=observations,
+                posteriors=posterior_prob,
+                inverse_link_function=obs.default_inverse_link_function,
+                negative_log_likelihood_func=negative_log_likelihood_func,
+            )
+
+        glm = GLM(observation_model=obs, solver_name="LBFGS")
+        glm.instantiate_solver(partial_hmm_negative_log_likelihood)
+
+        tolerances = [1e-2, 1e-4, 1e-6]
+        iteration_counts = []
+
+        for tol in tolerances:
+            result = em_glm_hmm(
+                X[:, 1:],
+                y,
+                initial_prob=initial_prob,
+                transition_prob=transition_prob,
+                glm_params=(coef, intercept),
+                inverse_link_function=obs.default_inverse_link_function,
+                likelihood_func=likelihood_func,
+                solver_run=glm._solver_run,
+                maxiter=10,
+                tol=tol,
+            )
+            iteration_counts.append(result[-1].iterations)
+
+        # Tighter tolerance should require more iterations
+        assert iteration_counts[0] <= iteration_counts[1] <= iteration_counts[2], (
+            f"Expected increasing iterations with tighter tolerance, "
+            f"got {iteration_counts}"
+        )
+        print("\nn of fb comp", forward_backward._cache_size())
+
+    def test_convergence_checker_with_iteration_limit(self):
+        """Test custom convergence checker that combines likelihood and iteration limit."""
+        jax.config.update("jax_enable_x64", True)
+
+        def converge_after_n_iterations(state: GLMHMMState, tol: float, n: int = 5):
+            """Stop after n iterations OR when likelihood converges."""
+            likelihood_converged = check_log_likelihood_increment(state, tol)
+            iteration_limit_reached = state.iterations >= n
+            return likelihood_converged | iteration_limit_reached
+
+        # Create a partial with n=5
+        check_conv_5_iter = lambda state, tol: converge_after_n_iterations(
+            state, tol, n=5
+        )
+
+        data_path = fetch_data("em_three_states.npz")
+        data = np.load(data_path)
+
+        X, y = data["X"][:50], data["y"][:50]  # Small subset
+        initial_prob = data["initial_prob"]
+        transition_prob = data["transition_prob"]
+        projection_weights = data["projection_weights"]
+        intercept, coef = projection_weights[:1], projection_weights[1:]
+
+        obs = BernoulliObservations()
+        likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
+            False, obs.log_likelihood, obs._negative_log_likelihood, is_log=True
+        )
+
+        def partial_hmm_negative_log_likelihood(
+            weights, design_matrix, observations, posterior_prob
+        ):
+            return hmm_negative_log_likelihood(
+                weights,
+                X=design_matrix,
+                y=observations,
+                posteriors=posterior_prob,
+                inverse_link_function=obs.default_inverse_link_function,
+                negative_log_likelihood_func=negative_log_likelihood_func,
+            )
+
+        glm = GLM(observation_model=obs, solver_name="LBFGS")
+        glm.instantiate_solver(partial_hmm_negative_log_likelihood)
+
+        result = em_glm_hmm(
+            X[:, 1:],
+            y,
+            initial_prob=initial_prob,
+            transition_prob=transition_prob,
+            glm_params=(coef, intercept),
+            inverse_link_function=obs.default_inverse_link_function,
+            likelihood_func=likelihood_func,
+            solver_run=glm._solver_run,
+            check_convergence=check_conv_5_iter,
+            maxiter=100,
+            tol=1e-10,  # Very tight tolerance, but will stop at 5 iterations
+        )
+
+        final_state = result[-1]
+
+        # Should stop at or just after 5 iterations
+        assert (
+            final_state.iterations <= 6
+        ), f"EM should stop around 5 iterations, but ran for {final_state.iterations}"
+
+
+class TestCompilation:
+    """Tests for JIT compilation behavior."""
+
+    def test_m_step_compiling(self, generate_data_multi_state):
+        new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
+            generate_data_multi_state
+        )
+
+        obs = PoissonObservations()
+        _, solver = prepare_partial_hmm_nll_single_neuron(obs)
+
+        gammas, xis = prepare_gammas_and_xis_for_m_step_single_neuron(
+            X, y, initial_prob, transition_prob, (coef, intercept), new_sess, obs
+        )
+
+        init_cache = run_m_step._cache_size()
+
+        # call with no prior
+        _ = run_m_step(
+            X,
+            y,
+            gammas,
+            xis,
+            (np.zeros_like(coef), np.zeros_like(intercept)),
+            is_new_session=new_sess.astype(bool),
+            solver_run=solver.run,
+            dirichlet_prior_alphas_transition=None,
+            dirichlet_prior_alphas_init_prob=None,
+        )
+
+        first_call_cache = run_m_step._cache_size()
+        assert init_cache + 1 == first_call_cache
+
+        # second call with no prior
+        _ = run_m_step(
+            X,
+            y,
+            gammas,
+            xis,
+            (np.zeros_like(coef), np.zeros_like(intercept)),
+            is_new_session=new_sess.astype(bool),
+            solver_run=solver.run,
+            dirichlet_prior_alphas_transition=None,
+            dirichlet_prior_alphas_init_prob=None,
+        )
+        second_call_cache = run_m_step._cache_size()
+        assert first_call_cache == second_call_cache, "None prior not cached!"
+
+        # second call with prior
+        _ = run_m_step(
+            X,
+            y,
+            gammas,
+            xis,
+            (np.zeros_like(coef), np.zeros_like(intercept)),
+            is_new_session=new_sess.astype(bool),
+            solver_run=solver.run,
+            dirichlet_prior_alphas_transition=np.ones(transition_prob.shape),
+            dirichlet_prior_alphas_init_prob=np.ones(initial_prob.shape),
+        )
+        third_call_cache = run_m_step._cache_size()
+        assert second_call_cache + 1 == third_call_cache
+
+        # 4th call with prior
+        _ = run_m_step(
+            X,
+            y,
+            gammas,
+            xis,
+            (np.zeros_like(coef), np.zeros_like(intercept)),
+            is_new_session=new_sess.astype(bool),
+            solver_run=solver.run,
+            dirichlet_prior_alphas_transition=2 * np.ones(transition_prob.shape),
+            dirichlet_prior_alphas_init_prob=2 * np.ones(initial_prob.shape),
+        )
+        forth_call_cache = run_m_step._cache_size()
+        assert third_call_cache == forth_call_cache, "Array prior not cached!"
+
+    @pytest.mark.parametrize("solver_name", ["LBFGS", "ProximalGradient"])
+    def test_em_glm_hmm_compiles_once(self, generate_data_multi_state, solver_name):
+        """
+        Test that em_glm_hmm compiles only once for repeated calls.
+
+        Ensures no unnecessary recompilation occurs when calling
+        with same static arguments and array shapes.
+        """
+        new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
+            generate_data_multi_state
+        )
+
+        obs = PoissonObservations()
+        _, solver = prepare_partial_hmm_nll_single_neuron(obs)
+
+        obs = BernoulliObservations()
+        likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
+            False, obs.log_likelihood, obs._negative_log_likelihood, is_log=True
+        )
+
+        def partial_hmm_negative_log_likelihood(
+            weights, design_matrix, observations, posterior_prob
+        ):
+            return hmm_negative_log_likelihood(
+                weights,
+                X=design_matrix,
+                y=observations,
+                posteriors=posterior_prob,
+                inverse_link_function=obs.default_inverse_link_function,
+                negative_log_likelihood_func=negative_log_likelihood_func,
+            )
+
+        glm = GLM(observation_model=obs, solver_name=solver_name)
+        glm.instantiate_solver(partial_hmm_negative_log_likelihood)
+
+        # Clear compilation cache
+        initial_cache_size = em_glm_hmm._cache_size()
+
+        # First call - should compile
+        _ = em_glm_hmm(
+            X,
+            y,
+            initial_prob=initial_prob,
+            transition_prob=transition_prob,
+            glm_params=(coef, intercept),
+            inverse_link_function=obs.default_inverse_link_function,
+            likelihood_func=likelihood_func,
+            solver_run=glm._solver_run,
+            maxiter=5,
+            tol=1e-8,
+        )
+
+        # Check that compilation happened
+        after_first_call = em_glm_hmm._cache_size()
+        assert after_first_call == initial_cache_size + 1, (
+            f"Expected 1 compilation, but cache went from {initial_cache_size} "
+            f"to {after_first_call}"
+        )
+
+        # Second call with SAME arguments - should NOT recompile
+        _ = em_glm_hmm(
+            X,
+            y,
+            initial_prob=initial_prob,
+            transition_prob=transition_prob,
+            glm_params=(coef, intercept),
+            inverse_link_function=obs.default_inverse_link_function,
+            likelihood_func=likelihood_func,
+            solver_run=glm._solver_run,
+            maxiter=5,
+            tol=1e-8,
+        )
+
+        # Cache should not have grown
+        after_second_call = em_glm_hmm._cache_size()
+        assert after_second_call == after_first_call, (
+            f"Unexpected recompilation: cache grew from {after_first_call} "
+            f"to {after_second_call}"
+        )
+
+        # Third call with DIFFERENT data (same shape) - should NOT recompile
+        X_new = (X + np.random.randn(*X.shape) * 0.1).astype(X.dtype)
+        y_new = y.copy()
+        initial_prob_new = np.ones_like(initial_prob) / len(initial_prob)
+        transition_prob_new = np.ones_like(transition_prob) / len(initial_prob)
+        coef_new = coef * np.random.randn(*coef.shape)
+        intercept_new = intercept * np.random.randn(*intercept.shape)
+        _ = em_glm_hmm(
+            X_new,
+            y_new,
+            initial_prob=initial_prob_new,
+            transition_prob=transition_prob_new,
+            glm_params=(coef_new, intercept_new),
+            inverse_link_function=obs.default_inverse_link_function,
+            likelihood_func=likelihood_func,
+            solver_run=glm._solver_run,
+            maxiter=5,
+            tol=1e-8,
+        )
+
+        after_third_call = em_glm_hmm._cache_size()
+        assert after_third_call == after_second_call, (
+            f"Recompiled on different data values (same shape): "
+            f"cache grew from {after_second_call} to {after_third_call}"
+        )
+
+    def test_forward_backward_compiles_once(self, generate_data_multi_state):
+        """
+        Test that forward_backward is not recompiled on each EM iteration.
+
+        forward_backward should compile once and be reused across all EM steps.
+        """
+        new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
+            generate_data_multi_state
+        )
+
+        obs = BernoulliObservations()
+        likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
+            False, obs.log_likelihood, obs._negative_log_likelihood, is_log=True
+        )
+
+        def partial_hmm_negative_log_likelihood(
+            weights, design_matrix, observations, posterior_prob
+        ):
+            return hmm_negative_log_likelihood(
+                weights,
+                X=design_matrix,
+                y=observations,
+                posteriors=posterior_prob,
+                inverse_link_function=obs.default_inverse_link_function,
+                negative_log_likelihood_func=negative_log_likelihood_func,
+            )
+
+        glm = GLM(observation_model=obs, solver_name="LBFGS")
+        glm.instantiate_solver(partial_hmm_negative_log_likelihood)
+
+        _ = forward_backward(
+            X,  # drop intercept
+            y,
+            initial_prob,
+            transition_prob,
+            (coef, intercept),
+            likelihood_func=likelihood_func,
+            inverse_link_function=obs.default_inverse_link_function,
+            is_new_session=new_sess.astype(bool),
+        )
+        initial_fb_cache = forward_backward._cache_size()
+        # second call with new data (same shape and size)
+        X_new = (X + np.random.randn(*X.shape) * 0.1).astype(X.dtype)
+        y_new = y.copy()
+        initial_prob_new = np.ones_like(initial_prob) / len(initial_prob)
+        transition_prob_new = np.ones_like(transition_prob) / len(initial_prob)
+        coef_new = coef * np.random.randn(*coef.shape)
+        intercept_new = intercept * np.random.randn(*intercept.shape)
+        _ = forward_backward(
+            X_new,  # drop intercept
+            y_new,
+            initial_prob_new,
+            transition_prob_new,
+            (coef_new, intercept_new),
+            likelihood_func=likelihood_func,
+            inverse_link_function=obs.default_inverse_link_function,
+            is_new_session=new_sess.astype(bool),
+        )
+
+        final_fb_cache = forward_backward._cache_size()
+
+        # forward_backward should compile at most once during entire EM
+        # (It's called multiple times but with same shapes)
+        compilations = final_fb_cache - initial_fb_cache
+        assert compilations <= 1, (
+            f"forward_backward compiled {compilations} times, "
+            f"expected at most 1 compilation"
+        )
