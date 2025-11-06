@@ -1,6 +1,6 @@
 """Custom solvers module."""
 
-from ._fista_port import OptimistixFISTA, OptimistixNAG
+from ._fista import OptimistixFISTA, OptimistixNAG
 from ._jaxopt_solvers import (
     JaxoptBFGS,
     JaxoptGradientDescent,
