@@ -10,6 +10,8 @@ authors:
   - family-names: Bagi
     given-names: Bence
     orcid: "https://orcid.org/0000-0003-0849-7480"
+  - family-names: Biswas
+    given-name: Arnab
   - family-names: Broderick
     given-names: William F.
     orcid: "https://orcid.org/0000-0002-8999-9003"
@@ -19,8 +21,9 @@ authors:
   - family-names: Lewis
     given-names: Caitlin
     orcid: 0000-0002-3317-0722
-  - family-names: Maura Llauri
-    given-names: Camila Patricia
+  - family-names: Maura
+    given-names: Camila
+    orcid: https://orcid.org/0000-0002-1304-5641
   - family-names: Crespo
     given-names: Pablo
   - family-names: Viejo
