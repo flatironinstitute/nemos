@@ -88,8 +88,6 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
 
     acceleration: bool = True
 
-    adjoint: optx.AbstractAdjoint | None = None
-
     def init(
         self,
         fn: Callable,
@@ -299,24 +297,17 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
         init_x = self.prox(init_x, self.regularizer_strength, stepsize)
         init_val = (init_x, stepsize)
 
+        # TODO: make kind dependent on the adjoint used?
+        # "lax" for implicit, "checkpointed" for RecursiveCheckpointAdjoint
+        # could make a partial function where these are available
+        # or just accept it in __init__?
         return eqx.internal.while_loop(
             cond_fun=cond_fun,
             body_fun=body_fun,
             init_val=init_val,
             max_steps=self.maxls,
-            kind=self.while_loop_kind,
+            kind="lax",
         )
-
-    @property
-    def while_loop_kind(self):
-        """Determine `kind` argument to the linesearch's while_loop."""
-        kind = "bounded"
-        if isinstance(self.adjoint, optx.RecursiveCheckpointAdjoint):
-            kind = "checkpointed"
-        if isinstance(self.adjoint, optx.ImplicitAdjoint):
-            kind = "lax"
-
-        return kind
 
     def terminate(
         self,
