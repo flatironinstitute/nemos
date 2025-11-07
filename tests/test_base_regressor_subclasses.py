@@ -327,7 +327,8 @@ class TestModelCommons:
             params = model.initialize_params(X, y, init_params=init_params)
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
+            # optimistix solvers do not have a velocity attr
+            assert getattr(init_state, "velocity", params) == params
 
     @pytest.mark.parametrize(
         "delta_dim, expectation",
@@ -356,7 +357,8 @@ class TestModelCommons:
             params = model.initialize_params(X, y, init_params=true_params)
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
+            # optimistix solvers do not have a velocity attr
+            assert getattr(init_state, "velocity", params) == params
 
     @pytest.mark.parametrize(
         "delta_dim, expectation",
@@ -391,7 +393,8 @@ class TestModelCommons:
             params = model.initialize_params(X, y, init_params=true_params)
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
+            # optimistix solvers do not have a velocity attr
+            assert getattr(init_state, "velocity", params) == params
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -419,7 +422,8 @@ class TestModelCommons:
             params = model.initialize_params(X, y, init_params=true_params)
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
+            # optimistix solvers do not have a velocity attr
+            assert getattr(init_state, "velocity", params) == params
 
     @pytest.mark.parametrize(
         "delta_tp, expectation",
@@ -451,7 +455,8 @@ class TestModelCommons:
             params = model.initialize_params(X, y, init_params=true_params)
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
+            # optimistix solvers do not have a velocity attr
+            assert getattr(init_state, "velocity", params) == params
 
     @pytest.mark.parametrize(
         "delta_tp, expectation",
@@ -483,7 +488,8 @@ class TestModelCommons:
             params = model.initialize_params(X, y, init_params=true_params)
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
+            # optimistix solvers do not have a velocity attr
+            assert getattr(init_state, "velocity", params) == params
 
     @pytest.mark.solver_related
     def test_initialize_solver_mask_grouplasso(
@@ -504,7 +510,8 @@ class TestModelCommons:
         )
         params = model.initialize_params(X, y)
         init_state = model.initialize_state(X, y, params)
-        assert init_state.velocity == params
+        # optimistix solvers do not have a velocity attr
+        assert getattr(init_state, "velocity", params) == params
 
     @pytest.mark.solver_related
     def test_fit_mask_grouplasso(self, instantiate_base_regressor_subclass):
@@ -552,7 +559,8 @@ class TestModelCommons:
         with expectation:
             params = model.initialize_params(X, y)
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
+            # optimistix solvers do not have a velocity attr
+            assert getattr(init_state, "velocity", params) == params
 
     @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso", "ElasticNet"])
     def test_reg_strength_reset(self, reg, instantiate_base_regressor_subclass):
