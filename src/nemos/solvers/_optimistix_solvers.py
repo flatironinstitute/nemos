@@ -1,5 +1,4 @@
 import dataclasses
-import inspect
 from typing import Any, Callable, ClassVar, Type, TypeAlias
 
 import equinox as eqx
@@ -111,17 +110,11 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
 
         # take out the arguments that go into minimise, init, terminate and so on
         # and only pass the actually needed things to __init__
-        solver_init_param_names = set(
-            inspect.getfullargspec(self._solver_cls.__init__).args
-        )
         user_args = {}
         for f in dataclasses.fields(OptimistixConfig):
             kw = f.name
             if kw in solver_init_kwargs:
-                if kw in solver_init_param_names:
-                    user_args[kw] = solver_init_kwargs[kw]
-                else:
-                    user_args[kw] = solver_init_kwargs.pop(kw)
+                user_args[kw] = solver_init_kwargs.pop(kw)
         self.config = OptimistixConfig(maxiter=maxiter, **user_args)
 
         self._solver = self._solver_cls(
