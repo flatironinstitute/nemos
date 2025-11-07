@@ -61,6 +61,7 @@ dev = [
     "dandi",                        # Required by doctest for fetch module
     "seaborn",                      # Required by doctest for _documentation_utils module
     "myst-nb",                      # Test myst_nb utils for glue
+    "hmmlearn",                     # Test algorithmic implementations of HMM
 ]
 docs = [
     "numpydoc",
