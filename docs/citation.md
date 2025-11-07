@@ -4,7 +4,7 @@
 
 If you use NeMoS in a published academic article or presentation, please cite the code by the DOI. You can use the following:
 
-- Code: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10151131.svg)](https://doi.org/10.5281/zenodo.10151131)
+- Code: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17553287.svg)](https://doi.org/10.5281/zenodo.17553287)
 
 Additionally, it may be a good idea to cite the following paper(s) depending on which component you use:
 
