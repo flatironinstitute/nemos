@@ -16,8 +16,9 @@ class GLMHMMState(eqx.Module):
 
     initial_prob: Array
     transition_matrix: Array
-    projection_weights: Array
+    glm_params: Tuple[Array, Array]  # (coef, intercept)
     data_log_likelihood: float | Array
+    previous_data_log_likelihood: float | Array
     iterations: int
 
 
@@ -591,7 +592,7 @@ def run_m_step(
     solver_run: Callable[[Tuple[Array, Array], Array, Array, Array], Array],
     dirichlet_prior_alphas_init_prob: Array | None = None,
     dirichlet_prior_alphas_transition: Array | None = None,
-) -> Tuple[Array, Array, Array, Any]:
+) -> Tuple[Tuple[Array, Array], Array, Array, Any]:
     r"""
     Perform the M-step of the EM algorithm for GLM-HMM.
 
@@ -636,7 +637,7 @@ def run_m_step(
     In the current implementation all Dirichlet alpha coefficients must be greater than one.
     """
 
-    # # Update Initial state probability Eq. 13.18
+    # Update Initial state probability Eq. 13.18
     new_initial_prob = _analytical_m_step_initial_prob(
         posteriors,
         is_new_session=is_new_session,
@@ -652,6 +653,272 @@ def run_m_step(
     return optimized_projection_weights, new_initial_prob, new_transition_prob, state
 
 
+def prepare_likelihood_func(
+    is_population_glm: bool,
+    likelihood_func: Callable,
+    negative_log_likelihood_func: Callable,
+    is_log: bool = True,
+) -> Tuple[Callable, Callable]:
+    """
+    Prepare a likelihood function for use in the EM algorithm.
+
+    Parameters
+    ----------
+    is_population_glm:
+        Bool, true if it is a population GLM likelihood.
+    likelihood_func:
+        Function computing the log-likelihood.
+    negative_log_likelihood_func
+        Function computing the negative log-likelihood.
+    is_log:
+        Whether the likelihood function returns log-likelihood values.
+
+    Returns
+    -------
+    likelihood:
+        Likelihood function.
+    vmap_nll:
+        Vectorized negative log-likelihood function.
+    """
+
+    if not is_log and is_population_glm:
+        raise ValueError(
+            "Population GLM-HMM requires log-likelihood for numerical stability."
+        )
+
+    # Wrap likelihood_func to avoid aggregating over samples
+    def likelihood_per_sample(x, z):
+        return likelihood_func(x, z, aggregate_sample_scores=lambda s: s)
+
+    def negative_log_likelihood_per_sample(x, z):
+        return negative_log_likelihood_func(x, z, aggregate_sample_scores=lambda s: s)
+
+    # Vectorize over the states axis
+    state_axes = 2 if is_population_glm else 1
+    likelihood_per_sample = jax.vmap(
+        likelihood_per_sample,
+        in_axes=(None, state_axes),
+        out_axes=state_axes,
+    )
+
+    def likelihood(y, rate):
+        log_like = likelihood_per_sample(y, rate)
+        if is_population_glm:
+            # Multi-neuron case: sum log-likelihoods across neurons
+            log_like = log_like.sum(axis=1)
+        return jnp.exp(log_like) if is_log else log_like
+
+    vmap_nll = jax.vmap(
+        negative_log_likelihood_per_sample,
+        in_axes=(None, state_axes),
+        out_axes=state_axes,
+    )
+    return likelihood, vmap_nll
+
+
+def _em_step(
+    carry: GLMHMMState,
+    xs: None,
+    X: Array,
+    y: Array,
+    inverse_link_function: Callable,
+    likelihood_func: Callable,
+    solver_run: Callable,
+    is_new_session: Array,
+) -> Tuple[GLMHMMState, Array]:
+    """Single EM iteration step."""
+    previous_state = carry
+
+    (posteriors, joint_posterior, _, new_log_like, alphas, _) = forward_backward(
+        X,
+        y,
+        previous_state.initial_prob,
+        previous_state.transition_matrix,
+        previous_state.glm_params,
+        inverse_link_function,
+        likelihood_func,
+        is_new_session,
+    )
+
+    glm_params_update, init_prob, trans_matrix, _ = run_m_step(
+        X,
+        y,
+        posteriors=posteriors,
+        joint_posterior=joint_posterior,
+        glm_params=previous_state.glm_params,
+        is_new_session=is_new_session,
+        solver_run=solver_run,
+    )
+
+    new_state = GLMHMMState(
+        initial_prob=init_prob,
+        transition_matrix=trans_matrix,
+        glm_params=glm_params_update,
+        iterations=previous_state.iterations + 1,
+        data_log_likelihood=new_log_like,
+        previous_data_log_likelihood=previous_state.data_log_likelihood,
+    )
+
+    return new_state, new_log_like
+
+
+def check_log_likelihood_increment(state: GLMHMMState, tol: float) -> Array:
+    """
+    Check EM convergence using absolute tolerance on log-likelihood.
+
+    Parameters
+    ----------
+    state : GLMHMMState
+        Current EM state containing likelihood history.
+    tol : float
+        Absolute tolerance threshold.
+
+    Returns
+    -------
+    : Array
+        Boolean indicating convergence.
+    """
+    delta = jnp.abs(state.data_log_likelihood - state.previous_data_log_likelihood)
+    return delta < tol
+
+
+@partial(
+    jax.jit,
+    static_argnames=[
+        "inverse_link_function",
+        "likelihood_func",
+        "solver_run",
+        "maxiter",
+        "check_convergence",
+        "tol",
+    ],
+)
+def em_glm_hmm(
+    X: Array,
+    y: Array,
+    initial_prob: Array,
+    transition_prob: Array,
+    glm_params: Tuple[Array, Array],
+    inverse_link_function: Callable,
+    likelihood_func: Callable,
+    solver_run: Callable,
+    is_new_session: Optional[Array] = None,
+    maxiter: int = 10**3,
+    tol: float = 1e-8,
+    check_convergence: Callable = check_log_likelihood_increment,
+) -> Tuple[Array, Array, Array, Array, Tuple[Array, Array], GLMHMMState]:
+    """
+    Perform EM optimization for a GLM-HMM.
+
+    Parameters
+    ----------
+    X:
+        Design matrix of observations.
+    y:
+        Target responses.
+    initial_prob:
+        Initial state distribution.
+    transition_prob:
+        Initial transition matrix.
+    glm_params:
+        Initial projection coefficients and intercept for the GLM, shape ``(n_features, n_states)``
+        and ``(n_states,)``, respectively.
+    inverse_link_function:
+        Elementwise function mapping linear predictors to rates.
+    likelihood_func:
+        Function computing the log-likelihood.
+    solver_run:
+        Callable that runs the M step for the projection coefficients.
+    is_new_session:
+        Boolean mask for the first observation of each session.
+    maxiter:
+        Maximum number of EM iterations.
+    tol:
+        The tolerance for the convergence criterion.
+    check_convergence:
+        Callable receiving the state and computing the convergence.
+
+    Returns
+    -------
+    posteriors:
+        Posterior probabilities over states for each observation.
+    joint_posterior:
+        Joint posterior probabilities over pairs of states.
+    final_initial_prob:
+        Final estimate of the initial state distribution.
+    final_transition_prob:
+        Final estimate of the transition matrix.
+    final_projection_weights:
+        Final optimized projection weights.
+    final_state:
+        Final GLMHMMState containing all parameters and diagnostics.
+    """
+    is_new_session = initialize_new_session(y.shape[0], is_new_session)
+
+    state = GLMHMMState(
+        initial_prob=initial_prob,
+        transition_matrix=transition_prob,
+        glm_params=glm_params,
+        data_log_likelihood=-jnp.array(jnp.inf),
+        previous_data_log_likelihood=-jnp.array(jnp.inf),
+        iterations=0,
+    )
+
+    # Create partial function with all the static/fixed arguments
+    em_step_fn = partial(
+        _em_step,
+        X=X,
+        y=y,
+        inverse_link_function=inverse_link_function,
+        likelihood_func=likelihood_func,
+        solver_run=solver_run,
+        is_new_session=is_new_session,
+    )
+
+    def stopping_condition(carry, _):
+        new_state = carry
+        return check_convergence(
+            new_state,
+            tol,
+        )
+
+    def body_fn(carry, xs):
+        return jax.lax.cond(
+            stopping_condition(carry, xs),
+            lambda c, _: (c, jnp.array(jnp.nan)),
+            em_step_fn,
+            carry,
+            xs,
+        )
+
+    state, likelihoods = jax.lax.scan(body_fn, state, None, length=maxiter)
+
+    # final posterior calculation
+    (posteriors, joint_posterior, _, _, _, _) = forward_backward(
+        X,
+        y,
+        state.initial_prob,
+        state.transition_matrix,
+        state.glm_params,
+        inverse_link_function,
+        likelihood_func,
+        is_new_session,
+    )
+
+    return (
+        posteriors,
+        joint_posterior,
+        state.initial_prob,
+        state.transition_matrix,
+        state.glm_params,
+        state,
+    )
+
+
+@partial(
+    jax.jit,
+    static_argnames=["inverse_link_function", "log_likelihood_func", "return_index"],
+)
 def max_sum(
     X: Array,
     y: Array,

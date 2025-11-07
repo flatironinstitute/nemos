@@ -5,7 +5,6 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-import nemos as nmo
 from nemos.glm.initialize_parameters import initialize_intercept_matching_mean_rate
 
 
@@ -66,7 +65,7 @@ def test_invert_non_linearity(non_linearity, output_y):
         ),
         (
             jax.scipy.stats.norm.cdf,
-            pytest.raises(ValueError, match=".+The mean firing rate has"),
+            pytest.raises(ValueError, match=".+Please, provide initial parameters"),
         ),
     ],
 )
