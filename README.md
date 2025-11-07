@@ -7,6 +7,8 @@
 [![codecov](https://codecov.io/gh/flatironinstitute/nemos/graph/badge.svg?token=vvtrcTFNeu)](https://codecov.io/gh/flatironinstitute/nemos)
 [![Documentation Status](https://readthedocs.org/projects/nemos/badge/?version=latest)](https://nemos.readthedocs.io/en/latest/?badge=latest)
 [![nemos CI](https://github.com/flatironinstitute/nemos/actions/workflows/ci.yml/badge.svg)](https://github.com/flatironinstitute/nemos/actions/workflows/ci.yml)
+[![DOI](https://zenodo.org/badge/597170566.svg)](https://doi.org/10.5281/zenodo.17553286)
+
 
 
 NeMoS (Neural ModelS) is a statistical modeling framework optimized for systems neuroscience and powered by [JAX](https://jax.readthedocs.io/en/latest/).
@@ -176,6 +178,22 @@ We communicate via several channels on Github:
 
 In all cases, we request that you respect our [code of
 conduct](CODE_OF_CONDUCT.md).
+
+## Citing us
+
+If you use NeMoS in a published academic article or presentation, please
+cite the code by the DOI. You can click on
+`Cite this repository` on the right side of the GitHub page to get a copyable
+citation for the code, or use the following:
+
+- Code: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10151131.svg)](https://doi.org/10.5281/zenodo.10151131)
+
+
+See the [citation
+guide](https://docs.plenoptic.org/docs/branch/main/citation.html) for more
+details, including citations for the different synthesis methods and
+computational moels included in plenoptic.
+
 
 ## Support
 
