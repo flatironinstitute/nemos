@@ -20,7 +20,7 @@ authors:
     orcid: "https://orcid.org/0000-0003-4681-0538"
   - family-names: Lewis
     given-names: Caitlin
-    orcid: 0000-0002-3317-0722
+    orcid: https://orcid.org/0000-0002-3317-0722
   - family-names: Maura
     given-names: Camila
     orcid: https://orcid.org/0000-0002-1304-5641
@@ -33,6 +33,7 @@ authors:
     given-names: Pranati
   - family-names: Thomson
     given-names: Eric
+    orcid: https://orcid.org/0000-0002-7118-2249
   - family-names: Williams
     given-names: Alex
     orcid: "https://orcid.org/0000-0001-5853-103X"
