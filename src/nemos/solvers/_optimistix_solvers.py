@@ -122,6 +122,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
             rtol=rtol,
             norm=self.config.norm,
             **solver_init_kwargs,
+            **self._params_derived_from_config(),
         )
 
         self.stats = {}
@@ -209,9 +210,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
     def get_optim_info(self, state: OptimistixSolverState) -> OptimizationInfo:
         num_steps = self.stats["num_steps"].item()
 
-        function_val = (
-            state.f.item() if hasattr(state, "f") else state.f_info.f.item()
-        )  # pyright: ignore
+        function_val = state.f.item() if hasattr(state, "f") else state.f_info.f.item()  # pyright: ignore
 
         return OptimizationInfo(
             function_val=function_val,
@@ -219,6 +218,23 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
             converged=state.terminate.item(),  # pyright: ignore
             reached_max_steps=(num_steps == self.maxiter),
         )
+
+    def _params_derived_from_config(self) -> dict:
+        """
+        Optionally derive some parameters for instantiating the wrapped solver.
+
+        Parameters
+        ----------
+        config:
+            OptimistixConfig created in the constructor.
+
+        Returns
+        -------
+        dict with argument names of _solver_cls.__init__ as keys and
+        their corresponding values as values.
+        Default implementation returns an empty dict.
+        """
+        return {}
 
 
 class OptimistixBFGS(OptimistixAdapter):

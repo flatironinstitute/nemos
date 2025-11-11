@@ -1,6 +1,6 @@
 """Implementation of the FISTA algorithm as an Optimistix IterativeSolver. Adapted from JAXopt."""
 
-from typing import Any, Callable, ClassVar
+from typing import Any, Callable, ClassVar, Literal
 
 import equinox as eqx
 import jax
@@ -10,7 +10,7 @@ from jaxtyping import Array, Bool, Float, Int, PyTree
 from optimistix._custom_types import Aux, Y
 
 from ..tree_utils import tree_add_scalar_mul, tree_sub
-from ._optimistix_solvers import OptimistixAdapter
+from ._optimistix_solvers import OptimistixAdapter, OptimistixConfig
 
 
 def prox_none(x: PyTree, hyperparams=None, scaling: float = 1.0):
@@ -87,6 +87,8 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
     max_stepsize: float | None = 1.0
 
     acceleration: bool = True
+
+    while_loop_kind: Literal["lax", "checkpointed", "bounded"] | None = None
 
     def init(
         self,
@@ -297,16 +299,12 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
         init_x = self.prox(init_x, self.regularizer_strength, stepsize)
         init_val = (init_x, stepsize)
 
-        # TODO: make kind dependent on the adjoint used?
-        # "lax" for implicit, "checkpointed" for RecursiveCheckpointAdjoint
-        # could make a partial function where these are available
-        # or just accept it in __init__?
         return eqx.internal.while_loop(
             cond_fun=cond_fun,
             body_fun=body_fun,
             init_val=init_val,
             max_steps=self.maxls,
-            kind="lax",
+            kind=self.while_loop_kind,
         )
 
     def terminate(
@@ -350,9 +348,24 @@ class OptimistixFISTA(OptimistixAdapter):
     _solver_cls = FISTA
     _proximal = True
 
+    def _params_derived_from_config(self) -> dict:
+        """Derive the "kind" parameter of the linesearch's while_loop based on the adjoint."""
+        if isinstance(self.config.adjoint, optx.ImplicitAdjoint):
+            kind = "lax"
+        elif isinstance(self.config.adjoint, optx.RecursiveCheckpointAdjoint):
+            kind = "checkpointed"
+        else:
+            raise ValueError(
+                "adjoint has to be ImplicitAdjoint or RecursiveCheckpointAdjoint"
+            )
+
+        return {"while_loop_kind": kind}
+
 
 class OptimistixNAG(OptimistixAdapter):
     """Port of Nesterov's accelerated gradient descent from JAXopt to the Optimistix API."""
 
     _solver_cls = GradientDescent
     _proximal = False
+
+    _params_derived_from_config = OptimistixFISTA._params_derived_from_config
