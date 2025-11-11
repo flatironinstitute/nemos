@@ -348,7 +348,9 @@ class OptimistixFISTA(OptimistixAdapter):
     _solver_cls = FISTA
     _proximal = True
 
-    def _params_derived_from_config(self) -> dict:
+    def adjust_solver_init_kwargs(
+        self, solver_init_kwargs: dict[str, Any]
+    ) -> dict[str, Any]:
         """Derive the "kind" parameter of the linesearch's while_loop based on the adjoint."""
         if isinstance(self.config.adjoint, optx.ImplicitAdjoint):
             kind = "lax"
@@ -359,7 +361,7 @@ class OptimistixFISTA(OptimistixAdapter):
                 "adjoint has to be ImplicitAdjoint or RecursiveCheckpointAdjoint"
             )
 
-        return {"while_loop_kind": kind}
+        return {"while_loop_kind": kind, **solver_init_kwargs}
 
 
 class OptimistixNAG(OptimistixAdapter):
@@ -368,4 +370,4 @@ class OptimistixNAG(OptimistixAdapter):
     _solver_cls = GradientDescent
     _proximal = False
 
-    _params_derived_from_config = OptimistixFISTA._params_derived_from_config
+    adjust_solver_init_kwargs = OptimistixFISTA.adjust_solver_init_kwargs

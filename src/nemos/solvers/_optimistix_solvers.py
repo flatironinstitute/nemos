@@ -117,12 +117,14 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
                 user_args[kw] = solver_init_kwargs.pop(kw)
         self.config = OptimistixConfig(maxiter=maxiter, **user_args)
 
+        # make custom adjustments such as adding a derived "while_loop_kind" parameter for FISTA
+        solver_init_kwargs = self.adjust_solver_init_kwargs(solver_init_kwargs)
+
         self._solver = self._solver_cls(
             atol=tol,
             rtol=rtol,
             norm=self.config.norm,
             **solver_init_kwargs,
-            **self._params_derived_from_config(),
         )
 
         self.stats = {}
@@ -219,22 +221,24 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
             reached_max_steps=(num_steps == self.maxiter),
         )
 
-    def _params_derived_from_config(self) -> dict:
+    def adjust_solver_init_kwargs(
+        self, solver_init_kwargs: dict[str, Any]
+    ) -> dict[str, Any]:
         """
-        Optionally derive some parameters for instantiating the wrapped solver.
+        Optionally adjust the parameters (e.g. derive from self.config) for instantiating the wrapped solver.
 
         Parameters
         ----------
-        config:
-            OptimistixConfig created in the constructor.
+        solver_init_kwargs:
+            Original keyword arguments that would be passed to _solver_cls.__init__.
 
         Returns
         -------
         dict with argument names of _solver_cls.__init__ as keys and
         their corresponding values as values.
-        Default implementation returns an empty dict.
+        Default implementation just returns solver_init_kwargs.
         """
-        return {}
+        return solver_init_kwargs
 
 
 class OptimistixBFGS(OptimistixAdapter):
