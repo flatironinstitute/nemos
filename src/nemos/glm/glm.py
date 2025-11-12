@@ -1456,7 +1456,7 @@ class PopulationGLM(GLM):
         ) = "Poisson",
         inverse_link_function: Optional[Callable] = None,
         regularizer: Union[str, Regularizer] = "UnRegularized",
-        regularizer_strength: Optional[float] = None,
+        regularizer_strength: Optional[RegularizerStrength] = None,
         solver_name: str = None,
         solver_kwargs: dict = None,
         feature_mask: Optional[jnp.ndarray] = None,

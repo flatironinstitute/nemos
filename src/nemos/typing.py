@@ -59,4 +59,4 @@ ProximalOperator = Callable[
 
 FeatureMatrix = nap.TsdFrame | NDArray
 
-RegularizerStrength = float | Tuple[float, float]
+RegularizerStrength = float | Tuple[float, float] | dict | Tuple[dict, dict]

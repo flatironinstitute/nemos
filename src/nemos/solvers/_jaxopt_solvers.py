@@ -7,6 +7,7 @@ from nemos.third_party.jaxopt import jaxopt
 from ..regularizer import Regularizer
 from ._abstract_solver import OptimizationInfo, Params
 from ._solver_adapter import SolverAdapter
+from ..typing import RegularizerStrength
 
 JaxoptSolverState: TypeAlias = NamedTuple
 JaxoptStepResult: TypeAlias = jaxopt.OptStep  # this is just a namedtuple(params, state)
@@ -27,7 +28,7 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
         self,
         unregularized_loss: Callable,
         regularizer: Regularizer,
-        regularizer_strength: float | None,
+        regularizer_strength: RegularizerStrength,
         **solver_init_kwargs,
     ):
         if self._proximal:
