@@ -17,7 +17,6 @@ from nemos.third_party.jaxopt import jaxopt
 
 from . import tree_utils
 from .base_class import Base
-from .pytrees import FeaturePytree
 from .proximal_operator import prox_elastic_net, prox_group_lasso
 from .typing import DESIGN_INPUT_TYPE, ProximalOperator
 from .utils import format_repr
@@ -108,27 +107,39 @@ class Regularizer(Base, abc.ABC):
     def __repr__(self):
         return format_repr(self)
 
-    def _validate_regularizer_strength(self, strength: Union[None, float, dict]):
-        if strength is None:
-            strength = 1.0
-        elif isinstance(strength, dict):
+    def _validate_regularizer_strength(
+        self,
+        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+        strength: Union[None, float, dict],
+    ):
+        if isinstance(strength, dict):
+            if jax.tree_util.tree_structure(strength) != jax.tree_util.tree_structure(
+                params[0]
+            ):
+                raise ValueError(
+                    f"Regularizer strength must conform to parameters: {strength}"
+                )
             try:
+                # force conversion to float to prevent weird GPU issues
                 strength = jax.tree_util.tree_map(
                     lambda x: jnp.asarray(x, dtype=float), strength
                 )
             except ValueError:
                 raise ValueError(
-                    f"Could not convert the regularizer strength: {strength} to floats."
+                    f"Could not convert regularizer strength to floats: {strength}"
                 )
         else:
-            try:
-                # force conversion to float to prevent weird GPU issues
-                strength = float(strength)
-            except ValueError:
-                # raise a more detailed ValueError
-                raise ValueError(
-                    f"Could not convert the regularizer strength: {strength} to a float."
-                )
+            if strength is None:
+                strength = 1.0
+            else:
+                try:
+                    # force conversion to float to prevent weird GPU issues
+                    strength = float(strength)
+                except ValueError:
+                    raise ValueError(
+                        f"Could not convert regularizer strength to float: {strength}"
+                    )
+            strength = tree_utils.tree_full_like(params[0], strength)
         return strength
 
 
@@ -229,11 +240,6 @@ class Ridge(Regularizer):
         def l2_penalty(coeff: jnp.ndarray, strength: jnp.ndarray):
             return 0.5 * jnp.sum(strength * jnp.square(coeff)) / intercept.shape[0]
 
-        if isinstance(regularizer_strength, float):
-            regularizer_strength = jax.tree_util.tree_map(
-                lambda _: regularizer_strength, coeffs
-            )
-
         return tree_utils.pytree_map_and_reduce(
             l2_penalty,
             sum,
@@ -242,7 +248,7 @@ class Ridge(Regularizer):
         )
 
     def penalized_loss(
-        self, loss: Callable, regularizer_strength: Union[float, FeaturePytree]
+        self, loss: Callable, regularizer_strength: Union[float, dict]
     ) -> Callable:
         """Return the penalized loss function for Ridge regularization."""
 
@@ -476,77 +482,74 @@ class ElasticNet(Regularizer):
 
     def _validate_regularizer_strength(
         self,
+        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
         strength: Union[
-            None, float, Tuple[float, float], Tuple[FeaturePytree, FeaturePytree]
+            None, float, dict, Tuple[Union[float, dict], Union[float, dict]]
         ],
     ):
-        if strength is None:
-            strength = (1.0, 0.5)
+        # check structure
+        if isinstance(strength, tuple):
+            _strength, _ratio = strength
 
-        elif not hasattr(strength, "__len__"):
-            try:
-                # Force conversion to float to prevent weird GPU issues
-                strength = (float(strength), 0.5)
-            except ValueError:
-                raise ValueError(
-                    f"Could not convert the regularizer strength: {strength} to a float."
-                )
-
-        elif isinstance(strength, tuple):
-            if all(isinstance(s, FeaturePytree) for s in strength):
-                s_tree, r_tree = strength
-
-                if s_tree.shape != r_tree.shape:
+            if isinstance(_strength, dict):
+                if jax.tree_util.tree_structure(
+                    _strength
+                ) != jax.tree_util.tree_structure(params[0]):
                     raise ValueError(
-                        f"FeaturePytree shapes must match. Got {s_tree.shape} and {r_tree.shape}."
+                        f"Regularizer strength must conform to parameters: {strength}"
                     )
-
-                try:
-                    s_tree = jax.tree_util.tree_map(float, s_tree)
-                    r_tree = jax.tree_util.tree_map(float, r_tree)
-                except Exception as e:
-                    raise ValueError(
-                        f"Could not convert FeaturePytree values to floats: {e}"
-                    )
-
-                def _check_ratio(r):
-                    if not (0 < r <= 1):
-                        raise ValueError(
-                            f"Invalid regularization ratio value {r}. "
-                            "Each ratio must be > 0 and ≤ 1."
-                        )
-                    return r
-
-                r_tree = jax.tree_util.tree_map(_check_ratio, r_tree)
-                strength = (s_tree, r_tree)
             else:
-                try:
-                    strength = jax.tree_util.tree_map(float, strength)
-                except ValueError:
-                    raise ValueError(
-                        f"Could not convert the regularizer strength and regularizer ratio: {strength} to a tuple of "
-                        "floats."
-                    )
+                _strength = tree_utils.tree_full_like(params[0], _strength)
 
-                if strength[1] < 0 or strength[1] > 1:
+            if isinstance(_ratio, dict):
+                if jax.tree_util.tree_structure(_ratio) != jax.tree_util.tree_structure(
+                    params[0]
+                ):
                     raise ValueError(
-                        f"Invalid regularization ratio: {strength[1]}. Ratio must be between 0 and 1."
+                        f"Regularizer ratio must conform to parameters: {strength}"
                     )
-                elif strength[1] == 0:
-                    raise ValueError(
-                        "Regularization ratio of 0 is not supported. Use Ridge regularization instead."
-                    )
-
+            else:
+                _ratio = tree_utils.tree_full_like(params[0], _ratio)
         else:
-            raise ValueError(f"Invalid regularization strength format: {strength}")
+            if isinstance(strength, dict):
+                if jax.tree_util.tree_structure(
+                    strength
+                ) != jax.tree_util.tree_structure(params[0]):
+                    raise ValueError(
+                        f"Regularizer strength must conform to parameters: {strength}"
+                    )
+            else:
+                if strength is None:
+                    _strength = 1.0
+                _strength = tree_utils.tree_full_like(params[0], strength)
+            _ratio = tree_utils.tree_full_like(params[0], 0.5)
 
-        if len(strength) != 2:
+        # check strength
+        try:
+            _strength = jax.tree_util.tree_map(float, _strength)
+        except ValueError:
             raise ValueError(
-                f"Invalid regularization strength and regularizer ratio: {strength}. regularizer_strength must "
-                "be a tuple of two floats or FeaturePytree objects."
+                f"Could not convert regularizer strength to floats: {strength}"
             )
 
-        return strength
+        # check ratio
+        try:
+            _ratio = jax.tree_util.tree_map(float, _ratio)
+        except ValueError:
+            raise ValueError(
+                f"Could not convert regularizer ratio to floats: {strength}"
+            )
+
+        def _check_ratio(r):
+            if not (0 < r <= 1):
+                raise ValueError(
+                    f"Invalid regularizater ratio value {r}. "
+                    "Each ratio must be > 0 and ≤ 1."
+                )
+
+        jax.tree_util.tree_map(_check_ratio, _ratio)
+
+        return _strength, _ratio
 
 
 class GroupLasso(Regularizer):
