@@ -272,8 +272,12 @@ class Ridge(Regularizer):
 
         def prox_op(params, l2reg, scaling=1.0):
             Ws, bs = params
-            l2reg /= bs.shape[0]
-            return jaxopt.prox.prox_ridge(Ws, l2reg, scaling=scaling), bs
+            l2reg = jax.tree_util.tree_map(lambda x: x / bs.shape[0], l2reg)
+            return jax.tree_util.tree_map(
+                lambda w, r: jaxopt.prox.prox_ridge(w, r, scaling=scaling),
+                Ws,
+                l2reg,
+            ), bs
 
         return prox_op
 
@@ -313,17 +317,19 @@ class Lasso(Regularizer):
 
         def prox_op(params, l1reg, scaling=1.0):
             Ws, bs = params
-            l1reg /= bs.shape[0]
-            # if Ws is a pytree, l1reg needs to be a pytree with the same
-            # structure
-            l1reg = jax.tree_util.tree_map(lambda x: l1reg * jnp.ones_like(x), Ws)
-            return jaxopt.prox.prox_lasso(Ws, l1reg, scaling=scaling), bs
+            l1reg = jax.tree_util.tree_map(lambda x: x / bs.shape[0], l1reg)
+            return jax.tree_util.tree_map(
+                lambda w, r: jaxopt.prox.prox_lasso(w, r, scaling=scaling),
+                Ws,
+                l1reg,
+            ), bs
 
         return prox_op
 
     @staticmethod
     def _penalization(
-        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], regularizer_strength: float
+        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+        regularizer_strength: Union[float, dict],
     ) -> jnp.ndarray:
         """
         Compute the Lasso penalization for given parameters.
@@ -338,16 +344,21 @@ class Lasso(Regularizer):
         float
             The Lasso penalization value.
         """
+        coeffs, intercept = params
 
-        def l1_penalty(coeff: jnp.ndarray, intercept: jnp.ndarray) -> jnp.ndarray:
-            return regularizer_strength * jnp.sum(jnp.abs(coeff)) / intercept.shape[0]
+        def l1_penalty(coeff: jnp.ndarray, strength: jnp.ndarray):
+            return jnp.sum(strength * jnp.abs(coeff)) / intercept.shape[0]
 
-        # tree map the computation and sum over leaves
         return tree_utils.pytree_map_and_reduce(
-            lambda x: l1_penalty(x, params[1]), sum, params[0]
+            l1_penalty,
+            sum,
+            coeffs,
+            regularizer_strength,
         )
 
-    def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
+    def penalized_loss(
+        self, loss: Callable, regularizer_strength: Union[float, dict]
+    ) -> Callable:
         """Return a function for calculating the penalized loss using Lasso regularization."""
 
         def _penalized_loss(params, X, y):
