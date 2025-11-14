@@ -233,8 +233,6 @@ class BaseRegressor(Base, abc.ABC):
 
     @regularizer_strength.setter
     def regularizer_strength(self, strength: Union[None, RegularizerStrength]):
-        # check regularizer strength
-        strength = self.regularizer._validate_regularizer_strength(strength)
         self._regularizer_strength = strength
 
     @property
@@ -462,6 +460,11 @@ class BaseRegressor(Base, abc.ABC):
 
         # validate input and params consistency
         init_params = self._check_params(init_params)
+
+        # validate regularizer strength and params consistency
+        self.regularizer_strength = self.regularizer._validate_regularizer_strength(
+            init_params, self.regularizer_strength
+        )
 
         # validate input and params consistency
         self._check_input_and_params_consistency(init_params, X=X, y=y)
