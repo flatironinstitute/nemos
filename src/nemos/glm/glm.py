@@ -21,6 +21,7 @@ from ..exceptions import NotFittedError
 from ..pytrees import FeaturePytree
 from ..regularizer import GroupLasso, Lasso, Regularizer, Ridge
 from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
+from ..tree_utils import pytree_map_and_reduce
 from ..type_casting import jnp_asarray_if, support_pynapple
 from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength, SolverState, StepResult
 from ..utils import format_repr
@@ -218,6 +219,7 @@ class GLM(BaseRegressor):
         regularizer_strength: Optional[RegularizerStrength] = None,
         solver_name: str = None,
         solver_kwargs: dict = None,
+        feature_mask: Optional[jnp.ndarray | DESIGN_INPUT_TYPE] = None,
     ):
         super().__init__(
             regularizer=regularizer,
@@ -235,6 +237,7 @@ class GLM(BaseRegressor):
         self.solver_state_ = None
         self.scale_ = None
         self.dof_resid_ = None
+        self.feature_mask = feature_mask
 
     def __sklearn_tags__(self):
         """Return GLM specific estimator tags."""
@@ -246,6 +249,44 @@ class GLM(BaseRegressor):
             required=True, one_d_labels=True, two_d_labels=False
         )
         return tags
+
+    @property
+    def feature_mask(self) -> Union[jnp.ndarray, dict, None]:
+        """Define a feature mask of shape ``(n_features, n_neurons)``."""
+        return self._feature_mask
+
+    def _check_mask_ndim(self, feature_mask: jnp.ndarray | DESIGN_INPUT_TYPE):
+        raise_exception = tree_utils.pytree_map_and_reduce(
+            lambda x: x.ndim != 1, any, feature_mask
+        )
+        if raise_exception:
+            raise ValueError(
+                "'feature_mask' of 'GLM' must be a 1-dimensional array, (n_features, ) "
+                "or a `FeaturePytree` of shape (1, )."
+            )
+
+    @feature_mask.setter
+    def feature_mask(self, feature_mask: Union[DESIGN_INPUT_TYPE, dict, None]):
+        if feature_mask is None:
+            self._feature_mask = None
+            return
+
+        # cast to jax
+        feature_mask = jax.tree_util.tree_map(
+            lambda x: jnp.atleast_1d(x).astype(float), feature_mask
+        )
+
+        # check if the mask is of 0s and 1s
+        if tree_utils.pytree_map_and_reduce(
+            lambda x: jnp.any(jnp.logical_and(x != 0, x != 1)), any, feature_mask
+        ):
+            raise ValueError("'feature_mask' must contain only 0s and 1s!")
+
+        # check the mask type and ndim
+        self._check_mask_ndim(feature_mask)
+        self._feature_mask = feature_mask
+        if isinstance(self._feature_mask, FeaturePytree):
+            self._feature_mask = self._feature_mask.data
 
     @property
     def inverse_link_function(self):
@@ -346,8 +387,8 @@ class GLM(BaseRegressor):
                 "(n_timebins, n_features) or pytree of the same shape.",
             )
 
-    @staticmethod
     def _check_input_and_params_consistency(
+        self,
         params: Tuple[Union[FeaturePytree, jnp.ndarray], jnp.ndarray],
         X: Optional[Union[FeaturePytree, jnp.ndarray]] = None,
         y: Optional[jnp.ndarray] = None,
@@ -385,6 +426,7 @@ class GLM(BaseRegressor):
                 f"spike basis coefficients has {jax.tree_util.tree_map(lambda p: p.shape[0], params[0])} features, "
                 f"X has {jax.tree_util.tree_map(lambda x: x.shape[1], X)} features instead!",
             )
+        self._check_mask(X, y, params)
 
     def _check_is_fit(self):
         """Ensure the instance has been fitted."""
@@ -394,7 +436,10 @@ class GLM(BaseRegressor):
             )
 
     def _predict(
-        self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], X: jnp.ndarray
+        self,
+        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+        X: jnp.ndarray,
+        feature_mask: Optional[DESIGN_INPUT_TYPE | jnp.ndarray] = None,
     ) -> jnp.ndarray:
         """
         Predicts firing rates based on given parameters and design matrix.
@@ -411,6 +456,9 @@ class GLM(BaseRegressor):
             Tuple containing the spike basis coefficients and bias terms.
         X :
             Predictors.
+        feature_mask :
+            Boolean mask (of floats) to include/exclude features. If None, no masking. If DESIGN_INPUT_TYPE,
+            then it must match the structure of X and params[0] (coefficients).
 
         Returns
         -------
@@ -418,11 +466,21 @@ class GLM(BaseRegressor):
             The predicted rates. Shape (n_time_bins, ).
         """
         Ws, bs = params
+
+        if feature_mask is None:
+            lin_combination = tree_utils.pytree_map_and_reduce(
+                lambda x, w: jnp.dot(x, w), sum, X, Ws
+            )
+        else:
+            lin_combination = tree_utils.pytree_map_and_reduce(
+                lambda x, w, m: jnp.dot(x, w * m), sum, X, Ws, feature_mask
+            )
+
         return self._inverse_link_function(
             # First, multiply each feature by its corresponding coefficient,
             # then sum across all features and add the intercept, before
             # passing to the inverse link function
-            tree_utils.pytree_map_and_reduce(lambda x, w: jnp.dot(x, w), sum, X, Ws)
+            lin_combination
             + bs
         )
 
@@ -493,13 +551,14 @@ class GLM(BaseRegressor):
             data = X.data
         else:
             data = X
-        return self._predict(params, data)
+        return self._predict(params, data, self._feature_mask)
 
     def _predict_and_compute_loss(
         self,
         params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
+        feature_mask: Optional[DESIGN_INPUT_TYPE | jnp.ndarray] = None,
     ) -> jnp.ndarray:
         r"""Predict the rate and compute the negative log-likelihood against neural activity.
 
@@ -515,6 +574,9 @@ class GLM(BaseRegressor):
             Predictors.
         y :
             Target neural activity.
+        feature_mask :
+            Boolean mask (of floats) to include/exclude features. If None, no masking. If DESIGN_INPUT_TYPE,
+            then it must match the structure of X and params[0] (coefficients)
 
         Returns
         -------
@@ -522,7 +584,7 @@ class GLM(BaseRegressor):
             The model negative log-likehood. Shape (1,).
 
         """
-        predicted_rate = self._predict(params, X)
+        predicted_rate = self._predict(params, X, feature_mask)
         return self._observation_model._negative_log_likelihood(y, predicted_rate)
 
     def score(
@@ -640,14 +702,14 @@ class GLM(BaseRegressor):
         if score_type == "log-likelihood":
             score = self._observation_model.log_likelihood(
                 y,
-                self._predict(params, data),
+                self._predict(params, data, self._feature_mask),
                 self.scale_,
                 aggregate_sample_scores=aggregate_sample_scores,
             )
         elif score_type.startswith("pseudo-r2"):
             score = self._observation_model.pseudo_r2(
                 y,
-                self._predict(params, data),
+                self._predict(params, data, self._feature_mask),
                 score_type=score_type,
                 scale=self.scale_,
                 aggregate_sample_scores=aggregate_sample_scores,
@@ -799,7 +861,18 @@ class GLM(BaseRegressor):
 
         self.initialize_state(data, y, init_params, cast_to_jax_and_drop_nans=False)
 
-        params, state = self.solver_run(init_params, data, y)
+        if y.ndim == 2:
+            vmap_axis_mask = 0 if self._feature_mask is not None else None
+            vmap_axis = jax.tree_util.tree_map(lambda x: 1, init_params[0]), 0
+            solver_run = jax.vmap(
+                self.solver_run,
+                in_axes=(vmap_axis, None, 1, vmap_axis_mask),
+                out_axes=-1,
+            )
+        else:
+            solver_run = self.solver_run
+
+        params, state = solver_run(init_params, data, y, self._feature_mask)
 
         if tree_utils.pytree_map_and_reduce(
             lambda x: jnp.any(jnp.isnan(x)), any, params
@@ -814,7 +887,9 @@ class GLM(BaseRegressor):
 
         self.dof_resid_ = self._estimate_resid_degrees_of_freedom(X)
         self.scale_ = self.observation_model.estimate_scale(
-            y, self._predict(params, data), dof_resid=self.dof_resid_
+            y,
+            self._predict(params, data, self._feature_mask),
+            dof_resid=self.dof_resid_,
         )
 
         # note that this will include an error value, which is not the same as
@@ -907,7 +982,7 @@ class GLM(BaseRegressor):
         # validate input and params consistency
         self._check_input_and_params_consistency(params, X=feedforward_input)
 
-        predicted_rate = self._predict(params, feedforward_input)
+        predicted_rate = self._predict(params, feedforward_input, self._feature_mask)
         return (
             self._observation_model.sample_generator(
                 key=random_key, predicted_rate=predicted_rate, scale=self.scale_
@@ -1196,7 +1271,9 @@ class GLM(BaseRegressor):
             X, n_samples=n_samples
         )
         self.scale_ = self.observation_model.estimate_scale(
-            y, self._predict(params, data), dof_resid=self.dof_resid_
+            y,
+            self._predict(params, data, self._feature_mask),
+            dof_resid=self.dof_resid_,
         )
 
         return opt_step
@@ -1291,6 +1368,47 @@ class GLM(BaseRegressor):
         string_attrs = ["inverse_link_function"]
 
         super().save_params(filename, fit_attrs, string_attrs)
+
+    def _check_mask(self, X, y, params):
+        if self._feature_mask is None:
+            return
+
+        if isinstance(X, FeaturePytree):
+            data = X.data
+        else:
+            data = X
+
+        if X is not None:
+            validation.check_tree_structure(
+                data,
+                self.feature_mask,
+                err_message=f"feature_mask and X must have the same structure, but feature_mask has structure  "
+                f"{jax.tree_util.tree_structure(X)}, params[0] is of "
+                f"{jax.tree_util.tree_structure(self.feature_mask)} structure instead!",
+            )
+
+        feature_mask = jax.tree_util.tree_map(jnp.squeeze, self._feature_mask)
+        if isinstance(params[0], dict):
+            # for pytrees the feature can be in or out -> the output of squeeze is a 1d array
+            has_all_zero_dim = pytree_map_and_reduce(
+                lambda x: x.ndim == 0, all, feature_mask
+            )
+            if not has_all_zero_dim:
+                raise ValueError(
+                    "For single neuron GLMs with ``FeaturePytree`` inputs, ``feature_matrix`` "
+                    "must have at most one boolean value per feature."
+                )
+        else:
+            # check the consistency of the feature axis
+            validation.check_tree_axis_consistency(
+                self.feature_mask,
+                params[0],
+                axis_1=0,
+                axis_2=0,
+                err_message="Inconsistent number of features. "
+                f"feature_mask has {jax.tree_util.tree_map(lambda m: m.shape[0], self.feature_mask)} features, "
+                f"model coefficients have {jax.tree_util.tree_map(lambda x: x.shape[1], params[0])}  instead!",
+            )
 
 
 class PopulationGLM(GLM):
@@ -1459,8 +1577,7 @@ class PopulationGLM(GLM):
         regularizer_strength: Optional[float] = None,
         solver_name: str = None,
         solver_kwargs: dict = None,
-        feature_mask: Optional[jnp.ndarray] = None,
-        **kwargs,
+        feature_mask: Optional[jnp.ndarray | DESIGN_INPUT_TYPE] = None,
     ):
         super().__init__(
             observation_model=observation_model,
@@ -1469,10 +1586,9 @@ class PopulationGLM(GLM):
             regularizer=regularizer,
             solver_name=solver_name,
             solver_kwargs=solver_kwargs,
-            **kwargs,
+            feature_mask=feature_mask,
         )
         self._metadata = None
-        self.feature_mask = feature_mask
 
     def __sklearn_tags__(self):
         """Return Population GLM specific estimator tags."""
@@ -1482,50 +1598,6 @@ class PopulationGLM(GLM):
             required=True, one_d_labels=False, two_d_labels=True
         )
         return tags
-
-    @property
-    def feature_mask(self) -> Union[jnp.ndarray, dict]:
-        """Define a feature mask of shape ``(n_features, n_neurons)``."""
-        return self._feature_mask
-
-    @feature_mask.setter
-    @cast_to_jax
-    def feature_mask(self, feature_mask: Union[DESIGN_INPUT_TYPE, dict]):
-        # do not allow reassignment after fit
-        if (self.coef_ is not None) and (self.intercept_ is not None):
-            raise AttributeError(
-                "property 'feature_mask' of 'populationGLM' cannot be set after fitting."
-            )
-
-        # check if the mask is of 0s and 1s
-        if tree_utils.pytree_map_and_reduce(
-            lambda x: jnp.any(jnp.logical_and(x != 0, x != 1)), any, feature_mask
-        ):
-            raise ValueError("'feature_mask' must contain only 0s and 1s!")
-
-        # check the mask type and ndim
-        if feature_mask is None:
-            self._feature_mask = feature_mask
-            raise_exception = False
-        elif isinstance(feature_mask, (FeaturePytree, dict)):
-            raise_exception = tree_utils.pytree_map_and_reduce(
-                lambda x: x.ndim != 1 if hasattr(x, "ndim") else True, any, feature_mask
-            )
-        elif hasattr(feature_mask, "ndim"):
-            raise_exception = feature_mask.ndim != 2
-        else:
-            raise_exception = True
-
-        if raise_exception:
-            raise ValueError(
-                "'feature_mask' of 'populationGLM' must be a 2-dimensional array, (n_features, n_neurons) "
-                "or a `FeaturePytree` of shape (n_neurons, )."
-            )
-
-        self._feature_mask = feature_mask
-
-        if isinstance(self._feature_mask, FeaturePytree):
-            self._feature_mask = self._feature_mask.data
 
     @staticmethod
     def _check_input_dimensionality(
@@ -1646,14 +1718,28 @@ class PopulationGLM(GLM):
             )
         self._check_mask(X, y, params)
 
+    def _check_mask_ndim(self, feature_mask: jnp.ndarray | DESIGN_INPUT_TYPE):
+        if not hasattr(feature_mask, "ndim"):
+            raise_exception = tree_utils.pytree_map_and_reduce(
+                lambda x: x.ndim != 1, any, feature_mask
+            )
+        else:
+            raise_exception = feature_mask.ndim != 2
+        if raise_exception:
+            raise ValueError(
+                "'feature_mask' of 'GLM' must be a 2-dimensional array, (n_features, n_neurons) "
+                "or a `FeaturePytree` of shape (n_neurons, )."
+            )
+
     def _check_mask(self, X, y, params):
+
+        if self._feature_mask is None:
+            return
+
         if isinstance(X, FeaturePytree):
             data = X.data
         else:
             data = X
-
-        if self.feature_mask is None:
-            self._initialize_feature_mask(X, y)
 
         if X is not None:
             validation.check_tree_structure(
@@ -1678,7 +1764,7 @@ class PopulationGLM(GLM):
                 f"feature_mask has {jax.tree_util.tree_map(lambda m: m.shape[0], self.feature_mask)} neurons, "
                 f"model coefficients have {jax.tree_util.tree_map(lambda x: x.shape[1], X)}  instead!",
             )
-        # check the consistency of the feature axis
+        # check the consistency of the neural axis
         validation.check_tree_axis_consistency(
             self.feature_mask,
             params[0],
@@ -1769,56 +1855,6 @@ class PopulationGLM(GLM):
         (3, 2)
         """
         return super().fit(X, y, init_params)
-
-    def _initialize_feature_mask(self, X: FeaturePytree, y: jnp.ndarray):
-        if self.feature_mask is None:
-            # static checker does not realize conversion to ndarray happened in cast_to_jax.
-            if isinstance(X, FeaturePytree):
-                self._feature_mask = jax.tree_util.tree_map(
-                    lambda x: jnp.ones((y.shape[1],)), X.data
-                )
-            elif isinstance(X, dict):
-                self._feature_mask = jax.tree_util.tree_map(
-                    lambda x: jnp.ones((y.shape[1],)), X
-                )
-            else:
-                self._feature_mask = jnp.ones((X.shape[1], y.shape[1]))
-
-    def _predict(
-        self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], X: jnp.ndarray
-    ) -> jnp.ndarray:
-        """
-        Predicts firing rates based on given parameters and design matrix.
-
-        This function computes the predicted firing rates using the provided parameters, the feature
-        mask and model design matrix ``X``. It is a streamlined version used internally within
-        optimization routines, where it serves as the loss function. Unlike the ``GLM.predict``
-        method, it does not perform any input validation, assuming that the inputs are pre-validated.
-        The parameters are first element-wise multiplied with the mask, then the canonical
-        linear-non-linear GLM map is applied.
-
-        Parameters
-        ----------
-        params :
-            Tuple containing the spike basis coefficients and bias terms.
-        X :
-            Predictors.
-
-        Returns
-        -------
-        :
-            The predicted rates. Shape (n_timebins, n_neurons).
-        """
-        Ws, bs = params
-        return self.inverse_link_function(
-            # First, multiply each feature by its corresponding coefficient,
-            # then sum across all features and add the intercept, before
-            # passing to the inverse link function
-            tree_utils.pytree_map_and_reduce(
-                lambda x, w, m: jnp.dot(x, w * m), sum, X, Ws, self._feature_mask
-            )
-            + bs
-        )
 
     def __sklearn_clone__(self) -> PopulationGLM:
         """Clone the PopulationGLM, dropping feature_mask."""
