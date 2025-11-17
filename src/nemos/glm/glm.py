@@ -789,6 +789,30 @@ class GLM(BaseRegressor):
         )
         return init_params
 
+    def _vmap_solver_run(
+        self, y: jnp.ndarray, init_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]
+    ) -> Callable:
+        """
+        Prepare the solver run function for single-neuron fitting.
+
+        For single-neuron GLMs, no vectorization is needed, so this returns
+        the solver_run directly. PopulationGLM overrides this method to wrap
+        the solver with jax.vmap for fitting multiple neurons in parallel.
+
+        Parameters
+        ----------
+        y :
+            Target neural activity. Shape (n_timebins,).
+        init_params :
+            Initial parameters (coefficients, intercepts).
+
+        Returns
+        -------
+        :
+            The solver_run function with signature: (params, data, y, feature_mask) -> (params, state).
+        """
+        return self.solver_run
+
     @cast_to_jax
     def fit(
         self,
@@ -861,17 +885,8 @@ class GLM(BaseRegressor):
 
         self.initialize_state(data, y, init_params, cast_to_jax_and_drop_nans=False)
 
-        if y.ndim == 2:
-            vmap_axis_mask = 0 if self._feature_mask is not None else None
-            vmap_axis = jax.tree_util.tree_map(lambda x: 1, init_params[0]), 0
-            solver_run = jax.vmap(
-                self.solver_run,
-                in_axes=(vmap_axis, None, 1, vmap_axis_mask),
-                out_axes=-1,
-            )
-        else:
-            solver_run = self.solver_run
-
+        # Prepare solver_run (PopulationGLM will vmap this for parallel fitting)
+        solver_run = self._vmap_solver_run(y, init_params)
         params, state = solver_run(init_params, data, y, self._feature_mask)
 
         if tree_utils.pytree_map_and_reduce(
@@ -1864,3 +1879,47 @@ class PopulationGLM(GLM):
         # reattach metadata
         klass._metadata = self._metadata
         return klass
+
+    def _vmap_solver_run(
+        self, y: jnp.ndarray, init_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]
+    ) -> Callable:
+        """
+        Prepare the solver run function with vmap for population fitting.
+
+        This method wraps the solver with jax.vmap to fit each neuron independently
+        in parallel, avoiding the need to aggregate scores across neurons in a joint
+        likelihood.
+
+        Parameters
+        ----------
+        y :
+            Target neural activity. Shape (n_timebins, n_neurons).
+        init_params :
+            Initial parameters (coefficients, intercepts) used to infer the parameter structure
+            for vmap axis configuration.
+
+        Returns
+        -------
+        :
+            A vmapped version of self.solver_run with signature:
+            (params, data, y, feature_mask) -> (params, state)
+
+        Notes
+        -----
+        The vmap configuration:
+        - in_axes for params: tree_map(lambda x: 1, init_params[0]) maps over axis 1 of coefficients
+        - in_axes for data: None (shared across neurons)
+        - in_axes for y: 1 (map over neurons, axis 1)
+        - in_axes for feature_mask: 0 if mask exists (map over mask's neuron axis), None otherwise
+        - out_axes: -1 (stack outputs along last axis)
+        """
+        # For population fitting, vmap over neurons (axis 1 of y and params)
+        vmap_axis_mask = 0 if self._feature_mask is not None else None
+        # Coefficients: vmap over axis 1 (neurons), Intercepts: vmap over axis 0
+        vmap_axis = jax.tree_util.tree_map(lambda x: 1, init_params[0]), 0
+        solver_run = jax.vmap(
+            self.solver_run,
+            in_axes=(vmap_axis, None, 1, vmap_axis_mask),
+            out_axes=-1,
+        )
+        return solver_run
