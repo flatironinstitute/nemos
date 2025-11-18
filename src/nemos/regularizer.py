@@ -214,12 +214,8 @@ class Ridge(Regularizer):
         """
 
         def l2_penalty(coeff: jnp.ndarray, intercept: jnp.ndarray) -> jnp.ndarray:
-            return (
-                0.5
-                * regularizer_strength
-                * jnp.sum(jnp.power(coeff, 2))
-                / intercept.shape[0]
-            )
+            n_neurons = 1 if intercept.ndim == 0 else intercept.shape[0]
+            return 0.5 * regularizer_strength * jnp.sum(jnp.power(coeff, 2)) / n_neurons
 
         # tree map the computation and sum over leaves
         return tree_utils.pytree_map_and_reduce(
@@ -229,8 +225,10 @@ class Ridge(Regularizer):
     def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
         """Return the penalized loss function for Ridge regularization."""
 
-        def _penalized_loss(params, X, y):
-            return loss(params, X, y) + self._penalization(params, regularizer_strength)
+        def _penalized_loss(params, *args, **kwargs):
+            return loss(params, *args, **kwargs) + self._penalization(
+                params, regularizer_strength
+            )
 
         return _penalized_loss
 
@@ -327,8 +325,10 @@ class Lasso(Regularizer):
     def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
         """Return a function for calculating the penalized loss using Lasso regularization."""
 
-        def _penalized_loss(params, X, y):
-            return loss(params, X, y) + self._penalization(params, regularizer_strength)
+        def _penalized_loss(params, *args, **kwargs):
+            return loss(params, *args, **kwargs) + self._penalization(
+                params, regularizer_strength
+            )
 
         return _penalized_loss
 
@@ -452,8 +452,10 @@ class ElasticNet(Regularizer):
     ) -> Callable:
         """Return a function for calculating the penalized loss using Elastic Net regularization."""
 
-        def _penalized_loss(params, X, y):
-            return loss(params, X, y) + self._penalization(params, regularizer_strength)
+        def _penalized_loss(params, *args, **kwargs):
+            return loss(params, *args, **kwargs) + self._penalization(
+                params, regularizer_strength
+            )
 
         return _penalized_loss
 
@@ -651,8 +653,10 @@ class GroupLasso(Regularizer):
     def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
         """Return a function for calculating the penalized loss using Group Lasso regularization."""
 
-        def _penalized_loss(params, X, y):
-            return loss(params, X, y) + self._penalization(params, regularizer_strength)
+        def _penalized_loss(params, *args, **kwargs):
+            return loss(params, *args, **kwargs) + self._penalization(
+                params, regularizer_strength
+            )
 
         return _penalized_loss
 
