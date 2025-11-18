@@ -1937,7 +1937,12 @@ class PopulationGLM(GLM):
         - out_axes: -1 (stack outputs along last axis)
         """
         # For population fitting, vmap over neurons (axis 1 of y and params)
-        vmap_axis_mask = 0 if self._feature_mask is not None else None
+        if hasattr(self._feature_mask, "shape"):
+            vmap_axis_mask = 1
+        elif self._feature_mask is None:
+            vmap_axis_mask = None
+        else:
+            vmap_axis_mask = 0
         # Coefficients: vmap over axis 1 (neurons), Intercepts: vmap over axis 0
         vmap_axis = jax.tree_util.tree_map(lambda x: 1, init_params[0]), 0
         solver_run = jax.vmap(
