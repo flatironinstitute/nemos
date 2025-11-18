@@ -1620,7 +1620,7 @@ class PopulationGLM(GLM):
         """
         Vectorization settings.
 
-        If true, vmap over neuron axis. If false, fit a joint likelihood.
+        If true, vmap over neuron axis. If false, maximize a joint log-likelihood.
         """
         return self._vmap
 
