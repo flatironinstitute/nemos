@@ -238,6 +238,8 @@ class GLM(BaseRegressor):
         self.scale_ = None
         self.dof_resid_ = None
         self.feature_mask = feature_mask
+        # only used for population glm fits, if true, vmap over neurons.
+        self._vmap = False
 
     def __sklearn_tags__(self):
         """Return GLM specific estimator tags."""
@@ -886,7 +888,11 @@ class GLM(BaseRegressor):
         self.initialize_state(data, y, init_params, cast_to_jax_and_drop_nans=False)
 
         # Prepare solver_run (PopulationGLM will vmap this for parallel fitting)
-        solver_run = self._vmap_solver_run(y, init_params)
+        if self._vmap:
+            solver_run = self._vmap_solver_run(y, init_params)
+        else:
+            solver_run = self.solver_run
+
         params, state = solver_run(init_params, data, y, self._feature_mask)
 
         if tree_utils.pytree_map_and_reduce(
@@ -1508,6 +1514,8 @@ class PopulationGLM(GLM):
         Either a matrix of shape (num_features, num_neurons) or a :meth:`nemos.pytrees.FeaturePytree` of 0s and 1s, with
         ``feature_mask[feature_name]`` of shape (num_neurons, ).
         The mask will be used to select which features are used as predictors for which neuron.
+    vmap:
+        If True, vmap over neurons, if False (default), fit joint log-likelihood.
 
     Attributes
     ----------
@@ -1593,6 +1601,7 @@ class PopulationGLM(GLM):
         solver_name: str = None,
         solver_kwargs: dict = None,
         feature_mask: Optional[jnp.ndarray | DESIGN_INPUT_TYPE] = None,
+        vmap: bool = False,
     ):
         super().__init__(
             observation_model=observation_model,
@@ -1604,6 +1613,20 @@ class PopulationGLM(GLM):
             feature_mask=feature_mask,
         )
         self._metadata = None
+        self._vmap = bool(vmap)
+
+    @property
+    def vmap(self):
+        """
+        Vectorization settings.
+
+        If true, vmap over neuron axis. If false, fit a joint likelihood.
+        """
+        return self._vmap
+
+    @vmap.setter
+    def vmap(self, vmap: bool):
+        self._vmap = bool(vmap)
 
     def __sklearn_tags__(self):
         """Return Population GLM specific estimator tags."""
