@@ -16,6 +16,7 @@ How-To Guide <how_to_guide/README>
 Tutorials <tutorials/README>
 Getting Help <getting_help>
 API Reference <api_reference>
+Citation Guide <citation>
 For Developers <developers_notes/README>
 ```
 
@@ -127,8 +128,11 @@ __Useful Links:__ [<span class="iconify" data-icon="mdi:chat-question"></span> G
 
 Open source, [licensed under MIT](https://github.com/flatironinstitute/nemos/blob/main/LICENSE).
 
+## <span class="iconify" data-icon="mdi:lead-pencil" style="width: 1em"></span>  __Cite Us__
 
-## Support
+If you use NeMoS in academic work, please cite the software. See the [](citation-doc) for more details.
+
+## __Support__
 
 This package is supported by:
 
