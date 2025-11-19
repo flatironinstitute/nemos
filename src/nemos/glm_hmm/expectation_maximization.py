@@ -19,6 +19,7 @@ class GLMHMMState(eqx.Module):
     glm_params: Tuple[Array, Array]  # (coef, intercept)
     data_log_likelihood: float | Array
     previous_data_log_likelihood: float | Array
+    log_likelihood_history: Array
     iterations: int
 
 
@@ -718,14 +719,13 @@ def prepare_likelihood_func(
 
 def _em_step(
     carry: GLMHMMState,
-    xs: None,
     X: Array,
     y: Array,
     inverse_link_function: Callable,
     likelihood_func: Callable,
     solver_run: Callable,
     is_new_session: Array,
-) -> Tuple[GLMHMMState, Array]:
+) -> GLMHMMState:
     """Single EM iteration step."""
     previous_state = carry
 
@@ -757,9 +757,12 @@ def _em_step(
         iterations=previous_state.iterations + 1,
         data_log_likelihood=new_log_like,
         previous_data_log_likelihood=previous_state.data_log_likelihood,
+        log_likelihood_history=previous_state.log_likelihood_history.at[
+            previous_state.iterations
+        ].set(new_log_like),
     )
 
-    return new_state, new_log_like
+    return new_state
 
 
 def check_log_likelihood_increment(state: GLMHMMState, tol: float) -> Array:
@@ -808,7 +811,10 @@ def em_glm_hmm(
     check_convergence: Callable = check_log_likelihood_increment,
 ) -> Tuple[Array, Array, Array, Array, Tuple[Array, Array], GLMHMMState]:
     """
-    Perform EM optimization for a GLM-HMM.
+    Perform EM optimization for a GLM-HMM using equinox while_loop.
+
+    This is identical to em_glm_hmm but uses eqx.internal.while_loop instead of
+    jax.lax.scan for the main iteration loop.
 
     Parameters
     ----------
@@ -861,12 +867,12 @@ def em_glm_hmm(
         glm_params=glm_params,
         data_log_likelihood=-jnp.array(jnp.inf),
         previous_data_log_likelihood=-jnp.array(jnp.inf),
+        log_likelihood_history=jnp.full(maxiter, jnp.nan),
         iterations=0,
     )
 
-    # Create partial function with all the static/fixed arguments
-    em_step_fn = partial(
-        _em_step,
+    em_step_fn_while = eqx.Partial(
+        lambda *args, **kwargs: _em_step(*args, **kwargs),
         X=X,
         y=y,
         inverse_link_function=inverse_link_function,
@@ -875,23 +881,16 @@ def em_glm_hmm(
         is_new_session=is_new_session,
     )
 
-    def stopping_condition(carry, _):
+    def stopping_condition_while(carry):
         new_state = carry
-        return check_convergence(
+        return ~check_convergence(
             new_state,
             tol,
         )
 
-    def body_fn(carry, xs):
-        return jax.lax.cond(
-            stopping_condition(carry, xs),
-            lambda c, _: (c, jnp.array(jnp.nan)),
-            em_step_fn,
-            carry,
-            xs,
-        )
-
-    state, likelihoods = jax.lax.scan(body_fn, state, None, length=maxiter)
+    state = eqx.internal.while_loop(
+        stopping_condition_while, em_step_fn_while, state, max_steps=maxiter, kind="lax"
+    )
 
     # final posterior calculation
     (posteriors, joint_posterior, _, _, _, _) = forward_backward(
