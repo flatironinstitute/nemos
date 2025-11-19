@@ -1189,7 +1189,7 @@ class NegativeBinomialObservations(Observations):
 
         """
         if self.scale is None:
-            self.estimate_scale(y, predicted_rate, aggregate_sample_scores)
+            self.estimate_scale(y, predicted_rate, 1.0)
         predicted_rate = jnp.clip(
             predicted_rate, min=jnp.finfo(predicted_rate.dtype).eps
         )
