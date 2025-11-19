@@ -69,7 +69,10 @@ class Observations(Base, abc.ABC):
 
     @abc.abstractmethod
     def _negative_log_likelihood(
-        self, y, predicted_rate, aggregate_sample_scores: Callable = jnp.mean
+        self,
+        y,
+        predicted_rate,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ):
         r"""Compute the observation model negative log-likelihood.
 
@@ -96,7 +99,7 @@ class Observations(Base, abc.ABC):
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
-        aggregate_sample_scores: Callable = jnp.mean,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ):
         r"""Compute the observation model log-likelihood.
 
@@ -126,7 +129,7 @@ class Observations(Base, abc.ABC):
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
-        aggregate_sample_scores: Callable = jnp.mean,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ):
         r"""Compute the observation model likelihood.
 
@@ -247,7 +250,7 @@ class Observations(Base, abc.ABC):
             "pseudo-r2-McFadden", "pseudo-r2-Cohen"
         ] = "pseudo-r2-McFadden",
         scale: Union[float, jnp.ndarray, NDArray] = 1.0,
-        aggregate_sample_scores: Callable = jnp.mean,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ) -> jnp.ndarray:
         r"""Pseudo-:math:`R^2` calculation for a GLM.
 
@@ -328,7 +331,7 @@ class Observations(Base, abc.ABC):
         self,
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
-        aggregate_sample_scores: Callable = jnp.mean,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ) -> jnp.ndarray:
         r"""Cohen's pseudo-:math:`R^2`.
 
@@ -361,7 +364,7 @@ class Observations(Base, abc.ABC):
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
-        aggregate_sample_scores: Callable = jnp.mean,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ):
         """
         McFadden's pseudo-:math:`R^2`.
@@ -420,7 +423,7 @@ class PoissonObservations(Observations):
         self,
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
-        aggregate_sample_scores: Callable = jnp.mean,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ) -> jnp.ndarray:
         r"""Compute the Poisson negative log-likelihood.
 
@@ -470,7 +473,7 @@ class PoissonObservations(Observations):
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
-        aggregate_sample_scores: Callable = jnp.mean,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ):
         r"""Compute the Poisson negative log-likelihood.
 
@@ -646,7 +649,7 @@ class GammaObservations(Observations):
         self,
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
-        aggregate_sample_scores: Callable = jnp.mean,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ) -> jnp.ndarray:
         r"""Compute the Gamma negative log-likelihood.
 
@@ -680,7 +683,7 @@ class GammaObservations(Observations):
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
-        aggregate_sample_scores: Callable = jnp.mean,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ):
         r"""Compute the Gamma negative log-likelihood.
 
@@ -852,7 +855,7 @@ class BernoulliObservations(Observations):
         self,
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
-        aggregate_sample_scores: Callable = jnp.mean,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ) -> jnp.ndarray:
         r"""Compute the Bernoulli negative log-likelihood.
 
@@ -899,7 +902,7 @@ class BernoulliObservations(Observations):
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
-        aggregate_sample_scores: Callable = jnp.mean,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ):
         r"""Compute the Bernoulli negative log-likelihood.
 
@@ -1049,7 +1052,9 @@ class BernoulliObservations(Observations):
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
-        aggregate_sample_scores: Callable = lambda x: jnp.exp(jnp.mean(jnp.log(x))),
+        aggregate_sample_scores: Callable = lambda x: jnp.exp(
+            jnp.mean(jnp.log(x), axis=0).sum()
+        ),
     ):
         r"""Compute the Binomial model likelihood.
 
@@ -1152,7 +1157,7 @@ class NegativeBinomialObservations(Observations):
         self,
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
-        aggregate_sample_scores: Callable = jnp.mean,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ) -> jnp.ndarray:
         r"""Compute the Negative Binomial negative log-likelihood.
 
@@ -1203,7 +1208,7 @@ class NegativeBinomialObservations(Observations):
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray, None] = None,
-        aggregate_sample_scores: Callable = jnp.mean,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ):
         r"""Compute the Negative Binomial log-likelihood.
 
