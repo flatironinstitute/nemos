@@ -213,18 +213,11 @@ class Ridge(Regularizer):
             The Ridge penalization value.
         """
 
-        def l2_penalty(coeff: jnp.ndarray, intercept: jnp.ndarray) -> jnp.ndarray:
-            return (
-                0.5
-                * regularizer_strength
-                * jnp.sum(jnp.power(coeff, 2))
-                / intercept.shape[0]
-            )
+        def l2_penalty(coeff: jnp.ndarray) -> jnp.ndarray:
+            return 0.5 * regularizer_strength * jnp.sum(jnp.power(coeff, 2))
 
         # tree map the computation and sum over leaves
-        return tree_utils.pytree_map_and_reduce(
-            lambda x: l2_penalty(x, params[1]), sum, params[0]
-        )
+        return tree_utils.pytree_map_and_reduce(lambda x: l2_penalty(x), sum, params[0])
 
     def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
         """Return the penalized loss function for Ridge regularization."""
@@ -251,7 +244,6 @@ class Ridge(Regularizer):
 
         def prox_op(params, l2reg, scaling=1.0):
             Ws, bs = params
-            l2reg /= bs.shape[0]
             return jaxopt.prox.prox_ridge(Ws, l2reg, scaling=scaling), bs
 
         return prox_op
@@ -292,7 +284,6 @@ class Lasso(Regularizer):
 
         def prox_op(params, l1reg, scaling=1.0):
             Ws, bs = params
-            l1reg /= bs.shape[0]
             # if Ws is a pytree, l1reg needs to be a pytree with the same
             # structure
             l1reg = jax.tree_util.tree_map(lambda x: l1reg * jnp.ones_like(x), Ws)
@@ -318,13 +309,11 @@ class Lasso(Regularizer):
             The Lasso penalization value.
         """
 
-        def l1_penalty(coeff: jnp.ndarray, intercept: jnp.ndarray) -> jnp.ndarray:
-            return regularizer_strength * jnp.sum(jnp.abs(coeff)) / intercept.shape[0]
+        def l1_penalty(coeff: jnp.ndarray) -> jnp.ndarray:
+            return regularizer_strength * jnp.sum(jnp.abs(coeff))
 
         # tree map the computation and sum over leaves
-        return tree_utils.pytree_map_and_reduce(
-            lambda x: l1_penalty(x, params[1]), sum, params[0]
-        )
+        return tree_utils.pytree_map_and_reduce(lambda x: l1_penalty(x), sum, params[0])
 
     def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
         """Return a function for calculating the penalized loss using Lasso regularization."""
@@ -394,7 +383,6 @@ class ElasticNet(Regularizer):
             Ws, bs = params
             # since we do not allow array regularization assume we pass a tuple
             regularizer_strength, regularizer_ratio = netreg
-            regularizer_strength /= bs.shape[0]
             lam = regularizer_strength * regularizer_ratio  # hyperparams[0]
             gam = (1 - regularizer_ratio) / regularizer_ratio  # hyperparams[1]
             # if Ws is a pytree, netreg needs to be a pytree with the same
@@ -435,20 +423,16 @@ class ElasticNet(Regularizer):
             The Elastic Net penalization value.
         """
 
-        def net_penalty(coeff: jnp.ndarray, intercept: jnp.ndarray) -> jnp.ndarray:
+        def net_penalty(coeff: jnp.ndarray) -> jnp.ndarray:
             regularizer_strength, regularizer_ratio = net_regularization
-            return (
-                regularizer_strength
-                * (
-                    0.5 * (1 - regularizer_ratio) * jnp.sum(jnp.power(coeff, 2))
-                    + regularizer_ratio * jnp.sum(jnp.abs(coeff))
-                )
-                / intercept.shape[0]
+            return regularizer_strength * (
+                0.5 * (1 - regularizer_ratio) * jnp.sum(jnp.power(coeff, 2))
+                + regularizer_ratio * jnp.sum(jnp.abs(coeff))
             )
 
         # tree map the computation and sum over leaves
         return tree_utils.pytree_map_and_reduce(
-            lambda x: net_penalty(x, params[1]), sum, params[0]
+            lambda x: net_penalty(x), sum, params[0]
         )
 
     def penalized_loss(
@@ -650,7 +634,7 @@ class GroupLasso(Regularizer):
         )
 
         # divide regularization strength by number of neurons
-        regularizer_strength = regularizer_strength / params[1].shape[0]
+        regularizer_strength = regularizer_strength
 
         return penalty * regularizer_strength
 
