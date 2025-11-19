@@ -3123,7 +3123,7 @@ class TestGLMObservationModel:
             (glm2.coef_, glm2.intercept_),
         )
 
-    @pytest.mark.parametrize("solver_name", ["GradientDescent", "SVRG"])
+    @pytest.mark.parametrize("solver_name", ["LBFGS", "SVRG"])
     @pytest.mark.solver_related
     def test_glm_fit_matches_sklearn(
         self, solver_name, request, glm_type, model_instantiation, sklearn_model
@@ -3147,24 +3147,23 @@ class TestGLMObservationModel:
         if "gamma" in model_instantiation:
             model.inverse_link_function = jnp.exp
 
-        # set precision to float64 for accurate matching of the results
-        model.data_type = jnp.float64
         model.fit(X, y)
 
         if "population" in glm_type:
             # test by fitting each neuron separately in sklearn
             for n, yn in enumerate(y.T):
                 sklearn_model.fit(X, yn)
-
-                match_weights = jnp.allclose(
-                    sklearn_model.coef_, model.coef_[:, n], atol=1e-5, rtol=0.0
-                )
+                abs_tol = 1e-6
                 # this will fail for poisson with GradientDescent for the third neuron
-                # with tol=1e-5
+                # with tol=1.57e-5 (note that other algorithm do just fine)
+                match_weights = jnp.allclose(
+                    sklearn_model.coef_, model.coef_[:, n], atol=abs_tol, rtol=0.0
+                )
+
                 match_intercepts = jnp.allclose(
                     sklearn_model.intercept_,
                     model.intercept_[n],
-                    atol=1.18e-5,
+                    atol=1e-6,
                     rtol=0.0,
                 )
                 if (not match_weights) or (not match_intercepts):
@@ -3174,10 +3173,10 @@ class TestGLMObservationModel:
             sklearn_model.fit(X, y)
 
             match_weights = jnp.allclose(
-                sklearn_model.coef_, model.coef_, atol=1e-5, rtol=0.0
+                sklearn_model.coef_, model.coef_, atol=1e-6, rtol=0.0
             )
             match_intercepts = jnp.allclose(
-                sklearn_model.intercept_, model.intercept_, atol=1e-5, rtol=0.0
+                sklearn_model.intercept_, model.intercept_, atol=1e-6, rtol=0.0
             )
             if (not match_weights) or (not match_intercepts):
                 raise ValueError("GLM.fit estimate does not match sklearn!")
