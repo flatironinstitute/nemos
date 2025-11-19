@@ -1324,6 +1324,8 @@ class TestEMAlgorithm:
 
         # Design matrix and observed choices
         X, y = data["X"][:100], data["y"][:100]
+        X = X.astype(float)
+        y = y.astype(float)
 
         # Initial parameters
         initial_prob = data["initial_prob"]
