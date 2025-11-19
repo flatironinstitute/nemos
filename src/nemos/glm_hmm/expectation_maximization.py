@@ -8,6 +8,8 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import NDArray
 
+from ..tree_utils import pytree_map_and_reduce
+
 Array = NDArray | jax.numpy.ndarray
 
 
@@ -358,17 +360,20 @@ def initialize_new_session(n_samples, is_new_session):
     return is_new_session
 
 
-def compute_rate_per_state(X, glm_params, inverse_link_function):
+def compute_rate_per_state(
+    X: Any, glm_params: Any, inverse_link_function: Callable
+) -> Array:
     """Compute the GLM mean per state."""
     coef, intercept = glm_params
 
     # Predicted y
-    if coef.ndim > 2:
-        predicted_rate_given_state = inverse_link_function(
-            jnp.einsum("ik, kjw->ijw", X, coef) + intercept
+    if jax.tree_util.tree_leaves(coef)[0].ndim > 2:
+        lin_comb = pytree_map_and_reduce(
+            lambda x, w: jnp.einsum("ik, kjw->ijw", x, w), sum, X, coef
         )
     else:
-        predicted_rate_given_state = inverse_link_function(X @ coef + intercept)
+        lin_comb = pytree_map_and_reduce(lambda x, w: jnp.matmul(x, w), sum, X, coef)
+    predicted_rate_given_state = inverse_link_function(lin_comb + intercept)
     return predicted_rate_given_state
 
 
@@ -447,7 +452,7 @@ def forward_backward(
     .. [1] Bishop, C. M. (2006). *Pattern recognition and machine learning*. Springer.
     """
     # Initialize variables
-    n_time_bins = X.shape[0]
+    n_time_bins = y.shape[0]
     is_new_session = initialize_new_session(y.shape[0], is_new_session)
     predicted_rate_given_state = compute_rate_per_state(
         X, glm_params, inverse_link_function
