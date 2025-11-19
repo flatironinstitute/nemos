@@ -158,7 +158,7 @@ filterwarnings = [
 markers = [
   "solver_related: tests that interact with solvers",
 ]
-addopts = "--strict-markers"
+addopts = ["-s", "--strict-markers"]
 
 
 [tool.coverage.run]
