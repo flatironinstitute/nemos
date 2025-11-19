@@ -811,10 +811,10 @@ def em_glm_hmm(
     check_convergence: Callable = check_log_likelihood_increment,
 ) -> Tuple[Array, Array, Array, Array, Tuple[Array, Array], GLMHMMState]:
     """
-    Perform EM optimization for a GLM-HMM using equinox while_loop.
+    Perform EM optimization for a GLM-HMM.
 
-    This is identical to em_glm_hmm but uses eqx.internal.while_loop instead of
-    jax.lax.scan for the main iteration loop.
+    Uses equinox while_loop for efficient early stopping when convergence
+    criteria are met.
 
     Parameters
     ----------
