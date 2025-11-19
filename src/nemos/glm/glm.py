@@ -19,7 +19,7 @@ from .._observation_model_builder import instantiate_observation_model
 from ..base_regressor import BaseRegressor, strip_metadata
 from ..exceptions import NotFittedError
 from ..pytrees import FeaturePytree
-from ..regularizer import GroupLasso, Lasso, Regularizer, Ridge
+from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
 from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
 from ..type_casting import jnp_asarray_if, support_pynapple
 from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength, SolverState, StepResult
@@ -917,7 +917,7 @@ class GLM(BaseRegressor):
 
     def _estimate_resid_degrees_of_freedom(
         self, X: DESIGN_INPUT_TYPE, n_samples: Optional[int] = None
-    ):
+    ) -> jnp.ndarray:
         """
         Estimate the degrees of freedom of the residuals.
 
@@ -952,7 +952,7 @@ class GLM(BaseRegressor):
         # if the regularizer is lasso use the non-zero
         # coeff as an estimate of the dof
         # see https://arxiv.org/abs/0712.0881
-        if isinstance(self.regularizer, (GroupLasso, Lasso)):
+        if isinstance(self.regularizer, (GroupLasso, Lasso, ElasticNet)):
             resid_dof = tree_utils.pytree_map_and_reduce(
                 lambda x: ~jnp.isclose(x, jnp.zeros_like(x)),
                 lambda x: sum([jnp.sum(i, axis=0) for i in x]),

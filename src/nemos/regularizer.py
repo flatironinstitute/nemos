@@ -234,11 +234,10 @@ class Ridge(Regularizer):
         float
             The Ridge penalization value.
         """
-
         coeffs, intercept = params
 
         def l2_penalty(coeff: jnp.ndarray, strength: jnp.ndarray):
-            return 0.5 * jnp.sum(strength * jnp.square(coeff)) / intercept.shape[0]
+            return 0.5 * jnp.sum(strength * jnp.square(coeff))
 
         return tree_utils.pytree_map_and_reduce(
             l2_penalty,
@@ -252,8 +251,10 @@ class Ridge(Regularizer):
     ) -> Callable:
         """Return the penalized loss function for Ridge regularization."""
 
-        def _penalized_loss(params, X, y):
-            return loss(params, X, y) + self._penalization(params, regularizer_strength)
+        def _penalized_loss(params, *args, **kwargs):
+            return loss(params, *args, **kwargs) + self._penalization(
+                params, regularizer_strength
+            )
 
         return _penalized_loss
 
@@ -271,13 +272,11 @@ class Ridge(Regularizer):
         """
 
         def prox_op(params, l2reg, scaling=1.0):
-            Ws, bs = params
-            l2reg = jax.tree_util.tree_map(lambda x: x / bs.shape[0], l2reg)
             return jax.tree_util.tree_map(
                 lambda w, r: jaxopt.prox.prox_ridge(w, r, scaling=scaling),
-                Ws,
+                params[0],
                 l2reg,
-            ), bs
+            ), params[1]
 
         return prox_op
 
@@ -317,12 +316,11 @@ class Lasso(Regularizer):
 
         def prox_op(params, l1reg, scaling=1.0):
             Ws, bs = params
-            l1reg = jax.tree_util.tree_map(lambda x: x / bs.shape[0], l1reg)
             return jax.tree_util.tree_map(
                 lambda w, r: jaxopt.prox.prox_lasso(w, r, scaling=scaling),
-                Ws,
+                params[0],
                 l1reg,
-            ), bs
+            ), params[1]
 
         return prox_op
 
@@ -347,7 +345,7 @@ class Lasso(Regularizer):
         coeffs, intercept = params
 
         def l1_penalty(coeff: jnp.ndarray, strength: jnp.ndarray):
-            return jnp.sum(strength * jnp.abs(coeff)) / intercept.shape[0]
+            return jnp.sum(strength * jnp.abs(coeff))
 
         return tree_utils.pytree_map_and_reduce(
             l1_penalty,
@@ -361,8 +359,10 @@ class Lasso(Regularizer):
     ) -> Callable:
         """Return a function for calculating the penalized loss using Lasso regularization."""
 
-        def _penalized_loss(params, X, y):
-            return loss(params, X, y) + self._penalization(params, regularizer_strength)
+        def _penalized_loss(params, *args, **kwargs):
+            return loss(params, *args, **kwargs) + self._penalization(
+                params, regularizer_strength
+            )
 
         return _penalized_loss
 
@@ -424,7 +424,6 @@ class ElasticNet(Regularizer):
             Ws, bs = params
             # since we do not allow array regularization assume we pass a tuple
             regularizer_strength, regularizer_ratio = netreg
-            regularizer_strength /= bs.shape[0]
             lam = regularizer_strength * regularizer_ratio  # hyperparams[0]
             gam = (1 - regularizer_ratio) / regularizer_ratio  # hyperparams[1]
             # if Ws is a pytree, netreg needs to be a pytree with the same
@@ -465,20 +464,16 @@ class ElasticNet(Regularizer):
             The Elastic Net penalization value.
         """
 
-        def net_penalty(coeff: jnp.ndarray, intercept: jnp.ndarray) -> jnp.ndarray:
+        def net_penalty(coeff: jnp.ndarray) -> jnp.ndarray:
             regularizer_strength, regularizer_ratio = net_regularization
-            return (
-                regularizer_strength
-                * (
-                    0.5 * (1 - regularizer_ratio) * jnp.sum(jnp.power(coeff, 2))
-                    + regularizer_ratio * jnp.sum(jnp.abs(coeff))
-                )
-                / intercept.shape[0]
+            return regularizer_strength * (
+                0.5 * (1 - regularizer_ratio) * jnp.sum(jnp.power(coeff, 2))
+                + regularizer_ratio * jnp.sum(jnp.abs(coeff))
             )
 
         # tree map the computation and sum over leaves
         return tree_utils.pytree_map_and_reduce(
-            lambda x: net_penalty(x, params[1]), sum, params[0]
+            lambda x: net_penalty(x), sum, params[0]
         )
 
     def penalized_loss(
@@ -486,8 +481,10 @@ class ElasticNet(Regularizer):
     ) -> Callable:
         """Return a function for calculating the penalized loss using Elastic Net regularization."""
 
-        def _penalized_loss(params, X, y):
-            return loss(params, X, y) + self._penalization(params, regularizer_strength)
+        def _penalized_loss(params, *args, **kwargs):
+            return loss(params, *args, **kwargs) + self._penalization(
+                params, regularizer_strength
+            )
 
         return _penalized_loss
 
@@ -708,15 +705,17 @@ class GroupLasso(Regularizer):
         )
 
         # divide regularization strength by number of neurons
-        regularizer_strength = regularizer_strength / params[1].shape[0]
+        regularizer_strength = regularizer_strength
 
         return penalty * regularizer_strength
 
     def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
         """Return a function for calculating the penalized loss using Group Lasso regularization."""
 
-        def _penalized_loss(params, X, y):
-            return loss(params, X, y) + self._penalization(params, regularizer_strength)
+        def _penalized_loss(params, *args, **kwargs):
+            return loss(params, *args, **kwargs) + self._penalization(
+                params, regularizer_strength
+            )
 
         return _penalized_loss
 
