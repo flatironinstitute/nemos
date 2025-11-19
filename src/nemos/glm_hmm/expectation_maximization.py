@@ -564,22 +564,13 @@ def hmm_negative_log_likelihood(
     nll:
         The scalar negative log-likelihood weighted by the posteriors.
     """
-    coef, intercept = glm_params
-    if coef.ndim > 2:
-        # coef.shape is (n_features, n_neurons, n_states)
-        predicted_rate = inverse_link_function(
-            jnp.einsum("ik, kjw->ijw", X, coef) + intercept
-        )
-        nll = negative_log_likelihood_func(
-            y,
-            predicted_rate,
-        ).sum(axis=1)
-    else:
-        predicted_rate = inverse_link_function(X @ coef + intercept)
-        nll = negative_log_likelihood_func(
-            y,
-            predicted_rate,
-        )
+    predicted_rate = compute_rate_per_state(X, glm_params, inverse_link_function)
+    nll = negative_log_likelihood_func(
+        y,
+        predicted_rate,
+    )
+    if nll.ndim > 2:
+        nll = nll.sum(axis=1)  # sum over neurons
 
     # Compute dot products between log-likelihood terms and gammas
     nll = jnp.sum(nll * posteriors)
