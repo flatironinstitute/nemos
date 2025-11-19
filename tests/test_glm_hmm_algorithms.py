@@ -2421,3 +2421,189 @@ class TestCompilation:
             f"forward_backward compiled {compilations} times, "
             f"expected at most 1 compilation"
         )
+
+
+class TestPytreeSupport:
+    """Test that GLM-HMM algorithms support pytree inputs."""
+
+    def test_forward_backward_with_pytree(self, generate_data_multi_state):
+        """Test forward_backward accepts pytree inputs for X and coef."""
+        new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
+            generate_data_multi_state
+        )
+
+        # Split X and coef into dictionaries
+        n_features = X.shape[1]
+        X_tree = {
+            "feature_a": X[:, :1],
+            "feature_b": X[:, 1:],
+        }
+        coef_tree = {
+            "feature_a": coef[:1, :],
+            "feature_b": coef[1:, :],
+        }
+
+        obs = PoissonObservations()
+        likelihood_func, _ = prepare_likelihood_func(
+            is_population_glm=False,
+            likelihood_func=obs.log_likelihood,
+            negative_log_likelihood_func=obs._negative_log_likelihood,
+            is_log=True,
+        )
+
+        # Test with standard arrays (reference)
+        posteriors_ref, joint_posterior_ref, ll_ref, ll_norm_ref, alphas_ref, betas_ref = (
+            forward_backward(
+                X,
+                y,
+                initial_prob,
+                transition_prob,
+                (coef, intercept),
+                obs.default_inverse_link_function,
+                likelihood_func,
+                new_sess.astype(bool),
+            )
+        )
+
+        # Test with pytrees
+        posteriors, joint_posterior, ll, ll_norm, alphas, betas = forward_backward(
+            X_tree,
+            y,
+            initial_prob,
+            transition_prob,
+            (coef_tree, intercept),
+            obs.default_inverse_link_function,
+            likelihood_func,
+            new_sess.astype(bool),
+        )
+
+        # Results should be identical
+        np.testing.assert_allclose(posteriors, posteriors_ref)
+        np.testing.assert_allclose(joint_posterior, joint_posterior_ref)
+        np.testing.assert_allclose(ll, ll_ref)
+        np.testing.assert_allclose(ll_norm, ll_norm_ref)
+        np.testing.assert_allclose(alphas, alphas_ref)
+        np.testing.assert_allclose(betas, betas_ref)
+
+    def test_hmm_negative_log_likelihood_with_pytree(self, generate_data_multi_state):
+        """Test hmm_negative_log_likelihood accepts pytree inputs."""
+        new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
+            generate_data_multi_state
+        )
+
+        # Split X and coef into dictionaries
+        X_tree = {
+            "feature_a": X[:, :1],
+            "feature_b": X[:, 1:],
+        }
+        coef_tree = {
+            "feature_a": coef[:1, :],
+            "feature_b": coef[1:, :],
+        }
+
+        obs = PoissonObservations()
+
+        # Create vmapped negative log likelihood
+        negative_log_likelihood = jax.vmap(
+            lambda x, z: obs._negative_log_likelihood(
+                x, z, aggregate_sample_scores=lambda w: w
+            ),
+            in_axes=(None, 1),
+            out_axes=1,
+        )
+
+        # Create some dummy posteriors
+        n_states = initial_prob.shape[0]
+        n_samples = X.shape[0]
+        posteriors = np.random.uniform(size=(n_samples, n_states))
+        posteriors /= posteriors.sum(axis=1, keepdims=True)
+
+        # Test with standard arrays (reference)
+        nll_ref = hmm_negative_log_likelihood(
+            (coef, intercept),
+            X,
+            y,
+            posteriors,
+            obs.default_inverse_link_function,
+            negative_log_likelihood,
+        )
+
+        # Test with pytrees
+        nll = hmm_negative_log_likelihood(
+            (coef_tree, intercept),
+            X_tree,
+            y,
+            posteriors,
+            obs.default_inverse_link_function,
+            negative_log_likelihood,
+        )
+
+        # Results should be identical
+        np.testing.assert_allclose(nll, nll_ref)
+
+    def test_em_glm_hmm_with_pytree(self, generate_data_multi_state):
+        """Test em_glm_hmm accepts pytree inputs for X and coef."""
+        new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
+            generate_data_multi_state
+        )
+
+        # Split X and coef into dictionaries
+        X_tree = {
+            "feature_a": X[:, :1],
+            "feature_b": X[:, 1:],
+        }
+        coef_tree = {
+            "feature_a": coef[:1, :],
+            "feature_b": coef[1:, :],
+        }
+
+        obs = PoissonObservations()
+        likelihood_func, vmap_nll = prepare_likelihood_func(
+            is_population_glm=False,
+            likelihood_func=obs.log_likelihood,
+            negative_log_likelihood_func=obs._negative_log_likelihood,
+            is_log=True,
+        )
+
+        # Create solver using GLM class
+        def partial_hmm_negative_log_likelihood(
+            weights, design_matrix, observations, posterior_prob
+        ):
+            return hmm_negative_log_likelihood(
+                weights,
+                X=design_matrix,
+                y=observations,
+                posteriors=posterior_prob,
+                inverse_link_function=obs.default_inverse_link_function,
+                negative_log_likelihood_func=vmap_nll,
+            )
+
+        glm = GLM(observation_model=obs, solver_name="LBFGS")
+        glm.instantiate_solver(partial_hmm_negative_log_likelihood)
+        solver_run = glm._solver_run
+
+        # Run EM with pytrees (just a few iterations)
+        posteriors, joint_posterior, final_init, final_trans, final_params, final_state = (
+            em_glm_hmm(
+                X_tree,
+                y,
+                initial_prob,
+                transition_prob,
+                (coef_tree, intercept),
+                obs.default_inverse_link_function,
+                likelihood_func,
+                solver_run,
+                new_sess.astype(bool),
+                maxiter=3,
+                tol=1e-8,
+            )
+        )
+
+        # Just verify it runs and returns valid outputs
+        assert posteriors.shape == (X.shape[0], initial_prob.shape[0])
+        assert joint_posterior.shape == (initial_prob.shape[0], initial_prob.shape[0])
+        assert final_init.shape == initial_prob.shape
+        assert final_trans.shape == transition_prob.shape
+        assert isinstance(final_params, tuple)
+        assert isinstance(final_params[0], dict)  # coef should be a dict
+        assert final_state.iterations > 0
