@@ -10,14 +10,14 @@ import pytest
 import scipy as sp
 import scipy.stats as sts
 import statsmodels.api as sm
+
+# Import helpers from conftest
+from conftest import is_population_model
 from numba import njit
 
 import nemos as nmo
 from nemos._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
 from nemos.inverse_link_function_utils import LINK_NAME_TO_FUNC
-
-# Import helpers from conftest
-from conftest import is_population_model
 
 MODEL_REGISTRY = {
     "GLM": nmo.glm.GLM,
