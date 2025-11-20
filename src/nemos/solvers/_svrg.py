@@ -49,6 +49,7 @@ class SVRGState(NamedTuple):
     stepsize: float
     reference_point: Optional[Pytree] = None
     full_grad_at_reference_point: Optional[Pytree] = None
+    aux: Optional[Any] = None
 
 
 class ProxSVRG:
@@ -115,13 +116,23 @@ class ProxSVRG:
         stepsize: float = 1e-3,
         tol: float = 1e-3,
         batch_size: int = 1,
+        has_aux: bool = False,
     ):
+        if has_aux:
+            self.fun = fun
+        else:
+            # standardize to always having aux
+            def fun_with_aux(*args, **kwargs):
+                return fun(*args, **kwargs), None
+
+            self.fun = fun_with_aux
+
         self.fun = fun
         self.maxiter = maxiter
         self.key = key
         self.stepsize = stepsize
         self.tol = tol
-        self.loss_gradient = jit(grad(self.fun))
+        self.loss_gradient = jit(grad(self.fun, has_aux=True))
         self.batch_size = batch_size
         self.proximal_operator = prox
 
@@ -207,10 +218,12 @@ class ProxSVRG:
         """
         # gradient on batch_{i_k} evaluated at the current parameters
         # gradient of f_{i_k} at x_{k} in the pseudocode of Gower et al. 2020
-        minibatch_grad_at_current_params = self.loss_gradient(params, *args)
+        minibatch_grad_at_current_params, _ = self.loss_gradient(params, *args)
         # gradient on batch_{i_k} evaluated at the anchor point
         # gradient of f_{i_k} at x_{k} in the pseudocode of Gower et al. 2020
-        minibatch_grad_at_reference_point = self.loss_gradient(reference_point, *args)
+        minibatch_grad_at_reference_point, _ = self.loss_gradient(
+            reference_point, *args
+        )
 
         # SVRG gradient estimate
         gk = jax.tree_util.tree_map(
@@ -441,10 +454,14 @@ class ProxSVRG:
             prev_reference_point, state = step
 
             # evaluate and store the full gradient with the params from the last inner loop
+            # TODO: Currently the saved aux comes from the function evaluation on the full data.
+            # TODO: Is that the required behavior?
+            # Alternatively, it could be saved after every (minibatch) evaluation.
+            full_grad, new_aux = self.loss_gradient(prev_reference_point, *args)
+
             state = state._replace(
-                full_grad_at_reference_point=self.loss_gradient(
-                    prev_reference_point, *args
-                )
+                full_grad_at_reference_point=full_grad,
+                aux=new_aux,
             )
 
             # run an update over the whole data
@@ -473,8 +490,10 @@ class ProxSVRG:
 
         # initialize the full gradient at the anchor point
         # the anchor point is init_params at first
+        init_grad, init_aux = self.loss_gradient(init_params, *args)
         init_state = init_state._replace(
-            full_grad_at_reference_point=self.loss_gradient(init_params, *args)
+            full_grad_at_reference_point=init_grad,
+            aux=init_aux,
         )
 
         final_params, final_state = loop.while_loop(
@@ -650,6 +669,7 @@ class SVRG(ProxSVRG):
         stepsize: float = 1e-3,
         tol: float = 1e-3,
         batch_size: int = 1,
+        has_aux: bool = False,
     ):
         super().__init__(
             fun,
@@ -659,6 +679,7 @@ class SVRG(ProxSVRG):
             stepsize,
             tol,
             batch_size,
+            has_aux,
         )
 
     def init_state(self, init_params: Pytree, *args: Any, **kwargs) -> SVRGState:
