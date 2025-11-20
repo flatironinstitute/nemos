@@ -2452,17 +2452,22 @@ class TestPytreeSupport:
         )
 
         # Test with standard arrays (reference)
-        posteriors_ref, joint_posterior_ref, ll_ref, ll_norm_ref, alphas_ref, betas_ref = (
-            forward_backward(
-                X,
-                y,
-                initial_prob,
-                transition_prob,
-                (coef, intercept),
-                obs.default_inverse_link_function,
-                likelihood_func,
-                new_sess.astype(bool),
-            )
+        (
+            posteriors_ref,
+            joint_posterior_ref,
+            ll_ref,
+            ll_norm_ref,
+            alphas_ref,
+            betas_ref,
+        ) = forward_backward(
+            X,
+            y,
+            initial_prob,
+            transition_prob,
+            (coef, intercept),
+            obs.default_inverse_link_function,
+            likelihood_func,
+            new_sess.astype(bool),
         )
 
         # Test with pytrees
@@ -2583,20 +2588,25 @@ class TestPytreeSupport:
         solver_run = glm._solver_run
 
         # Run EM with pytrees (just a few iterations)
-        posteriors, joint_posterior, final_init, final_trans, final_params, final_state = (
-            em_glm_hmm(
-                X_tree,
-                y,
-                initial_prob,
-                transition_prob,
-                (coef_tree, intercept),
-                obs.default_inverse_link_function,
-                likelihood_func,
-                solver_run,
-                new_sess.astype(bool),
-                maxiter=3,
-                tol=1e-8,
-            )
+        (
+            posteriors,
+            joint_posterior,
+            final_init,
+            final_trans,
+            final_params,
+            final_state,
+        ) = em_glm_hmm(
+            X_tree,
+            y,
+            initial_prob,
+            transition_prob,
+            (coef_tree, intercept),
+            obs.default_inverse_link_function,
+            likelihood_func,
+            solver_run,
+            new_sess.astype(bool),
+            maxiter=3,
+            tol=1e-8,
         )
 
         # Just verify it runs and returns valid outputs
