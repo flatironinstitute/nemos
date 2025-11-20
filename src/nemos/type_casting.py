@@ -461,3 +461,22 @@ def support_pynapple(conv_type: Literal["jax", "numpy"] = "jax") -> Callable:
         return wrapper
 
     return decorator
+
+
+def cast_to_jax(func):
+    """Cast argument to jax."""
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            args, kwargs = jax.tree_util.tree_map(
+                lambda x: jnp_asarray_if(x, dtype=float), (args, kwargs)
+            )
+        except Exception:
+            raise TypeError(
+                "X and y should be array-like object (or trees of array like object) "
+                "with numeric data type!"
+            )
+        return func(*args, **kwargs)
+
+    return wrapper
