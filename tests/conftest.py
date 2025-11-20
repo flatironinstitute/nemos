@@ -16,6 +16,13 @@ from copy import deepcopy
 from functools import partial
 from typing import Literal
 
+# Named tuple for model fixture returns (clearer than tuple indexing)
+ModelFixture = namedtuple(
+    "ModelFixture",
+    ["X", "y", "model", "params", "rates", "extra"],
+    defaults=[None, None],  # rates and extra default to None
+)
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -1143,13 +1150,13 @@ def instantiate_glm_func(
         counts, rates = model.simulate(jax.random.PRNGKey(1234), X)
     else:
         counts, rates = None, None
-    return (
-        X,
-        counts,
-        model,
-        (model.coef_, model.intercept_),
-        rates,
-        None,
+    return ModelFixture(
+        X=X,
+        y=counts,
+        model=model,
+        params=(model.coef_, model.intercept_),
+        rates=rates,
+        extra=None,
     )
 
 
@@ -1181,17 +1188,36 @@ def instantiate_population_glm_func(
         counts, rates = model.simulate(jax.random.PRNGKey(1234), X)
     else:
         counts, rates = None, None
-    return (
-        X,
-        counts,
-        model,
-        (model.coef_, model.intercept_),
-        rates,
-        None,
+    return ModelFixture(
+        X=X,
+        y=counts,
+        model=model,
+        params=(model.coef_, model.intercept_),
+        rates=rates,
+        extra=None,
     )
 
 
 _MODEL_CACHE = {}
+
+
+# Registry for model-specific configurations
+MODEL_CONFIG = {
+    "GLM": {
+        "is_population": False,
+        "default_y_shape": (500,),
+    },
+    "PopulationGLM": {
+        "is_population": True,
+        "default_y_shape": (500, 3),
+    },
+}
+
+
+def is_population_model(model) -> bool:
+    """Check if a model is a population model using registry instead of string matching."""
+    model_name = model.__class__.__name__
+    return MODEL_CONFIG.get(model_name, {}).get("is_population", False)
 
 
 @pytest.fixture
