@@ -90,9 +90,9 @@ class Regularizer(Base, abc.ABC):
     def __str__(self):
         return format_repr(self)
 
-    @staticmethod
     @abc.abstractmethod
     def _penalization(
+        self,
         params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
         regularizer_strength: RegularizerStrength,
     ):
@@ -100,12 +100,13 @@ class Regularizer(Base, abc.ABC):
 
     @staticmethod
     def _check_loss_output_tuple(output: tuple):
-        if len(output) > 1:
+        if len(output) != 2:
             n_out = len(output)
+            word = "value" if n_out == 1 else "values"
             raise ValueError(
-                f"Invalid loss function return. The loss function returns {n_out} values. "
-                "A valid loss function can return either a single value, the loss, "
-                "or two outputs, the loss and an auxiliary variable."
+                f"Invalid loss function return. The loss function returns a tuple with {n_out} {word}.\n"
+                "A valid loss function can return either a single value (float or a 0-dim array), the loss, "
+                "or a tuple with two values, the loss and an auxiliary variable."
             )
 
     def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
@@ -177,9 +178,8 @@ class UnRegularized(Regularizer):
     def _validate_regularizer_strength(self, strength: None):
         return None
 
-    @staticmethod
     def _penalization(
-        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], regularizer_strength: float
+        self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], regularizer_strength: float
     ):
         return 0.0
 
@@ -209,9 +209,10 @@ class Ridge(Regularizer):
     ):
         super().__init__()
 
-    @staticmethod
     def _penalization(
-        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], regularizer_strength: float
+        self,
+        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+        regularizer_strength: float,
     ) -> jnp.ndarray:
         """
         Compute the Ridge penalization for given parameters.
@@ -295,9 +296,10 @@ class Lasso(Regularizer):
 
         return prox_op
 
-    @staticmethod
     def _penalization(
-        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], regularizer_strength: float
+        self,
+        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+        regularizer_strength: float,
     ) -> jnp.ndarray:
         """
         Compute the Lasso penalization for given parameters.
@@ -387,8 +389,8 @@ class ElasticNet(Regularizer):
 
         return prox_op
 
-    @staticmethod
     def _penalization(
+        self,
         params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
         net_regularization: Tuple[float, float],
     ) -> jnp.ndarray:
