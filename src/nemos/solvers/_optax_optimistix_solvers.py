@@ -345,7 +345,7 @@ class OptimistixOptaxProximalGradient(AbstractOptimistixOptaxSolver):
         *args,
     ) -> OptimistixStepResult:
         solution = optx.minimise(
-            fn=self.fun,
+            fn=self.fun_with_aux if self.config.has_aux else self.fun,
             solver=self,  # pyright: ignore
             y0=init_params,
             args=args,

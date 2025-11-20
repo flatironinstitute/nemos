@@ -45,6 +45,8 @@ class OptimistixConfig:
     # f_struct: PyTree[jax.ShapeDtypeStruct] = dataclasses.field(
     f_struct: Pytree = dataclasses.field(default_factory=_f_struct_factory)
     # this would be the output shape + dtype of the aux variables fn returns
+    # TODO: This has to be updated now that aux has to be supported.
+    # TODO: Borrow how Optimistix.minimise sets up f_struct and aux_struct?
     # aux_struct: PyTree[jax.ShapeDtypeStruct] = None
     aux_struct: Pytree = None
     # "Any Lineax tags describing the structure of the Jacobian matrix d(fn)/dy."
@@ -56,7 +58,7 @@ class OptimistixConfig:
     # way of autodifferentiation: https://docs.kidger.site/optimistix/api/adjoints/
     adjoint: optx.AbstractAdjoint = optx.ImplicitAdjoint()
     # whether the objective function returns any auxiliary results.
-    has_aux: bool = False
+    has_aux: bool = True
 
 
 class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
@@ -101,6 +103,8 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
             self.prox = regularizer.get_proximal_operator()
             self.regularizer_strength = regularizer_strength
         else:
+            # TODO: How does this work if has_aux is false? Regularizer always expects fn with aux
+            # TODO: Should regularizers accept has_aux instead?
             loss_fn = regularizer.penalized_loss(
                 unregularized_loss, regularizer_strength
             )
@@ -164,7 +168,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
         *args: Any,
     ) -> OptimistixStepResult:
         solution = optx.minimise(
-            fn=self.fun,
+            fn=self.fun_with_aux if self.config.has_aux else self.fun,
             solver=self._solver,
             y0=init_params,
             args=args,
@@ -209,9 +213,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
     def get_optim_info(self, state: OptimistixSolverState) -> OptimizationInfo:
         num_steps = self.stats["num_steps"].item()
 
-        function_val = (
-            state.f.item() if hasattr(state, "f") else state.f_info.f.item()
-        )  # pyright: ignore
+        function_val = state.f.item() if hasattr(state, "f") else state.f_info.f.item()  # pyright: ignore
 
         return OptimizationInfo(
             function_val=function_val,
