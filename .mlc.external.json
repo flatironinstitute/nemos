@@ -4,5 +4,11 @@
     { "pattern": "^/" },
     { "pattern": "^../" },
     { "pattern": "^README.md$" }
-  ]
+  ],
+  "timeout": "20s",
+  "retryOn429": true,
+  "retryCount": 3,
+  "fallbackRetryDelay": "5s",
+  "aliveStatusCodes": [200, 206, 429, 503],
+  "_comment": "Treat 503 and 429 as alive to avoid CI failures from GitHub rate limiting. These indicate the server exists but is throttling requests, not that the link is broken."
 }
