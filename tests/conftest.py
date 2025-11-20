@@ -1258,9 +1258,13 @@ def instantiate_base_regressor_subclass(request):
 
 
 # Auto-clear cache after each test module run
-@pytest.fixture(scope="module", autouse=True)
+@pytest.fixture(scope="module")
 def _clear_model_cache():
-    """Clear model cache after each test class."""
+    """Clear model cache after each test module.
+
+    This fixture is NOT autouse - it's only used by test modules
+    that use the instantiate_base_regressor_subclass fixture.
+    """
     yield
     print("CLEARING MODEL CACHE")
     _MODEL_CACHE.clear()
