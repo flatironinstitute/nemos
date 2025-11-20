@@ -695,4 +695,5 @@ def test_solvers_work_without_aux(request, solver_name):
     )
     params, state, returned_aux = solver.run(param_init, X, y)
 
+    assert returned_aux is None
     assert np.allclose(true_params, params)
