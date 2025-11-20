@@ -359,7 +359,7 @@ class OptimistixOptaxProximalGradient(AbstractOptimistixOptaxSolver):
 
         self.stats.update(solution.stats)
 
-        return solution.value, solution.state
+        return solution.value, solution.state, solution.aux
 
     def init(self, *args, **kwargs):
         # so that when passing self to optx.minimise, init can be called

@@ -1,15 +1,16 @@
 """Base class for adapters wrapping JAXopt solvers."""
 
-from typing import Any, Callable, ClassVar, NamedTuple, Type, TypeAlias
+from typing import Any, Callable, ClassVar, NamedTuple, Tuple, Type, TypeAlias
 
 from nemos.third_party.jaxopt import jaxopt
 
 from ..regularizer import Regularizer
-from ._abstract_solver import OptimizationInfo, Params
+from ..typing import Aux, Params
+from ._abstract_solver import OptimizationInfo
 from ._solver_adapter import SolverAdapter
 
 JaxoptSolverState: TypeAlias = NamedTuple
-JaxoptStepResult: TypeAlias = jaxopt.OptStep  # this is just a namedtuple(params, state)
+JaxoptStepResult: TypeAlias = Tuple[Params, JaxoptSolverState, Aux]
 
 
 class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
@@ -47,6 +48,7 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
 
         self._solver = self._solver_cls(
             fun=self.fun,
+            has_aux=True,
             **solver_init_kwargs,
         )
 
@@ -56,10 +58,14 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
     def update(
         self, params: Params, state: JaxoptSolverState, *args: Any
     ) -> JaxoptStepResult:
-        return self._solver.update(params, state, *self.hyperparams_prox, *args)
+        params, state = self._solver.update(
+            params, state, *self.hyperparams_prox, *args
+        )
+        return (params, state, state.aux)
 
     def run(self, init_params: Params, *args: Any) -> JaxoptStepResult:
-        return self._solver.run(init_params, *self.hyperparams_prox, *args)
+        params, state = self._solver.run(init_params, *self.hyperparams_prox, *args)
+        return (params, state, state.aux)
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:

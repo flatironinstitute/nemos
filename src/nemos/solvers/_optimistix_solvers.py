@@ -7,8 +7,8 @@ import jax.numpy as jnp
 import optimistix as optx
 
 from ..regularizer import Regularizer
-from ..typing import Pytree
-from ._abstract_solver import OptimizationInfo, Params
+from ..typing import Aux, Params, Pytree
+from ._abstract_solver import OptimizationInfo
 from ._solver_adapter import SolverAdapter
 
 DEFAULT_ATOL = 1e-8
@@ -16,7 +16,7 @@ DEFAULT_RTOL = 0.0
 DEFAULT_MAX_STEPS = 100_000
 
 OptimistixSolverState: TypeAlias = eqx.Module
-OptimistixStepResult: TypeAlias = tuple[Params, OptimistixSolverState]
+OptimistixStepResult: TypeAlias = tuple[Params, OptimistixSolverState, Aux]
 
 
 def _f_struct_factory():
@@ -56,7 +56,6 @@ class OptimistixConfig:
     # way of autodifferentiation: https://docs.kidger.site/optimistix/api/adjoints/
     adjoint: optx.AbstractAdjoint = optx.ImplicitAdjoint()
     # whether the objective function returns any auxiliary results.
-    # We assume False throughout NeMoS.
     has_aux: bool = False
 
 
@@ -105,8 +104,6 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
             loss_fn = regularizer.penalized_loss(
                 unregularized_loss, regularizer_strength
             )
-        self.fun = lambda params, args: loss_fn(params, *args)
-        self.fun_with_aux = lambda params, args: (loss_fn(params, *args), None)
 
         # take out the arguments that go into minimise, init, terminate and so on
         # and only pass the actually needed things to __init__
@@ -116,6 +113,13 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
             if kw in solver_init_kwargs:
                 user_args[kw] = solver_init_kwargs.pop(kw)
         self.config = OptimistixConfig(maxiter=maxiter, **user_args)
+
+        if self.config.has_aux:
+            self.fun_with_aux = lambda params, args: loss_fn(params, *args)
+            self.fun = lambda params, args: loss_fn(params, *args)[0]
+        else:
+            self.fun = lambda params, args: loss_fn(params, *args)
+            self.fun_with_aux = lambda params, args: (loss_fn(params, *args), None)
 
         self._solver = self._solver_cls(
             atol=tol,
@@ -152,7 +156,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
             tags=self.config.tags,
         )
 
-        return new_params, state
+        return new_params, state, aux
 
     def run(
         self,
@@ -174,7 +178,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
 
         self.stats.update(solution.stats)
 
-        return solution.value, solution.state
+        return solution.value, solution.state, solution.aux
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:
