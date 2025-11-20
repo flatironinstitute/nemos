@@ -123,11 +123,10 @@ class ProxSVRG:
         else:
             # standardize to always having aux
             def fun_with_aux(*args, **kwargs):
-                return fun(*args, **kwargs), None
+                return (fun(*args, **kwargs), None)
 
             self.fun = fun_with_aux
 
-        self.fun = fun
         self.maxiter = maxiter
         self.key = key
         self.stepsize = stepsize
