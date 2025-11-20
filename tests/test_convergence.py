@@ -124,7 +124,7 @@ def test_lasso_convergence(solver_name):
 
     # use the penalized loss function to solve optimization via Nelder-Mead
     penalized_loss = lambda p, x, y: model_PG.regularizer.penalized_loss(
-        model_PG._predict_and_compute_loss, model_PG.regularizer_strength
+        model_PG.compute_loss, model_PG.regularizer_strength
     )(
         (
             p[1:],
@@ -172,7 +172,7 @@ def test_group_lasso_convergence(solver_name):
 
     # use the penalized loss function to solve optimization via Nelder-Mead
     penalized_loss = lambda p, x, y: model_PG.regularizer.penalized_loss(
-        model_PG._predict_and_compute_loss, model_PG.regularizer_strength
+        model_PG.compute_loss, model_PG.regularizer_strength
     )(
         (
             p[1:],
