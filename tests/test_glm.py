@@ -2014,10 +2014,10 @@ class TestGLMObservationModel:
 
         params = glm.initialize_params(X, y)
         state = glm.initialize_state(X, y, params)
-        glm.instantiate_solver(glm._predict_and_compute_loss)
+        glm.instantiate_solver(glm.compute_loss)
 
         # NOTE these two are not the same because for example Ridge augments the loss
-        # loss_grad = jax.jit(jax.grad(glm._predict_and_compute_loss))
+        # loss_grad = jax.jit(jax.grad(glm.compute_loss))
         loss_grad = jax.jit(jax.grad(glm._solver_loss_fun))
 
         # copied from GLM.fit
