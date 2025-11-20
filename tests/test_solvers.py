@@ -636,3 +636,63 @@ def test_all_solvers_accept_maxiter_and_not_max_steps():
     for solver_class in nmo.solvers._solver_registry.solver_registry.values():
         assert "maxiter" in solver_class.get_accepted_arguments()
         assert "max_steps" not in solver_class.get_accepted_arguments()
+
+
+@pytest.mark.parametrize(
+    "solver_name", [solver for solver in nmo.solvers.solver_registry.keys()]
+)
+def test_solvers_use_aux(request, solver_name):
+    jax.config.update("jax_enable_x64", True)
+    X, y, _, true_params, loss = request.getfixturevalue("linear_regression")
+    solver_class = nmo.solvers.solver_registry[solver_name]
+
+    class TestAux:
+        def __init__(self, loss):
+            self.counter = 0
+            self.auxes = []
+            self.loss = loss
+
+        def __call__(self, params, X, y):
+            self.counter += 1
+            # print(f"Call #{self.counter}: {self.auxes}")
+            loss_val = self.loss(params, X, y)
+            aux = np.random.randint(1000)
+            self.auxes.append(aux)
+            return loss_val, aux
+
+    loss_with_aux = TestAux(loss)
+
+    param_init = jax.tree_util.tree_map(np.zeros_like, true_params)
+    solver = solver_class(
+        unregularized_loss=loss_with_aux,
+        regularizer=nmo.regularizer.UnRegularized(),
+        regularizer_strength=None,
+        has_aux=True,
+    )
+    params, state, returned_aux = solver.run(param_init, X, y)
+
+    if os.getenv("NEMOS_SOLVER_BACKEND") != "optimistix":
+        assert returned_aux == state.aux
+    # testing this because there are extra evaluations whose aux is not saved
+    assert returned_aux in loss_with_aux.auxes
+
+
+@pytest.mark.parametrize(
+    "solver_name", [solver for solver in nmo.solvers.solver_registry.keys()]
+)
+def test_solvers_work_without_aux(request, solver_name):
+    jax.config.update("jax_enable_x64", True)
+    X, y, _, true_params, loss = request.getfixturevalue("linear_regression")
+    solver_class = nmo.solvers.solver_registry[solver_name]
+
+    param_init = jax.tree_util.tree_map(np.zeros_like, true_params)
+    solver = solver_class(
+        unregularized_loss=loss,
+        regularizer=nmo.regularizer.UnRegularized(),
+        regularizer_strength=None,
+        has_aux=False,
+        tol=1e-12,
+    )
+    params, state, returned_aux = solver.run(param_init, X, y)
+
+    assert np.allclose(true_params, params)
