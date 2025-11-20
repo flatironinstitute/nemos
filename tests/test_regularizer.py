@@ -1997,11 +1997,11 @@ class TestPenalizedLossAuxiliaryVariables:
 
         # ElasticNet requires (strength, ratio) tuple
         reg_strength = (
-            (0.1, 0.5)
-            if isinstance(regularizer, nmo.regularizer.ElasticNet)
-            else 0.1
+            (0.1, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 0.1
         )
-        penalized = regularizer.penalized_loss(simple_loss, regularizer_strength=reg_strength)
+        penalized = regularizer.penalized_loss(
+            simple_loss, regularizer_strength=reg_strength
+        )
 
         params = (jnp.ones(5), jnp.array(0.0))
         X = jnp.ones((10, 5))
@@ -2025,11 +2025,11 @@ class TestPenalizedLossAuxiliaryVariables:
 
         # ElasticNet requires (strength, ratio) tuple
         reg_strength = (
-            (0.1, 0.5)
-            if isinstance(regularizer, nmo.regularizer.ElasticNet)
-            else 0.1
+            (0.1, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 0.1
         )
-        penalized = regularizer.penalized_loss(loss_with_aux, regularizer_strength=reg_strength)
+        penalized = regularizer.penalized_loss(
+            loss_with_aux, regularizer_strength=reg_strength
+        )
 
         params = (jnp.ones(5), jnp.array(0.0))
         X = jnp.ones((10, 5))
@@ -2066,11 +2066,11 @@ class TestPenalizedLossAuxiliaryVariables:
 
         # ElasticNet requires (strength, ratio) tuple
         reg_strength = (
-            (0.1, 0.5)
-            if isinstance(regularizer, nmo.regularizer.ElasticNet)
-            else 0.1
+            (0.1, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 0.1
         )
-        penalized = regularizer.penalized_loss(bad_loss, regularizer_strength=reg_strength)
+        penalized = regularizer.penalized_loss(
+            bad_loss, regularizer_strength=reg_strength
+        )
 
         params = (jnp.ones(5), jnp.array(0.0))
         X = jnp.ones((10, 5))
@@ -2091,11 +2091,11 @@ class TestPenalizedLossAuxiliaryVariables:
 
         # ElasticNet requires (strength, ratio) tuple
         reg_strength = (
-            (0.1, 0.5)
-            if isinstance(regularizer, nmo.regularizer.ElasticNet)
-            else 0.1
+            (0.1, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 0.1
         )
-        penalized = regularizer.penalized_loss(bad_loss, regularizer_strength=reg_strength)
+        penalized = regularizer.penalized_loss(
+            bad_loss, regularizer_strength=reg_strength
+        )
 
         params = (jnp.ones(5), jnp.array(0.0))
         X = jnp.ones((10, 5))
@@ -2124,22 +2124,20 @@ class TestPenalizedLossAuxiliaryVariables:
 
         # ElasticNet requires (strength, ratio) tuple
         reg_strength = (
-            (1.0, 0.5)
-            if isinstance(regularizer, nmo.regularizer.ElasticNet)
-            else 1.0
+            (1.0, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 1.0
         )
 
         # Get penalized loss
-        penalized = regularizer.penalized_loss(loss_with_aux, regularizer_strength=reg_strength)
+        penalized = regularizer.penalized_loss(
+            loss_with_aux, regularizer_strength=reg_strength
+        )
         penalized_loss_value, aux = penalized(params, X, y)
 
         # Calculate expected penalty
         expected_penalty = regularizer._penalization(params, reg_strength)
 
         # Check that penalized loss = unpenalized loss + penalty
-        assert jnp.isclose(
-            penalized_loss_value, unpenalized_loss + expected_penalty
-        )
+        assert jnp.isclose(penalized_loss_value, unpenalized_loss + expected_penalty)
 
 
 def test_available_regularizer_match():
