@@ -1133,7 +1133,6 @@ def instantiate_glm_func(
     solver_name: str = None,
     simulate=False,
 ):
-    jax.config.update("jax_enable_x64", True)
     np.random.seed(123)
     n_features = 2
     X = np.ones((500, n_features))
@@ -1170,7 +1169,6 @@ def instantiate_population_glm_func(
     solver_name: str = None,
     simulate=False,
 ):
-    jax.config.update("jax_enable_x64", True)
     np.random.seed(123)
     n_features = 2
     X = np.ones((500, n_features))
@@ -1258,15 +1256,10 @@ def instantiate_base_regressor_subclass(request):
 
 
 # Auto-clear cache after each test module run
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="module", autouse=True)
 def _clear_model_cache():
-    """Clear model cache after each test module.
-
-    This fixture is NOT autouse - it's only used by test modules
-    that use the instantiate_base_regressor_subclass fixture.
-    """
+    """Clear model cache after each test module."""
     yield
-    print("CLEARING MODEL CACHE")
     _MODEL_CACHE.clear()
 
 

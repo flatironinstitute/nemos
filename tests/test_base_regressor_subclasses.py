@@ -19,9 +19,6 @@ from nemos.inverse_link_function_utils import LINK_NAME_TO_FUNC
 # Import helpers from conftest
 from conftest import is_population_model
 
-# Use the cache clearing fixture for this test module
-pytestmark = pytest.mark.usefixtures("_clear_model_cache")
-
 MODEL_REGISTRY = {
     "GLM": nmo.glm.GLM,
     "PopulationGLM": nmo.glm.PopulationGLM,
