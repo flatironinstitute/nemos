@@ -18,7 +18,7 @@ from nemos.third_party.jaxopt import jaxopt
 from . import tree_utils
 from .base_class import Base
 from .proximal_operator import prox_elastic_net, prox_group_lasso
-from .typing import DESIGN_INPUT_TYPE, ProximalOperator
+from .typing import DESIGN_INPUT_TYPE, ProximalOperator, RegularizerStrength
 from .utils import format_repr
 
 __all__ = ["UnRegularized", "Ridge", "Lasso", "GroupLasso", "ElasticNet"]
@@ -62,26 +62,6 @@ class Regularizer(Base, abc.ABC):
         return self._default_solver
 
     @abc.abstractmethod
-    def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
-        """
-        Abstract method to penalize loss functions.
-
-        Parameters
-        ----------
-        loss :
-            Callable loss function.
-        regularizer_strength :
-            Float the indicates the regularization strength.
-
-        Returns
-        -------
-        :
-            A modified version of the loss function including any relevant penalization based on the regularizer
-            type.
-        """
-        pass
-
-    @abc.abstractmethod
     def get_proximal_operator(
         self,
     ) -> ProximalOperator:
@@ -106,6 +86,43 @@ class Regularizer(Base, abc.ABC):
 
     def __repr__(self):
         return format_repr(self)
+
+    def __str__(self):
+        return format_repr(self)
+
+    @abc.abstractmethod
+    def _penalization(
+        self,
+        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+        regularizer_strength: RegularizerStrength,
+    ):
+        pass
+
+    @staticmethod
+    def _check_loss_output_tuple(output: tuple):
+        if len(output) != 2:
+            n_out = len(output)
+            word = "value" if n_out == 1 else "values"
+            raise ValueError(
+                f"Invalid loss function return. The loss function returns a tuple with {n_out} {word}.\n"
+                "A valid loss function can return either a single value (float or a 0-dim array), the loss, "
+                "or a tuple with two values, the loss and an auxiliary variable."
+            )
+
+    def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
+        """Return a function for calculating the penalized loss using Lasso regularization."""
+
+        def _penalized_loss(params, *args, **kwargs):
+            result = loss(params, *args, **kwargs)
+            penalty = self._penalization(params, regularizer_strength)
+            if isinstance(result, tuple):
+                self._check_loss_output_tuple(result)
+                loss_value, aux = result
+                return loss_value + penalty, aux
+
+            return result + penalty
+
+        return _penalized_loss
 
     def _validate_regularizer_strength(self, strength: Union[None, float]):
         if strength is None:
@@ -147,14 +164,6 @@ class UnRegularized(Regularizer):
     ):
         super().__init__()
 
-    def penalized_loss(self, loss: Callable, regularizer_strength: float):
-        """
-        Return the original loss function unpenalized.
-
-        Unregularized regularization method does not add any penalty.
-        """
-        return loss
-
     def get_proximal_operator(
         self,
     ) -> ProximalOperator:
@@ -168,6 +177,11 @@ class UnRegularized(Regularizer):
 
     def _validate_regularizer_strength(self, strength: None):
         return None
+
+    def _penalization(
+        self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], regularizer_strength: float
+    ):
+        return 0.0
 
 
 class Ridge(Regularizer):
@@ -195,9 +209,10 @@ class Ridge(Regularizer):
     ):
         super().__init__()
 
-    @staticmethod
     def _penalization(
-        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], regularizer_strength: float
+        self,
+        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+        regularizer_strength: float,
     ) -> jnp.ndarray:
         """
         Compute the Ridge penalization for given parameters.
@@ -218,16 +233,6 @@ class Ridge(Regularizer):
 
         # tree map the computation and sum over leaves
         return tree_utils.pytree_map_and_reduce(lambda x: l2_penalty(x), sum, params[0])
-
-    def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
-        """Return the penalized loss function for Ridge regularization."""
-
-        def _penalized_loss(params, *args, **kwargs):
-            return loss(params, *args, **kwargs) + self._penalization(
-                params, regularizer_strength
-            )
-
-        return _penalized_loss
 
     def get_proximal_operator(
         self,
@@ -291,9 +296,10 @@ class Lasso(Regularizer):
 
         return prox_op
 
-    @staticmethod
     def _penalization(
-        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], regularizer_strength: float
+        self,
+        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+        regularizer_strength: float,
     ) -> jnp.ndarray:
         """
         Compute the Lasso penalization for given parameters.
@@ -314,16 +320,6 @@ class Lasso(Regularizer):
 
         # tree map the computation and sum over leaves
         return tree_utils.pytree_map_and_reduce(lambda x: l1_penalty(x), sum, params[0])
-
-    def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
-        """Return a function for calculating the penalized loss using Lasso regularization."""
-
-        def _penalized_loss(params, *args, **kwargs):
-            return loss(params, *args, **kwargs) + self._penalization(
-                params, regularizer_strength
-            )
-
-        return _penalized_loss
 
 
 class ElasticNet(Regularizer):
@@ -393,8 +389,8 @@ class ElasticNet(Regularizer):
 
         return prox_op
 
-    @staticmethod
     def _penalization(
+        self,
         params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
         net_regularization: Tuple[float, float],
     ) -> jnp.ndarray:
@@ -434,18 +430,6 @@ class ElasticNet(Regularizer):
         return tree_utils.pytree_map_and_reduce(
             lambda x: net_penalty(x), sum, params[0]
         )
-
-    def penalized_loss(
-        self, loss: Callable, regularizer_strength: Tuple[float, float]
-    ) -> Callable:
-        """Return a function for calculating the penalized loss using Elastic Net regularization."""
-
-        def _penalized_loss(params, *args, **kwargs):
-            return loss(params, *args, **kwargs) + self._penalization(
-                params, regularizer_strength
-            )
-
-        return _penalized_loss
 
     def _validate_regularizer_strength(
         self, strength: Union[None, float, Tuple[float, float]]
@@ -637,16 +621,6 @@ class GroupLasso(Regularizer):
         regularizer_strength = regularizer_strength
 
         return penalty * regularizer_strength
-
-    def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
-        """Return a function for calculating the penalized loss using Group Lasso regularization."""
-
-        def _penalized_loss(params, *args, **kwargs):
-            return loss(params, *args, **kwargs) + self._penalization(
-                params, regularizer_strength
-            )
-
-        return _penalized_loss
 
     def get_proximal_operator(
         self,
