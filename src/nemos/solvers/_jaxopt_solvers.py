@@ -48,6 +48,9 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
 
         self._solver = self._solver_cls(
             fun=self.fun,
+            # TODO: This is not ideal.
+            # Nemos might currently only pass functions with aux,
+            # but that might not be guaranteed in the future.
             has_aux=True,
             **solver_init_kwargs,
         )
