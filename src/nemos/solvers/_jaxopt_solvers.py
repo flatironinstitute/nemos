@@ -46,12 +46,14 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
         # the objective function's arguments, while others do not need this.
         self.hyperparams_prox = (self.regularizer_strength,) if self._proximal else ()
 
+        # TODO: This is not ideal.
+        # Nemos might currently only pass functions with aux,
+        # but that might not be guaranteed in the future.
+        has_aux = solver_init_kwargs.pop("has_aux", True)
+
         self._solver = self._solver_cls(
             fun=self.fun,
-            # TODO: This is not ideal.
-            # Nemos might currently only pass functions with aux,
-            # but that might not be guaranteed in the future.
-            has_aux=True,
+            has_aux=has_aux,
             **solver_init_kwargs,
         )
 
