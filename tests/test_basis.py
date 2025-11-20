@@ -6503,7 +6503,6 @@ def test_basis_to_transformer(basis_cls, basis_class_specific_params):
     "basis_cls",
     list_all_basis_classes("Conv"),
 )
-@pytest.mark.skip(reason="TODO: Investigate threading crash in CI with pytest-xdist - issue #???")
 def test_multi_epoch_pynapple_basis(
     basis_cls,
     tsd,
