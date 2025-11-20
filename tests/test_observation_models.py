@@ -6,7 +6,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-import scipy as sp
 import scipy.stats as sts
 import statsmodels.api as sm
 
@@ -16,7 +15,6 @@ from nemos._observation_model_builder import (
     instantiate_observation_model,
 )
 from nemos.glm.initialize_parameters import initialize_intercept_matching_mean_rate
-from nemos.glm.inverse_link_function_utils import LINK_NAME_TO_FUNC
 
 
 @pytest.fixture

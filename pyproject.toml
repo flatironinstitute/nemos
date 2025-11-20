@@ -158,8 +158,8 @@ filterwarnings = [
 markers = [
   "solver_related: tests that interact with solvers",
 ]
+# -s: no capture from pytest (prints will show)
 addopts = ["-s", "--strict-markers"]
-
 
 [tool.coverage.run]
 omit = [

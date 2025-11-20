@@ -20,7 +20,7 @@ from sklearn.model_selection import GridSearchCV
 import nemos as nmo
 from nemos._observation_model_builder import instantiate_observation_model
 from nemos._regularizer_builder import instantiate_regularizer
-from nemos.glm.inverse_link_function_utils import LINK_NAME_TO_FUNC
+from nemos.inverse_link_function_utils import LINK_NAME_TO_FUNC
 from nemos.observation_models import NegativeBinomialObservations
 from nemos.pytrees import FeaturePytree
 from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
@@ -3078,7 +3078,7 @@ class TestGLMObservationModel:
 
         params = glm.initialize_params(X, y)
         state = glm.initialize_state(X, y, params)
-        glm.instantiate_solver()
+        glm.instantiate_solver(glm._predict_and_compute_loss)
 
         # NOTE these two are not the same because for example Ridge augments the loss
         # loss_grad = jax.jit(jax.grad(glm._predict_and_compute_loss))

@@ -9,6 +9,7 @@ from numpy.typing import NDArray
 
 from . import utils
 from .base_class import Base
+from .inverse_link_function_utils import exp, logistic
 
 __all__ = [
     "PoissonObservations",
@@ -417,7 +418,7 @@ class PoissonObservations(Observations):
 
     @property
     def default_inverse_link_function(self):
-        return jnp.exp
+        return exp
 
     def _negative_log_likelihood(
         self,
@@ -849,7 +850,7 @@ class BernoulliObservations(Observations):
 
     @property
     def default_inverse_link_function(self):
-        return jax.lax.logistic
+        return logistic
 
     def _negative_log_likelihood(
         self,
@@ -1151,7 +1152,7 @@ class NegativeBinomialObservations(Observations):
 
     @property
     def default_inverse_link_function(self):
-        return jnp.exp
+        return exp
 
     def _negative_log_likelihood(
         self,

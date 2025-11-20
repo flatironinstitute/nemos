@@ -167,11 +167,11 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     # Create the model instance
     try:
         model = model_class(**config_params)
-    except Exception:
+    except Exception as e:
         raise ValueError(
             f"Failed to instantiate model class '{model_name}' with parameters: {config_params}. "
             f"Use `nmo.inspect_npz('{filename}')` to inspect the saved object."
-        )
+        ) from e
 
     # Set the rest of the parameters as attributes if recognized
     _set_fit_params(model, fit_params, filename)
