@@ -103,8 +103,6 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
             self.prox = regularizer.get_proximal_operator()
             self.regularizer_strength = regularizer_strength
         else:
-            # TODO: How does this work if has_aux is false? Regularizer always expects fn with aux
-            # TODO: Should regularizers accept has_aux instead?
             loss_fn = regularizer.penalized_loss(
                 unregularized_loss, regularizer_strength
             )

@@ -453,9 +453,7 @@ class ProxSVRG:
             prev_reference_point, state = step
 
             # evaluate and store the full gradient with the params from the last inner loop
-            # TODO: Currently the saved aux comes from the function evaluation on the full data.
-            # TODO: Is that the required behavior?
-            # Alternatively, it could be saved after every (minibatch) evaluation.
+            # aux is also saved from this evaluation instead of minibatches later
             full_grad, new_aux = self.loss_gradient(prev_reference_point, *args)
 
             state = state._replace(
