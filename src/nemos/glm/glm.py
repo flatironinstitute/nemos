@@ -766,7 +766,7 @@ class GLM(BaseRegressor[ModelParams]):
 
         self.initialize_state(data, y, init_params, cast_to_jax_and_drop_nans=False)
 
-        params, state = self.solver_run(init_params, data, y)
+        params, state, aux = self.solver_run(init_params, data, y)
 
         if tree_utils.pytree_map_and_reduce(
             lambda x: jnp.any(jnp.isnan(x)), any, params
@@ -1124,21 +1124,24 @@ class GLM(BaseRegressor[ModelParams]):
         data = X.data if isinstance(X, FeaturePytree) else X
 
         # perform a one-step update
-        opt_step = self.solver_update(params, opt_state, data, y, *args, **kwargs)
+        params, opt_state, aux = self.solver_update(
+            params, opt_state, data, y, *args, **kwargs
+        )
 
         # store params and state
-        self._set_coef_and_intercept(opt_step[0])
-        self.solver_state_ = opt_step[1]
+        self._set_coef_and_intercept(params)
+        self.solver_state_ = opt_state
 
         # estimate the scale
         self.dof_resid_ = self._estimate_resid_degrees_of_freedom(
             X, n_samples=n_samples
         )
+        # TODO: This used the old params to predict. Was that a bug or intended?
         self.scale_ = self.observation_model.estimate_scale(
             y, self._predict(params, data), dof_resid=self.dof_resid_
         )
 
-        return opt_step
+        return (params, opt_state)
 
     def _get_optimal_solver_params_config(self):
         """Return the functions for computing default step and batch size for the solver."""
