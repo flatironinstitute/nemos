@@ -17,8 +17,7 @@ def test_optimistix_f_struct_dtype_matches_precision(request):
         f_struct, aux_struct = solvers._optimistix_solvers._make_f_and_aux_struct(
             lambda params, args: loss(params, *args),
             False,
-            # jax.tree_util.tree_map(jnp.zeros_like, params),
-            params,
+            jax.tree_util.tree_map(jnp.zeros_like, params),
             (X, y),
         )
         assert f_struct.dtype == jnp.float32
@@ -29,8 +28,7 @@ def test_optimistix_f_struct_dtype_matches_precision(request):
         f_struct, aux_struct = solvers._optimistix_solvers._make_f_and_aux_struct(
             lambda params, args: loss(params, *args),
             False,
-            # jax.tree_util.tree_map(jnp.zeros_like, params),
-            params,
+            jax.tree_util.tree_map(jnp.zeros_like, params),
             (X, y),
         )
         assert f_struct.dtype == jnp.float64
