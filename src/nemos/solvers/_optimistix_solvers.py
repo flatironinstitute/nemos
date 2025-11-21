@@ -61,8 +61,6 @@ class OptimistixConfig:
     norm: Callable = optx.max_norm
     # way of autodifferentiation: https://docs.kidger.site/optimistix/api/adjoints/
     adjoint: optx.AbstractAdjoint = optx.ImplicitAdjoint()
-    # whether the objective function returns any auxiliary results.
-    has_aux: bool = False
 
 
 class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
@@ -91,6 +89,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
         unregularized_loss: Callable,
         regularizer: Regularizer,
         regularizer_strength: float | None,
+        has_aux: bool,
         tol: float = DEFAULT_ATOL,
         rtol: float = DEFAULT_RTOL,
         maxiter: int = DEFAULT_MAX_STEPS,
@@ -120,7 +119,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
                 user_args[kw] = solver_init_kwargs.pop(kw)
         self.config = OptimistixConfig(maxiter=maxiter, **user_args)
 
-        if self.config.has_aux:
+        if has_aux:
             self.fun_with_aux = lambda params, args: loss_fn(params, *args)
             self.fun = lambda params, args: loss_fn(params, *args)[0]
         else:
@@ -174,12 +173,12 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
         *args: Any,
     ) -> OptimistixStepResult:
         solution = optx.minimise(
-            fn=self.fun_with_aux if self.config.has_aux else self.fun,
+            fn=self.fun_with_aux,
             solver=self._solver,
             y0=init_params,
             args=args,
             options=self.config.options,
-            has_aux=self.config.has_aux,
+            has_aux=True,
             max_steps=self.config.maxiter,
             adjoint=self.config.adjoint,
             throw=self.config.throw,
