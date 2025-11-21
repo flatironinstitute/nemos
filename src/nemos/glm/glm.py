@@ -788,6 +788,8 @@ class GLM(BaseRegressor[ModelParams]):
         # the output of loss. I believe it's the output of
         # solver.l2_optimality_error
         self.solver_state_ = state
+        # TODO: Should this be part of fit-state, so called aux_?
+        self.aux = aux
         return self
 
     def _get_coef_and_intercept(self):
@@ -1131,6 +1133,7 @@ class GLM(BaseRegressor[ModelParams]):
         # store params and state
         self._set_coef_and_intercept(params)
         self.solver_state_ = opt_state
+        self.aux = aux
 
         # estimate the scale
         self.dof_resid_ = self._estimate_resid_degrees_of_freedom(
