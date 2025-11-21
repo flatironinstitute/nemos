@@ -29,6 +29,8 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
         unregularized_loss: Callable,
         regularizer: Regularizer,
         regularizer_strength: float | None,
+        # TODO: Make this an explicitly required argument in AbstractSolver?
+        # has_aux: bool = False,
         **solver_init_kwargs,
     ):
         if self._proximal:
