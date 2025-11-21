@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable, Literal, NamedTuple, Optional, Tuple, Union
+from typing import Callable, Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -21,7 +21,7 @@ from ..pytrees import FeaturePytree
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
 from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
 from ..type_casting import cast_to_jax, support_pynapple
-from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength, SolverState, StepResult
+from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength, SolverState
 from ..utils import format_repr
 from .initialize_parameters import initialize_intercept_matching_mean_rate
 
@@ -1056,14 +1056,14 @@ class GLM(BaseRegressor[ModelParams]):
     @cast_to_jax
     def update(
         self,
-        params: Tuple[jnp.ndarray, jnp.ndarray],
-        opt_state: NamedTuple,
+        params: ModelParams,
+        opt_state: SolverState,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         *args,
         n_samples: Optional[int] = None,
         **kwargs,
-    ) -> StepResult:
+    ) -> Tuple[ModelParams, SolverState]:
         """
         Update the model parameters and solver state.
 
@@ -1097,7 +1097,7 @@ class GLM(BaseRegressor[ModelParams]):
 
         Returns
         -------
-        StepResult
+        params, opt_state
             A tuple containing the updated parameters and optimization state. This tuple is
             typically used to continue the optimization process in subsequent steps.
 
