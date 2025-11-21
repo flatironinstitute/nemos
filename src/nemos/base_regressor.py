@@ -103,6 +103,9 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
     - [`PopulationGLM`](../glm/#nemos.glm.PopulationGLM): A population GLM implementation.
     """
 
+    # overwrite this in subclasses if their objective functions return aux
+    has_aux: bool = False
+
     def __init__(
         self,
         regularizer: Union[str, Regularizer] = "UnRegularized",
@@ -343,6 +346,7 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
             loss,
             self.regularizer,
             self.regularizer_strength,
+            has_aux=self.has_aux,
             **solver_kwargs,
         )
         self._solver = solver
