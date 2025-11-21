@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable, Literal, NamedTuple, Optional, Tuple, Union
+from typing import Callable, Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -21,7 +21,7 @@ from ..pytrees import FeaturePytree
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
 from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
 from ..type_casting import cast_to_jax, support_pynapple
-from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength, SolverState, StepResult
+from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength, SolverState
 from ..utils import format_repr
 from .initialize_parameters import initialize_intercept_matching_mean_rate
 
@@ -766,7 +766,7 @@ class GLM(BaseRegressor[ModelParams]):
 
         self.initialize_state(data, y, init_params, cast_to_jax_and_drop_nans=False)
 
-        params, state = self.solver_run(init_params, data, y)
+        params, state, aux = self.solver_run(init_params, data, y)
 
         if tree_utils.pytree_map_and_reduce(
             lambda x: jnp.any(jnp.isnan(x)), any, params
@@ -788,6 +788,8 @@ class GLM(BaseRegressor[ModelParams]):
         # the output of loss. I believe it's the output of
         # solver.l2_optimality_error
         self.solver_state_ = state
+        # TODO: Should this be part of fit-state, so called aux_?
+        self.aux = aux
         return self
 
     def _get_coef_and_intercept(self):
@@ -1054,14 +1056,14 @@ class GLM(BaseRegressor[ModelParams]):
     @cast_to_jax
     def update(
         self,
-        params: Tuple[jnp.ndarray, jnp.ndarray],
-        opt_state: NamedTuple,
+        params: ModelParams,
+        opt_state: SolverState,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         *args,
         n_samples: Optional[int] = None,
         **kwargs,
-    ) -> StepResult:
+    ) -> Tuple[ModelParams, SolverState]:
         """
         Update the model parameters and solver state.
 
@@ -1095,7 +1097,7 @@ class GLM(BaseRegressor[ModelParams]):
 
         Returns
         -------
-        StepResult
+        params, opt_state
             A tuple containing the updated parameters and optimization state. This tuple is
             typically used to continue the optimization process in subsequent steps.
 
@@ -1124,21 +1126,25 @@ class GLM(BaseRegressor[ModelParams]):
         data = X.data if isinstance(X, FeaturePytree) else X
 
         # perform a one-step update
-        opt_step = self.solver_update(params, opt_state, data, y, *args, **kwargs)
+        params, opt_state, aux = self.solver_update(
+            params, opt_state, data, y, *args, **kwargs
+        )
 
         # store params and state
-        self._set_coef_and_intercept(opt_step[0])
-        self.solver_state_ = opt_step[1]
+        self._set_coef_and_intercept(params)
+        self.solver_state_ = opt_state
+        self.aux = aux
 
         # estimate the scale
         self.dof_resid_ = self._estimate_resid_degrees_of_freedom(
             X, n_samples=n_samples
         )
+        # TODO: This used the old params to predict. Was that a bug or intended?
         self.scale_ = self.observation_model.estimate_scale(
             y, self._predict(params, data), dof_resid=self.dof_resid_
         )
 
-        return opt_step
+        return (params, opt_state)
 
     def _get_optimal_solver_params_config(self):
         """Return the functions for computing default step and batch size for the solver."""
