@@ -92,7 +92,7 @@ def test_apply_identifiability_constraints_add_constant(add_intercept, expected_
 @pytest.mark.parametrize(
     "basis, input_shape, output_shape, expected_columns",
     [
-        (RaisedCosineLinearEval(10, width=4), (50,), (50, 10), jnp.arange(10)),
+        (RaisedCosineLinearEval(10, width=4), (100,), (100, 10), jnp.arange(10)),
         (
             BSplineEval(5) + BSplineEval(6),
             (20,),
@@ -112,6 +112,7 @@ def test_apply_identifiability_constraints_by_basis_component(
     basis, input_shape, output_shape, expected_columns
 ):
     """Test constraints applied by basis component."""
+    np.random.seed(42)
     x = basis.compute_features(
         *([np.random.randn(*input_shape)] * basis._n_input_dimensionality)
     )

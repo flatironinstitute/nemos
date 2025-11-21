@@ -19,7 +19,7 @@ For subclasses derived from `BaseRegressor` to function correctly, they must imp
 3. [`score`](nemos.glm.GLM.score): Score the accuracy of model predictions using input data `X` against the actual observations `y`.
 4. [`simulate`](nemos.glm.GLM.simulate): Simulate data based on the trained regression model.
 5. [`update`](nemos.glm.GLM.update): Run a single optimization step, and stores the updated parameter and solver state. Used by stochastic optimization schemes.
-6. `_predict_and_compute_loss`: Compute prediction and evaluates the loss function prvided the parameters and `X` and `y`. This is used by the `instantiate_solver` method which sets up the solver.
+6. `compute_loss`: Compute prediction and evaluates the loss function prvided the parameters and `X` and `y`. This is used by the `instantiate_solver` method which sets up the solver.
 7. `_check_params`: Check the parameter structure.
 8. `_check_input_dimensionality`: Check the input dimensionality matches model expectation.
 9. `_check_input_and_params_consistency`: Checks that the input and the parameters are consistent.
