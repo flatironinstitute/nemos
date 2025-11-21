@@ -12,6 +12,7 @@ import nemos as nmo
 pytestmark = pytest.mark.solver_related
 
 
+@pytest.mark.requires_x64
 @pytest.mark.parametrize(
     "solver_names", [("GradientDescent", "ProximalGradient"), ("SVRG", "ProxSVRG")]
 )
@@ -20,8 +21,6 @@ def test_unregularized_convergence(solver_names):
     Assert that solution found when using GradientDescent vs ProximalGradient with an
     unregularized GLM is the same.
     """
-    jax.config.update("jax_enable_x64", True)
-
     # generate toy data
     np.random.seed(111)
     # random design tensor. Shape (n_time_points, n_features).
@@ -51,6 +50,7 @@ def test_unregularized_convergence(solver_names):
     assert np.allclose(model_GD.intercept_, model_PG.intercept_)
 
 
+@pytest.mark.requires_x64
 @pytest.mark.parametrize(
     "solver_names", [("GradientDescent", "ProximalGradient"), ("SVRG", "ProxSVRG")]
 )
@@ -59,7 +59,6 @@ def test_ridge_convergence(solver_names):
     Assert that solution found when using GradientDescent vs ProximalGradient with an
     ridge GLM is the same.
     """
-    jax.config.update("jax_enable_x64", True)
     # generate toy data
     np.random.seed(111)
     # random design tensor. Shape (n_time_points, n_features).
@@ -99,13 +98,13 @@ def test_ridge_convergence(solver_names):
     assert np.allclose(model_GD.intercept_, model_PG.intercept_)
 
 
+@pytest.mark.requires_x64
 @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
 def test_lasso_convergence(solver_name):
     """
     Assert that solution found when using ProximalGradient versus Nelder-Mead method using
     lasso GLM is the same.
     """
-    jax.config.update("jax_enable_x64", True)
     # generate toy data
     num_samples, num_features, num_groups = 1000, 1, 3
     X = np.random.normal(size=(num_samples, num_features))  # design matrix
@@ -144,13 +143,13 @@ def test_lasso_convergence(solver_name):
     assert np.allclose(res.x[:1], model_PG.intercept_)
 
 
+@pytest.mark.requires_x64
 @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
 def test_group_lasso_convergence(solver_name):
     """
     Assert that solution found when using ProximalGradient versus Nelder-Mead method using
     group lasso GLM is the same.
     """
-    jax.config.update("jax_enable_x64", True)
     # generate toy data
     num_samples, num_features, num_groups = 1000, 3, 2
     X = np.random.normal(size=(num_samples, num_features))  # design matrix
