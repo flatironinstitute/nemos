@@ -60,7 +60,7 @@ def set_jax_precision_per_test(request):
     precision behavior, especially important for parallel test execution
     with pytest-xdist.
     """
-    if request.node.get_closest_marker('requires_x64'):
+    if request.node.get_closest_marker("requires_x64"):
         # This test needs x64
         original = jax.config.jax_enable_x64
         jax.config.update("jax_enable_x64", True)
