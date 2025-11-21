@@ -11,7 +11,7 @@ from ..typing import Pytree
 from ._abstract_solver import OptimizationInfo, Params
 from ._solver_adapter import SolverAdapter
 
-DEFAULT_ATOL = 1e-8
+DEFAULT_ATOL = 1e-4
 DEFAULT_RTOL = 0.0
 DEFAULT_MAX_STEPS = 100_000
 
@@ -52,7 +52,7 @@ class OptimistixConfig:
     # sets if the minimisation throws an error if an iterative solver runs out of steps
     throw: bool = False
     # norm used in the Cauchy convergence criterion. Required by all Optimistix solvers.
-    norm: Callable = optx.max_norm
+    norm: Callable = optx.two_norm
     # way of autodifferentiation: https://docs.kidger.site/optimistix/api/adjoints/
     adjoint: optx.AbstractAdjoint = optx.ImplicitAdjoint()
     # whether the objective function returns any auxiliary results.
@@ -99,8 +99,8 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
 
         if self._proximal:
             loss_fn = unregularized_loss
-            self.prox = regularizer.get_proximal_operator()
-            self.regularizer_strength = regularizer_strength
+            solver_init_kwargs["prox"] = regularizer.get_proximal_operator()
+            solver_init_kwargs["regularizer_strength"] = regularizer_strength
         else:
             loss_fn = regularizer.penalized_loss(
                 unregularized_loss, regularizer_strength
@@ -188,6 +188,10 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
             [f.name for f in dataclasses.fields(OptimistixConfig)]
         )
         all_arguments = own_and_solver_args | common_optx_arguments
+
+        # prox is read from the regularizer, not provided as a solver argument
+        if cls._proximal:
+            all_arguments.remove("prox")
 
         return all_arguments
 
