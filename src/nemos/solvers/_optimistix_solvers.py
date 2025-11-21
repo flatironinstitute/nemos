@@ -1,9 +1,8 @@
 import dataclasses
-from typing import Any, Callable, ClassVar, Type, TypeAlias
+from typing import Any, Callable, ClassVar, Type, TypeAlias, Tuple
 
 import equinox as eqx
 import jax
-import jax.numpy as jnp
 import optimistix as optx
 
 from ..regularizer import Regularizer
@@ -19,10 +18,25 @@ OptimistixSolverState: TypeAlias = eqx.Module
 OptimistixStepResult: TypeAlias = tuple[Params, OptimistixSolverState, Aux]
 
 
-def _f_struct_factory():
-    """Create the output shape and dtype of the objective function using the currently set JAX precision."""
-    current_float_dtype = jnp.float64 if jax.config.jax_enable_x64 else jnp.float32
-    return jax.ShapeDtypeStruct((), current_float_dtype)
+# if using jaxtyping, a more precise return type would be
+# Tuple[PyTree[jax.ShapeDtypeStruct], PyTree[jax.ShapeDtypeStruct]]
+def _make_f_and_aux_struct(
+    fn: Callable, has_aux: bool, y0: Params, args: Tuple[Any, ...]
+) -> Tuple[Pytree, Pytree]:
+    """
+    Derive f_struct and aux_struct. Adapted from Optimistix's optimise.
+
+    f_struct is "the shape+dtype of the output of `fn`".
+    aux_struct is the same for the returned aux.
+    """
+    y0 = jax.tree_util.tree_map(optx._misc.inexact_asarray, y0)
+    if not has_aux:
+        fn = optx._misc.NoneAux(fn)  # pyright: ignore
+    fn = optx._misc.OutAsArray(fn)
+    fn = eqx.filter_closure_convert(fn, y0, args)  # pyright: ignore
+    # fn = cast(Fn[Y, Scalar, Aux], fn)
+    f_struct, aux_struct = fn.out_struct  # pyright: ignore[reportFunctionMemberAccess]
+    return f_struct, aux_struct
 
 
 @dataclasses.dataclass
@@ -39,16 +53,6 @@ class OptimistixConfig:
     maxiter: int
     # options dict passed around within optimistix
     options: dict[str, Any] = dataclasses.field(default_factory=dict)
-    # "The shape+dtype of the output of `fn`"
-    # dtype is dynamically determined by calling _f_struct_factory to read the currently
-    # set JAX floating point precision from the config
-    # f_struct: PyTree[jax.ShapeDtypeStruct] = dataclasses.field(
-    f_struct: Pytree = dataclasses.field(default_factory=_f_struct_factory)
-    # this would be the output shape + dtype of the aux variables fn returns
-    # TODO: This has to be updated now that aux has to be supported.
-    # TODO: Borrow how Optimistix.minimise sets up f_struct and aux_struct?
-    # aux_struct: PyTree[jax.ShapeDtypeStruct] = None
-    aux_struct: Pytree = None
     # "Any Lineax tags describing the structure of the Jacobian matrix d(fn)/dy."
     tags: frozenset = frozenset()
     # sets if the minimisation throws an error if an iterative solver runs out of steps
@@ -58,7 +62,7 @@ class OptimistixConfig:
     # way of autodifferentiation: https://docs.kidger.site/optimistix/api/adjoints/
     adjoint: optx.AbstractAdjoint = optx.ImplicitAdjoint()
     # whether the objective function returns any auxiliary results.
-    has_aux: bool = True
+    has_aux: bool = False
 
 
 class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
@@ -133,13 +137,17 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
         self.stats = {}
 
     def init_state(self, init_params: Params, *args: Any) -> OptimistixSolverState:
+        f_struct, aux_struct = _make_f_and_aux_struct(
+            self.fun_with_aux, True, init_params, args
+        )
+
         return self._solver.init(
             self.fun_with_aux,
             init_params,
             args,
             self.config.options,
-            self.config.f_struct,
-            self.config.aux_struct,
+            f_struct,
+            aux_struct,
             self.config.tags,
         )
 
@@ -211,9 +219,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
     def get_optim_info(self, state: OptimistixSolverState) -> OptimizationInfo:
         num_steps = self.stats["num_steps"].item()
 
-        function_val = (
-            state.f.item() if hasattr(state, "f") else state.f_info.f.item()
-        )  # pyright: ignore
+        function_val = state.f.item() if hasattr(state, "f") else state.f_info.f.item()  # pyright: ignore
 
         return OptimizationInfo(
             function_val=function_val,
