@@ -112,7 +112,7 @@ def test_apply_identifiability_constraints_by_basis_component(
     basis, input_shape, output_shape, expected_columns
 ):
     """Test constraints applied by basis component."""
-    jax.config.update("jax_enable_x64", True)
+    np.random.seed(42)
     x = basis.compute_features(
         *([np.random.randn(*input_shape)] * basis._n_input_dimensionality)
     )
