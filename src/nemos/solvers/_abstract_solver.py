@@ -52,7 +52,7 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         has_aux:
             Whether `unregularized_loss` returns auxiliary variables.
             If False, the loss function is expected to return a single scalar.
-            If True, the loss is expected to return a tuple of a scalar and auxiliary variables.
+            If True, the loss is expected to return a tuple of length 2 with a scalar and auxiliary variables.
         **solver_init_kwargs:
             Keyword arguments modifying the solver's behavior.
         """
