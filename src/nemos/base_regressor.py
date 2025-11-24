@@ -241,7 +241,9 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
 
     @regularizer_strength.setter
     def regularizer_strength(self, strength: Union[None, RegularizerStrength]):
-        self._regularizer_strength = strength
+        self._regularizer_strength = self.regularizer._validate_regularizer_strength(
+            strength
+        )
 
     @property
     def solver_name(self) -> str:
@@ -474,8 +476,10 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         init_params = self._check_params(init_params)
 
         # validate regularizer strength and params consistency
-        self.regularizer_strength = self.regularizer._validate_regularizer_strength(
-            init_params, self.regularizer_strength
+        self.regularizer_strength = (
+            self.regularizer._validate_regularizer_strength_structure(
+                init_params, self.regularizer_strength
+            )
         )
 
         # validate input and params consistency

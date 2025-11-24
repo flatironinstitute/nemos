@@ -18,7 +18,12 @@ from nemos.third_party.jaxopt import jaxopt
 from . import tree_utils
 from .base_class import Base
 from .proximal_operator import prox_elastic_net, prox_group_lasso
-from .typing import DESIGN_INPUT_TYPE, ProximalOperator, RegularizerStrength
+from .typing import (
+    DESIGN_INPUT_TYPE,
+    ProximalOperator,
+    RegularizerStrength,
+    ElasticNetRegularizerStrength,
+)
 from .utils import format_repr
 
 __all__ = ["UnRegularized", "Ridge", "Lasso", "GroupLasso", "ElasticNet"]
@@ -124,25 +129,60 @@ class Regularizer(Base, abc.ABC):
 
         return _penalized_loss
 
-    def _validate_regularizer_strength(self, strength: Union[None, float]):
-        if isinstance(strength, dict):
-            if jax.tree_util.tree_structure(strength) != jax.tree_util.tree_structure(
-                params[0]
-            ):
-                raise ValueError(
-                    f"Regularizer strength must conform to parameters: {strength}"
-                )
-        else:
-            try:
-                # force conversion to float to prevent weird GPU issues
-                strength = jax.tree_util.tree_map(
-                    lambda x: jnp.asarray(x, dtype=float), strength
-                )
-            except ValueError:
-                raise ValueError(
-                    f"Could not convert regularizer strength to floats: {strength}"
-                )
+    def _validate_regularizer_strength(
+        self, strength: Union[None, RegularizerStrength]
+    ):
+        if strength is None:
+            strength = 1.0
+        elif not isinstance(strength, (float, list, dict, jnp.ndarray)):
+            raise TypeError(
+                "Regularizer strength should be either a float or a pytree of floats, "
+                f"you passed  {strength} of type {type(strength)}"
+            )
+
+        return strength
+
+    def _validate_regularizer_strength_structure(
+        self,
+        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+        strength: Union[None, RegularizerStrength],
+    ):
+        # wrap in tree if not a tree already
+        if not hasattr(strength, "__len__"):
             strength = tree_utils.tree_full_like(params[0], strength)
+
+        # compare structure to params
+        if jax.tree_util.tree_structure(strength) != jax.tree_util.tree_structure(
+            params[0]
+        ):
+            raise ValueError(
+                f"Regularizer strength must conform to parameters: {strength}"
+            )
+
+        # if arrays are leaves, also check structure match
+        def check_and_broadcast(param_leaf, strength_leaf):
+            if isinstance(strength_leaf, jnp.ndarray):
+                if param_leaf.shape != strength_leaf.shape:
+                    raise ValueError(
+                        f"Shape mismatch between regularizer strength and parameters. "
+                        f"Expected shape {param_leaf.shape}, but got {strength_leaf.shape}."
+                    )
+            else:
+                strength_leaf = jnp.broadcast_to(strength_leaf, param_leaf.shape)
+            return strength_leaf
+
+        strength = jax.tree_util.tree_map(check_and_broadcast, params[0], strength)
+
+        # Force conversion to float to prevent weird GPU issues
+        try:
+            strength = jax.tree_util.tree_map(
+                lambda x: jnp.asarray(x, dtype=float), strength
+            )
+        except ValueError:
+            raise ValueError(
+                f"Could not convert regularizer strength to floats: {strength}"
+            )
+
         return strength
 
 
@@ -185,6 +225,13 @@ class UnRegularized(Regularizer):
     def _validate_regularizer_strength(self, strength: None):
         return None
 
+    def _validate_regularizer_strength_structure(
+        self,
+        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+        strength: Union[None, float],
+    ):
+        return None
+
     def _penalization(
         self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], regularizer_strength: float
     ):
@@ -219,7 +266,7 @@ class Ridge(Regularizer):
     def _penalization(
         self,
         params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
-        regularizer_strength: Union[float, dict],
+        regularizer_strength: RegularizerStrength,
     ) -> jnp.ndarray:
         """
         Compute the Ridge penalization for given parameters.
@@ -234,7 +281,6 @@ class Ridge(Regularizer):
         float
             The Ridge penalization value.
         """
-        coeffs, intercept = params
 
         def l2_penalty(coeff: jnp.ndarray, strength: jnp.ndarray):
             return 0.5 * jnp.sum(strength * jnp.square(coeff))
@@ -242,12 +288,12 @@ class Ridge(Regularizer):
         return tree_utils.pytree_map_and_reduce(
             l2_penalty,
             sum,
-            coeffs,
+            params[0],
             regularizer_strength,
         )
 
     def penalized_loss(
-        self, loss: Callable, regularizer_strength: Union[float, dict]
+        self, loss: Callable, regularizer_strength: RegularizerStrength
     ) -> Callable:
         """Return the penalized loss function for Ridge regularization."""
 
@@ -315,7 +361,6 @@ class Lasso(Regularizer):
         """
 
         def prox_op(params, l1reg, scaling=1.0):
-            Ws, bs = params
             return jax.tree_util.tree_map(
                 lambda w, r: jaxopt.prox.prox_lasso(w, r, scaling=scaling),
                 params[0],
@@ -327,7 +372,7 @@ class Lasso(Regularizer):
     def _penalization(
         self,
         params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
-        regularizer_strength: Union[float, dict],
+        regularizer_strength: RegularizerStrength,
     ) -> jnp.ndarray:
         """
         Compute the Lasso penalization for given parameters.
@@ -342,7 +387,6 @@ class Lasso(Regularizer):
         float
             The Lasso penalization value.
         """
-        coeffs, intercept = params
 
         def l1_penalty(coeff: jnp.ndarray, strength: jnp.ndarray):
             return jnp.sum(strength * jnp.abs(coeff))
@@ -350,12 +394,12 @@ class Lasso(Regularizer):
         return tree_utils.pytree_map_and_reduce(
             l1_penalty,
             sum,
-            coeffs,
+            params[0],
             regularizer_strength,
         )
 
     def penalized_loss(
-        self, loss: Callable, regularizer_strength: Union[float, dict]
+        self, loss: Callable, regularizer_strength: RegularizerStrength
     ) -> Callable:
         """Return a function for calculating the penalized loss using Lasso regularization."""
 
@@ -437,7 +481,7 @@ class ElasticNet(Regularizer):
     def _penalization(
         self,
         params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
-        net_regularization: Tuple[float, float],
+        regularizer_strength: ElasticNetRegularizerStrength,
     ) -> jnp.ndarray:
         r"""
         Compute the Elastic Net penalization for given parameters.
@@ -479,9 +523,14 @@ class ElasticNet(Regularizer):
     def _validate_regularizer_strength(
         self,
         params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
-        strength: Union[
-            None, float, dict, Tuple[Union[float, dict], Union[float, dict]]
-        ],
+        regularizer_strength: ElasticNetRegularizerStrength,
+    ):
+        pass
+
+    def _validate_regularizer_strength_structure(
+        self,
+        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+        regularizer_strength: ElasticNetRegularizerStrength,
     ):
         # check structure
         if isinstance(strength, tuple):
@@ -661,7 +710,9 @@ class GroupLasso(Regularizer):
             )
 
     def _penalization(
-        self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], regularizer_strength: float
+        self,
+        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+        regularizer_strength: RegularizerStrength,
     ) -> jnp.ndarray:
         r"""
         Calculate the penalization.
