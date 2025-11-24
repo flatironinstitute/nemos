@@ -465,16 +465,13 @@ class ElasticNet(Regularizer):
         """
 
         def prox_op(params, netreg, scaling=1.0):
-            Ws, bs = params
-            # since we do not allow array regularization assume we pass a tuple
-            regularizer_strength, regularizer_ratio = netreg
-            lam = regularizer_strength * regularizer_ratio  # hyperparams[0]
-            gam = (1 - regularizer_ratio) / regularizer_ratio  # hyperparams[1]
-            # if Ws is a pytree, netreg needs to be a pytree with the same
-            # structure
-            lam = jax.tree_util.tree_map(lambda x: lam * jnp.ones_like(x), Ws)
-            gam = jax.tree_util.tree_map(lambda x: gam * jnp.ones_like(x), Ws)
-            return prox_elastic_net(Ws, (lam, gam), scaling=scaling), bs
+            lam = jax.tree_util.tree_map(
+                lambda strength, ratio: strength * ratio, *netreg
+            )  # hyperparams[0]
+            gam = jax.tree_util.tree_map(
+                lambda ratio: (1 - ratio) / ratio, netreg[1]
+            )  # hyperparams[1]
+            return prox_elastic_net(params[0], (lam, gam), scaling=scaling), params[1]
 
         return prox_op
 
@@ -508,91 +505,53 @@ class ElasticNet(Regularizer):
             The Elastic Net penalization value.
         """
 
-        def net_penalty(coeff: jnp.ndarray) -> jnp.ndarray:
-            regularizer_strength, regularizer_ratio = net_regularization
-            return regularizer_strength * (
-                0.5 * (1 - regularizer_ratio) * jnp.sum(jnp.power(coeff, 2))
-                + regularizer_ratio * jnp.sum(jnp.abs(coeff))
-            )
+        def net_penalty(
+            coeff: jnp.ndarray, strength: jnp.ndarray, ratio: jnp.ndarray
+        ) -> jnp.ndarray:
+            quad = 0.5 * (1.0 - ratio) * jnp.power(coeff, 2)
+            l1 = ratio * jnp.abs(coeff)
+            return jnp.sum(strength * (quad + l1))
 
         # tree map the computation and sum over leaves
         return tree_utils.pytree_map_and_reduce(
-            lambda x: net_penalty(x), sum, params[0]
+            lambda x, strength, ratio: net_penalty(x),
+            sum,
+            params[0],
+            strength[0],
+            strength[1],
         )
 
     def _validate_regularizer_strength(
-        self,
-        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
-        regularizer_strength: ElasticNetRegularizerStrength,
+        self, strength: Union[None, ElasticNetRegularizerStrength]
     ):
-        pass
+        if strength is None:
+            _strength, _ratio = (1.0, 0.5)
+        elif isinstance(strength, Tuple):
+            _strength = super()._validate_regularizer_strength(strength[0])
+            try:
+                _ratio = super()._validate_regularizer_strength(strength[1])
+            except TypeError as e:
+                raise TypeError(e.msg.replace("strength", "ratio"))
+        else:
+            _strength = super()._validate_regularizer_strength(strength)
+            _ratio = 0.5
+
+        return _strength, _ratio
 
     def _validate_regularizer_strength_structure(
         self,
         params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
-        regularizer_strength: ElasticNetRegularizerStrength,
+        strength: Union[None, ElasticNetRegularizerStrength],
     ):
-        # check structure
-        if isinstance(strength, tuple):
-            _strength, _ratio = strength
-
-            if isinstance(_strength, dict):
-                if jax.tree_util.tree_structure(
-                    _strength
-                ) != jax.tree_util.tree_structure(params[0]):
-                    raise ValueError(
-                        f"Regularizer strength must conform to parameters: {strength}"
-                    )
-            else:
-                _strength = tree_utils.tree_full_like(params[0], _strength)
-
-            if isinstance(_ratio, dict):
-                if jax.tree_util.tree_structure(_ratio) != jax.tree_util.tree_structure(
-                    params[0]
-                ):
-                    raise ValueError(
-                        f"Regularizer ratio must conform to parameters: {strength}"
-                    )
-            else:
-                _ratio = tree_utils.tree_full_like(params[0], _ratio)
-        else:
-            if isinstance(strength, dict):
-                if jax.tree_util.tree_structure(
-                    strength
-                ) != jax.tree_util.tree_structure(params[0]):
-                    raise ValueError(
-                        f"Regularizer strength must conform to parameters: {strength}"
-                    )
-            else:
-                if strength is None:
-                    _strength = 1.0
-                _strength = tree_utils.tree_full_like(params[0], strength)
-            _ratio = tree_utils.tree_full_like(params[0], 0.5)
-
-        # check strength
+        _strength = super()._validate_regularizer_strength_structure(
+            params, strength[0]
+        )
         try:
-            _strength = jax.tree_util.tree_map(float, _strength)
-        except ValueError:
-            raise ValueError(
-                f"Could not convert regularizer strength to floats: {strength}"
+            _ratio = super()._validate_regularizer_strength_structure(
+                params, strength[0]
             )
-
-        # check ratio
-        try:
-            _ratio = jax.tree_util.tree_map(float, _ratio)
-        except ValueError:
-            raise ValueError(
-                f"Could not convert regularizer ratio to floats: {strength}"
-            )
-
-        def _check_ratio(r):
-            if not (0 < r <= 1):
-                raise ValueError(
-                    f"Invalid regularizater ratio value {r}. "
-                    "Each ratio must be > 0 and ≤ 1."
-                )
-
-        jax.tree_util.tree_map(_check_ratio, _ratio)
+        except ValueError as e:
+            raise ValueError(e.msg.replace("strength", "ratio"))
 
         return _strength, _ratio
 
