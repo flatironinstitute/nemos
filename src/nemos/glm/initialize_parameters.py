@@ -7,14 +7,40 @@ import jax.numpy as jnp
 from numpy.typing import ArrayLike
 from scipy.optimize import root_scalar
 
+from ..inverse_link_function_utils import exp, logistic, norm_cdf, softplus
+from ..utils import one_over_x
+
 # dictionary of known inverse link functions.
 INVERSE_FUNCS = {
-    jnp.exp: jnp.log,
-    jax.nn.softplus: lambda x: jnp.log(jnp.exp(x) - 1.0),
-    jax.scipy.special.expit: jax.scipy.special.logit,
-    jax.lax.logistic: jax.scipy.special.logit,
-    jax.scipy.stats.norm.cdf: jax.scipy.stats.norm.ppf,
+    exp: jnp.log,
+    softplus: lambda x: jnp.log(jnp.exp(x) - 1.0),
+    logistic: jax.scipy.special.logit,
+    norm_cdf: jax.scipy.stats.norm.ppf,
+    one_over_x: one_over_x,
 }
+
+# Name-based lookup (for after pickling/copying)
+INVERSE_FUNCS_BY_SIMPLE_NAME = {
+    "exp": jnp.log,
+    "softplus": lambda x: jnp.log(jnp.exp(x) - 1.0),
+    "logistic": jax.scipy.special.logit,
+    "norm_cdf": jax.scipy.stats.norm.ppf,
+    "one_over_x": one_over_x,
+}
+
+
+def get_inverse_function(func: Callable):
+    """Get the inverse function for a given link function."""
+    # Strategy 1: Try identity lookup (fast path)
+    if func in INVERSE_FUNCS:
+        return INVERSE_FUNCS[func]
+
+    # Strategy 2: Try name lookup (for copied/pickled functions)
+    if hasattr(func, "__name__") and func.__name__ in INVERSE_FUNCS_BY_SIMPLE_NAME:
+        return INVERSE_FUNCS_BY_SIMPLE_NAME[func.__name__]
+
+    # No inverse function found
+    return None
 
 
 def scalar_root_find_elementwise(
@@ -83,7 +109,7 @@ def initialize_intercept_matching_mean_rate(
 
     """
     # return inverse if analytical solution is available
-    analytical_inv = INVERSE_FUNCS.get(inverse_link_function, None)
+    analytical_inv = get_inverse_function(inverse_link_function)
 
     means = jnp.atleast_1d(jnp.nanmean(y, axis=0))
     if analytical_inv:

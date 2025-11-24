@@ -12,7 +12,16 @@ Note:
 import abc
 import os
 from collections import namedtuple
+from copy import deepcopy
 from functools import partial
+from typing import Literal
+
+# Named tuple for model fixture returns (clearer than tuple indexing)
+ModelFixture = namedtuple(
+    "ModelFixture",
+    ["X", "y", "model", "params", "rates", "extra"],
+    defaults=[None, None],  # rates and extra default to None
+)
 
 import jax
 import jax.numpy as jnp
@@ -254,6 +263,9 @@ class MockRegressor(nmo.base_regressor.BaseRegressor):
         pass
 
     def initialize_params(self, *args, **kwargs):
+        pass
+
+    def _initialize_parameters(self, *args, **kwargs):
         pass
 
     def _predict_and_compute_loss(self, params, X, y):
@@ -1110,6 +1122,145 @@ def population_negativeBinomialGLM_model_instantiation_pytree(
         solver_name="LBFGS",
     )
     return X_tree, np.random.poisson(rate), model_tree, true_params_tree, rate
+
+
+def instantiate_glm_func(
+    obs_model: (
+        Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial"]
+        | nmo.observation_models.Observations
+    ) = "Bernoulli",
+    regularizer: str = "UnRegularized",
+    solver_name: str = None,
+    simulate=False,
+):
+    np.random.seed(123)
+    n_features = 2
+    X = np.ones((500, n_features))
+    X[:250, 0] = 0
+    X[np.arange(500) % 2 == 1, 1] = 0
+    model = nmo.glm.GLM(
+        observation_model=obs_model,
+        regularizer=regularizer,
+        solver_name=solver_name,
+    )
+    model.coef_ = np.random.randn(n_features)
+    model.intercept_ = np.random.randn(1)
+    if simulate:
+        counts, rates = model.simulate(jax.random.PRNGKey(1234), X)
+    else:
+        counts, rates = None, None
+    return ModelFixture(
+        X=X,
+        y=counts,
+        model=model,
+        params=(model.coef_, model.intercept_),
+        rates=rates,
+        extra=None,
+    )
+
+
+def instantiate_population_glm_func(
+    n_neurons=3,
+    obs_model: (
+        Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial"]
+        | nmo.observation_models.Observations
+    ) = "Bernoulli",
+    regularizer: str = "UnRegularized",
+    solver_name: str = None,
+    simulate=False,
+):
+    np.random.seed(123)
+    n_features = 2
+    X = np.ones((500, n_features))
+    X[:250, 0] = 0
+    X[np.arange(500) % 2 == 1, 1] = 0
+    model = nmo.glm.PopulationGLM(
+        observation_model=obs_model,
+        regularizer=regularizer,
+        solver_name=solver_name,
+    )
+    model.coef_ = np.random.randn(n_features, n_neurons)
+    model.intercept_ = np.random.randn(n_neurons)
+    if simulate:
+        model._initialize_feature_mask(X, np.empty(shape=(X.shape[0], n_neurons)))
+        counts, rates = model.simulate(jax.random.PRNGKey(1234), X)
+    else:
+        counts, rates = None, None
+    return ModelFixture(
+        X=X,
+        y=counts,
+        model=model,
+        params=(model.coef_, model.intercept_),
+        rates=rates,
+        extra=None,
+    )
+
+
+_MODEL_CACHE = {}
+
+
+# Registry for model-specific configurations
+MODEL_CONFIG = {
+    "GLM": {
+        "is_population": False,
+        "default_y_shape": (500,),
+    },
+    "PopulationGLM": {
+        "is_population": True,
+        "default_y_shape": (500, 3),
+    },
+}
+
+
+def is_population_model(model) -> bool:
+    """Check if a model is a population model using registry instead of string matching."""
+    model_name = model.__class__.__name__
+    return MODEL_CONFIG.get(model_name, {}).get("is_population", False)
+
+
+@pytest.fixture
+def instantiate_base_regressor_subclass(request):
+    """
+    Instantiate the concrete BaseRegressor sub-classes with caching.
+    """
+    model_name: str = request.param["model"]
+    obs_model: str | nmo.observation_models.Observations = request.param["obs_model"]
+    simulate: bool = request.param["simulate"]
+
+    # Create cache key (class-scoped)
+    cache_key = (
+        model_name,
+        str(obs_model),
+        simulate,
+        id(request.cls) if request.cls else id(request.module),
+    )
+
+    # Check cache
+    if cache_key not in _MODEL_CACHE:
+        if model_name == "GLM":
+            result = instantiate_glm_func(obs_model=obs_model, simulate=simulate)
+        elif model_name == "PopulationGLM":
+            result = instantiate_population_glm_func(
+                obs_model=obs_model, simulate=simulate
+            )
+        else:
+            raise ValueError("model_name {} unknown".format(model_name))
+        _MODEL_CACHE[cache_key] = result
+        return result
+
+    # Get cached data and return a complete deepcopy of everything
+    # this is different from a function level fixture because it
+    # would not re-run any potentially heavy setup code (like model.simulate).
+    cached_result = deepcopy(_MODEL_CACHE[cache_key])
+    return cached_result
+
+
+# Auto-clear cache after each test module run
+@pytest.fixture(scope="module", autouse=True)
+def _clear_model_cache():
+    """Clear model cache after each test module."""
+    yield
+    _MODEL_CACHE.clear()
 
 
 # Select solver backend for tests if requested via environment variable
