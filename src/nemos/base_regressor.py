@@ -104,7 +104,7 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
     """
 
     # overwrite this in subclasses if their objective functions return aux
-    has_aux: bool = False
+    _has_aux: bool = False
 
     def __init__(
         self,
@@ -346,7 +346,7 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
             loss,
             self.regularizer,
             self.regularizer_strength,
-            has_aux=self.has_aux,
+            has_aux=self._has_aux,
             **solver_kwargs,
         )
         self._solver = solver
