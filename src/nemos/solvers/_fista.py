@@ -10,7 +10,7 @@ from jaxtyping import Array, Bool, Float, Int, PyTree
 from optimistix._custom_types import Aux, Y
 
 from ..tree_utils import tree_add_scalar_mul, tree_sub
-from ._optimistix_solvers import OptimistixAdapter, OptimistixConfig
+from ._optimistix_solvers import OptimistixAdapter
 
 
 def prox_none(x: PyTree, hyperparams=None, scaling: float = 1.0):
