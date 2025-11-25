@@ -1471,9 +1471,9 @@ class GaussianObservations(Observations):
         :
             The Gaussian log-likelihood. Shape (1,).
         """
-        norm = - 0.5 * y.shape[0] * jnp.log(2 * jnp.pi * scale)
+        norm = -0.5 * y.shape[0] * jnp.log(2 * jnp.pi * scale)
         resid = y - predicted_rate
-        nll = - (0.5 / scale) * self._negative_log_likelihood(
+        nll = -(0.5 / scale) * self._negative_log_likelihood(
             y, predicted_rate, aggregate_sample_scores
         )
         return norm + nll
@@ -1505,7 +1505,10 @@ class GaussianObservations(Observations):
         jnp.ndarray
             Random numbers generated from the Gaussian distribution based on the `predicted_rate` and the `scale`.
         """
-        return jax.random.normal(key, shape=predicted_rate.shape) * jnp.sqrt(scale) + predicted_rate
+        return (
+            jax.random.normal(key, shape=predicted_rate.shape) * jnp.sqrt(scale)
+            + predicted_rate
+        )
 
     def deviance(
         self,
@@ -1582,7 +1585,6 @@ class GaussianObservations(Observations):
         """
         resid = jnp.power(y - predicted_rate, 2)
         return jnp.sum(resid, axis=0) / dof_resid
-
 
 
 def check_observation_model(observation_model, force_checks=False):

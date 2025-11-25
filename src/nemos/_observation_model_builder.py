@@ -6,7 +6,13 @@ from .observation_models import (
     GaussianObservations,
 )
 
-AVAILABLE_OBSERVATION_MODELS = ["Bernoulli", "NegativeBinomial", "Gamma", "Poisson", "Gaussian"]
+AVAILABLE_OBSERVATION_MODELS = [
+    "Bernoulli",
+    "NegativeBinomial",
+    "Gamma",
+    "Poisson",
+    "Gaussian",
+]
 
 
 def instantiate_observation_model(observation_model: str, **kwargs):
