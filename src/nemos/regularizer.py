@@ -524,6 +524,19 @@ class ElasticNet(Regularizer):
                 _ratio = super()._validate_regularizer_strength(strength[1])
             except TypeError as e:
                 raise TypeError(e.msg.replace("strength", "ratio"))
+
+            def _verify_ratio(ratio):
+                if jnp.any((ratio > 1) | (ratio < 0)):
+                    raise ValueError(
+                        f"Invalid regularization ratio: {strength[1]}. Must be between 0 and 1."
+                    )
+                if jnp.any(ratio == 0):
+                    raise ValueError(
+                        f"Invalid regularization ratio: {strength[1]}. 0 is not supported."
+                    )
+
+            jax.tree_util.tree_map(_verify_ratio, _ratio)
+
         else:
             _strength = super()._validate_regularizer_strength(strength)
             _ratio = 0.5
@@ -540,7 +553,7 @@ class ElasticNet(Regularizer):
         )
         try:
             _ratio = super()._validate_regularizer_strength_structure(
-                params, strength[0]
+                params, strength[1]
             )
         except ValueError as e:
             raise ValueError(e.msg.replace("strength", "ratio"))
