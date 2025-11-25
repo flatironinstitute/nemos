@@ -13,8 +13,6 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import NDArray
 
-from nemos.third_party.jaxopt import jaxopt
-
 from . import tree_utils
 from .base_class import Base
 from .proximal_operator import (
