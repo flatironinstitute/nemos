@@ -1404,6 +1404,37 @@ class GaussianObservations(Observations):
         """Identity link function for Gaussian observations."""
         return lambda x: x
 
+    def _negative_log_likelihood(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
+    ) -> jnp.ndarray:
+        r"""Compute the Gaussian negative log-likelihood.
+
+        This computes the Gaussian negative log-likelihood of the predicted rates
+        for the observed neural activity up to a constant.
+
+        Parameters
+        ----------
+        y :
+            The target activity to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
+        predicted_rate :
+            The predicted rate of the current model. Shape (n_time_bins, ) or (n_time_bins, n_neurons).
+        aggregate_sample_scores :
+            Function that aggregates the log-likelihood of each sample.
+
+        Returns
+        -------
+        :
+            The Gaussian negative log-likelihood. Shape (1,).
+        """
+        predicted_rate = jnp.clip(
+            predicted_rate, min=jnp.finfo(predicted_rate.dtype).eps
+        )
+        resid = y - predicted_rate
+        return aggregate_sample_scores(jnp.power(resid, 2))
+
     def log_likelihood(
         self,
         y: jnp.ndarray,
@@ -1411,14 +1442,15 @@ class GaussianObservations(Observations):
         scale: Union[float, jnp.ndarray] = 1.0,
         aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ):
-        r"""Compute the Gaussian log-likelihood.
+        r"""Compute the Gaussian negative log-likelihood.
 
         This computes the Gaussian log-likelihood of the predicted rates
         for the observed neural activity up to a constant.
 
         The formula for the Gaussian log-likelihood is given by:
+
         .. math::
-            \ell(\mu_1,\dots,\mu_n,\sigma^2) = -\frac{n}{2}\log(2\pi\sigma^2) - \frac{1}{2\sigma^2}\sum_{i=1}^{n} (y_i - \mu_i)^2.
+            \ell(\mu,\sigma^2) = -\frac{n}{2}\log(2\pi\sigma^2) - \frac{1}{2\sigma^2}\sum_{i=1}^{n} (y_i - \mu_i)^2.
 
         where :math:`\mu` is the predicted mean, :math:`\sigma^2` is the variance (scale), and :math:`y` is
         the observed data.
@@ -1441,7 +1473,9 @@ class GaussianObservations(Observations):
         """
         norm = - 0.5 * y.shape[0] * jnp.log(2 * jnp.pi * scale)
         resid = y - predicted_rate
-        nll = - (0.5 / scale) * jnp.sum(jnp.power(resid, 2))
+        nll = - (0.5 / scale) * self._negative_log_likelihood(
+            y, predicted_rate, aggregate_sample_scores
+        )
         return norm + nll
 
     def sample_generator(
@@ -1543,6 +1577,8 @@ class GaussianObservations(Observations):
         """
         resid = jnp.power(y - predicted_rate, 2)
         return jnp.sum(resid, axis=0) / dof_resid
+
+
 
 def check_observation_model(observation_model, force_checks=False):
     r"""

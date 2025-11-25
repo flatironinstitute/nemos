@@ -190,7 +190,7 @@ class GLM(BaseRegressor[ModelParams]):
         # Replace this manual list after dropping support for 3.10?
         observation_model: (
             obs.Observations
-            | Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial"]
+            | Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial", "Gaussian"]
         ) = "Poisson",
         inverse_link_function: Optional[Callable] = None,
         regularizer: Optional[Union[str, Regularizer]] = None,
