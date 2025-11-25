@@ -216,7 +216,7 @@ class GLMHMM(BaseRegressor[ModelParams]):
 
         if not isinstance(tol, Number) or tol <= 0:
             raise ValueError(
-                f"``maxiter`` must be a strictly positive float. {tol} provided."
+                f"``tol`` must be a strictly positive float. {tol} provided."
             )
         self._tol = float(tol)
 
@@ -307,7 +307,7 @@ class GLMHMM(BaseRegressor[ModelParams]):
             self._dirichlet_prior_alphas_transition = None
         elif is_numpy_array_like(value)[1]:
             value = jnp.asarray(value, dtype=float)
-            if value.shape != (self._n_states, self.n_states):
+            if value.shape != (self._n_states, self._n_states):
                 raise ValueError(
                     "Dirichlet prior alpha parameters for transition probabilities must "
                     f"have shape ({self._n_states}, {self._n_states}), "
@@ -439,12 +439,31 @@ class GLMHMM(BaseRegressor[ModelParams]):
             inverse_link_function, self._observation_model
         )
 
+    @property
+    def seed(self):
+        """Random seed as a jax PRNG key."""
+        return self._seed
+
+    @seed.setter
+    def seed(self, value):
+        # Validate it's a JAX PRNG key
+        if (
+            not isinstance(value, jax.Array)
+            or value.shape != (2,)
+            or value.dtype != jnp.uint32
+        ):
+            raise TypeError(
+                f"seed must be a JAX PRNG key (jax.random.PRNGKey). "
+                f"Got {type(value)} with shape {getattr(value, 'shape', 'N/A')}"
+            )
+        self._seed = value
+
     def fit(
         self,
         X: DESIGN_INPUT_TYPE,
         y: Union[NDArray, jnp.ndarray, nap.Tsd],
         init_params: Optional[
-            Tuple[Union[dict, ArrayLike], ArrayLike, ArrayLike, ArrayLike]
+            Tuple[Tuple[Union[dict, ArrayLike], ArrayLike], ArrayLike, ArrayLike]
         ] = None,
     ) -> "GLMHMM":
         """Fit the GLM-HMM model to the data."""
@@ -476,9 +495,6 @@ class GLMHMM(BaseRegressor[ModelParams]):
         else:
             data = X
 
-        self._likelihood_func, self._expected_negative_log_likelihood = (
-            self._get_m_step_loss_function(y.ndim > 1)
-        )
         self.initialize_state(data, y, init_params=init_params)
 
         # run EM
@@ -504,7 +520,6 @@ class GLMHMM(BaseRegressor[ModelParams]):
             self._tol,
         )
         self.dof_resid_ = self._estimate_resid_degrees_of_freedom(X)
-        print(self.dof_resid_)
         # TODO: uncomment this once the predict method is available
         # self.scale_ = self.observation_model.estimate_scale(y, self.predict(X), self.dof_resid_)
         self.scale_ = 1.0

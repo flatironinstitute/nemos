@@ -38,7 +38,7 @@ DEFAULT_GLM_COEF_SHAPE = {
     indirect=True,
 )
 def test_get_fit_attrs(instantiate_base_regressor_subclass):
-    X, y, model, params = instantiate_base_regressor_subclass[:4]
+    fixture = instantiate_base_regressor_subclass
     expected_state = {
         "coef_": None,
         "dof_resid_": None,
@@ -49,11 +49,11 @@ def test_get_fit_attrs(instantiate_base_regressor_subclass):
         "solver_state_": None,
         "transition_prob_": None,
     }
-    assert model._get_fit_state() == expected_state
-    model.solver_kwargs = {"maxiter": 1}
-    model.fit(X, y)
-    assert all(val is not None for val in model._get_fit_state().values())
-    assert model._get_fit_state().keys() == expected_state.keys()
+    assert fixture.model._get_fit_state() == expected_state
+    fixture.model.solver_kwargs = {"maxiter": 1}
+    fixture.model.fit(fixture.X, fixture.y)
+    assert all(val is not None for val in fixture.model._get_fit_state().values())
+    assert fixture.model._get_fit_state().keys() == expected_state.keys()
 
 
 @pytest.mark.parametrize(
@@ -79,7 +79,7 @@ class TestGLMHMM:
         """
         Fixture to define the expected behavior for test_fit_weights_dimensionality based on the type of GLM class.
         """
-        model_cls = instantiate_base_regressor_subclass[2].__class__
+        model_cls = instantiate_base_regressor_subclass.model.__class__
         if "Population" in model_cls.__name__:
             # FILL IN WHEN POPULATION CLASS IS DEFINED
             # NOTE THAT THE FIXTURE WILL MAKE TESTS FAIL FOR POPULATION, WHICH IS
@@ -113,23 +113,27 @@ class TestGLMHMM:
         Test the `fit` method with weight matrices of different dimensionalities.
         Check for correct dimensionality.
         """
+        fixture = instantiate_base_regressor_subclass
         expectation = fit_weights_dimensionality_expectation[dim_weights]
-        X, y, model, true_params = instantiate_base_regressor_subclass[:4]
-        n_samples, n_features = X.shape
+        n_samples, n_features = fixture.X.shape
 
         if dim_weights == 0:
             init_w = jnp.array([])
         elif dim_weights == 1:
             init_w = jnp.zeros((n_features,))
         elif dim_weights == 2:
-            init_w = jnp.zeros(DEFAULT_GLM_COEF_SHAPE[model.__class__.__name__])
+            init_w = jnp.zeros(DEFAULT_GLM_COEF_SHAPE[fixture.model.__class__.__name__])
         else:
             init_w = jnp.zeros(
-                DEFAULT_GLM_COEF_SHAPE[model.__class__.__name__]
+                DEFAULT_GLM_COEF_SHAPE[fixture.model.__class__.__name__]
                 + (1,) * (dim_weights - 2)
             )
         with expectation:
-            model.fit(X, y, init_params=((init_w, true_params[0][1]), *true_params[1:]))
+            fixture.model.fit(
+                fixture.X,
+                fixture.y,
+                init_params=((init_w, fixture.params[0][1]), *fixture.params[1:]),
+            )
 
     @pytest.mark.parametrize(
         "dim_intercepts, expectation",
@@ -161,13 +165,19 @@ class TestGLMHMM:
         """
         Test the `fit` method with intercepts of different dimensionalities. Check for correct dimensionality.
         """
-        X, y, model, true_params = instantiate_base_regressor_subclass[:4]
+        fixture = instantiate_base_regressor_subclass
         if dim_intercepts == 1:
-            init_b = jnp.ones(DEFAULT_GLM_COEF_SHAPE[model.__class__.__name__][1])
+            init_b = jnp.ones(
+                DEFAULT_GLM_COEF_SHAPE[fixture.model.__class__.__name__][1]
+            )
         else:
             init_b = jnp.ones((1,) * dim_intercepts)
         with expectation:
-            model.fit(X, y, init_params=((true_params[0][0], init_b), *true_params[1:]))
+            fixture.model.fit(
+                fixture.X,
+                fixture.y,
+                init_params=((fixture.params[0][0], init_b), *fixture.params[1:]),
+            )
 
     """
     Parameterization used by test_fit_init_params_type and test_initialize_solver_init_params_type
@@ -241,14 +251,16 @@ class TestGLMHMM:
         Test the `fit` method with various types of initial parameters. Ensure that the provided initial parameters
         are array-like.
         """
-        X, y, model, true_params = instantiate_base_regressor_subclass[:4]
-        if "Population" in model.__class__.__name__:
+        fixture = instantiate_base_regressor_subclass
+        if "Population" in fixture.model.__class__.__name__:
             init_params = init_params_population_glm
         else:
             init_params = init_params_glm
 
         with expectation:
-            model.fit(X, y, init_params=(init_params, *true_params[1:]))
+            fixture.model.fit(
+                fixture.X, fixture.y, init_params=(init_params, *fixture.params[1:])
+            )
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -268,22 +280,26 @@ class TestGLMHMM:
         Test the `fit` method for inconsistencies between data features and initial weights provided.
         Ensure the number of features align.
         """
-        X, y, model, true_params = instantiate_base_regressor_subclass[:4]
-        if "Population" in model.__class__.__name__:
+        fixture = instantiate_base_regressor_subclass
+        if "Population" in fixture.model.__class__.__name__:
             raise RuntimeError("Fill in the test case for population glmhmm")
         else:
-            init_w = jnp.zeros((X.shape[1] + delta_n_features, 3))
+            init_w = jnp.zeros((fixture.X.shape[1] + delta_n_features, 3))
             init_b = jnp.ones(
                 3,
             )
         with expectation:
-            model.fit(X, y, init_params=((init_w, init_b), *true_params[1:]))
+            fixture.model.fit(
+                fixture.X,
+                fixture.y,
+                init_params=((init_w, init_b), *fixture.params[1:]),
+            )
 
     @pytest.fixture
     def initialize_solver_weights_dimensionality_expectation(
         self, instantiate_base_regressor_subclass
     ):
-        name = instantiate_base_regressor_subclass[2].__class__.__name__
+        name = instantiate_base_regressor_subclass.model.__class__.__name__
         if "Population" in name:
             return {
                 0: pytest.raises(
@@ -329,9 +345,9 @@ class TestGLMHMM:
         Test the `initialize_solver` method with weight matrices of different dimensionalities.
         Check for correct dimensionality.
         """
-        X, y, model, true_params = instantiate_base_regressor_subclass[:4]
+        fixture = instantiate_base_regressor_subclass
         expectation = fit_weights_dimensionality_expectation[dim_weights]
-        n_samples, n_features = X.shape
+        n_samples, n_features = fixture.X.shape
 
         if dim_weights == 0:
             init_w = jnp.array([])
@@ -340,15 +356,19 @@ class TestGLMHMM:
         elif dim_weights == 2:
             init_w = jnp.zeros((n_features, 3))
         elif dim_weights == 3:
-            init_w = jnp.zeros((n_features, y.shape[1] if y.ndim > 1 else 1, 3))
+            init_w = jnp.zeros(
+                (n_features, fixture.y.shape[1] if fixture.y.ndim > 1 else 1, 3)
+            )
         else:
             init_w = jnp.zeros((n_features, 3) + (1,) * (dim_weights - 2))
         with expectation:
-            params = model.initialize_params(
-                X, y, init_params=((init_w, true_params[0][1]), *true_params[1:])
+            params = fixture.model.initialize_params(
+                fixture.X,
+                fixture.y,
+                init_params=((init_w, fixture.params[0][1]), *fixture.params[1:]),
             )
             # check that params are set
-            init_state = model.initialize_state(X, y, params)
+            init_state = fixture.model.initialize_state(fixture.X, fixture.y, params)
             assert init_state.velocity == params
 
     @pytest.mark.parametrize(
@@ -365,9 +385,9 @@ class TestGLMHMM:
 
         Check for correct dimensionality.
         """
-        X, y, model, true_params = instantiate_base_regressor_subclass[:4]
-        n_samples, n_features = X.shape
-        is_population = "Population" in model.__class__.__name__
+        fixture = instantiate_base_regressor_subclass
+        n_samples, n_features = fixture.X.shape
+        is_population = "Population" in fixture.model.__class__.__name__
         if (dim_intercepts == 2 and is_population) or (
             dim_intercepts == 1 and not is_population
         ):
@@ -386,11 +406,13 @@ class TestGLMHMM:
             )
             init_w = jnp.zeros((n_features, 3))
         with expectation:
-            params = model.initialize_params(
-                X, y, init_params=((init_w, init_b), *true_params[1:])
+            params = fixture.model.initialize_params(
+                fixture.X,
+                fixture.y,
+                init_params=((init_w, init_b), *fixture.params[1:]),
             )
             # check that params are set
-            init_state = model.initialize_state(X, y, params)
+            init_state = fixture.model.initialize_state(fixture.X, fixture.y, params)
             assert init_state.velocity == params
 
     @pytest.mark.parametrize(*fit_init_params_type_init_params)
@@ -406,17 +428,17 @@ class TestGLMHMM:
 
         Ensure that the provided initial parameters are array-like.
         """
-        X, y, model, true_params = instantiate_base_regressor_subclass[:4]
-        if "Population" in model.__class__.__name__:
+        fixture = instantiate_base_regressor_subclass
+        if "Population" in fixture.model.__class__.__name__:
             init_params = init_params_population_glm
         else:
             init_params = init_params_glm
         with expectation:
-            params = model.initialize_params(
-                X, y, init_params=(init_params, *true_params[1:])
+            params = fixture.model.initialize_params(
+                fixture.X, fixture.y, init_params=(init_params, *fixture.params[1:])
             )
             # check that params are set
-            init_state = model.initialize_state(X, y, params)
+            init_state = fixture.model.initialize_state(fixture.X, fixture.y, params)
             assert init_state.velocity == params
 
     @pytest.mark.parametrize(
@@ -437,18 +459,20 @@ class TestGLMHMM:
         Test the `initialize_solver` method for inconsistencies between data features and initial weights provided.
         Ensure the number of features align.
         """
-        X, y, model, true_params = instantiate_base_regressor_subclass[:4]
-        if "Population" in model.__class__.__name__:
+        fixture = instantiate_base_regressor_subclass
+        if "Population" in fixture.model.__class__.__name__:
             raise RuntimeError("Fill in the test case for population glmhmm")
         else:
-            init_w = jnp.zeros((X.shape[1] + delta_n_features, 3))
+            init_w = jnp.zeros((fixture.X.shape[1] + delta_n_features, 3))
             init_b = jnp.ones(3)
         with expectation:
-            params = model.initialize_params(
-                X, y, init_params=((init_w, init_b), *true_params[1:])
+            params = fixture.model.initialize_params(
+                fixture.X,
+                fixture.y,
+                init_params=((init_w, init_b), *fixture.params[1:]),
             )
             # check that params are set
-            init_state = model.initialize_state(X, y, params)
+            init_state = fixture.model.initialize_state(fixture.X, fixture.y, params)
             assert init_state.velocity == params
 
     # @pytest.mark.parametrize(
@@ -942,19 +966,19 @@ def test_save_and_load_fitted_model(instantiate_base_regressor_subclass, tmp_pat
     Test saving and loading a fitted model with various observation models and regularizers.
     Ensure all parameters are preserved.
     """
-    fitted_model, true_params = instantiate_base_regressor_subclass[2:4]
-    fitted_model.glm_params_ = true_params[0]
-    fitted_model.transition_prob_ = true_params[1]
-    fitted_model.initial_prob_ = true_params[2]
-    fitted_model.scale_ = 11.0
-    fitted_model.dof_resid_ = 1.0
-    initial_params = fitted_model.get_params()
-    fit_state = fitted_model._get_fit_state()
+    fixture = instantiate_base_regressor_subclass
+    fixture.model.glm_params_ = fixture.params[0]
+    fixture.model.transition_prob_ = fixture.params[1]
+    fixture.model.initial_prob_ = fixture.params[2]
+    fixture.model.scale_ = 11.0
+    fixture.model.dof_resid_ = 1.0
+    initial_params = fixture.model.get_params()
+    fit_state = fixture.model._get_fit_state()
     initial_params.update(fit_state)
 
     # Save
     save_path = tmp_path / "test_model.npz"
-    fitted_model.save_params(save_path)
+    fixture.model.save_params(save_path)
 
     # Load
     loaded_model = nmo.load_model(save_path)

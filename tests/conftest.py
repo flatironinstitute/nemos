@@ -1256,13 +1256,13 @@ def instantiate_glm_hmm_func(
         counts, rates, latent_states = run_simulation_glm_hmm(X, model, seed=1234)
     else:
         counts, rates, latent_states = None, None, None
-    return (
-        X,
-        counts,
-        model,
-        (glm_params, transition_prob, init_prob),
-        rates,
-        latent_states,
+    return ModelFixture(
+        X=X,
+        y=counts,
+        model=model,
+        params=(glm_params, transition_prob, init_prob),
+        rates=rates,
+        extra=latent_states,
     )
 
 
