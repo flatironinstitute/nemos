@@ -17,7 +17,13 @@ from nemos.third_party.jaxopt import jaxopt
 
 from . import tree_utils
 from .base_class import Base
-from .proximal_operator import prox_elastic_net, prox_group_lasso
+from .proximal_operator import (
+    prox_elastic_net,
+    prox_group_lasso,
+    prox_lasso,
+    prox_ridge,
+    prox_none,
+)
 from .typing import (
     DESIGN_INPUT_TYPE,
     ProximalOperator,
@@ -220,7 +226,7 @@ class UnRegularized(Regularizer):
         Unregularized method corresponds to an identity proximal operator, since no
         shrinkage factor is applied.
         """
-        return jaxopt.prox.prox_none
+        return prox_none
 
     def _validate_regularizer_strength(self, strength: None):
         return None
@@ -318,11 +324,7 @@ class Ridge(Regularizer):
         """
 
         def prox_op(params, l2reg, scaling=1.0):
-            return jax.tree_util.tree_map(
-                lambda w, r: jaxopt.prox.prox_ridge(w, r, scaling=scaling),
-                params[0],
-                l2reg,
-            ), params[1]
+            return prox_ridge(params[0], l2reg, scaling), params[1]
 
         return prox_op
 
@@ -361,11 +363,7 @@ class Lasso(Regularizer):
         """
 
         def prox_op(params, l1reg, scaling=1.0):
-            return jax.tree_util.tree_map(
-                lambda w, r: jaxopt.prox.prox_lasso(w, r, scaling=scaling),
-                params[0],
-                l1reg,
-            ), params[1]
+            return prox_lasso(params[0], l1reg, scaling), params[1]
 
         return prox_op
 
@@ -465,13 +463,7 @@ class ElasticNet(Regularizer):
         """
 
         def prox_op(params, netreg, scaling=1.0):
-            lam = jax.tree_util.tree_map(
-                lambda strength, ratio: strength * ratio, *netreg
-            )  # hyperparams[0]
-            gam = jax.tree_util.tree_map(
-                lambda ratio: (1 - ratio) / ratio, netreg[1]
-            )  # hyperparams[1]
-            return prox_elastic_net(params[0], (lam, gam), scaling=scaling), params[1]
+            return prox_elastic_net(params[0], netreg, scaling=scaling), params[1]
 
         return prox_op
 
@@ -701,11 +693,9 @@ class GroupLasso(Regularizer):
             jax.numpy.linalg.norm(masked_param, axis=1).T
             * jax.numpy.sqrt(self.mask.sum(axis=1))
         )
-
-        # divide regularization strength by number of neurons
-        regularizer_strength = regularizer_strength
-
-        return penalty * regularizer_strength
+        return jax.tree_util.tree_map(
+            lambda penalty, strength: penalty * strength, penalty, regularizer_strength
+        )
 
     def get_proximal_operator(
         self,
