@@ -338,7 +338,6 @@ def generate_data_multi_state():
     Observations.
     """
     np.random.seed(44)
-    jax.config.update("jax_enable_x64", True)
 
     # E-step initial parameters
     n_states, n_samples = 5, 100
@@ -366,7 +365,6 @@ def generate_data_multi_state():
 def generate_data_multi_state_population():
     """Generate synthetic multi-state population HMM data for testing."""
     np.random.seed(44)
-    jax.config.update("jax_enable_x64", True)
 
     # E-step initial parameters
     n_states, n_neurons, n_samples = 5, 3, 100
@@ -501,6 +499,7 @@ class TestForwardBackward:
             ),
         ],
     )
+    @pytest.mark.requires_x64
     def test_forward_backward_regression(self, decorator):
         """
         Test forward-backward algorithm against reference implementation.
@@ -508,7 +507,6 @@ class TestForwardBackward:
         Validates alphas, betas, gammas, xis, and log-likelihoods
         computed by forward_backward match expected results.
         """
-        jax.config.update("jax_enable_x64", True)
 
         # Fetch the data
         data_path = fetch_data("em_three_states.npz")
@@ -568,6 +566,7 @@ class TestForwardBackward:
         # Testing Eq. 13.65 of Bishop
         np.testing.assert_almost_equal(xis_nemos, xis, decimal=8)
 
+    @pytest.mark.requires_x64
     def test_for_loop_forward_step(self, generate_data_multi_state):
         """
         Test forward pass implementation against numpy for-loop version.
@@ -602,6 +601,7 @@ class TestForwardBackward:
         np.testing.assert_almost_equal(alphas_numpy, alphas)
         np.testing.assert_almost_equal(normalization_numpy, normalization)
 
+    @pytest.mark.requires_x64
     def test_for_loop_backward_step(self, generate_data_multi_state):
         """
         Test backward pass implementation against numpy for-loop version.
@@ -696,6 +696,7 @@ class TestLikelihood:
             ),
         ],
     )
+    @pytest.mark.requires_x64
     def test_hmm_negative_log_likelihood_regression(self, decorator):
         """
         Test HMM negative log-likelihood against reference implementation.
@@ -703,7 +704,6 @@ class TestLikelihood:
         Validates that computed negative log-likelihood matches expected
         values from reference implementation.
         """
-        jax.config.update("jax_enable_x64", True)
 
         # Fetch the data
         data_path = fetch_data("em_three_states.npz")
@@ -746,8 +746,8 @@ class TestLikelihood:
 
 
 class TestMStep:
+    @pytest.mark.requires_x64
     def test_run_m_step_regression(self):
-        jax.config.update("jax_enable_x64", True)
 
         # Fetch the data
         data_path = fetch_data("em_three_states.npz")
@@ -934,6 +934,7 @@ class TestMStep:
         assert optimized_projection_weights_nemos[0].shape == (2, 1)
         assert optimized_projection_weights_nemos[1].shape == (1,)
 
+    @pytest.mark.requires_x64
     def test_m_step_with_prior(self, generate_data_multi_state):
         new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
             generate_data_multi_state
@@ -1006,6 +1007,7 @@ class TestMStep:
         )
 
     @pytest.mark.parametrize("state_idx", range(5))
+    @pytest.mark.requires_x64
     def test_m_step_set_alpha_init_to_inf(self, generate_data_multi_state, state_idx):
         new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
             generate_data_multi_state
@@ -1044,6 +1046,7 @@ class TestMStep:
         )
 
     @pytest.mark.parametrize("row, col", itertools.product(range(3), range(3)))
+    @pytest.mark.requires_x64
     def test_m_step_set_alpha_transition_to_inf(
         self, generate_data_multi_state, row, col
     ):
@@ -1083,6 +1086,7 @@ class TestMStep:
             new_transition_prob[row, :], np.eye(new_initial_prob.shape[0])[col]
         )
 
+    @pytest.mark.requires_x64
     def test_m_step_set_alpha_init_to_1(self, generate_data_multi_state):
         new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
             generate_data_multi_state
@@ -1143,6 +1147,7 @@ class TestMStep:
             prior_optimized_projection_weights_nemos[1],
         )
 
+    @pytest.mark.requires_x64
     def test_m_step_set_alpha_transition_to_1(self, generate_data_multi_state):
         new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
             generate_data_multi_state
@@ -1210,8 +1215,8 @@ class TestMStep:
             "julia_regression_mstep_no_prior.npz",  # No prior / uninformative prior (alpha = 1)
         ],
     )
+    @pytest.mark.requires_x64
     def test_run_m_step_regression_priors_simulation(self, data_name):
-        jax.config.update("jax_enable_x64", True)
 
         # Fetch the data
         data_path = fetch_data(data_name)
@@ -1309,6 +1314,7 @@ class TestEMAlgorithm:
 
     @pytest.mark.parametrize("regularization", ["UnRegularized", "Ridge", "Lasso"])
     @pytest.mark.parametrize("require_new_session", [True, False])
+    @pytest.mark.requires_x64
     def test_run_em(self, regularization, require_new_session):
         """
         Test EM algorithm increases log-likelihood.
@@ -1316,7 +1322,6 @@ class TestEMAlgorithm:
         Validates that EM algorithm improves log-likelihood compared
         to initial parameters, with different regularization schemes.
         """
-        jax.config.update("jax_enable_x64", True)
 
         # Fetch the data
         data_path = fetch_data("em_three_states.npz")
@@ -1426,6 +1431,7 @@ class TestEMAlgorithm:
         ), "log-likelihood did not increase."
 
     @pytest.mark.parametrize("n_neurons", [5])
+    @pytest.mark.requires_x64
     def test_check_em(self, n_neurons):
         """
         Test EM algorithm recovers true latent states.
@@ -1433,7 +1439,6 @@ class TestEMAlgorithm:
         Validates that EM improves state recovery from noisy initial
         parameters for multi-neuron population data.
         """
-        jax.config.update("jax_enable_x64", True)
 
         # Fetch the data
         data_path = fetch_data(f"glm_hmm_simulation_n_neurons_{n_neurons}_seed_123.npz")
@@ -1563,6 +1568,7 @@ class TestEMAlgorithm:
         ), "Log-likelihood decreased."
 
 
+@pytest.mark.requires_x64
 def test_e_and_m_step_for_population(generate_data_multi_state_population):
     """Run E and M step fitting a population."""
     new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
@@ -1783,9 +1789,9 @@ class TestConvergence:
         # This should return False (not converged) or handle gracefully
         assert isinstance(result, jnp.ndarray)
 
+    @pytest.mark.requires_x64
     def test_custom_convergence_checker(self):
         """Test that custom convergence functions work with EM."""
-        jax.config.update("jax_enable_x64", True)
 
         def always_converge(state, tol):
             """Convergence checker that always returns True."""
@@ -1844,9 +1850,9 @@ class TestConvergence:
             f"but ran for {final_state.iterations}"
         )
 
+    @pytest.mark.requires_x64
     def test_never_converge_checker(self):
         """Test that EM runs to maxiter when convergence is never reached."""
-        jax.config.update("jax_enable_x64", True)
 
         def never_converge(state, tol):
             """Convergence checker that always returns False."""
@@ -1905,9 +1911,9 @@ class TestConvergence:
             f"but ran for {final_state.iterations}"
         )
 
+    @pytest.mark.requires_x64
     def test_em_stops_when_converged(self):
         """Test that EM stops early when convergence criterion is met."""
-        jax.config.update("jax_enable_x64", True)
 
         data_path = fetch_data("em_three_states.npz")
         data = np.load(data_path)
@@ -1967,9 +1973,9 @@ class TestConvergence:
             final_state, tol=tol
         ), "EM stopped but did not meet convergence criterion"
 
+    @pytest.mark.requires_x64
     def test_em_nan_diagnostics_after_convergence(self):
         """Test that NaN likelihoods after convergence don't break the algorithm."""
-        jax.config.update("jax_enable_x64", True)
 
         data_path = fetch_data("em_three_states.npz")
         data = np.load(data_path)
@@ -2045,9 +2051,9 @@ class TestConvergence:
             jnp.isfinite(final_transition_prob)
         ), "Final transition_prob contains non-finite values"
 
+    @pytest.mark.requires_x64
     def test_convergence_with_different_tolerances(self):
         """Test that different tolerance values produce expected iteration counts."""
-        jax.config.update("jax_enable_x64", True)
 
         data_path = fetch_data("em_three_states.npz")
         data = np.load(data_path)
@@ -2106,9 +2112,9 @@ class TestConvergence:
         )
         print("\nn of fb comp", forward_backward._cache_size())
 
+    @pytest.mark.requires_x64
     def test_convergence_checker_with_iteration_limit(self):
         """Test custom convergence checker that combines likelihood and iteration limit."""
-        jax.config.update("jax_enable_x64", True)
 
         def converge_after_n_iterations(state: GLMHMMState, tol: float, n: int = 5):
             """Stop after n iterations OR when likelihood converges."""
@@ -2175,6 +2181,7 @@ class TestConvergence:
 class TestCompilation:
     """Tests for JIT compilation behavior."""
 
+    @pytest.mark.requires_x64
     def test_m_step_compiling(self, generate_data_multi_state):
         new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
             generate_data_multi_state
@@ -2251,6 +2258,7 @@ class TestCompilation:
         assert third_call_cache == forth_call_cache, "Array prior not cached!"
 
     @pytest.mark.parametrize("solver_name", ["LBFGS", "ProximalGradient"])
+    @pytest.mark.requires_x64
     def test_em_glm_hmm_compiles_once(self, generate_data_multi_state, solver_name):
         """
         Test that em_glm_hmm compiles only once for repeated calls.
@@ -2356,6 +2364,7 @@ class TestCompilation:
             f"cache grew from {after_second_call} to {after_third_call}"
         )
 
+    @pytest.mark.requires_x64
     def test_forward_backward_compiles_once(self, generate_data_multi_state):
         """
         Test that forward_backward is not recompiled on each EM iteration.
@@ -2429,6 +2438,7 @@ class TestCompilation:
 class TestPytreeSupport:
     """Test that GLM-HMM algorithms support pytree inputs."""
 
+    @pytest.mark.requires_x64
     def test_forward_backward_with_pytree(self, generate_data_multi_state):
         """Test forward_backward accepts pytree inputs for X and coef."""
         new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
@@ -2493,6 +2503,7 @@ class TestPytreeSupport:
         np.testing.assert_allclose(alphas, alphas_ref)
         np.testing.assert_allclose(betas, betas_ref)
 
+    @pytest.mark.requires_x64
     def test_hmm_negative_log_likelihood_with_pytree(self, generate_data_multi_state):
         """Test hmm_negative_log_likelihood accepts pytree inputs."""
         new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
@@ -2549,6 +2560,7 @@ class TestPytreeSupport:
         # Results should be identical
         np.testing.assert_allclose(nll, nll_ref)
 
+    @pytest.mark.requires_x64
     def test_em_glm_hmm_with_pytree(self, generate_data_multi_state):
         """Test em_glm_hmm accepts pytree inputs for X and coef."""
         new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
