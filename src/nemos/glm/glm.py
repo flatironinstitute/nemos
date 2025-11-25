@@ -18,7 +18,7 @@ from ..base_regressor import BaseRegressor, strip_metadata
 from ..exceptions import NotFittedError
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..pytrees import FeaturePytree
-from ..regularizer import GroupLasso, Lasso, Regularizer, Ridge
+from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
 from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
 from ..type_casting import cast_to_jax, support_pynapple
 from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength, SolverState, StepResult
@@ -460,11 +460,13 @@ class GLM(BaseRegressor[ModelParams]):
             data = X
         return self._predict(params, data)
 
-    def _predict_and_compute_loss(
+    def compute_loss(
         self,
         params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
+        *args,
+        **kwargs,
     ) -> jnp.ndarray:
         r"""Predict the rate and compute the negative log-likelihood against neural activity.
 
@@ -884,7 +886,7 @@ class GLM(BaseRegressor[ModelParams]):
 
     def _estimate_resid_degrees_of_freedom(
         self, X: DESIGN_INPUT_TYPE, n_samples: Optional[int] = None
-    ):
+    ) -> jnp.ndarray:
         """
         Estimate the degrees of freedom of the residuals.
 
@@ -919,7 +921,7 @@ class GLM(BaseRegressor[ModelParams]):
         # if the regularizer is lasso use the non-zero
         # coeff as an estimate of the dof
         # see https://arxiv.org/abs/0712.0881
-        if isinstance(self.regularizer, (GroupLasso, Lasso)):
+        if isinstance(self.regularizer, (GroupLasso, Lasso, ElasticNet)):
             resid_dof = tree_utils.pytree_map_and_reduce(
                 lambda x: ~jnp.isclose(x, jnp.zeros_like(x)),
                 lambda x: sum([jnp.sum(i, axis=0) for i in x]),
@@ -1044,9 +1046,7 @@ class GLM(BaseRegressor[ModelParams]):
         opt_solver_kwargs = self._optimize_solver_params(data, y)
 
         #  set up the solver init/run/update attrs
-        self.instantiate_solver(
-            self._predict_and_compute_loss, solver_kwargs=opt_solver_kwargs
-        )
+        self.instantiate_solver(self.compute_loss, solver_kwargs=opt_solver_kwargs)
 
         opt_state = self.solver_init_state(init_params, data, y)
         return opt_state

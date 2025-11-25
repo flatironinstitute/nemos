@@ -153,3 +153,7 @@ docs/data/
 
 # rst generated files
 docs/stubs
+
+# NPZ/NPY files
+*.npz
+*.npy

@@ -16,6 +16,13 @@ from copy import deepcopy
 from functools import partial
 from typing import Literal
 
+# Named tuple for model fixture returns (clearer than tuple indexing)
+ModelFixture = namedtuple(
+    "ModelFixture",
+    ["X", "y", "model", "params", "rates", "extra"],
+    defaults=[None, None],  # rates and extra default to None
+)
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -44,6 +51,32 @@ DEFAULT_KWARGS = {
 
 # shut-off conversion warnings
 nap.nap_config.suppress_conversion_warnings = True
+
+
+@pytest.fixture(autouse=True, scope="function")
+def set_jax_precision_per_test(request):
+    """
+    Automatically set JAX precision based on test marker.
+
+    Tests marked with @pytest.mark.requires_x64 get float64.
+    All other tests get float32 (JAX default).
+
+    This fixture runs automatically for every test to ensure consistent
+    precision behavior, especially important for parallel test execution
+    with pytest-xdist.
+    """
+    if request.node.get_closest_marker("requires_x64"):
+        # This test needs x64
+        original = jax.config.jax_enable_x64
+        jax.config.update("jax_enable_x64", True)
+        yield
+        jax.config.update("jax_enable_x64", original)
+    else:
+        # Default: float32
+        original = jax.config.jax_enable_x64
+        jax.config.update("jax_enable_x64", False)
+        yield
+        jax.config.update("jax_enable_x64", original)
 
 
 @pytest.fixture()
@@ -266,7 +299,7 @@ class MockRegressor(nmo.base_regressor.BaseRegressor):
     def _initialize_parameters(self, *args, **kwargs):
         pass
 
-    def _predict_and_compute_loss(self, params, X, y):
+    def compute_loss(self, params, X, y):
         pass
 
     def _get_optimal_solver_params_config(self):
@@ -1242,7 +1275,6 @@ def instantiate_glm_func(
     solver_name: str = None,
     simulate=False,
 ):
-    jax.config.update("jax_enable_x64", True)
     np.random.seed(123)
     n_features = 2
     X = np.ones((500, n_features))
@@ -1259,13 +1291,13 @@ def instantiate_glm_func(
         counts, rates = model.simulate(jax.random.PRNGKey(1234), X)
     else:
         counts, rates = None, None
-    return (
-        X,
-        counts,
-        model,
-        (model.coef_, model.intercept_),
-        rates,
-        None,
+    return ModelFixture(
+        X=X,
+        y=counts,
+        model=model,
+        params=(model.coef_, model.intercept_),
+        rates=rates,
+        extra=None,
     )
 
 
@@ -1279,7 +1311,6 @@ def instantiate_population_glm_func(
     solver_name: str = None,
     simulate=False,
 ):
-    jax.config.update("jax_enable_x64", True)
     np.random.seed(123)
     n_features = 2
     X = np.ones((500, n_features))
@@ -1297,17 +1328,40 @@ def instantiate_population_glm_func(
         counts, rates = model.simulate(jax.random.PRNGKey(1234), X)
     else:
         counts, rates = None, None
-    return (
-        X,
-        counts,
-        model,
-        (model.coef_, model.intercept_),
-        rates,
-        None,
+    return ModelFixture(
+        X=X,
+        y=counts,
+        model=model,
+        params=(model.coef_, model.intercept_),
+        rates=rates,
+        extra=None,
     )
 
 
 _MODEL_CACHE = {}
+
+
+# Registry for model-specific configurations
+MODEL_CONFIG = {
+    "GLM": {
+        "is_population": False,
+        "default_y_shape": (500,),
+    },
+    "PopulationGLM": {
+        "is_population": True,
+        "default_y_shape": (500, 3),
+    },
+    "GLMHMM": {
+        "is_population": False,
+        "default_y_shape": (500,),
+    },
+}
+
+
+def is_population_model(model) -> bool:
+    """Check if a model is a population model using registry instead of string matching."""
+    model_name = model.__class__.__name__
+    return MODEL_CONFIG.get(model_name, {}).get("is_population", False)
 
 
 @pytest.fixture
@@ -1352,9 +1406,8 @@ def instantiate_base_regressor_subclass(request):
 # Auto-clear cache after each test module run
 @pytest.fixture(scope="module", autouse=True)
 def _clear_model_cache():
-    """Clear model cache after each test class."""
+    """Clear model cache after each test module."""
     yield
-    print("CLEARING MODEL CACHE")
     _MODEL_CACHE.clear()
 
 

@@ -8,6 +8,8 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import NDArray
 
+from ..tree_utils import pytree_map_and_reduce
+
 Array = NDArray | jax.numpy.ndarray
 
 
@@ -18,6 +20,8 @@ class GLMHMMState(eqx.Module):
     transition_matrix: Array
     glm_params: Tuple[Array, Array]  # (coef, intercept)
     data_log_likelihood: float | Array
+    previous_data_log_likelihood: float | Array
+    log_likelihood_history: Array
     iterations: int
 
 
@@ -338,6 +342,41 @@ def backward_pass(
     return betas
 
 
+def initialize_new_session(n_samples, is_new_session):
+    """Initialize new session indicator."""
+    # Revise if the data is one single session or multiple sessions.
+    # If new_sess is not provided, assume one session
+    if is_new_session is None:
+        # default: all False, but first time bin must be True
+        is_new_session = jax.lax.dynamic_update_index_in_dim(
+            jnp.zeros(n_samples, dtype=bool), True, 0, axis=0
+        )
+    else:
+        # use the user-provided tree, but force the first time bin to be True
+        is_new_session = jax.lax.dynamic_update_index_in_dim(
+            jnp.asarray(is_new_session, dtype=bool), True, 0, axis=0
+        )
+
+    return is_new_session
+
+
+def compute_rate_per_state(
+    X: Any, glm_params: Any, inverse_link_function: Callable
+) -> Array:
+    """Compute the GLM mean per state."""
+    coef, intercept = glm_params
+
+    # Predicted y
+    if jax.tree_util.tree_leaves(coef)[0].ndim > 2:
+        lin_comb = pytree_map_and_reduce(
+            lambda x, w: jnp.einsum("ik, kjw->ijw", x, w), sum, X, coef
+        )
+    else:
+        lin_comb = pytree_map_and_reduce(lambda x, w: jnp.matmul(x, w), sum, X, coef)
+    predicted_rate_given_state = inverse_link_function(lin_comb + intercept)
+    return predicted_rate_given_state
+
+
 @partial(jax.jit, static_argnames=["inverse_link_function", "likelihood_func"])
 def forward_backward(
     X: Array,
@@ -412,30 +451,12 @@ def forward_backward(
     ----------
     .. [1] Bishop, C. M. (2006). *Pattern recognition and machine learning*. Springer.
     """
-    coef, intercept = glm_params
     # Initialize variables
-    n_time_bins = X.shape[0]
-
-    # Revise if the data is one single session or multiple sessions.
-    # If new_sess is not provided, assume one session
-    if is_new_session is None:
-        # default: all False, but first time bin must be True
-        is_new_session = jax.lax.dynamic_update_index_in_dim(
-            jnp.zeros(y.shape[0], dtype=bool), True, 0, axis=0
-        )
-    else:
-        # use the user-provided tree, but force the first time bin to be True
-        is_new_session = jax.lax.dynamic_update_index_in_dim(
-            jnp.asarray(is_new_session, dtype=bool), True, 0, axis=0
-        )
-
-    # Predicted y
-    if coef.ndim > 2:
-        predicted_rate_given_state = inverse_link_function(
-            jnp.einsum("ik, kjw->ijw", X, coef) + intercept
-        )
-    else:
-        predicted_rate_given_state = inverse_link_function(X @ coef + intercept)
+    n_time_bins = y.shape[0]
+    is_new_session = initialize_new_session(y.shape[0], is_new_session)
+    predicted_rate_given_state = compute_rate_per_state(
+        X, glm_params, inverse_link_function
+    )
 
     # Compute likelihood given the fixed weights
     # Data likelihood p(y|z) from emissions model
@@ -543,22 +564,13 @@ def hmm_negative_log_likelihood(
     nll:
         The scalar negative log-likelihood weighted by the posteriors.
     """
-    coef, intercept = glm_params
-    if coef.ndim > 2:
-        # coef.shape is (n_features, n_neurons, n_states)
-        predicted_rate = inverse_link_function(
-            jnp.einsum("ik, kjw->ijw", X, coef) + intercept
-        )
-        nll = negative_log_likelihood_func(
-            y,
-            predicted_rate,
-        ).sum(axis=1)
-    else:
-        predicted_rate = inverse_link_function(X @ coef + intercept)
-        nll = negative_log_likelihood_func(
-            y,
-            predicted_rate,
-        )
+    predicted_rate = compute_rate_per_state(X, glm_params, inverse_link_function)
+    nll = negative_log_likelihood_func(
+        y,
+        predicted_rate,
+    )
+    if nll.ndim > 2:
+        nll = nll.sum(axis=1)  # sum over neurons
 
     # Compute dot products between log-likelihood terms and gammas
     nll = jnp.sum(nll * posteriors)
@@ -701,6 +713,74 @@ def prepare_likelihood_func(
     return likelihood, vmap_nll
 
 
+def _em_step(
+    carry: GLMHMMState,
+    X: Array,
+    y: Array,
+    inverse_link_function: Callable,
+    likelihood_func: Callable,
+    solver_run: Callable,
+    is_new_session: Array,
+) -> GLMHMMState:
+    """Single EM iteration step."""
+    previous_state = carry
+
+    (posteriors, joint_posterior, _, new_log_like, alphas, _) = forward_backward(
+        X,
+        y,
+        previous_state.initial_prob,
+        previous_state.transition_matrix,
+        previous_state.glm_params,
+        inverse_link_function,
+        likelihood_func,
+        is_new_session,
+    )
+
+    glm_params_update, init_prob, trans_matrix, _ = run_m_step(
+        X,
+        y,
+        posteriors=posteriors,
+        joint_posterior=joint_posterior,
+        glm_params=previous_state.glm_params,
+        is_new_session=is_new_session,
+        solver_run=solver_run,
+    )
+
+    new_state = GLMHMMState(
+        initial_prob=init_prob,
+        transition_matrix=trans_matrix,
+        glm_params=glm_params_update,
+        iterations=previous_state.iterations + 1,
+        data_log_likelihood=new_log_like,
+        previous_data_log_likelihood=previous_state.data_log_likelihood,
+        log_likelihood_history=previous_state.log_likelihood_history.at[
+            previous_state.iterations
+        ].set(new_log_like),
+    )
+
+    return new_state
+
+
+def check_log_likelihood_increment(state: GLMHMMState, tol: float) -> Array:
+    """
+    Check EM convergence using absolute tolerance on log-likelihood.
+
+    Parameters
+    ----------
+    state : GLMHMMState
+        Current EM state containing likelihood history.
+    tol : float
+        Absolute tolerance threshold.
+
+    Returns
+    -------
+    : Array
+        Boolean indicating convergence.
+    """
+    delta = jnp.abs(state.data_log_likelihood - state.previous_data_log_likelihood)
+    return delta < tol
+
+
 @partial(
     jax.jit,
     static_argnames=[
@@ -708,6 +788,7 @@ def prepare_likelihood_func(
         "likelihood_func",
         "solver_run",
         "maxiter",
+        "check_convergence",
         "tol",
     ],
 )
@@ -723,9 +804,13 @@ def em_glm_hmm(
     is_new_session: Optional[Array] = None,
     maxiter: int = 10**3,
     tol: float = 1e-8,
+    check_convergence: Callable = check_log_likelihood_increment,
 ) -> Tuple[Array, Array, Array, Array, Tuple[Array, Array], GLMHMMState]:
     """
     Perform EM optimization for a GLM-HMM.
+
+    Uses equinox while_loop for efficient early stopping when convergence
+    criteria are met.
 
     Parameters
     ----------
@@ -738,25 +823,22 @@ def em_glm_hmm(
     transition_prob:
         Initial transition matrix.
     glm_params:
-        Initial projection coefficients and intercept for the GLM, shape``(n_features, n_states)``
+        Initial projection coefficients and intercept for the GLM, shape ``(n_features, n_states)``
         and ``(n_states,)``, respectively.
     inverse_link_function:
         Elementwise function mapping linear predictors to rates.
     likelihood_func:
-        Function computing the log-likelihood, usually either:
-
-        - ``nemos.observation_models.Observations.log_likelihood``, if ``is_log==True``.
-        - ``nemos.observation_models.Observations.likelihood``, if ``is_log==False``.
+        Function computing the log-likelihood.
     solver_run:
         Callable that runs the M step for the projection coefficients.
-        Note that it must receive as parameters: (coefficients, X, y, posteriors), see
-        run_m_step.
     is_new_session:
         Boolean mask for the first observation of each session.
     maxiter:
         Maximum number of EM iterations.
     tol:
         The tolerance for the convergence criterion.
+    check_convergence:
+        Callable receiving the state and computing the convergence.
 
     Returns
     -------
@@ -770,88 +852,42 @@ def em_glm_hmm(
         Final estimate of the transition matrix.
     final_projection_weights:
         Final optimized projection weights.
+    final_state:
+        Final GLMHMMState containing all parameters and diagnostics.
     """
+    is_new_session = initialize_new_session(y.shape[0], is_new_session)
+
     state = GLMHMMState(
         initial_prob=initial_prob,
         transition_matrix=transition_prob,
         glm_params=glm_params,
         data_log_likelihood=-jnp.array(jnp.inf),
+        previous_data_log_likelihood=-jnp.array(jnp.inf),
+        log_likelihood_history=jnp.full(maxiter, jnp.nan),
         iterations=0,
     )
 
-    # setup new session
-    if is_new_session is None:
-        # default: all False, but first time bin must be True
-        is_new_session = jax.lax.dynamic_update_index_in_dim(
-            jnp.zeros(y.shape[0], dtype=bool), True, 0, axis=0
-        )
-    else:
-        # use the user-provided tree, but force the first time bin to be True
-        is_new_session = jax.lax.dynamic_update_index_in_dim(
-            jnp.asarray(is_new_session, dtype=bool), True, 0, axis=0
-        )
-
-    def em_step(carry, xs):
-        _, previous_state = carry
-        (
-            posteriors,
-            joint_posterior,
-            log_likelihood,
-            log_likelihood_norm,
-            alphas,
-            betas,
-        ) = forward_backward(
-            X,
-            y,
-            previous_state.initial_prob,
-            previous_state.transition_matrix,
-            previous_state.glm_params,
-            inverse_link_function,
-            likelihood_func,
-            is_new_session,
-        )
-
-        # alphas[-1] is p(y_1,...,y_n, z_n), see 13.34 Bishop
-        # marginalizing over z_n we have the data likelihood:
-        # p(y_1,...,y_n) = sum_{z_n} p(y_1,...,y_n, z_n)
-
-        new_log_like = jnp.log(alphas[-1].sum())
-
-        glm_params_update, init_prob, trans_matrix, _ = run_m_step(
-            X,
-            y,
-            posteriors=posteriors,
-            joint_posterior=joint_posterior,
-            glm_params=previous_state.glm_params,
-            is_new_session=is_new_session,
-            solver_run=solver_run,
-        )
-
-        new_state = GLMHMMState(
-            initial_prob=init_prob,
-            transition_matrix=trans_matrix,
-            glm_params=glm_params_update,
-            iterations=previous_state.iterations + 1,
-            data_log_likelihood=new_log_like,
-        )
-        return (previous_state.data_log_likelihood, new_state), new_log_like
-
-    def stopping_condition(carry, _):
-        old_likelihood, new_state = carry
-        return jnp.abs(new_state.data_log_likelihood - old_likelihood) < tol
-
-    def body_fn(carry, xs):
-        return jax.lax.cond(
-            stopping_condition(carry, xs),
-            lambda c, _: (c, jnp.array(jnp.nan)),
-            em_step,
-            carry,
-            xs,
-        )
-
-    (_, state), likelihoods = jax.lax.scan(
-        body_fn, (jnp.array(-jnp.inf), state), length=maxiter
+    em_step_fn_while = eqx.Partial(
+        lambda *args, **kwargs: _em_step(*args, **kwargs),
+        X=X,
+        y=y,
+        inverse_link_function=inverse_link_function,
+        likelihood_func=likelihood_func,
+        solver_run=solver_run,
+        is_new_session=is_new_session,
     )
+
+    def stopping_condition_while(carry):
+        new_state = carry
+        return ~check_convergence(
+            new_state,
+            tol,
+        )
+
+    state = eqx.internal.while_loop(
+        stopping_condition_while, em_step_fn_while, state, max_steps=maxiter, kind="lax"
+    )
+
     # final posterior calculation
     (posteriors, joint_posterior, _, _, _, _) = forward_backward(
         X,
@@ -863,6 +899,7 @@ def em_glm_hmm(
         likelihood_func,
         is_new_session,
     )
+
     return (
         posteriors,
         joint_posterior,
@@ -871,3 +908,142 @@ def em_glm_hmm(
         state.glm_params,
         state,
     )
+
+
+@partial(
+    jax.jit,
+    static_argnames=["inverse_link_function", "log_likelihood_func", "return_index"],
+)
+def max_sum(
+    X: Array,
+    y: Array,
+    initial_prob: Array,
+    transition_prob: Array,
+    glm_params: Tuple[Array, Array],
+    inverse_link_function: Callable,
+    log_likelihood_func: Callable[[Array, Array], Array],
+    is_new_session: Array | None = None,
+    return_index: bool = False,
+):
+    """
+    Find maximum a posteriori (MAP) state path via the max-sum algorithm.
+
+    This function implements the max-sum algorithm for a GLM-HMM, also known as Viterbi algorithm.
+
+    Parameters
+    ----------
+    X :
+        Design matrix, pytree with leaves of shape ``(n_time_bins, n_features)``.
+
+    y :
+        Observations, pytree with leaves of shape ``(n_time_bins,)``.
+
+    initial_prob :
+        Initial latent state probability, pytree with leaves of shape ``(n_states, 1)``.
+
+    transition_prob :
+        Latent state transition matrix, pytree with leaves of shape ``(n_states, n_states)``.
+        ``transition_prob[i, j]`` is the probability of transitioning from state ``i`` to state ``j``.
+
+    glm_params :
+        Length two tuple with the GLM coefficients of shape ``(n_features, n_states)``
+        and intercept of shape ``(n_states,)``.
+
+    inverse_link_function :
+        Function mapping linear predictors to the mean of the observation distribution
+        (e.g., exp for Poisson, sigmoid for Bernoulli).
+
+    is_new_session :
+        Boolean array marking the start of a new session.
+        If unspecified or empty, treats the full set of trials as a single session.
+
+    return_index:
+        If False, return 1-hot encoded map states, if True, return map state indices.
+
+    Returns
+    -------
+    map_path:
+        The MAP state path.
+
+    """
+    is_new_session = initialize_new_session(y.shape[0], is_new_session)
+    predicted_rate_given_state = compute_rate_per_state(
+        X, glm_params, inverse_link_function
+    )
+    log_emission = log_likelihood_func(y, predicted_rate_given_state)
+
+    log_transition = jnp.log(transition_prob)
+    log_init = jnp.log(initial_prob)
+    n_states = initial_prob.shape[0]
+
+    def forward_max_sum(omega_prev, xs):
+        log_em, is_new_sess = xs
+
+        def reset_chain(omega_prev, log_em):
+            # New session: reset to initial distribution
+            omega = log_init + log_em
+            max_prob_state = jnp.full(n_states, -1)  # Boundary marker
+            return omega, max_prob_state
+
+        def continue_chain(omega_prev, log_em):
+            # Continue existing session: Viterbi step
+            step = log_em[None, :] + log_transition + omega_prev[:, None]
+            max_prob_state = jnp.argmax(step, axis=0)
+            omega = step[max_prob_state, jnp.arange(n_states)]
+            return omega, max_prob_state
+
+        omega, max_prob_state = jax.lax.cond(
+            is_new_sess,
+            reset_chain,
+            continue_chain,
+            omega_prev,
+            log_em,
+        )
+
+        return omega, (omega, max_prob_state)
+
+    init_omega = log_init + log_emission[0]
+    _, (omegas, max_prob_states) = jax.lax.scan(
+        forward_max_sum, init_omega, (log_emission[1:], is_new_session[1:])
+    )
+
+    # Backward pass
+    best_final_state = jnp.argmax(omegas[-1])
+    # Prepend initial omega and exclude last one, which is already considered.
+    omegas = jnp.concatenate([init_omega[None, :], omegas[:-1]], axis=0)
+
+    def backward_max_sum(current_state_idx, xs):
+        max_prob_st, omega_t = xs
+
+        def session_boundary(state_idx, max_prob, omega):
+            # Hit a session start, pick best state at this boundary
+            return jnp.argmax(omega)
+
+        def continue_backward(state_idx, max_prob, omega):
+            # Normal backtracking
+            return max_prob[state_idx]
+
+        is_boundary = max_prob_st[current_state_idx] == -1
+
+        prev_state_idx = jax.lax.cond(
+            is_boundary,
+            session_boundary,
+            continue_backward,
+            current_state_idx,
+            max_prob_st,
+            omega_t,
+        )
+
+        return prev_state_idx, prev_state_idx
+
+    _, map_path = jax.lax.scan(
+        backward_max_sum, best_final_state, (max_prob_states, omegas), reverse=True
+    )
+
+    # Append the final state
+    map_path = jnp.concatenate([map_path, jnp.array([best_final_state])])
+
+    if not return_index:
+        map_path = jax.nn.one_hot(map_path, n_states, dtype=jnp.int32)
+
+    return map_path

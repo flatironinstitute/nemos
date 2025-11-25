@@ -335,7 +335,7 @@ class TransformerBasis:
         if name in self._wrapped_methods:
             return self._wrapped_methods[name]
 
-        if not hasattr(self._basis, name) or name == "to_transformer":
+        if not hasattr(self._basis, name):
             raise AttributeError(f"'TransformerBasis' object has no attribute '{name}'")
 
         # Get the original attribute from the basis
@@ -463,7 +463,6 @@ class TransformerBasis:
         """Extend the list of properties of methods with the ones from the underlying Basis."""
         unique_attrs = set(list(super().__dir__()) + list(self.basis.__dir__()))
         # discard without raising errors if not present
-        unique_attrs.discard("to_transformer")
         return list(unique_attrs)
 
     def __add__(self, other: TransformerBasis | Basis) -> TransformerBasis:

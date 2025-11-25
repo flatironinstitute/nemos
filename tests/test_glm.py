@@ -1635,11 +1635,10 @@ class TestGLMObservationModel:
         else:
             return
 
+    @pytest.mark.requires_x64
+    @pytest.mark.solver_related
     def test_fit_pytree_equivalence(self, request, glm_type, model_instantiation):
         """Check that the glm fit with pytree learns the same parameters."""
-
-        # required for numerical precision of coeffs
-        jax.config.update("jax_enable_x64", True)
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
@@ -1700,6 +1699,7 @@ class TestGLMObservationModel:
         with expectation:
             model.score(X, y, score_type=score_type)
 
+    @pytest.mark.requires_x64
     def test_loglikelihood_against_scipy_stats(
         self, request, glm_type, model_instantiation, ll_scipy_stats
     ):
@@ -1707,7 +1707,6 @@ class TestGLMObservationModel:
         Compare the model's log-likelihood computation against `jax.scipy`.
         Ensure consistent and correct calculations.
         """
-        jax.config.update("jax_enable_x64", True)
 
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
@@ -1828,11 +1827,11 @@ class TestGLMObservationModel:
 
     @pytest.mark.parametrize("batch_size", [2, 10])
     @pytest.mark.solver_related
+    @pytest.mark.requires_x64
     def test_update_nan_drop_at_jit_comp(
         self, batch_size, request, glm_type, model_instantiation
     ):
         """Test that jit compilation does not affect the update in the presence of nans."""
-        jax.config.update("jax_enable_x64", True)
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
@@ -1948,6 +1947,7 @@ class TestGLMObservationModel:
         ],
     )
     @pytest.mark.solver_related
+    @pytest.mark.requires_x64
     def test_glm_update_consistent_with_fit_with_svrg(
         self,
         request,
@@ -1962,7 +1962,6 @@ class TestGLMObservationModel:
         Make sure that calling GLM.update with the rest of the algorithm implemented outside in a naive loop
         is consistent with running the compiled GLM.fit on the same data with the same parameters
         """
-        jax.config.update("jax_enable_x64", True)
         X, y, model, true_params, rate = request.getfixturevalue(
             glm_type + model_instantiation + regr_setup
         )
@@ -2013,10 +2012,10 @@ class TestGLMObservationModel:
 
         params = glm.initialize_params(X, y)
         state = glm.initialize_state(X, y, params)
-        glm.instantiate_solver(glm._predict_and_compute_loss)
+        glm.instantiate_solver(glm.compute_loss)
 
         # NOTE these two are not the same because for example Ridge augments the loss
-        # loss_grad = jax.jit(jax.grad(glm._predict_and_compute_loss))
+        # loss_grad = jax.jit(jax.grad(glm.compute_loss))
         loss_grad = jax.jit(jax.grad(glm._solver_loss_fun))
 
         # copied from GLM.fit
@@ -2058,15 +2057,15 @@ class TestGLMObservationModel:
             (glm2.coef_, glm2.intercept_),
         )
 
-    @pytest.mark.parametrize("solver_name", ["GradientDescent", "SVRG"])
+    @pytest.mark.parametrize("solver_name", ["LBFGS", "SVRG"])
     @pytest.mark.solver_related
+    @pytest.mark.requires_x64
     def test_glm_fit_matches_sklearn(
         self, solver_name, request, glm_type, model_instantiation, sklearn_model
     ):
         """Test that different solvers converge to the same solution."""
         if sklearn_model is None:
             pytest.skip(f"sklearn model is not available for {model_instantiation}")
-        jax.config.update("jax_enable_x64", True)
         X, y, model_obs, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
@@ -2082,24 +2081,23 @@ class TestGLMObservationModel:
         if "gamma" in model_instantiation:
             model.inverse_link_function = jnp.exp
 
-        # set precision to float64 for accurate matching of the results
-        model.data_type = jnp.float64
         model.fit(X, y)
 
         if "population" in glm_type:
             # test by fitting each neuron separately in sklearn
             for n, yn in enumerate(y.T):
                 sklearn_model.fit(X, yn)
-
-                match_weights = jnp.allclose(
-                    sklearn_model.coef_, model.coef_[:, n], atol=1e-5, rtol=0.0
-                )
+                abs_tol = 1e-6
                 # this will fail for poisson with GradientDescent for the third neuron
-                # with tol=1e-5
+                # with tol=1.57e-5 (note that other algorithm do just fine)
+                match_weights = jnp.allclose(
+                    sklearn_model.coef_, model.coef_[:, n], atol=abs_tol, rtol=0.0
+                )
+
                 match_intercepts = jnp.allclose(
                     sklearn_model.intercept_,
                     model.intercept_[n],
-                    atol=1.18e-5,
+                    atol=1e-6,
                     rtol=0.0,
                 )
                 if (not match_weights) or (not match_intercepts):
@@ -2109,10 +2107,10 @@ class TestGLMObservationModel:
             sklearn_model.fit(X, y)
 
             match_weights = jnp.allclose(
-                sklearn_model.coef_, model.coef_, atol=1e-5, rtol=0.0
+                sklearn_model.coef_, model.coef_, atol=1e-6, rtol=0.0
             )
             match_intercepts = jnp.allclose(
-                sklearn_model.intercept_, model.intercept_, atol=1e-5, rtol=0.0
+                sklearn_model.intercept_, model.intercept_, atol=1e-6, rtol=0.0
             )
             if (not match_weights) or (not match_intercepts):
                 raise ValueError("GLM.fit estimate does not match sklearn!")
@@ -2135,6 +2133,7 @@ class TestGLMObservationModel:
     )
     @pytest.mark.parametrize("n_samples", [1, 20])
     @pytest.mark.solver_related
+    @pytest.mark.requires_x64
     def test_estimate_dof_resid(
         self,
         n_samples,
@@ -2148,7 +2147,6 @@ class TestGLMObservationModel:
         """
         Test that the dof is an integer.
         """
-        jax.config.update("jax_enable_x64", True)
 
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
@@ -2591,6 +2589,7 @@ class TestPopulationGLMObservationModel:
         ],
     )
     @pytest.mark.solver_related
+    @pytest.mark.requires_x64
     def test_masked_fit_vs_loop(
         self,
         regularizer,
@@ -2601,7 +2600,6 @@ class TestPopulationGLMObservationModel:
         request,
         model_instantiation,
     ):
-        jax.config.update("jax_enable_x64", True)
         if isinstance(mask, dict):
             X, y, _, true_params, firing_rate = request.getfixturevalue(
                 model_instantiation + "_pytree"

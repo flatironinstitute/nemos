@@ -627,12 +627,15 @@ class GLMHMM(BaseRegressor[ModelParams]):
         """Compute the most likely states over samples."""
         pass
 
-    def _predict_and_compute_loss(
+    def compute_loss(
         self,
         params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
+        *args,
+        **kwargs,
     ) -> jnp.ndarray:
+        """Loss function."""
         pass
 
     # INITIALIZATIONS

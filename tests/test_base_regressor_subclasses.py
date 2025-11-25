@@ -10,6 +10,9 @@ import pytest
 import scipy as sp
 import scipy.stats as sts
 import statsmodels.api as sm
+
+# Import helpers from conftest
+from conftest import is_population_model
 from numba import njit
 
 import nemos as nmo
@@ -137,10 +140,11 @@ def test_all_defaults_assigned():
 )
 def test_validate_lower_dimensional_data_X(instantiate_base_regressor_subclass):
     """Test behavior with lower-dimensional input data."""
-    model = instantiate_base_regressor_subclass[2]
+    fixture = instantiate_base_regressor_subclass
+    model = fixture.model
     X = jnp.array([1, 2, 3])
     y = jnp.array([0, 1, 1])
-    if "Population" in model.__class__.__name__:
+    if is_population_model(model):
         y = y[None]
     err_msg = "X must be two-dimensional"
     with pytest.raises(ValueError, match=err_msg):
@@ -154,10 +158,11 @@ def test_validate_lower_dimensional_data_X(instantiate_base_regressor_subclass):
 )
 def test_preprocess_fit_higher_dimensional_data_y(instantiate_base_regressor_subclass):
     """Test behavior with higher-dimensional input data."""
-    model = instantiate_base_regressor_subclass[2]
+    fixture = instantiate_base_regressor_subclass
+    model = fixture.model
     X = jnp.array([[[1, 2], [3, 4]]])
     y = jnp.array([[[1.0, 1.0, 1.0]]])
-    if "Population" in model.__class__.__name__:
+    if is_population_model(model):
         err_msg = "y must be two-dimensional"
     else:
         err_msg = "y must be one-dimensional"
@@ -172,10 +177,11 @@ def test_preprocess_fit_higher_dimensional_data_y(instantiate_base_regressor_sub
 )
 def test_validate_higher_dimensional_data_X(instantiate_base_regressor_subclass):
     """Test behavior with higher-dimensional input data."""
-    model = instantiate_base_regressor_subclass[2]
+    fixture = instantiate_base_regressor_subclass
+    model = fixture.model
     X = jnp.array([[[[1, 2], [3, 4]]]])
     y = jnp.array([1, 1])
-    if "Population" in model.__class__.__name__:
+    if is_population_model(model):
         y = y[None]
     with pytest.raises(ValueError, match="X must be two-dimensional"):
         model._validate(X, y, model._initialize_parameters(X, y))
@@ -217,7 +223,8 @@ class TestModelCommons:
         """
         Test that an error is raised if a non-compatible solver is passed.
         """
-        model = instantiate_base_regressor_subclass[2].__class__
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model.__class__
         pars = DEFAULTS[model.__name__].copy()
         pars.update(dict(solver_name=solver_name))
         with expectation:
@@ -249,13 +256,14 @@ class TestModelCommons:
         Test initialization with different regularizer types.
         Test that an error is raised if a non-compatible regularizer is passed.
         """
+        fixture = instantiate_base_regressor_subclass
+        model_cls = fixture.model.__class__
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",
                 category=UserWarning,
                 message="Unused parameter `regularizer_strength`.*",
             )
-            model_cls = instantiate_base_regressor_subclass[2].__class__
             with expectation:
                 model_cls(
                     **DEFAULTS[model_cls.__name__],
@@ -267,7 +275,8 @@ class TestModelCommons:
         """
         Test that get_params() contains expected values.
         """
-        model_cls = instantiate_base_regressor_subclass[2].__class__
+        fixture = instantiate_base_regressor_subclass
+        model_cls = fixture.model.__class__
 
         expected_keys = HARD_CODED_GET_PARAMS_KEYS[model_cls.__name__]
         model = model_cls(**DEFAULTS[model_cls.__name__])
@@ -325,7 +334,8 @@ class TestModelCommons:
         Test the `initialize_solver` method with different numbers of initial parameters.
         Check for correct number of parameters.
         """
-        X, _, model, true_params = instantiate_base_regressor_subclass[:4]
+        fixture = instantiate_base_regressor_subclass
+        X, model, true_params = fixture.X, fixture.model, fixture.params
 
         model_name = model.__class__.__name__
         y = np.zeros(DEFAULT_OBS_SHAPE[model_name])
@@ -348,7 +358,8 @@ class TestModelCommons:
             params = model.initialize_params(X, y, init_params=init_params)
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
+            # optimistix solvers do not have a velocity attr
+            assert getattr(init_state, "velocity", params) == params
 
     @pytest.mark.parametrize(
         "delta_dim, expectation",
@@ -367,7 +378,8 @@ class TestModelCommons:
 
         Ensure correct dimensionality for X.
         """
-        X, _, model, true_params = instantiate_base_regressor_subclass[:4]
+        fixture = instantiate_base_regressor_subclass
+        X, model, true_params = fixture.X, fixture.model, fixture.params
         y = np.zeros(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         if delta_dim == -1:
             X = np.zeros((X.shape[0],))
@@ -377,7 +389,8 @@ class TestModelCommons:
             params = model.initialize_params(X, y, init_params=true_params)
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
+            # optimistix solvers do not have a velocity attr
+            assert getattr(init_state, "velocity", params) == params
 
     @pytest.mark.parametrize(
         "delta_dim, expectation",
@@ -396,9 +409,10 @@ class TestModelCommons:
 
         Ensure correct dimensionality for y.
         """
-        X, _, model, true_params = instantiate_base_regressor_subclass[:4]
+        fixture = instantiate_base_regressor_subclass
+        X, model, true_params = fixture.X, fixture.model, fixture.params
         y = np.zeros(DEFAULT_OBS_SHAPE[model.__class__.__name__])
-        if "Population" in model.__class__.__name__:
+        if is_population_model(model):
             if delta_dim == -1:
                 y = y[:, 0]
             elif delta_dim == 1:
@@ -412,7 +426,8 @@ class TestModelCommons:
             params = model.initialize_params(X, y, init_params=true_params)
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
+            # optimistix solvers do not have a velocity attr
+            assert getattr(init_state, "velocity", params) == params
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -430,7 +445,8 @@ class TestModelCommons:
         Test the `initialize_solver` method for inconsistencies between data features and model's expectations.
         Ensure the number of features in X aligns.
         """
-        X, _, model, true_params = instantiate_base_regressor_subclass[:4]
+        fixture = instantiate_base_regressor_subclass
+        X, model, true_params = fixture.X, fixture.model, fixture.params
         y = np.zeros(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         if delta_n_features == 1:
             X = jnp.concatenate((X, jnp.zeros((X.shape[0], 1))), axis=1)
@@ -440,7 +456,8 @@ class TestModelCommons:
             params = model.initialize_params(X, y, init_params=true_params)
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
+            # optimistix solvers do not have a velocity attr
+            assert getattr(init_state, "velocity", params) == params
 
     @pytest.mark.parametrize(
         "delta_tp, expectation",
@@ -465,14 +482,16 @@ class TestModelCommons:
 
         Ensure the correct number of time-points.
         """
-        X, _, model, true_params = instantiate_base_regressor_subclass[:4]
+        fixture = instantiate_base_regressor_subclass
+        X, model, true_params = fixture.X, fixture.model, fixture.params
         y = np.zeros(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
         with expectation:
             params = model.initialize_params(X, y, init_params=true_params)
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
+            # optimistix solvers do not have a velocity attr
+            assert getattr(init_state, "velocity", params) == params
 
     @pytest.mark.parametrize(
         "delta_tp, expectation",
@@ -497,21 +516,24 @@ class TestModelCommons:
 
         Ensure the correct number of time-points.
         """
-        X, y, model, true_params = instantiate_base_regressor_subclass[:4]
+        fixture = instantiate_base_regressor_subclass
+        X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
         shape = DEFAULT_OBS_SHAPE[model.__class__.__name__]
         y = jnp.zeros((shape[0] + delta_tp,) + shape[1:])
         with expectation:
             params = model.initialize_params(X, y, init_params=true_params)
             # check that params are set
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
+            # optimistix solvers do not have a velocity attr
+            assert getattr(init_state, "velocity", params) == params
 
     @pytest.mark.solver_related
     def test_initialize_solver_mask_grouplasso(
         self, instantiate_base_regressor_subclass
     ):
         """Test that the group lasso initialize_solver goes through"""
-        X, _, model, params = instantiate_base_regressor_subclass[:4]
+        fixture = instantiate_base_regressor_subclass
+        X, model, params = fixture.X, fixture.model, fixture.params
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         n_groups = 2
         n_features = X.shape[1]
@@ -525,13 +547,15 @@ class TestModelCommons:
         )
         params = model.initialize_params(X, y)
         init_state = model.initialize_state(X, y, params)
-        assert init_state.velocity == params
+        # optimistix solvers do not have a velocity attr
+        assert getattr(init_state, "velocity", params) == params
 
     @pytest.mark.solver_related
     def test_fit_mask_grouplasso(self, instantiate_base_regressor_subclass):
         """Test that the group lasso fit goes through"""
 
-        X, _, model = instantiate_base_regressor_subclass[:3]
+        fixture = instantiate_base_regressor_subclass
+        X, model = fixture.X, fixture.model
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         n_groups = 2
         n_features = X.shape[1]
@@ -567,17 +591,20 @@ class TestModelCommons:
     def test_initialize_solver_all_invalid_X(
         self, fill_val, expectation, instantiate_base_regressor_subclass
     ):
-        X, _, model, true_params = instantiate_base_regressor_subclass[:4]
+        fixture = instantiate_base_regressor_subclass
+        X, model, true_params = fixture.X, fixture.model, fixture.params
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         X.fill(fill_val)
         with expectation:
             params = model.initialize_params(X, y)
             init_state = model.initialize_state(X, y, params)
-            assert init_state.velocity == params
+            # optimistix solvers do not have a velocity attr
+            assert getattr(init_state, "velocity", params) == params
 
     @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso", "ElasticNet"])
     def test_reg_strength_reset(self, reg, instantiate_base_regressor_subclass):
-        model_cls = instantiate_base_regressor_subclass[2].__class__
+        fixture = instantiate_base_regressor_subclass
+        model_cls = fixture.model.__class__
         model = model_cls(
             **DEFAULTS[model_cls.__name__], regularizer=reg, regularizer_strength=1.0
         )
@@ -653,7 +680,8 @@ class TestModelCommons:
         ],
     )
     def test_reg_set_params(self, params, warns, instantiate_base_regressor_subclass):
-        model_cls = instantiate_base_regressor_subclass[2].__class__
+        fixture = instantiate_base_regressor_subclass
+        model_cls = fixture.model.__class__
         model = model_cls(**DEFAULTS[model_cls.__name__])
         with warns:
             model.set_params(**params)
@@ -673,7 +701,8 @@ class TestModelCommons:
     def test_reg_set_params_reg_str_only(
         self, params, warns, reg, instantiate_base_regressor_subclass
     ):
-        model_cls = instantiate_base_regressor_subclass[2].__class__
+        fixture = instantiate_base_regressor_subclass
+        model_cls = fixture.model.__class__
         model = model_cls(
             **DEFAULTS[model_cls.__name__], regularizer=reg, regularizer_strength=1
         )
@@ -698,7 +727,8 @@ class TestModelCommons:
     def test_reg_set_params_reg_str_only_elasticnet(
         self, params, warns, reg, instantiate_base_regressor_subclass
     ):
-        model_cls = instantiate_base_regressor_subclass[2].__class__
+        fixture = instantiate_base_regressor_subclass
+        model_cls = fixture.model.__class__
         model = model_cls(
             **DEFAULTS[model_cls.__name__], regularizer=reg, regularizer_strength=11
         )
@@ -712,7 +742,8 @@ class TestModelCommons:
     def test_initializer_solver_set_solver_callable(
         self, instantiate_base_regressor_subclass
     ):
-        X, _, model, true_params = instantiate_base_regressor_subclass[:4]
+        fixture = instantiate_base_regressor_subclass
+        X, model, true_params = fixture.X, fixture.model, fixture.params
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         assert model.solver_init_state is None
         assert model.solver_update is None
@@ -731,7 +762,8 @@ class TestModelCommons:
 )
 class TestLinkFunctionModels:
     def test_non_differentiable_inverse_link(self, instantiate_base_regressor_subclass):
-        model = instantiate_base_regressor_subclass[2]
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
 
         # define a jax non-diff function
         non_diff = lambda y: jnp.asarray(njit(lambda x: x)(np.atleast_1d(y)))
@@ -763,7 +795,8 @@ class TestLinkFunctionModels:
     ):
         """Check that the observation model initializes when a callable is passed."""
         raise_exception = not isinstance(link_function(1.0), (jnp.ndarray, float))
-        model = instantiate_base_regressor_subclass[2]
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
 
         if raise_exception:
             with pytest.raises(
@@ -790,7 +823,8 @@ class TestLinkFunctionModels:
         instantiate_base_regressor_subclass,
     ):
         """Check that the observation model initializes when a callable is passed."""
-        model = instantiate_base_regressor_subclass[2]
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
 
         raise_exception = isinstance(link_function, np.ufunc) | isinstance(
             link_function, sm.families.links.Link
@@ -849,7 +883,8 @@ class TestLinkFunctionModels:
     def test_initialization_link_is_jax_set_params(
         self, link_function, instantiate_base_regressor_subclass, expectation
     ):
-        model_cls = instantiate_base_regressor_subclass[2].__class__
+        fixture = instantiate_base_regressor_subclass
+        model_cls = fixture.model.__class__
 
         with expectation:
             model_cls(**DEFAULTS[model_cls.__name__]).set_params(
@@ -861,7 +896,8 @@ class TestLinkFunctionModels:
         self, link_function, instantiate_base_regressor_subclass
     ):
         """Check that the observation model initializes when a callable is passed."""
-        model_cls = instantiate_base_regressor_subclass[2].__class__
+        fixture = instantiate_base_regressor_subclass
+        model_cls = fixture.model.__class__
         raise_exception = not callable(link_function)
         if raise_exception:
             with pytest.raises(
@@ -881,7 +917,8 @@ class TestLinkFunctionModels:
         self, link_function, instantiate_base_regressor_subclass
     ):
         """Check that the observation model initializes when a callable is passed."""
-        model_cls = instantiate_base_regressor_subclass[2].__class__
+        fixture = instantiate_base_regressor_subclass
+        model_cls = fixture.model.__class__
         raise_exception = not callable(link_function)
         if raise_exception:
             with pytest.raises(
@@ -914,7 +951,8 @@ class TestLinkFunctionModels:
     def test_link_func_from_string(
         self, link_func_string, expectation, instantiate_base_regressor_subclass
     ):
-        model_cls = instantiate_base_regressor_subclass[2].__class__
+        fixture = instantiate_base_regressor_subclass
+        model_cls = fixture.model.__class__
         with expectation:
             model_cls(
                 **DEFAULTS[model_cls.__name__], inverse_link_function=link_func_string
@@ -960,7 +998,8 @@ class TestObservationModel:
         Test initialization with different observation models. Check if an appropriate exception is raised
         when the observation model does not have the required attributes.
         """
-        model_cls = instantiate_base_regressor_subclass[2].__class__
+        fixture = instantiate_base_regressor_subclass
+        model_cls = fixture.model.__class__
         with expectation:
             model_cls(**DEFAULTS[model_cls.__name__], observation_model=observation)
 
@@ -985,7 +1024,8 @@ class TestModelSimulation:
         Test the `fit` method with different numbers of initial parameters.
         Check for correct number of parameters.
         """
-        X, y, model, true_params = instantiate_base_regressor_subclass[:4]
+        fixture = instantiate_base_regressor_subclass
+        X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
         model_name = model.__class__.__name__
         expectation = (
             pytest.raises(
@@ -1020,7 +1060,8 @@ class TestModelSimulation:
         """
         Test the `fit` method with X input data of different dimensionalities. Ensure correct dimensionality for X.
         """
-        X, y, model, true_params = instantiate_base_regressor_subclass[:4]
+        fixture = instantiate_base_regressor_subclass
+        X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
         if delta_dim == -1:
             X = np.zeros((X.shape[0],))
         elif delta_dim == 1:
@@ -1043,8 +1084,9 @@ class TestModelSimulation:
         """
         Test the `fit` method with y target data of different dimensionalities. Ensure correct dimensionality for y.
         """
-        X, y, model, true_params = instantiate_base_regressor_subclass[:4]
-        if "Population" in model.__class__.__name__:
+        fixture = instantiate_base_regressor_subclass
+        X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
+        if is_population_model(model):
             if delta_dim == -1:
                 y = y[:, 0]
             elif delta_dim == 1:
@@ -1076,7 +1118,8 @@ class TestModelSimulation:
         Test the `fit` method for inconsistencies between data features and model's expectations.
         Ensure the number of features in X aligns.
         """
-        X, y, model, true_params = instantiate_base_regressor_subclass[:4]
+        fixture = instantiate_base_regressor_subclass
+        X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
         if delta_n_features == 1:
             X = jnp.concatenate((X, jnp.zeros((X.shape[0], 1))), axis=1)
         elif delta_n_features == -1:
@@ -1105,7 +1148,8 @@ class TestModelSimulation:
         """
         Test the `fit` method for inconsistencies in time-points in data X. Ensure the correct number of time-points.
         """
-        X, y, model, true_params = instantiate_base_regressor_subclass[:4]
+        fixture = instantiate_base_regressor_subclass
+        X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
         X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
         with expectation:
             model.fit(X, y, init_params=true_params)
@@ -1131,7 +1175,8 @@ class TestModelSimulation:
         """
         Test the `fit` method for inconsistencies in time-points in y. Ensure the correct number of time-points.
         """
-        X, y, model, true_params = instantiate_base_regressor_subclass[:4]
+        fixture = instantiate_base_regressor_subclass
+        X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
         y = jnp.zeros((y.shape[0] + delta_tp,) + y.shape[1:])
         with expectation:
             model.fit(X, y, init_params=true_params)
@@ -1158,7 +1203,8 @@ class TestModelSimulation:
     def test_fit_all_invalid_X(
         self, fill_val, expectation, instantiate_base_regressor_subclass
     ):
-        X, y, model, true_params = instantiate_base_regressor_subclass[:4]
+        fixture = instantiate_base_regressor_subclass
+        X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
         X.fill(fill_val)
         with expectation:
             model.fit(X, y)

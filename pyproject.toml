@@ -61,6 +61,7 @@ dev = [
     "dandi",                        # Required by doctest for fetch module
     "seaborn",                      # Required by doctest for _documentation_utils module
     "myst-nb",                      # Test myst_nb utils for glue
+    "hmmlearn",                     # Test algorithmic implementations of HMM
 ]
 docs = [
     "numpydoc",
@@ -71,6 +72,7 @@ docs = [
     "sphinx-design",
     "sphinx-issues",
     "sphinxcontrib-apidoc",
+    "sphinxcontrib-bibtex",
     "sphinx-togglebutton",
     "sphinx_code_tabs",
     "sphinxemoji",
@@ -155,9 +157,10 @@ filterwarnings = [
 ]
 markers = [
   "solver_related: tests that interact with solvers",
+  "requires_x64: mark test as requiring JAX float64 precision",
 ]
-addopts = "--strict-markers"
-
+# -s: no capture from pytest (prints will show)
+addopts = ["-s", "--strict-markers"]
 
 [tool.coverage.run]
 omit = [
