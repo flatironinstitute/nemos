@@ -208,6 +208,7 @@ def backward_step_numpy(py_z, c, new_sess, transition_prob):
 
 
 # Below are tests for Bernoulli observation 3 states model glm hmm
+@pytest.mark.requires_x64
 @pytest.mark.parametrize(
     "decorator",
     [
@@ -216,7 +217,6 @@ def backward_step_numpy(py_z, c, new_sess, transition_prob):
     ],
 )
 def test_forward_backward_regression(decorator):
-    jax.config.update("jax_enable_x64", True)
 
     # Fetch the data
     data_path = fetch_data("em_three_states.npz")
@@ -280,7 +280,6 @@ def test_forward_backward_regression(decorator):
 @pytest.fixture(scope="module")
 def generate_data_multi_state():
     np.random.seed(44)
-    jax.config.update("jax_enable_x64", True)
 
     # E-step initial parameters
     n_states, n_samples = 5, 100
@@ -307,7 +306,6 @@ def generate_data_multi_state():
 @pytest.fixture(scope="module")
 def generate_data_multi_state_population():
     np.random.seed(44)
-    jax.config.update("jax_enable_x64", True)
 
     # E-step initial parameters
     n_states, n_neurons, n_samples = 5, 3, 100
@@ -333,6 +331,7 @@ def generate_data_multi_state_population():
     return new_sess, initial_prob, transition_prob, coef, intercept, X, y
 
 
+@pytest.mark.requires_x64
 def test_for_loop_forward_step(generate_data_multi_state):
     new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
         generate_data_multi_state
@@ -360,6 +359,7 @@ def test_for_loop_forward_step(generate_data_multi_state):
     np.testing.assert_almost_equal(normalization_numpy, normalization)
 
 
+@pytest.mark.requires_x64
 def test_for_loop_backward_step(generate_data_multi_state):
     new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
         generate_data_multi_state
@@ -437,6 +437,7 @@ def test_single_state_estep(single_state_inputs):
     )
 
 
+@pytest.mark.requires_x64
 @pytest.mark.parametrize(
     "decorator",
     [
@@ -448,7 +449,6 @@ def test_single_state_estep(single_state_inputs):
     ],
 )
 def test_hmm_negative_log_likelihood_regression(decorator):
-    jax.config.update("jax_enable_x64", True)
 
     # Fetch the data
     data_path = fetch_data("em_three_states.npz")
@@ -521,8 +521,8 @@ def lagrange_mult_loss(param, args, loss, **kwargs):
     return loss(proba, args, **kwargs) + lagrange_mult_term
 
 
+@pytest.mark.requires_x64
 def test_run_m_step_regression():
-    jax.config.update("jax_enable_x64", True)
 
     # Fetch the data
     data_path = fetch_data("em_three_states.npz")
@@ -705,6 +705,7 @@ def test_single_state_mstep(single_state_inputs):
     assert optimized_projection_weights_nemos[1].shape == (1,)
 
 
+@pytest.mark.requires_x64
 def test_maximization_with_prior(generate_data_multi_state):
     new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
         generate_data_multi_state
@@ -775,6 +776,7 @@ def test_maximization_with_prior(generate_data_multi_state):
     )
 
 
+@pytest.mark.requires_x64
 def test_e_and_m_step_for_population(generate_data_multi_state_population):
     """Run E and M step fitting a population."""
     new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
@@ -854,6 +856,7 @@ def test_e_and_m_step_for_population(generate_data_multi_state_population):
     )
 
 
+@pytest.mark.requires_x64
 @pytest.mark.parametrize("state_idx", range(5))
 def test_m_step_set_alpha_init_to_inf(generate_data_multi_state, state_idx):
     new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
@@ -893,6 +896,7 @@ def test_m_step_set_alpha_init_to_inf(generate_data_multi_state, state_idx):
     )
 
 
+@pytest.mark.requires_x64
 @pytest.mark.parametrize("row, col", itertools.product(range(3), range(3)))
 def test_m_step_set_alpha_transition_to_inf(generate_data_multi_state, row, col):
     new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
@@ -932,6 +936,7 @@ def test_m_step_set_alpha_transition_to_inf(generate_data_multi_state, row, col)
     )
 
 
+@pytest.mark.requires_x64
 def test_m_step_set_alpha_init_to_1(generate_data_multi_state):
     new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
         generate_data_multi_state
@@ -993,6 +998,7 @@ def test_m_step_set_alpha_init_to_1(generate_data_multi_state):
     )
 
 
+@pytest.mark.requires_x64
 def test_m_step_set_alpha_transition_to_1(generate_data_multi_state):
     new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
         generate_data_multi_state
@@ -1053,6 +1059,7 @@ def test_m_step_set_alpha_transition_to_1(generate_data_multi_state):
     )
 
 
+@pytest.mark.requires_x64
 @pytest.mark.parametrize(
     "data_name",
     [
@@ -1062,7 +1069,6 @@ def test_m_step_set_alpha_transition_to_1(generate_data_multi_state):
     ],
 )
 def test_run_m_step_regression_priors_simulation(data_name):
-    jax.config.update("jax_enable_x64", True)
 
     # Fetch the data
     data_path = fetch_data(data_name)
