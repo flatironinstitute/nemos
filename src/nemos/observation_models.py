@@ -16,6 +16,7 @@ __all__ = [
     "GammaObservations",
     "BernoulliObservations",
     "NegativeBinomialObservations",
+    "GaussianObservations",
 ]
 
 
@@ -735,7 +736,7 @@ class GammaObservations(Observations):
         key :
             Random key used for the generation of random numbers in JAX.
         predicted_rate :
-            Expected rate (lambda) of the Poisson distribution. Shape (n_time_bins, ), or (n_time_bins, n_neurons)..
+            Expected rate (lambda) of the Gamma distribution. Shape (n_time_bins, ), or (n_time_bins, n_neurons)..
         scale:
             The scale parameter for the distribution.
 
@@ -813,8 +814,7 @@ class GammaObservations(Observations):
         y :
             Observed neural activity.
         predicted_rate :
-            The predicted rate values. This is not used in the Poisson model for estimating scale,
-            but is retained for compatibility with the abstract method signature.
+            The predicted rate values.
         dof_resid :
             The DOF of the residuals.
 
@@ -958,7 +958,7 @@ class BernoulliObservations(Observations):
         key :
             Random key used for the generation of random numbers in JAX.
         predicted_rate :
-            Expected rate (success probability) of the Poisson distribution. Shape ``(n_time_bins, )``, or
+            Expected rate (success probability) of the Bernoulli distribution. Shape ``(n_time_bins, )``, or
             ``(n_time_bins, n_observations)``.
         scale :
             Scale parameter. For Bernoulli should be equal to 1.
@@ -1382,6 +1382,167 @@ class NegativeBinomialObservations(Observations):
         """
         return jnp.array(self.scale)
 
+
+class GaussianObservations(Observations):
+    """
+    Model observations as Gaussian random variables.
+
+    The GaussianObservations is designed to model data based on a Gaussian distribution
+    with a given mean (predicted rate) and variance (scale). It provides methods for computing the negative
+    log-likelihood, generating samples, and computing the residual deviance for the given spike count data.
+
+    """
+
+    def __init__(
+        self,
+    ):
+        super().__init__()
+        self.scale = 1.0
+
+    @property
+    def default_inverse_link_function(self):
+        """Identity link function for Gaussian observations."""
+        return lambda x: x
+
+    def log_likelihood(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
+    ):
+        r"""Compute the Gaussian log-likelihood.
+
+        This computes the Gaussian log-likelihood of the predicted rates
+        for the observed neural activity up to a constant.
+
+        The formula for the Gaussian log-likelihood is given by:
+        .. math::
+            \ell(\mu_1,\dots,\mu_n,\sigma^2) = -\frac{n}{2}\log(2\pi\sigma^2) - \frac{1}{2\sigma^2}\sum_{i=1}^{n} (y_i - \mu_i)^2.
+
+        where :math:`\mu` is the predicted mean, :math:`\sigma^2` is the variance (scale), and :math:`y` is
+        the observed data.
+
+        Parameters
+        ----------
+        y :
+            The target activity to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
+        predicted_rate :
+            The predicted rate of the current model. Shape (n_time_bins, ) or (n_time_bins, n_neurons).
+        scale :
+            The scale parameter of the model.
+        aggregate_sample_scores :
+            Function that aggregates the log-likelihood of each sample.
+
+        Returns
+        -------
+        :
+            The Gaussian log-likelihood. Shape (1,).
+        """
+        norm = - 0.5 * y.shape[0] * jnp.log(2 * jnp.pi * scale)
+        resid = y - predicted_rate
+        nll = - (0.5 / scale) * jnp.sum(jnp.power(resid, 2))
+        return norm + nll
+
+    def sample_generator(
+        self,
+        key: jax.Array,
+        predicted_rate: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
+    ) -> jnp.ndarray:
+        """
+        Sample from the Gaussian distribution.
+
+        This method generates random numbers from a Gaussian distribution based on the given
+        `predicted_rate` and `scale`.
+
+        Parameters
+        ----------
+        key :
+            Random key used for the generation of random numbers in JAX.
+        predicted_rate :
+            Expected rate (mean) of the Gaussian distribution. Shape (n_time_bins, ) or
+            (n_time_bins, n_neurons).
+        scale :
+            The scale parameter (variance) for the distribution.
+
+        Returns
+        -------
+        jnp.ndarray
+            Random numbers generated from the Gaussian distribution based on the `predicted_rate` and the `scale`.
+        """
+        return jax.random.normal(key, shape=predicted_rate.shape) * jnp.sqrt(scale) + predicted_rate
+
+    def deviance(
+        self,
+        neural_activity: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
+    ) -> jnp.ndarray:
+        r"""Compute the residual deviance for a Gaussian model.
+
+        Parameters
+        ----------
+        neural_activity:
+            The spike count activity. Shape (n_time_bins, ) or (n_time_bins, n_neurons) for population models.
+        predicted_rate:
+            The predicted firing rates. Shape (n_time_bins, ) or (n_time_bins, n_neurons) for population models.
+        scale:
+            Scale parameter of the model.
+
+        Returns
+        -------
+        :
+            The residual deviance of the model.
+
+        Notes
+        -----
+        The deviance is a measure of the goodness of fit of a statistical model.
+        For a Gaussian model, the residual deviance is computed as:
+
+        .. math::
+            D(y_{tn}, \hat{y}_{tn}) = \frac{(y_{tn} - \hat{y}_{tn})^2}{\sigma^2}
+
+        where :math:`y` is the observed data, :math:`\hat{y}` is the predicted data, and :math:`\sigma^2` is
+        the scale (variance) of the model. Lower values of deviance indicate a better fit.
+
+        """
+        resid_dev = jnp.power(neural_activity - predicted_rate, 2)
+        return resid_dev / scale
+
+    def estimate_scale(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        dof_resid: Union[float, jnp.ndarray],
+    ) -> Union[float, jnp.ndarray]:
+        r"""
+        Estimate the scale of the model based on the GLM residuals.
+
+        For :math:`y \sim \mathcal{N}(\mu, \sigma^2)` the scale is equal to,
+
+        .. math::
+            \Phi = \sigma^2
+
+        Therefore, the scale can be estimated as the variance of the residuals.
+
+        Parameters
+        ----------
+        y :
+            Observed spike counts.
+        predicted_rate :
+            The predicted rate values.
+        dof_resid :
+            The DOF of the residuals.
+
+        Returns
+        -------
+        :
+            The scale parameter. If predicted_rate is ``(n_samples, n_neurons)``, this method will return a
+            scale for each neuron.
+        """
+        resid = jnp.power(y - predicted_rate, 2)
+        return jnp.sum(resid, axis=0) / dof_resid
 
 def check_observation_model(observation_model, force_checks=False):
     r"""
