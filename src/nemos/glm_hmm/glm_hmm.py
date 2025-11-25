@@ -79,13 +79,16 @@ class GLMHMM(BaseRegressor[ModelParams]):
         solver_name: str = None,
         solver_kwargs: Optional[dict] = None,
         initialize_init_proba: (
-            Callable[[DESIGN_INPUT_TYPE, NDArray], NDArray] | NDArray | str
+            Callable[[int, jax.random.PRNGKey], NDArray] | NDArray | str
         ) = uniform_initial_proba_init,
         initialize_transition_proba: (
-            Callable[[DESIGN_INPUT_TYPE, NDArray], NDArray] | NDArray | str
+            Callable[[int, jax.random.PRNGKey], NDArray] | NDArray | str
         ) = sticky_transition_proba_init,
         initialize_glm_params: (
-            Callable[[DESIGN_INPUT_TYPE, NDArray], Tuple[jnp.ndarray, jnp.ndarray]]
+            Callable[
+                [int, int, DESIGN_INPUT_TYPE, jax.random.PRNGKey],
+                Tuple[jnp.ndarray, jnp.ndarray],
+            ]
             | Tuple[jnp.ndarray, jnp.ndarray]
             | str
         ) = random_glm_params_init,
