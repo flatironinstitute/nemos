@@ -404,9 +404,9 @@ class TestUnRegularized:
         )
 
     @pytest.mark.parametrize("solver_name", ["GradientDescent", "SVRG"])
+    @pytest.mark.requires_x64
     def test_solver_output_match(self, poissonGLM_model_instantiation, solver_name):
         """Test that different solvers converge to the same solution."""
-        jax.config.update("jax_enable_x64", True)
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         # set precision to float64 for accurate matching of the results
         model.data_type = jnp.float64
@@ -436,9 +436,9 @@ class TestUnRegularized:
             )
 
     @pytest.mark.parametrize("solver_name", ["GradientDescent", "SVRG"])
+    @pytest.mark.requires_x64
     def test_solver_match_sklearn(self, poissonGLM_model_instantiation, solver_name):
         """Test that different solvers converge to the same solution."""
-        jax.config.update("jax_enable_x64", True)
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         # set precision to float64 for accurate matching of the results
         model.data_type = jnp.float64
@@ -458,11 +458,11 @@ class TestUnRegularized:
             raise ValueError("UnRegularized GLM estimate does not match sklearn!")
 
     @pytest.mark.parametrize("solver_name", ["GradientDescent", "SVRG"])
+    @pytest.mark.requires_x64
     def test_solver_match_sklearn_gamma(
         self, gammaGLM_model_instantiation, solver_name
     ):
         """Test that different solvers converge to the same solution."""
-        jax.config.update("jax_enable_x64", True)
         X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
         # set precision to float64 for accurate matching of the results
         model.data_type = jnp.float64
@@ -491,11 +491,11 @@ class TestUnRegularized:
     )
     # @pytest.mark.parametrize("solver_name", ["LBFGS", "GradientDescent", "SVRG"])
     @pytest.mark.parametrize("solver_name", ["LBFGS", "SVRG"])
+    @pytest.mark.requires_x64
     def test_solver_match_statsmodels_gamma(
         self, inv_link_jax, link_sm, gammaGLM_model_instantiation, solver_name
     ):
         """Test that different solvers converge to the same solution."""
-        jax.config.update("jax_enable_x64", True)
         X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
         # set precision to float64 for accurate matching of the results
         model.data_type = jnp.float64
@@ -529,6 +529,7 @@ class TestUnRegularized:
         ],
     )
     @pytest.mark.parametrize("solver_name", ["LBFGS", "SVRG"])
+    @pytest.mark.requires_x64
     def test_solver_match_statsmodels_negative_binomial(
         self,
         inv_link_jax,
@@ -537,7 +538,6 @@ class TestUnRegularized:
         solver_name,
     ):
         """Test that different solvers converge to the same solution."""
-        jax.config.update("jax_enable_x64", True)
         X, y, model, true_params, firing_rate = negativeBinomialGLM_model_instantiation
         y = y.astype(
             float
@@ -762,9 +762,9 @@ class TestRidge:
         )
 
     @pytest.mark.parametrize("solver_name", ["GradientDescent", "SVRG"])
+    @pytest.mark.requires_x64
     def test_solver_output_match(self, poissonGLM_model_instantiation, solver_name):
         """Test that different solvers converge to the same solution."""
-        jax.config.update("jax_enable_x64", True)
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         # set precision to float64 for accurate matching of the results
         model.data_type = jnp.float64
@@ -795,9 +795,9 @@ class TestRidge:
                 "Convex estimators should converge to the same numerical value."
             )
 
+    @pytest.mark.requires_x64
     def test_solver_match_sklearn(self, poissonGLM_model_instantiation):
         """Test that different solvers converge to the same solution."""
-        jax.config.update("jax_enable_x64", True)
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         # set precision to float64 for accurate matching of the results
         model.data_type = jnp.float64
@@ -821,9 +821,9 @@ class TestRidge:
         if (not match_weights) or (not match_intercepts):
             raise ValueError("Ridge GLM solver estimate does not match sklearn!")
 
+    @pytest.mark.requires_x64
     def test_solver_match_sklearn_gamma(self, gammaGLM_model_instantiation):
         """Test that different solvers converge to the same solution."""
-        jax.config.update("jax_enable_x64", True)
         X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
         # set precision to float64 for accurate matching of the results
         model.data_type = jnp.float64
@@ -1018,11 +1018,11 @@ class TestLasso:
         )
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
+    @pytest.mark.requires_x64
     def test_solver_match_statsmodels(
         self, solver_name, poissonGLM_model_instantiation
     ):
         """Test that different solvers converge to the same solution."""
-        jax.config.update("jax_enable_x64", True)
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         # set precision to float64 for accurate matching of the results
         model.data_type = jnp.float64
@@ -1060,6 +1060,7 @@ class TestLasso:
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
     @pytest.mark.parametrize("reg_str", [0.001, 0.01, 0.1, 1, 10])
+    @pytest.mark.requires_x64
     def test_lasso_pytree_match(
         self,
         reg_str,
@@ -1068,7 +1069,6 @@ class TestLasso:
         poissonGLM_model_instantiation,
     ):
         """Check pytree and array find same solution."""
-        jax.config.update("jax_enable_x64", True)
         X, _, model, _, _ = poissonGLM_model_instantiation_pytree
         X_array, y, model_array, _, _ = poissonGLM_model_instantiation
 
@@ -1307,11 +1307,11 @@ class TestElasticNet:
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
     @pytest.mark.parametrize("reg_strength", [1.0, 0.5, 0.1])
     @pytest.mark.parametrize("reg_ratio", [1.0, 0.5, 0.2])
+    @pytest.mark.requires_x64
     def test_solver_match_statsmodels(
         self, solver_name, reg_strength, reg_ratio, poissonGLM_model_instantiation
     ):
         """Test that different solvers converge to the same solution."""
-        jax.config.update("jax_enable_x64", True)
         # with jax.disable_jit():
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         # set precision to float64 for accurate matching of the results
@@ -1347,9 +1347,9 @@ class TestElasticNet:
         glm_params = jnp.hstack((intercepts, weights.flatten()))
         assert np.allclose(sm_params, glm_params)
 
+    @pytest.mark.requires_x64
     def test_loss_convergence(self):
         """Test that penalized loss converges to the same value as statsmodels and the proximal operator."""
-        jax.config.update("jax_enable_x64", True)
         # generate toy data
         np.random.seed(123)
         num_samples, num_features = 1000, 5
@@ -1418,6 +1418,7 @@ class TestElasticNet:
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
     @pytest.mark.parametrize("reg_str", [0.001, 0.01, 0.1, 1, 10])
+    @pytest.mark.requires_x64
     def test_elasticnet_pytree_match(
         self,
         reg_str,
@@ -1426,7 +1427,6 @@ class TestElasticNet:
         poissonGLM_model_instantiation,
     ):
         """Check pytree and array find same solution."""
-        jax.config.update("jax_enable_x64", True)
         X, _, model, _, _ = poissonGLM_model_instantiation_pytree
         X_array, y, model_array, _, _ = poissonGLM_model_instantiation
 

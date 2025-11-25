@@ -357,12 +357,12 @@ class TestGammaObservations:
                 "The emission probability should output the results of a call to jax.random.gamma."
             )
 
+    @pytest.mark.requires_x64
     def test_pseudo_r2_vs_statsmodels(self, gammaGLM_model_instantiation):
         """
         Compare log-likelihood to scipy.
         Assesses if the model estimates are close to statsmodels' results.
         """
-        jax.config.update("jax_enable_x64", True)
         X, y, model, _, firing_rate = gammaGLM_model_instantiation
 
         # statsmodels mcfadden
@@ -457,16 +457,17 @@ class TestBernoulliObservations:
 
 class TestNegativeBinomialObservations:
 
+    @pytest.mark.requires_x64
     def test_get_params(self, negative_binomial_observations):
         observation_model = negative_binomial_observations()
         assert observation_model.get_params() == {
             "scale": 1.0,
         }
 
+    @pytest.mark.requires_x64
     def test_deviance_against_statsmodels(
         self, negativeBinomialGLM_model_instantiation
     ):
-        jax.config.update("jax_enable_x64", True)
         _, y, model, _, firing_rate = negativeBinomialGLM_model_instantiation
         dev = sm.families.NegativeBinomial(
             alpha=model.observation_model.scale
@@ -526,10 +527,10 @@ class TestNegativeBinomialObservations:
 class TestCommonObservationModels:
 
     @pytest.mark.parametrize("shape", [(10,), (10, 5), (10, 5, 2)])
+    @pytest.mark.requires_x64
     def test_likelihood_matching(
         self, shape, observation_model_string, observation_model_rate_and_samples
     ):
-        jax.config.update("jax_enable_x64", True)
         obs, y, rate = observation_model_rate_and_samples
         like1 = jnp.exp(
             obs.log_likelihood(y, rate, aggregate_sample_scores=lambda x: x)
