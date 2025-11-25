@@ -1556,7 +1556,12 @@ class GaussianObservations(Observations):
         For :math:`y \sim \mathcal{N}(\mu, \sigma^2)` the scale is equal to,
 
         .. math::
-            \Phi = \sigma^2
+            \hat{\phi}
+            =
+            \frac{1}{n - p}
+            \sum_{i=1}^n (y_i - \hat{\mu}_i)^2.
+
+        with :math:`n` the number of samples and :math:`p` the number of parameters in the model.
 
         Therefore, the scale can be estimated as the variance of the residuals.
 
