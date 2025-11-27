@@ -211,6 +211,7 @@ class GLM(BaseRegressor[ModelParams]):
         self.solver_state_ = None
         self.scale_ = None
         self.dof_resid_ = None
+        self.aux_ = None
 
     def __sklearn_tags__(self):
         """Return GLM specific estimator tags."""
@@ -788,8 +789,7 @@ class GLM(BaseRegressor[ModelParams]):
         # the output of loss. I believe it's the output of
         # solver.l2_optimality_error
         self.solver_state_ = state
-        # TODO: Should this be part of fit-state, so called aux_?
-        self.aux = aux
+        self.aux_ = aux
         return self
 
     def _get_coef_and_intercept(self):
@@ -1133,7 +1133,7 @@ class GLM(BaseRegressor[ModelParams]):
         # store params and state
         self._set_coef_and_intercept(params)
         self.solver_state_ = opt_state
-        self.aux = aux
+        self.aux_ = aux
 
         # estimate the scale
         self.dof_resid_ = self._estimate_resid_degrees_of_freedom(
