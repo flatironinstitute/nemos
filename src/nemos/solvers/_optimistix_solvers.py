@@ -2,7 +2,6 @@ import dataclasses
 from typing import Any, Callable, ClassVar, Tuple, Type, TypeAlias
 
 import equinox as eqx
-import jax
 import optimistix as optx
 
 from ..regularizer import Regularizer
@@ -18,6 +17,33 @@ OptimistixSolverState: TypeAlias = eqx.Module
 OptimistixStepResult: TypeAlias = tuple[Params, OptimistixSolverState, Aux]
 
 
+def _wrap_aux(fn: Callable) -> Callable:
+    """Make function that returns (fn(...), None)."""
+
+    def _fn_with_aux(*args, **kwargs):
+        return fn(*args, **kwargs), None
+
+    return _fn_with_aux
+
+
+def _drop_aux(fn: Callable) -> Callable:
+    """Make function that returns fn's value without its aux."""
+
+    def _fn_without_aux(*args, **kwargs):
+        return fn(*args, **kwargs)[0]
+
+    return _fn_without_aux
+
+
+def _pack_args(fn: Callable) -> Callable:
+    """Make function that accepts fn(params, args) instead of fn(params, *args)."""
+
+    def _fn_with_packed_args(params, args):
+        return fn(params, *args)
+
+    return _fn_with_packed_args
+
+
 # if using jaxtyping, a more precise return type would be
 # Tuple[PyTree[jax.ShapeDtypeStruct], PyTree[jax.ShapeDtypeStruct]]
 def _make_f_and_aux_struct(
@@ -29,12 +55,9 @@ def _make_f_and_aux_struct(
     f_struct is "the shape+dtype of the output of `fn`".
     aux_struct is the same for the returned aux.
     """
-    y0 = jax.tree_util.tree_map(optx._misc.inexact_asarray, y0)
     if not has_aux:
-        fn = optx._misc.NoneAux(fn)  # pyright: ignore
-    fn = optx._misc.OutAsArray(fn)
+        fn = _wrap_aux(fn)
     fn = eqx.filter_closure_convert(fn, y0, args)  # pyright: ignore
-    # fn = cast(Fn[Y, Scalar, Aux], fn)
     f_struct, aux_struct = fn.out_struct  # pyright: ignore[reportFunctionMemberAccess]
     return f_struct, aux_struct
 
@@ -120,11 +143,11 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
         self.config = OptimistixConfig(maxiter=maxiter, **user_args)
 
         if has_aux:
-            self.fun_with_aux = lambda params, args: loss_fn(params, *args)
-            self.fun = lambda params, args: loss_fn(params, *args)[0]
+            self.fun_with_aux = _pack_args(loss_fn)
+            self.fun = _drop_aux(self.fun_with_aux)
         else:
-            self.fun = lambda params, args: loss_fn(params, *args)
-            self.fun_with_aux = lambda params, args: (loss_fn(params, *args), None)
+            self.fun = _pack_args(loss_fn)
+            self.fun_with_aux = _wrap_aux(self.fun)
 
         self._solver = self._solver_cls(
             atol=tol,
@@ -218,9 +241,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
     def get_optim_info(self, state: OptimistixSolverState) -> OptimizationInfo:
         num_steps = self.stats["num_steps"].item()
 
-        function_val = (
-            state.f.item() if hasattr(state, "f") else state.f_info.f.item()
-        )  # pyright: ignore
+        function_val = state.f.item() if hasattr(state, "f") else state.f_info.f.item()  # pyright: ignore
 
         return OptimizationInfo(
             function_val=function_val,
