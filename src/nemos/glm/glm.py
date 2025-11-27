@@ -1139,7 +1139,6 @@ class GLM(BaseRegressor[ModelParams]):
         self.dof_resid_ = self._estimate_resid_degrees_of_freedom(
             X, n_samples=n_samples
         )
-        # TODO: This used the old params to predict. Was that a bug or intended?
         self.scale_ = self.observation_model.estimate_scale(
             y, self._predict(params, data), dof_resid=self.dof_resid_
         )
