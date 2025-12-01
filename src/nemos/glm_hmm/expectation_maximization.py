@@ -141,66 +141,70 @@ def compute_xi(
 
 
 def forward_pass(
-    initial_prob: Array,
-    transition_prob: Array,
-    conditional_prob: Array,
+    log_initial_prob: Array,
+    log_transition_prob: Array,
+    log_conditional_prob: Array,
     is_new_session: Array,
 ) -> Tuple[Array, Array]:
     """
-    Forward pass of an HMM.
+    Forward pass of an HMM in log-space.
 
     This function performs the recursive forward pass over time using ``jax.lax.scan``,
-    computing the filtered probabilities (``alpha``, eqn. 13.34 and 13.36 of [1]_) at each time step.
+    computing the filtered log-probabilities (``log alpha``, eqn. 13.34 and 13.36 of [1]_) at each time step.
     At the start of a new session, the recursion is reset using the initial state distribution.
+    All computations are performed in log-space for numerical stability.
 
     Parameters
     ----------
-    initial_prob :
-        Initial state probability distribution, array of shape ``(n_states,)``.
+    log_initial_prob :
+        Initial state log-probability distribution, array of shape ``(n_states,)``.
 
-    transition_prob :
-        Transition matrix of shape ``(n_states, n_states)``, where entry ``T[i, j]`` is the
-        probability of transitioning from state ``i`` to state ``j``.
+    log_transition_prob :
+        Log-transition matrix of shape ``(n_states, n_states)``, where entry ``log T[i, j]`` is the
+        log-probability of transitioning from state ``i`` to state ``j``.
 
-    conditional_prob :
-        Array of shape ``(n_time_bins, n_states)``, representing the observation likelihood
-        ``p(y_t | z_t)`` at each time step for each state.
+    log_conditional_prob :
+        Array of shape ``(n_time_bins, n_states)``, representing the observation log-likelihood
+        ``log p(y_t | z_t)`` at each time step for each state.
 
     is_new_session :
         Boolean array of shape ``(n_time_bins,)`` indicating the start of new sessions. When
-        ``is_new_session[t]`` is True, the recursion at time ``t`` is reset using ``initial_prob``.
+        ``is_new_session[t]`` is True, the recursion at time ``t`` is reset using ``log_initial_prob``.
 
     Returns
     -------
-    alphas :
-        Array of shape ``(n_time_bins, n_states)``, containing the filtered probabilities
-        at each time step. ``alphas[t]`` corresponds to the forward message at time ``t``.
+    log_alphas :
+        Array of shape ``(n_time_bins, n_states)``, containing the filtered log-probabilities
+        at each time step. ``log_alphas[t]`` corresponds to the log forward message at time ``t``.
 
-    normalizers :
-        Array of shape ``(n_time_bins,)`` containing the normalization constants at each
-        time step. These values can be used to compute the log-likelihood of the sequence.
+    log_normalizers :
+        Array of shape ``(n_time_bins,)`` containing the log-normalization constants at each
+        time step. The sum of these values gives the log-likelihood of the sequence.
 
     Notes
     -----
-    Normalization is performed at each time step to avoid numerical underflow, guarding
-    against divide-by-zero errors.
+    All operations are performed in log-space to avoid numerical underflow/overflow.
+    Normalization is performed at each time step using ``logsumexp`` for numerical stability.
 
-    Equivalent pseudocode in standard Python:
+    Equivalent pseudocode in standard Python (log-space version):
 
     .. code-block:: python
 
-        n_time_bins, n_states = py_z.shape
-        alphas = np.full((n_time_bins, n_states), np.nan)
-        c = np.full(n_time_bins, np.nan)
+        n_time_bins, n_states = log_py_z.shape
+        log_alphas = np.full((n_time_bins, n_states), -np.inf)
+        log_c = np.full(n_time_bins, -np.inf)
 
         for t in range(n_time_bins):
             if new_sess[t]:
-                alphas[t] = initial_prob * py_z[t]
+                log_alphas[t] = log_initial_prob + log_py_z[t]
             else:
-                alphas[t] = py_z[t] * (transition_prob.T @ alphas[t - 1])
+                log_alphas[t] = log_py_z[t] + logsumexp(
+                    log_transition_prob + log_alphas[t - 1][None, :],
+                    axis=1
+                )
 
-            c[t] = np.sum(alphas[t])
-            alphas[t] /= c[t]
+            log_c[t] = logsumexp(log_alphas[t])
+            log_alphas[t] -= log_c[t]
 
     References
     ----------
@@ -208,138 +212,143 @@ def forward_pass(
 
     """
 
-    def initial_compute(posterior, _):
-        # Equation 13.37. Reinitialize for new sessions
-        return posterior * initial_prob
+    def initial_compute(log_posterior, _):
+        return log_posterior + log_initial_prob
 
-    def transition_compute(posterior, alpha_previous):
-        # Equation 13.36
-        exp_transition = jnp.matmul(transition_prob, alpha_previous)
-        return posterior * exp_transition
+    def transition_compute(log_posterior, log_alpha_previous):
+        log_exp_transition = jax.scipy.special.logsumexp(
+            log_transition_prob + log_alpha_previous[None, :],  # Broadcasting
+            axis=1,  # Sum over second axis (after transpose)
+        )
+        return log_posterior + log_exp_transition
 
     def body_fn(carry, xs):
-        alpha_previous = carry
-        posterior, is_new_session = xs
-        # if it is a new session, run initial_compute
-        # else, run transition_compute
-        # for both functions, the inputs are posterior and alpha_previous
-        alpha = jax.lax.cond(
+        log_alpha_previous = carry
+        log_posterior, is_new_session = xs
+
+        log_alpha = jax.lax.cond(
             is_new_session,
             initial_compute,
             transition_compute,
-            posterior,
-            alpha_previous,
+            log_posterior,
+            log_alpha_previous,
         )
-        const = jnp.sum(alpha)  # Store marginal likelihood
+        log_const = jax.scipy.special.logsumexp(log_alpha)
+        log_alpha = log_alpha - log_const
+        return log_alpha, (log_alpha, log_const)
 
-        # Safe divide implementation so we don't divide over 0
-        const = jnp.where(const > 0, const, 1.0)
-
-        alpha = alpha / const  # Normalize - Equation 13.59
-        return alpha, (alpha, const)
-
-    init = jnp.zeros_like(conditional_prob[0])
-    transition_prob = transition_prob.T
-    _, (alphas, normalizers) = jax.lax.scan(
-        body_fn, init, (conditional_prob, is_new_session)
+    init = jnp.full_like(log_conditional_prob[0], -jnp.inf)  # log(0)
+    log_transition_prob = log_transition_prob.T
+    _, (log_alphas, log_normalizers) = jax.lax.scan(
+        body_fn, init, (log_conditional_prob, is_new_session)
     )
-    return alphas, normalizers
+    return log_alphas, log_normalizers
 
 
 def backward_pass(
-    transition_prob: Array,
-    conditional_prob: Array,
-    normalizers: Array,
+    log_transition_prob: Array,
+    log_conditional_prob: Array,
+    log_normalizers: Array,
     is_new_session: Array,
 ):
     """
-    Run the backward pass of the HMM inference algorithm to compute beta messages.
+    Run the backward pass of the HMM inference algorithm to compute log-beta messages.
 
     This function performs the backward recursion step of the forward–backward algorithm,
-    using ``jax.lax.scan`` in reverse to compute beta messages at each time step, computing
-    the ``beta`` parameters, see eqn. 13.35 and 13.38 of [1]_.
+    using ``jax.lax.scan`` in reverse to compute log-beta messages at each time step, computing
+    the ``log beta`` parameters, see eqn. 13.35 and 13.38 of [1]_.
     It handles session boundaries by resetting the beta messages when a new session starts.
+    All computations are performed in log-space for numerical stability.
 
     Parameters
     ----------
-    transition_prob :
-        Transition matrix of shape ``(n_states, n_states)``, where entry ``T[i, j]`` is the
-        probability of transitioning from state ``i`` to state ``j``.
+    log_transition_prob :
+        Log-transition matrix of shape ``(n_states, n_states)``, where entry ``log T[i, j]`` is the
+        log-probability of transitioning from state ``i`` to state ``j``.
 
-    conditional_prob :
-        Array of shape ``(n_time_bins, n_states)``, representing the observation likelihoods
-        ``p(y_t | z_t)`` at each time step for each state.
+    log_conditional_prob :
+        Array of shape ``(n_time_bins, n_states)``, representing the observation log-likelihoods
+        ``log p(y_t | z_t)`` at each time step for each state.
 
-    normalizers :
-        Array of shape ``(n_time_bins,)`` containing the normalization constants from the forward
-        pass (e.g., sums of alpha messages). These are used to normalize the backward recursion.
+    log_normalizers :
+        Array of shape ``(n_time_bins,)`` containing the log-normalization constants from the forward
+        pass. These are used to normalize the backward recursion in log-space.
 
     is_new_session :
         Boolean array of shape ``(n_time_bins,)`` indicating the start of new sessions. When
-        ``is_new_session[t]`` is True, the backward message at time ``t`` is reset to a vector of ones.
+        ``is_new_session[t]`` is True, the backward message at time ``t`` is reset to a vector of zeros
+        (corresponding to log(1) for each state).
 
     Returns
     -------
-    betas :
-        Array of shape ``(n_time_bins, n_states)``, containing the beta messages at each time step.
-        The indexing is aligned with the forward pass, such that ``betas[t]`` corresponds to the
-        backward message at time ``t``.
+    log_betas :
+        Array of shape ``(n_time_bins, n_states)``, containing the log-beta messages at each time step.
+        The indexing is aligned with the forward pass, such that ``log_betas[t]`` corresponds to the
+        log backward message at time ``t``.
 
     Notes
     -----
     This implementation follows the standard HMM backward equations (Bishop, 2006, Eq. 13.38–13.39),
-    including reinitialization for segmented sequences.
+    adapted to log-space, including reinitialization for segmented sequences.
 
-    Equivalent pseudocode in standard Python:
+    Equivalent pseudocode in standard Python (log-space version):
 
     .. code-block:: python
 
-        n_time_bins, n_states = py_z.shape
-        betas = np.full((n_time_bins, n_states), np.nan)
-        betas[-1] = np.ones(n_states)
+        n_time_bins, n_states = log_py_z.shape
+        log_betas = np.full((n_time_bins, n_states), -np.inf)
+        log_betas[-1] = np.zeros(n_states)  # log(1) = 0
 
         for t in range(n_time_bins - 2, -1, -1):
             if new_sess[t + 1]:
-                betas[t] = np.ones(n_states)
+                log_betas[t] = np.zeros(n_states)
             else:
-                betas[t] = transition_prob @ (
-                        betas[t + 1] * py_z[t + 1]
-                )
-                betas[t] /= c[t + 1]
+                log_betas[t] = logsumexp(
+                    transition_prob + (log_betas[t + 1] + log_py_z[t + 1])[None, :],
+                    axis=1
+                ) - log_c[t + 1]
 
     References
     ----------
     .. [1] Bishop, C. M. (2006). Pattern recognition and machine learning. Springer.
 
     """
-    init = jnp.ones_like(conditional_prob[0])
+    init = jnp.zeros_like(log_conditional_prob[0])
 
-    def initial_compute(posterior, *_):
-        # Initialize
-        return jnp.ones_like(posterior)
+    def initial_compute(log_posterior, *_):
+        # Initialize with log(ones) = zeros
+        return jnp.zeros_like(log_posterior)
 
-    def backward_step(posterior, beta, normalization):
-        # Normalize (Equation 13.62)
-        return jnp.matmul(transition_prob, posterior * beta) / normalization
+    def backward_step(log_posterior, log_beta, log_normalization):
+        # Normalize (log of Equation 13.62)
+        return (
+            jax.scipy.special.logsumexp(
+                log_transition_prob + (log_posterior + log_beta)[None, :], axis=1
+            )
+            - log_normalization
+        )
 
     def body_fn(carry, xs):
-        posterior, norm, is_new_sess = xs
-        beta = jax.lax.cond(
+        log_posterior, log_norm, is_new_sess = xs
+        log_beta = jax.lax.cond(
             is_new_sess,
             initial_compute,
             backward_step,
-            posterior,
+            log_posterior,
             carry,
-            norm,
+            log_norm,
         )
-        return beta, carry
+        return log_beta, carry
 
-    # Keeping the carrys because I am interested in
+    # Keeping the output betas because I am interested in
     # all outputs, including the last one.
-    _, betas = jax.lax.scan(
-        body_fn, init, (conditional_prob, normalizers, is_new_session), reverse=True
+    _, log_betas = jax.lax.scan(
+        body_fn,
+        init,
+        (log_conditional_prob, log_normalizers, is_new_session),
+        reverse=True,
     )
-    return betas
+    return log_betas
 
 
 def initialize_new_session(n_samples, is_new_session):

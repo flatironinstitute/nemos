@@ -98,6 +98,10 @@ VALID_PAIRS = [
     {"unaccepted_name", "accepted_name"},
     {"fn", "fun"},
     {"glm_params_init", "glm_params"},
+    {"initial_prob", "log_initial_prob"},
+    {"transition_prob", "log_transition_prob"},
+    {"normalization", "log_normalization"},
+    {"log_conditional_prob", "log_initial_prob"},
 ]
 
 
