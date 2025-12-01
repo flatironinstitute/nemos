@@ -303,7 +303,7 @@ def fit_glm_hmm_with_em(
         learned_initial_prob,
         learned_transition,
         (learned_coef, learned_intercept),
-        likelihood_func=likelihood_func,
+        log_likelihood_func=likelihood_func,
         inverse_link_function=observation_model.default_inverse_link_function,
     )
 

@@ -16,8 +16,8 @@ Array = NDArray | jax.numpy.ndarray
 class GLMHMMState(eqx.Module):
     """State class for the GLMHHM EM-algorithm."""
 
-    initial_prob: Array
-    transition_matrix: Array
+    log_initial_prob: Array
+    log_transition_matrix: Array
     glm_params: Tuple[Array, Array]  # (coef, intercept)
     data_log_likelihood: float | Array
     previous_data_log_likelihood: float | Array
@@ -386,15 +386,15 @@ def compute_rate_per_state(
     return predicted_rate_given_state
 
 
-@partial(jax.jit, static_argnames=["inverse_link_function", "likelihood_func"])
+@partial(jax.jit, static_argnames=["inverse_link_function", "log_likelihood_func"])
 def forward_backward(
     X: Array,
     y: Array,
-    initial_prob: Array,
-    transition_prob: Array,
+    log_initial_prob: Array,
+    log_transition_prob: Array,
     glm_params: Tuple[Array, Array],
     inverse_link_function: Callable,
-    likelihood_func: Callable[[Array, Array], Array],
+    log_likelihood_func: Callable[[Array, Array], Array],
     is_new_session: Array | None = None,
 ):
     """
@@ -412,11 +412,11 @@ def forward_backward(
     y :
         Observations, pytree with leaves of shape ``(n_time_bins,)``.
 
-    initial_prob :
-        Initial latent state probability, pytree with leaves of shape ``(n_states, 1)``.
+    log_initial_prob :
+        Log of the initial latent state probability, pytree with leaves of shape ``(n_states, 1)``.
 
-    transition_prob :
-        Latent state transition matrix, pytree with leaves of shape ``(n_states, n_states)``.
+    log_transition_prob :
+        Latent state log-transition matrix, pytree with leaves of shape ``(n_states, n_states)``.
         ``transition_prob[i, j]`` is the probability of transitioning from state ``i`` to state ``j``.
 
     glm_params :
@@ -427,8 +427,8 @@ def forward_backward(
         Function mapping linear predictors to the mean of the observation distribution
         (e.g., exp for Poisson, sigmoid for Bernoulli).
 
-    likelihood_func :
-        Function computing the elementwise likelihood of observations given predicted mean values.
+    log_likelihood_func :
+        Function computing the elementwise log-likelihood of observations given predicted mean values.
         Must return an array of shape ``(n_time_bins, n_states)``.
 
     is_new_session :
@@ -450,11 +450,11 @@ def forward_backward(
     log_likelihood_norm :
         The normalized total likelihood.
 
-    alphas :
-        Forward messages (alpha values), shape ``(n_time_bins, n_states)``.
+    log_alphas :
+        Log forward messages (log alpha values), shape ``(n_time_bins, n_states)``.
 
-    betas :
-        Backward messages (beta values), shape ``(n_time_bins, n_states)``.
+    log_betas :
+        Log backward messages (log beta values), shape ``(n_time_bins, n_states)``.
 
     References
     ----------
@@ -494,18 +494,20 @@ def forward_backward(
     # Here, log_likelihood_func is the ``log_likelihood`` method from
     # nemos.observation_models.Observations with ``aggregate_sample_scores = lambda x:x``
 
-    conditionals = likelihood_func(y, predicted_rate_given_state)
+    log_conditionals = log_likelihood_func(y, predicted_rate_given_state)
 
     # Compute forward pass
-    alphas, normalization = forward_pass(
-        initial_prob, transition_prob, conditionals, is_new_session
+    log_alphas, log_normalization = forward_pass(
+        log_initial_prob, log_transition_prob, log_conditionals, is_new_session
     )  # these are equivalent to the forward pass with python loop
 
     # Compute backward pass
-    betas = backward_pass(transition_prob, conditionals, normalization, is_new_session)
+    log_betas = backward_pass(
+        log_transition_prob, log_conditionals, log_normalization, is_new_session
+    )
 
     log_likelihood = jnp.sum(
-        jnp.log(normalization)
+        log_normalization
     )  # Store log-likelihood, log of Equation 13.63
 
     likelihood_norm = jnp.exp(log_likelihood / n_time_bins)  # Normalize
@@ -514,25 +516,26 @@ def forward_backward(
     # ----------
     # Compute posterior distributions
     # Gamma - Equations 13.32, 13.64 from [1]
-    posteriors = alphas * betas
+    # Here, for efficiency in the xis calculation, switch to probability
+    posteriors = jnp.exp(log_alphas + log_betas)
 
     # xis Equations 13.43 and 13.65 from [1]
     # Posterior over consecutive states summed across time steps
     joint_posterior = compute_xi(
-        alphas,
-        betas,
-        conditionals,
-        normalization,
+        jnp.exp(log_alphas),
+        jnp.exp(log_betas),
+        jnp.exp(log_conditionals),
+        jnp.exp(log_normalization),
         is_new_session,
-        transition_prob,
+        jnp.exp(log_transition_prob),
     )
     return (
         posteriors,
         joint_posterior,
         log_likelihood,
         likelihood_norm,
-        alphas,
-        betas,
+        log_alphas,
+        log_betas,
     )
 
 
@@ -661,9 +664,8 @@ def run_m_step(
 
 def prepare_likelihood_func(
     is_population_glm: bool,
-    likelihood_func: Callable,
+    log_likelihood_func: Callable,
     negative_log_likelihood_func: Callable,
-    is_log: bool = True,
 ) -> Tuple[Callable, Callable]:
     """
     Prepare a likelihood function for use in the EM algorithm.
@@ -672,12 +674,10 @@ def prepare_likelihood_func(
     ----------
     is_population_glm:
         Bool, true if it is a population GLM likelihood.
-    likelihood_func:
+    log_likelihood_func:
         Function computing the log-likelihood.
     negative_log_likelihood_func
         Function computing the negative log-likelihood.
-    is_log:
-        Whether the likelihood function returns log-likelihood values.
 
     Returns
     -------
@@ -687,39 +687,34 @@ def prepare_likelihood_func(
         Vectorized negative log-likelihood function.
     """
 
-    if not is_log and is_population_glm:
-        raise ValueError(
-            "Population GLM-HMM requires log-likelihood for numerical stability."
-        )
-
     # Wrap likelihood_func to avoid aggregating over samples
-    def likelihood_per_sample(x, z):
-        return likelihood_func(x, z, aggregate_sample_scores=lambda s: s)
+    def log_likelihood_per_sample(x, z):
+        return log_likelihood_func(x, z, aggregate_sample_scores=lambda s: s)
 
     def negative_log_likelihood_per_sample(x, z):
         return negative_log_likelihood_func(x, z, aggregate_sample_scores=lambda s: s)
 
     # Vectorize over the states axis
     state_axes = 2 if is_population_glm else 1
-    likelihood_per_sample = jax.vmap(
-        likelihood_per_sample,
+    log_likelihood_per_sample = jax.vmap(
+        log_likelihood_per_sample,
         in_axes=(None, state_axes),
         out_axes=state_axes,
     )
 
-    def likelihood(y, rate):
-        log_like = likelihood_per_sample(y, rate)
+    def log_likelihood(y, rate):
+        log_like = log_likelihood_per_sample(y, rate)
         if is_population_glm:
             # Multi-neuron case: sum log-likelihoods across neurons
             log_like = log_like.sum(axis=1)
-        return jnp.exp(log_like) if is_log else log_like
+        return log_like
 
     vmap_nll = jax.vmap(
         negative_log_likelihood_per_sample,
         in_axes=(None, state_axes),
         out_axes=state_axes,
     )
-    return likelihood, vmap_nll
+    return log_likelihood, vmap_nll
 
 
 def _em_step(
@@ -734,18 +729,18 @@ def _em_step(
     """Single EM iteration step."""
     previous_state = carry
 
-    (posteriors, joint_posterior, _, new_log_like, alphas, _) = forward_backward(
+    (posteriors, joint_posterior, _, new_log_like, _, _) = forward_backward(
         X,
         y,
-        previous_state.initial_prob,
-        previous_state.transition_matrix,
+        previous_state.log_initial_prob,
+        previous_state.log_transition_matrix,
         previous_state.glm_params,
         inverse_link_function,
         likelihood_func,
         is_new_session,
     )
 
-    glm_params_update, init_prob, trans_matrix, _ = run_m_step(
+    glm_params_update, log_init_prob, log_trans_matrix, _ = run_m_step(
         X,
         y,
         posteriors=posteriors,
@@ -756,8 +751,8 @@ def _em_step(
     )
 
     new_state = GLMHMMState(
-        initial_prob=init_prob,
-        transition_matrix=trans_matrix,
+        log_initial_prob=log_init_prob,
+        log_transition_matrix=log_trans_matrix,
         glm_params=glm_params_update,
         iterations=previous_state.iterations + 1,
         data_log_likelihood=new_log_like,
@@ -776,9 +771,9 @@ def check_log_likelihood_increment(state: GLMHMMState, tol: float) -> Array:
 
     Parameters
     ----------
-    state : GLMHMMState
+    state :
         Current EM state containing likelihood history.
-    tol : float
+    tol :
         Absolute tolerance threshold.
 
     Returns
@@ -867,8 +862,8 @@ def em_glm_hmm(
     is_new_session = initialize_new_session(y.shape[0], is_new_session)
 
     state = GLMHMMState(
-        initial_prob=initial_prob,
-        transition_matrix=transition_prob,
+        log_initial_prob=jnp.log(initial_prob),
+        log_transition_matrix=jnp.log(transition_prob),
         glm_params=glm_params,
         data_log_likelihood=-jnp.array(jnp.inf),
         previous_data_log_likelihood=-jnp.array(jnp.inf),
@@ -901,8 +896,8 @@ def em_glm_hmm(
     (posteriors, joint_posterior, _, _, _, _) = forward_backward(
         X,
         y,
-        state.initial_prob,
-        state.transition_matrix,
+        state.log_initial_prob,
+        state.log_transition_matrix,
         state.glm_params,
         inverse_link_function,
         likelihood_func,
@@ -912,8 +907,8 @@ def em_glm_hmm(
     return (
         posteriors,
         joint_posterior,
-        state.initial_prob,
-        state.transition_matrix,
+        state.log_initial_prob,
+        state.log_transition_matrix,
         state.glm_params,
         state,
     )
