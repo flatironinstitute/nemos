@@ -679,15 +679,15 @@ class TestForwardBackward:
 
         # xis are a sum of the ones over valid entries
         xis = compute_xi(
-            alphas,
-            betas,
-            conditionals,
-            norm,
+            jnp.exp(log_alphas),
+            jnp.exp(log_betas),
+            jnp.exp(log_conditionals),
+            jnp.exp(log_norm),
             new_sess,
             transition_prob,
         )
         np.testing.assert_array_almost_equal(
-            np.array([[alphas.shape[0] - sum(new_sess)]]).astype(xis), xis
+            np.array([[log_alphas.shape[0] - sum(new_sess)]]).astype(xis), xis
         )
 
 
