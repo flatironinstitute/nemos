@@ -744,7 +744,9 @@ class GLMHMM(BaseRegressor[ModelParams]):
                 self._get_m_step_loss_function(y.ndim > 1)
             )
         self.instantiate_solver(self._expected_negative_log_likelihood)
-        opt_state = self.solver_init_state(init_params, X, y)
+        opt_state = self.solver_init_state(
+            init_params, X, y, jnp.zeros_like(X, shape=(y.shape[0], self._n_states))
+        )
         return opt_state
 
     # CHECKS FOR PARAMS AND INPUTS
