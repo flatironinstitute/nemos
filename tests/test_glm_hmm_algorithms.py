@@ -580,8 +580,8 @@ class TestForwardBackward:
 
         obs = PoissonObservations()
 
-        likelihood = jax.vmap(
-            lambda x, z: obs.likelihood(x, z, aggregate_sample_scores=lambda w: w),
+        log_likelihood = jax.vmap(
+            lambda x, z: obs.log_likelihood(x, z, aggregate_sample_scores=lambda w: w),
             in_axes=(None, 1),
             out_axes=1,
         )
@@ -589,17 +589,17 @@ class TestForwardBackward:
         predicted_rate_given_state = obs.default_inverse_link_function(
             X @ coef + intercept
         )
-        conditionals = likelihood(y, predicted_rate_given_state)
+        log_conditionals = log_likelihood(y, predicted_rate_given_state)
 
-        alphas, normalization = forward_pass(
-            initial_prob, transition_prob, conditionals, new_sess
+        log_alphas, log_normalization = forward_pass(
+            np.log(initial_prob), np.log(transition_prob), log_conditionals, new_sess
         )
 
         alphas_numpy, normalization_numpy = forward_step_numpy(
-            conditionals, new_sess, initial_prob, transition_prob
+            np.exp(log_conditionals), new_sess, initial_prob, transition_prob
         )
-        np.testing.assert_almost_equal(alphas_numpy, alphas)
-        np.testing.assert_almost_equal(normalization_numpy, normalization)
+        np.testing.assert_almost_equal(np.log(alphas_numpy), log_alphas)
+        np.testing.assert_almost_equal(np.log(normalization_numpy), log_normalization)
 
     @pytest.mark.requires_x64
     def test_for_loop_backward_step(self, generate_data_multi_state):
@@ -614,8 +614,8 @@ class TestForwardBackward:
         )
         obs = PoissonObservations()
 
-        likelihood = jax.vmap(
-            lambda x, z: obs.likelihood(x, z, aggregate_sample_scores=lambda w: w),
+        log_likelihood = jax.vmap(
+            lambda x, z: obs.log_likelihood(x, z, aggregate_sample_scores=lambda w: w),
             in_axes=(None, 1),
             out_axes=1,
         )
@@ -623,17 +623,17 @@ class TestForwardBackward:
         predicted_rate_given_state = obs.default_inverse_link_function(
             X @ coef + intercept
         )
-        conditionals = likelihood(y, predicted_rate_given_state)
+        log_conditionals = log_likelihood(y, predicted_rate_given_state)
 
-        alphas, normalization = forward_pass(
-            initial_prob, transition_prob, conditionals, new_sess
+        log_alphas, log_normalization = forward_pass(
+            np.log(initial_prob), np.log(transition_prob), log_conditionals, new_sess
         )
 
-        betas = backward_pass(transition_prob, conditionals, normalization, new_sess)
+        log_betas = backward_pass(np.log(transition_prob), log_conditionals, log_normalization, new_sess)
         betas_numpy = backward_step_numpy(
-            conditionals, normalization, new_sess, transition_prob
+            np.exp(log_conditionals), np.exp(log_normalization), new_sess, transition_prob
         )
-        np.testing.assert_almost_equal(betas_numpy, betas)
+        np.testing.assert_almost_equal(np.log(betas_numpy), log_betas)
 
     def test_single_state_estep(self, single_state_inputs):
         """
