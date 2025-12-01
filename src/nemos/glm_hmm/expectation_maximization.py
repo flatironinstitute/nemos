@@ -304,7 +304,7 @@ def backward_pass(
                 log_betas[t] = np.zeros(n_states)
             else:
                 log_betas[t] = logsumexp(
-                    transition_prob + (log_betas[t + 1] + log_py_z[t + 1])[None, :],
+                    log_transition_prob + (log_betas[t + 1] + log_py_z[t + 1])[None, :],
                     axis=1
                 ) - log_c[t + 1]
 
