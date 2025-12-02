@@ -34,7 +34,7 @@ def observation_model_rate_and_samples(observation_model_string, shape=None):
         theta = 3
         y = jax.random.gamma(jax.random.PRNGKey(123), rate / theta) * theta
     elif observation_model_string == "Gaussian":
-        y = rate #+ jax.random.normal(jax.random.PRNGKey(123), shape=rate.shape)
+        y = rate  # + jax.random.normal(jax.random.PRNGKey(123), shape=rate.shape)
     elif observation_model_string == "Bernoulli":
         rate = rate / (1 + jnp.max(rate))
         y = jax.random.bernoulli(jax.random.PRNGKey(123), rate)
@@ -66,6 +66,7 @@ def bernoulli_observations():
 @pytest.fixture()
 def negative_binomial_observations():
     return nmo.observation_models.NegativeBinomialObservations
+
 
 @pytest.fixture()
 def gaussian_observations():

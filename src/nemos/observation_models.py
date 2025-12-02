@@ -1473,9 +1473,9 @@ class GaussianObservations(Observations):
         """
         norm = -0.5 * jnp.log(2 * jnp.pi * scale)
         return aggregate_sample_scores(
-            norm - (0.5 / scale) * self._negative_log_likelihood(
-                y, predicted_rate, lambda x: x
-            )
+            norm
+            - (0.5 / scale)
+            * self._negative_log_likelihood(y, predicted_rate, lambda x: x)
         )
 
     def sample_generator(
