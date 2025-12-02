@@ -229,7 +229,7 @@ def prepare_gammas_and_xis_for_m_step_single_neuron(
     """
     (coef, intercept) = glm_params
     likelihood = jax.vmap(
-        lambda x, z: obs.likelihood(x, z, aggregate_sample_scores=lambda w: w),
+        lambda x, z: obs.log_likelihood(x, z, aggregate_sample_scores=lambda w: w),
         in_axes=(None, 1),
         out_axes=1,
     )
@@ -542,8 +542,8 @@ class TestForwardBackward:
 
         decorated_forward_backward = decorator(forward_backward)
         (
-            gammas_nemos,
-            xis_nemos,
+            log_gammas_nemos,
+            log_xis_nemos,
             ll_nemos,
             ll_norm_nemos,
             log_alphas_nemos,
@@ -569,9 +569,9 @@ class TestForwardBackward:
 
         # Next testing xis and gammas because they depend on alphas and betas
         # Testing Eq. 13.43 of Bishop
-        np.testing.assert_almost_equal(gammas_nemos, gammas, decimal=8)
+        np.testing.assert_almost_equal(log_gammas_nemos, np.log(gammas), decimal=8)
         # Testing Eq. 13.65 of Bishop
-        np.testing.assert_almost_equal(xis_nemos, xis, decimal=8)
+        np.testing.assert_almost_equal(log_xis_nemos, np.log(xis), decimal=8)
 
     @pytest.mark.requires_x64
     def test_for_loop_forward_step(self, generate_data_multi_state):
@@ -800,8 +800,8 @@ class TestMStep:
         ) = run_m_step(
             X[:, 1:],  # drop intercept column
             y,
-            gammas,
-            xis,
+            np.log(gammas),
+            np.log(xis),
             (coef, intercept),
             is_new_session=new_sess.astype(bool),
             solver_run=solver.run,
@@ -921,8 +921,8 @@ class TestMStep:
         ) = run_m_step(
             X,
             y,
-            np.exp(log_alphas + log_betas),
-            xis,
+            log_alphas + log_betas,
+            np.log(xis),
             (np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             solver_run=solver.run,
@@ -962,7 +962,7 @@ class TestMStep:
         obs = PoissonObservations()
         _, solver = prepare_partial_hmm_nll_single_neuron(obs)
 
-        gammas, xis = prepare_gammas_and_xis_for_m_step_single_neuron(
+        log_gammas, log_xis = prepare_gammas_and_xis_for_m_step_single_neuron(
             X, y, initial_prob, transition_prob, (coef, intercept), new_sess, obs
         )
 
@@ -977,8 +977,8 @@ class TestMStep:
         ) = run_m_step(
             X,
             y,
-            gammas,
-            xis,
+            log_gammas,
+            log_xis,
             (np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             solver_run=solver.run,
@@ -991,7 +991,7 @@ class TestMStep:
         new_transition_prob = np.exp(log_transition_prob)
 
         lagrange_multiplier = -jax.grad(expected_log_likelihood_wrt_transitions)(
-            new_transition_prob, xis, dirichlet_alphas=alphas_transition
+            new_transition_prob, np.exp(log_xis), dirichlet_alphas=alphas_transition
         ).mean(
             axis=1
         )  # note that the lagrange mult makes the gradient all the same for each prob.
@@ -999,7 +999,7 @@ class TestMStep:
         grad_objective = jax.grad(lagrange_mult_loss)
         (grad_at_transition, grad_at_lagr) = grad_objective(
             (new_transition_prob, lagrange_multiplier),
-            xis,
+            np.exp(log_xis),
             expected_log_likelihood_wrt_transitions,
             dirichlet_alphas=alphas_transition,
         )
@@ -1010,7 +1010,7 @@ class TestMStep:
             grad_at_lagr, np.zeros_like(lagrange_multiplier)
         )
         # Initial probabilities:
-        sum_gammas = np.sum(gammas[np.where(new_sess)[0]], axis=0)
+        sum_gammas = np.sum(np.exp(log_gammas)[np.where(new_sess)[0]], axis=0)
         lagrange_multiplier = -jax.grad(expected_log_likelihood_wrt_initial_prob)(
             new_initial_prob, sum_gammas, dirichlet_alphas=alphas_init
         ).mean()  # note that the lagrange mult makes the gradient all the same for each prob.
@@ -1040,7 +1040,7 @@ class TestMStep:
 
         _, solver = prepare_partial_hmm_nll_single_neuron(obs)
 
-        gammas, xis = prepare_gammas_and_xis_for_m_step_single_neuron(
+        log_gammas, log_xis = prepare_gammas_and_xis_for_m_step_single_neuron(
             X, y, initial_prob, transition_prob, (coef, intercept), new_sess, obs
         )
 
@@ -1056,8 +1056,8 @@ class TestMStep:
         ) = run_m_step(
             X,
             y,
-            gammas,
-            xis,
+            log_gammas,
+            log_xis,
             (np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             solver_run=solver.run,
@@ -1083,7 +1083,7 @@ class TestMStep:
 
         _, solver = prepare_partial_hmm_nll_single_neuron(obs)
 
-        gammas, xis = prepare_gammas_and_xis_for_m_step_single_neuron(
+        log_gammas, log_xis = prepare_gammas_and_xis_for_m_step_single_neuron(
             X, y, initial_prob, transition_prob, (coef, intercept), new_sess, obs
         )
 
@@ -1099,8 +1099,8 @@ class TestMStep:
         ) = run_m_step(
             X,
             y,
-            gammas,
-            xis,
+            log_gammas,
+            log_xis,
             (np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             solver_run=solver.run,
@@ -1123,7 +1123,7 @@ class TestMStep:
         obs = PoissonObservations()
         _, solver = prepare_partial_hmm_nll_single_neuron(obs)
 
-        gammas, xis = prepare_gammas_and_xis_for_m_step_single_neuron(
+        log_gammas, log_xis = prepare_gammas_and_xis_for_m_step_single_neuron(
             X, y, initial_prob, transition_prob, (coef, intercept), new_sess, obs
         )
 
@@ -1138,8 +1138,8 @@ class TestMStep:
         ) = run_m_step(
             X,
             y,
-            gammas,
-            xis,
+            log_gammas,
+            log_xis,
             (np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             solver_run=solver.run,
@@ -1154,8 +1154,8 @@ class TestMStep:
         ) = run_m_step(
             X,
             y,
-            gammas,
-            xis,
+            log_gammas,
+            log_xis,
             (np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             solver_run=solver.run,
@@ -1184,7 +1184,7 @@ class TestMStep:
         obs = PoissonObservations()
         _, solver = prepare_partial_hmm_nll_single_neuron(obs)
 
-        gammas, xis = prepare_gammas_and_xis_for_m_step_single_neuron(
+        log_gammas, log_xis = prepare_gammas_and_xis_for_m_step_single_neuron(
             X, y, initial_prob, transition_prob, (coef, intercept), new_sess, obs
         )
         alphas_transition = np.ones(transition_prob.shape)
@@ -1198,8 +1198,8 @@ class TestMStep:
         ) = run_m_step(
             X,
             y,
-            gammas,
-            xis,
+            log_gammas,
+            log_xis,
             (np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             solver_run=solver.run,
@@ -1214,8 +1214,8 @@ class TestMStep:
         ) = run_m_step(
             X,
             y,
-            gammas,
-            xis,
+            log_gammas,
+            log_xis,
             (np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             solver_run=solver.run,
@@ -1293,8 +1293,8 @@ class TestMStep:
         ) = run_m_step(
             X[:, 1:],  # drop intercept column
             y,
-            gammas,
-            xis,
+            np.log(gammas),
+            np.log(xis),
             (coef, intercept),
             is_new_session=new_sess.astype(bool),
             solver_run=solver.run,
@@ -1526,8 +1526,8 @@ class TestEMAlgorithm:
         transition_pb[np.diag_indices(transition_prob.shape[1])] = 0.9
 
         (
-            posteriors_noisy_params,
-            joint_posterior_noisy_params,
+            log_posteriors_noisy_params,
+            log_joint_posterior_noisy_params,
             log_likelihood_noisy_params,
             log_likelihood_norm_noisy_params,
             log_alphas_noisy_params,
@@ -1543,9 +1543,9 @@ class TestEMAlgorithm:
         )
 
         latent_states = data["latent_states"]
-        corr_matrix_before_em = np.corrcoef(latent_states.T, posteriors_noisy_params.T)[
-            : latent_states.shape[1], latent_states.shape[1] :
-        ]
+        corr_matrix_before_em = np.corrcoef(
+            latent_states.T, np.exp(log_posteriors_noisy_params).T
+        )[: latent_states.shape[1], latent_states.shape[1] :]
         max_corr_before_em = np.max(corr_matrix_before_em, axis=1)
 
         (
@@ -1627,7 +1627,7 @@ def test_e_and_m_step_for_population(generate_data_multi_state_population):
         log_like = log_like.sum(axis=1)
         return jnp.exp(log_like)
 
-    gammas, xis, _, _, _, _ = forward_backward(
+    log_gammas, log_xis, _, _, _, _ = forward_backward(
         X,
         y,
         initial_prob,
@@ -1668,8 +1668,8 @@ def test_e_and_m_step_for_population(generate_data_multi_state_population):
     ) = run_m_step(
         X,
         y,
-        gammas,
-        xis,
+        log_gammas,
+        log_xis,
         (np.zeros_like(coef), np.zeros_like(intercept)),
         is_new_session=new_sess.astype(bool),
         solver_run=solver.run,
@@ -2228,7 +2228,7 @@ class TestCompilation:
         obs = PoissonObservations()
         _, solver = prepare_partial_hmm_nll_single_neuron(obs)
 
-        gammas, xis = prepare_gammas_and_xis_for_m_step_single_neuron(
+        log_gammas, log_xis = prepare_gammas_and_xis_for_m_step_single_neuron(
             X, y, initial_prob, transition_prob, (coef, intercept), new_sess, obs
         )
 
@@ -2238,8 +2238,8 @@ class TestCompilation:
         _ = run_m_step(
             X,
             y,
-            gammas,
-            xis,
+            log_gammas,
+            log_xis,
             (np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             solver_run=solver.run,
@@ -2254,8 +2254,8 @@ class TestCompilation:
         _ = run_m_step(
             X,
             y,
-            gammas,
-            xis,
+            log_gammas,
+            log_xis,
             (np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             solver_run=solver.run,
@@ -2269,8 +2269,8 @@ class TestCompilation:
         _ = run_m_step(
             X,
             y,
-            gammas,
-            xis,
+            log_gammas,
+            log_xis,
             (np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             solver_run=solver.run,
@@ -2284,8 +2284,8 @@ class TestCompilation:
         _ = run_m_step(
             X,
             y,
-            gammas,
-            xis,
+            np.log(gammas),
+            np.log(xis),
             (np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             solver_run=solver.run,
@@ -2418,7 +2418,6 @@ class TestCompilation:
             False,
             obs.log_likelihood,
             obs._negative_log_likelihood,
-
         )
 
         def partial_hmm_negative_log_likelihood(

@@ -25,21 +25,36 @@ class GLMHMMState(eqx.Module):
     iterations: int
 
 
-def _analytical_m_step_initial_prob(
-    posteriors: jnp.ndarray,
+def _add_prior(log_val: jnp.ndarray, offset: jnp.ndarray):
+    """Add prior offset in log-space."""
+    pos_result = jnp.logaddexp(log_val, jnp.log(jnp.maximum(offset, 1e-10)))
+    zero_result = log_val
+    neg_result = log_val + jnp.log1p(-jnp.abs(offset) * jnp.exp(-log_val))
+
+    result = jnp.where(
+        offset > 0, pos_result, jnp.where(offset == 0, zero_result, neg_result)
+    )
+    return result
+
+
+_vmap_add_prior = jax.vmap(_add_prior)
+
+
+def _analytical_m_step_log_initial_prob(
+    log_posteriors: jnp.ndarray,
     is_new_session: jnp.ndarray,
     dirichlet_prior_alphas: Optional[jnp.ndarray] = None,
 ):
     """
-    Calculate the M-step for initial state probabilities.
+    Calculate the M-step for initial state probabilities in log-space.
 
     Computes the maximum likelihood estimate (or MAP estimate with prior) of the
-    initial state distribution by summing posterior probabilities at session starts.
+    initial state distribution in log-space for numerical stability.
 
     Parameters
     ----------
-    posteriors :
-        The posterior distribution over latent states, shape ``(n_time_bins, n_states)``.
+    log_posteriors :
+        The log posterior distribution over latent states, shape ``(n_time_bins, n_states)``.
     is_new_session :
         Boolean array indicating session start points, shape ``(n_time_bins,)``.
     dirichlet_prior_alphas :
@@ -48,50 +63,67 @@ def _analytical_m_step_initial_prob(
 
     Returns
     -------
-    new_initial_prob :
-        Updated initial state probabilities, shape ``(n_states,)``.
-        Normalized to sum to 1.
+    log_initial_prob :
+        Updated initial state log-probabilities, shape ``(n_states,)``.
+        Normalized in log-space.
     """
-    tmp_initial_prob = jnp.sum(posteriors, axis=0, where=is_new_session[:, jnp.newaxis])
+    # Mask out non-session-start time points by setting to -inf
+    masked_log_posteriors = jnp.where(
+        is_new_session[:, jnp.newaxis], log_posteriors, -jnp.inf
+    )
+
+    # Sum over time in log-space (logsumexp ignores -inf values)
+    log_tmp_initial_prob = jax.scipy.special.logsumexp(masked_log_posteriors, axis=0)
+
     if dirichlet_prior_alphas is not None:
-        tmp_initial_prob += dirichlet_prior_alphas - 1
+        prior_offset = dirichlet_prior_alphas - 1
+        log_numerator = _vmap_add_prior(log_tmp_initial_prob, prior_offset)
+    else:
+        log_numerator = log_tmp_initial_prob
 
-    new_initial_prob = tmp_initial_prob / jnp.sum(tmp_initial_prob)
-    return new_initial_prob
+    # Normalize in log-space
+    log_sum = jax.scipy.special.logsumexp(log_numerator)
+    log_initial_prob = log_numerator - log_sum
+
+    return log_initial_prob
 
 
-def _analytical_m_step_transition_prob(
-    joint_posterior: jnp.ndarray, dirichlet_prior_alphas: Optional[jnp.ndarray] = None
+def _analytical_m_step_log_transition_prob(
+    log_joint_posterior: jnp.ndarray,
+    dirichlet_prior_alphas: Optional[jnp.ndarray] = None,
 ):
     """
-    Calculate the M-step for state transition probabilities.
+    Calculate the M-step for state transition probabilities in log-space.
 
     Computes the maximum likelihood estimate (or MAP estimate with prior) of the
-    transition matrix by normalizing expected transition counts from the joint posterior.
+    transition matrix in log-space for numerical stability.
 
     Parameters
     ----------
-    joint_posterior:
-        Expected counts of transitions from state i to state j,
-        shape ``(n_states, n_states)``. Typically computed from the forward-backward
-        algorithm as the sum over time of P(z_t=i, z_{t+1}=j | data).
+    log_joint_posterior:
+        Log of expected counts of transitions from state i to state j,
+        shape ``(n_states, n_states)``. Computed as logsumexp(log_xis, axis=0).
     dirichlet_prior_alphas:
         The parameters of the Dirichlet prior for each row of the transition matrix,
         shape ``(n_states, n_states)``. If None, uses a flat (uniform) prior.
 
     Returns
     -------
-    new_transition_prob:
-        Updated transition probability matrix, shape ``(n_states, n_states)``.
-        Each row sums to 1, where entry [i, j] is P(z_{t+1}=j | z_t=i).
+    log_transition_prob:
+        Updated log transition probability matrix, shape ``(n_states, n_states)``.
+        Each row is normalized in log-space.
     """
     if dirichlet_prior_alphas is not None:
-        new_transition_prob = joint_posterior + dirichlet_prior_alphas - 1
+        prior_offset = dirichlet_prior_alphas - 1
+        log_numerator = _vmap_add_prior(log_joint_posterior, prior_offset)
     else:
-        new_transition_prob = joint_posterior
+        log_numerator = log_joint_posterior
 
-    new_transition_prob /= jnp.sum(new_transition_prob, axis=1)[:, jnp.newaxis]
-    return new_transition_prob
+    # Normalize each row in log-space
+    log_row_sums = jax.scipy.special.logsumexp(log_numerator, axis=1, keepdims=True)
+    log_transition_prob = log_numerator - log_row_sums
+
+    return log_transition_prob
 
 
 def compute_xi_log(
@@ -448,11 +480,11 @@ def forward_backward(
 
     Returns
     -------
-    posteriors :
-        Marginal posterior distribution over latent states, shape ``(n_time_bins, n_states)``.
+    log_posteriors :
+        Marginal log-posterior distribution over latent states, shape ``(n_time_bins, n_states)``.
 
-    joint_posterior :
-        Joint posterior distribution between consecutive time steps summed
+    log_joint_posterior :
+        Joint log-posterior distribution between consecutive time steps summed
         over samples, shape ``(n_states, n_states)``.
 
     log_likelihood :
@@ -527,8 +559,7 @@ def forward_backward(
     # ----------
     # Compute posterior distributions
     # Gamma - Equations 13.32, 13.64 from [1]
-    # Here, for efficiency in the xis calculation, switch to probability
-    posteriors = jnp.exp(log_alphas + log_betas)
+    log_posteriors = log_alphas + log_betas
 
     # xis Equations 13.43 and 13.65 from [1]
     # Posterior over consecutive states summed across time steps
@@ -540,10 +571,9 @@ def forward_backward(
         is_new_session,
         log_transition_prob,
     )
-    joint_posterior = jnp.exp(log_joint_posterior)
     return (
-        posteriors,
-        joint_posterior,
+        log_posteriors,
+        log_joint_posterior,
         log_likelihood,
         likelihood_norm,
         log_alphas,
@@ -606,8 +636,8 @@ def hmm_negative_log_likelihood(
 def run_m_step(
     X: Array,
     y: Array,
-    posteriors: Array,
-    joint_posterior: Array,
+    log_posteriors: Array,
+    log_joint_posterior: Array,
     glm_params: Tuple[Array, Array],
     is_new_session: Array,
     solver_run: Callable[[Tuple[Array, Array], Array, Array, Array], Array],
@@ -623,10 +653,10 @@ def run_m_step(
         Design matrix of observations, shape (n_samples, n_features).
     y:
         Target responses, shape ``(n_samples,)`` or ``(n_samples, n_neurons)``.
-    posteriors:
-        Posterior probabilities over states, shape ``(n_samples, n_states)``.
-    joint_posterior:
-        Joint posterior probabilities over pairs of states summed over samples. Shape ``(n_states, n_states)``.
+    log_posteriors:
+        Log-posterior probabilities over states, shape ``(n_samples, n_states)``.
+    log_joint_posterior:
+        Log joint posterior probabilities over pairs of states summed over samples. Shape ``(n_states, n_states)``.
         :math:`\sum_t P(z_{t-1}, z_t \mid X, y, \theta_{\text{old}})`.
     glm_params:
         Current GLM coefficients and intercept terms. Coefficients have shape ``(n_features, n_states)`` for
@@ -659,21 +689,19 @@ def run_m_step(
     """
 
     # Update Initial state probability Eq. 13.18
-    new_initial_prob = _analytical_m_step_initial_prob(
-        posteriors,
+    log_initial_prob = _analytical_m_step_log_initial_prob(
+        log_posteriors,
         is_new_session=is_new_session,
         dirichlet_prior_alphas=dirichlet_prior_alphas_init_prob,
     )
-    new_transition_prob = _analytical_m_step_transition_prob(
-        joint_posterior, dirichlet_prior_alphas=dirichlet_prior_alphas_transition
+    log_transition_prob = _analytical_m_step_log_transition_prob(
+        log_joint_posterior, dirichlet_prior_alphas=dirichlet_prior_alphas_transition
     )
 
     # Minimize negative log-likelihood to update GLM weights
-    optimized_projection_weights, state = solver_run(glm_params, X, y, posteriors)
-
-    # Convert to log-space for use in GLMHMMState
-    log_initial_prob = jnp.log(new_initial_prob)
-    log_transition_prob = jnp.log(new_transition_prob)
+    optimized_projection_weights, state = solver_run(
+        glm_params, X, y, jnp.exp(log_posteriors)
+    )
 
     return optimized_projection_weights, log_initial_prob, log_transition_prob, state
 
@@ -745,7 +773,7 @@ def _em_step(
     """Single EM iteration step."""
     previous_state = carry
 
-    (posteriors, joint_posterior, _, new_log_like, _, _) = forward_backward(
+    (log_posteriors, log_joint_posterior, _, new_log_like, _, _) = forward_backward(
         X,
         y,
         previous_state.log_initial_prob,
@@ -759,8 +787,8 @@ def _em_step(
     glm_params_update, log_init_prob, log_trans_matrix, _ = run_m_step(
         X,
         y,
-        posteriors=posteriors,
-        joint_posterior=joint_posterior,
+        log_posteriors=log_posteriors,
+        log_joint_posterior=log_joint_posterior,
         glm_params=previous_state.glm_params,
         is_new_session=is_new_session,
         solver_run=solver_run,
@@ -909,7 +937,7 @@ def em_glm_hmm(
     )
 
     # final posterior calculation
-    (posteriors, joint_posterior, _, _, _, _) = forward_backward(
+    (log_posteriors, log_joint_posterior, _, _, _, _) = forward_backward(
         X,
         y,
         state.log_initial_prob,
@@ -921,8 +949,8 @@ def em_glm_hmm(
     )
 
     return (
-        posteriors,
-        joint_posterior,
+        jnp.exp(log_posteriors),
+        jnp.exp(log_joint_posterior),
         state.log_initial_prob,
         state.log_transition_matrix,
         state.glm_params,
