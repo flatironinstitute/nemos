@@ -26,13 +26,32 @@ class GLMHMMState(eqx.Module):
 
 
 def _add_prior(log_val: jnp.ndarray, offset: jnp.ndarray):
-    """Add prior offset in log-space."""
-    pos_result = jnp.logaddexp(log_val, jnp.log(jnp.maximum(offset, 1e-10)))
-    zero_result = log_val
-    neg_result = log_val + jnp.log1p(-jnp.abs(offset) * jnp.exp(-log_val))
+    """Add prior offset in log-space.
 
+    Computes log(exp(log_val) + offset) in a numerically stable way.
+
+    This function assumes offset >= 0, which corresponds to Dirichlet
+    prior parameters alpha >= 1.
+
+    Parameters
+    ----------
+    log_val :
+        Log of the value to which the offset is added.
+    offset :
+        The offset to add (e.g., alpha - 1 for Dirichlet prior).
+        Must be >= 0 (i.e., alpha >= 1).
+
+    Returns
+    -------
+    :
+        log(exp(log_val) + offset)
+    """
+    # For offset > 0: use logaddexp for numerical stability
+    # For offset = 0: return log_val unchanged
     result = jnp.where(
-        offset > 0, pos_result, jnp.where(offset == 0, zero_result, neg_result)
+        offset > 0,
+        jnp.logaddexp(log_val, jnp.log(jnp.maximum(offset, 1e-10))),
+        log_val,
     )
     return result
 
@@ -60,12 +79,19 @@ def _analytical_m_step_log_initial_prob(
     dirichlet_prior_alphas :
         The parameters of the Dirichlet prior for the initial distribution,
         shape ``(n_states,)``. If None, uses a flat (uniform) prior.
+        **Note**: All alpha values must be >= 1 for the current implementation.
 
     Returns
     -------
     log_initial_prob :
         Updated initial state log-probabilities, shape ``(n_states,)``.
         Normalized in log-space.
+
+    Notes
+    -----
+    The current implementation requires Dirichlet prior parameters alpha >= 1.
+    Support for sparse priors (0 < alpha < 1) may be added in a future version
+    using alternative optimization methods.
     """
     # Mask out non-session-start time points by setting to -inf
     masked_log_posteriors = jnp.where(
@@ -106,12 +132,19 @@ def _analytical_m_step_log_transition_prob(
     dirichlet_prior_alphas:
         The parameters of the Dirichlet prior for each row of the transition matrix,
         shape ``(n_states, n_states)``. If None, uses a flat (uniform) prior.
+        **Note**: All alpha values must be >= 1 for the current implementation.
 
     Returns
     -------
     log_transition_prob:
         Updated log transition probability matrix, shape ``(n_states, n_states)``.
         Each row is normalized in log-space.
+
+    Notes
+    -----
+    The current implementation requires Dirichlet prior parameters alpha >= 1.
+    Support for sparse priors (0 < alpha < 1) may be added in a future version
+    using alternative optimization methods.
     """
     if dirichlet_prior_alphas is not None:
         prior_offset = dirichlet_prior_alphas - 1
@@ -685,7 +718,9 @@ def run_m_step(
 
     Notes
     -----
-    In the current implementation all Dirichlet alpha coefficients must be greater than one.
+    The current implementation requires all Dirichlet prior parameters alpha >= 1.
+    Support for sparse priors (0 < alpha < 1) may be added in a future version
+    using alternative optimization methods such as proximal gradient descent.
     """
 
     # Update Initial state probability Eq. 13.18
