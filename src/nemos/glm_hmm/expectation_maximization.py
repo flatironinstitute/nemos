@@ -95,7 +95,12 @@ def _analytical_m_step_transition_prob(
 
 
 def compute_xi_log(
-    log_alphas, log_betas, log_conditionals, log_normalization, is_new_session, log_transition_prob
+    log_alphas,
+    log_betas,
+    log_conditional_prob,
+    log_normalization,
+    is_new_session,
+    log_transition_prob,
 ):
     """
     Compute the sum of the joint posterior (xi) over consecutive latent states in log-space.
@@ -109,7 +114,7 @@ def compute_xi_log(
         Log forward messages, shape ``(n_time_bins, n_states)``
     log_betas :
         Log backward messages, shape ``(n_time_bins, n_states)``.
-    log_conditionals :
+    log_conditional_prob :
         Log observation likelihoods log p(y_t | z_t), shape ``(n_time_bins, n_states)``.
     log_normalization :
         Log normalization constants from forward pass, shape ``(n_time_bins,)``.
@@ -132,12 +137,15 @@ def compute_xi_log(
     norm_log_alpha = log_alphas[:-1] - log_normalization[1:, jnp.newaxis]
 
     # mask out steps where t is a new session
-    norm_log_alpha = jnp.where(is_new_session[1:, jnp.newaxis], -jnp.inf, norm_log_alpha)
+    norm_log_alpha = jnp.where(
+        is_new_session[1:, jnp.newaxis], -jnp.inf, norm_log_alpha
+    )
 
     # Compute xi sum in one matmul
     log_xi_sum = jax.scipy.special.logsumexp(
-        norm_log_alpha.T[..., jnp.newaxis] + (log_conditionals[1:] + log_betas[1:])[jnp.newaxis],
-        axis=1
+        norm_log_alpha.T[..., jnp.newaxis]
+        + (log_conditional_prob[1:] + log_betas[1:])[jnp.newaxis],
+        axis=1,
     )
 
     return log_xi_sum + log_transition_prob
@@ -322,11 +330,11 @@ def backward_pass(
         # Initialize with log(ones) = zeros
         return jnp.zeros_like(log_posterior)
 
-    def backward_step(log_posterior, log_beta, log_normalization):
+    def backward_step(log_posterior, log_betas, log_normalization):
         # Normalize (log of Equation 13.62)
         return (
             jax.scipy.special.logsumexp(
-                log_transition_prob + (log_posterior + log_beta)[None, :], axis=1
+                log_transition_prob + (log_posterior + log_betas)[None, :], axis=1
             )
             - log_normalization
         )

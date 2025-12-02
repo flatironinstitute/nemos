@@ -14,13 +14,14 @@ from nemos.glm_hmm.expectation_maximization import (
     GLMHMMState,
     backward_pass,
     check_log_likelihood_increment,
+    compute_xi_log,
     em_glm_hmm,
     forward_backward,
     forward_pass,
     hmm_negative_log_likelihood,
     max_sum,
     prepare_likelihood_func,
-    run_m_step, compute_xi_log,
+    run_m_step,
 )
 from nemos.observation_models import BernoulliObservations, PoissonObservations
 from nemos.third_party.jaxopt.jaxopt import LBFGS
@@ -891,7 +892,9 @@ class TestMStep:
         log_alphas, log_norm = forward_pass(
             np.log(initial_prob), np.log(transition_prob), log_conditionals, new_sess
         )
-        log_betas = backward_pass(np.log(transition_prob), log_conditionals, log_norm, new_sess)
+        log_betas = backward_pass(
+            np.log(transition_prob), log_conditionals, log_norm, new_sess
+        )
 
         # xis are a sum of the ones over valid entires
         log_xis = compute_xi_log(
@@ -1820,7 +1823,9 @@ class TestConvergence:
 
         obs = BernoulliObservations()
         likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
-            False, obs.log_likelihood, obs._negative_log_likelihood,
+            False,
+            obs.log_likelihood,
+            obs._negative_log_likelihood,
         )
 
         def partial_hmm_negative_log_likelihood(
@@ -1881,7 +1886,9 @@ class TestConvergence:
 
         obs = BernoulliObservations()
         likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
-            False, obs.log_likelihood, obs._negative_log_likelihood,
+            False,
+            obs.log_likelihood,
+            obs._negative_log_likelihood,
         )
 
         def partial_hmm_negative_log_likelihood(
@@ -2080,7 +2087,9 @@ class TestConvergence:
 
         obs = BernoulliObservations()
         likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
-            False, obs.log_likelihood, obs._negative_log_likelihood,
+            False,
+            obs.log_likelihood,
+            obs._negative_log_likelihood,
         )
 
         def partial_hmm_negative_log_likelihood(
@@ -2149,7 +2158,9 @@ class TestConvergence:
 
         obs = BernoulliObservations()
         likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
-            False, obs.log_likelihood, obs._negative_log_likelihood,
+            False,
+            obs.log_likelihood,
+            obs._negative_log_likelihood,
         )
 
         def partial_hmm_negative_log_likelihood(
@@ -2388,7 +2399,9 @@ class TestCompilation:
 
         obs = BernoulliObservations()
         likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
-            False, obs.log_likelihood, obs._negative_log_likelihood,
+            False,
+            obs.log_likelihood,
+            obs._negative_log_likelihood,
         )
 
         def partial_hmm_negative_log_likelihood(
