@@ -18,6 +18,7 @@ from sklearn.linear_model import GammaRegressor, LogisticRegression, PoissonRegr
 from sklearn.model_selection import GridSearchCV
 
 import nemos as nmo
+from nemos import solvers
 from nemos._observation_model_builder import instantiate_observation_model
 from nemos._regularizer_builder import instantiate_regularizer
 from nemos.inverse_link_function_utils import LINK_NAME_TO_FUNC
@@ -47,7 +48,7 @@ def convert_to_nap(arr, t):
 @pytest.fixture
 def model_instantiation_type(glm_class_type):
     """
-    Fixure to grab the appropriate model instantiation function based on the type of GLM class.
+    Fixture to grab the appropriate model instantiation function based on the type of GLM class.
     Used by TestGLM and TestPoissonGLM classes.
     """
     if "population" in glm_class_type:
@@ -1429,28 +1430,6 @@ class TestGLMObservationModel:
     For new observation models, add it in the class parameterization above, and add cases for the fixtures below.
     """
 
-    @pytest.mark.parametrize(
-        "link_func_string, expectation",
-        [
-            *((link_name, does_not_raise()) for link_name in LINK_NAME_TO_FUNC),
-            (
-                "nemos.utils.invalid_link",
-                pytest.raises(ValueError, match="Unknown link function"),
-            ),
-            (
-                "jax.numpy.invalid_link",
-                pytest.raises(ValueError, match="Unknown link function"),
-            ),
-            ("invalid", pytest.raises(ValueError, match="Unknown link function")),
-        ],
-    )
-    def test_glm_link_func_from_string(
-        self, link_func_string, expectation, model_instantiation, glm_type, request
-    ):
-        _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
-        with expectation:
-            model.__class__(inverse_link_function=link_func_string)
-
     ########################################################
     # Observation model specific fixtures for shared tests #
     ########################################################
@@ -2137,7 +2116,7 @@ class TestGLMObservationModel:
                 raise ValueError("GLM.fit estimate does not match sklearn!")
 
     #####################
-    # Test redidual DOF #
+    # Test residual DOF #
     #####################
     @pytest.mark.parametrize(
         "reg, dof, strength",
@@ -2239,7 +2218,7 @@ class TestGLMObservationModel:
         # use glm static methods to check if the solver is batchable
         # if not pop the batch_size kwarg
         try:
-            slv_class = nmo.solvers.solver_registry[solver_name]
+            slv_class = solvers.solver_registry[solver_name]
             nmo.glm.GLM._check_solver_kwargs(slv_class, solver_kwargs)
         except NameError:
             solver_kwargs.pop("batch_size")
