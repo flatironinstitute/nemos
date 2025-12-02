@@ -1471,12 +1471,12 @@ class GaussianObservations(Observations):
         :
             The Gaussian log-likelihood. Shape (1,).
         """
-        norm = -0.5 * y.shape[0] * jnp.log(2 * jnp.pi * scale)
-        resid = y - predicted_rate
-        nll = -(0.5 / scale) * self._negative_log_likelihood(
-            y, predicted_rate, aggregate_sample_scores
+        norm = -0.5 * jnp.log(2 * jnp.pi * scale)
+        return aggregate_sample_scores(
+            norm - (0.5 / scale) * self._negative_log_likelihood(
+                y, predicted_rate, lambda x: x
+            )
         )
-        return norm + nll
 
     def sample_generator(
         self,

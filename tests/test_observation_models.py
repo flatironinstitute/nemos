@@ -563,6 +563,7 @@ class TestCommonObservationModels:
 
     @pytest.mark.parametrize("score_type", ["pseudo-r2-McFadden", "pseudo-r2-Cohen"])
     @pytest.mark.parametrize("shape", [(10,), (10, 5), (10, 5, 2)])
+    @pytest.mark.requires_x64
     def test_aggregation_score_pr2(
         self,
         score_type,
