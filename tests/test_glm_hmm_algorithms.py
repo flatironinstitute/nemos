@@ -1432,8 +1432,8 @@ class TestEMAlgorithm:
         ) = forward_backward(
             X[:, 1:],  # drop intercept
             y,
-            initial_prob,
-            transition_prob,
+            jnp.log(initial_prob),
+            jnp.log(transition_prob),
             (coef, intercept),
             log_likelihood_func=likelihood_func,
             inverse_link_function=obs.default_inverse_link_function,
@@ -1516,8 +1516,8 @@ class TestEMAlgorithm:
         ) = forward_backward(
             X[:, 1:],  # drop intercept
             y,
-            init_pb,
-            transition_pb,
+            jnp.log(init_pb),
+            jnp.log(transition_pb),
             (proj_weights[1:], proj_weights[:1]),
             log_likelihood_func=likelihood_func,
             inverse_link_function=obs.default_inverse_link_function,
@@ -2485,8 +2485,8 @@ class TestPytreeSupport:
         ) = forward_backward(
             X,
             y,
-            initial_prob,
-            transition_prob,
+            jnp.log(initial_prob),
+            jnp.log(transition_prob),
             (coef, intercept),
             obs.default_inverse_link_function,
             likelihood_func,
@@ -2497,8 +2497,8 @@ class TestPytreeSupport:
         posteriors, joint_posterior, ll, ll_norm, alphas, betas = forward_backward(
             X_tree,
             y,
-            initial_prob,
-            transition_prob,
+            jnp.log(initial_prob),
+            jnp.log(transition_prob),
             (coef_tree, intercept),
             obs.default_inverse_link_function,
             likelihood_func,
@@ -2590,9 +2590,8 @@ class TestPytreeSupport:
         obs = PoissonObservations()
         likelihood_func, vmap_nll = prepare_likelihood_func(
             is_population_glm=False,
-            likelihood_func=obs.log_likelihood,
+            log_likelihood_func=obs.log_likelihood,
             negative_log_likelihood_func=obs._negative_log_likelihood,
-            is_log=True,
         )
 
         # Create solver using GLM class
