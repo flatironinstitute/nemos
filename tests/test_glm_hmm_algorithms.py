@@ -803,7 +803,7 @@ class TestMStep:
             np.log(xis),
             (coef, intercept),
             is_new_session=new_sess.astype(bool),
-            solver_run=solver.run,
+            m_step_fn_glm_params=solver.run,
         )
 
         # Convert back to probability space for comparison with reference
@@ -924,7 +924,7 @@ class TestMStep:
             np.log(xis),
             (np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
-            solver_run=solver.run,
+            m_step_fn_glm_params=solver.run,
         )
         glm = GLM(
             observation_model=obs, solver_name="LBFGS", solver_kwargs={"tol": 10**-8}
@@ -985,7 +985,7 @@ class TestMStep:
             log_xis,
             (np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
-            solver_run=solver.run,
+            m_step_fn_glm_params=solver.run,
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
@@ -1064,7 +1064,7 @@ class TestMStep:
             log_xis,
             (np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
-            solver_run=solver.run,
+            m_step_fn_glm_params=solver.run,
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
@@ -1107,7 +1107,7 @@ class TestMStep:
             log_xis,
             (np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
-            solver_run=solver.run,
+            m_step_fn_glm_params=solver.run,
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
@@ -1146,7 +1146,7 @@ class TestMStep:
             log_xis,
             (np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
-            solver_run=solver.run,
+            m_step_fn_glm_params=solver.run,
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
@@ -1162,7 +1162,7 @@ class TestMStep:
             log_xis,
             (np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
-            solver_run=solver.run,
+            m_step_fn_glm_params=solver.run,
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=None,
         )
@@ -1206,7 +1206,7 @@ class TestMStep:
             log_xis,
             (np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
-            solver_run=solver.run,
+            m_step_fn_glm_params=solver.run,
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
@@ -1222,7 +1222,7 @@ class TestMStep:
             log_xis,
             (np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
-            solver_run=solver.run,
+            m_step_fn_glm_params=solver.run,
             dirichlet_prior_alphas_transition=None,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
@@ -1301,7 +1301,7 @@ class TestMStep:
             np.log(xis),
             (coef, intercept),
             is_new_session=new_sess.astype(bool),
-            solver_run=solver.run,
+            m_step_fn_glm_params=solver.run,
             dirichlet_prior_alphas_init_prob=dirichlet_prior_initial_prob,
             dirichlet_prior_alphas_transition=dirichlet_prior_transition_prob,
         )
@@ -1426,7 +1426,7 @@ class TestEMAlgorithm:
             ),
             inverse_link_function=inverse_link_function,
             likelihood_func=likelihood_func,
-            solver_run=solver_run,
+            m_step_fn_glm_params=solver_run,
         )
 
         (
@@ -1567,7 +1567,7 @@ class TestEMAlgorithm:
             glm_params=(proj_weights[1:], proj_weights[:1]),
             inverse_link_function=inverse_link_function,
             likelihood_func=likelihood_func,
-            solver_run=solver_run,
+            m_step_fn_glm_params=solver_run,
             tol=10**-10,
         )
         (
@@ -1676,7 +1676,7 @@ def test_e_and_m_step_for_population(generate_data_multi_state_population):
         log_xis,
         (np.zeros_like(coef), np.zeros_like(intercept)),
         is_new_session=new_sess.astype(bool),
-        solver_run=solver.run,
+        m_step_fn_glm_params=solver.run,
         dirichlet_prior_alphas_transition=alphas_transition,
         dirichlet_prior_alphas_init_prob=alphas_init,
     )
@@ -1872,7 +1872,7 @@ class TestConvergence:
             glm_params=(coef, intercept),
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
-            solver_run=glm._solver_run,
+            m_step_fn_glm_params=glm._solver_run,
             check_convergence=always_converge,
             maxiter=100,
             tol=1e-8,
@@ -1935,7 +1935,7 @@ class TestConvergence:
             glm_params=(coef, intercept),
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
-            solver_run=glm._solver_run,
+            m_step_fn_glm_params=glm._solver_run,
             check_convergence=never_converge,
             maxiter=maxiter,
             tol=1e-8,
@@ -1993,7 +1993,7 @@ class TestConvergence:
             glm_params=(coef, intercept),
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
-            solver_run=glm._solver_run,
+            m_step_fn_glm_params=glm._solver_run,
             maxiter=maxiter,
             tol=tol,
         )
@@ -2062,7 +2062,7 @@ class TestConvergence:
             glm_params=(coef, intercept),
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
-            solver_run=glm._solver_run,
+            m_step_fn_glm_params=glm._solver_run,
             maxiter=maxiter,
             tol=tol,
         )
@@ -2139,7 +2139,7 @@ class TestConvergence:
                 glm_params=(coef, intercept),
                 inverse_link_function=obs.default_inverse_link_function,
                 likelihood_func=likelihood_func,
-                solver_run=glm._solver_run,
+                m_step_fn_glm_params=glm._solver_run,
                 maxiter=10,
                 tol=tol,
             )
@@ -2206,7 +2206,7 @@ class TestConvergence:
             glm_params=(coef, intercept),
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
-            solver_run=glm._solver_run,
+            m_step_fn_glm_params=glm._solver_run,
             check_convergence=check_conv_5_iter,
             maxiter=100,
             tol=1e-10,  # Very tight tolerance, but will stop at 5 iterations
@@ -2246,7 +2246,7 @@ class TestCompilation:
             log_xis,
             (np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
-            solver_run=solver.run,
+            m_step_fn_glm_params=solver.run,
             dirichlet_prior_alphas_transition=None,
             dirichlet_prior_alphas_init_prob=None,
         )
@@ -2262,7 +2262,7 @@ class TestCompilation:
             log_xis,
             (np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
-            solver_run=solver.run,
+            m_step_fn_glm_params=solver.run,
             dirichlet_prior_alphas_transition=None,
             dirichlet_prior_alphas_init_prob=None,
         )
@@ -2277,7 +2277,7 @@ class TestCompilation:
             log_xis,
             (np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
-            solver_run=solver.run,
+            m_step_fn_glm_params=solver.run,
             dirichlet_prior_alphas_transition=np.ones(transition_prob.shape),
             dirichlet_prior_alphas_init_prob=np.ones(initial_prob.shape),
         )
@@ -2292,7 +2292,7 @@ class TestCompilation:
             log_xis,
             (np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
-            solver_run=solver.run,
+            m_step_fn_glm_params=solver.run,
             dirichlet_prior_alphas_transition=2 * np.ones(transition_prob.shape),
             dirichlet_prior_alphas_init_prob=2 * np.ones(initial_prob.shape),
         )
@@ -2347,7 +2347,7 @@ class TestCompilation:
             glm_params=(coef, intercept),
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
-            solver_run=glm._solver_run,
+            m_step_fn_glm_params=glm._solver_run,
             maxiter=5,
             tol=1e-8,
         )
@@ -2368,7 +2368,7 @@ class TestCompilation:
             glm_params=(coef, intercept),
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
-            solver_run=glm._solver_run,
+            m_step_fn_glm_params=glm._solver_run,
             maxiter=5,
             tol=1e-8,
         )
@@ -2395,7 +2395,7 @@ class TestCompilation:
             glm_params=(coef_new, intercept_new),
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
-            solver_run=glm._solver_run,
+            m_step_fn_glm_params=glm._solver_run,
             maxiter=5,
             tol=1e-8,
         )

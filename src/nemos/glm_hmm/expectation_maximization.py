@@ -673,7 +673,7 @@ def run_m_step(
     log_joint_posterior: Array,
     glm_params: Tuple[Array, Array],
     is_new_session: Array,
-    solver_run: Callable[[Tuple[Array, Array], Array, Array, Array], Array],
+    m_step_fn_glm_params: Callable[[Tuple[Array, Array], Array, Array, Array], Array],
     dirichlet_prior_alphas_init_prob: Array | None = None,
     dirichlet_prior_alphas_transition: Array | None = None,
 ) -> Tuple[Tuple[Array, Array], Array, Array, Any]:
@@ -697,7 +697,7 @@ def run_m_step(
         shape ``(n_states,)`` for single observation fits and ``(n_states, n_neurons)`` for population fits.
     is_new_session:
         Boolean mask marking the first observation of each session. Shape ``(n_samples,)``.
-    solver_run:
+    m_step_fn_glm_params:
         Callable performing a full optimization loop for the GLM weights.
         Note that the prior for the projection weights is baked in the solver run.
     dirichlet_prior_alphas_init_prob:
@@ -734,7 +734,7 @@ def run_m_step(
     )
 
     # Minimize negative log-likelihood to update GLM weights
-    optimized_projection_weights, state = solver_run(
+    optimized_projection_weights, state = m_step_fn_glm_params(
         glm_params, X, y, jnp.exp(log_posteriors)
     )
 
@@ -802,7 +802,7 @@ def _em_step(
     y: Array,
     inverse_link_function: Callable,
     likelihood_func: Callable,
-    solver_run: Callable,
+    m_step_fn_glm_params: Callable,
     is_new_session: Array,
 ) -> GLMHMMState:
     """Single EM iteration step."""
@@ -826,7 +826,7 @@ def _em_step(
         log_joint_posterior=log_joint_posterior,
         glm_params=previous_state.glm_params,
         is_new_session=is_new_session,
-        solver_run=solver_run,
+        m_step_fn_glm_params=m_step_fn_glm_params,
     )
 
     new_state = GLMHMMState(
@@ -883,7 +883,7 @@ def em_glm_hmm(
     glm_params: Tuple[Array, Array],
     inverse_link_function: Callable,
     likelihood_func: Callable,
-    solver_run: Callable,
+    m_step_fn_glm_params: Callable,
     is_new_session: Optional[Array] = None,
     maxiter: int = 10**3,
     tol: float = 1e-8,
@@ -912,7 +912,7 @@ def em_glm_hmm(
         Elementwise function mapping linear predictors to rates.
     likelihood_func:
         Function computing the log-likelihood.
-    solver_run:
+    m_step_fn_glm_params:
         Callable that runs the M step for the projection coefficients.
     is_new_session:
         Boolean mask for the first observation of each session.
@@ -956,7 +956,7 @@ def em_glm_hmm(
         y=y,
         inverse_link_function=inverse_link_function,
         likelihood_func=likelihood_func,
-        solver_run=solver_run,
+        solver_run=m_step_fn_glm_params,
         is_new_session=is_new_session,
     )
 
