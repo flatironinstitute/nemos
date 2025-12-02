@@ -13,14 +13,13 @@ from nemos.glm_hmm.expectation_maximization import (
     GLMHMMState,
     backward_pass,
     check_log_likelihood_increment,
-    compute_xi,
     em_glm_hmm,
     forward_backward,
     forward_pass,
     hmm_negative_log_likelihood,
     max_sum,
     prepare_likelihood_func,
-    run_m_step,
+    run_m_step, compute_xi_log,
 )
 from nemos.observation_models import BernoulliObservations, PoissonObservations
 from nemos.third_party.jaxopt.jaxopt import LBFGS
@@ -678,14 +677,15 @@ class TestForwardBackward:
         np.testing.assert_array_almost_equal(np.zeros_like(log_betas), log_betas)
 
         # xis are a sum of the ones over valid entries
-        xis = compute_xi(
-            jnp.exp(log_alphas),
-            jnp.exp(log_betas),
-            jnp.exp(log_conditionals),
-            jnp.exp(log_norm),
+        log_xis = compute_xi_log(
+            log_alphas,
+            log_betas,
+            log_conditionals,
+            log_norm,
             new_sess,
-            transition_prob,
+            np.log(transition_prob),
         )
+        xis = jnp.exp(log_xis)
         np.testing.assert_array_almost_equal(
             np.array([[log_alphas.shape[0] - sum(new_sess)]]).astype(xis), xis
         )
@@ -892,15 +892,15 @@ class TestMStep:
         betas = backward_pass(transition_prob, conditionals, norm, new_sess)
 
         # xis are a sum of the ones over valid entires
-        xis = compute_xi(
-            alphas,
-            betas,
-            conditionals,
-            norm,
+        log_xis = compute_xi_log(
+            np.log(alphas),
+            np.log(betas),
+            np.log(conditionals),
+            np.log(norm),
             new_sess,
-            transition_prob,
+            np.log(transition_prob),
         )
-
+        xis = np.exp(log_xis)
         partial_hmm_negative_log_likelihood, solver = (
             prepare_partial_hmm_nll_single_neuron(obs)
         )

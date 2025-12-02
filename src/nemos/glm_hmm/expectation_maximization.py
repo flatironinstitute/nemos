@@ -94,34 +94,34 @@ def _analytical_m_step_transition_prob(
     return new_transition_prob
 
 
-def compute_xi(
-    alphas, betas, conditionals, normalization, is_new_session, transition_prob
+def compute_xi_log(
+    log_alphas, log_betas, log_conditionals, log_normalization, is_new_session, log_transition_prob
 ):
     """
-    Compute the sum of the joint posterior (xi) over consecutive latent states.
+    Compute the sum of the joint posterior (xi) over consecutive latent states in log-space.
 
     Compute the sum of the joint posterior (xis, eqn. 13.14 of [1]_) over samples, implementing
     the summation required in the eqn. 13.19 of [1]_.
 
     Parameters
     ----------
-    alphas :
-        Forward messages, shape ``(n_time_bins, n_states)``
-    betas :
-        Backward messages, shape ``(n_time_bins, n_states)``.
-    conditionals :
-        Observation likelihoods p(y_t | z_t), shape ``(n_time_bins, n_states)``.
-    normalization :
-        Normalization constants from forward pass, shape ``(n_time_bins,)``.
+    log_alphas :
+        Log forward messages, shape ``(n_time_bins, n_states)``
+    log_betas :
+        Log backward messages, shape ``(n_time_bins, n_states)``.
+    log_conditionals :
+        Log observation likelihoods log p(y_t | z_t), shape ``(n_time_bins, n_states)``.
+    log_normalization :
+        Log normalization constants from forward pass, shape ``(n_time_bins,)``.
     is_new_session :
         Boolean array, True at start of new sessions, shape ``(n_time_bins,)``.
-    transition_prob :
-        Transition probability matrix, shape ``(n_states, n_states)``.
+    log_transition_prob :
+        Log transition probability matrix, shape ``(n_states, n_states)``.
 
     Returns
     -------
     :
-        Expected joint posteriors between time steps, shape ``(n_states, n_states)``.
+        Log expected joint posteriors between time steps, shape ``(n_states, n_states)``.
 
     References
     ----------
@@ -129,15 +129,18 @@ def compute_xi(
 
     """
     # shift alpha so that alpha[t-1] aligns with beta[t]
-    norm_alpha = alphas[:-1] / normalization[1:, jnp.newaxis]
+    norm_log_alpha = log_alphas[:-1] - log_normalization[1:, jnp.newaxis]
 
     # mask out steps where t is a new session
-    norm_alpha = jnp.where(is_new_session[1:, jnp.newaxis], 0.0, norm_alpha)
+    norm_log_alpha = jnp.where(is_new_session[1:, jnp.newaxis], -jnp.inf, norm_log_alpha)
 
     # Compute xi sum in one matmul
-    xi_sum = norm_alpha.T @ (conditionals[1:] * betas[1:])
+    log_xi_sum = jax.scipy.special.logsumexp(
+        norm_log_alpha.T[..., jnp.newaxis] + (log_conditionals[1:] + log_betas[1:])[jnp.newaxis],
+        axis=1
+    )
 
-    return xi_sum * transition_prob
+    return log_xi_sum + log_transition_prob
 
 
 def forward_pass(
@@ -521,14 +524,15 @@ def forward_backward(
 
     # xis Equations 13.43 and 13.65 from [1]
     # Posterior over consecutive states summed across time steps
-    joint_posterior = compute_xi(
-        jnp.exp(log_alphas),
-        jnp.exp(log_betas),
-        jnp.exp(log_conditionals),
-        jnp.exp(log_normalization),
+    log_joint_posterior = compute_xi_log(
+        log_alphas,
+        log_betas,
+        log_conditionals,
+        log_normalization,
         is_new_session,
-        jnp.exp(log_transition_prob),
+        log_transition_prob,
     )
+    joint_posterior = jnp.exp(log_joint_posterior)
     return (
         posteriors,
         joint_posterior,
