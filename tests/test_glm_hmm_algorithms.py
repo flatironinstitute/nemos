@@ -795,8 +795,8 @@ class TestMStep:
 
         (
             optimized_projection_weights_nemos,
-            new_initial_prob_nemos,
-            new_transition_prob_nemos,
+            log_initial_prob_nemos,
+            log_transition_prob_nemos,
             state,
         ) = run_m_step(
             X[:, 1:],  # drop intercept column
@@ -807,6 +807,10 @@ class TestMStep:
             is_new_session=new_sess.astype(bool),
             solver_run=solver.run,
         )
+
+        # Convert back to probability space for comparison with reference
+        new_initial_prob_nemos = np.exp(log_initial_prob_nemos)
+        new_transition_prob_nemos = np.exp(log_transition_prob_nemos)
 
         n_ll_nemos = partial_hmm_negative_log_likelihood(
             optimized_projection_weights_nemos,
@@ -912,8 +916,8 @@ class TestMStep:
 
         (
             optimized_projection_weights_nemos,
-            new_initial_prob_nemos,
-            new_transition_prob_nemos,
+            log_initial_prob_nemos,
+            log_transition_prob_nemos,
             state,
         ) = run_m_step(
             X,
@@ -936,17 +940,17 @@ class TestMStep:
             glm.intercept_, optimized_projection_weights_nemos[1].flatten()
         )
 
-        # test that the transition and initial probabilities are all ones.
+        # test that the transition and initial probabilities are all ones (log(1) = 0).
         np.testing.assert_array_equal(
-            new_initial_prob_nemos, np.ones_like(initial_prob)
+            log_initial_prob_nemos, np.zeros_like(initial_prob)
         )
         np.testing.assert_array_equal(
-            new_transition_prob_nemos, np.ones_like(new_transition_prob_nemos)
+            log_transition_prob_nemos, np.zeros_like(log_transition_prob_nemos)
         )
 
         # check expected shapes
-        assert new_transition_prob_nemos.shape == (1, 1)
-        assert new_initial_prob_nemos.shape == (1,)
+        assert log_transition_prob_nemos.shape == (1, 1)
+        assert log_initial_prob_nemos.shape == (1,)
         assert optimized_projection_weights_nemos[0].shape == (2, 1)
         assert optimized_projection_weights_nemos[1].shape == (1,)
 
@@ -968,8 +972,8 @@ class TestMStep:
 
         (
             optimized_projection_weights_nemos,
-            new_initial_prob,
-            new_transition_prob,
+            log_initial_prob,
+            log_transition_prob,
             state,
         ) = run_m_step(
             X,
@@ -982,6 +986,10 @@ class TestMStep:
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
+
+        # Convert back to probability space for gradient checks
+        new_initial_prob = np.exp(log_initial_prob)
+        new_transition_prob = np.exp(log_transition_prob)
 
         lagrange_multiplier = -jax.grad(expected_log_likelihood_wrt_transitions)(
             new_transition_prob, xis, dirichlet_alphas=alphas_transition
@@ -1043,8 +1051,8 @@ class TestMStep:
 
         (
             optimized_projection_weights_nemos,
-            new_initial_prob,
-            new_transition_prob,
+            log_initial_prob,
+            log_transition_prob,
             state,
         ) = run_m_step(
             X,
@@ -1057,6 +1065,8 @@ class TestMStep:
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
+        # Convert back to probability space
+        new_initial_prob = np.exp(log_initial_prob)
         np.testing.assert_array_almost_equal(
             new_initial_prob, np.eye(new_initial_prob.shape[0])[state_idx]
         )
@@ -1084,8 +1094,8 @@ class TestMStep:
 
         (
             optimized_projection_weights_nemos,
-            new_initial_prob,
-            new_transition_prob,
+            log_initial_prob,
+            log_transition_prob,
             state,
         ) = run_m_step(
             X,
@@ -1098,6 +1108,9 @@ class TestMStep:
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
+        # Convert back to probability space
+        new_initial_prob = np.exp(log_initial_prob)
+        new_transition_prob = np.exp(log_transition_prob)
         np.testing.assert_array_almost_equal(
             new_transition_prob[row, :], np.eye(new_initial_prob.shape[0])[col]
         )
@@ -1275,8 +1288,8 @@ class TestMStep:
 
         (
             optimized_projection_weights_nemos,
-            new_initial_prob_nemos,
-            new_transition_prob_nemos,
+            log_initial_prob_nemos,
+            log_transition_prob_nemos,
             state,
         ) = run_m_step(
             X[:, 1:],  # drop intercept column
@@ -1289,6 +1302,10 @@ class TestMStep:
             dirichlet_prior_alphas_init_prob=dirichlet_prior_initial_prob,
             dirichlet_prior_alphas_transition=dirichlet_prior_transition_prob,
         )
+
+        # Convert back to probability space for comparison with reference
+        new_initial_prob_nemos = np.exp(log_initial_prob_nemos)
+        new_transition_prob_nemos = np.exp(log_transition_prob_nemos)
 
         # NLL with nemos input
         n_ll_nemos = partial_hmm_negative_log_likelihood(

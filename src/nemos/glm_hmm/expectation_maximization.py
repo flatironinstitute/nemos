@@ -646,10 +646,10 @@ def run_m_step(
     -------
     optimized_projection_weights:
         Updated projection weights after optimization.
-    new_initial_prob:
-        Updated initial state distribution.
-    new_transition_prob:
-        Updated transition matrix.
+    log_initial_prob:
+        Updated initial state distribution in log-space.
+    log_transition_prob:
+        Updated transition matrix in log-space.
     state:
         State returned by the solver.
 
@@ -671,7 +671,11 @@ def run_m_step(
     # Minimize negative log-likelihood to update GLM weights
     optimized_projection_weights, state = solver_run(glm_params, X, y, posteriors)
 
-    return optimized_projection_weights, new_initial_prob, new_transition_prob, state
+    # Convert to log-space for use in GLMHMMState
+    log_initial_prob = jnp.log(new_initial_prob)
+    log_transition_prob = jnp.log(new_transition_prob)
+
+    return optimized_projection_weights, log_initial_prob, log_transition_prob, state
 
 
 def prepare_likelihood_func(
@@ -752,7 +756,7 @@ def _em_step(
         is_new_session,
     )
 
-    glm_params_update, init_prob, trans_matrix, _ = run_m_step(
+    glm_params_update, log_init_prob, log_trans_matrix, _ = run_m_step(
         X,
         y,
         posteriors=posteriors,
@@ -763,8 +767,8 @@ def _em_step(
     )
 
     new_state = GLMHMMState(
-        log_initial_prob=jnp.log(init_prob),
-        log_transition_matrix=jnp.log(trans_matrix),
+        log_initial_prob=log_init_prob,
+        log_transition_matrix=log_trans_matrix,
         glm_params=glm_params_update,
         iterations=previous_state.iterations + 1,
         data_log_likelihood=new_log_like,
