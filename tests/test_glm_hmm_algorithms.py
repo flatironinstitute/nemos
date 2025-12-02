@@ -1820,7 +1820,7 @@ class TestConvergence:
 
         obs = BernoulliObservations()
         likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
-            False, obs.log_likelihood, obs._negative_log_likelihood, is_log=True
+            False, obs.log_likelihood, obs._negative_log_likelihood,
         )
 
         def partial_hmm_negative_log_likelihood(
@@ -1881,7 +1881,7 @@ class TestConvergence:
 
         obs = BernoulliObservations()
         likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
-            False, obs.log_likelihood, obs._negative_log_likelihood, is_log=True
+            False, obs.log_likelihood, obs._negative_log_likelihood,
         )
 
         def partial_hmm_negative_log_likelihood(
@@ -1937,7 +1937,7 @@ class TestConvergence:
 
         obs = BernoulliObservations()
         likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
-            False, obs.log_likelihood, obs._negative_log_likelihood, is_log=True
+            False, obs.log_likelihood, obs._negative_log_likelihood
         )
 
         def partial_hmm_negative_log_likelihood(
@@ -1999,7 +1999,7 @@ class TestConvergence:
 
         obs = BernoulliObservations()
         likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
-            False, obs.log_likelihood, obs._negative_log_likelihood, is_log=True
+            False, obs.log_likelihood, obs._negative_log_likelihood
         )
 
         def partial_hmm_negative_log_likelihood(
@@ -2080,7 +2080,7 @@ class TestConvergence:
 
         obs = BernoulliObservations()
         likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
-            False, obs.log_likelihood, obs._negative_log_likelihood, is_log=True
+            False, obs.log_likelihood, obs._negative_log_likelihood,
         )
 
         def partial_hmm_negative_log_likelihood(
@@ -2149,7 +2149,7 @@ class TestConvergence:
 
         obs = BernoulliObservations()
         likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
-            False, obs.log_likelihood, obs._negative_log_likelihood, is_log=True
+            False, obs.log_likelihood, obs._negative_log_likelihood,
         )
 
         def partial_hmm_negative_log_likelihood(
@@ -2286,7 +2286,7 @@ class TestCompilation:
 
         obs = BernoulliObservations()
         likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
-            False, obs.log_likelihood, obs._negative_log_likelihood, is_log=True
+            False, obs.log_likelihood, obs._negative_log_likelihood
         )
 
         def partial_hmm_negative_log_likelihood(
@@ -2388,7 +2388,7 @@ class TestCompilation:
 
         obs = BernoulliObservations()
         likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
-            False, obs.log_likelihood, obs._negative_log_likelihood, is_log=True
+            False, obs.log_likelihood, obs._negative_log_likelihood,
         )
 
         def partial_hmm_negative_log_likelihood(
@@ -2470,9 +2470,8 @@ class TestPytreeSupport:
         obs = PoissonObservations()
         likelihood_func, _ = prepare_likelihood_func(
             is_population_glm=False,
-            likelihood_func=obs.log_likelihood,
+            log_likelihood_func=obs.log_likelihood,
             negative_log_likelihood_func=obs._negative_log_likelihood,
-            is_log=True,
         )
 
         # Test with standard arrays (reference)
