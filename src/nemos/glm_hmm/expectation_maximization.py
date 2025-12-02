@@ -725,7 +725,7 @@ def _em_step(
     """Single EM iteration step."""
     previous_state = carry
 
-    (posteriors, joint_posterior, _, new_log_like, alphas, _) = forward_backward(
+    (posteriors, joint_posterior, _, new_log_like, _, _) = forward_backward(
         X,
         y,
         previous_state.initial_prob,
