@@ -7,10 +7,10 @@ from .observation_models import (
 )
 
 AVAILABLE_OBSERVATION_MODELS = [
-    # "Bernoulli",
-    # "NegativeBinomial",
-    # "Gamma",
-    # "Poisson",
+    "Bernoulli",
+    "NegativeBinomial",
+    "Gamma",
+    "Poisson",
     "Gaussian",
 ]
 
