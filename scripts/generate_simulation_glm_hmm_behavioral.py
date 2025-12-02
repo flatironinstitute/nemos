@@ -241,7 +241,6 @@ def fit_glm_hmm_with_em(
         is_population_glm,
         observation_model.log_likelihood,
         observation_model._negative_log_likelihood,
-        is_log=True,
     )
     inverse_link_function = observation_model.default_inverse_link_function
 

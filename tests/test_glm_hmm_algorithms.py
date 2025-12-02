@@ -6,6 +6,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 from hmmlearn import hmm
+from numba.cpython.mathimpl import log_impl
 
 from nemos.fetch import fetch_data
 from nemos.glm import GLM
@@ -23,6 +24,7 @@ from nemos.glm_hmm.expectation_maximization import (
 )
 from nemos.observation_models import BernoulliObservations, PoissonObservations
 from nemos.third_party.jaxopt.jaxopt import LBFGS
+from scripts.generate_simulation_glm_hmm_behavioral import log_likelihoods
 
 
 def viterbi_with_hmmlearn(
@@ -878,25 +880,25 @@ class TestMStep:
         initial_prob, transition_prob, coef, intercept, X, rate, y = single_state_inputs
         obs = PoissonObservations()
 
-        likelihood = jax.vmap(
-            lambda x, z: obs.likelihood(x, z, aggregate_sample_scores=lambda w: w),
+        log_likelihood = jax.vmap(
+            lambda x, z: obs.log_likelihood(x, z, aggregate_sample_scores=lambda w: w),
             in_axes=(None, 1),
             out_axes=1,
         )
-        conditionals = likelihood(y, rate)
+        log_conditionals = log_likelihood(y, rate)
         new_sess = np.zeros(10)
         new_sess[0] = 1
-        alphas, norm = forward_pass(
-            initial_prob, transition_prob, conditionals, new_sess
+        log_alphas, log_norm = forward_pass(
+            np.log(initial_prob), np.log(transition_prob), log_conditionals, new_sess
         )
-        betas = backward_pass(transition_prob, conditionals, norm, new_sess)
+        log_betas = backward_pass(np.log(transition_prob), log_conditionals, log_norm, new_sess)
 
         # xis are a sum of the ones over valid entires
         log_xis = compute_xi_log(
-            np.log(alphas),
-            np.log(betas),
-            np.log(conditionals),
-            np.log(norm),
+            log_alphas,
+            log_betas,
+            log_conditionals,
+            log_norm,
             new_sess,
             np.log(transition_prob),
         )
@@ -913,7 +915,7 @@ class TestMStep:
         ) = run_m_step(
             X,
             y,
-            alphas * betas,
+            np.exp(log_alphas + log_betas),
             xis,
             (np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
@@ -1357,7 +1359,6 @@ class TestEMAlgorithm:
             is_population_glm,
             obs.log_likelihood,
             obs._negative_log_likelihood,
-            is_log=True,
         )
         inverse_link_function = obs.default_inverse_link_function
 
@@ -1471,7 +1472,6 @@ class TestEMAlgorithm:
             is_population_glm,
             obs.log_likelihood,
             obs._negative_log_likelihood,
-            is_log=True,
         )
         inverse_link_function = obs.default_inverse_link_function
 
@@ -1511,8 +1511,8 @@ class TestEMAlgorithm:
             joint_posterior_noisy_params,
             log_likelihood_noisy_params,
             log_likelihood_norm_noisy_params,
-            alphas_noisy_params,
-            betas_noisy_params,
+            log_alphas_noisy_params,
+            log_betas_noisy_params,
         ) = forward_backward(
             X[:, 1:],  # drop intercept
             y,
@@ -1535,7 +1535,7 @@ class TestEMAlgorithm:
             learned_initial_prob,
             learned_transition,
             (learned_coef, learned_intercept),
-            _,
+            state,
         ) = em_glm_hmm(
             X[:, 1:],
             jnp.squeeze(y),
@@ -1545,7 +1545,7 @@ class TestEMAlgorithm:
             inverse_link_function=inverse_link_function,
             likelihood_func=likelihood_func,
             solver_run=solver_run,
-            tol=10**-10,
+            tol=10**-12,
         )
         (
             _,
