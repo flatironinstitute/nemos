@@ -955,6 +955,11 @@ class TestMStep:
 
     @pytest.mark.requires_x64
     def test_m_step_with_prior(self, generate_data_multi_state):
+        """Test M-step with Dirichlet priors (alpha > 1) using Lagrange multipliers.
+
+        This test uses gradient-based Lagrange multiplier optimality conditions,
+        which work well for interior solutions (alpha > 1).
+        """
         new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
             generate_data_multi_state
         )
@@ -2284,8 +2289,8 @@ class TestCompilation:
         _ = run_m_step(
             X,
             y,
-            np.log(gammas),
-            np.log(xis),
+            log_gammas,
+            log_xis,
             (np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             solver_run=solver.run,
