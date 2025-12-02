@@ -698,8 +698,9 @@ def run_m_step(
     is_new_session:
         Boolean mask marking the first observation of each session. Shape ``(n_samples,)``.
     m_step_fn_glm_params:
-        Callable performing a full optimization loop for the GLM weights.
-        Note that the prior for the projection weights is baked in the solver run.
+        Callable that performs the M-step update for GLM parameters (coefficients and intercepts).
+        Should have signature: ``f(glm_params, X, y, posteriors) -> (updated_params, state)``.
+        The regularizer/prior for the GLM parameters should be configured within this callable.
     dirichlet_prior_alphas_init_prob:
         Prior for the initial states, shape ``(n_states,)``.
     dirichlet_prior_alphas_transition:
@@ -913,7 +914,9 @@ def em_glm_hmm(
     likelihood_func:
         Function computing the log-likelihood.
     m_step_fn_glm_params:
-        Callable that runs the M step for the projection coefficients.
+        Callable that performs the M-step update for GLM parameters (coefficients and intercepts).
+        Should have signature: ``f(glm_params, X, y, posteriors) -> (updated_params, state)``.
+        Typically created by configuring a solver with the appropriate regularizer/prior.
     is_new_session:
         Boolean mask for the first observation of each session.
     maxiter:
@@ -956,7 +959,7 @@ def em_glm_hmm(
         y=y,
         inverse_link_function=inverse_link_function,
         likelihood_func=likelihood_func,
-        solver_run=m_step_fn_glm_params,
+        m_step_fn_glm_params=m_step_fn_glm_params,
         is_new_session=is_new_session,
     )
 
