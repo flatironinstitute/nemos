@@ -1545,7 +1545,7 @@ class TestEMAlgorithm:
             inverse_link_function=inverse_link_function,
             likelihood_func=likelihood_func,
             solver_run=solver_run,
-            tol=10**-12,
+            tol=10**-10,
         )
         (
             _,
