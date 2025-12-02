@@ -6,7 +6,6 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 from hmmlearn import hmm
-from numba.cpython.mathimpl import log_impl
 
 from nemos.fetch import fetch_data
 from nemos.glm import GLM
