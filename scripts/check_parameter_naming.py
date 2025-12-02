@@ -97,6 +97,7 @@ VALID_PAIRS = [
     {"solver_kwargs", "solver_init_kwargs"},
     {"unaccepted_name", "accepted_name"},
     {"fn", "fun"},
+    {"glm_params_init", "glm_params"},
 ]
 
 
