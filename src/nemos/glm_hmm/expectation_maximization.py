@@ -25,7 +25,7 @@ class GLMHMMState(eqx.Module):
     iterations: int
 
 
-def _analytical_m_step_log_initial_prob(
+def _analytical_m_step_initial_prob(
     posteriors: jnp.ndarray,
     is_new_session: jnp.ndarray,
     dirichlet_prior_alphas: Optional[jnp.ndarray] = None,
@@ -77,7 +77,7 @@ def _analytical_m_step_log_initial_prob(
     return initial_prob
 
 
-def _analytical_m_step_log_transition_prob(
+def _analytical_m_step_transition_prob(
     joint_posterior: jnp.ndarray,
     dirichlet_prior_alphas: Optional[jnp.ndarray] = None,
 ):
@@ -694,12 +694,12 @@ def run_m_step(
     joint_posterior = jnp.exp(log_joint_posterior)
 
     # Update Initial state probability Eq. 13.18
-    initial_prob = _analytical_m_step_log_initial_prob(
+    initial_prob = _analytical_m_step_initial_prob(
         posteriors,
         is_new_session=is_new_session,
         dirichlet_prior_alphas=dirichlet_prior_alphas_init_prob,
     )
-    transition_prob = _analytical_m_step_log_transition_prob(
+    transition_prob = _analytical_m_step_transition_prob(
         joint_posterior, dirichlet_prior_alphas=dirichlet_prior_alphas_transition
     )
 
