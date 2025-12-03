@@ -51,7 +51,7 @@ def _analytical_m_step_initial_prob(
 
     Returns
     -------
-    initial_prob :
+    new_initial_prob :
         Initial state probabilities, shape ``(n_states,)``.
         Normalized to sum to 1.
 
