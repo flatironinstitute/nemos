@@ -241,7 +241,6 @@ def fit_glm_hmm_with_em(
         is_population_glm,
         observation_model.log_likelihood,
         observation_model._negative_log_likelihood,
-        is_log=True,
     )
     inverse_link_function = observation_model.default_inverse_link_function
 
@@ -287,7 +286,7 @@ def fit_glm_hmm_with_em(
         ),
         inverse_link_function=inverse_link_function,
         likelihood_func=likelihood_func,
-        solver_run=solver_run,
+        m_step_fn_glm_params=solver_run,
         tol=10**-10,
     )
     (
@@ -303,7 +302,7 @@ def fit_glm_hmm_with_em(
         learned_initial_prob,
         learned_transition,
         (learned_coef, learned_intercept),
-        likelihood_func=likelihood_func,
+        log_likelihood_func=likelihood_func,
         inverse_link_function=observation_model.default_inverse_link_function,
     )
 
