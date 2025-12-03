@@ -62,8 +62,7 @@ def _analytical_m_step_initial_prob(
     using alternative optimization methods.
     """
     # Mask and sum
-    masked_posteriors = jnp.where(is_new_session[:, jnp.newaxis], posteriors, 0.0)
-    counts = jnp.sum(masked_posteriors, axis=0)
+    counts = jnp.sum(posteriors, axis=0, where=is_new_session[:, jnp.newaxis])
 
     # Add prior
     if dirichlet_prior_alphas is not None:
