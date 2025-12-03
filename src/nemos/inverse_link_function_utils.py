@@ -47,6 +47,8 @@ expit = _make_wrapper(
     jax.scipy.special.expit, "expit", "Expit (sigmoid) link function."
 )
 
+identity = _make_wrapper(lambda x: x, "identity", "Identity link function.")
+
 LINK_NAME_TO_FUNC = {
     "exp": exp,
     "expit": expit,
@@ -72,6 +74,7 @@ LINK_NAME_TO_FUNC = {
     "norm.cdf": norm_cdf,
     "one_over_x": one_over_x,
     "softplus": softplus,
+    "identity": lambda x: x,
 }
 
 

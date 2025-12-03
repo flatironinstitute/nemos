@@ -9,7 +9,7 @@ from numpy.typing import NDArray
 
 from . import utils
 from .base_class import Base
-from .inverse_link_function_utils import exp, logistic
+from .inverse_link_function_utils import exp, logistic, identity
 
 __all__ = [
     "PoissonObservations",
@@ -1402,7 +1402,7 @@ class GaussianObservations(Observations):
     @property
     def default_inverse_link_function(self):
         """Identity link function for Gaussian observations."""
-        return lambda x: x
+        return identity
 
     def _negative_log_likelihood(
         self,
