@@ -660,17 +660,7 @@ def hmm_negative_log_likelihood(
         nll = nll.sum(axis=1)  # sum over neurons
 
     # Compute dot products between log-likelihood terms and gammas
-    # Handle positive nll values
-    pos_mask = nll > 0
-    log_nll_pos = jnp.where(pos_mask, jnp.log(nll), -jnp.inf)
-    nll_pos = jnp.exp(jax.scipy.special.logsumexp(log_nll_pos + log_posteriors))
-
-    # Handle negative nll values
-    neg_mask = nll < 0
-    log_nll_neg = jnp.where(neg_mask, jnp.log(-nll), -jnp.inf)
-    nll_neg = -jnp.exp(jax.scipy.special.logsumexp(log_nll_neg + log_posteriors))
-
-    return nll_pos + nll_neg
+    return jnp.sum(nll * jnp.exp(log_posteriors))
 
 
 @partial(jax.jit, static_argnames=["m_step_fn_glm_params"])
