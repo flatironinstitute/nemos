@@ -25,40 +25,6 @@ class GLMHMMState(eqx.Module):
     iterations: int
 
 
-def _add_prior(log_val: jnp.ndarray, offset: jnp.ndarray):
-    """Add prior offset in log-space.
-
-    Computes log(exp(log_val) + offset) in a numerically stable way.
-
-    This function assumes offset >= 0, which corresponds to Dirichlet
-    prior parameters alpha >= 1.
-
-    Parameters
-    ----------
-    log_val :
-        Log of the value to which the offset is added.
-    offset :
-        The offset to add (e.g., alpha - 1 for Dirichlet prior).
-        Must be >= 0 (i.e., alpha >= 1).
-
-    Returns
-    -------
-    :
-        log(exp(log_val) + offset)
-    """
-    # For offset > 0: use logaddexp for numerical stability
-    # For offset = 0: return log_val unchanged
-    result = jnp.where(
-        offset > 0,
-        jnp.logaddexp(log_val, jnp.log(jnp.maximum(offset, 1e-10))),
-        log_val,
-    )
-    return result
-
-
-_vmap_add_prior = jax.vmap(_add_prior)
-
-
 def _analytical_m_step_log_initial_prob(
     log_posteriors: jnp.ndarray,
     is_new_session: jnp.ndarray,
@@ -93,23 +59,24 @@ def _analytical_m_step_log_initial_prob(
     Support for sparse priors (0 < alpha < 1) may be added in a future version
     using alternative optimization methods.
     """
-    # Mask out non-session-start time points by setting to -inf
-    masked_log_posteriors = jnp.where(
-        is_new_session[:, jnp.newaxis], log_posteriors, -jnp.inf
-    )
+    # Exponentiate posteriors
+    posteriors = jnp.exp(log_posteriors)
 
-    # Sum over time in log-space (logsumexp ignores -inf values)
-    log_tmp_initial_prob = jax.scipy.special.logsumexp(masked_log_posteriors, axis=0)
+    # Mask and sum
+    masked_posteriors = jnp.where(is_new_session[:, jnp.newaxis], posteriors, 0.0)
+    counts = jnp.sum(masked_posteriors, axis=0)
 
+    # Add prior
     if dirichlet_prior_alphas is not None:
-        prior_offset = dirichlet_prior_alphas - 1
-        log_numerator = _vmap_add_prior(log_tmp_initial_prob, prior_offset)
+        numerator = counts + (dirichlet_prior_alphas - 1)
     else:
-        log_numerator = log_tmp_initial_prob
+        numerator = counts
 
-    # Normalize in log-space
-    log_sum = jax.scipy.special.logsumexp(log_numerator)
-    log_initial_prob = log_numerator - log_sum
+    # Normalize
+    initial_prob = numerator / jnp.sum(numerator)
+
+    # Convert to log-space
+    log_initial_prob = jnp.log(initial_prob)
 
     return log_initial_prob
 
@@ -146,15 +113,21 @@ def _analytical_m_step_log_transition_prob(
     Support for sparse priors (0 < alpha < 1) may be added in a future version
     using alternative optimization methods.
     """
-    if dirichlet_prior_alphas is not None:
-        prior_offset = dirichlet_prior_alphas - 1
-        log_numerator = _vmap_add_prior(log_joint_posterior, prior_offset)
-    else:
-        log_numerator = log_joint_posterior
+    # Exponentiate
+    joint_posterior = jnp.exp(log_joint_posterior)
 
-    # Normalize each row in log-space
-    log_row_sums = jax.scipy.special.logsumexp(log_numerator, axis=1, keepdims=True)
-    log_transition_prob = log_numerator - log_row_sums
+    # Add prior
+    if dirichlet_prior_alphas is not None:
+        numerator = joint_posterior + (dirichlet_prior_alphas - 1)
+    else:
+        numerator = joint_posterior
+
+    # Normalize rows
+    row_sums = jnp.sum(numerator, axis=1, keepdims=True)
+    transition_prob = numerator / row_sums
+
+    # Convert to log-space
+    log_transition_prob = jnp.log(transition_prob)
 
     return log_transition_prob
 
