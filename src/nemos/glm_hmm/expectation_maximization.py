@@ -41,41 +41,22 @@ def _analytical_m_step_log_initial_prob(
     Parameters
     ----------
     log_posteriors :
-        Log posterior probabilities over latent states, shape ``(T, K)``.
+        Log posterior probabilities over latent states, shape ``(n_time_bins, n_states)``.
         These values are assumed to come from a numerically stable forward–
         backward pass.
     is_new_session :
         Boolean array indicating the time bins corresponding to session
-        boundaries, shape ``(T,)``. Only these positions contribute to the
+        boundaries, shape ``(n_time_bins,)``. Only these positions contribute to the
         initial state estimate.
     dirichlet_prior_alphas :
         Optional Dirichlet prior parameters for the initial distribution,
-        shape ``(K,)``. If None, a uniform prior is assumed.
+        shape ``(n_states,)``. If None, a uniform prior is assumed.
         **Note**: This implementation assumes alpha >= 1 for all states.
 
     Returns
     -------
     log_initial_prob :
-        Log of the updated initial state distribution, shape ``(K,)``.
-
-    Notes
-    -----
-    *Why no log-sum-exp is needed here?*
-
-    The posteriors used in the M-step have *already* been computed in a
-    numerically stable way during the E-step (forward–backward algorithm),
-    meaning they are true probabilities in [0, 1], not exponentials of large
-    or small magnitudes.
-
-    Because of this, exponentiating the log-posteriors is safe:
-    ``exp(log_posteriors) == posteriors`` without underflow/overflow.
-
-    The M-step for the initial distribution reduces to a normalized sum of
-    these posteriors at session boundaries, which is analytically stable and
-    does not require log-domain tricks like ``logsumexp``.
-
-    Support for sparse Dirichlet priors (0 < alpha < 1) may be added later,
-    which would require additional care with zero-count behavior.
+        Log of the updated initial state distribution, shape ``(n_states,)``.
     """
     # Exponentiate posteriors
     posteriors = jnp.exp(log_posteriors)
@@ -113,35 +94,19 @@ def _analytical_m_step_log_transition_prob(
     Parameters
     ----------
     log_joint_posterior :
-        Log expected counts of transitions from state i to j, shape ``(K, K)``.
+        Log expected counts of transitions from state i to j, shape ``(n_states, n_states)``.
         These values are typically obtained via ``logsumexp(log_xis)`` during
         the E-step.
     dirichlet_prior_alphas :
         Optional Dirichlet prior parameters for each row of the transition
-        matrix, shape ``(K, K)``. If None, a uniform prior is assumed.
+        matrix, shape ``(n_states, n_states)``. If None, a uniform prior is assumed.
         **Note**: This implementation assumes alpha >= 1.
 
     Returns
     -------
     log_transition_prob :
-        Log transition probability matrix, shape ``(K, K)``, where each row
+        Log transition probability matrix, shape ``(n_states, n_states)``, where each row
         is normalized to sum to 1 in probability space.
-
-    Notes
-    -----
-    *Why exponentiating log-joint posterior is safe?*
-
-    ``log_joint_posterior`` represents log-counts already computed using
-    numerically stable log-sum-exp reductions during the E-step. These log-counts
-    are well-behaved (typically O(0–100)) and exponentiating them does not lead
-    to pathological underflow/overflow.
-
-    Since the M-step for transitions is simply a normalized row-wise sum of
-    expected counts, this analytical computation is stable and does not require
-    operating in log-space.
-
-    Support for sparse Dirichlet priors (0 < alpha < 1) may be added later,
-    which would require additional care with zero-count behavior.
     """
     # Exponentiate
     joint_posterior = jnp.exp(log_joint_posterior)
