@@ -1418,7 +1418,7 @@ class TestMStep:
     def test_m_step_underflow_logspace_controlled(self, underflow_scheme):
         """Test run_m_step with controlled underflow in log-posteriors."""
 
-        n_timesteps = 1000
+        n_timesteps = 10000
         n_states = 3
         n_sessions = 10
 
