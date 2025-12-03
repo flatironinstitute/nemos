@@ -105,7 +105,13 @@ VALID_PAIRS = [
     *(
         {a, b}
         for (a, b) in itertools.combinations(
-            ["log_posterior", "log_posteriors", "posteriors", "log_joint_posterior"],
+            [
+                "log_posterior",
+                "log_posteriors",
+                "posteriors",
+                "log_joint_posterior",
+                "joint_posterior",
+            ],
             r=2,
         )
     ),

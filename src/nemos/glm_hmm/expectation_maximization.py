@@ -26,7 +26,7 @@ class GLMHMMState(eqx.Module):
 
 
 def _analytical_m_step_log_initial_prob(
-    log_posteriors: jnp.ndarray,
+    posteriors: jnp.ndarray,
     is_new_session: jnp.ndarray,
     dirichlet_prior_alphas: Optional[jnp.ndarray] = None,
 ):
@@ -40,8 +40,8 @@ def _analytical_m_step_log_initial_prob(
 
     Parameters
     ----------
-    log_posteriors :
-        Log posterior probabilities over latent states, shape ``(n_time_bins, n_states)``.
+    posteriors :
+        Posterior probabilities over latent states, shape ``(n_time_bins, n_states)``.
         These values are assumed to come from a numerically stable forward–
         backward pass.
     is_new_session :
@@ -55,12 +55,9 @@ def _analytical_m_step_log_initial_prob(
 
     Returns
     -------
-    log_initial_prob :
-        Log of the updated initial state distribution, shape ``(n_states,)``.
+    initial_prob :
+        The updated initial state distribution, shape ``(n_states,)``.
     """
-    # Exponentiate posteriors
-    posteriors = jnp.exp(log_posteriors)
-
     # Mask and sum
     masked_posteriors = jnp.where(is_new_session[:, jnp.newaxis], posteriors, 0.0)
     counts = jnp.sum(masked_posteriors, axis=0)
@@ -74,14 +71,11 @@ def _analytical_m_step_log_initial_prob(
     # Normalize
     initial_prob = numerator / jnp.sum(numerator)
 
-    # Convert to log-space
-    log_initial_prob = jnp.log(initial_prob)
-
-    return log_initial_prob
+    return initial_prob
 
 
 def _analytical_m_step_log_transition_prob(
-    log_joint_posterior: jnp.ndarray,
+    joint_posterior: jnp.ndarray,
     dirichlet_prior_alphas: Optional[jnp.ndarray] = None,
 ):
     """
@@ -93,10 +87,8 @@ def _analytical_m_step_log_transition_prob(
 
     Parameters
     ----------
-    log_joint_posterior :
-        Log expected counts of transitions from state i to j, shape ``(n_states, n_states)``.
-        These values are typically obtained via ``logsumexp(log_xis)`` during
-        the E-step.
+    joint_posterior :
+        Expected counts of transitions from state i to j, shape ``(n_states, n_states)``.
     dirichlet_prior_alphas :
         Optional Dirichlet prior parameters for each row of the transition
         matrix, shape ``(n_states, n_states)``. If None, a uniform prior is assumed.
@@ -104,14 +96,11 @@ def _analytical_m_step_log_transition_prob(
 
     Returns
     -------
-    log_transition_prob :
-        Log transition probability matrix, shape ``(n_states, n_states)``, where each row
+    transition_prob :
+        Transition probability matrix, shape ``(n_states, n_states)``, where each row
         is normalized to sum to 1 in probability space.
     """
-    # Exponentiate
-    joint_posterior = jnp.exp(log_joint_posterior)
 
-    # Add prior
     if dirichlet_prior_alphas is not None:
         numerator = joint_posterior + (dirichlet_prior_alphas - 1)
     else:
@@ -121,10 +110,7 @@ def _analytical_m_step_log_transition_prob(
     row_sums = jnp.sum(numerator, axis=1, keepdims=True)
     transition_prob = numerator / row_sums
 
-    # Convert to log-space
-    log_transition_prob = jnp.log(transition_prob)
-
-    return log_transition_prob
+    return transition_prob
 
 
 def compute_xi_log(
@@ -589,7 +575,7 @@ def hmm_negative_log_likelihood(
     glm_params: Array,
     X: Array,
     y: Array,
-    log_posteriors: Array,
+    posteriors: Array,
     inverse_link_function: Callable,
     negative_log_likelihood_func: Callable,
 ):
@@ -611,9 +597,8 @@ def hmm_negative_log_likelihood(
         Design matrix of observations.
     y:
         Target responses.
-    log_posteriors:
-        Log posterior probabilities over states, shape (n_time_bins, n_states).
-        Posteriors are exponentiated internally for weighting.
+    posteriors:
+        Posterior probabilities over states, shape (n_time_bins, n_states).
     inverse_link_function:
         Function mapping linear predictors to rates.
     negative_log_likelihood_func:
@@ -634,7 +619,7 @@ def hmm_negative_log_likelihood(
         nll = nll.sum(axis=1)  # sum over neurons
 
     # Compute dot products between log-likelihood terms and gammas
-    return jnp.sum(nll * jnp.exp(log_posteriors))
+    return jnp.sum(nll * posteriors)
 
 
 @partial(jax.jit, static_argnames=["m_step_fn_glm_params"])
@@ -695,23 +680,30 @@ def run_m_step(
     Support for sparse priors (0 < alpha < 1) may be added in a future version
     using alternative optimization methods such as proximal gradient descent.
     """
+    posteriors = jnp.exp(log_posteriors)
+    joint_posterior = jnp.exp(log_joint_posterior)
 
     # Update Initial state probability Eq. 13.18
-    log_initial_prob = _analytical_m_step_log_initial_prob(
-        log_posteriors,
+    initial_prob = _analytical_m_step_log_initial_prob(
+        posteriors,
         is_new_session=is_new_session,
         dirichlet_prior_alphas=dirichlet_prior_alphas_init_prob,
     )
-    log_transition_prob = _analytical_m_step_log_transition_prob(
-        log_joint_posterior, dirichlet_prior_alphas=dirichlet_prior_alphas_transition
+    transition_prob = _analytical_m_step_log_transition_prob(
+        joint_posterior, dirichlet_prior_alphas=dirichlet_prior_alphas_transition
     )
 
     # Minimize negative log-likelihood to update GLM weights
     optimized_projection_weights, state = m_step_fn_glm_params(
-        glm_params, X, y, log_posteriors
+        glm_params, X, y, posteriors
     )
 
-    return optimized_projection_weights, log_initial_prob, log_transition_prob, state
+    return (
+        optimized_projection_weights,
+        jnp.log(initial_prob),
+        jnp.log(transition_prob),
+        state,
+    )
 
 
 def prepare_likelihood_func(
