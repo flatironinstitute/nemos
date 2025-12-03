@@ -31,33 +31,51 @@ def _analytical_m_step_log_initial_prob(
     dirichlet_prior_alphas: Optional[jnp.ndarray] = None,
 ):
     """
-    Calculate the M-step for initial state probabilities in log-space.
+    Compute the M-step update for the initial state probabilities in log-space.
 
-    Computes the maximum likelihood estimate (or MAP estimate with prior) of the
-    initial state distribution in log-space for numerical stability.
+    This function analytically computes a closed-form maximum-likelihood (or
+    MAP, if a Dirichlet prior is used) estimate of the initial state
+    distribution. The update is performed in probability space and returned in
+    log-space for consistency with the rest of the HMM code.
 
     Parameters
     ----------
     log_posteriors :
-        The log posterior distribution over latent states, shape ``(n_time_bins, n_states)``.
+        Log posterior probabilities over latent states, shape ``(T, K)``.
+        These values are assumed to come from a numerically stable forward–
+        backward pass.
     is_new_session :
-        Boolean array indicating session start points, shape ``(n_time_bins,)``.
+        Boolean array indicating the time bins corresponding to session
+        boundaries, shape ``(T,)``. Only these positions contribute to the
+        initial state estimate.
     dirichlet_prior_alphas :
-        The parameters of the Dirichlet prior for the initial distribution,
-        shape ``(n_states,)``. If None, uses a flat (uniform) prior.
-        **Note**: All alpha values must be >= 1 for the current implementation.
+        Optional Dirichlet prior parameters for the initial distribution,
+        shape ``(K,)``. If None, a uniform prior is assumed.
+        **Note**: This implementation assumes alpha >= 1 for all states.
 
     Returns
     -------
     log_initial_prob :
-        Updated initial state log-probabilities, shape ``(n_states,)``.
-        Normalized in log-space.
+        Log of the updated initial state distribution, shape ``(K,)``.
 
     Notes
     -----
-    The current implementation requires Dirichlet prior parameters alpha >= 1.
-    Support for sparse priors (0 < alpha < 1) may be added in a future version
-    using alternative optimization methods.
+    *Why no log-sum-exp is needed here?*
+
+    The posteriors used in the M-step have *already* been computed in a
+    numerically stable way during the E-step (forward–backward algorithm),
+    meaning they are true probabilities in [0, 1], not exponentials of large
+    or small magnitudes.
+
+    Because of this, exponentiating the log-posteriors is safe:
+    ``exp(log_posteriors) == posteriors`` without underflow/overflow.
+
+    The M-step for the initial distribution reduces to a normalized sum of
+    these posteriors at session boundaries, which is analytically stable and
+    does not require log-domain tricks like ``logsumexp``.
+
+    Support for sparse Dirichlet priors (0 < alpha < 1) may be added later,
+    which would require additional care with zero-count behavior.
     """
     # Exponentiate posteriors
     posteriors = jnp.exp(log_posteriors)
@@ -86,32 +104,44 @@ def _analytical_m_step_log_transition_prob(
     dirichlet_prior_alphas: Optional[jnp.ndarray] = None,
 ):
     """
-    Calculate the M-step for state transition probabilities in log-space.
+    Compute the M-step update for the transition probability matrix in log-space.
 
-    Computes the maximum likelihood estimate (or MAP estimate with prior) of the
-    transition matrix in log-space for numerical stability.
+    This function analytically computes the maximum-likelihood (or MAP) estimate
+    of the transition matrix using expected transition counts. The computation
+    is carried out in probability space and the result returned in log-space.
 
     Parameters
     ----------
-    log_joint_posterior:
-        Log of expected counts of transitions from state i to state j,
-        shape ``(n_states, n_states)``. Computed as logsumexp(log_xis, axis=0).
-    dirichlet_prior_alphas:
-        The parameters of the Dirichlet prior for each row of the transition matrix,
-        shape ``(n_states, n_states)``. If None, uses a flat (uniform) prior.
-        **Note**: All alpha values must be >= 1 for the current implementation.
+    log_joint_posterior :
+        Log expected counts of transitions from state i to j, shape ``(K, K)``.
+        These values are typically obtained via ``logsumexp(log_xis)`` during
+        the E-step.
+    dirichlet_prior_alphas :
+        Optional Dirichlet prior parameters for each row of the transition
+        matrix, shape ``(K, K)``. If None, a uniform prior is assumed.
+        **Note**: This implementation assumes alpha >= 1.
 
     Returns
     -------
-    log_transition_prob:
-        Updated log transition probability matrix, shape ``(n_states, n_states)``.
-        Each row is normalized in log-space.
+    log_transition_prob :
+        Log transition probability matrix, shape ``(K, K)``, where each row
+        is normalized to sum to 1 in probability space.
 
     Notes
     -----
-    The current implementation requires Dirichlet prior parameters alpha >= 1.
-    Support for sparse priors (0 < alpha < 1) may be added in a future version
-    using alternative optimization methods.
+    *Why exponentiating log-joint posterior is safe?*
+
+    ``log_joint_posterior`` represents log-counts already computed using
+    numerically stable log-sum-exp reductions during the E-step. These log-counts
+    are well-behaved (typically O(0–100)) and exponentiating them does not lead
+    to pathological underflow/overflow.
+
+    Since the M-step for transitions is simply a normalized row-wise sum of
+    expected counts, this analytical computation is stable and does not require
+    operating in log-space.
+
+    Support for sparse Dirichlet priors (0 < alpha < 1) may be added later,
+    which would require additional care with zero-count behavior.
     """
     # Exponentiate
     joint_posterior = jnp.exp(log_joint_posterior)
