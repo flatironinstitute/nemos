@@ -551,14 +551,19 @@ def resolve_initial_state_proba_init_function(
 
 class GMHMMInitializer:
     def __init__(self):
-       pass
-
-    def initialize_initial_proba(self, n_states: int, random_key=jax.random.PRNGKey(123)) -> jnp.ndarray:
         pass
 
-    def initialize_transition_proba(self, n_states: int, random_key=jax.random.PRNGKey(124)) -> jnp.ndarray:
+    def initialize_initial_proba(
+        self, n_states: int, random_key=jax.random.PRNGKey(123)
+    ) -> jnp.ndarray:
         pass
 
-    def initialize_glm_params(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray, random_key=jax.random.PRNGKey(125)) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    def initialize_transition_proba(
+        self, n_states: int, random_key=jax.random.PRNGKey(124)
+    ) -> jnp.ndarray:
         pass
 
+    def initialize_glm_params(
+        self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray, random_key=jax.random.PRNGKey(125)
+    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        pass
