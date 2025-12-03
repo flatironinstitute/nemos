@@ -66,7 +66,7 @@ def _analytical_m_step_initial_prob(
 
     # Add prior
     if dirichlet_prior_alphas is not None:
-        new_initial_prob = new_initial_prob + (dirichlet_prior_alphas - 1)
+        new_initial_prob += dirichlet_prior_alphas - 1
 
     # Normalize
     new_initial_prob /= jnp.sum(new_initial_prob)
