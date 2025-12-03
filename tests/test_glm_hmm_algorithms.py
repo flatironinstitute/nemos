@@ -180,13 +180,13 @@ def prepare_partial_hmm_nll_single_neuron(obs):
 
     # Solver
     def partial_hmm_negative_log_likelihood(
-        weights, design_matrix, observations, posterior_prob
+        weights, design_matrix, observations, log_posteriors
     ):
         return hmm_negative_log_likelihood(
             weights,
             X=design_matrix,
             y=observations,
-            posteriors=posterior_prob,
+            log_posteriors=log_posteriors,
             inverse_link_function=obs.default_inverse_link_function,
             negative_log_likelihood_func=negative_log_likelihood,
         )
@@ -748,7 +748,7 @@ class TestLikelihood:
             (coef, intercept),
             X[:, 1:],  # drop intercept column
             y,
-            gammas,
+            np.log(gammas),
             inverse_link_function=obs.default_inverse_link_function,
             negative_log_likelihood_func=negative_log_likelihood,
         )
@@ -814,13 +814,13 @@ class TestMStep:
             optimized_projection_weights_nemos,
             X[:, 1:],
             y,
-            gammas,
+            np.log(gammas),
         )
         n_ll_original = partial_hmm_negative_log_likelihood(
             (opt_coef, opt_intercept),
             X[:, 1:],
             y,
-            gammas,
+            np.log(gammas),
         )
 
         # Testing Eq. 13.18 of Bishop
@@ -1315,7 +1315,7 @@ class TestMStep:
             optimized_projection_weights_nemos,
             X[:, 1:],
             y,
-            gammas,
+            np.log(gammas),
         )
 
         # NLL with simulation input
@@ -1323,7 +1323,7 @@ class TestMStep:
             (opt_coef, opt_intercept),
             X[:, 1:],
             y,
-            gammas,
+            np.log(gammas),
         )
 
         # Testing Eq. 13.18 of Bishop
@@ -1395,7 +1395,7 @@ class TestEMAlgorithm:
                 weights,
                 X=design_matrix,
                 y=observations,
-                posteriors=posterior_prob,
+                log_posteriors=posterior_prob,
                 inverse_link_function=inverse_link_function,
                 negative_log_likelihood_func=negative_log_likelihood_func,
             )
@@ -1508,7 +1508,7 @@ class TestEMAlgorithm:
                 weights,
                 X=design_matrix,
                 y=observations,
-                posteriors=posterior_prob,
+                log_posteriors=posterior_prob,
                 inverse_link_function=inverse_link_function,
                 negative_log_likelihood_func=negative_log_likelihood_func,
             )
@@ -1656,7 +1656,7 @@ def test_e_and_m_step_for_population(generate_data_multi_state_population):
             weights,
             X=design_matrix,
             y=observations,
-            posteriors=posterior_prob,
+            log_posteriors=posterior_prob,
             inverse_link_function=obs.default_inverse_link_function,
             negative_log_likelihood_func=vmap_nll,
         )
@@ -1855,7 +1855,7 @@ class TestConvergence:
                 weights,
                 X=design_matrix,
                 y=observations,
-                posteriors=posterior_prob,
+                log_posteriors=posterior_prob,
                 inverse_link_function=obs.default_inverse_link_function,
                 negative_log_likelihood_func=negative_log_likelihood_func,
             )
@@ -1918,7 +1918,7 @@ class TestConvergence:
                 weights,
                 X=design_matrix,
                 y=observations,
-                posteriors=posterior_prob,
+                log_posteriors=posterior_prob,
                 inverse_link_function=obs.default_inverse_link_function,
                 negative_log_likelihood_func=negative_log_likelihood_func,
             )
@@ -1974,7 +1974,7 @@ class TestConvergence:
                 weights,
                 X=design_matrix,
                 y=observations,
-                posteriors=posterior_prob,
+                log_posteriors=posterior_prob,
                 inverse_link_function=obs.default_inverse_link_function,
                 negative_log_likelihood_func=negative_log_likelihood_func,
             )
@@ -2036,7 +2036,7 @@ class TestConvergence:
                 weights,
                 X=design_matrix,
                 y=observations,
-                posteriors=posterior_prob,
+                log_posteriors=posterior_prob,
                 inverse_link_function=obs.default_inverse_link_function,
                 negative_log_likelihood_func=negative_log_likelihood_func,
             )
@@ -2119,7 +2119,7 @@ class TestConvergence:
                 weights,
                 X=design_matrix,
                 y=observations,
-                posteriors=posterior_prob,
+                log_posteriors=posterior_prob,
                 inverse_link_function=obs.default_inverse_link_function,
                 negative_log_likelihood_func=negative_log_likelihood_func,
             )
@@ -2190,7 +2190,7 @@ class TestConvergence:
                 weights,
                 X=design_matrix,
                 y=observations,
-                posteriors=posterior_prob,
+                log_posteriors=posterior_prob,
                 inverse_link_function=obs.default_inverse_link_function,
                 negative_log_likelihood_func=negative_log_likelihood_func,
             )
@@ -2327,7 +2327,7 @@ class TestCompilation:
                 weights,
                 X=design_matrix,
                 y=observations,
-                posteriors=posterior_prob,
+                log_posteriors=posterior_prob,
                 inverse_link_function=obs.default_inverse_link_function,
                 negative_log_likelihood_func=negative_log_likelihood_func,
             )
@@ -2431,7 +2431,7 @@ class TestCompilation:
                 weights,
                 X=design_matrix,
                 y=observations,
-                posteriors=posterior_prob,
+                log_posteriors=posterior_prob,
                 inverse_link_function=obs.default_inverse_link_function,
                 negative_log_likelihood_func=negative_log_likelihood_func,
             )
@@ -2635,7 +2635,7 @@ class TestPytreeSupport:
                 weights,
                 X=design_matrix,
                 y=observations,
-                posteriors=posterior_prob,
+                log_posteriors=posterior_prob,
                 inverse_link_function=obs.default_inverse_link_function,
                 negative_log_likelihood_func=vmap_nll,
             )
@@ -2674,3 +2674,184 @@ class TestPytreeSupport:
         assert isinstance(final_params, tuple)
         assert isinstance(final_params[0], dict)  # coef should be a dict
         assert final_state.iterations > 0
+
+
+class TestGradientStability:
+    """Test numerical stability of gradients in log-space implementation."""
+
+    @pytest.mark.requires_x64
+    def test_hmm_nll_gradient_stability_with_small_values(self):
+        """
+        Test that log-space gradients match naive implementation across parameter scales.
+
+        Verifies that the log-space implementation produces numerically equivalent
+        gradients to the naive implementation, even when gradient magnitudes span
+        many orders of magnitude (from ~1e2 to ~1e14).
+
+        This confirms the log-space formulation is mathematically correct and
+        doesn't introduce numerical errors in the backward pass.
+        """
+        np.random.seed(123)
+        jax.config.update("jax_enable_x64", True)
+
+        n_samples = 100
+        n_states = 3
+        n_features = 2
+
+        # Create test data
+        X = np.random.randn(n_samples, n_features)
+        y = np.random.poisson(5, size=n_samples).astype(float)
+        log_posteriors = np.log(np.random.dirichlet([1, 1, 1], size=n_samples))
+        posteriors = np.exp(log_posteriors)
+
+        obs = PoissonObservations()
+
+        # Wrap negative_log_likelihood to handle broadcasting
+        def nll_func(y_val, predicted_rate):
+            return obs._negative_log_likelihood(
+                y_val[:, None], predicted_rate, aggregate_sample_scores=lambda x: x
+            )
+
+        # Define a wrapper that we can take gradients of
+        def loss_fn(weights):
+            coef, intercept = weights
+            return hmm_negative_log_likelihood(
+                (coef, intercept),
+                X=X,
+                y=y,
+                log_posteriors=log_posteriors,
+                inverse_link_function=obs.default_inverse_link_function,
+                negative_log_likelihood_func=nll_func,
+            )
+
+        def naive_hmm_nll(weights):
+            coef, intercept = weights
+            # Compute NLL for each sample and state
+            z_pred = jnp.einsum("tk,ks->ts", X, coef) + intercept
+            y_pred = obs.default_inverse_link_function(z_pred)
+            nll = nll_func(y, y_pred)
+            # Direct weighted sum
+            return jnp.sum(posteriors * nll)
+
+        # Test with various weight scales to get different NLL magnitudes
+        test_scales = [1e-3, 1e-2, 1e-1, 1.0, 10.0]
+
+        for scale in test_scales:
+            coef = scale * np.random.randn(n_features, n_states)
+            intercept = scale * np.random.randn(1, n_states)
+            weights = (coef, intercept)
+
+            # First, check what NLL values we're getting
+            predicted_rate = jnp.exp(jnp.einsum("tk,ks->ts", X, coef) + intercept)
+            nll = nll_func(y, predicted_rate)
+            min_nll = np.abs(nll).min()
+            max_nll = np.abs(nll).max()
+
+            print(f"\nScale {scale}: NLL range [{min_nll:.2e}, {max_nll:.2e}]")
+
+            # Compute gradient
+            grad_fn = jax.grad(loss_fn)
+            grads = grad_fn(weights)
+            grad_naive_fn = jax.grad(naive_hmm_nll)
+            grads_naive = grad_naive_fn(weights)
+
+            print(f"naive {np.max(np.abs(grads_naive[0]))}, current {np.max(np.abs(grads[0]))}")
+
+            # Check gradients are finite
+            assert np.all(np.isfinite(grads[0])), (
+                f"Coefficient gradients contain inf/nan at scale {scale}"
+            )
+            assert np.all(np.isfinite(grads[1])), (
+                f"Intercept gradients contain inf/nan at scale {scale}"
+            )
+            assert np.all(np.isfinite(grads_naive[0])), (
+                f"Naive coefficient gradients contain inf/nan at scale {scale}"
+            )
+            assert np.all(np.isfinite(grads_naive[1])), (
+                f"Naive intercept gradients contain inf/nan at scale {scale}"
+            )
+
+            max_grad = max(np.abs(grads[0]).max(), np.abs(grads[1]).max())
+            print(f"Scale {scale}: Max gradient = {max_grad:.2e}")
+
+            # Verify log-space gradients match naive implementation
+            # Use rtol=1e-12 which is well above float64 precision (~1e-15)
+            # but accounts for accumulated numerical errors
+            np.testing.assert_allclose(
+                grads[0], grads_naive[0], rtol=1e-12,
+                err_msg=f"Coefficient gradients differ at scale {scale}"
+            )
+            np.testing.assert_allclose(
+                grads[1], grads_naive[1], rtol=1e-12,
+                err_msg=f"Intercept gradients differ at scale {scale}"
+            )
+
+    @pytest.mark.requires_x64
+    def test_hmm_nll_gradient_vs_naive_implementation(self):
+        """
+        Compare gradients of log-space implementation against naive implementation.
+
+        For moderate-sized values where naive implementation doesn't overflow,
+        both should give the same gradients.
+        """
+        np.random.seed(456)
+        jax.config.update("jax_enable_x64", True)
+
+        n_samples = 50
+        n_states = 2
+        n_features = 2
+
+        # Create test data
+        X = np.random.randn(n_samples, n_features)
+        y = np.random.poisson(5, size=n_samples).astype(float)
+        posteriors = np.random.dirichlet([1, 1], size=n_samples)
+        log_posteriors = np.log(posteriors)
+
+        obs = PoissonObservations()
+
+        # Wrap negative_log_likelihood to handle broadcasting
+        def nll_func(y_val, predicted_rate):
+            return obs._negative_log_likelihood(
+                y_val[:, None], predicted_rate, aggregate_sample_scores=lambda x: x
+            )
+
+        # Naive implementation (direct computation)
+        def naive_hmm_nll(weights):
+            coef, intercept = weights
+            # Compute NLL for each sample and state
+            z_pred = jnp.einsum("tk,ks->ts", X, coef) + intercept
+            y_pred = obs.default_inverse_link_function(z_pred)
+            nll = nll_func(y, y_pred)
+            # Direct weighted sum
+            return jnp.sum(posteriors * nll)
+
+        # Log-space implementation
+        def logspace_hmm_nll(weights):
+            coef, intercept = weights
+            return hmm_negative_log_likelihood(
+                (coef, intercept),
+                X=X,
+                y=y,
+                log_posteriors=log_posteriors,
+                inverse_link_function=obs.default_inverse_link_function,
+                negative_log_likelihood_func=nll_func,
+            )
+
+        # Use moderate weights to avoid overflow in naive implementation
+        coef = 0.5 * np.random.randn(n_features, n_states)
+        intercept = 0.5 * np.random.randn(1, n_states)
+        weights = (coef, intercept)
+
+        # Compute gradients with both methods
+        grad_naive = jax.grad(naive_hmm_nll)(weights)
+        grad_logspace = jax.grad(logspace_hmm_nll)(weights)
+
+        # Check gradients match
+        np.testing.assert_allclose(
+            grad_naive[0], grad_logspace[0], rtol=1e-12,
+            err_msg="Coefficient gradients differ between implementations"
+        )
+        np.testing.assert_allclose(
+            grad_naive[1], grad_logspace[1], rtol=1e-12,
+            err_msg="Intercept gradients differ between implementations"
+        )

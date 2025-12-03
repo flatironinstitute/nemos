@@ -673,7 +673,7 @@ def hmm_negative_log_likelihood(
     return nll_pos + nll_neg
 
 
-@partial(jax.jit, static_argnames=["solver_run"])
+@partial(jax.jit, static_argnames=["m_step_fn_glm_params"])
 def run_m_step(
     X: Array,
     y: Array,
@@ -878,7 +878,7 @@ def check_log_likelihood_increment(state: GLMHMMState, tol: float) -> Array:
     static_argnames=[
         "inverse_link_function",
         "likelihood_func",
-        "solver_run",
+        "m_step_fn_glm_params",
         "maxiter",
         "check_convergence",
         "tol",
