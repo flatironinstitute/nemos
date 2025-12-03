@@ -10,7 +10,6 @@ import pytest
 import statsmodels.api as sm
 from scipy.optimize import minimize
 from sklearn.linear_model import GammaRegressor, PoissonRegressor
-from statsmodels.tools.sm_exceptions import DomainWarning
 
 import nemos as nmo
 
@@ -324,7 +323,7 @@ class TestUnRegularized:
 
         assert model.regularizer_strength == 1.0
         model.regularizer = regularizer
-        assert model.regularizer_strength == None
+        assert model.regularizer_strength is None
 
     def test_get_params(self):
         """Test get_params() returns expected values."""
@@ -1368,18 +1367,12 @@ class TestElasticNet:
         glm_res = np.hstack((model_PG.intercept_, model_PG.coef_))
 
         # use the penalized loss function to solve optimization via Nelder-Mead
-        penalized_loss = lambda p, x, y: model_PG.regularizer.penalized_loss(
-            model_PG.compute_loss, model_PG.regularizer_strength
-        )(
-            (
-                p[1:],
-                p[0].reshape(
-                    1,
-                ),
-            ),
-            x,
-            y,
-        )
+        def penalized_loss(p, x, y):
+            pen_loss = model_PG.regularizer.penalized_loss(
+                model_PG.compute_loss, model_PG.regularizer_strength
+            )
+            return pen_loss((p[1:], p[0].reshape(1),), x, y)
+
         res = minimize(
             penalized_loss,
             [0] + w,

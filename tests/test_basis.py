@@ -1452,9 +1452,9 @@ class TestSharedMethods:
                 basis.RaisedCosineLogEval: r"'mylabel': RaisedCosineLogEval\(n_basis_funcs=5, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True, bounds=\(1.0, 2.0\)\)",
                 basis.RaisedCosineLinearEval: r"'mylabel': RaisedCosineLinearEval\(n_basis_funcs=5, width=2.0, bounds=\(1.0, 2.0\)\)",
                 basis.BSplineEval: r"'mylabel': BSplineEval\(n_basis_funcs=5, order=4, bounds=\(1.0, 2.0\)\)",
-                basis.CyclicBSplineEval: "'mylabel': CyclicBSplineEval\(n_basis_funcs=5, order=4, bounds=\(1.0, 2.0\)\)",
+                basis.CyclicBSplineEval: r"'mylabel': CyclicBSplineEval\(n_basis_funcs=5, order=4, bounds=\(1.0, 2.0\)\)",
                 basis.MSplineEval: r"'mylabel': MSplineEval\(n_basis_funcs=5, order=4, bounds=\(1.0, 2.0\)\)",
-                basis.OrthExponentialEval: "'mylabel': OrthExponentialEval\(n_basis_funcs=5, bounds=\(1.0, 2.0\)\)",
+                basis.OrthExponentialEval: r"'mylabel': OrthExponentialEval\(n_basis_funcs=5, bounds=\(1.0, 2.0\)\)",
                 basis.IdentityEval: r"'mylabel': IdentityEval\(bounds=\(1.0, 2.0\)\)",
                 basis.RaisedCosineLogConv: r"'mylabel': RaisedCosineLogConv\(n_basis_funcs=5, window_size=10, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True\)",
                 basis.RaisedCosineLinearConv: r"'mylabel': RaisedCosineLinearConv\(n_basis_funcs=5, window_size=10, width=2.0\)",
@@ -6028,19 +6028,6 @@ class TestMultiplicativeBasis(CombinedBasis):
     )
     def test_deep_copy_basis(self, basis_a, basis_b, basis_class_specific_params):
 
-        if basis_a == HistoryConv:
-            n_basis_a = 10
-        elif basis_a == IdentityEval:
-            n_basis_a = 1
-        else:
-            n_basis_a = 5
-        if basis_b == HistoryConv:
-            n_basis_b = 10
-        elif basis_b == IdentityEval:
-            n_basis_b = 1
-        else:
-            n_basis_b = 5
-
         basis_a = self.instantiate_basis(
             5, basis_a, basis_class_specific_params, window_size=10
         )
@@ -6305,7 +6292,7 @@ def test_power_of_basis_repr(basis_class, basis_class_specific_params):
         5, basis_class, basis_class_specific_params, window_size=5
     )
     pow_basis = basis_obj**3
-    actual_labels = list(l for l, _ in generate_basis_label_pair(pow_basis))
+    actual_labels = list(lab for lab, _ in generate_basis_label_pair(pow_basis))
     assert len(actual_labels) == len(set(actual_labels))
     cls_names = {b.__class__.__name__ for b in pow_basis._iterate_over_components()}
     count_cls = {c: 0 for c in cls_names}
@@ -6326,7 +6313,7 @@ def test_mul_of_basis_repr(basis_class, basis_class_specific_params):
         5, basis_class, basis_class_specific_params, window_size=5
     )
     mul_basis = basis_obj * 3
-    actual_labels = list(l for l, _ in generate_basis_label_pair(mul_basis))
+    actual_labels = list(lab for lab, _ in generate_basis_label_pair(mul_basis))
     assert len(actual_labels) == len(set(actual_labels))
     cls_names = {b.__class__.__name__ for b in mul_basis._iterate_over_components()}
     count_cls = {c: 0 for c in cls_names}
@@ -7331,11 +7318,11 @@ def test_getitem(bas1, bas2, basis_class_specific_params):
     assert mix_123["y"] is mix_123.basis1.basis2
     assert mix_123["z"] is mix_123.basis2
 
-    with pytest.raises(IndexError, match=f"Basis label BSplineEval not found"):
+    with pytest.raises(IndexError, match="Basis label BSplineEval not found"):
         add_123["BSplineEval"]
-    with pytest.raises(IndexError, match=f"Basis label BSplineEval not found"):
+    with pytest.raises(IndexError, match="Basis label BSplineEval not found"):
         mul_123["BSplineEval"]
-    with pytest.raises(IndexError, match=f"Basis label BSplineEval not found"):
+    with pytest.raises(IndexError, match="Basis label BSplineEval not found"):
         mix_123["BSplineEval"]
 
 

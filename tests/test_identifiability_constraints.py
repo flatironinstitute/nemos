@@ -1,7 +1,6 @@
 import warnings
 from contextlib import nullcontext as does_not_raise
 
-import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest

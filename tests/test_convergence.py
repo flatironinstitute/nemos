@@ -106,7 +106,7 @@ def test_lasso_convergence(solver_name):
     lasso GLM is the same.
     """
     # generate toy data
-    num_samples, num_features, num_groups = 1000, 1, 3
+    num_samples, num_features = 1000, 1
     X = np.random.normal(size=(num_samples, num_features))  # design matrix
     w = [0.5]  # define some weights
     y = np.random.poisson(np.exp(X.dot(w)))  # observed counts
@@ -122,18 +122,21 @@ def test_lasso_convergence(solver_name):
     model_PG.fit(X, y)
 
     # use the penalized loss function to solve optimization via Nelder-Mead
-    penalized_loss = lambda p, x, y: model_PG.regularizer.penalized_loss(
-        model_PG.compute_loss, model_PG.regularizer_strength
-    )(
-        (
-            p[1:],
-            p[0].reshape(
-                1,
+    def penalized_loss(p, x, y):
+        pen_loss = model_PG.regularizer.penalized_loss(
+            model_PG.compute_loss, model_PG.regularizer_strength
+        )
+        return pen_loss(
+            (
+                p[1:],
+                p[0].reshape(
+                    1,
+                ),
             ),
-        ),
-        x,
-        y,
-    )
+            x,
+            y,
+        )
+
     res = minimize(
         penalized_loss, [0] + w, args=(X, y), method="Nelder-Mead", tol=10**-12
     )
@@ -170,18 +173,20 @@ def test_group_lasso_convergence(solver_name):
     model_PG.fit(X, y)
 
     # use the penalized loss function to solve optimization via Nelder-Mead
-    penalized_loss = lambda p, x, y: model_PG.regularizer.penalized_loss(
-        model_PG.compute_loss, model_PG.regularizer_strength
-    )(
-        (
-            p[1:],
-            p[0].reshape(
-                1,
+    def penalized_loss(p, x, y):
+        pen_loss = model_PG.regularizer.penalized_loss(
+            model_PG.compute_loss, model_PG.regularizer_strength
+        )
+        return pen_loss(
+            (
+                p[1:],
+                p[0].reshape(
+                    1,
+                ),
             ),
-        ),
-        x,
-        y,
-    )
+            x,
+            y,
+        )
 
     res = minimize(
         penalized_loss,

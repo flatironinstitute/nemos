@@ -1,13 +1,13 @@
 import warnings
 
-warnings.filterwarnings(
-    "ignore", message=".*plotting functions.*", category=UserWarning
-)
-
 import pytest
 from myst_nb import glue
 
 import nemos._documentation_utils._myst_nb_glue as myst_utils
+
+warnings.filterwarnings(
+    "ignore", message=".*plotting functions.*", category=UserWarning
+)
 
 
 @pytest.fixture

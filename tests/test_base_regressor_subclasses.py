@@ -571,7 +571,7 @@ class TestModelCommons:
         self, fill_val, expectation, instantiate_base_regressor_subclass
     ):
         fixture = instantiate_base_regressor_subclass
-        X, model, true_params = fixture.X, fixture.model, fixture.params
+        X, model, _ = fixture.X, fixture.model, fixture.params
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         X.fill(fill_val)
         with expectation:
@@ -722,7 +722,7 @@ class TestModelCommons:
         self, instantiate_base_regressor_subclass
     ):
         fixture = instantiate_base_regressor_subclass
-        X, model, true_params = fixture.X, fixture.model, fixture.params
+        X, model, _ = fixture.X, fixture.model, fixture.params
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         assert model.solver_init_state is None
         assert model.solver_update is None
@@ -745,7 +745,8 @@ class TestLinkFunctionModels:
         model = fixture.model
 
         # define a jax non-diff function
-        non_diff = lambda y: jnp.asarray(njit(lambda x: x)(np.atleast_1d(y)))
+        def non_diff(y):
+            return jnp.asarray(njit(lambda x: x)(np.atleast_1d(y)))
 
         with pytest.raises(
             ValueError,
@@ -1183,7 +1184,7 @@ class TestModelSimulation:
         self, fill_val, expectation, instantiate_base_regressor_subclass
     ):
         fixture = instantiate_base_regressor_subclass
-        X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
+        X, y, model, _ = fixture.X, fixture.y, fixture.model, fixture.params
         X.fill(fill_val)
         with expectation:
             model.fit(X, y)

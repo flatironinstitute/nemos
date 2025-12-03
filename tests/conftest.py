@@ -16,13 +16,6 @@ from copy import deepcopy
 from functools import partial
 from typing import Literal
 
-# Named tuple for model fixture returns (clearer than tuple indexing)
-ModelFixture = namedtuple(
-    "ModelFixture",
-    ["X", "y", "model", "params", "rates", "extra"],
-    defaults=[None, None],  # rates and extra default to None
-)
-
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -36,6 +29,13 @@ from nemos.basis import AdditiveBasis, CustomBasis, MultiplicativeBasis
 from nemos.basis._basis import Basis
 from nemos.basis._basis_mixin import BasisMixin
 from nemos.basis._transformer_basis import TransformerBasis
+
+# Named tuple for model fixture returns (clearer than tuple indexing)
+ModelFixture = namedtuple(
+    "ModelFixture",
+    ["X", "y", "model", "params", "rates", "extra"],
+    defaults=[None, None],  # rates and extra default to None
+)
 
 DEFAULT_KWARGS = {
     "n_basis_funcs": 5,

@@ -81,7 +81,10 @@ def test_initialization_error_nan_input(non_linearity, expectation):
 def test_initialization_error_non_invertible():
     """Initialize invalid."""
     output_y = np.random.uniform(size=100)
-    inv_link = lambda x: jax.nn.softplus(x) + 10
+
+    def inv_link(x):
+        return jax.nn.softplus(x) + 10
+
     with pytest.raises(
         ValueError, match="Failed to initialize the model intercept.+Please, provide"
     ):

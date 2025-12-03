@@ -1,9 +1,9 @@
 from .observation_models import (
     BernoulliObservations,
     GammaObservations,
+    GaussianObservations,
     NegativeBinomialObservations,
     PoissonObservations,
-    GaussianObservations,
 )
 
 AVAILABLE_OBSERVATION_MODELS = [

@@ -1,4 +1,3 @@
-import inspect
 import os
 from contextlib import nullcontext as does_not_raise
 
@@ -509,7 +508,10 @@ def test_svrg_xk_update_step(request, regr_setup, to_tuple, prox, prox_lambda):
             true_params,
             np.zeros(X.shape[1]),
         )
-        loss = lambda params, X, y: loss_arr(params[0], X, y)
+
+        def loss(params, X, y):
+            return loss_arr(params[0], X, y)
+
     else:
         loss = loss_arr
 

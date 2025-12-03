@@ -5,7 +5,6 @@ from contextlib import nullcontext as does_not_raise
 from copy import deepcopy
 from unittest.mock import patch
 
-import jax
 import numpy as np
 import pytest
 from conftest import (
@@ -1187,7 +1186,7 @@ def test_repr_out(basis_cls, basis_class_specific_params, expected_out):
 )
 def test_transformer_init_type(bas, expectation):
     with expectation:
-        out = nmo.basis.TransformerBasis(bas)
+        nmo.basis.TransformerBasis(bas)
 
 
 @pytest.mark.parametrize(

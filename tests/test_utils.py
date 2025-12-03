@@ -631,7 +631,7 @@ def test_inspect_npz(tmp_path, model_class, monkeypatch, capsys):
     monkeypatch.setattr("nemos.base_regressor.get_env_metadata", fake_env_metadata)
     monkeypatch.setattr("nemos.io.io.get_env_metadata", fake_env_metadata)
 
-    file_path = tmp_path / f"test_model.npz"
+    file_path = tmp_path / "test_model.npz"
 
     # Initialize the model with some parameters
     model = model_class(

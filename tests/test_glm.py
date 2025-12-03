@@ -1,5 +1,3 @@
-import inspect
-import warnings
 from contextlib import nullcontext as does_not_raise
 from copy import deepcopy
 from typing import Callable
@@ -8,11 +6,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-import scipy as sp
-import scipy.stats as sts
 import sklearn
 import statsmodels.api as sm
-from numba import njit
 from pynapple import Tsd, TsdFrame
 from sklearn.linear_model import GammaRegressor, LogisticRegression, PoissonRegressor
 from sklearn.model_selection import GridSearchCV
@@ -21,7 +16,6 @@ import nemos as nmo
 from nemos._observation_model_builder import instantiate_observation_model
 from nemos._regularizer_builder import instantiate_regularizer
 from nemos.inverse_link_function_utils import LINK_NAME_TO_FUNC
-from nemos.observation_models import NegativeBinomialObservations
 from nemos.pytrees import FeaturePytree
 from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
 from nemos.utils import _get_name
@@ -637,7 +631,7 @@ class TestGLM:
         with expectation:
             params = model.initialize_params(X, y, init_params=(init_w, true_params[1]))
             # check that params are set
-            init_state = model.initialize_state(X, y, params)
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "dim_intercepts, expectation",
@@ -675,7 +669,7 @@ class TestGLM:
         with expectation:
             params = model.initialize_params(X, y, init_params=(init_w, init_b))
             # check that params are set
-            init_state = model.initialize_state(X, y, params)
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(*fit_init_params_type_init_params)
     @pytest.mark.solver_related
@@ -703,7 +697,7 @@ class TestGLM:
         with expectation:
             params = model.initialize_params(X, y, init_params=init_params)
             # check that params are set
-            init_state = model.initialize_state(X, y, params)
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -742,7 +736,7 @@ class TestGLM:
         with expectation:
             params = model.initialize_params(X, y, init_params=(init_w, init_b))
             # check that params are set
-            init_state = model.initialize_state(X, y, params)
+            model.initialize_state(X, y, params)
 
     #######################
     # Test model.simulate
