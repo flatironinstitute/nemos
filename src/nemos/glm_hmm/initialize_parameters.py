@@ -15,6 +15,7 @@ def random_glm_params_init(
     n_neurons: int,
     n_states: int,
     X: DESIGN_INPUT_TYPE,
+    y: jnp.ndarray = None,
     random_key=jax.random.PRNGKey(123),
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """
@@ -28,6 +29,8 @@ def random_glm_params_init(
         Number of HMM states.
     X :
         Design matrix with shape (n_samples, n_features).
+    y :
+        Observations, shape (n_samples,) or (n_samples, n_units).
     random_key
         Random key for reproducibility. Default is PRNGKey(123).
 
@@ -45,7 +48,7 @@ def random_glm_params_init(
 
 def sticky_transition_proba_init(
     n_states: int,
-    random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
+    random_key: jax.ndarray = jax.random.PRNGKey(123),
     prob_stay=0.95,
 ):
     """
@@ -243,11 +246,11 @@ def resolve_glm_params_init_function(
         n_params = len(sig.parameters)
 
         # Check minimum number of parameters
-        if n_params < 4:
+        if n_params < 5:
             param_names = list(sig.parameters.keys())
             raise ValueError(
-                f"Projection initialization function must have at least 4 parameters: "
-                f"(n_neurons, n_states, X, key), but got {n_params} parameter(s): {param_names}.\n"
+                f"Projection initialization function must have at least 5 parameters: "
+                f"(n_neurons, n_states, X, y, key), but got {n_params} parameter(s): {param_names}.\n"
                 f"Signature should be: "
                 f"Callable[[int, int, DESIGN_INPUT_TYPE, jax.random.PRNGKey], Tuple[NDArray, NDArray, NDArray]]"
             )
@@ -255,12 +258,12 @@ def resolve_glm_params_init_function(
         # Check that extra parameters have defaults
         params = list(sig.parameters.values())
         params_without_defaults = [
-            p.name for p in params[4:] if p.default is inspect.Parameter.empty
+            p.name for p in params[5:] if p.default is inspect.Parameter.empty
         ]
 
         if params_without_defaults:
             raise ValueError(
-                f"All parameters beyond the required 4 (n_neurons, n_states, X, key) must have default values.\n"
+                f"All parameters beyond the required 5 (n_neurons, n_states, X, y, key) must have default values.\n"
                 f"Parameters without defaults: {params_without_defaults}"
             )
 
@@ -544,3 +547,18 @@ def resolve_initial_state_proba_init_function(
             "  - An array-like object with shape (n_states,)\n"
             "  - A callable with signature: (n_states: int, key: jax.random.PRNGKey, **kwargs) -> int or NDArray"
         )
+
+
+class GMHMMInitializer:
+    def __init__(self):
+       pass
+
+    def initialize_initial_proba(self, n_states: int, random_key=jax.random.PRNGKey(123)) -> jnp.ndarray:
+        pass
+
+    def initialize_transition_proba(self, n_states: int, random_key=jax.random.PRNGKey(124)) -> jnp.ndarray:
+        pass
+
+    def initialize_glm_params(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray, random_key=jax.random.PRNGKey(125)) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        pass
+
