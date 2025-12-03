@@ -621,7 +621,7 @@ def hmm_negative_log_likelihood(
     glm_params: Array,
     X: Array,
     y: Array,
-    posteriors: Array,
+    log_posteriors: Array,
     inverse_link_function: Callable,
     negative_log_likelihood_func: Callable,
 ):
@@ -639,8 +639,8 @@ def hmm_negative_log_likelihood(
         Design matrix of observations.
     y:
         Target responses.
-    posteriors:
-        Posterior probabilities over states.
+    log_posteriors:
+        Log posterior probabilities over states.
     inverse_link_function:
         Function mapping linear predictors to rates.
     negative_log_likelihood_func:
@@ -660,9 +660,17 @@ def hmm_negative_log_likelihood(
         nll = nll.sum(axis=1)  # sum over neurons
 
     # Compute dot products between log-likelihood terms and gammas
-    nll = jnp.sum(nll * posteriors)
+    # Handle positive nll values
+    pos_mask = nll > 0
+    log_nll_pos = jnp.where(pos_mask, jnp.log(nll), -jnp.inf)
+    nll_pos = jnp.exp(jax.scipy.special.logsumexp(log_nll_pos + log_posteriors))
 
-    return nll
+    # Handle negative nll values
+    neg_mask = nll < 0
+    log_nll_neg = jnp.where(neg_mask, jnp.log(-nll), -jnp.inf)
+    nll_neg = -jnp.exp(jax.scipy.special.logsumexp(log_nll_neg + log_posteriors))
+
+    return nll_pos + nll_neg
 
 
 @partial(jax.jit, static_argnames=["solver_run"])
@@ -736,7 +744,7 @@ def run_m_step(
 
     # Minimize negative log-likelihood to update GLM weights
     optimized_projection_weights, state = m_step_fn_glm_params(
-        glm_params, X, y, jnp.exp(log_posteriors)
+        glm_params, X, y, log_posteriors
     )
 
     return optimized_projection_weights, log_initial_prob, log_transition_prob, state
