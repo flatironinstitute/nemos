@@ -626,10 +626,14 @@ def hmm_negative_log_likelihood(
     negative_log_likelihood_func: Callable,
 ):
     """
-    Compute the negative log-likelihood of the GLM-HMM.
+    Compute the posterior-weighted negative log-likelihood for GLM parameters.
 
-    Compute the expected negative log-likelihood as a function of
-    the projection weights. The expectation is taken over the posteriors.
+    Computes the expected negative log-likelihood as a function of the GLM
+    projection weights, where the expectation is taken over the posterior
+    distribution over states.
+
+    This is the objective function minimized during the M-step to update
+    GLM parameters.
 
     Parameters
     ----------
@@ -640,7 +644,8 @@ def hmm_negative_log_likelihood(
     y:
         Target responses.
     log_posteriors:
-        Log posterior probabilities over states.
+        Log posterior probabilities over states, shape (n_time_bins, n_states).
+        Posteriors are exponentiated internally for weighting.
     inverse_link_function:
         Function mapping linear predictors to rates.
     negative_log_likelihood_func:
@@ -648,8 +653,9 @@ def hmm_negative_log_likelihood(
 
     Returns
     -------
-    nll:
-        The scalar negative log-likelihood weighted by the posteriors.
+    :
+        Scalar negative log-likelihood weighted by posteriors:
+        sum_t sum_k posterior[t,k] * nll[t,k]
     """
     predicted_rate = compute_rate_per_state(X, glm_params, inverse_link_function)
     nll = negative_log_likelihood_func(
