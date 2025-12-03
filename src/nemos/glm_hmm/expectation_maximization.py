@@ -62,18 +62,16 @@ def _analytical_m_step_initial_prob(
     using alternative optimization methods.
     """
     # Mask and sum
-    counts = jnp.sum(posteriors, axis=0, where=is_new_session[:, jnp.newaxis])
+    new_initial_prob = jnp.sum(posteriors, axis=0, where=is_new_session[:, jnp.newaxis])
 
     # Add prior
     if dirichlet_prior_alphas is not None:
-        numerator = counts + (dirichlet_prior_alphas - 1)
-    else:
-        numerator = counts
+        new_initial_prob = new_initial_prob + (dirichlet_prior_alphas - 1)
 
     # Normalize
-    initial_prob = numerator / jnp.sum(numerator)
+    new_initial_prob /= jnp.sum(new_initial_prob)
 
-    return initial_prob
+    return new_initial_prob
 
 
 def _analytical_m_step_transition_prob(
@@ -111,15 +109,14 @@ def _analytical_m_step_transition_prob(
     """
 
     if dirichlet_prior_alphas is not None:
-        numerator = joint_posterior + (dirichlet_prior_alphas - 1)
+        new_transition_prob = joint_posterior + dirichlet_prior_alphas - 1
     else:
-        numerator = joint_posterior
+        new_transition_prob = joint_posterior
 
     # Normalize rows
-    row_sums = jnp.sum(numerator, axis=1, keepdims=True)
-    transition_prob = numerator / row_sums
+    new_transition_prob /= jnp.sum(new_transition_prob, axis=1, keepdims=True)
 
-    return transition_prob
+    return new_transition_prob
 
 
 def compute_xi_log(
