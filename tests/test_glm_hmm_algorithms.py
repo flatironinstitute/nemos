@@ -26,6 +26,75 @@ from nemos.observation_models import BernoulliObservations, PoissonObservations
 from nemos.third_party.jaxopt.jaxopt import LBFGS
 
 
+def _add_prior_logspace(log_val: jnp.ndarray, offset: jnp.ndarray):
+    """Add prior offset in log-space (current implementation)."""
+    result = jnp.where(
+        offset > 0,
+        jnp.logaddexp(log_val, jnp.log(jnp.maximum(offset, 1e-10))),
+        log_val,
+    )
+    return result
+
+
+_vmap_add_prior = jax.vmap(_add_prior_logspace)
+
+
+# ============================================================================
+# LOG-SPACE IMPLEMENTATIONS (Current)
+# ============================================================================
+
+
+def m_step_initial_logspace(
+    log_posteriors: jnp.ndarray,
+    is_new_session: jnp.ndarray,
+    dirichlet_prior_alphas: jnp.ndarray | None = None,
+):
+    """M-step for initial probabilities in log-space.
+
+    Underflow safe update (slow and overkill, just for testing against our implementation).
+    """
+    # Mask out non-session-start time points
+    masked_log_posteriors = jnp.where(
+        is_new_session[:, jnp.newaxis], log_posteriors, -jnp.inf
+    )
+
+    # Sum over time in log-space
+    log_tmp_initial_prob = jax.scipy.special.logsumexp(masked_log_posteriors, axis=0)
+
+    if dirichlet_prior_alphas is not None:
+        prior_offset = dirichlet_prior_alphas - 1
+        log_numerator = _vmap_add_prior(log_tmp_initial_prob, prior_offset)
+    else:
+        log_numerator = log_tmp_initial_prob
+
+    # Normalize in log-space
+    log_sum = jax.scipy.special.logsumexp(log_numerator)
+    log_initial_prob = log_numerator - log_sum
+
+    return log_initial_prob
+
+
+def m_step_transition_logspace(
+    log_joint_posterior: jnp.ndarray,
+    dirichlet_prior_alphas: jnp.ndarray | None = None,
+):
+    """M-step for transition probabilities in log-space.
+
+    Underflow safe update (slow and overkill, just for testing against our implementation).
+    """
+    if dirichlet_prior_alphas is not None:
+        prior_offset = dirichlet_prior_alphas - 1
+        log_numerator = _vmap_add_prior(log_joint_posterior, prior_offset)
+    else:
+        log_numerator = log_joint_posterior
+
+    # Normalize each row in log-space
+    log_row_sums = jax.scipy.special.logsumexp(log_numerator, axis=1, keepdims=True)
+    log_transition_prob = log_numerator - log_row_sums
+
+    return log_transition_prob
+
+
 def viterbi_with_hmmlearn(
     log_emission, transition_proba, init_proba, is_new_session=None
 ):
@@ -1343,6 +1412,110 @@ class TestMStep:
             (opt_coef, opt_intercept),
             optimized_projection_weights_nemos,
         )
+
+    @pytest.mark.parametrize("underflow_scheme", ["one_of_three", "two_of_three"])
+    @pytest.mark.requires_x64
+    def test_m_step_underflow_logspace_controlled(self, underflow_scheme):
+        """Test run_m_step with controlled underflow in log-posteriors."""
+
+        n_timesteps = 1000
+        n_states = 3
+        n_sessions = 10
+
+        key = jax.random.PRNGKey(0)
+
+        # Generate baseline log-posteriors
+        key, subkey = jax.random.split(key)
+        log_posteriors = jax.random.normal(subkey, (n_timesteps, n_states))
+
+        # Apply controlled underflow
+        if underflow_scheme == "one_of_three":
+            # For each row, pick 1 of 3 to underflow
+            key, subkey = jax.random.split(key)
+            selected = jax.random.randint(subkey, (n_timesteps,), 0, n_states)
+            log_posteriors = log_posteriors.at[jnp.arange(n_timesteps), selected].set(
+                -200.0
+            )
+        elif underflow_scheme == "two_of_three":
+            # For each row, pick 2 of 3 to underflow
+            key, subkey = jax.random.split(key)
+            choices = jax.random.permutation(subkey, n_states)[:2]  # pick two indices
+            log_posteriors = log_posteriors.at[:, choices].set(-200.0)
+
+        # Normalize in log-space per row
+        log_posteriors = log_posteriors - jax.scipy.special.logsumexp(
+            log_posteriors, axis=1, keepdims=True
+        )
+
+        print(
+            "\nEffective underflow log_posterior fraction :",
+            np.mean(log_posteriors < -40),
+        )
+        # Session starts
+        is_new_session = np.zeros(n_timesteps, dtype=bool)
+        session_starts = np.linspace(0, n_timesteps - 1, n_sessions, dtype=int)
+        is_new_session[session_starts] = True
+        is_new_session = jnp.array(is_new_session)
+
+        # Log joint posterior for transitions
+        key, subkey = jax.random.split(key)
+        log_joint_posterior = jax.random.normal(subkey, (n_states, n_states))
+        if underflow_scheme == "one_of_three":
+            for i in range(n_states):
+                key, subkey = jax.random.split(key)
+                choices = jax.random.permutation(subkey, n_states)[:1]
+                log_joint_posterior = log_joint_posterior.at[i, choices].set(-200.0)
+        elif underflow_scheme == "two_of_three":
+            for i in range(n_states):
+                key, subkey = jax.random.split(key)
+                choices = jax.random.permutation(subkey, n_states)[:2]
+                log_joint_posterior = log_joint_posterior.at[i, choices].set(-200.0)
+
+        # Normalize each row in log-space to make them valid log-probabilities
+        log_joint_posterior = log_joint_posterior - jax.scipy.special.logsumexp(
+            log_joint_posterior, axis=1, keepdims=True
+        )
+        print(
+            "\nEffective underflow log_joint_posterior fraction :",
+            np.mean(log_joint_posterior < -40),
+        )
+
+        # Dirichlet priors
+        alphas_init = jnp.ones(n_states) * 1.5
+        alphas_trans = jnp.ones((n_states, n_states)) * 1.5
+
+        # Compute reference log-space M-step
+        log_init_ref = m_step_initial_logspace(
+            log_posteriors, is_new_session, alphas_init
+        )
+        log_trans_ref = m_step_transition_logspace(log_joint_posterior, alphas_trans)
+
+        # Dummy GLM parameters
+        dummy_coef = jnp.zeros((n_states, 1))
+        dummy_intercept = jnp.zeros((1,))
+        X_dummy = jnp.ones((n_timesteps, n_states))
+        y_dummy = jnp.ones((n_timesteps,))
+
+        # Run M-step
+        optimized_weights, log_init, log_trans, _ = run_m_step(
+            X_dummy,
+            y_dummy,
+            log_posteriors,
+            log_joint_posterior,
+            (dummy_coef, dummy_intercept),
+            is_new_session=is_new_session,
+            m_step_fn_glm_params=lambda *a, **kw: (dummy_coef, dummy_intercept),
+            dirichlet_prior_alphas_init_prob=alphas_init,
+            dirichlet_prior_alphas_transition=alphas_trans,
+        )
+
+        # Compare to reference
+        np.testing.assert_allclose(log_init, log_init_ref, rtol=1e-12, atol=0)
+        np.testing.assert_allclose(log_trans, log_trans_ref, rtol=1e-12, atol=0)
+
+        # Shapes
+        assert log_init.shape == (n_states,)
+        assert log_trans.shape == (n_states, n_states)
 
 
 class TestEMAlgorithm:
