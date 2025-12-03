@@ -249,13 +249,13 @@ def prepare_partial_hmm_nll_single_neuron(obs):
 
     # Solver
     def partial_hmm_negative_log_likelihood(
-        weights, design_matrix, observations, log_posteriors
+        weights, design_matrix, observations, posteriors
     ):
         return hmm_negative_log_likelihood(
             weights,
             X=design_matrix,
             y=observations,
-            log_posteriors=log_posteriors,
+            posteriors=posteriors,
             inverse_link_function=obs.default_inverse_link_function,
             negative_log_likelihood_func=negative_log_likelihood,
         )
@@ -817,7 +817,7 @@ class TestLikelihood:
             (coef, intercept),
             X[:, 1:],  # drop intercept column
             y,
-            np.log(gammas),
+            gammas,
             inverse_link_function=obs.default_inverse_link_function,
             negative_log_likelihood_func=negative_log_likelihood,
         )
@@ -883,13 +883,13 @@ class TestMStep:
             optimized_projection_weights_nemos,
             X[:, 1:],
             y,
-            np.log(gammas),
+            gammas,
         )
         n_ll_original = partial_hmm_negative_log_likelihood(
             (opt_coef, opt_intercept),
             X[:, 1:],
             y,
-            np.log(gammas),
+            gammas,
         )
 
         # Testing Eq. 13.18 of Bishop
@@ -1384,7 +1384,7 @@ class TestMStep:
             optimized_projection_weights_nemos,
             X[:, 1:],
             y,
-            np.log(gammas),
+            gammas,
         )
 
         # NLL with simulation input
@@ -1392,7 +1392,7 @@ class TestMStep:
             (opt_coef, opt_intercept),
             X[:, 1:],
             y,
-            np.log(gammas),
+            gammas,
         )
 
         # Testing Eq. 13.18 of Bishop
@@ -1568,7 +1568,7 @@ class TestEMAlgorithm:
                 weights,
                 X=design_matrix,
                 y=observations,
-                log_posteriors=posterior_prob,
+                posteriors=posterior_prob,
                 inverse_link_function=inverse_link_function,
                 negative_log_likelihood_func=negative_log_likelihood_func,
             )
@@ -1681,7 +1681,7 @@ class TestEMAlgorithm:
                 weights,
                 X=design_matrix,
                 y=observations,
-                log_posteriors=posterior_prob,
+                posteriors=posterior_prob,
                 inverse_link_function=inverse_link_function,
                 negative_log_likelihood_func=negative_log_likelihood_func,
             )
@@ -1829,7 +1829,7 @@ def test_e_and_m_step_for_population(generate_data_multi_state_population):
             weights,
             X=design_matrix,
             y=observations,
-            log_posteriors=posterior_prob,
+            posteriors=posterior_prob,
             inverse_link_function=obs.default_inverse_link_function,
             negative_log_likelihood_func=vmap_nll,
         )
@@ -2028,7 +2028,7 @@ class TestConvergence:
                 weights,
                 X=design_matrix,
                 y=observations,
-                log_posteriors=posterior_prob,
+                posteriors=posterior_prob,
                 inverse_link_function=obs.default_inverse_link_function,
                 negative_log_likelihood_func=negative_log_likelihood_func,
             )
@@ -2091,7 +2091,7 @@ class TestConvergence:
                 weights,
                 X=design_matrix,
                 y=observations,
-                log_posteriors=posterior_prob,
+                posteriors=posterior_prob,
                 inverse_link_function=obs.default_inverse_link_function,
                 negative_log_likelihood_func=negative_log_likelihood_func,
             )
@@ -2147,7 +2147,7 @@ class TestConvergence:
                 weights,
                 X=design_matrix,
                 y=observations,
-                log_posteriors=posterior_prob,
+                posteriors=posterior_prob,
                 inverse_link_function=obs.default_inverse_link_function,
                 negative_log_likelihood_func=negative_log_likelihood_func,
             )
@@ -2209,7 +2209,7 @@ class TestConvergence:
                 weights,
                 X=design_matrix,
                 y=observations,
-                log_posteriors=posterior_prob,
+                posteriors=posterior_prob,
                 inverse_link_function=obs.default_inverse_link_function,
                 negative_log_likelihood_func=negative_log_likelihood_func,
             )
@@ -2292,7 +2292,7 @@ class TestConvergence:
                 weights,
                 X=design_matrix,
                 y=observations,
-                log_posteriors=posterior_prob,
+                posteriors=posterior_prob,
                 inverse_link_function=obs.default_inverse_link_function,
                 negative_log_likelihood_func=negative_log_likelihood_func,
             )
@@ -2363,7 +2363,7 @@ class TestConvergence:
                 weights,
                 X=design_matrix,
                 y=observations,
-                log_posteriors=posterior_prob,
+                posteriors=posterior_prob,
                 inverse_link_function=obs.default_inverse_link_function,
                 negative_log_likelihood_func=negative_log_likelihood_func,
             )
@@ -2500,7 +2500,7 @@ class TestCompilation:
                 weights,
                 X=design_matrix,
                 y=observations,
-                log_posteriors=posterior_prob,
+                posteriors=posterior_prob,
                 inverse_link_function=obs.default_inverse_link_function,
                 negative_log_likelihood_func=negative_log_likelihood_func,
             )
@@ -2604,7 +2604,7 @@ class TestCompilation:
                 weights,
                 X=design_matrix,
                 y=observations,
-                log_posteriors=posterior_prob,
+                posteriors=posterior_prob,
                 inverse_link_function=obs.default_inverse_link_function,
                 negative_log_likelihood_func=negative_log_likelihood_func,
             )
@@ -2808,7 +2808,7 @@ class TestPytreeSupport:
                 weights,
                 X=design_matrix,
                 y=observations,
-                log_posteriors=posterior_prob,
+                posteriors=posterior_prob,
                 inverse_link_function=obs.default_inverse_link_function,
                 negative_log_likelihood_func=vmap_nll,
             )

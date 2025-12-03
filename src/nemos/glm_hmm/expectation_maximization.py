@@ -31,32 +31,35 @@ def _analytical_m_step_log_initial_prob(
     dirichlet_prior_alphas: Optional[jnp.ndarray] = None,
 ):
     """
-    Compute the M-step update for the initial state probabilities in log-space.
+    Compute the M-step update for initial state probabilities.
 
-    This function analytically computes a closed-form maximum-likelihood (or
-    MAP, if a Dirichlet prior is used) estimate of the initial state
-    distribution. The update is performed in probability space and returned in
-    log-space for consistency with the rest of the HMM code.
+    Analytically computes the maximum-likelihood (or MAP with Dirichlet prior)
+    estimate of the initial state distribution. Computation is performed in
+    probability space for efficiency.
 
     Parameters
     ----------
     posteriors :
         Posterior probabilities over latent states, shape ``(n_time_bins, n_states)``.
-        These values are assumed to come from a numerically stable forward–
-        backward pass.
     is_new_session :
-        Boolean array indicating the time bins corresponding to session
-        boundaries, shape ``(n_time_bins,)``. Only these positions contribute to the
-        initial state estimate.
+        Boolean array indicating session start time bins, shape ``(n_time_bins,)``.
+        Only these positions contribute to the initial state estimate.
     dirichlet_prior_alphas :
-        Optional Dirichlet prior parameters for the initial distribution,
-        shape ``(n_states,)``. If None, a uniform prior is assumed.
-        **Note**: This implementation assumes alpha >= 1 for all states.
+        Dirichlet prior parameters for the initial distribution,
+        shape ``(n_states,)``. If None, uses uniform prior.
+        **Note**: All alpha values must be >= 1.
 
     Returns
     -------
     initial_prob :
-        The updated initial state distribution, shape ``(n_states,)``.
+        Initial state probabilities, shape ``(n_states,)``.
+        Normalized to sum to 1.
+
+    Notes
+    -----
+    The current implementation requires Dirichlet prior parameters alpha >= 1.
+    Support for sparse priors (0 < alpha < 1) may be added in a future version
+    using alternative optimization methods.
     """
     # Mask and sum
     masked_posteriors = jnp.where(is_new_session[:, jnp.newaxis], posteriors, 0.0)
@@ -79,26 +82,33 @@ def _analytical_m_step_log_transition_prob(
     dirichlet_prior_alphas: Optional[jnp.ndarray] = None,
 ):
     """
-    Compute the M-step update for the transition probability matrix in log-space.
+    Compute the M-step update for the transition probability matrix.
 
-    This function analytically computes the maximum-likelihood (or MAP) estimate
-    of the transition matrix using expected transition counts. The computation
-    is carried out in probability space and the result returned in log-space.
+    Analytically computes the maximum-likelihood (or MAP with Dirichlet prior)
+    estimate of the transition matrix using expected transition counts.
+    Computation is performed in probability space for efficiency.
 
     Parameters
     ----------
     joint_posterior :
-        Expected counts of transitions from state i to j, shape ``(n_states, n_states)``.
+        Expected transition counts from state i to j (in probability space),
+        shape ``(n_states, n_states)``.
     dirichlet_prior_alphas :
-        Optional Dirichlet prior parameters for each row of the transition
-        matrix, shape ``(n_states, n_states)``. If None, a uniform prior is assumed.
-        **Note**: This implementation assumes alpha >= 1.
+        Dirichlet prior parameters for each row of the transition matrix,
+        shape ``(n_states, n_states)``. If None, uses uniform prior.
+        **Note**: All alpha values must be >= 1.
 
     Returns
     -------
     transition_prob :
-        Transition probability matrix, shape ``(n_states, n_states)``, where each row
-        is normalized to sum to 1 in probability space.
+        Transition probability matrix, shape ``(n_states, n_states)``.
+        Each row is normalized to sum to 1.
+
+    Notes
+    -----
+    The current implementation requires Dirichlet prior parameters alpha >= 1.
+    Support for sparse priors (0 < alpha < 1) may be added in a future version
+    using alternative optimization methods.
     """
 
     if dirichlet_prior_alphas is not None:
