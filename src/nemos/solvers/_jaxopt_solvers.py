@@ -62,11 +62,13 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
         params, state = self._solver.update(
             params, state, *self.hyperparams_prox, *args
         )
-        return (params, state, state.aux)
+        aux = self._extract_aux(state, fallback_name="aux_batch")
+        return (params, state, aux)
 
     def run(self, init_params: Params, *args: Any) -> JaxoptStepResult:
         params, state = self._solver.run(init_params, *self.hyperparams_prox, *args)
-        return (params, state, state.aux)
+        aux = self._extract_aux(state, fallback_name="aux_full")
+        return (params, state, aux)
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:
@@ -92,6 +94,18 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
     @property
     def maxiter(self):
         return self._solver.maxiter
+
+    def _extract_aux(self, state: JaxoptSolverState, fallback_name: str):
+        """
+        Return auxiliary output from a solver state.
+
+        Prefers `state.aux` when present; otherwise falls back to the provided field name
+        (e.g., `aux_batch` for SVRG updates or `aux_full` for SVRG run).
+        """
+        if hasattr(state, "aux"):
+            return state.aux
+
+        return getattr(state, fallback_name)
 
 
 class JaxoptProximalGradient(JaxoptAdapter):
