@@ -2,43 +2,9 @@ from typing import Any, Callable
 
 import equinox as eqx
 import jax
-import jax.numpy as jnp
+from optimistix._misc import asarray, inexact_asarray
 
 from ..typing import Params, Pytree
-
-
-def _asarray(dtype, x):
-    return jnp.asarray(x, dtype=dtype)
-
-
-# Work around JAX issue #15676
-_asarray = jax.custom_jvp(_asarray, nondiff_argnums=(0,))
-
-
-@_asarray.defjvp
-def _asarray_jvp(dtype, x, tx):
-    (x,) = x
-    (tx,) = tx
-    return _asarray(dtype, x), _asarray(dtype, tx)
-
-
-def asarray(x):
-    dtype = jnp.result_type(x)
-    return _asarray(dtype, x)
-
-
-def default_floating_dtype():
-    if jax.config.jax_enable_x64:  # pyright: ignore
-        return jnp.float64
-    else:
-        return jnp.float32
-
-
-def inexact_asarray(x):
-    dtype = jnp.result_type(x)
-    if not jnp.issubdtype(jnp.result_type(x), jnp.inexact):
-        dtype = default_floating_dtype()
-    return _asarray(dtype, x)
 
 
 def _as_inexact_array(params: Pytree):
@@ -75,7 +41,8 @@ def _pack_args(fn: Callable) -> Callable:
 
 
 def _out_asarray(fn: Callable):
-    # adapted from optimistix._misc
+    """Return output as inexact array, aux as array. Adapted from Optimistix."""
+
     def _fn_with_array_outputs(*args, **kwargs):
         out, aux = fn(*args, **kwargs)
         out = jax.tree_util.tree_map(inexact_asarray, out)
