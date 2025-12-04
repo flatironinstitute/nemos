@@ -416,12 +416,12 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         pass
 
     @abc.abstractmethod
-    def _get_coef_and_intercept(self) -> Tuple[Any, Any]:
+    def _get_model_params(self) -> ParamsT:
         """Pack coef_ and intercept_  into a params pytree."""
         pass
 
     @abc.abstractmethod
-    def _set_coef_and_intercept(self, params: Any):
+    def _set_model_params(self, params: ParamsT):
         """Unpack and store params pytree to coef_ and intercept_."""
         pass
 
