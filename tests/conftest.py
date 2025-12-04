@@ -343,10 +343,10 @@ class MockGLM(nmo.glm.GLM):
     ):
         pass
 
-    def _get_coef_and_intercept(self):
+    def _get_model_params(self):
         pass
 
-    def _set_coef_and_intercept(self, params):
+    def _set_model_params(self, params):
         pass
 
 
