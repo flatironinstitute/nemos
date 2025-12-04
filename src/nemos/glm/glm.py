@@ -9,6 +9,7 @@ from typing import Callable, Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
+from equinox import Module
 from numpy.typing import ArrayLike
 from sklearn.utils import InputTags, TargetTags
 
@@ -25,6 +26,7 @@ from ..type_casting import cast_to_jax, support_pynapple
 from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength, SolverState
 from ..utils import format_repr
 from .initialize_parameters import initialize_intercept_matching_mean_rate
+<<<<<<< HEAD
 from .params import GLMParams, GLMUserParams
 from .validation import GLMValidator, PopulationGLMValidator
 
@@ -259,6 +261,84 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         obs.check_observation_model(observation)
         self._observation_model = observation
 
+    def _check_params(
+        self,
+        params: Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike],
+        data_type: Optional[jnp.dtype] = None,
+    ) -> GLMParams:
+        """
+        Validate the dimensions and consistency of parameters and data.
+
+        This function checks the consistency of shapes and dimensions for model
+        parameters.
+        It ensures that the parameters and data are compatible for the model.
+
+        """
+        return GLMParams.validated(
+            params,
+            is_population_glm=isinstance(self, PopulationGLM),
+            data_type=data_type,
+        )
+
+    @staticmethod
+    def _check_input_dimensionality(
+        X: Union[FeaturePytree, jnp.ndarray] = None, y: jnp.ndarray = None
+    ):
+        if y is not None:
+            validation.check_tree_leaves_dimensionality(
+                y,
+                expected_dim=1,
+                err_message="y must be one-dimensional, with shape (n_timebins, ).",
+            )
+
+        if X is not None:
+            validation.check_tree_leaves_dimensionality(
+                X,
+                expected_dim=2,
+                err_message="X must be two-dimensional, with shape "
+                "(n_timebins, n_features) or pytree of the same shape.",
+            )
+
+    @staticmethod
+    def _check_input_and_params_consistency(
+        params: GLMParams,
+        X: Optional[Union[FeaturePytree, jnp.ndarray]] = None,
+        y: Optional[jnp.ndarray] = None,
+    ):
+        """Validate the number of features and structure in model parameters and input arguments.
+
+        Raises
+        ------
+        ValueError
+            If param and X have different structures.
+        ValueError
+            if the number of features is inconsistent between params[1] and X (when provided).
+
+        """
+        if X is not None:
+            # check that X and params[0] have the same structure
+            if isinstance(X, FeaturePytree):
+                data = X.data
+            else:
+                data = X
+
+            validation.check_tree_structure(
+                data,
+                params.coef,
+                err_message=f"X and coef must be the same type, but X is "
+                f"{type(X)} and coef is {type(params.coef)}",
+            )
+            # check the consistency of the feature axis
+            validation.check_tree_axis_consistency(
+                params.coef,
+                data,
+                axis_1=0,
+                axis_2=1,
+                err_message="Inconsistent number of features. "
+                f"spike basis coefficients has {jax.tree_util.tree_map(lambda p: p.shape[0], params.coef)} features, "
+                f"X has {jax.tree_util.tree_map(lambda x: x.shape[1], X)} features instead!",
+            )
+
     def _check_is_fit(self):
         """Ensure the instance has been fitted."""
         if (self.coef_ is None) or (self.intercept_ is None):
@@ -266,9 +346,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
                 "This GLM instance is not fitted yet. Call 'fit' with appropriate arguments."
             )
 
-    def _predict(
-        self, params: GLMParams, X: Union[dict[str, jnp.ndarray], jnp.ndarray]
-    ) -> jnp.ndarray:
+    def _predict(self, params: GLMParams, X: jnp.ndarray) -> jnp.ndarray:
         """
         Predicts firing rates based on given parameters and design matrix.
 
@@ -857,7 +935,66 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         self,
         X: dict[str, jnp.ndarray] | jnp.ndarray,
         y: jnp.ndarray,
+        init_params: Optional[Tuple[jnp.ndarray | dict, jnp.ndarray]] = None,
+    ) -> GLMParams:
+        """
+        Initialize the model parameters for the optimization process.
+
+        This method prepares the initializes model parameters if they are not provided. It is typically called
+        before starting the optimization process to ensure that all necessary
+        components and states are correctly configured.
+
+        Parameters
+        ----------
+        X :
+            The predictors used in the model fitting process. This can include feature matrices or other structures
+            compatible with the model's design.
+        y :
+            The response variables or outputs corresponding to the predictors. Used to initialize parameters when
+            they are not provided.
+        init_params :
+            Initial parameters for the model. If not provided, they will be initialized based on the input data X and y.
+            A tuple (coefficients, intercept).
+
+        Returns
+        -------
+        ModelParams
+            The initialized model parameters
+
+        Raises
+        ------
+        ValueError
+            If ``params`` is not of length two.
+        ValueError
+            If dimensionality of ``init_params`` are not correct.
+        ValueError
+            If ``X`` is not two-dimensional.
+        ValueError
+            If ``y`` is not correct (1D for GLM, 2D for populationGLM).
+
+        TypeError
+            If ``params`` are not array-like when provided.
+        TypeError
+            If ``init_params[i]`` cannot be converted to jnp.ndarray for all i
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import nemos as nmo
+        >>> X, y = np.random.normal(size=(10, 2)), np.random.uniform(size=10)
+        >>> model = nmo.glm.GLM()
+        >>> params = model.initialize_params(X, y)
+        >>> opt_state = model.initialize_state(X, y, params)
+        >>> # Now ready to run optimization or update steps
+        """
+        return super().initialize_params(X, y, init_params)
+
+    def initialize_state(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
         init_params: GLMParams,
+        cast_to_jax_and_drop_nans: bool = True,
     ) -> SolverState:
         """Initialize the solver by instantiating its init_state, update and, run methods.
 
