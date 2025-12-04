@@ -1,12 +1,19 @@
 import dataclasses
-from typing import Any, Callable, ClassVar, Tuple, Type, TypeAlias
+from typing import Any, Callable, ClassVar, Type, TypeAlias
 
 import equinox as eqx
 import optimistix as optx
 
 from ..regularizer import Regularizer
-from ..typing import Aux, Params, Pytree
+from ..typing import Aux, Params
 from ._abstract_solver import OptimizationInfo
+from ._aux_helpers import (
+    _as_inexact_array,
+    _convert_fn,
+    _drop_aux,
+    _pack_args,
+    _wrap_aux,
+)
 from ._solver_adapter import SolverAdapter
 
 DEFAULT_ATOL = 1e-8
@@ -15,51 +22,6 @@ DEFAULT_MAX_STEPS = 100_000
 
 OptimistixSolverState: TypeAlias = eqx.Module
 OptimistixStepResult: TypeAlias = tuple[Params, OptimistixSolverState, Aux]
-
-
-def _wrap_aux(fn: Callable) -> Callable:
-    """Make function that returns (fn(...), None)."""
-
-    def _fn_with_aux(*args, **kwargs):
-        return fn(*args, **kwargs), None
-
-    return _fn_with_aux
-
-
-def _drop_aux(fn: Callable) -> Callable:
-    """Make function that returns fn's value without its aux."""
-
-    def _fn_without_aux(*args, **kwargs):
-        return fn(*args, **kwargs)[0]
-
-    return _fn_without_aux
-
-
-def _pack_args(fn: Callable) -> Callable:
-    """Make function that accepts fn(params, args) instead of fn(params, *args)."""
-
-    def _fn_with_packed_args(params, args):
-        return fn(params, *args)
-
-    return _fn_with_packed_args
-
-
-# if using jaxtyping, a more precise return type would be
-# Tuple[PyTree[jax.ShapeDtypeStruct], PyTree[jax.ShapeDtypeStruct]]
-def _make_f_and_aux_struct(
-    fn: Callable, has_aux: bool, y0: Params, args: Tuple[Any, ...]
-) -> Tuple[Pytree, Pytree]:
-    """
-    Derive f_struct and aux_struct. Adapted from Optimistix's optimise.
-
-    f_struct is "the shape+dtype of the output of `fn`".
-    aux_struct is the same for the returned aux.
-    """
-    if not has_aux:
-        fn = _wrap_aux(fn)
-    fn = eqx.filter_closure_convert(fn, y0, args)  # pyright: ignore
-    f_struct, aux_struct = fn.out_struct  # pyright: ignore[reportFunctionMemberAccess]
-    return f_struct, aux_struct
 
 
 @dataclasses.dataclass
@@ -159,12 +121,12 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
         self.stats = {}
 
     def init_state(self, init_params: Params, *args: Any) -> OptimistixSolverState:
-        f_struct, aux_struct = _make_f_and_aux_struct(
-            self.fun_with_aux, True, init_params, args
-        )
+        init_params = _as_inexact_array(init_params)
+        fn = _convert_fn(self.fun_with_aux, True, init_params, args)
+        f_struct, aux_struct = fn.out_struct
 
         return self._solver.init(
-            self.fun_with_aux,
+            fn,
             init_params,
             args,
             self.config.options,
@@ -179,8 +141,13 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
         state: OptimistixSolverState,
         *args: Any,
     ) -> OptimistixStepResult:
+        params = _as_inexact_array(params)
+
+        # TODO: Check if I can store this
+        fn = _convert_fn(self.fun_with_aux, True, params, args)
+
         new_params, state, aux = self._solver.step(
-            fn=self.fun_with_aux,
+            fn=fn,
             y=params,
             args=args,
             state=state,
@@ -241,7 +208,9 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
     def get_optim_info(self, state: OptimistixSolverState) -> OptimizationInfo:
         num_steps = self.stats["num_steps"].item()
 
-        function_val = state.f.item() if hasattr(state, "f") else state.f_info.f.item()  # pyright: ignore
+        function_val = (
+            state.f.item() if hasattr(state, "f") else state.f_info.f.item()
+        )  # pyright: ignore
 
         return OptimizationInfo(
             function_val=function_val,
