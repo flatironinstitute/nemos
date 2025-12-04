@@ -1817,7 +1817,7 @@ class TestGLMObservationModel:
 
     @pytest.mark.parametrize("nan_inputs", [True, False])
     @pytest.mark.parametrize(
-        "solver_name", ["ProximalGradient", "GradientDescent", "LBFGS"]
+        "solver_name", ["ProximalGradient", "GradientDescent", "LBFGS", "BFGS"]
     )
     @pytest.mark.solver_related
     def test_update_params_are_finite(
