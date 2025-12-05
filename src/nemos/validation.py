@@ -1,16 +1,24 @@
 """Collection of methods utilities."""
 
+import abc
 import difflib
 import warnings
-from typing import Any, List, Optional, Union
+from dataclasses import dataclass
+from typing import Any, Callable, Generic, List, Optional, Tuple, TypeVar, Union
 
 import jax
 import jax.numpy as jnp
 from numpy.typing import DTypeLike, NDArray
 
 from . import utils
+from .base_class import Base
 from .pytrees import FeaturePytree
 from .tree_utils import get_valid_multitree, pytree_map_and_reduce
+
+# User provided init_params (e.g. for GLMs Tuple[array, array])
+UserProvidedParamsT = TypeVar("UserProvidedParamsT")
+# Model internal representation (e.g. for GLMs nemos.glm.glm.GLMParams)
+ModelParamsT = TypeVar("ModelParamsT")
 
 
 def error_invalid_entry(*pytree: Any):
@@ -486,3 +494,315 @@ def _suggest_keys(
         )
         key_paris.append((unmatched_key, suggestions[0] if suggestions else None))
     return key_paris
+
+
+@dataclass(frozen=True)
+class ParameterValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
+    """
+    Base class for validating and converting user-provided parameters to model parameters.
+
+    This class provides a configurable validation pipeline that transforms user-provided
+    parameters (typically simple structures like tuples of arrays) into validated model
+    parameter objects with proper structure and type checking.
+
+    The validation sequence consists of five steps:
+    1. check_user_params_structure: Validate the overall structure of user input
+    2. convert_to_jax_arrays: Convert array-like objects to JAX arrays
+    3. check_array_dimensions: Verify array dimensionality matches expectations
+    4. cast_to_model_params: Transform validated input into model parameter structure
+    5. additional_validation_model_params: Perform custom validation on the final parameter object
+
+    Subclasses should:
+    - Set `expected_array_dims` to specify required dimensionality for each parameter array
+    - Set `model_param_structure` to define the target pytree structure
+    - Set `model_class` to reference the associated model class
+    - Override `check_user_params_structure` to validate user-provided parameter structure
+    - Override `additional_validation_model_params` to implement custom validation logic
+
+    Important
+    ---------
+    When subclassing, you MUST use type annotations on class attributes to override the
+    default field values. Without type annotations, attributes become class attributes
+    rather than instance fields, and the defaults from the parent class will be used.
+
+    Example::
+
+        # Correct - with type annotations:
+        class MyValidator(ParameterValidator[UserParams, ModelParams]):
+            expected_array_dims: Tuple[int, int] = (1, 1)  # Instance field
+            model_class: type = MyModel  # Instance field
+
+        # Incorrect - without type annotations:
+        class MyValidator(ParameterValidator[UserParams, ModelParams]):
+            expected_array_dims = (1, 1)  # Class attribute, won't override!
+            model_class = MyModel  # Class attribute, won't override!
+
+    Attributes
+    ----------
+    expected_array_dims :
+        Expected dimensionality for each array in the user-provided parameters.
+        Should match the structure of user input (e.g., (2, 1) for GLM coef and intercept).
+    to_model_params :
+        Function to transform validated user parameters into model parameter structure.
+    model_class :
+        The model class these parameters belong to (used for error messages).
+    validation_sequence :
+        Names of validation methods to call in order.
+    validation_sequence_kwargs :
+        Keyword arguments for each validation method (None = no kwargs).
+    """
+
+    expected_array_dims: Tuple[int] = None
+    model_class: type = None
+    to_model_params: Callable[[UserProvidedParamsT], ModelParamsT] = None
+    validation_sequence: Tuple[str, ...] = (
+        "check_user_params_structure",
+        "convert_to_jax_arrays",
+        "check_array_dimensions",
+        "cast_to_model_params",
+        "additional_validation_model_params",
+    )
+    validation_sequence_kwargs: Tuple[Optional[dict], ...] = (
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+
+    @abc.abstractmethod
+    def check_user_params_structure(
+        self, params: UserProvidedParamsT, **kwargs
+    ) -> UserProvidedParamsT:
+        """
+        Validate the structure of user-provided parameters.
+
+        This method should verify that the user input has an acceptable structure
+        (e.g., is an iterable of length 2 for GLM parameters). This is called first
+        in the validation pipeline to provide early, clear error messages.
+
+        This method should NOT check:
+        - Array element types (handled by convert_to_jax_arrays)
+        - Array dimensionality (handled by check_array_dimensions)
+        - Parameter value constraints (handled by additional_validation_model_params)
+
+        Parameters
+        ----------
+        params : UserProvidedParamsT
+            User-provided parameters in their original format.
+
+        Returns
+        -------
+        UserProvidedParamsT
+            The same parameters, validated for structure.
+
+        Raises
+        ------
+        ValueError
+            If the parameter structure is invalid.
+        """
+        return params
+
+    def check_array_dimensions(
+        self,
+        params: UserProvidedParamsT,
+        err_msg: Optional[str] = None,
+        **kwargs,
+    ) -> UserProvidedParamsT:
+        """
+        Verify that all arrays have the expected dimensionality.
+
+        Checks that each array in the parameter pytree has the dimensionality
+        specified in `expected_array_dims`.
+
+        Parameters
+        ----------
+        params : UserProvidedParamsT
+            User-provided parameters (must contain JAX arrays at leaves).
+        err_msg : str, optional
+            Custom error message. If None, a default message is generated.
+
+        Returns
+        -------
+        UserProvidedParamsT
+            The same parameters, validated for dimensionality.
+
+        Raises
+        ------
+        ValueError
+            If any array has unexpected dimensionality.
+        """
+        if not pytree_map_and_reduce(
+            lambda arr, expected_dim: arr.ndim == expected_dim,
+            all,
+            params,
+            self.expected_array_dims,
+        ):
+            if err_msg is None:
+                provided_dims = jax.tree_util.tree_map(lambda x: x.ndim, params)
+                provided_dims_flat = tuple(jax.tree_util.tree_leaves(provided_dims))
+                err_msg = (
+                    f"Unexpected array dimensionality for {self.model_class.__name__} parameters. "
+                    f"Expected dimensions: {self.expected_array_dims}. "
+                    f"Provided dimensions: {provided_dims_flat}"
+                )
+            raise ValueError(err_msg)
+        return params
+
+    @classmethod
+    def convert_to_jax_arrays(
+        cls,
+        params: UserProvidedParamsT,
+        data_type: Optional[jax.dtypes] = None,
+        err_msg: Optional[str] = None,
+        **kwargs,
+    ) -> UserProvidedParamsT:
+        """
+        Convert all array-like objects in parameters to JAX arrays.
+
+        Parameters
+        ----------
+        params : UserProvidedParamsT
+            User-provided parameters with array-like objects at leaves.
+        data_type : jax.dtype, optional
+            Target JAX dtype for arrays. If None, infers from input.
+        err_msg : str, optional
+            Custom error message for conversion failures.
+
+        Returns
+        -------
+        UserProvidedParamsT
+            Parameters with JAX arrays at all leaves.
+
+        Raises
+        ------
+        TypeError
+            If any leaf cannot be converted to a JAX array.
+        """
+        if err_msg is None:
+            err_msg = (
+                "Failed to convert parameters to JAX arrays. "
+                "Parameters must be array-like objects (or pytrees of array-like objects) "
+                "with numeric data types."
+            )
+        return convert_tree_leaves_to_jax_array(
+            params, err_message=err_msg, data_type=data_type
+        )
+
+    def cast_to_model_params(
+        self,
+        params: UserProvidedParamsT,
+        model_param_structure: jax.tree_util.PyTreeDef,
+        **kwargs,
+    ) -> ModelParamsT:
+        """
+        Transform validated user parameters into model parameter structure.
+
+        Uses `model_param_structure` to unflatten the validated parameter arrays
+        into the target model parameter object (e.g., GLMParams).
+
+        This method assumes parameters have already been validated for structure
+        and dimensionality, so it should not fail.
+
+        Parameters
+        ----------
+        params :
+            Validated user parameters as JAX arrays.
+        model_param_structure:
+            Target model parameter structure.
+
+        Returns
+        -------
+        ModelParamsT
+            Parameters in model parameter structure.
+        """
+        return self.to_model_params(params)
+
+    def validate_and_cast(
+        self, params: UserProvidedParamsT, **validation_kwargs
+    ) -> ModelParamsT:
+        """
+        Run the complete validation pipeline on user-provided parameters.
+
+        Executes all validation steps in sequence, transforming user input
+        into a validated model parameter object.
+
+        Parameters
+        ----------
+        params : UserProvidedParamsT
+            User-provided parameters to validate.
+        **validation_kwargs
+            Additional keyword arguments passed to validation methods.
+
+        Returns
+        -------
+        ModelParamsT
+            Validated and structured model parameters.
+
+        Raises
+        ------
+        ValueError, TypeError
+            If any validation step fails.
+        """
+        validated_params = params
+        kwargs_sequence = [
+            kwargs if kwargs is not None else {}
+            for kwargs in self.validation_sequence_kwargs
+        ]
+
+        for method_name, method_kwargs in zip(
+            self.validation_sequence, kwargs_sequence
+        ):
+            # Merge default kwargs with any user-provided kwargs
+            merged_kwargs = {**method_kwargs, **validation_kwargs}
+            validated_params = getattr(self, method_name)(
+                validated_params, **merged_kwargs
+            )
+
+        return validated_params
+
+    @abc.abstractmethod
+    def additional_validation_model_params(
+        self, params: ModelParamsT, **kwargs
+    ) -> ModelParamsT:
+        """
+        Perform custom validation on model parameters.
+
+        This method is called after parameters have been cast to the model
+        parameter structure. It should implement model-specific validation
+        logic (e.g., checking shape consistency between coefficients and intercepts).
+
+        Since parameters are already in model structure, you can use attribute
+        access for readable validation logic.
+
+        Parameters
+        ----------
+        params : ModelParamsT
+            Parameters in model structure (e.g., GLMParams with .coef and .intercept).
+
+        Returns
+        -------
+        ModelParamsT
+            The same parameters, validated for model-specific constraints.
+
+        Raises
+        ------
+        ValueError
+            If any model-specific validation check fails.
+
+        Examples
+        --------
+        >>> def additional_validation_model_params(self, params: GLMParams) -> GLMParams:
+        ...     n_features = params.coef.shape[0]
+        ...     n_neurons = params.intercept.shape[0]
+        ...     if params.coef.shape != (n_features, n_neurons):
+        ...         raise ValueError("Coefficient shape mismatch")
+        ...     return params
+        """
+        return params
+
+    def __repr__(self):
+        """Small repr for the validator class."""
+        return utils.format_repr(
+            self, multiline=True, use_name_keys=["to_model_params"]
+        )
