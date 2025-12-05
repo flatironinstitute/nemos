@@ -3,6 +3,7 @@
 # required to get ArrayLike to render correctly
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Literal, NamedTuple, Optional, Tuple, Union
 
@@ -15,7 +16,7 @@ from sklearn.utils import InputTags, TargetTags
 from .. import observation_models as obs
 from .. import tree_utils, validation
 from .._observation_model_builder import instantiate_observation_model
-from ..base_regressor import BaseRegressor, ParameterValidator, strip_metadata
+from ..base_regressor import BaseRegressor, strip_metadata
 from ..exceptions import NotFittedError
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..pytrees import FeaturePytree
@@ -1755,7 +1756,8 @@ class PopulationGLM(GLM):
         return klass
 
 
-class GLMParamsValidator(ParameterValidator[GLMUserParams, GLMParams]):
+@dataclass(frozen=True)
+class GLMParamsValidator(validation.ParameterValidator[GLMUserParams, GLMParams]):
     """Parameter validator for GLM models."""
 
     expected_array_dims: Tuple[int] = (
@@ -1780,15 +1782,26 @@ class GLMParamsValidator(ParameterValidator[GLMUserParams, GLMParams]):
 
     def additional_validation_model_params(self, params: GLMParams, **kwargs):
         """
+        Perform GLM-specific parameter validation.
+
+        Validates that the intercept has the correct shape for a single-neuron GLM.
 
         Parameters
         ----------
-        params
-        kwargs
+        params : GLMParams
+            GLM parameters with coef and intercept attributes.
+        **kwargs
+            Additional keyword arguments (unused).
 
         Returns
         -------
+        GLMParams
+            The validated parameters.
 
+        Raises
+        ------
+        ValueError
+            If intercept does not have shape (1,).
         """
         # check intercept shape
         if params.intercept.shape != (1,):
@@ -1803,11 +1816,56 @@ class GLMParamsValidator(ParameterValidator[GLMUserParams, GLMParams]):
         err_msg: Optional[str] = None,
         err_message_format: str = None,
     ) -> GLMUserParams:
+        """
+        Check array dimensions with custom error formatting for GLM parameters.
+
+        Overrides the base implementation to provide GLM-specific error messages
+        that include the actual shapes of the provided coefficient and intercept arrays.
+
+        Parameters
+        ----------
+        params : GLMUserParams
+            User-provided parameters as a tuple (coef, intercept).
+        err_msg : str, optional
+            Custom error message (unused, overridden by err_message_format).
+        err_message_format : str, optional
+            Format string for error message that takes two shape arguments.
+
+        Returns
+        -------
+        GLMUserParams
+            The validated parameters.
+
+        Raises
+        ------
+        ValueError
+            If arrays have incorrect dimensionality.
+        """
         err_msg = err_message_format.format(params[0].shape, params[1].shape)
         return super().check_array_dimensions(self, params, err_msg=err_msg)
 
     def check_user_params_structure(
         self, params: GLMUserParams, **kwargs
     ) -> GLMUserParams:
+        """
+        Validate that user parameters are a two-element structure.
+
+        Parameters
+        ----------
+        params : GLMUserParams
+            User-provided parameters (should be a tuple/list of length 2).
+        **kwargs
+            Additional keyword arguments (unused).
+
+        Returns
+        -------
+        GLMUserParams
+            The validated parameters.
+
+        Raises
+        ------
+        ValueError
+            If parameters do not have length two.
+        """
         validation.check_length(params, 2, "Params must have length two.")
         return params
