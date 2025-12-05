@@ -692,14 +692,10 @@ class ParameterValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
     def cast_to_model_params(
         self,
         params: UserProvidedParamsT,
-        model_param_structure: jax.tree_util.PyTreeDef,
         **kwargs,
     ) -> ModelParamsT:
         """
         Transform validated user parameters into model parameter structure.
-
-        Uses `model_param_structure` to unflatten the validated parameter arrays
-        into the target model parameter object (e.g., GLMParams).
 
         This method assumes parameters have already been validated for structure
         and dimensionality, so it should not fail.
@@ -708,8 +704,6 @@ class ParameterValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
         ----------
         params :
             Validated user parameters as JAX arrays.
-        model_param_structure:
-            Target model parameter structure.
 
         Returns
         -------
