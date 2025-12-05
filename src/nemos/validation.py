@@ -514,7 +514,7 @@ class ParameterValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
 
     Subclasses should:
     - Set `expected_array_dims` to specify required dimensionality for each parameter array
-    - Set `model_param_structure` to define the target pytree structure
+    - Set `to_model_params` to define the transformation function to model parameter structure
     - Set `model_class` to reference the associated model class
     - Override `check_user_params_structure` to validate user-provided parameter structure
     - Override `additional_validation_model_params` to implement custom validation logic
@@ -590,6 +590,8 @@ class ParameterValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
         ----------
         params : UserProvidedParamsT
             User-provided parameters in their original format.
+        **kwargs
+            Additional keyword arguments (unused in base implementation).
 
         Returns
         -------
@@ -621,6 +623,8 @@ class ParameterValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
             User-provided parameters (must contain JAX arrays at leaves).
         err_msg : str, optional
             Custom error message. If None, a default message is generated.
+        **kwargs
+            Additional keyword arguments (unused in base implementation).
 
         Returns
         -------
@@ -668,6 +672,8 @@ class ParameterValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
             Target JAX dtype for arrays. If None, infers from input.
         err_msg : str, optional
             Custom error message for conversion failures.
+        **kwargs
+            Additional keyword arguments (unused in base implementation).
 
         Returns
         -------
@@ -697,13 +703,18 @@ class ParameterValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
         """
         Transform validated user parameters into model parameter structure.
 
+        Uses the `to_model_params` function to convert validated parameter arrays
+        into the target model parameter object (e.g., GLMParams).
+
         This method assumes parameters have already been validated for structure
         and dimensionality, so it should not fail.
 
         Parameters
         ----------
-        params :
+        params : UserProvidedParamsT
             Validated user parameters as JAX arrays.
+        **kwargs
+            Additional keyword arguments (unused in base implementation).
 
         Returns
         -------
@@ -773,6 +784,8 @@ class ParameterValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
         ----------
         params : ModelParamsT
             Parameters in model structure (e.g., GLMParams with .coef and .intercept).
+        **kwargs
+            Additional keyword arguments (unused in base implementation).
 
         Returns
         -------
@@ -786,7 +799,7 @@ class ParameterValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
 
         Examples
         --------
-        >>> def additional_validation_model_params(self, params: GLMParams) -> GLMParams:
+        >>> def additional_validation_model_params(self, params: GLMParams, **kwargs) -> GLMParams:
         ...     n_features = params.coef.shape[0]
         ...     n_neurons = params.intercept.shape[0]
         ...     if params.coef.shape != (n_features, n_neurons):
