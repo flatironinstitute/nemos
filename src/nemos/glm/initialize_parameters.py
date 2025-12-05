@@ -7,7 +7,7 @@ import jax.numpy as jnp
 from numpy.typing import ArrayLike
 from scipy.optimize import root_scalar
 
-from ..inverse_link_function_utils import exp, logistic, norm_cdf, softplus, identity
+from ..inverse_link_function_utils import exp, identity, logistic, norm_cdf, softplus
 from ..utils import one_over_x
 
 # dictionary of known inverse link functions.

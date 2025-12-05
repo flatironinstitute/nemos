@@ -9,7 +9,7 @@ from numpy.typing import NDArray
 
 from . import utils
 from .base_class import Base
-from .inverse_link_function_utils import exp, logistic, identity
+from .inverse_link_function_utils import exp, identity, logistic
 
 __all__ = [
     "PoissonObservations",
