@@ -1418,9 +1418,9 @@ class GaussianObservations(Observations):
         Parameters
         ----------
         y :
-            The target activity to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
+            The target activity to compare against. Shape ``(n_time_bins, )``, or ``(n_time_bins, n_neurons)``.
         predicted_rate :
-            The predicted rate of the current model. Shape (n_time_bins, ) or (n_time_bins, n_neurons).
+            The predicted rate of the current model. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)``.
         aggregate_sample_scores :
             Function that aggregates the log-likelihood of each sample.
 
@@ -1441,7 +1441,7 @@ class GaussianObservations(Observations):
     ):
         r"""Compute the Gaussian negative log-likelihood.
 
-        This computes the Gaussian log-likelihood of the predicted rates
+        Compute the Gaussian log-likelihood of the predicted rates
         for the observed neural activity up to a constant.
 
         The formula for the Gaussian log-likelihood is given by:
@@ -1455,9 +1455,9 @@ class GaussianObservations(Observations):
         Parameters
         ----------
         y :
-            The target activity to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
+            The target activity to compare against. Shape ``(n_time_bins, )``, or ``(n_time_bins, n_neurons)``.
         predicted_rate :
-            The predicted rate of the current model. Shape (n_time_bins, ) or (n_time_bins, n_neurons).
+            The predicted rate of the current model. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)``.
         scale :
             The scale parameter of the model.
         aggregate_sample_scores :
@@ -1466,7 +1466,7 @@ class GaussianObservations(Observations):
         Returns
         -------
         :
-            The Gaussian log-likelihood. Shape (1,).
+            The Gaussian log-likelihood. Shape ``(1,)``.
         """
         norm = -0.5 * jnp.log(2 * jnp.pi * scale)
         return aggregate_sample_scores(
@@ -1485,7 +1485,7 @@ class GaussianObservations(Observations):
         Sample from the Gaussian distribution.
 
         This method generates random numbers from a Gaussian distribution based on the given
-        `predicted_rate` and `scale`.
+        ``predicted_rate`` and ``scale``.
 
         Parameters
         ----------
@@ -1500,7 +1500,7 @@ class GaussianObservations(Observations):
         Returns
         -------
         jnp.ndarray
-            Random numbers generated from the Gaussian distribution based on the `predicted_rate` and the `scale`.
+            Random numbers generated from the Gaussian distribution based on the ``predicted_rate`` and the ``scale``.
         """
         return (
             jax.random.normal(key, shape=predicted_rate.shape) * jnp.sqrt(scale)
@@ -1518,9 +1518,9 @@ class GaussianObservations(Observations):
         Parameters
         ----------
         neural_activity:
-            The spike count activity. Shape (n_time_bins, ) or (n_time_bins, n_neurons) for population models.
+            The spike count activity. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)`` for population models.
         predicted_rate:
-            The predicted firing rates. Shape (n_time_bins, ) or (n_time_bins, n_neurons) for population models.
+            The predicted firing rates. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)`` for population models.
         scale:
             Scale parameter of the model.
 
