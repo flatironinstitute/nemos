@@ -211,6 +211,7 @@ class GLM(BaseRegressor[GLMParams]):
             solver_name=solver_name,
             solver_kwargs=solver_kwargs,
         )
+        self._validator = GLMParamsValidator()
 
         self.observation_model = observation_model
         self.inverse_link_function = inverse_link_function
@@ -262,7 +263,7 @@ class GLM(BaseRegressor[GLMParams]):
 
     def _check_params(
         self,
-        params: Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike],
+        params: GLMUserParams,
         data_type: Optional[jnp.dtype] = None,
     ) -> GLMParams:
         """
@@ -273,11 +274,7 @@ class GLM(BaseRegressor[GLMParams]):
         It ensures that the parameters and data are compatible for the model.
 
         """
-        return GLMParams.validated(
-            params,
-            is_population_glm=isinstance(self, PopulationGLM),
-            data_type=data_type,
-        )
+        return self._validator.validate_and_cast(params)
 
     @staticmethod
     def _check_input_dimensionality(
