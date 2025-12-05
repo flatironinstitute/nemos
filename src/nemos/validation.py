@@ -515,7 +515,7 @@ class ParameterValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
 
     Subclasses should:
     - Set `expected_array_dims` to specify required dimensionality for each parameter array
-    - Set `model_param_structure` to define the target pytree structure
+    - Set `to_model_params` to define the transformation function to model parameter structure
     - Set `model_class` to reference the associated model class
     - Override `check_user_params_structure` to validate user-provided parameter structure
     - Override `additional_validation_model_params` to implement custom validation logic
