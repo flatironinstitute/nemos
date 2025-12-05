@@ -1756,7 +1756,7 @@ class PopulationGLM(GLM):
         return klass
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class GLMParamsValidator(validation.ParameterValidator[GLMUserParams, GLMParams]):
     """Parameter validator for GLM models."""
 
@@ -1842,7 +1842,7 @@ class GLMParamsValidator(validation.ParameterValidator[GLMUserParams, GLMParams]
             If arrays have incorrect dimensionality.
         """
         err_msg = err_message_format.format(params[0].shape, params[1].shape)
-        return super().check_array_dimensions(self, params, err_msg=err_msg)
+        return super().check_array_dimensions(params, err_msg=err_msg)
 
     def check_user_params_structure(
         self, params: GLMUserParams, **kwargs
