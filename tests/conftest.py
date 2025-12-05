@@ -1344,6 +1344,7 @@ def configure_solver_backend():
         nmo.solvers.solver_registry.clear()
         nmo.solvers.solver_registry.update(original)
 
+
 @pytest.fixture
 def gaussianGLM_model_instantiation():
     """Set up a Gaussian GLM for testing purposes.
@@ -1366,11 +1367,13 @@ def gaussianGLM_model_instantiation():
     w_true = np.random.normal(size=(5,))
     observation_model = nmo.observation_models.GaussianObservations()
     regularizer = nmo.regularizer.UnRegularized()
-    model = nmo.glm.GLM(observation_model, regularizer=regularizer,
-                        solver_name="LBFGS")#, solver_kwargs={"tol":1e-12})
+    model = nmo.glm.GLM(
+        observation_model, regularizer=regularizer, solver_name="LBFGS"
+    )  # , solver_kwargs={"tol":1e-12})
     model.scale_ = 1.0
     rate = jax.numpy.einsum("k,tk->t", w_true, X) + b_true
     return X, np.random.normal(rate), model, (w_true, b_true), rate
+
 
 @pytest.fixture
 def population_gaussianGLM_model_instantiation():
@@ -1395,12 +1398,14 @@ def population_gaussianGLM_model_instantiation():
     observation_model = nmo.observation_models.GaussianObservations()
     regularizer = nmo.regularizer.UnRegularized()
     model = nmo.glm.PopulationGLM(
-        observation_model=observation_model, regularizer=regularizer,
-        solver_name="LBFGS"
+        observation_model=observation_model,
+        regularizer=regularizer,
+        solver_name="LBFGS",
     )
     model.scale_ = 1.0
     rate = jax.numpy.einsum("ki,tk->ti", w_true, X) + b_true
     return X, np.random.normal(rate), model, (w_true, b_true), rate
+
 
 @pytest.fixture
 def gaussianGLM_model_instantiation_pytree(gaussianGLM_model_instantiation):
@@ -1424,9 +1429,11 @@ def gaussianGLM_model_instantiation_pytree(gaussianGLM_model_instantiation):
         dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
         true_params[1],
     )
-    model_tree = nmo.glm.GLM(model.observation_model, regularizer=model.regularizer,
-                             solver_name="LBFGS")#, solver_kwargs={"tol":1e-12})
+    model_tree = nmo.glm.GLM(
+        model.observation_model, regularizer=model.regularizer, solver_name="LBFGS"
+    )  # , solver_kwargs={"tol":1e-12})
     return X_tree, spikes, model_tree, true_params_tree, rate
+
 
 @pytest.fixture
 def population_gaussianGLM_model_instantiation_pytree(
@@ -1446,16 +1453,15 @@ def population_gaussianGLM_model_instantiation_pytree(
             - (w_true, b_true) (tuple): True weight and bias parameters.
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
-    X, spikes, model, true_params, rate = (
-        population_gaussianGLM_model_instantiation
-    )
+    X, spikes, model, true_params, rate = population_gaussianGLM_model_instantiation
     X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
     true_params_tree = (
         dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
         true_params[1],
     )
     model_tree = nmo.glm.PopulationGLM(
-        observation_model=model.observation_model, regularizer=model.regularizer,
-        solver_name="LBFGS"
+        observation_model=model.observation_model,
+        regularizer=model.regularizer,
+        solver_name="LBFGS",
     )
     return X_tree, np.random.normal(rate), model_tree, true_params_tree, rate

@@ -14,7 +14,12 @@ import sklearn
 import statsmodels.api as sm
 from numba import njit
 from pynapple import Tsd, TsdFrame
-from sklearn.linear_model import GammaRegressor, LogisticRegression, PoissonRegressor, LinearRegression
+from sklearn.linear_model import (
+    GammaRegressor,
+    LogisticRegression,
+    PoissonRegressor,
+    LinearRegression,
+)
 from sklearn.model_selection import GridSearchCV
 
 import nemos as nmo
@@ -1477,7 +1482,9 @@ class TestGLMObservationModel:
                     norm = y.shape[0]
                 elif y.ndim == 2:
                     norm = y.shape[0] * y.shape[1]
-                return sm.families.Gaussian().loglike(y, mean_firing, scale=scale) / norm
+                return (
+                    sm.families.Gaussian().loglike(y, mean_firing, scale=scale) / norm
+                )
 
         else:
             raise ValueError("Unknown model instantiation")
@@ -2902,7 +2909,9 @@ class TestGammaGLM:
         assert ratesim.shape == y.shape
 
 
-@pytest.mark.parametrize("inv_link", [identity, jnp.exp])  # identity from inverse_link_function_utils
+@pytest.mark.parametrize(
+    "inv_link", [identity, jnp.exp]
+)  # identity from inverse_link_function_utils
 @pytest.mark.parametrize("glm_type", ["", "population_"])
 @pytest.mark.parametrize("model_instantiation", ["gaussianGLM_model_instantiation"])
 class TestGaussianGLM:
