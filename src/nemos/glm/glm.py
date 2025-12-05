@@ -7,16 +7,16 @@ import warnings
 from pathlib import Path
 from typing import Callable, Literal, Optional, Tuple, Union
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
-from equinox import Module
 from numpy.typing import ArrayLike
 from sklearn.utils import InputTags, TargetTags
 
 from .. import observation_models as obs
 from .. import tree_utils, validation
 from .._observation_model_builder import instantiate_observation_model
-from ..base_regressor import BaseRegressor, strip_metadata
+from ..base_regressor import BaseRegressor, ParameterValidator, strip_metadata
 from ..exceptions import NotFittedError
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..pytrees import FeaturePytree
@@ -26,7 +26,6 @@ from ..type_casting import cast_to_jax, support_pynapple
 from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength, SolverState
 from ..utils import format_repr
 from .initialize_parameters import initialize_intercept_matching_mean_rate
-<<<<<<< HEAD
 from .params import GLMParams, GLMUserParams
 from .validation import GLMValidator, PopulationGLMValidator
 
@@ -1583,3 +1582,61 @@ class PopulationGLM(GLM):
         # reattach metadata
         klass._metadata = self._metadata
         return klass
+
+
+class GLMParamsValidator(ParameterValidator[GLMUserParams, GLMParams]):
+    """Parameter validator for GLM models."""
+
+    expected_array_dims: Tuple[int] = (
+        1,
+        1,
+    )  # this should be (coef.ndim, intercept.ndim)
+    to_model_params: Callable[[GLMUserParams], GLMParams] = lambda p: GLMParams(
+        *p
+    )  # casting from tuple of array to GLMParams
+    model_class: type = GLM
+    validation_sequence_kwargs: Tuple[Optional[dict], ...] = (
+        None,
+        None,
+        dict(
+            err_message_format="Invalid parameter dimensionality. coef must be an array or nemos.pytree.FeaturePytree "
+            "with array leafs of shape (n_features, ). intercept must be of shape (1,). "
+            "\nThe provided coef and intercept have shape ``{}`` and ``{}`` instead."
+        ),
+        None,
+        None,
+    )
+
+    def additional_validation_model_params(self, params: GLMParams, **kwargs):
+        """
+
+        Parameters
+        ----------
+        params
+        kwargs
+
+        Returns
+        -------
+
+        """
+        # check intercept shape
+        if params.intercept.shape != (1,):
+            raise ValueError(
+                "Intercept term should be a one-dimensional array with shape ``(1,)``."
+            )
+        return params
+
+    def check_array_dimensions(
+        self,
+        params: GLMUserParams,
+        err_msg: Optional[str] = None,
+        err_message_format: str = None,
+    ) -> GLMUserParams:
+        err_msg = err_message_format.format(params[0].shape, params[1].shape)
+        return super().check_array_dimensions(self, params, err_msg=err_msg)
+
+    def check_user_params_structure(
+        self, params: GLMUserParams, **kwargs
+    ) -> GLMUserParams:
+        validation.check_length(params, 2, "Params must have length two.")
+        return params
