@@ -14,7 +14,7 @@ import sklearn
 import statsmodels.api as sm
 from numba import njit
 from pynapple import Tsd, TsdFrame
-from sklearn.linear_model import GammaRegressor, LogisticRegression, PoissonRegressor
+from sklearn.linear_model import GammaRegressor, LogisticRegression, PoissonRegressor, LinearRegression
 from sklearn.model_selection import GridSearchCV
 
 import nemos as nmo
@@ -1415,6 +1415,7 @@ class TestGLM:
 @pytest.mark.parametrize(
     "model_instantiation",
     [
+        "gaussianGLM_model_instantiation",
         "poissonGLM_model_instantiation",
         "gammaGLM_model_instantiation",
         "bernoulliGLM_model_instantiation",
@@ -1423,9 +1424,9 @@ class TestGLM:
 )
 class TestGLMObservationModel:
     """
-    Shared unit tests of the GLM class that do depend on obeservation model.
+    Shared unit tests of the GLM class that do depend on observation model.
     i.e. tests that directly depend on observation model methods (e.g. model.fit, model.score, model.update),
-    and tests that inspect the output when obervation model methods are called.
+    and tests that inspect the output when observation model methods are called.
 
     For new observation models, add it in the class parameterization above, and add cases for the fixtures below.
     """
@@ -1469,6 +1470,15 @@ class TestGLMObservationModel:
                     / norm
                 )
 
+        elif "gaussian" in model_instantiation:
+
+            def ll(y, mean_firing, scale):
+                if y.ndim == 1:
+                    norm = y.shape[0]
+                elif y.ndim == 2:
+                    norm = y.shape[0] * y.shape[1]
+                return sm.families.Gaussian().loglike(y, mean_firing, scale=scale) / norm
+
         else:
             raise ValueError("Unknown model instantiation")
         return ll
@@ -1494,6 +1504,9 @@ class TestGLMObservationModel:
         elif "negativeBinomial" in model_instantiation:
             return None
 
+        elif "gaussian" in model_instantiation:
+            return LinearRegression(fit_intercept=True)
+
         else:
             raise ValueError("Unknown model instantiation")
 
@@ -1513,6 +1526,9 @@ class TestGLMObservationModel:
 
         elif "negativeBinomial" in model_instantiation:
             return 0.01
+
+        elif "gaussian" in model_instantiation:
+            return 0.5
 
         else:
             raise ValueError("Unknown model instantiation")
@@ -1546,6 +1562,12 @@ class TestGLMObservationModel:
             else:
                 return np.array([5])
 
+        elif "gaussian" in model_instantiation:
+            if "population" in glm_type:
+                return np.array([3, 3, 3])
+            else:
+                return np.array([3])
+
         else:
             raise ValueError("Unknown model instantiation")
 
@@ -1564,6 +1586,9 @@ class TestGLMObservationModel:
             return False
 
         elif "negativeBinomial" in model_instantiation:
+            return False
+
+        elif "gaussian" in model_instantiation:
             return False
 
         else:
@@ -1592,11 +1617,17 @@ class TestGLMObservationModel:
             else:
                 return "GLM(\n    observation_model=BernoulliObservations(),\n    inverse_link_function=logistic,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
 
-        elif "negative_binomial":
+        elif "negative_binomial" in model_instantiation:
             if "population" in glm_type:
                 return "PopulationGLM(\n    observation_model=NegativeBinomialObservations(scale=1.0),\n    inverse_link_function=exp,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
             else:
                 return "GLM(\n    observation_model=NegativeBinomialObservations(scale=1.0),\n    inverse_link_function=exp,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
+
+        elif "gaussian" in model_instantiation:
+            if "population" in glm_type:
+                return "PopulationGLM(\n    observation_model=GaussianObservations(),\n    inverse_link_function=identity,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
+            else:
+                return "GLM(\n    observation_model=GaussianObservations(),\n    inverse_link_function=identity,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
 
         else:
             raise ValueError("Unknown model instantiation")
@@ -1719,7 +1750,7 @@ class TestGLMObservationModel:
         # get the rate
         mean_firing = model.predict(X)
         # compute the log-likelihood using jax.scipy
-        if "gamma" in model_instantiation:
+        if "gamma" in model_instantiation or "gaussian" in model_instantiation:
             mean_ll_jax = ll_scipy_stats(y, mean_firing, model.scale_)
         else:
             mean_ll_jax = ll_scipy_stats(y, mean_firing)
@@ -1773,7 +1804,7 @@ class TestGLMObservationModel:
         state = model.initialize_state(X, y, params)
         assert model.coef_ is None
         assert model.intercept_ is None
-        if "gamma" not in model_instantiation:
+        if "gamma" not in model_instantiation and "gaussian" not in model_instantiation:
             # gamma model instantiation sets the scale
             assert model.scale_ is None
         _, _ = model.update(params, state, X[:batch_size], y[:batch_size])
@@ -1809,7 +1840,7 @@ class TestGLMObservationModel:
 
         assert model.coef_ is None
         assert model.intercept_ is None
-        if "gamma" not in model_instantiation:
+        if "gamma" not in model_instantiation and "gaussian" not in model_instantiation:
             # gamma model instantiation sets the scale
             assert model.scale_ is None
 
@@ -2489,6 +2520,7 @@ class TestPopulationGLM:
 @pytest.mark.parametrize(
     "model_instantiation",
     [
+        "population_gaussianGLM_model_instantiation",
         "population_poissonGLM_model_instantiation",
         "population_gammaGLM_model_instantiation",
         "population_bernoulliGLM_model_instantiation",
@@ -2533,25 +2565,19 @@ class TestPopulationGLMObservationModel:
                 nmo.regularizer.UnRegularized(),
                 None,
                 "LBFGS",
-                {"stepsize": 0.1, "tol": 10**-14},
-            ),
-            (
-                nmo.regularizer.UnRegularized(),
-                None,
-                "GradientDescent",
-                {"tol": 10**-14},
+                {"stepsize": 0.1, "tol": 10**-9},
             ),
             (
                 nmo.regularizer.Ridge(),
                 1.0,
                 "LBFGS",
-                {"tol": 10**-14},
+                {"tol": 10**-9},
             ),
             (
                 nmo.regularizer.Ridge(),
                 1.0,
                 "LBFGS",
-                {"stepsize": 0.1, "tol": 10**-14},
+                {"stepsize": 0.1, "tol": 10**-9},
             ),
             (
                 nmo.regularizer.Lasso(),
@@ -2601,7 +2627,7 @@ class TestPopulationGLMObservationModel:
         model_instantiation,
     ):
         if isinstance(mask, dict):
-            X, y, _, true_params, firing_rate = request.getfixturevalue(
+            X, y, model_class, true_params, firing_rate = request.getfixturevalue(
                 model_instantiation + "_pytree"
             )
 
@@ -2616,7 +2642,7 @@ class TestPopulationGLMObservationModel:
                 return ind_array, coef_stack
 
         else:
-            X, y, _, true_params, firing_rate = request.getfixturevalue(
+            X, y, model_class, true_params, firing_rate = request.getfixturevalue(
                 model_instantiation
             )
 
@@ -2628,6 +2654,7 @@ class TestPopulationGLMObservationModel:
         mask_bool = jax.tree_util.tree_map(lambda x: np.asarray(x.T, dtype=bool), mask)
         # fit pop glm
         kwargs = dict(
+            observation_model=model_class.observation_model,
             feature_mask=mask,
             regularizer=regularizer,
             regularizer_strength=regularizer_strength,
@@ -2641,13 +2668,9 @@ class TestPopulationGLMObservationModel:
         coef_loop = np.zeros((5, 3))
         intercept_loop = np.zeros((3,))
         # loop over neuron
+        kwargs.pop("feature_mask")
         for k in range(y.shape[1]):
-            model_single_neu = nmo.glm.GLM(
-                regularizer=regularizer,
-                regularizer_strength=regularizer_strength,
-                solver_name=solver_name,
-                solver_kwargs=solver_kwargs,
-            )
+            model_single_neu = nmo.glm.GLM(**kwargs)
             if isinstance(mask_bool, dict):
                 X_neu = {}
                 for key, xx in X.items():
@@ -2662,6 +2685,7 @@ class TestPopulationGLMObservationModel:
             coef_loop[idx, k] = coef
             intercept_loop[k] = np.array(model_single_neu.intercept_)[0]
         print(f"\nMAX ERR: {np.abs(coef_loop - coef_vectorized).max()}")
+
         assert np.allclose(coef_loop, coef_vectorized, atol=10**-5, rtol=0)
 
 

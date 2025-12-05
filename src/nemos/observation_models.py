@@ -1429,9 +1429,6 @@ class GaussianObservations(Observations):
         :
             The Gaussian negative log-likelihood. Shape (1,).
         """
-        predicted_rate = jnp.clip(
-            predicted_rate, min=jnp.finfo(predicted_rate.dtype).eps
-        )
         resid = y - predicted_rate
         return aggregate_sample_scores(jnp.power(resid, 2))
 

@@ -1343,3 +1343,119 @@ def configure_solver_backend():
     finally:
         nmo.solvers.solver_registry.clear()
         nmo.solvers.solver_registry.update(original)
+
+@pytest.fixture
+def gaussianGLM_model_instantiation():
+    """Set up a Gaussian GLM for testing purposes.
+
+    This fixture initializes a Gaussian GLM with random parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response.
+
+    Returns:
+        tuple: A tuple containing:
+            - X (numpy.ndarray): Simulated input data.
+            - np.random.normal(rate) (numpy.ndarray): Simulated spike responses.
+            - model (nmo.glm.PoissonGLM): Initialized model instance.
+            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of response.
+    """
+    np.random.seed(123)
+    X = np.random.normal(size=(100, 5)) * 100
+    b_true = np.zeros((1,))
+    w_true = np.random.normal(size=(5,))
+    observation_model = nmo.observation_models.GaussianObservations()
+    regularizer = nmo.regularizer.UnRegularized()
+    model = nmo.glm.GLM(observation_model, regularizer=regularizer,
+                        solver_name="LBFGS")#, solver_kwargs={"tol":1e-12})
+    model.scale_ = 1.0
+    rate = jax.numpy.einsum("k,tk->t", w_true, X) + b_true
+    return X, np.random.normal(rate), model, (w_true, b_true), rate
+
+@pytest.fixture
+def population_gaussianGLM_model_instantiation():
+    """Set up a Population Gaussian GLM for testing purposes.
+
+    This fixture initializes a Population Gaussian GLM with random parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response.
+
+    Returns:
+        tuple: A tuple containing:
+            - X (numpy.ndarray): Simulated input data.
+            - np.random.normal(rate) (numpy.ndarray): Simulated spike responses.
+            - model (nmo.glm.PoissonGLM): Initialized model instance.
+            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of response.
+    """
+    np.random.seed(123)
+    X = np.random.normal(size=(200, 5)) * 10
+    b_true = np.zeros((3,))
+    w_true = np.random.normal(size=(5, 3))
+    observation_model = nmo.observation_models.GaussianObservations()
+    regularizer = nmo.regularizer.UnRegularized()
+    model = nmo.glm.PopulationGLM(
+        observation_model=observation_model, regularizer=regularizer,
+        solver_name="LBFGS"
+    )
+    model.scale_ = 1.0
+    rate = jax.numpy.einsum("ki,tk->ti", w_true, X) + b_true
+    return X, np.random.normal(rate), model, (w_true, b_true), rate
+
+@pytest.fixture
+def gaussianGLM_model_instantiation_pytree(gaussianGLM_model_instantiation):
+    """Set up a Gaussian GLM for testing purposes.
+
+    This fixture initializes a Gaussian GLM with random parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response.
+
+    Returns:
+        tuple: A tuple containing:
+            - X (FeaturePytree): Simulated input data.
+            - np.random.normal(rate) (numpy.ndarray): Simulated spike responses.
+            - model (nmo.glm.PoissonGLM): Initialized model instance.
+            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of response.
+    """
+    X, spikes, model, true_params, rate = gaussianGLM_model_instantiation
+    X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
+    true_params_tree = (
+        dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
+        true_params[1],
+    )
+    model_tree = nmo.glm.GLM(model.observation_model, regularizer=model.regularizer,
+                             solver_name="LBFGS")#, solver_kwargs={"tol":1e-12})
+    return X_tree, spikes, model_tree, true_params_tree, rate
+
+@pytest.fixture
+def population_gaussianGLM_model_instantiation_pytree(
+    population_gaussianGLM_model_instantiation,
+):
+    """Set up a Population Gaussian GLM for testing purposes.
+
+    This fixture initializes a Population Gaussian GLM with random parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response.
+
+    Returns:
+        tuple: A tuple containing:
+            - X (FeaturePytree): Simulated input data.
+            - np.random.normal(rate) (numpy.ndarray): Simulated spike responses.
+            - model (nmo.glm.PoissonGLM): Initialized model instance.
+            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of response.
+    """
+    X, spikes, model, true_params, rate = (
+        population_gaussianGLM_model_instantiation
+    )
+    X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
+    true_params_tree = (
+        dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
+        true_params[1],
+    )
+    model_tree = nmo.glm.PopulationGLM(
+        observation_model=model.observation_model, regularizer=model.regularizer,
+        solver_name="LBFGS"
+    )
+    return X_tree, np.random.normal(rate), model_tree, true_params_tree, rate
