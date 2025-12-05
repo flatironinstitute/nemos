@@ -4,7 +4,7 @@ import abc
 import difflib
 import warnings
 from dataclasses import dataclass
-from typing import Any, Callable, Generic, List, Optional, Tuple, Union
+from typing import Any, Callable, Generic, List, Optional, Tuple, TypeVar, Union
 
 import jax
 import jax.numpy as jnp
@@ -15,6 +15,11 @@ from .base_class import Base
 from .pytrees import FeaturePytree
 from .tree_utils import get_valid_multitree, pytree_map_and_reduce
 from .typing import DESIGN_INPUT_TYPE, ModelParamsT, UserProvidedParamsT
+
+# User provided init_params (e.g. for GLMs Tuple[array, array])
+UserProvidedParamsT = TypeVar("UserProvidedParamsT")
+# Model internal representation (e.g. for GLMs nemos.glm.glm.GLMParams)
+ModelParamsT = TypeVar("ModelParamsT")
 
 
 def error_invalid_entry(*pytree: Any):
@@ -493,24 +498,15 @@ def _suggest_keys(
 
 
 @dataclass(frozen=True)
-class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
+class ParameterValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
     """
-    Base class for validating regressor models' parameters, inputs, and consistency.
+    Base class for validating and converting user-provided parameters to model parameters.
 
-    This class provides a comprehensive validation framework for regression models,
-    handling three types of validation:
+    This class provides a configurable validation pipeline that transforms user-provided
+    parameters (typically simple structures like tuples of arrays) into validated model
+    parameter objects with proper structure and type checking.
 
-    1. **Parameter Validation**: Transforms user-provided parameters (typically tuples
-       of arrays) into validated model parameter objects with proper structure and type
-       checking.
-
-    2. **Input Validation**: Checks that input data (X, y) have the expected
-       dimensionality and compatible sample sizes.
-
-    3. **Consistency Validation**: Ensures model parameters are compatible with input
-       data (e.g., matching feature counts, neuron counts).
-
-    The parameter validation pipeline consists of five steps:
+    The validation sequence consists of five steps:
     1. check_user_params_structure: Validate the overall structure of user input
     2. convert_to_jax_arrays: Convert array-like objects to JAX arrays
     3. check_array_dimensions: Verify array dimensionality matches expectations
@@ -519,15 +515,13 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
 
     Subclasses should:
     - Set `expected_array_dims` to specify required dimensionality for each parameter array
-    - Set `X_dimensionality` and `y_dimensionality` for input validation
-    - Set `to_model_params` to define the transformation function to model parameter structure
-    - Set `model_class` to reference the associated model class (string for error messages)
+    - Set `model_param_structure` to define the target pytree structure
+    - Set `model_class` to reference the associated model class
     - Override `check_user_params_structure` to validate user-provided parameter structure
     - Override `additional_validation_model_params` to implement custom validation logic
-    - Implement `validate_consistency` to check parameter/input compatibility
 
-    Notes
-    -----
+    Important
+    ---------
     When subclassing, you MUST use type annotations on class attributes to override the
     default field values. Without type annotations, attributes become class attributes
     rather than instance fields, and the defaults from the parent class will be used.
@@ -535,49 +529,46 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
     Example::
 
         # Correct - with type annotations:
-        class MyValidator(RegressorValidator[UserParams, ModelParams]):
+        class MyValidator(ParameterValidator[UserParams, ModelParams]):
             expected_array_dims: Tuple[int, int] = (1, 1)  # Instance field
-            X_dimensionality: int = 2  # Instance field
-            y_dimensionality: int = 1  # Instance field
-            model_class: str = "MyModel"  # Instance field
+            model_class: type = MyModel  # Instance field
 
         # Incorrect - without type annotations:
-        class MyValidator(RegressorValidator[UserParams, ModelParams]):
+        class MyValidator(ParameterValidator[UserParams, ModelParams]):
             expected_array_dims = (1, 1)  # Class attribute, won't override!
-            model_class = "MyModel"  # Class attribute, won't override!
+            model_class = MyModel  # Class attribute, won't override!
 
     Attributes
     ----------
     expected_array_dims :
         Expected dimensionality for each array in the user-provided parameters.
-        Should match the structure of user input (e.g., (1, 1) for GLM coef and intercept).
-    X_dimensionality :
-        Expected number of dimensions for input X (e.g., 2 for shape (n_samples, n_features)).
-    y_dimensionality :
-        Expected number of dimensions for output y (e.g., 1 for shape (n_samples,)).
+        Should match the structure of user input (e.g., (2, 1) for GLM coef and intercept).
     to_model_params :
         Function to transform validated user parameters into model parameter structure.
     model_class :
-        The model class name (string, used for error messages).
-    params_validation_sequence :
-        Names of parameter validation methods to call in order.
+        The model class these parameters belong to (used for error messages).
+    validation_sequence :
+        Names of validation methods to call in order.
+    validation_sequence_kwargs :
+        Keyword arguments for each validation method (None = no kwargs).
     """
 
-    expected_param_dims: Tuple[int] = None
-    model_class: str = None
+    expected_array_dims: Tuple[int] = None
+    model_class: type = None
     to_model_params: Callable[[UserProvidedParamsT], ModelParamsT] = None
-    from_model_params: Callable[[ModelParamsT], UserProvidedParamsT] = None
-    X_dimensionality: int = None
-    y_dimensionality: int = None
-
-    # tuples [(meth, kwargs), (meth,), ]
-    params_validation_sequence: Tuple[
-        Tuple[str, None] | Tuple[str, dict[str, Any]], ...
-    ] = (
-        ("check_user_params_structure", None),
-        ("convert_to_jax_arrays", None),
-        ("check_array_dimensions", None),
-        ("to_model_params", None),
+    validation_sequence: Tuple[str, ...] = (
+        "check_user_params_structure",
+        "convert_to_jax_arrays",
+        "check_array_dimensions",
+        "cast_to_model_params",
+        "additional_validation_model_params",
+    )
+    validation_sequence_kwargs: Tuple[Optional[dict], ...] = (
+        None,
+        None,
+        None,
+        None,
+        None,
     )
 
     @abc.abstractmethod
@@ -630,6 +621,7 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
         if hasattr(params, "ndim"):
             return [params]
         return list(params)
+
 
     def check_array_dimensions(
         self,
