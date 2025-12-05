@@ -86,8 +86,8 @@ def check_length(x: Any, expected_len: int, err_message: str):
     """
     try:
         assert len(x) == expected_len
-    except Exception:
-        raise ValueError(err_message)
+    except Exception as e:
+        raise ValueError(err_message) from e
 
 
 def convert_tree_leaves_to_jax_array(
@@ -120,8 +120,8 @@ def convert_tree_leaves_to_jax_array(
         pytree = jax.tree_util.tree_map(
             lambda x: jnp.asarray(x, dtype=data_type), pytree
         )
-    except (ValueError, TypeError):
-        raise TypeError(err_message)
+    except (ValueError, TypeError) as e:
+        raise TypeError(err_message) from e
     return pytree
 
 
