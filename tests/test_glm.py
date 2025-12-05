@@ -1624,7 +1624,7 @@ class TestGLMObservationModel:
             else:
                 return "GLM(\n    observation_model=BernoulliObservations(),\n    inverse_link_function=logistic,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
 
-        elif "negative_binomial" in model_instantiation:
+        elif "negativeBinomial" in model_instantiation:
             if "population" in glm_type:
                 return "PopulationGLM(\n    observation_model=NegativeBinomialObservations(scale=1.0),\n    inverse_link_function=exp,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
             else:

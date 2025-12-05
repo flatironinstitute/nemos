@@ -278,7 +278,7 @@ The Gaussian observation model is suitable for modeling continuous data that can
 import nemos as nmo
 
 # set up a Gaussian GLM for modeling continuous data
-glm = nmo.glm.GLM(observation_model="gaussian")
+glm = nmo.glm.GLM(observation_model="Gaussian")
 
 ```
 
