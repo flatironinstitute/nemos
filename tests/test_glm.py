@@ -16,9 +16,9 @@ from numba import njit
 from pynapple import Tsd, TsdFrame
 from sklearn.linear_model import (
     GammaRegressor,
+    LinearRegression,
     LogisticRegression,
     PoissonRegressor,
-    LinearRegression,
 )
 from sklearn.model_selection import GridSearchCV
 

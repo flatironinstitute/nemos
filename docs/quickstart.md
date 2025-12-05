@@ -250,8 +250,12 @@ For additional information on one-dimensional convolutions, see [here](convoluti
 
 ### **Continuous Observations**
 
+By default, NeMoS' GLM uses [Poisson observations](nemos.observation_models.PoissonObservations), which are a natural choice for spike counts. However, the 
+package also supports a [Gamma](nemos.observation_models.GammaObservations) GLM and a [Gaussian](nemos.observation_models.GaussianObservations) GLM. 
 
-By default, NeMoS' GLM uses [Poisson observations](nemos.observation_models.PoissonObservations), which are a natural choice for spike counts. However, the package also supports a [Gamma](nemos.observation_models.GammaObservations) GLM, which is more appropriate for modeling continuous, non-negative observations such as calcium transients.
+#### Gamma Observations
+
+The Gamma observation model is more appropriate for modeling continuous, non-negative observations such as calcium transients.
 
 To change the default observation model, set the `observation_model` argument during initialization:
 
@@ -264,6 +268,20 @@ import nemos as nmo
 glm = nmo.glm.GLM(observation_model=nmo.observation_models.GammaObservations())
 
 ```
+
+#### Gaussian Observations
+
+The Gaussian observation model is suitable for modeling continuous data that can take on both positive and negative values.
+
+```{code-cell} ipython3
+
+import nemos as nmo
+
+# set up a Gaussian GLM for modeling continuous data
+glm = nmo.glm.GLM(observation_model="gaussian")
+
+```
+
 
 
 Take a look at our [tutorial](tutorial-calcium-imaging) for a detailed example.
