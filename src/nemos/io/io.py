@@ -167,11 +167,11 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     # Create the model instance
     try:
         model = model_class(**config_params)
-    except Exception:
+    except Exception as e:
         raise ValueError(
             f"Failed to instantiate model class '{model_name}' with parameters: {config_params}. "
             f"Use `nmo.inspect_npz('{filename}')` to inspect the saved object."
-        )
+        ) from e
 
     # Set the rest of the parameters as attributes if recognized
     _set_fit_params(model, fit_params, filename)
@@ -429,7 +429,7 @@ def _unflattened_user_map(
     return nested_mapping, False
 
 
-def get_user_keys_from_nested_dict(nested_dict: dict, filter_keys=True) -> list:
+def get_user_keys_from_nested_dict(nested_dict: dict, filter_keys: bool = True) -> list:
     """
     Get the user-formatted keys from a nested dictionary.
 
@@ -439,9 +439,9 @@ def get_user_keys_from_nested_dict(nested_dict: dict, filter_keys=True) -> list:
 
     Parameters
     ----------
-    nested_dict : dict
+    nested_dict :
         A nested parameter dictionary, typically from a saved model.
-    filter_keys : bool, optional
+    filter_keys :
         If True, remove internal keys ('__class' and '__params') from the output and return
         only user-facing parameter names. Default is True.
 
@@ -503,7 +503,7 @@ def _get_invalid_mappings(mapping_dict: dict | None) -> List:
 
     Parameters
     ----------
-    mapping_dict : dict or None
+    mapping_dict :
         A (possibly nested) dictionary defining how symbolic model components
         should be mapped to Python classes or callables. May contain nested
         entries with the special keys ``"class"`` and/or ``"params"``.

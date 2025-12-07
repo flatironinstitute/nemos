@@ -171,7 +171,7 @@ def check_same_shape_on_axis(*arrays: NDArray, axis: int = 0, err_message: str):
 
 
 def check_array_shape_match_tree(
-    pytree: Any, array: NDArray, axis: int, err_message: str
+    pytree: Any, array_or_shape: NDArray | int, axis: int, err_message: str
 ):
     """
     Check if the shape of an array matches the shape of arrays in a pytree along a specified axis.
@@ -180,8 +180,8 @@ def check_array_shape_match_tree(
     ----------
     pytree :
         Pytree with arrays as leaves.
-    array :
-        Array to compare the shape with.
+    array_or_shape :
+        Array to compare the shape with or expected shape.
     axis :
         Axis along which to compare the shape.
     err_message :
@@ -192,9 +192,15 @@ def check_array_shape_match_tree(
     ValueError
         If the array's shape does not match the pytree leaves' shapes along the specified axis.
     """
-    if pytree_map_and_reduce(
-        lambda arr: arr.shape[axis] != array.shape[axis], any, pytree
-    ):
+    if isinstance(array_or_shape, int):
+        _raise = pytree_map_and_reduce(
+            lambda arr: arr.shape[axis] != array_or_shape, any, pytree
+        )
+    else:
+        _raise = pytree_map_and_reduce(
+            lambda arr: arr.shape[axis] != array_or_shape.shape[axis], any, pytree
+        )
+    if _raise:
         raise ValueError(err_message)
 
 
@@ -406,10 +412,15 @@ def _check_trials_longer_than_time_window(
             lambda x: x.shape[axis] < window_size, any, time_series
         )
     # Check window size
-    if insufficient_window_size:
-        raise ValueError(
-            "Insufficient trial duration. The number of time points in each trial must "
-            "be greater or equal to the window size."
+    all_empty_or_valid = pytree_map_and_reduce(
+        lambda x: x.shape[axis] == 0 or x.shape[axis] >= window_size, all, time_series
+    )
+    if insufficient_window_size and not all_empty_or_valid:
+        warnings.warn(
+            f"One or more trials are shorter than the convolution window size "
+            f"({window_size} samples). These trials will produce NaN values in the output.",
+            category=UserWarning,
+            stacklevel=2,
         )
 
 

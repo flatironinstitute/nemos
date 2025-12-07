@@ -1,16 +1,41 @@
 cff-version: 1.2.0
-message: "If you use this software, please cite it using the preferred-citation metadata."
-title: ""NEural MOdelS, a statistical modeling framework for neuroscience."
+message: "If you use this software, please cite it using the metadata from this file."
+title: "NeMoS: Neural ModelS"
+abstract: "NEural MOdelS, a statistical modeling framework for neuroscience."
+type: software
 authors:
   - family-names: Balzani
     given-names: Edoardo
     orcid: "https://orcid.org/0000-0002-3702-5856"
+  - family-names: Bagi
+    given-names: Bence
+    orcid: "https://orcid.org/0000-0003-0849-7480"
+  - family-names: Biswas
+    given-names: Arnab
+    orcid: "https://orcid.org/0000-0002-2782-4603"
   - family-names: Broderick
-    given-names: William
+    given-names: William F.
     orcid: "https://orcid.org/0000-0002-8999-9003"
+  - family-names: Venditto
+    given-names: Sarah Jo
+    orcid: "https://orcid.org/0000-0003-4681-0538"
+  - family-names: Lewis
+    given-names: Caitlin
+    orcid: "https://orcid.org/0000-0002-3317-0722"
+  - family-names: Maura
+    given-names: Camila
+    orcid: "https://orcid.org/0000-0002-1304-5641"
+  - family-names: Crespo Darriba
+    given-names: Pablo
   - family-names: Viejo
     given-names: Guillaume
     orcid: "https://orcid.org/0000-0002-2450-7397"
+  - family-names: Modumudi
+    given-names: Pranati
+    orcid: "https://orcid.org/0009-0009-0299-6810"
+  - family-names: Thomson
+    given-names: Eric
+    orcid: "https://orcid.org/0000-0002-7118-2249"
   - family-names: Williams
     given-names: Alex
     orcid: "https://orcid.org/0000-0001-5853-103X"
@@ -21,3 +46,7 @@ keywords:
   - neuroscience
   - Poisson GLM
   - spike counts modeling
+  - generalized linear model
+  - JAX
+  - systems neuroscience
+  - statistical modeling

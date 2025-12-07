@@ -40,6 +40,7 @@ extensions = [
     'sphinx_design',  # For layout components
     'myst_nb',
     'sphinx_contributors',
+    "sphinxcontrib.bibtex",
     'sphinx_code_tabs',
     'sphinx.ext.mathjax',
     'sphinx_autodoc_typehints',
@@ -90,6 +91,10 @@ napoleon_use_admonition_for_references = False
 napoleon_use_ivar = False
 napoleon_use_param = True
 napoleon_use_rtype = True
+
+# SPHINXCONTRIB-BIBTEX
+bibtex_bibfiles = ["references.bib"]
+bibtex_reference_style = "author_year"
 
 autodoc_typehints = "description"  # Use "description" to place hints in the description
 autodoc_type_aliases = {

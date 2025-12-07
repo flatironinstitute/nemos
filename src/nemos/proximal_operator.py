@@ -135,8 +135,6 @@ def prox_group_lasso(
     """
     weights, intercepts = params
     shape = weights.shape
-    # divide the reg strength by the number of neurons
-    regularizer_strength /= intercepts.shape[0]
     # add an extra dim if not 2D, do nothing otherwise.
     weights = jnp.atleast_2d(weights.T)
     # [(n_neurons, n_features), (n_groups, n_features)] -> (n_neurons, n_groups)
@@ -167,7 +165,7 @@ def prox_lasso(x: Any, l1reg: Optional[Any] = None, scaling: float = 1.0) -> Any
         Input pytree.
     l1reg :
         Regularization strength, float or pytree with the same structure as `x`. Default is None.
-    scaling : float, optional
+    scaling :
         A scaling factor. Default is 1.0.
 
     Returns

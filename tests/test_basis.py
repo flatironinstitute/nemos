@@ -1448,22 +1448,22 @@ class TestSharedMethods:
         "expected_out",
         [
             {
-                CustomBasis: "'mylabel': CustomBasis(\n    funcs=[partial(power_func, 1), ..., partial(power_func, 5)",
-                basis.RaisedCosineLogEval: "'mylabel': RaisedCosineLogEval(n_basis_funcs=5, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True, bounds=(1.0, 2.0))",
-                basis.RaisedCosineLinearEval: "'mylabel': RaisedCosineLinearEval(n_basis_funcs=5, width=2.0, bounds=(1.0, 2.0))",
-                basis.BSplineEval: "'mylabel': BSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
-                basis.CyclicBSplineEval: "'mylabel': CyclicBSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
-                basis.MSplineEval: "'mylabel': MSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
-                basis.OrthExponentialEval: "'mylabel': OrthExponentialEval(n_basis_funcs=5, bounds=(1.0, 2.0))",
-                basis.IdentityEval: "'mylabel': IdentityEval(bounds=(1.0, 2.0))",
-                basis.RaisedCosineLogConv: "'mylabel': RaisedCosineLogConv(n_basis_funcs=5, window_size=10, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True)",
-                basis.RaisedCosineLinearConv: "'mylabel': RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0)",
-                basis.BSplineConv: "'mylabel': BSplineConv(n_basis_funcs=5, window_size=10, order=4)",
-                basis.CyclicBSplineConv: "'mylabel': CyclicBSplineConv(n_basis_funcs=5, window_size=10, order=4)",
-                basis.MSplineConv: "'mylabel': MSplineConv(n_basis_funcs=5, window_size=10, order=4)",
-                basis.OrthExponentialConv: "'mylabel': OrthExponentialConv(n_basis_funcs=5, window_size=10)",
-                basis.HistoryConv: "'mylabel': HistoryConv(window_size=10)",
-                basis.FourierEval: "'mylabel': FourierEval(frequencies=[Array([1., 2.], dtype=float32)], ndim=1, bounds=((1.0, 2.0),), frequency_mask='no-intercept')",
+                CustomBasis: r"'mylabel': CustomBasis\(\n    funcs=\[partial\(power_func, 1\), ..., partial\(power_func, 5\)",
+                basis.RaisedCosineLogEval: r"'mylabel': RaisedCosineLogEval\(n_basis_funcs=5, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True, bounds=\(1.0, 2.0\)\)",
+                basis.RaisedCosineLinearEval: r"'mylabel': RaisedCosineLinearEval\(n_basis_funcs=5, width=2.0, bounds=\(1.0, 2.0\)\)",
+                basis.BSplineEval: r"'mylabel': BSplineEval\(n_basis_funcs=5, order=4, bounds=\(1.0, 2.0\)\)",
+                basis.CyclicBSplineEval: "'mylabel': CyclicBSplineEval\(n_basis_funcs=5, order=4, bounds=\(1.0, 2.0\)\)",
+                basis.MSplineEval: r"'mylabel': MSplineEval\(n_basis_funcs=5, order=4, bounds=\(1.0, 2.0\)\)",
+                basis.OrthExponentialEval: "'mylabel': OrthExponentialEval\(n_basis_funcs=5, bounds=\(1.0, 2.0\)\)",
+                basis.IdentityEval: r"'mylabel': IdentityEval\(bounds=\(1.0, 2.0\)\)",
+                basis.RaisedCosineLogConv: r"'mylabel': RaisedCosineLogConv\(n_basis_funcs=5, window_size=10, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True\)",
+                basis.RaisedCosineLinearConv: r"'mylabel': RaisedCosineLinearConv\(n_basis_funcs=5, window_size=10, width=2.0\)",
+                basis.BSplineConv: r"'mylabel': BSplineConv\(n_basis_funcs=5, window_size=10, order=4\)",
+                basis.CyclicBSplineConv: r"'mylabel': CyclicBSplineConv\(n_basis_funcs=5, window_size=10, order=4\)",
+                basis.MSplineConv: r"'mylabel': MSplineConv\(n_basis_funcs=5, window_size=10, order=4\)",
+                basis.OrthExponentialConv: r"'mylabel': OrthExponentialConv\(n_basis_funcs=5, window_size=10\)",
+                basis.HistoryConv: r"'mylabel': HistoryConv\(window_size=10\)",
+                basis.FourierEval: r"'mylabel': FourierEval\(frequencies=\[Array\(\[1\., 2\.\], dtype=float\d{2}\)\], ndim=1, bounds=\(\(1\.0, 2\.0\),\), frequency_mask='no-intercept'\)",
             }
         ],
     )
@@ -1477,7 +1477,11 @@ class TestSharedMethods:
             **extra_kwargs(cls, 5),
         )
         out = repr(bas)
-        assert out.startswith(expected_out.get(cls, ""))
+        assert re.search(expected_out.get(cls, ""), out) is not None, (
+            "Pattern not found in output.\n"
+            f"Expected pattern: {expected_out.get(cls, '')}\n"
+            f"Actual output: {out}"
+        )
 
     @pytest.mark.parametrize("n_basis", [5])
     @pytest.mark.parametrize("ws", [10])

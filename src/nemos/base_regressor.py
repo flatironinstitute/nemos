@@ -4,30 +4,38 @@
 from __future__ import annotations
 
 import abc
+import warnings
 from abc import abstractmethod
 from copy import deepcopy
 from functools import wraps
 from pathlib import Path
-from typing import Any, NamedTuple, Optional, Tuple, Type, Union
+from typing import Any, Generic, NamedTuple, Optional, Tuple, Type, TypeVar, Union
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from . import solvers, utils, validation
+from . import solvers, tree_utils, utils, validation
 from ._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from .base_class import Base
-from .regularizer import Regularizer
-from .solvers._abstract_solver import SolverState, StepResult
+from .regularizer import GroupLasso, Regularizer
+from .type_casting import cast_to_jax
 from .typing import (
     DESIGN_INPUT_TYPE,
+    FeaturePytree,
     RegularizerStrength,
     SolverInit,
     SolverRun,
+    SolverState,
     SolverUpdate,
+    StepResult,
 )
 from .utils import _flatten_dict, _get_name, _unpack_params, get_env_metadata
+
+_SOLVER_ARGS_CACHE = {}
+
+ParamsT = TypeVar("ParamsT")
 
 
 def strip_metadata(arg_num: Optional[int] = None, kwarg_key: Optional[str] = None):
@@ -52,7 +60,7 @@ def strip_metadata(arg_num: Optional[int] = None, kwarg_key: Optional[str] = Non
     return decorator
 
 
-class BaseRegressor(Base, abc.ABC):
+class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
     """Abstract base class for GLM regression models.
 
     This class encapsulates the common functionality for Generalized Linear Models (GLM)
@@ -288,7 +296,9 @@ class BaseRegressor(Base, abc.ABC):
                 f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for {solver_class.__name__}!"
             )
 
-    def instantiate_solver(self, solver_kwargs: Optional[dict] = None) -> BaseRegressor:
+    def instantiate_solver(
+        self, loss, solver_kwargs: Optional[dict] = None
+    ) -> BaseRegressor:
         """
         Instantiate the solver with the provided loss function.
 
@@ -306,6 +316,8 @@ class BaseRegressor(Base, abc.ABC):
 
         Parameters
         ----------
+        loss:
+            The un-regularized loss function.
         solver_kwargs:
             Optional dictionary with the solver kwargs.
             If nothing is provided, it defaults to self.solver_kwargs.
@@ -328,7 +340,7 @@ class BaseRegressor(Base, abc.ABC):
         self._check_solver_kwargs(solver_cls, solver_kwargs)
 
         solver = solver_cls(
-            self._predict_and_compute_loss,
+            loss,
             self.regularizer,
             self.regularizer_strength,
             **solver_kwargs,
@@ -443,7 +455,7 @@ class BaseRegressor(Base, abc.ABC):
             )
 
     @abc.abstractmethod
-    def _predict_and_compute_loss(self, params, X, y):
+    def compute_loss(self, params, X, y, *args, **kwargs):
         """Loss function for a given model to be optimized over."""
         pass
 
@@ -479,15 +491,59 @@ class BaseRegressor(Base, abc.ABC):
         """Run a single update step of the underlying solver."""
         pass
 
-    @abc.abstractmethod
+    @cast_to_jax
     def initialize_params(
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
-        params: Optional = None,
-    ) -> Union[Any, NamedTuple]:
+        init_params: Optional = None,
+    ) -> ParamsT:
         """Initialize the solver's state and optionally sets initial model parameters for the optimization."""
+        if init_params is None:
+            init_params = self._initialize_parameters(X, y)  # initialize
+        else:
+            err_message = "Initial parameters must be array-like objects (or pytrees of array-like objects) "
+            "with numeric data-type!"
+            init_params = validation.convert_tree_leaves_to_jax_array(
+                init_params, err_message=err_message, data_type=float
+            )
+
+        # validate input
+        self._validate(X, y, init_params)
+
+        return init_params
+
+    @abc.abstractmethod
+    def _initialize_parameters(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+    ) -> ParamsT:
+        """Model specific initialization logic."""
         pass
+
+    def _preprocess_inputs(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        cast_to_jax_and_drop_nans: bool = True,
+    ) -> Tuple[dict | jnp.ndarray, jnp.ndarray]:
+        """Preprocess inputs before initializing state."""
+        if cast_to_jax_and_drop_nans:
+            X, y = cast_to_jax(tree_utils.drop_nans)(X, y)
+            data = X.data if isinstance(X, FeaturePytree) else X
+        else:
+            data = X
+
+        if isinstance(self.regularizer, GroupLasso):
+            if self.regularizer.mask is None:
+                warnings.warn(
+                    "Mask has not been set. Defaulting to a single group for all parameters. "
+                    "Please see the documentation on GroupLasso regularization for defining a mask."
+                )
+                self.regularizer.mask = jnp.ones((1, data.shape[1]))
+
+        return X, y
 
     @abc.abstractmethod
     def initialize_state(

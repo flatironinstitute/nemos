@@ -77,6 +77,20 @@ VALID_PAIRS = [
     {"flat_dict", "flat_map_dict"},
     {"fit_params", "init_params"},
     {"args", "arg"},
+    {"initialize_init_proba", "initialize_transition_proba"},
+    *(
+        {a, b}
+        for (a, b) in itertools.combinations(
+            [
+                "dirichlet_prior_alphas_init_prob",
+                "dirichlet_prior_alphas_transition",
+                "dirichlet_prior_alphas",
+            ],
+            r=2,
+        )
+    ),
+    {"likelihood_func", "log_likelihood_func"},
+    {"negative_log_likelihood_func", "log_likelihood_func"},
     {"tol", "atol"},
     {"tol", "rtol"},
     {"fit_params", "flat_params"},
@@ -84,6 +98,24 @@ VALID_PAIRS = [
     {"unaccepted_name", "accepted_name"},
     {"fn", "fun"},
     {"ax", "aux"},
+    {"glm_params_init", "glm_params"},
+    {"initial_prob", "log_initial_prob"},
+    {"transition_prob", "log_transition_prob"},
+    {"normalization", "log_normalization"},
+    {"log_conditional_prob", "log_initial_prob"},
+    *(
+        {a, b}
+        for (a, b) in itertools.combinations(
+            [
+                "log_posterior",
+                "log_posteriors",
+                "posteriors",
+                "log_joint_posterior",
+                "joint_posterior",
+            ],
+            r=2,
+        )
+    ),
 ]
 
 
@@ -139,6 +171,7 @@ def handle_matches(
             "info": [(current_parameter, current_path)],
         }
     else:
+
         # if there is an invalid match, then add to existing result entry
         for k, v in results.items():
             # Otherwise, add the parameter to any existing groups where it has a match
@@ -162,6 +195,7 @@ def extract_parameters_from_ast(
     unique_param_names: set,
     similarity_cutoff: float,
 ):
+
     class ParamVisitor(ast.NodeVisitor):
         def __init__(self):
             self.class_name = None
