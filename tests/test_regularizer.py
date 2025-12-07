@@ -1820,7 +1820,7 @@ class TestGroupLasso:
         model.solver_name = "ProximalGradient"
 
         runner = model.instantiate_solver(model.compute_loss).solver_run
-        params, _ = runner((true_params[0] * 0.0, true_params[1]), X, y)
+        params, _, _ = runner((true_params[0] * 0.0, true_params[1]), X, y)
 
         zeros_est = params[0] == 0
         if not np.all(zeros_est == zeros_true):
