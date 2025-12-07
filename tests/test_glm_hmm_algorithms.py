@@ -23,7 +23,8 @@ from nemos.glm_hmm.expectation_maximization import (
     run_m_step,
 )
 from nemos.observation_models import BernoulliObservations, PoissonObservations
-from nemos.third_party.jaxopt.jaxopt import LBFGS
+from nemos.regularizer import UnRegularized
+from nemos.solvers import solver_registry
 
 
 def _add_prior_logspace(log_val: jnp.ndarray, offset: jnp.ndarray):
@@ -260,7 +261,14 @@ def prepare_partial_hmm_nll_single_neuron(obs):
             negative_log_likelihood_func=negative_log_likelihood,
         )
 
-    solver = LBFGS(partial_hmm_negative_log_likelihood, tol=10**-8)
+    lbfgs_class = solver_registry["LBFGS"]
+    solver = lbfgs_class(
+        partial_hmm_negative_log_likelihood,
+        UnRegularized(),
+        0.0,
+        False,
+        tol=10**-8,
+    )
 
     return partial_hmm_negative_log_likelihood, solver
 
@@ -442,8 +450,9 @@ def generate_data_multi_state_population():
     transition_prob = np.random.uniform(size=(n_states, n_states))
     transition_prob /= np.sum(transition_prob, axis=0)
     transition_prob = transition_prob.T
-    coef, intercept = np.random.randn(2, n_neurons, n_states), np.random.randn(
-        n_neurons, n_states
+    coef, intercept = (
+        np.random.randn(2, n_neurons, n_states),
+        np.random.randn(n_neurons, n_states),
     )
 
     X = np.random.randn(n_samples, 2)
@@ -829,7 +838,6 @@ class TestLikelihood:
 class TestMStep:
     @pytest.mark.requires_x64
     def test_run_m_step_regression(self):
-
         # Fetch the data
         data_path = fetch_data("em_three_states.npz")
         data = np.load(data_path)
@@ -1318,7 +1326,6 @@ class TestMStep:
     )
     @pytest.mark.requires_x64
     def test_run_m_step_regression_priors_simulation(self, data_name):
-
         # Fetch the data
         data_path = fetch_data(data_name)
         data = np.load(data_path)
@@ -1493,6 +1500,7 @@ class TestMStep:
         # Dummy GLM parameters
         dummy_coef = jnp.zeros((n_states, 1))
         dummy_intercept = jnp.zeros((1,))
+        dummy_aux = None
         X_dummy = jnp.ones((n_timesteps, n_states))
         y_dummy = jnp.ones((n_timesteps,))
 
@@ -1504,7 +1512,11 @@ class TestMStep:
             log_joint_posterior,
             (dummy_coef, dummy_intercept),
             is_new_session=is_new_session,
-            m_step_fn_glm_params=lambda *a, **kw: (dummy_coef, dummy_intercept),
+            m_step_fn_glm_params=lambda *a, **kw: (
+                dummy_coef,
+                dummy_intercept,
+                dummy_aux,
+            ),
             dirichlet_prior_alphas_init_prob=alphas_init,
             dirichlet_prior_alphas_transition=alphas_trans,
         )
@@ -1836,7 +1848,15 @@ def test_e_and_m_step_for_population(generate_data_multi_state_population):
 
     alphas_transition = np.random.uniform(1, 3, size=transition_prob.shape)
     alphas_init = np.random.uniform(1, 3, size=initial_prob.shape)
-    solver = LBFGS(partial_hmm_negative_log_likelihood, tol=10**-13)
+    lbfgs_class = solver_registry["LBFGS"]
+    solver = lbfgs_class(
+        partial_hmm_negative_log_likelihood,
+        UnRegularized(),
+        0.0,
+        False,
+        tol=1e-13,
+    )
+
     (
         optimized_projection_weights_nemos,
         new_initial_prob,
@@ -2239,6 +2259,9 @@ class TestConvergence:
             maxiter=maxiter,
             tol=tol,
         )
+
+        # TODO: final_..._prob are log, leading to valid solution, but test failure
+        # -inf in log probabilities is valid
 
         # Final state should have valid likelihood
         assert jnp.isfinite(

@@ -699,8 +699,9 @@ def run_m_step(
         joint_posterior, dirichlet_prior_alphas=dirichlet_prior_alphas_transition
     )
 
+    # TODO: Document that aux is also passed around
     # Minimize negative log-likelihood to update GLM weights
-    optimized_projection_weights, state = m_step_fn_glm_params(
+    optimized_projection_weights, state, _ = m_step_fn_glm_params(
         glm_params, X, y, posteriors
     )
 
@@ -956,6 +957,7 @@ def em_glm_hmm(
         is_new_session,
     )
 
+    # TODO: what should be log and what not? Docstring doesn't mention log.
     return (
         jnp.exp(log_posteriors),
         jnp.exp(log_joint_posterior),
