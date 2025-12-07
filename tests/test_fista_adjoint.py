@@ -121,7 +121,6 @@ def test_fista_explicit_while_loop_kind_overrides_adjoint(
 @pytest.mark.parametrize(
     "adjoint", [optx.ImplicitAdjoint(), optx.RecursiveCheckpointAdjoint()]
 )
-# @pytest.mark.parametrize("while_loop_kind", ["lax", "checkpointed", "bounded"])
 @pytest.mark.parametrize("while_loop_kind", ["bounded", "lax", "checkpointed"])
 @pytest.mark.skipif(
     os.getenv("NEMOS_SOLVER_BACKEND") != "optimistix",
