@@ -459,7 +459,7 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
             )
 
     @abc.abstractmethod
-    def _predict_and_compute_loss(self, params, X, y):
+    def compute_loss(self, params, X, y, *args, **kwargs):
         """Loss function for a given model to be optimized over."""
         pass
 

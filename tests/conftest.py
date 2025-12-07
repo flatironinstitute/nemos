@@ -48,6 +48,32 @@ DEFAULT_KWARGS = {
 nap.nap_config.suppress_conversion_warnings = True
 
 
+@pytest.fixture(autouse=True, scope="function")
+def set_jax_precision_per_test(request):
+    """
+    Automatically set JAX precision based on test marker.
+
+    Tests marked with @pytest.mark.requires_x64 get float64.
+    All other tests get float32 (JAX default).
+
+    This fixture runs automatically for every test to ensure consistent
+    precision behavior, especially important for parallel test execution
+    with pytest-xdist.
+    """
+    if request.node.get_closest_marker("requires_x64"):
+        # This test needs x64
+        original = jax.config.jax_enable_x64
+        jax.config.update("jax_enable_x64", True)
+        yield
+        jax.config.update("jax_enable_x64", original)
+    else:
+        # Default: float32
+        original = jax.config.jax_enable_x64
+        jax.config.update("jax_enable_x64", False)
+        yield
+        jax.config.update("jax_enable_x64", original)
+
+
 @pytest.fixture()
 def basis_class_specific_params():
     """Returns all the params for each class."""
@@ -268,7 +294,7 @@ class MockRegressor(nmo.base_regressor.BaseRegressor):
     def _initialize_parameters(self, *args, **kwargs):
         pass
 
-    def _predict_and_compute_loss(self, params, X, y):
+    def compute_loss(self, params, X, y):
         pass
 
     def _get_optimal_solver_params_config(self):

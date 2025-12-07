@@ -653,9 +653,9 @@ class TestCreateConvolutionalPredictor:
 
     @pytest.mark.parametrize("input_shape", [(3, 1), (3, 2), (3, 3)])
     @pytest.mark.parametrize("batch_size", [1, 2, 3])
+    @pytest.mark.requires_x64
     def test_batch_binary_func_output(self, input_shape, batch_size):
         """Check expected output values."""
-        jax.config.update("jax_enable_x64", True)
 
         def add(a, b):
             return a + b
@@ -669,11 +669,11 @@ class TestCreateConvolutionalPredictor:
     @pytest.mark.parametrize("input_shape", [(3, 2)])
     @pytest.mark.parametrize("batch_size", [1])
     @pytest.mark.parametrize("out_axis, expected_out_shape", [(0, (6, 1)), (1, (3, 2))])
+    @pytest.mark.requires_x64
     def test_batch_binary_func_out_axis(
         self, input_shape, batch_size, out_axis, expected_out_shape
     ):
         """Check expected out shape."""
-        jax.config.update("jax_enable_x64", True)
 
         def add(a, b):
             return a + b
@@ -686,8 +686,8 @@ class TestCreateConvolutionalPredictor:
 
     @pytest.mark.parametrize("input_shape", [(3, 3)])
     @pytest.mark.parametrize("batch_size", [2])
+    @pytest.mark.requires_x64
     def test_batch_binary_func_pad(self, input_shape, batch_size):
-        jax.config.update("jax_enable_x64", True)
 
         def add(a, b):
             return a + b

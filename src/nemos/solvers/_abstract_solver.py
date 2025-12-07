@@ -43,7 +43,7 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         ---------
         unregularized_loss:
             Unregularized loss function.
-            Currently `BaseRegressor._predict_and_compute_loss`.
+            Currently `BaseRegressor.compute_loss`.
         regularizer:
             Regularizer object used to create the penalized loss
             or get the proximal operator from.

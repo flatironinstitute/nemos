@@ -461,11 +461,13 @@ class GLM(BaseRegressor[ModelParams]):
             data = X
         return self._predict(params, data)
 
-    def _predict_and_compute_loss(
+    def compute_loss(
         self,
         params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
+        *args,
+        **kwargs,
     ) -> jnp.ndarray:
         r"""Predict the rate and compute the negative log-likelihood against neural activity.
 
@@ -1046,9 +1048,7 @@ class GLM(BaseRegressor[ModelParams]):
         opt_solver_kwargs = self._optimize_solver_params(data, y)
 
         #  set up the solver init/run/update attrs
-        self.instantiate_solver(
-            self._predict_and_compute_loss, solver_kwargs=opt_solver_kwargs
-        )
+        self.instantiate_solver(self.compute_loss, solver_kwargs=opt_solver_kwargs)
 
         opt_state = self.solver_init_state(init_params, data, y)
         return opt_state
