@@ -675,6 +675,7 @@ def test_inspect_npz(tmp_path, model_class, monkeypatch, capsys):
         "",
         "Model fit parameters",
         "--------------------",
+        "aux_: None",
         "coef_: None",
         "dof_resid_: None",
         "intercept_: None",
