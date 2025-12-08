@@ -1,10 +1,12 @@
+"""Validation classes for GLM and PopulationGLM models."""
+
 from dataclasses import dataclass
 from typing import Callable, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
 
-from .. import tree_utils, validation
+from .. import validation
 from ..tree_utils import pytree_map_and_reduce
 from ..typing import DESIGN_INPUT_TYPE, FeaturePytree
 from .params import GLMParams, GLMUserParams
@@ -12,7 +14,20 @@ from .params import GLMParams, GLMUserParams
 
 @dataclass(frozen=True, repr=False)
 class GLMValidator(validation.RegressorValidator[GLMUserParams, GLMParams]):
-    """Parameter validator for GLM models."""
+    """
+    Validator for single-neuron GLM models.
+
+    Validates and transforms user-provided parameters, inputs, and checks consistency
+    between parameters and data for single-neuron GLMs. Single-neuron GLMs have:
+    - 1D coefficients: shape (n_features,) or dict of (n_features,) arrays
+    - 1D intercept: shape (1,)
+    - 2D input X: shape (n_samples, n_features) or pytree of same
+    - 1D output y: shape (n_samples,)
+
+    This validator extends RegressorValidator with GLM-specific validation logic,
+    including custom error messages and consistency checks between model parameters
+    and input data.
+    """
 
     expected_array_dims: Tuple[int] = (
         1,
@@ -132,20 +147,26 @@ class GLMValidator(validation.RegressorValidator[GLMUserParams, GLMParams]):
         X: Optional[DESIGN_INPUT_TYPE] = None,
         y: Optional[jnp.ndarray] = None,
     ):
+        """
+        Validate consistency between parameters and inputs for single-neuron GLM.
+
+        For single-neuron GLM, only validates feature consistency with X.
+        Does not validate y since it's 1D (single neuron, no neuron axis to check).
+        """
         if X is not None:
-            # check that X and params[0] have the same structure
-            msg = "X and coef have mismatched same structure."
+            # check that X and params.coef have the same structure
+            msg = "X and coef have mismatched structure."
             if isinstance(X, FeaturePytree):
                 data = X.data
                 msg += (
-                    " X was provided as a FeaturePytree, and coef should be a dictionary with matching keys."
+                    " X was provided as a FeaturePytree, and coef should be a dictionary with matching keys. "
                     f"X keys are ``{X.keys()}``, the provided coef is {params.coef} instead."
                 )
             else:
                 data = X
                 msg += (
-                    f" X was provided as an array, and coef should be a array too. "
-                    f"The provided coef is of type ``{type(params.coef)}``  instead."
+                    f" X was provided as an array, and coef should be an array too. "
+                    f"The provided coef is of type ``{type(params.coef)}`` instead."
                 )
 
             validation.check_tree_structure(
@@ -160,25 +181,15 @@ class GLMValidator(validation.RegressorValidator[GLMUserParams, GLMParams]):
                 axis_1=0,
                 axis_2=1,
                 err_message="Inconsistent number of features. "
-                f"spike basis coefficients has {jax.tree_util.tree_map(lambda p: p.shape[0], params.coef)} features, "
+                f"Model coefficients have {jax.tree_util.tree_map(lambda p: p.shape[0], params.coef)} features, "
                 f"X has {jax.tree_util.tree_map(lambda x: x.shape[1], X)} features instead!",
-            )
-        if y is not None:
-            validation.check_array_shape_match_tree(
-                params.coef,
-                y,
-                axis=1,
-                err_message="Inconsistent number of neurons. "
-                f"spike basis coefficients assumes "
-                f"{jax.tree_util.tree_map(lambda p: p.shape[1], params.coef)} neurons, "
-                f"y has {jax.tree_util.tree_map(lambda x: x.shape[1], y)} neurons instead!",
             )
 
     def validate_and_cast_feature_mask(
         self,
         feature_mask: Union[dict[str, jnp.ndarray], jnp.ndarray],
         params: Optional[GLMParams] = None,
-        data_type: jnp.dtype = float,
+        data_type: Optional[jnp.dtype] = None,
     ) -> Union[dict[str, jnp.ndarray], jnp.ndarray]:
         """Validate feature mask and cast to jax array of floats."""
         feature_mask = super().validate_and_cast_feature_mask(feature_mask, params)
@@ -225,6 +236,20 @@ class GLMValidator(validation.RegressorValidator[GLMUserParams, GLMParams]):
 
 @dataclass(frozen=True, repr=False)
 class PopulationGLMValidator(GLMValidator):
+    """
+    Validator for population (multi-neuron) GLM models.
+
+    Validates and transforms user-provided parameters, inputs, and checks consistency
+    between parameters and data for population GLMs. Population GLMs have:
+    - 2D coefficients: shape (n_features, n_neurons) or dict of (n_features, n_neurons) arrays
+    - 1D intercept: shape (n_neurons,)
+    - 2D input X: shape (n_samples, n_features) or pytree of same
+    - 2D output y: shape (n_samples, n_neurons)
+
+    This validator extends GLMValidator with additional validation for the neuron dimension,
+    checking that the number of neurons is consistent between model parameters and output y.
+    """
+
     y_dimensionality: int = 2
     expected_array_dims: Tuple[int] = (
         2,
@@ -242,3 +267,30 @@ class PopulationGLMValidator(GLMValidator):
         None,
         None,
     )
+
+    def validate_consistency(
+        self,
+        params: GLMParams,
+        X: Optional[DESIGN_INPUT_TYPE] = None,
+        y: Optional[jnp.ndarray] = None,
+    ):
+        """
+        Validate consistency between parameters and inputs for population GLM.
+
+        For population GLM, validates both feature consistency with X and
+        neuron count consistency with y (since y is 2D with shape (n_timebins, n_neurons)).
+        """
+        # First validate X consistency (features) using parent implementation
+        super().validate_consistency(params, X=X, y=None)
+
+        # Then validate y consistency (neurons) - specific to population GLM
+        if y is not None:
+            validation.check_array_shape_match_tree(
+                params.coef,
+                y,
+                axis=1,
+                err_message="Inconsistent number of neurons. "
+                f"Model coefficients assume "
+                f"{jax.tree_util.tree_map(lambda p: p.shape[1], params.coef)} neurons, "
+                f"y has {jax.tree_util.tree_map(lambda x: x.shape[1], y)} neurons instead!",
+            )

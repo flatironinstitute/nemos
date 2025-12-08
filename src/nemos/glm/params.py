@@ -1,3 +1,5 @@
+"""GLM parameter definitions and type aliases."""
+
 from typing import Tuple, Union
 
 import equinox as eqx
