@@ -23,9 +23,9 @@ from typing import (
 import jax
 import jax.numpy as jnp
 import numpy as np
-from numpy.typing import ArrayLike, NDArray
+from numpy.typing import NDArray
 
-from . import solvers, tree_utils, utils, validation
+from . import solvers, tree_utils, utils
 from ._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from .base_class import Base
 from .regularizer import GroupLasso, Regularizer
@@ -41,6 +41,7 @@ from .typing import (
     StepResult,
 )
 from .utils import _flatten_dict, _get_name, _unpack_params, get_env_metadata
+from .validation import RegressorValidator, UserProvidedParamsT
 
 _SOLVER_ARGS_CACHE = {}
 
@@ -111,6 +112,8 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
     - [`GLM`](../glm/#nemos.glm.GLM): A feed-forward GLM implementation.
     - [`PopulationGLM`](../glm/#nemos.glm.PopulationGLM): A population GLM implementation.
     """
+
+    _validator: RegressorValidator = None
 
     def __init__(
         self,
@@ -271,6 +274,11 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         """Getter for the solver_kwargs attribute."""
         return self._solver_kwargs
 
+    @property
+    def solver(self):
+        """Getter for the solver class."""
+        return self._solver
+
     @solver_kwargs.setter
     def solver_kwargs(self, solver_kwargs: dict):
         """Setter for the solver_kwargs attribute."""
@@ -371,7 +379,7 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         return self
 
     @abc.abstractmethod
-    def fit(self, X: DESIGN_INPUT_TYPE, y: Union[NDArray, jnp.ndarray]):
+    def fit(self, X: DESIGN_INPUT_TYPE, y: Union[NDArray, jnp.ndarray], init_params: Optional[UserProvidedParamsT] = None) -> BaseRegressor[ParamsT]:
         """Fit the model to neural activity."""
         pass
 
@@ -400,29 +408,6 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         """Simulate neural activity in response to a feed-forward input and recurrent activity."""
         pass
 
-    @staticmethod
-    @abc.abstractmethod
-    def _check_params(
-        params: Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike],
-        data_type: Optional[jnp.dtype] = None,
-    ) -> Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]:
-        """
-        Validate the dimensions and consistency of parameters.
-
-        This function checks the consistency of shapes and dimensions for model
-        parameters.
-        It ensures that the parameters and data are compatible for the model.
-
-        """
-        pass
-
-    @staticmethod
-    @abc.abstractmethod
-    def _check_input_dimensionality(
-        X: Optional[Union[DESIGN_INPUT_TYPE, jnp.ndarray]] = None,
-        y: Optional[jnp.ndarray] = None,
-    ):
-        pass
 
     @abc.abstractmethod
     def _get_model_params(self) -> ParamsT:
@@ -433,35 +418,6 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
     def _set_model_params(self, params: ParamsT):
         """Unpack and store params pytree to coef_ and intercept_."""
         pass
-
-    @staticmethod
-    @abc.abstractmethod
-    def _check_input_and_params_consistency(
-        params: Tuple[Union[DESIGN_INPUT_TYPE, jnp.ndarray], jnp.ndarray],
-        X: Optional[Union[DESIGN_INPUT_TYPE, jnp.ndarray]] = None,
-        y: Optional[jnp.ndarray] = None,
-    ):
-        """Validate the number of features in model parameters and input arguments.
-
-        Raises
-        ------
-        ValueError
-            - if the number of features is inconsistent between params[1] and X
-              (when provided).
-
-        """
-        pass
-
-    @staticmethod
-    def _check_input_n_timepoints(
-        X: Union[DESIGN_INPUT_TYPE, jnp.ndarray], y: jnp.ndarray
-    ):
-        if y.shape[0] != X.shape[0]:
-            raise ValueError(
-                "The number of time-points in X and y must agree. "
-                f"X has {X.shape[0]} time-points, "
-                f"y has {y.shape[0]} instead!"
-            )
 
     @abc.abstractmethod
     def compute_loss(self, params, X, y, *args, **kwargs):
@@ -475,17 +431,13 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         init_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
     ):
         # check input dimensionality
-        self._check_input_dimensionality(X, y)
-        self._check_input_n_timepoints(X, y)
-
-        # error if all samples are invalid
-        validation.error_all_invalid(X, y)
+        self._validator.validate_inputs(X, y)
 
         # validate input and params consistency
-        init_params = self._check_params(init_params)
+        init_params = self._validator.validate_and_cast(init_params)
 
         # validate input and params consistency
-        self._check_input_and_params_consistency(init_params, X=X, y=y)
+        self._validator.validate_consistency(init_params, X=X, y=y)
 
     @abc.abstractmethod
     def update(
@@ -500,7 +452,6 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         """Run a single update step of the underlying solver."""
         pass
 
-    @cast_to_jax
     def initialize_params(
         self,
         X: DESIGN_INPUT_TYPE,
@@ -511,14 +462,9 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         if init_params is None:
             init_params = self._initialize_parameters(X, y)  # initialize
         else:
-            err_message = "Initial parameters must be array-like objects (or pytrees of array-like objects) "
-            "with numeric data-type!"
-            init_params = validation.convert_tree_leaves_to_jax_array(
-                init_params, err_message=err_message, data_type=float
-            )
-
-        # validate input
-        self._validate(X, y, init_params)
+            # validate params & cast to float
+            init_params = self._validator.validate_and_cast(init_params)
+            self._validator.validate_consistency(init_params, X=X, y=y)
 
         return init_params
 
@@ -555,14 +501,13 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         return X, y
 
     @abc.abstractmethod
-    def initialize_state(
+    def initialize_solver_and_state(
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         init_params,
-        cast_to_jax_and_drop_nans: bool = True,
     ) -> SolverState:
-        """Initialize the state of the solver for running fit and update."""
+        """Initialize the solver and the state of the solver for running fit and update."""
         pass
 
     def _optimize_solver_params(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray) -> dict:
