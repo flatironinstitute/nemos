@@ -647,7 +647,7 @@ class TestGLM:
         with expectation:
             params = model.initialize_params(X, y, init_params=(init_w, true_params[1]))
             # check that params are set
-            init_state = model.initialize_state(X, y, params)
+            init_state = model.initialize_solver_and_state(X, y, params)
 
     @pytest.mark.parametrize(
         "dim_intercepts, expectation",
@@ -685,7 +685,7 @@ class TestGLM:
         with expectation:
             params = model.initialize_params(X, y, init_params=(init_w, init_b))
             # check that params are set
-            init_state = model.initialize_state(X, y, params)
+            init_state = model.initialize_solver_and_state(X, y, params)
 
     @pytest.mark.parametrize(*fit_init_params_type_init_params)
     @pytest.mark.solver_related
@@ -713,7 +713,7 @@ class TestGLM:
         with expectation:
             params = model.initialize_params(X, y, init_params=init_params)
             # check that params are set
-            init_state = model.initialize_state(X, y, params)
+            init_state = model.initialize_solver_and_state(X, y, params)
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -752,7 +752,7 @@ class TestGLM:
         with expectation:
             params = model.initialize_params(X, y, init_params=(init_w, init_b))
             # check that params are set
-            init_state = model.initialize_state(X, y, params)
+            init_state = model.initialize_solver_and_state(X, y, params)
 
     #######################
     # Test model.simulate
@@ -1804,7 +1804,7 @@ class TestGLMObservationModel:
             glm_type + model_instantiation
         )
         params = model.initialize_params(X, y)
-        state = model.initialize_state(X, y, params)
+        state = model.initialize_solver_and_state(X, y, params)
         with expectation:
             model.update(
                 params, state, X[:batch_size], y[:batch_size], n_samples=n_samples
@@ -1819,7 +1819,7 @@ class TestGLMObservationModel:
             glm_type + model_instantiation
         )
         params = model.initialize_params(X, y)
-        state = model.initialize_state(X, y, params)
+        state = model.initialize_solver_and_state(X, y, params)
         assert model.coef_ is None
         assert model.intercept_ is None
         if "gamma" not in model_instantiation and "gaussian" not in model_instantiation:
@@ -1854,7 +1854,7 @@ class TestGLMObservationModel:
             X[: X.shape[0] // 2, :] = np.nan
 
         params = model.initialize_params(X, y)
-        state = model.initialize_state(X, y, params)
+        state = model.initialize_solver_and_state(X, y, params)
 
         assert model.coef_ is None
         assert model.intercept_ is None
@@ -1886,7 +1886,7 @@ class TestGLMObservationModel:
         )
         model.solver_kwargs.update({"stepsize": 0.01})
         params = model.initialize_params(X, y)
-        state = model.initialize_state(X, y, params)
+        state = model.initialize_solver_and_state(X, y, params)
         # extract batch and add nans
         Xnan = X[:batch_size]
         Xnan[: batch_size // 2] = np.nan
@@ -1984,8 +1984,130 @@ class TestGLMObservationModel:
         # check that the repr works after cloning
         repr(cls)
 
-    ###############
-    @pytest.mark.parametrize("solver_name", ["LBFGS"])
+    @pytest.mark.parametrize("regr_setup", ["", "_pytree"])
+    @pytest.mark.parametrize("key", [jax.random.key(0), jax.random.key(19)])
+    @pytest.mark.parametrize(
+        "regularizer_class, solver_name",
+        [
+            (nmo.regularizer.UnRegularized, "SVRG"),
+            (nmo.regularizer.Ridge, "SVRG"),
+            (nmo.regularizer.Lasso, "ProxSVRG"),
+            (nmo.regularizer.ElasticNet, "ProxSVRG"),
+            # (nmo.regularizer.GroupLasso, "ProxSVRG"),
+        ],
+    )
+    @pytest.mark.solver_related
+    @pytest.mark.requires_x64
+    def test_glm_update_consistent_with_fit_with_svrg(
+        self,
+        request,
+        glm_type,
+        model_instantiation,
+        regr_setup,
+        key,
+        regularizer_class,
+        solver_name,
+    ):
+        """
+        Make sure that calling GLM.update with the rest of the algorithm implemented outside in a naive loop
+        is consistent with running the compiled GLM.fit on the same data with the same parameters
+        """
+        X, y, model, true_params, rate = request.getfixturevalue(
+            glm_type + model_instantiation + regr_setup
+        )
+
+        N = y.shape[0]
+        batch_size = 1
+        maxiter = 3  # number of epochs
+        tol = 1e-12
+        stepsize = 1e-3
+
+        # has to match how the number of iterations is calculated in SVRG
+        m = int((N + batch_size - 1) // batch_size)
+
+        regularizer_kwargs = {}
+        if regularizer_class.__name__ == "GroupLasso":
+            n_features = sum(x.shape[1] for x in jax.tree.leaves(X))
+            regularizer_kwargs["mask"] = (
+                (np.random.randn(n_features) > 0).reshape(1, -1).astype(float)
+            )
+
+        reg = regularizer_class(**regularizer_kwargs)
+        strength = None if isinstance(reg, nmo.regularizer.UnRegularized) else 1.0
+        glm = type(model)(
+            regularizer=reg,
+            regularizer_strength=strength,
+            solver_name=solver_name,
+            solver_kwargs={
+                "batch_size": batch_size,
+                "stepsize": stepsize,
+                "tol": tol,
+                "maxiter": maxiter,
+                "key": key,
+            },
+        )
+        glm2 = type(model)(
+            regularizer=reg,
+            solver_name=solver_name,
+            solver_kwargs={
+                "batch_size": batch_size,
+                "stepsize": stepsize,
+                "tol": tol,
+                "maxiter": maxiter,
+                "key": key,
+            },
+            regularizer_strength=strength,
+        )
+        glm2.fit(X, y)
+
+        params = glm.initialize_params(X, y)
+        state = glm.initialize_solver_and_state(X, y, params)
+        glm.instantiate_solver(glm.compute_loss)
+
+        # NOTE these two are not the same because for example Ridge augments the loss
+        # loss_grad = jax.jit(jax.grad(glm.compute_loss))
+        loss_grad = jax.jit(jax.grad(glm._solver_loss_fun))
+
+        # copied from GLM.fit
+        # grab data if needed (tree map won't function because param is never a FeaturePytree).
+        if isinstance(X, FeaturePytree):
+            X = X.data
+
+        iter_num = 0
+        while iter_num < maxiter:
+            state = state._replace(
+                full_grad_at_reference_point=loss_grad(params, X, y),
+            )
+
+            prev_params = params
+            for _ in range(m):
+                key, subkey = jax.random.split(key)
+                ind = jax.random.randint(subkey, (batch_size,), 0, N)
+                xi, yi = tree_slice(X, ind), tree_slice(y, ind)
+                params, state = glm.update(params, state, xi, yi)
+
+            state = state._replace(
+                reference_point=params,
+            )
+
+            iter_num += 1
+
+            _error = tree_l2_norm(tree_sub(params, prev_params)) / tree_l2_norm(
+                prev_params
+            )
+            if _error < tol:
+                break
+
+        assert iter_num == glm2.solver_state_.iter_num
+
+        assert pytree_map_and_reduce(
+            lambda a, b: np.allclose(a, b, atol=10**-5, rtol=0.0),
+            all,
+            (glm.coef_, glm.intercept_),
+            (glm2.coef_, glm2.intercept_),
+        )
+
+    @pytest.mark.parametrize("solver_name", ["LBFGS", "SVRG"])
     @pytest.mark.solver_related
     @pytest.mark.requires_x64
     def test_glm_fit_matches_sklearn(
@@ -2662,7 +2784,7 @@ class TestPoissonGLM:
             regularizer=reg,
             regularizer_strength=None if reg == "UnRegularized" else 1.0,
         )
-        opt_state = model.initialize_state(X, y, true_params)
+        opt_state = model.initialize_solver_and_state(X, y, true_params)
         solver = model._solver
 
         if stepsize is not None:
