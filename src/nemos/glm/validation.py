@@ -268,6 +268,29 @@ class PopulationGLMValidator(GLMValidator):
         None,
     )
 
+    def additional_validation_model_params(self, params: GLMParams, **kwargs):
+        """
+        Perform PopulationGLM-specific parameter validation.
+
+        For population GLMs, intercept can have any shape (n_neurons,) where n_neurons >= 1.
+        Unlike single-neuron GLM, we don't enforce shape (1,).
+
+        Parameters
+        ----------
+        params : GLMParams
+            GLM parameters with coef and intercept attributes.
+        **kwargs
+            Additional keyword arguments (unused).
+
+        Returns
+        -------
+        GLMParams
+            The validated parameters.
+        """
+        # For PopulationGLM, intercept can be any 1D array with shape (n_neurons,)
+        # No additional validation needed beyond dimensionality check
+        return params
+
     def validate_consistency(
         self,
         params: GLMParams,
