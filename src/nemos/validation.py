@@ -531,8 +531,8 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
     - Override `additional_validation_model_params` to implement custom validation logic
     - Implement `validate_consistency` to check parameter/input compatibility
 
-    Important
-    ---------
+    Notes
+    -----
     When subclassing, you MUST use type annotations on class attributes to override the
     default field values. Without type annotations, attributes become class attributes
     rather than instance fields, and the defaults from the parent class will be used.
