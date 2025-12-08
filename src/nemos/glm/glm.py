@@ -13,7 +13,6 @@ import jax.numpy as jnp
 from numpy.typing import ArrayLike
 from sklearn.utils import InputTags, TargetTags
 
-from .validation import GLMValidator, PopulationGLMValidator
 from .. import observation_models as obs
 from .. import tree_utils, validation
 from .._observation_model_builder import instantiate_observation_model
@@ -275,7 +274,6 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
 
         """
         return self._validator.validate_and_cast(params)
-
 
     def _check_is_fit(self):
         """Ensure the instance has been fitted."""
