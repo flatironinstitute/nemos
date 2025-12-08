@@ -16,6 +16,8 @@ from copy import deepcopy
 from functools import partial
 from typing import Literal
 
+from nemos.glm.validation import GLMValidator
+
 # Named tuple for model fixture returns (clearer than tuple indexing)
 ModelFixture = namedtuple(
     "ModelFixture",
@@ -239,7 +241,7 @@ class MockRegressor(nmo.base_regressor.BaseRegressor):
     Mock implementation of the BaseRegressor abstract class for testing purposes.
     Implements all required abstract methods as empty methods.
     """
-
+    _validator = GLMValidator()
     def __init__(self, std_param: int = 0):
         """Initialize a MockBaseRegressor instance with optional standard parameters."""
         self.std_param = std_param
@@ -267,25 +269,16 @@ class MockRegressor(nmo.base_regressor.BaseRegressor):
     ):
         pass
 
-    def _check_params(self, *args, **kwargs):
+    def _get_model_params(self):
         pass
 
-    def _check_input_and_params_consistency(self, *args, **kwargs):
-        pass
-
-    def _check_input_dimensionality(self, *args, **kwargs):
-        pass
-
-    def _get_coef_and_intercept(self):
-        pass
-
-    def _set_coef_and_intercept(self, params):
+    def _set_model_params(self, params):
         pass
 
     def update(self, *args, **kwargs):
         pass
 
-    def initialize_state(self, *args, **kwargs):
+    def initialize_solver_and_state(self, *args, **kwargs):
         pass
 
     def initialize_params(self, *args, **kwargs):
