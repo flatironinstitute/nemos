@@ -125,7 +125,7 @@ def test_validate_lower_dimensional_data_X(instantiate_base_regressor_subclass):
     y = jnp.array([0, 1, 1])
     if is_population_model(model):
         y = y[None]
-    err_msg = "X must be two-dimensional"
+    err_msg = "X must be 2-dimensional"
     with pytest.raises(ValueError, match=err_msg):
         model._validate(X, y, model._initialize_parameters(X, y))
 
@@ -142,9 +142,9 @@ def test_preprocess_fit_higher_dimensional_data_y(instantiate_base_regressor_sub
     X = jnp.array([[[1, 2], [3, 4]]])
     y = jnp.array([[[1.0, 1.0, 1.0]]])
     if is_population_model(model):
-        err_msg = "y must be two-dimensional"
+        err_msg = "y must be 2-dimensional"
     else:
-        err_msg = "y must be one-dimensional"
+        err_msg = "y must be 1-dimensional"
     with pytest.raises(ValueError, match=err_msg):
         model._validate(X, y, model._initialize_parameters(X, y))
 
@@ -162,7 +162,7 @@ def test_validate_higher_dimensional_data_X(instantiate_base_regressor_subclass)
     y = jnp.array([1, 1])
     if is_population_model(model):
         y = y[None]
-    with pytest.raises(ValueError, match="X must be two-dimensional"):
+    with pytest.raises(ValueError, match="X must be 2-dimensional"):
         model._validate(X, y, model._initialize_parameters(X, y))
 
 
@@ -343,9 +343,9 @@ class TestModelCommons:
     @pytest.mark.parametrize(
         "delta_dim, expectation",
         [
-            (-1, pytest.raises(ValueError, match="X must be two-dimensional")),
+            (-1, pytest.raises(ValueError, match="X must be 2-dimensional")),
             (0, does_not_raise()),
-            (1, pytest.raises(ValueError, match="X must be two-dimensional")),
+            (1, pytest.raises(ValueError, match="X must be 2-dimensional")),
         ],
     )
     @pytest.mark.solver_related
@@ -1027,9 +1027,9 @@ class TestModelSimulation:
     @pytest.mark.parametrize(
         "delta_dim, expectation",
         [
-            (-1, pytest.raises(ValueError, match="X must be two-dimensional")),
+            (-1, pytest.raises(ValueError, match="X must be 2-dimensional")),
             (0, does_not_raise()),
-            (1, pytest.raises(ValueError, match="X must be two-dimensional")),
+            (1, pytest.raises(ValueError, match="X must be 2-dimensional")),
         ],
     )
     @pytest.mark.solver_related
