@@ -162,7 +162,7 @@ def test_validate_higher_dimensional_data_X(instantiate_base_regressor_subclass)
     y = jnp.array([1, 1])
     if is_population_model(model):
         y = y[None]
-    with pytest.raises(ValueError, match="X must be 2-dimensional"):
+    with pytest.raises(ValueError, match="X must be 2-dimensional\\."):
         model._validate(X, y, model._initialize_parameters(X, y))
 
 
@@ -343,9 +343,9 @@ class TestModelCommons:
     @pytest.mark.parametrize(
         "delta_dim, expectation",
         [
-            (-1, pytest.raises(ValueError, match="X must be 2-dimensional")),
+            (-1, pytest.raises(ValueError, match="X must be 2-dimensional\\.")),
             (0, does_not_raise()),
-            (1, pytest.raises(ValueError, match="X must be 2-dimensional")),
+            (1, pytest.raises(ValueError, match="X must be 2-dimensional\\.")),
         ],
     )
     @pytest.mark.solver_related
@@ -365,7 +365,8 @@ class TestModelCommons:
         elif delta_dim == 1:
             X = np.zeros((X.shape[0], 1, X.shape[1]))
         with expectation:
-            params = model.initialize_params(X, y, init_params=true_params)
+            model._validator.validate_inputs(X, y)
+            params = model._validator.validate_and_cast(true_params)
             # check that params are set
             init_state = model.initialize_solver_and_state(X, y, params)
             # optimistix solvers do not have a velocity attr
@@ -374,9 +375,9 @@ class TestModelCommons:
     @pytest.mark.parametrize(
         "delta_dim, expectation",
         [
-            (-1, pytest.raises(ValueError, match="y must be ...-dimensional")),
+            (-1, pytest.raises(ValueError, match="y must be [12]-dimensional\\.")),
             (0, does_not_raise()),
-            (1, pytest.raises(ValueError, match="y must be ...-dimensional")),
+            (1, pytest.raises(ValueError, match="y must be [12]-dimensional\\.")),
         ],
     )
     @pytest.mark.solver_related
@@ -402,7 +403,8 @@ class TestModelCommons:
             elif delta_dim == 1:
                 y = np.zeros((y.shape[0], 1))
         with expectation:
-            params = model.initialize_params(X, y, init_params=true_params)
+            model._validator.validate_inputs(X, y)
+            params = model._validator.validate_and_cast(true_params)
             # check that params are set
             init_state = model.initialize_solver_and_state(X, y, params)
             # optimistix solvers do not have a velocity attr
@@ -443,12 +445,12 @@ class TestModelCommons:
         [
             (
                 -1,
-                pytest.raises(ValueError, match="The number of time-points in X and y"),
+                pytest.raises(ValueError, match="X and y must have the same number of samples"),
             ),
             (0, does_not_raise()),
             (
                 1,
-                pytest.raises(ValueError, match="The number of time-points in X and y"),
+                pytest.raises(ValueError, match="X and y must have the same number of samples"),
             ),
         ],
     )
@@ -477,12 +479,12 @@ class TestModelCommons:
         [
             (
                 -1,
-                pytest.raises(ValueError, match="The number of time-points in X and y"),
+                pytest.raises(ValueError, match="X and y must have the same number of samples"),
             ),
             (0, does_not_raise()),
             (
                 1,
-                pytest.raises(ValueError, match="The number of time-points in X and y"),
+                pytest.raises(ValueError, match="X and y must have the same number of samples"),
             ),
         ],
     )
@@ -1027,9 +1029,9 @@ class TestModelSimulation:
     @pytest.mark.parametrize(
         "delta_dim, expectation",
         [
-            (-1, pytest.raises(ValueError, match="X must be 2-dimensional")),
+            (-1, pytest.raises(ValueError, match="X must be 2-dimensional\\.")),
             (0, does_not_raise()),
-            (1, pytest.raises(ValueError, match="X must be 2-dimensional")),
+            (1, pytest.raises(ValueError, match="X must be 2-dimensional\\.")),
         ],
     )
     @pytest.mark.solver_related
@@ -1051,9 +1053,9 @@ class TestModelSimulation:
     @pytest.mark.parametrize(
         "delta_dim, expectation",
         [
-            (-1, pytest.raises(ValueError, match=r"y must be (one|two)-dimensional")),
+            (-1, pytest.raises(ValueError, match=r"y must be [12]-dimensional\.")),
             (0, does_not_raise()),
-            (1, pytest.raises(ValueError, match=r"y must be (one|two)-dimensional")),
+            (1, pytest.raises(ValueError, match=r"y must be [12]-dimensional\.")),
         ],
     )
     @pytest.mark.solver_related
@@ -1111,12 +1113,12 @@ class TestModelSimulation:
         [
             (
                 -1,
-                pytest.raises(ValueError, match="The number of time-points in X and y"),
+                pytest.raises(ValueError, match="X and y must have the same number of samples"),
             ),
             (0, does_not_raise()),
             (
                 1,
-                pytest.raises(ValueError, match="The number of time-points in X and y"),
+                pytest.raises(ValueError, match="X and y must have the same number of samples"),
             ),
         ],
     )
@@ -1138,12 +1140,12 @@ class TestModelSimulation:
         [
             (
                 -1,
-                pytest.raises(ValueError, match="The number of time-points in X and y"),
+                pytest.raises(ValueError, match="X and y must have the same number of samples"),
             ),
             (0, does_not_raise()),
             (
                 1,
-                pytest.raises(ValueError, match="The number of time-points in X and y"),
+                pytest.raises(ValueError, match="X and y must have the same number of samples"),
             ),
         ],
     )
