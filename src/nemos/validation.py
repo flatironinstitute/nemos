@@ -500,13 +500,22 @@ def _suggest_keys(
 @dataclass(frozen=True)
 class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
     """
-    Base class for validating and converting user-provided parameters to model parameters.
+    Base class for validating regressor models' parameters, inputs, and consistency.
 
-    This class provides a configurable validation pipeline that transforms user-provided
-    parameters (typically simple structures like tuples of arrays) into validated model
-    parameter objects with proper structure and type checking.
+    This class provides a comprehensive validation framework for regression models,
+    handling three types of validation:
 
-    The validation sequence consists of five steps:
+    1. **Parameter Validation**: Transforms user-provided parameters (typically tuples
+       of arrays) into validated model parameter objects with proper structure and type
+       checking.
+
+    2. **Input Validation**: Checks that input data (X, y) have the expected
+       dimensionality and compatible sample sizes.
+
+    3. **Consistency Validation**: Ensures model parameters are compatible with input
+       data (e.g., matching feature counts, neuron counts).
+
+    The parameter validation pipeline consists of five steps:
     1. check_user_params_structure: Validate the overall structure of user input
     2. convert_to_jax_arrays: Convert array-like objects to JAX arrays
     3. check_array_dimensions: Verify array dimensionality matches expectations
@@ -515,10 +524,12 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
 
     Subclasses should:
     - Set `expected_array_dims` to specify required dimensionality for each parameter array
+    - Set `X_dimensionality` and `y_dimensionality` for input validation
     - Set `to_model_params` to define the transformation function to model parameter structure
-    - Set `model_class` to reference the associated model class
+    - Set `model_class` to reference the associated model class (string for error messages)
     - Override `check_user_params_structure` to validate user-provided parameter structure
     - Override `additional_validation_model_params` to implement custom validation logic
+    - Implement `validate_consistency` to check parameter/input compatibility
 
     Important
     ---------
@@ -529,26 +540,32 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
     Example::
 
         # Correct - with type annotations:
-        class MyValidator(ParameterValidator[UserParams, ModelParams]):
+        class MyValidator(RegressorValidator[UserParams, ModelParams]):
             expected_array_dims: Tuple[int, int] = (1, 1)  # Instance field
-            model_class: type = MyModel  # Instance field
+            X_dimensionality: int = 2  # Instance field
+            y_dimensionality: int = 1  # Instance field
+            model_class: str = "MyModel"  # Instance field
 
         # Incorrect - without type annotations:
-        class MyValidator(ParameterValidator[UserParams, ModelParams]):
+        class MyValidator(RegressorValidator[UserParams, ModelParams]):
             expected_array_dims = (1, 1)  # Class attribute, won't override!
-            model_class = MyModel  # Class attribute, won't override!
+            model_class = "MyModel"  # Class attribute, won't override!
 
     Attributes
     ----------
     expected_array_dims :
         Expected dimensionality for each array in the user-provided parameters.
-        Should match the structure of user input (e.g., (2, 1) for GLM coef and intercept).
+        Should match the structure of user input (e.g., (1, 1) for GLM coef and intercept).
+    X_dimensionality :
+        Expected number of dimensions for input X (e.g., 2 for shape (n_samples, n_features)).
+    y_dimensionality :
+        Expected number of dimensions for output y (e.g., 1 for shape (n_samples,)).
     to_model_params :
         Function to transform validated user parameters into model parameter structure.
     model_class :
-        The model class these parameters belong to (used for error messages).
+        The model class name (string, used for error messages).
     params_validation_sequence :
-        Names of validation methods to call in order.
+        Names of parameter validation methods to call in order.
     validation_sequence_kwargs :
         Keyword arguments for each validation method (None = no kwargs).
     """
@@ -817,27 +834,49 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
     def validate_inputs(
         self, X: Optional[DESIGN_INPUT_TYPE] = None, y: Optional[jnp.ndarray] = None
     ):
+        """
+        Validate input data dimensions and sample consistency.
+
+        Checks that X and y have the expected dimensionality (as specified by
+        X_dimensionality and y_dimensionality) and that they have the same
+        number of samples along axis 0.
+
+        Parameters
+        ----------
+        X : DESIGN_INPUT_TYPE, optional
+            Input features. Should have dimensionality matching X_dimensionality.
+        y : jnp.ndarray, optional
+            Output/target data. Should have dimensionality matching y_dimensionality.
+
+        Raises
+        ------
+        ValueError
+            If X or y don't have the expected dimensionality.
+        ValueError
+            If X and y have different number of samples along axis 0.
+        ValueError
+            If all samples are invalid (contain only NaN/Inf values).
+        """
         if y is not None:
             check_tree_leaves_dimensionality(
                 y,
                 expected_dim=self.y_dimensionality,
-                err_message=f"y must be {self.y_dimensionality}-dimensional. "
-                f"The provided y is {y.ndim}-dimensional instead.",
+                err_message=f"y must be {self.y_dimensionality}-dimensional.",
             )
 
         if X is not None:
             check_tree_leaves_dimensionality(
                 X,
                 expected_dim=self.X_dimensionality,
-                err_message=f"X must be {self.X_dimensionality}-dimensional. "
-                f"The provided X is {X.ndim}-dimensional instead.",
+                err_message=f"X must be {self.X_dimensionality}-dimensional.",
             )
-        if X is None and y is not None:
+
+        if X is not None and y is not None:
             if y.shape[0] != X.shape[0]:
                 raise ValueError(
-                    "The number of time-points in X and y must agree. "
-                    f"X has {X.shape[0]} time-points, "
-                    f"y has {y.shape[0]} instead!"
+                    "X and y must have the same number of samples (same length along axis 0). "
+                    f"X has {X.shape[0]} samples, "
+                    f"y has {y.shape[0]} samples instead!"
                 )
         # error if all samples are invalid
         error_all_invalid(X, y)
@@ -849,6 +888,30 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
         X: Optional[DESIGN_INPUT_TYPE] = None,
         y: Optional[jnp.ndarray] = None,
     ):
+        """
+        Validate consistency between model parameters and input data.
+
+        This abstract method should be implemented by subclasses to check that
+        model parameters are compatible with the provided input data. For example,
+        checking that the number of features in parameters matches the number of
+        features in X, or that the number of neurons in parameters matches the
+        neuron dimension in y.
+
+        Parameters
+        ----------
+        params : ModelParamsT
+            Model parameters in their validated structure (e.g., GLMParams).
+        X : DESIGN_INPUT_TYPE, optional
+            Input features to validate against parameters.
+        y : jnp.ndarray, optional
+            Output/target data to validate against parameters.
+
+        Raises
+        ------
+        ValueError
+            If parameters and inputs are inconsistent (e.g., mismatched dimensions,
+            incompatible structures).
+        """
         pass
 
     def __repr__(self):
@@ -863,12 +926,42 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
         params: Optional[ModelParamsT] = None,
         data_type: Optional[jnp.dtype] = None,
     ) -> Union[dict[str, jnp.ndarray], jnp.ndarray]:
+        """
+        Validate and cast a feature mask to JAX arrays.
+
+        Validates that the feature mask contains only 0s and 1s, then converts
+        it to JAX arrays with the specified data type. Subclasses can extend
+        this to add parameter-specific validation (e.g., checking that mask
+        shape matches parameter dimensions).
+
+        Parameters
+        ----------
+        feature_mask : dict[str, jnp.ndarray] or jnp.ndarray
+            Feature mask indicating which features are used. Must contain only 0s and 1s.
+        params : ModelParamsT, optional
+            Model parameters to validate mask against. If None, only validates
+            mask values (0s and 1s) without checking consistency with parameters.
+        data_type : jnp.dtype, optional
+            Target data type for the mask arrays. Defaults to float.
+
+        Returns
+        -------
+        dict[str, jnp.ndarray] or jnp.ndarray
+            The validated and cast feature mask.
+
+        Raises
+        ------
+        ValueError
+            If feature_mask contains values other than 0 or 1.
+        """
         if pytree_map_and_reduce(
             lambda x: jnp.any(jnp.logical_and(x != 0, x != 1)), any, feature_mask
         ):
             raise ValueError("'feature_mask' must contain only 0s and 1s!")
 
-        # cast to jax
+        # cast to jax - default to float if not specified
+        if data_type is None:
+            data_type = float
         feature_mask = jax.tree_util.tree_map(
             lambda x: jnp.asarray(x, dtype=data_type), feature_mask
         )
