@@ -276,7 +276,9 @@ class GLM(BaseRegressor[GLMParams]):
                 "This GLM instance is not fitted yet. Call 'fit' with appropriate arguments."
             )
 
-    def _predict(self, params: GLMParams, X: jnp.ndarray) -> jnp.ndarray:
+    def _predict(
+        self, params: GLMParams, X: Union[dict[str, jnp.ndarray], jnp.ndarray]
+    ) -> jnp.ndarray:
         """
         Predicts firing rates based on given parameters and design matrix.
 
@@ -365,16 +367,14 @@ class GLM(BaseRegressor[GLMParams]):
         # extract model params
         params = self._get_model_params()
 
-        X = jax.tree_util.tree_map(lambda x: jnp.asarray(x, dtype=float), X)
+        # filter for non-nans, grab data if needed
+        data, _ = self._preprocess_inputs(X, drop_nans=False)
 
-        # check input dimensionality
-        self._check_input_dimensionality(X=X)
+        self._validator.validate_inputs(data)
+
         # check consistency between X and params
-        self._check_input_and_params_consistency(params, X=X)
-        if isinstance(X, FeaturePytree):
-            data = X.data
-        else:
-            data = X
+        self._validator.validate_consistency(params, X=data)
+
         return self._predict(params, data)
 
     def compute_loss(
@@ -507,31 +507,21 @@ class GLM(BaseRegressor[GLMParams]):
         self._check_is_fit()
         params = self._get_model_params()
 
-        X = jax.tree_util.tree_map(lambda x: jnp.asarray(x, dtype=float), X)
-        y = jnp.asarray(y, dtype=float)
-
-        self._check_input_dimensionality(X, y)
-        self._check_input_n_timepoints(X, y)
-        self._check_input_and_params_consistency(params, X=X, y=y)
-
-        X, y = tree_utils.drop_nans(X, y)
-
-        if isinstance(X, FeaturePytree):
-            data = X.data
-        else:
-            data = X
+        X, y = self._preprocess_inputs(X, y, drop_nans=True)
+        self._validator.validate_inputs(X, y)
+        self._validator.validate_consistency(params, X, y)
 
         if score_type == "log-likelihood":
             score = self._observation_model.log_likelihood(
                 y,
-                self._predict(params, data),
+                self._predict(params, X),
                 self.scale_,
                 aggregate_sample_scores=aggregate_sample_scores,
             )
         elif score_type.startswith("pseudo-r2"):
             score = self._observation_model.pseudo_r2(
                 y,
-                self._predict(params, data),
+                self._predict(params, X),
                 score_type=score_type,
                 scale=self.scale_,
                 aggregate_sample_scores=aggregate_sample_scores,
@@ -794,10 +784,15 @@ class GLM(BaseRegressor[GLMParams]):
         validation.error_all_invalid(feedforward_input)
 
         # check input dimensionality
-        self._check_input_dimensionality(X=feedforward_input)
+        self._validator.validate_inputs(X=feedforward_input)
 
         # validate input and params consistency
-        self._check_input_and_params_consistency(params, X=feedforward_input)
+        self._validator.validate_consistency(params, X=feedforward_input)
+
+        # pre-process
+        feedforward_input, _ = self._preprocess_inputs(
+            X=feedforward_input, drop_nans=False
+        )
 
         predicted_rate = self._predict(params, feedforward_input)
         return (

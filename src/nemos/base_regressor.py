@@ -484,15 +484,26 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
     def _preprocess_inputs(
         self,
         X: DESIGN_INPUT_TYPE,
-        y: jnp.ndarray,
-        cast_to_jax_and_drop_nans: bool = True,
-    ) -> Tuple[dict | jnp.ndarray, jnp.ndarray]:
+        y: Optional[jnp.ndarray] = None,
+        drop_nans: bool = True,
+    ) -> Tuple[dict[str, jnp.ndarray] | jnp.ndarray, jnp.ndarray | None]:
         """Preprocess inputs before initializing state."""
-        if cast_to_jax_and_drop_nans:
-            X, y = cast_to_jax(tree_utils.drop_nans)(X, y)
-            data = X.data if isinstance(X, FeaturePytree) else X
+        if drop_nans:
+            process = cast_to_jax(tree_utils.drop_nans)
         else:
-            data = X
+            process = cast_to_jax(lambda *x: x)
+
+        process_X = X is not None
+        process_y = y is not None
+
+        if process_X and process_y:
+            X, y = process(X, y)
+        elif process_X:
+            X = process(X)
+        elif process_y:
+            y = process(y)
+
+        data = X.data if isinstance(X, FeaturePytree) else X
 
         if isinstance(self.regularizer, GroupLasso):
             if self.regularizer.mask is None:
