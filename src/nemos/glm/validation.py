@@ -1,21 +1,13 @@
 from dataclasses import dataclass
-from .. import validation
-from .params import GLMParams, GLMUserParams
 from typing import Callable, Optional, Tuple, Union
 
+import jax
+import jax.numpy as jnp
+
+from .. import tree_utils, validation
 from ..tree_utils import pytree_map_and_reduce
 from ..typing import DESIGN_INPUT_TYPE, FeaturePytree
-import jax.numpy as jnp
-import jax
-from .. import tree_utils
-
-def check_feature_mask(feature_mask, params: Optional[GLMParams]=None):
-    # check if the mask is of 0s and 1s
-    if tree_utils.pytree_map_and_reduce(
-            lambda x: jnp.any(jnp.logical_and(x != 0, x != 1)), any, feature_mask
-    ):
-        raise ValueError("'feature_mask' must contain only 0s and 1s!")
-
+from .params import GLMParams, GLMUserParams
 
 
 @dataclass(frozen=True, repr=False)
@@ -43,7 +35,6 @@ class GLMValidator(validation.RegressorValidator[GLMUserParams, GLMParams]):
         None,
         None,
     )
-
 
     def additional_validation_model_params(self, params: GLMParams, **kwargs):
         """
@@ -135,17 +126,27 @@ class GLMValidator(validation.RegressorValidator[GLMUserParams, GLMParams]):
         validation.check_length(params, 2, "Params must have length two.")
         return params
 
-    def validate_consistency(self, params: GLMParams, X: Optional[DESIGN_INPUT_TYPE] = None, y: Optional[jnp.ndarray]=None):
+    def validate_consistency(
+        self,
+        params: GLMParams,
+        X: Optional[DESIGN_INPUT_TYPE] = None,
+        y: Optional[jnp.ndarray] = None,
+    ):
         if X is not None:
             # check that X and params[0] have the same structure
             msg = "X and coef have mismatched same structure."
             if isinstance(X, FeaturePytree):
                 data = X.data
-                msg += (" X was provided as a FeaturePytree, and coef should be a dictionary with matching keys."
-                       f"X keys are ``{X.keys()}``, the provided coef is {params.coef} instead.")
+                msg += (
+                    " X was provided as a FeaturePytree, and coef should be a dictionary with matching keys."
+                    f"X keys are ``{X.keys()}``, the provided coef is {params.coef} instead."
+                )
             else:
                 data = X
-                msg += f" X was provided as an array, and coef should be a array too. The provided coef is of type ``{type(params.coef)}``  instead."
+                msg += (
+                    f" X was provided as an array, and coef should be a array too. "
+                    f"The provided coef is of type ``{type(params.coef)}``  instead."
+                )
 
             validation.check_tree_structure(
                 data,
@@ -159,8 +160,8 @@ class GLMValidator(validation.RegressorValidator[GLMUserParams, GLMParams]):
                 axis_1=0,
                 axis_2=1,
                 err_message="Inconsistent number of features. "
-                            f"spike basis coefficients has {jax.tree_util.tree_map(lambda p: p.shape[0], params.coef)} features, "
-                            f"X has {jax.tree_util.tree_map(lambda x: x.shape[1], X)} features instead!",
+                f"spike basis coefficients has {jax.tree_util.tree_map(lambda p: p.shape[0], params.coef)} features, "
+                f"X has {jax.tree_util.tree_map(lambda x: x.shape[1], X)} features instead!",
             )
         if y is not None:
             validation.check_array_shape_match_tree(
@@ -168,11 +169,18 @@ class GLMValidator(validation.RegressorValidator[GLMUserParams, GLMParams]):
                 y,
                 axis=1,
                 err_message="Inconsistent number of neurons. "
-                f"spike basis coefficients assumes {jax.tree_util.tree_map(lambda p: p.shape[1], params.coef)} neurons, "
+                f"spike basis coefficients assumes "
+                f"{jax.tree_util.tree_map(lambda p: p.shape[1], params.coef)} neurons, "
                 f"y has {jax.tree_util.tree_map(lambda x: x.shape[1], y)} neurons instead!",
             )
 
-    def validate_and_cast_feature_mask(self, feature_mask: Union[dict[str, jnp.ndarray], jnp.ndarray], params: Optional[GLMParams]=None, data_type: jnp.dtype=float) -> Union[dict[str, jnp.ndarray], jnp.ndarray]:
+    def validate_and_cast_feature_mask(
+        self,
+        feature_mask: Union[dict[str, jnp.ndarray], jnp.ndarray],
+        params: Optional[GLMParams] = None,
+        data_type: jnp.dtype = float,
+    ) -> Union[dict[str, jnp.ndarray], jnp.ndarray]:
+        """Validate feature mask and cast to jax array of floats."""
         feature_mask = super().validate_and_cast_feature_mask(feature_mask, params)
         if params is None:
             return feature_mask
@@ -181,8 +189,8 @@ class GLMValidator(validation.RegressorValidator[GLMUserParams, GLMParams]):
             params.coef,
             feature_mask,
             err_message=f"feature_mask and X must have the same structure, but feature_mask has structure  "
-                        f"{jax.tree_util.tree_structure(feature_mask)}, coef is of "
-                        f"{jax.tree_util.tree_structure(params.coef)} structure instead!",
+            f"{jax.tree_util.tree_structure(feature_mask)}, coef is of "
+            f"{jax.tree_util.tree_structure(params.coef)} structure instead!",
         )
 
         if isinstance(params.coef, dict):
@@ -190,8 +198,14 @@ class GLMValidator(validation.RegressorValidator[GLMUserParams, GLMParams]):
             # aka, same dict keys implies same feature masked. All we need to check is the match of
             # n_neurons.
             neural_axis = 0
-            n_neurons = 1 if self.y_dimensionality == 1 else next(iter(params.coef.values())).shape[1]
-            shape_match = pytree_map_and_reduce(lambda fm: fm.shape == (n_neurons,), all, feature_mask)
+            n_neurons = (
+                1
+                if self.y_dimensionality == 1
+                else next(iter(params.coef.values())).shape[1]
+            )
+            shape_match = pytree_map_and_reduce(
+                lambda fm: fm.shape == (n_neurons,), all, feature_mask
+            )
             if not shape_match:
                 raise ValueError(
                     "Inconsistent number of neurons. "
@@ -201,9 +215,11 @@ class GLMValidator(validation.RegressorValidator[GLMUserParams, GLMParams]):
         else:
             shape_match = feature_mask.shape == params.coef.shape
             if not shape_match:
-                raise ValueError("The shape of the ``feature_mask`` array must match that of the ``coef``. "
-                                 f"The shape of the ``coef`` is ``{params.coef.shape}``, "
-                                 f"that of the ``feature_mask`` is ``{feature_mask.shape}`` instead!")
+                raise ValueError(
+                    "The shape of the ``feature_mask`` array must match that of the ``coef``. "
+                    f"The shape of the ``coef`` is ``{params.coef.shape}``, "
+                    f"that of the ``feature_mask`` is ``{feature_mask.shape}`` instead!"
+                )
         return feature_mask
 
 
@@ -220,8 +236,8 @@ class PopulationGLMValidator(GLMValidator):
         None,
         dict(
             err_message_format="Invalid parameter dimensionality. coef must be an array or nemos.pytree.FeaturePytree "
-                               "with array leafs of shape (n_features, n_neurons). intercept must be of shape (n_neurons,). "
-                               "\nThe provided coef and intercept have shape ``{}`` and ``{}`` instead."
+            "with array leafs of shape (n_features, n_neurons). intercept must be of shape (n_neurons,). "
+            "\nThe provided coef and intercept have shape ``{}`` and ``{}`` instead."
         ),
         None,
         None,

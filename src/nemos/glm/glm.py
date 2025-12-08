@@ -3,6 +3,7 @@
 # required to get ArrayLike to render correctly
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 from typing import Callable, Literal, NamedTuple, Optional, Tuple, Union
 
@@ -11,7 +12,6 @@ import jax.numpy as jnp
 from numpy.typing import ArrayLike
 from sklearn.utils import InputTags, TargetTags
 
-from .validation import GLMValidator, PopulationGLMValidator
 from .. import observation_models as obs
 from .. import tree_utils, validation
 from .._observation_model_builder import instantiate_observation_model
@@ -25,9 +25,8 @@ from ..type_casting import cast_to_jax, support_pynapple
 from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength, SolverState, StepResult
 from ..utils import format_repr
 from .initialize_parameters import initialize_intercept_matching_mean_rate
-from .params import GLMUserParams, GLMParams
-import warnings
-
+from .params import GLMParams, GLMUserParams
+from .validation import GLMValidator, PopulationGLMValidator
 
 
 class GLM(BaseRegressor[GLMParams]):
@@ -269,7 +268,6 @@ class GLM(BaseRegressor[GLMParams]):
 
         """
         return self._validator.validate_and_cast(params)
-
 
     def _check_is_fit(self):
         """Ensure the instance has been fitted."""
@@ -694,12 +692,15 @@ class GLM(BaseRegressor[GLMParams]):
 
         self.optim_info_ = self._solver.get_optim_info(state)
         if not self.optim_info_.converged:
-            warnings.warn("The fit did not converge. "
-                          "Consider the following:"
-                          "\n1) Enable float64 with ``jax.config.update('jax_enable_x64', True)`` "
-                          "\n2) Increase the max number of iterations or increase tolerance (if reasonable). "
-                          "These parameters can be specified by providing a ``solver_kwargs`` dictionary. "
-                          "For the available options see the ``self.solver.__init__`` docstrings.", RuntimeWarning)
+            warnings.warn(
+                "The fit did not converge. "
+                "Consider the following:"
+                "\n1) Enable float64 with ``jax.config.update('jax_enable_x64', True)`` "
+                "\n2) Increase the max number of iterations or increase tolerance (if reasonable). "
+                "These parameters can be specified by providing a ``solver_kwargs`` dictionary. "
+                "For the available options see the ``self.solver.__init__`` docstrings.",
+                RuntimeWarning,
+            )
 
         self._set_model_params(params)
 
@@ -1353,7 +1354,9 @@ class PopulationGLM(GLM):
             return
         elif isinstance(feature_mask, FeaturePytree):
             feature_mask = self._feature_mask.data
-        self._feature_mask = self._validator.validate_and_cast_feature_mask(feature_mask)
+        self._feature_mask = self._validator.validate_and_cast_feature_mask(
+            feature_mask
+        )
 
     @strip_metadata(arg_num=1)
     def fit(

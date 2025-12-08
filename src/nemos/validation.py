@@ -814,19 +814,23 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
         """
         return params
 
-    def validate_inputs(self, X: Optional[DESIGN_INPUT_TYPE] = None, y: Optional[jnp.ndarray] = None):
+    def validate_inputs(
+        self, X: Optional[DESIGN_INPUT_TYPE] = None, y: Optional[jnp.ndarray] = None
+    ):
         if y is not None:
             check_tree_leaves_dimensionality(
                 y,
                 expected_dim=self.y_dimensionality,
-                err_message=f"y must be {self.y_dimensionality}-dimensional. The provided y is {y.ndim}-dimensional instead.",
+                err_message=f"y must be {self.y_dimensionality}-dimensional. "
+                f"The provided y is {y.ndim}-dimensional instead.",
             )
 
         if X is not None:
             check_tree_leaves_dimensionality(
                 X,
                 expected_dim=self.X_dimensionality,
-                err_message=f"X must be {self.X_dimensionality}-dimensional. The provided X is {X.ndim}-dimensional instead.",
+                err_message=f"X must be {self.X_dimensionality}-dimensional. "
+                f"The provided X is {X.ndim}-dimensional instead.",
             )
         if X is None and y is not None:
             if y.shape[0] != X.shape[0]:
@@ -839,7 +843,12 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
         error_all_invalid(X, y)
 
     @abc.abstractmethod
-    def validate_consistency(self, params: ModelParamsT, X: Optional[DESIGN_INPUT_TYPE]=None, y: Optional[jnp.ndarray]=None):
+    def validate_consistency(
+        self,
+        params: ModelParamsT,
+        X: Optional[DESIGN_INPUT_TYPE] = None,
+        y: Optional[jnp.ndarray] = None,
+    ):
         pass
 
     def __repr__(self):
@@ -848,13 +857,20 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
             self, multiline=True, use_name_keys=["to_model_params"]
         )
 
-    def validate_and_cast_feature_mask(self, feature_mask: Union[dict[str, jnp.ndarray], jnp.ndarray], params: Optional[ModelParamsT]=None, data_type: Optional[jnp.dtype]=None) -> Union[dict[str, jnp.ndarray], jnp.ndarray]:
+    def validate_and_cast_feature_mask(
+        self,
+        feature_mask: Union[dict[str, jnp.ndarray], jnp.ndarray],
+        params: Optional[ModelParamsT] = None,
+        data_type: Optional[jnp.dtype] = None,
+    ) -> Union[dict[str, jnp.ndarray], jnp.ndarray]:
         if pytree_map_and_reduce(
-                lambda x: jnp.any(jnp.logical_and(x != 0, x != 1)), any, feature_mask
+            lambda x: jnp.any(jnp.logical_and(x != 0, x != 1)), any, feature_mask
         ):
             raise ValueError("'feature_mask' must contain only 0s and 1s!")
 
         # cast to jax
-        feature_mask = jax.tree_util.tree_map(lambda x: jnp.asarray(x, dtype=data_type), feature_mask)
+        feature_mask = jax.tree_util.tree_map(
+            lambda x: jnp.asarray(x, dtype=data_type), feature_mask
+        )
 
         return feature_mask
