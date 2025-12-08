@@ -1571,9 +1571,9 @@ class TestGLMObservationModel:
 
         elif "gaussian" in model_instantiation:
             if "population" in glm_type:
-                return np.array([3, 3, 3])
+                return np.array([5, 5, 5])
             else:
-                return np.array([3])
+                return np.array([5])
 
         else:
             raise ValueError("Unknown model instantiation")
@@ -2192,7 +2192,7 @@ class TestGLMObservationModel:
         # different dof for different obs models with lasso
         if isinstance(dof, str):
             dof = request.getfixturevalue(dof)
-        elif "population" in glm_type:
+        if "population" not in glm_type:
             # this should exclude lasso dof, where pop vs single neuron
             # is handled in the fixture
             dof = np.array([dof[0]])
