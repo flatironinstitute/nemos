@@ -493,15 +493,7 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         else:
             process = cast_to_jax(lambda *x: x)
 
-        process_X = X is not None
-        process_y = y is not None
-
-        if process_X and process_y:
-            X, y = process(X, y)
-        elif process_X:
-            X = process(X)
-        elif process_y:
-            y = process(y)
+        X, y = process(X, y)
 
         data = X.data if isinstance(X, FeaturePytree) else X
 
@@ -513,7 +505,7 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
                 )
                 self.regularizer.mask = jnp.ones((1, data.shape[1]))
 
-        return X, y
+        return data, y
 
     @abc.abstractmethod
     def initialize_solver_and_state(
