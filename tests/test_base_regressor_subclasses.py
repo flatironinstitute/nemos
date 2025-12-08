@@ -366,7 +366,6 @@ class TestModelCommons:
         )
         model.fit(X, y)
 
-
     @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso", "ElasticNet"])
     def test_reg_strength_reset(self, reg, instantiate_base_regressor_subclass):
         fixture = instantiate_base_regressor_subclass

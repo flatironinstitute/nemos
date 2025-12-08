@@ -8,12 +8,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Literal, Optional, Tuple, Union
 
-import equinox as eqx
 import jax
 import jax.numpy as jnp
 from numpy.typing import ArrayLike
 from sklearn.utils import InputTags, TargetTags
 
+from .validation import GLMValidator, PopulationGLMValidator
 from .. import observation_models as obs
 from .. import tree_utils, validation
 from .._observation_model_builder import instantiate_observation_model
@@ -209,7 +209,6 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             solver_name=solver_name,
             solver_kwargs=solver_kwargs,
         )
-        self._validator = GLMParamsValidator()
 
         self.observation_model = observation_model
         self.inverse_link_function = inverse_link_function
@@ -277,64 +276,6 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         """
         return self._validator.validate_and_cast(params)
 
-    @staticmethod
-    def _check_input_dimensionality(
-        X: Union[FeaturePytree, jnp.ndarray] = None, y: jnp.ndarray = None
-    ):
-        if y is not None:
-            validation.check_tree_leaves_dimensionality(
-                y,
-                expected_dim=1,
-                err_message="y must be one-dimensional, with shape (n_timebins, ).",
-            )
-
-        if X is not None:
-            validation.check_tree_leaves_dimensionality(
-                X,
-                expected_dim=2,
-                err_message="X must be two-dimensional, with shape "
-                "(n_timebins, n_features) or pytree of the same shape.",
-            )
-
-    @staticmethod
-    def _check_input_and_params_consistency(
-        params: GLMParams,
-        X: Optional[Union[FeaturePytree, jnp.ndarray]] = None,
-        y: Optional[jnp.ndarray] = None,
-    ):
-        """Validate the number of features and structure in model parameters and input arguments.
-
-        Raises
-        ------
-        ValueError
-            If param and X have different structures.
-        ValueError
-            if the number of features is inconsistent between params[1] and X (when provided).
-
-        """
-        if X is not None:
-            # check that X and params[0] have the same structure
-            if isinstance(X, FeaturePytree):
-                data = X.data
-            else:
-                data = X
-
-            validation.check_tree_structure(
-                data,
-                params.coef,
-                err_message=f"X and coef must be the same type, but X is "
-                f"{type(X)} and coef is {type(params.coef)}",
-            )
-            # check the consistency of the feature axis
-            validation.check_tree_axis_consistency(
-                params.coef,
-                data,
-                axis_1=0,
-                axis_2=1,
-                err_message="Inconsistent number of features. "
-                f"spike basis coefficients has {jax.tree_util.tree_map(lambda p: p.shape[0], params.coef)} features, "
-                f"X has {jax.tree_util.tree_map(lambda x: x.shape[1], X)} features instead!",
-            )
 
     def _check_is_fit(self):
         """Ensure the instance has been fitted."""
@@ -760,6 +701,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
                 "For the available options see the ``self.solver.__init__`` docstrings.",
                 RuntimeWarning,
             )
+        self.optim_info_ = self._solver.get_optim_info(state)
 
         self._set_model_params(params)
 
@@ -981,17 +923,16 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         >>> X, y = np.random.normal(size=(10, 2)), np.random.uniform(size=10)
         >>> model = nmo.glm.GLM()
         >>> params = model.initialize_params(X, y)
-        >>> opt_state = model.initialize_state(X, y, params)
+        >>> opt_state = model.initialize_solver_and_state(X, y, params)
         >>> # Now ready to run optimization or update steps
         """
         return super().initialize_params(X, y, init_params)
 
-    def initialize_state(
+    def initialize_solver_and_state(
         self,
-        X: DESIGN_INPUT_TYPE,
+        X: dict[str, jnp.ndarray] | jnp.ndarray,
         y: jnp.ndarray,
         init_params: GLMParams,
-        cast_to_jax_and_drop_nans: bool = True,
     ) -> SolverState:
         """Initialize the solver by instantiating its init_state, update and, run methods.
 
@@ -1580,118 +1521,3 @@ class PopulationGLM(GLM):
         # reattach metadata
         klass._metadata = self._metadata
         return klass
-
-
-@dataclass(frozen=True, repr=False)
-class GLMParamsValidator(validation.ParameterValidator[GLMUserParams, GLMParams]):
-    """Parameter validator for GLM models."""
-
-    expected_array_dims: Tuple[int] = (
-        1,
-        1,
-    )  # this should be (coef.ndim, intercept.ndim)
-    to_model_params: Callable[[GLMUserParams], GLMParams] = lambda p: GLMParams(
-        *p
-    )  # casting from tuple of array to GLMParams
-    model_class: type = GLM
-    validation_sequence_kwargs: Tuple[Optional[dict], ...] = (
-        None,
-        None,
-        dict(
-            err_message_format="Invalid parameter dimensionality. coef must be an array or nemos.pytree.FeaturePytree "
-            "with array leafs of shape (n_features, ). intercept must be of shape (1,). "
-            "\nThe provided coef and intercept have shape ``{}`` and ``{}`` instead."
-        ),
-        None,
-        None,
-    )
-
-    def additional_validation_model_params(self, params: GLMParams, **kwargs):
-        """
-        Perform GLM-specific parameter validation.
-
-        Validates that the intercept has the correct shape for a single-neuron GLM.
-
-        Parameters
-        ----------
-        params : GLMParams
-            GLM parameters with coef and intercept attributes.
-        **kwargs
-            Additional keyword arguments (unused).
-
-        Returns
-        -------
-        GLMParams
-            The validated parameters.
-
-        Raises
-        ------
-        ValueError
-            If intercept does not have shape (1,).
-        """
-        # check intercept shape
-        if params.intercept.shape != (1,):
-            raise ValueError(
-                "Intercept term should be a one-dimensional array with shape ``(1,)``."
-            )
-        return params
-
-    def check_array_dimensions(
-        self,
-        params: GLMUserParams,
-        err_msg: Optional[str] = None,
-        err_message_format: str = None,
-    ) -> GLMUserParams:
-        """
-        Check array dimensions with custom error formatting for GLM parameters.
-
-        Overrides the base implementation to provide GLM-specific error messages
-        that include the actual shapes of the provided coefficient and intercept arrays.
-
-        Parameters
-        ----------
-        params : GLMUserParams
-            User-provided parameters as a tuple (coef, intercept).
-        err_msg : str, optional
-            Custom error message (unused, overridden by err_message_format).
-        err_message_format : str, optional
-            Format string for error message that takes two shape arguments.
-
-        Returns
-        -------
-        GLMUserParams
-            The validated parameters.
-
-        Raises
-        ------
-        ValueError
-            If arrays have incorrect dimensionality.
-        """
-        err_msg = err_message_format.format(params[0].shape, params[1].shape)
-        return super().check_array_dimensions(params, err_msg=err_msg)
-
-    def check_user_params_structure(
-        self, params: GLMUserParams, **kwargs
-    ) -> GLMUserParams:
-        """
-        Validate that user parameters are a two-element structure.
-
-        Parameters
-        ----------
-        params : GLMUserParams
-            User-provided parameters (should be a tuple/list of length 2).
-        **kwargs
-            Additional keyword arguments (unused).
-
-        Returns
-        -------
-        GLMUserParams
-            The validated parameters.
-
-        Raises
-        ------
-        ValueError
-            If parameters do not have length two.
-        """
-        validation.check_length(params, 2, "Params must have length two.")
-        return params
