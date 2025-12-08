@@ -379,7 +379,12 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         return self
 
     @abc.abstractmethod
-    def fit(self, X: DESIGN_INPUT_TYPE, y: Union[NDArray, jnp.ndarray], init_params: Optional[UserProvidedParamsT] = None) -> BaseRegressor[ParamsT]:
+    def fit(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: Union[NDArray, jnp.ndarray],
+        init_params: Optional[UserProvidedParamsT] = None,
+    ) -> BaseRegressor[ParamsT]:
         """Fit the model to neural activity."""
         pass
 
@@ -407,7 +412,6 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
     ):
         """Simulate neural activity in response to a feed-forward input and recurrent activity."""
         pass
-
 
     @abc.abstractmethod
     def _get_model_params(self) -> ParamsT:
