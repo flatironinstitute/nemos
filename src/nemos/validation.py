@@ -14,6 +14,7 @@ from . import utils
 from .base_class import Base
 from .pytrees import FeaturePytree
 from .tree_utils import get_valid_multitree, pytree_map_and_reduce
+from .typing import DESIGN_INPUT_TYPE
 
 # User provided init_params (e.g. for GLMs Tuple[array, array])
 UserProvidedParamsT = TypeVar("UserProvidedParamsT")
@@ -497,7 +498,7 @@ def _suggest_keys(
 
 
 @dataclass(frozen=True)
-class ParameterValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
+class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
     """
     Base class for validating and converting user-provided parameters to model parameters.
 
@@ -546,7 +547,7 @@ class ParameterValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
         Function to transform validated user parameters into model parameter structure.
     model_class :
         The model class these parameters belong to (used for error messages).
-    validation_sequence :
+    params_validation_sequence :
         Names of validation methods to call in order.
     validation_sequence_kwargs :
         Keyword arguments for each validation method (None = no kwargs).
@@ -555,7 +556,9 @@ class ParameterValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
     expected_array_dims: Tuple[int] = None
     model_class: type = None
     to_model_params: Callable[[UserProvidedParamsT], ModelParamsT] = None
-    validation_sequence: Tuple[str, ...] = (
+    X_dimensionality: int = None
+    y_dimensionality: int = None
+    params_validation_sequence: Tuple[str, ...] = (
         "check_user_params_structure",
         "convert_to_jax_arrays",
         "check_array_dimensions",
@@ -691,6 +694,9 @@ class ParameterValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
                 "Parameters must be array-like objects (or pytrees of array-like objects) "
                 "with numeric data types."
             )
+        if data_type is None:
+            # default to float for model params.
+            data_type = float
         return convert_tree_leaves_to_jax_array(
             params, err_message=err_msg, data_type=data_type
         )
@@ -756,7 +762,7 @@ class ParameterValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
         ]
 
         for method_name, method_kwargs in zip(
-            self.validation_sequence, kwargs_sequence
+            self.params_validation_sequence, kwargs_sequence
         ):
             # Merge default kwargs with any user-provided kwargs
             merged_kwargs = {**method_kwargs, **validation_kwargs}
@@ -808,8 +814,47 @@ class ParameterValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
         """
         return params
 
+    def validate_inputs(self, X: Optional[DESIGN_INPUT_TYPE] = None, y: Optional[jnp.ndarray] = None):
+        if y is not None:
+            check_tree_leaves_dimensionality(
+                y,
+                expected_dim=self.y_dimensionality,
+                err_message=f"y must be {self.y_dimensionality}-dimensional. The provided y is {y.ndim}-dimensional instead.",
+            )
+
+        if X is not None:
+            check_tree_leaves_dimensionality(
+                X,
+                expected_dim=self.X_dimensionality,
+                err_message=f"X must be {self.X_dimensionality}-dimensional. The provided X is {X.ndim}-dimensional instead.",
+            )
+        if X is None and y is not None:
+            if y.shape[0] != X.shape[0]:
+                raise ValueError(
+                    "The number of time-points in X and y must agree. "
+                    f"X has {X.shape[0]} time-points, "
+                    f"y has {y.shape[0]} instead!"
+                )
+        # error if all samples are invalid
+        error_all_invalid(X, y)
+
+    @abc.abstractmethod
+    def validate_consistency(self, params: ModelParamsT, X: Optional[DESIGN_INPUT_TYPE]=None, y: Optional[jnp.ndarray]=None):
+        pass
+
     def __repr__(self):
         """Small repr for the validator class."""
         return utils.format_repr(
             self, multiline=True, use_name_keys=["to_model_params"]
         )
+
+    def validate_and_cast_feature_mask(self, feature_mask: Union[dict[str, jnp.ndarray], jnp.ndarray], params: Optional[ModelParamsT]=None, data_type: Optional[jnp.dtype]=None) -> Union[dict[str, jnp.ndarray], jnp.ndarray]:
+        if pytree_map_and_reduce(
+                lambda x: jnp.any(jnp.logical_and(x != 0, x != 1)), any, feature_mask
+        ):
+            raise ValueError("'feature_mask' must contain only 0s and 1s!")
+
+        # cast to jax
+        feature_mask = jax.tree_util.tree_map(lambda x: jnp.asarray(x, dtype=data_type), feature_mask)
+
+        return feature_mask

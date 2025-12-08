@@ -336,7 +336,7 @@ class TestModelCommons:
         with expectation:
             params = model.initialize_params(X, y, init_params=init_params)
             # check that params are set
-            init_state = model.initialize_state(X, y, params)
+            init_state = model.initialize_solver_and_state(X, y, params)
             # optimistix solvers do not have a velocity attr
             assert getattr(init_state, "velocity", params) == params
 
@@ -367,7 +367,7 @@ class TestModelCommons:
         with expectation:
             params = model.initialize_params(X, y, init_params=true_params)
             # check that params are set
-            init_state = model.initialize_state(X, y, params)
+            init_state = model.initialize_solver_and_state(X, y, params)
             # optimistix solvers do not have a velocity attr
             assert getattr(init_state, "velocity", params) == params
 
@@ -404,7 +404,7 @@ class TestModelCommons:
         with expectation:
             params = model.initialize_params(X, y, init_params=true_params)
             # check that params are set
-            init_state = model.initialize_state(X, y, params)
+            init_state = model.initialize_solver_and_state(X, y, params)
             # optimistix solvers do not have a velocity attr
             assert getattr(init_state, "velocity", params) == params
 
@@ -434,7 +434,7 @@ class TestModelCommons:
         with expectation:
             params = model.initialize_params(X, y, init_params=true_params)
             # check that params are set
-            init_state = model.initialize_state(X, y, params)
+            init_state = model.initialize_solver_and_state(X, y, params)
             # optimistix solvers do not have a velocity attr
             assert getattr(init_state, "velocity", params) == params
 
@@ -468,7 +468,7 @@ class TestModelCommons:
         with expectation:
             params = model.initialize_params(X, y, init_params=true_params)
             # check that params are set
-            init_state = model.initialize_state(X, y, params)
+            init_state = model.initialize_solver_and_state(X, y, params)
             # optimistix solvers do not have a velocity attr
             assert getattr(init_state, "velocity", params) == params
 
@@ -502,7 +502,7 @@ class TestModelCommons:
         with expectation:
             params = model.initialize_params(X, y, init_params=true_params)
             # check that params are set
-            init_state = model.initialize_state(X, y, params)
+            init_state = model.initialize_solver_and_state(X, y, params)
             # optimistix solvers do not have a velocity attr
             assert getattr(init_state, "velocity", params) == params
 
@@ -525,7 +525,7 @@ class TestModelCommons:
             regularizer_strength=1.0,
         )
         params = model.initialize_params(X, y)
-        init_state = model.initialize_state(X, y, params)
+        init_state = model.initialize_solver_and_state(X, y, params)
         # optimistix solvers do not have a velocity attr
         assert getattr(init_state, "velocity", params) == params
 
@@ -576,7 +576,7 @@ class TestModelCommons:
         X.fill(fill_val)
         with expectation:
             params = model.initialize_params(X, y)
-            init_state = model.initialize_state(X, y, params)
+            init_state = model.initialize_solver_and_state(X, y, params)
             # optimistix solvers do not have a velocity attr
             assert getattr(init_state, "velocity", params) == params
 
@@ -728,7 +728,7 @@ class TestModelCommons:
         assert model.solver_update is None
         assert model.solver_run is None
         init_params = model.initialize_params(X, y)
-        model.initialize_state(X, y, init_params)
+        model.initialize_solver_and_state(X, y, init_params)
         assert callable(model.solver_init_state)
         assert callable(model.solver_update)
         assert callable(model.solver_run)
