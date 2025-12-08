@@ -10,14 +10,6 @@ from ..typing import DESIGN_INPUT_TYPE, FeaturePytree
 from .params import GLMParams, GLMUserParams
 
 
-def check_feature_mask(feature_mask, params: Optional[GLMParams] = None):
-    # check if the mask is of 0s and 1s
-    if tree_utils.pytree_map_and_reduce(
-        lambda x: jnp.any(jnp.logical_and(x != 0, x != 1)), any, feature_mask
-    ):
-        raise ValueError("'feature_mask' must contain only 0s and 1s!")
-
-
 @dataclass(frozen=True, repr=False)
 class GLMValidator(validation.RegressorValidator[GLMUserParams, GLMParams]):
     """Parameter validator for GLM models."""
@@ -151,7 +143,10 @@ class GLMValidator(validation.RegressorValidator[GLMUserParams, GLMParams]):
                 )
             else:
                 data = X
-                msg += f" X was provided as an array, and coef should be a array too. The provided coef is of type ``{type(params.coef)}``  instead."
+                msg += (
+                    f" X was provided as an array, and coef should be a array too. "
+                    f"The provided coef is of type ``{type(params.coef)}``  instead."
+                )
 
             validation.check_tree_structure(
                 data,
@@ -174,7 +169,8 @@ class GLMValidator(validation.RegressorValidator[GLMUserParams, GLMParams]):
                 y,
                 axis=1,
                 err_message="Inconsistent number of neurons. "
-                f"spike basis coefficients assumes {jax.tree_util.tree_map(lambda p: p.shape[1], params.coef)} neurons, "
+                f"spike basis coefficients assumes "
+                f"{jax.tree_util.tree_map(lambda p: p.shape[1], params.coef)} neurons, "
                 f"y has {jax.tree_util.tree_map(lambda x: x.shape[1], y)} neurons instead!",
             )
 
@@ -184,6 +180,7 @@ class GLMValidator(validation.RegressorValidator[GLMUserParams, GLMParams]):
         params: Optional[GLMParams] = None,
         data_type: jnp.dtype = float,
     ) -> Union[dict[str, jnp.ndarray], jnp.ndarray]:
+        """Validate feature mask and cast to jax array of floats."""
         feature_mask = super().validate_and_cast_feature_mask(feature_mask, params)
         if params is None:
             return feature_mask

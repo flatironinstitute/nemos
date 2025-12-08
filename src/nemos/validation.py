@@ -821,14 +821,16 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
             check_tree_leaves_dimensionality(
                 y,
                 expected_dim=self.y_dimensionality,
-                err_message=f"y must be {self.y_dimensionality}-dimensional. The provided y is {y.ndim}-dimensional instead.",
+                err_message=f"y must be {self.y_dimensionality}-dimensional. "
+                f"The provided y is {y.ndim}-dimensional instead.",
             )
 
         if X is not None:
             check_tree_leaves_dimensionality(
                 X,
                 expected_dim=self.X_dimensionality,
-                err_message=f"X must be {self.X_dimensionality}-dimensional. The provided X is {X.ndim}-dimensional instead.",
+                err_message=f"X must be {self.X_dimensionality}-dimensional. "
+                f"The provided X is {X.ndim}-dimensional instead.",
             )
         if X is None and y is not None:
             if y.shape[0] != X.shape[0]:
