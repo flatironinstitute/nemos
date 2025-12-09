@@ -570,7 +570,7 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
         Keyword arguments for each validation method (None = no kwargs).
     """
 
-    expected_array_dims: Tuple[int] = None
+    expected_param_dims: Tuple[int] = None
     model_class: type = None
     to_model_params: Callable[[UserProvidedParamsT], ModelParamsT] = None
     from_model_params: Callable[[ModelParamsT], UserProvidedParamsT] = None
