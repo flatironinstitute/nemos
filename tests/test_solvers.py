@@ -296,6 +296,7 @@ def test_svrg_glm_update(
     assert state.iter_num == 1
 
 
+# TODO: Why does this have ProximalGradient as solver if it's testing SVRG?
 @pytest.mark.parametrize(
     "regularizer_name, solver_name, mask",
     [
@@ -337,13 +338,22 @@ def test_svrg_glm_fit(
     # set the tolerance such that the solvers never hit their convergence criterion
     # and run until maxiter is reached
     backend = os.getenv("NEMOS_SOLVER_BACKEND")
-    if backend is not None:
-        use_jaxopt_tol = backend == "jaxopt"
-    else:
-        use_jaxopt_tol = (
-            "jaxopt"
-            in str(nmo.solvers._solver_registry.solver_registry[solver_name]).lower()
-        )
+    solver_class_name = str(nmo.solvers._solver_registry.solver_registry[solver_name])
+
+    use_jaxopt_tol = False
+    if backend is not None and backend == "jaxopt":
+        use_jaxopt_tol = True
+
+    if "jaxopt" in solver_class_name.lower():
+        use_jaxopt_tol = True
+
+    if "optimistix" in solver_class_name.lower():
+        use_jaxopt_tol = False
+
+    # OptimistixFISTA currently uses jaxopt-like termination
+    if "optimistixfista" in solver_class_name.lower():
+        use_jaxopt_tol = True
+
     tol = -1.0 if use_jaxopt_tol else 0.0
     solver_kwargs = {"maxiter": maxiter, "tol": tol}
 

@@ -181,15 +181,20 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
             next_vel = state.velocity
 
         # use Cauchy for consistency with other solvers
-        terminate = optx._misc.cauchy_termination(
-            self.rtol,
-            self.atol,
-            self.norm,
-            y,
-            diff_y,
-            state.f,
-            new_fun_val - state.f,
-        )
+        # terminate = optx._misc.cauchy_termination(
+        #     self.rtol,
+        #     self.atol,
+        #     self.norm,
+        #     y,
+        #     diff_y,
+        #     state.f,
+        #     new_fun_val - state.f,
+        # )
+        # TODO: Have a more explicit condition to stop if something is none?
+        # or use the same termination as JAXopt
+        # terminate = ~continue_iteration assures that it stops if anything is NaN
+        continue_iteration = (optx.two_norm(diff_y) / new_stepsize) > self.atol
+        terminate = ~continue_iteration
 
         next_state = ProxGradState(
             iter_num=state.iter_num + 1,
