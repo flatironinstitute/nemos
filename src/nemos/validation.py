@@ -678,9 +678,8 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
                 raise ValueError(err_msg)
         return params
 
-    @classmethod
     def convert_to_jax_arrays(
-        cls,
+        self,
         params: UserProvidedParamsT,
         data_type: Optional[jax.dtypes] = None,
         err_msg: Optional[str] = None,
