@@ -2968,8 +2968,8 @@ class TestGaussianGLM:
             glm_type + model_instantiation
         )
         model.observation_model.inverse_link_function = inv_link
-        model.coef_ = true_params[0]
-        model.intercept_ = true_params[1]
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
         model.score(X, y)
 
     def test_simulate_glm(self, inv_link, request, glm_type, model_instantiation):
@@ -2985,8 +2985,8 @@ class TestGaussianGLM:
             model.scale_ = jnp.ones((y.shape[1]))
         else:
             model.scale_ = 1.0
-        model.coef_ = true_params[0]
-        model.intercept_ = true_params[1]
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
         ysim, ratesim = model.simulate(jax.random.PRNGKey(123), X)
         assert ysim.shape == y.shape
         assert ratesim.shape == y.shape
