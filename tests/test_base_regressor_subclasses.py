@@ -529,6 +529,11 @@ class TestModelCommons:
         # optimistix solvers do not have a velocity attr
         assert getattr(init_state, "velocity", params) == params
 
+    # TODO: For Bernoulli observations y=ones leads to NaN and stopping after the first iteration
+    # That is mostly luck because of the way JAXopt implements stopping.
+    # The FISTA implementation didn't stop and produced NaNs in the final parameters.
+    # After changing the criterion it does.
+    # It is a bit unclear, what expected behavior is here.
     @pytest.mark.solver_related
     def test_fit_mask_grouplasso(self, instantiate_base_regressor_subclass):
         """Test that the group lasso fit goes through"""
@@ -992,7 +997,6 @@ class TestObservationModel:
     indirect=True,
 )
 class TestModelSimulation:
-
     @pytest.mark.parametrize(
         "n_params",
         [0, 1, 2, 3, 4],
