@@ -586,6 +586,11 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
     )
 
     @abc.abstractmethod
+    def match_ndims_feature_pytree(self, params: UserProvidedParamsT):
+        """Match params tree structure."""
+        pass
+
+    @abc.abstractmethod
     def check_user_params_structure(
         self, params: UserProvidedParamsT, **kwargs
     ) -> UserProvidedParamsT:
@@ -654,14 +659,14 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
         if not pytree_map_and_reduce(
             lambda arr, expected_dim: arr.ndim == expected_dim,
             all,
-            params,
-            self.expected_array_dims,
+            jax.tree_util.tree_leaves(params),
+            jax.tree_util.tree_leaves(self.match_ndims_feature_pytree(params)),
         ):
             if err_msg is None:
                 provided_dims = jax.tree_util.tree_map(lambda x: x.ndim, params)
                 provided_dims_flat = tuple(jax.tree_util.tree_leaves(provided_dims))
                 err_msg = (
-                    f"Unexpected array dimensionality for {self.model_class.__name__} parameters. "
+                    f"Unexpected array dimensionality for ``{self.model_class}`` parameters. "
                     f"Expected dimensions: {self.expected_array_dims}. "
                     f"Provided dimensions: {provided_dims_flat}"
                 )
@@ -917,51 +922,3 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
         return utils.format_repr(
             self, multiline=True, use_name_keys=["to_model_params"]
         )
-
-    def validate_and_cast_feature_mask(
-        self,
-        feature_mask: Union[dict[str, jnp.ndarray], jnp.ndarray],
-        params: Optional[ModelParamsT] = None,
-        data_type: Optional[jnp.dtype] = None,
-    ) -> Union[dict[str, jnp.ndarray], jnp.ndarray]:
-        """
-        Validate and cast a feature mask to JAX arrays.
-
-        Validates that the feature mask contains only 0s and 1s, then converts
-        it to JAX arrays with the specified data type. Subclasses can extend
-        this to add parameter-specific validation (e.g., checking that mask
-        shape matches parameter dimensions).
-
-        Parameters
-        ----------
-        feature_mask : dict[str, jnp.ndarray] or jnp.ndarray
-            Feature mask indicating which features are used. Must contain only 0s and 1s.
-        params : ModelParamsT, optional
-            Model parameters to validate mask against. If None, only validates
-            mask values (0s and 1s) without checking consistency with parameters.
-        data_type : jnp.dtype, optional
-            Target data type for the mask arrays. Defaults to float.
-
-        Returns
-        -------
-        dict[str, jnp.ndarray] or jnp.ndarray
-            The validated and cast feature mask.
-
-        Raises
-        ------
-        ValueError
-            If feature_mask contains values other than 0 or 1.
-        """
-        if pytree_map_and_reduce(
-            lambda x: jnp.any(jnp.logical_and(x != 0, x != 1)), any, feature_mask
-        ):
-            raise ValueError("'feature_mask' must contain only 0s and 1s!")
-
-        # cast to jax - default to float if not specified
-        if data_type is None:
-            data_type = float
-        feature_mask = jax.tree_util.tree_map(
-            lambda x: jnp.asarray(x, dtype=data_type), feature_mask
-        )
-
-        return feature_mask
