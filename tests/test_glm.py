@@ -162,7 +162,7 @@ class TestGLM:
         else:
             init_w = jnp.zeros((n_features, n_neurons) + (1,) * (dim_weights - 2))
         with expectation:
-            model.fit(X, y, init_params=(init_w, true_params[1]))
+            model.fit(X, y, init_params=(init_w, true_params.intercept))
 
     @pytest.mark.parametrize(
         "dim_intercepts, expectation",
@@ -343,8 +343,8 @@ class TestGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation_type
         )
-        model.coef_ = true_params[0]
-        model.intercept_ = true_params[1]
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
         if delta_dim == -1:
             X = np.zeros((X.shape[0],))
         elif delta_dim == 1:
@@ -380,8 +380,8 @@ class TestGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation_type
         )
-        model.coef_ = true_params[0]
-        model.intercept_ = true_params[1]
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
         if "population" in glm_class_type:
             if delta_dim == -1:
                 y = y[:, 0]
@@ -418,8 +418,8 @@ class TestGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation_type
         )
-        model.coef_ = true_params[0]
-        model.intercept_ = true_params[1]
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
         if delta_n_features == 1:
             X = jnp.concatenate((X, jnp.zeros((X.shape[0], 1))), axis=1)
         elif delta_n_features == -1:
@@ -451,8 +451,8 @@ class TestGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation_type
         )
-        model.coef_ = true_params[0]
-        model.intercept_ = true_params[1]
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
         X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
         with expectation:
             model.score(X, y)
@@ -481,8 +481,8 @@ class TestGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation_type
         )
-        model.coef_ = true_params[0]
-        model.intercept_ = true_params[1]
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
         y = jnp.zeros((y.shape[0] + delta_tp,) + y.shape[1:])
         with expectation:
             model.score(X, y)
@@ -533,8 +533,8 @@ class TestGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation_type
         )
-        model.coef_ = true_params[0]
-        model.intercept_ = true_params[1]
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
         if "population" in glm_class_type:
             model._initialize_feature_mask(X, y)
         if delta_dim == -1:
@@ -567,8 +567,8 @@ class TestGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation_type
         )
-        model.coef_ = true_params[0]
-        model.intercept_ = true_params[1]
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
         if "population" in glm_class_type:
             model._initialize_feature_mask(X, y)
         if delta_n_features == 1:
@@ -645,7 +645,7 @@ class TestGLM:
         else:
             init_w = jnp.zeros((n_features, n_neurons) + (1,) * (dim_weights - 2))
         with expectation:
-            params = model.initialize_params(X, y, init_params=(init_w, true_params[1]))
+            params = model.initialize_params(X, y, init_params=(init_w, true_params.intercept))
             # check that params are set
             init_state = model.initialize_solver_and_state(X, y, params)
 
@@ -775,8 +775,8 @@ class TestGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation_type
         )
-        model.coef_ = true_params[0]
-        model.intercept_ = true_params[1]
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
         if "population" in glm_class_type:
             model._initialize_feature_mask(X, y)
         if delta_dim == -1:
@@ -809,8 +809,8 @@ class TestGLM:
             model_instantiation_type
         )
         if is_fit:
-            model.coef_ = true_params[0]
-            model.intercept_ = true_params[1]
+            model.coef_ = true_params.coef
+            model.intercept_ = true_params.intercept
             if "population" in glm_class_type:
                 model._initialize_feature_mask(X, y)
         with expectation:
@@ -859,8 +859,8 @@ class TestGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation_type
         )
-        model.coef_ = true_params[0]
-        model.intercept_ = true_params[1]
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
         if "population" in glm_class_type:
             model._initialize_feature_mask(X, y)
         feedforward_input = jnp.zeros(
@@ -1743,8 +1743,8 @@ class TestGLMObservationModel:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
-        model.coef_ = true_params[0]
-        model.intercept_ = true_params[1]
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
         with expectation:
             model.score(X, y, score_type=score_type)
 
@@ -1761,8 +1761,8 @@ class TestGLMObservationModel:
             glm_type + model_instantiation
         )
         # set model coeff
-        model.coef_ = true_params[0]
-        model.intercept_ = true_params[1]
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
         if "population" in glm_type:
             model._initialize_feature_mask(X, y)
         # get the rate
@@ -1933,8 +1933,8 @@ class TestGLMObservationModel:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
-        model.coef_ = true_params[0]
-        model.intercept_ = true_params[1]
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
         if "population" in glm_type:
             model._initialize_feature_mask(X, y)
         if input_type == TsdFrame:
@@ -2329,8 +2329,8 @@ class TestPopulationGLM:
         X, y, model, true_params, firing_rate = (
             population_poissonGLM_model_instantiation
         )
-        model.coef_ = true_params[0]
-        model.intercept_ = true_params[1]
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
         model._initialize_feature_mask(X, y)
         # hardcode metadata
         model._metadata = {"columns": 1, "metadata": 2}
@@ -2464,8 +2464,8 @@ class TestPopulationGLM:
         else:
             expectation = expectation_np
         model.feature_mask = mask
-        model.coef_ = true_params[0]
-        model.intercept_ = true_params[1]
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
         with expectation:
             if attr_name == "predict":
                 getattr(model, attr_name)(X)
@@ -2565,8 +2565,8 @@ class TestPopulationGLMObservationModel:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation
         )
-        model.coef_ = true_params[0]
-        model.intercept_ = true_params[1]
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
         mn = model.score(X, y, score_type=score_type, aggregate_sample_scores=jnp.mean)
         mn_n = model.score(
             X,
@@ -3023,8 +3023,8 @@ class TestGammaGLM:
             glm_type + model_instantiation
         )
         model.observation_model.inverse_link_function = inv_link
-        model.coef_ = true_params[0]
-        model.intercept_ = true_params[1]
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
         model.score(X, y)
 
     def test_simulate_glm(self, inv_link, request, glm_type, model_instantiation):
@@ -3040,8 +3040,8 @@ class TestGammaGLM:
             model.scale_ = jnp.ones((y.shape[1]))
         else:
             model.scale_ = 1.0
-        model.coef_ = true_params[0]
-        model.intercept_ = true_params[1]
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
         ysim, ratesim = model.simulate(jax.random.PRNGKey(123), X)
         assert ysim.shape == y.shape
         assert ratesim.shape == y.shape
@@ -3131,8 +3131,8 @@ class TestBernoulliGLM:
             glm_type + model_instantiation
         )
         model.inverse_link_function = inv_link
-        model.coef_ = true_params[0]
-        model.intercept_ = true_params[1]
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
         if "population" in glm_type:
             model.scale_ = np.ones((y.shape[1]))
         else:
@@ -3152,8 +3152,8 @@ class TestBernoulliGLM:
             model.scale_ = jnp.ones((y.shape[1]))
         else:
             model.scale_ = 1.0
-        model.coef_ = true_params[0]
-        model.intercept_ = true_params[1]
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
         ysim, ratesim = model.simulate(jax.random.PRNGKey(123), X)
         assert ysim.shape == y.shape
         assert ratesim.shape == y.shape
@@ -3179,7 +3179,7 @@ class TestNegativeBinomialGLM:
         )
         # intialize to true params
         model.inverse_link_function = inv_link
-        model.fit(X, y, init_params=true_params)
+        model.fit(X, y, init_params=(true_params.coef, true_params.intercept))
 
     def test_score_glm(self, inv_link, request, glm_type, model_instantiation):
         """
@@ -3189,8 +3189,8 @@ class TestNegativeBinomialGLM:
             glm_type + model_instantiation
         )
         model.inverse_link_function = inv_link
-        model.coef_ = true_params[0]
-        model.intercept_ = true_params[1]
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
         if "population" in glm_type:
             model.scale_ = np.ones((y.shape[1]))
         else:
@@ -3210,8 +3210,8 @@ class TestNegativeBinomialGLM:
             model.scale_ = jnp.ones((y.shape[1]))
         else:
             model.scale_ = 1.0
-        model.coef_ = true_params[0]
-        model.intercept_ = true_params[1]
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
         ysim, ratesim = model.simulate(jax.random.PRNGKey(123), X)
         assert ysim.shape == y.shape
         assert ratesim.shape == y.shape
