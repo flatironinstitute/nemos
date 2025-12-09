@@ -127,7 +127,7 @@ def test_validate_lower_dimensional_data_X(instantiate_base_regressor_subclass):
         y = y[None]
     err_msg = "X must be 2-dimensional"
     with pytest.raises(ValueError, match=err_msg):
-        model._validate(X, y, model._initialize_parameters(X, y))
+        model._validate(X, y, model._model_specific_initialization(X, y))
 
 
 @pytest.mark.parametrize(
@@ -146,7 +146,7 @@ def test_preprocess_fit_higher_dimensional_data_y(instantiate_base_regressor_sub
     else:
         err_msg = "y must be 1-dimensional"
     with pytest.raises(ValueError, match=err_msg):
-        model._validate(X, y, model._initialize_parameters(X, y))
+        model._validate(X, y, model._model_specific_initialization(X, y))
 
 
 @pytest.mark.parametrize(
@@ -163,7 +163,7 @@ def test_validate_higher_dimensional_data_X(instantiate_base_regressor_subclass)
     if is_population_model(model):
         y = y[None]
     with pytest.raises(ValueError, match="X must be 2-dimensional\\."):
-        model._validate(X, y, model._initialize_parameters(X, y))
+        model._validate(X, y, model._model_specific_initialization(X, y))
 
 
 @pytest.mark.parametrize(
@@ -338,9 +338,9 @@ class TestModelCommons:
                 n_params - INIT_PARAM_LENGTH[model_name]
             )
         with expectation:
-            params = model.initialize_params(X, y, init_params=init_params)
+            params = model._initialize_params(X, y, init_params=init_params)
             # check that params are set
-            init_state = model.initialize_solver_and_state(X, y, params)
+            init_state = model._initialize_solver_and_state(X, y, params)
             # optimistix solvers do not have a velocity attr
             assert getattr(init_state, "velocity", params) == params
 
@@ -374,7 +374,7 @@ class TestModelCommons:
                 (true_params.coef, true_params.intercept)
             )
             # check that params are set
-            init_state = model.initialize_solver_and_state(X, y, params)
+            init_state = model._initialize_solver_and_state(X, y, params)
             # optimistix solvers do not have a velocity attr
             assert getattr(init_state, "velocity", params) == params
 
@@ -414,7 +414,7 @@ class TestModelCommons:
                 (true_params.coef, true_params.intercept)
             )
             # check that params are set
-            init_state = model.initialize_solver_and_state(X, y, params)
+            init_state = model._initialize_solver_and_state(X, y, params)
             # optimistix solvers do not have a velocity attr
             assert getattr(init_state, "velocity", params) == params
 
@@ -442,11 +442,11 @@ class TestModelCommons:
         elif delta_n_features == -1:
             X = X[..., :-1]
         with expectation:
-            params = model.initialize_params(
+            params = model._initialize_params(
                 X, y, init_params=(true_params.coef, true_params.intercept)
             )
             # check that params are set
-            init_state = model.initialize_solver_and_state(X, y, params)
+            init_state = model._initialize_solver_and_state(X, y, params)
             # optimistix solvers do not have a velocity attr
             assert getattr(init_state, "velocity", params) == params
 
@@ -482,12 +482,12 @@ class TestModelCommons:
         y = np.zeros(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
         with expectation:
-            params = model.initialize_params(
+            params = model._initialize_params(
                 X, y, init_params=(true_params.coef, true_params.intercept)
             )
             model._validator.validate_inputs(X, y)
             # check that params are set
-            init_state = model.initialize_solver_and_state(X, y, params)
+            init_state = model._initialize_solver_and_state(X, y, params)
             # optimistix solvers do not have a velocity attr
             assert getattr(init_state, "velocity", params) == params
 
@@ -523,12 +523,12 @@ class TestModelCommons:
         shape = DEFAULT_OBS_SHAPE[model.__class__.__name__]
         y = jnp.zeros((shape[0] + delta_tp,) + shape[1:])
         with expectation:
-            params = model.initialize_params(
+            params = model._initialize_params(
                 X, y, init_params=(true_params.coef, true_params.intercept)
             )
             model._validator.validate_inputs(X, y)
             # check that params are set
-            init_state = model.initialize_solver_and_state(X, y, params)
+            init_state = model._initialize_solver_and_state(X, y, params)
             # optimistix solvers do not have a velocity attr
             assert getattr(init_state, "velocity", params) == params
 
@@ -550,8 +550,8 @@ class TestModelCommons:
             solver_name="ProximalGradient",
             regularizer_strength=1.0,
         )
-        params = model.initialize_params(X, y)
-        init_state = model.initialize_solver_and_state(X, y, params)
+        params = model._initialize_params(X, y)
+        init_state = model._initialize_solver_and_state(X, y, params)
         # optimistix solvers do not have a velocity attr
         assert getattr(init_state, "velocity", params) == params
 
@@ -601,9 +601,9 @@ class TestModelCommons:
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         X.fill(fill_val)
         with expectation:
-            params = model.initialize_params(X, y)
+            params = model._initialize_params(X, y)
             model._validator.validate_inputs(X, y)
-            init_state = model.initialize_solver_and_state(X, y, params)
+            init_state = model._initialize_solver_and_state(X, y, params)
             # optimistix solvers do not have a velocity attr
             assert getattr(init_state, "velocity", params) == params
 
@@ -754,8 +754,8 @@ class TestModelCommons:
         assert model.solver_init_state is None
         assert model.solver_update is None
         assert model.solver_run is None
-        init_params = model.initialize_params(X, y)
-        model.initialize_solver_and_state(X, y, init_params)
+        init_params = model._initialize_params(X, y)
+        model._initialize_solver_and_state(X, y, init_params)
         assert callable(model.solver_init_state)
         assert callable(model.solver_update)
         assert callable(model.solver_run)
