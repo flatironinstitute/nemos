@@ -57,6 +57,7 @@ class GLMValidator(validation.RegressorValidator[GLMUserParams, GLMParams]):
             ),
         ),
         *RegressorValidator.params_validation_sequence[3:],
+        ("validate_intercept_shape", None),
     )
 
     def validate_intercept_shape(self, params: GLMParams, **kwargs):
@@ -149,6 +150,8 @@ class GLMValidator(validation.RegressorValidator[GLMUserParams, GLMParams]):
             If parameters do not have length two.
         """
         validation.check_length(params, 2, "Params must have length two.")
+        if not isinstance(params, (tuple, list)):
+            raise TypeError("GLM params must be a tuple/list of length two.")
         return params
 
     def validate_consistency(
@@ -307,7 +310,7 @@ class PopulationGLMValidator(GLMValidator):
         1,
     )  # this should be (coef.ndim, intercept.ndim)
     model_class: str = "PopulationGLM"
-    params_validation_sequence = (
+    params_validation_sequence: Tuple[Tuple[str, None] | Tuple[str, dict[str, Any]]] = (
         *RegressorValidator.params_validation_sequence[:2],
         (
             "check_array_dimensions",
