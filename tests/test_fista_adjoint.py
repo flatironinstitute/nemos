@@ -42,7 +42,7 @@ def test_glm_passes_adjoint_to_optimistix_config(
         solver_name=solver_name,
         solver_kwargs={"adjoint": adjoint},
     )
-    glm.instantiate_solver()
+    glm.instantiate_solver(glm.compute_loss)
 
     solver_adapter = glm._solver
     assert isinstance(solver_adapter.config.adjoint, type(adjoint))
@@ -75,7 +75,7 @@ def test_fista_while_loop_kind_matches_adjoint(
         solver_name=solver_name,
         solver_kwargs={"adjoint": adjoint},
     )
-    glm.instantiate_solver()
+    glm.instantiate_solver(glm.compute_loss)
 
     fista_solver = glm._solver._solver
     assert fista_solver.while_loop_kind == expected_kind
@@ -105,7 +105,7 @@ def test_fista_explicit_while_loop_kind_overrides_adjoint(
         solver_name=solver_name,
         solver_kwargs={"adjoint": adjoint, "while_loop_kind": while_loop_kind},
     )
-    glm.instantiate_solver()
+    glm.instantiate_solver(glm.compute_loss)
 
     fista_solver = glm._solver._solver
     assert fista_solver.while_loop_kind == while_loop_kind
