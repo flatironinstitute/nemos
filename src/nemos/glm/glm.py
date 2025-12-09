@@ -661,8 +661,8 @@ class GLM(BaseRegressor[GLMParams]):
         >>> model_intercept = model.intercept_
 
         """
-        init_params = self.initialize_params(X, y, init_params)
         self._validator.validate_inputs(X, y)
+        init_params = self.initialize_params(X, y, init_params)
 
         # filter for non-nans, grab data if needed
         data, y = self._preprocess_inputs(X, y)
@@ -1448,9 +1448,7 @@ class PopulationGLM(GLM):
             else:
                 self._feature_mask = jnp.ones((X.shape[1], y.shape[1]))
 
-    def _predict(
-        self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], X: jnp.ndarray
-    ) -> jnp.ndarray:
+    def _predict(self, params: GLMParams, X: jnp.ndarray) -> jnp.ndarray:
         """
         Predicts firing rates based on given parameters and design matrix.
 
@@ -1464,7 +1462,7 @@ class PopulationGLM(GLM):
         Parameters
         ----------
         params :
-            Tuple containing the spike basis coefficients and bias terms.
+            GLMParams containing the spike basis coefficients and bias terms.
         X :
             Predictors.
 
@@ -1473,15 +1471,20 @@ class PopulationGLM(GLM):
         :
             The predicted rates. Shape (n_timebins, n_neurons).
         """
-        Ws, bs = params
+        if self._feature_mask is None:
+            return super()._predict(params, X)
         return self.inverse_link_function(
             # First, multiply each feature by its corresponding coefficient,
             # then sum across all features and add the intercept, before
             # passing to the inverse link function
             tree_utils.pytree_map_and_reduce(
-                lambda x, w, m: jnp.dot(x, w * m), sum, X, Ws, self._feature_mask
+                lambda x, w, m: jnp.dot(x, w * m),
+                sum,
+                X,
+                params.coef,
+                self._feature_mask,
             )
-            + bs
+            + params.intercept
         )
 
     def __sklearn_clone__(self) -> PopulationGLM:
