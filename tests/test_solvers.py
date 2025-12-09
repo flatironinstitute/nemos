@@ -137,7 +137,7 @@ def test_svrg_glm_instantiate_solver(regularizer_name, solver_class, mask):
         solver_name=solver_name,
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
     )
-    glm.instantiate_solver(glm.compute_loss)
+    glm._instantiate_solver(glm._compute_loss)
 
     # currently glm._solver is a Wrapped(Prox)SVRG
     solver = glm._solver._solver
@@ -173,7 +173,7 @@ def test_svrg_glm_passes_solver_kwargs(regularizer_name, solver_name, mask, glm_
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
         **kwargs,
     )
-    glm.instantiate_solver(glm.compute_loss)
+    glm._instantiate_solver(glm._compute_loss)
 
     # currently glm._solver is a Wrapped(Prox)SVRG
     solver = glm._solver._solver
@@ -227,8 +227,8 @@ def test_svrg_glm_initialize_state(
         **kwargs,
     )
 
-    init_params = glm.initialize_params(X, y)
-    state = glm.initialize_solver_and_state(X, y, init_params)
+    init_params = glm._initialize_params(X, y)
+    state = glm._initialize_solver_and_state(X, y, init_params)
 
     assert state.reference_point == init_params
 
@@ -281,8 +281,8 @@ def test_svrg_glm_update(
         **kwargs,
     )
 
-    init_params = glm.initialize_params(X, y)
-    state = glm.initialize_solver_and_state(X, y, init_params)
+    init_params = glm._initialize_params(X, y)
+    state = glm._initialize_solver_and_state(X, y, init_params)
 
     loss_gradient = jax.jit(jax.grad(glm._solver_loss_fun))
 
@@ -291,7 +291,7 @@ def test_svrg_glm_update(
         full_grad_at_reference_point=loss_gradient(init_params, X, y),
     )
 
-    params, state = glm.update(init_params, state, X, y)
+    params, state = glm.update((init_params.coef, init_params.intercept), state, X, y)
 
     assert state.iter_num == 1
 
@@ -332,7 +332,7 @@ def test_svrg_glm_fit(
     poissonGLM_model_instantiation,
     maxiter,
 ):
-    X, y, model, (w_true, b_true), rate = poissonGLM_model_instantiation
+    X, y, model, true_params, rate = poissonGLM_model_instantiation
 
     # set the tolerance such that the solvers never hit their convergence criterion
     # and run until maxiter is reached
@@ -422,9 +422,9 @@ def test_svrg_glm_update_needs_full_grad_at_reference_point(
         ValueError,
         match=r"Full gradient at the anchor point \(state\.full_grad_at_reference_point\) has to be set",
     ):
-        params = glm.initialize_params(X, y)
-        state = glm.initialize_solver_and_state(X, y, params)
-        glm.update(params, state, X, y)
+        params = glm._initialize_params(X, y)
+        state = glm._initialize_solver_and_state(X, y, params)
+        glm.update((params.coef, params.intercept), state, X, y)
 
 
 @pytest.mark.parametrize(

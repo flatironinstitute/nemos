@@ -73,7 +73,6 @@ def test_get_fit_attrs(request, glm_class_type, model_instantiation_type):
         "scale_": None,
         "solver_state_": None,
         "dof_resid_": None,
-        "optim_info_": None,
     }
     assert model._get_fit_state() == expected_state
     model.solver_kwargs = {"maxiter": 1}
@@ -649,11 +648,11 @@ class TestGLM:
         else:
             init_w = jnp.zeros((n_features, n_neurons) + (1,) * (dim_weights - 2))
         with expectation:
-            params = model.initialize_params(
+            params = model._initialize_params(
                 X, y, init_params=(init_w, true_params.intercept)
             )
             # check that params are set
-            init_state = model.initialize_solver_and_state(X, y, params)
+            init_state = model._initialize_solver_and_state(X, y, params)
 
     @pytest.mark.parametrize(
         "dim_intercepts, expectation",
@@ -689,9 +688,9 @@ class TestGLM:
             init_b = jnp.zeros((1,) * dim_intercepts)
             init_w = jnp.zeros((n_features,))
         with expectation:
-            params = model.initialize_params(X, y, init_params=(init_w, init_b))
+            params = model._initialize_params(X, y, init_params=(init_w, init_b))
             # check that params are set
-            init_state = model.initialize_solver_and_state(X, y, params)
+            init_state = model._initialize_solver_and_state(X, y, params)
 
     @pytest.mark.parametrize(*fit_init_params_type_init_params)
     @pytest.mark.solver_related
@@ -717,9 +716,9 @@ class TestGLM:
         else:
             init_params = init_params_glm
         with expectation:
-            params = model.initialize_params(X, y, init_params=init_params)
+            params = model._initialize_params(X, y, init_params=init_params)
             # check that params are set
-            init_state = model.initialize_solver_and_state(X, y, params)
+            init_state = model._initialize_solver_and_state(X, y, params)
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -756,9 +755,9 @@ class TestGLM:
                 1,
             )
         with expectation:
-            params = model.initialize_params(X, y, init_params=(init_w, init_b))
+            params = model._initialize_params(X, y, init_params=(init_w, init_b))
             # check that params are set
-            init_state = model.initialize_solver_and_state(X, y, params)
+            init_state = model._initialize_solver_and_state(X, y, params)
 
     #######################
     # Test model.simulate
@@ -1639,7 +1638,7 @@ class TestGLMObservationModel:
             y = np.tile(y[:, None], (1, 3))
 
         if "poisson" in model_instantiation:
-            params = model._initialize_parameters(X, y)
+            params = model._model_specific_initialization(X, y)
 
             if "population" in glm_type:
                 assert params.coef.shape == (X.shape[1], y.shape[1])
@@ -1771,11 +1770,15 @@ class TestGLMObservationModel:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
-        params = model.initialize_params(X, y)
-        state = model.initialize_solver_and_state(X, y, params)
+        params = model._initialize_params(X, y)
+        state = model._initialize_solver_and_state(X, y, params)
         with expectation:
             model.update(
-                params, state, X[:batch_size], y[:batch_size], n_samples=n_samples
+                (params.coef, params.intercept),
+                state,
+                X[:batch_size],
+                y[:batch_size],
+                n_samples=n_samples,
             )
 
     @pytest.mark.parametrize("batch_size", [1, 10])
@@ -1786,14 +1789,16 @@ class TestGLMObservationModel:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
-        params = model.initialize_params(X, y)
-        state = model.initialize_solver_and_state(X, y, params)
+        params = model._initialize_params(X, y)
+        state = model._initialize_solver_and_state(X, y, params)
         assert model.coef_ is None
         assert model.intercept_ is None
         if "gamma" not in model_instantiation:
             # gamma model instantiation sets the scale
             assert model.scale_ is None
-        _, _ = model.update(params, state, X[:batch_size], y[:batch_size])
+        _, _ = model.update(
+            (params.coef, params.intercept), state, X[:batch_size], y[:batch_size]
+        )
         assert model.coef_ is not None
         assert model.intercept_ is not None
         assert model.scale_ is not None
@@ -1821,8 +1826,8 @@ class TestGLMObservationModel:
         if nan_inputs:
             X[: X.shape[0] // 2, :] = np.nan
 
-        params = model.initialize_params(X, y)
-        state = model.initialize_solver_and_state(*drop_nans(X, y), params)
+        params = model._initialize_params(X, y)
+        state = model._initialize_solver_and_state(*drop_nans(X, y), params)
 
         assert model.coef_ is None
         assert model.intercept_ is None
@@ -1831,7 +1836,7 @@ class TestGLMObservationModel:
             assert model.scale_ is None
 
         # take an update step using the initialized state
-        _, _ = model.update(params, state, X, y)
+        _, _ = model.update((params.coef, params.intercept), state, X, y)
 
         assert model.coef_ is not None
         assert model.intercept_ is not None
@@ -1852,27 +1857,27 @@ class TestGLMObservationModel:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
-        params = model.initialize_params(X, y)
-        state = model.initialize_solver_and_state(X, y, params)
+        params = model._initialize_params(X, y)
+        state = model._initialize_solver_and_state(X, y, params)
         # extract batch and add nans
         Xnan = X[:batch_size]
         Xnan[: batch_size // 2] = np.nan
 
         # run 3 iterations
         tot_iter = 3
-        jit_update = deepcopy(params)
+        jit_update = (params.coef, params.intercept)
         jit_state = deepcopy(state)
         for _ in range(tot_iter):
             jit_update, jit_state = model.update(
                 jit_update, jit_state, Xnan, y[:batch_size]
             )
         # make sure there is an update
-        assert not jnp.allclose(params.coef, jit_update.coef) or not jnp.allclose(
-            params.intercept, jit_update.intercept
+        assert not jnp.allclose(params.coef, jit_update[0]) or not jnp.allclose(
+            params.intercept, jit_update[1]
         )
 
         # update without jitting
-        nojit_update = deepcopy(params)
+        nojit_update = (params.coef, params.intercept)
         nojit_state = deepcopy(state)
         with jax.disable_jit(True):
             for _ in range(tot_iter):
@@ -1880,8 +1885,8 @@ class TestGLMObservationModel:
                     nojit_update, nojit_state, Xnan, y[:batch_size]
                 )
         # check for equivalence update
-        assert jnp.allclose(nojit_update.coef, jit_update.coef) and jnp.allclose(
-            nojit_update.intercept, jit_update.intercept
+        assert jnp.allclose(nojit_update[0], jit_update[0]) and jnp.allclose(
+            nojit_update[1], jit_update[1]
         )
 
     #######################
@@ -2031,9 +2036,9 @@ class TestGLMObservationModel:
         )
         glm2.fit(X, y)
 
-        params = glm.initialize_params(X, y)
-        state = glm.initialize_solver_and_state(X, y, params)
-        glm.instantiate_solver(glm.compute_loss)
+        params = glm._initialize_params(X, y)
+        state = glm._initialize_solver_and_state(X, y, params)
+        glm._instantiate_solver(glm._compute_loss)
 
         # NOTE these two are not the same because for example Ridge augments the loss
         # loss_grad = jax.jit(jax.grad(glm.compute_loss))
@@ -2051,14 +2056,15 @@ class TestGLMObservationModel:
             )
 
             prev_params = params
+            user_params = (params.coef, params.intercept)
             for _ in range(m):
                 key, subkey = jax.random.split(key)
                 ind = jax.random.randint(subkey, (batch_size,), 0, N)
                 xi, yi = tree_slice(X, ind), tree_slice(y, ind)
-                params, state = glm.update(params, state, xi, yi)
+                params, state = glm.update(user_params, state, xi, yi)
 
             state = state._replace(
-                reference_point=params,
+                reference_point=glm._validator.validate_and_cast(params),
             )
 
             iter_num += 1
@@ -2361,14 +2367,18 @@ class TestPopulationGLM:
             ),
             (
                 np.array([0, 1, 1] * 4).reshape(4, 3),
-                pytest.raises(ValueError, match="The shape of the ``feature_mask`` "),
+                pytest.raises(
+                    ValueError, match="feature_mask and X must have the same structure"
+                ),
                 pytest.raises(
                     TypeError, match="feature_mask and X must have the same structure"
                 ),
             ),
             (
                 np.array([0, 1, 1, 1] * 5).reshape(5, 4),
-                pytest.raises(ValueError, match="The shape of the ``feature_mask`` "),
+                pytest.raises(
+                    ValueError, match="feature_mask and X must have the same structure"
+                ),
                 pytest.raises(
                     TypeError, match="feature_mask and X must have the same structure"
                 ),
@@ -2385,17 +2395,27 @@ class TestPopulationGLM:
                 pytest.raises(
                     TypeError, match="feature_mask and X must have the same structure"
                 ),
-                pytest.raises(ValueError, match="The shape of the ``feature_mask`` "),
+                pytest.raises(
+                    ValueError, match="feature_mask and X must have the same structure"
+                ),
             ),
             (
                 {"input_1": np.array([0, 1, 0])},
-                pytest.raises(TypeError, match="The shape of the ``feature_mask`` "),
-                pytest.raises(TypeError, match="The shape of the ``feature_mask`` "),
+                pytest.raises(
+                    TypeError, match="feature_mask and X must have the same structure"
+                ),
+                pytest.raises(
+                    TypeError, match="feature_mask and X must have the same structure"
+                ),
             ),
             (
                 {"input_1": np.array([0, 1, 0, 1])},
-                pytest.raises(TypeError, match="The shape of the ``feature_mask`` "),
-                pytest.raises(TypeError, match="The shape of the ``feature_mask`` "),
+                pytest.raises(
+                    TypeError, match="feature_mask and X must have the same structure"
+                ),
+                pytest.raises(
+                    TypeError, match="feature_mask and X must have the same structure"
+                ),
             ),
         ],
     )
@@ -2694,9 +2714,9 @@ class TestPoissonGLM:
         )
         X, y = example_X_y_high_firing_rates
         if "population" in glm_class_type:
-            model.initialize_params(X, y)
+            model._initialize_params(X, y)
         else:
-            model.initialize_params(X, y[:, 0])
+            model._initialize_params(X, y[:, 0])
 
     @pytest.mark.parametrize("reg_setup", ["", "_pytree"])
     @pytest.mark.parametrize(
@@ -2751,7 +2771,7 @@ class TestPoissonGLM:
             regularizer=reg,
             regularizer_strength=None if reg == "UnRegularized" else 1.0,
         )
-        opt_state = model.initialize_solver_and_state(X, y, true_params)
+        opt_state = model._initialize_solver_and_state(X, y, true_params)
         solver = model._solver
 
         if stepsize is not None:

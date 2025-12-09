@@ -28,6 +28,7 @@ from numpy.typing import NDArray
 from . import solvers, tree_utils, utils
 from ._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from .base_class import Base
+from .glm.params import GLMParams
 from .regularizer import GroupLasso, Regularizer
 from .type_casting import cast_to_jax
 from .typing import (
@@ -313,7 +314,7 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
                 f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for {solver_class.__name__}!"
             )
 
-    def instantiate_solver(
+    def _instantiate_solver(
         self, loss, solver_kwargs: Optional[dict] = None
     ) -> BaseRegressor:
         """
@@ -424,9 +425,26 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         pass
 
     @abc.abstractmethod
-    def compute_loss(self, params, X, y, *args, **kwargs):
+    def _compute_loss(
+        self, params: GLMParams, X: DESIGN_INPUT_TYPE, y: jnp.ndarray, *args, **kwargs
+    ):
         """Loss function for a given model to be optimized over."""
         pass
+
+    @cast_to_jax
+    def compute_loss(
+        self,
+        params: UserProvidedParamsT,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        *args,
+        **kwargs,
+    ):
+        """Loss function for a given model to be optimized over."""
+        self._validator.validate_inputs(X, y)
+        params = self._validator.validate_and_cast(params)
+        self._validator.validate_consistency(params, X, y)
+        return self._compute_loss(params, X, y, *args, **kwargs)
 
     def _validate(
         self,
@@ -460,20 +478,13 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
-        init_params: Optional = None,
-    ) -> ParamsT:
-        """Initialize the solver's state and optionally sets initial model parameters for the optimization."""
-        if init_params is None:
-            init_params = self._initialize_parameters(X, y)  # initialize
-        else:
-            # validate params & cast to float
-            init_params = self._validator.validate_and_cast(init_params)
-            self._validator.validate_consistency(init_params, X=X, y=y)
-
-        return init_params
+    ) -> UserProvidedParamsT:
+        """Initialize parameters."""
+        init_params = self._model_specific_initialization(X, y)
+        return self._validator.from_model_params(init_params)
 
     @abc.abstractmethod
-    def _initialize_parameters(
+    def _model_specific_initialization(
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
@@ -508,14 +519,30 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         return data, y
 
     @abc.abstractmethod
+    def _initialize_solver_and_state(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        init_params: GLMParams,
+    ) -> SolverState:
+        """Initialize the solver and the state of the solver for running fit and update."""
+        pass
+
+    @cast_to_jax
     def initialize_solver_and_state(
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
-        init_params,
+        init_params: Optional[UserProvidedParamsT] = None,
     ) -> SolverState:
         """Initialize the solver and the state of the solver for running fit and update."""
-        pass
+        self._validator.validate_inputs(X, y)
+        if init_params is None:
+            init_params = self._model_specific_initialization(X, y)
+        else:
+            init_params = self._validator.validate_and_cast(init_params)
+            self._validator.validate_consistency(init_params, X=X, y=y)
+        return self._initialize_solver_and_state(X, y, init_params)
 
     def _optimize_solver_params(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray) -> dict:
         """

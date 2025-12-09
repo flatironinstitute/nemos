@@ -379,7 +379,7 @@ class GLM(BaseRegressor[GLMParams]):
 
         return self._predict(params, data)
 
-    def compute_loss(
+    def _compute_loss(
         self,
         params: GLMParams,
         X: DESIGN_INPUT_TYPE,
@@ -539,7 +539,7 @@ class GLM(BaseRegressor[GLMParams]):
             )
         return score
 
-    def _initialize_parameters(
+    def _model_specific_initialization(
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
@@ -655,7 +655,14 @@ class GLM(BaseRegressor[GLMParams]):
 
         """
         self._validator.validate_inputs(X, y)
-        init_params = self.initialize_params(X, y, init_params)
+
+        # initialize params if no params are provided
+        if init_params is None:
+            init_params = self._model_specific_initialization(X, y)
+        else:
+            init_params = self._validator.validate_and_cast(init_params)
+            self._validator.validate_consistency(init_params, X=X, y=y)
+
         self._validator.feature_mask_consistency(
             getattr(self, "_feature_mask", None), init_params
         )
@@ -663,7 +670,7 @@ class GLM(BaseRegressor[GLMParams]):
         # filter for non-nans, grab data if needed
         data, y = self._preprocess_inputs(X, y)
 
-        self.initialize_solver_and_state(data, y, init_params)
+        self._initialize_solver_and_state(data, y, init_params)
 
         params, state = self.solver_run(init_params, data, y)
 
@@ -853,65 +860,7 @@ class GLM(BaseRegressor[GLMParams]):
             rank = jnp.linalg.matrix_rank(X)
             return (n_samples - rank - 1) * jnp.ones_like(params.intercept)
 
-    def initialize_params(
-        self,
-        X: DESIGN_INPUT_TYPE,
-        y: jnp.ndarray,
-        init_params: Optional[Tuple[jnp.ndarray | dict, jnp.ndarray]] = None,
-    ) -> GLMParams:
-        """
-        Initialize the model parameters for the optimization process.
-
-        This method prepares the initializes model parameters if they are not provided. It is typically called
-        before starting the optimization process to ensure that all necessary
-        components and states are correctly configured.
-
-        Parameters
-        ----------
-        X :
-            The predictors used in the model fitting process. This can include feature matrices or other structures
-            compatible with the model's design.
-        y :
-            The response variables or outputs corresponding to the predictors. Used to initialize parameters when
-            they are not provided.
-        init_params :
-            Initial parameters for the model. If not provided, they will be initialized based on the input data X and y.
-            A tuple (coefficients, intercept).
-
-        Returns
-        -------
-        ModelParams
-            The initialized model parameters
-
-        Raises
-        ------
-        ValueError
-            If ``params`` is not of length two.
-        ValueError
-            If dimensionality of ``init_params`` are not correct.
-        ValueError
-            If ``X`` is not two-dimensional.
-        ValueError
-            If ``y`` is not correct (1D for GLM, 2D for populationGLM).
-
-        TypeError
-            If ``params`` are not array-like when provided.
-        TypeError
-            If ``init_params[i]`` cannot be converted to jnp.ndarray for all i
-
-        Examples
-        --------
-        >>> import numpy as np
-        >>> import nemos as nmo
-        >>> X, y = np.random.normal(size=(10, 2)), np.random.uniform(size=10)
-        >>> model = nmo.glm.GLM()
-        >>> params = model.initialize_params(X, y)
-        >>> opt_state = model.initialize_solver_and_state(X, y, params)
-        >>> # Now ready to run optimization or update steps
-        """
-        return super().initialize_params(X, y, init_params)
-
-    def initialize_solver_and_state(
+    def _initialize_solver_and_state(
         self,
         X: dict[str, jnp.ndarray] | jnp.ndarray,
         y: jnp.ndarray,
@@ -944,13 +893,13 @@ class GLM(BaseRegressor[GLMParams]):
         >>> import nemos as nmo
         >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
         >>> model = nmo.glm.GLM()
-        >>> params = model.initialize_params(X, y)
-        >>> opt_state = model.initialize_solver_and_state(X, y, params)
+        >>> params = model._initialize_params(X, y)
+        >>> opt_state = model._initialize_solver_and_state(X, y, params)
         >>> # Now ready to run optimization or update steps
         """
         opt_solver_kwargs = self._optimize_solver_params(X, y)
         #  set up the solver init/run/update attrs
-        self.instantiate_solver(self.compute_loss, solver_kwargs=opt_solver_kwargs)
+        self._instantiate_solver(self._compute_loss, solver_kwargs=opt_solver_kwargs)
 
         opt_state = self.solver_init_state(init_params, X, y)
         return opt_state
@@ -1027,8 +976,10 @@ class GLM(BaseRegressor[GLMParams]):
         # grab the data
         data = X.data if isinstance(X, FeaturePytree) else X
 
-        # wrap into GLM arams
-        params = GLMParams(*params)
+        # wrap into GLM params, this assumes params are well structured,
+        # if initializaiton is done via `initialize_solver_and_state` it
+        # should be fine
+        params = self._validator.to_model_params(params)
 
         # perform a one-step update
         updated_params, updated_state = self.solver_update(
@@ -1047,7 +998,7 @@ class GLM(BaseRegressor[GLMParams]):
             y, self._predict(params, data), dof_resid=self.dof_resid_
         )
 
-        return (updated_params.coef, updated_params.intercept), updated_state
+        return self._validator.from_model_params(updated_params), updated_state
 
     def _get_optimal_solver_params_config(self):
         """Return the functions for computing default step and batch size for the solver."""
