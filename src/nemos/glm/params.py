@@ -15,5 +15,10 @@ class GLMParams(eqx.Module):
     coef: jnp.ndarray | dict
     intercept: jnp.ndarray
 
+    @staticmethod
+    def regularizable_subtrees():
+        """Filter regularizable subtrees."""
+        return [lambda p: p.coef]
+
 
 GLMUserParams = Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike]
