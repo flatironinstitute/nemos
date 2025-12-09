@@ -363,12 +363,12 @@ class TestUnRegularized:
         raise_exception = not callable(loss)
         regularizer = self.cls()
         model = nmo.glm.GLM(regularizer=regularizer)
-        model.compute_loss = loss
+        model._compute_loss = loss
         if raise_exception:
             with pytest.raises(TypeError, match="The `loss` must be a Callable"):
-                nmo.utils.assert_is_callable(model.compute_loss, "loss")
+                nmo.utils.assert_is_callable(model._compute_loss, "loss")
         else:
-            nmo.utils.assert_is_callable(model.compute_loss, "loss")
+            nmo.utils.assert_is_callable(model._compute_loss, "loss")
 
     @pytest.mark.parametrize(
         "solver_name",
@@ -382,7 +382,7 @@ class TestUnRegularized:
         # set regularizer and solver name
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
-        model.instantiate_solver(model.compute_loss)
+        model._instantiate_solver(model._compute_loss)
         params = GLMParams(true_params.coef * 0.0, true_params.intercept)
         model.solver_run(params, X, y)
 
@@ -398,7 +398,7 @@ class TestUnRegularized:
         # set regularizer and solver name
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
-        model.instantiate_solver(model.compute_loss)
+        model._instantiate_solver(model._compute_loss)
         params = GLMParams(
             jax.tree_util.tree_map(jnp.zeros_like, true_params.coef),
             true_params.intercept,
@@ -418,14 +418,14 @@ class TestUnRegularized:
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-12}
-        model.instantiate_solver(model.compute_loss)
+        model._instantiate_solver(model._compute_loss)
 
         init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
 
         # update solver name
         model_bfgs = copy.deepcopy(model)
         model_bfgs.solver_name = "BFGS"
-        model_bfgs.instantiate_solver(model_bfgs.compute_loss)
+        model_bfgs._instantiate_solver(model_bfgs._compute_loss)
         params_gd = model.solver_run(init_params, X, y)[0]
         params_bfgs = model_bfgs.solver_run(init_params, X, y)[0]
 
@@ -445,7 +445,7 @@ class TestUnRegularized:
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-12}
-        model.instantiate_solver(model.compute_loss)
+        model._instantiate_solver(model._compute_loss)
         init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
         params = model.solver_run(init_params, X, y)[0]
         model_skl = PoissonRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
@@ -467,7 +467,7 @@ class TestUnRegularized:
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-12}
-        model.instantiate_solver(model.compute_loss)
+        model._instantiate_solver(model._compute_loss)
         init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
         params = model.solver_run(init_params, X, y)[0]
         model_skl = GammaRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
@@ -496,8 +496,8 @@ class TestUnRegularized:
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-13}
-        model.instantiate_solver(model.compute_loss)
-        params = model.solver_run(model._initialize_parameters(X, y), X, y)[0]
+        model._instantiate_solver(model._compute_loss)
+        params = model.solver_run(model._model_specific_initialization(X, y), X, y)[0]
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore", message="The InversePower link function does "
@@ -539,8 +539,8 @@ class TestUnRegularized:
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-13}
-        model.instantiate_solver(model.compute_loss)
-        params = model.solver_run(model._initialize_parameters(X, y), X, y)[0]
+        model._instantiate_solver(model._compute_loss)
+        params = model.solver_run(model._model_specific_initialization(X, y), X, y)[0]
         model_sm = sm.GLM(
             endog=y,
             exog=sm.add_constant(X),
@@ -709,12 +709,12 @@ class TestRidge:
         raise_exception = not callable(loss)
         regularizer = self.cls()
         model = nmo.glm.GLM(regularizer=regularizer, regularizer_strength=1.0)
-        model.compute_loss = loss
+        model._compute_loss = loss
         if raise_exception:
             with pytest.raises(TypeError, match="The `loss` must be a Callable"):
-                nmo.utils.assert_is_callable(model.compute_loss, "loss")
+                nmo.utils.assert_is_callable(model._compute_loss, "loss")
         else:
-            nmo.utils.assert_is_callable(model.compute_loss, "loss")
+            nmo.utils.assert_is_callable(model._compute_loss, "loss")
 
     @pytest.mark.parametrize(
         "solver_name",
@@ -728,7 +728,7 @@ class TestRidge:
         # set regularizer and solver name
         model.set_params(regularizer=self.cls(), regularizer_strength=1.0)
         model.solver_name = solver_name
-        runner = model.instantiate_solver(model.compute_loss).solver_run
+        runner = model._instantiate_solver(model._compute_loss).solver_run
         runner(GLMParams(true_params.coef * 0.0, true_params.intercept), X, y)
 
     @pytest.mark.parametrize(
@@ -743,7 +743,7 @@ class TestRidge:
         # set regularizer and solver name
         model.set_params(regularizer=self.cls(), regularizer_strength=1.0)
         model.solver_name = solver_name
-        runner = model.instantiate_solver(model.compute_loss).solver_run
+        runner = model._instantiate_solver(model._compute_loss).solver_run
         runner(
             GLMParams(
                 jax.tree_util.tree_map(jnp.zeros_like, true_params.coef),
@@ -769,8 +769,10 @@ class TestRidge:
         model_bfgs = copy.deepcopy(model)
         model_bfgs.solver_name = "BFGS"
 
-        runner_gd = model.instantiate_solver(model.compute_loss).solver_run
-        runner_bfgs = model_bfgs.instantiate_solver(model_bfgs.compute_loss).solver_run
+        runner_gd = model._instantiate_solver(model._compute_loss).solver_run
+        runner_bfgs = model_bfgs._instantiate_solver(
+            model_bfgs._compute_loss
+        ).solver_run
 
         params_gd = runner_gd(
             GLMParams(true_params.coef * 0.0, true_params.intercept), X, y
@@ -795,7 +797,7 @@ class TestRidge:
         model.solver_kwargs = {"tol": 10**-12}
         model.solver_name = "BFGS"
 
-        runner_bfgs = model.instantiate_solver(model.compute_loss).solver_run
+        runner_bfgs = model._instantiate_solver(model._compute_loss).solver_run
         params = runner_bfgs(
             GLMParams(true_params.coef * 0.0, true_params.intercept), X, y
         )[0]
@@ -823,7 +825,7 @@ class TestRidge:
         model.solver_kwargs = {"tol": 10**-12}
         model.regularizer_strength = 0.1
         model.solver_name = solver_name
-        runner_bfgs = model.instantiate_solver(model.compute_loss).solver_run
+        runner_bfgs = model._instantiate_solver(model._compute_loss).solver_run
         params = runner_bfgs(
             GLMParams(true_params.coef * 0.0, true_params.intercept), X, y
         )[0]
@@ -974,12 +976,12 @@ class TestLasso:
         raise_exception = not callable(loss)
         regularizer = self.cls()
         model = nmo.glm.GLM(regularizer=regularizer, regularizer_strength=1)
-        model.compute_loss = loss
+        model._compute_loss = loss
         if raise_exception:
             with pytest.raises(TypeError, match="The `loss` must be a Callable"):
-                nmo.utils.assert_is_callable(model.compute_loss, "loss")
+                nmo.utils.assert_is_callable(model._compute_loss, "loss")
         else:
-            nmo.utils.assert_is_callable(model.compute_loss, "loss")
+            nmo.utils.assert_is_callable(model._compute_loss, "loss")
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
     def test_run_solver(self, solver_name, poissonGLM_model_instantiation):
@@ -989,7 +991,7 @@ class TestLasso:
 
         model.set_params(regularizer=self.cls(), regularizer_strength=1)
         model.solver_name = solver_name
-        runner = model.instantiate_solver(model.compute_loss).solver_run
+        runner = model._instantiate_solver(model._compute_loss).solver_run
         runner(GLMParams(true_params.coef * 0.0, true_params.intercept), X, y)
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
@@ -1001,7 +1003,7 @@ class TestLasso:
         # set regularizer and solver name
         model.set_params(regularizer=self.cls(), regularizer_strength=1)
         model.solver_name = solver_name
-        runner = model.instantiate_solver(model.compute_loss).solver_run
+        runner = model._instantiate_solver(model._compute_loss).solver_run
         runner(
             GLMParams(
                 jax.tree_util.tree_map(jnp.zeros_like, true_params.coef),
@@ -1024,7 +1026,7 @@ class TestLasso:
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-12}
 
-        runner = model.instantiate_solver(model.compute_loss).solver_run
+        runner = model._instantiate_solver(model._compute_loss).solver_run
         params = runner(GLMParams(true_params.coef * 0.0, true_params.intercept), X, y)[
             0
         ]
@@ -1266,12 +1268,12 @@ class TestElasticNet:
         raise_exception = not callable(loss)
         regularizer = self.cls()
         model = nmo.glm.GLM(regularizer=regularizer, regularizer_strength=(1, 0.5))
-        model.compute_loss = loss
+        model._compute_loss = loss
         if raise_exception:
             with pytest.raises(TypeError, match="The `loss` must be a Callable"):
-                nmo.utils.assert_is_callable(model.compute_loss, "loss")
+                nmo.utils.assert_is_callable(model._compute_loss, "loss")
         else:
-            nmo.utils.assert_is_callable(model.compute_loss, "loss")
+            nmo.utils.assert_is_callable(model._compute_loss, "loss")
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
     def test_run_solver(self, solver_name, poissonGLM_model_instantiation):
@@ -1281,7 +1283,7 @@ class TestElasticNet:
 
         model.set_params(regularizer=self.cls(), regularizer_strength=(1, 0.5))
         model.solver_name = solver_name
-        runner = model.instantiate_solver(model.compute_loss).solver_run
+        runner = model._instantiate_solver(model._compute_loss).solver_run
         runner(GLMParams(true_params.coef * 0.0, true_params.intercept), X, y)
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
@@ -1293,7 +1295,7 @@ class TestElasticNet:
         # set regularizer and solver name
         model.set_params(regularizer=self.cls(), regularizer_strength=(1, 0.5))
         model.solver_name = solver_name
-        runner = model.instantiate_solver(model.compute_loss).solver_run
+        runner = model._instantiate_solver(model._compute_loss).solver_run
         runner(
             GLMParams(
                 jax.tree_util.tree_map(jnp.zeros_like, true_params.coef),
@@ -1321,7 +1323,7 @@ class TestElasticNet:
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-12, "maxiter": 10000}
 
-        runner = model.instantiate_solver(model.compute_loss).solver_run
+        runner = model._instantiate_solver(model._compute_loss).solver_run
         params = runner(GLMParams(true_params.coef * 0.0, true_params.intercept), X, y)[
             0
         ]
@@ -1370,7 +1372,7 @@ class TestElasticNet:
 
         # use the penalized loss function to solve optimization via Nelder-Mead
         penalized_loss = lambda p, x, y: model_PG.regularizer.penalized_loss(
-            model_PG.compute_loss, model_PG.regularizer_strength
+            model_PG._compute_loss, model_PG.regularizer_strength
         )(
             GLMParams(
                 p[1:],
@@ -1600,13 +1602,13 @@ class TestGroupLasso:
 
         regularizer = self.cls(mask=mask)
         model = nmo.glm.GLM(regularizer=regularizer, regularizer_strength=1.0)
-        model.compute_loss = loss
+        model._compute_loss = loss
 
         if raise_exception:
             with pytest.raises(TypeError, match="The `loss` must be a Callable"):
-                nmo.utils.assert_is_callable(model.compute_loss, "loss")
+                nmo.utils.assert_is_callable(model._compute_loss, "loss")
         else:
-            nmo.utils.assert_is_callable(model.compute_loss, "loss")
+            nmo.utils.assert_is_callable(model._compute_loss, "loss")
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
     def test_run_solver(self, solver_name, poissonGLM_model_instantiation):
@@ -1623,7 +1625,7 @@ class TestGroupLasso:
         model.set_params(regularizer=self.cls(mask=mask), regularizer_strength=1.0)
         model.solver_name = solver_name
 
-        model.instantiate_solver(model.compute_loss)
+        model._instantiate_solver(model._compute_loss)
         model.solver_run(GLMParams(true_params.coef * 0.0, true_params.intercept), X, y)
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
@@ -1641,7 +1643,7 @@ class TestGroupLasso:
         model.set_params(regularizer=self.cls(mask=mask), regularizer_strength=1.0)
         model.solver_name = solver_name
 
-        model.instantiate_solver(model.compute_loss)
+        model._instantiate_solver(model._compute_loss)
         state = model.solver_init_state(true_params, X, y)
         # asses that state is a NamedTuple by checking tuple type and the availability of some NamedTuple
         # specific namespace attributes
@@ -1662,7 +1664,7 @@ class TestGroupLasso:
         model.set_params(regularizer=self.cls(mask=mask), regularizer_strength=1.0)
         model.solver_name = solver_name
 
-        model.instantiate_solver(model.compute_loss)
+        model._instantiate_solver(model._compute_loss)
 
         state = model.solver_init_state(
             GLMParams(true_params.coef * 0.0, true_params.intercept), X, y
@@ -1822,7 +1824,7 @@ class TestGroupLasso:
         model.set_params(regularizer=self.cls(mask=mask), regularizer_strength=1.0)
         model.solver_name = "ProximalGradient"
 
-        runner = model.instantiate_solver(model.compute_loss).solver_run
+        runner = model._instantiate_solver(model._compute_loss).solver_run
         params, _ = runner(
             GLMParams(true_params.coef * 0.0, true_params.intercept), X, y
         )

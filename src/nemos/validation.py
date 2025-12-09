@@ -568,6 +568,7 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
     expected_array_dims: Tuple[int] = None
     model_class: type = None
     to_model_params: Callable[[UserProvidedParamsT], ModelParamsT] = None
+    from_model_params: Callable[[ModelParamsT], UserProvidedParamsT] = None
     X_dimensionality: int = None
     y_dimensionality: int = None
     params_validation_sequence: Tuple[str, ...] = (

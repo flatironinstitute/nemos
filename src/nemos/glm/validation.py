@@ -36,6 +36,10 @@ class GLMValidator(validation.RegressorValidator[GLMUserParams, GLMParams]):
     to_model_params: Callable[[GLMUserParams], GLMParams] = lambda p: GLMParams(
         *p
     )  # casting from tuple of array to GLMParams
+    from_model_params: Callable[[GLMParams], GLMUserParams] = lambda p: (
+        p.coef,
+        p.intercept,
+    )
     model_class: str = "GLM"
     X_dimensionality: int = 2
     y_dimensionality: int = 1
