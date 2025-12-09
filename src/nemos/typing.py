@@ -60,3 +60,8 @@ ProximalOperator = Callable[
 FeatureMatrix = nap.TsdFrame | NDArray
 
 RegularizerStrength = float | Tuple[float, float]
+
+# User provided init_params (e.g. for GLMs Tuple[array, array])
+UserProvidedParamsT = TypeVar("UserProvidedParamsT")
+# Model internal representation (e.g. for GLMs nemos.glm.glm.GLMParams)
+ModelParamsT = TypeVar("ModelParamsT")
