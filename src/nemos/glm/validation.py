@@ -29,7 +29,7 @@ class GLMValidator(validation.RegressorValidator[GLMUserParams, GLMParams]):
     and input data.
     """
 
-    expected_array_dims: Tuple[int] = (
+    expected_param_dims: Tuple[int] = (
         1,
         1,
     )  # this should be (coef.ndim, intercept.ndim)
@@ -298,7 +298,7 @@ class PopulationGLMValidator(GLMValidator):
     """
 
     y_dimensionality: int = 2
-    expected_array_dims: Tuple[int] = (
+    expected_param_dims: Tuple[int] = (
         2,
         1,
     )  # this should be (coef.ndim, intercept.ndim)
