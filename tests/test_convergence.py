@@ -7,6 +7,7 @@ import pytest
 from scipy.optimize import minimize
 
 import nemos as nmo
+from nemos.glm.params import GLMParams
 
 # Register every test here as solver-related
 pytestmark = pytest.mark.solver_related
@@ -125,7 +126,7 @@ def test_lasso_convergence(solver_name):
     penalized_loss = lambda p, x, y: model_PG.regularizer.penalized_loss(
         model_PG._compute_loss, model_PG.regularizer_strength
     )(
-        (
+        GLMParams(
             p[1:],
             p[0].reshape(
                 1,
@@ -173,7 +174,7 @@ def test_group_lasso_convergence(solver_name):
     penalized_loss = lambda p, x, y: model_PG.regularizer.penalized_loss(
         model_PG._compute_loss, model_PG.regularizer_strength
     )(
-        (
+        GLMParams(
             p[1:],
             p[0].reshape(
                 1,
