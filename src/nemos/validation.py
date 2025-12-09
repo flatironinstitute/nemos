@@ -565,7 +565,7 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
         Keyword arguments for each validation method (None = no kwargs).
     """
 
-    expected_array_dims: Tuple[int] = None
+    expected_param_dims: Tuple[int] = None
     model_class: type = None
     to_model_params: Callable[[UserProvidedParamsT], ModelParamsT] = None
     from_model_params: Callable[[ModelParamsT], UserProvidedParamsT] = None
@@ -669,7 +669,7 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
             If any array has unexpected dimensionality.
         """
         for par, exp_dim in zip(
-            self.wrap_user_params(params), self.expected_array_dims
+            self.wrap_user_params(params), self.expected_param_dims
         ):
             dim_match = pytree_map_and_reduce(lambda x: x.ndim == exp_dim, all, par)
             if not dim_match:
@@ -678,7 +678,7 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
                     provided_dims_flat = tuple(jax.tree_util.tree_leaves(provided_dims))
                     err_msg = (
                         f"Unexpected array dimensionality for ``{self.model_class}`` parameters. "
-                        f"Expected dimensions: {self.expected_array_dims}. "
+                        f"Expected dimensions: {self.expected_param_dims}. "
                         f"Provided dimensions: {provided_dims_flat}"
                     )
                 raise ValueError(err_msg)
