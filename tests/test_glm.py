@@ -2309,21 +2309,13 @@ class TestPopulationGLM:
             ),
             (
                 {"input_1": np.array([0, 1, 0])},
-                pytest.raises(
-                    TypeError, match="feature_mask and X must have the same structure"
-                ),
-                pytest.raises(
-                    TypeError, match="feature_mask and X must have the same structure"
-                ),
+                pytest.raises(TypeError, match="The shape of the ``feature_mask`` "),
+                pytest.raises(TypeError, match="The shape of the ``feature_mask`` "),
             ),
             (
                 {"input_1": np.array([0, 1, 0, 1])},
-                pytest.raises(
-                    TypeError, match="feature_mask and X must have the same structure"
-                ),
-                pytest.raises(
-                    TypeError, match="feature_mask and X must have the same structure"
-                ),
+                pytest.raises(TypeError, match="The shape of the ``feature_mask`` "),
+                pytest.raises(TypeError, match="The shape of the ``feature_mask`` "),
             ),
         ],
     )
