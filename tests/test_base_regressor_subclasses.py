@@ -460,12 +460,16 @@ class TestModelCommons:
         [
             (
                 -1,
-                pytest.raises(ValueError, match="X and y must have the same number of samples"),
+                pytest.raises(
+                    ValueError, match="X and y must have the same number of samples"
+                ),
             ),
             (0, does_not_raise()),
             (
                 1,
-                pytest.raises(ValueError, match="X and y must have the same number of samples"),
+                pytest.raises(
+                    ValueError, match="X and y must have the same number of samples"
+                ),
             ),
         ],
     )
@@ -484,6 +488,7 @@ class TestModelCommons:
         X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
         with expectation:
             params = model.initialize_params(X, y, init_params=true_params)
+            model._validator.validate_inputs(X, y)
             # check that params are set
             init_state = model.initialize_solver_and_state(X, y, params)
             # optimistix solvers do not have a velocity attr
@@ -494,12 +499,16 @@ class TestModelCommons:
         [
             (
                 -1,
-                pytest.raises(ValueError, match="X and y must have the same number of samples"),
+                pytest.raises(
+                    ValueError, match="X and y must have the same number of samples"
+                ),
             ),
             (0, does_not_raise()),
             (
                 1,
-                pytest.raises(ValueError, match="X and y must have the same number of samples"),
+                pytest.raises(
+                    ValueError, match="X and y must have the same number of samples"
+                ),
             ),
         ],
     )
@@ -596,6 +605,7 @@ class TestModelCommons:
         X.fill(fill_val)
         with expectation:
             params = model.initialize_params(X, y)
+            model._validator.validate_inputs(X, y)
             init_state = model.initialize_solver_and_state(X, y, params)
             # optimistix solvers do not have a velocity attr
             assert getattr(init_state, "velocity", params) == params
@@ -1132,12 +1142,16 @@ class TestModelSimulation:
         [
             (
                 -1,
-                pytest.raises(ValueError, match="X and y must have the same number of samples"),
+                pytest.raises(
+                    ValueError, match="X and y must have the same number of samples"
+                ),
             ),
             (0, does_not_raise()),
             (
                 1,
-                pytest.raises(ValueError, match="X and y must have the same number of samples"),
+                pytest.raises(
+                    ValueError, match="X and y must have the same number of samples"
+                ),
             ),
         ],
     )
@@ -1159,12 +1173,16 @@ class TestModelSimulation:
         [
             (
                 -1,
-                pytest.raises(ValueError, match="X and y must have the same number of samples"),
+                pytest.raises(
+                    ValueError, match="X and y must have the same number of samples"
+                ),
             ),
             (0, does_not_raise()),
             (
                 1,
-                pytest.raises(ValueError, match="X and y must have the same number of samples"),
+                pytest.raises(
+                    ValueError, match="X and y must have the same number of samples"
+                ),
             ),
         ],
     )
