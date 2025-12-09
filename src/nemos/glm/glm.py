@@ -570,18 +570,6 @@ class GLM(BaseRegressor[GLMParams]):
             - The first element is the initialized coefficients
             (either as a FeaturePytree or ndarray, matching the structure of X) with shapes (n_features,).
             - The second element is the initialized intercept (bias terms) as an ndarray of shape (1,).
-
-        Examples
-        --------
-        >>> import nemos as nmo
-        >>> import numpy as np
-        >>> X = np.zeros((100, 5))  # Example input
-        >>> y = np.exp(np.random.normal(size=(100, )))  # Simulated firing rates
-        >>> coeff, intercept = nmo.glm.GLM()._initialize_parameters(X, y)
-        >>> coeff.shape
-        (5,)
-        >>> intercept.shape
-        (1,)
         """
         if isinstance(X, FeaturePytree):
             data = X.data
@@ -970,7 +958,7 @@ class GLM(BaseRegressor[GLMParams]):
     @cast_to_jax
     def update(
         self,
-        params: Tuple[jnp.ndarray, jnp.ndarray],
+        params: GLMUserParams,
         opt_state: NamedTuple,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
@@ -1039,12 +1027,17 @@ class GLM(BaseRegressor[GLMParams]):
         # grab the data
         data = X.data if isinstance(X, FeaturePytree) else X
 
+        # wrap into GLM arams
+        params = GLMParams(*params)
+
         # perform a one-step update
-        opt_step = self.solver_update(params, opt_state, data, y, *args, **kwargs)
+        updated_params, updated_state = self.solver_update(
+            params, opt_state, data, y, *args, **kwargs
+        )
 
         # store params and state
-        self._set_model_params(opt_step[0])
-        self.solver_state_ = opt_step[1]
+        self._set_model_params(updated_params)
+        self.solver_state_ = updated_state
 
         # estimate the scale
         self.dof_resid_ = self._estimate_resid_degrees_of_freedom(
@@ -1054,7 +1047,7 @@ class GLM(BaseRegressor[GLMParams]):
             y, self._predict(params, data), dof_resid=self.dof_resid_
         )
 
-        return opt_step
+        return (updated_params.coef, updated_params.intercept), updated_state
 
     def _get_optimal_solver_params_config(self):
         """Return the functions for computing default step and batch size for the solver."""
@@ -1359,12 +1352,10 @@ class PopulationGLM(GLM):
             return
 
         elif isinstance(feature_mask, FeaturePytree):
-            feature_mask = self._feature_mask.data
+            feature_mask = feature_mask.data
 
-        if isinstance(self.feature_mask, dict):
-            feature_mask = dict(
-                (i, jnp.asarray(v)) for i, v in self.feature_mask.items()
-            )
+        if isinstance(feature_mask, dict):
+            feature_mask = dict((i, jnp.asarray(v)) for i, v in feature_mask.items())
 
         self._feature_mask = self._validator.validate_and_cast_feature_mask(
             feature_mask
