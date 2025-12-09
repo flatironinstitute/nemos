@@ -24,7 +24,13 @@ from nemos._regularizer_builder import instantiate_regularizer
 from nemos.inverse_link_function_utils import LINK_NAME_TO_FUNC
 from nemos.observation_models import NegativeBinomialObservations
 from nemos.pytrees import FeaturePytree
-from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
+from nemos.tree_utils import (
+    drop_nans,
+    pytree_map_and_reduce,
+    tree_l2_norm,
+    tree_slice,
+    tree_sub,
+)
 from nemos.utils import _get_name
 
 GLM_COMMON_PARAMS_NAMES = {
@@ -67,6 +73,7 @@ def test_get_fit_attrs(request, glm_class_type, model_instantiation_type):
         "scale_": None,
         "solver_state_": None,
         "dof_resid_": None,
+        "optim_info_": None,
     }
     assert model._get_fit_state() == expected_state
     model.solver_kwargs = {"maxiter": 1}
@@ -92,16 +99,16 @@ class TestGLM:
             return {
                 0: pytest.raises(
                     ValueError,
-                    match=r"params\[0\] must be an array or .* of shape \(n_features",
+                    match=r"coef must be an array or .* of shape \(n_features",
                 ),
                 1: pytest.raises(
                     ValueError,
-                    match=r"params\[0\] must be an array or .* of shape \(n_features",
+                    match=r"coef must be an array or .* of shape \(n_features",
                 ),
                 2: does_not_raise(),
                 3: pytest.raises(
                     ValueError,
-                    match=r"params\[0\] must be an array or .* of shape \(n_features",
+                    match=r"coef must be an array or .* of shape \(n_features",
                 ),
             }
         else:
@@ -113,11 +120,11 @@ class TestGLM:
                 1: does_not_raise(),
                 2: pytest.raises(
                     ValueError,
-                    match=r"params\[0\] must be an array or .* of shape \(n_features",
+                    match=r"coef must be an array or .* of shape \(n_features",
                 ),
                 3: pytest.raises(
                     ValueError,
-                    match=r"params\[0\] must be an array or .* of shape \(n_features",
+                    match=r"coef must be an array or .* of shape \(n_features",
                 ),
             }
 
@@ -158,10 +165,10 @@ class TestGLM:
     @pytest.mark.parametrize(
         "dim_intercepts, expectation",
         [
-            (0, pytest.raises(ValueError, match=r"params\[1\] must be of shape")),
+            (0, pytest.raises(ValueError, match=r"intercept must be of shape")),
             (1, does_not_raise()),
-            (2, pytest.raises(ValueError, match=r"params\[1\] must be of shape")),
-            (3, pytest.raises(ValueError, match=r"params\[1\] must be of shape")),
+            (2, pytest.raises(ValueError, match=r"intercept must be of shape")),
+            (3, pytest.raises(ValueError, match=r"intercept must be of shape")),
         ],
     )
     @pytest.mark.solver_related
@@ -214,16 +221,12 @@ class TestGLM:
                 dict(p1=jnp.zeros((3, 3)), p2=jnp.zeros((3, 2))),
             ),
             (
-                pytest.raises(
-                    TypeError, match=r"X and params\[0\] must be the same type"
-                ),
+                pytest.raises(TypeError, match="X and coef have mismatched structure"),
                 [dict(p1=jnp.zeros((5,)), p2=jnp.zeros((1,))), jnp.zeros((1,))],
                 [dict(p1=jnp.zeros((3, 3)), p2=jnp.zeros((2, 3))), jnp.zeros((3,))],
             ),
             (
-                pytest.raises(
-                    TypeError, match=r"X and params\[0\] must be the same type"
-                ),
+                pytest.raises(TypeError, match="X and coef have mismatched structure"),
                 [
                     FeaturePytree(p1=jnp.zeros((5,)), p2=jnp.zeros((5,))),
                     jnp.zeros((1,)),
@@ -235,17 +238,23 @@ class TestGLM:
             ),
             (pytest.raises(ValueError, match="Params must have length two."), 0, 0),
             (
-                pytest.raises(TypeError, match="Initial parameters must be array-like"),
+                pytest.raises(
+                    TypeError, match="Failed to convert parameters to JAX arrays"
+                ),
                 {0, 1},
                 {0, 1},
             ),
             (
-                pytest.raises(TypeError, match="Initial parameters must be array-like"),
+                pytest.raises(
+                    TypeError, match="Failed to convert parameters to JAX arrays"
+                ),
                 [jnp.zeros((1, 5)), ""],
                 [jnp.zeros((1, 5)), ""],
             ),
             (
-                pytest.raises(TypeError, match="Initial parameters must be array-like"),
+                pytest.raises(
+                    TypeError, match="Failed to convert parameters to JAX arrays"
+                ),
                 ["", jnp.zeros((1,))],
                 ["", jnp.zeros((1,))],
             ),
@@ -320,9 +329,9 @@ class TestGLM:
     @pytest.mark.parametrize(
         "delta_dim, expectation",
         [
-            (-1, pytest.raises(ValueError, match="X must be two-dimensional")),
+            (-1, pytest.raises(ValueError, match="X must be 2-dimensional")),
             (0, does_not_raise()),
-            (1, pytest.raises(ValueError, match="X must be two-dimensional")),
+            (1, pytest.raises(ValueError, match="X must be 2-dimensional")),
         ],
     )
     def test_score_x_dimensionality(
@@ -348,16 +357,12 @@ class TestGLM:
         [
             (
                 -1,
-                pytest.raises(
-                    ValueError, match=r"y must be (one|two)-dimensional, with shape"
-                ),
+                pytest.raises(ValueError, match=r"y must be [12]-dimensional."),
             ),
             (0, does_not_raise()),
             (
                 1,
-                pytest.raises(
-                    ValueError, match=r"y must be (one|two)-dimensional, with shape"
-                ),
+                pytest.raises(ValueError, match=r"y must be [12]-dimensional."),
             ),
         ],
     )
@@ -423,12 +428,16 @@ class TestGLM:
         [
             (
                 -1,
-                pytest.raises(ValueError, match="The number of time-points in X and y"),
+                pytest.raises(
+                    ValueError, match="X and y must have the same number of samples"
+                ),
             ),
             (0, does_not_raise()),
             (
                 1,
-                pytest.raises(ValueError, match="The number of time-points in X and y"),
+                pytest.raises(
+                    ValueError, match="X and y must have the same number of samples"
+                ),
             ),
         ],
     )
@@ -453,12 +462,16 @@ class TestGLM:
         [
             (
                 -1,
-                pytest.raises(ValueError, match="The number of time-points in X and y"),
+                pytest.raises(
+                    ValueError, match="X and y must have the same number of samples"
+                ),
             ),
             (0, does_not_raise()),
             (
                 1,
-                pytest.raises(ValueError, match="The number of time-points in X and y"),
+                pytest.raises(
+                    ValueError, match="X and y must have the same number of samples"
+                ),
             ),
         ],
     )
@@ -509,9 +522,9 @@ class TestGLM:
     @pytest.mark.parametrize(
         "delta_dim, expectation",
         [
-            (-1, pytest.raises(ValueError, match="X must be two-dimensional")),
+            (-1, pytest.raises(ValueError, match="X must be 2-dimensional.")),
             (0, does_not_raise()),
-            (1, pytest.raises(ValueError, match="X must be two-dimensional")),
+            (1, pytest.raises(ValueError, match="X must be 2-dimensional.")),
         ],
     )
     def test_predict_x_dimensionality(
@@ -575,16 +588,16 @@ class TestGLM:
             return {
                 0: pytest.raises(
                     ValueError,
-                    match=r"params\[0\] must be an array or .* of shape \(n_features",
+                    match=r"coef must be an array or .* of shape \(n_features",
                 ),
                 1: pytest.raises(
                     ValueError,
-                    match=r"params\[0\] must be an array or .* of shape \(n_features",
+                    match=r"coef must be an array or .* of shape \(n_features",
                 ),
                 2: does_not_raise(),
                 3: pytest.raises(
                     ValueError,
-                    match=r"params\[0\] must be an array or .* of shape \(n_features",
+                    match=r"coef must be an array or .* of shape \(n_features",
                 ),
             }
         else:
@@ -596,11 +609,11 @@ class TestGLM:
                 1: does_not_raise(),
                 2: pytest.raises(
                     ValueError,
-                    match=r"params\[0\] must be an array or .* of shape \(n_features",
+                    match=r"coef must be an array or .* of shape \(n_features",
                 ),
                 3: pytest.raises(
                     ValueError,
-                    match=r"params\[0\] must be an array or .* of shape \(n_features",
+                    match=r"coef must be an array or .* of shape \(n_features",
                 ),
             }
 
@@ -636,17 +649,19 @@ class TestGLM:
         else:
             init_w = jnp.zeros((n_features, n_neurons) + (1,) * (dim_weights - 2))
         with expectation:
-            params = model.initialize_params(X, y, init_params=(init_w, true_params.intercept))
+            params = model.initialize_params(
+                X, y, init_params=(init_w, true_params.intercept)
+            )
             # check that params are set
             init_state = model.initialize_solver_and_state(X, y, params)
 
     @pytest.mark.parametrize(
         "dim_intercepts, expectation",
         [
-            (0, pytest.raises(ValueError, match=r"params\[1\] must be of shape")),
+            (0, pytest.raises(ValueError, match=r"intercept must be of shape")),
             (1, does_not_raise()),
-            (2, pytest.raises(ValueError, match=r"params\[1\] must be of shape")),
-            (3, pytest.raises(ValueError, match=r"params\[1\] must be of shape")),
+            (2, pytest.raises(ValueError, match=r"intercept must be of shape")),
+            (3, pytest.raises(ValueError, match=r"intercept must be of shape")),
         ],
     )
     @pytest.mark.solver_related
@@ -751,9 +766,9 @@ class TestGLM:
     @pytest.mark.parametrize(
         "delta_dim, expectation",
         [
-            (-1, pytest.raises(ValueError, match="X must be two-dimensional")),
+            (-1, pytest.raises(ValueError, match="X must be 2-dimensional.")),
             (0, does_not_raise()),
-            (1, pytest.raises(ValueError, match="X must be two-dimensional")),
+            (1, pytest.raises(ValueError, match="X must be 2-dimensional.")),
         ],
     )
     def test_simulate_input_dimensionality(
@@ -817,7 +832,7 @@ class TestGLM:
                 -1,
                 pytest.raises(
                     ValueError,
-                    match="Inconsistent number of features. spike basis coefficients has",
+                    match="Inconsistent number of features.",
                 ),
             ),
             (0, does_not_raise()),
@@ -825,7 +840,7 @@ class TestGLM:
                 1,
                 pytest.raises(
                     ValueError,
-                    match="Inconsistent number of features. spike basis coefficients has",
+                    match="Inconsistent number of features.",
                 ),
             ),
         ],
@@ -1624,14 +1639,14 @@ class TestGLMObservationModel:
             y = np.tile(y[:, None], (1, 3))
 
         if "poisson" in model_instantiation:
-            coef, inter = model._initialize_parameters(X, y)
+            params = model._initialize_parameters(X, y)
 
             if "population" in glm_type:
-                assert coef.shape == (X.shape[1], y.shape[1])
-                assert inter.shape == (y.shape[1],)
+                assert params.coef.shape == (X.shape[1], y.shape[1])
+                assert params.intercept.shape == (y.shape[1],)
             else:
-                assert coef.shape == (X.shape[1],)
-                assert inter.shape == (1,)
+                assert params.coef.shape == (X.shape[1],)
+                assert params.intercept.shape == (1,)
         else:
             return
 
@@ -1646,8 +1661,10 @@ class TestGLMObservationModel:
             glm_type + model_instantiation + "_pytree"
         )
         # fit both models
-        model.fit(X, y, init_params=true_params)
-        model_tree.fit(X_tree, y, init_params=true_params_tree)
+        model.fit(X, y, init_params=(true_params.coef, true_params.intercept))
+        model_tree.fit(
+            X_tree, y, init_params=(true_params_tree.coef, true_params_tree.intercept)
+        )
 
         # get the flat parameters
         if "population" in glm_type:
@@ -1805,7 +1822,7 @@ class TestGLMObservationModel:
             X[: X.shape[0] // 2, :] = np.nan
 
         params = model.initialize_params(X, y)
-        state = model.initialize_solver_and_state(X, y, params)
+        state = model.initialize_solver_and_state(*drop_nans(X, y), params)
 
         assert model.coef_ is None
         assert model.intercept_ is None
@@ -1850,7 +1867,9 @@ class TestGLMObservationModel:
                 jit_update, jit_state, Xnan, y[:batch_size]
             )
         # make sure there is an update
-        assert any(~jnp.allclose(p0, jit_update[k]) for k, p0 in enumerate(params))
+        assert not jnp.allclose(params.coef, jit_update.coef) or not jnp.allclose(
+            params.intercept, jit_update.intercept
+        )
 
         # update without jitting
         nojit_update = deepcopy(params)
@@ -1861,7 +1880,9 @@ class TestGLMObservationModel:
                     nojit_update, nojit_state, Xnan, y[:batch_size]
                 )
         # check for equivalence update
-        assert all(jnp.allclose(p0, jit_update[k]) for k, p0 in enumerate(nojit_update))
+        assert jnp.allclose(nojit_update.coef, jit_update.coef) and jnp.allclose(
+            nojit_update.intercept, jit_update.intercept
+        )
 
     #######################
     # Test model.simulate #
@@ -1905,8 +1926,8 @@ class TestGLMObservationModel:
         X, y, model, params, rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
-        model.coef_ = params[0]
-        model.intercept_ = params[1]
+        model.coef_ = params.coef
+        model.intercept_ = params.intercept
         model.scale_ = model.observation_model.scale
         if "population" in glm_type:
             model._initialize_feature_mask(X, y)
@@ -2295,10 +2316,7 @@ class TestPopulationGLM:
             (np.array([0, 1, 1] * 5).reshape(5, 3), does_not_raise()),
             (
                 {"input_1": [0, 1, 0], "input_2": [1, 0, 1]},
-                pytest.raises(
-                    ValueError,
-                    match="'feature_mask' of 'populationGLM' must be a 2-dimensional array",
-                ),
+                does_not_raise(),
             ),
             (
                 {"input_1": np.array([0, 1, 0]), "input_2": np.array([1, 0, 1])},
@@ -2343,14 +2361,14 @@ class TestPopulationGLM:
             ),
             (
                 np.array([0, 1, 1] * 4).reshape(4, 3),
-                pytest.raises(ValueError, match="Inconsistent number of features"),
+                pytest.raises(ValueError, match="The shape of the ``feature_mask`` "),
                 pytest.raises(
                     TypeError, match="feature_mask and X must have the same structure"
                 ),
             ),
             (
                 np.array([0, 1, 1, 1] * 5).reshape(5, 4),
-                pytest.raises(ValueError, match="Inconsistent number of neurons"),
+                pytest.raises(ValueError, match="The shape of the ``feature_mask`` "),
                 pytest.raises(
                     TypeError, match="feature_mask and X must have the same structure"
                 ),
@@ -2367,25 +2385,17 @@ class TestPopulationGLM:
                 pytest.raises(
                     TypeError, match="feature_mask and X must have the same structure"
                 ),
-                pytest.raises(ValueError, match="Inconsistent number of neurons"),
+                pytest.raises(ValueError, match="The shape of the ``feature_mask`` "),
             ),
             (
                 {"input_1": np.array([0, 1, 0])},
-                pytest.raises(
-                    TypeError, match="feature_mask and X must have the same structure"
-                ),
-                pytest.raises(
-                    TypeError, match="feature_mask and X must have the same structure"
-                ),
+                pytest.raises(TypeError, match="The shape of the ``feature_mask`` "),
+                pytest.raises(TypeError, match="The shape of the ``feature_mask`` "),
             ),
             (
                 {"input_1": np.array([0, 1, 0, 1])},
-                pytest.raises(
-                    TypeError, match="feature_mask and X must have the same structure"
-                ),
-                pytest.raises(
-                    TypeError, match="feature_mask and X must have the same structure"
-                ),
+                pytest.raises(TypeError, match="The shape of the ``feature_mask`` "),
+                pytest.raises(TypeError, match="The shape of the ``feature_mask`` "),
             ),
         ],
     )

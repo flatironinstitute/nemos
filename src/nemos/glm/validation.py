@@ -51,6 +51,17 @@ class GLMValidator(validation.RegressorValidator[GLMUserParams, GLMParams]):
         None,
     )
 
+    def match_ndims_feature_pytree(self, params: GLMUserParams):
+        """Match params tree structure."""
+        if isinstance(params[0], (dict, FeaturePytree)):
+            struct = jax.tree_util.tree_structure(params[0])
+            ndims = jax.tree_util.tree_unflatten(
+                struct, [self.expected_array_dims[0]] * struct.num_leaves
+            )
+        else:
+            ndims = self.expected_array_dims[0]
+        return (ndims, self.expected_array_dims[1])
+
     def additional_validation_model_params(self, params: GLMParams, **kwargs):
         """
         Perform GLM-specific parameter validation.
@@ -112,7 +123,8 @@ class GLMValidator(validation.RegressorValidator[GLMUserParams, GLMParams]):
         ValueError
             If arrays have incorrect dimensionality.
         """
-        err_msg = err_message_format.format(params[0].shape, params[1].shape)
+        shapes = jax.tree_util.tree_map(lambda x: x.shape, params)
+        err_msg = err_message_format.format(shapes, params[1].shape)
         return super().check_array_dimensions(params, err_msg=err_msg)
 
     def check_user_params_structure(
@@ -185,17 +197,58 @@ class GLMValidator(validation.RegressorValidator[GLMUserParams, GLMParams]):
                 f"X has {jax.tree_util.tree_map(lambda x: x.shape[1], X)} features instead!",
             )
 
+    @staticmethod
     def validate_and_cast_feature_mask(
-        self,
         feature_mask: Union[dict[str, jnp.ndarray], jnp.ndarray],
-        params: Optional[GLMParams] = None,
         data_type: Optional[jnp.dtype] = None,
     ) -> Union[dict[str, jnp.ndarray], jnp.ndarray]:
-        """Validate feature mask and cast to jax array of floats."""
-        feature_mask = super().validate_and_cast_feature_mask(feature_mask, params)
-        if params is None:
-            return feature_mask
+        """
+        Validate and cast a feature mask to JAX arrays.
 
+        Validates that the feature mask contains only 0s and 1s, then converts
+        it to JAX arrays with the specified data type. Subclasses can extend
+        this to add parameter-specific validation (e.g., checking that mask
+        shape matches parameter dimensions).
+
+        Parameters
+        ----------
+        feature_mask : dict[str, jnp.ndarray] or jnp.ndarray
+            Feature mask indicating which features are used. Must contain only 0s and 1s.
+        data_type : jnp.dtype, optional
+            Target data type for the mask arrays. Defaults to float.
+
+        Returns
+        -------
+        dict[str, jnp.ndarray] or jnp.ndarray
+            The validated and cast feature mask.
+
+        Raises
+        ------
+        ValueError
+            If feature_mask contains values other than 0 or 1.
+        """
+        if pytree_map_and_reduce(
+            lambda x: jnp.any(jnp.logical_and(x != 0, x != 1)), any, feature_mask
+        ):
+            raise ValueError("'feature_mask' must contain only 0s and 1s!")
+
+        # cast to jax - default to float if not specified
+        if data_type is None:
+            data_type = float
+        feature_mask = jax.tree_util.tree_map(
+            lambda x: jnp.asarray(x, dtype=data_type), feature_mask
+        )
+
+        return feature_mask
+
+    def feature_mask_consistency(
+        self,
+        feature_mask: Union[dict[str, jnp.ndarray], jnp.ndarray] | None,
+        params: GLMParams,
+    ):
+        """Check consistency of feature_mask and params."""
+        if feature_mask is None:
+            return
         validation.check_tree_structure(
             params.coef,
             feature_mask,
@@ -231,7 +284,7 @@ class GLMValidator(validation.RegressorValidator[GLMUserParams, GLMParams]):
                     f"The shape of the ``coef`` is ``{params.coef.shape}``, "
                     f"that of the ``feature_mask`` is ``{feature_mask.shape}`` instead!"
                 )
-        return feature_mask
+        return
 
 
 @dataclass(frozen=True, repr=False)
