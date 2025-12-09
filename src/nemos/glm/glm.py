@@ -220,6 +220,7 @@ class GLM(BaseRegressor[GLMParams]):
         self.aux_ = None
         self.optim_info_ = None
 
+
     def __sklearn_tags__(self):
         """Return GLM specific estimator tags."""
         tags = super().__sklearn_tags__()
@@ -378,6 +379,9 @@ class GLM(BaseRegressor[GLMParams]):
 
         # check consistency between X and params
         self._validator.validate_consistency(params, X=data)
+        self._validator.feature_mask_consistency(
+            getattr(self, "_feature_mask", None), params
+        )
 
         return self._predict(params, data)
 
@@ -511,9 +515,12 @@ class GLM(BaseRegressor[GLMParams]):
         self._check_is_fit()
         params = self._get_model_params()
 
-        X, y = self._preprocess_inputs(X, y, drop_nans=True)
         self._validator.validate_inputs(X, y)
+        X, y = self._preprocess_inputs(X, y, drop_nans=True)
         self._validator.validate_consistency(params, X, y)
+        self._validator.feature_mask_consistency(
+            getattr(self, "_feature_mask", None), params
+        )
 
         if score_type == "log-likelihood":
             score = self._observation_model.log_likelihood(
@@ -667,6 +674,9 @@ class GLM(BaseRegressor[GLMParams]):
         """
         self._validator.validate_inputs(X, y)
         init_params = self.initialize_params(X, y, init_params)
+        self._validator.feature_mask_consistency(
+            getattr(self, "_feature_mask", None), init_params
+        )
 
         # filter for non-nans, grab data if needed
         data, y = self._preprocess_inputs(X, y)
@@ -684,8 +694,7 @@ class GLM(BaseRegressor[GLMParams]):
                 "and/or setting `acceleration=False`."
             )
 
-        self.optim_info_ = self._solver.get_optim_info(state)
-        if not self.optim_info_.converged:
+        if not self._solver.get_optim_info(state).converged:
             warnings.warn(
                 "The fit did not converge. "
                 "Consider the following:"
@@ -793,6 +802,9 @@ class GLM(BaseRegressor[GLMParams]):
 
         # validate input and params consistency
         self._validator.validate_consistency(params, X=feedforward_input)
+        self._validator.feature_mask_consistency(
+            getattr(self, "_feature_mask", None), params
+        )
 
         # pre-process
         feedforward_input, _ = self._preprocess_inputs(
@@ -1355,8 +1367,15 @@ class PopulationGLM(GLM):
         if feature_mask is None:
             self._feature_mask = feature_mask
             return
+
         elif isinstance(feature_mask, FeaturePytree):
             feature_mask = self._feature_mask.data
+
+        if isinstance(self.feature_mask, dict):
+            feature_mask = dict(
+                (i, jnp.asarray(v)) for i, v in self.feature_mask.items()
+            )
+
         self._feature_mask = self._validator.validate_and_cast_feature_mask(
             feature_mask
         )
