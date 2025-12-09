@@ -139,8 +139,8 @@ def test_preprocess_fit_higher_dimensional_data_y(instantiate_base_regressor_sub
     """Test behavior with higher-dimensional input data."""
     fixture = instantiate_base_regressor_subclass
     model = fixture.model
-    X = jnp.array([[[1, 2], [3, 4]]])
-    y = jnp.array([[[1.0, 1.0, 1.0]]])
+    X = jnp.array([[1, 2], [3, 4]])  # Valid 2D X
+    y = jnp.array([[[1.0, 1.0, 1.0]]])  # Invalid 3D y
     if is_population_model(model):
         err_msg = "y must be 2-dimensional"
     else:
@@ -328,9 +328,13 @@ class TestModelCommons:
         )
 
         if n_params < INIT_PARAM_LENGTH[model_name]:
-            init_params = true_params[:n_params]
+            # Convert GLMParams to tuple for slicing
+            params_tuple = (true_params.coef, true_params.intercept)
+            init_params = params_tuple[:n_params]
         else:
-            init_params = true_params + (true_params[0],) * (
+            # Convert GLMParams to tuple for concatenation
+            params_tuple = (true_params.coef, true_params.intercept)
+            init_params = params_tuple + (true_params.coef,) * (
                 n_params - INIT_PARAM_LENGTH[model_name]
             )
         with expectation:
@@ -366,7 +370,9 @@ class TestModelCommons:
             X = np.zeros((X.shape[0], 1, X.shape[1]))
         with expectation:
             model._validator.validate_inputs(X, y)
-            params = model._validator.validate_and_cast(true_params)
+            params = model._validator.validate_and_cast(
+                (true_params.coef, true_params.intercept)
+            )
             # check that params are set
             init_state = model.initialize_solver_and_state(X, y, params)
             # optimistix solvers do not have a velocity attr
@@ -404,7 +410,9 @@ class TestModelCommons:
                 y = np.zeros((y.shape[0], 1))
         with expectation:
             model._validator.validate_inputs(X, y)
-            params = model._validator.validate_and_cast(true_params)
+            params = model._validator.validate_and_cast(
+                (true_params.coef, true_params.intercept)
+            )
             # check that params are set
             init_state = model.initialize_solver_and_state(X, y, params)
             # optimistix solvers do not have a velocity attr
@@ -434,7 +442,9 @@ class TestModelCommons:
         elif delta_n_features == -1:
             X = X[..., :-1]
         with expectation:
-            params = model.initialize_params(X, y, init_params=true_params)
+            params = model.initialize_params(
+                X, y, init_params=(true_params.coef, true_params.intercept)
+            )
             # check that params are set
             init_state = model.initialize_solver_and_state(X, y, params)
             # optimistix solvers do not have a velocity attr
@@ -472,7 +482,9 @@ class TestModelCommons:
         y = np.zeros(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
         with expectation:
-            params = model.initialize_params(X, y, init_params=true_params)
+            params = model.initialize_params(
+                X, y, init_params=(true_params.coef, true_params.intercept)
+            )
             model._validator.validate_inputs(X, y)
             # check that params are set
             init_state = model.initialize_solver_and_state(X, y, params)
@@ -511,7 +523,10 @@ class TestModelCommons:
         shape = DEFAULT_OBS_SHAPE[model.__class__.__name__]
         y = jnp.zeros((shape[0] + delta_tp,) + shape[1:])
         with expectation:
-            params = model.initialize_params(X, y, init_params=true_params)
+            params = model.initialize_params(
+                X, y, init_params=(true_params.coef, true_params.intercept)
+            )
+            model._validator.validate_inputs(X, y)
             # check that params are set
             init_state = model.initialize_solver_and_state(X, y, params)
             # optimistix solvers do not have a velocity attr
@@ -1028,9 +1043,13 @@ class TestModelSimulation:
         )
 
         if n_params < INIT_PARAM_LENGTH[model_name]:
-            init_params = true_params[:n_params]
+            # Convert GLMParams to tuple for slicing
+            params_tuple = (true_params.coef, true_params.intercept)
+            init_params = params_tuple[:n_params]
         else:
-            init_params = true_params + (true_params[0],) * (
+            # Convert GLMParams to tuple for concatenation
+            params_tuple = (true_params.coef, true_params.intercept)
+            init_params = params_tuple + (true_params.coef,) * (
                 n_params - INIT_PARAM_LENGTH[model_name]
             )
         with expectation:
@@ -1058,7 +1077,7 @@ class TestModelSimulation:
         elif delta_dim == 1:
             X = np.zeros((X.shape[0], 1, X.shape[1]))
         with expectation:
-            model.fit(X, y, init_params=true_params)
+            model.fit(X, y, init_params=(true_params.coef, true_params.intercept))
 
     @pytest.mark.parametrize(
         "delta_dim, expectation",
@@ -1088,7 +1107,7 @@ class TestModelSimulation:
             elif delta_dim == 1:
                 y = np.zeros((y.shape[0], 1))
         with expectation:
-            model.fit(X, y, init_params=true_params)
+            model.fit(X, y, init_params=(true_params.coef, true_params.intercept))
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -1116,7 +1135,7 @@ class TestModelSimulation:
         elif delta_n_features == -1:
             X = X[..., :-1]
         with expectation:
-            model.fit(X, y, init_params=true_params)
+            model.fit(X, y, init_params=(true_params.coef, true_params.intercept))
 
     @pytest.mark.parametrize(
         "delta_tp, expectation",
@@ -1147,7 +1166,7 @@ class TestModelSimulation:
         X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
         X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
         with expectation:
-            model.fit(X, y, init_params=true_params)
+            model.fit(X, y, init_params=(true_params.coef, true_params.intercept))
 
     @pytest.mark.parametrize(
         "delta_tp, expectation",
@@ -1178,7 +1197,7 @@ class TestModelSimulation:
         X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
         y = jnp.zeros((y.shape[0] + delta_tp,) + y.shape[1:])
         with expectation:
-            model.fit(X, y, init_params=true_params)
+            model.fit(X, y, init_params=(true_params.coef, true_params.intercept))
 
     @pytest.mark.parametrize(
         "fill_val, expectation",
