@@ -112,8 +112,9 @@ class GLMValidator(validation.RegressorValidator[GLMUserParams, GLMParams]):
         ValueError
             If arrays have incorrect dimensionality.
         """
-        shapes = jax.tree_util.tree_map(lambda x: x.shape, params)
-        err_msg = err_message_format.format(shapes, params[1].shape)
+        wrapped = self.wrap_user_params(params)
+        shapes = tuple(jax.tree_util.tree_map(lambda x: x.shape, p) for p in wrapped)
+        err_msg = err_message_format.format(shapes[0], shapes[1])
         return super().check_array_dimensions(params, err_msg=err_msg)
 
     def check_user_params_structure(

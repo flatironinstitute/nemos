@@ -576,18 +576,6 @@ class GLM(BaseRegressor[GLMParams]):
             - The first element is the initialized coefficients
             (either as a FeaturePytree or ndarray, matching the structure of X) with shapes (n_features,).
             - The second element is the initialized intercept (bias terms) as an ndarray of shape (1,).
-
-        Examples
-        --------
-        >>> import nemos as nmo
-        >>> import numpy as np
-        >>> X = np.zeros((100, 5))  # Example input
-        >>> y = np.exp(np.random.normal(size=(100, )))  # Simulated firing rates
-        >>> coeff, intercept = nmo.glm.GLM()._initialize_parameters(X, y)
-        >>> coeff.shape
-        (5,)
-        >>> intercept.shape
-        (1,)
         """
         if isinstance(X, FeaturePytree):
             data = X.data
@@ -977,8 +965,8 @@ class GLM(BaseRegressor[GLMParams]):
     @cast_to_jax
     def update(
         self,
-        params: ModelParams,
-        opt_state: SolverState,
+        params: GLMUserParams,
+        opt_state: NamedTuple,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         *args,
@@ -1046,8 +1034,11 @@ class GLM(BaseRegressor[GLMParams]):
         # grab the data
         data = X.data if isinstance(X, FeaturePytree) else X
 
+        # wrap into GLM arams
+        params = GLMParams(*params)
+
         # perform a one-step update
-        params, opt_state, aux = self.solver_update(
+        params, opt_state, aux  = self.solver_update(
             params, opt_state, data, y, *args, **kwargs
         )
 
@@ -1063,8 +1054,7 @@ class GLM(BaseRegressor[GLMParams]):
         self.scale_ = self.observation_model.estimate_scale(
             y, self._predict(params, data), dof_resid=self.dof_resid_
         )
-
-        return (params, opt_state)
+        return (params.coef, params.intercept), opt_state
 
     def _get_optimal_solver_params_config(self):
         """Return the functions for computing default step and batch size for the solver."""
@@ -1369,12 +1359,10 @@ class PopulationGLM(GLM):
             return
 
         elif isinstance(feature_mask, FeaturePytree):
-            feature_mask = self._feature_mask.data
+            feature_mask = feature_mask.data
 
-        if isinstance(self.feature_mask, dict):
-            feature_mask = dict(
-                (i, jnp.asarray(v)) for i, v in self.feature_mask.items()
-            )
+        if isinstance(feature_mask, dict):
+            feature_mask = dict((i, jnp.asarray(v)) for i, v in feature_mask.items())
 
         self._feature_mask = self._validator.validate_and_cast_feature_mask(
             feature_mask

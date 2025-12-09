@@ -832,6 +832,7 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
 
         Examples
         --------
+        >>> from nemos.glm.params import GLMParams
         >>> def additional_validation_model_params(self, params: GLMParams, **kwargs) -> GLMParams:
         ...     n_features = params.coef.shape[0]
         ...     n_neurons = params.intercept.shape[0]
