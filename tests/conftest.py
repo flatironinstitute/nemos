@@ -38,6 +38,7 @@ from nemos.basis import AdditiveBasis, CustomBasis, MultiplicativeBasis
 from nemos.basis._basis import Basis
 from nemos.basis._basis_mixin import BasisMixin
 from nemos.basis._transformer_basis import TransformerBasis
+from nemos.glm.params import GLMParams
 
 DEFAULT_KWARGS = {
     "n_basis_funcs": 5,
@@ -373,7 +374,7 @@ def poissonGLM_model_instantiation():
             - X (numpy.ndarray): Simulated input data.
             - np.random.poisson(rate) (numpy.ndarray): Simulated spike responses.
             - model (nmo.glm.PoissonGLM): Initialized model instance.
-            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - GLMParams(w_true, b_true) (tuple): True weight and bias parameters.
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
     np.random.seed(123)
@@ -384,7 +385,7 @@ def poissonGLM_model_instantiation():
     regularizer = nmo.regularizer.UnRegularized()
     model = nmo.glm.GLM(observation_model, regularizer=regularizer)
     rate = jax.numpy.exp(jax.numpy.einsum("k,tk->t", w_true, X) + b_true)
-    return X, np.random.poisson(rate), model, (w_true, b_true), rate
+    return X, np.random.poisson(rate), model, GLMParams(w_true, b_true), rate
 
 
 @pytest.fixture
@@ -400,14 +401,14 @@ def poissonGLM_model_instantiation_pytree(poissonGLM_model_instantiation):
             - X (numpy.ndarray): Simulated input data.
             - np.random.poisson(rate) (numpy.ndarray): Simulated spike responses.
             - model (nmo.glm.PoissonGLM): Initialized model instance.
-            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - GLMParams(w_true, b_true) (tuple): True weight and bias parameters.
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
     X, spikes, model, true_params, rate = poissonGLM_model_instantiation
     X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
-    true_params_tree = (
-        dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
-        true_params[1],
+    true_params_tree = GLMParams(
+        dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
+        true_params.intercept,
     )
     model_tree = nmo.glm.GLM(model.observation_model, regularizer=model.regularizer)
     return X_tree, np.random.poisson(rate), model_tree, true_params_tree, rate
@@ -434,7 +435,7 @@ def population_poissonGLM_model_instantiation():
             - X (numpy.ndarray): Simulated input data.
             - np.random.poisson(rate) (numpy.ndarray): Simulated spike responses.
             - model (nmo.glm.PoissonGLM): Initialized model instance.
-            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - GLMParams(w_true, b_true) (tuple): True weight and bias parameters.
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
     np.random.seed(123)
@@ -447,7 +448,7 @@ def population_poissonGLM_model_instantiation():
         observation_model=observation_model, regularizer=regularizer
     )
     rate = jnp.exp(jnp.einsum("ki,tk->ti", w_true, X) + b_true)
-    return X, np.random.poisson(rate), model, (w_true, b_true), rate
+    return X, np.random.poisson(rate), model, GLMParams(w_true, b_true), rate
 
 
 @pytest.fixture
@@ -465,14 +466,14 @@ def population_poissonGLM_model_instantiation_pytree(
             - X (numpy.ndarray): Simulated input data.
             - np.random.poisson(rate) (numpy.ndarray): Simulated spike responses.
             - model (nmo.glm.PoissonGLM): Initialized model instance.
-            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - GLMParams(w_true, b_true) (tuple): True weight and bias parameters.
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
     X, spikes, model, true_params, rate = population_poissonGLM_model_instantiation
     X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
-    true_params_tree = (
-        dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
-        true_params[1],
+    true_params_tree = GLMParams(
+        dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
+        true_params.intercept,
     )
     model_tree = nmo.glm.PopulationGLM(
         observation_model=model.observation_model, regularizer=model.regularizer
@@ -574,7 +575,7 @@ def poissonGLM_model_instantiation_group_sparse():
             - X (numpy.ndarray): Simulated input data.
             - np.random.poisson(rate) (numpy.ndarray): Simulated spike responses.
             - model (nmo.glm.PoissonGLM): Initialized model instance.
-            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - GLMParams(w_true, b_true) (tuple): True weight and bias parameters.
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
     np.random.seed(123)
@@ -589,7 +590,7 @@ def poissonGLM_model_instantiation_group_sparse():
     regularizer = nmo.regularizer.UnRegularized()
     model = nmo.glm.GLM(observation_model, regularizer=regularizer)
     rate = jax.numpy.exp(jax.numpy.einsum("k,tk->t", w_true, X) + b_true)
-    return X, np.random.poisson(rate), model, (w_true, b_true), rate, mask
+    return X, np.random.poisson(rate), model, GLMParams(w_true, b_true), rate, mask
 
 
 @pytest.fixture
@@ -605,7 +606,7 @@ def population_poissonGLM_model_instantiation_group_sparse():
             - X (numpy.ndarray): Simulated input data.
             - np.random.poisson(rate) (numpy.ndarray): Simulated spike responses.
             - model (nmo.glm.PoissonGLM): Initialized model instance.
-            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - GLMParams(w_true, b_true) (tuple): True weight and bias parameters.
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
     np.random.seed(123)
@@ -620,7 +621,7 @@ def population_poissonGLM_model_instantiation_group_sparse():
     regularizer = nmo.regularizer.UnRegularized()
     model = nmo.glm.PopulationGLM(observation_model, regularizer=regularizer)
     rate = jax.numpy.exp(jax.numpy.einsum("kn,tk->tn", w_true, X) + b_true)
-    return X, np.random.poisson(rate), model, (w_true, b_true), rate, mask
+    return X, np.random.poisson(rate), model, GLMParams(w_true, b_true), rate, mask
 
 
 @pytest.fixture
@@ -709,7 +710,7 @@ def gammaGLM_model_instantiation():
             - X (numpy.ndarray): Simulated input data.
             - np.random.poisson(rate) (numpy.ndarray): Simulated spike responses.
             - model (nmo.glm.PoissonGLM): Initialized model instance.
-            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - GLMParams(w_true, b_true) (tuple): True weight and bias parameters.
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
     np.random.seed(123)
@@ -723,7 +724,7 @@ def gammaGLM_model_instantiation():
     theta = 3
     k = rate / theta
     model.scale_ = theta
-    return X, np.random.gamma(k, scale=theta), model, (w_true, b_true), rate
+    return X, np.random.gamma(k, scale=theta), model, GLMParams(w_true, b_true), rate
 
 
 @pytest.fixture
@@ -739,14 +740,14 @@ def gammaGLM_model_instantiation_pytree(gammaGLM_model_instantiation):
             - X (numpy.ndarray): Simulated input data.
             - np.random.poisson(rate) (numpy.ndarray): Simulated spike responses.
             - model (nmo.glm.PoissonGLM): Initialized model instance.
-            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - GLMParams(w_true, b_true) (tuple): True weight and bias parameters.
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
     X, spikes, model, true_params, rate = gammaGLM_model_instantiation
     X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
-    true_params_tree = (
-        dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
-        true_params[1],
+    true_params_tree = GLMParams(
+        dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
+        true_params.intercept,
     )
     model_tree = nmo.glm.GLM(model.observation_model, regularizer=model.regularizer)
     return X_tree, spikes, model_tree, true_params_tree, rate
@@ -767,7 +768,7 @@ def population_gammaGLM_model_instantiation():
     theta = 3
     model.scale_ = theta
     y = jax.random.gamma(jax.random.PRNGKey(123), rate / theta) * theta
-    return X, y, model, (w_true, b_true), rate
+    return X, y, model, GLMParams(w_true, b_true), rate
 
 
 @pytest.fixture()
@@ -776,9 +777,9 @@ def population_gammaGLM_model_instantiation_pytree(
 ):
     X, spikes, model, true_params, rate = population_gammaGLM_model_instantiation
     X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
-    true_params_tree = (
-        dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
-        true_params[1],
+    true_params_tree = GLMParams(
+        dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
+        true_params.intercept,
     )
     model_tree = nmo.glm.PopulationGLM(
         observation_model=model.observation_model, regularizer=model.regularizer
@@ -901,7 +902,7 @@ def bernoulliGLM_model_instantiation():
             - X (numpy.ndarray): Simulated input data.
             - np.random.binomial(1,rate) (numpy.ndarray): Simulated spike responses.
             - model (nmo.glm.GLM): Initialized model instance.
-            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - GLMParams(w_true, b_true) (tuple): True weight and bias parameters.
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
     np.random.seed(123)
@@ -912,7 +913,7 @@ def bernoulliGLM_model_instantiation():
     regularizer = nmo.regularizer.UnRegularized()
     model = nmo.glm.GLM(observation_model, regularizer=regularizer)
     rate = jax.lax.logistic(jnp.einsum("k,tk->t", w_true, X) + b_true)
-    return X, np.random.binomial(1, rate), model, (w_true, b_true), rate
+    return X, np.random.binomial(1, rate), model, GLMParams(w_true, b_true), rate
 
 
 @pytest.fixture
@@ -928,14 +929,14 @@ def bernoulliGLM_model_instantiation_pytree(bernoulliGLM_model_instantiation):
             - X (numpy.ndarray): Simulated input data.
             - np.random.binomial(1,rate) (numpy.ndarray): Simulated spike responses.
             - model (nmo.glm.GLM): Initialized model instance.
-            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - GLMParams(w_true, b_true) (tuple): True weight and bias parameters.
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
     X, spikes, model, true_params, rate = bernoulliGLM_model_instantiation
     X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
-    true_params_tree = (
-        dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
-        true_params[1],
+    true_params_tree = GLMParams(
+        dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
+        true_params.intercept,
     )
     model_tree = nmo.glm.GLM(model.observation_model, regularizer=model.regularizer)
     return X_tree, np.random.binomial(1, rate), model_tree, true_params_tree, rate
@@ -954,7 +955,7 @@ def population_bernoulliGLM_model_instantiation():
             - X (numpy.ndarray): Simulated input data.
             - np.random.binomial(1,rate) (numpy.ndarray): Simulated spike responses.
             - model (nmo.glm.PopulationGLM): Initialized model instance.
-            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - GLMParams(w_true, b_true) (tuple): True weight and bias parameters.
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
     np.random.seed(123)
@@ -967,7 +968,7 @@ def population_bernoulliGLM_model_instantiation():
         observation_model=observation_model, regularizer=regularizer
     )
     rate = jax.lax.logistic(jnp.einsum("ki,tk->ti", w_true, X) + b_true)
-    return X, np.random.binomial(1, rate), model, (w_true, b_true), rate
+    return X, np.random.binomial(1, rate), model, GLMParams(w_true, b_true), rate
 
 
 @pytest.fixture
@@ -985,14 +986,14 @@ def population_bernoulliGLM_model_instantiation_pytree(
             - X (numpy.ndarray): Simulated input data.
             - np.random.binomial(1,rate) (numpy.ndarray): Simulated spike responses.
             - model (nmo.glm.PopulationGLM): Initialized model instance.
-            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - GLMParams(w_true, b_true) (tuple): True weight and bias parameters.
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
     X, spikes, model, true_params, rate = population_bernoulliGLM_model_instantiation
     X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
-    true_params_tree = (
-        dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
-        true_params[1],
+    true_params_tree = GLMParams(
+        dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
+        true_params.intercept,
     )
     model_tree = nmo.glm.PopulationGLM(
         observation_model=model.observation_model, regularizer=model.regularizer
@@ -1031,7 +1032,7 @@ def negativeBinomialGLM_model_instantiation():
             - X (numpy.ndarray): Simulated input data.
             - np.random.poisson(rate) (numpy.ndarray): Simulated spike responses.
             - model (nmo.glm.PoissonGLM): Initialized model instance.
-            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - GLMParams(w_true, b_true) (tuple): True weight and bias parameters.
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
     np.random.seed(123)
@@ -1044,7 +1045,7 @@ def negativeBinomialGLM_model_instantiation():
     rate = jax.numpy.exp(jax.numpy.einsum("k,tk->t", w_true, X) + b_true)
     r = 1 / model.observation_model.scale
     spikes = np.random.poisson(np.random.gamma(shape=r, size=rate.shape) * (r / rate))
-    return X, spikes, model, (w_true, b_true), rate
+    return X, spikes, model, GLMParams(w_true, b_true), rate
 
 
 @pytest.fixture
@@ -1062,14 +1063,14 @@ def negativeBinomialGLM_model_instantiation_pytree(
             - X (FeaturePytree): Simulated input data.
             - np.random.poisson(rate) (numpy.ndarray): Simulated spike responses.
             - model (nmo.glm.PoissonGLM): Initialized model instance.
-            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - GLMParams(w_true, b_true) (tuple): True weight and bias parameters.
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
     X, spikes, model, true_params, rate = negativeBinomialGLM_model_instantiation
     X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
-    true_params_tree = (
-        dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
-        true_params[1],
+    true_params_tree = GLMParams(
+        dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
+        true_params.intercept,
     )
     model_tree = nmo.glm.GLM(
         model.observation_model, regularizer=model.regularizer, solver_name="LBFGS"
@@ -1090,7 +1091,7 @@ def population_negativeBinomialGLM_model_instantiation():
             - X (numpy.ndarray): Simulated input data.
             - np.random.poisson(rate) (numpy.ndarray): Simulated spike responses.
             - model (nmo.glm.PoissonGLM): Initialized model instance.
-            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - GLMParams(w_true, b_true) (tuple): True weight and bias parameters.
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
     np.random.seed(123)
@@ -1108,7 +1109,7 @@ def population_negativeBinomialGLM_model_instantiation():
     spikes = model.observation_model.sample_generator(jax.random.PRNGKey(123), rate)
     # make sure that at least one entry is non-zero
     spikes = spikes.at[-1].set(1)
-    return X, spikes, model, (w_true, b_true), rate
+    return X, spikes, model, GLMParams(w_true, b_true), rate
 
 
 @pytest.fixture
@@ -1126,16 +1127,16 @@ def population_negativeBinomialGLM_model_instantiation_pytree(
             - X (numpy.ndarray): Simulated input data.
             - np.random.poisson(rate) (numpy.ndarray): Simulated spike responses.
             - model (nmo.glm.PoissonGLM): Initialized model instance.
-            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - GLMParams(w_true, b_true) (tuple): True weight and bias parameters.
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
     X, spikes, model, true_params, rate = (
         population_negativeBinomialGLM_model_instantiation
     )
     X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
-    true_params_tree = (
-        dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
-        true_params[1],
+    true_params_tree = GLMParams(
+        dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
+        true_params.intercept,
     )
     model_tree = nmo.glm.PopulationGLM(
         observation_model=model.observation_model,
@@ -1174,7 +1175,7 @@ def instantiate_glm_func(
         X=X,
         y=counts,
         model=model,
-        params=(model.coef_, model.intercept_),
+        params=GLMParams(model.coef_, model.intercept_),
         rates=rates,
         extra=None,
     )
@@ -1211,7 +1212,7 @@ def instantiate_population_glm_func(
         X=X,
         y=counts,
         model=model,
-        params=(model.coef_, model.intercept_),
+        params=GLMParams(model.coef_, model.intercept_),
         rates=rates,
         extra=None,
     )
