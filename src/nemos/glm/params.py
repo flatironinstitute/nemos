@@ -1,6 +1,6 @@
 """GLM parameter definitions and type aliases."""
 
-from typing import Tuple, Union
+from typing import Callable, Tuple, Union
 
 import equinox as eqx
 import jax.numpy as jnp
@@ -16,7 +16,7 @@ class GLMParams(eqx.Module):
     intercept: jnp.ndarray
 
     @staticmethod
-    def regularizable_subtrees():
+    def regularizable_subtrees() -> list[Callable[["GLMParams"], jnp.ndarray | dict]]:
         """Filter regularizable subtrees."""
         return [lambda p: p.coef]
 
