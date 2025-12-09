@@ -383,7 +383,7 @@ class TestUnRegularized:
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
         model.instantiate_solver(model.compute_loss)
-        params = GLMParams(true_params[0] * 0.0, true_params[1])
+        params = GLMParams(true_params.coef * 0.0, true_params.intercept)
         model.solver_run(params, X, y)
 
     @pytest.mark.parametrize(
@@ -400,7 +400,8 @@ class TestUnRegularized:
         model.solver_name = solver_name
         model.instantiate_solver(model.compute_loss)
         params = GLMParams(
-            jax.tree_util.tree_map(jnp.zeros_like, true_params[0]), true_params[1]
+            jax.tree_util.tree_map(jnp.zeros_like, true_params.coef),
+            true_params.intercept,
         )
         model.solver_run(
             params,
@@ -419,7 +420,7 @@ class TestUnRegularized:
         model.solver_kwargs = {"tol": 10**-12}
         model.instantiate_solver(model.compute_loss)
 
-        init_params = GLMParams(true_params[0] * 0.0, true_params[1])
+        init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
 
         # update solver name
         model_bfgs = copy.deepcopy(model)
@@ -445,7 +446,7 @@ class TestUnRegularized:
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-12}
         model.instantiate_solver(model.compute_loss)
-        init_params = GLMParams(true_params[0] * 0.0, true_params[1])
+        init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
         params = model.solver_run(init_params, X, y)[0]
         model_skl = PoissonRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
         model_skl.fit(X, y)
@@ -467,7 +468,7 @@ class TestUnRegularized:
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-12}
         model.instantiate_solver(model.compute_loss)
-        init_params = GLMParams(true_params[0] * 0.0, true_params[1])
+        init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
         params = model.solver_run(init_params, X, y)[0]
         model_skl = GammaRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
         model_skl.fit(X, y)
@@ -728,7 +729,7 @@ class TestRidge:
         model.set_params(regularizer=self.cls(), regularizer_strength=1.0)
         model.solver_name = solver_name
         runner = model.instantiate_solver(model.compute_loss).solver_run
-        runner(GLMParams(true_params[0] * 0.0, true_params[1]), X, y)
+        runner(GLMParams(true_params.coef * 0.0, true_params.intercept), X, y)
 
     @pytest.mark.parametrize(
         "solver_name",
@@ -745,7 +746,8 @@ class TestRidge:
         runner = model.instantiate_solver(model.compute_loss).solver_run
         runner(
             GLMParams(
-                jax.tree_util.tree_map(jnp.zeros_like, true_params[0]), true_params[1]
+                jax.tree_util.tree_map(jnp.zeros_like, true_params.coef),
+                true_params.intercept,
             ),
             X.data,
             y,
@@ -770,9 +772,11 @@ class TestRidge:
         runner_gd = model.instantiate_solver(model.compute_loss).solver_run
         runner_bfgs = model_bfgs.instantiate_solver(model_bfgs.compute_loss).solver_run
 
-        params_gd = runner_gd(GLMParams(true_params[0] * 0.0, true_params[1]), X, y)[0]
+        params_gd = runner_gd(
+            GLMParams(true_params.coef * 0.0, true_params.intercept), X, y
+        )[0]
         params_bfgs = runner_bfgs(
-            GLMParams(true_params[0] * 0.0, true_params[1]), X, y
+            GLMParams(true_params.coef * 0.0, true_params.intercept), X, y
         )[0]
 
         match_weights = np.allclose(params_gd.coef, params_bfgs.coef)
@@ -792,7 +796,9 @@ class TestRidge:
         model.solver_name = "BFGS"
 
         runner_bfgs = model.instantiate_solver(model.compute_loss).solver_run
-        params = runner_bfgs(GLMParams(true_params[0] * 0.0, true_params[1]), X, y)[0]
+        params = runner_bfgs(
+            GLMParams(true_params.coef * 0.0, true_params.intercept), X, y
+        )[0]
         model_skl = PoissonRegressor(
             fit_intercept=True,
             tol=10**-12,
@@ -818,7 +824,9 @@ class TestRidge:
         model.regularizer_strength = 0.1
         model.solver_name = solver_name
         runner_bfgs = model.instantiate_solver(model.compute_loss).solver_run
-        params = runner_bfgs(GLMParams(true_params[0] * 0.0, true_params[1]), X, y)[0]
+        params = runner_bfgs(
+            GLMParams(true_params.coef * 0.0, true_params.intercept), X, y
+        )[0]
         model_skl = GammaRegressor(
             fit_intercept=True,
             tol=10**-12,
@@ -982,7 +990,7 @@ class TestLasso:
         model.set_params(regularizer=self.cls(), regularizer_strength=1)
         model.solver_name = solver_name
         runner = model.instantiate_solver(model.compute_loss).solver_run
-        runner(GLMParams(true_params[0] * 0.0, true_params[1]), X, y)
+        runner(GLMParams(true_params.coef * 0.0, true_params.intercept), X, y)
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
     def test_run_solver_tree(self, solver_name, poissonGLM_model_instantiation_pytree):
@@ -996,7 +1004,8 @@ class TestLasso:
         runner = model.instantiate_solver(model.compute_loss).solver_run
         runner(
             GLMParams(
-                jax.tree_util.tree_map(jnp.zeros_like, true_params[0]), true_params[1]
+                jax.tree_util.tree_map(jnp.zeros_like, true_params.coef),
+                true_params.intercept,
             ),
             X.data,
             y,
@@ -1016,7 +1025,9 @@ class TestLasso:
         model.solver_kwargs = {"tol": 10**-12}
 
         runner = model.instantiate_solver(model.compute_loss).solver_run
-        params = runner(GLMParams(true_params[0] * 0.0, true_params[1]), X, y)[0]
+        params = runner(GLMParams(true_params.coef * 0.0, true_params.intercept), X, y)[
+            0
+        ]
 
         # instantiate the glm with statsmodels
         glm_sm = sm.GLM(endog=y, exog=sm.add_constant(X), family=sm.families.Poisson())
@@ -1271,7 +1282,7 @@ class TestElasticNet:
         model.set_params(regularizer=self.cls(), regularizer_strength=(1, 0.5))
         model.solver_name = solver_name
         runner = model.instantiate_solver(model.compute_loss).solver_run
-        runner(GLMParams(true_params[0] * 0.0, true_params[1]), X, y)
+        runner(GLMParams(true_params.coef * 0.0, true_params.intercept), X, y)
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
     def test_run_solver_tree(self, solver_name, poissonGLM_model_instantiation_pytree):
@@ -1285,7 +1296,8 @@ class TestElasticNet:
         runner = model.instantiate_solver(model.compute_loss).solver_run
         runner(
             GLMParams(
-                jax.tree_util.tree_map(jnp.zeros_like, true_params[0]), true_params[1]
+                jax.tree_util.tree_map(jnp.zeros_like, true_params.coef),
+                true_params.intercept,
             ),
             X.data,
             y,
@@ -1310,7 +1322,9 @@ class TestElasticNet:
         model.solver_kwargs = {"tol": 10**-12, "maxiter": 10000}
 
         runner = model.instantiate_solver(model.compute_loss).solver_run
-        params = runner(GLMParams(true_params[0] * 0.0, true_params[1]), X, y)[0]
+        params = runner(GLMParams(true_params.coef * 0.0, true_params.intercept), X, y)[
+            0
+        ]
 
         model.fit(X, y)
         # instantiate the glm with statsmodels
@@ -1610,7 +1624,7 @@ class TestGroupLasso:
         model.solver_name = solver_name
 
         model.instantiate_solver(model.compute_loss)
-        model.solver_run(GLMParams(true_params[0] * 0.0, true_params[1]), X, y)
+        model.solver_run(GLMParams(true_params.coef * 0.0, true_params.intercept), X, y)
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
     def test_init_solver(self, solver_name, poissonGLM_model_instantiation):
@@ -1651,7 +1665,7 @@ class TestGroupLasso:
         model.instantiate_solver(model.compute_loss)
 
         state = model.solver_init_state(
-            GLMParams(true_params[0] * 0.0, true_params[1]), X, y
+            GLMParams(true_params.coef * 0.0, true_params.intercept), X, y
         )
 
         # ProxSVRG needs the full gradient at the anchor point to be initialized
@@ -1659,14 +1673,14 @@ class TestGroupLasso:
         if solver_name == "ProxSVRG":
             state = state._replace(full_grad_at_reference_point=state.reference_point)
 
-        params, state = model.solver_update(GLMParams(*true_params), state, X, y)
+        params, state = model.solver_update(true_params, state, X, y)
         # asses that state is a NamedTuple by checking tuple type and the availability of some NamedTuple
         # specific namespace attributes
         assert isinstance(state, tuple | eqx.Module)
 
         # check params struct and shapes
         assert jax.tree_util.tree_structure(params) == jax.tree_util.tree_structure(
-            GLMParams(*true_params)
+            true_params
         )
         assert all(
             jax.tree_util.tree_leaves(params)[k].shape == p.shape
@@ -1799,7 +1813,7 @@ class TestGroupLasso:
             firing_rate,
             _,
         ) = poissonGLM_model_instantiation_group_sparse
-        zeros_true = true_params[0].flatten() == 0
+        zeros_true = true_params.coef.flatten() == 0
         mask = np.zeros((2, X.shape[1]))
         mask[0, zeros_true] = 1
         mask[1, ~zeros_true] = 1
@@ -1809,7 +1823,9 @@ class TestGroupLasso:
         model.solver_name = "ProximalGradient"
 
         runner = model.instantiate_solver(model.compute_loss).solver_run
-        params, _ = runner(GLMParams(true_params[0] * 0.0, true_params[1]), X, y)
+        params, _ = runner(
+            GLMParams(true_params.coef * 0.0, true_params.intercept), X, y
+        )
 
         zeros_est = params.coef == 0
         if not np.all(zeros_est == zeros_true):
