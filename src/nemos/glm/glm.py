@@ -843,7 +843,7 @@ class GLM(BaseRegressor[GLMParams]):
             resid_dof = tree_utils.pytree_map_and_reduce(
                 lambda x: ~jnp.isclose(x, jnp.zeros_like(x)),
                 lambda x: sum([jnp.sum(i, axis=0) for i in x]),
-                params[0],
+                params.coef,
             )
             return n_samples - resid_dof - 1
 
