@@ -4,7 +4,7 @@ import abc
 import difflib
 import warnings
 from dataclasses import dataclass
-from typing import Any, Callable, Generic, List, Optional, Tuple, TypeVar, Union
+from typing import Any, Callable, Generic, List, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -14,12 +14,7 @@ from . import utils
 from .base_class import Base
 from .pytrees import FeaturePytree
 from .tree_utils import get_valid_multitree, pytree_map_and_reduce
-from .typing import DESIGN_INPUT_TYPE
-
-# User provided init_params (e.g. for GLMs Tuple[array, array])
-UserProvidedParamsT = TypeVar("UserProvidedParamsT")
-# Model internal representation (e.g. for GLMs nemos.glm.glm.GLMParams)
-ModelParamsT = TypeVar("ModelParamsT")
+from .typing import DESIGN_INPUT_TYPE, ModelParamsT, UserProvidedParamsT
 
 
 def error_invalid_entry(*pytree: Any):
@@ -857,19 +852,22 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
         ValueError
             If all samples are invalid (contain only NaN/Inf values).
         """
-        if y is not None:
-            check_tree_leaves_dimensionality(
-                y,
-                expected_dim=self.y_dimensionality,
-                err_message=f"y must be {self.y_dimensionality}-dimensional.",
-            )
-
+        check_vals = []
         if X is not None:
             check_tree_leaves_dimensionality(
                 X,
                 expected_dim=self.X_dimensionality,
                 err_message=f"X must be {self.X_dimensionality}-dimensional.",
             )
+            check_vals.append(X)
+
+        if y is not None:
+            check_tree_leaves_dimensionality(
+                y,
+                expected_dim=self.y_dimensionality,
+                err_message=f"y must be {self.y_dimensionality}-dimensional.",
+            )
+            check_vals.append(y)
 
         if X is not None and y is not None:
             if y.shape[0] != X.shape[0]:
@@ -879,7 +877,7 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
                     f"y has {y.shape[0]} samples instead!"
                 )
         # error if all samples are invalid
-        error_all_invalid(X, y)
+        error_all_invalid(*check_vals)
 
     @abc.abstractmethod
     def validate_consistency(
