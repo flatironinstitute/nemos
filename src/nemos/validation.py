@@ -576,19 +576,15 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
     from_model_params: Callable[[ModelParamsT], UserProvidedParamsT] = None
     X_dimensionality: int = None
     y_dimensionality: int = None
-    params_validation_sequence: Tuple[str, ...] = (
-        "check_user_params_structure",
-        "convert_to_jax_arrays",
-        "check_array_dimensions",
-        "cast_to_model_params",
-        "additional_validation_model_params",
-    )
-    validation_sequence_kwargs: Tuple[Optional[dict], ...] = (
-        None,
-        None,
-        None,
-        None,
-        None,
+
+    # tuples [(meth, kwargs), (meth,), ]
+    params_validation_sequence: Tuple[
+        Tuple[str, None] | Tuple[str, dict[str, Any]], ...
+    ] = (
+        ("check_user_params_structure", None),
+        ("convert_to_jax_arrays", None),
+        ("check_array_dimensions", None),
+        ("cast_to_model_params", None),
     )
 
     @abc.abstractmethod
