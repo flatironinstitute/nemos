@@ -474,6 +474,7 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         """Run a single update step of the underlying solver."""
         pass
 
+    @cast_to_jax
     def initialize_params(
         self,
         X: DESIGN_INPUT_TYPE,
