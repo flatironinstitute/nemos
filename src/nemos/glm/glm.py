@@ -893,7 +893,7 @@ class GLM(BaseRegressor[GLMParams]):
         >>> import nemos as nmo
         >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
         >>> model = nmo.glm.GLM()
-        >>> params = model._initialize_params(X, y)
+        >>> params = model.initialize_params(X, y)
         >>> opt_state = model._initialize_solver_and_state(X, y, params)
         >>> # Now ready to run optimization or update steps
         """
