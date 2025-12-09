@@ -661,6 +661,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
 
         """
         self._validator.validate_inputs(X, y)
+        init_params = self.initialize_params(X, y, init_params)
 
         # initialize params if no params are provided
         if init_params is None:
