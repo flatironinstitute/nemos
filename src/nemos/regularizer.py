@@ -313,8 +313,10 @@ class Ridge(Regularizer):
 
         Parameters
         ----------
-        params :
-            Model parameters for which to compute the penalization.
+        sub_params :
+            Model parameter subtree for which to compute the penalization.
+        regularizer_strength :
+            The regularization strength.
 
         Returns
         -------
