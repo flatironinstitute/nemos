@@ -915,7 +915,7 @@ class GLM(BaseRegressor[GLMParams]):
     def update(
         self,
         params: GLMUserParams,
-        opt_state: NamedTuple,
+        opt_state: SolverState,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         *args,
