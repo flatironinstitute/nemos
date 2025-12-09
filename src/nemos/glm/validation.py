@@ -1,7 +1,7 @@
 """Validation classes for GLM and PopulationGLM models."""
 
 from dataclasses import dataclass
-from typing import Callable, Optional, Tuple, Union
+from typing import Any, Callable, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -9,6 +9,7 @@ import jax.numpy as jnp
 from .. import validation
 from ..tree_utils import pytree_map_and_reduce
 from ..typing import DESIGN_INPUT_TYPE, FeaturePytree
+from ..validation import RegressorValidator
 from .params import GLMParams, GLMUserParams
 
 
@@ -43,19 +44,22 @@ class GLMValidator(validation.RegressorValidator[GLMUserParams, GLMParams]):
     model_class: str = "GLM"
     X_dimensionality: int = 2
     y_dimensionality: int = 1
-    validation_sequence_kwargs: Tuple[Optional[dict], ...] = (
-        None,
-        None,
-        dict(
-            err_message_format="Invalid parameter dimensionality. coef must be an array or nemos.pytree.FeaturePytree "
-            "with array leafs of shape (n_features, ). intercept must be of shape (1,). "
-            "\nThe provided coef and intercept have shape ``{}`` and ``{}`` instead."
+    params_validation_sequence: Tuple[Tuple[str, None] | Tuple[str, dict[str, Any]]] = (
+        *RegressorValidator.params_validation_sequence[:2],
+        (
+            "check_array_dimensions",
+            dict(
+                err_message_format="Invalid parameter dimensionality. coef must be an array "
+                "or nemos.pytree.FeaturePytree with array leafs of shape "
+                "(n_features, ). intercept must be of shape (1,)."
+                "\nThe provided coef and intercept have shape ``{}`` and ``{}`` "
+                "instead."
+            ),
         ),
-        None,
-        None,
+        *RegressorValidator.params_validation_sequence[3:],
     )
 
-    def additional_validation_model_params(self, params: GLMParams, **kwargs):
+    def validate_intercept_shape(self, params: GLMParams, **kwargs):
         """
         Perform GLM-specific parameter validation.
 
@@ -118,7 +122,7 @@ class GLMValidator(validation.RegressorValidator[GLMUserParams, GLMParams]):
         """
         wrapped = self.wrap_user_params(params)
         shapes = tuple(jax.tree_util.tree_map(lambda x: x.shape, p) for p in wrapped)
-        err_msg = err_message_format.format(shapes[0], shapes[1])
+        err_msg = err_message_format.format(*shapes)
         return super().check_array_dimensions(params, err_msg=err_msg)
 
     def check_user_params_structure(
@@ -303,40 +307,20 @@ class PopulationGLMValidator(GLMValidator):
         1,
     )  # this should be (coef.ndim, intercept.ndim)
     model_class: str = "PopulationGLM"
-    validation_sequence_kwargs: Tuple[Optional[dict], ...] = (
-        None,
-        None,
-        dict(
-            err_message_format="Invalid parameter dimensionality. coef must be an array or nemos.pytree.FeaturePytree "
-            "with array leafs of shape (n_features, n_neurons). intercept must be of shape (n_neurons,). "
-            "\nThe provided coef and intercept have shape ``{}`` and ``{}`` instead."
+    params_validation_sequence = (
+        *RegressorValidator.params_validation_sequence[:2],
+        (
+            "check_array_dimensions",
+            dict(
+                err_message_format="Invalid parameter dimensionality. "
+                "coef must be an array or nemos.pytree.FeaturePytree "
+                "with array leafs of shape (n_features, n_neurons). "
+                "intercept must be of shape (n_neurons,)."
+                "\nThe provided coef and intercept have shape ``{}`` and ``{}`` instead."
+            ),
         ),
-        None,
-        None,
+        *RegressorValidator.params_validation_sequence[3:],
     )
-
-    def additional_validation_model_params(self, params: GLMParams, **kwargs):
-        """
-        Perform PopulationGLM-specific parameter validation.
-
-        For population GLMs, intercept can have any shape (n_neurons,) where n_neurons >= 1.
-        Unlike single-neuron GLM, we don't enforce shape (1,).
-
-        Parameters
-        ----------
-        params : GLMParams
-            GLM parameters with coef and intercept attributes.
-        **kwargs
-            Additional keyword arguments (unused).
-
-        Returns
-        -------
-        GLMParams
-            The validated parameters.
-        """
-        # For PopulationGLM, intercept can be any 1D array with shape (n_neurons,)
-        # No additional validation needed beyond dimensionality check
-        return params
 
     def validate_consistency(
         self,

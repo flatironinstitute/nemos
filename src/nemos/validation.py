@@ -561,8 +561,6 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
         The model class name (string, used for error messages).
     params_validation_sequence :
         Names of parameter validation methods to call in order.
-    validation_sequence_kwargs :
-        Keyword arguments for each validation method (None = no kwargs).
     """
 
     expected_param_dims: Tuple[int] = None
@@ -571,19 +569,15 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
     from_model_params: Callable[[ModelParamsT], UserProvidedParamsT] = None
     X_dimensionality: int = None
     y_dimensionality: int = None
-    params_validation_sequence: Tuple[str, ...] = (
-        "check_user_params_structure",
-        "convert_to_jax_arrays",
-        "check_array_dimensions",
-        "cast_to_model_params",
-        "additional_validation_model_params",
-    )
-    validation_sequence_kwargs: Tuple[Optional[dict], ...] = (
-        None,
-        None,
-        None,
-        None,
-        None,
+
+    # tuples [(meth, kwargs), (meth,), ]
+    params_validation_sequence: Tuple[
+        Tuple[str, None] | Tuple[str, dict[str, Any]], ...
+    ] = (
+        ("check_user_params_structure", None),
+        ("convert_to_jax_arrays", None),
+        ("check_array_dimensions", None),
+        ("cast_to_model_params", None),
     )
 
     @abc.abstractmethod
@@ -784,14 +778,9 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
             If any validation step fails.
         """
         validated_params = params
-        kwargs_sequence = [
-            kwargs if kwargs is not None else {}
-            for kwargs in self.validation_sequence_kwargs
-        ]
 
-        for method_name, method_kwargs in zip(
-            self.params_validation_sequence, kwargs_sequence
-        ):
+        for method_name, method_kwargs in self.params_validation_sequence:
+            method_kwargs = {} if method_kwargs is None else method_kwargs
             # Merge default kwargs with any user-provided kwargs
             merged_kwargs = {**method_kwargs, **validation_kwargs}
             validated_params = getattr(self, method_name)(
@@ -799,49 +788,6 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
             )
 
         return validated_params
-
-    @abc.abstractmethod
-    def additional_validation_model_params(
-        self, params: ModelParamsT, **kwargs
-    ) -> ModelParamsT:
-        """
-        Perform custom validation on model parameters.
-
-        This method is called after parameters have been cast to the model
-        parameter structure. It should implement model-specific validation
-        logic (e.g., checking shape consistency between coefficients and intercepts).
-
-        Since parameters are already in model structure, you can use attribute
-        access for readable validation logic.
-
-        Parameters
-        ----------
-        params : ModelParamsT
-            Parameters in model structure (e.g., GLMParams with .coef and .intercept).
-        **kwargs
-            Additional keyword arguments (unused in base implementation).
-
-        Returns
-        -------
-        ModelParamsT
-            The same parameters, validated for model-specific constraints.
-
-        Raises
-        ------
-        ValueError
-            If any model-specific validation check fails.
-
-        Examples
-        --------
-        >>> from nemos.glm.params import GLMParams
-        >>> def additional_validation_model_params(self, params: GLMParams, **kwargs) -> GLMParams:
-        ...     n_features = params.coef.shape[0]
-        ...     n_neurons = params.intercept.shape[0]
-        ...     if params.coef.shape != (n_features, n_neurons):
-        ...         raise ValueError("Coefficient shape mismatch")
-        ...     return params
-        """
-        return params
 
     def validate_inputs(
         self, X: Optional[DESIGN_INPUT_TYPE] = None, y: Optional[jnp.ndarray] = None
