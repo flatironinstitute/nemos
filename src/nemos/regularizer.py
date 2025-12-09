@@ -9,6 +9,7 @@ with various optimization methods, and they can be applied depending on the mode
 import abc
 from typing import Callable, Tuple, Union
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 from numpy.typing import NDArray
@@ -18,7 +19,12 @@ from nemos.third_party.jaxopt import jaxopt
 from . import tree_utils
 from .base_class import Base
 from .proximal_operator import prox_elastic_net, prox_group_lasso
-from .typing import DESIGN_INPUT_TYPE, ProximalOperator, RegularizerStrength
+from .typing import (
+    DESIGN_INPUT_TYPE,
+    ModelParamsT,
+    ProximalOperator,
+    RegularizerStrength,
+)
 from .utils import format_repr
 
 __all__ = ["UnRegularized", "Ridge", "Lasso", "GroupLasso", "ElasticNet"]
@@ -26,6 +32,83 @@ __all__ = ["UnRegularized", "Ridge", "Lasso", "GroupLasso", "ElasticNet"]
 
 def __dir__() -> list[str]:
     return __all__
+
+
+def apply_operator(func, params, *args, **kwargs):
+    """
+    Apply an operator to all regularizable subtrees of a parameter pytree.
+
+    This function iterates over all locations returned by
+    ``params.regularizable_subtrees()`` and applies ``func`` to each selected
+    subtree. The updated values are written back into ``params`` using
+    :func:`equinox.tree_at`. Typical use cases include applying proximal
+    operators or other transformations to parameter tensors while leaving
+    non-regularized fields (e.g., intercepts or structural metadata) unchanged.
+
+    Parameters
+    ----------
+    func :
+        A callable with signature ``func(x, *args, **kwargs) -> Any``.
+        It receives each regularizable subtree ``x`` and must return a value
+        with the same pytree structure that should replace that subtree.
+    params :
+        An object implementing ``regularizable_subtrees()`` which returns an
+        iterable of selector functions (suitable for ``eqx.tree_at``) that
+        identify the leaves/subtrees to be transformed.
+    *args :
+        Additional positional arguments passed directly to ``func``.
+    **kwargs :
+        Additional keyword arguments passed directly to ``func``.
+
+    Returns
+    -------
+    params_new : same type as ``params``
+        A new pytree/module with ``func`` applied to all regularizable
+        subtrees. Non-regularized fields are preserved unchanged.
+
+    Notes
+    -----
+    - ``regularizable_subtrees()`` must return a sequence of callables
+      compatible with ``eqx.tree_at``. Each callable should extract a subtree
+      from ``params``.
+    - ``func`` must be pure and JAX-compatible if this function is used inside
+      JIT-compiled code.
+
+    Examples
+    --------
+    A minimal working example with a fake ``Params`` object:
+
+    >>> import equinox as eqx
+    >>> class Params(eqx.Module):
+    ...     w: float
+    ...     b: float
+    ...
+    ...     # Only `w` is regularizable
+    ...     def regularizable_subtrees(self):
+    ...         return [lambda p: p.w]
+
+    >>> p = Params(w=3.0, b=10.0)
+
+    Define an operator that halves the value:
+
+    >>> def halve(x):
+    ...     return x / 2
+
+    Apply it only to the regularizable subtree (`w`):
+
+    >>> p2 = apply_operator(halve, p)
+    >>> p2.w
+    1.5
+    >>> p2.b
+    10.0
+
+    The bias `b` is unchanged because it is not listed in
+    `regularizable_subtrees`.
+    """
+    for where in params.regularizable_subtrees():
+        params = eqx.tree_at(where, params, func(where(params), *args, **kwargs))
+
+    return params
 
 
 class Regularizer(Base, abc.ABC):
@@ -90,14 +173,6 @@ class Regularizer(Base, abc.ABC):
     def __str__(self):
         return format_repr(self)
 
-    @abc.abstractmethod
-    def _penalization(
-        self,
-        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
-        regularizer_strength: RegularizerStrength,
-    ):
-        pass
-
     @staticmethod
     def _check_loss_output_tuple(output: tuple):
         if len(output) != 2:
@@ -123,6 +198,23 @@ class Regularizer(Base, abc.ABC):
             return result + penalty
 
         return _penalized_loss
+
+    def _penalization(
+        self, params: ModelParamsT, strength: RegularizerStrength
+    ) -> jnp.ndarray:
+        penalty = jnp.array(0.0)
+
+        for where in params.regularizable_subtrees():
+            subtree = where(params)
+            penalty = penalty + self._penalty_on_subtree(subtree, strength)
+
+        return penalty
+
+    @abc.abstractmethod
+    def _penalty_on_subtree(
+        self, sub_params, strength: RegularizerStrength
+    ) -> jnp.ndarray:
+        pass
 
     def _validate_regularizer_strength(self, strength: Union[None, float]):
         if strength is None:
@@ -178,8 +270,10 @@ class UnRegularized(Regularizer):
     def _validate_regularizer_strength(self, strength: None):
         return None
 
-    def _penalization(
-        self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], regularizer_strength: float
+    def _penalty_on_subtree(
+        self,
+        sub_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+        regularizer_strength: float,
     ):
         return 0.0
 
@@ -209,9 +303,9 @@ class Ridge(Regularizer):
     ):
         super().__init__()
 
-    def _penalization(
+    def _penalty_on_subtree(
         self,
-        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+        sub_params,
         regularizer_strength: float,
     ) -> jnp.ndarray:
         """
@@ -232,7 +326,9 @@ class Ridge(Regularizer):
             return 0.5 * regularizer_strength * jnp.sum(jnp.power(coeff, 2))
 
         # tree map the computation and sum over leaves
-        return tree_utils.pytree_map_and_reduce(lambda x: l2_penalty(x), sum, params[0])
+        return tree_utils.pytree_map_and_reduce(
+            lambda x: l2_penalty(x), sum, sub_params
+        )
 
     def get_proximal_operator(
         self,
@@ -248,8 +344,9 @@ class Ridge(Regularizer):
         """
 
         def prox_op(params, l2reg, scaling=1.0):
-            Ws, bs = params
-            return jaxopt.prox.prox_ridge(Ws, l2reg, scaling=scaling), bs
+            return apply_operator(
+                jaxopt.prox.prox_ridge, params, l2reg, scaling=scaling
+            )
 
         return prox_op
 
@@ -288,17 +385,15 @@ class Lasso(Regularizer):
         """
 
         def prox_op(params, l1reg, scaling=1.0):
-            Ws, bs = params
-            # if Ws is a pytree, l1reg needs to be a pytree with the same
-            # structure
-            l1reg = jax.tree_util.tree_map(lambda x: l1reg * jnp.ones_like(x), Ws)
-            return jaxopt.prox.prox_lasso(Ws, l1reg, scaling=scaling), bs
+            return apply_operator(
+                jaxopt.prox.prox_lasso, params, l1reg, scaling=scaling
+            )
 
         return prox_op
 
-    def _penalization(
+    def _penalty_on_subtree(
         self,
-        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+        sub_params: ModelParamsT,
         regularizer_strength: float,
     ) -> jnp.ndarray:
         """
@@ -306,7 +401,7 @@ class Lasso(Regularizer):
 
         Parameters
         ----------
-        params :
+        sub_params :
             Model parameters for which to compute the penalization.
 
         Returns
@@ -319,7 +414,9 @@ class Lasso(Regularizer):
             return regularizer_strength * jnp.sum(jnp.abs(coeff))
 
         # tree map the computation and sum over leaves
-        return tree_utils.pytree_map_and_reduce(lambda x: l1_penalty(x), sum, params[0])
+        return tree_utils.pytree_map_and_reduce(
+            lambda x: l1_penalty(x), sum, sub_params
+        )
 
 
 class ElasticNet(Regularizer):
@@ -375,23 +472,25 @@ class ElasticNet(Regularizer):
             term is not regularized.
         """
 
-        def prox_op(params, netreg, scaling=1.0):
-            Ws, bs = params
+        def tree_prox_op(params, netreg, scaling=1.0):
             # since we do not allow array regularization assume we pass a tuple
             regularizer_strength, regularizer_ratio = netreg
             lam = regularizer_strength * regularizer_ratio  # hyperparams[0]
             gam = (1 - regularizer_ratio) / regularizer_ratio  # hyperparams[1]
             # if Ws is a pytree, netreg needs to be a pytree with the same
             # structure
-            lam = jax.tree_util.tree_map(lambda x: lam * jnp.ones_like(x), Ws)
-            gam = jax.tree_util.tree_map(lambda x: gam * jnp.ones_like(x), Ws)
-            return prox_elastic_net(Ws, (lam, gam), scaling=scaling), bs
+            lam = jax.tree_util.tree_map(lambda x: lam * jnp.ones_like(x), params)
+            gam = jax.tree_util.tree_map(lambda x: gam * jnp.ones_like(x), params)
+            return prox_elastic_net(params, (lam, gam), scaling=scaling)
+
+        def prox_op(params, netreg, scaling=1.0):
+            return apply_operator(tree_prox_op, params, netreg, scaling=scaling)
 
         return prox_op
 
-    def _penalization(
+    def _penalty_on_subtree(
         self,
-        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+        sub_params,
         net_regularization: Tuple[float, float],
     ) -> jnp.ndarray:
         r"""
@@ -428,7 +527,7 @@ class ElasticNet(Regularizer):
 
         # tree map the computation and sum over leaves
         return tree_utils.pytree_map_and_reduce(
-            lambda x: net_penalty(x), sum, params[0]
+            lambda x: net_penalty(x), sum, sub_params
         )
 
     def _validate_regularizer_strength(
@@ -585,8 +684,8 @@ class GroupLasso(Regularizer):
                 f"Data type {mask.dtype} provided instead!"
             )
 
-    def _penalization(
-        self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], regularizer_strength: float
+    def _penalty_on_subtree(
+        self, sub_params, regularizer_strength: float
     ) -> jnp.ndarray:
         r"""
         Calculate the penalization.
@@ -602,7 +701,7 @@ class GroupLasso(Regularizer):
         """
         # conform to shape (1, n_features) if param is (n_features,) or (n_neurons, n_features) if
         # param is (n_features, n_neurons)
-        param_with_extra_axis = jnp.atleast_2d(params[0].T)
+        param_with_extra_axis = jnp.atleast_2d(sub_params.T)
 
         vec_prod = jax.vmap(
             lambda x: self.mask * x, in_axes=0, out_axes=2
@@ -636,8 +735,12 @@ class GroupLasso(Regularizer):
         """
 
         def prox_op(params, regularizer_strength, scaling=1.0):
-            return prox_group_lasso(
-                params, regularizer_strength, mask=self.mask, scaling=scaling
+            return apply_operator(
+                prox_group_lasso,
+                params,
+                regularizer_strength,
+                mask=self.mask,
+                scaling=scaling,
             )
 
         return prox_op
