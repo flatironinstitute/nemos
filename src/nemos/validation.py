@@ -586,11 +586,6 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
     )
 
     @abc.abstractmethod
-    def match_ndims_feature_pytree(self, params: UserProvidedParamsT):
-        """Match params tree structure."""
-        pass
-
-    @abc.abstractmethod
     def check_user_params_structure(
         self, params: UserProvidedParamsT, **kwargs
     ) -> UserProvidedParamsT:
@@ -625,6 +620,22 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
         """
         return params
 
+    @staticmethod
+    def wrap_user_params(params: UserProvidedParamsT) -> List:
+        """Wrap user provided parameters into a list.
+
+        Notes
+        -----
+        The output list should be of the same length as ``self.expected_array_dims``, one element
+        per parameter. The user parameter structure is verified by ``self.check_user_params_structure``,
+        if the structure is valid, the output list should have the expected length. May need re-implementation
+        for complex parameter logic.
+
+        """
+        if hasattr(params, "ndim"):
+            return [params]
+        return list(params)
+
     def check_array_dimensions(
         self,
         params: UserProvidedParamsT,
@@ -656,21 +667,20 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
         ValueError
             If any array has unexpected dimensionality.
         """
-        if not pytree_map_and_reduce(
-            lambda arr, expected_dim: arr.ndim == expected_dim,
-            all,
-            jax.tree_util.tree_leaves(params),
-            jax.tree_util.tree_leaves(self.match_ndims_feature_pytree(params)),
+        for par, exp_dim in zip(
+            self.wrap_user_params(params), self.expected_array_dims
         ):
-            if err_msg is None:
-                provided_dims = jax.tree_util.tree_map(lambda x: x.ndim, params)
-                provided_dims_flat = tuple(jax.tree_util.tree_leaves(provided_dims))
-                err_msg = (
-                    f"Unexpected array dimensionality for ``{self.model_class}`` parameters. "
-                    f"Expected dimensions: {self.expected_array_dims}. "
-                    f"Provided dimensions: {provided_dims_flat}"
-                )
-            raise ValueError(err_msg)
+            dim_match = pytree_map_and_reduce(lambda x: x.ndim == exp_dim, all, par)
+            if not dim_match:
+                if err_msg is None:
+                    provided_dims = jax.tree_util.tree_map(lambda x: x.ndim, params)
+                    provided_dims_flat = tuple(jax.tree_util.tree_leaves(provided_dims))
+                    err_msg = (
+                        f"Unexpected array dimensionality for ``{self.model_class}`` parameters. "
+                        f"Expected dimensions: {self.expected_array_dims}. "
+                        f"Provided dimensions: {provided_dims_flat}"
+                    )
+                raise ValueError(err_msg)
         return params
 
     @classmethod

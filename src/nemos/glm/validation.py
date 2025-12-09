@@ -51,17 +51,6 @@ class GLMValidator(validation.RegressorValidator[GLMUserParams, GLMParams]):
         None,
     )
 
-    def match_ndims_feature_pytree(self, params: GLMUserParams):
-        """Match params tree structure."""
-        if isinstance(params[0], (dict, FeaturePytree)):
-            struct = jax.tree_util.tree_structure(params[0])
-            ndims = jax.tree_util.tree_unflatten(
-                struct, [self.expected_array_dims[0]] * struct.num_leaves
-            )
-        else:
-            ndims = self.expected_array_dims[0]
-        return (ndims, self.expected_array_dims[1])
-
     def additional_validation_model_params(self, params: GLMParams, **kwargs):
         """
         Perform GLM-specific parameter validation.
