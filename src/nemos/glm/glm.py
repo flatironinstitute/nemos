@@ -411,6 +411,7 @@ class GLM(BaseRegressor[GLMParams]):
         predicted_rate = self._predict(params, X)
         return self._observation_model._negative_log_likelihood(y, predicted_rate)
 
+    @cast_to_jax
     def score(
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
