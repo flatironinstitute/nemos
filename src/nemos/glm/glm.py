@@ -916,8 +916,7 @@ class GLM(BaseRegressor[GLMParams]):
         n_samples: Optional[int] = None,
         **kwargs,
     ) -> StepResult:
-        """
-        Update the model parameters and solver state.
+        """Update the model parameters and solver state.
 
         This method performs a single optimization step using the model's current solver.
         It updates the model's coefficients and intercept based on the provided parameters, predictors (X),
@@ -927,31 +926,31 @@ class GLM(BaseRegressor[GLMParams]):
 
         Parameters
         ----------
-        params :
+        params
             The current model parameters, typically a tuple of coefficients and intercepts.
-        opt_state :
+        opt_state
             The current state of the optimizer, encapsulating information necessary for the
             optimization algorithm to continue from the current state. This includes gradients,
             step sizes, and other optimizer-specific metrics.
-        X :
+        X
             The predictors used in the model fitting process, which may include feature matrices
-            or :class:`nemos.pytrees.FeaturePytree` objects.
-        y :
-            The response variable or output data corresponding to the predictors, used in the model
-            fitting process.
+            or :class:`nemos.pytrees.FeaturePytree` objects. Shape ``(n_time_bins, n_features)``.
+        y
+            The response variable or output data corresponding to the predictors. Shape ``(n_time_bins,)``.
         *args
             Additional positional arguments to be passed to the solver's update method.
-        n_samples:
-            The tot number of samples. Usually larger than the samples of an indivisual batch,
+        n_samples
+            The total number of samples. Usually larger than the samples of an individual batch,
             the ``n_samples`` are used to estimate the scale parameter of the GLM.
         **kwargs
             Additional keyword arguments to be passed to the solver's update method.
 
         Returns
         -------
-        StepResult
-            A tuple containing the updated parameters and optimization state. This tuple is
-            typically used to continue the optimization process in subsequent steps.
+        params
+            Updated model parameters (coefficients, intercepts).
+        state
+            Updated optimizer state.
 
         Raises
         ------
@@ -964,10 +963,11 @@ class GLM(BaseRegressor[GLMParams]):
         --------
         >>> import nemos as nmo
         >>> import numpy as np
-        >>> X, y = np.random.normal(size=(10, 2)), np.random.uniform(size=10)
-        >>> glm_instance = nmo.glm.GLM().fit(X, y)
-        >>> params = glm_instance.coef_, glm_instance.intercept_
-        >>> opt_state = glm_instance.solver_state_
+        >>> import jax
+        >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
+        >>> glm_instance = nmo.glm.GLM()
+        >>> params = glm_instance.initialize_params(X, y)
+        >>> opt_state = glm_instance.initialize_solver(X, y, params)
         >>> new_params, new_opt_state = glm_instance.update(params, opt_state, X, y)
 
         """
