@@ -493,7 +493,7 @@ def _suggest_keys(
 
 
 @dataclass(frozen=True)
-class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT], abc.ABC):
+class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
     """
     Base class for validating regressor models' parameters, inputs, and consistency.
 
