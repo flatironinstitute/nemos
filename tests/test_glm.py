@@ -2566,9 +2566,9 @@ class TestPoissonGLM:
         )
         X, y = example_X_y_high_firing_rates
         if "population" in glm_class_type:
-            model._initialize_params(X, y)
+            model._model_specific_initialization(X, y)
         else:
-            model._initialize_params(X, y[:, 0])
+            model._model_specific_initialization(X, y[:, 0])
 
     @pytest.mark.parametrize("reg_setup", ["", "_pytree"])
     @pytest.mark.parametrize(
