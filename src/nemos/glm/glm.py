@@ -253,21 +253,6 @@ class GLM(BaseRegressor[GLMParams]):
         obs.check_observation_model(observation)
         self._observation_model = observation
 
-    def _check_params(
-        self,
-        params: GLMUserParams,
-        data_type: Optional[jnp.dtype] = None,
-    ) -> GLMParams:
-        """
-        Validate the dimensions and consistency of parameters and data.
-
-        This function checks the consistency of shapes and dimensions for model
-        parameters.
-        It ensures that the parameters and data are compatible for the model.
-
-        """
-        return self._validator.validate_and_cast_params(params)
-
     def _check_is_fit(self):
         """Ensure the instance has been fitted."""
         if (self.coef_ is None) or (self.intercept_ is None):

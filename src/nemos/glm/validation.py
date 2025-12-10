@@ -5,6 +5,7 @@ from typing import Any, Callable, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
+from jax.typing import DTypeLike
 
 from .. import validation
 from ..tree_utils import pytree_map_and_reduce
@@ -206,7 +207,7 @@ class GLMValidator(validation.RegressorValidator[GLMUserParams, GLMParams]):
     @staticmethod
     def validate_and_cast_feature_mask(
         feature_mask: Union[dict[str, jnp.ndarray], jnp.ndarray],
-        data_type: Optional[jnp.dtype] = None,
+        data_type: Optional[DTypeLike] = None,
     ) -> Union[dict[str, jnp.ndarray], jnp.ndarray]:
         """
         Validate and cast a feature mask to JAX arrays.
