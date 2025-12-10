@@ -228,7 +228,7 @@ def test_svrg_glm_initialize_state(
         **kwargs,
     )
 
-    init_params, state = glm.initialize_solver_and_state(X, y)
+    init_params, state = glm.initialize_params_and_solver(X, y)
 
     assert pytree_map_and_reduce(
         lambda a, b: np.array_equal(a, b),
@@ -286,7 +286,7 @@ def test_svrg_glm_update(
         **kwargs,
     )
 
-    init_params, state = glm.initialize_solver_and_state(X, y)
+    init_params, state = glm.initialize_params_and_solver(X, y)
 
     loss_gradient = jax.jit(jax.grad(glm._solver_loss_fun))
 
@@ -426,7 +426,7 @@ def test_svrg_glm_update_needs_full_grad_at_reference_point(
         ValueError,
         match=r"Full gradient at the anchor point \(state\.full_grad_at_reference_point\) has to be set",
     ):
-        params, state = glm.initialize_solver_and_state(X, y)
+        params, state = glm.initialize_params_and_solver(X, y)
         glm.update(params, state, X, y)
 
 
