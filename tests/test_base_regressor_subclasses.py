@@ -1012,7 +1012,7 @@ class TestModelValidator:
             )
         validator = VALIDATOR_REGISTRY[model_name]
         with expectation:
-            params = validator.validate_and_cast(init_params)
+            params = validator.validate_and_cast_params(init_params)
             # check that params are set
             init_state = model._initialize_solver_and_state(X, y, params)
             # optimistix solvers do not have a velocity attr

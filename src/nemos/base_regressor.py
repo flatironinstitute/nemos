@@ -442,7 +442,7 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
     ):
         """Loss function for a given model to be optimized over."""
         self._validator.validate_inputs(X, y)
-        params = self._validator.validate_and_cast(params)
+        params = self._validator.validate_and_cast_params(params)
         self._validator.validate_consistency(params, X, y)
         return self._compute_loss(params, X, y, *args, **kwargs)
 
@@ -456,7 +456,7 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         self._validator.validate_inputs(X, y)
 
         # validate input and params consistency
-        init_params = self._validator.validate_and_cast(init_params)
+        init_params = self._validator.validate_and_cast_params(init_params)
 
         # validate input and params consistency
         self._validator.validate_consistency(init_params, X=X, y=y)
@@ -541,7 +541,7 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         if init_params is None:
             init_params = self._model_specific_initialization(X, y)
         else:
-            init_params = self._validator.validate_and_cast(init_params)
+            init_params = self._validator.validate_and_cast_params(init_params)
             self._validator.validate_consistency(init_params, X=X, y=y)
         return self._validator.from_model_params(
             init_params
