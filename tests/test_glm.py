@@ -2220,7 +2220,7 @@ class TestPopulationGLM:
             (
                 np.array([0, 1, 1] * 4).reshape(4, 3),
                 pytest.raises(
-                    ValueError, match="feature_mask and X must have the same structure"
+                    ValueError, match="The shape of the ``feature_mask`` array must match that of the ``coef``"
                 ),
                 pytest.raises(
                     TypeError, match="feature_mask and X must have the same structure"
@@ -2229,7 +2229,7 @@ class TestPopulationGLM:
             (
                 np.array([0, 1, 1, 1] * 5).reshape(5, 4),
                 pytest.raises(
-                    ValueError, match="feature_mask and X must have the same structure"
+                    ValueError, match="The shape of the ``feature_mask`` array must match that of the ``coef``"
                 ),
                 pytest.raises(
                     TypeError, match="feature_mask and X must have the same structure"
@@ -2248,7 +2248,7 @@ class TestPopulationGLM:
                     TypeError, match="feature_mask and X must have the same structure"
                 ),
                 pytest.raises(
-                    ValueError, match="feature_mask and X must have the same structure"
+                    ValueError, match="Inconsistent number of neurons. feature_mask has"
                 ),
             ),
             (
