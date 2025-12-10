@@ -29,7 +29,7 @@ from .params import GLMParams, GLMUserParams
 from .validation import GLMValidator, PopulationGLMValidator
 
 
-class GLM(BaseRegressor[GLMParams]):
+class GLM(BaseRegressor[GLMUserParams, GLMParams]):
     r"""Generalized Linear Model (GLM) for neural activity data.
 
     This GLM implementation allows users to model neural activity based on a combination of exogenous inputs
@@ -1303,7 +1303,7 @@ class PopulationGLM(GLM):
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: ArrayLike,
-        init_params: Optional[Tuple[Union[dict, ArrayLike], ArrayLike]] = None,
+        init_params: Optional[GLMUserParams] = None,
     ):
         """Fit GLM to the activity of a population of neurons.
 
