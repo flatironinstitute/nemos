@@ -584,7 +584,7 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
         ("check_user_params_structure", None),
         ("convert_to_jax_arrays", None),
         ("check_array_dimensions", None),
-        ("cast_to_model_params", None),
+        ("to_model_params", None),
     )
 
     @abc.abstractmethod
