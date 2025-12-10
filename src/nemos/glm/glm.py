@@ -273,7 +273,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         It ensures that the parameters and data are compatible for the model.
 
         """
-        return self._validator.validate_and_cast(params)
+        return self._validator.validate_and_cast_params(params)
 
     def _check_is_fit(self):
         """Ensure the instance has been fitted."""
