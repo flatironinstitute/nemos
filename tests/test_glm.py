@@ -1725,8 +1725,8 @@ class TestGLMObservationModel:
                 jit_update, jit_state, Xnan, y[:batch_size]
             )
         # make sure there is an update
-        assert not jnp.allclose(params.coef, jit_update[0]) or not jnp.allclose(
-            params.intercept, jit_update[1]
+        assert not jnp.allclose(params[0], jit_update[0]) or not jnp.allclose(
+            params[1], jit_update[1]
         )
 
         # update without jitting
