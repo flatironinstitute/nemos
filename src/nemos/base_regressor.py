@@ -440,7 +440,35 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         *args,
         **kwargs,
     ):
-        """Loss function for a given model to be optimized over."""
+        """Compute the loss function for the model.
+
+        This method validates inputs and converts user-provided parameters to the internal
+        representation before computing the loss.
+
+        Parameters
+        ----------
+        params
+            Parameter tuple of (coefficients, intercept).
+        X
+            Input data, array of shape ``(n_time_bins, n_features)`` or pytree of same.
+        y
+            Target data, array of shape ``(n_time_bins,)`` for single neuron models or
+            ``(n_time_bins, n_neurons)`` for population models.
+        *args
+            Additional positional arguments passed to the model-specific loss function.
+        **kwargs
+            Additional keyword arguments passed to the model-specific loss function.
+
+        Returns
+        -------
+        loss
+            The loss value (negative log-likelihood).
+
+        Raises
+        ------
+        ValueError
+            If inputs or parameters have incompatible shapes or invalid values.
+        """
         self._validator.validate_inputs(X, y)
         params = self._validator.validate_and_cast_params(params)
         self._validator.validate_consistency(params, X, y)
@@ -480,7 +508,23 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
     ) -> UserProvidedParamsT:
-        """Initialize parameters."""
+        """Initialize model parameters.
+
+        Initialize coefficients with zeros and intercept by matching the mean firing rate.
+
+        Parameters
+        ----------
+        X
+            Input data, array of shape ``(n_time_bins, n_features)`` or pytree of same.
+        y
+            Target data, array of shape ``(n_time_bins,)`` for single neuron models or
+            ``(n_time_bins, n_neurons)`` for population models.
+
+        Returns
+        -------
+        params
+            Initial parameter tuple of (coefficients, intercept).
+        """
         init_params = self._model_specific_initialization(X, y)
         return self._validator.from_model_params(init_params)
 
@@ -536,7 +580,31 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         y: jnp.ndarray,
         init_params: UserProvidedParamsT,
     ) -> SolverState:
-        """Initialize the solver and the state of the solver for running fit and update."""
+        """Initialize the solver and its state for running fit and update.
+
+        This method must be called before using :meth:`update` for iterative optimization.
+        It sets up the solver with the provided initial parameters and data.
+
+        Parameters
+        ----------
+        X
+            Input data, array of shape ``(n_time_bins, n_features)`` or pytree of same.
+        y
+            Target data, array of shape ``(n_time_bins,)`` for single neuron models or
+            ``(n_time_bins, n_neurons)`` for population models.
+        init_params
+            Initial parameter tuple of (coefficients, intercept).
+
+        Returns
+        -------
+        state
+            Initial solver state.
+
+        Raises
+        ------
+        ValueError
+            If inputs or parameters have incompatible shapes or invalid values.
+        """
         self._validator.validate_inputs(X, y)
         init_params = self._validator.validate_and_cast_params(init_params)
         self._validator.validate_consistency(init_params, X=X, y=y)
