@@ -577,7 +577,7 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
         ("check_user_params_structure", None),
         ("convert_to_jax_arrays", None),
         ("check_array_dimensions", None),
-        ("cast_to_model_params", None),
+        ("to_model_params", None),
     )
 
     @abc.abstractmethod
@@ -721,34 +721,6 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
         return convert_tree_leaves_to_jax_array(
             params, err_message=err_msg, data_type=data_type
         )
-
-    def cast_to_model_params(
-        self,
-        params: UserProvidedParamsT,
-        **kwargs,
-    ) -> ModelParamsT:
-        """
-        Transform validated user parameters into model parameter structure.
-
-        Uses the `to_model_params` function to convert validated parameter arrays
-        into the target model parameter object (e.g., GLMParams).
-
-        This method assumes parameters have already been validated for structure
-        and dimensionality, so it should not fail.
-
-        Parameters
-        ----------
-        params : UserProvidedParamsT
-            Validated user parameters as JAX arrays.
-        **kwargs
-            Additional keyword arguments (unused in base implementation).
-
-        Returns
-        -------
-        ModelParamsT
-            Parameters in model parameter structure.
-        """
-        return self.to_model_params(params)
 
     def validate_and_cast(
         self, params: UserProvidedParamsT, **validation_kwargs
