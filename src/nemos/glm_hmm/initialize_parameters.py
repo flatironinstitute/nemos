@@ -48,7 +48,7 @@ def random_glm_params_init(
 
 def sticky_transition_proba_init(
     n_states: int,
-    random_key: jax.ndarray = jax.random.PRNGKey(123),
+    random_key: jax.numpy.ndarray = jax.random.PRNGKey(123),
     prob_stay=0.95,
 ):
     """
