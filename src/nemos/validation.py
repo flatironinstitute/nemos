@@ -849,5 +849,5 @@ class RegressorValidator(Base, Generic[UserProvidedParamsT, ModelParamsT]):
     def __repr__(self):
         """Small repr for the validator class."""
         return utils.format_repr(
-            self, multiline=True, use_name_keys=["to_model_params"]
+            self, multiline=True, use_name_keys=["to_model_params", "from_model_params"]
         )
