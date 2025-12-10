@@ -138,7 +138,7 @@ This gets you the initial parameters and the first state of the solver.
 
 ```{code-cell} ipython3
 params = glm.initialize_params(*batcher())
-state = glm.initialize_state(*batcher(), params)
+state = glm.initialize_solver(*batcher(), params)
 ```
 
 ## Batch learning

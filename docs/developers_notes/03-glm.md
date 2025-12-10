@@ -54,7 +54,7 @@ Additionally, the [`GLM`](nemos.glm.GLM) class inherits the attributes of `BaseR
 - [`simulate`](nemos.glm.GLM.simulate): Simulates spike trains using the GLM as a feedforward network, invoking the `observation_models.sample_generator` method for emission probability.
 - [`compute_loss`](nemos.glm.GLM.compute_loss): Computes the loss function for given user-provided parameters, `X`, and `y`. This method validates inputs and parameters, converts user parameters to the internal representation, and delegates to `_compute_loss`.
 - [`initialize_params`](nemos.glm.GLM.initialize_params): Initialize model parameters, setting to zero the coefficients, and setting the intercept by matching the firing rate.
-- [`initialize_state`](nemos.glm.GLM.initialize_state): Initialize the state of the solver.
+- [`initialize_solver`](nemos.glm.GLM.initialize_solver): Initialize the solver and its state. Takes initial parameters and returns the solver state.
 - [`update`](nemos.glm.GLM.update): Run a step of optimization and update the parameter and solver step.
 
 ### Private Methods
