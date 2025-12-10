@@ -7,11 +7,21 @@ from nemos.proximal_operator import _vmap_norm2_masked_2, prox_group_lasso, prox
 @pytest.mark.parametrize(
     "prox_operator,input_data,expected_type",
     [
-        (prox_lasso, lambda d: (d[0], d[1], d[3]), tuple),  # (params, regularizer_strength, scaling)
-        (prox_group_lasso, lambda d: (d[0][0], d[1], d[2], d[3]), jnp.ndarray),  # (weights, regularizer_strength, mask, scaling)
+        (
+            prox_lasso,
+            lambda d: (d[0], d[1], d[3]),
+            tuple,
+        ),  # (params, regularizer_strength, scaling)
+        (
+            prox_group_lasso,
+            lambda d: (d[0][0], d[1], d[2], d[3]),
+            jnp.ndarray,
+        ),  # (weights, regularizer_strength, mask, scaling)
     ],
 )
-def test_prox_operator_returns_correct_type(prox_operator, input_data, expected_type, example_data_prox_operator):
+def test_prox_operator_returns_correct_type(
+    prox_operator, input_data, expected_type, example_data_prox_operator
+):
     """Test whether the proximal operator returns the correct type."""
     args = input_data(example_data_prox_operator)
     result = prox_operator(*args)
@@ -21,8 +31,16 @@ def test_prox_operator_returns_correct_type(prox_operator, input_data, expected_
 @pytest.mark.parametrize(
     "prox_operator,input_data,expected_type",
     [
-        (prox_lasso, lambda d: (d[0], d[1], d[3]), tuple),  # (params, regularizer_strength, scaling)
-        (prox_group_lasso, lambda d: (d[0][0], d[1], d[2], d[3]), jnp.ndarray),  # (weights, regularizer_strength, mask, scaling)
+        (
+            prox_lasso,
+            lambda d: (d[0], d[1], d[3]),
+            tuple,
+        ),  # (params, regularizer_strength, scaling)
+        (
+            prox_group_lasso,
+            lambda d: (d[0][0], d[1], d[2], d[3]),
+            jnp.ndarray,
+        ),  # (weights, regularizer_strength, mask, scaling)
     ],
 )
 def test_prox_operator_returns_correct_type_multineuron(
@@ -51,11 +69,21 @@ def test_prox_lasso_tuple_length_multineuron(example_data_prox_operator_multineu
 @pytest.mark.parametrize(
     "prox_operator,input_data,shape_getter",
     [
-        (prox_lasso, lambda d: (d[0], d[1], d[3]), lambda result, d: (result[0].shape, d[0][0].shape)),  # (params, regularizer_strength, scaling)
-        (prox_group_lasso, lambda d: (d[0][0], d[1], d[2], d[3]), lambda result, d: (result.shape, d[0][0].shape)),  # (weights, regularizer_strength, mask, scaling)
+        (
+            prox_lasso,
+            lambda d: (d[0], d[1], d[3]),
+            lambda result, d: (result[0].shape, d[0][0].shape),
+        ),  # (params, regularizer_strength, scaling)
+        (
+            prox_group_lasso,
+            lambda d: (d[0][0], d[1], d[2], d[3]),
+            lambda result, d: (result.shape, d[0][0].shape),
+        ),  # (weights, regularizer_strength, mask, scaling)
     ],
 )
-def test_prox_operator_weights_shape(prox_operator, input_data, shape_getter, example_data_prox_operator):
+def test_prox_operator_weights_shape(
+    prox_operator, input_data, shape_getter, example_data_prox_operator
+):
     """Test whether the shape of the weights in the proximal operator is correct."""
     args = input_data(example_data_prox_operator)
     result = prox_operator(*args)
@@ -66,8 +94,16 @@ def test_prox_operator_weights_shape(prox_operator, input_data, shape_getter, ex
 @pytest.mark.parametrize(
     "prox_operator,input_data,shape_getter",
     [
-        (prox_lasso, lambda d: (d[0], d[1], d[3]), lambda result, d: (result[0].shape, d[0][0].shape)),  # (params, regularizer_strength, scaling)
-        (prox_group_lasso, lambda d: (d[0][0], d[1], d[2], d[3]), lambda result, d: (result.shape, d[0][0].shape)),  # (weights, regularizer_strength, mask, scaling)
+        (
+            prox_lasso,
+            lambda d: (d[0], d[1], d[3]),
+            lambda result, d: (result[0].shape, d[0][0].shape),
+        ),  # (params, regularizer_strength, scaling)
+        (
+            prox_group_lasso,
+            lambda d: (d[0][0], d[1], d[2], d[3]),
+            lambda result, d: (result.shape, d[0][0].shape),
+        ),  # (weights, regularizer_strength, mask, scaling)
     ],
 )
 def test_prox_operator_weights_shape_multineuron(
@@ -76,7 +112,9 @@ def test_prox_operator_weights_shape_multineuron(
     """Test whether the shape of the weights in the proximal operator is correct."""
     args = input_data(example_data_prox_operator_multineuron)
     result = prox_operator(*args)
-    result_shape, expected_shape = shape_getter(result, example_data_prox_operator_multineuron)
+    result_shape, expected_shape = shape_getter(
+        result, example_data_prox_operator_multineuron
+    )
     assert result_shape == expected_shape
 
 
@@ -87,7 +125,9 @@ def test_prox_lasso_intercepts_shape(example_data_prox_operator):
     assert params_new[1].shape == params[1].shape
 
 
-def test_prox_lasso_intercepts_shape_multineuron(example_data_prox_operator_multineuron):
+def test_prox_lasso_intercepts_shape_multineuron(
+    example_data_prox_operator_multineuron,
+):
     """Test whether the shape of the intercepts returned by prox_lasso is correct."""
     params, regularizer_strength, _, scaling = example_data_prox_operator_multineuron
     params_new = prox_lasso(params, regularizer_strength, scaling)
