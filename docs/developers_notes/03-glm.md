@@ -31,8 +31,9 @@ The [`GLM`](nemos.glm.GLM) class provides a direct implementation of the GLM mod
 
 ### Inheritance
 
-[`GLM`](nemos.glm.GLM) inherits from [`BaseRegressor`](02-base_regressor.md). This inheritance mandates the direct implementation of methods like [`predict`](nemos.glm.GLM.predict), [`fit`](nemos.glm.GLM.fit), [`score`](nemos.glm.GLM.score), [`update`](nemos.glm.GLM.update), and [`simulate`(nemos.glm.GLM.[`GLM`](nemos.glm.GLM) inherits from [`BaseRegressor`](02-base_regressor.md). This inheritance mandates the direct implementation of methods like [`predict`](nemos.glm.GLM.predict), [`fit`](nemos.glm.GLM.fit), [`score`](nemos.glm.GLM.score), [`update`](nemos.glm.GLM.update), and [`simulate`](nemos.glm.GLM.simulate), plus a number of validation methods.
-), plus a number of validation methods.
+[`GLM`](nemos.glm.GLM) inherits from [`BaseRegressor`](02-base_regressor.md). This inheritance mandates the direct implementation of methods like [`predict`](nemos.glm.GLM.predict), [`fit`](nemos.glm.GLM.fit), [`score`](nemos.glm.GLM.score), [`update`](nemos.glm.GLM.update), and [`simulate`](nemos.glm.GLM.simulate).
+
+Parameter validation is delegated to the `GLMValidator` class, which handles conversion between user-provided parameters (tuples of coefficient and intercept arrays) and the internal `GLMParams` representation.
 
 ### Attributes
 
@@ -51,18 +52,42 @@ Additionally, the [`GLM`](nemos.glm.GLM) class inherits the attributes of `BaseR
 - [`score`](nemos.glm.GLM.score): Validates input and assesses the Poisson GLM using either log-likelihood or pseudo-$R^2$. This method uses the `observation_models` to determine log-likelihood or pseudo-$R^2$.
 - [`fit`](nemos.glm.GLM.fit): Validates input and aligns the Poisson GLM with spike train data. It leverages the `observation_models` and `regularizer` to define the model's loss function and instantiate the regularizer.
 - [`simulate`](nemos.glm.GLM.simulate): Simulates spike trains using the GLM as a feedforward network, invoking the `observation_models.sample_generator` method for emission probability.
+- [`compute_loss`](nemos.glm.GLM.compute_loss): Computes the loss function for given user-provided parameters, `X`, and `y`. This method validates inputs and parameters, converts user parameters to the internal representation, and delegates to `_compute_loss`.
 - [`initialize_params`](nemos.glm.GLM.initialize_params): Initialize model parameters, setting to zero the coefficients, and setting the intercept by matching the firing rate.
 - [`initialize_state`](nemos.glm.GLM.initialize_state): Initialize the state of the solver.
 - [`update`](nemos.glm.GLM.update): Run a step of optimization and update the parameter and solver step.
 
 ### Private Methods
 
-Here we list the private method related to the model computations:
+Here we list the private methods related to model computations:
 
 - **`_predict`**: Forecasts rates based on current model parameters and the inverse-link function of the `observation_models`.
-- **`compute_loss`**: Predicts the rate and calculates the mean Poisson negative log-likelihood, excluding normalization constants.
+- **`_compute_loss`**: Predicts the rate and calculates the negative log-likelihood based on the observation model, excluding normalization constants. Operates on `GLMParams` internally.
+- **`_get_model_params`**: Packs `coef_` and `intercept_` attributes into a `GLMParams` container.
+- **`_set_model_params`**: Unpacks a `GLMParams` container and stores coefficients in `coef_` and `intercept_` attributes.
 
-A number of [`GLM`](nemos.glm.GLM) specific private methods are used for checking parameters and inputs, while the methods related for checking the solver-regularizer configurations/instantiation are inherited from `BaseRergessor`.
+Parameter and input validation is handled by the `GLMValidator`, while solver-regularizer configuration methods are inherited from `BaseRegressor`.
+
+## Internal Parameter Representation
+
+The GLM class uses `GLMParams`, an `equinox.Module` container, to represent parameters internally:
+
+```python
+class GLMParams(eqx.Module):
+    coef: jnp.ndarray | dict
+    intercept: jnp.ndarray
+
+    @staticmethod
+    def regularizable_subtrees():
+        return [lambda p: p.coef]
+```
+
+This internal representation:
+- Provides clear, self-documenting field names (`coef`, `intercept`)
+- Specifies which parameters are regularizable via the `regularizable_subtrees()` method
+- Is transparent to users—they continue to provide parameters as `(coef, intercept)` tuples
+
+The `GLMValidator` handles conversion between user-facing tuples and internal `GLMParams` automatically.
 
 
 ## The Concrete Class `PopulationGLM`
