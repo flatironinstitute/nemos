@@ -530,22 +530,19 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         pass
 
     @cast_to_jax
-    def initialize_params_and_solver(
+    def initialize_solver(
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
-        init_params: Optional[UserProvidedParamsT] = None,
-    ) -> Tuple[UserProvidedParamsT, SolverState]:
+        init_params: UserProvidedParamsT,
+    ) -> SolverState:
         """Initialize the solver and the state of the solver for running fit and update."""
         self._validator.validate_inputs(X, y)
-        if init_params is None:
-            init_params = self._model_specific_initialization(X, y)
-        else:
-            init_params = self._validator.validate_and_cast_params(init_params)
-            self._validator.validate_consistency(init_params, X=X, y=y)
-        return self._validator.from_model_params(
-            init_params
-        ), self._initialize_solver_and_state(X, y, init_params)
+        init_params = self._validator.validate_and_cast_params(init_params)
+        self._validator.validate_consistency(init_params, X=X, y=y)
+        return self._initialize_solver_and_state(
+            *tree_utils.drop_nans(X, y), init_params
+        )
 
     def _optimize_solver_params(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray) -> dict:
         """
