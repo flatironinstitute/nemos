@@ -281,7 +281,7 @@ class MockRegressor(nmo.base_regressor.BaseRegressor):
     def update(self, *args, **kwargs):
         pass
 
-    def initialize_solver_and_state(self, *args, **kwargs):
+    def _initialize_solver_and_state(self, *args, **kwargs):
         pass
 
     def initialize_params(self, *args, **kwargs):
@@ -290,13 +290,16 @@ class MockRegressor(nmo.base_regressor.BaseRegressor):
     def _initialize_parameters(self, *args, **kwargs):
         pass
 
-    def compute_loss(self, params, X, y):
+    def _compute_loss(self, params, X, y):
         pass
 
     def _get_optimal_solver_params_config(self):
         return None, None, None
 
     def save_params(self, *args):
+        pass
+
+    def _model_specific_initialization(self, *args, **kwargs):
         pass
 
 
