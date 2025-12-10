@@ -266,7 +266,7 @@ class GLM(BaseRegressor[GLMParams]):
         It ensures that the parameters and data are compatible for the model.
 
         """
-        return self._validator.validate_and_cast(params)
+        return self._validator.validate_and_cast_params(params)
 
     def _check_is_fit(self):
         """Ensure the instance has been fitted."""
@@ -660,7 +660,7 @@ class GLM(BaseRegressor[GLMParams]):
         if init_params is None:
             init_params = self._model_specific_initialization(X, y)
         else:
-            init_params = self._validator.validate_and_cast(init_params)
+            init_params = self._validator.validate_and_cast_params(init_params)
             self._validator.validate_consistency(init_params, X=X, y=y)
 
         self._validator.feature_mask_consistency(
