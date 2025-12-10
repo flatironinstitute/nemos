@@ -530,7 +530,7 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         pass
 
     @cast_to_jax
-    def initialize_solver_and_state(
+    def initialize_params_and_solver(
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
