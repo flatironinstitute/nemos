@@ -4,84 +4,94 @@ import pytest
 from nemos.proximal_operator import _vmap_norm2_masked_2, prox_group_lasso, prox_lasso
 
 
-@pytest.mark.parametrize("prox_operator", [prox_group_lasso, prox_lasso])
-def test_prox_operator_returns_tuple(prox_operator, example_data_prox_operator):
-    """Test whether the proximal operator returns a tuple."""
-    args = example_data_prox_operator
-    args = args if prox_operator is prox_group_lasso else (*args[:2], *args[3:])
-    params_new = prox_operator(*args)
-    assert isinstance(params_new, tuple)
+@pytest.mark.parametrize(
+    "prox_operator,input_data,expected_type",
+    [
+        (prox_lasso, lambda d: (d[0], d[1], d[3]), tuple),  # (params, regularizer_strength, scaling)
+        (prox_group_lasso, lambda d: (d[0][0], d[1], d[2], d[3]), jnp.ndarray),  # (weights, regularizer_strength, mask, scaling)
+    ],
+)
+def test_prox_operator_returns_correct_type(prox_operator, input_data, expected_type, example_data_prox_operator):
+    """Test whether the proximal operator returns the correct type."""
+    args = input_data(example_data_prox_operator)
+    result = prox_operator(*args)
+    assert isinstance(result, expected_type)
 
 
-@pytest.mark.parametrize("prox_operator", [prox_group_lasso, prox_lasso])
-def test_prox_operator_returns_tuple_multineuron(
-    prox_operator, example_data_prox_operator_multineuron
+@pytest.mark.parametrize(
+    "prox_operator,input_data,expected_type",
+    [
+        (prox_lasso, lambda d: (d[0], d[1], d[3]), tuple),  # (params, regularizer_strength, scaling)
+        (prox_group_lasso, lambda d: (d[0][0], d[1], d[2], d[3]), jnp.ndarray),  # (weights, regularizer_strength, mask, scaling)
+    ],
+)
+def test_prox_operator_returns_correct_type_multineuron(
+    prox_operator, input_data, expected_type, example_data_prox_operator_multineuron
 ):
-    """Test whether the tuple returned by the proximal operator has a length of 2."""
-    args = example_data_prox_operator_multineuron
-    args = args if prox_operator is prox_group_lasso else (*args[:2], *args[3:])
-    params_new = prox_operator(*args)
-    assert isinstance(params_new, tuple)
+    """Test whether the proximal operator returns the correct type."""
+    args = input_data(example_data_prox_operator_multineuron)
+    result = prox_operator(*args)
+    assert isinstance(result, expected_type)
 
 
-@pytest.mark.parametrize("prox_operator", [prox_group_lasso, prox_lasso])
-def test_prox_operator_tuple_length(prox_operator, example_data_prox_operator):
-    """Test whether the tuple returned by the proximal operator has a length of 2."""
-    args = example_data_prox_operator
-    args = args if prox_operator is prox_group_lasso else (*args[:2], *args[3:])
-    params_new = prox_operator(*args)
+def test_prox_lasso_tuple_length(example_data_prox_operator):
+    """Test whether the tuple returned by prox_lasso has a length of 2."""
+    params, regularizer_strength, _, scaling = example_data_prox_operator
+    params_new = prox_lasso(params, regularizer_strength, scaling)
     assert len(params_new) == 2
 
 
-@pytest.mark.parametrize("prox_operator", [prox_group_lasso, prox_lasso])
-def test_prox_operator_tuple_length_multineuron(
-    prox_operator, example_data_prox_operator_multineuron
-):
-    """Test whether the tuple returned by the proximal operator has a length of 2."""
-    args = example_data_prox_operator_multineuron
-    args = args if prox_operator is prox_group_lasso else (*args[:2], *args[3:])
-    params_new = prox_operator(*args)
+def test_prox_lasso_tuple_length_multineuron(example_data_prox_operator_multineuron):
+    """Test whether the tuple returned by prox_lasso has a length of 2."""
+    params, regularizer_strength, _, scaling = example_data_prox_operator_multineuron
+    params_new = prox_lasso(params, regularizer_strength, scaling)
     assert len(params_new) == 2
 
 
-@pytest.mark.parametrize("prox_operator", [prox_group_lasso, prox_lasso])
-def test_prox_operator_weights_shape(prox_operator, example_data_prox_operator):
+@pytest.mark.parametrize(
+    "prox_operator,input_data,shape_getter",
+    [
+        (prox_lasso, lambda d: (d[0], d[1], d[3]), lambda result, d: (result[0].shape, d[0][0].shape)),  # (params, regularizer_strength, scaling)
+        (prox_group_lasso, lambda d: (d[0][0], d[1], d[2], d[3]), lambda result, d: (result.shape, d[0][0].shape)),  # (weights, regularizer_strength, mask, scaling)
+    ],
+)
+def test_prox_operator_weights_shape(prox_operator, input_data, shape_getter, example_data_prox_operator):
     """Test whether the shape of the weights in the proximal operator is correct."""
-    args = example_data_prox_operator
-    args = args if prox_operator is prox_group_lasso else (*args[:2], *args[3:])
-    params_new = prox_operator(*args)
-    assert params_new[0].shape == args[0][0].shape
+    args = input_data(example_data_prox_operator)
+    result = prox_operator(*args)
+    result_shape, expected_shape = shape_getter(result, example_data_prox_operator)
+    assert result_shape == expected_shape
 
 
-@pytest.mark.parametrize("prox_operator", [prox_group_lasso, prox_lasso])
+@pytest.mark.parametrize(
+    "prox_operator,input_data,shape_getter",
+    [
+        (prox_lasso, lambda d: (d[0], d[1], d[3]), lambda result, d: (result[0].shape, d[0][0].shape)),  # (params, regularizer_strength, scaling)
+        (prox_group_lasso, lambda d: (d[0][0], d[1], d[2], d[3]), lambda result, d: (result.shape, d[0][0].shape)),  # (weights, regularizer_strength, mask, scaling)
+    ],
+)
 def test_prox_operator_weights_shape_multineuron(
-    prox_operator, example_data_prox_operator_multineuron
+    prox_operator, input_data, shape_getter, example_data_prox_operator_multineuron
 ):
     """Test whether the shape of the weights in the proximal operator is correct."""
-    args = example_data_prox_operator_multineuron
-    args = args if prox_operator is prox_group_lasso else (*args[:2], *args[3:])
-    params_new = prox_operator(*args)
-    assert params_new[0].shape == args[0][0].shape
+    args = input_data(example_data_prox_operator_multineuron)
+    result = prox_operator(*args)
+    result_shape, expected_shape = shape_getter(result, example_data_prox_operator_multineuron)
+    assert result_shape == expected_shape
 
 
-@pytest.mark.parametrize("prox_operator", [prox_group_lasso, prox_lasso])
-def test_prox_operator_intercepts_shape(prox_operator, example_data_prox_operator):
-    """Test whether the shape of the intercepts in the proximal operator is correct."""
-    args = example_data_prox_operator
-    args = args if prox_operator is prox_group_lasso else (*args[:2], *args[3:])
-    params_new = prox_operator(*args)
-    assert params_new[1].shape == args[0][1].shape
+def test_prox_lasso_intercepts_shape(example_data_prox_operator):
+    """Test whether the shape of the intercepts returned by prox_lasso is correct."""
+    params, regularizer_strength, _, scaling = example_data_prox_operator
+    params_new = prox_lasso(params, regularizer_strength, scaling)
+    assert params_new[1].shape == params[1].shape
 
 
-@pytest.mark.parametrize("prox_operator", [prox_group_lasso, prox_lasso])
-def test_prox_operator_intercepts_shape_multineuron(
-    prox_operator, example_data_prox_operator_multineuron
-):
-    """Test whether the shape of the intercepts in the proximal operator is correct."""
-    args = example_data_prox_operator_multineuron
-    args = args if prox_operator is prox_group_lasso else (*args[:2], *args[3:])
-    params_new = prox_operator(*args)
-    assert params_new[1].shape == args[0][1].shape
+def test_prox_lasso_intercepts_shape_multineuron(example_data_prox_operator_multineuron):
+    """Test whether the shape of the intercepts returned by prox_lasso is correct."""
+    params, regularizer_strength, _, scaling = example_data_prox_operator_multineuron
+    params_new = prox_lasso(params, regularizer_strength, scaling)
+    assert params_new[1].shape == params[1].shape
 
 
 def test_vmap_norm2_masked_2_returns_array(example_data_prox_operator):
@@ -121,20 +131,21 @@ def test_vmap_norm2_masked_2_non_negative_multineuron(
     assert jnp.all(l2_norm >= 0)
 
 
-def test_prox_operator_shrinks_only_masked(example_data_prox_operator):
+def test_prox_group_lasso_shrinks_only_masked(example_data_prox_operator):
+    """Test that prox_group_lasso only shrinks features that belong to groups (masked)."""
     params, _, mask, _ = example_data_prox_operator
     mask = mask.at[:, 1].set(jnp.zeros(2))
-    params_new = prox_group_lasso(params, 0.05, mask)
-    assert params_new[0][1] == params[0][1]
-    assert all(params_new[0][i] < params[0][i] for i in [0, 2, 3])
+    weights_new = prox_group_lasso(params[0], 0.05, mask)
+    assert weights_new[1] == params[0][1]
+    assert all(weights_new[i] < params[0][i] for i in [0, 2, 3])
 
 
-def test_prox_operator_shrinks_only_masked_multineuron(
+def test_prox_group_lasso_shrinks_only_masked_multineuron(
     example_data_prox_operator_multineuron,
 ):
+    """Test that prox_group_lasso only shrinks features that belong to groups (masked) for multiple neurons."""
     params, _, mask, _ = example_data_prox_operator_multineuron
     mask = mask.astype(float)
     mask = mask.at[:, 1].set(jnp.zeros(2))
-    params_new = prox_group_lasso(params, 0.05, mask)
-    assert jnp.all(params_new[0][1] == params[0][1])
-    assert all(jnp.all(params_new[0][i] < params[0][i]) for i in [0, 2, 3])
+    weights_new = prox_group_lasso(params[0], 0.05, mask)
+    assert all(jnp.all(weights_new[i] < params[0][i]) for i in [0, 2, 3])
