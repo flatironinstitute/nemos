@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 import nemos as nmo
+from nemos.glm.params import GLMParams
 from nemos.solvers._svrg import SVRG, ProxSVRG, SVRGState
 from nemos.third_party.jaxopt import jaxopt
 from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
@@ -227,10 +228,14 @@ def test_svrg_glm_initialize_state(
         **kwargs,
     )
 
-    init_params = glm._initialize_params(X, y)
-    state = glm._initialize_solver_and_state(X, y, init_params)
+    init_params, state = glm.initialize_solver_and_state(X, y)
 
-    assert state.reference_point == init_params
+    assert pytree_map_and_reduce(
+        lambda a, b: np.array_equal(a, b),
+        all,
+        state.reference_point,
+        GLMParams(*init_params)
+    )
 
     for f in (glm._solver_init_state, glm._solver_update, glm._solver_run):
         assert isinstance(f.__self__._solver, solver_class)
@@ -281,17 +286,16 @@ def test_svrg_glm_update(
         **kwargs,
     )
 
-    init_params = glm._initialize_params(X, y)
-    state = glm._initialize_solver_and_state(X, y, init_params)
+    init_params, state = glm.initialize_solver_and_state(X, y)
 
     loss_gradient = jax.jit(jax.grad(glm._solver_loss_fun))
 
     # initialize full gradient at the anchor point
     state = state._replace(
-        full_grad_at_reference_point=loss_gradient(init_params, X, y),
+        full_grad_at_reference_point=loss_gradient(glm._validator.to_model_params(init_params), X, y),
     )
 
-    params, state = glm.update((init_params.coef, init_params.intercept), state, X, y)
+    params, state = glm.update(init_params, state, X, y)
 
     assert state.iter_num == 1
 
@@ -422,9 +426,8 @@ def test_svrg_glm_update_needs_full_grad_at_reference_point(
         ValueError,
         match=r"Full gradient at the anchor point \(state\.full_grad_at_reference_point\) has to be set",
     ):
-        params = glm._initialize_params(X, y)
-        state = glm._initialize_solver_and_state(X, y, params)
-        glm.update((params.coef, params.intercept), state, X, y)
+        params, state = glm.initialize_solver_and_state(X, y)
+        glm.update(params, state, X, y)
 
 
 @pytest.mark.parametrize(
