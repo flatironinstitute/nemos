@@ -12,11 +12,9 @@ from pathlib import Path
 from typing import (
     Any,
     Generic,
-    NamedTuple,
     Optional,
     Tuple,
     Type,
-    TypeVar,
     Union,
 )
 
@@ -46,8 +44,6 @@ from .utils import _flatten_dict, _get_name, _unpack_params, get_env_metadata
 from .validation import RegressorValidator
 
 _SOLVER_ARGS_CACHE = {}
-
-ParamsT = TypeVar("ParamsT")
 
 
 def strip_metadata(arg_num: Optional[int] = None, kwarg_key: Optional[str] = None):
