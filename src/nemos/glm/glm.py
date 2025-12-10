@@ -967,7 +967,7 @@ class GLM(BaseRegressor[GLMParams]):
         >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
         >>> glm_instance = nmo.glm.GLM()
         >>> params = glm_instance.initialize_params(X, y)
-        >>> opt_state = glm_instance.initialize_solver(X, y, params)
+        >>> opt_state = glm_instance.initialize_solver_and_state(X, y, params)
         >>> new_params, new_opt_state = glm_instance.update(params, opt_state, X, y)
 
         """
