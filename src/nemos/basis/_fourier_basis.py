@@ -351,7 +351,9 @@ class FourierBasis(AtomicBasisMixin, Basis):
         self._n_input_dimensionality = self._check_ndim(ndim)
         self.frequencies = frequencies
         self.frequency_mask = frequency_mask
-
+        Basis.__init__(
+            self,
+        )
         AtomicBasisMixin.__init__(
             self,
             n_basis_funcs=self.n_basis_funcs,
