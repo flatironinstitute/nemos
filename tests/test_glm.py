@@ -1629,7 +1629,8 @@ class TestGLMObservationModel:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
-        params, state = model.initialize_params_and_solver(X, y)
+        params = model.initialize_params(X, y)
+        state = model.initialize_solver(X, y, params)
         with expectation:
             model.update(
                 params,
@@ -1647,7 +1648,8 @@ class TestGLMObservationModel:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
-        params, state = model.initialize_params_and_solver(X, y)
+        params = model.initialize_params(X, y)
+        state = model.initialize_solver(X, y, params)
         assert model.coef_ is None
         assert model.intercept_ is None
         if "gamma" not in model_instantiation:
@@ -1681,8 +1683,8 @@ class TestGLMObservationModel:
         if nan_inputs:
             X[: X.shape[0] // 2, :] = np.nan
 
-        params, state = model.initialize_params_and_solver(*drop_nans(X, y))
-
+        params = model.initialize_params(X, y)
+        state = model.initialize_solver(X, y, params)
         assert model.coef_ is None
         assert model.intercept_ is None
         if "gamma" not in model_instantiation:
@@ -1711,7 +1713,8 @@ class TestGLMObservationModel:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
-        params, state = model.initialize_params_and_solver(X, y)
+        params = model.initialize_params(X, y)
+        state = model.initialize_solver(X, y, params)
         # extract batch and add nans
         Xnan = X[:batch_size]
         Xnan[: batch_size // 2] = np.nan
@@ -1889,7 +1892,8 @@ class TestGLMObservationModel:
         )
         glm2.fit(X, y)
 
-        params, state = glm.initialize_params_and_solver(X, y)
+        params = glm.initialize_params(X, y)
+        state = glm.initialize_solver(X, y, params)
 
         # NOTE these two are not the same because for example Ridge augments the loss
         # loss_grad = jax.jit(jax.grad(glm.compute_loss))
