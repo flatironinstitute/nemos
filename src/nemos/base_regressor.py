@@ -71,7 +71,7 @@ def strip_metadata(arg_num: Optional[int] = None, kwarg_key: Optional[str] = Non
     return decorator
 
 
-class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
+class BaseRegressor(abc.ABC, Base, Generic[ParamsT]):
     """Abstract base class for GLM regression models.
 
     This class encapsulates the common functionality for Generalized Linear Models (GLM)
