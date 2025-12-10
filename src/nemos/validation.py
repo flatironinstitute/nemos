@@ -681,7 +681,7 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
     def convert_to_jax_arrays(
         self,
         params: UserProvidedParamsT,
-        data_type: Optional[jax.dtypes] = None,
+        data_type: Optional[DTypeLike] = None,
         err_msg: Optional[str] = None,
         **kwargs,
     ) -> UserProvidedParamsT:
