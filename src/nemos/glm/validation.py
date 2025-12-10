@@ -13,6 +13,16 @@ from ..validation import RegressorValidator
 from .params import GLMParams, GLMUserParams
 
 
+def to_glm_params(user_params: GLMUserParams) -> GLMParams:
+    """Map from GLMUserParams to GLMParams."""
+    return GLMParams(*user_params)
+
+
+def from_glm_params(params: GLMParams) -> GLMUserParams:
+    """Map from GLMParams to GLMUserParams."""
+    return params.coef, params.intercept
+
+
 @dataclass(frozen=True, repr=False)
 class GLMValidator(validation.RegressorValidator[GLMUserParams, GLMParams]):
     """
@@ -34,13 +44,8 @@ class GLMValidator(validation.RegressorValidator[GLMUserParams, GLMParams]):
         1,
         1,
     )  # this should be (coef.ndim, intercept.ndim)
-    to_model_params: Callable[[GLMUserParams], GLMParams] = lambda p: GLMParams(
-        *p
-    )  # casting from tuple of array to GLMParams
-    from_model_params: Callable[[GLMParams], GLMUserParams] = lambda p: (
-        p.coef,
-        p.intercept,
-    )
+    to_model_params: Callable[[GLMUserParams], GLMParams] = to_glm_params
+    from_model_params: Callable[[GLMParams], GLMUserParams] = from_glm_params
     model_class: str = "GLM"
     X_dimensionality: int = 2
     y_dimensionality: int = 1
