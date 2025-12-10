@@ -12,11 +12,9 @@ from pathlib import Path
 from typing import (
     Any,
     Generic,
-    NamedTuple,
     Optional,
     Tuple,
     Type,
-    TypeVar,
     Union,
 )
 
@@ -28,25 +26,24 @@ from numpy.typing import NDArray
 from . import solvers, tree_utils, utils
 from ._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from .base_class import Base
-from .glm.params import GLMParams
 from .regularizer import GroupLasso, Regularizer
 from .type_casting import cast_to_jax
 from .typing import (
     DESIGN_INPUT_TYPE,
     FeaturePytree,
+    ModelParamsT,
     RegularizerStrength,
     SolverInit,
     SolverRun,
     SolverState,
     SolverUpdate,
     StepResult,
+    UserProvidedParamsT,
 )
 from .utils import _flatten_dict, _get_name, _unpack_params, get_env_metadata
-from .validation import RegressorValidator, UserProvidedParamsT
+from .validation import RegressorValidator
 
 _SOLVER_ARGS_CACHE = {}
-
-ParamsT = TypeVar("ParamsT")
 
 
 def strip_metadata(arg_num: Optional[int] = None, kwarg_key: Optional[str] = None):
@@ -71,7 +68,7 @@ def strip_metadata(arg_num: Optional[int] = None, kwarg_key: Optional[str] = Non
     return decorator
 
 
-class BaseRegressor(abc.ABC, Base, Generic[ParamsT]):
+class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
     """Abstract base class for GLM regression models.
 
     This class encapsulates the common functionality for Generalized Linear Models (GLM)
@@ -388,7 +385,7 @@ class BaseRegressor(abc.ABC, Base, Generic[ParamsT]):
         X: DESIGN_INPUT_TYPE,
         y: Union[NDArray, jnp.ndarray],
         init_params: Optional[UserProvidedParamsT] = None,
-    ) -> BaseRegressor[ParamsT]:
+    ) -> BaseRegressor[UserProvidedParamsT, ModelParamsT]:
         """Fit the model to neural activity."""
         pass
 
@@ -418,18 +415,23 @@ class BaseRegressor(abc.ABC, Base, Generic[ParamsT]):
         pass
 
     @abc.abstractmethod
-    def _get_model_params(self) -> ParamsT:
+    def _get_model_params(self) -> ModelParamsT:
         """Pack coef_ and intercept_  into a params pytree."""
         pass
 
     @abc.abstractmethod
-    def _set_model_params(self, params: ParamsT):
+    def _set_model_params(self, params: ModelParamsT):
         """Unpack and store params pytree to coef_ and intercept_."""
         pass
 
     @abc.abstractmethod
     def _compute_loss(
-        self, params: GLMParams, X: DESIGN_INPUT_TYPE, y: jnp.ndarray, *args, **kwargs
+        self,
+        params: ModelParamsT,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        *args,
+        **kwargs,
     ):
         """Loss function for a given model to be optimized over."""
         pass
@@ -442,7 +444,7 @@ class BaseRegressor(abc.ABC, Base, Generic[ParamsT]):
         y: jnp.ndarray,
         *args,
         **kwargs,
-    ):
+    ) -> jnp.ndarray:
         """Compute the loss function for the model.
 
         This method validates inputs and converts user-provided parameters to the internal
@@ -495,8 +497,8 @@ class BaseRegressor(abc.ABC, Base, Generic[ParamsT]):
     @abc.abstractmethod
     def update(
         self,
-        params: Tuple[jnp.ndarray, jnp.ndarray],
-        opt_state: NamedTuple,
+        params: UserProvidedParamsT,
+        opt_state: SolverState,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         *args,
@@ -536,7 +538,7 @@ class BaseRegressor(abc.ABC, Base, Generic[ParamsT]):
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
-    ) -> ParamsT:
+    ) -> ModelParamsT:
         """Model specific initialization logic."""
         pass
 
@@ -571,7 +573,7 @@ class BaseRegressor(abc.ABC, Base, Generic[ParamsT]):
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
-        init_params: GLMParams,
+        init_params: ModelParamsT,
     ) -> SolverState:
         """Initialize the solver and the state of the solver for running fit and update."""
         pass
