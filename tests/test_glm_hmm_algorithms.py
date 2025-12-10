@@ -9,6 +9,7 @@ from hmmlearn import hmm
 
 from nemos.fetch import fetch_data
 from nemos.glm import GLM
+from nemos.glm.params import GLMParams
 from nemos.glm_hmm.expectation_maximization import (
     GLMHMMState,
     backward_pass,
@@ -306,7 +307,7 @@ def prepare_gammas_and_xis_for_m_step_single_neuron(
         y,
         initial_prob,
         transition_prob,
-        (coef, intercept),
+        GLMParams(coef, intercept),
         log_likelihood_func=likelihood,
         inverse_link_function=obs.default_inverse_link_function,
         is_new_session=new_sess.astype(bool),
@@ -621,7 +622,7 @@ class TestForwardBackward:
             y,
             jnp.log(initial_prob),
             jnp.log(transition_prob),
-            (coef, intercept),
+            GLMParams(coef, intercept),
             log_likelihood_func=log_likelihood,
             inverse_link_function=obs.default_inverse_link_function,
             is_new_session=new_sess.astype(bool),
@@ -814,7 +815,7 @@ class TestLikelihood:
         )
 
         nll_m_step_nemos = hmm_negative_log_likelihood(
-            (coef, intercept),
+            GLMParams(coef, intercept),
             X[:, 1:],  # drop intercept column
             y,
             gammas,
@@ -870,7 +871,7 @@ class TestMStep:
             y,
             np.log(gammas),
             np.log(xis),
-            (coef, intercept),
+            GLMParams(coef, intercept),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
         )
@@ -886,7 +887,7 @@ class TestMStep:
             gammas,
         )
         n_ll_original = partial_hmm_negative_log_likelihood(
-            (opt_coef, opt_intercept),
+            GLMParams(opt_coef, opt_intercept),
             X[:, 1:],
             y,
             gammas,
@@ -904,7 +905,7 @@ class TestMStep:
         # Testing projection weights
         jax.tree_util.tree_map(
             lambda x, y: np.testing.assert_almost_equal(x, y, decimal=6),
-            (opt_coef, opt_intercept),
+            GLMParams(opt_coef, opt_intercept),
             optimized_projection_weights_nemos,
         )
         # check maximization analytical
@@ -991,7 +992,7 @@ class TestMStep:
             y,
             log_alphas + log_betas,
             np.log(xis),
-            (np.zeros_like(coef), np.zeros_like(intercept)),
+            GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
         )
@@ -1001,10 +1002,10 @@ class TestMStep:
         glm.fit(X, y)
         # test that the glm coeff and intercept matches with the m-step output
         np.testing.assert_array_almost_equal(
-            glm.coef_, optimized_projection_weights_nemos[0].flatten()
+            glm.coef_, optimized_projection_weights_nemos.coef.flatten()
         )
         np.testing.assert_array_almost_equal(
-            glm.intercept_, optimized_projection_weights_nemos[1].flatten()
+            glm.intercept_, optimized_projection_weights_nemos.intercept.flatten()
         )
 
         # test that the transition and initial probabilities are all ones (log(1) = 0).
@@ -1018,8 +1019,8 @@ class TestMStep:
         # check expected shapes
         assert log_transition_prob_nemos.shape == (1, 1)
         assert log_initial_prob_nemos.shape == (1,)
-        assert optimized_projection_weights_nemos[0].shape == (2, 1)
-        assert optimized_projection_weights_nemos[1].shape == (1,)
+        assert optimized_projection_weights_nemos.coef.shape == (2, 1)
+        assert optimized_projection_weights_nemos.intercept.shape == (1,)
 
     @pytest.mark.requires_x64
     def test_m_step_with_prior(self, generate_data_multi_state):
@@ -1052,7 +1053,7 @@ class TestMStep:
             y,
             log_gammas,
             log_xis,
-            (np.zeros_like(coef), np.zeros_like(intercept)),
+            GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
             dirichlet_prior_alphas_transition=alphas_transition,
@@ -1131,7 +1132,7 @@ class TestMStep:
             y,
             log_gammas,
             log_xis,
-            (np.zeros_like(coef), np.zeros_like(intercept)),
+            GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
             dirichlet_prior_alphas_transition=alphas_transition,
@@ -1174,7 +1175,7 @@ class TestMStep:
             y,
             log_gammas,
             log_xis,
-            (np.zeros_like(coef), np.zeros_like(intercept)),
+            GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
             dirichlet_prior_alphas_transition=alphas_transition,
@@ -1213,7 +1214,7 @@ class TestMStep:
             y,
             log_gammas,
             log_xis,
-            (np.zeros_like(coef), np.zeros_like(intercept)),
+            GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
             dirichlet_prior_alphas_transition=alphas_transition,
@@ -1229,7 +1230,7 @@ class TestMStep:
             y,
             log_gammas,
             log_xis,
-            (np.zeros_like(coef), np.zeros_like(intercept)),
+            GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
             dirichlet_prior_alphas_transition=alphas_transition,
@@ -1240,12 +1241,12 @@ class TestMStep:
             no_prior_transition_prob, prior_transition_prob
         )
         np.testing.assert_array_almost_equal(
-            optimized_projection_weights_nemos[0],
-            prior_optimized_projection_weights_nemos[0],
+            optimized_projection_weights_nemos.coef,
+            prior_optimized_projection_weights_nemos.coef,
         )
         np.testing.assert_array_almost_equal(
-            optimized_projection_weights_nemos[1],
-            prior_optimized_projection_weights_nemos[1],
+            optimized_projection_weights_nemos.intercept,
+            prior_optimized_projection_weights_nemos.intercept,
         )
 
     @pytest.mark.requires_x64
@@ -1273,7 +1274,7 @@ class TestMStep:
             y,
             log_gammas,
             log_xis,
-            (np.zeros_like(coef), np.zeros_like(intercept)),
+            GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
             dirichlet_prior_alphas_transition=alphas_transition,
@@ -1289,7 +1290,7 @@ class TestMStep:
             y,
             log_gammas,
             log_xis,
-            (np.zeros_like(coef), np.zeros_like(intercept)),
+            GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
             dirichlet_prior_alphas_transition=None,
@@ -1300,12 +1301,12 @@ class TestMStep:
             no_prior_transition_prob, prior_transition_prob
         )
         np.testing.assert_array_almost_equal(
-            optimized_projection_weights_nemos[0],
-            prior_optimized_projection_weights_nemos[0],
+            optimized_projection_weights_nemos.coef,
+            prior_optimized_projection_weights_nemos.coef,
         )
         np.testing.assert_array_almost_equal(
-            optimized_projection_weights_nemos[1],
-            prior_optimized_projection_weights_nemos[1],
+            optimized_projection_weights_nemos.intercept,
+            prior_optimized_projection_weights_nemos.intercept,
         )
 
     @pytest.mark.parametrize(
@@ -1368,7 +1369,7 @@ class TestMStep:
             y,
             np.log(gammas),
             np.log(xis),
-            (coef, intercept),
+            GLMParams(coef, intercept),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
             dirichlet_prior_alphas_init_prob=dirichlet_prior_initial_prob,
@@ -1389,7 +1390,7 @@ class TestMStep:
 
         # NLL with simulation input
         n_ll_original = partial_hmm_negative_log_likelihood(
-            (opt_coef, opt_intercept),
+            GLMParams(opt_coef, opt_intercept),
             X[:, 1:],
             y,
             gammas,
@@ -1409,7 +1410,7 @@ class TestMStep:
         # Testing intercept and optimized projection weights
         jax.tree_util.tree_map(
             lambda x, y: np.testing.assert_almost_equal(x, y, decimal=6),
-            (opt_coef, opt_intercept),
+            GLMParams(opt_coef, opt_intercept),
             optimized_projection_weights_nemos,
         )
 
@@ -1502,9 +1503,12 @@ class TestMStep:
             y_dummy,
             log_posteriors,
             log_joint_posterior,
-            (dummy_coef, dummy_intercept),
+            GLMParams(dummy_coef, dummy_intercept),
             is_new_session=is_new_session,
-            m_step_fn_glm_params=lambda *a, **kw: (dummy_coef, dummy_intercept),
+            m_step_fn_glm_params=lambda *a, **kw: (
+                GLMParams(dummy_coef, dummy_intercept),
+                None,
+            ),
             dirichlet_prior_alphas_init_prob=alphas_init,
             dirichlet_prior_alphas_transition=alphas_trans,
         )
@@ -1586,14 +1590,14 @@ class TestEMAlgorithm:
             joint_posterior,
             learned_initial_prob,
             learned_transition,
-            (learned_coef, learned_intercept),
+            learned_glm_params,
             _,
         ) = em_glm_hmm(
             X[:, 1:],
             y,
             initial_prob=initial_prob,
             transition_prob=transition_prob,
-            glm_params=(coef, intercept),
+            glm_params=GLMParams(coef, intercept),
             is_new_session=(
                 new_sess.astype(bool)[: X.shape[0]] if require_new_session else None
             ),
@@ -1614,7 +1618,7 @@ class TestEMAlgorithm:
             y,
             learned_initial_prob,
             learned_transition,
-            (learned_coef, learned_intercept),
+            learned_glm_params,
             log_likelihood_func=likelihood_func,
             inverse_link_function=obs.default_inverse_link_function,
         )
@@ -1630,7 +1634,7 @@ class TestEMAlgorithm:
             y,
             jnp.log(initial_prob),
             jnp.log(transition_prob),
-            (coef, intercept),
+            GLMParams(coef, intercept),
             log_likelihood_func=likelihood_func,
             inverse_link_function=obs.default_inverse_link_function,
         )
@@ -1714,7 +1718,7 @@ class TestEMAlgorithm:
             y,
             jnp.log(init_pb),
             jnp.log(transition_pb),
-            (proj_weights[1:], proj_weights[:1]),
+            GLMParams(proj_weights[1:], proj_weights[:1]),
             log_likelihood_func=likelihood_func,
             inverse_link_function=obs.default_inverse_link_function,
         )
@@ -1730,14 +1734,14 @@ class TestEMAlgorithm:
             joint_posterior,
             learned_initial_prob,
             learned_transition,
-            (learned_coef, learned_intercept),
+            learned_glm_params,
             state,
         ) = em_glm_hmm(
             X[:, 1:],
             jnp.squeeze(y),
             initial_prob=init_pb,
             transition_prob=transition_pb,
-            glm_params=(proj_weights[1:], proj_weights[:1]),
+            glm_params=GLMParams(proj_weights[1:], proj_weights[:1]),
             inverse_link_function=inverse_link_function,
             likelihood_func=likelihood_func,
             m_step_fn_glm_params=solver_run,
@@ -1755,7 +1759,7 @@ class TestEMAlgorithm:
             y,
             learned_initial_prob,
             learned_transition,
-            (learned_coef, learned_intercept),
+            learned_glm_params,
             log_likelihood_func=likelihood_func,
             inverse_link_function=obs.default_inverse_link_function,
         )
@@ -1809,7 +1813,7 @@ def test_e_and_m_step_for_population(generate_data_multi_state_population):
         y,
         initial_prob,
         transition_prob,
-        (coef, intercept),
+        GLMParams(coef, intercept),
         log_likelihood_func=likelihood,
         inverse_link_function=obs.default_inverse_link_function,
         is_new_session=new_sess.astype(bool),
@@ -1847,7 +1851,7 @@ def test_e_and_m_step_for_population(generate_data_multi_state_population):
         y,
         log_gammas,
         log_xis,
-        (np.zeros_like(coef), np.zeros_like(intercept)),
+        GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
         is_new_session=new_sess.astype(bool),
         m_step_fn_glm_params=solver.run,
         dirichlet_prior_alphas_transition=alphas_transition,
@@ -1882,7 +1886,7 @@ class TestViterbi:
             y,
             initial_prob,
             transition_prob,
-            (coef, intercept),
+            GLMParams(coef, intercept),
             inverse_link_function,
             log_like_func,
             is_new_session=new_session,
@@ -1923,7 +1927,7 @@ class TestViterbi:
             y[:100],
             initial_prob,
             transition_prob,
-            (coef, intercept),
+            GLMParams(coef, intercept),
             inverse_link_function,
             log_like_func,
             is_new_session=new_session,
@@ -1948,7 +1952,7 @@ class TestConvergence:
         state = GLMHMMState(
             log_initial_prob=jnp.array([0.5, 0.5]),
             log_transition_matrix=jnp.eye(2),
-            glm_params=(jnp.zeros((2, 2)), jnp.zeros(2)),
+            glm_params=GLMParams(jnp.zeros((2, 2)), jnp.zeros(2)),
             data_log_likelihood=-0.0,
             previous_data_log_likelihood=-0.0001,  # Very small change
             log_likelihood_history=jnp.zeros(1),
@@ -1967,7 +1971,7 @@ class TestConvergence:
         state = GLMHMMState(
             log_initial_prob=jnp.array([0.5, 0.5]),
             log_transition_matrix=jnp.eye(2),
-            glm_params=(jnp.zeros((2, 2)), jnp.zeros(2)),
+            glm_params=GLMParams(jnp.zeros((2, 2)), jnp.zeros(2)),
             data_log_likelihood=-100.0,
             previous_data_log_likelihood=-130.0,  # Large change
             log_likelihood_history=jnp.zeros(1),
@@ -1983,7 +1987,7 @@ class TestConvergence:
         state = GLMHMMState(
             log_initial_prob=jnp.array([0.5, 0.5]),
             log_transition_matrix=jnp.eye(2),
-            glm_params=(jnp.zeros((2, 2)), jnp.zeros(2)),
+            glm_params=GLMParams(jnp.zeros((2, 2)), jnp.zeros(2)),
             data_log_likelihood=-jnp.inf,
             previous_data_log_likelihood=-jnp.inf,
             log_likelihood_history=jnp.zeros(1),
@@ -2042,7 +2046,7 @@ class TestConvergence:
             y,
             initial_prob=initial_prob,
             transition_prob=transition_prob,
-            glm_params=(coef, intercept),
+            glm_params=GLMParams(coef, intercept),
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
@@ -2105,7 +2109,7 @@ class TestConvergence:
             y,
             initial_prob=initial_prob,
             transition_prob=transition_prob,
-            glm_params=(coef, intercept),
+            glm_params=GLMParams(coef, intercept),
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
@@ -2163,7 +2167,7 @@ class TestConvergence:
             y,
             initial_prob=initial_prob,
             transition_prob=transition_prob,
-            glm_params=(coef, intercept),
+            glm_params=GLMParams(coef, intercept),
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
@@ -2232,7 +2236,7 @@ class TestConvergence:
             y[:100],
             initial_prob=initial_prob,
             transition_prob=transition_prob,
-            glm_params=(coef, intercept),
+            glm_params=GLMParams(coef, intercept),
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
@@ -2309,7 +2313,7 @@ class TestConvergence:
                 y,
                 initial_prob=initial_prob,
                 transition_prob=transition_prob,
-                glm_params=(coef, intercept),
+                glm_params=GLMParams(coef, intercept),
                 inverse_link_function=obs.default_inverse_link_function,
                 likelihood_func=likelihood_func,
                 m_step_fn_glm_params=glm._solver_run,
@@ -2376,7 +2380,7 @@ class TestConvergence:
             y,
             initial_prob=initial_prob,
             transition_prob=transition_prob,
-            glm_params=(coef, intercept),
+            glm_params=GLMParams(coef, intercept),
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
@@ -2417,7 +2421,7 @@ class TestCompilation:
             y,
             log_gammas,
             log_xis,
-            (np.zeros_like(coef), np.zeros_like(intercept)),
+            GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
             dirichlet_prior_alphas_transition=None,
@@ -2433,7 +2437,7 @@ class TestCompilation:
             y,
             log_gammas,
             log_xis,
-            (np.zeros_like(coef), np.zeros_like(intercept)),
+            GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
             dirichlet_prior_alphas_transition=None,
@@ -2448,7 +2452,7 @@ class TestCompilation:
             y,
             log_gammas,
             log_xis,
-            (np.zeros_like(coef), np.zeros_like(intercept)),
+            GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
             dirichlet_prior_alphas_transition=np.ones(transition_prob.shape),
@@ -2463,7 +2467,7 @@ class TestCompilation:
             y,
             log_gammas,
             log_xis,
-            (np.zeros_like(coef), np.zeros_like(intercept)),
+            GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
             dirichlet_prior_alphas_transition=2 * np.ones(transition_prob.shape),
@@ -2517,7 +2521,7 @@ class TestCompilation:
             y,
             initial_prob=initial_prob,
             transition_prob=transition_prob,
-            glm_params=(coef, intercept),
+            glm_params=GLMParams(coef, intercept),
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
@@ -2538,7 +2542,7 @@ class TestCompilation:
             y,
             initial_prob=initial_prob,
             transition_prob=transition_prob,
-            glm_params=(coef, intercept),
+            glm_params=GLMParams(coef, intercept),
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
@@ -2565,7 +2569,7 @@ class TestCompilation:
             y_new,
             initial_prob=initial_prob_new,
             transition_prob=transition_prob_new,
-            glm_params=(coef_new, intercept_new),
+            glm_params=GLMParams(coef_new, intercept_new),
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
@@ -2617,7 +2621,7 @@ class TestCompilation:
             y,
             initial_prob,
             transition_prob,
-            (coef, intercept),
+            GLMParams(coef, intercept),
             log_likelihood_func=likelihood_func,
             inverse_link_function=obs.default_inverse_link_function,
             is_new_session=new_sess.astype(bool),
@@ -2635,7 +2639,7 @@ class TestCompilation:
             y_new,
             initial_prob_new,
             transition_prob_new,
-            (coef_new, intercept_new),
+            GLMParams(coef_new, intercept_new),
             log_likelihood_func=likelihood_func,
             inverse_link_function=obs.default_inverse_link_function,
             is_new_session=new_sess.astype(bool),
@@ -2693,7 +2697,7 @@ class TestPytreeSupport:
             y,
             jnp.log(initial_prob),
             jnp.log(transition_prob),
-            (coef, intercept),
+            GLMParams(coef, intercept),
             obs.default_inverse_link_function,
             likelihood_func,
             new_sess.astype(bool),
@@ -2705,7 +2709,7 @@ class TestPytreeSupport:
             y,
             jnp.log(initial_prob),
             jnp.log(transition_prob),
-            (coef_tree, intercept),
+            GLMParams(coef_tree, intercept),
             obs.default_inverse_link_function,
             likelihood_func,
             new_sess.astype(bool),
@@ -2755,7 +2759,7 @@ class TestPytreeSupport:
 
         # Test with standard arrays (reference)
         nll_ref = hmm_negative_log_likelihood(
-            (coef, intercept),
+            GLMParams(coef, intercept),
             X,
             y,
             posteriors,
@@ -2765,7 +2769,7 @@ class TestPytreeSupport:
 
         # Test with pytrees
         nll = hmm_negative_log_likelihood(
-            (coef_tree, intercept),
+            GLMParams(coef_tree, intercept),
             X_tree,
             y,
             posteriors,
@@ -2830,7 +2834,7 @@ class TestPytreeSupport:
             y,
             initial_prob,
             transition_prob,
-            (coef_tree, intercept),
+            GLMParams(coef_tree, intercept),
             obs.default_inverse_link_function,
             likelihood_func,
             solver_run,
@@ -2844,6 +2848,6 @@ class TestPytreeSupport:
         assert joint_posterior.shape == (initial_prob.shape[0], initial_prob.shape[0])
         assert final_init.shape == initial_prob.shape
         assert final_trans.shape == transition_prob.shape
-        assert isinstance(final_params, tuple)
-        assert isinstance(final_params[0], dict)  # coef should be a dict
+        assert isinstance(final_params, GLMParams)
+        assert isinstance(final_params.coef, dict)  # coef should be a dict
         assert final_state.iterations > 0
