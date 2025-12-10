@@ -14,19 +14,33 @@ As a `BaseRegressor`, it **must** implement the [`fit`](nemos.glm.GLM.fit), [`sc
 
 For subclasses derived from `BaseRegressor` to function correctly, they must implement the following:
 
+### Public Methods
 1. [`fit`](nemos.glm.GLM.fit): Adapt the model using input data `X` and corresponding observations `y`.
 2. [`predict`](nemos.glm.GLM.predict): Provide predictions based on the trained model and input data `X`.
 3. [`score`](nemos.glm.GLM.score): Score the accuracy of model predictions using input data `X` against the actual observations `y`.
 4. [`simulate`](nemos.glm.GLM.simulate): Simulate data based on the trained regression model.
 5. [`update`](nemos.glm.GLM.update): Run a single optimization step, and stores the updated parameter and solver state. Used by stochastic optimization schemes.
-6. `compute_loss`: Compute prediction and evaluates the loss function prvided the parameters and `X` and `y`. This is used by the `instantiate_solver` method which sets up the solver.
-7. `_check_params`: Check the parameter structure.
-8. `_check_input_dimensionality`: Check the input dimensionality matches model expectation.
-9. `_check_input_and_params_consistency`: Checks that the input and the parameters are consistent.
-10. `_get_coef_and_intercept` and `_set_coef_and_intercept`: set and get model coefficient and intercept term.
 
-All the `_check_<method-name>` methods are called by the `_validate` method which checks that the provided
-input and parameters conform with the model requirements.
+### Private Methods
+6. `_compute_loss`: Compute predictions and evaluate the loss function given the parameters, `X`, and `y`. This method operates on the internal parameter representation (e.g., `GLMParams`). The public-facing `compute_loss` wrapper handles conversion from user-provided parameters.
+7. `_get_model_params`: Pack model parameters from sklearn-style attributes (`coef_`, `intercept_`) into the internal parameter representation.
+8. `_set_model_params`: Unpack the internal parameter representation and store as sklearn-style attributes (`coef_`, `intercept_`).
+9. `save_params`: Serialize and save model parameters to disk.
+10. `_get_optimal_solver_params_config`: Return functions for computing default step size and batch size for the solver.
+
+## Parameter Representation and Validation
+
+`BaseRegressor` maintains two representations of model parameters:
+
+- **User-facing parameters**: Simple structures (tuples, arrays) that users provide to methods like `fit()`, `predict()`, etc.
+- **Internal parameters**: Model-specific parameter containers (e.g., `GLMParams`) with named fields for clarity and type safety.
+
+Each `BaseRegressor` subclass has an associated `RegressorValidator` that handles:
+- Validation of user-provided inputs and parameters
+- Conversion between user-facing and internal parameter representations
+- Consistency checks between parameters and data
+
+The validator is accessed via the `_validator` attribute and is used throughout the class to ensure data integrity.
 
 ## Attributes
 
@@ -47,6 +61,28 @@ Typically, in `YourRegressor` you will call `self.solver_init_state` at the para
 
 We implement a set of standard solvers in NeMoS, relying on various backends. In the future we are planning to add support for user-defined solvers, because in principle any object that adheres to our `AbstractSolver` interface should be compatible with NeMoS. For more information about the solver interface and solvers, see the [developer notes about solvers](07-solvers.md).
 :::
+
+## Parameter Containers
+
+Model parameters are stored internally using `equinox.Module` containers, which are frozen dataclasses that are also valid JAX pytrees. These containers provide:
+
+- **Named fields**: Self-documenting code (e.g., `params.coef`, `params.intercept`)
+- **Type safety**: Full type annotation support
+- **JAX compatibility**: Work seamlessly with `jax.jit`, `jax.grad`, etc.
+- **Extensibility**: Easy to add model-specific hooks
+
+For example, `GLMParams` includes a `regularizable_subtrees()` method that specifies which parameter components should be regularized. This allows regularizers and other components to interact with parameters in a controlled, model-aware manner.
+
+## Validation Framework
+
+Validation is handled by model-specific `RegressorValidator` subclasses (e.g., `GLMValidator` for GLM models). The validator:
+
+1. Validates user-provided parameters and inputs
+2. Converts user parameters to internal representation
+3. Validates internal parameters
+4. Checks consistency between parameters and data
+
+This separation of concerns keeps the model classes focused on their core functionality while ensuring robust input validation.
 
 ## Contributor Guidelines
 
