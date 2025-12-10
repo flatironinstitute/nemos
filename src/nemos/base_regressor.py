@@ -535,7 +535,7 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         init_params: Optional[UserProvidedParamsT] = None,
-    ) -> SolverState:
+    ) -> Tuple[UserProvidedParamsT, SolverState]:
         """Initialize the solver and the state of the solver for running fit and update."""
         self._validator.validate_inputs(X, y)
         if init_params is None:
@@ -543,7 +543,9 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         else:
             init_params = self._validator.validate_and_cast(init_params)
             self._validator.validate_consistency(init_params, X=X, y=y)
-        return self._initialize_solver_and_state(X, y, init_params)
+        return self._validator.from_model_params(
+            init_params
+        ), self._initialize_solver_and_state(X, y, init_params)
 
     def _optimize_solver_params(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray) -> dict:
         """

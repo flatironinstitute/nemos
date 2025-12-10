@@ -215,7 +215,9 @@ class TestGLM:
                 [[jnp.zeros((1, 5)), jnp.zeros((3,))]],
             ),
             (
-                pytest.raises(TypeError, match="GLM params must be a tuple/list of length two"),
+                pytest.raises(
+                    TypeError, match="GLM params must be a tuple/list of length two"
+                ),
                 dict(p1=jnp.zeros((5,)), p2=jnp.zeros((1,))),
                 dict(p1=jnp.zeros((3, 3)), p2=jnp.zeros((3, 2))),
             ),
@@ -615,7 +617,6 @@ class TestGLM:
                     match=r"coef must be an array or .* of shape \(n_features",
                 ),
             }
-
 
     #######################
     # Test model.simulate
@@ -1628,11 +1629,10 @@ class TestGLMObservationModel:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
-        params = model._initialize_params(X, y)
-        state = model._initialize_solver_and_state(X, y, params)
+        params, state = model.initialize_solver_and_state(X, y)
         with expectation:
             model.update(
-                (params.coef, params.intercept),
+                params,
                 state,
                 X[:batch_size],
                 y[:batch_size],
@@ -1647,16 +1647,13 @@ class TestGLMObservationModel:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
-        params = model._initialize_params(X, y)
-        state = model._initialize_solver_and_state(X, y, params)
+        params, state = model.initialize_solver_and_state(X, y)
         assert model.coef_ is None
         assert model.intercept_ is None
         if "gamma" not in model_instantiation:
             # gamma model instantiation sets the scale
             assert model.scale_ is None
-        _, _ = model.update(
-            (params.coef, params.intercept), state, X[:batch_size], y[:batch_size]
-        )
+        _, _ = model.update(params, state, X[:batch_size], y[:batch_size])
         assert model.coef_ is not None
         assert model.intercept_ is not None
         assert model.scale_ is not None
@@ -1684,8 +1681,7 @@ class TestGLMObservationModel:
         if nan_inputs:
             X[: X.shape[0] // 2, :] = np.nan
 
-        params = model._initialize_params(X, y)
-        state = model._initialize_solver_and_state(*drop_nans(X, y), params)
+        params, state = model.initialize_solver_and_state(*drop_nans(X, y))
 
         assert model.coef_ is None
         assert model.intercept_ is None
@@ -1694,7 +1690,7 @@ class TestGLMObservationModel:
             assert model.scale_ is None
 
         # take an update step using the initialized state
-        _, _ = model.update((params.coef, params.intercept), state, X, y)
+        _, _ = model.update(params, state, X, y)
 
         assert model.coef_ is not None
         assert model.intercept_ is not None
@@ -1715,15 +1711,14 @@ class TestGLMObservationModel:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
-        params = model._initialize_params(X, y)
-        state = model._initialize_solver_and_state(X, y, params)
+        params, state = model.initialize_solver_and_state(X, y)
         # extract batch and add nans
         Xnan = X[:batch_size]
         Xnan[: batch_size // 2] = np.nan
 
         # run 3 iterations
         tot_iter = 3
-        jit_update = (params.coef, params.intercept)
+        jit_update = deepcopy(params)
         jit_state = deepcopy(state)
         for _ in range(tot_iter):
             jit_update, jit_state = model.update(
@@ -1735,7 +1730,7 @@ class TestGLMObservationModel:
         )
 
         # update without jitting
-        nojit_update = (params.coef, params.intercept)
+        nojit_update = deepcopy(params)
         nojit_state = deepcopy(state)
         with jax.disable_jit(True):
             for _ in range(tot_iter):
@@ -1894,9 +1889,7 @@ class TestGLMObservationModel:
         )
         glm2.fit(X, y)
 
-        params = glm._initialize_params(X, y)
-        state = glm._initialize_solver_and_state(X, y, params)
-        glm._instantiate_solver(glm._compute_loss)
+        params, state = glm.initialize_solver_and_state(X, y)
 
         # NOTE these two are not the same because for example Ridge augments the loss
         # loss_grad = jax.jit(jax.grad(glm.compute_loss))
@@ -1908,21 +1901,22 @@ class TestGLMObservationModel:
             X = X.data
 
         iter_num = 0
+        params = deepcopy(params)
         while iter_num < maxiter:
+            glm_params = glm._validator.to_model_params(params)
             state = state._replace(
-                full_grad_at_reference_point=loss_grad(params, X, y),
+                full_grad_at_reference_point=loss_grad(glm_params, X, y),
             )
 
             prev_params = params
-            user_params = (params.coef, params.intercept)
             for _ in range(m):
                 key, subkey = jax.random.split(key)
                 ind = jax.random.randint(subkey, (batch_size,), 0, N)
                 xi, yi = tree_slice(X, ind), tree_slice(y, ind)
-                params, state = glm.update(user_params, state, xi, yi)
+                params, state = glm.update(params, state, xi, yi)
 
             state = state._replace(
-                reference_point=glm._validator.validate_and_cast(params),
+                reference_point=glm._validator.to_model_params(params),
             )
 
             iter_num += 1
