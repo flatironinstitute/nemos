@@ -791,17 +791,20 @@ def _em_step(
         is_new_session,
     )
 
-    glm_params, log_init_prob, log_trans_matrix, _ = run_m_step(
+    glm_params_update, log_init_prob, log_trans_matrix, _ = run_m_step(
         X,
         y,
         log_posteriors=log_posteriors,
         log_joint_posterior=log_joint_posterior,
-        glm_params=glm_params,
+        glm_params=previous_state.glm_params,
         is_new_session=is_new_session,
         m_step_fn_glm_params=m_step_fn_glm_params,
     )
 
     new_state = GLMHMMState(
+        log_initial_prob=log_init_prob,
+        log_transition_matrix=log_trans_matrix,
+        glm_params=glm_params_update,
         iterations=previous_state.iterations + 1,
         data_log_likelihood=new_log_like,
         previous_data_log_likelihood=previous_state.data_log_likelihood,
@@ -810,7 +813,7 @@ def _em_step(
         ].set(new_log_like),
     )
 
-    return log_init_prob, log_trans_matrix, glm_params, new_state
+    return new_state
 
 
 def check_log_likelihood_increment(state: GLMHMMState, tol: float) -> Array:
