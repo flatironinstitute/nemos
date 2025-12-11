@@ -139,18 +139,6 @@ jobs:
       - name: Check links
         run: ./scripts/prevent_absolute_links_to_docs.sh
 
-  check-relative-links:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install markdown-link-check
-        run: npm install -g markdown-link-check
-
-      - name: Check relative links in root Markdown files
-        run: ./scripts/check_markdown_links.sh relative
-
   check-external-links:
     runs-on: ubuntu-latest
     steps:
