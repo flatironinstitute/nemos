@@ -137,7 +137,7 @@ def test_svrg_glm_instantiate_solver(regularizer_name, solver_class, mask):
         solver_name=solver_name,
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
     )
-    glm.instantiate_solver(glm._predict_and_compute_loss)
+    glm.instantiate_solver(glm.compute_loss)
 
     # currently glm._solver is a Wrapped(Prox)SVRG
     solver = glm._solver._solver
@@ -173,7 +173,7 @@ def test_svrg_glm_passes_solver_kwargs(regularizer_name, solver_name, mask, glm_
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
         **kwargs,
     )
-    glm.instantiate_solver(glm._predict_and_compute_loss)
+    glm.instantiate_solver(glm.compute_loss)
 
     # currently glm._solver is a Wrapped(Prox)SVRG
     solver = glm._solver._solver

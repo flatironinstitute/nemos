@@ -60,7 +60,7 @@ Additionally, the [`GLM`](nemos.glm.GLM) class inherits the attributes of `BaseR
 Here we list the private method related to the model computations:
 
 - **`_predict`**: Forecasts rates based on current model parameters and the inverse-link function of the `observation_models`.
-- **`_predict_and_compute_loss`**: Predicts the rate and calculates the mean Poisson negative log-likelihood, excluding normalization constants.
+- **`compute_loss`**: Predicts the rate and calculates the mean Poisson negative log-likelihood, excluding normalization constants.
 
 A number of [`GLM`](nemos.glm.GLM) specific private methods are used for checking parameters and inputs, while the methods related for checking the solver-regularizer configurations/instantiation are inherited from `BaseRergessor`.
 
