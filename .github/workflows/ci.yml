@@ -157,7 +157,6 @@ jobs:
       - tox_tests_not_solver_related
       - prevent_docs_absolute_links
       - tox_check
-      - check-relative-links
       - tox_solver_related_jaxopt_backend
       - tox_solver_related_optimistix_backend
     runs-on: ubuntu-latest
