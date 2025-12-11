@@ -22,7 +22,7 @@ class GLMHMMState(eqx.Module):
     iterations: int
 
 
-EMCarry = Tuple[Array, Array, Tuple[Array, Array], GLMHMMState]
+EMCarry = Tuple[Tuple[Array, Array, Tuple[Array, Array]], GLMHMMState]
 
 
 def _analytical_m_step_initial_prob(
@@ -778,7 +778,7 @@ def _em_step(
 ) -> EMCarry:
     """Single EM iteration step."""
 
-    log_init_prob, log_trans_matrix, glm_params, previous_state = carry
+    (log_init_prob, log_trans_matrix, glm_params), previous_state = carry
 
     (log_posteriors, log_joint_posterior, _, new_log_like, _, _) = forward_backward(
         X,
@@ -810,7 +810,7 @@ def _em_step(
         ].set(new_log_like),
     )
 
-    return log_init_prob, log_trans_matrix, glm_params, new_state
+    return (log_init_prob, log_trans_matrix, glm_params), new_state
 
 
 def check_log_likelihood_increment(state: GLMHMMState, tol: float) -> Array:
@@ -929,11 +929,11 @@ def em_glm_hmm(
     )
 
     def stopping_condition_while(carry):
-        _, _, _, new_state = carry
+        _, new_state = carry
         return ~check_convergence(new_state, tol)
 
-    init_carry = (jnp.log(initial_prob), jnp.log(transition_prob), glm_params, state)
-    log_initial_prob, log_transition_matrix, glm_params, state = (
+    init_carry = (jnp.log(initial_prob), jnp.log(transition_prob), glm_params), state
+    (log_initial_prob, log_transition_matrix, glm_params), state = (
         eqx.internal.while_loop(
             stopping_condition_while,
             em_step_fn_while,
