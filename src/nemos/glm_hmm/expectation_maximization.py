@@ -959,8 +959,8 @@ def em_glm_hmm(
     return (
         jnp.exp(log_posteriors),
         jnp.exp(log_joint_posterior),
-        state.log_initial_prob,
-        state.log_transition_matrix,
+        jnp.exp(state.log_initial_prob),
+        jnp.exp(state.log_transition_matrix),
         state.glm_params,
         state,
     )
