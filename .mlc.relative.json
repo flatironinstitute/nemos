@@ -1,5 +1,6 @@
 {
   "ignorePatterns": [
-    { "pattern": "^https?://" }
+    { "pattern": "^https?://" },
+    { "pattern": "^[^/]+$" }
   ]
 }
