@@ -16,13 +16,13 @@ Array = NDArray | jax.numpy.ndarray
 class GLMHMMState(eqx.Module):
     """State class for the GLMHHM EM-algorithm."""
 
-    log_initial_prob: Array
-    log_transition_matrix: Array
-    glm_params: Tuple[Array, Array]  # (coef, intercept)
     data_log_likelihood: float | Array
     previous_data_log_likelihood: float | Array
     log_likelihood_history: Array
     iterations: int
+
+
+EMCarry = Tuple[Array, Array, Tuple[Array, Array], GLMHMMState]
 
 
 def _analytical_m_step_initial_prob(
@@ -768,42 +768,40 @@ def prepare_likelihood_func(
 
 
 def _em_step(
-    carry: GLMHMMState,
+    carry: EMCarry,
     X: Array,
     y: Array,
     inverse_link_function: Callable,
     likelihood_func: Callable,
     m_step_fn_glm_params: Callable,
     is_new_session: Array,
-) -> GLMHMMState:
+) -> EMCarry:
     """Single EM iteration step."""
-    previous_state = carry
+
+    log_init_prob, log_trans_matrix, glm_params, previous_state = carry
 
     (log_posteriors, log_joint_posterior, _, new_log_like, _, _) = forward_backward(
         X,
         y,
-        previous_state.log_initial_prob,
-        previous_state.log_transition_matrix,
-        previous_state.glm_params,
+        log_init_prob,
+        log_trans_matrix,
+        glm_params,
         inverse_link_function,
         likelihood_func,
         is_new_session,
     )
 
-    glm_params_update, log_init_prob, log_trans_matrix, _ = run_m_step(
+    glm_params, log_init_prob, log_trans_matrix, _ = run_m_step(
         X,
         y,
         log_posteriors=log_posteriors,
         log_joint_posterior=log_joint_posterior,
-        glm_params=previous_state.glm_params,
+        glm_params=glm_params,
         is_new_session=is_new_session,
         m_step_fn_glm_params=m_step_fn_glm_params,
     )
 
     new_state = GLMHMMState(
-        log_initial_prob=log_init_prob,
-        log_transition_matrix=log_trans_matrix,
-        glm_params=glm_params_update,
         iterations=previous_state.iterations + 1,
         data_log_likelihood=new_log_like,
         previous_data_log_likelihood=previous_state.data_log_likelihood,
@@ -812,7 +810,7 @@ def _em_step(
         ].set(new_log_like),
     )
 
-    return new_state
+    return log_init_prob, log_trans_matrix, glm_params, new_state
 
 
 def check_log_likelihood_increment(state: GLMHMMState, tol: float) -> Array:
@@ -914,9 +912,6 @@ def em_glm_hmm(
     is_new_session = initialize_new_session(y.shape[0], is_new_session)
 
     state = GLMHMMState(
-        log_initial_prob=jnp.log(initial_prob),
-        log_transition_matrix=jnp.log(transition_prob),
-        glm_params=glm_params,
         data_log_likelihood=-jnp.array(jnp.inf),
         previous_data_log_likelihood=-jnp.array(jnp.inf),
         log_likelihood_history=jnp.full(maxiter, jnp.nan),
@@ -934,23 +929,27 @@ def em_glm_hmm(
     )
 
     def stopping_condition_while(carry):
-        new_state = carry
-        return ~check_convergence(
-            new_state,
-            tol,
-        )
+        _, _, _, new_state = carry
+        return ~check_convergence(new_state, tol)
 
-    state = eqx.internal.while_loop(
-        stopping_condition_while, em_step_fn_while, state, max_steps=maxiter, kind="lax"
+    init_carry = (jnp.log(initial_prob), jnp.log(transition_prob), glm_params, state)
+    log_initial_prob, log_transition_matrix, glm_params, state = (
+        eqx.internal.while_loop(
+            stopping_condition_while,
+            em_step_fn_while,
+            init_carry,
+            max_steps=maxiter,
+            kind="lax",
+        )
     )
 
     # final posterior calculation
     (log_posteriors, log_joint_posterior, _, _, _, _) = forward_backward(
         X,
         y,
-        state.log_initial_prob,
-        state.log_transition_matrix,
-        state.glm_params,
+        log_initial_prob,
+        log_transition_matrix,
+        glm_params,
         inverse_link_function,
         likelihood_func,
         is_new_session,
@@ -959,9 +958,9 @@ def em_glm_hmm(
     return (
         jnp.exp(log_posteriors),
         jnp.exp(log_joint_posterior),
-        jnp.exp(state.log_initial_prob),
-        jnp.exp(state.log_transition_matrix),
-        state.glm_params,
+        jnp.exp(log_initial_prob),
+        jnp.exp(log_transition_matrix),
+        glm_params,
         state,
     )
 
