@@ -25,7 +25,7 @@ def from_glm_params(params: GLMParams) -> GLMUserParams:
 
 
 @dataclass(frozen=True, repr=False)
-class GLMValidator(validation.RegressorValidator[GLMUserParams, GLMParams]):
+class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
     """
     Validator for single-neuron GLM models.
 
