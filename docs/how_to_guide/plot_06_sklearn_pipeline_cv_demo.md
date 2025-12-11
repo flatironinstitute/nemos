@@ -61,9 +61,9 @@ In particular, we will learn:
 <figcaption>Schematic of a scikit-learn pipeline.</figcaption>
 </figure>
 
-A pipeline is a sequence of data transformations leading up to a model. Each step before the final one transforms the input data into a different representation, and then the final model step fits, predicts, or scores based on the previous step's output and some observations. Setting up such machinery can be simplified using the [`Pipeline`](https://scikit-learn.org/1.5/modules/generated/sklearn.pipeline.Pipeline.html) class from scikit-learn.
+A pipeline is a sequence of data transformations leading up to a model. Each step before the final one transforms the input data into a different representation, and then the final model step fits, predicts, or scores based on the previous step's output and some observations. Setting up such machinery can be simplified using the [`Pipeline`](https://scikit-learn.org/stable/modules/generated/sklearn.pipeline.Pipeline.html) class from scikit-learn.
 
-To set up a scikit-learn [`Pipeline`](https://scikit-learn.org/1.5/modules/generated/sklearn.pipeline.Pipeline.html), ensure that:
+To set up a scikit-learn [`Pipeline`](https://scikit-learn.org/stable/modules/generated/sklearn.pipeline.Pipeline.html), ensure that:
 
 1. Each intermediate step is a [scikit-learn transformer object](https://scikit-learn.org/stable/data_transforms.html) with a `transform` and/or `fit_transform` method.
 2. The final step is an [estimator object](https://scikit-learn.org/stable/developers/develop.html#estimators) with a `fit` method, or a model with `fit`, `predict`, and `score` methods.
@@ -107,7 +107,7 @@ And the same holds for `pipe.score` and `pipe.predict`.
 
 ## Why pipelines are useful
 
-Pipelines not only streamline and simplify your code but also offer several other advantages. The real power of pipelines becomes evident when combined with the scikit-learn [`model_selection`](https://scikit-learn.org/1.5/api/sklearn.model_selection.html) module, which includes cross-validation and similar methods. This combination allows you to tune hyperparameters at each step of the pipeline in a straightforward manner.
+Pipelines not only streamline and simplify your code but also offer several other advantages. The real power of pipelines becomes evident when combined with the scikit-learn [`model_selection`](https://scikit-learn.org/stable/api/sklearn.model_selection.html) module, which includes cross-validation and similar methods. This combination allows you to tune hyperparameters at each step of the pipeline in a straightforward manner.
 
 In the following sections, we will showcase this approach with a concrete example: selecting the appropriate basis type and number of bases for a GLM regression in NeMoS.
 
@@ -288,7 +288,7 @@ The values in the dictionary are the parameters to be tested.
 
 
 #### Run the grid search
-Let's run a 5-fold cross-validation of the hyperparameters with the scikit-learn [`model_selection.GridsearchCV`](https://scikit-learn.org/1.5/modules/generated/sklearn.model_selection.GridSearchCV.html#sklearn.model_selection.GridSearchCV) class.
+Let's run a 5-fold cross-validation of the hyperparameters with the scikit-learn [`model_selection.GridsearchCV`](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GridSearchCV.html#sklearn.model_selection.GridSearchCV) class.
 :::{dropdown} K-Fold cross-validation
 :color: info
 :icon: info
