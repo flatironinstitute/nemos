@@ -190,7 +190,7 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
         #     state.f,
         #     new_fun_val - state.f,
         # )
-        # TODO: Have a more explicit condition to stop if something is none?
+        # TODO: Adapt this to terminate on nan with Cauchy
         # or use the same termination as JAXopt
         # terminate = ~continue_iteration assures that it stops if anything is NaN
         continue_iteration = (optx.two_norm(diff_y) / new_stepsize) > self.atol
