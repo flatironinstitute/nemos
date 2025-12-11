@@ -30,16 +30,28 @@ else
     exit 1
 fi
 
-echo "🔍 Checking $LABEL Markdown links in root directory..."
+echo "🔍 Checking $LABEL Markdown links..."
 LOG_FILE=$(mktemp)
 
 run_check() {
     local CONFIG=$1
     echo "🔎 Using config: $CONFIG"
+
+    # Check root directory
+    echo "📁 Checking root directory..."
     for file in $(find . -maxdepth 1 -name "*.md"); do
         echo "📄 Checking $file..."
         $MARKDOWN_LINK_CHECK -c "$CONFIG" "$file" 2>&1 | tee -a "$LOG_FILE"
     done
+
+    # Check docs directory (up to 2 levels deep) if it exists
+    if [[ -d "docs" ]]; then
+        echo "📁 Checking docs directory..."
+        for file in $(find docs -maxdepth 2 -name "*.md"); do
+            echo "📄 Checking $file..."
+            $MARKDOWN_LINK_CHECK -c "$CONFIG" "$file" 2>&1 | tee -a "$LOG_FILE"
+        done
+    fi
 }
 
 # Run one or both checks
