@@ -1056,46 +1056,78 @@ class GLM(BaseRegressor[ModelParams]):
 
     @cast_to_jax
     def update(
-            self,
-            params: Tuple[jnp.ndarray, jnp.ndarray],
-            opt_state: NamedTuple,
-            X: DESIGN_INPUT_TYPE,
-            y: jnp.ndarray,
-            *args,
-            n_samples: Optional[int] = None,
-            **kwargs,
+        self,
+        params: Tuple[jnp.ndarray, jnp.ndarray],
+        opt_state: NamedTuple,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        *args,
+        n_samples: Optional[int] = None,
+        **kwargs,
     ) -> StepResult:
+        """
+        Update the model parameters and solver state.
 
-        if isinstance(self.observation_model, obs.GaussianObservations):
-            with open("/tmp/debug_update.log", "a") as f:
-                f.write("=== UPDATE START ===\n")
-                f.write(f"Input params[0] (coef):\n{params[0]}\n")
-                f.write(f"Input params[1] (intercept):\n{params[1]}\n")
-                f.write(f"opt_state type: {type(opt_state)}\n")
+        This method performs a single optimization step using the model's current solver.
+        It updates the model's coefficients and intercept based on the provided parameters, predictors (X),
+        responses (y), and the current optimization state. This method is particularly useful for iterative
+        model fitting, especially in scenarios where model parameters need to be updated incrementally,
+        such as online learning or when dealing with very large datasets that do not fit into memory at once.
 
+        Parameters
+        ----------
+        params :
+            The current model parameters, typically a tuple of coefficients and intercepts.
+        opt_state :
+            The current state of the optimizer, encapsulating information necessary for the
+            optimization algorithm to continue from the current state. This includes gradients,
+            step sizes, and other optimizer-specific metrics.
+        X :
+            The predictors used in the model fitting process, which may include feature matrices
+            or :class:`nemos.pytrees.FeaturePytree` objects.
+        y :
+            The response variable or output data corresponding to the predictors, used in the model
+            fitting process.
+        *args
+            Additional positional arguments to be passed to the solver's update method.
+        n_samples:
+            The tot number of samples. Usually larger than the samples of an indivisual batch,
+            the ``n_samples`` are used to estimate the scale parameter of the GLM.
+        **kwargs
+            Additional keyword arguments to be passed to the solver's update method.
+
+        Returns
+        -------
+        StepResult
+            A tuple containing the updated parameters and optimization state. This tuple is
+            typically used to continue the optimization process in subsequent steps.
+
+        Raises
+        ------
+        ValueError
+            If the solver has not been instantiated or if the solver returns NaN values
+            indicating an invalid update step, typically due to numerical instabilities
+            or inappropriate solver configurations.
+
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> X, y = np.random.normal(size=(10, 2)), np.random.uniform(size=10)
+        >>> glm_instance = nmo.glm.GLM().fit(X, y)
+        >>> params = glm_instance.coef_, glm_instance.intercept_
+        >>> opt_state = glm_instance.solver_state_
+        >>> new_params, new_opt_state = glm_instance.update(params, opt_state, X, y)
+
+        """
         # find non-nans
         X, y = tree_utils.drop_nans(X, y)
 
         # grab the data
         data = X.data if isinstance(X, FeaturePytree) else X
 
-        if isinstance(self.observation_model, obs.GaussianObservations):
-            with open("/tmp/debug_update.log", "a") as f:
-                f.write(f"X shape: {data.shape}\n")
-                f.write(f"y shape: {y.shape}\n")
-                f.write(f"y values:\n{y}\n")
-                f.write("BEFORE solver_update\n")
-
         # perform a one-step update
         opt_step = self.solver_update(params, opt_state, data, y, *args, **kwargs)
-
-        if isinstance(self.observation_model, obs.GaussianObservations):
-            with open("/tmp/debug_update.log", "a") as f:
-                f.write("AFTER solver_update\n")
-                f.write(f"Output params[0] (coef):\n{opt_step[0][0]}\n")
-                f.write(f"Output params[1] (intercept):\n{opt_step[0][1]}\n")
-                f.write(f"Coef change magnitude: {jnp.linalg.norm(opt_step[0][0] - params[0])}\n")
-                f.write("=== UPDATE END ===\n\n")
 
         # store params and state
         self._set_coef_and_intercept(opt_step[0])
