@@ -93,3 +93,11 @@ def test_initialization_error_non_invertible():
             initialize_intercept_matching_mean_rate(
                 inverse_link_function=inv_link, y=output_y
             )
+
+
+def test_initialization_error_logistic_all_one_output():
+    output_y = np.ones(10)
+    with pytest.raises(ValueError, match="has non-finite values"):
+        initialize_intercept_matching_mean_rate(
+            inverse_link_function=jax.lax.logistic, y=output_y
+        )

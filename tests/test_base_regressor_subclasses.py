@@ -536,6 +536,13 @@ class TestModelCommons:
         fixture = instantiate_base_regressor_subclass
         X, model = fixture.X, fixture.model
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        # for logistic all ones would initialize the intercept to inf
+        if model.inverse_link_function.__name__ == "logistic":
+            y = np.expand_dims(y, 1) if y.ndim == 1 else y
+            for j in range(y.shape[1]):
+                row_ind = np.random.choice(y.shape[0], y.shape[0] // 10, replace=False)
+                y[row_ind, j] = 0
+            y = np.squeeze(y)
         n_groups = 2
         n_features = X.shape[1]
         mask = np.ones((n_groups, n_features), dtype=float)
@@ -992,7 +999,6 @@ class TestObservationModel:
     indirect=True,
 )
 class TestModelSimulation:
-
     @pytest.mark.parametrize(
         "n_params",
         [0, 1, 2, 3, 4],

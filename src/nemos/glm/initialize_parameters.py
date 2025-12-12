@@ -119,6 +119,12 @@ def initialize_intercept_matching_mean_rate(
                 "Failed to initialize the model intercept as the inverse of the firing rate for "
                 "the provided link function. The mean firing rate has some non-positive values."
             )
+        if jnp.any(~jnp.isfinite(out)):
+            raise ValueError(
+                "Failed to initialize the model intercept as the inverse of the firing rate for "
+                "the provided link function. The inferred intercept has non-finite values. "
+                "Please provide initial parameters instead."
+            )
         return out
 
     def func(x, mean_x):
