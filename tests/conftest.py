@@ -1345,7 +1345,7 @@ def configure_solver_backend():
         nmo.solvers.solver_registry.update(original)
 
 
-@pytest.fixture
+@pytest.fixture(scope="function", autouse=True)
 def gaussianGLM_model_instantiation():
     """Set up a Gaussian GLM for testing purposes.
 
@@ -1375,7 +1375,7 @@ def gaussianGLM_model_instantiation():
     return X, np.random.normal(rate), model, (w_true, b_true), rate
 
 
-@pytest.fixture
+@pytest.fixture(scope="function", autouse=True)
 def population_gaussianGLM_model_instantiation():
     """Set up a Population Gaussian GLM for testing purposes.
 

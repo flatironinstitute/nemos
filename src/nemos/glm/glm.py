@@ -1120,14 +1120,29 @@ class GLM(BaseRegressor[ModelParams]):
         >>> new_params, new_opt_state = glm_instance.update(params, opt_state, X, y)
 
         """
+        print("=== UPDATE START ===")
+        print(f"Input params[0] (coef) hash: {hash(str(params[0]))}")
+        print(f"Input params[1] (intercept) hash: {hash(str(params[1]))}")
+        print(f"opt_state type: {type(opt_state)}")
+
         # find non-nans
         X, y = tree_utils.drop_nans(X, y)
+        print(f"After dropping - X shape: {X.shape if hasattr(X, 'shape') else 'N/A'}")
+        print(f"After dropping - y shape: {y.shape}")
+        print(f"y mean: {jnp.mean(y)}, y std: {jnp.std(y)}")
 
         # grab the data
         data = X.data if isinstance(X, FeaturePytree) else X
 
+        print("BEFORE solver_update call")
         # perform a one-step update
         opt_step = self.solver_update(params, opt_state, data, y, *args, **kwargs)
+
+        print("AFTER solver_update call")
+        print(f"Output params[0] (coef) hash: {hash(str(opt_step[0][0]))}")
+        print(f"Output params[1] (intercept) hash: {hash(str(opt_step[0][1]))}")
+        print(f"Coef magnitude change: {jnp.linalg.norm(opt_step[0][0] - params[0])}")
+        print("=== UPDATE END ===\n")
 
         # store params and state
         self._set_coef_and_intercept(opt_step[0])

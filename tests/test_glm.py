@@ -1426,7 +1426,6 @@ class TestGLM:
         "bernoulliGLM_model_instantiation",
         "negativeBinomialGLM_model_instantiation",
     ],
-    scope="function"
 )
 class TestGLMObservationModel:
     """
@@ -1881,6 +1880,8 @@ class TestGLMObservationModel:
         # extract batch and add nans
         Xnan = X[:batch_size]
         Xnan[: batch_size // 2] = np.nan
+        model1 = deepcopy(model)
+        model2 = deepcopy(model)
 
         # run 3 iterations
         tot_iter = 3
@@ -1890,9 +1891,11 @@ class TestGLMObservationModel:
         nojit_state = deepcopy(state)
         Xnan = jnp.asarray(Xnan)
         y = jnp.asarray(y)
+        model1 = deepcopy(model)
+        model2 = deepcopy(model)
 
         for _ in range(tot_iter):
-            jit_update, jit_state = model.update(
+            jit_update, jit_state = model1.update(
                 jit_update, jit_state, Xnan, y[:batch_size]
             )
         # make sure there is an update
@@ -1900,7 +1903,7 @@ class TestGLMObservationModel:
 
         with jax.disable_jit(True):
             for _ in range(tot_iter):
-                nojit_update, nojit_state = model.update(
+                nojit_update, nojit_state = model2.update(
                     nojit_update, nojit_state, Xnan, y[:batch_size]
                 )
         # check for equivalence update
