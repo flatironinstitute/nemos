@@ -442,8 +442,9 @@ def generate_data_multi_state_population():
     transition_prob = np.random.uniform(size=(n_states, n_states))
     transition_prob /= np.sum(transition_prob, axis=0)
     transition_prob = transition_prob.T
-    coef, intercept = np.random.randn(2, n_neurons, n_states), np.random.randn(
-        n_neurons, n_states
+    coef, intercept = (
+        np.random.randn(2, n_neurons, n_states),
+        np.random.randn(n_neurons, n_states),
     )
 
     X = np.random.randn(n_samples, 2)
@@ -829,7 +830,6 @@ class TestLikelihood:
 class TestMStep:
     @pytest.mark.requires_x64
     def test_run_m_step_regression(self):
-
         # Fetch the data
         data_path = fetch_data("em_three_states.npz")
         data = np.load(data_path)
@@ -1318,7 +1318,6 @@ class TestMStep:
     )
     @pytest.mark.requires_x64
     def test_run_m_step_regression_priors_simulation(self, data_name):
-
         # Fetch the data
         data_path = fetch_data(data_name)
         data = np.load(data_path)
@@ -1946,9 +1945,6 @@ class TestConvergence:
         """Test that convergence checker detects convergence with small likelihood change."""
 
         state = GLMHMMState(
-            log_initial_prob=jnp.array([0.5, 0.5]),
-            log_transition_matrix=jnp.eye(2),
-            glm_params=(jnp.zeros((2, 2)), jnp.zeros(2)),
             data_log_likelihood=-0.0,
             previous_data_log_likelihood=-0.0001,  # Very small change
             log_likelihood_history=jnp.zeros(1),
@@ -1965,9 +1961,6 @@ class TestConvergence:
         """Test that convergence checker detects non-convergence with large likelihood change."""
 
         state = GLMHMMState(
-            log_initial_prob=jnp.array([0.5, 0.5]),
-            log_transition_matrix=jnp.eye(2),
-            glm_params=(jnp.zeros((2, 2)), jnp.zeros(2)),
             data_log_likelihood=-100.0,
             previous_data_log_likelihood=-130.0,  # Large change
             log_likelihood_history=jnp.zeros(1),
@@ -1981,9 +1974,6 @@ class TestConvergence:
         """Test convergence checker behavior on first iteration."""
 
         state = GLMHMMState(
-            log_initial_prob=jnp.array([0.5, 0.5]),
-            log_transition_matrix=jnp.eye(2),
-            glm_params=(jnp.zeros((2, 2)), jnp.zeros(2)),
             data_log_likelihood=-jnp.inf,
             previous_data_log_likelihood=-jnp.inf,
             log_likelihood_history=jnp.zeros(1),
