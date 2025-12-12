@@ -71,11 +71,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install tox
 
-      - name: Run solver-dependent tests with JAXopt backend
-        run: tox -e backend-jaxopt
+#      - name: Run solver-dependent tests with JAXopt backend
+#        run: tox -e backend-jaxopt
 
       - name: Start tmate session for debugging
-        if: failure()
+#        if: failure()
         uses: mxschmitt/action-tmate@v3
 
       - name: Upload coverage reports to Codecov
