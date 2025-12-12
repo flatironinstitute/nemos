@@ -1966,9 +1966,6 @@ class TestConvergence:
         """Test that convergence checker detects convergence with small likelihood change."""
 
         state = GLMHMMState(
-            log_initial_prob=jnp.array([0.5, 0.5]),
-            log_transition_matrix=jnp.eye(2),
-            glm_params=(jnp.zeros((2, 2)), jnp.zeros(2)),
             data_log_likelihood=-0.0,
             previous_data_log_likelihood=-0.0001,  # Very small change
             log_likelihood_history=jnp.zeros(1),
@@ -1985,9 +1982,6 @@ class TestConvergence:
         """Test that convergence checker detects non-convergence with large likelihood change."""
 
         state = GLMHMMState(
-            log_initial_prob=jnp.array([0.5, 0.5]),
-            log_transition_matrix=jnp.eye(2),
-            glm_params=(jnp.zeros((2, 2)), jnp.zeros(2)),
             data_log_likelihood=-100.0,
             previous_data_log_likelihood=-130.0,  # Large change
             log_likelihood_history=jnp.zeros(1),
@@ -2001,9 +1995,6 @@ class TestConvergence:
         """Test convergence checker behavior on first iteration."""
 
         state = GLMHMMState(
-            log_initial_prob=jnp.array([0.5, 0.5]),
-            log_transition_matrix=jnp.eye(2),
-            glm_params=(jnp.zeros((2, 2)), jnp.zeros(2)),
             data_log_likelihood=-jnp.inf,
             previous_data_log_likelihood=-jnp.inf,
             log_likelihood_history=jnp.zeros(1),
