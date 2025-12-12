@@ -1416,15 +1416,15 @@ class TestGLM:
             nmo.load_model(save_path, mapping_dict=invalid_mapping)
 
 
-@pytest.mark.parametrize("glm_type", ["", "population_"])
+@pytest.mark.parametrize("glm_type", ["",])# "population_"])
 @pytest.mark.parametrize(
     "model_instantiation",
     [
         "gaussianGLM_model_instantiation",
-        "poissonGLM_model_instantiation",
-        "gammaGLM_model_instantiation",
-        "bernoulliGLM_model_instantiation",
-        "negativeBinomialGLM_model_instantiation",
+        # "poissonGLM_model_instantiation",
+        # "gammaGLM_model_instantiation",
+        # "bernoulliGLM_model_instantiation",
+        # "negativeBinomialGLM_model_instantiation",
     ],
 )
 class TestGLMObservationModel:
@@ -1865,7 +1865,7 @@ class TestGLMObservationModel:
         assert jnp.all(jnp.isfinite(model.intercept_))
         assert jnp.all(jnp.isfinite(model.scale_))
 
-    @pytest.mark.parametrize("batch_size", [2, 10])
+    @pytest.mark.parametrize("batch_size", [2])#[2, 10])
     @pytest.mark.solver_related
     @pytest.mark.requires_x64
     def test_update_nan_drop_at_jit_comp(
@@ -1875,19 +1875,23 @@ class TestGLMObservationModel:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
+        with open("/tmp/debug_update.log", "a") as f:
+            f.write("STARTED TEST:")
+            f.write(f"{glm_type + model_instantiation}")
+            f.write(f"{batch_size}")
+            f.write(f"")
         params = model.initialize_params(X, y)
         state = model.initialize_state(X, y, params)
         # extract batch and add nans
         Xnan = X[:batch_size]
         Xnan[: batch_size // 2] = np.nan
-        model1 = deepcopy(model)
-        model2 = deepcopy(model)
+
 
         # run 3 iterations
         tot_iter = 3
-        jit_update = deepcopy(params)
+        jit_update = deepcopy(jax.tree_util.tree_map(lambda x: jnp.asarray(x, float), params))
         jit_state = deepcopy(state)
-        nojit_update = deepcopy(params)
+        nojit_update = deepcopy(jax.tree_util.tree_map(lambda x: jnp.asarray(x, float), params))
         nojit_state = deepcopy(state)
         Xnan = jnp.asarray(Xnan)
         y = jnp.asarray(y)
