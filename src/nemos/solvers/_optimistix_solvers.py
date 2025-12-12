@@ -8,11 +8,11 @@ from ..regularizer import Regularizer
 from ..typing import Aux, Params
 from ._abstract_solver import OptimizationInfo
 from ._aux_helpers import (
-    _as_inexact_array,
-    _convert_fn,
-    _drop_aux,
-    _pack_args,
-    _wrap_aux,
+    convert_fn,
+    drop_aux,
+    pack_args,
+    tree_map_inexact_asarray,
+    wrap_aux,
 )
 from ._solver_adapter import SolverAdapter
 
@@ -105,11 +105,11 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
         self.config = OptimistixConfig(maxiter=maxiter, **user_args)
 
         if has_aux:
-            self.fun_with_aux = _pack_args(loss_fn)
-            self.fun = _drop_aux(self.fun_with_aux)
+            self.fun_with_aux = pack_args(loss_fn)
+            self.fun = drop_aux(self.fun_with_aux)
         else:
-            self.fun = _pack_args(loss_fn)
-            self.fun_with_aux = _wrap_aux(self.fun)
+            self.fun = pack_args(loss_fn)
+            self.fun_with_aux = wrap_aux(self.fun)
 
         self._solver = self._solver_cls(
             atol=tol,
@@ -121,8 +121,8 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
         self.stats = {}
 
     def init_state(self, init_params: Params, *args: Any) -> OptimistixSolverState:
-        init_params = _as_inexact_array(init_params)
-        fn = _convert_fn(self.fun_with_aux, True, init_params, args)
+        init_params = tree_map_inexact_asarray(init_params)
+        fn = convert_fn(self.fun_with_aux, True, init_params, args)
         f_struct, aux_struct = fn.out_struct
 
         return self._solver.init(
@@ -141,10 +141,10 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
         state: OptimistixSolverState,
         *args: Any,
     ) -> OptimistixStepResult:
-        params = _as_inexact_array(params)
+        params = tree_map_inexact_asarray(params)
 
         # TODO: Check if I can store this
-        fn = _convert_fn(self.fun_with_aux, True, params, args)
+        fn = convert_fn(self.fun_with_aux, True, params, args)
 
         new_params, state, aux = self._solver.step(
             fn=fn,
