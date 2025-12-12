@@ -1426,6 +1426,7 @@ class TestGLM:
         "bernoulliGLM_model_instantiation",
         "negativeBinomialGLM_model_instantiation",
     ],
+    scope="function"
 )
 class TestGLMObservationModel:
     """
@@ -1684,6 +1685,8 @@ class TestGLMObservationModel:
             glm_type + model_instantiation + "_pytree"
         )
         # fit both models
+        model.solver_kwargs.update(dict(tol=1e-12))
+        model_tree.solver_kwargs.update(dict(tol=1e-12))
         model.fit(X, y, init_params=true_params)
         model_tree.fit(X_tree, y, init_params=true_params_tree)
 
@@ -1883,6 +1886,11 @@ class TestGLMObservationModel:
         tot_iter = 3
         jit_update = deepcopy(params)
         jit_state = deepcopy(state)
+        nojit_update = deepcopy(params)
+        nojit_state = deepcopy(state)
+        Xnan = jnp.asarray(Xnan)
+        y = jnp.asarray(y)
+
         for _ in range(tot_iter):
             jit_update, jit_state = model.update(
                 jit_update, jit_state, Xnan, y[:batch_size]
@@ -1890,9 +1898,6 @@ class TestGLMObservationModel:
         # make sure there is an update
         assert any(~jnp.allclose(p0, jit_update[k]) for k, p0 in enumerate(params))
 
-        # update without jitting
-        nojit_update = deepcopy(params)
-        nojit_state = deepcopy(state)
         with jax.disable_jit(True):
             for _ in range(tot_iter):
                 nojit_update, nojit_state = model.update(
