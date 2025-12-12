@@ -1,19 +1,36 @@
+"""
+Helpers for supporting objective functions with aux.
+
+Relevant NeMoS PR and discussion:
+  https://github.com/flatironinstitute/nemos/pull/444
+  https://github.com/flatironinstitute/nemos/pull/444#discussion_r2593434556
+"""
+
 from typing import Any, Callable
 
 import equinox as eqx
 import jax
 import jax.numpy as jnp
 
+# NOTE: If optimistix._misc._asarray is deleted, just use jnp.asarray instead.
+# Requires bumping JAX version: jax>=0.7.2
+# That is when the fix for #15676 and representing constants as arrays in jaxpr were included.
+#   https://github.com/jax-ml/jax/issues/15676
+#   https://docs.jax.dev/en/latest/changelog.html#jax-0-7-2-september-16-2025
+# So swtiching to jnp.asarray can also be done if the jax requirement is >=0.7.2.
+# Note that arguments are reversed.
+from optimistix._misc import _asarray
+
 from ..typing import Params, Pytree
 
 
-def _inexact_asarray(x):
-    """
-    Cast x as inexact array.
+def asarray(x):
+    dtype = jnp.result_type(x)  # to prevent weak_type?
+    return _asarray(dtype, x)
 
-    Adaptation of optimistix._misc.inexact_asarray using
-    jnp.asarray instead of optimistix._misc.asarray.
-    """
+
+def _inexact_asarray(x):
+    """Adaptation of optimistix._misc.inexact_asarray."""
     dtype = jnp.result_type(x)
     if not jnp.issubdtype(jnp.result_type(x), jnp.inexact):
         if jax.config.jax_enable_x64:  # pyright: ignore
@@ -21,10 +38,7 @@ def _inexact_asarray(x):
         else:
             dtype = jnp.float32
 
-    # using jnp.asarray instead of optimistix._misc.asarray
-    # as the relevant JAX issue seems to be fixed
-    # https://github.com/jax-ml/jax/issues/15676
-    return jnp.asarray(x, dtype)
+    return _asarray(dtype, x)
 
 
 def _as_inexact_array(params: Pytree):
@@ -66,7 +80,7 @@ def _out_asarray(fn: Callable):
     def _fn_with_array_outputs(*args, **kwargs):
         out, aux = fn(*args, **kwargs)
         out = jax.tree_util.tree_map(_inexact_asarray, out)
-        aux = jax.tree_util.tree_map(jnp.asarray, aux)
+        aux = jax.tree_util.tree_map(asarray, aux)
         return out, aux
 
     return _fn_with_array_outputs
