@@ -1272,7 +1272,7 @@ def instantiate_base_regressor_subclass(request):
         else:
             raise ValueError("model_name {} unknown".format(model_name))
         _MODEL_CACHE[cache_key] = result
-        return result
+        return deepcopy(result)
 
     # Get cached data and return a complete deepcopy of everything
     # this is different from a function level fixture because it
