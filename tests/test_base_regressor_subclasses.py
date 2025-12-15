@@ -347,6 +347,7 @@ class TestModelCommons:
         assert getattr(init_state, "velocity", params) == params
 
     @pytest.mark.solver_related
+    @pytest.mark.requires_x64
     def test_fit_mask_grouplasso(self, instantiate_base_regressor_subclass):
         """Test that the group lasso fit goes through"""
 

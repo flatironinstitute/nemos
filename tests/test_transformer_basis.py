@@ -857,6 +857,7 @@ def test_transformer_fit_transform_input_struct(
         0.1 * np.random.randn(100, 1, 2),
     ],
 )
+@pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
 def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
 
     if basis_cls is IdentityEval:
