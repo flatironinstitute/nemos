@@ -1361,7 +1361,7 @@ def gaussianGLM_model_instantiation():
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
     np.random.seed(123)
-    X = np.random.normal(size=(100, 5)) * 100
+    X = np.random.normal(size=(100, 5))
     b_true = np.zeros((1,))
     w_true = np.random.normal(size=(5,))
     observation_model = nmo.observation_models.GaussianObservations()
@@ -1371,7 +1371,7 @@ def gaussianGLM_model_instantiation():
     )  # , solver_kwargs={"tol":1e-12})
     model.scale_ = 1.0
     rate = jax.numpy.einsum("k,tk->t", w_true, X) + b_true
-    return X, np.random.normal(rate), model, GLMParams(w_true, b_true), rate
+    return X, 0.1 * np.random.normal(rate), model, GLMParams(w_true, b_true), rate
 
 
 @pytest.fixture
