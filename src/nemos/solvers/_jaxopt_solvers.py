@@ -102,9 +102,11 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
         Prefers `state.aux` when present; otherwise falls back to the provided field name
         (e.g., `aux_batch` for SVRG updates or `aux_full` for SVRG run).
         """
+        # solvers imported from jaxopt have state.aux
         if hasattr(state, "aux"):
             return state.aux
 
+        # for SVRG get state.aux_batch or state.aux_full
         return getattr(state, fallback_name)
 
 
