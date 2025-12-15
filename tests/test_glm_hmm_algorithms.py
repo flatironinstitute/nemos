@@ -948,6 +948,7 @@ class TestMStep:
             grad_at_lagr, np.zeros_like(lagrange_multiplier)
         )
 
+    @pytest.mark.requires_x64
     def test_single_state_mstep(self, single_state_inputs):
         """Single state forward pass posteriors reduces to a GLM."""
         initial_prob, transition_prob, coef, intercept, X, rate, y = single_state_inputs

@@ -487,6 +487,7 @@ class TestUnRegularized:
     )
     @pytest.mark.parametrize("solver_name", ["LBFGS", "SVRG"])
     @pytest.mark.requires_x64
+
     def test_solver_match_statsmodels_gamma(
         self, inv_link_jax, link_sm, gammaGLM_model_instantiation, solver_name
     ):
@@ -1309,6 +1310,7 @@ class TestElasticNet:
     @pytest.mark.parametrize("reg_strength", [1.0, 0.5, 0.1])
     @pytest.mark.parametrize("reg_ratio", [1.0, 0.5, 0.2])
     @pytest.mark.requires_x64
+    @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
     def test_solver_match_statsmodels(
         self, solver_name, reg_strength, reg_ratio, poissonGLM_model_instantiation
     ):
@@ -1351,6 +1353,7 @@ class TestElasticNet:
         assert np.allclose(sm_params, glm_params)
 
     @pytest.mark.requires_x64
+    @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
     def test_loss_convergence(self):
         """Test that penalized loss converges to the same value as statsmodels and the proximal operator."""
         # generate toy data

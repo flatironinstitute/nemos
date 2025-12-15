@@ -332,6 +332,7 @@ def test_svrg_glm_update(
     "glm_class",
     [nmo.glm.GLM, nmo.glm.PopulationGLM],
 )
+@pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
 def test_svrg_glm_fit(
     glm_class,
     regularizer_name,

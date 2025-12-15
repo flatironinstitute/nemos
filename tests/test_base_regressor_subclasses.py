@@ -331,12 +331,14 @@ class TestModelCommons:
         assert getattr(init_state, "velocity", params) == params
 
     @pytest.mark.solver_related
+    @pytest.mark.requires_x64
     def test_fit_mask_grouplasso(self, instantiate_base_regressor_subclass):
         """Test that the group lasso fit goes through"""
 
         fixture = instantiate_base_regressor_subclass
         X, model = fixture.X, fixture.model
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        y[::5] = 0  # bernoulli cannot be initialized to all 1s (expit^-1(1) = inf)
         n_groups = 2
         n_features = X.shape[1]
         mask = np.ones((n_groups, n_features), dtype=float)
