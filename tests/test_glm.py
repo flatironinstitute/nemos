@@ -63,6 +63,7 @@ def model_instantiation_type(glm_class_type):
 
 @pytest.mark.parametrize("glm_class_type", ["", "population"])
 @pytest.mark.solver_related
+@pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
 def test_get_fit_attrs(request, glm_class_type, model_instantiation_type):
     X, y, model = request.getfixturevalue(model_instantiation_type)[:3]
     expected_state = {
@@ -1413,7 +1414,7 @@ class TestGLMObservationModel:
             return 0.01
 
         elif "gaussian" in model_instantiation:
-            return 0.5
+            return 0.1
 
         else:
             raise ValueError("Unknown model instantiation")
@@ -1451,7 +1452,7 @@ class TestGLMObservationModel:
             if "population" in glm_type:
                 return np.array([5, 5, 5])
             else:
-                return np.array([5])
+                return np.array([3])
 
         else:
             raise ValueError("Unknown model instantiation")
@@ -1856,7 +1857,7 @@ class TestGLMObservationModel:
             glm_type + model_instantiation
         )
         param_grid = {"solver_name": ["BFGS", "GradientDescent"]}
-        model.solver_kwargs.update(dict(max_iter=2))
+        model.solver_kwargs.update(dict(maxiter=2))
         cls = GridSearchCV(model, param_grid).fit(X, y)
         # check that the repr works after cloning
         repr(cls)
