@@ -956,7 +956,6 @@ def em_glm_hmm(
         is_new_session,
     )
 
-    # TODO: what should be log and what not? Docstring doesn't mention log.
     return (
         jnp.exp(log_posteriors),
         jnp.exp(log_joint_posterior),
