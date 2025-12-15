@@ -638,7 +638,7 @@ def test_all_solvers_accept_maxiter_and_not_max_steps():
         assert "max_steps" not in solver_class.get_accepted_arguments()
 
 
-# TODO: add @pytest.mark.requires_x64
+@pytest.mark.requires_x64
 @pytest.mark.parametrize(
     "solver_name", [solver for solver in nmo.solvers.solver_registry.keys()]
 )
@@ -650,7 +650,6 @@ def test_all_solvers_accept_maxiter_and_not_max_steps():
     ],
 )
 def test_solvers_use_aux_in_run(request, solver_name, aux_gen_fn):
-    jax.config.update("jax_enable_x64", True)
     X, y, _, true_params, loss = request.getfixturevalue("linear_regression")
     solver_class = nmo.solvers.solver_registry[solver_name]
 
