@@ -143,7 +143,6 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
     ) -> OptimistixStepResult:
         params = tree_map_inexact_asarray(params)
 
-        # TODO: Check if I can store this
         fn = convert_fn(self.fun_with_aux, True, params, args)
 
         new_params, state, aux = self._solver.step(
