@@ -2251,9 +2251,6 @@ class TestConvergence:
             tol=tol,
         )
 
-        # TODO: final_..._prob are log, leading to valid solution, but test failure
-        # -inf in log probabilities is valid
-
         # Final state should have valid likelihood
         assert jnp.isfinite(
             final_state.data_log_likelihood
