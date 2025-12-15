@@ -195,7 +195,7 @@ def test_sklearn_transformer_pipeline_pynapple(
     bas, poissonGLM_model_instantiation, expected_nans
 ):
     X, y, model, _, _ = poissonGLM_model_instantiation
-
+    model.solver_kwargs.update({"maxiter": 2})
     # transform input to pynapple
     ep = nap.IntervalSet(start=[0, 20.5], end=[20, X.shape[0]])
     X_nap = nap.TsdFrame(t=np.arange(X.shape[0]), d=X, time_support=ep)
@@ -284,7 +284,7 @@ def test_cross_validate_multiplicative_basis_in_pipe_with_label(
     poissonGLM_model_instantiation,
 ):
     X, y, model, _, _ = poissonGLM_model_instantiation
-    model.solver_kwargs = {}
+    model.solver_kwargs.update({"maxiter": 2})
     bas = basis.RaisedCosineLinearEval(4, label="x") * basis.MSplineEval(5, label="y")
     pipe = Pipeline(
         [("bas", bas.to_transformer().set_input_shape(1, 1)), ("fit", model)]
