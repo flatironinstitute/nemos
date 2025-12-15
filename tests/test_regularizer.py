@@ -487,7 +487,6 @@ class TestUnRegularized:
     )
     @pytest.mark.parametrize("solver_name", ["LBFGS", "SVRG"])
     @pytest.mark.requires_x64
-
     def test_solver_match_statsmodels_gamma(
         self, inv_link_jax, link_sm, gammaGLM_model_instantiation, solver_name
     ):

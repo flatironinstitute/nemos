@@ -2355,7 +2355,7 @@ class TestPopulationGLMObservationModel:
                 nmo.regularizer.Lasso(),
                 0.001,
                 "ProximalGradient",
-                {"tol": 10**-8, "maxiter":10**5},
+                {"tol": 10**-8, "maxiter": 10**5},
             ),
             (
                 nmo.regularizer.Lasso(),
