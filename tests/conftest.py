@@ -1380,7 +1380,7 @@ def gaussianGLM_model_instantiation():
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
     np.random.seed(123)
-    X = np.random.normal(size=(100, 5)) * 100
+    X = np.random.normal(size=(100, 5))
     b_true = np.zeros((1,))
     w_true = np.random.normal(size=(5,))
     observation_model = nmo.observation_models.GaussianObservations()

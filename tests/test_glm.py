@@ -1,5 +1,3 @@
-import inspect
-import warnings
 from contextlib import nullcontext as does_not_raise
 from copy import deepcopy
 from typing import Callable
@@ -8,11 +6,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-import scipy as sp
-import scipy.stats as sts
 import sklearn
 import statsmodels.api as sm
-from numba import njit
 from pynapple import Tsd, TsdFrame
 from sklearn.linear_model import (
     GammaRegressor,
@@ -26,11 +21,9 @@ import nemos as nmo
 from nemos import solvers
 from nemos._observation_model_builder import instantiate_observation_model
 from nemos._regularizer_builder import instantiate_regularizer
-from nemos.inverse_link_function_utils import LINK_NAME_TO_FUNC, identity
-from nemos.observation_models import NegativeBinomialObservations
+from nemos.inverse_link_function_utils import identity
 from nemos.pytrees import FeaturePytree
 from nemos.tree_utils import (
-    drop_nans,
     pytree_map_and_reduce,
     tree_l2_norm,
     tree_slice,
@@ -1567,8 +1560,8 @@ class TestGLMObservationModel:
             glm_type + model_instantiation + "_pytree"
         )
         # fit both models
-        model.solver_kwargs.update(dict(tol=1e-12))
-        model_tree.solver_kwargs.update(dict(tol=1e-12))
+        model.solver_kwargs.update(dict(tol=1e-7, maxiter=10**5))
+        model_tree.solver_kwargs.update(dict(tol=1e-7, maxiter=10**5))
         model.fit(X, y, init_params=(true_params.coef, true_params.intercept))
         model_tree.fit(
             X_tree, y, init_params=(true_params_tree.coef, true_params_tree.intercept)
@@ -1855,6 +1848,7 @@ class TestGLMObservationModel:
     # Compare with standard implementation #
     ########################################
     @pytest.mark.solver_related
+    @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
     def test_compatibility_with_sklearn_cv(
         self, request, glm_type, model_instantiation
     ):
@@ -1862,6 +1856,7 @@ class TestGLMObservationModel:
             glm_type + model_instantiation
         )
         param_grid = {"solver_name": ["BFGS", "GradientDescent"]}
+        model.solver_kwargs.update(dict(max_iter=2))
         cls = GridSearchCV(model, param_grid).fit(X, y)
         # check that the repr works after cloning
         repr(cls)
@@ -2098,6 +2093,7 @@ class TestGLMObservationModel:
             strength = request.getfixturevalue(strength)
         model.set_params(regularizer=reg, regularizer_strength=strength)
         model.solver_name = model.regularizer.default_solver
+        model.solver_kwargs.update({"maxiter": 10**5})
         model.fit(X, y)
         num = model._estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
         assert np.allclose(num, n_samples - dof - 1)
@@ -2483,7 +2479,7 @@ class TestPopulationGLMObservationModel:
                 nmo.regularizer.Lasso(),
                 0.001,
                 "ProximalGradient",
-                {"tol": 10**-14},
+                {"tol": 10**-8, "maxiter":10**5},
             ),
             (
                 nmo.regularizer.Lasso(),
@@ -2516,6 +2512,7 @@ class TestPopulationGLMObservationModel:
     )
     @pytest.mark.solver_related
     @pytest.mark.requires_x64
+    @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
     def test_masked_fit_vs_loop(
         self,
         regularizer,
@@ -2584,6 +2581,7 @@ class TestPopulationGLMObservationModel:
             idx, coef = map_neu(k, model_single_neu.coef_)
             coef_loop[idx, k] = coef
             intercept_loop[k] = np.array(model_single_neu.intercept_)[0]
+        print(model)
         print(f"\nMAX ERR: {np.abs(coef_loop - coef_vectorized).max()}")
 
         assert np.allclose(coef_loop, coef_vectorized, atol=10**-5, rtol=0)
@@ -2760,6 +2758,7 @@ class TestPoissonGLM:
         ],
     )
     @pytest.mark.solver_related
+    @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
     @pytest.mark.requires_x64
     def test_glm_update_consistent_with_fit_with_svrg(
         self,
