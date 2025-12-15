@@ -38,12 +38,12 @@ from nemos.basis import AdditiveBasis, CustomBasis, MultiplicativeBasis
 from nemos.basis._basis import Basis
 from nemos.basis._basis_mixin import BasisMixin
 from nemos.basis._transformer_basis import TransformerBasis
+from nemos.glm.params import GLMParams
 from nemos.glm_hmm.initialize_parameters import (
     random_glm_params_init,
     sticky_transition_proba_init,
     uniform_initial_proba_init,
 )
-from nemos.glm.params import GLMParams
 
 DEFAULT_KWARGS = {
     "n_basis_funcs": 5,
