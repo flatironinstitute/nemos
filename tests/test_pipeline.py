@@ -304,6 +304,7 @@ def test_cross_validate_additive_basis_in_pipe_with_label(
     poissonGLM_model_instantiation,
 ):
     X, y, model, _, _ = poissonGLM_model_instantiation
+    model.solver_kwargs.update({"maxiter": 2})
     bas = basis.RaisedCosineLinearEval(4, label="x") + basis.MSplineEval(5, label="y")
     pipe = Pipeline(
         [("bas", bas.to_transformer().set_input_shape(1, 1)), ("fit", model)]
