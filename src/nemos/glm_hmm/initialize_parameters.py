@@ -1,45 +1,47 @@
 """Initialization functions and related utility functions."""
 
 import inspect
-from typing import Any, Callable, Tuple
+from typing import Callable, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
-from numpy.typing import ArrayLike
+from numpy.typing import NDArray
 
-from ..type_casting import is_numpy_array_like
 from ..typing import DESIGN_INPUT_TYPE
 
 
 def random_glm_params_init(
-    n_neurons: int,
     n_states: int,
     X: DESIGN_INPUT_TYPE,
-    y: jnp.ndarray = None,
+    y: jnp.ndarray,
     random_key=jax.random.PRNGKey(123),
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """
     Initialize GLM coefficients and intercept with random normal values.
 
+    Generates random GLM parameters for each HMM state by sampling from a normal
+    distribution scaled by 0.1.
+
     Parameters
     ----------
-    n_states :
-        Number of neurons to be fit.
-    n_states :
+    n_states : int
         Number of HMM states.
-    X :
+    X : DESIGN_INPUT_TYPE
         Design matrix with shape (n_samples, n_features).
-    y :
+    y : jnp.ndarray
         Observations, shape (n_samples,) or (n_samples, n_units).
-    random_key
+    random_key : jax.random.PRNGKey
         Random key for reproducibility. Default is PRNGKey(123).
 
     Returns
     -------
-    :
-        Projection weight coef and intercept of shape (n_features, n_states) and (n_states,).
+    coef : jnp.ndarray
+        Coefficient matrix of shape (n_features, n_neurons, n_states).
+    intercept : jnp.ndarray
+        Intercept array of shape (n_neurons, n_states).
     """
     n_features = X.shape[1]
+    n_neurons = 1 if y.ndim == 1 else y.shape[1]
     random_param = 0.1 * jax.random.normal(
         random_key, (n_features + 1, n_neurons, n_states)
     )
@@ -48,6 +50,8 @@ def random_glm_params_init(
 
 def sticky_transition_proba_init(
     n_states: int,
+    X: DESIGN_INPUT_TYPE,
+    y: NDArray | jnp.ndarray,
     random_key: jax.numpy.ndarray = jax.random.PRNGKey(123),
     prob_stay=0.95,
 ):
@@ -55,19 +59,26 @@ def sticky_transition_proba_init(
     Initialize transition probabilities with sticky dynamics.
 
     Creates a transition probability matrix that favors staying in the current state.
+    The diagonal entries (probability of staying in current state) are set to `prob_stay`,
+    while off-diagonal entries (probability of transitioning to other states) are set to
+    (1 - prob_stay) / (n_states - 1).
 
     Parameters
     ----------
-    n_states :
+    n_states : int
         Number of HMM states. Must be greater than 1.
-    random_key :
+    X : DESIGN_INPUT_TYPE
+        Design matrix, unused but included for API consistency.
+    y : NDArray | jnp.ndarray
+        Observations, unused but included for API consistency.
+    random_key : jax.random.PRNGKey
         Random key, unused for this particular initialization, but added for API consistency.
-    prob_stay :
+    prob_stay : float
         Probability of staying in the current state. Default is 0.95.
 
     Returns
     -------
-    :
+    transition_matrix : jnp.ndarray
         Transition probability matrix of shape (n_states, n_states).
     """
     # assume n_state is > 1
@@ -77,7 +88,12 @@ def sticky_transition_proba_init(
     )
 
 
-def uniform_initial_proba_init(n_states: int, random_key=jax.random.PRNGKey(124)):
+def uniform_initial_proba_init(
+    n_states: int,
+    X: DESIGN_INPUT_TYPE,
+    y: NDArray | jnp.ndarray,
+    random_key=jax.random.PRNGKey(124),
+):
     """
     Initialize initial state probabilities from a uniform distribution.
 
@@ -86,14 +102,18 @@ def uniform_initial_proba_init(n_states: int, random_key=jax.random.PRNGKey(124)
 
     Parameters
     ----------
-    n_states :
+    n_states : int
         Number of HMM states.
-    random_key :
+    X : DESIGN_INPUT_TYPE
+        Design matrix, unused but included for API consistency.
+    y : NDArray | jnp.ndarray
+        Observations, unused but included for API consistency.
+    random_key : jax.random.PRNGKey
         Random key for reproducibility. Default is PRNGKey(124).
 
     Returns
     -------
-    :
+    initial_probs : jnp.ndarray
         Initial state probability vector of shape (n_states,) that sums to 1.
 
     Examples
@@ -120,450 +140,201 @@ def uniform_initial_proba_init(n_states: int, random_key=jax.random.PRNGKey(124)
     return prob / jnp.sum(prob)
 
 
-AVAILABLE_GLM_PARAMS_INIT = [random_glm_params_init]
-AVAILABLE_TRANSITION_PROBA_INIT = [sticky_transition_proba_init]
-AVAILABLE_INITIAL_PROBA_INIT = [uniform_initial_proba_init]
-
-INIT_FUNCTION_MAPPING = {
+AVAILABLE_INIT_FUNCTIONS = {
     "glm_params_init": {
-        "random_glm_params_init": random_glm_params_init,
+        "random": random_glm_params_init,
     },
-    "transition_proba": {
-        "sticky_transition_proba": sticky_transition_proba_init,
+    "transition_proba_init": {
+        "sticky": sticky_transition_proba_init,
     },
-    "initial_proba": {
+    "initial_proba_init": {
         "uniform": uniform_initial_proba_init,
     },
 }
 
-# this is used by save/load, not intended to be user exposed
-INIT_FUNCTION_MAPPING_MODULE = {
-    "glm_params_init": {
-        "nemos.glm_hmm.initialize_parameters.random_glm_params_init": random_glm_params_init,
-    },
-    "transition_proba": {
-        "nemos.glm_hmm.initialize_parameters.sticky_transition_proba_init": sticky_transition_proba_init,
-    },
-    "initial_proba": {
-        "nemos.glm_hmm.initialize_parameters.uniform_initial_proba_init": uniform_initial_proba_init,
-    },
+DEFAULT_INIT_FUNCTION = {
+    "glm_params_init": random_glm_params_init,
+    "transition_proba_init": sticky_transition_proba_init,
+    "initial_proba_init": uniform_initial_proba_init,
 }
 
 
-def resolve_glm_params_init_function(
-    glm_params_init: Callable | str | ArrayLike | Any,
-) -> (
-    Callable[
-        [int, int, DESIGN_INPUT_TYPE, jax.random.PRNGKey],
-        Tuple[jnp.ndarray, jnp.ndarray],
-    ]
-    | Tuple[jnp.ndarray, jnp.ndarray]
+def glm_hmm_initialization(
+    n_states: int,
+    X: DESIGN_INPUT_TYPE,
+    y: NDArray | jnp.ndarray,
+    random_key=jax.random.PRNGKey(123),
+    init_registry: Optional[dict] = None,
 ):
     """
-    Validate and resolve a projection weight initialization specification.
+    Initialize all GLM-HMM parameters.
 
-    This function handles multiple input formats for initializing projection weights
-    in HMM-based models. It validates the input and returns either the provided
-    function/array or resolves a string name to the corresponding initialization function.
+    Coordinates initialization of GLM parameters (coefficients and intercept) and
+    HMM parameters (initial state probabilities and transition matrix) using the
+    specified initialization functions.
 
     Parameters
     ----------
-    glm_params_init :
-        The projection weights and intercept initialization specification. Can be:
-        - A pre-defined initialization function from AVAILABLE_PROJECTION_INIT
-        - str: name of a standard initialization method (e.g., "random")
-        - array-like: explicit projection weight values (n_features, n_states) or (n_features, n_neurons, n_states)
-        - Callable: custom initialization function with signature
-          (n_neurons: int, n_states: int, X: DESIGN_INPUT_TYPE, key: jax.random.PRNGKey, **kwargs) -> NDArray
-          where any additional keyword arguments must have default values
+    n_states : int
+        Number of HMM states.
+    X : DESIGN_INPUT_TYPE
+        Design matrix with shape (n_samples, n_features).
+    y : NDArray | jnp.ndarray
+        Observations, shape (n_samples,) or (n_samples, n_units).
+    random_key : jax.random.PRNGKey
+        Random key for reproducibility. Default is PRNGKey(123).
+    init_registry : dict, optional
+        Dictionary mapping parameter names to initialization functions. Valid keys are:
+        - 'glm_params_init': Function to initialize GLM coefficients and intercept
+        - 'initial_proba_init': Function to initialize initial state probabilities
+        - 'transition_proba_init': Function to initialize transition probabilities
+        If None, uses DEFAULT_INIT_FUNCTION. If partial dict, missing keys use defaults.
 
     Returns
     -------
-    :
-        A validated initialization function or the provided array-like object.
+    coef : jnp.ndarray
+        Coefficient matrix of shape (n_features, n_neurons, n_states).
+    intercept : jnp.ndarray
+        Intercept array of shape (n_neurons, n_states).
+    initial_proba : jnp.ndarray
+        Initial state probability vector of shape (n_states,).
+    transition_proba : jnp.ndarray
+        Transition probability matrix of shape (n_states, n_states).
+    """
+    if init_registry is None:
+        init_registry = DEFAULT_INIT_FUNCTION
+    else:
+        init_registry = _resolve_registry(init_registry)
+    key, subkey = jax.random.split(random_key)
+    coef, intercept = init_registry["glm_params_init"](n_states, X, y, subkey)
+    key, subkey = jax.random.split(key)
+    initial_proba = init_registry["initial_proba_init"](n_states, X, y, subkey)
+    _, subkey = jax.random.split(key)
+    transition_proba = init_registry["transition_proba_init"](n_states, X, y, subkey)
+    return coef, intercept, initial_proba, transition_proba
+
+
+def _resolve_registry(registry: dict):
+    """
+    Merge and validate a partial initialization registry with defaults.
+
+    Takes a partial registry (with only some keys) and merges it with the default
+    registry, validating each provided function.
+
+    Parameters
+    ----------
+    registry : dict
+        Dictionary mapping parameter names to initialization functions. Must contain
+        only valid keys from DEFAULT_INIT_FUNCTION.
+
+    Returns
+    -------
+    updated_registry : dict
+        Complete registry with user-provided functions merged with defaults.
+
+    Raises
+    ------
+    KeyError
+        If registry contains invalid keys.
+    """
+    if not set(registry.keys()).issubset(DEFAULT_INIT_FUNCTION.keys()):
+        invalid = set(registry.keys()).difference(DEFAULT_INIT_FUNCTION.keys())
+        raise KeyError(
+            f"Invalid key(s) for initialization dictionary: {invalid}.\n"
+            f"Valid keys are {DEFAULT_INIT_FUNCTION.keys()}."
+        )
+    updated_registry = DEFAULT_INIT_FUNCTION.copy()
+    for func_name, func in registry.items():
+        updated_registry[func_name] = _resolve_init_func(func_name, func)
+    return updated_registry
+
+
+def _resolve_init_func(func_name: str, init_func: Callable | str):
+    """
+    Validate and resolve an initialization function.
+
+    Checks that the provided initialization function has the correct signature
+    (at least 4 parameters: n_states, X, y, key, with any additional parameters
+    having default values). Can accept either a string name or a callable.
+
+    Parameters
+    ----------
+    func_name : str
+        Name of the initialization function (e.g., 'glm_params_init').
+    init_func : Callable, str, or None
+        Initialization function to validate. Can be:
+        - None: returns the default function
+        - str: looks up the function by name in AVAILABLE_INIT_FUNCTIONS
+        - Callable: validates and returns the function
+
+    Returns
+    -------
+    init_func : Callable
+        Validated initialization function.
 
     Raises
     ------
     ValueError
-        - If the string name is not recognized
-        - If a callable has fewer than 4 required parameters
-        - If a callable has extra parameters without default values
+        If the function signature is invalid (wrong number of parameters or
+        extra parameters without defaults), or if string name is not found.
     TypeError
-        If the input is not a recognized type (string, callable, or array-like).
-
-    Examples
-    --------
-    >>> import jax.numpy as jnp
-    >>> import jax
-    >>> jax.config.update("jax_enable_x64", True)
-    >>> from nemos.glm_hmm.initialize_parameters import resolve_glm_params_init_function
-    >>>
-    >>> n_features, n_states = 4, 3
-    >>>
-    >>> # Use a named initialization method
-    >>> init_fn = resolve_glm_params_init_function("random_glm_params_init")
-    >>> callable(init_fn)
-    True
-    >>>
-    >>> # Use explicit weights
-    >>> glm_params = (jnp.zeros((n_features, n_states)), jnp.zeros(n_states))
-    >>> init_array = resolve_glm_params_init_function(glm_params)
-    >>> init_array
-    (Array([[0., 0., 0.],
-           [0., 0., 0.],
-           [0., 0., 0.],
-           [0., 0., 0.]], dtype=float64), Array([0., 0., 0.], dtype=float64))
-    >>>
-    >>> # Use custom function with optional parameters
-    >>> def custom_init(n_states, X, key, scale=1.0):
-    ...     return jax.random.normal(key, (n_states, X.shape[1])) * scale, jax.random.normal(key, (n_states,))
-    >>> init_fn = resolve_glm_params_init_function(custom_init)
-    >>> callable(init_fn)
-    True
+        If init_func is not callable, string, or None.
     """
-    # Check if it's a pre-defined function
-    if callable(glm_params_init) and glm_params_init in AVAILABLE_GLM_PARAMS_INIT:
-        return glm_params_init
+    if init_func is None:
+        # assign default
+        return DEFAULT_INIT_FUNCTION[func_name]
 
-    # Handle string names
-    elif isinstance(glm_params_init, str):
-        mapping = INIT_FUNCTION_MAPPING["glm_params_init"]
-        mapping_module = INIT_FUNCTION_MAPPING_MODULE["glm_params_init"]
-        if glm_params_init in mapping:
-            return mapping[glm_params_init]
-        elif glm_params_init in mapping_module:
-            return mapping_module[glm_params_init]
-        else:
-            available = ", ".join(f"'{k}'" for k in mapping.keys())
+    # Handle string inputs (lookup by name)
+    elif isinstance(init_func, str):
+        available = AVAILABLE_INIT_FUNCTIONS.get(func_name, {})
+        if init_func not in available:
             raise ValueError(
-                f"Unknown projection initialization method: '{glm_params_init}'.\n"
-                f"Available methods are: {available}"
+                f"Unknown initialization method '{init_func}' for '{func_name}'.\n"
+                f"Available methods: {list(available.keys())}"
             )
+        return available[init_func]
 
-    # Handle callable inputs
-    elif callable(glm_params_init):
-        sig = inspect.signature(glm_params_init)
+    # Check if it's a pre-defined function
+    elif callable(init_func):
+        # Check if it's in the available functions
+        available_funcs = [
+            f
+            for funcs in AVAILABLE_INIT_FUNCTIONS.get(func_name, {}).values()
+            for f in [funcs]
+        ]
+        if init_func in available_funcs:
+            return init_func
+
+        # Validate signature for custom functions
+        sig = inspect.signature(init_func)
         n_params = len(sig.parameters)
 
         # Check minimum number of parameters
-        if n_params < 5:
+        if n_params < 4:
             param_names = list(sig.parameters.keys())
             raise ValueError(
-                f"Projection initialization function must have at least 5 parameters: "
-                f"(n_neurons, n_states, X, y, key), but got {n_params} parameter(s): {param_names}.\n"
-                f"Signature should be: "
-                f"Callable[[int, int, DESIGN_INPUT_TYPE, jax.random.PRNGKey], Tuple[NDArray, NDArray, NDArray]]"
+                f"'{func_name}' initialization function must have at least 4 parameters: "
+                f"(n_states, X, y, key), but got {n_params} parameter(s): {param_names}.\n"
             )
 
         # Check that extra parameters have defaults
         params = list(sig.parameters.values())
         params_without_defaults = [
-            p.name for p in params[5:] if p.default is inspect.Parameter.empty
+            p.name for p in params[4:] if p.default is inspect.Parameter.empty
         ]
 
         if params_without_defaults:
             raise ValueError(
-                f"All parameters beyond the required 5 (n_neurons, n_states, X, y, key) must have default values.\n"
+                f"All parameters beyond the required 4 (n_states, X, y, key) must have default values.\n"
                 f"Parameters without defaults: {params_without_defaults}"
             )
 
-        return glm_params_init
+        return init_func
 
-    # Handle array-like inputs
-    elif all(is_numpy_array_like(p)[1] for p in glm_params_init):
-        return tuple(jnp.asarray(p, dtype=float) for p in glm_params_init)
-
-    # Invalid type
-    valid_strings_formatted = ", ".join(
-        f"'{s}'" for s in INIT_FUNCTION_MAPPING["glm_params_init"].keys()
-    )
     raise TypeError(
-        f"Invalid projection weight initialization type: {type(glm_params_init).__name__}.\n"
-        "The projection weight initialization must be one of:\n"
-        f"  - A string from: {valid_strings_formatted}\n"
-        "  - An array-like object with shape (n_states, n_features) for GLM or "
-        "(n_states, n_states, n_features) for PopulationGLM\n"
-        "  - A callable with signature: (n_neurons: int, n_states: int, X: DESIGN_INPUT_TYPE, "
-        "key: jax.random.PRNGKey, **kwargs) -> NDArray"
+        f"Invalid initialization function: {func_name}.\n"
+        "The initialization function should be:\n"
+        "- A string (e.g., 'random', 'sticky', 'uniform')\n"
+        "- A callable with signature: (n_states: int, X: DESIGN_INPUT_TYPE, "
+        "y: jnp.ndarray, key: jax.random.PRNGKey, **kwargs)"
     )
-
-
-def resolve_transition_proba_init_function(
-    transition_prob: Callable | str | ArrayLike | Any,
-) -> Callable[[int, jax.random.PRNGKey], jnp.ndarray] | jnp.ndarray:
-    """
-    Validate and resolve a transition probability initialization specification.
-
-    This function handles multiple input formats for initializing transition probability
-    matrices in HMM-based models. It validates the input and returns either the provided
-    function/array or resolves a string name to the corresponding initialization function.
-
-    Parameters
-    ----------
-    transition_prob :
-        The transition probability initialization specification. Can be:
-        - A pre-defined initialization function from AVAILABLE_TRANSITION_PROBA_INIT
-        - str: name of a standard initialization method (e.g., "sticky_transition_proba")
-        - array-like: explicit transition probability matrix (n_states, n_states)
-        - Callable: custom initialization function with signature
-          (n_states: int, **kwargs) -> NDArray
-          where any additional keyword arguments must have default values
-
-    Returns
-    -------
-    :
-        A validated initialization function or the provided initial parameters as a jax array.
-        If a function, it must return a transition probability matrix of shape (n_states, n_states).
-
-    Raises
-    ------
-    ValueError
-        - If the string name is not recognized
-        - If a callable has fewer than 1 required parameter
-        - If a callable has extra parameters without default values
-    TypeError
-        If the input is not a recognized type (string, callable, or array-like).
-
-    Examples
-    --------
-    >>> import jax.numpy as jnp
-    >>> import jax
-    >>> jax.config.update("jax_enable_x64", True)
-    >>> from nemos.glm_hmm.initialize_parameters import resolve_transition_proba_init_function
-    >>>
-    >>> n_states = 3
-    >>> # Use a named initialization method
-    >>> init_fn = resolve_transition_proba_init_function("sticky_transition_proba")
-    >>> callable(init_fn)
-    True
-    >>>
-    >>> # Use explicit transition matrix
-    >>> trans_matrix = jnp.eye(n_states) * 0.9 + 0.1 / n_states
-    >>> init_array = resolve_transition_proba_init_function(trans_matrix)
-    >>> init_array
-    Array([[0.93333333, 0.03333333, 0.03333333],
-           [0.03333333, 0.93333333, 0.03333333],
-           [0.03333333, 0.03333333, 0.93333333]], dtype=float64)
-    >>>
-    >>> # Use custom function with optional parameters
-    >>> def custom_init(n_states, diagonal_weight=0.8):
-    ...     return jnp.eye(n_states) * diagonal_weight
-    >>> init_fn = resolve_transition_proba_init_function(custom_init)
-    >>> callable(init_fn)
-    True
-    """
-    # Check if it's a pre-defined function
-    if callable(transition_prob) and transition_prob in AVAILABLE_TRANSITION_PROBA_INIT:
-        return transition_prob
-
-    # Handle string names
-    elif isinstance(transition_prob, str):
-        mapping = INIT_FUNCTION_MAPPING["transition_proba"]
-        mapping_module = INIT_FUNCTION_MAPPING_MODULE["transition_proba"]
-        if transition_prob in mapping:
-            return mapping[transition_prob]
-        elif transition_prob in mapping_module:
-            return mapping_module[transition_prob]
-        else:
-            available = ", ".join(f"'{k}'" for k in mapping.keys())
-            raise ValueError(
-                f"Unknown transition probability initialization method: '{transition_prob}'.\n"
-                f"Available methods are: {available}"
-            )
-
-    # Handle array-like inputs
-    elif is_numpy_array_like(transition_prob)[1]:
-        return jnp.asarray(transition_prob, dtype=float)
-
-    # Handle callable inputs
-    elif callable(transition_prob):
-        sig = inspect.signature(transition_prob)
-        n_params = len(sig.parameters)
-
-        # Check minimum number of parameters
-        if n_params < 2:
-            raise ValueError(
-                f"Transition probability initialization function must have at least 2 parameters: "
-                f"(n_states , key), but got {n_params} parameter(s).\n"
-                f"Signature should be: (n_states: int, key, **kwargs) -> NDArray"
-            )
-
-        # Check that extra parameters have defaults
-        params = list(sig.parameters.values())
-        params_without_defaults = [
-            p.name for p in params[2:] if p.default is inspect.Parameter.empty
-        ]
-
-        if params_without_defaults:
-            raise ValueError(
-                f"All parameters beyond the required 2 (n_states, key) must have default values.\n"
-                f"Parameters without defaults: {params_without_defaults}"
-            )
-
-        return transition_prob
-
-    # Invalid type
-    else:
-        valid_strings = list(INIT_FUNCTION_MAPPING["transition_proba"].keys())
-        valid_strings_str = ", ".join(f"'{s}'" for s in valid_strings)
-
-        raise TypeError(
-            f"Invalid transition probability initialization type: {type(transition_prob).__name__}.\n"
-            "The transition probability initialization must be one of:\n"
-            f"  - A string from: {valid_strings_str}\n"
-            "  - An array-like object with shape (n_states, n_states)\n"
-            "  - A callable with signature: (n_states: int, key, **kwargs) -> NDArray"
-        )
-
-
-def resolve_initial_state_proba_init_function(
-    initial_state_proba_init: Callable | str | ArrayLike | Any,
-) -> Callable[[int, jax.random.PRNGKey], int] | jnp.ndarray:
-    """
-    Validate and resolve an initial state probability initialization specification.
-
-    This function handles multiple input formats for initializing the initial state
-    probability distribution (π₀) in HMM-based models. It validates the input and
-    returns either the provided function/array or resolves a string name to the
-    corresponding initialization function.
-
-    Parameters
-    ----------
-    initial_state_proba_init :
-        The initial state probability initialization specification. Can be:
-        - A pre-defined initialization function from AVAILABLE_INITIAL_PROBA_INIT
-        - str: name of a standard initialization method (e.g., "uniform")
-        - array-like: explicit initial state probability vector (n_states,)
-        - Callable: custom initialization function with signature
-          (n_states: int, key: jax.random.PRNGKey, **kwargs) -> NDArray
-          where any additional keyword arguments must have default values
-
-    Returns
-    -------
-    init_function_or_array :
-        A validated initialization function or the provided array-like object.
-        The function returns an initial state index or probability vector.
-
-    Raises
-    ------
-    ValueError
-        - If the string name is not recognized
-        - If a callable has fewer than 2 required parameters
-        - If a callable has extra parameters without default values
-    TypeError
-        If the input is not a recognized type (string, callable, or array-like).
-
-    Examples
-    --------
-    >>> import jax
-    >>> jax.config.update("jax_enable_x64", True)
-    >>> import jax.numpy as jnp
-    >>> from nemos.glm_hmm.initialize_parameters import resolve_initial_state_proba_init_function
-    >>>
-    >>> n_states = 3
-    >>>
-    >>> # Use a named initialization method
-    >>> init_fn = resolve_initial_state_proba_init_function("uniform")
-    >>> callable(init_fn)
-    True
-    >>>
-    >>> # Use explicit initial state probabilities
-    >>> init_probs = jnp.array([0.5, 0.3, 0.2])
-    >>> init_array = resolve_initial_state_proba_init_function(init_probs)
-    >>> init_array
-    Array([0.5, 0.3, 0.2], dtype=float64)
-    >>>
-    >>> # Use custom function with optional parameters
-    >>> def custom_init(n_states, key, temperature=1.0):
-    ...     logits = jax.random.normal(key, (n_states,)) / temperature
-    ...     return jax.nn.softmax(logits)
-    >>> init_fn = resolve_initial_state_proba_init_function(custom_init)
-    >>> callable(init_fn)
-    True
-    """
-    # Check if it's a pre-defined function
-    if (
-        callable(initial_state_proba_init)
-        and initial_state_proba_init in AVAILABLE_INITIAL_PROBA_INIT
-    ):
-        return initial_state_proba_init
-
-    # Handle string names
-    elif isinstance(initial_state_proba_init, str):
-        mapping = INIT_FUNCTION_MAPPING["initial_proba"]
-        mapping_module = INIT_FUNCTION_MAPPING_MODULE["initial_proba"]
-        if initial_state_proba_init in mapping:
-            return mapping[initial_state_proba_init]
-        elif initial_state_proba_init in mapping_module:
-            return mapping_module[initial_state_proba_init]
-        else:
-            available = ", ".join(f"'{k}'" for k in mapping.keys())
-            raise ValueError(
-                f"Unknown initial state initialization method: '{initial_state_proba_init}'.\n"
-                f"Available methods are: {available}"
-            )
-
-    # Handle array-like inputs
-    elif is_numpy_array_like(initial_state_proba_init)[1]:
-        return jnp.asarray(initial_state_proba_init, dtype=float)
-
-    # Handle callable inputs
-    elif callable(initial_state_proba_init):
-        sig = inspect.signature(initial_state_proba_init)
-        n_params = len(sig.parameters)
-
-        # Check minimum number of parameters
-        if n_params < 2:
-            param_names = list(sig.parameters.keys())
-            raise ValueError(
-                f"Initial state initialization function must have at least 2 parameters: "
-                f"(n_states, key), but got {n_params} parameter(s): {param_names}.\n"
-                f"Signature should be: Callable[[int, jax.random.PRNGKey], int or NDArray]"
-            )
-
-        # Check that extra parameters have defaults
-        params = list(sig.parameters.values())
-        params_without_defaults = [
-            p.name for p in params[2:] if p.default is inspect.Parameter.empty
-        ]
-
-        if params_without_defaults:
-            raise ValueError(
-                f"All parameters beyond the required 2 (n_states, key) must have default values.\n"
-                f"Parameters without defaults: {params_without_defaults}"
-            )
-
-        return initial_state_proba_init
-
-    # Invalid type
-    else:
-        valid_strings = list(INIT_FUNCTION_MAPPING["initial_proba"].keys())
-        valid_strings_str = ", ".join(f"'{s}'" for s in valid_strings)
-
-        raise TypeError(
-            f"Invalid initial state initialization type: {type(initial_state_proba_init).__name__}.\n"
-            "The initial state initialization must be one of:\n"
-            f"  - A string from: {valid_strings_str}\n"
-            "  - An array-like object with shape (n_states,)\n"
-            "  - A callable with signature: (n_states: int, key: jax.random.PRNGKey, **kwargs) -> int or NDArray"
-        )
-
-
-class GMHMMInitializer:
-    def __init__(self):
-        pass
-
-    def initialize_initial_proba(
-        self, n_states: int, random_key=jax.random.PRNGKey(123)
-    ) -> jnp.ndarray:
-        pass
-
-    def initialize_transition_proba(
-        self, n_states: int, random_key=jax.random.PRNGKey(124)
-    ) -> jnp.ndarray:
-        pass
-
-    def initialize_glm_params(
-        self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray, random_key=jax.random.PRNGKey(125)
-    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        pass
