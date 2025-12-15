@@ -1378,7 +1378,7 @@ class TestGLMObservationModel:
             return LogisticRegression(
                 fit_intercept=True,
                 tol=10**-12,
-                penalty=None,
+                C=np.inf,
             )
 
         elif "negativeBinomial" in model_instantiation:
@@ -1860,6 +1860,7 @@ class TestGLMObservationModel:
     @pytest.mark.parametrize("solver_name", ["LBFGS"])
     @pytest.mark.solver_related
     @pytest.mark.requires_x64
+    @pytest.mark.filterwarnings("ignore:Setting penalty=None will ignore:UserWarning")
     def test_glm_fit_matches_sklearn(
         self, solver_name, request, glm_type, model_instantiation, sklearn_model
     ):
@@ -1874,7 +1875,7 @@ class TestGLMObservationModel:
             regularizer=nmo.regularizer.UnRegularized(),
             observation_model=model_obs.observation_model,
             solver_name=solver_name,
-            solver_kwargs={"tol": 10**-12},
+            solver_kwargs={"tol": 10**-10},
         )
 
         # set gamma inverse link function to match sklearn
