@@ -9,7 +9,7 @@ import jax.numpy as jnp
 from numpy.typing import NDArray
 
 from ..tree_utils import pytree_map_and_reduce
-from ..typing import SolverState, Aux
+from ..typing import Aux, SolverState
 
 Array = NDArray | jax.numpy.ndarray
 
