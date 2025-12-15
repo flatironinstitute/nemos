@@ -33,6 +33,8 @@ def observation_model_rate_and_samples(observation_model_string, shape=None):
     elif observation_model_string == "Gamma":
         theta = 3
         y = jax.random.gamma(jax.random.PRNGKey(123), rate / theta) * theta
+    elif observation_model_string == "Gaussian":
+        y = rate + jax.random.normal(jax.random.PRNGKey(123), shape=rate.shape)
     elif observation_model_string == "Bernoulli":
         rate = rate / (1 + jnp.max(rate))
         y = jax.random.bernoulli(jax.random.PRNGKey(123), rate)
@@ -66,6 +68,11 @@ def negative_binomial_observations():
     return nmo.observation_models.NegativeBinomialObservations
 
 
+@pytest.fixture()
+def gaussian_observations():
+    return nmo.observation_models.GaussianObservations
+
+
 @pytest.mark.parametrize(
     "obs_model_string, expectation",
     [
@@ -73,6 +80,7 @@ def negative_binomial_observations():
         ("Gamma", does_not_raise()),
         ("Bernoulli", does_not_raise()),
         ("NegativeBinomial", does_not_raise()),
+        ("Gaussian", does_not_raise()),
         (
             "invalid",
             pytest.raises(ValueError, match="Unknown observation model: invalid"),
@@ -93,9 +101,11 @@ def test_glm_instantiation_from_string_at_init(
         ("Poisson", does_not_raise()),
         ("Gamma", does_not_raise()),
         ("Bernoulli", does_not_raise()),
+        ("Gaussian", does_not_raise()),
         ("nemos.observation_models.PoissonObservations", does_not_raise()),
         ("nemos.observation_models.GammaObservations", does_not_raise()),
         ("nemos.observation_models.BernoulliObservations", does_not_raise()),
+        ("nemos.observation_models.GaussianObservations", does_not_raise()),
         ("NegativeBinomial", does_not_raise()),
         ("nemos.observation_models.NegativeBinomial", does_not_raise()),
         (
@@ -139,6 +149,10 @@ def test_glm_setter_observation_model(obs_model_string, glm_class, expectation):
         assert isinstance(
             model.observation_model, nmo.observation_models.NegativeBinomialObservations
         )
+    elif obs_model_string == "Gaussian":
+        assert isinstance(
+            model.observation_model, nmo.observation_models.GaussianObservations
+        )
 
 
 @pytest.mark.parametrize(
@@ -148,6 +162,7 @@ def test_glm_setter_observation_model(obs_model_string, glm_class, expectation):
         ("Gamma", does_not_raise()),
         ("Bernoulli", does_not_raise()),
         ("NegativeBinomial", does_not_raise()),
+        ("Gaussian", does_not_raise()),
         ("NB", pytest.raises(ValueError, match="Unknown observation model: NB")),
     ],
 )
@@ -529,6 +544,7 @@ class TestCommonObservationModels:
         assert jnp.allclose(like1, like2)
 
     @pytest.mark.parametrize("shape", [(10,), (10, 5), (10, 5, 2)])
+    @pytest.mark.requires_x64
     def test_aggregation_score_mcfadden(
         self, shape, observation_model_string, observation_model_rate_and_samples
     ):
@@ -548,6 +564,7 @@ class TestCommonObservationModels:
 
     @pytest.mark.parametrize("score_type", ["pseudo-r2-McFadden", "pseudo-r2-Cohen"])
     @pytest.mark.parametrize("shape", [(10,), (10, 5), (10, 5, 2)])
+    @pytest.mark.requires_x64
     def test_aggregation_score_pr2(
         self,
         score_type,
