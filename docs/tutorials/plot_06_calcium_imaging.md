@@ -54,7 +54,6 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import pynapple as nap
-from sklearn.linear_model import LinearRegression
 
 import nemos as nmo
 ```
@@ -190,7 +189,7 @@ Different option are possible. With a soft-plus we are assuming an "additive" ef
 :::
 
 ```{code-cell} ipython3
-model = nmo.glm.GLM(
+gamma_model = nmo.glm.GLM(
     solver_kwargs=dict(tol=10**-13),
     regularizer="Ridge",
     regularizer_strength=0.02,
@@ -267,33 +266,32 @@ Ytest = Y.restrict(test_ep)
 It's time to fit the model on the data from the neuron we left out.
 
 ```{code-cell} ipython3
-model.fit(Xtrain, Ytrain[:, neu])
+gamma_model.fit(Xtrain, Ytrain[:, neu])
 ```
 
 ## Model comparison
 
+We can compare the Gamma GLM to a standard Gaussian GLM. Nemos implements Gaussian GLMs as well.
 
 
-
-We can compare this to scikit-learn [linear regression](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LinearRegression.html).
 
 ```{code-cell} ipython3
-mdl = LinearRegression()
-valid = ~jnp.isnan(Xtrain.d.sum(axis=1)) # Scikit learn does not like nans.
-mdl.fit(Xtrain[valid], Ytrain[valid, neu])
+gaussian_model = nmo.glm.GLM(
+    observation_model="Gaussian",    
+    regularizer="Ridge",
+    regularizer_strength=0.02,
+    solver_kwargs=dict(tol=10**-13),
+)
+
+gaussian_model.fit(Xtrain, Ytrain[:, neu])
 ```
+
 
 We now have 2 models we can compare. Let's predict the activity of the neuron during the test epoch.
 
 ```{code-cell} ipython3
-yp = model.predict(Xtest)
-ylreg = mdl.predict(Xtest) # Notice that this is not a pynapple object.
-```
-
-Unfortunately scikit-learn has not adopted pynapple yet. Let's convert `ylreg` to a pynapple object to make our life easier.
-
-```{code-cell} ipython3
-ylreg = nap.Tsd(t=yp.t, d=ylreg, time_support = yp.time_support)
+yp = gamma_model.predict(Xtest)
+ylreg = gaussian_model.predict(Xtest)
 ```
 
 Let's plot the predicted activity for the first 60 seconds of data.
@@ -306,15 +304,17 @@ ep_to_plot = nap.IntervalSet(test_ep.start+20, test_ep.start+80)
 plt.figure()
 plt.plot(Ytest[:,neu].restrict(ep_to_plot), "r", label="true", linewidth=2)
 plt.plot(yp.restrict(ep_to_plot), "k", label="gamma-nemos", alpha=1)
-plt.plot(ylreg.restrict(ep_to_plot), "g", label="linreg-sklearn", alpha=0.5)
+plt.plot(ylreg.restrict(ep_to_plot), "g", label="gaussian-nemos", alpha=0.5)
 plt.legend(loc='best')
 plt.xlabel("Time (s)")
 plt.ylabel("Fluorescence")
 plt.show()
 ```
 
-While there is some variability in the fit for both models, one advantage of the gamma distribution is clear: the nonnegativity constraint is followed with the data.
- This is required for using GLMs to predict the firing rate, which must be positive, in response to simulated inputs. See Peyrache et al. 2018[$^{[1]}$](#ref-1) for an example of simulating activity with a GLM.
+While there is some variability in the fit for both models, one advantage of the gamma distribution is clear: the nonnegativity 
+constraint is followed with the data.
+This is required for using GLMs to predict the firing rate, which must be positive, in response to simulated inputs. 
+See Peyrache et al. 2018[$^{[1]}$](#ref-1) for an example of simulating activity with a GLM.
 
 Another way to compare models is to compute tuning curves. Here we use the function [`compute_tuning_curves`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_tuning_curves) from pynapple.
 
@@ -330,7 +330,7 @@ Let's plot them.
 fig = plt.figure()
 plt.plot(real_tcurves.hd, real_tcurves.sel(unit=neu), "r", label="true", linewidth=2)
 plt.plot(gamma_tcurves.hd, gamma_tcurves[0], "k", label="gamma-nemos", alpha=1)
-plt.plot(linreg_tcurves.hd, linreg_tcurves[0], "g", label="linreg-sklearn", alpha=0.5)
+plt.plot(linreg_tcurves.hd, linreg_tcurves[0], "g", label="gaussian-nemos", alpha=0.5)
 plt.legend(loc='best')
 plt.ylabel("Fluorescence")
 plt.xlabel("Head-direction (rad)")

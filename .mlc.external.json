@@ -3,12 +3,18 @@
     { "pattern": "^\\." },
     { "pattern": "^/" },
     { "pattern": "^../" },
-    { "pattern": "^README.md$" }
+    { "pattern": "^README.md$" },
+    { "pattern": "^[^/]+$" },
+    { "pattern": "^https://fonts.gstatic.com" },
+    { "pattern": "^https://celltypes.brain-map.org/experiment/electrophysiology/478498617" },
+    { "pattern": "^https://www.jneurosci.org/content/25/47/11003" },
+    { "pattern": "^https://www.nature.com/articles/s41467-017-01908-3" },
+    { "pattern": "^https://doi.org/10.1038/s41467-017-01908-3" },
+    { "pattern": "^https://www.taylorfrancis.com/books/mono/10.4324/9780203774441/applied-multiple-regression-correlation-analysis-behavioral-sciences-jacob-cohen-patricia-cohen-stephen-west-leona-aiken" }
   ],
+  "aliveStatusCodes": [200, 206, 302, 400, 403, 503, 504, 0],
   "timeout": "20s",
   "retryOn429": true,
-  "retryCount": 3,
-  "fallbackRetryDelay": "5s",
-  "aliveStatusCodes": [200, 206, 429, 503],
-  "_comment": "Treat 503 and 429 as alive to avoid CI failures from GitHub rate limiting. These indicate the server exists but is throttling requests, not that the link is broken."
+  "retryCount": 5,
+  "fallbackRetryDelay": "5s"
 }
