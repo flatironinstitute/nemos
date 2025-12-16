@@ -7,7 +7,9 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import NDArray
 
+from ..glm.params import GLMUserParams
 from ..typing import DESIGN_INPUT_TYPE
+from .params import GLMHMMUserParams
 
 RANDOM_KEY = jax.Array
 INIT_FUNCTION = Callable[
@@ -21,7 +23,7 @@ def random_glm_params_init(
     X: DESIGN_INPUT_TYPE,
     y: jnp.ndarray,
     random_key=jax.random.PRNGKey(123),
-) -> Tuple[jnp.ndarray, jnp.ndarray]:
+) -> GLMUserParams:
     """
     Initialize GLM coefficients and intercept with random normal values.
 
@@ -60,7 +62,7 @@ def sticky_transition_proba_init(
     y: NDArray | jnp.ndarray,
     random_key: jax.numpy.ndarray = jax.random.PRNGKey(123),
     prob_stay=0.95,
-):
+) -> jnp.ndarray:
     """
     Initialize transition probabilities with sticky dynamics.
 
@@ -99,7 +101,7 @@ def uniform_initial_proba_init(
     X: DESIGN_INPUT_TYPE,
     y: NDArray | jnp.ndarray,
     random_key=jax.random.PRNGKey(124),
-):
+) -> jnp.ndarray:
     """
     Initialize initial state probabilities from a uniform distribution.
 
@@ -171,7 +173,7 @@ def glm_hmm_initialization(
     y: NDArray | jnp.ndarray,
     random_key=jax.random.PRNGKey(123),
     init_registry: Optional[dict] = None,
-):
+) -> GLMHMMUserParams:
     """
     Initialize all GLM-HMM parameters.
 
