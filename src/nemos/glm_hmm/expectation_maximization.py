@@ -839,7 +839,7 @@ def check_log_likelihood_increment(state: GLMHMMState, tol: float) -> Array:
     jax.jit,
     static_argnames=[
         "inverse_link_function",
-        "likelihood_func",
+        "log_likelihood_func",
         "m_step_fn_glm_params",
         "maxiter",
         "check_convergence",
