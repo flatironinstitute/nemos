@@ -153,17 +153,17 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
     @property
     def optimization_init_state(self) -> Union[None, SolverInit]:
         """
-        Provides the initialization function for the solver's state.
+        Provides the initialization function for the optimization state.
 
-        This function is responsible for initializing the solver's state, necessary for the start
+        This function is responsible for initializing the optimization state, necessary for the start
         of the optimization process. It sets up initial values for parameters like gradients and step
         sizes based on the model configuration and input data.
 
         Returns
         -------
         :
-            The function to initialize the state of the solver, if available; otherwise, None if
-            the solver has not yet been instantiated.
+            The function to initialize the optimization state, if available; otherwise, None if
+            the optimization has not yet been instantiated.
         """
         return self._optimization_init_state
 
@@ -180,8 +180,8 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         Returns
         -------
         :
-            The function to update the solver's state, if available; otherwise, None if the solver
-            has not yet been instantiated.
+            The function to perform a single optimization update step, if available; otherwise, None if
+            the optimization has not yet been instantiated.
         """
         return self._optimization_update
 
@@ -190,15 +190,15 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         """
         Provides the function to execute the optimization process.
 
-        This function runs the solver using the initialized parameters and state, performing the
+        This function runs the optimization using the initialized parameters and state, performing the
         optimization to fit the model to the data. It iteratively updates the model parameters until
         a stopping criterion is met, such as convergence or exceeding a maximum number of iterations.
 
         Returns
         -------
         :
-            The function to run the solver's optimization process, if available; otherwise, None if
-            the solver has not yet been instantiated.
+            The function to run the optimization process, if available; otherwise, None if
+            the optimization has not yet been instantiated.
         """
         return self._optimization_run
 
