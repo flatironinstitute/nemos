@@ -815,6 +815,80 @@ def _em_step(
     return (log_init_prob, log_trans_matrix, glm_params), new_state
 
 
+def em_step(
+    params: GLMHMMParams,
+    state: GLMHMMState,
+    X: Array,
+    y: Array,
+    inverse_link_function: Callable,
+    likelihood_func: Callable,
+    m_step_fn_glm_params: Callable,
+    is_new_session: Array,
+) -> Tuple[GLMHMMParams, GLMHMMState]:
+    """
+    Perform a single EM iteration step for GLM-HMM.
+
+    This function provides a clean public API for running a single EM iteration,
+    compatible with the optimization API pattern used by solvers. It wraps the
+    internal `_em_step` function which operates on EMCarry tuples.
+
+    Parameters
+    ----------
+    params : GLMHMMParams
+        Current GLM-HMM parameters containing GLM coefficients/intercepts and
+        HMM initial/transition probabilities.
+    state : GLMHMMState
+        Current EM algorithm state containing iteration count and log-likelihood history.
+    X : Array
+        Design matrix of observations.
+    y : Array
+        Target responses.
+    inverse_link_function : Callable
+        Elementwise function mapping linear predictors to rates.
+    likelihood_func : Callable
+        Function computing the log-likelihood.
+    m_step_fn_glm_params : Callable
+        Callable that performs the M-step update for GLM parameters.
+    is_new_session : Array
+        Boolean mask for the first observation of each session.
+
+    Returns
+    -------
+    updated_params : GLMHMMParams
+        Updated parameters after one EM iteration.
+    updated_state : GLMHMMState
+        Updated state after one EM iteration.
+    """
+    # Pack params and state into EMCarry format (log-space for HMM params)
+    carry = (
+        jnp.log(params.hmm_params.initial_prob),
+        jnp.log(params.hmm_params.transition_prob),
+        params.glm_params,
+    ), state
+
+    # Run the internal EM step
+    (log_init_prob, log_trans_matrix, glm_params), new_state = _em_step(
+        carry,
+        X,
+        y,
+        inverse_link_function,
+        likelihood_func,
+        m_step_fn_glm_params,
+        is_new_session,
+    )
+
+    # Unpack into GLMHMMParams (exponentiating log probs back to prob space)
+    updated_params = GLMHMMParams(
+        glm_params,
+        HMMParams(
+            jnp.exp(log_init_prob),
+            jnp.exp(log_trans_matrix),
+        ),
+    )
+
+    return updated_params, new_state
+
+
 def check_log_likelihood_increment(state: GLMHMMState, tol: float) -> Array:
     """
     Check EM convergence using absolute tolerance on log-likelihood.
