@@ -1596,9 +1596,9 @@ class TestEMAlgorithm:
             learned_params,
             _,
         ) = em_glm_hmm(
+            glm_hmm_params,
             X[:, 1:],
             y,
-            glm_hmm_params,
             is_new_session=(
                 new_sess.astype(bool)[: X.shape[0]] if require_new_session else None
             ),
@@ -1740,9 +1740,9 @@ class TestEMAlgorithm:
             learned_params,
             state,
         ) = em_glm_hmm(
+            glm_hmm_params,
             X[:, 1:],
             jnp.squeeze(y),
-            glm_hmm_params,
             inverse_link_function=inverse_link_function,
             log_likelihood_func=likelihood_func,
             m_step_fn_glm_params=solver_run,
@@ -2038,9 +2038,9 @@ class TestConvergence:
             HMMParams(initial_prob, transition_prob),
         )
         result = em_glm_hmm(
+            glm_hmm_params,
             X[:, 1:],
             y,
-            glm_hmm_params,
             inverse_link_function=obs.default_inverse_link_function,
             log_likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
@@ -2103,9 +2103,9 @@ class TestConvergence:
             HMMParams(initial_prob, transition_prob),
         )
         result = em_glm_hmm(
+            glm_hmm_params,
             X[:, 1:],
             y,
-            glm_hmm_params,
             inverse_link_function=obs.default_inverse_link_function,
             log_likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
@@ -2163,9 +2163,9 @@ class TestConvergence:
             HMMParams(initial_prob, transition_prob),
         )
         result = em_glm_hmm(
+            glm_hmm_params,
             X[:, 1:],
             y,
-            glm_hmm_params,
             inverse_link_function=obs.default_inverse_link_function,
             log_likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
@@ -2232,9 +2232,9 @@ class TestConvergence:
             final_params,
             final_state,
         ) = em_glm_hmm(
+            glm_hmm_params,
             X[:100, 1:],
             y[:100],
-            glm_hmm_params,
             inverse_link_function=obs.default_inverse_link_function,
             log_likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
@@ -2311,9 +2311,9 @@ class TestConvergence:
         )
         for tol in tolerances:
             result = em_glm_hmm(
+                glm_hmm_params,
                 X[:, 1:],
                 y,
-                glm_hmm_params,
                 inverse_link_function=obs.default_inverse_link_function,
                 log_likelihood_func=likelihood_func,
                 m_step_fn_glm_params=glm._solver_run,
@@ -2380,9 +2380,9 @@ class TestConvergence:
             HMMParams(initial_prob, transition_prob),
         )
         result = em_glm_hmm(
+            glm_hmm_params,
             X[:, 1:],
             y,
-            glm_hmm_params,
             inverse_link_function=obs.default_inverse_link_function,
             log_likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
@@ -2523,9 +2523,9 @@ class TestCompilation:
             HMMParams(initial_prob, transition_prob),
         )
         _ = em_glm_hmm(
+            glm_hmm_params,
             X,
             y,
-            glm_hmm_params,
             inverse_link_function=obs.default_inverse_link_function,
             log_likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
@@ -2542,9 +2542,9 @@ class TestCompilation:
 
         # Second call with SAME arguments - should NOT recompile
         _ = em_glm_hmm(
+            glm_hmm_params,
             X,
             y,
-            glm_hmm_params,
             inverse_link_function=obs.default_inverse_link_function,
             log_likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
@@ -2571,9 +2571,9 @@ class TestCompilation:
             HMMParams(initial_prob_new, transition_prob_new),
         )
         _ = em_glm_hmm(
+            glm_hmm_params_new,
             X_new,
             y_new,
-            glm_hmm_params_new,
             inverse_link_function=obs.default_inverse_link_function,
             log_likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
@@ -2836,9 +2836,9 @@ class TestPytreeSupport:
             final_params_all,
             final_state,
         ) = em_glm_hmm(
+            glm_hmm_params,
             X_tree,
             y,
-            glm_hmm_params,
             inverse_link_function=obs.default_inverse_link_function,
             log_likelihood_func=likelihood_func,
             m_step_fn_glm_params=solver_run,

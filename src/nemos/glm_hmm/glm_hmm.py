@@ -414,9 +414,9 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
             fit_params,
             self.solver_state_,
         ) = em_glm_hmm(
+            init_params,
             data,
             y,
-            init_params,
             inverse_link_function=self.inverse_link_function,
             log_likelihood_func=log_likelihood,
             m_step_fn_glm_params=self.solver_run,

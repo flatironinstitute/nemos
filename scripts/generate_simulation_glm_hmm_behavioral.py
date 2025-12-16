@@ -20,12 +20,14 @@ import numpy as np
 # IMPORTS
 ###
 import nemos as nmo
+from nemos.glm.params import GLMParams
 from nemos.glm_hmm.expectation_maximization import (
     em_glm_hmm,
     forward_backward,
     hmm_negative_log_likelihood,
     prepare_likelihood_func,
 )
+from nemos.glm_hmm.params import GLMHMMParams, HMMParams
 
 ###
 # SESSION PARAMETERS
@@ -268,27 +270,31 @@ def fit_glm_hmm_with_em(
     glm._instantiate_solver(partial_hmm_negative_log_likelihood)
     solver_run = glm._solver_run
 
-    (
-        posteriors,
-        joint_posterior,
-        learned_initial_prob,
-        learned_transition,
-        (learned_coef, learned_intercept),
-        final_state,
-    ) = em_glm_hmm(
-        X[:, 1:],
-        jnp.squeeze(true_choices),
-        initial_prob=initial_prob_initial_guess,
-        transition_prob=transition_prob_initial_guess,
-        glm_params=(
+    glm_hmm_params = GLMHMMParams(
+        GLMParams(
             projection_weights_initial_guess[1:],
             projection_weights_initial_guess[:1],
         ),
+        HMMParams(initial_prob_initial_guess, transition_prob_initial_guess),
+    )
+    (
+        posteriors,
+        joint_posterior,
+        learned_params,
+        final_state,
+    ) = em_glm_hmm(
+        glm_hmm_params,
+        X[:, 1:],
+        jnp.squeeze(true_choices),
         inverse_link_function=inverse_link_function,
         log_likelihood_func=likelihood_func,
         m_step_fn_glm_params=solver_run,
         tol=10**-10,
     )
+    learned_coef = learned_params.glm_params.coef
+    learned_intercept = learned_params.glm_params.intercept
+    learned_initial_prob = learned_params.hmm_params.initial_prob
+    learned_transition = learned_params.hmm_params.transition_prob
     (
         _,
         _,

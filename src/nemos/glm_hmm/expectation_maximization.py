@@ -847,9 +847,9 @@ def check_log_likelihood_increment(state: GLMHMMState, tol: float) -> Array:
     ],
 )
 def em_glm_hmm(
+    glm_hmm_params: GLMHMMParams,
     X: Array,
     y: Array,
-    glm_hmm_params: GLMHMMParams,
     inverse_link_function: Callable,
     log_likelihood_func: Callable,
     m_step_fn_glm_params: Callable,
@@ -866,16 +866,16 @@ def em_glm_hmm(
 
     Parameters
     ----------
-    X:
-        Design matrix of observations.
-    y:
-        Target responses.
     glm_hmm_params:
         Initial GLM-HMM parameters. This includes:
         - the GLM coef, shape ``(n_features, n_states)`` or ``(n_features, n_neurons, n_states)`` .
         - the GLM intercept, shape  ``(n_states, )`` or ``(n_neurons, n_states)`` .
         - the HMM initial probabilities, shape ``(n_states,)``.
         - the HMM transition probabilities, shape ``(n_states, n_states)``.
+    X:
+        Design matrix of observations.
+    y:
+        Target responses.
     inverse_link_function:
         Elementwise function mapping linear predictors to rates.
     log_likelihood_func:
