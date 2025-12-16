@@ -1593,9 +1593,7 @@ class TestEMAlgorithm:
         (
             posteriors,
             joint_posterior,
-            learned_initial_prob,
-            learned_transition,
-            learned_glm_params,
+            learned_params,
             _,
         ) = em_glm_hmm(
             X[:, 1:],
@@ -1619,9 +1617,9 @@ class TestEMAlgorithm:
         ) = forward_backward(
             X[:, 1:],  # drop intercept
             y,
-            learned_initial_prob,
-            learned_transition,
-            learned_glm_params,
+            learned_params.hmm_params.initial_prob,
+            learned_params.hmm_params.transition_prob,
+            learned_params.glm_params,
             log_likelihood_func=likelihood_func,
             inverse_link_function=obs.default_inverse_link_function,
         )
@@ -1732,19 +1730,19 @@ class TestEMAlgorithm:
         )[: latent_states.shape[1], latent_states.shape[1] :]
         max_corr_before_em = np.max(corr_matrix_before_em, axis=1)
 
+        glm_hmm_params = GLMHMMParams(
+            GLMParams(proj_weights[1:], proj_weights[:1]),
+            HMMParams(init_pb, transition_pb),
+        )
         (
             posteriors,
             joint_posterior,
-            learned_initial_prob,
-            learned_transition,
-            learned_glm_params,
+            learned_params,
             state,
         ) = em_glm_hmm(
             X[:, 1:],
             jnp.squeeze(y),
-            initial_prob=init_pb,
-            transition_prob=transition_pb,
-            glm_params=GLMParams(proj_weights[1:], proj_weights[:1]),
+            glm_hmm_params,
             inverse_link_function=inverse_link_function,
             likelihood_func=likelihood_func,
             m_step_fn_glm_params=solver_run,
@@ -1760,9 +1758,9 @@ class TestEMAlgorithm:
         ) = forward_backward(
             X[:, 1:],  # drop intercept
             y,
-            learned_initial_prob,
-            learned_transition,
-            learned_glm_params,
+            jnp.log(learned_params.hmm_params.initial_prob),
+            jnp.log(learned_params.hmm_params.transition_prob),
+            learned_params.glm_params,
             log_likelihood_func=likelihood_func,
             inverse_link_function=obs.default_inverse_link_function,
         )
@@ -2035,12 +2033,14 @@ class TestConvergence:
         glm._instantiate_solver(partial_hmm_negative_log_likelihood)
 
         # Run EM with custom checker - should stop after 1 iteration
+        glm_hmm_params = GLMHMMParams(
+            GLMParams(coef, intercept),
+            HMMParams(initial_prob, transition_prob),
+        )
         result = em_glm_hmm(
             X[:, 1:],
             y,
-            initial_prob=initial_prob,
-            transition_prob=transition_prob,
-            glm_params=GLMParams(coef, intercept),
+            glm_hmm_params,
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
@@ -2098,12 +2098,14 @@ class TestConvergence:
         glm._instantiate_solver(partial_hmm_negative_log_likelihood)
 
         maxiter = 10
+        glm_hmm_params = GLMHMMParams(
+            GLMParams(coef, intercept),
+            HMMParams(initial_prob, transition_prob),
+        )
         result = em_glm_hmm(
             X[:, 1:],
             y,
-            initial_prob=initial_prob,
-            transition_prob=transition_prob,
-            glm_params=GLMParams(coef, intercept),
+            glm_hmm_params,
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
@@ -2156,12 +2158,14 @@ class TestConvergence:
         maxiter = 1000
         tol = 1e-3  # Loose tolerance for faster convergence
 
+        glm_hmm_params = GLMHMMParams(
+            GLMParams(coef, intercept),
+            HMMParams(initial_prob, transition_prob),
+        )
         result = em_glm_hmm(
             X[:, 1:],
             y,
-            initial_prob=initial_prob,
-            transition_prob=transition_prob,
-            glm_params=GLMParams(coef, intercept),
+            glm_hmm_params,
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
@@ -2218,19 +2222,19 @@ class TestConvergence:
         maxiter = 100
         tol = 1e-6
 
+        glm_hmm_params = GLMHMMParams(
+            GLMParams(coef, intercept),
+            HMMParams(initial_prob, transition_prob),
+        )
         (
             posteriors,
             joint_posterior,
-            final_initial_prob,
-            final_transition_prob,
-            final_glm_params,
+            final_params,
             final_state,
         ) = em_glm_hmm(
             X[:100, 1:],
             y[:100],
-            initial_prob=initial_prob,
-            transition_prob=transition_prob,
-            glm_params=GLMParams(coef, intercept),
+            glm_hmm_params,
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
@@ -2254,10 +2258,10 @@ class TestConvergence:
             jnp.isfinite(joint_posterior)
         ), "Joint posteriors contain non-finite values"
         assert jnp.all(
-            jnp.isfinite(final_initial_prob)
+            jnp.isfinite(final_params.hmm_params.initial_prob)
         ), "Final initial_prob contains non-finite values"
         assert jnp.all(
-            jnp.isfinite(final_transition_prob)
+            jnp.isfinite(final_params.hmm_params.transition_prob)
         ), "Final transition_prob contains non-finite values"
 
     @pytest.mark.requires_x64
@@ -2301,13 +2305,15 @@ class TestConvergence:
         tolerances = [1e-2, 1e-4, 1e-6]
         iteration_counts = []
 
+        glm_hmm_params = GLMHMMParams(
+            GLMParams(coef, intercept),
+            HMMParams(initial_prob, transition_prob),
+        )
         for tol in tolerances:
             result = em_glm_hmm(
                 X[:, 1:],
                 y,
-                initial_prob=initial_prob,
-                transition_prob=transition_prob,
-                glm_params=GLMParams(coef, intercept),
+                glm_hmm_params,
                 inverse_link_function=obs.default_inverse_link_function,
                 likelihood_func=likelihood_func,
                 m_step_fn_glm_params=glm._solver_run,
@@ -2369,12 +2375,14 @@ class TestConvergence:
         glm = GLM(observation_model=obs, solver_name="LBFGS")
         glm._instantiate_solver(partial_hmm_negative_log_likelihood)
 
+        glm_hmm_params = GLMHMMParams(
+            GLMParams(coef, intercept),
+            HMMParams(initial_prob, transition_prob),
+        )
         result = em_glm_hmm(
             X[:, 1:],
             y,
-            initial_prob=initial_prob,
-            transition_prob=transition_prob,
-            glm_params=GLMParams(coef, intercept),
+            glm_hmm_params,
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
@@ -2510,12 +2518,14 @@ class TestCompilation:
         initial_cache_size = em_glm_hmm._cache_size()
 
         # First call - should compile
+        glm_hmm_params = GLMHMMParams(
+            GLMParams(coef, intercept),
+            HMMParams(initial_prob, transition_prob),
+        )
         _ = em_glm_hmm(
             X,
             y,
-            initial_prob=initial_prob,
-            transition_prob=transition_prob,
-            glm_params=GLMParams(coef, intercept),
+            glm_hmm_params,
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
@@ -2534,9 +2544,7 @@ class TestCompilation:
         _ = em_glm_hmm(
             X,
             y,
-            initial_prob=initial_prob,
-            transition_prob=transition_prob,
-            glm_params=GLMParams(coef, intercept),
+            glm_hmm_params,
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
@@ -2558,12 +2566,14 @@ class TestCompilation:
         transition_prob_new = np.ones_like(transition_prob) / len(initial_prob)
         coef_new = coef * np.random.randn(*coef.shape)
         intercept_new = intercept * np.random.randn(*intercept.shape)
+        glm_hmm_params_new = GLMHMMParams(
+            GLMParams(coef_new, intercept_new),
+            HMMParams(initial_prob_new, transition_prob_new),
+        )
         _ = em_glm_hmm(
             X_new,
             y_new,
-            initial_prob=initial_prob_new,
-            transition_prob=transition_prob_new,
-            glm_params=GLMParams(coef_new, intercept_new),
+            glm_hmm_params_new,
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
@@ -2816,23 +2826,23 @@ class TestPytreeSupport:
         solver_run = glm._solver_run
 
         # Run EM with pytrees (just a few iterations)
+        glm_hmm_params = GLMHMMParams(
+            GLMParams(coef_tree, intercept),
+            HMMParams(initial_prob, transition_prob),
+        )
         (
             posteriors,
             joint_posterior,
-            final_init,
-            final_trans,
-            final_params,
+            final_params_all,
             final_state,
         ) = em_glm_hmm(
             X_tree,
             y,
-            initial_prob,
-            transition_prob,
-            GLMParams(coef_tree, intercept),
-            obs.default_inverse_link_function,
-            likelihood_func,
-            solver_run,
-            new_sess.astype(bool),
+            glm_hmm_params,
+            inverse_link_function=obs.default_inverse_link_function,
+            likelihood_func=likelihood_func,
+            m_step_fn_glm_params=solver_run,
+            is_new_session=new_sess.astype(bool),
             maxiter=3,
             tol=1e-8,
         )
@@ -2840,8 +2850,8 @@ class TestPytreeSupport:
         # Just verify it runs and returns valid outputs
         assert posteriors.shape == (X.shape[0], initial_prob.shape[0])
         assert joint_posterior.shape == (initial_prob.shape[0], initial_prob.shape[0])
-        assert final_init.shape == initial_prob.shape
-        assert final_trans.shape == transition_prob.shape
-        assert isinstance(final_params, GLMParams)
-        assert isinstance(final_params.coef, dict)  # coef should be a dict
+        assert final_params_all.hmm_params.initial_prob.shape == initial_prob.shape
+        assert final_params_all.hmm_params.transition_prob.shape == transition_prob.shape
+        assert isinstance(final_params_all.glm_params, GLMParams)
+        assert isinstance(final_params_all.glm_params.coef, dict)  # coef should be a dict
         assert final_state.iterations > 0
