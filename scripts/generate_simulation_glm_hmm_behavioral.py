@@ -285,7 +285,7 @@ def fit_glm_hmm_with_em(
             projection_weights_initial_guess[:1],
         ),
         inverse_link_function=inverse_link_function,
-        likelihood_func=likelihood_func,
+        log_likelihood_func=likelihood_func,
         m_step_fn_glm_params=solver_run,
         tol=10**-10,
     )
