@@ -9,6 +9,12 @@ from numpy.typing import NDArray
 
 from ..typing import DESIGN_INPUT_TYPE
 
+RANDOM_KEY = jax.Array
+INIT_FUNCTION = Callable[
+    [int, DESIGN_INPUT_TYPE, NDArray | jnp.ndarray, RANDOM_KEY],
+    Tuple[jnp.ndarray, jnp.ndarray],
+]
+
 
 def random_glm_params_init(
     n_states: int,
@@ -214,7 +220,7 @@ def glm_hmm_initialization(
     return coef, intercept, initial_proba, transition_proba
 
 
-def _resolve_registry(registry: dict):
+def _resolve_registry(registry: dict[str, INIT_FUNCTION]):
     """
     Merge and validate a partial initialization registry with defaults.
 
@@ -249,7 +255,7 @@ def _resolve_registry(registry: dict):
     return updated_registry
 
 
-def _resolve_init_func(func_name: str, init_func: Callable | str):
+def _resolve_init_func(func_name: str, init_func: Callable | str) -> INIT_FUNCTION:
     """
     Validate and resolve an initialization function.
 
