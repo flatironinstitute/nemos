@@ -28,8 +28,8 @@ from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength, SolverState
 from ..utils import format_repr
 from .expectation_maximization import (
     GLMHMMState,
-    _em_step,
     em_glm_hmm,
+    em_step,
     hmm_negative_log_likelihood,
     prepare_likelihood_func,
 )
@@ -390,7 +390,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
 
         # cannot wrap is_new_session, that's to be calculated at each update form the provided X and y.
         self._optimization_update = eqx.Partial(
-            _em_step,
+            em_step,
             inverse_link_function=self.inverse_link_function,
             log_likelihood_func=log_likelihood,
             m_step_fn_glm_params=solver_run,
