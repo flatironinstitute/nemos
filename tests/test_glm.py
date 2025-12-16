@@ -1542,6 +1542,7 @@ class TestGLMObservationModel:
 
     @pytest.mark.requires_x64
     @pytest.mark.solver_related
+    @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
     def test_fit_pytree_equivalence(self, request, glm_type, model_instantiation):
         """Check that the glm fit with pytree learns the same parameters."""
         X, y, model, true_params, firing_rate = request.getfixturevalue(
@@ -1551,8 +1552,8 @@ class TestGLMObservationModel:
             glm_type + model_instantiation + "_pytree"
         )
         # fit both models
-        model.solver_kwargs.update(dict(tol=1e-7, maxiter=10**5))
-        model_tree.solver_kwargs.update(dict(tol=1e-7, maxiter=10**5))
+        model.solver_kwargs.update(dict(tol=1e-12, maxiter=10**5))
+        model_tree.solver_kwargs.update(dict(tol=1e-12, maxiter=10**5))
         model.fit(X, y, init_params=(true_params.coef, true_params.intercept))
         model_tree.fit(
             X_tree, y, init_params=(true_params_tree.coef, true_params_tree.intercept)
