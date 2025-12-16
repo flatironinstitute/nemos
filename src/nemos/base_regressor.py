@@ -669,6 +669,13 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
     def save_params(
         self,
         filename: Union[str, Path],
+    ):
+        """Save model parameters and specified attributes to a .npz file."""
+        pass
+
+    def _save_params(
+        self,
+        filename: Union[str, Path],
         fit_attrs: dict,
         string_attrs: list = None,
     ):

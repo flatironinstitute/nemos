@@ -1078,7 +1078,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         fit_attrs.pop("solver_state_")
         string_attrs = ["inverse_link_function"]
 
-        super().save_params(filename, fit_attrs, string_attrs)
+        self._save_params(filename, fit_attrs, string_attrs)
 
 
 class PopulationGLM(GLM):

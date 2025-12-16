@@ -116,6 +116,9 @@ VALID_PAIRS = [
             r=2,
         )
     ),
+    {"glm_hmm_params", "hmm_params"},
+    {"glm_params", "glm_hmm_params"},
+    {"glm_params", "hmm_params"},
 ]
 
 
