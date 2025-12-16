@@ -41,7 +41,7 @@ def random_glm_params_init(
     X : DESIGN_INPUT_TYPE
         Design matrix with shape (n_samples, n_features).
     y : jnp.ndarray
-        Observations, shape (n_samples,) or (n_samples, n_units).
+        Observations, shape (n_samples,) or (n_samples, n_neurons).
     random_key : jax.random.PRNGKey
         Random key for reproducibility. Default is PRNGKey(123).
 
@@ -53,11 +53,16 @@ def random_glm_params_init(
         Intercept array of shape (n_neurons, n_states).
     """
     n_features = X.shape[1]
-    n_neurons = 1 if y.ndim == 1 else y.shape[1]
+    is_one_dim = y.ndim == 1
+    n_neurons = 1 if is_one_dim else y.shape[1]
     random_param = 0.1 * jax.random.normal(
         random_key, (n_features + 1, n_neurons, n_states)
     )
-    return random_param[:-1], random_param[-1]
+    coef, intercept = random_param[:-1], random_param[-1]
+    if is_one_dim:
+        coef = jnp.squeeze(coef)
+        intercept = jnp.squeeze(intercept)
+    return coef, intercept
 
 
 def sticky_transition_proba_init(

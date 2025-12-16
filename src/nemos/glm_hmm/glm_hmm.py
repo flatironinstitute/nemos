@@ -434,10 +434,10 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
             )
 
         # assign fit attributes
-        self.coef_ = fit_params.glm_parms.coef
-        self.intercept_ = fit_params.glm_parms.intercept
-        self.initial_prob_ = fit_params.hmm_parms.initial_prob
-        self.transition_prob_ = fit_params.hmm_parms.transition_prob
+        self.coef_ = fit_params.glm_params.coef
+        self.intercept_ = fit_params.glm_params.intercept
+        self.initial_prob_ = fit_params.hmm_params.initial_prob
+        self.transition_prob_ = fit_params.hmm_params.transition_prob
         self.dof_resid_ = self._estimate_resid_degrees_of_freedom(X)
         # TODO: uncomment this once the predict method is available
         # self.scale_ = self.observation_model.estimate_scale(y, self.predict(X), self.dof_resid_)
