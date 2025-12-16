@@ -854,7 +854,6 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         X: dict[str, jnp.ndarray] | jnp.ndarray,
         y: jnp.ndarray,
         init_params: GLMParams,
-        **kwargs,
     ) -> SolverState:
         """Initialize the solver by instantiating its init_state, update and, run methods.
 

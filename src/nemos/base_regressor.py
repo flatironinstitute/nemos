@@ -563,7 +563,6 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         init_params: ModelParamsT,
-        **kwargs,
     ) -> SolverState:
         """Initialize the solver and the state of the solver for running fit and update."""
         pass

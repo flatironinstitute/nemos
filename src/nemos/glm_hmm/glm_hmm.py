@@ -373,7 +373,6 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         init_params: GLMHMMParams,
-        is_new_session: Optional[jnp.dtype] = None,
     ) -> SolverState:
         """Initialize the EM functions."""
         # glm params m-step setup
@@ -384,17 +383,17 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
             expected_negative_log_likelihood, solver_kwargs=self.solver_kwargs
         )
 
+        # cannot wrap is_new_session, that's to be calculated at each update form the provided X and y.
+        # for consistency, do not make a partial of that argument in run as well.
         self._optimization_run = eqx.Partial(
             em_glm_hmm,
             inverse_link_function=self.inverse_link_function,
             log_likelihood_func=log_likelihood,
             m_step_fn_glm_params=solver_run,
-            is_new_session=is_new_session,
             maxiter=self.maxiter,
             tol=self.tol,
         )
 
-        # cannot wrap is_new_session, that's to be calculated at each update form the provided X and y.
         self._optimization_update = eqx.Partial(
             em_step,
             inverse_link_function=self.inverse_link_function,
@@ -452,14 +451,16 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
 
         # set up optimization
         self._initialize_optimization_and_state(
-            X, init_params, is_new_session=is_new_session
+            X, y, init_params, is_new_session=is_new_session
         )
 
         # run EM
         (
             fit_params,
             self.solver_state_,
-        ) = self._optimization_run(init_params, X=data, y=y)
+        ) = self._optimization_run(
+            init_params, X=data, y=y, is_new_session=is_new_session
+        )
 
         if self.solver_state_.iterations == self.maxiter:
             warnings.warn(
