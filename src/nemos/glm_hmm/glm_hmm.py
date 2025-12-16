@@ -37,6 +37,7 @@ from .expectation_maximization import (
     em_glm_hmm,
     em_step,
     hmm_negative_log_likelihood,
+    initialize_new_session,
     prepare_likelihood_func,
 )
 from .initialize_parameters import (
@@ -422,7 +423,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         elif is_pynapple_tsd(X):
             is_new_session = compute_is_new_session(X.t, X.time_support.start)
         else:
-            is_new_session = None
+            is_new_session = initialize_new_session(y.shape[0], None)
         return is_new_session
 
     def fit(
@@ -450,9 +451,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         data, y = self._preprocess_inputs(X, y)
 
         # set up optimization
-        self._initialize_optimization_and_state(
-            X, y, init_params, is_new_session=is_new_session
-        )
+        self._initialize_optimization_and_state(X, y, init_params)
 
         # run EM
         (

@@ -774,7 +774,7 @@ def _em_step(
     X: Array,
     y: Array,
     inverse_link_function: Callable,
-    likelihood_func: Callable,
+    log_likelihood_func: Callable,
     m_step_fn_glm_params: Callable,
     is_new_session: Array,
 ) -> EMCarry:
@@ -789,7 +789,7 @@ def _em_step(
         log_trans_matrix,
         glm_params,
         inverse_link_function,
-        likelihood_func,
+        log_likelihood_func,
         is_new_session,
     )
 
@@ -821,7 +821,7 @@ def em_step(
     X: Array,
     y: Array,
     inverse_link_function: Callable,
-    likelihood_func: Callable,
+    log_likelihood_func: Callable,
     m_step_fn_glm_params: Callable,
     is_new_session: Array,
 ) -> Tuple[GLMHMMParams, GLMHMMState]:
@@ -845,7 +845,7 @@ def em_step(
         Target responses.
     inverse_link_function : Callable
         Elementwise function mapping linear predictors to rates.
-    likelihood_func : Callable
+    log_likelihood_func : Callable
         Function computing the log-likelihood.
     m_step_fn_glm_params : Callable
         Callable that performs the M-step update for GLM parameters.
@@ -872,7 +872,7 @@ def em_step(
         X,
         y,
         inverse_link_function,
-        likelihood_func,
+        log_likelihood_func,
         m_step_fn_glm_params,
         is_new_session,
     )
@@ -996,7 +996,7 @@ def em_glm_hmm(
         X=X,
         y=y,
         inverse_link_function=inverse_link_function,
-        likelihood_func=log_likelihood_func,
+        log_likelihood_func=log_likelihood_func,
         m_step_fn_glm_params=m_step_fn_glm_params,
         is_new_session=is_new_session,
     )
