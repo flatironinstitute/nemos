@@ -180,28 +180,24 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
             next_t = state.t
             next_vel = state.velocity
 
-        # use Cauchy for consistency with other solvers
-        # terminate = optx._misc.cauchy_termination(
-        #     self.rtol,
-        #     self.atol,
-        #     self.norm,
-        #     y,
-        #     diff_y,
-        #     state.f,
-        #     new_fun_val - state.f,
-        # )
-        # TODO: Adapt this to terminate on nan with Cauchy
-        # or use the same termination as JAXopt
-        # terminate = ~continue_iteration assures that it stops if anything is NaN
-        continue_iteration = (optx.two_norm(diff_y) / new_stepsize) > self.atol
-        terminate = ~continue_iteration
+        # use Cauchy for consistency with other Optimistix solvers
+        # self.terminate additionally checks if the parameters are finite and terminates if not
+        converged = optx._misc.cauchy_termination(
+            self.rtol,
+            self.atol,
+            self.norm,
+            y,
+            diff_y,
+            state.f,
+            new_fun_val - state.f,
+        )
 
         next_state = ProxGradState(
             iter_num=state.iter_num + 1,
             velocity=next_vel,
             t=next_t,
             stepsize=jnp.asarray(new_stepsize),
-            terminate=terminate,
+            terminate=converged,  # actual termination is determined by self.terminate
             f=new_fun_val,
         )
 
@@ -321,9 +317,23 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
         state: ProxGradState,
         tags: frozenset[object],
     ) -> tuple[Bool[Array, ""], optx._solution.RESULTS]:
-        del fn, y, args, options, tags
+        del fn, args, options, tags
 
-        return state.terminate, optx._solution.RESULTS.successful
+        converged = state.terminate
+        diverged = jnp.invert(
+            jax.tree.reduce(
+                jnp.logical_and,
+                jax.tree.map(lambda x: jnp.all(jnp.isfinite(x)), y),
+            )
+        )
+        terminate = converged | diverged
+        result = optx._solution.RESULTS.where(
+            diverged,
+            optx._solution.RESULTS.nonlinear_divergence,
+            optx._solution.RESULTS.successful,
+        )
+
+        return terminate, result
 
     def postprocess(
         self,
