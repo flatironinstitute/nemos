@@ -972,13 +972,13 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         # grab the data
         data = X.data if isinstance(X, FeaturePytree) else X
 
-        # wrap into GLM params, this assumes params are well structured,
-        # if initializaiton is done via `initialize_solver_and_state` it
+        # wrap into GLM params, this assumes params are well-structured,
+        # if initialization is done via `initialize_solver_and_state` it
         # should be fine
         params = self._validator.to_model_params(params)
 
         # perform a one-step update
-        updated_params, updated_state = self.optimization_update(
+        updated_params, updated_state = self._optimization_update(
             params, opt_state, data, y, *args, **kwargs
         )
 
