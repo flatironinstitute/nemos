@@ -1,3 +1,5 @@
+"""Validation classes for GLMHMM and PopulationGLMHMM models."""
+
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional, Tuple, Union
 
@@ -8,8 +10,7 @@ from jax.typing import DTypeLike
 from .. import validation
 from ..glm.params import GLMParams, GLMUserParams
 from ..glm.validation import GLMValidator
-from ..tree_utils import pytree_map_and_reduce
-from ..typing import DESIGN_INPUT_TYPE, FeaturePytree
+from ..typing import DESIGN_INPUT_TYPE
 from ..validation import RegressorValidator
 from .params import GLMHMMParams, GLMHMMUserParams, HMMParams
 
@@ -109,6 +110,7 @@ class GLMHMMValidator(RegressorValidator[GLMUserParams, GLMParams]):
     def check_init_and_transition_prob_shape(
         self, params: GLMHMMUserParams
     ) -> GLMHMMUserParams:
+        """Check initial and transition probabilities shape."""
         wrapped = self.wrap_user_params(params)
         initial_prob, transition_prob = wrapped[-2:]
         if initial_prob.shape != (self.n_states,):
@@ -124,6 +126,7 @@ class GLMHMMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         return params
 
     def check_glm_params_shape(self, params: GLMHMMUserParams) -> GLMHMMUserParams:
+        """Check the length of the glm parameters state axis."""
         wrapped = self.wrap_user_params(params)
         coef, intercept = wrapped[:2]
         if coef.shape[-1] != self.n_states:
@@ -141,6 +144,7 @@ class GLMHMMValidator(RegressorValidator[GLMUserParams, GLMParams]):
     def check_init_and_transition_prob_sum_to_1(
         self, params: GLMHMMUserParams
     ) -> GLMHMMUserParams:
+        """Check that initial and transition probability sum to 1."""
         wrapped = self.wrap_user_params(params)
         initial_prob, transition_prob = wrapped[-2:]
         if not jnp.allclose(initial_prob.sum(), 1):
