@@ -1584,7 +1584,7 @@ class TestEMAlgorithm:
             observation_model=obs, regularizer=regularization, solver_name=solver_name
         )
         glm._instantiate_solver(partial_hmm_negative_log_likelihood)
-        solver_run = glm._solver_run
+        solver_run = glm._optimization_run
         glm_hmm_params = GLMHMMParams(
             GLMParams(coef, intercept),
             HMMParams(initial_prob, transition_prob),
@@ -1694,7 +1694,7 @@ class TestEMAlgorithm:
         # use the BaseRegressor initialize_solver (this will be avaialble also in the GLMHHM class)
         glm = GLM(observation_model=obs, solver_name="LBFGS")
         glm._instantiate_solver(partial_hmm_negative_log_likelihood)
-        solver_run = glm._solver_run
+        solver_run = glm._optimization_run
         # End of preparatory step.
 
         # add small noise to initial prob & projection weights
@@ -2043,7 +2043,7 @@ class TestConvergence:
             y,
             inverse_link_function=obs.default_inverse_link_function,
             log_likelihood_func=likelihood_func,
-            m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_params=glm._optimization_run,
             check_convergence=always_converge,
             maxiter=100,
             tol=1e-8,
@@ -2108,7 +2108,7 @@ class TestConvergence:
             y,
             inverse_link_function=obs.default_inverse_link_function,
             log_likelihood_func=likelihood_func,
-            m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_params=glm._optimization_run,
             check_convergence=never_converge,
             maxiter=maxiter,
             tol=1e-8,
@@ -2168,7 +2168,7 @@ class TestConvergence:
             y,
             inverse_link_function=obs.default_inverse_link_function,
             log_likelihood_func=likelihood_func,
-            m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_params=glm._optimization_run,
             maxiter=maxiter,
             tol=tol,
         )
@@ -2237,7 +2237,7 @@ class TestConvergence:
             y[:100],
             inverse_link_function=obs.default_inverse_link_function,
             log_likelihood_func=likelihood_func,
-            m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_params=glm._optimization_run,
             maxiter=maxiter,
             tol=tol,
         )
@@ -2316,7 +2316,7 @@ class TestConvergence:
                 y,
                 inverse_link_function=obs.default_inverse_link_function,
                 log_likelihood_func=likelihood_func,
-                m_step_fn_glm_params=glm._solver_run,
+                m_step_fn_glm_params=glm._optimization_run,
                 maxiter=10,
                 tol=tol,
             )
@@ -2385,7 +2385,7 @@ class TestConvergence:
             y,
             inverse_link_function=obs.default_inverse_link_function,
             log_likelihood_func=likelihood_func,
-            m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_params=glm._optimization_run,
             check_convergence=check_conv_5_iter,
             maxiter=100,
             tol=1e-10,  # Very tight tolerance, but will stop at 5 iterations
@@ -2528,7 +2528,7 @@ class TestCompilation:
             y,
             inverse_link_function=obs.default_inverse_link_function,
             log_likelihood_func=likelihood_func,
-            m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_params=glm._optimization_run,
             maxiter=5,
             tol=1e-8,
         )
@@ -2547,7 +2547,7 @@ class TestCompilation:
             y,
             inverse_link_function=obs.default_inverse_link_function,
             log_likelihood_func=likelihood_func,
-            m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_params=glm._optimization_run,
             maxiter=5,
             tol=1e-8,
         )
@@ -2576,7 +2576,7 @@ class TestCompilation:
             y_new,
             inverse_link_function=obs.default_inverse_link_function,
             log_likelihood_func=likelihood_func,
-            m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_params=glm._optimization_run,
             maxiter=5,
             tol=1e-8,
         )
@@ -2823,7 +2823,7 @@ class TestPytreeSupport:
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
         glm._instantiate_solver(partial_hmm_negative_log_likelihood)
-        solver_run = glm._solver_run
+        solver_run = glm._optimization_run
 
         # Run EM with pytrees (just a few iterations)
         glm_hmm_params = GLMHMMParams(

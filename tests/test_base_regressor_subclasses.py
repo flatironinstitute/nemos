@@ -495,14 +495,14 @@ class TestModelCommons:
         fixture = instantiate_base_regressor_subclass
         X, model, true_params = fixture.X, fixture.model, fixture.params
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
-        assert model.solver_init_state is None
-        assert model.solver_update is None
-        assert model.solver_run is None
+        assert model.optimization_init_state is None
+        assert model.optimization_update is None
+        assert model.optimization_run is None
         init_params = model.initialize_params(X, y)
         model._initialize_solver_and_state(X, y, init_params)
-        assert callable(model.solver_init_state)
-        assert callable(model.solver_update)
-        assert callable(model.solver_run)
+        assert callable(model.optimization_init_state)
+        assert callable(model.optimization_update)
+        assert callable(model.optimization_run)
 
 
 @pytest.mark.parametrize(

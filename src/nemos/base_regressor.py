@@ -136,9 +136,9 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         self._check_solver_kwargs(solver_class, solver_kwargs)
 
         self.solver_kwargs = solver_kwargs
-        self._solver_init_state = None
-        self._solver_update = None
-        self._solver_run = None
+        self._optimization_init_state = None
+        self._optimization_update = None
+        self._optimization_run = None
 
     def __sklearn_tags__(self):
         """Return regression model specific estimator tags."""
@@ -151,7 +151,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         return tags
 
     @property
-    def solver_init_state(self) -> Union[None, SolverInit]:
+    def optimization_init_state(self) -> Union[None, SolverInit]:
         """
         Provides the initialization function for the solver's state.
 
@@ -165,12 +165,12 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             The function to initialize the state of the solver, if available; otherwise, None if
             the solver has not yet been instantiated.
         """
-        return self._solver_init_state
+        return self._optimization_init_state
 
     @property
-    def solver_update(self) -> Union[None, SolverUpdate]:
+    def optimization_update(self) -> Union[None, SolverUpdate]:
         """
-        Provides the function for updating the solver's state during the optimization process.
+        Provides the function for updating the state during the optimization process.
 
         This function is used to perform a single update step in the optimization process. It updates
         the model's parameters based on the current state, data, and gradients. It is typically used
@@ -183,12 +183,12 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             The function to update the solver's state, if available; otherwise, None if the solver
             has not yet been instantiated.
         """
-        return self._solver_update
+        return self._optimization_update
 
     @property
-    def solver_run(self) -> Union[None, SolverRun]:
+    def optimization_run(self) -> Union[None, SolverRun]:
         """
-        Provides the function to execute the solver's optimization process.
+        Provides the function to execute the optimization process.
 
         This function runs the solver using the initialized parameters and state, performing the
         optimization to fit the model to the data. It iteratively updates the model parameters until
@@ -200,7 +200,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             The function to run the solver's optimization process, if available; otherwise, None if
             the solver has not yet been instantiated.
         """
-        return self._solver_run
+        return self._optimization_run
 
     def set_params(self, **params: Any):
         """Manage warnings in case of multiple parameter settings."""
@@ -370,9 +370,9 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             utils.assert_is_callable(solver.fun, "solver's loss")
             self._solver_loss_fun = solver.fun
 
-        self._solver_init_state = solver.init_state
-        self._solver_update = solver.update
-        self._solver_run = solver.run
+        self._optimization_init_state = solver.init_state
+        self._optimization_update = solver.update
+        self._optimization_run = solver.run
 
         return self
 

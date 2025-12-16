@@ -419,7 +419,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
             y,
             inverse_link_function=self.inverse_link_function,
             log_likelihood_func=log_likelihood,
-            m_step_fn_glm_params=self.solver_run,
+            m_step_fn_glm_params=self.optimization_run,
             is_new_session=is_new_session,
         )
 
