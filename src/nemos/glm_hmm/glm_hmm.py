@@ -39,6 +39,7 @@ from .initialize_parameters import (
     glm_hmm_initialization,
 )
 from .params import GLMHMMParams, GLMHMMUserParams, HMMParams
+from .validation import GLMHMMValidator
 
 
 def compute_is_new_session(time: NDArray, start: NDArray) -> jnp.ndarray:
@@ -115,7 +116,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
             solver_name=solver_name,
             solver_kwargs=solver_kwargs,
         )
-        self._n_states = n_states
+        self.n_states = n_states
         self.observation_model = observation_model
         self.inverse_link_function = inverse_link_function
 
@@ -177,6 +178,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         # quick sanity check and assignment
         if isinstance(n_states, int) and n_states > 0:
             self._n_states = n_states
+            self._validator = GLMHMMValidator(n_states=n_states)
             return
 
         # further checks for other valid numeric types (like non-negative float with no-decimals)
@@ -197,6 +199,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
                 f"n_states must be a positive integer. ``{n_states}`` provided instead."
             )
         self._n_states = int_n_states
+        self._validator = GLMHMMValidator(n_states=n_states)
 
     @property
     def maxiter(self):

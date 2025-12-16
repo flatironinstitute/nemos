@@ -16,7 +16,10 @@ from .params import GLMHMMParams, GLMHMMUserParams, HMMParams
 
 def to_glm_hmm_params(user_params: GLMHMMUserParams) -> GLMHMMParams:
     """Map from GLMUserParams to GLMParams."""
-    return GLMHMMParams(*user_params)
+    return GLMHMMParams(
+        GLMParams(*user_params[:2]),
+        HMMParams(*user_params[2:]),
+    )
 
 
 def from_glm_hmm_params(params: GLMHMMParams) -> GLMHMMUserParams:
@@ -62,8 +65,9 @@ class GLMHMMValidator(RegressorValidator[GLMUserParams, GLMParams]):
             ),
         ),
         ("check_init_and_transition_prob_shape", None),
-        ("check_init_and_transition_prob_sum_to_1.", None)
-        * RegressorValidator.params_validation_sequence[3:],
+        ("check_init_and_transition_prob_sum_to_1", None),
+        ("check_glm_params_shape", None),
+        *RegressorValidator.params_validation_sequence[3:],
     )
 
     def check_array_dimensions(
@@ -116,6 +120,21 @@ class GLMHMMValidator(RegressorValidator[GLMUserParams, GLMParams]):
             raise ValueError(
                 f"transition_prob must be a 2-dimensional array of shape ``({self.n_states}, {self.n_states})``."
                 f"Provided transition_prob is of shape ``{transition_prob.shape}`` instead."
+            )
+        return params
+
+    def check_glm_params_shape(self, params: GLMHMMUserParams) -> GLMHMMUserParams:
+        wrapped = self.wrap_user_params(params)
+        coef, intercept = wrapped[:2]
+        if coef.shape[-1] != self.n_states:
+            raise ValueError(
+                "GLM coef must be of shape ``(n_features, n_states)``. "
+                f"n_states is {self.n_states} but coef has shape ``{coef.shape}``."
+            )
+        if intercept.shape[-1] != self.n_states:
+            raise ValueError(
+                "GLM intercept must be of shape ``(n_states,)``. "
+                f"n_states is {self.n_states} but coef has shape ``{intercept.shape}``."
             )
         return params
 
