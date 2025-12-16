@@ -24,6 +24,7 @@ __all__ = [
     "row_wise_kron",
     "one_over_x",
     "get_flattener_unflattener",
+    "format_repr",
 ]
 
 
