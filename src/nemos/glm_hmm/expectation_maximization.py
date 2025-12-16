@@ -733,8 +733,8 @@ def prepare_likelihood_func(
 
     Returns
     -------
-    likelihood:
-        Likelihood function.
+    log_likelihood:
+        Log-likelihood function.
     vmap_nll:
         Vectorized negative log-likelihood function.
     """
@@ -851,7 +851,7 @@ def em_glm_hmm(
     y: Array,
     glm_hmm_params: GLMHMMParams,
     inverse_link_function: Callable,
-    likelihood_func: Callable,
+    log_likelihood_func: Callable,
     m_step_fn_glm_params: Callable,
     is_new_session: Optional[Array] = None,
     maxiter: int = 10**3,
@@ -878,7 +878,7 @@ def em_glm_hmm(
         - the HMM transition probabilities, shape ``(n_states, n_states)``.
     inverse_link_function:
         Elementwise function mapping linear predictors to rates.
-    likelihood_func:
+    log_likelihood_func:
         Function computing the log-likelihood.
     m_step_fn_glm_params:
         Callable that performs the M-step update for GLM parameters (coefficients and intercepts).
@@ -922,7 +922,7 @@ def em_glm_hmm(
         X=X,
         y=y,
         inverse_link_function=inverse_link_function,
-        likelihood_func=likelihood_func,
+        likelihood_func=log_likelihood_func,
         m_step_fn_glm_params=m_step_fn_glm_params,
         is_new_session=is_new_session,
     )
@@ -954,7 +954,7 @@ def em_glm_hmm(
         log_transition_matrix,
         glm_params,
         inverse_link_function,
-        likelihood_func,
+        log_likelihood_func,
         is_new_session,
     )
     # convert back to prob-space
