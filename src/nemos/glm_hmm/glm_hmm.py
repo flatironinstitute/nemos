@@ -1,573 +1,533 @@
 """API for the GLM-HMM model."""
 
-#
-# from numbers import Number
-# from pathlib import Path
-# from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
-#
-# import jax
-# import jax.numpy as jnp
-# import pynapple as nap
-# from numpy.typing import ArrayLike, NDArray
-#
-# from .. import observation_models as obs
-# from .. import tree_utils, validation
-# from .._observation_model_builder import instantiate_observation_model
-# from ..base_regressor import BaseRegressor
-# from ..glm import GLM
-# from ..inverse_link_function_utils import resolve_inverse_link_function
-# from ..observation_models import Observations
-# from ..pytrees import FeaturePytree
-# from ..regularizer import GroupLasso, Lasso, Regularizer, Ridge
-# from ..third_party.jaxopt import jaxopt
-# from ..type_casting import (
-#     is_numpy_array_like,
-#     is_pynapple_tsd,
-#     jnp_asarray_if,
-# )
-# from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength
-# from .expectation_maximization import (
-#     em_glm_hmm,
-#     hmm_negative_log_likelihood,
-#     prepare_likelihood_func,
-# )
-# from .initialize_parameters import (
-#     random_glm_params_init,
-#     resolve_glm_params_init_function,
-#     resolve_initial_state_proba_init_function,
-#     resolve_transition_proba_init_function,
-#     sticky_transition_proba_init,
-#     uniform_initial_proba_init,
-# )
-# from .params import GLMHMMParams, GLMHMMUserParams
-#
-#
-# def compute_is_new_session(time: NDArray, start: NDArray) -> jnp.ndarray:
-#     """Compute new session indicator vector.
-#
-#     Parameters
-#     ----------
-#     time:
-#         The timestamp associated to each sample.
-#     start:
-#         Start times of each new epoch/session.
-#     """
-#     return jax.numpy.zeros_like(time).at[jax.numpy.searchsorted(time, start)].set(1)
-#
-#
-# class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
-#     """GLM-HMM model."""
-#
-#     def __init__(
-#         self,
-#         n_states: int,
-#         observation_model: (
-#             Observations | Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial"]
-#         ) = "Bernoulli",
-#         inverse_link_function: Callable = jax.lax.logistic,
-#         regularizer: Union[
-#             str, Regularizer
-#         ] = "UnRegularized",  # this applies only for the regularization of the glm coefficients.
-#         regularizer_strength: Optional[
-#             RegularizerStrength
-#         ] = None,  # this is used to regularize GLM coef.
-#         # prior to regularize init prob and transition
-#         dirichlet_prior_alphas_init_prob: jnp.ndarray | None = None,  # (n_state, )
-#         dirichlet_prior_alphas_transition: (
-#             jnp.ndarray | None
-#         ) = None,  # (n_state, n_state)
-#         solver_name: str = None,
-#         solver_kwargs: Optional[dict] = None,
-#         initialize_init_proba: Optional[
-#             Callable[[int, jax.random.PRNGKey], NDArray]
-#         ] = None,
-#         initialize_transition_proba: Optional[
-#             Callable[[int, jax.random.PRNGKey], NDArray]
-#         ] = None,
-#         initialize_glm_params: Optional[
-#             Callable[[int, NDArray, NDArray, jax.random.PRNGKey], NDArray]
-#         ] = None,
-#         maxiter: int = 1000,
-#         tol: float = 1e-8,
-#         seed=jax.random.PRNGKey(123),
-#     ):
-#         super().__init__(
-#             regularizer=regularizer,
-#             regularizer_strength=regularizer_strength,
-#             solver_name=solver_name,
-#             solver_kwargs=solver_kwargs,
-#         )
-#         self._n_states = n_states
-#         self.observation_model = observation_model
-#         self.inverse_link_function = inverse_link_function
-#
-#         # assign defaults to initialization functions
-#         self.initialize_glm_params = initialize_glm_params
-#         self.initialize_transition_proba = initialize_transition_proba
-#         self.initialize_init_proba = initialize_init_proba
-#         # if initialize_transition_proba is None:
-#         #     self.initialize_transition_proba = sticky_transition_proba_init
-#         # else:
-#         #     self.initialize_transition_proba = initialize_transition_proba
-#         # if initialize_init_proba is None:
-#         #     self.initialize_init_proba = uniform_initial_proba_init
-#         # else:
-#         #     self.initialize_init_proba = initialize_init_proba
-#
-#         # set the prior params
-#         self.dirichlet_prior_alphas_init_prob = dirichlet_prior_alphas_init_prob
-#         self.dirichlet_prior_alphas_transition = dirichlet_prior_alphas_transition
-#
-#         self.seed = seed
-#         self.maxiter = maxiter
-#         self.tol = tol
-#         # Model log-likelihood
-#         # inputs: (y, firing_rate)
-#         # input shapes:
-#         #     - y: (n_samples,)
-#         #     - firing_rate: (n_samples,)
-#         # returns: a 0-dim jnp.ndarray
-#         self._likelihood_func: (
-#             Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray] | None
-#         ) = None
-#         # expected negative log-likelihood as function of the GLM parameters.
-#         # inputs: ((coef, intercept), X, y, posteriors)
-#         # input shapes:
-#         #     - (coef, intercept): ( (n_features, n_states), (n_states,) )
-#         #     - X: (n_samples, n_features)
-#         #     - y: (n_samples,)
-#         #     - posteriors: (n_samples, n_states)
-#         self._expected_negative_log_likelihood: (
-#             Callable[
-#                 [
-#                     Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
-#                     jnp.ndarray,
-#                     jnp.ndarray,
-#                     jnp.ndarray,
-#                 ],
-#                 jnp.ndarray,
-#             ]
-#             | None
-#         ) = None
-#
-#         # fit attributes
-#         self.glm_params_: Tuple[dict | jnp.ndarray, jnp.ndarray] | None = None
-#         self.transition_prob_: jnp.ndarray | None = None
-#         self.initial_prob_: jnp.ndarray | None = None
-#         self.solver_state_: NamedTuple | None = None
-#         self.scale_: float | None = None
-#         self.dof_resid_: int | None = None
-#
-#     #
-# @property
-# def maxiter(self):
-#     """EM maximum number of iterations."""
-#     return self._maxiter
-#
-# @maxiter.setter
-# def maxiter(self, maxiter: int):
-#
-#     if not isinstance(maxiter, Number) or maxiter != int(maxiter) or maxiter <= 0:
-#         raise ValueError(
-#             f"``maxiter`` must be a strictly positive integer. {maxiter} provided."
-#         )
-#     self._maxiter = int(maxiter)
-#
-# @property
-# def tol(self):
-#     """Tolerance for the EM algorithm convergence criterion.
-#
-#     The algorithm stops when the absolute change in log-likelihood between
-#     consecutive iterations falls below this threshold:
-#     |log_likelihood_current - log_likelihood_previous| < tol
-#
-#     Returns
-#     -------
-#         float: Convergence tolerance value.
-#     """
-#     return self._tol
-#
-# @tol.setter
-# def tol(self, tol: float):
-#
-#     if not isinstance(tol, Number) or tol <= 0:
-#         raise ValueError(
-#             f"``tol`` must be a strictly positive float. {tol} provided."
-#         )
-#     self._tol = float(tol)
-#
-# @property
-# def initialize_glm_params(self):
-#     """Initialization of glm coef and intercept for the GLM."""
-#     return self._initialize_glm_params
-#
-# @initialize_glm_params.setter
-# def initialize_glm_params(self, glm_params):
-#     glm_params = resolve_glm_params_init_function(glm_params)
-#     check_values = (
-#         isinstance(glm_params, tuple)
-#         and len(glm_params) == 2
-#         and all(isinstance(arr, jax.numpy.ndarray) for arr in glm_params)
-#     )
-#     if check_values:
-#         self._check_initial_glm_params(glm_params)
-#     self._initialize_glm_params = glm_params
-#
-# @property
-# def initialize_init_proba(self):
-#     """Initialization of initial state probabilities."""
-#     return self._initialize_init_proba
-#
-# @initialize_init_proba.setter
-# def initialize_init_proba(self, initial_prob):
-#     initial_prob = resolve_initial_state_proba_init_function(initial_prob)
-#     if isinstance(initial_prob, jnp.ndarray):
-#         self._check_init_state_proba(initial_prob)
-#     self._initialize_init_proba = initial_prob
-#
-# @property
-# def initialize_transition_proba(self):
-#     """Initialization of the transition probabilities."""
-#     return self._initialize_transition_proba
-#
-# @initialize_transition_proba.setter
-# def initialize_transition_proba(self, transition_prob):
-#     transition_prob = resolve_transition_proba_init_function(transition_prob)
-#     if isinstance(transition_prob, jnp.ndarray):
-#         self._check_transition_proba(transition_prob)
-#     self._initialize_transition_proba = transition_prob
-#
-# @property
-# def dirichlet_prior_alphas_init_prob(self) -> jnp.ndarray | None:
-#     """Alpha parameters of the Dirichlet prior over the initial probabilities of HMM states.
-#
-#     If ``None``, a flat prior is assumed.
-#     """
-#     return self._dirichlet_prior_alphas_init_prob
-#
-# @dirichlet_prior_alphas_init_prob.setter
-# def dirichlet_prior_alphas_init_prob(self, value: jnp.ndarray | None):
-#     if value is None:
-#         self._dirichlet_prior_alphas_init_prob = None
-#     elif is_numpy_array_like(value)[1]:
-#         value = jnp.asarray(value, dtype=float)
-#         if value.shape != (self._n_states,):
-#             raise ValueError(
-#                 f"Dirichlet prior alpha parameters for initial state probabilities "
-#                 f"must have shape ({self._n_states},), "
-#                 f"but got shape {value.shape}."
-#             )
-#         if not jnp.all(value > 0):
-#             raise ValueError(
-#                 f"Dirichlet prior alpha parameters must be strictly positive, but got values with "
-#                 f"zero or negative entries: {value}"
-#             )
-#         self._dirichlet_prior_alphas_init_prob = value
-#     else:
-#         raise TypeError(
-#             f"Invalid type for Dirichlet prior alpha parameters: {type(value).__name__}. "
-#             f"Must be None or an array-like object of shape ({self._n_states},) with strictly positive values."
-#         )
-#
-# @property
-# def dirichlet_prior_alphas_transition(self) -> jnp.ndarray | None:
-#     """Alpha parameters of the Dirichlet prior over the initial probabilities of HMM states.
-#
-#     If ``None``, a flat prior is assumed.
-#     """
-#     return self._dirichlet_prior_alphas_transition
-#
-# @dirichlet_prior_alphas_transition.setter
-# def dirichlet_prior_alphas_transition(self, value: jnp.ndarray | None):
-#     if value is None:
-#         self._dirichlet_prior_alphas_transition = None
-#     elif is_numpy_array_like(value)[1]:
-#         value = jnp.asarray(value, dtype=float)
-#         if value.shape != (self._n_states, self._n_states):
-#             raise ValueError(
-#                 "Dirichlet prior alpha parameters for transition probabilities must "
-#                 f"have shape ({self._n_states}, {self._n_states}), "
-#                 f"but got shape {value.shape}."
-#             )
-#         if not jnp.all(value > 0):
-#             raise ValueError(
-#                 f"Dirichlet prior alpha parameters must be strictly positive, but got values with "
-#                 f"zero or negative entries: {value}"
-#             )
-#         self._dirichlet_prior_alphas_transition = value
-#     else:
-#         raise TypeError(
-#             f"Invalid type for Dirichlet prior alpha parameters for transition probabilities: "
-#             f"{type(value).__name__}. "
-#             f"Must be None or an array-like object of shape ({self._n_states}, {self._n_states}) "
-#             f"with strictly positive values."
-#         )
-#
-# def _check_initial_glm_params(
-#     self,
-#     params: Tuple[DESIGN_INPUT_TYPE | dict, jax.numpy.ndarray],
-# ):
-#     coef, intercept = params
-#     # check the dimensionality of coeff
-#     err_message_shape = (
-#         "params[0] (GLM coefficients) must be a two-dimensional array "
-#         f"or nemos.pytree.FeaturePytree with array leafs of shape "
-#         f"(n_features, {self._n_states})."
-#     )
-#     validation.check_tree_leaves_dimensionality(
-#         params[0],
-#         expected_dim=2,
-#         err_message=err_message_shape,
-#     )
-#
-#     shape_coef = set(
-#         jax.tree_util.tree_map(
-#             lambda x: x.shape[1], jax.tree_util.tree_leaves(params[0])
-#         )
-#     )
-#     if len(shape_coef) != 1 or shape_coef != {self._n_states}:
-#         raise ValueError(err_message_shape)
-#
-#     if not isinstance(intercept, jnp.ndarray):
-#         raise ValueError(
-#             f"params[1] (GLM intercepts) must be a 1-dimensional array of shape ({self._n_states},). "
-#             f"Provided params[1] is of type {type(intercept)} instead."
-#         )
-#     elif not intercept.shape == (self._n_states,):
-#         raise ValueError(
-#             f"params[1] (GLM intercepts) must be a 1-dimensional array of shape ({self._n_states},). "
-#             f"Provided params[1] is of shape {intercept.shape} instead."
-#         )
-#
-# def _check_transition_proba(self, transition_prob: jax.numpy.ndarray):
-#     if transition_prob.shape != (self._n_states, self._n_states):
-#         raise ValueError(
-#             f"Transition probability matrix shape mismatch: expected ({self._n_states}, {self._n_states}), "
-#             f"but got {transition_prob.shape}."
-#         )
-#     if not jnp.allclose(jnp.sum(transition_prob, axis=1), 1):
-#         row_sums = jnp.sum(transition_prob, axis=1)
-#         raise ValueError(
-#             f"Transition probability matrix rows must sum to 1. "
-#             f"Each row i represents the probability distribution of transitioning from state i. "
-#             f"Row sums: {row_sums}"
-#         )
-#
-# def _check_init_state_proba(self, initial_prob: jax.numpy.ndarray):
-#     if initial_prob.shape != (self._n_states,):
-#         raise ValueError(
-#             f"Initial state probability vector shape mismatch: expected ({self._n_states},), "
-#             f"but got {initial_prob.shape}."
-#         )
-#     if not jnp.allclose(initial_prob.sum(), 1):
-#         raise ValueError(
-#             f"Initial state probabilities must sum to 1, but got sum = {initial_prob.sum()}. "
-#             f"Probabilities: {initial_prob}"
-#         )
-#
-# @property
-# def n_states(self) -> int:
-#     """Number of hidden states of the HMM."""
-#     return self._n_states
-#
-# @n_states.setter
-# def n_states(self, n_states: int):
-#     if not isinstance(n_states, Number):
-#         raise TypeError(
-#             f"n_states must be a positive integer. "
-#             f"n_states is of type `{type(n_states)}` instead."
-#         )
-#     int_n_states = int(n_states)
-#     if int_n_states != int(n_states):
-#         raise TypeError(
-#             f"n_states must be a positive integer. `{n_states}` provided instead."
-#         )
-#     if int_n_states < 1:
-#         raise ValueError(
-#             f"n_states must be a positive integer. `{n_states}` provided instead."
-#         )
-#     self._n_states = int_n_states
-#
-# @property
-# def observation_model(self) -> Union[None, obs.Observations]:
-#     """Getter for the ``observation_model`` attribute."""
-#     return self._observation_model
-#
-# @observation_model.setter
-# def observation_model(self, observation: obs.Observations):
-#     if isinstance(observation, str):
-#         self._observation_model = instantiate_observation_model(observation)
-#         return
-#     # check that the model has the required attributes
-#     # and that the attribute can be called
-#     obs.check_observation_model(observation)
-#     self._observation_model = observation
-#
-# @property
-# def inverse_link_function(self):
-#     """Getter for the inverse link function for the model."""
-#     return self._inverse_link_function
-#
-# @inverse_link_function.setter
-# def inverse_link_function(self, inverse_link_function: Callable):
-#     """Setter for the inverse link function for the model."""
-#     self._inverse_link_function = resolve_inverse_link_function(
-#         inverse_link_function, self._observation_model
-#     )
-#
-# @property
-# def seed(self):
-#     """Random seed as a jax PRNG key."""
-#     return self._seed
-#
-# @seed.setter
-# def seed(self, value):
-#     # Validate it's a JAX PRNG key
-#     if (
-#         not isinstance(value, jax.Array)
-#         or value.shape != (2,)
-#         or value.dtype != jnp.uint32
-#     ):
-#         raise TypeError(
-#             f"seed must be a JAX PRNG key (jax.random.PRNGKey). "
-#             f"Got {type(value)} with shape {getattr(value, 'shape', 'N/A')}"
-#         )
-#     self._seed = value
-#
-# def fit(
-#     self,
-#     X: DESIGN_INPUT_TYPE,
-#     y: Union[NDArray, jnp.ndarray, nap.Tsd],
-#     init_params: Optional[
-#         Tuple[Tuple[Union[dict, ArrayLike], ArrayLike], ArrayLike, ArrayLike]
-#     ] = None,
-# ) -> "GLMHMM":
-#     """Fit the GLM-HMM model to the data."""
-#
-#     # define new session array
-#     if is_pynapple_tsd(y):
-#         is_new_session = compute_is_new_session(y.t, y.time_support.start)
-#     elif is_pynapple_tsd(X):
-#         is_new_session = compute_is_new_session(X.t, X.time_support.start)
-#     else:
-#         is_new_session = None
-#
-#     # cast to jax
-#     X, y = jax.tree_util.tree_map(lambda x: jnp_asarray_if(x, dtype=float), (X, y))
-#
-#     # validate the inputs & initialize solver
-#     init_params = self.initialize_params(X, y, init_params=init_params)
-#
-#     # find non-nans
-#     is_valid = tree_utils.get_valid_multitree(X, y)
-#
-#     # drop nans
-#     X = jax.tree_util.tree_map(lambda x: x[is_valid], X)
-#     y = jax.tree_util.tree_map(lambda x: x[is_valid], y)
-#
-#     # grab data if needed (tree map won't function because param is never a FeaturePytree).
-#     if isinstance(X, FeaturePytree):
-#         data = X.data
-#     else:
-#         data = X
-#
-#     self.initialize_state(data, y, init_params=init_params)
-#
-#     # run EM
-#     glm_params, transition_prob, initial_prob = init_params
-#     (
-#         _,
-#         _,
-#         self.initial_prob_,
-#         self.transition_prob_,
-#         self.glm_params_,
-#         self.solver_state_,
-#     ) = em_glm_hmm(
-#         data,
-#         y,
-#         initial_prob,
-#         transition_prob,
-#         glm_params,
-#         self._inverse_link_function,
-#         self._likelihood_func,
-#         self._solver_run,
-#         is_new_session,
-#         self._maxiter,
-#         self._tol,
-#     )
-#     self.dof_resid_ = self._estimate_resid_degrees_of_freedom(X)
-#     # TODO: uncomment this once the predict method is available
-#     # self.scale_ = self.observation_model.estimate_scale(y, self.predict(X), self.dof_resid_)
-#     self.scale_ = 1.0
-#     return self
-#
-# def _estimate_resid_degrees_of_freedom(
-#     self, X: DESIGN_INPUT_TYPE, n_samples: Optional[int] = None
-# ):
-#     """
-#     Estimate the degrees of freedom of the residuals.
-#
-#     Parameters
-#     ----------
-#     self :
-#         A fitted GLM model.
-#     X :
-#         The design matrix.
-#     n_samples :
-#         The number of samples observed. If not provided, n_samples is set to ``X.shape[0]``. If the fit is
-#         batched, the n_samples could be larger than ``X.shape[0]``.
-#
-#     Returns
-#     -------
-#     :
-#         An estimate of the degrees of freedom of the residuals.
-#     """
-#     # Convert a pytree to a design-matrix with pytrees
-#     X = jnp.hstack(jax.tree_util.tree_leaves(X))
-#     dof_intercept_and_hmm = (
-#         self._n_states  # intercept
-#         + (
-#             self._n_states - 1
-#         )  # init prob (n values but sum to 1, so n-1 free values)
-#         + (self._n_states - 1) * self._n_states
-#     )  # transition n n-dim vectors that sum to 1
-#
-#     if n_samples is None:
-#         n_samples = X.shape[0]
-#     else:
-#         if not isinstance(n_samples, int):
-#             raise TypeError(
-#                 "`n_samples` must either `None` or of type `int`. Type {type(n_sample)} provided "
-#                 "instead!"
-#             )
-#
-#     params = self.glm_params_
-#     if params[0].ndim == 3:
-#         n_neurons = params[0].shape[1]
-#     else:
-#         n_neurons = 1
-#     # if the regularizer is lasso use the non-zero
-#     # coeff as an estimate of the dof
-#     # see https://arxiv.org/abs/0712.0881
-#     if isinstance(self.regularizer, (GroupLasso, Lasso)):
-#         resid_dof = sum(
-#             tree_utils.pytree_map_and_reduce(
-#                 lambda x: ~jnp.isclose(x, jnp.zeros_like(x)),
-#                 lambda x: sum([jnp.sum(i, axis=0) for i in x]),
-#                 params[0],
-#             )
-#         )
-#         return n_samples - resid_dof - dof_intercept_and_hmm
-#
-#     elif isinstance(self.regularizer, Ridge):
-#         # for Ridge, use the tot parameters (X.shape[1] + intercept)
-#         return (
-#             n_samples - (X.shape[1] * self.n_states) - dof_intercept_and_hmm
-#         ) * jnp.ones(n_neurons)
-#     else:
-#         # for UnRegularized, use the rank
-#         rank = jnp.linalg.matrix_rank(X)
-#         return (n_samples - rank - dof_intercept_and_hmm) * jnp.ones(n_neurons)
+from numbers import Number
+from pathlib import Path
+from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
+
+import jax
+import jax.numpy as jnp
+import pynapple as nap
+from numpy.typing import ArrayLike, NDArray
+
+from .. import observation_models as obs
+from .. import tree_utils, validation
+from .._observation_model_builder import instantiate_observation_model
+from ..base_regressor import BaseRegressor
+from ..glm import GLM
+from ..inverse_link_function_utils import resolve_inverse_link_function
+from ..observation_models import Observations
+from ..pytrees import FeaturePytree
+from ..regularizer import GroupLasso, Lasso, Regularizer, Ridge
+from ..third_party.jaxopt import jaxopt
+from ..type_casting import (
+    is_numpy_array_like,
+    is_pynapple_tsd,
+    jnp_asarray_if,
+)
+from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength
+from .expectation_maximization import (
+    em_glm_hmm,
+    hmm_negative_log_likelihood,
+    prepare_likelihood_func,
+)
+from .initialize_parameters import (
+    INITIALIZATION_FN_DICT,
+    _is_native_init_registry,
+    _resolve_init_funcs_registry,
+    glm_hmm_initialization,
+)
+from .params import GLMHMMParams, GLMHMMUserParams
+
+
+def compute_is_new_session(time: NDArray, start: NDArray) -> jnp.ndarray:
+    """Compute new session indicator vector.
+
+    Parameters
+    ----------
+    time:
+        The timestamp associated to each sample.
+    start:
+        Start times of each new epoch/session.
+    """
+    return jax.numpy.zeros_like(time).at[jax.numpy.searchsorted(time, start)].set(1)
+
+
+def resolve_dirichlet_priors(
+    alphas: Any, expected_shape: Tuple[int, ...]
+) -> jnp.ndarray | None:
+    if alphas is None:
+        return None
+    elif is_numpy_array_like(alphas)[1]:
+        alphas = jnp.asarray(alphas, dtype=float)
+        if alphas.shape != expected_shape:
+            raise ValueError(
+                f"Dirichlet prior alpha parameters for initial state probabilities "
+                f"must have shape ``{expected_shape}``, "
+                f"but got shape ``{alphas.shape}``."
+            )
+        if not jnp.all(alphas >= 1):
+            raise ValueError(
+                f"Dirichlet prior alpha parameters must be >= 1, but got values < 1"
+                f":\n{alphas}"
+            )
+        return alphas
+    else:
+        raise TypeError(
+            f"Invalid type for Dirichlet prior alpha parameters: ``{type(alphas).__name__}``. "
+            f"Must be None or an array-like object of shape ``{expected_shape}`` with strictly positive values."
+        )
+
+
+class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
+    """GLM-HMM model."""
+
+    def __init__(
+        self,
+        n_states: int,
+        observation_model: (
+            Observations
+            | Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial", "Gaussian"]
+        ) = "Bernoulli",
+        inverse_link_function: Optional[Callable[[jnp.ndarray], jnp.ndarray]] = None,
+        regularizer: Optional[Union[str, Regularizer]] = None,
+        regularizer_strength: Optional[
+            RegularizerStrength
+        ] = None,  # this is used to regularize GLM coef.
+        # prior to regularize init prob and transition
+        dirichlet_prior_alphas_init_prob: Union[
+            jnp.ndarray, None
+        ] = None,  # (n_state, )
+        dirichlet_prior_alphas_transition: Union[
+            jnp.ndarray | None
+        ] = None,  # (n_state, n_state)
+        solver_name: str = None,
+        solver_kwargs: Optional[dict] = None,
+        initialization_funcs: Optional[INITIALIZATION_FN_DICT] = None,
+        maxiter: int = 1000,
+        tol: float = 1e-8,
+        seed=jax.random.PRNGKey(123),
+    ):
+        super().__init__(
+            regularizer=regularizer,
+            regularizer_strength=regularizer_strength,
+            solver_name=solver_name,
+            solver_kwargs=solver_kwargs,
+        )
+        self._n_states = n_states
+        self.observation_model = observation_model
+        self.inverse_link_function = inverse_link_function
+
+        # assign defaults to initialization functions
+        self.initialization_funcs = initialization_funcs
+
+        # set the prior params
+        self.dirichlet_prior_alphas_init_prob = dirichlet_prior_alphas_init_prob
+        self.dirichlet_prior_alphas_transition = dirichlet_prior_alphas_transition
+
+        self.seed = seed
+        self.maxiter = maxiter
+        self.tol = tol
+        # Model log-likelihood
+        # inputs: (y, firing_rate)
+        # input shapes:
+        #     - y: (n_samples,)
+        #     - firing_rate: (n_samples,)
+        # returns: a 0-dim jnp.ndarray
+        self._likelihood_func: (
+            Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray] | None
+        ) = None
+        # expected negative log-likelihood as function of the GLM parameters.
+        # inputs: ((coef, intercept), X, y, posteriors)
+        # input shapes:
+        #     - (coef, intercept): ( (n_features, n_states), (n_states,) )
+        #     - X: (n_samples, n_features)
+        #     - y: (n_samples,)
+        #     - posteriors: (n_samples, n_states)
+        self._expected_negative_log_likelihood: (
+            Callable[
+                [
+                    Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+                    jnp.ndarray,
+                    jnp.ndarray,
+                    jnp.ndarray,
+                ],
+                jnp.ndarray,
+            ]
+            | None
+        ) = None
+
+        # fit attributes
+        self.transition_prob_: jnp.ndarray | None = None
+        self.initial_prob_: jnp.ndarray | None = None
+        self.coef_: jnp.ndarray | None = None
+        self.intercept_: jnp.ndarray | None = None
+        self.solver_state_: NamedTuple | None = None
+        self.scale_: float | None = None
+        self.dof_resid_: int | None = None
+
+    @property
+    def n_states(self) -> int:
+        """Number of hidden states of the HMM."""
+        return self._n_states
+
+    @n_states.setter
+    def n_states(self, n_states: int):
+        # quick sanity check and assignment
+        if isinstance(n_states, int) and n_states > 0:
+            self._n_states = n_states
+            return
+
+        # further checks for other valid numeric types (like non-negative float with no-decimals)
+        if not isinstance(n_states, Number):
+            raise TypeError(
+                f"n_states must be a positive integer. "
+                f"n_states is of type ``{type(n_states)}`` instead."
+            )
+
+        # provided a non-integer number (check that has no decimals)
+        int_n_states = int(n_states)
+        if int_n_states != int(n_states):
+            raise TypeError(
+                f"n_states must be a positive integer. ``{n_states}`` provided instead."
+            )
+        elif int_n_states < 1:
+            raise ValueError(
+                f"n_states must be a positive integer. ``{n_states}`` provided instead."
+            )
+        self._n_states = int_n_states
+
+    @property
+    def maxiter(self):
+        """EM maximum number of iterations."""
+        return self._maxiter
+
+    @maxiter.setter
+    def maxiter(self, maxiter: int):
+
+        if not isinstance(maxiter, Number) or maxiter != int(maxiter) or maxiter <= 0:
+            raise ValueError(
+                f"``maxiter`` must be a strictly positive integer. {maxiter} provided."
+            )
+        self._maxiter = int(maxiter)
+
+    @property
+    def tol(self):
+        """Tolerance for the EM algorithm convergence criterion.
+
+        The algorithm stops when the absolute change in log-likelihood between
+        consecutive iterations falls below this threshold:
+        |log_likelihood_current - log_likelihood_previous| < tol
+
+        Returns
+        -------
+            float: Convergence tolerance value.
+        """
+        return self._tol
+
+    @tol.setter
+    def tol(self, tol: float):
+
+        if not isinstance(tol, Number) or tol <= 0:
+            raise ValueError(
+                f"``tol`` must be a strictly positive float. {tol} provided."
+            )
+        self._tol = float(tol)
+
+    @property
+    def initialization_funcs(self):
+        return self._initialization_funcs
+
+    @initialization_funcs.setter
+    def initialization_funcs(self, initialization_funcs: INITIALIZATION_FN_DICT):
+        self._initialization_funcs = _resolve_init_funcs_registry(initialization_funcs)
+
+    @property
+    def dirichlet_prior_alphas_init_prob(self) -> jnp.ndarray | None:
+        """Alpha parameters of the Dirichlet prior over the initial probabilities of HMM states.
+
+        If ``None``, a flat prior is assumed.
+        """
+        return self._dirichlet_prior_alphas_init_prob
+
+    @dirichlet_prior_alphas_init_prob.setter
+    def dirichlet_prior_alphas_init_prob(self, value: jnp.ndarray | None):
+        self._dirichlet_prior_alphas_init_prob = resolve_dirichlet_priors(
+            value, (self._n_states,)
+        )
+
+    @property
+    def dirichlet_prior_alphas_transition(self) -> jnp.ndarray | None:
+        """Alpha parameters of the Dirichlet prior over the initial probabilities of HMM states.
+
+        If ``None``, a flat prior is assumed.
+        """
+        return self._dirichlet_prior_alphas_transition
+
+    @dirichlet_prior_alphas_transition.setter
+    def dirichlet_prior_alphas_transition(self, value: jnp.ndarray | None):
+        self._dirichlet_prior_alphas_transition = resolve_dirichlet_priors(
+            value, (self._n_states, self._n_states)
+        )
+
+    @property
+    def observation_model(self) -> obs.Observations:
+        """Getter for the ``observation_model`` attribute."""
+        return self._observation_model
+
+    @observation_model.setter
+    def observation_model(self, observation: obs.Observations):
+        if isinstance(observation, str):
+            self._observation_model = instantiate_observation_model(observation)
+            return
+        # check that the model has the required attributes
+        # and that the attribute can be called
+        obs.check_observation_model(observation)
+        self._observation_model = observation
+
+    @property
+    def inverse_link_function(self):
+        """Getter for the inverse link function for the model."""
+        return self._inverse_link_function
+
+    @inverse_link_function.setter
+    def inverse_link_function(self, inverse_link_function: Callable):
+        """Setter for the inverse link function for the model."""
+        self._inverse_link_function = resolve_inverse_link_function(
+            inverse_link_function, self._observation_model
+        )
+
+    @property
+    def seed(self):
+        """Random seed as a jax PRNG key."""
+        return self._seed
+
+    @seed.setter
+    def seed(self, value):
+        # Validate it's a JAX PRNG key
+        if (
+            not isinstance(value, jax.Array)
+            or value.shape != (2,)
+            or value.dtype != jnp.uint32
+        ):
+            raise TypeError(
+                f"seed must be a JAX PRNG key (jax.random.PRNGKey). "
+                f"Got {type(value)} with shape {getattr(value, 'shape', 'N/A')}"
+            )
+        self._seed = value
+
+    # def _check_initial_glm_params(
+    #     self,
+    #     params: Tuple[DESIGN_INPUT_TYPE | dict, jax.numpy.ndarray],
+    # ):
+    #     coef, intercept = params
+    #     # check the dimensionality of coeff
+    #     err_message_shape = (
+    #         "params[0] (GLM coefficients) must be a two-dimensional array "
+    #         f"or nemos.pytree.FeaturePytree with array leafs of shape "
+    #         f"(n_features, {self._n_states})."
+    #     )
+    #     validation.check_tree_leaves_dimensionality(
+    #         params[0],
+    #         expected_dim=2,
+    #         err_message=err_message_shape,
+    #     )
+    #
+    #     shape_coef = set(
+    #         jax.tree_util.tree_map(
+    #             lambda x: x.shape[1], jax.tree_util.tree_leaves(params[0])
+    #         )
+    #     )
+    #     if len(shape_coef) != 1 or shape_coef != {self._n_states}:
+    #         raise ValueError(err_message_shape)
+    #
+    #     if not isinstance(intercept, jnp.ndarray):
+    #         raise ValueError(
+    #             f"params[1] (GLM intercepts) must be a 1-dimensional array of shape ({self._n_states},). "
+    #             f"Provided params[1] is of type {type(intercept)} instead."
+    #         )
+    #     elif not intercept.shape == (self._n_states,):
+    #         raise ValueError(
+    #             f"params[1] (GLM intercepts) must be a 1-dimensional array of shape ({self._n_states},). "
+    #             f"Provided params[1] is of shape {intercept.shape} instead."
+    #         )
+    #
+    # def _check_transition_proba(self, transition_prob: jax.numpy.ndarray):
+    #     if transition_prob.shape != (self._n_states, self._n_states):
+    #         raise ValueError(
+    #             f"Transition probability matrix shape mismatch: expected ({self._n_states}, {self._n_states}), "
+    #             f"but got {transition_prob.shape}."
+    #         )
+    #     if not jnp.allclose(jnp.sum(transition_prob, axis=1), 1):
+    #         row_sums = jnp.sum(transition_prob, axis=1)
+    #         raise ValueError(
+    #             f"Transition probability matrix rows must sum to 1. "
+    #             f"Each row i represents the probability distribution of transitioning from state i. "
+    #             f"Row sums: {row_sums}"
+    #         )
+    #
+    # def _check_init_state_proba(self, initial_prob: jax.numpy.ndarray):
+    #     if initial_prob.shape != (self._n_states,):
+    #         raise ValueError(
+    #             f"Initial state probability vector shape mismatch: expected ({self._n_states},), "
+    #             f"but got {initial_prob.shape}."
+    #         )
+    #     if not jnp.allclose(initial_prob.sum(), 1):
+    #         raise ValueError(
+    #             f"Initial state probabilities must sum to 1, but got sum = {initial_prob.sum()}. "
+    #             f"Probabilities: {initial_prob}"
+    #         )
+    #
+    #
+
+    def _model_specific_initialization(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+    ) -> GLMHMMParams:
+        """GLM-HMM initialization."""
+        user_params = glm_hmm_initialization(self._n_states, X, y, self._seed)
+
+        # check if registry uses NeMoS init funcs
+        is_nemos_init = _is_native_init_registry(self._initialization_funcs)
+        if is_nemos_init:
+            # skip validation and just cast
+            return self._validator.to_model_params(user_params)
+
+        # params casting with validation
+        model_params = self._validator.validate_and_cast_params(user_params)
+        self._validator.validate_consistency(model_params, X=X, y=y)
+        return model_params
+
+    def fit(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: Union[NDArray, jnp.ndarray, nap.Tsd],
+        init_params: Optional[GLMHMMUserParams] = None,
+    ) -> "GLMHMM":
+        """Fit the GLM-HMM model to the data."""
+
+        # define new session array
+        if is_pynapple_tsd(y):
+            is_new_session = compute_is_new_session(y.t, y.time_support.start)
+        elif is_pynapple_tsd(X):
+            is_new_session = compute_is_new_session(X.t, X.time_support.start)
+        else:
+            is_new_session = None
+
+        # validate the inputs & initialize solver
+        # initialize params if no params are provided
+        if init_params is None:
+            init_params = self._model_specific_initialization(X, y)
+        else:
+            init_params = self._validator.validate_and_cast_params(init_params)
+            self._validator.validate_consistency(init_params, X=X, y=y)
+
+        self._validator.feature_mask_consistency(
+            getattr(self, "_feature_mask", None), init_params
+        )
+
+        # filter for non-nans, grab data if needed
+        data, y = self._preprocess_inputs(X, y)
+
+        self._initialize_solver_and_state(data, y, init_params)
+
+        # run EM
+        glm_params, transition_prob, initial_prob = init_params
+        (
+            _,
+            _,
+            self.initial_prob_,
+            self.transition_prob_,
+            self.glm_params_,
+            self.solver_state_,
+        ) = em_glm_hmm(
+            data,
+            y,
+            init_params.hmm_params.initial_prob,
+            init_params.hmm_params.transition_prob,
+            init_params.glm_params,
+            self._inverse_link_function,
+            self._likelihood_func,
+            self._solver_run,
+            is_new_session,
+            self._maxiter,
+            self._tol,
+        )
+        self.dof_resid_ = self._estimate_resid_degrees_of_freedom(X)
+        # TODO: uncomment this once the predict method is available
+        # self.scale_ = self.observation_model.estimate_scale(y, self.predict(X), self.dof_resid_)
+        self.scale_ = 1.0
+        return self
+
+    def _estimate_resid_degrees_of_freedom(
+        self, X: DESIGN_INPUT_TYPE, n_samples: Optional[int] = None
+    ):
+        """
+        Estimate the degrees of freedom of the residuals.
+
+        Parameters
+        ----------
+        self :
+            A fitted GLM model.
+        X :
+            The design matrix.
+        n_samples :
+            The number of samples observed. If not provided, n_samples is set to ``X.shape[0]``. If the fit is
+            batched, the n_samples could be larger than ``X.shape[0]``.
+
+        Returns
+        -------
+        :
+            An estimate of the degrees of freedom of the residuals.
+        """
+        # Convert a pytree to a design-matrix with pytrees
+        X = jnp.hstack(jax.tree_util.tree_leaves(X))
+        dof_intercept_and_hmm = (
+            self._n_states  # intercept
+            + (
+                self._n_states - 1
+            )  # init prob (n values but sum to 1, so n-1 free values)
+            + (self._n_states - 1) * self._n_states
+        )  # transition n n-dim vectors that sum to 1
+
+        if n_samples is None:
+            n_samples = X.shape[0]
+        else:
+            if not isinstance(n_samples, int):
+                raise TypeError(
+                    "`n_samples` must either `None` or of type `int`. Type {type(n_sample)} provided "
+                    "instead!"
+                )
+
+        params = self.glm_params_
+        if params[0].ndim == 3:
+            n_neurons = params[0].shape[1]
+        else:
+            n_neurons = 1
+
+        # if the regularizer is lasso use the non-zero
+        # coeff as an estimate of the dof
+        # see https://arxiv.org/abs/0712.0881
+        if isinstance(self.regularizer, (GroupLasso, Lasso)):
+            resid_dof = sum(
+                tree_utils.pytree_map_and_reduce(
+                    lambda x: ~jnp.isclose(x, jnp.zeros_like(x)),
+                    lambda x: sum([jnp.sum(i, axis=0) for i in x]),
+                    params[0],
+                )
+            )
+            return n_samples - resid_dof - dof_intercept_and_hmm
+        elif isinstance(self.regularizer, Ridge):
+            # for Ridge, use the tot parameters (X.shape[1] + intercept)
+            return (
+                n_samples - (X.shape[1] * self.n_states) - dof_intercept_and_hmm
+            ) * jnp.ones(n_neurons)
+        else:
+            # for UnRegularized, use the rank
+            rank = jnp.linalg.matrix_rank(X)
+            return (n_samples - rank - dof_intercept_and_hmm) * jnp.ones(n_neurons)
+
+
 #
 # def predict(
 #     self,
@@ -647,36 +607,7 @@
 #     """
 #     return super().initialize_params(X, y, init_params)
 #
-# def _initialize_parameters(
-#     self,
-#     X: DESIGN_INPUT_TYPE,
-#     y: jnp.ndarray,
-# ) -> ModelParams:
-#     """GLM-HMM initialization."""
-#
-#     key = self.seed
-#     init_glm_params = self._initialize_glm_params
-#     if callable(init_glm_params):
-#         key, subkey = jax.random.split(key)
-#         coef, intercept = init_glm_params(
-#             1 if y.ndim == 1 else y.shape[1], self._n_states, X, subkey
-#         )
-#         if y.ndim == 1:
-#             coef, intercept = jnp.squeeze(coef), jnp.squeeze(intercept)
-#         init_glm_params = coef, intercept
-#
-#     init_transition_proba = self._initialize_transition_proba
-#     if callable(init_transition_proba):
-#         key, subkey = jax.random.split(key)
-#         init_transition_proba = init_transition_proba(self._n_states, subkey)
-#
-#     init_proba = self._initialize_init_proba
-#     if callable(init_proba):
-#         key, subkey = jax.random.split(key)
-#         init_proba = init_proba(self._n_states, subkey)
-#
-#     return init_glm_params, init_transition_proba, init_proba
-#
+
 # def _get_m_step_loss_function(self, is_population_glm: bool):
 #     """Prepare the loss function for the M-step of the GLM params."""
 #     # prepare the loss function

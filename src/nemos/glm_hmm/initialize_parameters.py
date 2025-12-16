@@ -1,7 +1,7 @@
 """Initialization functions and related utility functions."""
 
 import inspect
-from typing import Callable, Optional, Tuple
+from typing import Callable, Literal, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -15,6 +15,10 @@ RANDOM_KEY = jax.Array
 INIT_FUNCTION = Callable[
     [int, DESIGN_INPUT_TYPE, NDArray | jnp.ndarray, RANDOM_KEY],
     Tuple[jnp.ndarray, jnp.ndarray],
+]
+INITIALIZATION_FN_DICT = dict[
+    Literal["glm_params_init", "initial_proba_init", "transition_proba_init"],
+    INIT_FUNCTION,
 ]
 
 
@@ -212,7 +216,7 @@ def glm_hmm_initialization(
     if init_registry is None:
         init_registry = DEFAULT_INIT_FUNCTION
     else:
-        init_registry = _resolve_registry(init_registry)
+        init_registry = _resolve_init_funcs_registry(init_registry)
     key, subkey = jax.random.split(random_key)
     coef, intercept = init_registry["glm_params_init"](n_states, X, y, subkey)
     key, subkey = jax.random.split(key)
@@ -222,7 +226,9 @@ def glm_hmm_initialization(
     return coef, intercept, initial_proba, transition_proba
 
 
-def _resolve_registry(registry: dict[str, INIT_FUNCTION]):
+def _resolve_init_funcs_registry(
+    registry: INITIALIZATION_FN_DICT,
+) -> INITIALIZATION_FN_DICT:
     """
     Merge and validate a partial initialization registry with defaults.
 
@@ -255,6 +261,13 @@ def _resolve_registry(registry: dict[str, INIT_FUNCTION]):
     for func_name, func in registry.items():
         updated_registry[func_name] = _resolve_init_func(func_name, func)
     return updated_registry
+
+
+def _is_native_init_registry(registry: INITIALIZATION_FN_DICT) -> bool:
+    """Return true if a function is a native initialization function."""
+    return all(
+        [fn in AVAILABLE_INIT_FUNCTIONS[key].values() for key, fn in registry.items()]
+    )
 
 
 def _resolve_init_func(func_name: str, init_func: Callable | str) -> INIT_FUNCTION:

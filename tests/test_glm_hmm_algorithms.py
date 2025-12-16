@@ -23,6 +23,7 @@ from nemos.glm_hmm.expectation_maximization import (
     prepare_likelihood_func,
     run_m_step,
 )
+from nemos.glm_hmm.params import GLMHMMParams, HMMParams
 from nemos.observation_models import BernoulliObservations, PoissonObservations
 from nemos.third_party.jaxopt.jaxopt import LBFGS
 
@@ -1584,6 +1585,10 @@ class TestEMAlgorithm:
         )
         glm._instantiate_solver(partial_hmm_negative_log_likelihood)
         solver_run = glm._solver_run
+        glm_hmm_params = GLMHMMParams(
+            GLMParams(coef, intercept),
+            HMMParams(initial_prob, transition_prob),
+        )
         # End of preparatory step.
         (
             posteriors,
@@ -1595,9 +1600,7 @@ class TestEMAlgorithm:
         ) = em_glm_hmm(
             X[:, 1:],
             y,
-            initial_prob=initial_prob,
-            transition_prob=transition_prob,
-            glm_params=GLMParams(coef, intercept),
+            glm_hmm_params,
             is_new_session=(
                 new_sess.astype(bool)[: X.shape[0]] if require_new_session else None
             ),

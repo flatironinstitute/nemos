@@ -10,6 +10,7 @@ from numpy.typing import NDArray
 
 from ..glm.params import GLMParams
 from ..tree_utils import pytree_map_and_reduce
+from .params import GLMHMMParams, HMMParams
 
 Array = NDArray | jax.numpy.ndarray
 
@@ -848,9 +849,7 @@ def check_log_likelihood_increment(state: GLMHMMState, tol: float) -> Array:
 def em_glm_hmm(
     X: Array,
     y: Array,
-    initial_prob: Array,
-    transition_prob: Array,
-    glm_params: GLMParams,
+    glm_hmm_params: GLMHMMParams,
     inverse_link_function: Callable,
     likelihood_func: Callable,
     m_step_fn_glm_params: Callable,
@@ -858,7 +857,7 @@ def em_glm_hmm(
     maxiter: int = 10**3,
     tol: float = 1e-8,
     check_convergence: Callable = check_log_likelihood_increment,
-) -> Tuple[Array, Array, Array, Array, Tuple[Array, Array], GLMHMMState]:
+) -> Tuple[Array, Array, GLMHMMParams, GLMHMMState]:
     """
     Perform EM optimization for a GLM-HMM.
 
@@ -871,13 +870,12 @@ def em_glm_hmm(
         Design matrix of observations.
     y:
         Target responses.
-    initial_prob:
-        Initial state distribution.
-    transition_prob:
-        Initial transition matrix.
-    glm_params:
-        Initial projection coefficients and intercept for the GLM, shape ``(n_features, n_states)``
-        and ``(n_states,)``, respectively.
+    glm_hmm_params:
+        Initial GLM-HMM parameters. This includes:
+        - the GLM coef, shape ``(n_features, n_states)`` or ``(n_features, n_neurons, n_states)`` .
+        - the GLM intercept, shape  ``(n_states, )`` or ``(n_neurons, n_states)`` .
+        - the HMM initial probabilities, shape ``(n_states,)``.
+        - the HMM transition probabilities, shape ``(n_states, n_states)``.
     inverse_link_function:
         Elementwise function mapping linear predictors to rates.
     likelihood_func:
@@ -933,7 +931,11 @@ def em_glm_hmm(
         _, new_state = carry
         return ~check_convergence(new_state, tol)
 
-    init_carry = (jnp.log(initial_prob), jnp.log(transition_prob), glm_params), state
+    init_carry = (
+        jnp.log(glm_hmm_params.hmm_params.initial_prob),
+        jnp.log(glm_hmm_params.hmm_params.transition_prob),
+        glm_hmm_params.glm_params,
+    ), state
     (log_initial_prob, log_transition_matrix, glm_params), state = (
         eqx.internal.while_loop(
             stopping_condition_while,
@@ -955,13 +957,18 @@ def em_glm_hmm(
         likelihood_func,
         is_new_session,
     )
-
+    # convert back to prob-space
+    glm_hmm_params = GLMHMMParams(
+        glm_params,
+        HMMParams(
+            jnp.exp(log_initial_prob),
+            jnp.exp(log_transition_matrix),
+        ),
+    )
     return (
         jnp.exp(log_posteriors),
         jnp.exp(log_joint_posterior),
-        jnp.exp(log_initial_prob),
-        jnp.exp(log_transition_matrix),
-        glm_params,
+        glm_hmm_params,
         state,
     )
 
