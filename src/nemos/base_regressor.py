@@ -21,6 +21,7 @@ from typing import (
 import jax
 import jax.numpy as jnp
 import numpy as np
+from numba.core.types import Callable
 from numpy.typing import NDArray
 
 from . import solvers, tree_utils, utils
@@ -313,7 +314,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
 
     def _instantiate_solver(
         self, loss, solver_kwargs: Optional[dict] = None
-    ) -> BaseRegressor:
+    ) -> Tuple[Callable, Callable, Callable]:
         """
         Instantiate the solver with the provided loss function.
 
@@ -370,11 +371,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             utils.assert_is_callable(solver.fun, "solver's loss")
             self._solver_loss_fun = solver.fun
 
-        self._optimization_init_state = solver.init_state
-        self._optimization_update = solver.update
-        self._optimization_run = solver.run
-
-        return self
+        return solver.init_state, solver.update, solver.run
 
     @abc.abstractmethod
     def fit(
@@ -561,17 +558,18 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         return data, y
 
     @abc.abstractmethod
-    def _initialize_solver_and_state(
+    def _initialize_optimization_and_state(
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         init_params: ModelParamsT,
+        **kwargs,
     ) -> SolverState:
         """Initialize the solver and the state of the solver for running fit and update."""
         pass
 
     @cast_to_jax
-    def initialize_solver_and_state(
+    def initialize_optimization_and_state(
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
@@ -605,7 +603,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         self._validator.validate_inputs(X, y)
         init_params = self._validator.validate_and_cast_params(init_params)
         self._validator.validate_consistency(init_params, X=X, y=y)
-        return self._initialize_solver_and_state(
+        return self._initialize_optimization_and_state(
             *tree_utils.drop_nans(X, y), init_params
         )
 

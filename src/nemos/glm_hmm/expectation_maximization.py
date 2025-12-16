@@ -857,7 +857,7 @@ def em_glm_hmm(
     maxiter: int = 10**3,
     tol: float = 1e-8,
     check_convergence: Callable = check_log_likelihood_increment,
-) -> Tuple[Array, Array, GLMHMMParams, GLMHMMState]:
+) -> Tuple[GLMHMMParams, GLMHMMState]:
     """
     Perform EM optimization for a GLM-HMM.
 
@@ -946,17 +946,6 @@ def em_glm_hmm(
         )
     )
 
-    # final posterior calculation
-    (log_posteriors, log_joint_posterior, _, _, _, _) = forward_backward(
-        X,
-        y,
-        log_initial_prob,
-        log_transition_matrix,
-        glm_params,
-        inverse_link_function,
-        log_likelihood_func,
-        is_new_session,
-    )
     # convert back to prob-space
     glm_hmm_params = GLMHMMParams(
         glm_params,
@@ -966,8 +955,6 @@ def em_glm_hmm(
         ),
     )
     return (
-        jnp.exp(log_posteriors),
-        jnp.exp(log_joint_posterior),
         glm_hmm_params,
         state,
     )

@@ -326,7 +326,7 @@ class TestModelCommons:
             regularizer_strength=1.0,
         )
         params = model.initialize_params(X, y)
-        init_state = model._initialize_solver_and_state(X, y, params)
+        init_state = model._initialize_optimization_and_state(X, y, params)
         # optimistix solvers do not have a velocity attr
         assert getattr(init_state, "velocity", params) == params
 
@@ -499,7 +499,7 @@ class TestModelCommons:
         assert model.optimization_update is None
         assert model.optimization_run is None
         init_params = model.initialize_params(X, y)
-        model._initialize_solver_and_state(X, y, init_params)
+        model._initialize_optimization_and_state(X, y, init_params)
         assert callable(model.optimization_init_state)
         assert callable(model.optimization_update)
         assert callable(model.optimization_run)
@@ -1020,7 +1020,7 @@ class TestModelValidator:
         with expectation:
             params = validator.validate_and_cast_params(init_params)
             # check that params are set
-            init_state = model._initialize_solver_and_state(X, y, params)
+            init_state = model._initialize_optimization_and_state(X, y, params)
             # optimistix solvers do not have a velocity attr
             assert getattr(init_state, "velocity", params) == params
 

@@ -497,7 +497,9 @@ class TestUnRegularized:
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-13}
         model._instantiate_solver(model._compute_loss)
-        params = model.optimization_run(model._model_specific_initialization(X, y), X, y)[0]
+        params = model.optimization_run(
+            model._model_specific_initialization(X, y), X, y
+        )[0]
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore", message="The InversePower link function does "
@@ -540,7 +542,9 @@ class TestUnRegularized:
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-13}
         model._instantiate_solver(model._compute_loss)
-        params = model.optimization_run(model._model_specific_initialization(X, y), X, y)[0]
+        params = model.optimization_run(
+            model._model_specific_initialization(X, y), X, y
+        )[0]
         model_sm = sm.GLM(
             endog=y,
             exog=sm.add_constant(X),
@@ -1628,7 +1632,9 @@ class TestGroupLasso:
         model.solver_name = solver_name
 
         model._instantiate_solver(model._compute_loss)
-        model.optimization_run(GLMParams(true_params.coef * 0.0, true_params.intercept), X, y)
+        model.optimization_run(
+            GLMParams(true_params.coef * 0.0, true_params.intercept), X, y
+        )
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
     def test_init_solver(self, solver_name, poissonGLM_model_instantiation):

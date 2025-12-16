@@ -5,6 +5,7 @@ from numbers import Number
 from pathlib import Path
 from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import pynapple as nap
@@ -26,6 +27,8 @@ from ..type_casting import (
 from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength, SolverState
 from ..utils import format_repr
 from .expectation_maximization import (
+    GLMHMMState,
+    _em_step,
     em_glm_hmm,
     hmm_negative_log_likelihood,
     prepare_likelihood_func,
@@ -359,14 +362,63 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         self._validator.validate_consistency(model_params, X=X, y=y)
         return model_params
 
-    def _initialize_solver_and_state(
+    def _initialize_optimization_and_state(
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         init_params: GLMHMMParams,
+        is_new_session: Optional[jnp.dtype] = None,
     ) -> SolverState:
-        """Solver the GLM-HMM M-step."""
-        pass
+        """Initialize the EM functions."""
+        # glm params m-step setup
+        log_likelihood, expected_negative_log_likelihood = (
+            self._get_m_step_loss_function(y.ndim > 1)
+        )
+        _, _, solver_run = self._instantiate_solver(
+            expected_negative_log_likelihood, solver_kwargs=self.solver_kwargs
+        )
+
+        self._optimization_run = eqx.Partial(
+            em_glm_hmm,
+            inverse_link_function=self.inverse_link_function,
+            log_likelihood_func=log_likelihood,
+            m_step_fn_glm_params=solver_run,
+            is_new_session=is_new_session,
+            maxiter=self.maxiter,
+            tol=self.tol,
+        )
+
+        # cannot wrap is_new_session, that's to be calculated at each update form the provided X and y.
+        self._optimization_update = eqx.Partial(
+            _em_step,
+            inverse_link_function=self.inverse_link_function,
+            log_likelihood_func=log_likelihood,
+            m_step_fn_glm_params=solver_run,
+        )
+
+        def init_state_fn(*args, **kwargs) -> SolverState:
+            state = GLMHMMState(
+                data_log_likelihood=-jnp.array(jnp.inf),
+                previous_data_log_likelihood=-jnp.array(jnp.inf),
+                log_likelihood_history=jnp.full(self.maxiter, jnp.nan),
+                iterations=0,
+            )
+            return state
+
+        self._optimization_init_state = init_state_fn
+        return init_state_fn()
+
+    def _get_is_new_session(
+        self, X: DESIGN_INPUT_TYPE, y: ArrayLike | nap.Tsd | nap.TsdFrame
+    ) -> jnp.ndarray | None:
+        # define new session array
+        if is_pynapple_tsd(y):
+            is_new_session = compute_is_new_session(y.t, y.time_support.start)
+        elif is_pynapple_tsd(X):
+            is_new_session = compute_is_new_session(X.t, X.time_support.start)
+        else:
+            is_new_session = None
+        return is_new_session
 
     def fit(
         self,
@@ -375,14 +427,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         init_params: Optional[GLMHMMUserParams] = None,
     ) -> "GLMHMM":
         """Fit the GLM-HMM model to the data."""
-
-        # define new session array
-        if is_pynapple_tsd(y):
-            is_new_session = compute_is_new_session(y.t, y.time_support.start)
-        elif is_pynapple_tsd(X):
-            is_new_session = compute_is_new_session(X.t, X.time_support.start)
-        else:
-            is_new_session = None
+        is_new_session = self._get_is_new_session(X, y)
 
         # validate the inputs & initialize solver
         # initialize params if no params are provided
@@ -399,29 +444,16 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         # filter for non-nans, grab data if needed
         data, y = self._preprocess_inputs(X, y)
 
-        # glm params m-step setup
-        log_likelihood, expected_negative_log_likelihood = (
-            self._get_m_step_loss_function(y.ndim > 1)
-        )
-        self._instantiate_solver(
-            expected_negative_log_likelihood, solver_kwargs=self.solver_kwargs
+        # set up optimization
+        self._initialize_optimization_and_state(
+            X, init_params, is_new_session=is_new_session
         )
 
         # run EM
         (
-            _,
-            _,
             fit_params,
             self.solver_state_,
-        ) = em_glm_hmm(
-            init_params,
-            data,
-            y,
-            inverse_link_function=self.inverse_link_function,
-            log_likelihood_func=log_likelihood,
-            m_step_fn_glm_params=self.optimization_run,
-            is_new_session=is_new_session,
-        )
+        ) = self._optimization_run(init_params, X=data, y=y)
 
         if self.solver_state_.iterations == self.maxiter:
             warnings.warn(
