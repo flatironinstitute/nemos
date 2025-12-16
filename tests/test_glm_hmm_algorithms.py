@@ -2851,7 +2851,11 @@ class TestPytreeSupport:
         assert posteriors.shape == (X.shape[0], initial_prob.shape[0])
         assert joint_posterior.shape == (initial_prob.shape[0], initial_prob.shape[0])
         assert final_params_all.hmm_params.initial_prob.shape == initial_prob.shape
-        assert final_params_all.hmm_params.transition_prob.shape == transition_prob.shape
+        assert (
+            final_params_all.hmm_params.transition_prob.shape == transition_prob.shape
+        )
         assert isinstance(final_params_all.glm_params, GLMParams)
-        assert isinstance(final_params_all.glm_params.coef, dict)  # coef should be a dict
+        assert isinstance(
+            final_params_all.glm_params.coef, dict
+        )  # coef should be a dict
         assert final_state.iterations > 0
