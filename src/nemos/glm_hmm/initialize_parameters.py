@@ -164,7 +164,7 @@ AVAILABLE_INIT_FUNCTIONS = {
     },
 }
 
-DEFAULT_INIT_FUNCTION = {
+DEFAULT_INIT_FUNCTION: INITIALIZATION_FN_DICT = {
     "glm_params_init": random_glm_params_init,
     "transition_proba_init": sticky_transition_proba_init,
     "initial_proba_init": uniform_initial_proba_init,
@@ -243,7 +243,7 @@ def _resolve_init_funcs_registry(
 
     Returns
     -------
-    updated_registry : dict
+    updated_registry :
         Complete registry with user-provided functions merged with defaults.
 
     Raises
@@ -251,13 +251,15 @@ def _resolve_init_funcs_registry(
     KeyError
         If registry contains invalid keys.
     """
-    if not set(registry.keys()).issubset(DEFAULT_INIT_FUNCTION.keys()):
+    if registry is None:
+        registry = DEFAULT_INIT_FUNCTION
+    elif not set(registry.keys()).issubset(DEFAULT_INIT_FUNCTION.keys()):
         invalid = set(registry.keys()).difference(DEFAULT_INIT_FUNCTION.keys())
         raise KeyError(
             f"Invalid key(s) for initialization dictionary: {invalid}.\n"
             f"Valid keys are {DEFAULT_INIT_FUNCTION.keys()}."
         )
-    updated_registry = DEFAULT_INIT_FUNCTION.copy()
+    updated_registry: INITIALIZATION_FN_DICT = DEFAULT_INIT_FUNCTION.copy()
     for func_name, func in registry.items():
         updated_registry[func_name] = _resolve_init_func(func_name, func)
     return updated_registry
