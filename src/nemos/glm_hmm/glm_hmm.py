@@ -1,5 +1,6 @@
 """API for the GLM-HMM model."""
 
+import warnings
 from numbers import Number
 from pathlib import Path
 from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
@@ -13,7 +14,7 @@ from .. import observation_models as obs
 from .. import tree_utils, validation
 from .._observation_model_builder import instantiate_observation_model
 from ..base_regressor import BaseRegressor
-from ..glm import GLM
+from ..glm.params import GLMParams
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..observation_models import Observations
 from ..pytrees import FeaturePytree
@@ -24,7 +25,8 @@ from ..type_casting import (
     is_pynapple_tsd,
     jnp_asarray_if,
 )
-from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength
+from ..typing import DESIGN_INPUT_TYPE, ModelParamsT, RegularizerStrength, SolverState
+from ..utils import format_repr
 from .expectation_maximization import (
     em_glm_hmm,
     hmm_negative_log_likelihood,
@@ -36,7 +38,7 @@ from .initialize_parameters import (
     _resolve_init_funcs_registry,
     glm_hmm_initialization,
 )
-from .params import GLMHMMParams, GLMHMMUserParams
+from .params import GLMHMMParams, GLMHMMUserParams, HMMParams
 
 
 def compute_is_new_session(time: NDArray, start: NDArray) -> jnp.ndarray:
@@ -398,6 +400,15 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         self._validator.validate_consistency(model_params, X=X, y=y)
         return model_params
 
+    def _initialize_solver_and_state(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        init_params: GLMHMMParams,
+    ) -> SolverState:
+        """Solver the GLM-HMM M-step."""
+        pass
+
     def fit(
         self,
         X: DESIGN_INPUT_TYPE,
@@ -429,30 +440,45 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         # filter for non-nans, grab data if needed
         data, y = self._preprocess_inputs(X, y)
 
-        self._initialize_solver_and_state(data, y, init_params)
+        # glm params m-step setup
+        log_likelihood, expected_negative_log_likelihood = (
+            self._get_m_step_loss_function(y.ndim > 1)
+        )
+        self._instantiate_solver(
+            expected_negative_log_likelihood, solver_kwargs=self.solver_kwargs
+        )
 
         # run EM
-        glm_params, transition_prob, initial_prob = init_params
         (
             _,
             _,
-            self.initial_prob_,
-            self.transition_prob_,
-            self.glm_params_,
+            fit_params,
             self.solver_state_,
         ) = em_glm_hmm(
             data,
             y,
-            init_params.hmm_params.initial_prob,
-            init_params.hmm_params.transition_prob,
-            init_params.glm_params,
-            self._inverse_link_function,
-            self._likelihood_func,
-            self._solver_run,
-            is_new_session,
-            self._maxiter,
-            self._tol,
+            init_params,
+            inverse_link_function=self.inverse_link_function,
+            log_likelihood_func=log_likelihood,
+            m_step_fn_glm_params=self.solver_run,
+            is_new_session=is_new_session,
         )
+
+        if self.solver_state_.iterations == self.maxiter:
+            warnings.warn(
+                "The fit did not converge. "
+                "Consider the following:"
+                "\n1) Enable float64 with ``jax.config.update('jax_enable_x64', True)``"
+                "\n2) Increase the ``maxiter`` parameter (max number of iterations of the EM) "
+                "or increase the ``tol`` parameter (tolerance).",
+                RuntimeWarning,
+            )
+
+        # assign fit attributes
+        self.coef_ = fit_params.glm_parms.coef
+        self.intercept_ = fit_params.glm_parms.intercept
+        self.initial_prob_ = fit_params.hmm_parms.initial_prob
+        self.transition_prob_ = fit_params.hmm_parms.transition_prob
         self.dof_resid_ = self._estimate_resid_degrees_of_freedom(X)
         # TODO: uncomment this once the predict method is available
         # self.scale_ = self.observation_model.estimate_scale(y, self.predict(X), self.dof_resid_)
@@ -527,267 +553,215 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
             rank = jnp.linalg.matrix_rank(X)
             return (n_samples - rank - dof_intercept_and_hmm) * jnp.ones(n_neurons)
 
+    def score(
+        self,
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: ArrayLike,
+        score_type: Literal[
+            "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"
+        ] = "log-likelihood",
+        aggregate_sample_scores: Callable = jnp.mean,
+    ) -> jnp.ndarray:
+        """Compute the model score."""
+        pass
 
-#
-# def predict(
-#     self,
-#     X: DESIGN_INPUT_TYPE,
-#     predict_type: Literal["most-likely", "per-state", "average"] = "most-likely",
-# ) -> jnp.ndarray | nap.Tsd | nap.TsdFrame:
-#     """Compute predicted firing rate pet state."""
-#     # output state
-#     # per state
-#     # (t, neu, states) pop
-#     # (t, states) single neu
-#     # most likely
-#     # (t, neu) pop
-#     # (t,) single neu
-#     # average
-#     # (t, neu)  pop
-#     # (t,) single neu
-#     pass
-#
-# def score(
-#     self,
-#     X: Union[DESIGN_INPUT_TYPE, ArrayLike],
-#     y: ArrayLike,
-#     score_type: Literal[
-#         "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"
-#     ] = "log-likelihood",
-#     aggregate_sample_scores: Callable = jnp.mean,
-# ) -> jnp.ndarray:
-#     """Compute the model score."""
-#     pass
-#
-# def simulate(
-#     self,
-#     random_key: jax.Array,
-#     feedforward_input: DESIGN_INPUT_TYPE,
-# ) -> Tuple[jnp.ndarray, jnp.ndarray] | Tuple[nap.Tsd, nap.Tsd]:
-#     """Simulate spikes from the model, returns neural activity and states."""
-#     pass
-#
-# def predict_proba(
-#     self,
-#     X: Union[DESIGN_INPUT_TYPE, ArrayLike],
-#     y: NDArray,
-# ) -> jnp.ndarray | nap.TsdFrame:
-#     """Compute the smoothing posteriors over-states."""
-#     pass
-#
-# def decode_state(
-#     self, X: Union[DESIGN_INPUT_TYPE, ArrayLike], y: ArrayLike
-# ) -> jnp.ndarray | nap.TsdFrame:
-#     """Compute the most likely states over samples."""
-#     pass
-#
-# def compute_loss(
-#     self,
-#     params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
-#     X: DESIGN_INPUT_TYPE,
-#     y: jnp.ndarray,
-#     *args,
-#     **kwargs,
-# ) -> jnp.ndarray:
-#     """Loss function."""
-#     pass
-#
-# # INITIALIZATIONS
-# def initialize_params(
-#     self,
-#     X: DESIGN_INPUT_TYPE,
-#     y: jnp.ndarray,
-#     init_params: Optional[
-#         Tuple[Tuple[ArrayLike, ArrayLike], ArrayLike, ArrayLike]
-#     ] = None,
-# ) -> Union[Any, NamedTuple]:
-#     """Initialize the solver's state and optionally sets initial model parameters for the optimization.
-#
-#     TODO: fill up docstrings.
-#     """
-#     return super().initialize_params(X, y, init_params)
-#
+    def simulate(
+        self,
+        random_key: jax.Array,
+        feedforward_input: DESIGN_INPUT_TYPE,
+    ) -> Tuple[jnp.ndarray, jnp.ndarray] | Tuple[nap.Tsd, nap.Tsd]:
+        """Simulate spikes from the model, returns neural activity and states."""
+        pass
 
-# def _get_m_step_loss_function(self, is_population_glm: bool):
-#     """Prepare the loss function for the M-step of the GLM params."""
-#     # prepare the loss function
-#     likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
-#         is_population_glm,
-#         self.observation_model.log_likelihood,
-#         self.observation_model._negative_log_likelihood,
-#         is_log=True,
-#     )
-#     inverse_link_function = self.inverse_link_function
-#
-#     # closure for the static callable solver.run
-#     # NOTE: this is the loss function used in the numerical M-step that learns coefficient and intercept.
-#     def expected_negative_log_likelihood(
-#         glm_params, design_matrix, observations, posterior_prob
-#     ):
-#         return hmm_negative_log_likelihood(
-#             glm_params,
-#             X=design_matrix,
-#             y=observations,
-#             posteriors=posterior_prob,
-#             inverse_link_function=inverse_link_function,
-#             negative_log_likelihood_func=negative_log_likelihood_func,
-#         )
-#
-#     return likelihood_func, expected_negative_log_likelihood
-#
-# def initialize_state(
-#     self,
-#     X: DESIGN_INPUT_TYPE,
-#     y: jnp.ndarray,
-#     init_params,
-#     cast_to_jax_and_drop_nans: bool = True,
-# ) -> Union[Any, NamedTuple]:
-#     """Initialize the state of the solver for running fit and update."""
-#     X, y = self._preprocess_inputs(
-#         X, y, cast_to_jax_and_drop_nans=cast_to_jax_and_drop_nans
-#     )
-#     if self._expected_negative_log_likelihood is None:
-#         self._likelihood_func, self._expected_negative_log_likelihood = (
-#             self._get_m_step_loss_function(y.ndim > 1)
-#         )
-#     self.instantiate_solver(self._expected_negative_log_likelihood)
-#     opt_state = self.solver_init_state(
-#         init_params, X, y, jnp.zeros_like(X, shape=(y.shape[0], self._n_states))
-#     )
-#     return opt_state
-#
-# # CHECKS FOR PARAMS AND INPUTS
-# def _check_params(
-#     self,
-#     params: Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike],
-#     data_type: Optional[jnp.dtype] = None,
-# ) -> Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]:
-#     """
-#     Validate the dimensions and consistency of parameters.
-#
-#     This function checks the consistency of shapes and dimensions for model
-#     parameters.
-#     It ensures that the parameters and data are compatible for the model.
-#
-#     """
-#     # check that params has length 4 (coeff, intercept, transition_proba, initial_proba)
-#     validation.check_length(
-#         params,
-#         3,
-#         "GLM-HMM requires three parameters: "
-#         "``(glm_params, transition_proba, initial_proba)``.\n ``glm_params`` must be a "
-#         "length 2 tuple ``(coef, intercept)``.",
-#     )
-#     validation.check_length(
-#         params[0],
-#         2,
-#         "The GLM params must be a length two tuple, ``(coef, intercept)``.",
-#     )
-#     # convert to jax array (specify type if needed)
-#     params = validation.convert_tree_leaves_to_jax_array(
-#         params,
-#         "Initial parameters must be array-like objects (or pytrees of array-like objects) "
-#         "with numeric data-type!",
-#         data_type,
-#     )
-#     self._check_initial_glm_params(params[0])
-#     self._check_transition_proba(params[1])
-#     self._check_init_state_proba(params[2])
-#     return params
-#
-# @staticmethod
-# def _check_input_dimensionality(
-#     X: Optional[Union[DESIGN_INPUT_TYPE, jnp.ndarray]] = None,
-#     y: Optional[jnp.ndarray] = None,
-# ):
-#     GLM._check_input_dimensionality(X=X, y=y)
-#
-# @staticmethod
-# def _check_input_and_params_consistency(
-#     params: ModelParams,  # TODO: Add signature
-#     X: Optional[Union[DESIGN_INPUT_TYPE, jnp.ndarray]] = None,
-#     y: Optional[jnp.ndarray] = None,
-# ):
-#     """Validate the number of features in model parameters and input arguments.
-#
-#     Raises
-#     ------
-#     ValueError
-#         - if the number of features is inconsistent between params[1] and X
-#           (when provided).
-#
-#     """
-#     if X is not None:
-#         # check that X and params[0] have the same structure
-#         if isinstance(X, FeaturePytree):
-#             data = X.data
-#         else:
-#             data = X
-#         coef, intercept = params[0]
-#         struct1 = jax.tree_util.tree_structure(data)
-#         struct2 = jax.tree_util.tree_structure(coef)
-#         if struct1 != struct2:
-#             raise ValueError(
-#                 f"X and the GLM coefficients must be PyTrees with the same structure.\n"
-#                 f"X has structure {struct1} and coefficients have structure {struct2}. "
-#             )
-#
-#         # check the consistency of the feature axis
-#         validation.check_tree_axis_consistency(
-#             coef,
-#             data,
-#             axis_1=0,
-#             axis_2=1,
-#             err_message="Inconsistent number of features. "
-#             f"GLM coefficients have {jax.tree_util.tree_map(lambda p: p.shape[0], coef)} features, "
-#             f"X has {jax.tree_util.tree_map(lambda x: x.shape[1], X)} features instead!",
-#         )
-#
-# # Save
-# def save_params(
-#     self,
-#     filename: Union[str, Path],
-# ):
-#     """Save model params."""
-#     # initialize saving dictionary
-#     fit_attrs = self._get_fit_state()
-#     # coef_ and intercept_ are redundant
-#     fit_attrs.pop("coef_")
-#     fit_attrs.pop("intercept_")
-#     fit_attrs.pop("solver_state_")
-#     string_attrs = ["inverse_link_function"]
-#     putative_func = [
-#         "initialize_init_proba",
-#         "initialize_transition_proba",
-#         "initialize_glm_params",
-#     ]
-#     for var_name in putative_func:
-#         var = getattr(self, var_name)
-#         if callable(var):
-#             string_attrs.append(var_name)
-#     super().save_params(filename, fit_attrs, string_attrs)
-#
-# # SVRG specific optimization not available.
-# def _get_optimal_solver_params_config(self):
-#     """No optimal parameters known for SVRG in HMMGLM."""
-#     return None, None, None
-#
-# def _get_coef_and_intercept(self) -> Tuple[Any, Any]:
-#     if self.glm_params_ is not None:
-#         return self.glm_params_
-#     return None, None
-#
-# def _set_coef_and_intercept(self, params):
-#     self.glm_params_ = params
-#
-# def update(
-#     self,
-#     params: Tuple[jnp.ndarray, jnp.ndarray],
-#     opt_state: NamedTuple,
-#     X: DESIGN_INPUT_TYPE,
-#     y: jnp.ndarray,
-#     *args,
-#     **kwargs,
-# ) -> jaxopt.OptStep:
-#     """Run a single update step of the jaxopt solver."""
-#     pass
+    def smooth_proba(
+        self,
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: NDArray,
+    ) -> jnp.ndarray | nap.TsdFrame:
+        """Compute the smoothing posteriors over-states."""
+        pass
+
+    def filter_proba(
+        self,
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: NDArray,
+    ):
+        """Compute the filtering posteriors over-states."""
+        pass
+
+    def decode_state(
+        self, X: Union[DESIGN_INPUT_TYPE, ArrayLike], y: ArrayLike
+    ) -> jnp.ndarray | nap.TsdFrame:
+        """Compute the most likely states over samples."""
+        pass
+
+    def _compute_loss(
+        self,
+        params: GLMHMMParams,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        *args,
+        **kwargs,
+    ) -> jnp.ndarray:
+        """Loss function (expected HMM log-likelihood) without validation."""
+        pass
+
+    def _get_m_step_loss_function(self, is_population_glm: bool):
+        """Prepare the loss function for the M-step of the GLM params."""
+        # prepare the loss function
+        likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
+            is_population_glm,
+            self.observation_model.log_likelihood,
+            self.observation_model._negative_log_likelihood,
+        )
+        inverse_link_function = self.inverse_link_function
+
+        # closure for the static callable solver.run
+        # NOTE: this is the loss function used in the numerical M-step that learns coefficient and intercept.
+        def expected_negative_log_likelihood(
+            glm_params, design_matrix, observations, posterior_prob
+        ):
+            return hmm_negative_log_likelihood(
+                glm_params,
+                X=design_matrix,
+                y=observations,
+                posteriors=posterior_prob,
+                inverse_link_function=inverse_link_function,
+                negative_log_likelihood_func=negative_log_likelihood_func,
+            )
+
+        return likelihood_func, expected_negative_log_likelihood
+
+    #
+    # # CHECKS FOR PARAMS AND INPUTS
+    # def _check_params(
+    #     self,
+    #     params: Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike],
+    #     data_type: Optional[jnp.dtype] = None,
+    # ) -> Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]:
+    #     """
+    #     Validate the dimensions and consistency of parameters.
+    #
+    #     This function checks the consistency of shapes and dimensions for model
+    #     parameters.
+    #     It ensures that the parameters and data are compatible for the model.
+    #
+    #     """
+    #     # check that params has length 4 (coeff, intercept, transition_proba, initial_proba)
+    #     validation.check_length(
+    #         params,
+    #         3,
+    #         "GLM-HMM requires three parameters: "
+    #         "``(glm_params, transition_proba, initial_proba)``.\n ``glm_params`` must be a "
+    #         "length 2 tuple ``(coef, intercept)``.",
+    #     )
+    #     validation.check_length(
+    #         params[0],
+    #         2,
+    #         "The GLM params must be a length two tuple, ``(coef, intercept)``.",
+    #     )
+    #     # convert to jax array (specify type if needed)
+    #     params = validation.convert_tree_leaves_to_jax_array(
+    #         params,
+    #         "Initial parameters must be array-like objects (or pytrees of array-like objects) "
+    #         "with numeric data-type!",
+    #         data_type,
+    #     )
+    #     self._check_initial_glm_params(params[0])
+    #     self._check_transition_proba(params[1])
+    #     self._check_init_state_proba(params[2])
+    #     return params
+    #
+    # @staticmethod
+    # def _check_input_dimensionality(
+    #     X: Optional[Union[DESIGN_INPUT_TYPE, jnp.ndarray]] = None,
+    #     y: Optional[jnp.ndarray] = None,
+    # ):
+    #     GLM._check_input_dimensionality(X=X, y=y)
+    #
+    # @staticmethod
+    # def _check_input_and_params_consistency(
+    #     params: ModelParams,  # TODO: Add signature
+    #     X: Optional[Union[DESIGN_INPUT_TYPE, jnp.ndarray]] = None,
+    #     y: Optional[jnp.ndarray] = None,
+    # ):
+    #     """Validate the number of features in model parameters and input arguments.
+    #
+    #     Raises
+    #     ------
+    #     ValueError
+    #         - if the number of features is inconsistent between params[1] and X
+    #           (when provided).
+    #
+    #     """
+    #     if X is not None:
+    #         # check that X and params[0] have the same structure
+    #         if isinstance(X, FeaturePytree):
+    #             data = X.data
+    #         else:
+    #             data = X
+    #         coef, intercept = params[0]
+    #         struct1 = jax.tree_util.tree_structure(data)
+    #         struct2 = jax.tree_util.tree_structure(coef)
+    #         if struct1 != struct2:
+    #             raise ValueError(
+    #                 f"X and the GLM coefficients must be PyTrees with the same structure.\n"
+    #                 f"X has structure {struct1} and coefficients have structure {struct2}. "
+    #             )
+    #
+    #         # check the consistency of the feature axis
+    #         validation.check_tree_axis_consistency(
+    #             coef,
+    #             data,
+    #             axis_1=0,
+    #             axis_2=1,
+    #             err_message="Inconsistent number of features. "
+    #             f"GLM coefficients have {jax.tree_util.tree_map(lambda p: p.shape[0], coef)} features, "
+    #             f"X has {jax.tree_util.tree_map(lambda x: x.shape[1], X)} features instead!",
+    #         )
+    #
+    # Save
+    def save_params(
+        self,
+        filename: Union[str, Path],
+    ):
+        """Save model params."""
+        # initialize saving dictionary
+        fit_attrs = self._get_fit_state()
+        fit_attrs.pop("solver_state_")
+        string_attrs = ["inverse_link_function"]
+        # TODO: Figure out how to save init registry.
+        self._save_params(filename, fit_attrs, string_attrs)
+
+    # SVRG specific optimization not available.
+    def _get_optimal_solver_params_config(self):
+        """No optimal parameters known for SVRG in HMMGLM."""
+        return None, None, None
+
+    def _get_model_params(self) -> GLMHMMParams:
+        glm_params = GLMParams(self.coef_, self.intercept_)
+        hmm_params = HMMParams(self.initial_prob_, self.transition_prob_)
+        return GLMHMMParams(glm_params, hmm_params)
+
+    def _set_model_params(self, params: GLMHMMParams):
+        self.coef_ = params.glm_params.coef
+        self.intercept_ = params.glm_params.intercept
+        self.initial_prob_ = params.hmm_params.initial_prob
+        self.transition_prob_ = params.hmm_params.transition_prob
+
+    def update(
+        self,
+        params: Tuple[jnp.ndarray, jnp.ndarray],
+        opt_state: NamedTuple,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        *args,
+        **kwargs,
+    ) -> jaxopt.OptStep:
+        """Run a single update step of the jaxopt solver."""
+        pass
+
+    def __repr__(self) -> str:
+        return format_repr(
+            self, multiline=True, use_name_keys=["inverse_link_function"]
+        )
