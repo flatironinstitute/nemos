@@ -153,7 +153,7 @@ def uniform_initial_proba_init(
     >>> jnp.isclose(jnp.sum(init_probs), 1.0)
     Array(True, dtype=bool)
     """
-    prob = jax.random.uniform(random_key, (n_states,), minval=0, maxval=1)
+    prob = jnp.ones((n_states,), dtype=float)
     return prob / jnp.sum(prob)
 
 
