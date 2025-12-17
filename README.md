@@ -1,207 +1,76 @@
-# <div style="text-align: center;"> <img src="docs/assets/NeMoS_Logo_CMYK_Full.svg" width="75%"> </div>
+# nemos
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/flatironinstitute/nemos/blob/main/LICENSE)
-![Python version](https://img.shields.io/badge/python-3.10%7C3.11%7C3.12-blue.svg)
-[![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
-![PyPI - Version](https://img.shields.io/pypi/v/nemos)
-[![codecov](https://codecov.io/gh/flatironinstitute/nemos/graph/badge.svg?token=vvtrcTFNeu)](https://codecov.io/gh/flatironinstitute/nemos)
-[![Documentation Status](https://readthedocs.org/projects/nemos/badge/?version=latest)](https://nemos.readthedocs.io/en/latest/?badge=latest)
-[![nemos CI](https://github.com/flatironinstitute/nemos/actions/workflows/ci.yml/badge.svg)](https://github.com/flatironinstitute/nemos/actions/workflows/ci.yml)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17553287.svg)](https://doi.org/10.5281/zenodo.17553287)
+[![PyPi](https://badge.fury.io/py/nemos.svg)](https://badge.fury.io/py/nemos)
+![License](https://img.shields.io/github/license/flatironinstitute/nemos?style=flat&logo=opensourceinitiative&logoColor=white&color=blue)
+[![OSA-improved](https://img.shields.io/badge/improved%20by-OSA-yellow)](https://github.com/aimclub/OSA)
 
+Built with:
 
+![numba](https://img.shields.io/badge/Numba-00A3E0.svg?style={0}&logo=Numba&logoColor=white)![numpy](https://img.shields.io/badge/NumPy-013243.svg?style={0}&logo=NumPy&logoColor=white)![pandas](https://img.shields.io/badge/pandas-150458.svg?style={0}&logo=pandas&logoColor=white)![pytest](https://img.shields.io/badge/Pytest-0A9EDC.svg?style={0}&logo=Pytest&logoColor=white)![scikit-learn](https://img.shields.io/badge/scikitlearn-F7931E.svg?style={0}&logo=scikit-learn&logoColor=white)![scipy](https://img.shields.io/badge/SciPy-8CAAE6.svg?style={0}&logo=SciPy&logoColor=white)![tqdm](https://img.shields.io/badge/tqdm-FFC107.svg?style={0}&logo=tqdm&logoColor=black)
 
-NeMoS (Neural ModelS) is a statistical modeling framework optimized for systems neuroscience and powered by [JAX](https://jax.readthedocs.io/en/latest/).
-It streamlines the process of creating and selecting models, through a collection of easy-to-use methods for feature design.
-
-The core of NeMoS includes GPU-accelerated, well-tested implementations of standard statistical models, currently
-focusing on the Generalized Linear Model (GLM).
-
-We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for calcium or voltage imaging traces.
-
-The package is under active development and more methods will be added in the future.
-
-For those looking to get a better grasp of the Generalized Linear Model, we recommend checking out the
-Neuromatch Academy's lesson [here](https://compneuro.neuromatch.io/tutorials/W1D3_GeneralizedLinearModels/student/W1D3_Tutorial1.html) and Jonathan Pillow's tutorial
-from Cosyne 2018 [here](https://www.youtube.com/watch?v=NFeGW5ljUoI&t=424s).
+---
 
 ## Overview
 
-At his core, NeMoS consists of two primary modules: the `basis` and the `glm` module.
+NeMoS is a framework designed to help neuroscientists build and analyze statistical models of neural data. It simplifies the process of model creation and selection, offering tools to understand the relationship between neural activity and underlying factors. It empowers researchers to gain insights from complex neuroscience datasets.
 
-The `basis` module focuses on designing model features (inputs) for the GLM. It includes a suite of composable feature
-constructors that accept time-series data as inputs. These inputs can be any observed variables, such as presented
-stimuli, head direction, position, or spike counts.
+---
 
-The basis objects can perform two types of transformations on the inputs:
+## Table of Contents
 
-1. **Non-linear Mapping:** This process transforms the input data through a non-linear function,
-   allowing it to capture complex, non-linear relationships between inputs and neuronal firing rates.
-   Importantly, this transformation preserves the properties that makes GLM easy to fit and guarantee a
-   single optimal solution (e.g. convexity).
+- [Installation](#installation)
+- [Examples](#examples)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
+- [License](#license)
+- [Citation](#citation)
 
-2. **Convolution:** This applies a convolution of the input data with a bank of filters, designed to
-   capture linear temporal effects. This transformation is particularly useful when analyzing data with
-   inherent time dependencies or when the temporal dynamics of the input are significant.
+---
 
-Both transformations produce a vector of features `X` that changes over time, with a shape
-of `(n_time_points, n_features)`.
+## Installation
 
-On the other hand, the `glm` module maps the feature to spike counts. It is used to learn the GLM weights,
-evaluating the model performance, and explore its behavior on new input.
+**Prerequisites:** requires Python >=3.10,<3.14
+
+Install nemos using one of the following methods:
+
+**Using PyPi:**
+
+```sh
+pip install nemos
+```
+
+---
 
 ## Examples
 
-Here's a brief demonstration of how the `basis` and `glm` modules work together within NeMoS.
+Examples of how this should work and how it should be used are available [here](https://github.com/flatironinstitute/nemos/tree/main/docs/tutorials).
 
-### Poisson GLM for features analysis
+---
 
-<img src="docs/assets/glm_features_scheme.svg" width="100%">
+## Documentation
 
-In this example, we'll construct a time-series of features using the basis objects, applying a non-linear mapping
-(default behavior):
+A detailed nemos description is available [here](https://nemos.readthedocs.io/).
 
-#### Feature Representation
+---
 
-```python
-import nemos as nmo
+## Contributing
 
-# Instantiate the basis
-basis_1 = nmo.basis.MSplineEval(n_basis_funcs=5)
-basis_2 = nmo.basis.CyclicBSplineEval(n_basis_funcs=6)
-basis_3 = nmo.basis.MSplineEval(n_basis_funcs=7)
+- **[Join the Discussions](https://github.com/flatironinstitute/nemos/discussions)**: Share your insights, provide feedback, or ask questions.
 
-basis = basis_1 * basis_2 + basis_3
+- **[Report Issues](https://github.com/flatironinstitute/nemos/issues)**: Submit bugs found or log feature requests for the project.
 
-# Generate the design matrix starting from some raw
-# input time series, i.e. LFP phase, position, etc.
-X = basis.compute_features(input_1, input_2, input_3)
-```
+- **[Submit Pull Requests](https://github.com/flatironinstitute/nemos/tree/main/CONTRIBUTING.md)**: To learn more about making a contribution to nemos.
 
-#### GLM
+---
 
-```python
+## License
 
-# Fit the model mapping X to the spike count
-# time-series y
-glm = nmo.glm.GLM().fit(X, y)
+This project is protected under the MIT License. For more details, refer to the [LICENSE](https://github.com/flatironinstitute/nemos/tree/main/LICENSE) file.
 
-# Inspect the learned coefficients
-print(glm.coef_, glm.intercept_)
+---
 
-# compute the rate
-firing_rate = glm.predict(X)
+## Citation
 
-# compute log-likelihood
-ll = glm.score(X, y)
-```
+If you use this software, please cite it as it is written in the [CITATION](https://github.com/flatironinstitute/nemos/tree/main/CITATION.cff) file.
 
-### Poisson GLM for neural population
-
-<img src="docs/assets/glm_population_scheme.svg" width="84%">
-
-This second example demonstrates feature construction by convolving the simultaneously recorded population spike counts with a bank of filters, utilizing the basis in `conv` mode.
-The figure above show the GLM scheme for a single neuron, however in NeMoS you can fit jointly the whole population with the [`PopulationGLM`](https://nemos.readthedocs.io/en/latest/how_to_guide/plot_03_population_glm.html) object.
-
-#### Feature Representation
-
-```python
-import nemos as nmo
-
-# assume that the population spike counts time-series is stored
-# in a 2D array spike_counts of shape (n_samples, n_neurons).
-
-# generate 5 basis functions of 100 time-bins,
-# and convolve the counts with the basis.
-X = nmo.basis.RaisedCosineLogConv(5, window_size=100
-    ).compute_features(spike_counts)
-```
-#### Population GLM
-
-```python
-# fit a GLM to the first neuron counts time-series
-glm = nmo.glm.PopulationGLM().fit(X, spike_counts)
-
-# compute the rate
-firing_rate = glm.predict(X)
-
-# compute log-likelihood
-ll = glm.score(X, spike_counts)
-```
-
-For a deeper dive, see our [Quickstart](https://nemos.readthedocs.io/en/latest/quickstart.html)  guide and consider using [pynapple](https://github.com/pynapple-org/pynapple) for data exploration and preprocessing. When initializing the GLM object, you may optionally specify an [observation
-model](https://nemos.readthedocs.io/en/latest/api_reference.html#the-nemos-observation-models-module) and a [regularizer](https://nemos.readthedocs.io/en/latest/api_reference.html#the-nemos-regularizer-module).
-
-> **Note: Multi-epoch Convolution**
->
-> If your data is formatted as a `pynapple` time-series, the convolution performed by the basis objects will be
-> executed epoch-by-epoch, avoiding the risk of introducing artifacts from gaps in your time-series.
-
-
-## Installation
-Run the following `pip` command in your virtual environment.
-
-**For macOS/Linux users:**
- ```bash
- pip install nemos
- ```
-
-**For Windows users:**
- ```
- python -m pip install nemos
- ```
-
-For more details, including specifics for GPU users and developers, refer to NeMoS [docs](https://nemos.readthedocs.io/en/latest/installation.html).
-
-
-## Disclaimer
-
-Please note that this package is currently under development. While you can
-download and test the functionalities that are already present, please be aware
-that syntax and functionality may change before our preliminary release.
-
-## Getting help and getting in touch
-
-We communicate via several channels on Github:
-
-- To report a bug, open an
-  [issue](https://github.com/flatironinstitute/nemos/issues).
-- To ask usage questions, discuss broad issues, or show off what you’ve made
-  with NeMoS, go to
-  [Discussions](https://github.com/flatironinstitute/nemos/discussions).
-- To send suggestions for extensions or enhancements, please post in the
-  [ideas](https://github.com/flatironinstitute/nemos/discussions/categories/ideas)
-  section of discussions first. We’ll discuss it there and, if we decide to
-  pursue it, open an issue to track progress.
-- To contribute to the project, see the [contributing
-  guide](CONTRIBUTING.md).
-
-In all cases, we request that you respect our [code of
-conduct](CODE_OF_CONDUCT.md).
-
-## Citing us
-
-If you use NeMoS in a published academic article or presentation, please
-cite the code by the DOI. You can click on
-`Cite this repository` on the right side of the GitHub page to get a copyable
-citation for the code, or use the following:
-
-- Code: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17553287.svg)](https://doi.org/10.5281/zenodo.17553287)
-
-
-
-
-See the [citation
-guide](https://docs.plenoptic.org/docs/branch/main/citation.html) for more
-details, including citations for the different synthesis methods and
-computational moels included in plenoptic.
-
-
-## Support
-
-This package is supported by:
-
-- The Center for Computational Neuroscience, in the Flatiron Institute of the Simons Foundation.
-- The NIH BRAIN Initiative (1RF1MH133778).
-
-<img src="docs/assets/CCN-logo-wText.png" width="20%" alt="Flatiron Center for Computational Neuroscience logo.">
+---
