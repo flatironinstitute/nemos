@@ -433,6 +433,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         init_params: Optional[GLMHMMUserParams] = None,
     ) -> "GLMHMM":
         """Fit the GLM-HMM model to the data."""
+        self._validator.validate_inputs(X=X, y=y)
         is_new_session = self._get_is_new_session(X, y)
 
         # validate the inputs & initialize solver

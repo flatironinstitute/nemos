@@ -42,7 +42,6 @@ def test_get_fit_attrs(instantiate_base_regressor_subclass):
     expected_state = {
         "coef_": None,
         "dof_resid_": None,
-        "glm_params_": None,
         "initial_prob_": None,
         "intercept_": None,
         "scale_": None,
@@ -89,16 +88,16 @@ class TestGLMHMM:
             return {
                 0: pytest.raises(
                     ValueError,
-                    match=r"params\[0\] \(GLM coefficients\) must be",
+                    match=r"Invalid parameter dimensionality",
                 ),
                 1: pytest.raises(
                     ValueError,
-                    match=r"params\[0\] \(GLM coefficients\) must be",
+                    match=r"Invalid parameter dimensionality",
                 ),
                 2: does_not_raise(),
                 3: pytest.raises(
                     ValueError,
-                    match=r"params\[0\] \(GLM coefficients\) must be",
+                    match=r"Invalid parameter dimensionality",
                 ),
             }
 
@@ -140,22 +139,16 @@ class TestGLMHMM:
         [
             (
                 0,
-                pytest.raises(
-                    ValueError, match=r"params\[1\] \(GLM intercepts\) must be"
-                ),
+                pytest.raises(ValueError, match=r"Invalid parameter dimensionality"),
             ),
             (1, does_not_raise()),
             (
                 2,
-                pytest.raises(
-                    ValueError, match=r"params\[1\] \(GLM intercepts\) must be"
-                ),
+                pytest.raises(ValueError, match=r"Invalid parameter dimensionality"),
             ),
             (
                 3,
-                pytest.raises(
-                    ValueError, match=r"params\[1\] \(GLM intercepts\) must be"
-                ),
+                pytest.raises(ValueError, match=r"Invalid parameter dimensionality"),
             ),
         ],
     )
@@ -192,7 +185,7 @@ class TestGLMHMM:
                 [jnp.zeros((2, 3, 3)), jnp.zeros((3, 3))],
             ),
             (
-                pytest.raises(ValueError, match="The GLM params must be a length"),
+                pytest.raises(ValueError, match="Params must have length four"),
                 [[jnp.zeros((1, 2, 3)), jnp.zeros((3,))]],
                 [[jnp.zeros((1, 2, 3)), jnp.zeros((3, 3))]],
             ),
@@ -202,7 +195,7 @@ class TestGLMHMM:
                 dict(p1=jnp.zeros((2, 3, 3)), p2=jnp.zeros((2, 2, 3))),
             ),
             (
-                pytest.raises(ValueError, match=r"X and the GLM coefficients must be"),
+                pytest.raises(ValueError, match=r"Params must have length four"),
                 [dict(p1=jnp.zeros((1, 3)), p2=jnp.zeros((1, 3))), jnp.zeros((3,))],
                 [
                     dict(p1=jnp.zeros((1, 3, 3)), p2=jnp.zeros((1, 3, 3))),
@@ -210,7 +203,7 @@ class TestGLMHMM:
                 ],
             ),
             (
-                pytest.raises(ValueError, match=r"X and the GLM coefficients must be"),
+                pytest.raises(ValueError, match=r"Params must have length four"),
                 [
                     FeaturePytree(p1=jnp.zeros((1, 3)), p2=jnp.zeros((1, 3))),
                     jnp.zeros((3,)),

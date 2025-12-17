@@ -18,26 +18,31 @@ from numba import njit
 import nemos as nmo
 from nemos._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
 from nemos.glm.validation import GLMValidator, PopulationGLMValidator
+from nemos.glm_hmm.validation import GLMHMMValidator
 from nemos.inverse_link_function_utils import LINK_NAME_TO_FUNC
 
 MODEL_REGISTRY = {
     "GLM": nmo.glm.GLM,
     "PopulationGLM": nmo.glm.PopulationGLM,
+    "GLMHMM": nmo.glm_hmm.GLMHMM,
 }
 
 VALIDATOR_REGISTRY = {
     "GLM": GLMValidator(),
     "PopulationGLM": PopulationGLMValidator(),
+    "GLMHMM": GLMHMMValidator(n_states=3),
 }
 
 INIT_PARAM_LENGTH = {
     "GLM": 2,
     "PopulationGLM": 2,
+    "GLMHMM": 4,
 }
 
 DEFAULT_OBS_SHAPE = {
     "GLM": (500,),
     "PopulationGLM": (500, 3),
+    "GLMHMM": (500,),
 }
 
 HARD_CODED_GET_PARAMS_KEYS = {
@@ -58,15 +63,31 @@ HARD_CODED_GET_PARAMS_KEYS = {
         "solver_name",
         "feature_mask",
     },
+    "GLMHMM": {
+        "dirichlet_prior_alphas_init_prob",
+        "dirichlet_prior_alphas_transition",
+        "initialization_funcs",
+        "inverse_link_function",
+        "maxiter",
+        "n_states",
+        "observation_model",
+        "regularizer",
+        "regularizer_strength",
+        "seed",
+        "solver_kwargs",
+        "solver_name",
+        "tol",
+    },
 }
 
 # as of now, all models are glm type... in the future this may change.
 MODEL_WITH_LINK_FUNCTION_REGISTRY = {
     "GLM": nmo.glm.GLM,
     "PopulationGLM": nmo.glm.PopulationGLM,
+    "GLMHMM": nmo.glm_hmm.GLMHMM,
 }
 
-DEFAULTS = {"GLM": dict(), "PopulationGLM": dict()}
+DEFAULTS = {"GLM": dict(), "PopulationGLM": dict(), "GLMHMM": dict(n_states=3)}
 
 
 INSTANTIATE_MODEL_ONLY = [
@@ -133,7 +154,7 @@ def test_validate_lower_dimensional_data_X(instantiate_base_regressor_subclass):
         y = y[None]
     err_msg = "X must be 2-dimensional"
     with pytest.raises(ValueError, match=err_msg):
-        model._validate(X, y, model._model_specific_initialization(X, y))
+        model._validate(X, y, model._model_specific_initialization(X[:, None], y))
 
 
 @pytest.mark.parametrize(
@@ -780,7 +801,7 @@ class TestModelSimulation:
         expectation = (
             pytest.raises(
                 ValueError,
-                match="Params must have length.|GLM-HMM requires three parameters",
+                match="Params must have length",
             )
             if n_params != INIT_PARAM_LENGTH[model_name]
             else does_not_raise()

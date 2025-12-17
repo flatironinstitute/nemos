@@ -17,6 +17,7 @@ from functools import partial
 from typing import Literal
 
 from nemos.glm.validation import GLMValidator
+from nemos.glm_hmm.params import GLMHMMParams, HMMParams
 
 # Named tuple for model fixture returns (clearer than tuple indexing)
 ModelFixture = namedtuple(
@@ -1158,17 +1159,14 @@ def run_simulation_glm_hmm(
     design_matrix: jnp.ndarray, model: nmo.glm_hmm.GLMHMM, seed: int
 ):
     n_timepoints = design_matrix.shape[0]
-    if isinstance(model.initialize_glm_params, tuple):
-        coef, intercept = model.initialize_glm_params
-        if coef.ndim > 2:
-            n_neurons = coef.shape[1]
-        else:
-            n_neurons = 1
-        n_states = intercept.shape[-1]
-        initial_prob = model.initialize_init_proba
-        transition_prob = model.initialize_transition_proba
+    coef, intercept = model.coef_, model.intercept_
+    if coef.ndim > 2:
+        n_neurons = coef.shape[1]
     else:
-        raise ValueError("Must provided concrete intial values to run simulaitons.")
+        n_neurons = 1
+    n_states = intercept.shape[-1]
+    initial_prob = model.initial_prob_
+    transition_prob = model.transition_prob_
 
     # Initialize GLM
     glm = nmo.glm.PopulationGLM(
@@ -1183,7 +1181,11 @@ def run_simulation_glm_hmm(
 
     # Sample initial state
     np.random.seed(seed)
-    initial_state = np.random.choice(n_states, p=initial_prob)
+    initial_state = np.random.choice(
+        n_states,
+        p=np.asarray(initial_prob, dtype=float)
+        / sum(np.asarray(initial_prob, dtype=float)),
+    )
     latent_states[0, initial_state] = 1
 
     # Set initial weights and simulate first timepoint
@@ -1228,7 +1230,6 @@ def instantiate_glm_hmm_func(
     solver_name: str = None,
     simulate=False,
 ):
-    jax.config.update("jax_enable_x64", True)
     np.random.seed(123)
     n_neurons = 1
     n_features = 2
@@ -1236,21 +1237,30 @@ def instantiate_glm_hmm_func(
     X[:250, 0] = 0
     X[np.arange(500) % 2 == 1, 1] = 0
     glm_params = random_glm_params_init(
-        n_neurons, n_states, X, random_key=jax.random.PRNGKey(123)
+        n_states,
+        X,
+        np.zeros_like(X, shape=X.shape[0]),
+        random_key=jax.random.PRNGKey(123),
     )
-    glm_params = jax.numpy.squeeze(glm_params[0]), np.squeeze(glm_params[1])
-    transition_prob = sticky_transition_proba_init(n_states)
-    init_prob = uniform_initial_proba_init(n_states, random_key=jax.random.PRNGKey(124))
+    coef, intercept = jax.numpy.squeeze(glm_params[0]), np.squeeze(glm_params[1])
+    transition_prob = sticky_transition_proba_init(
+        n_states, X, None, random_key=jax.random.PRNGKey(123)
+    )
+    init_prob = uniform_initial_proba_init(
+        n_states, X, None, random_key=jax.random.PRNGKey(124)
+    )
 
     model = nmo.glm_hmm.GLMHMM(
         n_states=n_states,
         observation_model=obs_model,
         regularizer=regularizer,
         solver_name=solver_name,
-        initialize_transition_proba=transition_prob,
-        initialize_glm_params=glm_params,
-        initialize_init_proba=init_prob,
     )
+    model.coef_ = coef
+    model.intercept_ = intercept
+    model.initial_prob_ = init_prob
+    model.transition_prob_ = transition_prob
+
     if simulate:
         counts, rates, latent_states = run_simulation_glm_hmm(X, model, seed=1234)
     else:
@@ -1259,7 +1269,9 @@ def instantiate_glm_hmm_func(
         X=X,
         y=counts,
         model=model,
-        params=(glm_params, transition_prob, init_prob),
+        params=GLMHMMParams(
+            GLMParams(*glm_params), HMMParams(init_prob, transition_prob)
+        ),
         rates=rates,
         extra=latent_states,
     )
