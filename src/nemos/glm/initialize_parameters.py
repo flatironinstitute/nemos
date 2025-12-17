@@ -30,6 +30,12 @@ INVERSE_FUNCS_BY_SIMPLE_NAME = {
     "identity": identity,
 }
 
+non_finite_error = ValueError(
+    "Failed to initialize the model intercept as the inverse of the firing rate for "
+    "the provided link function. The inferred intercept has non-finite values. "
+    "Please provide initial parameters instead."
+)
+
 
 def get_inverse_function(func: Callable):
     """Get the inverse function for a given link function."""
@@ -121,6 +127,9 @@ def initialize_intercept_matching_mean_rate(
                 "Failed to initialize the model intercept as the inverse of the firing rate for "
                 "the provided link function. The mean firing rate has some non-positive values."
             )
+        if jnp.any(~jnp.isfinite(out)):
+            raise non_finite_error
+
         return out
 
     def func(x, mean_x):
@@ -133,4 +142,8 @@ def initialize_intercept_matching_mean_rate(
             "Failed to initialize the model intercept as the inverse of the firing rate for the"
             " provided link function. Please, provide initial parameters instead!"
         )
+
+    if jnp.any(~jnp.isfinite(out)):
+        raise non_finite_error
+
     return out
