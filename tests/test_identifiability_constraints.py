@@ -17,6 +17,7 @@ from nemos.identifiability_constraints import (
 )
 
 
+@pytest.mark.requires_x64
 @pytest.mark.parametrize(
     "dtype, expected_context, filter_type",
     [
@@ -39,7 +40,6 @@ from nemos.identifiability_constraints import (
 )
 def test_warn_if_not_float64(dtype, expected_context, filter_type):
     """Test warnings raised for float32 matrices."""
-    jax.config.update("jax_enable_x64", True)
     matrix = jnp.ones((5, 5), dtype=dtype)
     with expected_context:
         with warnings.catch_warnings():
@@ -92,7 +92,7 @@ def test_apply_identifiability_constraints_add_constant(add_intercept, expected_
 @pytest.mark.parametrize(
     "basis, input_shape, output_shape, expected_columns",
     [
-        (RaisedCosineLinearEval(10, width=4), (50,), (50, 10), jnp.arange(10)),
+        (RaisedCosineLinearEval(10, width=4), (100,), (100, 10), jnp.arange(10)),
         (
             BSplineEval(5) + BSplineEval(6),
             (20,),
@@ -112,6 +112,7 @@ def test_apply_identifiability_constraints_by_basis_component(
     basis, input_shape, output_shape, expected_columns
 ):
     """Test constraints applied by basis component."""
+    np.random.seed(42)
     x = basis.compute_features(
         *([np.random.randn(*input_shape)] * basis._n_input_dimensionality)
     )
@@ -122,6 +123,7 @@ def test_apply_identifiability_constraints_by_basis_component(
     assert jnp.array_equal(expected_columns, kept_columns)
 
 
+@pytest.mark.requires_x64
 @pytest.mark.parametrize(
     "matrix, max_drop, preproc, expected_result",
     [
@@ -161,7 +163,6 @@ def test_apply_identifiability_constraints_by_basis_component(
 )
 def test_find_drop_column(matrix, max_drop, expected_result, preproc):
     """Test if a column is linearly dependent."""
-    jax.config.update("jax_enable_x64", True)
     rank = int(jnp.linalg.matrix_rank(preproc(matrix)))
     result = _find_drop_column(
         matrix.astype(float), rank=rank, max_drop=max_drop, preprocessing_func=preproc
@@ -169,6 +170,7 @@ def test_find_drop_column(matrix, max_drop, expected_result, preproc):
     assert jnp.array_equal(result, expected_result)
 
 
+@pytest.mark.requires_x64
 @pytest.mark.parametrize(
     "dtype, expected_dtype",
     [
@@ -178,19 +180,20 @@ def test_find_drop_column(matrix, max_drop, expected_result, preproc):
 )
 def test_feature_matrix_dtype(dtype, expected_dtype):
     """Test if the matrix retains its dtype after applying constraints."""
-    jax.config.update("jax_enable_x64", True)
+    np.random.seed(42)
     x = np.random.randn(10, 5).astype(dtype)
     constrained_x, _ = apply_identifiability_constraints(x, warn_if_float32=False)
     assert constrained_x.dtype == expected_dtype
 
 
+@pytest.mark.requires_x64
 @pytest.mark.parametrize(
     "invalid_entries",
     [[np.nan, np.nan], [np.nan, np.inf], [np.inf, np.inf], [np.inf, np.inf]],
 )
 def test_apply_constraint_with_invalid(invalid_entries):
     """Test if the matrix retains its dtype after applying constraints."""
-    jax.config.update("jax_enable_x64", True)
+    np.random.seed(42)
     x = np.random.randn(10, 5)
     # add invalid
     x[:2, 2] = invalid_entries

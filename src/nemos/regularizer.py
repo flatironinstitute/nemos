@@ -9,6 +9,7 @@ with various optimization methods, and they can be applied depending on the mode
 import abc
 from typing import Callable, Tuple, Union
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 from numpy.typing import NDArray
@@ -24,6 +25,7 @@ from .proximal_operator import (
 )
 from .typing import (
     DESIGN_INPUT_TYPE,
+    ModelParamsT,
     ProximalOperator,
     RegularizerStrength,
     ElasticNetRegularizerStrength,
@@ -35,6 +37,83 @@ __all__ = ["UnRegularized", "Ridge", "Lasso", "GroupLasso", "ElasticNet"]
 
 def __dir__() -> list[str]:
     return __all__
+
+
+def apply_operator(func, params, *args, **kwargs):
+    """
+    Apply an operator to all regularizable subtrees of a parameter pytree.
+
+    This function iterates over all locations returned by
+    ``params.regularizable_subtrees()`` and applies ``func`` to each selected
+    subtree. The updated values are written back into ``params`` using
+    :func:`equinox.tree_at`. Typical use cases include applying proximal
+    operators or other transformations to parameter tensors while leaving
+    non-regularized fields (e.g., intercepts or structural metadata) unchanged.
+
+    Parameters
+    ----------
+    func :
+        A callable with signature ``func(x, *args, **kwargs) -> Any``.
+        It receives each regularizable subtree ``x`` and must return a value
+        with the same pytree structure that should replace that subtree.
+    params :
+        An object implementing ``regularizable_subtrees()`` which returns an
+        iterable of selector functions (suitable for ``eqx.tree_at``) that
+        identify the leaves/subtrees to be transformed.
+    *args :
+        Additional positional arguments passed directly to ``func``.
+    **kwargs :
+        Additional keyword arguments passed directly to ``func``.
+
+    Returns
+    -------
+    params_new : same type as ``params``
+        A new pytree/module with ``func`` applied to all regularizable
+        subtrees. Non-regularized fields are preserved unchanged.
+
+    Notes
+    -----
+    - ``regularizable_subtrees()`` must return a sequence of callables
+      compatible with ``eqx.tree_at``. Each callable should extract a subtree
+      from ``params``.
+    - ``func`` must be pure and JAX-compatible if this function is used inside
+      JIT-compiled code.
+
+    Examples
+    --------
+    A minimal working example with a fake ``Params`` object:
+
+    >>> import equinox as eqx
+    >>> class Params(eqx.Module):
+    ...     w: float
+    ...     b: float
+    ...
+    ...     # Only `w` is regularizable
+    ...     def regularizable_subtrees(self):
+    ...         return [lambda p: p.w]
+
+    >>> p = Params(w=3.0, b=10.0)
+
+    Define an operator that halves the value:
+
+    >>> def halve(x):
+    ...     return x / 2
+
+    Apply it only to the regularizable subtree (`w`):
+
+    >>> p2 = apply_operator(halve, p)
+    >>> p2.w
+    1.5
+    >>> p2.b
+    10.0
+
+    The bias `b` is unchanged because it is not listed in
+    `regularizable_subtrees`.
+    """
+    for where in params.regularizable_subtrees():
+        params = eqx.tree_at(where, params, func(where(params), *args, **kwargs))
+
+    return params
 
 
 class Regularizer(Base, abc.ABC):
@@ -55,6 +134,7 @@ class Regularizer(Base, abc.ABC):
 
     _allowed_solvers: Tuple[str] = tuple()
     _default_solver: str = None
+    _proximal_operator: Callable = None
 
     def __init__(
         self,
@@ -70,19 +150,22 @@ class Regularizer(Base, abc.ABC):
     def default_solver(self) -> str:
         return self._default_solver
 
-    @abc.abstractmethod
     def get_proximal_operator(
         self,
     ) -> ProximalOperator:
         """
-        Abstract method to retrieve the proximal operator for this solver.
+        Retrieve the proximal operator for this solver.
 
         Returns
         -------
         :
-            The proximal operator, which typically applies a form of regularization.
+            The proximal operator, applying regularization to the provided parameters.
         """
-        pass
+
+        def prox_op(params, reg, scaling=1.0):
+            return apply_operator(self._proximal_operator, params, reg, scaling=scaling)
+
+        return prox_op
 
     def check_solver(self, solver_name: str):
         """Raise an error if the given solver is not allowed."""
@@ -99,14 +182,6 @@ class Regularizer(Base, abc.ABC):
     def __str__(self):
         return format_repr(self)
 
-    @abc.abstractmethod
-    def _penalization(
-        self,
-        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
-        regularizer_strength: RegularizerStrength,
-    ):
-        pass
-
     @staticmethod
     def _check_loss_output_tuple(output: tuple):
         if len(output) != 2:
@@ -119,7 +194,7 @@ class Regularizer(Base, abc.ABC):
             )
 
     def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
-        """Return a function for calculating the penalized loss using Lasso regularization."""
+        """Return a function for calculating the penalized loss."""
 
         def _penalized_loss(params, *args, **kwargs):
             result = loss(params, *args, **kwargs)
@@ -132,6 +207,23 @@ class Regularizer(Base, abc.ABC):
             return result + penalty
 
         return _penalized_loss
+
+    def _penalization(
+        self, params: ModelParamsT, strength: RegularizerStrength
+    ) -> jnp.ndarray:
+        penalty = jnp.array(0.0)
+
+        for where in params.regularizable_subtrees():
+            subtree = where(params)
+            penalty = penalty + self._penalty_on_subtree(subtree, strength)
+
+        return penalty
+
+    @abc.abstractmethod
+    def _penalty_on_subtree(
+        self, sub_params, strength: RegularizerStrength
+    ) -> jnp.ndarray:
+        pass
 
     def _validate_regularizer_strength(
         self, strength: Union[None, RegularizerStrength]
@@ -148,16 +240,18 @@ class Regularizer(Base, abc.ABC):
 
     def _validate_regularizer_strength_structure(
         self,
-        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+        params: ModelParamsT,
         strength: Union[None, RegularizerStrength],
     ):
+        regularizable_params = params.regularizable_subtrees()
+
         # wrap in tree if not a tree already
         if not hasattr(strength, "__len__"):
-            strength = tree_utils.tree_full_like(params[0], strength)
+            strength = tree_utils.tree_full_like(regularizable_params, strength)
 
         # compare structure to params
         if jax.tree_util.tree_structure(strength) != jax.tree_util.tree_structure(
-            params[0]
+            regularizable_params
         ):
             raise ValueError(
                 f"Regularizer strength must conform to parameters: {strength}"
@@ -175,7 +269,9 @@ class Regularizer(Base, abc.ABC):
                 strength_leaf = jnp.broadcast_to(strength_leaf, param_leaf.shape)
             return strength_leaf
 
-        strength = jax.tree_util.tree_map(check_and_broadcast, params[0], strength)
+        strength = jax.tree_util.tree_map(
+            check_and_broadcast, regularizable_params, strength
+        )
 
         # Force conversion to float to prevent weird GPU issues
         try:
@@ -214,17 +310,7 @@ class UnRegularized(Regularizer):
         self,
     ):
         super().__init__()
-
-    def get_proximal_operator(
-        self,
-    ) -> ProximalOperator:
-        """
-        Return the identity operator.
-
-        Unregularized method corresponds to an identity proximal operator, since no
-        shrinkage factor is applied.
-        """
-        return prox_none
+        self._proximal_operator = prox_none
 
     def _validate_regularizer_strength(self, strength: None):
         return None
@@ -236,8 +322,10 @@ class UnRegularized(Regularizer):
     ):
         return None
 
-    def _penalization(
-        self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], regularizer_strength: float
+    def _penalty_on_subtree(
+        self,
+        sub_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+        regularizer_strength: float,
     ):
         return 0.0
 
@@ -266,10 +354,11 @@ class Ridge(Regularizer):
         self,
     ):
         super().__init__()
+        self._proximal_operator = prox_ridge
 
-    def _penalization(
+    def _penalty_on_subtree(
         self,
-        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+        sub_params,
         regularizer_strength: RegularizerStrength,
     ) -> jnp.ndarray:
         """
@@ -277,8 +366,10 @@ class Ridge(Regularizer):
 
         Parameters
         ----------
-        params :
-            Model parameters for which to compute the penalization.
+        sub_params :
+            Model parameter subtree for which to compute the penalization.
+        regularizer_strength :
+            The regularization strength.
 
         Returns
         -------
@@ -292,39 +383,9 @@ class Ridge(Regularizer):
         return tree_utils.pytree_map_and_reduce(
             l2_penalty,
             sum,
-            params[0],
+            sub_params,
             regularizer_strength,
         )
-
-    def penalized_loss(
-        self, loss: Callable, regularizer_strength: RegularizerStrength
-    ) -> Callable:
-        """Return the penalized loss function for Ridge regularization."""
-
-        def _penalized_loss(params, *args, **kwargs):
-            return loss(params, *args, **kwargs) + self._penalization(
-                params, regularizer_strength
-            )
-
-        return _penalized_loss
-
-    def get_proximal_operator(
-        self,
-    ) -> ProximalOperator:
-        """
-        Retrieve the proximal operator for Ridge regularization (L2 penalty).
-
-        Returns
-        -------
-        :
-            The proximal operator, applying L2 regularization to the provided parameters. The intercept
-            term is not regularized.
-        """
-
-        def prox_op(params, l2reg, scaling=1.0):
-            return prox_ridge(params[0], l2reg, scaling), params[1]
-
-        return prox_op
 
 
 class Lasso(Regularizer):
@@ -346,28 +407,11 @@ class Lasso(Regularizer):
         self,
     ):
         super().__init__()
+        self._proximal_operator = prox_lasso
 
-    def get_proximal_operator(
+    def _penalty_on_subtree(
         self,
-    ) -> ProximalOperator:
-        """
-        Retrieve the proximal operator for Lasso regularization (L1 penalty).
-
-        Returns
-        -------
-        :
-            The proximal operator, applying L1 regularization to the provided parameters. The intercept
-            term is not regularized.
-        """
-
-        def prox_op(params, l1reg, scaling=1.0):
-            return prox_lasso(params[0], l1reg, scaling), params[1]
-
-        return prox_op
-
-    def _penalization(
-        self,
-        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+        sub_params: ModelParamsT,
         regularizer_strength: RegularizerStrength,
     ) -> jnp.ndarray:
         """
@@ -375,7 +419,7 @@ class Lasso(Regularizer):
 
         Parameters
         ----------
-        params :
+        sub_params :
             Model parameters for which to compute the penalization.
 
         Returns
@@ -390,21 +434,9 @@ class Lasso(Regularizer):
         return tree_utils.pytree_map_and_reduce(
             l1_penalty,
             sum,
-            params[0],
+            sub_params,
             regularizer_strength,
         )
-
-    def penalized_loss(
-        self, loss: Callable, regularizer_strength: RegularizerStrength
-    ) -> Callable:
-        """Return a function for calculating the penalized loss using Lasso regularization."""
-
-        def _penalized_loss(params, *args, **kwargs):
-            return loss(params, *args, **kwargs) + self._penalization(
-                params, regularizer_strength
-            )
-
-        return _penalized_loss
 
 
 class ElasticNet(Regularizer):
@@ -446,28 +478,11 @@ class ElasticNet(Regularizer):
         self,
     ):
         super().__init__()
+        self._proximal_operator = prox_elastic_net
 
-    def get_proximal_operator(
+    def _penalty_on_subtree(
         self,
-    ) -> ProximalOperator:
-        """
-        Retrieve the proximal operator for Elastic Net regularization (L1 + L2 penalty).
-
-        Returns
-        -------
-        :
-            The proximal operator, applying L1 + L2 regularization to the provided parameters. The intercept
-            term is not regularized.
-        """
-
-        def prox_op(params, netreg, scaling=1.0):
-            return prox_elastic_net(params[0], netreg, scaling=scaling), params[1]
-
-        return prox_op
-
-    def _penalization(
-        self,
-        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+        sub_params,
         regularizer_strength: ElasticNetRegularizerStrength,
     ) -> jnp.ndarray:
         r"""
@@ -506,7 +521,7 @@ class ElasticNet(Regularizer):
         return tree_utils.pytree_map_and_reduce(
             lambda x, strength, ratio: net_penalty(x),
             sum,
-            params[0],
+            sub_params,
             strength[0],
             strength[1],
         )
@@ -611,7 +626,7 @@ class GroupLasso(Regularizer):
         mask: Union[NDArray, jnp.ndarray] = None,
     ):
         super().__init__()
-
+        self._proximal_operator = prox_elastic_net
         self.mask = mask
 
     @property
@@ -671,9 +686,9 @@ class GroupLasso(Regularizer):
                 f"Data type {mask.dtype} provided instead!"
             )
 
-    def _penalization(
+    def _penalty_on_subtree(
         self,
-        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+        sub_params,
         regularizer_strength: RegularizerStrength,
     ) -> jnp.ndarray:
         r"""
@@ -690,7 +705,7 @@ class GroupLasso(Regularizer):
         """
         # conform to shape (1, n_features) if param is (n_features,) or (n_neurons, n_features) if
         # param is (n_features, n_neurons)
-        param_with_extra_axis = jnp.atleast_2d(params[0].T)
+        param_with_extra_axis = jnp.atleast_2d(sub_params.T)
 
         vec_prod = jax.vmap(
             lambda x: self.mask * x, in_axes=0, out_axes=2
@@ -722,8 +737,12 @@ class GroupLasso(Regularizer):
         """
 
         def prox_op(params, regularizer_strength, scaling=1.0):
-            return prox_group_lasso(
-                params, regularizer_strength, mask=self.mask, scaling=scaling
+            return apply_operator(
+                prox_group_lasso,
+                params,
+                regularizer_strength,
+                mask=self.mask,
+                scaling=scaling,
             )
 
         return prox_op

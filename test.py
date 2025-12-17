@@ -12,9 +12,8 @@ X = nmo.pytrees.FeaturePytree(
 y = np.random.randint(low=0, high=10, size=(100,))
 
 glm = nmo.glm.GLM(
-    regularizer=nmo.regularizer.Lasso(),
+    regularizer=nmo.regularizer.Ridge(),
     regularizer_strength=strength,
-    solver_name="ProxSVRG",
 )
 # glm = nmo.glm.GLM(
 #    regularizer=nmo.regularizer.ElasticNet(), regularizer_strength=strength

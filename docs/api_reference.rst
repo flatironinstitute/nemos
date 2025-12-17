@@ -143,6 +143,7 @@ Statistical models to describe the distribution of neural responses or other pre
 
     Observations
     PoissonObservations
+    GaussianObservations
     NegativeBinomialObservations
     GammaObservations
     BernoulliObservations

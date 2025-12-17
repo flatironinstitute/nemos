@@ -97,6 +97,24 @@ VALID_PAIRS = [
     {"solver_kwargs", "solver_init_kwargs"},
     {"unaccepted_name", "accepted_name"},
     {"fn", "fun"},
+    {"glm_params_init", "glm_params"},
+    {"initial_prob", "log_initial_prob"},
+    {"transition_prob", "log_transition_prob"},
+    {"normalization", "log_normalization"},
+    {"log_conditional_prob", "log_initial_prob"},
+    *(
+        {a, b}
+        for (a, b) in itertools.combinations(
+            [
+                "log_posterior",
+                "log_posteriors",
+                "posteriors",
+                "log_joint_posterior",
+                "joint_posterior",
+            ],
+            r=2,
+        )
+    ),
 ]
 
 

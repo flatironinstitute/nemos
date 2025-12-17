@@ -9,14 +9,21 @@ from abc import abstractmethod
 from copy import deepcopy
 from functools import wraps
 from pathlib import Path
-from typing import Any, Generic, NamedTuple, Optional, Tuple, Type, TypeVar, Union
+from typing import (
+    Any,
+    Generic,
+    Optional,
+    Tuple,
+    Type,
+    Union,
+)
 
 import jax
 import jax.numpy as jnp
 import numpy as np
-from numpy.typing import ArrayLike, NDArray
+from numpy.typing import NDArray
 
-from . import solvers, tree_utils, utils, validation
+from . import solvers, tree_utils, utils
 from ._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from .base_class import Base
 from .regularizer import GroupLasso, Regularizer
@@ -24,18 +31,19 @@ from .type_casting import cast_to_jax
 from .typing import (
     DESIGN_INPUT_TYPE,
     FeaturePytree,
+    ModelParamsT,
     RegularizerStrength,
     SolverInit,
     SolverRun,
     SolverState,
     SolverUpdate,
     StepResult,
+    UserProvidedParamsT,
 )
 from .utils import _flatten_dict, _get_name, _unpack_params, get_env_metadata
+from .validation import RegressorValidator
 
 _SOLVER_ARGS_CACHE = {}
-
-ParamsT = TypeVar("ParamsT")
 
 
 def strip_metadata(arg_num: Optional[int] = None, kwarg_key: Optional[str] = None):
@@ -60,7 +68,7 @@ def strip_metadata(arg_num: Optional[int] = None, kwarg_key: Optional[str] = Non
     return decorator
 
 
-class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
+class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
     """Abstract base class for GLM regression models.
 
     This class encapsulates the common functionality for Generalized Linear Models (GLM)
@@ -102,6 +110,8 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
     - [`GLM`](../glm/#nemos.glm.GLM): A feed-forward GLM implementation.
     - [`PopulationGLM`](../glm/#nemos.glm.PopulationGLM): A population GLM implementation.
     """
+
+    _validator: RegressorValidator = None
 
     def __init__(
         self,
@@ -262,6 +272,11 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         """Getter for the solver_kwargs attribute."""
         return self._solver_kwargs
 
+    @property
+    def solver(self):
+        """Getter for the solver class."""
+        return self._solver
+
     @solver_kwargs.setter
     def solver_kwargs(self, solver_kwargs: dict):
         """Setter for the solver_kwargs attribute."""
@@ -296,7 +311,7 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
                 f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for {solver_class.__name__}!"
             )
 
-    def instantiate_solver(
+    def _instantiate_solver(
         self, loss, solver_kwargs: Optional[dict] = None
     ) -> BaseRegressor:
         """
@@ -362,7 +377,12 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         return self
 
     @abc.abstractmethod
-    def fit(self, X: DESIGN_INPUT_TYPE, y: Union[NDArray, jnp.ndarray]):
+    def fit(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: Union[NDArray, jnp.ndarray],
+        init_params: Optional[UserProvidedParamsT] = None,
+    ) -> BaseRegressor[UserProvidedParamsT, ModelParamsT]:
         """Fit the model to neural activity."""
         pass
 
@@ -391,73 +411,70 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         """Simulate neural activity in response to a feed-forward input and recurrent activity."""
         pass
 
-    @staticmethod
     @abc.abstractmethod
-    def _check_params(
-        params: Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike],
-        data_type: Optional[jnp.dtype] = None,
-    ) -> Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]:
-        """
-        Validate the dimensions and consistency of parameters.
-
-        This function checks the consistency of shapes and dimensions for model
-        parameters.
-        It ensures that the parameters and data are compatible for the model.
-
-        """
-        pass
-
-    @staticmethod
-    @abc.abstractmethod
-    def _check_input_dimensionality(
-        X: Optional[Union[DESIGN_INPUT_TYPE, jnp.ndarray]] = None,
-        y: Optional[jnp.ndarray] = None,
-    ):
-        pass
-
-    @abc.abstractmethod
-    def _get_coef_and_intercept(self) -> Tuple[Any, Any]:
+    def _get_model_params(self) -> ModelParamsT:
         """Pack coef_ and intercept_  into a params pytree."""
         pass
 
     @abc.abstractmethod
-    def _set_coef_and_intercept(self, params: Any):
+    def _set_model_params(self, params: ModelParamsT):
         """Unpack and store params pytree to coef_ and intercept_."""
         pass
 
-    @staticmethod
     @abc.abstractmethod
-    def _check_input_and_params_consistency(
-        params: Tuple[Union[DESIGN_INPUT_TYPE, jnp.ndarray], jnp.ndarray],
-        X: Optional[Union[DESIGN_INPUT_TYPE, jnp.ndarray]] = None,
-        y: Optional[jnp.ndarray] = None,
+    def _compute_loss(
+        self,
+        params: ModelParamsT,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        *args,
+        **kwargs,
     ):
-        """Validate the number of features in model parameters and input arguments.
+        """Loss function for a given model to be optimized over."""
+        pass
+
+    @cast_to_jax
+    def compute_loss(
+        self,
+        params: UserProvidedParamsT,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        *args,
+        **kwargs,
+    ) -> jnp.ndarray:
+        """Compute the loss function for the model.
+
+        This method validates inputs and converts user-provided parameters to the internal
+        representation before computing the loss.
+
+        Parameters
+        ----------
+        params
+            Parameter tuple of (coefficients, intercept).
+        X
+            Input data, array of shape ``(n_time_bins, n_features)`` or pytree of same.
+        y
+            Target data, array of shape ``(n_time_bins,)`` for single neuron models or
+            ``(n_time_bins, n_neurons)`` for population models.
+        *args
+            Additional positional arguments passed to the model-specific loss function.
+        **kwargs
+            Additional keyword arguments passed to the model-specific loss function.
+
+        Returns
+        -------
+        loss
+            The loss value (negative log-likelihood).
 
         Raises
         ------
         ValueError
-            - if the number of features is inconsistent between params[1] and X
-              (when provided).
-
+            If inputs or parameters have incompatible shapes or invalid values.
         """
-        pass
-
-    @staticmethod
-    def _check_input_n_timepoints(
-        X: Union[DESIGN_INPUT_TYPE, jnp.ndarray], y: jnp.ndarray
-    ):
-        if y.shape[0] != X.shape[0]:
-            raise ValueError(
-                "The number of time-points in X and y must agree. "
-                f"X has {X.shape[0]} time-points, "
-                f"y has {y.shape[0]} instead!"
-            )
-
-    @abc.abstractmethod
-    def _predict_and_compute_loss(self, params, X, y):
-        """Loss function for a given model to be optimized over."""
-        pass
+        self._validator.validate_inputs(X, y)
+        params = self._validator.validate_and_cast_params(params)
+        self._validator.validate_consistency(params, X, y)
+        return self._compute_loss(params, X, y, *args, **kwargs)
 
     def _validate(
         self,
@@ -466,14 +483,10 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         init_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
     ):
         # check input dimensionality
-        self._check_input_dimensionality(X, y)
-        self._check_input_n_timepoints(X, y)
-
-        # error if all samples are invalid
-        validation.error_all_invalid(X, y)
+        self._validator.validate_inputs(X, y)
 
         # validate input and params consistency
-        init_params = self._check_params(init_params)
+        init_params = self._validator.validate_and_cast_params(init_params)
 
         # validate regularizer strength and params consistency
         self.regularizer_strength = (
@@ -483,13 +496,13 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         )
 
         # validate input and params consistency
-        self._check_input_and_params_consistency(init_params, X=X, y=y)
+        self._validator.validate_consistency(init_params, X=X, y=y)
 
     @abc.abstractmethod
     def update(
         self,
-        params: Tuple[jnp.ndarray, jnp.ndarray],
-        opt_state: NamedTuple,
+        params: UserProvidedParamsT,
+        opt_state: SolverState,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         *args,
@@ -503,44 +516,51 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
-        init_params: Optional = None,
-    ) -> ParamsT:
-        """Initialize the solver's state and optionally sets initial model parameters for the optimization."""
-        if init_params is None:
-            init_params = self._initialize_parameters(X, y)  # initialize
-        else:
-            err_message = "Initial parameters must be array-like objects (or pytrees of array-like objects) "
-            "with numeric data-type!"
-            init_params = validation.convert_tree_leaves_to_jax_array(
-                init_params, err_message=err_message, data_type=float
-            )
+    ) -> UserProvidedParamsT:
+        """Initialize model parameters.
 
-        # validate input
-        self._validate(X, y, init_params)
+        Initialize coefficients with zeros and intercept by matching the mean firing rate.
 
-        return init_params
+        Parameters
+        ----------
+        X
+            Input data, array of shape ``(n_time_bins, n_features)`` or pytree of same.
+        y
+            Target data, array of shape ``(n_time_bins,)`` for single neuron models or
+            ``(n_time_bins, n_neurons)`` for population models.
+
+        Returns
+        -------
+        params
+            Initial parameter tuple of (coefficients, intercept).
+        """
+        init_params = self._model_specific_initialization(X, y)
+        return self._validator.from_model_params(init_params)
 
     @abc.abstractmethod
-    def _initialize_parameters(
+    def _model_specific_initialization(
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
-    ) -> ParamsT:
+    ) -> ModelParamsT:
         """Model specific initialization logic."""
         pass
 
     def _preprocess_inputs(
         self,
         X: DESIGN_INPUT_TYPE,
-        y: jnp.ndarray,
-        cast_to_jax_and_drop_nans: bool = True,
-    ) -> Tuple[dict | jnp.ndarray, jnp.ndarray]:
+        y: Optional[jnp.ndarray] = None,
+        drop_nans: bool = True,
+    ) -> Tuple[dict[str, jnp.ndarray] | jnp.ndarray, jnp.ndarray | None]:
         """Preprocess inputs before initializing state."""
-        if cast_to_jax_and_drop_nans:
-            X, y = cast_to_jax(tree_utils.drop_nans)(X, y)
-            data = X.data if isinstance(X, FeaturePytree) else X
+        if drop_nans:
+            process = cast_to_jax(tree_utils.drop_nans)
         else:
-            data = X
+            process = cast_to_jax(lambda *x: x)
+
+        X, y = process(X, y)
+
+        data = X.data if isinstance(X, FeaturePytree) else X
 
         if isinstance(self.regularizer, GroupLasso):
             if self.regularizer.mask is None:
@@ -550,18 +570,56 @@ class BaseRegressor(Base, abc.ABC, Generic[ParamsT]):
                 )
                 self.regularizer.mask = jnp.ones((1, data.shape[1]))
 
-        return X, y
+        return data, y
 
     @abc.abstractmethod
-    def initialize_state(
+    def _initialize_solver_and_state(
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
-        init_params,
-        cast_to_jax_and_drop_nans: bool = True,
+        init_params: ModelParamsT,
     ) -> SolverState:
-        """Initialize the state of the solver for running fit and update."""
+        """Initialize the solver and the state of the solver for running fit and update."""
         pass
+
+    @cast_to_jax
+    def initialize_solver_and_state(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        init_params: UserProvidedParamsT,
+    ) -> SolverState:
+        """Initialize the solver and its state for running fit and update.
+
+        This method must be called before using :meth:`update` for iterative optimization.
+        It sets up the solver with the provided initial parameters and data.
+
+        Parameters
+        ----------
+        X
+            Input data, array of shape ``(n_time_bins, n_features)`` or pytree of same.
+        y
+            Target data, array of shape ``(n_time_bins,)`` for single neuron models or
+            ``(n_time_bins, n_neurons)`` for population models.
+        init_params
+            Initial parameter tuple of (coefficients, intercept).
+
+        Returns
+        -------
+        state
+            Initial solver state.
+
+        Raises
+        ------
+        ValueError
+            If inputs or parameters have incompatible shapes or invalid values.
+        """
+        self._validator.validate_inputs(X, y)
+        init_params = self._validator.validate_and_cast_params(init_params)
+        self._validator.validate_consistency(init_params, X=X, y=y)
+        return self._initialize_solver_and_state(
+            *tree_utils.drop_nans(X, y), init_params
+        )
 
     def _optimize_solver_params(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray) -> dict:
         """

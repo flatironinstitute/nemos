@@ -157,6 +157,7 @@ filterwarnings = [
 ]
 markers = [
   "solver_related: tests that interact with solvers",
+  "requires_x64: mark test as requiring JAX float64 precision",
 ]
 # -s: no capture from pytest (prints will show)
 addopts = ["-s", "--strict-markers"]

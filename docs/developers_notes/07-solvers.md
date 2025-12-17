@@ -108,5 +108,5 @@ For information on how stochastic optimization is planned to be supported in NeM
 :::{admonition} Stochastic optimization interface for (Prox-)SVRG
 :class: warning
 
-Note that (Prox-)SVRG is especially well-suited for running stochastic optimization, however it currently requires the optimization loop to be implemented separately as it is a bit more involved than what is done by `run_iterator`.  
+Note that (Prox-)SVRG is especially well-suited for running stochastic optimization, however it currently requires the optimization loop to be implemented separately as it is a bit more involved than what is done by `run_iterator`.
 :::

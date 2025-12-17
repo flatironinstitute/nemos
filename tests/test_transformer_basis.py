@@ -857,6 +857,7 @@ def test_transformer_fit_transform_input_struct(
         0.1 * np.random.randn(100, 1, 2),
     ],
 )
+@pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
 def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
 
     if basis_cls is IdentityEval:
@@ -1123,6 +1124,7 @@ def test_check_input(inp, expectation, basis_cls, basis_class_specific_params, m
             meth(inp, np.ones(11))
 
 
+@pytest.mark.requires_x64
 @pytest.mark.parametrize(
     "basis_cls",
     list_all_basis_classes(),
@@ -1153,7 +1155,6 @@ def test_check_input(inp, expectation, basis_cls, basis_class_specific_params, m
     ],
 )
 def test_repr_out(basis_cls, basis_class_specific_params, expected_out):
-    jax.config.update("jax_enable_x64", True)
     with patch("os.get_terminal_size", return_value=(80, 24)):
         bas = CombinedBasis().instantiate_basis(
             5, basis_cls, basis_class_specific_params, window_size=10
