@@ -296,7 +296,6 @@ def test_svrg_glm_update(
     assert state.iter_num == 1
 
 
-# TODO: Why does this have ProximalGradient as solver if it's testing SVRG?
 @pytest.mark.parametrize(
     "regularizer_name, solver_name, mask",
     [

@@ -167,9 +167,11 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
         new_y, new_stepsize = self._update_at_point(
             fn, update_point, args, options, state
         )
-        # TODO: These could be returned from _update_at_point
+        # These could be returned from _update_at_point
         # because the linesearch already calculates it
         # so a function evaluation could be saved here.
+        # But then aux would have to part of the loop carry,
+        # which might not be the best if aux is large.
         new_fun_val, new_aux = fn(new_y, args)
         diff_y = tree_sub(new_y, y)
 
