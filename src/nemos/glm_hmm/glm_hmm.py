@@ -697,6 +697,9 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
             X, n_samples=n_samples
         )
         # TODO: uncomment this once the predict method is available
+        # IDEAS: calculate the expectation of Y via tower rule.
+        # as var(Y) = var(E_z[ Y | z]) + E_z[Var(Y|z)], see sketch,
+        # https://www.overleaf.com/project/6942e6f0a2ee36c5e6eb1e96
         # self.scale_ = self.observation_model.estimate_scale(y, self.predict(X), self.dof_resid_)
         self.scale_ = 1.0
         return self._validator.from_model_params(updated_params), updated_state
