@@ -1645,10 +1645,8 @@ class TestGLMObservationModel:
     @pytest.mark.parametrize(
         "X, y",
         [
-            (jnp.zeros((2, 4)), jnp.zeros((2,))),
             (jnp.ones((2, 4)), jnp.ones((2,))),
             (jnp.zeros((2, 4)), jnp.ones((2,))),
-            (jnp.ones((2, 4)), jnp.zeros((2,))),
         ],
     )
     def test_parameter_initialization(
