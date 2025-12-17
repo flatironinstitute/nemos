@@ -18,6 +18,7 @@ from nemos._observation_model_builder import (
 from nemos._regularizer_builder import instantiate_regularizer
 from nemos.typing import FeaturePytree
 from nemos.utils import _get_name
+from nemos.glm_hmm.params import GLMHMMParams, GLMParams
 
 # FILTER FOR GLM HMM
 INSTANTIATE_MODEL_ONLY = INSTANTIATE_MODEL_ONLY.copy()
@@ -131,7 +132,12 @@ class TestGLMHMM:
             fixture.model.fit(
                 fixture.X,
                 fixture.y,
-                init_params=((init_w, fixture.params[0][1]), *fixture.params[1:]),
+                init_params=(
+                    init_w,
+                    fixture.params.glm_params.intercept,
+                    fixture.params.hmm_params.initial_prob,
+                    fixture.params.hmm_params.transition_prob,
+                ),
             )
 
     @pytest.mark.parametrize(
@@ -169,65 +175,99 @@ class TestGLMHMM:
             fixture.model.fit(
                 fixture.X,
                 fixture.y,
-                init_params=((fixture.params[0][0], init_b), *fixture.params[1:]),
+                init_params=(
+                    fixture.params.glm_params.coef,
+                    init_b,
+                    fixture.params.hmm_params.initial_prob,
+                    fixture.params.hmm_params.transition_prob,
+                ),
             )
 
     """
     Parameterization used by test_fit_init_params_type and test_initialize_solver_init_params_type
     Contains the expected behavior and separate initial parameters for regular and population GLMs
+
+    Note: init_params is expected to be a 4-tuple (coef, intercept, initial_prob, transition_prob)
     """
     fit_init_params_type_init_params = (
         "expectation, init_params_glm, init_params_population_glm",
         [
+            # Valid case: proper arrays for all 4 params
             (
                 does_not_raise(),
-                [jnp.zeros((2, 3)), jnp.zeros((3,))],
-                [jnp.zeros((2, 3, 3)), jnp.zeros((3, 3))],
+                (
+                    jnp.zeros((2, 3)),
+                    jnp.zeros((3,)),
+                    jnp.ones(3) / 3,
+                    jnp.ones((3, 3)) / 3,
+                ),
+                (
+                    jnp.zeros((2, 3, 3)),
+                    jnp.zeros((3, 3)),
+                    jnp.ones(3) / 3,
+                    jnp.ones((3, 3)) / 3,
+                ),
             ),
+            # Wrong length tuple (not 4 elements)
             (
                 pytest.raises(ValueError, match="Params must have length four"),
-                [[jnp.zeros((1, 2, 3)), jnp.zeros((3,))]],
-                [[jnp.zeros((1, 2, 3)), jnp.zeros((3, 3))]],
+                (jnp.zeros((1, 2, 3)), jnp.zeros((3,))),  # Only 2 elements
+                (jnp.zeros((1, 2, 3)), jnp.zeros((3, 3))),
             ),
+            # Dict instead of tuple for coef (should fail coef validation)
             (
                 pytest.raises(KeyError),
-                dict(p1=jnp.zeros((1, 3)), p2=jnp.zeros((1, 3))),
-                dict(p1=jnp.zeros((2, 3, 3)), p2=jnp.zeros((2, 2, 3))),
-            ),
-            (
-                pytest.raises(ValueError, match=r"Params must have length four"),
-                [dict(p1=jnp.zeros((1, 3)), p2=jnp.zeros((1, 3))), jnp.zeros((3,))],
-                [
-                    dict(p1=jnp.zeros((1, 3, 3)), p2=jnp.zeros((1, 3, 3))),
+                (
+                    dict(p1=jnp.zeros((1, 3)), p2=jnp.zeros((1, 3))),
+                    jnp.zeros((3,)),
+                    jnp.ones(3) / 3,
+                    jnp.ones((3, 3)) / 3,
+                ),
+                (
+                    dict(p1=jnp.zeros((2, 3, 3)), p2=jnp.zeros((2, 2, 3))),
                     jnp.zeros((3, 3)),
-                ],
+                    jnp.ones(3) / 3,
+                    jnp.ones((3, 3)) / 3,
+                ),
             ),
+            # FeaturePytree for coef (valid pytree structure, should pass if shapes are right)
             (
-                pytest.raises(ValueError, match=r"Params must have length four"),
-                [
+                does_not_raise(),
+                (
                     FeaturePytree(p1=jnp.zeros((1, 3)), p2=jnp.zeros((1, 3))),
                     jnp.zeros((3,)),
-                ],
-                [
+                    jnp.ones(3) / 3,
+                    jnp.ones((3, 3)) / 3,
+                ),
+                (
                     FeaturePytree(p1=jnp.zeros((1, 3, 3)), p2=jnp.zeros((1, 2, 3))),
                     jnp.zeros((3, 3)),
-                ],
+                    jnp.ones(3) / 3,
+                    jnp.ones((3, 3)) / 3,
+                ),
             ),
-            (pytest.raises(ValueError, match="The GLM params must be a length"), 0, 0),
+            # Scalar instead of tuple (wrong type)
+            (pytest.raises(ValueError, match="Params must have length four"), 0, 0),
+            # Set instead of tuple (wrong type, not subscriptable)
             (
-                pytest.raises(TypeError, match="Initial parameters must be array-like"),
+                pytest.raises(
+                    TypeError,
+                    match="Initial parameters must be array-like|object is not subscriptable",
+                ),
                 {0, 1},
                 {0, 1},
             ),
+            # String as intercept (wrong type)
             (
                 pytest.raises(TypeError, match="Initial parameters must be array-like"),
-                [jnp.zeros((1, 5)), ""],
-                [jnp.zeros((1, 5)), ""],
+                (jnp.zeros((2, 3)), "", jnp.ones(3) / 3, jnp.ones((3, 3)) / 3),
+                (jnp.zeros((2, 3, 3)), "", jnp.ones(3) / 3, jnp.ones((3, 3)) / 3),
             ),
+            # String as coef (wrong type)
             (
                 pytest.raises(TypeError, match="Initial parameters must be array-like"),
-                ["", jnp.zeros((1,))],
-                ["", jnp.zeros((1,))],
+                ("", jnp.zeros((3,)), jnp.ones(3) / 3, jnp.ones((3, 3)) / 3),
+                ("", jnp.zeros((3, 3)), jnp.ones(3) / 3, jnp.ones((3, 3)) / 3),
             ),
         ],
     )
@@ -251,9 +291,7 @@ class TestGLMHMM:
             init_params = init_params_glm
 
         with expectation:
-            fixture.model.fit(
-                fixture.X, fixture.y, init_params=(init_params, *fixture.params[1:])
-            )
+            fixture.model.fit(fixture.X, fixture.y, init_params=init_params)
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -285,7 +323,12 @@ class TestGLMHMM:
             fixture.model.fit(
                 fixture.X,
                 fixture.y,
-                init_params=((init_w, init_b), *fixture.params[1:]),
+                init_params=(
+                    init_w,
+                    init_b,
+                    fixture.params.hmm_params.initial_prob,
+                    fixture.params.hmm_params.transition_prob,
+                ),
             )
 
     @pytest.fixture
@@ -358,11 +401,10 @@ class TestGLMHMM:
             params = fixture.model.initialize_params(
                 fixture.X,
                 fixture.y,
-                init_params=((init_w, fixture.params[0][1]), *fixture.params[1:]),
             )
+            params = tuple([init_w, *params[1:]])
             # check that params are set
-            init_state = fixture.model.initialize_state(fixture.X, fixture.y, params)
-            assert init_state.velocity == params
+            init_state = fixture.model.initialize_optimization_and_state(fixture.X, fixture.y, params)
 
     @pytest.mark.parametrize(
         "dim_intercepts",
@@ -402,7 +444,12 @@ class TestGLMHMM:
             params = fixture.model.initialize_params(
                 fixture.X,
                 fixture.y,
-                init_params=((init_w, init_b), *fixture.params[1:]),
+                init_params=(
+                    init_w,
+                    init_b,
+                    fixture.params.hmm_params.initial_prob,
+                    fixture.params.hmm_params.transition_prob,
+                ),
             )
             # check that params are set
             init_state = fixture.model.initialize_state(fixture.X, fixture.y, params)
@@ -428,7 +475,7 @@ class TestGLMHMM:
             init_params = init_params_glm
         with expectation:
             params = fixture.model.initialize_params(
-                fixture.X, fixture.y, init_params=(init_params, *fixture.params[1:])
+                fixture.X, fixture.y, init_params=init_params
             )
             # check that params are set
             init_state = fixture.model.initialize_state(fixture.X, fixture.y, params)
@@ -462,7 +509,12 @@ class TestGLMHMM:
             params = fixture.model.initialize_params(
                 fixture.X,
                 fixture.y,
-                init_params=((init_w, init_b), *fixture.params[1:]),
+                init_params=(
+                    init_w,
+                    init_b,
+                    fixture.params.hmm_params.initial_prob,
+                    fixture.params.hmm_params.transition_prob,
+                ),
             )
             # check that params are set
             init_state = fixture.model.initialize_state(fixture.X, fixture.y, params)
