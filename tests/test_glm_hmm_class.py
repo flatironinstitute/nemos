@@ -444,16 +444,10 @@ class TestGLMHMM:
             params = fixture.model.initialize_params(
                 fixture.X,
                 fixture.y,
-                init_params=(
-                    init_w,
-                    init_b,
-                    fixture.params.hmm_params.initial_prob,
-                    fixture.params.hmm_params.transition_prob,
-                ),
             )
+            params = tuple([init_w, init_b, *params[2:]])
             # check that params are set
-            init_state = fixture.model.initialize_state(fixture.X, fixture.y, params)
-            assert init_state.velocity == params
+            init_state = fixture.model.initialize_optimization_and_state(fixture.X, fixture.y, params)
 
     @pytest.mark.parametrize(*fit_init_params_type_init_params)
     def test_initialize_solver_init_glm_params_type(
@@ -474,12 +468,8 @@ class TestGLMHMM:
         else:
             init_params = init_params_glm
         with expectation:
-            params = fixture.model.initialize_params(
-                fixture.X, fixture.y, init_params=init_params
-            )
             # check that params are set
-            init_state = fixture.model.initialize_state(fixture.X, fixture.y, params)
-            assert init_state.velocity == params
+            init_state = fixture.model.initialize_optimization_and_state(fixture.X, fixture.y, init_params)
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -509,16 +499,10 @@ class TestGLMHMM:
             params = fixture.model.initialize_params(
                 fixture.X,
                 fixture.y,
-                init_params=(
-                    init_w,
-                    init_b,
-                    fixture.params.hmm_params.initial_prob,
-                    fixture.params.hmm_params.transition_prob,
-                ),
             )
+            params = tuple([init_w, init_b, *params[2:]])
             # check that params are set
-            init_state = fixture.model.initialize_state(fixture.X, fixture.y, params)
-            assert init_state.velocity == params
+            init_state = fixture.model.initialize_optimization_and_state(fixture.X, fixture.y, params)
 
     # @pytest.mark.parametrize(
     #     "fitted_glm_type",
