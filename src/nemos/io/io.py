@@ -19,15 +19,14 @@ from .._observation_model_builder import (
 )
 from .._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from ..glm import GLM, PopulationGLM
-
-# from ..glm_hmm import GLMHMM
+from ..glm_hmm import GLMHMM
 from ..utils import _get_name, _unflatten_dict, get_env_metadata
 from ..validation import _suggest_keys
 
 MODEL_REGISTRY = {
     "nemos.glm.glm.GLM": GLM,
     "nemos.glm.glm.PopulationGLM": PopulationGLM,
-    # "nemos.glm_hmm.glm_hmm.GLMHMM": GLMHMM,
+    "nemos.glm_hmm.glm_hmm.GLMHMM": GLMHMM,
 }
 
 ERROR_MSG_OVERRIDE_NOT_ALLOWED = (
