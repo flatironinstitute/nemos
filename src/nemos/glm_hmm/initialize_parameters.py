@@ -169,6 +169,23 @@ AVAILABLE_INIT_FUNCTIONS = {
     },
 }
 
+_IO_AVAILABLE_INIT_FUNCTIONS = AVAILABLE_INIT_FUNCTIONS.copy()
+_IO_AVAILABLE_INIT_FUNCTIONS["glm_params_init"].update(
+    {
+        "nemos.glm_hmm.initialize_parameters.random_glm_params_init": random_glm_params_init
+    }
+)
+_IO_AVAILABLE_INIT_FUNCTIONS["transition_proba_init"].update(
+    {
+        "nemos.glm_hmm.initialize_parameters.sticky_transition_proba_init": sticky_transition_proba_init
+    }
+)
+_IO_AVAILABLE_INIT_FUNCTIONS["initial_proba_init"].update(
+    {
+        "nemos.glm_hmm.initialize_parameters.uniform_initial_proba_init": uniform_initial_proba_init
+    }
+)
+
 DEFAULT_INIT_FUNCTION: INITIALIZATION_FN_DICT = {
     "glm_params_init": random_glm_params_init,
     "transition_proba_init": sticky_transition_proba_init,
@@ -314,7 +331,7 @@ def _resolve_init_func(func_name: str, init_func: Callable | str) -> INIT_FUNCTI
 
     # Handle string inputs (lookup by name)
     elif isinstance(init_func, str):
-        available = AVAILABLE_INIT_FUNCTIONS.get(func_name, {})
+        available = _IO_AVAILABLE_INIT_FUNCTIONS.get(func_name, {})
         if init_func not in available:
             raise ValueError(
                 f"Unknown initialization method '{init_func}' for '{func_name}'.\n"
