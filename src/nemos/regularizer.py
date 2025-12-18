@@ -528,7 +528,7 @@ class ElasticNet(Regularizer):
             try:
                 _ratio = super()._validate_regularizer_strength(strength[1])
             except TypeError as e:
-                raise TypeError(e.msg.replace("strength", "ratio"))
+                raise TypeError(str(e).replace("strength", "ratio")) from None
 
             def _verify_ratio(ratio, extra_msg=""):
                 if jnp.any((ratio > 1) | (ratio < 0)):
@@ -572,7 +572,7 @@ class ElasticNet(Regularizer):
                 params, strength[1]
             )
         except ValueError as e:
-            raise ValueError(e.msg.replace("strength", "ratio"))
+            raise ValueError(str(e).replace("strength", "ratio")) from None
 
         return _strength, _ratio
 
