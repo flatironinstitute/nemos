@@ -312,6 +312,7 @@ def test_svrg_glm_update(
             np.array([[0, 1, 0, 1, 1], [1, 0, 1, 0, 0]]).astype(float),
         ),
         ("GroupLasso", "ProximalGradient", np.array([[1, 1, 1, 1, 1]]).astype(float)),
+        ("Ridge", "GradientDescent", None),
         ("Ridge", "SVRG", None),
         ("UnRegularized", "SVRG", None),
     ],
@@ -324,7 +325,7 @@ def test_svrg_glm_update(
     "glm_class",
     [nmo.glm.GLM, nmo.glm.PopulationGLM],
 )
-def test_svrg_glm_fit(
+def test_maxiter_is_respected(
     glm_class,
     regularizer_name,
     solver_name,
