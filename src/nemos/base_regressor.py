@@ -488,12 +488,6 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         # validate input and params consistency
         init_params = self._validator.validate_and_cast_params(init_params)
 
-        # validate regularizer strength and params consistency
-        self.regularizer_strength = (
-            self.regularizer._validate_regularizer_strength_structure(
-                init_params, self.regularizer_strength
-            )
-        )
 
         # validate input and params consistency
         self._validator.validate_consistency(init_params, X=X, y=y)

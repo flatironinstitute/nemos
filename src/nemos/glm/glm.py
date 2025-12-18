@@ -656,6 +656,13 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             getattr(self, "_feature_mask", None), init_params
         )
 
+        # validate regularizer strength and params consistency
+        self.regularizer_strength = (
+            self.regularizer._validate_regularizer_strength_structure(
+                init_params, self.regularizer_strength
+            )
+        )
+
         # filter for non-nans, grab data if needed
         data, y = self._preprocess_inputs(X, y)
 

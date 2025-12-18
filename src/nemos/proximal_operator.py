@@ -171,7 +171,7 @@ def prox_group_lasso(
     return (weights * (factor @ mask + not_regularized)).T.reshape(shape)
 
 
-def prox_ridge(x: Any, l2reg: Any, scaling=1.0) -> Any:
+def prox_ridge(x: Any, strength: Any, scaling=1.0) -> Any:
     r"""Proximal operator for the squared l2 norm.
 
     Minimizes the following function:
@@ -185,8 +185,8 @@ def prox_ridge(x: Any, l2reg: Any, scaling=1.0) -> Any:
     ----------
     x :
         Input pytree.
-    l2reg :
-        Regularization strength, pytree with the same structure as `x`. Default is None.
+    strength :
+        Regularization strength, pytree with the same structure as `x`.
     scaling :
         A scaling factor. Default is 1.0.
 
@@ -202,7 +202,7 @@ def prox_ridge(x: Any, l2reg: Any, scaling=1.0) -> Any:
     return jax.tree_util.tree_map(fun, x, l2reg)
 
 
-def prox_lasso(x: Any, l1reg: Any, scaling: float = 1.0) -> Any:
+def prox_lasso(x: Any, strength: Any, scaling: float = 1.0) -> Any:
     r"""Proximal operator for the l1 norm, i.e., soft-thresholding operator.
 
     Minimizes the following function:
@@ -218,8 +218,8 @@ def prox_lasso(x: Any, l1reg: Any, scaling: float = 1.0) -> Any:
     ----------
     x :
         Input pytree.
-    l1reg :
-        Regularization strength, pytree with the same structure as `x`. Default is None.
+    strength :
+        Regularization strength, pytree with the same structure as `x`.
     scaling :
         A scaling factor. Default is 1.0.
 
@@ -235,7 +235,7 @@ def prox_lasso(x: Any, l1reg: Any, scaling: float = 1.0) -> Any:
     return jax.tree_util.tree_map(fun, x, l1reg)
 
 
-def prox_elastic_net(x: Any, hyperparams: Tuple[Any, Any], scaling: float = 1.0) -> Any:
+def prox_elastic_net(x: Any, strength: Any, ratio: Any, scaling: float = 1.0) -> Any:
     r"""Proximal operator for the elastic net.
 
     .. math::
@@ -249,9 +249,10 @@ def prox_elastic_net(x: Any, hyperparams: Tuple[Any, Any], scaling: float = 1.0)
     ----------
     x :
         Input pytree.
-    hyperparams :
-        A tuple, where both ``hyperparams[0]`` and ``hyperparams[1]`` can be either floats or pytrees with the same
-        structure as ``x``.
+    strength :
+        Regularization strength, pytree with the same structure as `x`.
+    ratio :
+        Regularization ratio, pytree with the same structure as `x`.
     scaling :
         A scaling factor.
 
@@ -260,8 +261,8 @@ def prox_elastic_net(x: Any, hyperparams: Tuple[Any, Any], scaling: float = 1.0)
     :
         Output pytree, with the same structure as ``x``.
     """
-    lam = jax.tree_util.tree_map(lambda strength, ratio: strength * ratio, *hyperparams)
-    gam = jax.tree_util.tree_map(lambda ratio: (1 - ratio) / ratio, hyperparams[1])
+    lam = jax.tree_util.tree_map(lambda strength, ratio: strength * ratio, strength, ratio)
+    gam = jax.tree_util.tree_map(lambda ratio: (1 - ratio) / ratio, ratio)
 
     def prox_l1(u, lambd):
         return jnp.sign(u) * jax.nn.relu(jnp.abs(u) - lambd)
