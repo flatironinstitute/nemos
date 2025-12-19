@@ -16,6 +16,7 @@ from conftest import is_population_model
 from numba import njit
 
 import nemos as nmo
+from nemos import inverse_link_function_utils
 from nemos._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
 from nemos.glm.validation import GLMValidator, PopulationGLMValidator
 from nemos.inverse_link_function_utils import LINK_NAME_TO_FUNC
@@ -94,6 +95,20 @@ INSTANTIATE_MODEL_AND_SIMULATE_LINK = [
 ]
 
 
+def _add_zeros(y):
+    """Set some elements to zero so Bernoulli observation model doesn't raise."""
+    zero_ind = np.random.choice(y.shape[0], y.shape[0] // 10, replace=False)
+    y[zero_ind, ...] = 0
+    return y
+
+
+def _zero_init_params(X, y):
+    return (
+        jax.tree_util.tree_map(lambda x: jnp.zeros((*x[0].shape, *y.shape[1:])), X),
+        jnp.zeros(jnp.nanmean(y, axis=0).shape),
+    )
+
+
 def test_all_defaults_assigned():
     PARS_WITHOUT_DEFAULTS = {}
     for k, cls in MODEL_REGISTRY.items():
@@ -133,7 +148,7 @@ def test_validate_lower_dimensional_data_X(instantiate_base_regressor_subclass):
         y = y[None]
     err_msg = "X must be 2-dimensional"
     with pytest.raises(ValueError, match=err_msg):
-        model._validate(X, y, model._model_specific_initialization(X, y))
+        model._validate(X, y, _zero_init_params(X, y))
 
 
 @pytest.mark.parametrize(
@@ -152,7 +167,7 @@ def test_preprocess_fit_higher_dimensional_data_y(instantiate_base_regressor_sub
     else:
         err_msg = "y must be 1-dimensional"
     with pytest.raises(ValueError, match=err_msg):
-        model._validate(X, y, model._model_specific_initialization(X, y))
+        model._validate(X, y, _zero_init_params(X, y))
 
 
 @pytest.mark.parametrize(
@@ -168,8 +183,8 @@ def test_validate_higher_dimensional_data_X(instantiate_base_regressor_subclass)
     y = jnp.array([1, 1])
     if is_population_model(model):
         y = y[None]
-    with pytest.raises(ValueError, match="X must be 2-dimensional\\."):
-        model._validate(X, y, model._model_specific_initialization(X, y))
+    with pytest.raises(ValueError, match="X must be two-dimensional"):
+        model._validate(X, y, _zero_init_params(X, y))
 
 
 @pytest.mark.parametrize(
@@ -315,6 +330,7 @@ class TestModelCommons:
         fixture = instantiate_base_regressor_subclass
         X, model, params = fixture.X, fixture.model, fixture.params
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        y = _add_zeros(y)
         n_groups = 2
         n_features = X.shape[1]
         mask = np.ones((n_groups, n_features), dtype=float)
@@ -338,7 +354,7 @@ class TestModelCommons:
         fixture = instantiate_base_regressor_subclass
         X, model = fixture.X, fixture.model
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
-        y[::5] = 0  # bernoulli cannot be initialized to all 1s (expit^-1(1) = inf)
+        y = _add_zeros(y)
         n_groups = 2
         n_features = X.shape[1]
         mask = np.ones((n_groups, n_features), dtype=float)
@@ -350,6 +366,39 @@ class TestModelCommons:
             regularizer_strength=1.0,
         )
         model.fit(X, y)
+
+    @pytest.mark.parametrize(
+        "fill_val, expectation",
+        [
+            (0, does_not_raise()),
+            (
+                jnp.inf,
+                pytest.raises(
+                    ValueError, match="At least a NaN or an Inf at all sample points"
+                ),
+            ),
+            (
+                jnp.nan,
+                pytest.raises(
+                    ValueError, match="At least a NaN or an Inf at all sample points"
+                ),
+            ),
+        ],
+    )
+    @pytest.mark.solver_related
+    def test_initialize_solver_all_invalid_X(
+        self, fill_val, expectation, instantiate_base_regressor_subclass
+    ):
+        fixture = instantiate_base_regressor_subclass
+        X, model, true_params = fixture.X, fixture.model, fixture.params
+        y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        y = _add_zeros(y)
+        X.fill(fill_val)
+        with expectation:
+            params = model.initialize_params(X, y)
+            init_state = model.initialize_state(X, y, params)
+            # optimistix solvers do not have a velocity attr
+            assert getattr(init_state, "velocity", params) == params
 
     @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso", "ElasticNet"])
     def test_reg_strength_reset(self, reg, instantiate_base_regressor_subclass):
@@ -495,6 +544,8 @@ class TestModelCommons:
         fixture = instantiate_base_regressor_subclass
         X, model, true_params = fixture.X, fixture.model, fixture.params
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        y = _add_zeros(y)
+
         assert model.solver_init_state is None
         assert model.solver_update is None
         assert model.solver_run is None
@@ -763,7 +814,6 @@ class TestObservationModel:
     indirect=True,
 )
 class TestModelSimulation:
-
     @pytest.mark.parametrize(
         "n_params",
         [0, 1, 2, 3, 4],
