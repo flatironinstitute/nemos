@@ -631,7 +631,6 @@ class GroupLasso(Regularizer):
         mask: Union[NDArray, jnp.ndarray] = None,
     ):
         super().__init__()
-        self._proximal_operator = prox_elastic_net
         self.mask = mask
 
     @property
