@@ -199,7 +199,7 @@ def prox_ridge(x: Any, strength: Any, scaling=1.0) -> Any:
     def fun(u, v):
         return u * (1.0 / (1 + scaling * v))
 
-    return jax.tree_util.tree_map(fun, x, l2reg)
+    return jax.tree_util.tree_map(fun, x, strength)
 
 
 def prox_lasso(x: Any, strength: Any, scaling: float = 1.0) -> Any:
@@ -232,7 +232,7 @@ def prox_lasso(x: Any, strength: Any, scaling: float = 1.0) -> Any:
     def fun(u, v):
         return jnp.sign(u) * jax.nn.relu(jnp.abs(u) - v * scaling)
 
-    return jax.tree_util.tree_map(fun, x, l1reg)
+    return jax.tree_util.tree_map(fun, x, strength)
 
 
 def prox_elastic_net(x: Any, strength: Any, ratio: Any, scaling: float = 1.0) -> Any:
