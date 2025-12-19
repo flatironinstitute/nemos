@@ -11,7 +11,7 @@ from ..typing import Pytree
 from ._abstract_solver import OptimizationInfo, Params
 from ._solver_adapter import SolverAdapter
 
-DEFAULT_ATOL = 1e-8
+DEFAULT_ATOL = 1e-4
 DEFAULT_RTOL = 0.0
 DEFAULT_MAX_STEPS = 100_000
 
@@ -52,7 +52,7 @@ class OptimistixConfig:
     # sets if the minimisation throws an error if an iterative solver runs out of steps
     throw: bool = False
     # norm used in the Cauchy convergence criterion. Required by all Optimistix solvers.
-    norm: Callable = optx.max_norm
+    norm: Callable = optx.two_norm
     # way of autodifferentiation: https://docs.kidger.site/optimistix/api/adjoints/
     adjoint: optx.AbstractAdjoint = optx.ImplicitAdjoint()
     # whether the objective function returns any auxiliary results.
@@ -99,8 +99,8 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
 
         if self._proximal:
             loss_fn = unregularized_loss
-            self.prox = regularizer.get_proximal_operator()
-            self.regularizer_strength = regularizer_strength
+            solver_init_kwargs["prox"] = regularizer.get_proximal_operator()
+            solver_init_kwargs["regularizer_strength"] = regularizer_strength
         else:
             loss_fn = regularizer.penalized_loss(
                 unregularized_loss, regularizer_strength
@@ -116,6 +116,9 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
             if kw in solver_init_kwargs:
                 user_args[kw] = solver_init_kwargs.pop(kw)
         self.config = OptimistixConfig(maxiter=maxiter, **user_args)
+
+        # make custom adjustments such as adding a derived "while_loop_kind" parameter for FISTA
+        solver_init_kwargs = self.adjust_solver_init_kwargs(solver_init_kwargs)
 
         self._solver = self._solver_cls(
             atol=tol,
@@ -189,6 +192,10 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
         )
         all_arguments = own_and_solver_args | common_optx_arguments
 
+        # prox is read from the regularizer, not provided as a solver argument
+        if cls._proximal:
+            all_arguments.remove("prox")
+
         return all_arguments
 
     @classmethod
@@ -215,6 +222,25 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
             converged=state.terminate.item(),  # pyright: ignore
             reached_max_steps=(num_steps == self.maxiter),
         )
+
+    def adjust_solver_init_kwargs(
+        self, solver_init_kwargs: dict[str, Any]
+    ) -> dict[str, Any]:
+        """
+        Optionally adjust the parameters (e.g. derive from self.config) for instantiating the wrapped solver.
+
+        Parameters
+        ----------
+        solver_init_kwargs:
+            Original keyword arguments that would be passed to _solver_cls.__init__.
+
+        Returns
+        -------
+        dict with argument names of _solver_cls.__init__ as keys and
+        their corresponding values as values.
+        Default implementation just returns solver_init_kwargs.
+        """
+        return solver_init_kwargs
 
 
 class OptimistixBFGS(OptimistixAdapter):
