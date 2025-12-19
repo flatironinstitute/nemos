@@ -448,7 +448,14 @@ def forward_backward(
     )
 
 
-@partial(jax.jit, static_argnames=["m_step_fn_glm_params", "m_step_fn_glm_scale"])
+@partial(
+    jax.jit,
+    static_argnames=[
+        "m_step_fn_glm_params",
+        "m_step_fn_glm_scale",
+        "inverse_link_function",
+    ],
+)
 def run_m_step(
     X: Array,
     y: Array,

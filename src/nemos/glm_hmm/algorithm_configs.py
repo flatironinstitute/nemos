@@ -123,7 +123,7 @@ def posterior_weighted_glm_negative_log_likelihood(
     """
     predicted_rate = compute_rate_per_state(X, glm_params, inverse_link_function)
     return _posterior_weighted_objective_impl(
-        predicted_rate, y, posteriors, negative_log_likelihood_func
+        y, predicted_rate, posteriors, negative_log_likelihood_func
     )
 
 
