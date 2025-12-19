@@ -351,9 +351,11 @@ class TestGammaObservations:
         if not np.allclose(dev, dev_model):
             raise ValueError("Deviance doesn't match statsmodels!")
 
-    @pytest.mark.parametrize("scale", [1., 2., 4.])
+    @pytest.mark.parametrize("scale", [1.0, 2.0, 4.0])
     @pytest.mark.requiresx64
-    def test_loglikelihood_against_statsmodels(self, gammaGLM_model_instantiation, scale):
+    def test_loglikelihood_against_statsmodels(
+        self, gammaGLM_model_instantiation, scale
+    ):
         """
         Compare log-likelihood to scipy.
         Assesses if the model estimates are close to statsmodels' results.
