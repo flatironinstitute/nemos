@@ -208,8 +208,10 @@ def prepare_solver_for_m_step_single_neuron(
     """
     (coef, intercept) = glm_params
     likelihood = jax.vmap(
-        lambda x, z: obs.likelihood(x, z, aggregate_sample_scores=lambda w: w),
-        in_axes=(None, 1),
+        lambda x, z, s: obs.likelihood(
+            x, z, scale=s, aggregate_sample_scores=lambda w: w
+        ),
+        in_axes=(None, 1, 0),
         out_axes=1,
     )
     gammas, xis, _, _, _, _ = forward_backward(
@@ -218,6 +220,7 @@ def prepare_solver_for_m_step_single_neuron(
         initial_prob,
         transition_prob,
         GLMParams(coef, intercept),
+        scale=jnp.ones_like(intercept),
         log_likelihood_func=likelihood,
         inverse_link_function=obs.default_inverse_link_function,
         is_new_session=new_sess.astype(bool),
