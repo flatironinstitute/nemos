@@ -278,7 +278,7 @@ class UnRegularized(Regularizer):
         params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
         strength: Union[None, float],
     ):
-        return None
+        return [None] * len(params.regularizable_subtrees())
 
     def _penalty_on_subtree(
         self,
