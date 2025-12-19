@@ -549,7 +549,45 @@ def _em_step(
     m_step_fn_glm_scale: Callable,
     is_new_session: Array,
 ) -> EMCarry:
-    """Single EM iteration step."""
+    """
+    Execute a single EM iteration combining E-step and M-step.
+
+    Performs one complete EM cycle: computes posterior distributions over
+    latent states (E-step), then updates all model parameters to maximize
+    the expected complete-data log-likelihood (M-step).
+
+    Parameters
+    ----------
+    carry :
+        Tuple of current parameters and state:
+        ``((log_init_prob, log_trans_matrix, glm_params, glm_scale), previous_state)``
+    X :
+        Design matrix of observations.
+    y :
+        Target responses.
+    inverse_link_function :
+        Function mapping linear predictors to predicted rates.
+    likelihood_func :
+        Log-likelihood function for the E-step.
+    m_step_fn_glm_params :
+        M-step update function for GLM coefficients and intercepts.
+    m_step_fn_glm_scale :
+        M-step update function for scale parameters.
+    is_new_session :
+        Boolean array marking session boundaries.
+
+    Returns
+    -------
+    carry :
+        Updated tuple of parameters and state with new log-likelihood values:
+        ``((log_init_prob, log_trans_matrix, glm_params, glm_scale), new_state)``
+
+    Notes
+    -----
+    This function is designed to be called repeatedly by ``eqx.internal.while_loop``
+    until convergence criteria are met. The carry structure allows JAX to efficiently
+    compile and execute the EM loop.
+    """
 
     (log_init_prob, log_trans_matrix, glm_params, glm_scale), previous_state = carry
 

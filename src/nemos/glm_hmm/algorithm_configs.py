@@ -30,7 +30,43 @@ def _posterior_weighted_objective_impl(
     negative_log_likelihood_func: Callable,
     scale: Array | None = None,
 ):
-    """Core implementation of posterior-weighted objective computation."""
+    """
+    Core implementation of posterior-weighted negative log-likelihood computation.
+
+    Computes the expected negative log-likelihood by weighting sample-wise NLL
+    values with posterior probabilities over states. This shared implementation
+    is used by both coefficient/intercept and scale optimization objectives.
+
+    Parameters
+    ----------
+    y :
+        Target observations, shape ``(n_time_bins,)`` for single observations
+        or ``(n_time_bins, n_neurons)`` for population data.
+    predicted_rate :
+        Predicted mean responses for each state, shape ``(n_time_bins, n_states)``
+        for single observations or ``(n_time_bins, n_neurons, n_states)`` for
+        population data.
+    posteriors :
+        Posterior probabilities over states, shape ``(n_time_bins, n_states)``.
+    negative_log_likelihood_func :
+        Function computing negative log-likelihood. Must accept ``(y, predicted_rate)``
+        or ``(y, predicted_rate, scale)`` depending on whether scale is provided.
+    scale :
+        Optional scale parameters for distributions that require them,
+        shape ``(n_states,)`` or ``(n_neurons, n_states)``.
+
+    Returns
+    -------
+    weighted_nll :
+        Scalar posterior-weighted negative log-likelihood summed over all
+        time bins, states, and (if applicable) neurons.
+
+    Notes
+    -----
+    For population GLMs with multiple neurons, the function automatically
+    sums negative log-likelihoods across neurons before weighting by posteriors,
+    assuming conditional independence of neurons given the latent state.
+    """
     if scale is None:
         nll = negative_log_likelihood_func(y, predicted_rate)
     else:
@@ -323,7 +359,35 @@ def prepare_objective_mstep_numerical_scale(
 def get_analytical_scale_update(
     observation_model: Observations, is_population_glm: bool
 ) -> None | Callable:
-    """Get the analytical update from the registry."""
+    """
+    Retrieve analytical M-step update function for scale parameters if available.
+
+    Checks if the observation model has a registered closed-form solution for
+    scale parameter updates. If available, returns a configured update function
+    with the appropriate negative log-likelihood already bound.
+
+    Parameters
+    ----------
+    observation_model :
+        The observation model instance (e.g., GaussianObservations, PoissonObservations).
+    is_population_glm :
+        Whether this is a population GLM with multiple neurons.
+
+    Returns
+    -------
+    update_func :
+        Configured analytical update function with signature
+        ``(scale, y, rate, posteriors) -> optimized_scale``,
+        or None if no analytical update exists for this observation model.
+
+    Notes
+    -----
+    Currently supported analytical updates:
+    - GaussianObservations: Closed-form variance update
+
+    Observation models without analytical updates (e.g., PoissonObservations,
+    BernoulliObservations) should use numerical optimization instead.
+    """
     if type(observation_model) in _ANALYTICAL_SCALE_UPDATE:
         update = _ANALYTICAL_SCALE_UPDATE[type(observation_model)]
         nll_fnc = prepare_nll_mstep_analytical_scale(
