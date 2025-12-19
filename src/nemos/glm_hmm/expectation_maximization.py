@@ -462,10 +462,10 @@ def run_m_step(
     log_posteriors: Array,
     log_joint_posterior: Array,
     glm_params: GLMParams,
-    scale: Array,
+    glm_scale: Array,
     is_new_session: Array,
     m_step_fn_glm_params: Callable[[GLMParams, Array, Array, Array], GLMParams],
-    m_step_fn_glm_scale: Callable[[Array, Array, Array, Array], Array],
+    m_step_fn_glm_scale: Callable[[Array, Array, Array, Array], Array] | None,
     inverse_link_function: Callable[[Array], Array],
     dirichlet_prior_alphas_init_prob: Array | None = None,
     dirichlet_prior_alphas_transition: Array | None = None,
@@ -536,10 +536,13 @@ def run_m_step(
     predicted_rate = compute_rate_per_state(
         X, optimized_projection_weights, inverse_link_function=inverse_link_function
     )
-    scale, state_scale = m_step_fn_glm_scale(scale, y, predicted_rate, posteriors)
+    if m_step_fn_glm_scale is not None:
+        glm_scale, state_scale = m_step_fn_glm_scale(
+            glm_scale, y, predicted_rate, posteriors
+        )
     return (
         optimized_projection_weights,
-        scale,
+        glm_scale,
         jnp.log(initial_prob),
         jnp.log(transition_prob),
         state,
@@ -616,7 +619,7 @@ def _em_step(
         log_posteriors=log_posteriors,
         log_joint_posterior=log_joint_posterior,
         glm_params=glm_params,
-        scale=glm_scale,
+        glm_scale=glm_scale,
         is_new_session=is_new_session,
         m_step_fn_glm_params=m_step_fn_glm_params,
         m_step_fn_glm_scale=m_step_fn_glm_scale,
@@ -682,7 +685,7 @@ def em_glm_hmm(
     maxiter: int = 10**3,
     tol: float = 1e-8,
     check_convergence: Callable = check_log_likelihood_increment,
-) -> Tuple[Array, Array, Array, Array, Tuple[Array, Array], GLMHMMState]:
+) -> Tuple[Array, Array, Array, Array, Tuple[Array, Array], Array, GLMHMMState]:
     """
     Perform EM optimization for a GLM-HMM.
 
@@ -764,7 +767,7 @@ def em_glm_hmm(
         glm_params,
         glm_scale,
     ), state
-    (log_initial_prob, log_transition_matrix, glm_params), state = (
+    (log_initial_prob, log_transition_matrix, glm_params, glm_scale), state = (
         eqx.internal.while_loop(
             stopping_condition_while,
             em_step_fn_while,
@@ -781,6 +784,7 @@ def em_glm_hmm(
         log_initial_prob,
         log_transition_matrix,
         glm_params,
+        glm_scale,
         inverse_link_function,
         likelihood_func,
         is_new_session,
@@ -792,6 +796,7 @@ def em_glm_hmm(
         jnp.exp(log_initial_prob),
         jnp.exp(log_transition_matrix),
         glm_params,
+        glm_scale,
         state,
     )
 
