@@ -271,7 +271,7 @@ class UnRegularized(Regularizer):
         super().__init__()
 
     def _validate_regularizer_strength(self, strength: None):
-        return None
+        return strength
 
     def _validate_regularizer_strength_structure(
         self,
