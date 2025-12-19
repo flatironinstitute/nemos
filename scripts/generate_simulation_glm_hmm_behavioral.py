@@ -20,11 +20,13 @@ import numpy as np
 # IMPORTS
 ###
 import nemos as nmo
+from nemos.glm_hmm.algorithm_configs import (
+    prepare_ll_estep_likelihood,
+    prepare_nll_mstep_numerical_params,
+)
 from nemos.glm_hmm.expectation_maximization import (
     em_glm_hmm,
     forward_backward,
-    hmm_negative_log_likelihood,
-    prepare_likelihood_func,
 )
 
 ###
@@ -237,24 +239,13 @@ def fit_glm_hmm_with_em(
     is_population_glm = true_projection_weights.ndim > 2
 
     observation_model = nmo.observation_models.BernoulliObservations()
-    likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
-        is_population_glm,
-        observation_model.log_likelihood,
-        observation_model._negative_log_likelihood,
-    )
+    likelihood_func = prepare_ll_estep_likelihood(is_population_glm, observation_model)
     inverse_link_function = observation_model.default_inverse_link_function
-
-    def partial_hmm_negative_log_likelihood(
-        weights, design_matrix, observations, posterior_prob
-    ):
-        return hmm_negative_log_likelihood(
-            weights,
-            X=design_matrix,
-            y=observations,
-            posteriors=posterior_prob,
-            inverse_link_function=inverse_link_function,
-            negative_log_likelihood_func=negative_log_likelihood_func,
-        )
+    partial_hmm_negative_log_likelihood = prepare_nll_mstep_numerical_params(
+        is_population_glm,
+        observation_model,
+        observation_model.default_inverse_link_function,
+    )
 
     # use the BaseRegressor initialize_solver
     regularization = "UnRegularized"
