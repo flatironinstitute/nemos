@@ -165,4 +165,4 @@ def _m_step_scale_gaussian_observations(
 
     optimized_scale = jnp.squeeze(expected_nll / sum_posteriors)
 
-    return optimized_scale
+    return optimized_scale, None
