@@ -37,7 +37,7 @@ class TestAnalyticMStepScale:
         expected_negative_log_likelihood_scale = (
             prepare_objective_mstep_numerical_scale(
                 is_population_glm=is_population_glm,
-                obs=obs,
+                observation_model=obs,
             )
         )
         init_proba = jnp.ones(n_states) / n_states
@@ -80,5 +80,5 @@ class TestAnalyticMStepScale:
             args=(y, rate_per_state, jnp.exp(log_gammas_nemos)),
         )
         update = get_analytical_scale_update(obs, is_population_glm=is_population_glm)
-        update_solution = update(None, y, rate_per_state, jnp.exp(log_gammas_nemos))
+        update_solution, _ = update(None, y, rate_per_state, jnp.exp(log_gammas_nemos))
         np.testing.assert_allclose(solution.value, update_solution)

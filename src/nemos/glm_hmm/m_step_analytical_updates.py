@@ -1,7 +1,7 @@
 """Implementations of analyzing M-step updates."""
 
 from functools import partial
-from typing import Optional
+from typing import Optional, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -104,7 +104,7 @@ def _analytical_m_step_transition_prob(
 @partial(jax.jit, static_argnames=["negative_log_likelihood_func"])
 def _m_step_scale_gaussian_observations(
     scale, y, rate, posteriors, negative_log_likelihood_func
-):
+) -> Tuple[jnp.ndarray, None]:
     r"""
     Analytical M-step update for Gaussian observation model scale (variance).
 
