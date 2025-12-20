@@ -3,7 +3,6 @@ from typing import Tuple
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from optimistix import LBFGS, minimise
 
 import nemos as nmo
 import nemos.regularizer
