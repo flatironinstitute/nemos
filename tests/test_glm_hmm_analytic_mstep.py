@@ -18,7 +18,16 @@ from nemos.glm_hmm.utils import compute_rate_per_state
 from nemos.solvers import JaxoptLBFGS
 
 
-def generate_data_gaussian(glm_params: GLMParams, y_shape: Tuple[int, ...]):
+@pytest.fixture
+def generate_data_gaussian(request):
+    """
+    Fixture to generate Gaussian GLM-HMM data.
+
+    Uses indirect parametrization to receive (glm_params, y_shape, inv_link_func) and generates
+    data once per parameter combination for all tests in the class.
+    """
+    glm_params, y_shape, inv_link_func = request.param
+
     np.random.seed(111)
     X = np.random.randn(20, 2)
     n_states = glm_params.intercept.shape[-1]
@@ -70,7 +79,7 @@ def generate_data_gaussian(glm_params: GLMParams, y_shape: Tuple[int, ...]):
         glm_params,
         glm_scale=jnp.ones((*y_shape, n_states)).astype(float),
         log_likelihood_func=log_likelihood_fn,
-        inverse_link_function=obs.default_inverse_link_function,
+        inverse_link_function=inv_link_func,
         is_new_session=None,
     )
     return (
@@ -81,21 +90,25 @@ def generate_data_gaussian(glm_params: GLMParams, y_shape: Tuple[int, ...]):
         expected_negative_log_likelihood_scale,
         log_gammas,
         log_xis,
+        glm_params,
+        inv_link_func,
     )
 
 
-@pytest.mark.parametrize("inv_link_func", [lambda x: x, jnp.exp])
 @pytest.mark.parametrize(
-    "glm_params, y_shape",
+    "generate_data_gaussian",
     [
-        (GLMParams(np.random.randn(2, 3), np.random.randn(3)), ()),
-        (GLMParams(np.random.randn(2, 4, 3), np.random.randn(4, 3)), (4,)),
+        (GLMParams(np.random.randn(2, 3), np.random.randn(3)), (), lambda x: x),
+        (GLMParams(np.random.randn(2, 3), np.random.randn(3)), (), jnp.exp),
+        (GLMParams(np.random.randn(2, 4, 3), np.random.randn(4, 3)), (4,), lambda x: x),
+        (GLMParams(np.random.randn(2, 4, 3), np.random.randn(4, 3)), (4,), jnp.exp),
     ],
+    indirect=True,
 )
 @pytest.mark.requires_x64
 class TestAnalyticMStepScale:
 
-    def test_gaussian_obs_mstep(self, inv_link_func, glm_params, y_shape):
+    def test_gaussian_obs_mstep(self, generate_data_gaussian):
         (
             X,
             y,
@@ -104,7 +117,9 @@ class TestAnalyticMStepScale:
             expected_negative_log_likelihood_scale,
             log_gammas_nemos,
             _,
-        ) = generate_data_gaussian(glm_params, y_shape)
+            glm_params,
+            inv_link_func,
+        ) = generate_data_gaussian
 
         def objective(scale, args):
             return expected_negative_log_likelihood_scale(scale, *args)
@@ -128,9 +143,7 @@ class TestAnalyticMStepScale:
         )
         np.testing.assert_allclose(numerical_update, analytical_update, atol=1e-7)
 
-    def test_gaussian_obs_mstep_via_run_m_step(
-        self, inv_link_func, glm_params, y_shape
-    ):
+    def test_gaussian_obs_mstep_via_run_m_step(self, generate_data_gaussian):
         np.random.seed(111)
         (
             X,
@@ -140,7 +153,9 @@ class TestAnalyticMStepScale:
             expected_negative_log_likelihood_scale,
             log_gammas,
             log_xis,
-        ) = generate_data_gaussian(glm_params, y_shape)
+            glm_params,
+            inv_link_func,
+        ) = generate_data_gaussian
         update = get_analytical_scale_update(obs, is_population_glm=is_population_glm)
         nll_fcn = prepare_nll_mstep_numerical_params(
             is_population_glm=is_population_glm,
@@ -173,7 +188,7 @@ class TestAnalyticMStepScale:
             m_step_fn_glm_params=solver.run,
             glm_scale=jnp.ones_like(glm_params.intercept),
             m_step_fn_glm_scale=update,
-            inverse_link_function=obs.default_inverse_link_function,
+            inverse_link_function=inv_link_func,
             dirichlet_prior_alphas_transition=None,
             dirichlet_prior_alphas_init_prob=None,
         )[1]
@@ -187,7 +202,7 @@ class TestAnalyticMStepScale:
             m_step_fn_glm_params=solver.run,
             glm_scale=jnp.ones_like(glm_params.intercept),
             m_step_fn_glm_scale=solver_scale.run,
-            inverse_link_function=obs.default_inverse_link_function,
+            inverse_link_function=inv_link_func,
             dirichlet_prior_alphas_transition=None,
             dirichlet_prior_alphas_init_prob=None,
         )[1]
