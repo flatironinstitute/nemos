@@ -518,6 +518,8 @@ def run_m_step(
     -------
     optimized_projection_weights:
         Updated projection weights after optimization.
+    glm_scale:
+        Updated GLM scale.
     log_initial_prob:
         Updated initial state distribution in log-space.
     log_transition_prob:
@@ -704,7 +706,7 @@ def em_glm_hmm(
     maxiter: int = 10**3,
     tol: float = 1e-8,
     check_convergence: Callable = check_log_likelihood_increment,
-) -> Tuple[Array, Array, Array, Array, Tuple[Array, Array], Array, GLMHMMState]:
+) -> Tuple[Array, Array, Array, Array, GLMParams, Array, GLMHMMState]:
     """
     Perform EM optimization for a GLM-HMM.
 
@@ -751,13 +753,15 @@ def em_glm_hmm(
         Posterior probabilities over states for each observation.
     joint_posterior:
         Joint posterior probabilities over pairs of states.
-    final_initial_prob:
+    initial_prob:
         Final estimate of the initial state distribution.
-    final_transition_prob:
+    transition_matrix:
         Final estimate of the transition matrix.
-    final_projection_weights:
-        Final optimized projection weights.
-    final_state:
+    glm_params:
+        Final optimized glm parameters.
+    glm_scale:
+        Final scale parameter.
+    state:
         Final GLMHMMState containing all parameters and diagnostics.
     """
     is_new_session = initialize_new_session(y.shape[0], is_new_session)
@@ -813,11 +817,15 @@ def em_glm_hmm(
         is_new_session,
     )
 
+    posteriors = jnp.exp(log_posteriors)
+    joint_posterior = jnp.exp(log_joint_posterior)
+    initial_prob = jnp.exp(log_initial_prob)
+    transition_matrix = jnp.exp(log_transition_matrix)
     return (
-        jnp.exp(log_posteriors),
-        jnp.exp(log_joint_posterior),
-        jnp.exp(log_initial_prob),
-        jnp.exp(log_transition_matrix),
+        posteriors,
+        joint_posterior,
+        initial_prob,
+        transition_matrix,
         glm_params,
         glm_scale,
         state,
