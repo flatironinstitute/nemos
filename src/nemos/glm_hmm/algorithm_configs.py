@@ -3,7 +3,6 @@
 from functools import partial
 from typing import Callable, Type
 
-import equinox as eqx
 import jax
 import jax.numpy as jnp
 
@@ -393,5 +392,15 @@ def get_analytical_scale_update(
         nll_fnc = prepare_nll_mstep_analytical_scale(
             is_population_glm, observation_model=observation_model
         )
-        return eqx.Partial(update, negative_log_likelihood_func=nll_fnc)
+
+        def scale_update_fn(current_scale, y, predicted_rate, posteriors):
+            return update(
+                current_scale,
+                y,
+                predicted_rate,
+                posteriors,
+                negative_log_likelihood_func=nll_fnc,
+            )
+
+        return scale_update_fn
     return None
