@@ -496,6 +496,8 @@ def run_m_step(
         Current GLM coefficients and intercept terms. Coefficients have shape ``(n_features, n_states)`` for
         single observation fits and ``(n_features, n_neurons, n_states)`` for population fits. Intercepts have
         shape ``(n_states,)`` for single observation fits and ``(n_states, n_neurons)`` for population fits.
+    glm_scale :
+        The scale parameter of the likelihood. Shape (n_states,) or (n_neurons, n_states).
     is_new_session:
         Boolean mask marking the first observation of each session. Shape ``(n_samples,)``.
     m_step_fn_glm_params:
