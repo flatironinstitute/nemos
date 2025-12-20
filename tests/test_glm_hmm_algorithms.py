@@ -11,7 +11,9 @@ from nemos.fetch import fetch_data
 from nemos.glm import GLM
 from nemos.glm.params import GLMParams
 from nemos.glm_hmm.algorithm_configs import (
+    posterior_weighted_glm_negative_log_likelihood,
     prepare_ll_estep_likelihood,
+    prepare_nll_mstep_analytical_scale,
     prepare_nll_mstep_numerical_params,
     prepare_objective_mstep_numerical_scale,
 )
@@ -235,27 +237,29 @@ def prepare_partial_hmm_nll_single_neuron(obs):
 
     Returns
     -------
-    partial_hmm_negative_log_likelihood
+    partial_posterior_weighted_glm_negative_log_likelihood
         Partial negative log-likelihood function for HMM.
     solver
         LBFGS solver instance configured for the HMM likelihood.
     """
-    partial_hmm_negative_log_likelihood = prepare_nll_mstep_numerical_params(
-        False,
-        observation_model=obs,
-        inverse_link_function=obs.default_inverse_link_function,
+    partial_posterior_weighted_glm_negative_log_likelihood = (
+        prepare_nll_mstep_numerical_params(
+            False,
+            observation_model=obs,
+            inverse_link_function=obs.default_inverse_link_function,
+        )
     )
 
     lbfgs_class = solver_registry["LBFGS"]
     solver = lbfgs_class(
-        partial_hmm_negative_log_likelihood,
+        partial_posterior_weighted_glm_negative_log_likelihood,
         UnRegularized(),
         0.0,
         False,
         tol=10 ** -8,
     )
 
-    return partial_hmm_negative_log_likelihood, solver
+    return partial_posterior_weighted_glm_negative_log_likelihood, solver
 
 
 def prepare_gammas_and_xis_for_m_step_single_neuron(
@@ -296,6 +300,7 @@ def prepare_gammas_and_xis_for_m_step_single_neuron(
         initial_prob,
         transition_prob,
         GLMParams(coef, intercept),
+        glm_scale=jnp.ones(initial_prob.shape[0]),
         log_likelihood_func=likelihood,
         inverse_link_function=obs.default_inverse_link_function,
         is_new_session=new_sess.astype(bool),
@@ -767,7 +772,7 @@ class TestLikelihood:
         ],
     )
     @pytest.mark.requires_x64
-    def test_hmm_negative_log_likelihood_regression(self, decorator):
+    def test_posterior_weighted_glm_negative_log_likelihood_regression(self, decorator):
         """
         Test HMM negative log-likelihood against reference implementation.
 
@@ -839,7 +844,7 @@ class TestMStep:
         # Initialize nemos observation model
         obs = BernoulliObservations()
 
-        partial_hmm_negative_log_likelihood, solver = (
+        partial_posterior_weighted_glm_negative_log_likelihood, solver = (
             prepare_partial_hmm_nll_single_neuron(obs)
         )
 
@@ -855,7 +860,7 @@ class TestMStep:
             np.log(gammas),
             np.log(xis),
             GLMParams(coef, intercept),
-            glm_scale=jnp.ones(intercept.shape[1]),
+            glm_scale=jnp.ones(intercept.shape[-1]),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
             m_step_fn_glm_scale=None,
@@ -866,13 +871,13 @@ class TestMStep:
         new_initial_prob_nemos = np.exp(log_initial_prob_nemos)
         new_transition_prob_nemos = np.exp(log_transition_prob_nemos)
 
-        n_ll_nemos = partial_hmm_negative_log_likelihood(
+        n_ll_nemos = partial_posterior_weighted_glm_negative_log_likelihood(
             optimized_projection_weights_nemos,
             X[:, 1:],
             y,
             gammas,
         )
-        n_ll_original = partial_hmm_negative_log_likelihood(
+        n_ll_original = partial_posterior_weighted_glm_negative_log_likelihood(
             GLMParams(opt_coef, opt_intercept),
             X[:, 1:],
             y,
@@ -963,7 +968,7 @@ class TestMStep:
             np.log(transition_prob),
         )
         xis = np.exp(log_xis)
-        partial_hmm_negative_log_likelihood, solver = (
+        partial_posterior_weighted_glm_negative_log_likelihood, solver = (
             prepare_partial_hmm_nll_single_neuron(obs)
         )
 
@@ -1034,6 +1039,7 @@ class TestMStep:
 
         (
             optimized_projection_weights_nemos,
+            _scale,
             log_initial_prob,
             log_transition_prob,
             state,
@@ -1045,6 +1051,9 @@ class TestMStep:
             GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
+            glm_scale=jnp.ones(intercept.shape[-1]),
+            m_step_fn_glm_scale=None,
+            inverse_link_function=obs.default_inverse_link_function,
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
@@ -1113,6 +1122,7 @@ class TestMStep:
 
         (
             optimized_projection_weights_nemos,
+            _scale,
             log_initial_prob,
             log_transition_prob,
             state,
@@ -1124,6 +1134,9 @@ class TestMStep:
             GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
+            glm_scale=jnp.ones(intercept.shape[-1]),
+            m_step_fn_glm_scale=None,
+            inverse_link_function=obs.default_inverse_link_function,
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
@@ -1156,6 +1169,7 @@ class TestMStep:
 
         (
             optimized_projection_weights_nemos,
+            _scale,
             log_initial_prob,
             log_transition_prob,
             state,
@@ -1167,6 +1181,9 @@ class TestMStep:
             GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
+            glm_scale=jnp.ones(intercept.shape[-1]),
+            m_step_fn_glm_scale=None,
+            inverse_link_function=obs.default_inverse_link_function,
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
@@ -1195,6 +1212,7 @@ class TestMStep:
 
         (
             prior_optimized_projection_weights_nemos,
+            _scale,
             prior_initial_prob,
             prior_transition_prob,
             state,
@@ -1206,11 +1224,15 @@ class TestMStep:
             GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
+            glm_scale=jnp.ones(intercept.shape[-1]),
+            m_step_fn_glm_scale=None,
+            inverse_link_function=obs.default_inverse_link_function,
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
         (
             optimized_projection_weights_nemos,
+            _scale,
             no_prior_initial_prob,
             no_prior_transition_prob,
             state,
@@ -1222,6 +1244,9 @@ class TestMStep:
             GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
+            glm_scale=jnp.ones(intercept.shape[-1]),
+            m_step_fn_glm_scale=None,
+            inverse_link_function=obs.default_inverse_link_function,
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=None,
         )
@@ -1255,6 +1280,7 @@ class TestMStep:
 
         (
             prior_optimized_projection_weights_nemos,
+            _scale,
             prior_initial_prob,
             prior_transition_prob,
             state,
@@ -1266,11 +1292,15 @@ class TestMStep:
             GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
+            glm_scale=jnp.ones(intercept.shape[-1]),
+            m_step_fn_glm_scale=None,
+            inverse_link_function=obs.default_inverse_link_function,
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
         (
             optimized_projection_weights_nemos,
+            _scale,
             no_prior_initial_prob,
             no_prior_transition_prob,
             state,
@@ -1282,6 +1312,9 @@ class TestMStep:
             GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
+            glm_scale=jnp.ones(intercept.shape[-1]),
+            m_step_fn_glm_scale=None,
+            inverse_link_function=obs.default_inverse_link_function,
             dirichlet_prior_alphas_transition=None,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
@@ -1343,12 +1376,13 @@ class TestMStep:
         obs = BernoulliObservations()
 
         # Prepare nll function & solver
-        partial_hmm_negative_log_likelihood, solver = (
+        partial_posterior_weighted_glm_negative_log_likelihood, solver = (
             prepare_partial_hmm_nll_single_neuron(obs)
         )
 
         (
             optimized_projection_weights_nemos,
+            _scale,
             log_initial_prob_nemos,
             log_transition_prob_nemos,
             state,
@@ -1360,6 +1394,9 @@ class TestMStep:
             GLMParams(coef, intercept),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
+            glm_scale=jnp.ones(intercept.shape[-1]),
+            m_step_fn_glm_scale=None,
+            inverse_link_function=obs.default_inverse_link_function,
             dirichlet_prior_alphas_init_prob=dirichlet_prior_initial_prob,
             dirichlet_prior_alphas_transition=dirichlet_prior_transition_prob,
         )
@@ -1369,7 +1406,7 @@ class TestMStep:
         new_transition_prob_nemos = np.exp(log_transition_prob_nemos)
 
         # NLL with nemos input
-        n_ll_nemos = partial_hmm_negative_log_likelihood(
+        n_ll_nemos = partial_posterior_weighted_glm_negative_log_likelihood(
             optimized_projection_weights_nemos,
             X[:, 1:],
             y,
@@ -1377,7 +1414,7 @@ class TestMStep:
         )
 
         # NLL with simulation input
-        n_ll_original = partial_hmm_negative_log_likelihood(
+        n_ll_original = partial_posterior_weighted_glm_negative_log_likelihood(
             GLMParams(opt_coef, opt_intercept),
             X[:, 1:],
             y,
@@ -1485,8 +1522,10 @@ class TestMStep:
         X_dummy = jnp.ones((n_timesteps, n_states))
         y_dummy = jnp.ones((n_timesteps,))
 
+        obs = PoissonObservations()
+
         # Run M-step
-        optimized_weights, log_init, log_trans, _ = run_m_step(
+        optimized_weights, _scale, log_init, log_trans, _ = run_m_step(
             X_dummy,
             y_dummy,
             log_posteriors,
@@ -1497,6 +1536,9 @@ class TestMStep:
                 GLMParams(dummy_coef, dummy_intercept),
                 None,
             ),
+            glm_scale=jnp.ones(dummy_intercept.shape[-1]),
+            m_step_fn_glm_scale=None,
+            inverse_link_function=obs.default_inverse_link_function,
             dirichlet_prior_alphas_init_prob=alphas_init,
             dirichlet_prior_alphas_transition=alphas_trans,
         )
@@ -1546,10 +1588,12 @@ class TestEMAlgorithm:
         likelihood_func = prepare_ll_estep_likelihood(y.ndim > 1, observation_model=obs)
 
         inverse_link_function = obs.default_inverse_link_function
-        partial_hmm_negative_log_likelihood = prepare_nll_mstep_numerical_params(
-            y.ndim > 1,
-            observation_model=obs,
-            inverse_link_function=inverse_link_function,
+        partial_posterior_weighted_glm_negative_log_likelihood = (
+            prepare_nll_mstep_numerical_params(
+                y.ndim > 1,
+                observation_model=obs,
+                inverse_link_function=inverse_link_function,
+            )
         )
 
         # use the BaseRegressor initialize_solver (this will be avaialble also in the GLMHHM class)
@@ -1557,7 +1601,7 @@ class TestEMAlgorithm:
         glm = GLM(
             observation_model=obs, regularizer=regularization, solver_name=solver_name
         )
-        glm._instantiate_solver(partial_hmm_negative_log_likelihood)
+        glm._instantiate_solver(partial_posterior_weighted_glm_negative_log_likelihood)
         solver_run = glm._solver_run
         # End of preparatory step.
         (
@@ -1648,20 +1692,19 @@ class TestEMAlgorithm:
         # Start of the preparatory steps that will be carried out by the GLMHMM class.
         is_population_glm = n_neurons > 1
         obs = BernoulliObservations()
-        likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
-            is_population_glm,
-            obs.log_likelihood,
-            obs._negative_log_likelihood,
+        likelihood_func = prepare_ll_estep_likelihood(is_population_glm, obs)
+        negative_log_likelihood_func = prepare_nll_mstep_analytical_scale(
+            is_population_glm, obs
         )
         inverse_link_function = obs.default_inverse_link_function
 
         # closure for the static callables
         # NOTE: this is the _predict_and_compute_loss equivalent (aka, what it is used in
         # the numerical M-step).
-        def partial_hmm_negative_log_likelihood(
+        def partial_posterior_weighted_glm_negative_log_likelihood(
             weights, design_matrix, observations, posterior_prob
         ):
-            return hmm_negative_log_likelihood(
+            return posterior_weighted_glm_negative_log_likelihood(
                 weights,
                 X=design_matrix,
                 y=observations,
@@ -1672,7 +1715,7 @@ class TestEMAlgorithm:
 
         # use the BaseRegressor initialize_solver (this will be avaialble also in the GLMHHM class)
         glm = GLM(observation_model=obs, solver_name="LBFGS")
-        glm._instantiate_solver(partial_hmm_negative_log_likelihood)
+        glm._instantiate_solver(partial_posterior_weighted_glm_negative_log_likelihood)
         solver_run = glm._solver_run
         # End of preparatory step.
 
@@ -1699,6 +1742,11 @@ class TestEMAlgorithm:
             jnp.log(init_pb),
             jnp.log(transition_pb),
             GLMParams(proj_weights[1:], proj_weights[:1]),
+            glm_scale=(
+                jnp.ones((y.shape[1], initial_prob.shape[0]))
+                if is_population_glm
+                else jnp.ones(initial_prob.shape[0])
+            ),
             log_likelihood_func=likelihood_func,
             inverse_link_function=obs.default_inverse_link_function,
         )
@@ -1715,6 +1763,7 @@ class TestEMAlgorithm:
             learned_initial_prob,
             learned_transition,
             learned_glm_params,
+            _scale,
             state,
         ) = em_glm_hmm(
             X[:, 1:],
@@ -1722,9 +1771,15 @@ class TestEMAlgorithm:
             initial_prob=init_pb,
             transition_prob=transition_pb,
             glm_params=GLMParams(proj_weights[1:], proj_weights[:1]),
+            glm_scale=(
+                jnp.ones((y.shape[1], transition_prob.shape[0]))
+                if is_population_glm
+                else jnp.ones(transition_prob.shape[0])
+            ),
             inverse_link_function=inverse_link_function,
             likelihood_func=likelihood_func,
             m_step_fn_glm_params=solver_run,
+            m_step_fn_glm_scale=None,
             tol=10**-10,
         )
         (
@@ -1740,6 +1795,7 @@ class TestEMAlgorithm:
             learned_initial_prob,
             learned_transition,
             learned_glm_params,
+            glm_scale=_scale,
             log_likelihood_func=likelihood_func,
             inverse_link_function=obs.default_inverse_link_function,
         )
@@ -1781,16 +1837,18 @@ def test_e_and_m_step_for_population(generate_data_multi_state_population):
         is_new_session=new_sess.astype(bool),
     )
 
-    partial_hmm_negative_log_likelihood = prepare_nll_mstep_numerical_params(
-        True,
-        observation_model=obs,
-        inverse_link_function=obs.default_inverse_link_function,
+    partial_posterior_weighted_glm_negative_log_likelihood = (
+        prepare_nll_mstep_numerical_params(
+            True,
+            observation_model=obs,
+            inverse_link_function=obs.default_inverse_link_function,
+        )
     )
     alphas_transition = np.random.uniform(1, 3, size=transition_prob.shape)
     alphas_init = np.random.uniform(1, 3, size=initial_prob.shape)
     lbfgs_class = solver_registry["LBFGS"]
     solver = lbfgs_class(
-        partial_hmm_negative_log_likelihood,
+        partial_posterior_weighted_glm_negative_log_likelihood,
         UnRegularized(),
         0.0,
         False,
@@ -1798,10 +1856,10 @@ def test_e_and_m_step_for_population(generate_data_multi_state_population):
     )
     nll_scale = prepare_objective_mstep_numerical_scale(True, obs)
     solver_scale = lbfgs_class(
-        nll_scale,UnRegularized(),
+        nll_scale, UnRegularized(),
         0.,
         False,
-        tol=10**-13
+        tol=10 ** -13
     )
     (
         optimized_projection_weights_nemos,
@@ -1976,16 +2034,13 @@ class TestConvergence:
         intercept, coef = projection_weights[:1], projection_weights[1:]
 
         obs = BernoulliObservations()
-        likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
-            False,
-            obs.log_likelihood,
-            obs._negative_log_likelihood,
-        )
+        likelihood_func = prepare_ll_estep_likelihood(False, obs)
+        negative_log_likelihood_func = prepare_nll_mstep_analytical_scale(False, obs)
 
-        def partial_hmm_negative_log_likelihood(
+        def partial_posterior_weighted_glm_negative_log_likelihood(
             weights, design_matrix, observations, posterior_prob
         ):
-            return hmm_negative_log_likelihood(
+            return posterior_weighted_glm_negative_log_likelihood(
                 weights,
                 X=design_matrix,
                 y=observations,
@@ -1995,7 +2050,7 @@ class TestConvergence:
             )
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
-        glm._instantiate_solver(partial_hmm_negative_log_likelihood)
+        glm._instantiate_solver(partial_posterior_weighted_glm_negative_log_likelihood)
 
         # Run EM with custom checker - should stop after 1 iteration
         result = em_glm_hmm(
@@ -2004,9 +2059,11 @@ class TestConvergence:
             initial_prob=initial_prob,
             transition_prob=transition_prob,
             glm_params=GLMParams(coef, intercept),
+            glm_scale=jnp.ones(transition_prob.shape[0]),
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_scale=None,
             check_convergence=always_converge,
             maxiter=100,
             tol=1e-8,
@@ -2039,16 +2096,13 @@ class TestConvergence:
         intercept, coef = projection_weights[:1], projection_weights[1:]
 
         obs = BernoulliObservations()
-        likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
-            False,
-            obs.log_likelihood,
-            obs._negative_log_likelihood,
-        )
+        likelihood_func = prepare_ll_estep_likelihood(False, obs)
+        negative_log_likelihood_func = prepare_nll_mstep_analytical_scale(False, obs)
 
-        def partial_hmm_negative_log_likelihood(
+        def partial_posterior_weighted_glm_negative_log_likelihood(
             weights, design_matrix, observations, posterior_prob
         ):
-            return hmm_negative_log_likelihood(
+            return posterior_weighted_glm_negative_log_likelihood(
                 weights,
                 X=design_matrix,
                 y=observations,
@@ -2058,7 +2112,7 @@ class TestConvergence:
             )
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
-        glm._instantiate_solver(partial_hmm_negative_log_likelihood)
+        glm._instantiate_solver(partial_posterior_weighted_glm_negative_log_likelihood)
 
         maxiter = 10
         result = em_glm_hmm(
@@ -2067,9 +2121,11 @@ class TestConvergence:
             initial_prob=initial_prob,
             transition_prob=transition_prob,
             glm_params=GLMParams(coef, intercept),
+            glm_scale=jnp.ones(transition_prob.shape[0]),
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_scale=None,
             check_convergence=never_converge,
             maxiter=maxiter,
             tol=1e-8,
@@ -2097,14 +2153,13 @@ class TestConvergence:
         intercept, coef = projection_weights[:1], projection_weights[1:]
 
         obs = BernoulliObservations()
-        likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
-            False, obs.log_likelihood, obs._negative_log_likelihood
-        )
+        likelihood_func = prepare_ll_estep_likelihood(False, obs)
+        negative_log_likelihood_func = prepare_nll_mstep_analytical_scale(False, obs)
 
-        def partial_hmm_negative_log_likelihood(
+        def partial_posterior_weighted_glm_negative_log_likelihood(
             weights, design_matrix, observations, posterior_prob
         ):
-            return hmm_negative_log_likelihood(
+            return posterior_weighted_glm_negative_log_likelihood(
                 weights,
                 X=design_matrix,
                 y=observations,
@@ -2114,7 +2169,7 @@ class TestConvergence:
             )
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
-        glm._instantiate_solver(partial_hmm_negative_log_likelihood)
+        glm._instantiate_solver(partial_posterior_weighted_glm_negative_log_likelihood)
 
         maxiter = 1000
         tol = 1e-3  # Loose tolerance for faster convergence
@@ -2125,9 +2180,11 @@ class TestConvergence:
             initial_prob=initial_prob,
             transition_prob=transition_prob,
             glm_params=GLMParams(coef, intercept),
+            glm_scale=jnp.ones(transition_prob.shape[0]),
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_scale=None,
             maxiter=maxiter,
             tol=tol,
         )
@@ -2159,14 +2216,13 @@ class TestConvergence:
         intercept, coef = projection_weights[:1], projection_weights[1:]
 
         obs = BernoulliObservations()
-        likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
-            False, obs.log_likelihood, obs._negative_log_likelihood
-        )
+        likelihood_func = prepare_ll_estep_likelihood(False, obs)
+        negative_log_likelihood_func = prepare_nll_mstep_analytical_scale(False, obs)
 
-        def partial_hmm_negative_log_likelihood(
+        def partial_posterior_weighted_glm_negative_log_likelihood(
             weights, design_matrix, observations, posterior_prob
         ):
-            return hmm_negative_log_likelihood(
+            return posterior_weighted_glm_negative_log_likelihood(
                 weights,
                 X=design_matrix,
                 y=observations,
@@ -2176,7 +2232,7 @@ class TestConvergence:
             )
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
-        glm._instantiate_solver(partial_hmm_negative_log_likelihood)
+        glm._instantiate_solver(partial_posterior_weighted_glm_negative_log_likelihood)
 
         maxiter = 100
         tol = 1e-6
@@ -2187,6 +2243,7 @@ class TestConvergence:
             final_initial_prob,
             final_transition_prob,
             final_glm_params,
+            _scale,
             final_state,
         ) = em_glm_hmm(
             X[:100, 1:],
@@ -2194,9 +2251,11 @@ class TestConvergence:
             initial_prob=initial_prob,
             transition_prob=transition_prob,
             glm_params=GLMParams(coef, intercept),
+            glm_scale=jnp.ones(transition_prob.shape[0]),
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_scale=None,
             maxiter=maxiter,
             tol=tol,
         )
@@ -2240,16 +2299,13 @@ class TestConvergence:
         intercept, coef = projection_weights[:1], projection_weights[1:]
 
         obs = BernoulliObservations()
-        likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
-            False,
-            obs.log_likelihood,
-            obs._negative_log_likelihood,
-        )
+        likelihood_func = prepare_ll_estep_likelihood(False, obs)
+        negative_log_likelihood_func = prepare_nll_mstep_analytical_scale(False, obs)
 
-        def partial_hmm_negative_log_likelihood(
+        def partial_posterior_weighted_glm_negative_log_likelihood(
             weights, design_matrix, observations, posterior_prob
         ):
-            return hmm_negative_log_likelihood(
+            return posterior_weighted_glm_negative_log_likelihood(
                 weights,
                 X=design_matrix,
                 y=observations,
@@ -2259,7 +2315,7 @@ class TestConvergence:
             )
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
-        glm._instantiate_solver(partial_hmm_negative_log_likelihood)
+        glm._instantiate_solver(partial_posterior_weighted_glm_negative_log_likelihood)
 
         tolerances = [1e-2, 1e-4, 1e-6]
         iteration_counts = []
@@ -2271,9 +2327,11 @@ class TestConvergence:
                 initial_prob=initial_prob,
                 transition_prob=transition_prob,
                 glm_params=GLMParams(coef, intercept),
+                glm_scale=jnp.ones(transition_prob.shape[0]),
                 inverse_link_function=obs.default_inverse_link_function,
                 likelihood_func=likelihood_func,
                 m_step_fn_glm_params=glm._solver_run,
+                m_step_fn_glm_scale=None,
                 maxiter=10,
                 tol=tol,
             )
@@ -2311,16 +2369,13 @@ class TestConvergence:
         intercept, coef = projection_weights[:1], projection_weights[1:]
 
         obs = BernoulliObservations()
-        likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
-            False,
-            obs.log_likelihood,
-            obs._negative_log_likelihood,
-        )
+        likelihood_func = prepare_ll_estep_likelihood(False, obs)
+        negative_log_likelihood_func = prepare_nll_mstep_analytical_scale(False, obs)
 
-        def partial_hmm_negative_log_likelihood(
+        def partial_posterior_weighted_glm_negative_log_likelihood(
             weights, design_matrix, observations, posterior_prob
         ):
-            return hmm_negative_log_likelihood(
+            return posterior_weighted_glm_negative_log_likelihood(
                 weights,
                 X=design_matrix,
                 y=observations,
@@ -2330,7 +2385,7 @@ class TestConvergence:
             )
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
-        glm._instantiate_solver(partial_hmm_negative_log_likelihood)
+        glm._instantiate_solver(partial_posterior_weighted_glm_negative_log_likelihood)
 
         result = em_glm_hmm(
             X[:, 1:],
@@ -2338,9 +2393,11 @@ class TestConvergence:
             initial_prob=initial_prob,
             transition_prob=transition_prob,
             glm_params=GLMParams(coef, intercept),
+            glm_scale=jnp.ones(transition_prob.shape[0]),
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_scale=None,
             check_convergence=check_conv_5_iter,
             maxiter=100,
             tol=1e-10,  # Very tight tolerance, but will stop at 5 iterations
@@ -2381,6 +2438,9 @@ class TestCompilation:
             GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
+            glm_scale=jnp.ones(intercept.shape[-1]),
+            m_step_fn_glm_scale=None,
+            inverse_link_function=obs.default_inverse_link_function,
             dirichlet_prior_alphas_transition=None,
             dirichlet_prior_alphas_init_prob=None,
         )
@@ -2397,6 +2457,9 @@ class TestCompilation:
             GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
+            glm_scale=jnp.ones(intercept.shape[-1]),
+            m_step_fn_glm_scale=None,
+            inverse_link_function=obs.default_inverse_link_function,
             dirichlet_prior_alphas_transition=None,
             dirichlet_prior_alphas_init_prob=None,
         )
@@ -2412,6 +2475,9 @@ class TestCompilation:
             GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
+            glm_scale=jnp.ones(intercept.shape[-1]),
+            m_step_fn_glm_scale=None,
+            inverse_link_function=obs.default_inverse_link_function,
             dirichlet_prior_alphas_transition=np.ones(transition_prob.shape),
             dirichlet_prior_alphas_init_prob=np.ones(initial_prob.shape),
         )
@@ -2427,6 +2493,9 @@ class TestCompilation:
             GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
+            glm_scale=jnp.ones(intercept.shape[-1]),
+            m_step_fn_glm_scale=None,
+            inverse_link_function=obs.default_inverse_link_function,
             dirichlet_prior_alphas_transition=2 * np.ones(transition_prob.shape),
             dirichlet_prior_alphas_init_prob=2 * np.ones(initial_prob.shape),
         )
@@ -2450,14 +2519,13 @@ class TestCompilation:
         _, solver = prepare_partial_hmm_nll_single_neuron(obs)
 
         obs = BernoulliObservations()
-        likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
-            False, obs.log_likelihood, obs._negative_log_likelihood
-        )
+        likelihood_func = prepare_ll_estep_likelihood(False, obs)
+        negative_log_likelihood_func = prepare_nll_mstep_analytical_scale(False, obs)
 
-        def partial_hmm_negative_log_likelihood(
+        def partial_posterior_weighted_glm_negative_log_likelihood(
             weights, design_matrix, observations, posterior_prob
         ):
-            return hmm_negative_log_likelihood(
+            return posterior_weighted_glm_negative_log_likelihood(
                 weights,
                 X=design_matrix,
                 y=observations,
@@ -2467,7 +2535,7 @@ class TestCompilation:
             )
 
         glm = GLM(observation_model=obs, solver_name=solver_name)
-        glm._instantiate_solver(partial_hmm_negative_log_likelihood)
+        glm._instantiate_solver(partial_posterior_weighted_glm_negative_log_likelihood)
 
         # Clear compilation cache
         initial_cache_size = em_glm_hmm._cache_size()
@@ -2479,9 +2547,11 @@ class TestCompilation:
             initial_prob=initial_prob,
             transition_prob=transition_prob,
             glm_params=GLMParams(coef, intercept),
+            glm_scale=jnp.ones(transition_prob.shape[0]),
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_scale=None,
             maxiter=5,
             tol=1e-8,
         )
@@ -2500,9 +2570,11 @@ class TestCompilation:
             initial_prob=initial_prob,
             transition_prob=transition_prob,
             glm_params=GLMParams(coef, intercept),
+            glm_scale=jnp.ones(transition_prob.shape[0]),
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_scale=None,
             maxiter=5,
             tol=1e-8,
         )
@@ -2527,9 +2599,11 @@ class TestCompilation:
             initial_prob=initial_prob_new,
             transition_prob=transition_prob_new,
             glm_params=GLMParams(coef_new, intercept_new),
+            glm_scale=jnp.ones(transition_prob.shape[0]),
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_scale=None,
             maxiter=5,
             tol=1e-8,
         )
@@ -2552,16 +2626,13 @@ class TestCompilation:
         )
 
         obs = BernoulliObservations()
-        likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
-            False,
-            obs.log_likelihood,
-            obs._negative_log_likelihood,
-        )
+        likelihood_func = prepare_ll_estep_likelihood(False, obs)
+        negative_log_likelihood_func = prepare_nll_mstep_analytical_scale(False, obs)
 
-        def partial_hmm_negative_log_likelihood(
+        def partial_posterior_weighted_glm_negative_log_likelihood(
             weights, design_matrix, observations, posterior_prob
         ):
-            return hmm_negative_log_likelihood(
+            return posterior_weighted_glm_negative_log_likelihood(
                 weights,
                 X=design_matrix,
                 y=observations,
@@ -2571,7 +2642,7 @@ class TestCompilation:
             )
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
-        glm._instantiate_solver(partial_hmm_negative_log_likelihood)
+        glm._instantiate_solver(partial_posterior_weighted_glm_negative_log_likelihood)
 
         _ = forward_backward(
             X,  # drop intercept
@@ -2579,6 +2650,7 @@ class TestCompilation:
             initial_prob,
             transition_prob,
             GLMParams(coef, intercept),
+            glm_scale=jnp.ones(initial_prob.shape[0]),
             log_likelihood_func=likelihood_func,
             inverse_link_function=obs.default_inverse_link_function,
             is_new_session=new_sess.astype(bool),
@@ -2597,6 +2669,7 @@ class TestCompilation:
             initial_prob_new,
             transition_prob_new,
             GLMParams(coef_new, intercept_new),
+            glm_scale=jnp.ones(initial_prob.shape[0]),
             log_likelihood_func=likelihood_func,
             inverse_link_function=obs.default_inverse_link_function,
             is_new_session=new_sess.astype(bool),
@@ -2635,10 +2708,9 @@ class TestPytreeSupport:
         }
 
         obs = PoissonObservations()
-        likelihood_func, _ = prepare_likelihood_func(
+        likelihood_func = prepare_ll_estep_likelihood(
             is_population_glm=False,
-            log_likelihood_func=obs.log_likelihood,
-            negative_log_likelihood_func=obs._negative_log_likelihood,
+            observation_model=obs,
         )
 
         # Test with standard arrays (reference)
@@ -2655,9 +2727,10 @@ class TestPytreeSupport:
             jnp.log(initial_prob),
             jnp.log(transition_prob),
             GLMParams(coef, intercept),
-            obs.default_inverse_link_function,
-            likelihood_func,
-            new_sess.astype(bool),
+            glm_scale=jnp.ones(initial_prob.shape[0]),
+            log_likelihood_func=likelihood_func,
+            inverse_link_function=obs.default_inverse_link_function,
+            is_new_session=new_sess.astype(bool),
         )
 
         # Test with pytrees
@@ -2667,9 +2740,10 @@ class TestPytreeSupport:
             jnp.log(initial_prob),
             jnp.log(transition_prob),
             GLMParams(coef_tree, intercept),
-            obs.default_inverse_link_function,
-            likelihood_func,
-            new_sess.astype(bool),
+            glm_scale=jnp.ones(initial_prob.shape[0]),
+            log_likelihood_func=likelihood_func,
+            inverse_link_function=obs.default_inverse_link_function,
+            is_new_session=new_sess.astype(bool),
         )
 
         # Results should be identical
@@ -2681,8 +2755,10 @@ class TestPytreeSupport:
         np.testing.assert_allclose(betas, betas_ref)
 
     @pytest.mark.requires_x64
-    def test_hmm_negative_log_likelihood_with_pytree(self, generate_data_multi_state):
-        """Test hmm_negative_log_likelihood accepts pytree inputs."""
+    def test_posterior_weighted_glm_negative_log_likelihood_with_pytree(
+        self, generate_data_multi_state
+    ):
+        """Test posterior_weighted_glm_negative_log_likelihood accepts pytree inputs."""
         new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
             generate_data_multi_state
         )
@@ -2715,7 +2791,7 @@ class TestPytreeSupport:
         posteriors /= posteriors.sum(axis=1, keepdims=True)
 
         # Test with standard arrays (reference)
-        nll_ref = hmm_negative_log_likelihood(
+        nll_ref = posterior_weighted_glm_negative_log_likelihood(
             GLMParams(coef, intercept),
             X,
             y,
@@ -2725,7 +2801,7 @@ class TestPytreeSupport:
         )
 
         # Test with pytrees
-        nll = hmm_negative_log_likelihood(
+        nll = posterior_weighted_glm_negative_log_likelihood(
             GLMParams(coef_tree, intercept),
             X_tree,
             y,
@@ -2755,17 +2831,20 @@ class TestPytreeSupport:
         }
 
         obs = PoissonObservations()
-        likelihood_func, vmap_nll = prepare_likelihood_func(
+        likelihood_func = prepare_ll_estep_likelihood(
             is_population_glm=False,
-            log_likelihood_func=obs.log_likelihood,
-            negative_log_likelihood_func=obs._negative_log_likelihood,
+            observation_model=obs,
+        )
+        vmap_nll = prepare_nll_mstep_analytical_scale(
+            is_population_glm=False,
+            observation_model=obs,
         )
 
         # Create solver using GLM class
-        def partial_hmm_negative_log_likelihood(
+        def partial_posterior_weighted_glm_negative_log_likelihood(
             weights, design_matrix, observations, posterior_prob
         ):
-            return hmm_negative_log_likelihood(
+            return posterior_weighted_glm_negative_log_likelihood(
                 weights,
                 X=design_matrix,
                 y=observations,
@@ -2775,7 +2854,7 @@ class TestPytreeSupport:
             )
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
-        glm._instantiate_solver(partial_hmm_negative_log_likelihood)
+        glm._instantiate_solver(partial_posterior_weighted_glm_negative_log_likelihood)
         solver_run = glm._solver_run
 
         # Run EM with pytrees (just a few iterations)
@@ -2785,17 +2864,20 @@ class TestPytreeSupport:
             final_init,
             final_trans,
             final_params,
+            _scale,
             final_state,
         ) = em_glm_hmm(
             X_tree,
             y,
-            initial_prob,
-            transition_prob,
-            GLMParams(coef_tree, intercept),
-            obs.default_inverse_link_function,
-            likelihood_func,
-            solver_run,
-            new_sess.astype(bool),
+            initial_prob=initial_prob,
+            transition_prob=transition_prob,
+            glm_params=GLMParams(coef_tree, intercept),
+            glm_scale=jnp.ones(initial_prob.shape[0]),
+            inverse_link_function=obs.default_inverse_link_function,
+            likelihood_func=likelihood_func,
+            m_step_fn_glm_params=solver_run,
+            m_step_fn_glm_scale=None,
+            is_new_session=new_sess.astype(bool),
             maxiter=3,
             tol=1e-8,
         )
