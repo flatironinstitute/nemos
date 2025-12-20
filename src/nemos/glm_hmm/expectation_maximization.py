@@ -1,13 +1,14 @@
 """Forward backward pass for a GLM-HMM."""
 
 from functools import partial
-from typing import Any, Callable, Optional, Tuple
+from typing import Callable, Optional, Tuple
 
 import equinox as eqx
 import jax
 import jax.numpy as jnp
 
 from ..glm.params import GLMParams
+from ..typing import SolverState
 from .m_step_analytical_updates import (
     _analytical_m_step_initial_prob,
     _analytical_m_step_transition_prob,
@@ -24,7 +25,7 @@ class GLMHMMState(eqx.Module):
     iterations: int
 
 
-EMCarry = Tuple[Tuple[Array, Array, Tuple[Array, Array], Array], GLMHMMState]
+EMCarry = Tuple[Tuple[Array, Array, GLMParams, Array], GLMHMMState]
 
 
 def compute_xi_log(
@@ -303,7 +304,7 @@ def forward_backward(
     log_transition_prob: Array,
     glm_params: GLMParams,
     glm_scale: Array,
-    inverse_link_function: Callable,
+    inverse_link_function: Callable[[Array], Array],
     log_likelihood_func: Callable[[Array, Array, Array], Array],
     is_new_session: Array | None = None,
 ):
@@ -332,6 +333,9 @@ def forward_backward(
     glm_params :
         GLM coefficients of shape ``(n_features, n_states)``
         and intercept of shape ``(n_states,)`` as GLMParams.
+
+    glm_scale :
+        The scale parameter of the likelihood. Shape (n_states,) or (n_neurons, n_states).
 
     inverse_link_function :
         Function mapping linear predictors to the mean of the observation distribution
@@ -464,12 +468,16 @@ def run_m_step(
     glm_params: GLMParams,
     glm_scale: Array,
     is_new_session: Array,
-    m_step_fn_glm_params: Callable[[GLMParams, Array, Array, Array], GLMParams],
-    m_step_fn_glm_scale: Callable[[Array, Array, Array, Array], Array] | None,
+    m_step_fn_glm_params: Callable[
+        [GLMParams, Array, Array, Array], Tuple[GLMParams, SolverState]
+    ],
+    m_step_fn_glm_scale: (
+        Callable[[Array, Array, Array, Array], Tuple[Array, SolverState]] | None
+    ),
     inverse_link_function: Callable[[Array], Array],
     dirichlet_prior_alphas_init_prob: Array | None = None,
     dirichlet_prior_alphas_transition: Array | None = None,
-) -> Tuple[Tuple[Array, Array], Array, Array, Array, Any]:
+) -> Tuple[GLMParams, Array, Array, Array, SolverState]:
     r"""
     Perform the M-step of the EM algorithm for GLM-HMM.
 
@@ -494,6 +502,11 @@ def run_m_step(
         Callable that performs the M-step update for GLM parameters (coefficients and intercepts).
         Should have signature: ``f(glm_params, X, y, posteriors) -> (updated_params, state, aux)``.
         The regularizer/prior for the GLM parameters should be configured within this callable.
+    m_step_fn_glm_scale:
+        Callable that performs the M-step update for GLM scales.
+        Should have signature: ``f(scale, glm_params, X, y, posteriors) -> (updated_scale, state)``.
+    inverse_link_function:
+        Inverse link function for computing the predicted rates per each state.
     dirichlet_prior_alphas_init_prob:
         Prior for the initial states, shape ``(n_states,)``.
     dirichlet_prior_alphas_transition:
@@ -553,10 +566,14 @@ def _em_step(
     carry: EMCarry,
     X: Array,
     y: Array,
-    inverse_link_function: Callable,
-    likelihood_func: Callable,
-    m_step_fn_glm_params: Callable,
-    m_step_fn_glm_scale: Callable,
+    inverse_link_function: Callable[[Array], Array],
+    likelihood_func: Callable[[Array, Array, Array], Array],
+    m_step_fn_glm_params: Callable[
+        [GLMParams, Array, Array, Array], Tuple[GLMParams, SolverState]
+    ],
+    m_step_fn_glm_scale: (
+        Callable[[Array, Array, Array, Array], Tuple[Array, SolverState]] | None
+    ),
     is_new_session: Array,
 ) -> EMCarry:
     """
