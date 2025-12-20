@@ -680,7 +680,7 @@ def em_glm_hmm(
     inverse_link_function: Callable,
     likelihood_func: Callable,
     m_step_fn_glm_params: Callable,
-    m_step_fn_glm_scale: Callable,
+    m_step_fn_glm_scale: Callable | None,
     is_new_session: Optional[Array] = None,
     maxiter: int = 10**3,
     tol: float = 1e-8,
@@ -713,6 +713,10 @@ def em_glm_hmm(
         Callable that performs the M-step update for GLM parameters (coefficients and intercepts).
         Should have signature: ``f(glm_params, X, y, posteriors) -> (updated_params, state)``.
         Typically created by configuring a solver with the appropriate regularizer/prior.
+    m_step_fn_glm_scale:
+        If provided, callable that performs the M-step updated for the scale parameter of
+        the distribution.
+        Must have signature ``f(scale, glm_params, X, y, posteriors) -> (updated_scale, state)``
     is_new_session:
         Boolean mask for the first observation of each session.
     maxiter:
