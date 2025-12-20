@@ -12,6 +12,7 @@ from typing import Callable, Tuple, Union
 import equinox as eqx
 import jax
 import jax.numpy as jnp
+import numpy as np
 from numpy.typing import NDArray
 
 from . import tree_utils
@@ -164,7 +165,7 @@ class Regularizer(Base, abc.ABC):
         else:
 
             def _validate(substrength, extra_msg=""):
-                if not isinstance(substrength, (float, dict, jnp.ndarray)):
+                if not isinstance(substrength, (float, jnp.ndarray, np.ndarray)):
                     raise TypeError(
                         "Regularizer strength should be either a float or a pytree of floats, "
                         f"you passed {substrength} of type {type(substrength)}"
@@ -693,37 +694,67 @@ class GroupLasso(Regularizer):
     def _penalty_on_subtree(
         self,
         subtree,
-        strength: RegularizerStrength,
+        strength: jnp.ndarray,
     ) -> jnp.ndarray:
-        r"""
-        Calculate the penalization.
-
-        Note: the penalty is being calculated according to the following formula:
-
-        .. math::
-
-            \\text{loss}(\beta_1,...,\beta_g) + \alpha \cdot \sum _{j=1...,g} \sqrt{\dim(\beta_j)} || \beta_j||_2
-
-        where :math:`g` is the number of groups, :math:`\dim(\cdot)` is the dimension of the vector,
-        i.e. the number of coefficient in each :math:`\beta_j`, and :math:`||\cdot||_2` is the euclidean norm.
-        """
-        # conform to shape (1, n_features) if param is (n_features,) or (n_neurons, n_features) if
-        # param is (n_features, n_neurons)
+        # (n_neurons, n_features)
         param_with_extra_axis = jnp.atleast_2d(subtree.T)
 
-        vec_prod = jax.vmap(
-            lambda x: self.mask * x, in_axes=0, out_axes=2
-        )  # this vectorizes the product over the neurons, and adds the neuron axis as the last axis
-
-        masked_param = vec_prod(
+        # (group, feature, neuron)
+        masked_param = jax.vmap(lambda x: self.mask * x, in_axes=0, out_axes=2)(
             param_with_extra_axis
-        )  # this masks the param, (group, feature, neuron)
-
-        penalty = jax.numpy.sum(
-            jax.numpy.linalg.norm(masked_param, axis=1).T
-            * jax.numpy.sqrt(self.mask.sum(axis=1))
         )
-        return jax.tree_util.tree_map(lambda penalty, s: penalty * s, penalty, strength)
+
+        # ||β_g||₂ per group, summed over neurons
+        # (group, neuron) -> (group,)
+        group_norms = jnp.linalg.norm(masked_param, axis=1).sum(axis=1)
+
+        # sqrt(p_g)
+        group_sizes = jnp.sqrt(self.mask.sum(axis=1))
+
+        return jnp.sum(strength * group_sizes * group_norms)
+
+    def _validate_regularizer_strength_structure(
+        self,
+        params: ModelParamsT,
+        strength: Union[None, RegularizerStrength],
+    ):
+        n_groups = self.mask.shape[0]
+        regularizable_subtrees = params.regularizable_subtrees()
+
+        # normalize to per-subtree list
+        if strength is None:
+            strength = 1.0
+
+        if isinstance(strength, list):
+            if len(strength) != len(regularizable_subtrees):
+                raise ValueError(
+                    f"Length of regularizer strength ({len(strength)}) must match "
+                    f"number of regularizable parameter sets ({len(regularizable_subtrees)})"
+                )
+            strengths = strength
+        else:
+            strengths = [strength] * len(regularizable_subtrees)
+
+        _strengths = []
+
+        for s in strengths:
+            if isinstance(s, (float, int)):
+                s = jnp.ones(n_groups) * float(s)
+
+            elif isinstance(s, (jnp.ndarray, np.ndarray)):
+                if s.ndim != 1 or s.shape[0] != n_groups:
+                    raise ValueError(
+                        f"GroupLasso regularizer strength must match number of groups: {s.shape} vs. {n_groups}"
+                    )
+            else:
+                raise TypeError(
+                    "GroupLasso regularizer strength must be a float or "
+                    f"a 1D array of length {n_groups}"
+                )
+
+            _strengths.append(jnp.asarray(s, dtype=float))
+
+        return _strengths
 
     def get_proximal_operator(
         self,

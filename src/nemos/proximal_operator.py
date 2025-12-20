@@ -261,7 +261,9 @@ def prox_elastic_net(x: Any, strength: Any, ratio: Any, scaling: float = 1.0) ->
     :
         Output pytree, with the same structure as ``x``.
     """
-    lam = jax.tree_util.tree_map(lambda strength, ratio: strength * ratio, strength, ratio)
+    lam = jax.tree_util.tree_map(
+        lambda strength, ratio: strength * ratio, strength, ratio
+    )
     gam = jax.tree_util.tree_map(lambda ratio: (1 - ratio) / ratio, ratio)
 
     def prox_l1(u, lambd):
