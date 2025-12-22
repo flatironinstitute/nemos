@@ -21,8 +21,8 @@ import numpy as np
 ###
 import nemos as nmo
 from nemos.glm_hmm.algorithm_configs import (
-    prepare_ll_estep_likelihood,
-    prepare_nll_mstep_numerical_params,
+    prepare_estep_log_likelihood,
+    prepare_mstep_nll_objective_param,
 )
 from nemos.glm_hmm.expectation_maximization import (
     em_glm_hmm,
@@ -239,9 +239,9 @@ def fit_glm_hmm_with_em(
     is_population_glm = true_projection_weights.ndim > 2
 
     observation_model = nmo.observation_models.BernoulliObservations()
-    likelihood_func = prepare_ll_estep_likelihood(is_population_glm, observation_model)
+    likelihood_func = prepare_estep_log_likelihood(is_population_glm, observation_model)
     inverse_link_function = observation_model.default_inverse_link_function
-    partial_hmm_negative_log_likelihood = prepare_nll_mstep_numerical_params(
+    partial_hmm_negative_log_likelihood = prepare_mstep_nll_objective_param(
         is_population_glm,
         observation_model,
         observation_model.default_inverse_link_function,
