@@ -28,7 +28,7 @@ from nemos.glm_hmm.expectation_maximization import (
     max_sum,
     run_m_step,
 )
-from nemos.observation_models import BernoulliObservations, PoissonObservations
+from nemos.observation_models import Observations, BernoulliObservations, PoissonObservations, GaussianObservations, GammaObservations
 from nemos.third_party.jaxopt.jaxopt import LBFGS
 
 
@@ -325,7 +325,7 @@ def backward_step_numpy(py_z, c, new_sess, transition_prob):
 
 
 @pytest.fixture(scope="module")
-def generate_data_multi_state():
+def generate_data_multi_state(request):
     """
     Generate synthetic multi-state HMM data for testing.
 
@@ -347,6 +347,8 @@ def generate_data_multi_state():
     Observations.
     """
     np.random.seed(44)
+    obs_model: Observations = request.param["observations"]
+    scale: float = request.param["scale"]
 
     # E-step initial parameters
     n_states, n_samples = 5, 100
@@ -359,11 +361,13 @@ def generate_data_multi_state():
 
     X = np.random.randn(n_samples, 2)
     y = np.zeros(n_samples)
+    key = jax.random.PRNGKey(42)
     for i, k in enumerate(range(0, 100, 10)):
         sl = slice(k, k + 10)
         state = i % n_states
         rate = np.exp(X[sl].dot(coef[:, state]) + intercept[state])
-        y[sl] = np.random.poisson(rate)
+        key, subkey = jax.random.split(key)
+        y[sl] = obs_model.sample_generator(subkey, rate, scale)
 
     new_sess = np.zeros(n_samples)
     new_sess[[0, 10, 90]] = 1
@@ -371,9 +375,11 @@ def generate_data_multi_state():
 
 
 @pytest.fixture(scope="module")
-def generate_data_multi_state_population():
+def generate_data_multi_state_population(request):
     """Generate synthetic multi-state population HMM data for testing."""
     np.random.seed(44)
+    obs_model: Observations = request.param["observations"]
+    scale: float = request.param["scale"]
 
     # E-step initial parameters
     n_states, n_neurons, n_samples = 5, 3, 100
@@ -389,11 +395,13 @@ def generate_data_multi_state_population():
 
     X = np.random.randn(n_samples, 2)
     y = np.zeros((n_samples, n_neurons))
+    key = jax.random.PRNGKey(42)
     for i, k in enumerate(range(0, 100, 10)):
         sl = slice(k, k + 10)
         state = i % n_states
         rate = np.exp(X[sl].dot(coef[..., state]) + intercept[..., state])
-        y[sl] = np.random.poisson(rate)
+        key, subkey = jax.random.split(key)
+        y[sl] = obs_model.sample_generator(subkey, rate, scale)
 
     new_sess = np.zeros(n_samples)
     new_sess[[0, 10, 90]] = 1
@@ -582,6 +590,7 @@ class TestForwardBackward:
         np.testing.assert_almost_equal(log_xis_nemos, np.log(xis), decimal=8)
 
     @pytest.mark.requires_x64
+    @pytest.mark.parametrize("generate_data_multi_state", [{"observations": PoissonObservations(), "scale": 1.}], indirect=True)
     def test_for_loop_forward_step(self, generate_data_multi_state):
         """
         Test forward pass implementation against numpy for-loop version.
@@ -617,6 +626,7 @@ class TestForwardBackward:
         np.testing.assert_almost_equal(np.log(normalization_numpy), log_normalization)
 
     @pytest.mark.requires_x64
+    @pytest.mark.parametrize("generate_data_multi_state", [{"observations": PoissonObservations(), "scale": 1.}], indirect=True)
     def test_for_loop_backward_step(self, generate_data_multi_state):
         """
         Test backward pass implementation against numpy for-loop version.
@@ -963,6 +973,7 @@ class TestMStep:
         assert optimized_projection_weights_nemos.intercept.shape == (1,)
 
     @pytest.mark.requires_x64
+    @pytest.mark.parametrize("generate_data_multi_state", [{"observations": PoissonObservations(), "scale": 1.}], indirect=True)
     def test_m_step_with_prior(self, generate_data_multi_state):
         """Test M-step with Dirichlet priors (alpha > 1) using Lagrange multipliers.
 
@@ -1049,6 +1060,7 @@ class TestMStep:
 
     @pytest.mark.parametrize("state_idx", range(5))
     @pytest.mark.requires_x64
+    @pytest.mark.parametrize("generate_data_multi_state", [{"observations": PoissonObservations(), "scale": 1.}], indirect=True)
     def test_m_step_set_alpha_init_to_inf(self, generate_data_multi_state, state_idx):
         new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
             generate_data_multi_state
@@ -1094,6 +1106,7 @@ class TestMStep:
 
     @pytest.mark.parametrize("row, col", itertools.product(range(3), range(3)))
     @pytest.mark.requires_x64
+    @pytest.mark.parametrize("generate_data_multi_state", [{"observations": PoissonObservations(), "scale": 1.}], indirect=True)
     def test_m_step_set_alpha_transition_to_inf(
         self, generate_data_multi_state, row, col
     ):
@@ -1141,6 +1154,7 @@ class TestMStep:
         )
 
     @pytest.mark.requires_x64
+    @pytest.mark.parametrize("generate_data_multi_state", [{"observations": PoissonObservations(), "scale": 1.}], indirect=True)
     def test_m_step_set_alpha_init_to_1(self, generate_data_multi_state):
         new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
             generate_data_multi_state
@@ -1210,6 +1224,7 @@ class TestMStep:
         )
 
     @pytest.mark.requires_x64
+    @pytest.mark.parametrize("generate_data_multi_state", [{"observations": PoissonObservations(), "scale": 1.}], indirect=True)
     def test_m_step_set_alpha_transition_to_1(self, generate_data_multi_state):
         new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
             generate_data_multi_state
@@ -1762,6 +1777,8 @@ class TestEMAlgorithm:
 
 
 @pytest.mark.requires_x64
+@pytest.mark.parametrize("generate_data_multi_state_population", [{"observations": PoissonObservations(), "scale": 1.}],
+                         indirect=True)
 def test_e_and_m_step_for_population(generate_data_multi_state_population):
     """Run E and M step fitting a population."""
     new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
@@ -2349,6 +2366,8 @@ class TestCompilation:
     """Tests for JIT compilation behavior."""
 
     @pytest.mark.requires_x64
+    @pytest.mark.parametrize("generate_data_multi_state", [{"observations": PoissonObservations(), "scale": 1.}],
+                             indirect=True)
     def test_m_step_compiling(self, generate_data_multi_state):
         new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
             generate_data_multi_state
@@ -2438,6 +2457,8 @@ class TestCompilation:
 
     @pytest.mark.parametrize("solver_name", ["LBFGS", "ProximalGradient"])
     @pytest.mark.requires_x64
+    @pytest.mark.parametrize("generate_data_multi_state", [{"observations": PoissonObservations(), "scale": 1.}],
+                             indirect=True)
     def test_em_glm_hmm_compiles_once(self, generate_data_multi_state, solver_name):
         """
         Test that em_glm_hmm compiles only once for repeated calls.
@@ -2549,6 +2570,8 @@ class TestCompilation:
         )
 
     @pytest.mark.requires_x64
+    @pytest.mark.parametrize("generate_data_multi_state", [{"observations": PoissonObservations(), "scale": 1.}],
+                             indirect=True)
     def test_forward_backward_compiles_once(self, generate_data_multi_state):
         """
         Test that forward_backward is not recompiled on each EM iteration.
@@ -2624,6 +2647,8 @@ class TestPytreeSupport:
     """Test that GLM-HMM algorithms support pytree inputs."""
 
     @pytest.mark.requires_x64
+    @pytest.mark.parametrize("generate_data_multi_state", [{"observations": PoissonObservations(), "scale": 1.}],
+                             indirect=True)
     def test_forward_backward_with_pytree(self, generate_data_multi_state):
         """Test forward_backward accepts pytree inputs for X and coef."""
         new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
@@ -2689,6 +2714,8 @@ class TestPytreeSupport:
         np.testing.assert_allclose(betas, betas_ref)
 
     @pytest.mark.requires_x64
+    @pytest.mark.parametrize("generate_data_multi_state", [{"observations": PoissonObservations(), "scale": 1.}],
+                             indirect=True)
     def test_posterior_weighted_glm_negative_log_likelihood_with_pytree(
         self, generate_data_multi_state
     ):
@@ -2748,6 +2775,8 @@ class TestPytreeSupport:
         np.testing.assert_allclose(nll, nll_ref)
 
     @pytest.mark.requires_x64
+    @pytest.mark.parametrize("generate_data_multi_state", [{"observations": PoissonObservations(), "scale": 1.}],
+                             indirect=True)
     def test_em_glm_hmm_with_pytree(self, generate_data_multi_state):
         """Test em_glm_hmm accepts pytree inputs for X and coef."""
         new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
