@@ -17,7 +17,9 @@ INIT_FUNCTION = Callable[
     Tuple[jnp.ndarray, jnp.ndarray],
 ]
 INITIALIZATION_FN_DICT = dict[
-    Literal["glm_params_init", "initial_proba_init", "transition_proba_init"],
+    Literal[
+        "glm_params_init", "scale_init", "initial_proba_init", "transition_proba_init"
+    ],
     INIT_FUNCTION,
 ]
 
@@ -60,9 +62,24 @@ def random_glm_params_init(
     )
     coef, intercept = random_param[:-1], random_param[-1]
     if is_one_dim:
-        coef = jnp.squeeze(coef)
-        intercept = jnp.squeeze(intercept)
+        coef = jnp.squeeze(coef, axis=1)
+        intercept = jnp.squeeze(intercept, axis=0)
     return coef, intercept
+
+
+def ones_scale_init(
+    n_states: int,
+    X: DESIGN_INPUT_TYPE,
+    y: NDArray | jnp.ndarray,
+    random_key=jax.random.PRNGKey(124),
+):
+    """Initialize scale to ones."""
+    is_one_dim = y.ndim == 1
+    n_neurons = 1 if is_one_dim else y.shape[1]
+    scale = jnp.ones((n_neurons, n_states), dtype=float)
+    if is_one_dim:
+        scale = jnp.squeeze(scale, axis=0)
+    return scale
 
 
 def sticky_transition_proba_init(
@@ -99,7 +116,10 @@ def sticky_transition_proba_init(
         Transition probability matrix of shape (n_states, n_states).
     """
     # assume n_state is > 1
-    prob_leave = (1 - prob_stay) / (n_states - 1)
+    if n_states == 1:
+        prob_leave = 0.0
+    else:
+        prob_leave = (1 - prob_stay) / (n_states - 1)
     return jnp.full((n_states, n_states), prob_leave) + jnp.diag(
         (prob_stay - prob_leave) * jnp.ones(n_states)
     )
@@ -161,6 +181,9 @@ AVAILABLE_INIT_FUNCTIONS = {
     "glm_params_init": {
         "random": random_glm_params_init,
     },
+    "scale_init": {
+        "ones": ones_scale_init,
+    },
     "transition_proba_init": {
         "sticky": sticky_transition_proba_init,
     },
@@ -175,6 +198,9 @@ _IO_AVAILABLE_INIT_FUNCTIONS["glm_params_init"].update(
         "nemos.glm_hmm.initialize_parameters.random_glm_params_init": random_glm_params_init
     }
 )
+_IO_AVAILABLE_INIT_FUNCTIONS["scale_init"].update(
+    {"nemos.glm_hmm.initialize_parameters.ones_scale_init": ones_scale_init}
+)
 _IO_AVAILABLE_INIT_FUNCTIONS["transition_proba_init"].update(
     {
         "nemos.glm_hmm.initialize_parameters.sticky_transition_proba_init": sticky_transition_proba_init
@@ -188,6 +214,7 @@ _IO_AVAILABLE_INIT_FUNCTIONS["initial_proba_init"].update(
 
 DEFAULT_INIT_FUNCTION: INITIALIZATION_FN_DICT = {
     "glm_params_init": random_glm_params_init,
+    "scale_init": ones_scale_init,
     "transition_proba_init": sticky_transition_proba_init,
     "initial_proba_init": uniform_initial_proba_init,
 }
@@ -227,9 +254,12 @@ def glm_hmm_initialization(
     Returns
     -------
     coef : jnp.ndarray
-        Coefficient matrix of shape (n_features, n_neurons, n_states).
+        Coefficient matrix of shape (n_features, n_states) or
+         (n_features, n_neurons, n_states).
     intercept : jnp.ndarray
-        Intercept array of shape (n_neurons, n_states).
+        Intercept array of shape (n_states,) or (n_neurons, n_states).
+    scale: jnp.ndarray
+        Scale of the GLM, shape (n_states,) or (n_neurons, n_states).
     initial_proba : jnp.ndarray
         Initial state probability vector of shape (n_states,).
     transition_proba : jnp.ndarray
@@ -241,11 +271,13 @@ def glm_hmm_initialization(
         init_registry = _resolve_init_funcs_registry(init_registry)
     key, subkey = jax.random.split(random_key)
     coef, intercept = init_registry["glm_params_init"](n_states, X, y, subkey)
+    key, subkey = jax.random.split(random_key)
+    scale = init_registry["initial_proba_init"](n_states, X, y, subkey)
     key, subkey = jax.random.split(key)
     initial_proba = init_registry["initial_proba_init"](n_states, X, y, subkey)
     _, subkey = jax.random.split(key)
     transition_proba = init_registry["transition_proba_init"](n_states, X, y, subkey)
-    return coef, intercept, initial_proba, transition_proba
+    return coef, intercept, scale, initial_proba, transition_proba
 
 
 def _resolve_init_funcs_registry(

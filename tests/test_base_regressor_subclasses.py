@@ -36,7 +36,7 @@ VALIDATOR_REGISTRY = {
 INIT_PARAM_LENGTH = {
     "GLM": 2,
     "PopulationGLM": 2,
-    "GLMHMM": 4,
+    "GLMHMM": 5,
 }
 
 DEFAULT_OBS_SHAPE = {
@@ -115,6 +115,20 @@ INSTANTIATE_MODEL_AND_SIMULATE_LINK = [
 ]
 
 
+def _add_zeros(y):
+    """Set some elements to zero so Bernoulli observation model doesn't raise."""
+    zero_ind = np.random.choice(y.shape[0], y.shape[0] // 10, replace=False)
+    y[zero_ind, ...] = 0
+    return y
+
+
+def _zero_init_params(X, y):
+    return (
+        jax.tree_util.tree_map(lambda x: jnp.zeros((*x[0].shape, *y.shape[1:])), X),
+        jnp.zeros(jnp.nanmean(y, axis=0).shape),
+    )
+
+
 def test_all_defaults_assigned():
     PARS_WITHOUT_DEFAULTS = {}
     for k, cls in MODEL_REGISTRY.items():
@@ -154,7 +168,7 @@ def test_validate_lower_dimensional_data_X(instantiate_base_regressor_subclass):
         y = y[None]
     err_msg = "X must be 2-dimensional"
     with pytest.raises(ValueError, match=err_msg):
-        model._validate(X, y, model._model_specific_initialization(X[:, None], y))
+        model._validate(X, y, _zero_init_params(X, y))
 
 
 @pytest.mark.parametrize(
@@ -173,7 +187,7 @@ def test_preprocess_fit_higher_dimensional_data_y(instantiate_base_regressor_sub
     else:
         err_msg = "y must be 1-dimensional"
     with pytest.raises(ValueError, match=err_msg):
-        model._validate(X, y, model._model_specific_initialization(X, y))
+        model._validate(X, y, _zero_init_params(X, y))
 
 
 @pytest.mark.parametrize(
@@ -189,8 +203,8 @@ def test_validate_higher_dimensional_data_X(instantiate_base_regressor_subclass)
     y = jnp.array([1, 1])
     if is_population_model(model):
         y = y[None]
-    with pytest.raises(ValueError, match="X must be 2-dimensional\\."):
-        model._validate(X, y, model._model_specific_initialization(X, y))
+    with pytest.raises(ValueError, match="X must be 2-dimensional"):
+        model._validate(X, y, _zero_init_params(X, y))
 
 
 @pytest.mark.parametrize(
@@ -336,6 +350,7 @@ class TestModelCommons:
         fixture = instantiate_base_regressor_subclass
         X, model, params = fixture.X, fixture.model, fixture.params
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        y = _add_zeros(y)
         n_groups = 2
         n_features = X.shape[1]
         mask = np.ones((n_groups, n_features), dtype=float)
@@ -347,12 +362,15 @@ class TestModelCommons:
             regularizer_strength=1.0,
         )
         params = model.initialize_params(X, y)
-        init_state = model._initialize_optimization_and_state(X, y, params)
+        init_state = model.initialize_optimization_and_state(X, y, params)
         # optimistix solvers do not have a velocity attr
-        assert getattr(init_state, "velocity", params) == params
+        assert getattr(
+            init_state, "velocity", model._validator.to_model_params(params)
+        ) == model._validator.to_model_params(params)
 
     @pytest.mark.solver_related
     @pytest.mark.requires_x64
+    @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
     def test_fit_mask_grouplasso(self, instantiate_base_regressor_subclass):
         """Test that the group lasso fit goes through"""
 
@@ -360,6 +378,7 @@ class TestModelCommons:
         X, model = fixture.X, fixture.model
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         y[::5] = 0  # bernoulli cannot be initialized to all 1s (expit^-1(1) = inf)
+        y = _add_zeros(y)
         n_groups = 2
         n_features = X.shape[1]
         mask = np.ones((n_groups, n_features), dtype=float)
@@ -369,8 +388,44 @@ class TestModelCommons:
             regularizer=nmo.regularizer.GroupLasso(mask=mask),
             solver_name="ProximalGradient",
             regularizer_strength=1.0,
+            solver_kwargs={"maxiter": 3},
         )
         model.fit(X, y)
+
+    @pytest.mark.parametrize(
+        "fill_val, expectation",
+        [
+            (0, does_not_raise()),
+            (
+                jnp.inf,
+                pytest.raises(
+                    ValueError, match="At least a NaN or an Inf at all sample points"
+                ),
+            ),
+            (
+                jnp.nan,
+                pytest.raises(
+                    ValueError, match="At least a NaN or an Inf at all sample points"
+                ),
+            ),
+        ],
+    )
+    @pytest.mark.solver_related
+    def test_initialize_solver_all_invalid_X(
+        self, fill_val, expectation, instantiate_base_regressor_subclass
+    ):
+        fixture = instantiate_base_regressor_subclass
+        X, model, true_params = fixture.X, fixture.model, fixture.params
+        y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        y = _add_zeros(y)
+        X.fill(fill_val)
+        with expectation:
+            params = model.initialize_params(X, y)
+            init_state = model.initialize_optimization_and_state(X, y, params)
+            # optimistix solvers do not have a velocity attr
+            assert getattr(
+                init_state, "velocity", model._validator.to_model_params(params)
+            ) == model._validator.to_model_params(params)
 
     @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso", "ElasticNet"])
     def test_reg_strength_reset(self, reg, instantiate_base_regressor_subclass):
@@ -516,6 +571,7 @@ class TestModelCommons:
         fixture = instantiate_base_regressor_subclass
         X, model, true_params = fixture.X, fixture.model, fixture.params
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        y = _add_zeros(y)
         assert model.optimization_init_state is None
         assert model.optimization_update is None
         assert model.optimization_run is None
@@ -784,12 +840,12 @@ class TestObservationModel:
     indirect=True,
 )
 class TestModelSimulation:
-
     @pytest.mark.parametrize(
         "n_params",
         [0, 1, 2, 3, 4],
     )
     @pytest.mark.solver_related
+    @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
     def test_fit_param_length(self, n_params, instantiate_base_regressor_subclass):
         """
         Test the `fit` method with different numbers of initial parameters.
@@ -798,6 +854,7 @@ class TestModelSimulation:
         fixture = instantiate_base_regressor_subclass
         X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
         model_name = model.__class__.__name__
+        model.solver_kwargs.update({"maxiter": 3})
         expectation = (
             pytest.raises(
                 ValueError,
@@ -828,6 +885,7 @@ class TestModelSimulation:
         ],
     )
     @pytest.mark.solver_related
+    @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
     def test_fit_x_dimensionality(
         self, delta_dim, expectation, instantiate_base_regressor_subclass
     ):
@@ -836,6 +894,7 @@ class TestModelSimulation:
         """
         fixture = instantiate_base_regressor_subclass
         X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
+        model.solver_kwargs.update({"maxiter": 3})
         if delta_dim == -1:
             X = np.zeros((X.shape[0],))
         elif delta_dim == 1:
@@ -853,6 +912,7 @@ class TestModelSimulation:
         ],
     )
     @pytest.mark.solver_related
+    @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
     def test_fit_y_dimensionality(
         self, delta_dim, expectation, instantiate_base_regressor_subclass
     ):
@@ -861,6 +921,7 @@ class TestModelSimulation:
         """
         fixture = instantiate_base_regressor_subclass
         X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
+        model.solver_kwargs.update({"maxiter": 3})
         if is_population_model(model):
             if delta_dim == -1:
                 y = y[:, 0]
@@ -884,6 +945,7 @@ class TestModelSimulation:
         ],
     )
     @pytest.mark.solver_related
+    @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
     def test_fit_n_feature_consistency_x(
         self,
         delta_n_features,
@@ -896,6 +958,7 @@ class TestModelSimulation:
         """
         fixture = instantiate_base_regressor_subclass
         X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
+        model.solver_kwargs.update({"maxiter": 3})
         if delta_n_features == 1:
             X = jnp.concatenate((X, jnp.zeros((X.shape[0], 1))), axis=1)
         elif delta_n_features == -1:
@@ -923,6 +986,7 @@ class TestModelSimulation:
         ],
     )
     @pytest.mark.solver_related
+    @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
     def test_fit_time_points_x(
         self, delta_tp, expectation, instantiate_base_regressor_subclass
     ):
@@ -931,6 +995,7 @@ class TestModelSimulation:
         """
         fixture = instantiate_base_regressor_subclass
         X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
+        model.solver_kwargs.update({"maxiter": 3})
         X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
         validator = VALIDATOR_REGISTRY[model.__class__.__name__]
         with expectation:
@@ -955,6 +1020,7 @@ class TestModelSimulation:
         ],
     )
     @pytest.mark.solver_related
+    @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
     def test_fit_time_points_y(
         self, delta_tp, expectation, instantiate_base_regressor_subclass
     ):
@@ -963,6 +1029,7 @@ class TestModelSimulation:
         """
         fixture = instantiate_base_regressor_subclass
         X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
+        model.solver_kwargs.update({"maxiter": 3})
         y = jnp.zeros((y.shape[0] + delta_tp,) + y.shape[1:])
         validator = VALIDATOR_REGISTRY[model.__class__.__name__]
         with expectation:
@@ -987,11 +1054,13 @@ class TestModelSimulation:
         ],
     )
     @pytest.mark.solver_related
+    @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
     def test_fit_all_invalid_X(
         self, fill_val, expectation, instantiate_base_regressor_subclass
     ):
         fixture = instantiate_base_regressor_subclass
         X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
+        model.solver_kwargs.update({"maxiter": 3})
         X.fill(fill_val)
         with expectation:
             model.fit(X, y)
@@ -1005,7 +1074,7 @@ class TestModelSimulation:
 class TestModelValidator:
     @pytest.mark.parametrize(
         "n_params",
-        [0, 1, 2, 3, 4],
+        [0, 1, 2, 3, 5],
     )
     @pytest.mark.solver_related
     def test_validate_param_length(self, n_params, instantiate_base_regressor_subclass):
@@ -1027,14 +1096,11 @@ class TestModelValidator:
             else does_not_raise()
         )
 
+        flat_params = jax.tree_util.tree_leaves(true_params)
         if n_params < INIT_PARAM_LENGTH[model_name]:
-            # Convert GLMParams to tuple for slicing
-            params_tuple = (true_params.coef, true_params.intercept)
-            init_params = params_tuple[:n_params]
+            init_params = flat_params[:n_params]
         else:
-            # Convert GLMParams to tuple for concatenation
-            params_tuple = (true_params.coef, true_params.intercept)
-            init_params = params_tuple + (true_params.coef,) * (
+            init_params = flat_params + [flat_params[-1]] * (
                 n_params - INIT_PARAM_LENGTH[model_name]
             )
         validator = VALIDATOR_REGISTRY[model_name]
@@ -1125,7 +1191,8 @@ class TestModelValidator:
         """
         fixture = instantiate_base_regressor_subclass
         X, model, true_params = fixture.X, fixture.model, fixture.params
-        y = np.zeros(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        y = _add_zeros(y)
         validator = VALIDATOR_REGISTRY[model.__class__.__name__]
         params = model.initialize_params(X, y)
         params = validator.to_model_params(params)

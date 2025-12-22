@@ -32,13 +32,17 @@ from ..typing import (
     StepResult,
 )
 from ..utils import format_repr
-from .expectation_maximization import (
+from .algorithm_configs import (
+    get_analytical_scale_update,
+    prepare_estep_log_likelihood,
+    prepare_mstep_nll_objective_param,
+    prepare_mstep_nll_objective_scale,
+)
+from .expectation_maximization import (  # hmm_negative_log_likelihood,; prepare_likelihood_func,
     GLMHMMState,
     em_glm_hmm,
     em_step,
-    hmm_negative_log_likelihood,
     initialize_new_session,
-    prepare_likelihood_func,
 )
 from .initialize_parameters import (
     INITIALIZATION_FN_DICT,
@@ -46,7 +50,7 @@ from .initialize_parameters import (
     _resolve_init_funcs_registry,
     glm_hmm_initialization,
 )
-from .params import GLMHMMParams, GLMHMMUserParams, HMMParams
+from .params import GLMHMMParams, GLMHMMUserParams, GLMScale, HMMParams
 from .validation import GLMHMMValidator
 
 
@@ -194,7 +198,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         self.coef_: jnp.ndarray | None = None
         self.intercept_: jnp.ndarray | None = None
         self.solver_state_: NamedTuple | None = None
-        self.scale_: float | None = None
+        self.scale_: jnp.ndarray | None = None
         self.dof_resid_: int | None = None
 
     @property
@@ -374,12 +378,27 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
     ) -> SolverState:
         """Initialize the EM functions."""
         # glm params m-step setup
-        log_likelihood, expected_negative_log_likelihood = (
-            self._get_m_step_loss_function(y.ndim > 1)
+        is_population = y.ndim > 1
+        log_likelihood = prepare_estep_log_likelihood(
+            is_population_glm=is_population,
+            observation_model=self.observation_model,
         )
-        _, _, solver_run = self._instantiate_solver(
-            expected_negative_log_likelihood, solver_kwargs=self.solver_kwargs
+        objective = prepare_mstep_nll_objective_param(
+            is_population_glm=is_population,
+            observation_model=self._observation_model,
+            inverse_link_function=self._inverse_link_function,
         )
+        _, _, glm_params_update_fn = self._instantiate_solver(objective)
+
+        scale_update_fn = get_analytical_scale_update(
+            is_population_glm=is_population, observation_model=self._observation_model
+        )
+        if scale_update_fn is None:
+            objective_scale = prepare_mstep_nll_objective_scale(
+                is_population_glm=is_population,
+                observation_model=self._observation_model,
+            )
+            _, _, scale_update_fn = self._instantiate_solver(objective_scale)
 
         # cannot wrap is_new_session, that's to be calculated at each update form the provided X and y.
         # for consistency, do not make a partial of that argument in run as well.
@@ -387,7 +406,8 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
             em_glm_hmm,
             inverse_link_function=self.inverse_link_function,
             log_likelihood_func=log_likelihood,
-            m_step_fn_glm_params=solver_run,
+            m_step_fn_glm_params=glm_params_update_fn,
+            m_step_fn_glm_scale=scale_update_fn,
             maxiter=self.maxiter,
             tol=self.tol,
         )
@@ -396,7 +416,8 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
             em_step,
             inverse_link_function=self.inverse_link_function,
             log_likelihood_func=log_likelihood,
-            m_step_fn_glm_params=solver_run,
+            m_step_fn_glm_params=glm_params_update_fn,
+            m_step_fn_glm_scale=scale_update_fn,
         )
 
         def init_state_fn(*args, **kwargs) -> SolverState:
@@ -470,14 +491,8 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
             )
 
         # assign fit attributes
-        self.coef_ = fit_params.glm_params.coef
-        self.intercept_ = fit_params.glm_params.intercept
-        self.initial_prob_ = fit_params.hmm_params.initial_prob
-        self.transition_prob_ = fit_params.hmm_params.transition_prob
+        self._set_model_params(fit_params)
         self.dof_resid_ = self._estimate_resid_degrees_of_freedom(X)
-        # TODO: uncomment this once the predict method is available
-        # self.scale_ = self.observation_model.estimate_scale(y, self.predict(X), self.dof_resid_)
-        self.scale_ = 1.0
         return self
 
     def _estimate_resid_degrees_of_freedom(
@@ -603,32 +618,6 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         """Loss function (expected HMM log-likelihood) without validation."""
         pass
 
-    def _get_m_step_loss_function(self, is_population_glm: bool):
-        """Prepare the loss function for the M-step of the GLM params."""
-        # prepare the loss function
-        likelihood_func, negative_log_likelihood_func = prepare_likelihood_func(
-            is_population_glm,
-            self.observation_model.log_likelihood,
-            self.observation_model._negative_log_likelihood,
-        )
-        inverse_link_function = self.inverse_link_function
-
-        # closure for the static callable solver.run
-        # NOTE: this is the loss function used in the numerical M-step that learns coefficient and intercept.
-        def expected_negative_log_likelihood(
-            glm_params, design_matrix, observations, posterior_prob
-        ):
-            return hmm_negative_log_likelihood(
-                glm_params,
-                X=design_matrix,
-                y=observations,
-                posteriors=posterior_prob,
-                inverse_link_function=inverse_link_function,
-                negative_log_likelihood_func=negative_log_likelihood_func,
-            )
-
-        return likelihood_func, expected_negative_log_likelihood
-
     def save_params(
         self,
         filename: Union[str, Path],
@@ -647,12 +636,14 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
 
     def _get_model_params(self) -> GLMHMMParams:
         glm_params = GLMParams(self.coef_, self.intercept_)
+        scale = GLMScale(self.scale_)
         hmm_params = HMMParams(self.initial_prob_, self.transition_prob_)
-        return GLMHMMParams(glm_params, hmm_params)
+        return GLMHMMParams(glm_params, scale, hmm_params)
 
     def _set_model_params(self, params: GLMHMMParams):
         self.coef_ = params.glm_params.coef
         self.intercept_ = params.glm_params.intercept
+        self.scale_ = params.glm_scale.scale
         self.initial_prob_ = params.hmm_params.initial_prob
         self.transition_prob_ = params.hmm_params.transition_prob
 
@@ -693,12 +684,6 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         self.dof_resid_ = self._estimate_resid_degrees_of_freedom(
             X, n_samples=n_samples
         )
-        # TODO: uncomment this once the predict method is available
-        # IDEAS: calculate the expectation of Y via tower rule.
-        # as var(Y) = var(E_z[ Y | z]) + E_z[Var(Y|z)], see sketch,
-        # https://www.overleaf.com/project/6942e6f0a2ee36c5e6eb1e96
-        # self.scale_ = self.observation_model.estimate_scale(y, self.predict(X), self.dof_resid_)
-        self.scale_ = 1.0
         return self._validator.from_model_params(updated_params), updated_state
 
     def __repr__(self) -> str:

@@ -16,9 +16,9 @@ from nemos._observation_model_builder import (
     instantiate_observation_model,
 )
 from nemos._regularizer_builder import instantiate_regularizer
+from nemos.glm_hmm.params import GLMHMMParams, GLMParams
 from nemos.typing import FeaturePytree
 from nemos.utils import _get_name
-from nemos.glm_hmm.params import GLMHMMParams, GLMParams
 
 # FILTER FOR GLM HMM
 INSTANTIATE_MODEL_ONLY = INSTANTIATE_MODEL_ONLY.copy()
@@ -404,7 +404,9 @@ class TestGLMHMM:
             )
             params = tuple([init_w, *params[1:]])
             # check that params are set
-            init_state = fixture.model.initialize_optimization_and_state(fixture.X, fixture.y, params)
+            init_state = fixture.model.initialize_optimization_and_state(
+                fixture.X, fixture.y, params
+            )
 
     @pytest.mark.parametrize(
         "dim_intercepts",
@@ -447,7 +449,9 @@ class TestGLMHMM:
             )
             params = tuple([init_w, init_b, *params[2:]])
             # check that params are set
-            init_state = fixture.model.initialize_optimization_and_state(fixture.X, fixture.y, params)
+            init_state = fixture.model.initialize_optimization_and_state(
+                fixture.X, fixture.y, params
+            )
 
     @pytest.mark.parametrize(*fit_init_params_type_init_params)
     def test_initialize_solver_init_glm_params_type(
@@ -469,7 +473,9 @@ class TestGLMHMM:
             init_params = init_params_glm
         with expectation:
             # check that params are set
-            init_state = fixture.model.initialize_optimization_and_state(fixture.X, fixture.y, init_params)
+            init_state = fixture.model.initialize_optimization_and_state(
+                fixture.X, fixture.y, init_params
+            )
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -502,7 +508,9 @@ class TestGLMHMM:
             )
             params = tuple([init_w, init_b, *params[2:]])
             # check that params are set
-            init_state = fixture.model.initialize_optimization_and_state(fixture.X, fixture.y, params)
+            init_state = fixture.model.initialize_optimization_and_state(
+                fixture.X, fixture.y, params
+            )
 
     # @pytest.mark.parametrize(
     #     "fitted_glm_type",

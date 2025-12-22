@@ -22,10 +22,22 @@ class HMMParams(eqx.Module):
         return []
 
 
+class GLMScale(eqx.Module):
+    """Scale parameter container."""
+
+    scale: jnp.ndarray
+
+    @staticmethod
+    def regularizable_subtrees() -> list[Callable[["HMMParams"], jnp.ndarray | dict]]:
+        """Filter regularizable subtrees."""
+        return []
+
+
 class GLMHMMParams(eqx.Module):
     """Parameter container for GLM-HMM models."""
 
     glm_params: GLMParams
+    glm_scale: GLMScale
     hmm_params: HMMParams
 
     @staticmethod
@@ -38,7 +50,7 @@ class GLMHMMParams(eqx.Module):
 
 # Tuple[coef, intercept, init_proba, transition_proba]
 GLMHMMUserParams = Tuple[
-    Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike, ArrayLike, ArrayLike
+    Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike, ArrayLike, ArrayLike, ArrayLike
 ]
 # Tuple[init_proba, transition_proba]
 HMMUserParams = Tuple[ArrayLike, ArrayLike]
