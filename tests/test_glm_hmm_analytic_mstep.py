@@ -9,9 +9,9 @@ import nemos.regularizer
 from nemos.glm.params import GLMParams
 from nemos.glm_hmm.algorithm_configs import (
     get_analytical_scale_update,
-    prepare_ll_estep_likelihood,
-    prepare_nll_mstep_numerical_params,
-    prepare_objective_mstep_numerical_scale,
+    prepare_estep_log_likelihood,
+    prepare_mstep_nll_objective_param,
+    prepare_mstep_nll_objective_scale,
 )
 from nemos.glm_hmm.expectation_maximization import forward_backward, run_m_step
 from nemos.glm_hmm.utils import compute_rate_per_state
@@ -53,8 +53,8 @@ def generate_data_gaussian(request):
     y = rate + np.random.randn(X.shape[0], *y_shape) * std
     obs = nmo.observation_models.GaussianObservations()
 
-    log_likelihood_fn = prepare_ll_estep_likelihood(is_population_glm, obs)
-    expected_negative_log_likelihood_scale = prepare_objective_mstep_numerical_scale(
+    log_likelihood_fn = prepare_estep_log_likelihood(is_population_glm, obs)
+    expected_negative_log_likelihood_scale = prepare_mstep_nll_objective_scale(
         is_population_glm=is_population_glm,
         observation_model=obs,
     )
@@ -157,7 +157,7 @@ class TestAnalyticMStepScale:
             inv_link_func,
         ) = generate_data_gaussian
         update = get_analytical_scale_update(obs, is_population_glm=is_population_glm)
-        nll_fcn = prepare_nll_mstep_numerical_params(
+        nll_fcn = prepare_mstep_nll_objective_param(
             is_population_glm=is_population_glm,
             observation_model=obs,
             inverse_link_function=inv_link_func,

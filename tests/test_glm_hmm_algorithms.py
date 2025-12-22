@@ -13,10 +13,10 @@ from nemos.glm.params import GLMParams
 from nemos.glm_hmm.algorithm_configs import (
     get_analytical_scale_update,
     posterior_weighted_glm_negative_log_likelihood,
-    prepare_ll_estep_likelihood,
-    prepare_nll_mstep_analytical_scale,
-    prepare_nll_mstep_numerical_params,
-    prepare_objective_mstep_numerical_scale,
+    prepare_estep_log_likelihood,
+    prepare_mstep_nll_for_analytical_scale,
+    prepare_mstep_nll_objective_param,
+    prepare_mstep_nll_objective_scale,
 )
 from nemos.glm_hmm.expectation_maximization import (
     GLMHMMState,
@@ -42,6 +42,7 @@ from nemos.observation_models import (
     PoissonObservations,
 )
 from nemos.solvers import solver_registry
+from nemos.regularizer import UnRegularized
 
 
 def _add_prior_logspace(log_val: jnp.ndarray, offset: jnp.ndarray):
@@ -209,7 +210,7 @@ def prepare_partial_hmm_nll_single_neuron(obs):
         LBFGS solver instance configured for the HMM likelihood.
     """
     partial_posterior_weighted_glm_negative_log_likelihood = (
-        prepare_nll_mstep_numerical_params(
+        prepare_mstep_nll_objective_param(
             False,
             observation_model=obs,
             inverse_link_function=obs.default_inverse_link_function,
@@ -259,7 +260,7 @@ def prepare_gammas_and_xis_for_m_step_single_neuron(
         Joint posterior probabilities for consecutive states.
     """
     (coef, intercept) = glm_params
-    likelihood = prepare_ll_estep_likelihood(y.ndim > 1, obs)
+    likelihood = prepare_estep_log_likelihood(y.ndim > 1, obs)
     gammas, xis, _, _, _, _ = forward_backward(
         X,
         y,
@@ -599,7 +600,7 @@ class TestForwardBackward:
 
         obs = BernoulliObservations()
 
-        log_likelihood = prepare_ll_estep_likelihood(
+        log_likelihood = prepare_estep_log_likelihood(
             is_population_glm=y.ndim > 1, observation_model=obs
         )
 
@@ -820,7 +821,7 @@ class TestLikelihood:
         obs = BernoulliObservations()
 
         # Define negative log likelihood vmap function
-        log_likelihood = prepare_nll_mstep_numerical_params(
+        log_likelihood = prepare_mstep_nll_objective_param(
             y.ndim > 1,
             observation_model=obs,
             inverse_link_function=obs.default_inverse_link_function,
@@ -966,7 +967,7 @@ class TestMStep:
         initial_prob, transition_prob, coef, intercept, X, rate, y = single_state_inputs
         obs = PoissonObservations()
 
-        log_likelihood = prepare_ll_estep_likelihood(
+        log_likelihood = prepare_estep_log_likelihood(
             is_population_glm=y.ndim > 1, observation_model=obs
         )
         log_conditionals = log_likelihood(y, rate, jnp.ones(coef.shape[-1]))
@@ -1659,7 +1660,7 @@ class TestMStep:
             inv_link,
         ) = generate_data_multi_state
         new_sess = jnp.asarray(new_sess, dtype=bool)
-        ll_func = prepare_ll_estep_likelihood(False, obs)
+        ll_func = prepare_estep_log_likelihood(False, obs)
         (log_posteriors, log_joint_posterior, _, initial_log_like, _, _) = (
             forward_backward(
                 X,
@@ -1723,7 +1724,7 @@ class TestMStep:
 
         # Minimize negative log-likelihood to update GLM weights
         initial_log_like = updated_log_like
-        objective = prepare_nll_mstep_numerical_params(False, obs, inv_link)
+        objective = prepare_mstep_nll_objective_param(False, obs, inv_link)
         new_glm_prams, state = LBFGS(objective).run(
             GLMParams(coef, intercept), X, y, posteriors
         )
@@ -1745,7 +1746,7 @@ class TestMStep:
         predicted_rate = compute_rate_per_state(
             X, new_glm_prams, inverse_link_function=inv_link
         )
-        objective_scale = prepare_objective_mstep_numerical_scale(False, obs)
+        objective_scale = prepare_mstep_nll_objective_scale(False, obs)
         new_scale, _ = LBFGS(objective_scale, tol=10**-12).run(
             jnp.ones_like(intercept), y, predicted_rate, posteriors
         )
@@ -1828,11 +1829,11 @@ class TestEMAlgorithm:
         # Start of the preparatory steps that will be carried out by the GLMHMM class.
         is_population_glm = projection_weights.ndim > 2
         obs = BernoulliObservations()
-        likelihood_func = prepare_ll_estep_likelihood(y.ndim > 1, observation_model=obs)
+        likelihood_func = prepare_estep_log_likelihood(y.ndim > 1, observation_model=obs)
 
         inverse_link_function = obs.default_inverse_link_function
         partial_posterior_weighted_glm_negative_log_likelihood = (
-            prepare_nll_mstep_numerical_params(
+            prepare_mstep_nll_objective_param(
                 y.ndim > 1,
                 observation_model=obs,
                 inverse_link_function=inverse_link_function,
@@ -1938,8 +1939,8 @@ class TestEMAlgorithm:
         # Start of the preparatory steps that will be carried out by the GLMHMM class.
         is_population_glm = n_neurons > 1
         obs = BernoulliObservations()
-        likelihood_func = prepare_ll_estep_likelihood(is_population_glm, obs)
-        negative_log_likelihood_func = prepare_nll_mstep_analytical_scale(
+        likelihood_func = prepare_estep_log_likelihood(is_population_glm, obs)
+        negative_log_likelihood_func = prepare_mstep_nll_for_analytical_scale(
             is_population_glm, obs
         )
         inverse_link_function = obs.default_inverse_link_function
@@ -2085,7 +2086,7 @@ def test_e_and_m_step_for_population(generate_data_multi_state_population):
         inv_link,
     ) = generate_data_multi_state_population
 
-    likelihood = prepare_ll_estep_likelihood(True, observation_model=obs)
+    likelihood = prepare_estep_log_likelihood(True, observation_model=obs)
 
     log_gammas, log_xis, _, _, _, _ = forward_backward(
         X,
@@ -2100,7 +2101,7 @@ def test_e_and_m_step_for_population(generate_data_multi_state_population):
     )
 
     partial_posterior_weighted_glm_negative_log_likelihood = (
-        prepare_nll_mstep_numerical_params(
+        prepare_mstep_nll_objective_param(
             True,
             observation_model=obs,
             inverse_link_function=inv_link,
@@ -2116,7 +2117,7 @@ def test_e_and_m_step_for_population(generate_data_multi_state_population):
         False,
         tol=1e-13,
     )
-    nll_scale = prepare_objective_mstep_numerical_scale(True, obs)
+    nll_scale = prepare_mstep_nll_objective_scale(True, obs)
     solver_scale = lbfgs_class(
         nll_scale, UnRegularized(),
         0.,
@@ -2296,8 +2297,8 @@ class TestConvergence:
         intercept, coef = projection_weights[:1], projection_weights[1:]
 
         obs = BernoulliObservations()
-        likelihood_func = prepare_ll_estep_likelihood(False, obs)
-        negative_log_likelihood_func = prepare_nll_mstep_analytical_scale(False, obs)
+        likelihood_func = prepare_estep_log_likelihood(False, obs)
+        negative_log_likelihood_func = prepare_mstep_nll_for_analytical_scale(False, obs)
 
         def partial_posterior_weighted_glm_negative_log_likelihood(
             weights, design_matrix, observations, posterior_prob
@@ -2360,8 +2361,8 @@ class TestConvergence:
         intercept, coef = projection_weights[:1], projection_weights[1:]
 
         obs = BernoulliObservations()
-        likelihood_func = prepare_ll_estep_likelihood(False, obs)
-        negative_log_likelihood_func = prepare_nll_mstep_analytical_scale(False, obs)
+        likelihood_func = prepare_estep_log_likelihood(False, obs)
+        negative_log_likelihood_func = prepare_mstep_nll_for_analytical_scale(False, obs)
 
         def partial_posterior_weighted_glm_negative_log_likelihood(
             weights, design_matrix, observations, posterior_prob
@@ -2419,8 +2420,8 @@ class TestConvergence:
         intercept, coef = projection_weights[:1], projection_weights[1:]
 
         obs = BernoulliObservations()
-        likelihood_func = prepare_ll_estep_likelihood(False, obs)
-        negative_log_likelihood_func = prepare_nll_mstep_analytical_scale(False, obs)
+        likelihood_func = prepare_estep_log_likelihood(False, obs)
+        negative_log_likelihood_func = prepare_mstep_nll_for_analytical_scale(False, obs)
 
         def partial_posterior_weighted_glm_negative_log_likelihood(
             weights, design_matrix, observations, posterior_prob
@@ -2484,8 +2485,8 @@ class TestConvergence:
         intercept, coef = projection_weights[:1], projection_weights[1:]
 
         obs = BernoulliObservations()
-        likelihood_func = prepare_ll_estep_likelihood(False, obs)
-        negative_log_likelihood_func = prepare_nll_mstep_analytical_scale(False, obs)
+        likelihood_func = prepare_estep_log_likelihood(False, obs)
+        negative_log_likelihood_func = prepare_mstep_nll_for_analytical_scale(False, obs)
 
         def partial_posterior_weighted_glm_negative_log_likelihood(
             weights, design_matrix, observations, posterior_prob
@@ -2569,8 +2570,8 @@ class TestConvergence:
         intercept, coef = projection_weights[:1], projection_weights[1:]
 
         obs = BernoulliObservations()
-        likelihood_func = prepare_ll_estep_likelihood(False, obs)
-        negative_log_likelihood_func = prepare_nll_mstep_analytical_scale(False, obs)
+        likelihood_func = prepare_estep_log_likelihood(False, obs)
+        negative_log_likelihood_func = prepare_mstep_nll_for_analytical_scale(False, obs)
 
         def partial_posterior_weighted_glm_negative_log_likelihood(
             weights, design_matrix, observations, posterior_prob
@@ -2641,8 +2642,8 @@ class TestConvergence:
         intercept, coef = projection_weights[:1], projection_weights[1:]
 
         obs = BernoulliObservations()
-        likelihood_func = prepare_ll_estep_likelihood(False, obs)
-        negative_log_likelihood_func = prepare_nll_mstep_analytical_scale(False, obs)
+        likelihood_func = prepare_estep_log_likelihood(False, obs)
+        negative_log_likelihood_func = prepare_mstep_nll_for_analytical_scale(False, obs)
 
         def partial_posterior_weighted_glm_negative_log_likelihood(
             weights, design_matrix, observations, posterior_prob
@@ -2817,8 +2818,8 @@ class TestCompilation:
         _, solver = prepare_partial_hmm_nll_single_neuron(obs)
 
         obs = BernoulliObservations()
-        likelihood_func = prepare_ll_estep_likelihood(False, obs)
-        negative_log_likelihood_func = prepare_nll_mstep_analytical_scale(False, obs)
+        likelihood_func = prepare_estep_log_likelihood(False, obs)
+        negative_log_likelihood_func = prepare_mstep_nll_for_analytical_scale(False, obs)
 
         def partial_posterior_weighted_glm_negative_log_likelihood(
             weights, design_matrix, observations, posterior_prob
@@ -2938,8 +2939,8 @@ class TestCompilation:
             scale,
             inv_link,
         ) = generate_data_multi_state
-        likelihood_func = prepare_ll_estep_likelihood(False, obs)
-        negative_log_likelihood_func = prepare_nll_mstep_analytical_scale(False, obs)
+        likelihood_func = prepare_estep_log_likelihood(False, obs)
+        negative_log_likelihood_func = prepare_mstep_nll_for_analytical_scale(False, obs)
 
         def partial_posterior_weighted_glm_negative_log_likelihood(
             weights, design_matrix, observations, posterior_prob
@@ -3034,7 +3035,7 @@ class TestPytreeSupport:
             "feature_b": coef[1:, :],
         }
 
-        likelihood_func = prepare_ll_estep_likelihood(
+        likelihood_func = prepare_estep_log_likelihood(
             is_population_glm=False,
             observation_model=obs,
         )
@@ -3180,11 +3181,11 @@ class TestPytreeSupport:
             "feature_b": coef[1:, :],
         }
 
-        likelihood_func = prepare_ll_estep_likelihood(
+        likelihood_func = prepare_estep_log_likelihood(
             is_population_glm=False,
             observation_model=obs,
         )
-        vmap_nll = prepare_nll_mstep_analytical_scale(
+        vmap_nll = prepare_mstep_nll_for_analytical_scale(
             is_population_glm=False,
             observation_model=obs,
         )
@@ -3397,8 +3398,8 @@ class TestEMScaleOptimization:
         init_scale = jnp.ones(data['n_states'])  # Start with all scales = 1
 
         # Prepare EM components
-        likelihood_func = prepare_ll_estep_likelihood(False, obs)
-        nll_params = prepare_nll_mstep_numerical_params(False, obs, lambda x: x)
+        likelihood_func = prepare_estep_log_likelihood(False, obs)
+        nll_params = prepare_mstep_nll_objective_param(False, obs, lambda x: x)
         scale_update_fn = get_analytical_scale_update(obs, is_population_glm=False)
 
         solver = LBFGS(nll_params, tol=10**-6)
@@ -3459,8 +3460,8 @@ class TestEMScaleOptimization:
         init_scale = jnp.ones(data['n_states'])
 
         # Prepare components
-        likelihood_func = prepare_ll_estep_likelihood(False, obs)
-        nll_params = prepare_nll_mstep_numerical_params(False, obs, lambda x: x)
+        likelihood_func = prepare_estep_log_likelihood(False, obs)
+        nll_params = prepare_mstep_nll_objective_param(False, obs, lambda x: x)
         scale_update_fn = get_analytical_scale_update(obs, is_population_glm=False)
 
         solver = LBFGS(nll_params, tol=10**-6)
@@ -3545,9 +3546,9 @@ class TestEMScaleOptimization:
         init_scale = jnp.ones(data['n_states']) * 2.0  # Initialize to moderate value
 
         # Prepare EM components
-        likelihood_func = prepare_ll_estep_likelihood(False, obs)
-        nll_params = prepare_nll_mstep_numerical_params(False, obs, jnp.exp)
-        nll_scale = prepare_objective_mstep_numerical_scale(False, obs)
+        likelihood_func = prepare_estep_log_likelihood(False, obs)
+        nll_params = prepare_mstep_nll_objective_param(False, obs, jnp.exp)
+        nll_scale = prepare_mstep_nll_objective_scale(False, obs)
 
         solver_params = LBFGS(nll_params, tol=10**-6)
         solver_scale = LBFGS(nll_scale, tol=10**-6)
@@ -3608,8 +3609,8 @@ class TestEMScaleOptimization:
         init_scale = jnp.ones(data['true_scale'].shape)
 
         # Prepare EM components
-        likelihood_func = prepare_ll_estep_likelihood(True, obs)  # is_population_glm=True
-        nll_params = prepare_nll_mstep_numerical_params(True, obs, lambda x: x)
+        likelihood_func = prepare_estep_log_likelihood(True, obs)  # is_population_glm=True
+        nll_params = prepare_mstep_nll_objective_param(True, obs, lambda x: x)
         scale_update_fn = get_analytical_scale_update(obs, is_population_glm=True)
 
         solver = LBFGS(nll_params, tol=10**-6)

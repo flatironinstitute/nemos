@@ -170,7 +170,7 @@ def posterior_weighted_glm_negative_log_likelihood_scale(
     )
 
 
-def prepare_ll_estep_likelihood(
+def prepare_estep_log_likelihood(
     is_population_glm: bool,
     observation_model: Observations,
 ) -> Callable:
@@ -217,7 +217,7 @@ def prepare_ll_estep_likelihood(
     return log_likelihood
 
 
-def prepare_nll_mstep_analytical_scale(
+def prepare_mstep_nll_for_analytical_scale(
     is_population_glm: bool,
     observation_model: Observations,
 ) -> Callable:
@@ -256,7 +256,7 @@ def prepare_nll_mstep_analytical_scale(
     return negative_log_likelihood
 
 
-def prepare_nll_mstep_numerical_params(
+def prepare_mstep_nll_objective_param(
     is_population_glm: bool,
     observation_model: Observations,
     inverse_link_function: Callable,
@@ -307,7 +307,7 @@ def prepare_nll_mstep_numerical_params(
     return objective
 
 
-def prepare_objective_mstep_numerical_scale(
+def prepare_mstep_nll_objective_scale(
     is_population_glm: bool,
     observation_model: Observations,
 ) -> Callable:
@@ -389,7 +389,7 @@ def get_analytical_scale_update(
     """
     if type(observation_model) in _ANALYTICAL_SCALE_UPDATE:
         update = _ANALYTICAL_SCALE_UPDATE[type(observation_model)]
-        nll_fnc = prepare_nll_mstep_analytical_scale(
+        nll_fnc = prepare_mstep_nll_for_analytical_scale(
             is_population_glm, observation_model=observation_model
         )
 
