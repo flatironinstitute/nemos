@@ -1636,8 +1636,8 @@ class TestMStep:
             {"observations": BernoulliObservations(), "scale": 1.0, "inv_link": None},
             {"observations": GaussianObservations(), "scale": 1.0, "inv_link": None},
             {"observations": GaussianObservations(), "scale": 2.0, "inv_link": None},
-            {"observations": GammaObservations(), "scale": 1.0, "inv_link": np.exp},
-            {"observations": GammaObservations(), "scale": 2.0, "inv_link": np.exp},
+            {"observations": GammaObservations(), "scale": 1.0, "inv_link": jnp.exp},
+            {"observations": GammaObservations(), "scale": 2.0, "inv_link": jnp.exp},
         ],
         indirect=True,
     )
@@ -1745,7 +1745,7 @@ class TestMStep:
             X, new_glm_prams, inverse_link_function=inv_link
         )
         objective_scale = prepare_objective_mstep_numerical_scale(False, obs)
-        new_scale, _ = LBFGS(objective_scale).run(
+        new_scale, _ = LBFGS(objective_scale, tol=10**-12).run(
             jnp.ones_like(intercept), y, predicted_rate, posteriors
         )
         if not isinstance(obs, (PoissonObservations, BernoulliObservations)):
@@ -1780,7 +1780,7 @@ class TestMStep:
             glm_scale=jnp.ones_like(intercept),
             inverse_link_function=inv_link,
             is_new_session=new_sess,
-            m_step_fn_glm_scale=LBFGS(objective_scale).run,
+            m_step_fn_glm_scale=LBFGS(objective_scale, tol=10**-12).run,
             m_step_fn_glm_params=LBFGS(objective).run,
             dirichlet_prior_alphas_init_prob=dirichlet_init,
             dirichlet_prior_alphas_transition=dirichlet_trans,
