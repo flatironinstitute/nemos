@@ -342,9 +342,9 @@ class TestModelCommons:
             regularizer_strength=1.0,
         )
         params = model.initialize_params(X, y)
-        init_state = model._initialize_solver_and_state(X, y, params)
+        init_state = model.initialize_solver_and_state(X, y, params)
         # optimistix solvers do not have a velocity attr
-        assert getattr(init_state, "velocity", params) == params
+        assert getattr(init_state, "velocity", model._validator.to_model_params(params)) == model._validator.to_model_params(params)
 
     @pytest.mark.solver_related
     @pytest.mark.requires_x64
@@ -517,7 +517,7 @@ class TestModelCommons:
         assert model.solver_update is None
         assert model.solver_run is None
         init_params = model.initialize_params(X, y)
-        model._initialize_solver_and_state(X, y, init_params)
+        model.initialize_solver_and_state(X, y, init_params)
         assert callable(model.solver_init_state)
         assert callable(model.solver_update)
         assert callable(model.solver_run)
