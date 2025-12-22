@@ -387,9 +387,7 @@ def generate_data_multi_state(request):
     for i, k in enumerate(range(0, 100, 10)):
         sl = slice(k, k + 10)
         state = i % n_states
-        rate = inv_link(
-            X[sl].dot(coef[:, state]) + intercept[state]
-        )
+        rate = inv_link(X[sl].dot(coef[:, state]) + intercept[state])
         key, subkey = jax.random.split(key)
         y[sl] = obs_model.sample_generator(subkey, rate, scale)
 
@@ -651,18 +649,25 @@ class TestForwardBackward:
         Ensures that the JAX vectorized forward pass produces
         identical results to a simple numpy loop implementation.
         """
-        new_sess, initial_prob, transition_prob, coef, intercept, X, y, obs, scale, inv_link = (
-            generate_data_multi_state
-        )
+        (
+            new_sess,
+            initial_prob,
+            transition_prob,
+            coef,
+            intercept,
+            X,
+            y,
+            obs,
+            scale,
+            inv_link,
+        ) = generate_data_multi_state
         log_likelihood = jax.vmap(
             lambda x, z: obs.log_likelihood(x, z, aggregate_sample_scores=lambda w: w),
             in_axes=(None, 1),
             out_axes=1,
         )
 
-        predicted_rate_given_state = inv_link(
-            X @ coef + intercept
-        )
+        predicted_rate_given_state = inv_link(X @ coef + intercept)
         log_conditionals = log_likelihood(y, predicted_rate_given_state)
 
         log_alphas, log_normalization = forward_pass(
@@ -688,18 +693,25 @@ class TestForwardBackward:
         Ensures that the JAX vectorized backward pass produces
         identical results to a simple numpy loop implementation.
         """
-        new_sess, initial_prob, transition_prob, coef, intercept, X, y, obs, scale, inv_link = (
-            generate_data_multi_state
-        )
+        (
+            new_sess,
+            initial_prob,
+            transition_prob,
+            coef,
+            intercept,
+            X,
+            y,
+            obs,
+            scale,
+            inv_link,
+        ) = generate_data_multi_state
         log_likelihood = jax.vmap(
             lambda x, z: obs.log_likelihood(x, z, aggregate_sample_scores=lambda w: w),
             in_axes=(None, 1),
             out_axes=1,
         )
 
-        predicted_rate_given_state = inv_link(
-            X @ coef + intercept
-        )
+        predicted_rate_given_state = inv_link(X @ coef + intercept)
         log_conditionals = log_likelihood(y, predicted_rate_given_state)
 
         log_alphas, log_normalization = forward_pass(
@@ -1036,9 +1048,18 @@ class TestMStep:
         This test uses gradient-based Lagrange multiplier optimality conditions,
         which work well for interior solutions (alpha > 1).
         """
-        new_sess, initial_prob, transition_prob, coef, intercept, X, y, obs, scale, inv_link = (
-            generate_data_multi_state
-        )
+        (
+            new_sess,
+            initial_prob,
+            transition_prob,
+            coef,
+            intercept,
+            X,
+            y,
+            obs,
+            scale,
+            inv_link,
+        ) = generate_data_multi_state
         _, solver = prepare_partial_hmm_nll_single_neuron(obs)
 
         log_gammas, log_xis = prepare_gammas_and_xis_for_m_step_single_neuron(
@@ -1120,9 +1141,18 @@ class TestMStep:
         indirect=True,
     )
     def test_m_step_set_alpha_init_to_inf(self, generate_data_multi_state, state_idx):
-        new_sess, initial_prob, transition_prob, coef, intercept, X, y, obs, scale, inv_link = (
-            generate_data_multi_state
-        )
+        (
+            new_sess,
+            initial_prob,
+            transition_prob,
+            coef,
+            intercept,
+            X,
+            y,
+            obs,
+            scale,
+            inv_link,
+        ) = generate_data_multi_state
         _, solver = prepare_partial_hmm_nll_single_neuron(obs)
 
         log_gammas, log_xis = prepare_gammas_and_xis_for_m_step_single_neuron(
@@ -1169,9 +1199,18 @@ class TestMStep:
     def test_m_step_set_alpha_transition_to_inf(
         self, generate_data_multi_state, row, col
     ):
-        new_sess, initial_prob, transition_prob, coef, intercept, X, y, obs, scale, inv_link = (
-            generate_data_multi_state
-        )
+        (
+            new_sess,
+            initial_prob,
+            transition_prob,
+            coef,
+            intercept,
+            X,
+            y,
+            obs,
+            scale,
+            inv_link,
+        ) = generate_data_multi_state
         _, solver = prepare_partial_hmm_nll_single_neuron(obs)
 
         log_gammas, log_xis = prepare_gammas_and_xis_for_m_step_single_neuron(
@@ -1216,9 +1255,18 @@ class TestMStep:
         indirect=True,
     )
     def test_m_step_set_alpha_init_to_1(self, generate_data_multi_state):
-        new_sess, initial_prob, transition_prob, coef, intercept, X, y, obs, scale, inv_link = (
-            generate_data_multi_state
-        )
+        (
+            new_sess,
+            initial_prob,
+            transition_prob,
+            coef,
+            intercept,
+            X,
+            y,
+            obs,
+            scale,
+            inv_link,
+        ) = generate_data_multi_state
         _, solver = prepare_partial_hmm_nll_single_neuron(obs)
 
         log_gammas, log_xis = prepare_gammas_and_xis_for_m_step_single_neuron(
@@ -1288,9 +1336,18 @@ class TestMStep:
         indirect=True,
     )
     def test_m_step_set_alpha_transition_to_1(self, generate_data_multi_state):
-        new_sess, initial_prob, transition_prob, coef, intercept, X, y, obs, scale, inv_link = (
-            generate_data_multi_state
-        )
+        (
+            new_sess,
+            initial_prob,
+            transition_prob,
+            coef,
+            intercept,
+            X,
+            y,
+            obs,
+            scale,
+            inv_link,
+        ) = generate_data_multi_state
         _, solver = prepare_partial_hmm_nll_single_neuron(obs)
 
         log_gammas, log_xis = prepare_gammas_and_xis_for_m_step_single_neuron(
@@ -1588,9 +1645,18 @@ class TestMStep:
     def test_likelihood_increases_at_each_update(
         self, generate_data_multi_state, prior
     ):
-        new_sess, initial_prob, transition_prob, coef, intercept, X, y, obs, scale, inv_link = (
-            generate_data_multi_state
-        )
+        (
+            new_sess,
+            initial_prob,
+            transition_prob,
+            coef,
+            intercept,
+            X,
+            y,
+            obs,
+            scale,
+            inv_link,
+        ) = generate_data_multi_state
         new_sess = jnp.asarray(new_sess, dtype=bool)
         ll_func = prepare_ll_estep_likelihood(False, obs)
         (log_posteriors, log_joint_posterior, _, initial_log_like, _, _) = (
@@ -1656,9 +1722,7 @@ class TestMStep:
 
         # Minimize negative log-likelihood to update GLM weights
         initial_log_like = updated_log_like
-        objective = prepare_nll_mstep_numerical_params(
-            False, obs, inv_link
-        )
+        objective = prepare_nll_mstep_numerical_params(False, obs, inv_link)
         new_glm_prams, state = LBFGS(objective).run(
             GLMParams(coef, intercept), X, y, posteriors
         )
@@ -1722,7 +1786,9 @@ class TestMStep:
             dirichlet_prior_alphas_transition=dirichlet_trans,
         )
 
-        jax.tree_util.tree_map(np.testing.assert_allclose, optimized_projection_weights, new_glm_prams)
+        jax.tree_util.tree_map(
+            np.testing.assert_allclose, optimized_projection_weights, new_glm_prams
+        )
         np.testing.assert_allclose(optimized_glm_scale, new_scale)
         np.testing.assert_allclose(jnp.exp(optimized_log_init), new_initial_prob)
         np.testing.assert_allclose(jnp.exp(optimized_log_trans), new_transition_prob)
@@ -2005,9 +2071,18 @@ class TestEMAlgorithm:
 )
 def test_e_and_m_step_for_population(generate_data_multi_state_population):
     """Run E and M step fitting a population."""
-    new_sess, initial_prob, transition_prob, coef, intercept, X, y, obs, scale, inv_link = (
-        generate_data_multi_state_population
-    )
+    (
+        new_sess,
+        initial_prob,
+        transition_prob,
+        coef,
+        intercept,
+        X,
+        y,
+        obs,
+        scale,
+        inv_link,
+    ) = generate_data_multi_state_population
 
     likelihood = prepare_ll_estep_likelihood(True, observation_model=obs)
 
@@ -2619,9 +2694,18 @@ class TestCompilation:
         indirect=True,
     )
     def test_m_step_compiling(self, generate_data_multi_state):
-        new_sess, initial_prob, transition_prob, coef, intercept, X, y, obs, scale, inv_link = (
-            generate_data_multi_state
-        )
+        (
+            new_sess,
+            initial_prob,
+            transition_prob,
+            coef,
+            intercept,
+            X,
+            y,
+            obs,
+            scale,
+            inv_link,
+        ) = generate_data_multi_state
         _, solver = prepare_partial_hmm_nll_single_neuron(obs)
 
         log_gammas, log_xis = prepare_gammas_and_xis_for_m_step_single_neuron(
@@ -2717,9 +2801,18 @@ class TestCompilation:
         Ensures no unnecessary recompilation occurs when calling
         with same static arguments and array shapes.
         """
-        new_sess, initial_prob, transition_prob, coef, intercept, X, y, obs, scale, inv_link = (
-            generate_data_multi_state
-        )
+        (
+            new_sess,
+            initial_prob,
+            transition_prob,
+            coef,
+            intercept,
+            X,
+            y,
+            obs,
+            scale,
+            inv_link,
+        ) = generate_data_multi_state
         _, solver = prepare_partial_hmm_nll_single_neuron(obs)
 
         obs = BernoulliObservations()
@@ -2832,9 +2925,18 @@ class TestCompilation:
 
         forward_backward should compile once and be reused across all EM steps.
         """
-        new_sess, initial_prob, transition_prob, coef, intercept, X, y, obs, scale, inv_link = (
-            generate_data_multi_state
-        )
+        (
+            new_sess,
+            initial_prob,
+            transition_prob,
+            coef,
+            intercept,
+            X,
+            y,
+            obs,
+            scale,
+            inv_link,
+        ) = generate_data_multi_state
         likelihood_func = prepare_ll_estep_likelihood(False, obs)
         negative_log_likelihood_func = prepare_nll_mstep_analytical_scale(False, obs)
 
@@ -2908,9 +3010,18 @@ class TestPytreeSupport:
     )
     def test_forward_backward_with_pytree(self, generate_data_multi_state):
         """Test forward_backward accepts pytree inputs for X and coef."""
-        new_sess, initial_prob, transition_prob, coef, intercept, X, y, obs, scale, inv_link = (
-            generate_data_multi_state
-        )
+        (
+            new_sess,
+            initial_prob,
+            transition_prob,
+            coef,
+            intercept,
+            X,
+            y,
+            obs,
+            scale,
+            inv_link,
+        ) = generate_data_multi_state
         # Split X and coef into dictionaries
         n_features = X.shape[1]
         X_tree = {
@@ -2978,9 +3089,18 @@ class TestPytreeSupport:
         self, generate_data_multi_state
     ):
         """Test posterior_weighted_glm_negative_log_likelihood accepts pytree inputs."""
-        new_sess, initial_prob, transition_prob, coef, intercept, X, y, obs, scale, inv_link = (
-            generate_data_multi_state
-        )
+        (
+            new_sess,
+            initial_prob,
+            transition_prob,
+            coef,
+            intercept,
+            X,
+            y,
+            obs,
+            scale,
+            inv_link,
+        ) = generate_data_multi_state
         # Split X and coef into dictionaries
         X_tree = {
             "feature_a": X[:, :1],
@@ -3037,9 +3157,18 @@ class TestPytreeSupport:
     )
     def test_em_glm_hmm_with_pytree(self, generate_data_multi_state):
         """Test em_glm_hmm accepts pytree inputs for X and coef."""
-        new_sess, initial_prob, transition_prob, coef, intercept, X, y, obs, scale, inv_link = (
-            generate_data_multi_state
-        )
+        (
+            new_sess,
+            initial_prob,
+            transition_prob,
+            coef,
+            intercept,
+            X,
+            y,
+            obs,
+            scale,
+            inv_link,
+        ) = generate_data_multi_state
         # Split X and coef into dictionaries
         X_tree = {
             "feature_a": X[:, :1],
