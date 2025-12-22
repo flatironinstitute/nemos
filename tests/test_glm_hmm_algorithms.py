@@ -21,6 +21,7 @@ from nemos.glm_hmm.expectation_maximization import (
     GLMHMMState,
     backward_pass,
     check_log_likelihood_increment,
+    compute_rate_per_state,
     compute_xi_log,
     em_glm_hmm,
     forward_backward,
@@ -28,7 +29,17 @@ from nemos.glm_hmm.expectation_maximization import (
     max_sum,
     run_m_step,
 )
-from nemos.observation_models import Observations, BernoulliObservations, PoissonObservations, GaussianObservations, GammaObservations
+from nemos.glm_hmm.m_step_analytical_updates import (
+    _analytical_m_step_initial_prob,
+    _analytical_m_step_transition_prob,
+)
+from nemos.observation_models import (
+    BernoulliObservations,
+    GammaObservations,
+    GaussianObservations,
+    Observations,
+    PoissonObservations,
+)
 from nemos.third_party.jaxopt.jaxopt import LBFGS
 
 
@@ -349,6 +360,9 @@ def generate_data_multi_state(request):
     np.random.seed(44)
     obs_model: Observations = request.param["observations"]
     scale: float = request.param["scale"]
+    inv_link = request.param.get("inv_link", None)
+    if inv_link is None:
+        inv_link = obs_model.default_inverse_link_function
 
     # E-step initial parameters
     n_states, n_samples = 5, 100
@@ -365,13 +379,26 @@ def generate_data_multi_state(request):
     for i, k in enumerate(range(0, 100, 10)):
         sl = slice(k, k + 10)
         state = i % n_states
-        rate = np.exp(X[sl].dot(coef[:, state]) + intercept[state])
+        rate = inv_link(
+            X[sl].dot(coef[:, state]) + intercept[state]
+        )
         key, subkey = jax.random.split(key)
         y[sl] = obs_model.sample_generator(subkey, rate, scale)
 
     new_sess = np.zeros(n_samples)
     new_sess[[0, 10, 90]] = 1
-    return new_sess, initial_prob, transition_prob, coef, intercept, X, y
+    return (
+        new_sess,
+        initial_prob,
+        transition_prob,
+        coef,
+        intercept,
+        X,
+        y,
+        obs_model,
+        scale,
+        inv_link,
+    )
 
 
 @pytest.fixture(scope="module")
@@ -380,6 +407,9 @@ def generate_data_multi_state_population(request):
     np.random.seed(44)
     obs_model: Observations = request.param["observations"]
     scale: float = request.param["scale"]
+    inv_link = request.param.get("inv_link", None)
+    if inv_link is None:
+        inv_link = obs_model.default_inverse_link_function
 
     # E-step initial parameters
     n_states, n_neurons, n_samples = 5, 3, 100
@@ -405,7 +435,18 @@ def generate_data_multi_state_population(request):
 
     new_sess = np.zeros(n_samples)
     new_sess[[0, 10, 90]] = 1
-    return new_sess, initial_prob, transition_prob, coef, intercept, X, y
+    return (
+        new_sess,
+        initial_prob,
+        transition_prob,
+        coef,
+        intercept,
+        X,
+        y,
+        obs_model,
+        scale,
+        inv_link,
+    )
 
 
 @pytest.fixture(scope="module")
@@ -590,7 +631,11 @@ class TestForwardBackward:
         np.testing.assert_almost_equal(log_xis_nemos, np.log(xis), decimal=8)
 
     @pytest.mark.requires_x64
-    @pytest.mark.parametrize("generate_data_multi_state", [{"observations": PoissonObservations(), "scale": 1.}], indirect=True)
+    @pytest.mark.parametrize(
+        "generate_data_multi_state",
+        [{"observations": PoissonObservations(), "scale": 1.0}],
+        indirect=True,
+    )
     def test_for_loop_forward_step(self, generate_data_multi_state):
         """
         Test forward pass implementation against numpy for-loop version.
@@ -598,19 +643,16 @@ class TestForwardBackward:
         Ensures that the JAX vectorized forward pass produces
         identical results to a simple numpy loop implementation.
         """
-        new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
+        new_sess, initial_prob, transition_prob, coef, intercept, X, y, obs, scale, inv_link = (
             generate_data_multi_state
         )
-
-        obs = PoissonObservations()
-
         log_likelihood = jax.vmap(
             lambda x, z: obs.log_likelihood(x, z, aggregate_sample_scores=lambda w: w),
             in_axes=(None, 1),
             out_axes=1,
         )
 
-        predicted_rate_given_state = obs.default_inverse_link_function(
+        predicted_rate_given_state = inv_link(
             X @ coef + intercept
         )
         log_conditionals = log_likelihood(y, predicted_rate_given_state)
@@ -626,7 +668,11 @@ class TestForwardBackward:
         np.testing.assert_almost_equal(np.log(normalization_numpy), log_normalization)
 
     @pytest.mark.requires_x64
-    @pytest.mark.parametrize("generate_data_multi_state", [{"observations": PoissonObservations(), "scale": 1.}], indirect=True)
+    @pytest.mark.parametrize(
+        "generate_data_multi_state",
+        [{"observations": PoissonObservations(), "scale": 1.0}],
+        indirect=True,
+    )
     def test_for_loop_backward_step(self, generate_data_multi_state):
         """
         Test backward pass implementation against numpy for-loop version.
@@ -634,18 +680,16 @@ class TestForwardBackward:
         Ensures that the JAX vectorized backward pass produces
         identical results to a simple numpy loop implementation.
         """
-        new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
+        new_sess, initial_prob, transition_prob, coef, intercept, X, y, obs, scale, inv_link = (
             generate_data_multi_state
         )
-        obs = PoissonObservations()
-
         log_likelihood = jax.vmap(
             lambda x, z: obs.log_likelihood(x, z, aggregate_sample_scores=lambda w: w),
             in_axes=(None, 1),
             out_axes=1,
         )
 
-        predicted_rate_given_state = obs.default_inverse_link_function(
+        predicted_rate_given_state = inv_link(
             X @ coef + intercept
         )
         log_conditionals = log_likelihood(y, predicted_rate_given_state)
@@ -973,18 +1017,20 @@ class TestMStep:
         assert optimized_projection_weights_nemos.intercept.shape == (1,)
 
     @pytest.mark.requires_x64
-    @pytest.mark.parametrize("generate_data_multi_state", [{"observations": PoissonObservations(), "scale": 1.}], indirect=True)
+    @pytest.mark.parametrize(
+        "generate_data_multi_state",
+        [{"observations": PoissonObservations(), "scale": 1.0}],
+        indirect=True,
+    )
     def test_m_step_with_prior(self, generate_data_multi_state):
         """Test M-step with Dirichlet priors (alpha > 1) using Lagrange multipliers.
 
         This test uses gradient-based Lagrange multiplier optimality conditions,
         which work well for interior solutions (alpha > 1).
         """
-        new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
+        new_sess, initial_prob, transition_prob, coef, intercept, X, y, obs, scale, inv_link = (
             generate_data_multi_state
         )
-
-        obs = PoissonObservations()
         _, solver = prepare_partial_hmm_nll_single_neuron(obs)
 
         log_gammas, log_xis = prepare_gammas_and_xis_for_m_step_single_neuron(
@@ -1010,7 +1056,7 @@ class TestMStep:
             m_step_fn_glm_params=solver.run,
             glm_scale=jnp.ones(intercept.shape[-1]),
             m_step_fn_glm_scale=None,
-            inverse_link_function=obs.default_inverse_link_function,
+            inverse_link_function=inv_link,
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
@@ -1060,14 +1106,15 @@ class TestMStep:
 
     @pytest.mark.parametrize("state_idx", range(5))
     @pytest.mark.requires_x64
-    @pytest.mark.parametrize("generate_data_multi_state", [{"observations": PoissonObservations(), "scale": 1.}], indirect=True)
+    @pytest.mark.parametrize(
+        "generate_data_multi_state",
+        [{"observations": PoissonObservations(), "scale": 1.0}],
+        indirect=True,
+    )
     def test_m_step_set_alpha_init_to_inf(self, generate_data_multi_state, state_idx):
-        new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
+        new_sess, initial_prob, transition_prob, coef, intercept, X, y, obs, scale, inv_link = (
             generate_data_multi_state
         )
-
-        obs = PoissonObservations()
-
         _, solver = prepare_partial_hmm_nll_single_neuron(obs)
 
         log_gammas, log_xis = prepare_gammas_and_xis_for_m_step_single_neuron(
@@ -1094,7 +1141,7 @@ class TestMStep:
             m_step_fn_glm_params=solver.run,
             glm_scale=jnp.ones(intercept.shape[-1]),
             m_step_fn_glm_scale=None,
-            inverse_link_function=obs.default_inverse_link_function,
+            inverse_link_function=inv_link,
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
@@ -1106,16 +1153,17 @@ class TestMStep:
 
     @pytest.mark.parametrize("row, col", itertools.product(range(3), range(3)))
     @pytest.mark.requires_x64
-    @pytest.mark.parametrize("generate_data_multi_state", [{"observations": PoissonObservations(), "scale": 1.}], indirect=True)
+    @pytest.mark.parametrize(
+        "generate_data_multi_state",
+        [{"observations": PoissonObservations(), "scale": 1.0}],
+        indirect=True,
+    )
     def test_m_step_set_alpha_transition_to_inf(
         self, generate_data_multi_state, row, col
     ):
-        new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
+        new_sess, initial_prob, transition_prob, coef, intercept, X, y, obs, scale, inv_link = (
             generate_data_multi_state
         )
-
-        obs = PoissonObservations()
-
         _, solver = prepare_partial_hmm_nll_single_neuron(obs)
 
         log_gammas, log_xis = prepare_gammas_and_xis_for_m_step_single_neuron(
@@ -1142,7 +1190,7 @@ class TestMStep:
             m_step_fn_glm_params=solver.run,
             glm_scale=jnp.ones(intercept.shape[-1]),
             m_step_fn_glm_scale=None,
-            inverse_link_function=obs.default_inverse_link_function,
+            inverse_link_function=inv_link,
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
@@ -1154,13 +1202,15 @@ class TestMStep:
         )
 
     @pytest.mark.requires_x64
-    @pytest.mark.parametrize("generate_data_multi_state", [{"observations": PoissonObservations(), "scale": 1.}], indirect=True)
+    @pytest.mark.parametrize(
+        "generate_data_multi_state",
+        [{"observations": PoissonObservations(), "scale": 1.0}],
+        indirect=True,
+    )
     def test_m_step_set_alpha_init_to_1(self, generate_data_multi_state):
-        new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
+        new_sess, initial_prob, transition_prob, coef, intercept, X, y, obs, scale, inv_link = (
             generate_data_multi_state
         )
-
-        obs = PoissonObservations()
         _, solver = prepare_partial_hmm_nll_single_neuron(obs)
 
         log_gammas, log_xis = prepare_gammas_and_xis_for_m_step_single_neuron(
@@ -1186,7 +1236,7 @@ class TestMStep:
             m_step_fn_glm_params=solver.run,
             glm_scale=jnp.ones(intercept.shape[-1]),
             m_step_fn_glm_scale=None,
-            inverse_link_function=obs.default_inverse_link_function,
+            inverse_link_function=inv_link,
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
@@ -1206,7 +1256,7 @@ class TestMStep:
             m_step_fn_glm_params=solver.run,
             glm_scale=jnp.ones(intercept.shape[-1]),
             m_step_fn_glm_scale=None,
-            inverse_link_function=obs.default_inverse_link_function,
+            inverse_link_function=inv_link,
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=None,
         )
@@ -1224,13 +1274,15 @@ class TestMStep:
         )
 
     @pytest.mark.requires_x64
-    @pytest.mark.parametrize("generate_data_multi_state", [{"observations": PoissonObservations(), "scale": 1.}], indirect=True)
+    @pytest.mark.parametrize(
+        "generate_data_multi_state",
+        [{"observations": PoissonObservations(), "scale": 1.0}],
+        indirect=True,
+    )
     def test_m_step_set_alpha_transition_to_1(self, generate_data_multi_state):
-        new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
+        new_sess, initial_prob, transition_prob, coef, intercept, X, y, obs, scale, inv_link = (
             generate_data_multi_state
         )
-
-        obs = PoissonObservations()
         _, solver = prepare_partial_hmm_nll_single_neuron(obs)
 
         log_gammas, log_xis = prepare_gammas_and_xis_for_m_step_single_neuron(
@@ -1255,7 +1307,7 @@ class TestMStep:
             m_step_fn_glm_params=solver.run,
             glm_scale=jnp.ones(intercept.shape[-1]),
             m_step_fn_glm_scale=None,
-            inverse_link_function=obs.default_inverse_link_function,
+            inverse_link_function=inv_link,
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
@@ -1275,7 +1327,7 @@ class TestMStep:
             m_step_fn_glm_params=solver.run,
             glm_scale=jnp.ones(intercept.shape[-1]),
             m_step_fn_glm_scale=None,
-            inverse_link_function=obs.default_inverse_link_function,
+            inverse_link_function=inv_link,
             dirichlet_prior_alphas_transition=None,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
@@ -1511,6 +1563,161 @@ class TestMStep:
         # Shapes
         assert log_init.shape == (n_states,)
         assert log_trans.shape == (n_states, n_states)
+
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize(
+        "generate_data_multi_state",
+        [
+            {"observations": BernoulliObservations(), "scale": 1.0, "inv_link": None},
+            {"observations": GaussianObservations(), "scale": 1.0, "inv_link": None},
+            {"observations": GaussianObservations(), "scale": 2.0, "inv_link": None},
+            {"observations": GammaObservations(), "scale": 1.0, "inv_link": np.exp},
+            {"observations": GammaObservations(), "scale": 2.0, "inv_link": np.exp},
+        ],
+        indirect=True,
+    )
+    @pytest.mark.parametrize("prior", [True, False])
+    def test_likelihood_increases_at_each_update(
+        self, generate_data_multi_state, prior
+    ):
+        new_sess, initial_prob, transition_prob, coef, intercept, X, y, obs, scale, inv_link = (
+            generate_data_multi_state
+        )
+        new_sess = jnp.asarray(new_sess, dtype=bool)
+        ll_func = prepare_ll_estep_likelihood(False, obs)
+        (log_posteriors, log_joint_posterior, _, initial_log_like, _, _) = (
+            forward_backward(
+                X,
+                y,
+                np.log(initial_prob),
+                np.log(transition_prob),
+                glm_params=GLMParams(coef, intercept),
+                glm_scale=jnp.ones_like(intercept),
+                inverse_link_function=inv_link,
+                log_likelihood_func=ll_func,
+            )
+        )
+
+        if prior:
+            dirichlet_init = np.random.uniform(1, 3, size=initial_prob.shape)
+            dirichlet_trans = np.random.uniform(1, 3, size=transition_prob.shape)
+        else:
+            dirichlet_init = None
+            dirichlet_trans = None
+
+        # apply update:
+        # Update Initial state probability Eq. 13.18
+        posteriors = jnp.exp(log_posteriors)
+        joint_posterior = jnp.exp(log_joint_posterior)
+        new_initial_prob = _analytical_m_step_initial_prob(
+            posteriors,
+            is_new_session=new_sess,
+            dirichlet_prior_alphas=dirichlet_init,
+        )
+        (_, _, _, updated_log_like, _, _) = forward_backward(
+            X,
+            y,
+            new_initial_prob,
+            np.log(transition_prob),
+            glm_params=GLMParams(coef, intercept),
+            glm_scale=jnp.ones_like(intercept),
+            inverse_link_function=inv_link,
+            log_likelihood_func=ll_func,
+        )
+        assert (
+            updated_log_like > initial_log_like
+        ), "M-step for initial prob did not increase likelihood"
+
+        initial_log_like = updated_log_like
+        new_transition_prob = _analytical_m_step_transition_prob(
+            joint_posterior, dirichlet_prior_alphas=dirichlet_trans
+        )
+        (_, _, _, updated_log_like, _, _) = forward_backward(
+            X,
+            y,
+            new_initial_prob,
+            new_transition_prob,
+            glm_params=GLMParams(coef, intercept),
+            glm_scale=jnp.ones_like(intercept),
+            inverse_link_function=inv_link,
+            log_likelihood_func=ll_func,
+        )
+        assert (
+            updated_log_like > initial_log_like
+        ), "M-step for transition prob did not increase likelihood"
+
+        # Minimize negative log-likelihood to update GLM weights
+        initial_log_like = updated_log_like
+        objective = prepare_nll_mstep_numerical_params(
+            False, obs, inv_link
+        )
+        new_glm_prams, state = LBFGS(objective).run(
+            GLMParams(coef, intercept), X, y, posteriors
+        )
+        (_, _, _, updated_log_like, _, _) = forward_backward(
+            X,
+            y,
+            new_initial_prob,
+            new_transition_prob,
+            glm_params=new_glm_prams,
+            glm_scale=jnp.ones_like(intercept),
+            inverse_link_function=inv_link,
+            log_likelihood_func=ll_func,
+        )
+        assert (
+            updated_log_like > initial_log_like
+        ), "M-step for GLMParams prob did not increase likelihood"
+
+        initial_log_like = updated_log_like
+        predicted_rate = compute_rate_per_state(
+            X, new_glm_prams, inverse_link_function=inv_link
+        )
+        objective_scale = prepare_objective_mstep_numerical_scale(False, obs)
+        new_scale, _ = LBFGS(objective_scale).run(
+            jnp.ones_like(intercept), y, predicted_rate, posteriors
+        )
+        if not isinstance(obs, (PoissonObservations, BernoulliObservations)):
+            (_, _, _, updated_log_like, _, _) = forward_backward(
+                X,
+                y,
+                new_initial_prob,
+                new_transition_prob,
+                glm_params=new_glm_prams,
+                glm_scale=new_scale,
+                inverse_link_function=inv_link,
+                log_likelihood_func=ll_func,
+            )
+            assert (
+                updated_log_like > initial_log_like
+            ), "M-step for GLM scale prob did not increase likelihood"
+        else:
+            np.testing.assert_array_equal(new_scale, jnp.ones_like(intercept))
+
+        (
+            optimized_projection_weights,
+            optimized_glm_scale,
+            optimized_log_init,
+            optimized_log_trans,
+            _,
+        ) = run_m_step(
+            X,
+            y,
+            log_posteriors=log_posteriors,
+            log_joint_posterior=log_joint_posterior,
+            glm_params=GLMParams(coef, intercept),
+            glm_scale=jnp.ones_like(intercept),
+            inverse_link_function=inv_link,
+            is_new_session=new_sess,
+            m_step_fn_glm_scale=LBFGS(objective_scale).run,
+            m_step_fn_glm_params=LBFGS(objective).run,
+            dirichlet_prior_alphas_init_prob=dirichlet_init,
+            dirichlet_prior_alphas_transition=dirichlet_trans,
+        )
+
+        jax.tree_util.tree_map(np.testing.assert_allclose, optimized_projection_weights, new_glm_prams)
+        np.testing.assert_allclose(optimized_glm_scale, new_scale)
+        np.testing.assert_allclose(jnp.exp(optimized_log_init), new_initial_prob)
+        np.testing.assert_allclose(jnp.exp(optimized_log_trans), new_transition_prob)
 
 
 class TestEMAlgorithm:
@@ -1777,14 +1984,16 @@ class TestEMAlgorithm:
 
 
 @pytest.mark.requires_x64
-@pytest.mark.parametrize("generate_data_multi_state_population", [{"observations": PoissonObservations(), "scale": 1.}],
-                         indirect=True)
+@pytest.mark.parametrize(
+    "generate_data_multi_state_population",
+    [{"observations": PoissonObservations(), "scale": 1.0}],
+    indirect=True,
+)
 def test_e_and_m_step_for_population(generate_data_multi_state_population):
     """Run E and M step fitting a population."""
-    new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
+    new_sess, initial_prob, transition_prob, coef, intercept, X, y, obs, scale, inv_link = (
         generate_data_multi_state_population
     )
-    obs = PoissonObservations()
 
     likelihood = prepare_ll_estep_likelihood(True, observation_model=obs)
 
@@ -1796,7 +2005,7 @@ def test_e_and_m_step_for_population(generate_data_multi_state_population):
         GLMParams(coef, intercept),
         glm_scale=jnp.ones_like(intercept),
         log_likelihood_func=likelihood,
-        inverse_link_function=obs.default_inverse_link_function,
+        inverse_link_function=inv_link,
         is_new_session=new_sess.astype(bool),
     )
 
@@ -1804,7 +2013,7 @@ def test_e_and_m_step_for_population(generate_data_multi_state_population):
         prepare_nll_mstep_numerical_params(
             True,
             observation_model=obs,
-            inverse_link_function=obs.default_inverse_link_function,
+            inverse_link_function=inv_link,
         )
     )
     alphas_transition = np.random.uniform(1, 3, size=transition_prob.shape)
@@ -1830,7 +2039,7 @@ def test_e_and_m_step_for_population(generate_data_multi_state_population):
         m_step_fn_glm_scale=solver_scale.run,
         dirichlet_prior_alphas_transition=alphas_transition,
         dirichlet_prior_alphas_init_prob=alphas_init,
-        inverse_link_function=obs.default_inverse_link_function,
+        inverse_link_function=inv_link,
     )
 
 
@@ -2366,14 +2575,15 @@ class TestCompilation:
     """Tests for JIT compilation behavior."""
 
     @pytest.mark.requires_x64
-    @pytest.mark.parametrize("generate_data_multi_state", [{"observations": PoissonObservations(), "scale": 1.}],
-                             indirect=True)
+    @pytest.mark.parametrize(
+        "generate_data_multi_state",
+        [{"observations": PoissonObservations(), "scale": 1.0}],
+        indirect=True,
+    )
     def test_m_step_compiling(self, generate_data_multi_state):
-        new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
+        new_sess, initial_prob, transition_prob, coef, intercept, X, y, obs, scale, inv_link = (
             generate_data_multi_state
         )
-
-        obs = PoissonObservations()
         _, solver = prepare_partial_hmm_nll_single_neuron(obs)
 
         log_gammas, log_xis = prepare_gammas_and_xis_for_m_step_single_neuron(
@@ -2393,7 +2603,7 @@ class TestCompilation:
             m_step_fn_glm_params=solver.run,
             glm_scale=jnp.ones(intercept.shape[-1]),
             m_step_fn_glm_scale=None,
-            inverse_link_function=obs.default_inverse_link_function,
+            inverse_link_function=inv_link,
             dirichlet_prior_alphas_transition=None,
             dirichlet_prior_alphas_init_prob=None,
         )
@@ -2412,7 +2622,7 @@ class TestCompilation:
             m_step_fn_glm_params=solver.run,
             glm_scale=jnp.ones(intercept.shape[-1]),
             m_step_fn_glm_scale=None,
-            inverse_link_function=obs.default_inverse_link_function,
+            inverse_link_function=inv_link,
             dirichlet_prior_alphas_transition=None,
             dirichlet_prior_alphas_init_prob=None,
         )
@@ -2448,7 +2658,7 @@ class TestCompilation:
             m_step_fn_glm_params=solver.run,
             glm_scale=jnp.ones(intercept.shape[-1]),
             m_step_fn_glm_scale=None,
-            inverse_link_function=obs.default_inverse_link_function,
+            inverse_link_function=inv_link,
             dirichlet_prior_alphas_transition=2 * np.ones(transition_prob.shape),
             dirichlet_prior_alphas_init_prob=2 * np.ones(initial_prob.shape),
         )
@@ -2457,8 +2667,11 @@ class TestCompilation:
 
     @pytest.mark.parametrize("solver_name", ["LBFGS", "ProximalGradient"])
     @pytest.mark.requires_x64
-    @pytest.mark.parametrize("generate_data_multi_state", [{"observations": PoissonObservations(), "scale": 1.}],
-                             indirect=True)
+    @pytest.mark.parametrize(
+        "generate_data_multi_state",
+        [{"observations": PoissonObservations(), "scale": 1.0}],
+        indirect=True,
+    )
     def test_em_glm_hmm_compiles_once(self, generate_data_multi_state, solver_name):
         """
         Test that em_glm_hmm compiles only once for repeated calls.
@@ -2466,11 +2679,9 @@ class TestCompilation:
         Ensures no unnecessary recompilation occurs when calling
         with same static arguments and array shapes.
         """
-        new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
+        new_sess, initial_prob, transition_prob, coef, intercept, X, y, obs, scale, inv_link = (
             generate_data_multi_state
         )
-
-        obs = PoissonObservations()
         _, solver = prepare_partial_hmm_nll_single_neuron(obs)
 
         obs = BernoulliObservations()
@@ -2485,7 +2696,7 @@ class TestCompilation:
                 X=design_matrix,
                 y=observations,
                 posteriors=posterior_prob,
-                inverse_link_function=obs.default_inverse_link_function,
+                inverse_link_function=inv_link,
                 negative_log_likelihood_func=negative_log_likelihood_func,
             )
 
@@ -2503,7 +2714,7 @@ class TestCompilation:
             transition_prob=transition_prob,
             glm_params=GLMParams(coef, intercept),
             glm_scale=jnp.ones(transition_prob.shape[0]),
-            inverse_link_function=obs.default_inverse_link_function,
+            inverse_link_function=inv_link,
             likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
             m_step_fn_glm_scale=None,
@@ -2526,7 +2737,7 @@ class TestCompilation:
             transition_prob=transition_prob,
             glm_params=GLMParams(coef, intercept),
             glm_scale=jnp.ones(transition_prob.shape[0]),
-            inverse_link_function=obs.default_inverse_link_function,
+            inverse_link_function=inv_link,
             likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
             m_step_fn_glm_scale=None,
@@ -2555,7 +2766,7 @@ class TestCompilation:
             transition_prob=transition_prob_new,
             glm_params=GLMParams(coef_new, intercept_new),
             glm_scale=jnp.ones(transition_prob.shape[0]),
-            inverse_link_function=obs.default_inverse_link_function,
+            inverse_link_function=inv_link,
             likelihood_func=likelihood_func,
             m_step_fn_glm_params=glm._solver_run,
             m_step_fn_glm_scale=None,
@@ -2570,19 +2781,20 @@ class TestCompilation:
         )
 
     @pytest.mark.requires_x64
-    @pytest.mark.parametrize("generate_data_multi_state", [{"observations": PoissonObservations(), "scale": 1.}],
-                             indirect=True)
+    @pytest.mark.parametrize(
+        "generate_data_multi_state",
+        [{"observations": PoissonObservations(), "scale": 1.0}],
+        indirect=True,
+    )
     def test_forward_backward_compiles_once(self, generate_data_multi_state):
         """
         Test that forward_backward is not recompiled on each EM iteration.
 
         forward_backward should compile once and be reused across all EM steps.
         """
-        new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
+        new_sess, initial_prob, transition_prob, coef, intercept, X, y, obs, scale, inv_link = (
             generate_data_multi_state
         )
-
-        obs = BernoulliObservations()
         likelihood_func = prepare_ll_estep_likelihood(False, obs)
         negative_log_likelihood_func = prepare_nll_mstep_analytical_scale(False, obs)
 
@@ -2594,7 +2806,7 @@ class TestCompilation:
                 X=design_matrix,
                 y=observations,
                 posteriors=posterior_prob,
-                inverse_link_function=obs.default_inverse_link_function,
+                inverse_link_function=inv_link,
                 negative_log_likelihood_func=negative_log_likelihood_func,
             )
 
@@ -2609,7 +2821,7 @@ class TestCompilation:
             GLMParams(coef, intercept),
             glm_scale=jnp.ones(initial_prob.shape[0]),
             log_likelihood_func=likelihood_func,
-            inverse_link_function=obs.default_inverse_link_function,
+            inverse_link_function=inv_link,
             is_new_session=new_sess.astype(bool),
         )
         initial_fb_cache = forward_backward._cache_size()
@@ -2628,7 +2840,7 @@ class TestCompilation:
             GLMParams(coef_new, intercept_new),
             glm_scale=jnp.ones(initial_prob.shape[0]),
             log_likelihood_func=likelihood_func,
-            inverse_link_function=obs.default_inverse_link_function,
+            inverse_link_function=inv_link,
             is_new_session=new_sess.astype(bool),
         )
 
@@ -2647,14 +2859,16 @@ class TestPytreeSupport:
     """Test that GLM-HMM algorithms support pytree inputs."""
 
     @pytest.mark.requires_x64
-    @pytest.mark.parametrize("generate_data_multi_state", [{"observations": PoissonObservations(), "scale": 1.}],
-                             indirect=True)
+    @pytest.mark.parametrize(
+        "generate_data_multi_state",
+        [{"observations": PoissonObservations(), "scale": 1.0}],
+        indirect=True,
+    )
     def test_forward_backward_with_pytree(self, generate_data_multi_state):
         """Test forward_backward accepts pytree inputs for X and coef."""
-        new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
+        new_sess, initial_prob, transition_prob, coef, intercept, X, y, obs, scale, inv_link = (
             generate_data_multi_state
         )
-
         # Split X and coef into dictionaries
         n_features = X.shape[1]
         X_tree = {
@@ -2666,7 +2880,6 @@ class TestPytreeSupport:
             "feature_b": coef[1:, :],
         }
 
-        obs = PoissonObservations()
         likelihood_func = prepare_ll_estep_likelihood(
             is_population_glm=False,
             observation_model=obs,
@@ -2688,7 +2901,7 @@ class TestPytreeSupport:
             GLMParams(coef, intercept),
             glm_scale=jnp.ones(initial_prob.shape[0]),
             log_likelihood_func=likelihood_func,
-            inverse_link_function=obs.default_inverse_link_function,
+            inverse_link_function=inv_link,
             is_new_session=new_sess.astype(bool),
         )
 
@@ -2701,7 +2914,7 @@ class TestPytreeSupport:
             GLMParams(coef_tree, intercept),
             glm_scale=jnp.ones(initial_prob.shape[0]),
             log_likelihood_func=likelihood_func,
-            inverse_link_function=obs.default_inverse_link_function,
+            inverse_link_function=inv_link,
             is_new_session=new_sess.astype(bool),
         )
 
@@ -2714,16 +2927,18 @@ class TestPytreeSupport:
         np.testing.assert_allclose(betas, betas_ref)
 
     @pytest.mark.requires_x64
-    @pytest.mark.parametrize("generate_data_multi_state", [{"observations": PoissonObservations(), "scale": 1.}],
-                             indirect=True)
+    @pytest.mark.parametrize(
+        "generate_data_multi_state",
+        [{"observations": PoissonObservations(), "scale": 1.0}],
+        indirect=True,
+    )
     def test_posterior_weighted_glm_negative_log_likelihood_with_pytree(
         self, generate_data_multi_state
     ):
         """Test posterior_weighted_glm_negative_log_likelihood accepts pytree inputs."""
-        new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
+        new_sess, initial_prob, transition_prob, coef, intercept, X, y, obs, scale, inv_link = (
             generate_data_multi_state
         )
-
         # Split X and coef into dictionaries
         X_tree = {
             "feature_a": X[:, :1],
@@ -2733,8 +2948,6 @@ class TestPytreeSupport:
             "feature_a": coef[:1, :],
             "feature_b": coef[1:, :],
         }
-
-        obs = PoissonObservations()
 
         # Create vmapped negative log likelihood
         negative_log_likelihood = jax.vmap(
@@ -2757,7 +2970,7 @@ class TestPytreeSupport:
             X,
             y,
             posteriors,
-            obs.default_inverse_link_function,
+            inv_link,
             negative_log_likelihood,
         )
 
@@ -2767,7 +2980,7 @@ class TestPytreeSupport:
             X_tree,
             y,
             posteriors,
-            obs.default_inverse_link_function,
+            inv_link,
             negative_log_likelihood,
         )
 
@@ -2775,14 +2988,16 @@ class TestPytreeSupport:
         np.testing.assert_allclose(nll, nll_ref)
 
     @pytest.mark.requires_x64
-    @pytest.mark.parametrize("generate_data_multi_state", [{"observations": PoissonObservations(), "scale": 1.}],
-                             indirect=True)
+    @pytest.mark.parametrize(
+        "generate_data_multi_state",
+        [{"observations": PoissonObservations(), "scale": 1.0}],
+        indirect=True,
+    )
     def test_em_glm_hmm_with_pytree(self, generate_data_multi_state):
         """Test em_glm_hmm accepts pytree inputs for X and coef."""
-        new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
+        new_sess, initial_prob, transition_prob, coef, intercept, X, y, obs, scale, inv_link = (
             generate_data_multi_state
         )
-
         # Split X and coef into dictionaries
         X_tree = {
             "feature_a": X[:, :1],
@@ -2793,7 +3008,6 @@ class TestPytreeSupport:
             "feature_b": coef[1:, :],
         }
 
-        obs = PoissonObservations()
         likelihood_func = prepare_ll_estep_likelihood(
             is_population_glm=False,
             observation_model=obs,
@@ -2812,7 +3026,7 @@ class TestPytreeSupport:
                 X=design_matrix,
                 y=observations,
                 posteriors=posterior_prob,
-                inverse_link_function=obs.default_inverse_link_function,
+                inverse_link_function=inv_link,
                 negative_log_likelihood_func=vmap_nll,
             )
 
@@ -2836,7 +3050,7 @@ class TestPytreeSupport:
             transition_prob=transition_prob,
             glm_params=GLMParams(coef_tree, intercept),
             glm_scale=jnp.ones(initial_prob.shape[0]),
-            inverse_link_function=obs.default_inverse_link_function,
+            inverse_link_function=inv_link,
             likelihood_func=likelihood_func,
             m_step_fn_glm_params=solver_run,
             m_step_fn_glm_scale=None,

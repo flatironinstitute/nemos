@@ -335,7 +335,6 @@ def test_svrg_glm_update(
 )
 @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
 def test_maxiter_is_respected(
-
     glm_class,
     regularizer_name,
     solver_name,
