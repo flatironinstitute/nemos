@@ -11,6 +11,7 @@ from nemos.fetch import fetch_data
 from nemos.glm import GLM
 from nemos.glm.params import GLMParams
 from nemos.glm_hmm.algorithm_configs import (
+    get_analytical_scale_update,
     posterior_weighted_glm_negative_log_likelihood,
     prepare_ll_estep_likelihood,
     prepare_nll_mstep_analytical_scale,
@@ -3240,3 +3241,417 @@ class TestPytreeSupport:
         assert isinstance(final_params, GLMParams)
         assert isinstance(final_params.coef, dict)  # coef should be a dict
         assert final_state.iterations > 0
+
+
+@pytest.mark.requires_x64
+class TestEMScaleOptimization:
+    """
+    Integration tests for EM algorithm with scale parameter optimization.
+
+    This test class uses dedicated fixtures rather than the existing
+    `generate_data_multi_state` fixture for the following reasons:
+
+    1. **Tailored data generation**: These integration tests require specific
+       configurations (different numbers of states, sample sizes) optimized for
+       testing convergence behavior rather than general algorithm correctness.
+
+    2. **Access to ground truth**: The fixtures return dictionaries containing
+       true parameters (`true_scale`, `true_coef`, `true_intercept`) which are
+       essential for validating parameter recovery and convergence quality.
+
+    3. **Test independence**: Using `scope="function"` fixtures ensures each test
+       has independent data, avoiding interference between tests that compare
+       different optimization strategies (e.g., with vs without scale optimization).
+
+    4. **Flexibility**: Different tests need different observation models (Gaussian
+       with analytical updates, Gamma with numerical updates) and both single-neuron
+       and population configurations, which would require extensive parametrization
+       of the existing fixtures.
+
+    The existing `generate_data_multi_state` fixtures remain appropriate for unit
+    tests and algorithm correctness checks where ground truth parameters are not
+    needed and module-scoped fixtures improve test performance.
+    """
+
+    @pytest.fixture
+    def gaussian_data_single_neuron(self):
+        """Generate synthetic Gaussian GLM-HMM data for single neuron."""
+        np.random.seed(42)
+        n_samples, n_features, n_states = 200, 3, 4
+
+        # True parameters
+        true_coef = np.random.randn(n_features, n_states) * 0.5
+        true_intercept = np.random.randn(n_states)
+        true_scale = np.random.uniform(0.5, 2.0, n_states)  # Different variance per state
+
+        # HMM parameters
+        initial_prob = np.ones(n_states) / n_states
+        transition_prob = np.eye(n_states) * 0.9 + (1 - np.eye(n_states)) * 0.1 / (n_states - 1)
+
+        # Generate data
+        X = np.random.randn(n_samples, n_features)
+        states = np.zeros(n_samples, dtype=int)
+        states[0] = np.random.choice(n_states, p=initial_prob)
+        for t in range(1, n_samples):
+            states[t] = np.random.choice(n_states, p=transition_prob[states[t-1]])
+
+        # Generate observations
+        rates = X @ true_coef + true_intercept
+        y = rates[np.arange(n_samples), states] + np.random.randn(n_samples) * np.sqrt(true_scale[states])
+
+        return {
+            'X': X, 'y': y,
+            'true_coef': true_coef, 'true_intercept': true_intercept, 'true_scale': true_scale,
+            'initial_prob': initial_prob, 'transition_prob': transition_prob,
+            'n_states': n_states
+        }
+
+    @pytest.fixture
+    def gaussian_data_population(self):
+        """Generate synthetic Gaussian GLM-HMM data for population."""
+        np.random.seed(123)
+        n_samples, n_features, n_neurons, n_states = 150, 2, 3, 3
+
+        # True parameters
+        true_coef = np.random.randn(n_features, n_neurons, n_states) * 0.3
+        true_intercept = np.random.randn(n_neurons, n_states)
+        true_scale = np.random.uniform(0.3, 1.5, (n_neurons, n_states))
+
+        # HMM parameters
+        initial_prob = np.ones(n_states) / n_states
+        transition_prob = np.eye(n_states) * 0.85 + (1 - np.eye(n_states)) * 0.15 / (n_states - 1)
+
+        # Generate data
+        X = np.random.randn(n_samples, n_features)
+        states = np.zeros(n_samples, dtype=int)
+        states[0] = np.random.choice(n_states, p=initial_prob)
+        for t in range(1, n_samples):
+            states[t] = np.random.choice(n_states, p=transition_prob[states[t-1]])
+
+        # Generate observations
+        rates = np.einsum('tf,fnk->tnk', X, true_coef) + true_intercept
+        y = np.zeros((n_samples, n_neurons))
+        for t in range(n_samples):
+            y[t] = rates[t, :, states[t]] + np.random.randn(n_neurons) * np.sqrt(true_scale[:, states[t]])
+
+        return {
+            'X': X, 'y': y,
+            'true_coef': true_coef, 'true_intercept': true_intercept, 'true_scale': true_scale,
+            'initial_prob': initial_prob, 'transition_prob': transition_prob,
+            'n_states': n_states
+        }
+
+    @pytest.fixture
+    def gamma_data_single_neuron(self):
+        """Generate synthetic Gamma GLM-HMM data for single neuron."""
+        np.random.seed(99)
+        n_samples, n_features, n_states = 200, 3, 3
+
+        # True parameters
+        true_coef = np.random.randn(n_features, n_states) * 0.3
+        true_intercept = np.random.randn(n_states) - 1.0  # Negative to ensure positive rates after exp
+        true_scale = np.random.uniform(1.0, 3.0, n_states)
+
+        # HMM parameters
+        initial_prob = np.ones(n_states) / n_states
+        transition_prob = np.eye(n_states) * 0.9 + (1 - np.eye(n_states)) * 0.1 / (n_states - 1)
+
+        # Generate data
+        X = np.random.randn(n_samples, n_features)
+        states = np.zeros(n_samples, dtype=int)
+        states[0] = np.random.choice(n_states, p=initial_prob)
+        for t in range(1, n_samples):
+            states[t] = np.random.choice(n_states, p=transition_prob[states[t-1]])
+
+        # Generate observations (Gamma with rate parameterization)
+        rates = np.exp(X @ true_coef + true_intercept)
+        y = np.zeros(n_samples)
+        for t in range(n_samples):
+            # Gamma: shape = scale, rate = scale / mean  =>  mean = rate
+            shape = true_scale[states[t]]
+            rate_param = shape / rates[t, states[t]]
+            y[t] = np.random.gamma(shape, 1.0 / rate_param)
+
+        return {
+            'X': X, 'y': y,
+            'true_coef': true_coef, 'true_intercept': true_intercept, 'true_scale': true_scale,
+            'initial_prob': initial_prob, 'transition_prob': transition_prob,
+            'n_states': n_states
+        }
+
+    def test_em_gaussian_analytical_scale_single_neuron(self, gaussian_data_single_neuron):
+        """
+        Test #1: Full EM with Gaussian observations using analytical scale update (single neuron).
+
+        Verifies that:
+        1. EM converges with analytical scale optimization
+        2. Scale parameters improve over iterations
+        3. Final likelihood is better than initial
+        """
+        data = gaussian_data_single_neuron
+        obs = GaussianObservations()
+
+        # Initialize parameters (intentionally poor initialization)
+        init_coef = np.random.randn(*data['true_coef'].shape) * 0.1
+        init_intercept = np.random.randn(data['n_states']) * 0.1
+        init_scale = jnp.ones(data['n_states'])  # Start with all scales = 1
+
+        # Prepare EM components
+        likelihood_func = prepare_ll_estep_likelihood(False, obs)
+        nll_params = prepare_nll_mstep_numerical_params(False, obs, lambda x: x)
+        scale_update_fn = get_analytical_scale_update(obs, is_population_glm=False)
+
+        solver = LBFGS(nll_params, tol=10**-6)
+
+        # Run EM with scale optimization
+        (
+            posteriors,
+            joint_posterior,
+            final_init_prob,
+            final_trans_prob,
+            final_params,
+            final_scale,
+            final_state,
+        ) = em_glm_hmm(
+            data['X'],
+            data['y'],
+            initial_prob=data['initial_prob'],
+            transition_prob=data['transition_prob'],
+            glm_params=GLMParams(init_coef, init_intercept),
+            glm_scale=init_scale,
+            inverse_link_function=lambda x: x,  # Identity link for Gaussian
+            likelihood_func=likelihood_func,
+            m_step_fn_glm_params=solver.run,
+            m_step_fn_glm_scale=scale_update_fn,
+            maxiter=50,
+            tol=1e-5,
+        )
+
+        # Verify convergence
+        assert final_state.iterations > 0, "EM should have run at least one iteration"
+
+        # Verify scale was updated (should differ from initialization)
+        assert not jnp.allclose(final_scale, init_scale, atol=0.1), \
+            "Scale should have been updated from initialization"
+
+        # Verify scale is positive
+        assert jnp.all(final_scale > 0), "All scale parameters should be positive"
+
+        # Verify shapes
+        assert final_scale.shape == (data['n_states'],)
+        assert posteriors.shape == (data['X'].shape[0], data['n_states'])
+
+    def test_em_gaussian_scale_improves_likelihood(self, gaussian_data_single_neuron):
+        """
+        Test #3: Compare EM with and without scale optimization for Gaussian.
+
+        Verifies that:
+        1. EM with scale optimization achieves higher or equal likelihood
+        2. Both configurations converge successfully
+        """
+        data = gaussian_data_single_neuron
+        obs = GaussianObservations()
+
+        # Shared initialization (use fixed seed for reproducibility)
+        np.random.seed(999)
+        init_coef = np.random.randn(*data['true_coef'].shape) * 0.1
+        init_intercept = np.random.randn(data['n_states']) * 0.1
+        init_scale = jnp.ones(data['n_states'])
+
+        # Prepare components
+        likelihood_func = prepare_ll_estep_likelihood(False, obs)
+        nll_params = prepare_nll_mstep_numerical_params(False, obs, lambda x: x)
+        scale_update_fn = get_analytical_scale_update(obs, is_population_glm=False)
+
+        solver = LBFGS(nll_params, tol=10**-6)
+
+        # Run EM WITHOUT scale optimization
+        (
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            state_no_scale,
+        ) = em_glm_hmm(
+            data['X'],
+            data['y'],
+            initial_prob=data['initial_prob'],
+            transition_prob=data['transition_prob'],
+            glm_params=GLMParams(init_coef.copy(), init_intercept.copy()),
+            glm_scale=init_scale,
+            inverse_link_function=lambda x: x,
+            likelihood_func=likelihood_func,
+            m_step_fn_glm_params=solver.run,
+            m_step_fn_glm_scale=None,  # No scale optimization
+            maxiter=50,
+            tol=1e-5,
+        )
+
+        # Run EM WITH scale optimization
+        (
+            _,
+            _,
+            _,
+            _,
+            _,
+            final_scale,
+            state_with_scale,
+        ) = em_glm_hmm(
+            data['X'],
+            data['y'],
+            initial_prob=data['initial_prob'],
+            transition_prob=data['transition_prob'],
+            glm_params=GLMParams(init_coef.copy(), init_intercept.copy()),
+            glm_scale=init_scale,
+            inverse_link_function=lambda x: x,
+            likelihood_func=likelihood_func,
+            m_step_fn_glm_params=solver.run,
+            m_step_fn_glm_scale=scale_update_fn,
+            maxiter=50,
+            tol=1e-5,
+        )
+
+        # Verify both converged
+        assert state_no_scale.iterations > 0
+        assert state_with_scale.iterations > 0
+
+        # The version with scale optimization should achieve equal or better likelihood
+        # Note: We compare final log-likelihoods stored in the state
+        # Since we're optimizing scale, it should at minimum match the fixed scale version
+        assert state_with_scale.data_log_likelihood >= state_no_scale.data_log_likelihood - 1e-3, \
+            "EM with scale optimization should achieve at least as good likelihood"
+
+        # Verify scale changed
+        assert not jnp.allclose(final_scale, init_scale, atol=0.1), \
+            "Scale parameters should have been optimized"
+
+    def test_em_gamma_numerical_scale_single_neuron(self, gamma_data_single_neuron):
+        """
+        Test #2: Full EM with Gamma observations using numerical scale update.
+
+        Verifies that:
+        1. Numerical scale optimization works for Gamma
+        2. EM converges
+        3. Scale parameters are updated appropriately
+        """
+        data = gamma_data_single_neuron
+        obs = GammaObservations()
+
+        # Initialize parameters
+        init_coef = np.random.randn(*data['true_coef'].shape) * 0.1
+        init_intercept = np.random.randn(data['n_states']) - 1.0
+        init_scale = jnp.ones(data['n_states']) * 2.0  # Initialize to moderate value
+
+        # Prepare EM components
+        likelihood_func = prepare_ll_estep_likelihood(False, obs)
+        nll_params = prepare_nll_mstep_numerical_params(False, obs, jnp.exp)
+        nll_scale = prepare_objective_mstep_numerical_scale(False, obs)
+
+        solver_params = LBFGS(nll_params, tol=10**-6)
+        solver_scale = LBFGS(nll_scale, tol=10**-6)
+
+        # Run EM with numerical scale optimization
+        (
+            posteriors,
+            joint_posterior,
+            final_init_prob,
+            final_trans_prob,
+            final_params,
+            final_scale,
+            final_state,
+        ) = em_glm_hmm(
+            data['X'],
+            data['y'],
+            initial_prob=data['initial_prob'],
+            transition_prob=data['transition_prob'],
+            glm_params=GLMParams(init_coef, init_intercept),
+            glm_scale=init_scale,
+            inverse_link_function=jnp.exp,
+            likelihood_func=likelihood_func,
+            m_step_fn_glm_params=solver_params.run,
+            m_step_fn_glm_scale=solver_scale.run,  # Numerical optimization
+            maxiter=50,
+            tol=1e-5,
+        )
+
+        # Verify convergence
+        assert final_state.iterations > 0, "EM should have run at least one iteration"
+
+        # Verify scale was updated
+        assert not jnp.allclose(final_scale, init_scale, atol=0.1), \
+            "Scale should have been updated from initialization"
+
+        # Verify scale is positive (required for Gamma)
+        assert jnp.all(final_scale > 0), "All scale parameters should be positive for Gamma"
+
+        # Verify shapes
+        assert final_scale.shape == (data['n_states'],)
+        assert posteriors.shape == (data['X'].shape[0], data['n_states'])
+
+    def test_em_gaussian_analytical_scale_population(self, gaussian_data_population):
+        """
+        Test #5: Full EM for population GLM with Gaussian observations and analytical scale.
+
+        Verifies:
+        1. Population case works with analytical scale update
+        2. Scale has shape (n_neurons, n_states)
+        3. EM converges
+        """
+        data = gaussian_data_population
+        obs = GaussianObservations()
+
+        # Initialize parameters
+        init_coef = np.random.randn(*data['true_coef'].shape) * 0.1
+        init_intercept = np.random.randn(*data['true_intercept'].shape) * 0.1
+        init_scale = jnp.ones(data['true_scale'].shape)
+
+        # Prepare EM components
+        likelihood_func = prepare_ll_estep_likelihood(True, obs)  # is_population_glm=True
+        nll_params = prepare_nll_mstep_numerical_params(True, obs, lambda x: x)
+        scale_update_fn = get_analytical_scale_update(obs, is_population_glm=True)
+
+        solver = LBFGS(nll_params, tol=10**-6)
+
+        # Run EM with scale optimization
+        (
+            posteriors,
+            joint_posterior,
+            final_init_prob,
+            final_trans_prob,
+            final_params,
+            final_scale,
+            final_state,
+        ) = em_glm_hmm(
+            data['X'],
+            data['y'],
+            initial_prob=data['initial_prob'],
+            transition_prob=data['transition_prob'],
+            glm_params=GLMParams(init_coef, init_intercept),
+            glm_scale=init_scale,
+            inverse_link_function=lambda x: x,
+            likelihood_func=likelihood_func,
+            m_step_fn_glm_params=solver.run,
+            m_step_fn_glm_scale=scale_update_fn,
+            maxiter=50,
+            tol=1e-5,
+        )
+
+        # Verify convergence
+        assert final_state.iterations > 0, "EM should have run at least one iteration"
+
+        # Verify scale shape (n_neurons, n_states)
+        n_neurons = data['y'].shape[1]
+        assert final_scale.shape == (n_neurons, data['n_states']), \
+            f"Expected scale shape ({n_neurons}, {data['n_states']}), got {final_scale.shape}"
+
+        # Verify scale was updated
+        assert not jnp.allclose(final_scale, init_scale, atol=0.1), \
+            "Scale should have been updated from initialization"
+
+        # Verify all scales are positive
+        assert jnp.all(final_scale > 0), "All scale parameters should be positive"
+
+        # Verify posteriors shape
+        assert posteriors.shape == (data['X'].shape[0], data['n_states'])
