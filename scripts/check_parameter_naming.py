@@ -97,6 +97,7 @@ VALID_PAIRS = [
     {"solver_kwargs", "solver_init_kwargs"},
     {"unaccepted_name", "accepted_name"},
     {"fn", "fun"},
+    {"ax", "aux"},
     {"glm_params_init", "glm_params"},
     {"initial_prob", "log_initial_prob"},
     {"transition_prob", "log_transition_prob"},
