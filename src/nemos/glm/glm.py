@@ -1054,7 +1054,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         observation_model: GammaObservations()
         regularizer: Ridge()
         regularizer_strength: 0.1
-        solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
+        solver_kwargs: {'maxiter': 1000, 'stepsize': 0.1, 'tol': 1e-06}
         solver_name: BFGS
 
         >>> # Saving and loading a custom inverse link function

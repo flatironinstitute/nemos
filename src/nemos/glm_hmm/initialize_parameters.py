@@ -161,15 +161,10 @@ def uniform_initial_proba_init(
     >>>
     >>> # Generate initial probabilities for 3 states
     >>> n_states = 3
-    >>> init_probs = uniform_initial_proba_init(n_states)
+    >>> X_dummy, y_dummy = jnp.ones((3, 2)), jnp.ones(3)
+    >>> init_probs = uniform_initial_proba_init(n_states, X_dummy, y_dummy)
     >>> init_probs.shape
     (3,)
-    >>> jnp.isclose(jnp.sum(init_probs), 1.0)
-    Array(True, dtype=bool)
-    >>>
-    >>> # Use a custom random key for reproducibility
-    >>> key = jax.random.PRNGKey(42)
-    >>> init_probs = uniform_initial_proba_init(n_states, random_key=key)
     >>> jnp.isclose(jnp.sum(init_probs), 1.0)
     Array(True, dtype=bool)
     """
