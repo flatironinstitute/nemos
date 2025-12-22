@@ -181,51 +181,6 @@ def single_session_viterbi_with_hmmlearn(model, log_emission):
         model._compute_log_likelihood = original_method
 
 
-def prepare_solver_for_m_step_single_neuron(
-    X, y, initial_prob, transition_prob, glm_params, new_sess, obs
-):
-    """
-    Prepare solver for M-step optimization for single neuron.
-
-    Parameters
-    ----------
-    X
-        Design matrix.
-    y
-        Observations.
-    initial_prob
-        Initial state probabilities.
-    transition_prob
-        State transition probability matrix.
-    glm_params
-        Tuple of (coefficients, intercept).
-    new_sess
-        Binary array indicating new session starts.
-    obs
-        Observation model instance.
-
-    Returns
-    -------
-    gammas
-        Posterior state probabilities.
-    xis
-        Joint posterior probabilities for consecutive states.
-    """
-    (coef, intercept) = glm_params
-    likelihood = prepare_ll_estep_likelihood(y.ndim > 1, obs)
-    gammas, xis, _, _, _, _ = forward_backward(
-        X,
-        y,
-        initial_prob,
-        transition_prob,
-        GLMParams(coef, intercept),
-        scale=jnp.ones_like(intercept),
-        log_likelihood_func=likelihood,
-        inverse_link_function=obs.default_inverse_link_function,
-        is_new_session=new_sess.astype(bool),
-    )
-
-
 def prepare_partial_hmm_nll_single_neuron(obs):
     """
     Prepare partial HMM negative log-likelihood function and solver.
