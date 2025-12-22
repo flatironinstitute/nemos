@@ -400,8 +400,8 @@ class TestModelCommons:
             init_state = model.initialize_solver_and_state(X, y, params)
             # optimistix solvers do not have a velocity attr
             assert getattr(
-                init_state, "velocity", params
-            ) == params
+                init_state, "velocity", model._validator.to_model_params(params)
+            ) == model._validator.to_model_params(params)
 
     @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso", "ElasticNet"])
     def test_reg_strength_reset(self, reg, instantiate_base_regressor_subclass):
