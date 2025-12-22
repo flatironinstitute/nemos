@@ -7,7 +7,7 @@ import jax.numpy as jnp
 from numpy.typing import ArrayLike
 from scipy.optimize import root_scalar
 
-from ..inverse_link_function_utils import exp, logistic, norm_cdf, softplus
+from ..inverse_link_function_utils import exp, identity, logistic, norm_cdf, softplus
 from ..utils import one_over_x
 
 # dictionary of known inverse link functions.
@@ -17,6 +17,7 @@ INVERSE_FUNCS = {
     logistic: jax.scipy.special.logit,
     norm_cdf: jax.scipy.stats.norm.ppf,
     one_over_x: one_over_x,
+    identity: identity,
 }
 
 # Name-based lookup (for after pickling/copying)
@@ -26,7 +27,14 @@ INVERSE_FUNCS_BY_SIMPLE_NAME = {
     "logistic": jax.scipy.special.logit,
     "norm_cdf": jax.scipy.stats.norm.ppf,
     "one_over_x": one_over_x,
+    "identity": identity,
 }
+
+non_finite_error = ValueError(
+    "Failed to initialize the model intercept as the inverse of the firing rate for "
+    "the provided link function. The inferred intercept has non-finite values. "
+    "Please provide initial parameters instead."
+)
 
 
 def get_inverse_function(func: Callable):
@@ -119,6 +127,9 @@ def initialize_intercept_matching_mean_rate(
                 "Failed to initialize the model intercept as the inverse of the firing rate for "
                 "the provided link function. The mean firing rate has some non-positive values."
             )
+        if jnp.any(~jnp.isfinite(out)):
+            raise non_finite_error
+
         return out
 
     def func(x, mean_x):
@@ -131,4 +142,8 @@ def initialize_intercept_matching_mean_rate(
             "Failed to initialize the model intercept as the inverse of the firing rate for the"
             " provided link function. Please, provide initial parameters instead!"
         )
+
+    if jnp.any(~jnp.isfinite(out)):
+        raise non_finite_error
+
     return out

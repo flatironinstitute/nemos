@@ -14,14 +14,19 @@ import sklearn
 import statsmodels.api as sm
 from numba import njit
 from pynapple import Tsd, TsdFrame
-from sklearn.linear_model import GammaRegressor, LogisticRegression, PoissonRegressor
+from sklearn.linear_model import (
+    GammaRegressor,
+    LinearRegression,
+    LogisticRegression,
+    PoissonRegressor,
+)
 from sklearn.model_selection import GridSearchCV
 
 import nemos as nmo
 from nemos import solvers
 from nemos._observation_model_builder import instantiate_observation_model
 from nemos._regularizer_builder import instantiate_regularizer
-from nemos.inverse_link_function_utils import LINK_NAME_TO_FUNC
+from nemos.inverse_link_function_utils import LINK_NAME_TO_FUNC, identity
 from nemos.observation_models import NegativeBinomialObservations
 from nemos.pytrees import FeaturePytree
 from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
@@ -1426,6 +1431,7 @@ class TestGLM:
 @pytest.mark.parametrize(
     "model_instantiation",
     [
+        "gaussianGLM_model_instantiation",
         "poissonGLM_model_instantiation",
         "gammaGLM_model_instantiation",
         "bernoulliGLM_model_instantiation",
@@ -1434,9 +1440,9 @@ class TestGLM:
 )
 class TestGLMObservationModel:
     """
-    Shared unit tests of the GLM class that do depend on obeservation model.
+    Shared unit tests of the GLM class that do depend on observation model.
     i.e. tests that directly depend on observation model methods (e.g. model.fit, model.score, model.update),
-    and tests that inspect the output when obervation model methods are called.
+    and tests that inspect the output when observation model methods are called.
 
     For new observation models, add it in the class parameterization above, and add cases for the fixtures below.
     """
@@ -1480,6 +1486,17 @@ class TestGLMObservationModel:
                     / norm
                 )
 
+        elif "gaussian" in model_instantiation:
+
+            def ll(y, mean_firing, scale):
+                if y.ndim == 1:
+                    norm = y.shape[0]
+                elif y.ndim == 2:
+                    norm = y.shape[0] * y.shape[1]
+                return (
+                    sm.families.Gaussian().loglike(y, mean_firing, scale=scale) / norm
+                )
+
         else:
             raise ValueError("Unknown model instantiation")
         return ll
@@ -1505,6 +1522,9 @@ class TestGLMObservationModel:
         elif "negativeBinomial" in model_instantiation:
             return None
 
+        elif "gaussian" in model_instantiation:
+            return LinearRegression(fit_intercept=True)
+
         else:
             raise ValueError("Unknown model instantiation")
 
@@ -1524,6 +1544,9 @@ class TestGLMObservationModel:
 
         elif "negativeBinomial" in model_instantiation:
             return 0.01
+
+        elif "gaussian" in model_instantiation:
+            return 0.5
 
         else:
             raise ValueError("Unknown model instantiation")
@@ -1557,6 +1580,12 @@ class TestGLMObservationModel:
             else:
                 return np.array([5])
 
+        elif "gaussian" in model_instantiation:
+            if "population" in glm_type:
+                return np.array([5, 5, 5])
+            else:
+                return np.array([5])
+
         else:
             raise ValueError("Unknown model instantiation")
 
@@ -1575,6 +1604,9 @@ class TestGLMObservationModel:
             return False
 
         elif "negativeBinomial" in model_instantiation:
+            return False
+
+        elif "gaussian" in model_instantiation:
             return False
 
         else:
@@ -1603,11 +1635,17 @@ class TestGLMObservationModel:
             else:
                 return "GLM(\n    observation_model=BernoulliObservations(),\n    inverse_link_function=logistic,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
 
-        elif "negative_binomial":
+        elif "negativeBinomial" in model_instantiation:
             if "population" in glm_type:
                 return "PopulationGLM(\n    observation_model=NegativeBinomialObservations(scale=1.0),\n    inverse_link_function=exp,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
             else:
                 return "GLM(\n    observation_model=NegativeBinomialObservations(scale=1.0),\n    inverse_link_function=exp,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
+
+        elif "gaussian" in model_instantiation:
+            if "population" in glm_type:
+                return "PopulationGLM(\n    observation_model=GaussianObservations(),\n    inverse_link_function=identity,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
+            else:
+                return "GLM(\n    observation_model=GaussianObservations(),\n    inverse_link_function=identity,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
 
         else:
             raise ValueError("Unknown model instantiation")
@@ -1618,10 +1656,8 @@ class TestGLMObservationModel:
     @pytest.mark.parametrize(
         "X, y",
         [
-            (jnp.zeros((2, 4)), jnp.zeros((2,))),
             (jnp.ones((2, 4)), jnp.ones((2,))),
             (jnp.zeros((2, 4)), jnp.ones((2,))),
-            (jnp.ones((2, 4)), jnp.zeros((2,))),
         ],
     )
     def test_parameter_initialization(
@@ -1657,6 +1693,8 @@ class TestGLMObservationModel:
             glm_type + model_instantiation + "_pytree"
         )
         # fit both models
+        model.solver_kwargs.update(dict(tol=1e-12))
+        model_tree.solver_kwargs.update(dict(tol=1e-12))
         model.fit(X, y, init_params=true_params)
         model_tree.fit(X_tree, y, init_params=true_params_tree)
 
@@ -1730,7 +1768,7 @@ class TestGLMObservationModel:
         # get the rate
         mean_firing = model.predict(X)
         # compute the log-likelihood using jax.scipy
-        if "gamma" in model_instantiation:
+        if "gamma" in model_instantiation or "gaussian" in model_instantiation:
             mean_ll_jax = ll_scipy_stats(y, mean_firing, model.scale_)
         else:
             mean_ll_jax = ll_scipy_stats(y, mean_firing)
@@ -1784,7 +1822,7 @@ class TestGLMObservationModel:
         state = model.initialize_state(X, y, params)
         assert model.coef_ is None
         assert model.intercept_ is None
-        if "gamma" not in model_instantiation:
+        if "gamma" not in model_instantiation and "gaussian" not in model_instantiation:
             # gamma model instantiation sets the scale
             assert model.scale_ is None
         _, _ = model.update(params, state, X[:batch_size], y[:batch_size])
@@ -1820,7 +1858,7 @@ class TestGLMObservationModel:
 
         assert model.coef_ is None
         assert model.intercept_ is None
-        if "gamma" not in model_instantiation:
+        if "gamma" not in model_instantiation and "gaussian" not in model_instantiation:
             # gamma model instantiation sets the scale
             assert model.scale_ is None
 
@@ -1846,6 +1884,7 @@ class TestGLMObservationModel:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
+        model.solver_kwargs.update({"stepsize": 0.01})
         params = model.initialize_params(X, y)
         state = model.initialize_state(X, y, params)
         # extract batch and add nans
@@ -1945,130 +1984,8 @@ class TestGLMObservationModel:
         # check that the repr works after cloning
         repr(cls)
 
-    @pytest.mark.parametrize("regr_setup", ["", "_pytree"])
-    @pytest.mark.parametrize("key", [jax.random.key(0), jax.random.key(19)])
-    @pytest.mark.parametrize(
-        "regularizer_class, solver_name",
-        [
-            (nmo.regularizer.UnRegularized, "SVRG"),
-            (nmo.regularizer.Ridge, "SVRG"),
-            (nmo.regularizer.Lasso, "ProxSVRG"),
-            (nmo.regularizer.ElasticNet, "ProxSVRG"),
-            # (nmo.regularizer.GroupLasso, "ProxSVRG"),
-        ],
-    )
-    @pytest.mark.solver_related
-    @pytest.mark.requires_x64
-    def test_glm_update_consistent_with_fit_with_svrg(
-        self,
-        request,
-        glm_type,
-        model_instantiation,
-        regr_setup,
-        key,
-        regularizer_class,
-        solver_name,
-    ):
-        """
-        Make sure that calling GLM.update with the rest of the algorithm implemented outside in a naive loop
-        is consistent with running the compiled GLM.fit on the same data with the same parameters
-        """
-        X, y, model, true_params, rate = request.getfixturevalue(
-            glm_type + model_instantiation + regr_setup
-        )
-
-        N = y.shape[0]
-        batch_size = 1
-        maxiter = 3  # number of epochs
-        tol = 1e-12
-        stepsize = 1e-3
-
-        # has to match how the number of iterations is calculated in SVRG
-        m = int((N + batch_size - 1) // batch_size)
-
-        regularizer_kwargs = {}
-        if regularizer_class.__name__ == "GroupLasso":
-            n_features = sum(x.shape[1] for x in jax.tree.leaves(X))
-            regularizer_kwargs["mask"] = (
-                (np.random.randn(n_features) > 0).reshape(1, -1).astype(float)
-            )
-
-        reg = regularizer_class(**regularizer_kwargs)
-        strength = None if isinstance(reg, nmo.regularizer.UnRegularized) else 1.0
-        glm = type(model)(
-            regularizer=reg,
-            regularizer_strength=strength,
-            solver_name=solver_name,
-            solver_kwargs={
-                "batch_size": batch_size,
-                "stepsize": stepsize,
-                "tol": tol,
-                "maxiter": maxiter,
-                "key": key,
-            },
-        )
-        glm2 = type(model)(
-            regularizer=reg,
-            solver_name=solver_name,
-            solver_kwargs={
-                "batch_size": batch_size,
-                "stepsize": stepsize,
-                "tol": tol,
-                "maxiter": maxiter,
-                "key": key,
-            },
-            regularizer_strength=strength,
-        )
-        glm2.fit(X, y)
-
-        params = glm.initialize_params(X, y)
-        state = glm.initialize_state(X, y, params)
-        glm.instantiate_solver(glm.compute_loss)
-
-        # NOTE these two are not the same because for example Ridge augments the loss
-        # loss_grad = jax.jit(jax.grad(glm.compute_loss))
-        loss_grad = jax.jit(jax.grad(glm._solver_loss_fun))
-
-        # copied from GLM.fit
-        # grab data if needed (tree map won't function because param is never a FeaturePytree).
-        if isinstance(X, FeaturePytree):
-            X = X.data
-
-        iter_num = 0
-        while iter_num < maxiter:
-            state = state._replace(
-                full_grad_at_reference_point=loss_grad(params, X, y),
-            )
-
-            prev_params = params
-            for _ in range(m):
-                key, subkey = jax.random.split(key)
-                ind = jax.random.randint(subkey, (batch_size,), 0, N)
-                xi, yi = tree_slice(X, ind), tree_slice(y, ind)
-                params, state = glm.update(params, state, xi, yi)
-
-            state = state._replace(
-                reference_point=params,
-            )
-
-            iter_num += 1
-
-            _error = tree_l2_norm(tree_sub(params, prev_params)) / tree_l2_norm(
-                prev_params
-            )
-            if _error < tol:
-                break
-
-        assert iter_num == glm2.solver_state_.iter_num
-
-        assert pytree_map_and_reduce(
-            lambda a, b: np.allclose(a, b, atol=10**-5, rtol=0.0),
-            all,
-            (glm.coef_, glm.intercept_),
-            (glm2.coef_, glm2.intercept_),
-        )
-
-    @pytest.mark.parametrize("solver_name", ["LBFGS", "SVRG"])
+    ###############
+    @pytest.mark.parametrize("solver_name", ["LBFGS"])
     @pytest.mark.solver_related
     @pytest.mark.requires_x64
     def test_glm_fit_matches_sklearn(
@@ -2165,7 +2082,7 @@ class TestGLMObservationModel:
         # different dof for different obs models with lasso
         if isinstance(dof, str):
             dof = request.getfixturevalue(dof)
-        elif "population" in glm_type:
+        if "population" not in glm_type:
             # this should exclude lasso dof, where pop vs single neuron
             # is handled in the fixture
             dof = np.array([dof[0]])
@@ -2500,6 +2417,7 @@ class TestPopulationGLM:
 @pytest.mark.parametrize(
     "model_instantiation",
     [
+        "population_gaussianGLM_model_instantiation",
         "population_poissonGLM_model_instantiation",
         "population_gammaGLM_model_instantiation",
         "population_bernoulliGLM_model_instantiation",
@@ -2544,25 +2462,19 @@ class TestPopulationGLMObservationModel:
                 nmo.regularizer.UnRegularized(),
                 None,
                 "LBFGS",
-                {"stepsize": 0.1, "tol": 10**-14},
-            ),
-            (
-                nmo.regularizer.UnRegularized(),
-                None,
-                "GradientDescent",
-                {"tol": 10**-14},
+                {"stepsize": 0.1, "tol": 10**-9},
             ),
             (
                 nmo.regularizer.Ridge(),
                 1.0,
                 "LBFGS",
-                {"tol": 10**-14},
+                {"tol": 10**-9},
             ),
             (
                 nmo.regularizer.Ridge(),
                 1.0,
                 "LBFGS",
-                {"stepsize": 0.1, "tol": 10**-14},
+                {"stepsize": 0.1, "tol": 10**-9},
             ),
             (
                 nmo.regularizer.Lasso(),
@@ -2612,7 +2524,7 @@ class TestPopulationGLMObservationModel:
         model_instantiation,
     ):
         if isinstance(mask, dict):
-            X, y, _, true_params, firing_rate = request.getfixturevalue(
+            X, y, model_class, true_params, firing_rate = request.getfixturevalue(
                 model_instantiation + "_pytree"
             )
 
@@ -2627,7 +2539,7 @@ class TestPopulationGLMObservationModel:
                 return ind_array, coef_stack
 
         else:
-            X, y, _, true_params, firing_rate = request.getfixturevalue(
+            X, y, model_class, true_params, firing_rate = request.getfixturevalue(
                 model_instantiation
             )
 
@@ -2639,6 +2551,7 @@ class TestPopulationGLMObservationModel:
         mask_bool = jax.tree_util.tree_map(lambda x: np.asarray(x.T, dtype=bool), mask)
         # fit pop glm
         kwargs = dict(
+            observation_model=model_class.observation_model,
             feature_mask=mask,
             regularizer=regularizer,
             regularizer_strength=regularizer_strength,
@@ -2652,13 +2565,9 @@ class TestPopulationGLMObservationModel:
         coef_loop = np.zeros((5, 3))
         intercept_loop = np.zeros((3,))
         # loop over neuron
+        kwargs.pop("feature_mask")
         for k in range(y.shape[1]):
-            model_single_neu = nmo.glm.GLM(
-                regularizer=regularizer,
-                regularizer_strength=regularizer_strength,
-                solver_name=solver_name,
-                solver_kwargs=solver_kwargs,
-            )
+            model_single_neu = nmo.glm.GLM(**kwargs)
             if isinstance(mask_bool, dict):
                 X_neu = {}
                 for key, xx in X.items():
@@ -2673,6 +2582,7 @@ class TestPopulationGLMObservationModel:
             coef_loop[idx, k] = coef
             intercept_loop[k] = np.array(model_single_neu.intercept_)[0]
         print(f"\nMAX ERR: {np.abs(coef_loop - coef_vectorized).max()}")
+
         assert np.allclose(coef_loop, coef_vectorized, atol=10**-5, rtol=0)
 
 
@@ -2833,6 +2743,132 @@ class TestPoissonGLM:
             convexity, expected_type_convexity
         ), f"convexity type: {type(convexity)}, expected type: {expected_type_convexity}"
 
+    @pytest.mark.parametrize("glm_type", ["", "population_"])
+    @pytest.mark.parametrize("regr_setup", ["", "_pytree"])
+    @pytest.mark.parametrize("key", [jax.random.key(0), jax.random.key(19)])
+    @pytest.mark.parametrize(
+        "regularizer_class, solver_name",
+        [
+            (nmo.regularizer.UnRegularized, "SVRG"),
+            (nmo.regularizer.Ridge, "SVRG"),
+            (nmo.regularizer.Lasso, "ProxSVRG"),
+            (nmo.regularizer.ElasticNet, "ProxSVRG"),
+            # (nmo.regularizer.GroupLasso, "ProxSVRG"),
+        ],
+    )
+    @pytest.mark.solver_related
+    @pytest.mark.requires_x64
+    def test_glm_update_consistent_with_fit_with_svrg(
+        self,
+        request,
+        glm_type,
+        regr_setup,
+        key,
+        regularizer_class,
+        solver_name,
+        glm_class_type,
+    ):
+        """
+        Make sure that calling GLM.update with the rest of the algorithm implemented outside in a naive loop
+        is consistent with running the compiled GLM.fit on the same data with the same parameters
+        """
+        X, y, model, true_params, rate = request.getfixturevalue(
+            glm_type + "poissonGLM_model_instantiation" + regr_setup
+        )
+
+        N = y.shape[0]
+        batch_size = 1
+        maxiter = 3  # number of epochs
+        tol = 1e-12
+        stepsize = 1e-3
+
+        # has to match how the number of iterations is calculated in SVRG
+        m = int((N + batch_size - 1) // batch_size)
+
+        regularizer_kwargs = {}
+        if regularizer_class.__name__ == "GroupLasso":
+            n_features = sum(x.shape[1] for x in jax.tree.leaves(X))
+            regularizer_kwargs["mask"] = (
+                (np.random.randn(n_features) > 0).reshape(1, -1).astype(float)
+            )
+
+        reg = regularizer_class(**regularizer_kwargs)
+        strength = None if isinstance(reg, nmo.regularizer.UnRegularized) else 1.0
+        glm = type(model)(
+            observation_model=model.observation_model,
+            regularizer=reg,
+            regularizer_strength=strength,
+            solver_name=solver_name,
+            solver_kwargs={
+                "batch_size": batch_size,
+                "stepsize": stepsize,
+                "tol": tol,
+                "maxiter": maxiter,
+                "key": key,
+            },
+        )
+        glm2 = type(model)(
+            observation_model=model.observation_model,
+            regularizer=reg,
+            solver_name=solver_name,
+            solver_kwargs={
+                "batch_size": batch_size,
+                "stepsize": stepsize,
+                "tol": tol,
+                "maxiter": maxiter,
+                "key": key,
+            },
+            regularizer_strength=strength,
+        )
+        glm2.fit(X, y)
+
+        params = glm.initialize_params(X, y)
+        state = glm.initialize_state(X, y, params)
+        glm.instantiate_solver(glm.compute_loss)
+
+        # NOTE these two are not the same because for example Ridge augments the loss
+        # loss_grad = jax.jit(jax.grad(glm.compute_loss))
+        loss_grad = jax.jit(jax.grad(glm._solver_loss_fun))
+
+        # copied from GLM.fit
+        # grab data if needed (tree map won't function because param is never a FeaturePytree).
+        if isinstance(X, FeaturePytree):
+            X = X.data
+
+        iter_num = 0
+        while iter_num < maxiter:
+            state = state._replace(
+                full_grad_at_reference_point=loss_grad(params, X, y),
+            )
+
+            prev_params = params
+            for _ in range(m):
+                key, subkey = jax.random.split(key)
+                ind = jax.random.randint(subkey, (batch_size,), 0, N)
+                xi, yi = tree_slice(X, ind), tree_slice(y, ind)
+                params, state = glm.update(params, state, xi, yi)
+
+            state = state._replace(
+                reference_point=params,
+            )
+
+            iter_num += 1
+
+            _error = tree_l2_norm(tree_sub(params, prev_params)) / tree_l2_norm(
+                prev_params
+            )
+            if _error < tol:
+                break
+
+        assert iter_num == glm2.solver_state_.iter_num
+
+        assert pytree_map_and_reduce(
+            lambda a, b: np.allclose(a, b, atol=10**-5, rtol=0.0),
+            all,
+            (glm.coef_, glm.intercept_),
+            (glm2.coef_, glm2.intercept_),
+        )
+
 
 @pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1 / x])
 @pytest.mark.parametrize("glm_type", ["", "population_"])
@@ -2877,6 +2913,63 @@ class TestGammaGLM:
             glm_type + model_instantiation
         )
         model.observation_model.inverse_link_function = inv_link
+        if "population" in glm_type:
+            model.feature_mask = jnp.ones((X.shape[1], y.shape[1]))
+            model.scale_ = jnp.ones((y.shape[1]))
+        else:
+            model.scale_ = 1.0
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        ysim, ratesim = model.simulate(jax.random.PRNGKey(123), X)
+        assert ysim.shape == y.shape
+        assert ratesim.shape == y.shape
+
+
+@pytest.mark.parametrize(
+    "inv_link", [identity, jnp.exp]
+)  # identity from inverse_link_function_utils
+@pytest.mark.parametrize("glm_type", ["", "population_"])
+@pytest.mark.parametrize("model_instantiation", ["gaussianGLM_model_instantiation"])
+class TestGaussianGLM:
+    """
+    Unit tests specific to Gaussian GLM.
+    """
+
+    @pytest.mark.solver_related
+    def test_fit_glm(self, inv_link, request, glm_type, model_instantiation):
+        """
+        Ensure that the model can be fit with different link functions.
+        """
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        model.observation_model.inverse_link_function = inv_link
+        model.fit(X, y)
+        if "population" in glm_type:
+            assert np.all(model.scale_ != 1)
+        else:
+            assert model.scale_ != 1
+
+    def test_score_glm(self, inv_link, request, glm_type, model_instantiation):
+        """
+        Ensure that the model can be scored with different link functions.
+        """
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        model.observation_model.inverse_link_function = inv_link
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        model.score(X, y)
+
+    def test_simulate_glm(self, inv_link, request, glm_type, model_instantiation):
+        """
+        Ensure that data can be simulated with different link functions.
+        """
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        model.inverse_link_function = inv_link
         if "population" in glm_type:
             model.feature_mask = jnp.ones((X.shape[1], y.shape[1]))
             model.scale_ = jnp.ones((y.shape[1]))

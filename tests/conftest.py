@@ -1272,7 +1272,7 @@ def instantiate_base_regressor_subclass(request):
         else:
             raise ValueError("model_name {} unknown".format(model_name))
         _MODEL_CACHE[cache_key] = result
-        return result
+        return deepcopy(result)
 
     # Get cached data and return a complete deepcopy of everything
     # this is different from a function level fixture because it
@@ -1305,8 +1305,8 @@ _solver_registry_per_backend = {
     },
     "optimistix": {
         **_common_solvers,
-        "GradientDescent": nmo.solvers.OptimistixOptaxGradientDescent,
-        "ProximalGradient": nmo.solvers.OptimistixOptaxProximalGradient,
+        "GradientDescent": nmo.solvers.OptimistixNAG,
+        "ProximalGradient": nmo.solvers.OptimistixFISTA,
         "LBFGS": nmo.solvers.OptimistixOptaxLBFGS,
         "BFGS": nmo.solvers.OptimistixBFGS,
         "NonlinearCG": nmo.solvers.OptimistixNonlinearCG,
@@ -1315,31 +1315,172 @@ _solver_registry_per_backend = {
 
 
 @pytest.fixture(autouse=True, scope="session")
-def configure_solver_backend():
+def configure_solver_backend(request):
     """
-    Patch the solver registry depending on ``NEMOS_SOLVER_BACKEND``.
+    Patch the solver registry depending on `NEMOS_SOLVER_BACKEND` and `override_solver`.
 
-    Used for running solver-dependent tests in separate tox environments
-    for the JAXopt and the Optimistix backends.
+    The `NEMOS_SOLVER_BACKEND` env variable is used for running solver-dependent tests
+    in separate tox environments for the JAXopt and the Optimistix backends.
+
+    The `override_solver` pytest option is used to set a given solver algorithm's
+    implementation to a class available in nemos.solvers.
     """
     backend = os.getenv("NEMOS_SOLVER_BACKEND")
-    if not backend:
-        yield  # run with default solver registry
-        return  # don't execute the remainder on teardown
 
-    try:
-        _backend_solver_registry = _solver_registry_per_backend[backend]
-    except KeyError:
-        available = ", ".join(_solver_registry_per_backend.keys())
-        pytest.fail(f"Unknown solver backend: {backend}. Available: {available}")
+    if backend is None:
+        _solver_registry_to_use = nmo.solvers.solver_registry.copy()
+    else:
+        try:
+            _solver_registry_to_use = _solver_registry_per_backend[backend]
+        except KeyError:
+            available = ", ".join(_solver_registry_per_backend.keys())
+            pytest.fail(f"Unknown solver backend: {backend}. Available: {available}")
+
+    override_solver = request.config.getini("override_solver")
+    if override_solver:
+        try:
+            algo_name, impl_name = override_solver.split(":", 1)
+        except ValueError:
+            raise ValueError(
+                f"override_solver must be in format 'algo:implementation', got: {override_solver}"
+            )
+        _solver_registry_to_use[algo_name] = getattr(nmo.solvers, impl_name)
 
     # save the original registry so that we can restore it after
     original = nmo.solvers.solver_registry.copy()
     nmo.solvers.solver_registry.clear()
-    nmo.solvers.solver_registry.update(_backend_solver_registry)
+    nmo.solvers.solver_registry.update(_solver_registry_to_use)
 
     try:
         yield
     finally:
         nmo.solvers.solver_registry.clear()
         nmo.solvers.solver_registry.update(original)
+
+
+def pytest_addoption(parser):
+    """Register custom ini options."""
+    parser.addini("solver_backend", "Solver backend to use")
+    parser.addini("override_solver", "Override solver as 'algorithm:implementation'")
+
+
+@pytest.fixture
+def gaussianGLM_model_instantiation():
+    """Set up a Gaussian GLM for testing purposes.
+
+    This fixture initializes a Gaussian GLM with random parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response.
+
+    Returns:
+        tuple: A tuple containing:
+            - X (numpy.ndarray): Simulated input data.
+            - np.random.normal(rate) (numpy.ndarray): Simulated spike responses.
+            - model (nmo.glm.PoissonGLM): Initialized model instance.
+            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of response.
+    """
+    np.random.seed(123)
+    X = np.random.normal(size=(100, 5)) * 100
+    b_true = np.zeros((1,))
+    w_true = np.random.normal(size=(5,))
+    observation_model = nmo.observation_models.GaussianObservations()
+    regularizer = nmo.regularizer.UnRegularized()
+    model = nmo.glm.GLM(
+        observation_model, regularizer=regularizer, solver_name="LBFGS"
+    )  # , solver_kwargs={"tol":1e-12})
+    model.scale_ = 1.0
+    rate = jax.numpy.einsum("k,tk->t", w_true, X) + b_true
+    return X, np.random.normal(rate), model, (w_true, b_true), rate
+
+
+@pytest.fixture
+def population_gaussianGLM_model_instantiation():
+    """Set up a Population Gaussian GLM for testing purposes.
+
+    This fixture initializes a Population Gaussian GLM with random parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response.
+
+    Returns:
+        tuple: A tuple containing:
+            - X (numpy.ndarray): Simulated input data.
+            - np.random.normal(rate) (numpy.ndarray): Simulated spike responses.
+            - model (nmo.glm.PoissonGLM): Initialized model instance.
+            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of response.
+    """
+    np.random.seed(123)
+    X = np.random.normal(size=(200, 5)) * 10
+    b_true = np.zeros((3,))
+    w_true = np.random.normal(size=(5, 3))
+    observation_model = nmo.observation_models.GaussianObservations()
+    regularizer = nmo.regularizer.UnRegularized()
+    model = nmo.glm.PopulationGLM(
+        observation_model=observation_model,
+        regularizer=regularizer,
+        solver_name="LBFGS",
+    )
+    model.scale_ = 1.0
+    rate = jax.numpy.einsum("ki,tk->ti", w_true, X) + b_true
+    return X, np.random.normal(rate), model, (w_true, b_true), rate
+
+
+@pytest.fixture
+def gaussianGLM_model_instantiation_pytree(gaussianGLM_model_instantiation):
+    """Set up a Gaussian GLM for testing purposes.
+
+    This fixture initializes a Gaussian GLM with random parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response.
+
+    Returns:
+        tuple: A tuple containing:
+            - X (FeaturePytree): Simulated input data.
+            - np.random.normal(rate) (numpy.ndarray): Simulated spike responses.
+            - model (nmo.glm.PoissonGLM): Initialized model instance.
+            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of response.
+    """
+    X, spikes, model, true_params, rate = gaussianGLM_model_instantiation
+    X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
+    true_params_tree = (
+        dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
+        true_params[1],
+    )
+    model_tree = nmo.glm.GLM(
+        model.observation_model, regularizer=model.regularizer, solver_name="LBFGS"
+    )  # , solver_kwargs={"tol":1e-12})
+    return X_tree, spikes, model_tree, true_params_tree, rate
+
+
+@pytest.fixture
+def population_gaussianGLM_model_instantiation_pytree(
+    population_gaussianGLM_model_instantiation,
+):
+    """Set up a Population Gaussian GLM for testing purposes.
+
+    This fixture initializes a Population Gaussian GLM with random parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response.
+
+    Returns:
+        tuple: A tuple containing:
+            - X (FeaturePytree): Simulated input data.
+            - np.random.normal(rate) (numpy.ndarray): Simulated spike responses.
+            - model (nmo.glm.PoissonGLM): Initialized model instance.
+            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of response.
+    """
+    X, spikes, model, true_params, rate = population_gaussianGLM_model_instantiation
+    X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
+    true_params_tree = (
+        dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
+        true_params[1],
+    )
+    model_tree = nmo.glm.PopulationGLM(
+        observation_model=model.observation_model,
+        regularizer=model.regularizer,
+        solver_name="LBFGS",
+    )
+    return X_tree, np.random.normal(rate), model_tree, true_params_tree, rate
