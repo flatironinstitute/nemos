@@ -1660,9 +1660,8 @@ class TestMStep:
         ],
         indirect=True,
     )
-    @pytest.mark.parametrize("prior", [True, False])
     def test_likelihood_increases_at_each_update(
-        self, generate_data_multi_state, prior
+        self, generate_data_multi_state
     ):
         (
             new_sess,
@@ -1682,8 +1681,8 @@ class TestMStep:
             forward_backward(
                 X,
                 y,
-                np.log(initial_prob),
-                np.log(transition_prob),
+                jnp.log(initial_prob),
+                jnp.log(transition_prob),
                 glm_params=GLMParams(coef, intercept),
                 glm_scale=GLMScale(jnp.zeros_like(intercept)),
                 inverse_link_function=inv_link,
@@ -1692,12 +1691,6 @@ class TestMStep:
             )
         )
 
-        if prior:
-            dirichlet_init = np.random.uniform(1, 3, size=initial_prob.shape)
-            dirichlet_trans = np.random.uniform(1, 3, size=transition_prob.shape)
-        else:
-            dirichlet_init = None
-            dirichlet_trans = None
 
         # apply update:
         # Update Initial state probability Eq. 13.18
@@ -1706,13 +1699,12 @@ class TestMStep:
         new_initial_prob = _analytical_m_step_initial_prob(
             posteriors,
             is_new_session=new_sess,
-            dirichlet_prior_alphas=dirichlet_init,
         )
         (_, _, _, updated_log_like, _, _) = forward_backward(
             X,
             y,
-            np.log(new_initial_prob),
-            np.log(transition_prob),
+            jnp.log(new_initial_prob),
+            jnp.log(transition_prob),
             glm_params=GLMParams(coef, intercept),
             glm_scale=GLMScale(jnp.zeros_like(intercept)),
             inverse_link_function=inv_link,
@@ -1725,7 +1717,7 @@ class TestMStep:
 
         initial_log_like = updated_log_like
         new_transition_prob = _analytical_m_step_transition_prob(
-            joint_posterior, dirichlet_prior_alphas=dirichlet_trans
+            joint_posterior
         )
         (_, _, _, updated_log_like, _, _) = forward_backward(
             X,
@@ -1808,8 +1800,6 @@ class TestMStep:
             is_new_session=new_sess,
             m_step_fn_glm_scale=LBFGS(objective_scale, tol=10**-12).run,
             m_step_fn_glm_params=LBFGS(objective).run,
-            dirichlet_prior_alphas_init_prob=dirichlet_init,
-            dirichlet_prior_alphas_transition=dirichlet_trans,
         )
 
         jax.tree_util.tree_map(
