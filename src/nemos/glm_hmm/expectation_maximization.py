@@ -9,6 +9,7 @@ import jax.numpy as jnp
 from numpy.typing import NDArray
 
 from ..tree_utils import pytree_map_and_reduce
+from ..typing import Aux, SolverState
 
 Array = NDArray | jax.numpy.ndarray
 
@@ -636,7 +637,10 @@ def run_m_step(
     log_joint_posterior: Array,
     glm_params: Tuple[Array, Array],
     is_new_session: Array,
-    m_step_fn_glm_params: Callable[[Tuple[Array, Array], Array, Array, Array], Array],
+    m_step_fn_glm_params: Callable[
+        [Tuple[Array, Array], Array, Array, Array],
+        Tuple[Tuple[Array, Array], SolverState, Aux],
+    ],
     dirichlet_prior_alphas_init_prob: Array | None = None,
     dirichlet_prior_alphas_transition: Array | None = None,
 ) -> Tuple[Tuple[Array, Array], Array, Array, Any]:
@@ -662,7 +666,7 @@ def run_m_step(
         Boolean mask marking the first observation of each session. Shape ``(n_samples,)``.
     m_step_fn_glm_params:
         Callable that performs the M-step update for GLM parameters (coefficients and intercepts).
-        Should have signature: ``f(glm_params, X, y, posteriors) -> (updated_params, state)``.
+        Should have signature: ``f(glm_params, X, y, posteriors) -> (updated_params, state, aux)``.
         The regularizer/prior for the GLM parameters should be configured within this callable.
     dirichlet_prior_alphas_init_prob:
         Prior for the initial states, shape ``(n_states,)``.
@@ -700,7 +704,7 @@ def run_m_step(
     )
 
     # Minimize negative log-likelihood to update GLM weights
-    optimized_projection_weights, state = m_step_fn_glm_params(
+    optimized_projection_weights, state, _ = m_step_fn_glm_params(
         glm_params, X, y, posteriors
     )
 

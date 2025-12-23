@@ -72,11 +72,15 @@ def test_get_fit_attrs(request, glm_class_type, model_instantiation_type):
         "scale_": None,
         "solver_state_": None,
         "dof_resid_": None,
+        "aux_": None,
     }
     assert model._get_fit_state() == expected_state
     model.solver_kwargs = {"maxiter": 1}
     model.fit(X, y)
-    assert all(val is not None for val in model._get_fit_state().values())
+    assert not model._has_aux
+    assert all(
+        val is not None for key, val in model._get_fit_state().items() if key != "aux_"
+    )
     assert model._get_fit_state().keys() == expected_state.keys()
 
 
@@ -906,6 +910,7 @@ class TestGLM:
                     "intercept_": jnp.array([1.0]),
                     "scale_": 2.0,
                     "dof_resid_": 3,
+                    "aux_": None,
                 },
             ),
             (
@@ -915,6 +920,7 @@ class TestGLM:
                     "intercept_": jnp.array([1.0]),
                     "scale_": 2.0,
                     "dof_resid_": 3,
+                    "aux_": None,
                 },
             ),
         ],
@@ -1021,6 +1027,7 @@ class TestGLM:
                     "intercept_": jnp.array([1.0]),
                     "scale_": 2.0,
                     "dof_resid_": 3,
+                    "aux_": None,
                 },
             ),
             (
@@ -1032,6 +1039,7 @@ class TestGLM:
                     "intercept_": jnp.array([1.0]),
                     "scale_": 2.0,
                     "dof_resid_": 3,
+                    "aux_": None,
                 },
             ),
         ],
@@ -1289,7 +1297,10 @@ class TestGLM:
 
         # Assert states are close
         for k, v in fit_state.items():
-            assert np.allclose(initial_params[k], v), f"{k} mismatch after load."
+            if v is None:
+                assert initial_params[k] is None
+            else:
+                assert np.allclose(initial_params[k], v), f"{k} mismatch after load."
 
     @pytest.mark.parametrize(
         "fitted_glm_type",
@@ -1821,7 +1832,7 @@ class TestGLMObservationModel:
 
     @pytest.mark.parametrize("nan_inputs", [True, False])
     @pytest.mark.parametrize(
-        "solver_name", ["ProximalGradient", "GradientDescent", "LBFGS"]
+        "solver_name", ["ProximalGradient", "GradientDescent", "LBFGS", "BFGS"]
     )
     @pytest.mark.solver_related
     def test_update_params_are_finite(
