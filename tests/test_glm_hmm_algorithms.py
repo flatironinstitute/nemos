@@ -3632,7 +3632,7 @@ class TestEMScaleOptimization:
         nll_scale = prepare_mstep_nll_objective_scale(False, obs)
 
         solver_params = LBFGS(nll_params, tol=10**-6)
-        solver_scale = LBFGS(nll_scale, tol=10**-12)
+        solver_scale = LBFGS(nll_scale, tol=10**-6)
 
         # Create initial parameters
         params = GLMHMMParams(
