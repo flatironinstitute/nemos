@@ -603,9 +603,8 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         self._validator.validate_inputs(X, y)
         init_params = self._validator.validate_and_cast_params(init_params)
         self._validator.validate_consistency(init_params, X=X, y=y)
-        return self._initialize_optimization_and_state(
-            *tree_utils.drop_nans(X, y), init_params
-        )
+        X, y = self._preprocess_inputs(X, y, drop_nans=True)
+        return self._initialize_optimization_and_state(X, y, init_params)
 
     def _optimize_solver_params(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray) -> dict:
         """
