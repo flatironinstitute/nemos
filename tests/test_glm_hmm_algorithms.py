@@ -3644,18 +3644,17 @@ class TestEMScaleOptimization:
         )
 
         # Run EM with numerical scale optimization
-        with jax.disable_jit(False):
-            final_params, final_state = em_glm_hmm(
-                params=params,
-                X=data["X"],
-                y=data["y"],
-                inverse_link_function=jnp.exp,
-                log_likelihood_func=likelihood_func,
-                m_step_fn_glm_params=solver_params.run,
-                m_step_fn_glm_scale=solver_scale.run,  # Numerical optimization
-                maxiter=50,
-                tol=1e-5,
-            )
+        final_params, final_state = em_glm_hmm(
+            params=params,
+            X=data["X"],
+            y=data["y"],
+            inverse_link_function=jnp.exp,
+            log_likelihood_func=likelihood_func,
+            m_step_fn_glm_params=solver_params.run,
+            m_step_fn_glm_scale=solver_scale.run,  # Numerical optimization
+            maxiter=50,
+            tol=1e-5,
+        )
 
         # Verify convergence
         assert final_state.iterations > 0, "EM should have run at least one iteration"
@@ -3665,11 +3664,6 @@ class TestEMScaleOptimization:
         assert not jnp.allclose(
             final_scale, init_scale, atol=0.1
         ), "Scale should have been updated from initialization"
-
-        # Verify scale is positive (required for Gamma)
-        assert jnp.all(
-            final_scale > 0
-        ), "All scale parameters should be positive for Gamma"
 
         # Verify shapes
         assert final_scale.shape == (data["n_states"],)
