@@ -21,6 +21,7 @@ For subclasses derived from `BaseRegressor` to function correctly, they must imp
 4. [`simulate`](nemos.glm.GLM.simulate): Simulate data based on the trained regression model.
 5. [`update`](nemos.glm.GLM.update): Run a single optimization step, and stores the updated parameter and solver state. Used by stochastic optimization schemes.
 6. [`compute_loss`](nemos.glm.GLM.compute_loss): Computes the loss function for given user-provided parameters, `X`, and `y`. This method validates inputs and parameters, converts user parameters to the internal representation, and delegates to `_compute_loss`.
+7. `_has_aux`: If the model's objective function returns auxiliary variables, set this class attribute to `True`. Otherwise it defaults to `False` and the objective function is assumed to return a scalar value.
 
 ### Private Methods
 6. `_compute_loss`: Compute predictions and evaluate the loss function given the parameters, `X`, and `y`. This method operates on the internal parameter representation (e.g., `GLMParams`). The public-facing `compute_loss` wrapper handles conversion from user-provided parameters.

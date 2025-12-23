@@ -3,7 +3,6 @@ import numpy as np
 import pytest
 
 import nemos as nmo
-import nemos.regularizer
 from nemos.glm.params import GLMParams
 from nemos.glm_hmm.algorithm_configs import (
     get_analytical_scale_update,
@@ -12,9 +11,22 @@ from nemos.glm_hmm.algorithm_configs import (
     prepare_mstep_nll_objective_scale,
 )
 from nemos.glm_hmm.expectation_maximization import forward_backward, run_m_step
-from nemos.glm_hmm.params import GLMScale
+from nemos.glm_hmm.params import GLMHMMParams, GLMScale, HMMParams
 from nemos.glm_hmm.utils import compute_rate_per_state
-from nemos.solvers import JaxoptLBFGS
+from nemos.regularizer import UnRegularized
+from nemos.solvers import solver_registry
+
+
+def setup_solver(objective, tol=1e-12, reg=UnRegularized()):
+    lbfgs_class = solver_registry["LBFGS"]
+    solver = lbfgs_class(
+        objective,
+        reg,
+        0.0,
+        False,
+        tol=tol,
+    )
+    return solver
 
 
 @pytest.fixture
@@ -76,7 +88,7 @@ def generate_data_gaussian(request):
         jnp.log(init_proba),
         jnp.log(transition_probs),
         glm_params,
-        glm_scale=GLMScale(scale=jnp.ones((*y_shape, n_states)).astype(float)),
+        glm_scale=GLMScale(jnp.zeros((*y_shape, n_states)).astype(float)),
         log_likelihood_func=log_likelihood_fn,
         inverse_link_function=inv_link_func,
         is_new_session=None,
@@ -120,31 +132,27 @@ class TestAnalyticMStepScale:
             inv_link_func,
         ) = generate_data_gaussian
 
-        solver = JaxoptLBFGS(
-            expected_negative_log_likelihood_scale,
-            regularizer=nemos.regularizer.UnRegularized(),
-            regularizer_strength=None,
-            tol=10**-14,
-            maxiter=20000,
-        )
+        def objective(scale, args):
+            return expected_negative_log_likelihood_scale(scale, *args)
+
+        solver = setup_solver(objective, tol=10**-14)
         rate_per_state = compute_rate_per_state(
             X, glm_params, inverse_link_function=inv_link_func
         )
-        numerical_update, state = solver.run(
-            GLMScale(scale=jnp.ones_like(glm_params.intercept)),
-            y,
-            rate_per_state,
-            jnp.exp(log_gammas_nemos),
+        numerical_update, _, _ = solver.run(
+            GLMScale(jnp.zeros_like(glm_params.intercept)),
+            (y, rate_per_state, jnp.exp(log_gammas_nemos)),
         )
         update = get_analytical_scale_update(obs, is_population_glm=is_population_glm)
-        analytical_update, _ = update(
+        analytical_update, _, _ = update(
             None, y, rate_per_state, jnp.exp(log_gammas_nemos)
         )
         np.testing.assert_allclose(
-            numerical_update.scale, analytical_update.scale, atol=1e-7
+            numerical_update.log_scale, analytical_update.log_scale, atol=1e-7
         )
 
     def test_gaussian_obs_mstep_via_run_m_step(self, generate_data_gaussian):
+        np.random.seed(111)
         (
             X,
             y,
@@ -163,51 +171,48 @@ class TestAnalyticMStepScale:
             inverse_link_function=inv_link_func,
         )
 
-        solver = JaxoptLBFGS(
-            nll_fcn,
-            regularizer=nemos.regularizer.UnRegularized(),
-            regularizer_strength=None,
-            tol=10**-14,
-            maxiter=20000,
-        )
+        solver = setup_solver(nll_fcn, tol=10**-4)
 
-        solver_scale = JaxoptLBFGS(
+        solver_scale = setup_solver(
             expected_negative_log_likelihood_scale,
-            regularizer=nemos.regularizer.UnRegularized(),
-            regularizer_strength=None,
-            tol=10**-14,
-            maxiter=20000,
+            tol=10**-12,
         )
         new_sess = np.zeros(y.shape[0], dtype=bool)
         new_sess[[0, 15]] = True
-        analytical_update = run_m_step(
+
+        params = GLMHMMParams(
+            hmm_params=HMMParams(None, None),
+            glm_params=glm_params,
+            glm_scale=GLMScale(jnp.zeros_like(glm_params.intercept)),
+        )
+        analytical_update, _ = run_m_step(
+            params,
             X,
             y,
             log_gammas,
             log_xis,
-            glm_params,
             is_new_session=new_sess,
             m_step_fn_glm_params=solver.run,
-            glm_scale=GLMScale(scale=jnp.ones_like(glm_params.intercept)),
             m_step_fn_glm_scale=update,
             inverse_link_function=inv_link_func,
             dirichlet_prior_alphas_transition=None,
             dirichlet_prior_alphas_init_prob=None,
-        )[1]
-        numerical_update = run_m_step(
+        )
+        numerical_update, _ = run_m_step(
+            params,
             X,
             y,
             log_gammas,
             log_xis,
-            glm_params,
             is_new_session=new_sess,
             m_step_fn_glm_params=solver.run,
-            glm_scale=GLMScale(scale=jnp.ones_like(glm_params.intercept)),
             m_step_fn_glm_scale=solver_scale.run,
             inverse_link_function=inv_link_func,
             dirichlet_prior_alphas_transition=None,
             dirichlet_prior_alphas_init_prob=None,
-        )[1]
+        )
         np.testing.assert_allclose(
-            numerical_update.scale, analytical_update.scale, atol=1e-7
+            numerical_update.glm_scale.log_scale,
+            analytical_update.glm_scale.log_scale,
+            atol=1e-7,
         )

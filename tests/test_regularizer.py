@@ -1746,7 +1746,8 @@ class TestGroupLasso:
         if solver_name == "ProxSVRG":
             state = state._replace(full_grad_at_reference_point=state.reference_point)
 
-        params, state = model.optimization_update(true_params, state, X, y)
+        params, state, _ = model.optimization_update(true_params, state, X, y)
+
         # asses that state is a NamedTuple by checking tuple type and the availability of some NamedTuple
         # specific namespace attributes
         assert isinstance(state, tuple | eqx.Module)
@@ -1895,12 +1896,8 @@ class TestGroupLasso:
         model.set_params(regularizer=self.cls(mask=mask), regularizer_strength=1.0)
         model.solver_name = "ProximalGradient"
 
-        init_pars = model.initialize_params(X, y)
-
-        model.initialize_optimization_and_state(X, y, init_pars)
-
-        runner = model.optimization_run
-        params, _ = runner(
+        runner = model._instantiate_solver(model._compute_loss)[-1]
+        params, _, _ = runner(
             GLMParams(true_params.coef * 0.0, true_params.intercept), X, y
         )
 

@@ -28,7 +28,7 @@ def _posterior_weighted_objective_impl(
     predicted_rate: Array,
     posteriors: Array,
     negative_log_likelihood_func: Callable,
-    scale: GLMScale | None = None,
+    log_scale: GLMScale | None = None,
 ):
     """
     Core implementation of posterior-weighted negative log-likelihood computation.
@@ -51,8 +51,8 @@ def _posterior_weighted_objective_impl(
     negative_log_likelihood_func :
         Function computing negative log-likelihood. Must accept ``(y, predicted_rate)``
         or ``(y, predicted_rate, scale)`` depending on whether scale is provided.
-    scale :
-        Optional scale parameters for distributions that require them,
+    log_scale :
+        Optional log-scale parameters for distributions that require them,
         shape ``(n_states,)`` or ``(n_neurons, n_states)``.
 
     Returns
@@ -67,10 +67,12 @@ def _posterior_weighted_objective_impl(
     sums negative log-likelihoods across neurons before weighting by posteriors,
     assuming conditional independence of neurons given the latent state.
     """
-    if scale is None:
+    if log_scale is None:
         nll = negative_log_likelihood_func(y, predicted_rate)
     else:
-        nll = negative_log_likelihood_func(y, predicted_rate, scale.scale)
+        nll = negative_log_likelihood_func(
+            y, predicted_rate, jnp.exp(log_scale.log_scale)
+        )
 
     if nll.ndim > 2:
         nll = nll.sum(axis=1)  # sum over neurons
@@ -129,7 +131,7 @@ def posterior_weighted_glm_negative_log_likelihood(
 
 @partial(jax.jit, static_argnames=["negative_log_likelihood_func"])
 def posterior_weighted_glm_negative_log_likelihood_scale(
-    glm_scale: GLMScale,
+    log_scale: GLMScale,
     y: Array,
     predicted_rate: Array,
     posteriors: Array,
@@ -148,8 +150,8 @@ def posterior_weighted_glm_negative_log_likelihood_scale(
 
     Parameters
     ----------
-    glm_scale:
-        Scale parameters for the GLM.
+    log_scale:
+        Log of the scale parameters for the GLM.
     y:
         Target responses.
     predicted_rate:
@@ -167,7 +169,7 @@ def posterior_weighted_glm_negative_log_likelihood_scale(
         sum_t sum_k posterior[t,k] * nll[t,k]
     """
     return _posterior_weighted_objective_impl(
-        y, predicted_rate, posteriors, negative_log_likelihood_func, scale=glm_scale
+        y, predicted_rate, posteriors, negative_log_likelihood_func, log_scale=log_scale
     )
 
 
@@ -344,9 +346,9 @@ def prepare_mstep_nll_objective_scale(
         out_axes=state_axes,
     )
 
-    def objective(scale, observations, predicted_rate, posteriors):
+    def objective(log_scale: GLMScale, observations, predicted_rate, posteriors):
         return posterior_weighted_glm_negative_log_likelihood_scale(
-            scale,
+            log_scale,
             observations,
             predicted_rate,
             posteriors,

@@ -16,22 +16,30 @@ from .params import GLMHMMParams, GLMHMMUserParams, GLMScale, HMMParams
 
 
 def to_glm_hmm_params(user_params: GLMHMMUserParams) -> GLMHMMParams:
-    """Map from GLMUserParams to GLMParams."""
+    """Map from GLMHMMUserParams to GLMHMMParams.
+
+    Converts user-provided parameters (scale and probabilities in regular space)
+    to internal model parameters (log_scale and log probabilities).
+    """
     return GLMHMMParams(
-        GLMParams(*user_params[:2]),
-        GLMScale(user_params[2]),
-        HMMParams(*user_params[3:]),
+        glm_params=GLMParams(*user_params[:2]),
+        glm_scale=GLMScale(jnp.log(user_params[2])),
+        hmm_params=HMMParams(*(jnp.log(p) for p in user_params[3:])),
     )
 
 
 def from_glm_hmm_params(params: GLMHMMParams) -> GLMHMMUserParams:
-    """Map from GLMParams to GLMUserParams."""
+    """Map from GLMHMMParams to GLMHMMUserParams.
+
+    Converts internal model parameters (log_scale and log probabilities)
+    to user-facing parameters (scale and probabilities in regular space).
+    """
     return (
         params.glm_params.coef,
         params.glm_params.intercept,
-        params.glm_scale.scale,
-        params.hmm_params.initial_prob,
-        params.hmm_params.transition_prob,
+        jnp.exp(params.glm_scale.log_scale),
+        jnp.exp(params.hmm_params.log_initial_prob),
+        jnp.exp(params.hmm_params.log_transition_prob),
     )
 
 
@@ -46,7 +54,7 @@ class GLMHMMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         1,
         1,
         2,
-    )  # this should be (coef.ndim, intercept.ndim, init_prob.ndim, transition_prob.ndim)
+    )  # (coef.ndim, intercept.ndim, scale.ndim, init_prob.ndim, transition_prob.ndim)
     to_model_params: Callable[[GLMHMMUserParams], GLMHMMParams] = to_glm_hmm_params
     from_model_params: Callable[[GLMHMMParams], GLMHMMUserParams] = from_glm_hmm_params
     model_class: str = "GLMHMM"
@@ -59,13 +67,13 @@ class GLMHMMValidator(RegressorValidator[GLMUserParams, GLMParams]):
             "check_array_dimensions",
             dict(
                 err_message_format="Invalid parameter dimensionality.\n- coef must be an array "
-                "or nemos.pytree.FeaturePytree with array leafs of shape"
+                "or nemos.pytree.FeaturePytree with array leafs of shape "
                 "``(n_features, n_states)``.\n- intercept must be of shape ``(n_states,)``.\n"
-                "- scale should be of shape ``(n_states,)``.\n"
+                "- scale must be of shape ``(n_states,)``.\n"
                 "- initial_prob must be of shape ``(n_states,)``.\n"
-                "- transition_prob must be of shape ``(n_states,n_states)``.\n"
-                "\nThe provided coe, intercept, initial_prob and transition_prob "
-                "have shape ``{}``, ``{}`` , ``{}``, ``{}``  and ``{}`` "
+                "- transition_prob must be of shape ``(n_states, n_states)``.\n"
+                "\nThe provided coef, intercept, scale, initial_prob and transition_prob "
+                "have shape ``{}``, ``{}``, ``{}``, ``{}`` and ``{}`` "
                 "instead."
             ),
         ),
@@ -73,7 +81,6 @@ class GLMHMMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         ("check_init_and_transition_prob_sum_to_1", None),
         ("check_glm_params_shape", None),
         *RegressorValidator.params_validation_sequence[3:],
-        ("validate_scale", None),
     )
 
     def check_array_dimensions(
@@ -219,21 +226,12 @@ class GLMHMMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         Does not validate y since it's 1D (single neuron, no neuron axis to check).
         """
         self._glm_validator.validate_consistency(params.glm_params, X, y)
-        if params.glm_scale.scale.shape != params.glm_params.intercept.shape:
+        if params.glm_scale.log_scale.shape != params.glm_params.intercept.shape:
             raise ValueError(
                 "The scale parameter and the intercept must be of shape ``(n_neurons,)``."
-                f"\nThe scale is of shape ``{params.glm_scale.scale.shape}`` and the intercept "
+                f"\nThe scale is of shape ``{params.glm_scale.log_scale.shape}`` and the intercept "
                 f"is of shape ``{params.glm_params.intercept.shape}`` instead."
             )
-
-    @staticmethod
-    def validate_scale(params: GLMHMMParams) -> GLMHMMParams:
-        """Enforce positive scales."""
-        if not all(params.glm_scale.scale > 0):
-            raise ValueError(
-                "The scale parameter must be strictly positive. Some values <= 0 provided instead."
-            )
-        return params
 
     def validate_and_cast_feature_mask(
         self,

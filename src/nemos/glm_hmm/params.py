@@ -13,8 +13,8 @@ from ..typing import DESIGN_INPUT_TYPE
 class HMMParams(eqx.Module):
     """Parameter container for HMM models."""
 
-    initial_prob: jnp.ndarray
-    transition_prob: jnp.ndarray
+    log_initial_prob: jnp.ndarray
+    log_transition_prob: jnp.ndarray
 
     @staticmethod
     def regularizable_subtrees() -> list[Callable[["HMMParams"], jnp.ndarray | dict]]:
@@ -25,7 +25,7 @@ class HMMParams(eqx.Module):
 class GLMScale(eqx.Module):
     """Scale parameter container."""
 
-    scale: jnp.ndarray
+    log_scale: jnp.ndarray
 
     @staticmethod
     def regularizable_subtrees() -> list[Callable[["HMMParams"], jnp.ndarray | dict]]:
