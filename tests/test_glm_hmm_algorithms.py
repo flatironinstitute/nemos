@@ -18,6 +18,7 @@ from nemos.glm_hmm.algorithm_configs import (
     prepare_mstep_nll_objective_param,
     prepare_mstep_nll_objective_scale,
 )
+from nemos.glm_hmm.params import GLMHMMParams, HMMParams, GLMScale
 from nemos.glm_hmm.expectation_maximization import (
     GLMHMMState,
     backward_pass,
@@ -267,7 +268,7 @@ def prepare_gammas_and_xis_for_m_step_single_neuron(
         initial_prob,
         transition_prob,
         GLMParams(coef, intercept),
-        glm_scale=jnp.ones(initial_prob.shape[0]),
+        glm_scale=GLMScale(jnp.zeros(initial_prob.shape[0])),
         log_likelihood_func=likelihood,
         inverse_link_function=obs.default_inverse_link_function,
         is_new_session=new_sess.astype(bool),
@@ -590,6 +591,7 @@ class TestForwardBackward:
         # E-step initial parameters
         initial_prob = data["initial_prob"]
         intercept, coef = data["projection_weights"][:1], data["projection_weights"][1:]
+        intercept = intercept.squeeze()
         transition_prob = data["transition_prob"]
 
         # E-step output
@@ -618,7 +620,7 @@ class TestForwardBackward:
             jnp.log(initial_prob),
             jnp.log(transition_prob),
             GLMParams(coef, intercept),
-            glm_scale=jnp.ones(intercept.shape[-1]),
+            glm_scale=GLMScale(jnp.zeros_like(intercept)),
             log_likelihood_func=log_likelihood,
             inverse_link_function=obs.default_inverse_link_function,
             is_new_session=new_sess.astype(bool),
@@ -813,6 +815,7 @@ class TestLikelihood:
         gammas = data["gammas"]
         projection_weights = data["projection_weights_nll"]
         intercept, coef = projection_weights[:1], projection_weights[1:]
+        intercept = intercept.squeeze()
 
         # Negative LL output
         nll_m_step = data["nll_m_step"]
@@ -852,12 +855,14 @@ class TestMStep:
         xis = data["xis"]
         projection_weights = data["projection_weights"]
         intercept, coef = projection_weights[:1], projection_weights[1:]
+        intercept = intercept.squeeze()
+
         new_sess = data["new_sess"]
 
         # M-step output
         optimized_projection_weights = data["optimized_projection_weights"]
         opt_intercept, opt_coef = (
-            optimized_projection_weights[:1],
+            optimized_projection_weights[:1].squeeze(),
             optimized_projection_weights[1:],
         )
         new_initial_prob = data["new_initial_prob"]
@@ -869,20 +874,20 @@ class TestMStep:
         partial_posterior_weighted_glm_negative_log_likelihood, solver = (
             prepare_partial_hmm_nll_single_neuron(obs)
         )
-
+        params = GLMHMMParams(
+            hmm_params=HMMParams(None, None),
+            glm_params=GLMParams(coef, intercept),
+            glm_scale=GLMScale(jnp.zeros_like(intercept)),
+        )
         (
-            optimized_projection_weights_nemos,
-            opt_scale,
-            log_initial_prob_nemos,
-            log_transition_prob_nemos,
+            new_params,
             state,
         ) = run_m_step(
+            params,
             X[:, 1:],  # drop intercept column
             y,
             np.log(gammas),
             np.log(xis),
-            GLMParams(coef, intercept),
-            glm_scale=jnp.ones(intercept.shape[-1]),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
             m_step_fn_glm_scale=None,
@@ -890,11 +895,11 @@ class TestMStep:
         )
 
         # Convert back to probability space for comparison with reference
-        new_initial_prob_nemos = np.exp(log_initial_prob_nemos)
-        new_transition_prob_nemos = np.exp(log_transition_prob_nemos)
+        new_initial_prob_nemos = np.exp(new_params.hmm_params.log_initial_prob)
+        new_transition_prob_nemos = np.exp(new_params.hmm_params.log_transition_prob)
 
         n_ll_nemos = partial_posterior_weighted_glm_negative_log_likelihood(
-            optimized_projection_weights_nemos,
+            new_params.glm_params,
             X[:, 1:],
             y,
             gammas,
@@ -919,7 +924,7 @@ class TestMStep:
         jax.tree_util.tree_map(
             lambda x, y: np.testing.assert_almost_equal(x, y, decimal=6),
             GLMParams(opt_coef, opt_intercept),
-            optimized_projection_weights_nemos,
+            new_params.glm_params,
         )
         # check maximization analytical
         # Transition Probability:
@@ -994,19 +999,20 @@ class TestMStep:
             prepare_partial_hmm_nll_single_neuron(obs)
         )
 
+        params = GLMHMMParams(
+            hmm_params=HMMParams(None, None),
+            glm_params=GLMParams(jnp.zeros_like(coef), jnp.zeros_like(intercept)),
+            glm_scale=GLMScale(jnp.zeros_like(intercept)),
+        )
         (
-            optimized_projection_weights_nemos,
-            _,
-            log_initial_prob_nemos,
-            log_transition_prob_nemos,
+            new_params,
             state,
         ) = run_m_step(
+            params,
             X,
             y,
             log_alphas + log_betas,
             np.log(xis),
-            GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
-            jnp.ones(coef.shape[-1]),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
             m_step_fn_glm_scale=None,
@@ -1018,25 +1024,25 @@ class TestMStep:
         glm.fit(X, y)
         # test that the glm coeff and intercept matches with the m-step output
         np.testing.assert_array_almost_equal(
-            glm.coef_, optimized_projection_weights_nemos.coef.flatten()
+            glm.coef_, new_params.glm_params.coef.flatten()
         )
         np.testing.assert_array_almost_equal(
-            glm.intercept_, optimized_projection_weights_nemos.intercept.flatten()
+            glm.intercept_, new_params.glm_params.intercept.flatten()
         )
 
         # test that the transition and initial probabilities are all ones (log(1) = 0).
         np.testing.assert_array_equal(
-            log_initial_prob_nemos, np.zeros_like(initial_prob)
+            new_params.hmm_params.log_initial_prob, np.zeros_like(initial_prob)
         )
         np.testing.assert_array_equal(
-            log_transition_prob_nemos, np.zeros_like(log_transition_prob_nemos)
+            new_params.hmm_params.log_transition_prob, np.zeros_like(transition_prob)
         )
 
         # check expected shapes
-        assert log_transition_prob_nemos.shape == (1, 1)
-        assert log_initial_prob_nemos.shape == (1,)
-        assert optimized_projection_weights_nemos.coef.shape == (2, 1)
-        assert optimized_projection_weights_nemos.intercept.shape == (1,)
+        assert new_params.hmm_params.log_transition_prob.shape == (1, 1)
+        assert new_params.hmm_params.log_initial_prob.shape == (1,)
+        assert new_params.glm_params.coef.shape == (2, 1)
+        assert new_params.glm_params.intercept.shape == (1,)
 
     @pytest.mark.requires_x64
     @pytest.mark.parametrize(
@@ -1071,21 +1077,23 @@ class TestMStep:
         alphas_transition = np.random.uniform(1, 3, size=transition_prob.shape)
         alphas_init = np.random.uniform(1, 3, size=initial_prob.shape)
 
+        params = GLMHMMParams(
+            hmm_params=HMMParams(None, None),
+            glm_params=GLMParams(jnp.zeros_like(coef), jnp.zeros_like(intercept)),
+            glm_scale=GLMScale(jnp.zeros_like(intercept)),
+        )
+
         (
-            optimized_projection_weights_nemos,
-            _scale,
-            log_initial_prob,
-            log_transition_prob,
+            new_params,
             state,
         ) = run_m_step(
+            params,
             X,
             y,
             log_gammas,
             log_xis,
-            GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
-            glm_scale=jnp.ones(intercept.shape[-1]),
             m_step_fn_glm_scale=None,
             inverse_link_function=inv_link,
             dirichlet_prior_alphas_transition=alphas_transition,
@@ -1093,8 +1101,8 @@ class TestMStep:
         )
 
         # Convert back to probability space for gradient checks
-        new_initial_prob = np.exp(log_initial_prob)
-        new_transition_prob = np.exp(log_transition_prob)
+        new_initial_prob = np.exp(new_params.hmm_params.log_initial_prob)
+        new_transition_prob = np.exp(new_params.hmm_params.log_transition_prob)
 
         lagrange_multiplier = -jax.grad(expected_log_likelihood_wrt_transitions)(
             new_transition_prob, np.exp(log_xis), dirichlet_alphas=alphas_transition
@@ -1165,30 +1173,32 @@ class TestMStep:
         alphas_init = np.random.uniform(1, 3, size=initial_prob.shape)
         alphas_init[state_idx] = 10**20
 
+        params = GLMHMMParams(
+            hmm_params=HMMParams(None, None),
+            glm_params=GLMParams(jnp.zeros_like(coef), jnp.zeros_like(intercept)),
+            glm_scale=GLMScale(jnp.zeros_like(intercept)),
+        )
+
         (
-            optimized_projection_weights_nemos,
-            _scale,
-            log_initial_prob,
-            log_transition_prob,
+            new_params,
             state,
         ) = run_m_step(
+            params,
             X,
             y,
             log_gammas,
             log_xis,
-            GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
-            glm_scale=jnp.ones(intercept.shape[-1]),
             m_step_fn_glm_scale=None,
             inverse_link_function=inv_link,
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
         # Convert back to probability space
-        new_initial_prob = np.exp(log_initial_prob)
+        new_initial_prob = np.exp(new_params.hmm_params.log_initial_prob)
         np.testing.assert_array_almost_equal(
-            new_initial_prob, np.eye(new_initial_prob.shape[0])[state_idx]
+            new_initial_prob, np.eye(new_params.hmm_params.log_initial_prob.shape[0])[state_idx]
         )
 
     @pytest.mark.parametrize("row, col", itertools.product(range(3), range(3)))
@@ -1223,29 +1233,31 @@ class TestMStep:
         alphas_init = np.random.uniform(1, 3, size=initial_prob.shape)
         alphas_transition[row, col] = 10**20
 
+        params = GLMHMMParams(
+            hmm_params=HMMParams(None, None),
+            glm_params=GLMParams(jnp.zeros_like(coef), jnp.zeros_like(intercept)),
+            glm_scale=GLMScale(jnp.zeros_like(intercept)),
+        )
+
         (
-            optimized_projection_weights_nemos,
-            _scale,
-            log_initial_prob,
-            log_transition_prob,
+            new_params,
             state,
         ) = run_m_step(
+            params,
             X,
             y,
             log_gammas,
             log_xis,
-            GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
-            glm_scale=jnp.ones(intercept.shape[-1]),
             m_step_fn_glm_scale=None,
             inverse_link_function=inv_link,
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
         # Convert back to probability space
-        new_initial_prob = np.exp(log_initial_prob)
-        new_transition_prob = np.exp(log_transition_prob)
+        new_initial_prob = np.exp(new_params.hmm_params.log_initial_prob)
+        new_transition_prob = np.exp(new_params.hmm_params.log_transition_prob)
         np.testing.assert_array_almost_equal(
             new_transition_prob[row, :], np.eye(new_initial_prob.shape[0])[col]
         )
@@ -1278,57 +1290,55 @@ class TestMStep:
         alphas_transition = np.random.uniform(1, 3, size=transition_prob.shape)
         alphas_init = np.ones(initial_prob.shape)
 
+        params = GLMHMMParams(
+            hmm_params=HMMParams(None, None),
+            glm_params=GLMParams(jnp.zeros_like(coef), jnp.zeros_like(intercept)),
+            glm_scale=GLMScale(jnp.zeros_like(intercept)),
+        )
+
         (
-            prior_optimized_projection_weights_nemos,
-            _scale,
-            prior_initial_prob,
-            prior_transition_prob,
+            new_params,
             state,
         ) = run_m_step(
+            params,
             X,
             y,
             log_gammas,
             log_xis,
-            GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
-            glm_scale=jnp.ones(intercept.shape[-1]),
             m_step_fn_glm_scale=None,
             inverse_link_function=inv_link,
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
         (
-            optimized_projection_weights_nemos,
-            _scale,
-            no_prior_initial_prob,
-            no_prior_transition_prob,
+            new_params_no_prior,
             state,
         ) = run_m_step(
+            params,
             X,
             y,
             log_gammas,
             log_xis,
-            GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
-            glm_scale=jnp.ones(intercept.shape[-1]),
             m_step_fn_glm_scale=None,
             inverse_link_function=inv_link,
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=None,
         )
-        np.testing.assert_array_almost_equal(no_prior_initial_prob, prior_initial_prob)
+        np.testing.assert_array_almost_equal(new_params_no_prior.hmm_params.log_initial_prob, new_params.hmm_params.log_initial_prob)
         np.testing.assert_array_almost_equal(
-            no_prior_transition_prob, prior_transition_prob
+            new_params_no_prior.hmm_params.log_transition_prob, new_params.hmm_params.log_transition_prob
         )
         np.testing.assert_array_almost_equal(
-            optimized_projection_weights_nemos.coef,
-            prior_optimized_projection_weights_nemos.coef,
+            new_params_no_prior.glm_params.coef,
+            new_params.glm_params.coef,
         )
         np.testing.assert_array_almost_equal(
-            optimized_projection_weights_nemos.intercept,
-            prior_optimized_projection_weights_nemos.intercept,
+            new_params_no_prior.glm_params.intercept,
+            new_params.glm_params.intercept,
         )
 
     @pytest.mark.requires_x64
@@ -1358,57 +1368,56 @@ class TestMStep:
         alphas_transition = np.ones(transition_prob.shape)
         alphas_init = np.random.uniform(1, 3, size=initial_prob.shape)
 
+        params = GLMHMMParams(
+            hmm_params=HMMParams(None, None),
+            glm_params=GLMParams(jnp.zeros_like(coef), jnp.zeros_like(intercept)),
+            glm_scale=GLMScale(jnp.zeros_like(intercept)),
+        )
+
+
         (
-            prior_optimized_projection_weights_nemos,
-            _scale,
-            prior_initial_prob,
-            prior_transition_prob,
+            new_params,
             state,
         ) = run_m_step(
+            params,
             X,
             y,
             log_gammas,
             log_xis,
-            GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
-            glm_scale=jnp.ones(intercept.shape[-1]),
             m_step_fn_glm_scale=None,
             inverse_link_function=inv_link,
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
         (
-            optimized_projection_weights_nemos,
-            _scale,
-            no_prior_initial_prob,
-            no_prior_transition_prob,
+            new_params_no_prior,
             state,
         ) = run_m_step(
+            params,
             X,
             y,
             log_gammas,
             log_xis,
-            GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
-            glm_scale=jnp.ones(intercept.shape[-1]),
             m_step_fn_glm_scale=None,
             inverse_link_function=inv_link,
             dirichlet_prior_alphas_transition=None,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
-        np.testing.assert_array_almost_equal(no_prior_initial_prob, prior_initial_prob)
+        np.testing.assert_array_almost_equal(new_params_no_prior.hmm_params.log_initial_prob, new_params.hmm_params.log_initial_prob)
         np.testing.assert_array_almost_equal(
-            no_prior_transition_prob, prior_transition_prob
+            new_params_no_prior.hmm_params.log_transition_prob, new_params.hmm_params.log_transition_prob
         )
         np.testing.assert_array_almost_equal(
-            optimized_projection_weights_nemos.coef,
-            prior_optimized_projection_weights_nemos.coef,
+            new_params_no_prior.glm_params.coef,
+            new_params.glm_params.coef,
         )
         np.testing.assert_array_almost_equal(
-            optimized_projection_weights_nemos.intercept,
-            prior_optimized_projection_weights_nemos.intercept,
+            new_params_no_prior.glm_params.intercept,
+            new_params.glm_params.intercept,
         )
 
     @pytest.mark.parametrize(
@@ -1441,12 +1450,13 @@ class TestMStep:
         xis = data["xis"]
         projection_weights = data["projection_weights"]
         intercept, coef = projection_weights[:1], projection_weights[1:]
+        intercept = intercept.squeeze()
         new_sess = data["new_sess"]
 
         # M-step output
         optimized_projection_weights = data["optimized_projection_weights"]
         opt_intercept, opt_coef = (
-            optimized_projection_weights[:1],
+            optimized_projection_weights[:1].squeeze(),
             optimized_projection_weights[1:],
         )
         new_initial_prob = data["new_initial_prob"]
@@ -1460,21 +1470,23 @@ class TestMStep:
             prepare_partial_hmm_nll_single_neuron(obs)
         )
 
+        params = GLMHMMParams(
+            hmm_params=HMMParams(None, None),
+            glm_params=GLMParams(jnp.zeros_like(coef), jnp.zeros_like(intercept)),
+            glm_scale=GLMScale(jnp.zeros_like(intercept)),
+        )
+
         (
-            optimized_projection_weights_nemos,
-            _scale,
-            log_initial_prob_nemos,
-            log_transition_prob_nemos,
+            new_params,
             state,
         ) = run_m_step(
+            params,
             X[:, 1:],  # drop intercept column
             y,
             np.log(gammas),
             np.log(xis),
-            GLMParams(coef, intercept),
             is_new_session=new_sess.astype(bool),
             m_step_fn_glm_params=solver.run,
-            glm_scale=jnp.ones(intercept.shape[-1]),
             m_step_fn_glm_scale=None,
             inverse_link_function=obs.default_inverse_link_function,
             dirichlet_prior_alphas_init_prob=dirichlet_prior_initial_prob,
@@ -1482,12 +1494,12 @@ class TestMStep:
         )
 
         # Convert back to probability space for comparison with reference
-        new_initial_prob_nemos = np.exp(log_initial_prob_nemos)
-        new_transition_prob_nemos = np.exp(log_transition_prob_nemos)
+        new_initial_prob_nemos = np.exp(new_params.hmm_params.log_initial_prob)
+        new_transition_prob_nemos = np.exp(new_params.hmm_params.log_transition_prob)
 
         # NLL with nemos input
         n_ll_nemos = partial_posterior_weighted_glm_negative_log_likelihood(
-            optimized_projection_weights_nemos,
+            new_params.glm_params,
             X[:, 1:],
             y,
             gammas,
@@ -1516,7 +1528,7 @@ class TestMStep:
         jax.tree_util.tree_map(
             lambda x, y: np.testing.assert_almost_equal(x, y, decimal=6),
             GLMParams(opt_coef, opt_intercept),
-            optimized_projection_weights_nemos,
+            new_params.glm_params,
         )
 
     @pytest.mark.parametrize("underflow_scheme", ["one_of_three", "two_of_three"])
@@ -1604,19 +1616,24 @@ class TestMStep:
 
         obs = PoissonObservations()
 
+        params = GLMHMMParams(
+            hmm_params=HMMParams(None, None),
+            glm_params=GLMParams(dummy_coef, dummy_intercept),
+            glm_scale=GLMScale(jnp.zeros_like(dummy_intercept)),
+        )
+
         # Run M-step
-        optimized_weights, _scale, log_init, log_trans, _ = run_m_step(
+        new_params, _ = run_m_step(
+            params,
             X_dummy,
             y_dummy,
             log_posteriors,
             log_joint_posterior,
-            GLMParams(dummy_coef, dummy_intercept),
             is_new_session=is_new_session,
             m_step_fn_glm_params=lambda *a, **kw: (
-                GLMParams(dummy_coef, dummy_intercept),
+                params.glm_params,
                 None,
             ),
-            glm_scale=jnp.ones(dummy_intercept.shape[-1]),
             m_step_fn_glm_scale=None,
             inverse_link_function=obs.default_inverse_link_function,
             dirichlet_prior_alphas_init_prob=alphas_init,
@@ -1624,12 +1641,12 @@ class TestMStep:
         )
 
         # Compare to reference
-        np.testing.assert_allclose(log_init, log_init_ref, rtol=1e-12, atol=0)
-        np.testing.assert_allclose(log_trans, log_trans_ref, rtol=1e-12, atol=0)
+        np.testing.assert_allclose(new_params.hmm_params.log_initial_prob, log_init_ref, rtol=1e-12, atol=0)
+        np.testing.assert_allclose(new_params.hmm_params.log_transition_prob, log_trans_ref, rtol=1e-12, atol=0)
 
         # Shapes
-        assert log_init.shape == (n_states,)
-        assert log_trans.shape == (n_states, n_states)
+        assert new_params.hmm_params.log_initial_prob.shape == (n_states,)
+        assert new_params.hmm_params.log_transition_prob.shape == (n_states, n_states)
 
     @pytest.mark.requires_x64
     @pytest.mark.parametrize(
@@ -1668,9 +1685,10 @@ class TestMStep:
                 np.log(initial_prob),
                 np.log(transition_prob),
                 glm_params=GLMParams(coef, intercept),
-                glm_scale=jnp.ones_like(intercept),
+                glm_scale=GLMScale(jnp.zeros_like(intercept)),
                 inverse_link_function=inv_link,
                 log_likelihood_func=ll_func,
+                is_new_session=new_sess,
             )
         )
 
@@ -1693,12 +1711,13 @@ class TestMStep:
         (_, _, _, updated_log_like, _, _) = forward_backward(
             X,
             y,
-            new_initial_prob,
+            np.log(new_initial_prob),
             np.log(transition_prob),
             glm_params=GLMParams(coef, intercept),
-            glm_scale=jnp.ones_like(intercept),
+            glm_scale=GLMScale(jnp.zeros_like(intercept)),
             inverse_link_function=inv_link,
             log_likelihood_func=ll_func,
+            is_new_session=new_sess,
         )
         assert (
             updated_log_like > initial_log_like
@@ -1711,12 +1730,13 @@ class TestMStep:
         (_, _, _, updated_log_like, _, _) = forward_backward(
             X,
             y,
-            new_initial_prob,
-            new_transition_prob,
+            np.log(new_initial_prob),
+            np.log(new_transition_prob),
             glm_params=GLMParams(coef, intercept),
-            glm_scale=jnp.ones_like(intercept),
+            glm_scale=GLMScale(jnp.zeros_like(intercept)),
             inverse_link_function=inv_link,
             log_likelihood_func=ll_func,
+            is_new_session=new_sess,
         )
         assert (
             updated_log_like > initial_log_like
@@ -1731,12 +1751,13 @@ class TestMStep:
         (_, _, _, updated_log_like, _, _) = forward_backward(
             X,
             y,
-            new_initial_prob,
-            new_transition_prob,
+            np.log(new_initial_prob),
+            np.log(new_transition_prob),
             glm_params=new_glm_prams,
-            glm_scale=jnp.ones_like(intercept),
+            glm_scale=GLMScale(jnp.zeros_like(intercept)),
             inverse_link_function=inv_link,
             log_likelihood_func=ll_func,
+            is_new_session=new_sess,
         )
         assert (
             updated_log_like > initial_log_like
@@ -1748,38 +1769,41 @@ class TestMStep:
         )
         objective_scale = prepare_mstep_nll_objective_scale(False, obs)
         new_scale, _ = LBFGS(objective_scale, tol=10**-12).run(
-            jnp.ones_like(intercept), y, predicted_rate, posteriors
+            GLMScale(jnp.zeros_like(intercept)), y, predicted_rate, posteriors
         )
         if not isinstance(obs, (PoissonObservations, BernoulliObservations)):
             (_, _, _, updated_log_like, _, _) = forward_backward(
                 X,
                 y,
-                new_initial_prob,
-                new_transition_prob,
+                np.log(new_initial_prob),
+                np.log(new_transition_prob),
                 glm_params=new_glm_prams,
                 glm_scale=new_scale,
                 inverse_link_function=inv_link,
                 log_likelihood_func=ll_func,
+                is_new_session=new_sess,
             )
             assert (
                 updated_log_like > initial_log_like
             ), "M-step for GLM scale prob did not increase likelihood"
         else:
-            np.testing.assert_array_equal(new_scale, jnp.ones_like(intercept))
+            np.testing.assert_array_equal(new_scale.log_scale, jnp.zeros_like(intercept))
+
+        params = GLMHMMParams(
+            hmm_params=HMMParams(None, None),
+            glm_params=GLMParams(coef, intercept),
+            glm_scale=GLMScale(jnp.zeros_like(intercept)),
+        )
 
         (
-            optimized_projection_weights,
-            optimized_glm_scale,
-            optimized_log_init,
-            optimized_log_trans,
+            new_params,
             _,
         ) = run_m_step(
+            params,
             X,
             y,
             log_posteriors=log_posteriors,
             log_joint_posterior=log_joint_posterior,
-            glm_params=GLMParams(coef, intercept),
-            glm_scale=jnp.ones_like(intercept),
             inverse_link_function=inv_link,
             is_new_session=new_sess,
             m_step_fn_glm_scale=LBFGS(objective_scale, tol=10**-12).run,
@@ -1789,11 +1813,11 @@ class TestMStep:
         )
 
         jax.tree_util.tree_map(
-            np.testing.assert_allclose, optimized_projection_weights, new_glm_prams
+            np.testing.assert_allclose, new_params.glm_params, new_glm_prams
         )
-        np.testing.assert_allclose(optimized_glm_scale, new_scale)
-        np.testing.assert_allclose(jnp.exp(optimized_log_init), new_initial_prob)
-        np.testing.assert_allclose(jnp.exp(optimized_log_trans), new_transition_prob)
+        np.testing.assert_allclose(new_params.glm_scale.log_scale, new_scale.log_scale)
+        np.testing.assert_allclose(jnp.exp(new_params.hmm_params.log_initial_prob), new_initial_prob)
+        np.testing.assert_allclose(jnp.exp(new_params.hmm_params.log_transition_prob), new_transition_prob)
 
 
 class TestEMAlgorithm:
