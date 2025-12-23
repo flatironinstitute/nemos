@@ -16,16 +16,24 @@ from .params import GLMHMMParams, GLMHMMUserParams, GLMScale, HMMParams
 
 
 def to_glm_hmm_params(user_params: GLMHMMUserParams) -> GLMHMMParams:
-    """Map from GLMUserParams to GLMParams."""
+    """Map from GLMHMMUserParams to GLMHMMParams.
+
+    Converts user-provided parameters (scale and probabilities in regular space)
+    to internal model parameters (log_scale and log probabilities).
+    """
     return GLMHMMParams(
-        GLMParams(*user_params[:2]),
-        GLMScale(jnp.log(user_params[2])),
-        HMMParams(*(jnp.log(p) for p in user_params[3:])),
+        glm_params=GLMParams(*user_params[:2]),
+        glm_scale=GLMScale(jnp.log(user_params[2])),
+        hmm_params=HMMParams(*(jnp.log(p) for p in user_params[3:])),
     )
 
 
 def from_glm_hmm_params(params: GLMHMMParams) -> GLMHMMUserParams:
-    """Map from GLMParams to GLMUserParams."""
+    """Map from GLMHMMParams to GLMHMMUserParams.
+
+    Converts internal model parameters (log_scale and log probabilities)
+    to user-facing parameters (scale and probabilities in regular space).
+    """
     return (
         params.glm_params.coef,
         params.glm_params.intercept,
@@ -46,7 +54,7 @@ class GLMHMMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         1,
         1,
         2,
-    )  # this should be (coef.ndim, intercept.ndim, init_prob.ndim, transition_prob.ndim)
+    )  # (coef.ndim, intercept.ndim, scale.ndim, init_prob.ndim, transition_prob.ndim)
     to_model_params: Callable[[GLMHMMUserParams], GLMHMMParams] = to_glm_hmm_params
     from_model_params: Callable[[GLMHMMParams], GLMHMMUserParams] = from_glm_hmm_params
     model_class: str = "GLMHMM"
@@ -59,13 +67,13 @@ class GLMHMMValidator(RegressorValidator[GLMUserParams, GLMParams]):
             "check_array_dimensions",
             dict(
                 err_message_format="Invalid parameter dimensionality.\n- coef must be an array "
-                "or nemos.pytree.FeaturePytree with array leafs of shape"
+                "or nemos.pytree.FeaturePytree with array leafs of shape "
                 "``(n_features, n_states)``.\n- intercept must be of shape ``(n_states,)``.\n"
-                "- scale should be of shape ``(n_states,)``.\n"
+                "- scale must be of shape ``(n_states,)``.\n"
                 "- initial_prob must be of shape ``(n_states,)``.\n"
-                "- transition_prob must be of shape ``(n_states,n_states)``.\n"
-                "\nThe provided coe, intercept, initial_prob and transition_prob "
-                "have shape ``{}``, ``{}`` , ``{}``, ``{}``  and ``{}`` "
+                "- transition_prob must be of shape ``(n_states, n_states)``.\n"
+                "\nThe provided coef, intercept, scale, initial_prob and transition_prob "
+                "have shape ``{}``, ``{}``, ``{}``, ``{}`` and ``{}`` "
                 "instead."
             ),
         ),
