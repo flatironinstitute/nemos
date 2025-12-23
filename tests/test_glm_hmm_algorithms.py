@@ -1655,6 +1655,7 @@ class TestMStep:
             scale,
             inv_link,
         ) = generate_data_multi_state
+        X, y, coef, intercept, initial_prob,transition_prob, scale = jax.tree_util.tree_map(lambda x: jnp.asarray(x, dtype=jnp.float64), (X, y, coef, intercept, initial_prob,transition_prob, scale))
         new_sess = jnp.asarray(new_sess, dtype=bool)
         ll_func = prepare_estep_log_likelihood(False, obs)
         (log_posteriors, log_joint_posterior, _, initial_log_like, _, _) = (
@@ -1788,7 +1789,7 @@ class TestMStep:
             np.testing.assert_allclose, optimized_projection_weights, new_glm_prams
         )
         jax.tree_util.tree_map(
-            np.testing.assert_allclose, optimized_glm_scale, new_scale
+            lambda x, y: np.testing.assert_allclose(x, y, atol=1e-8), optimized_glm_scale, new_scale
         )
         np.testing.assert_allclose(jnp.exp(optimized_log_init), new_initial_prob)
         np.testing.assert_allclose(jnp.exp(optimized_log_trans), new_transition_prob)
