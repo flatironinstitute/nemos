@@ -13,6 +13,7 @@ from .m_step_analytical_updates import (
     _analytical_m_step_initial_prob,
     _analytical_m_step_transition_prob,
 )
+from .params import GLMHMMParams, GLMScale, HMMParams
 from .utils import Array, compute_rate_per_state, initialize_new_session
 
 
@@ -25,7 +26,7 @@ class GLMHMMState(eqx.Module):
     iterations: int
 
 
-EMCarry = Tuple[Tuple[Array, Array, GLMParams, Array], GLMHMMState]
+EMCarry = Tuple[GLMHMMParams, GLMHMMState]
 
 
 def compute_xi_log(
@@ -303,7 +304,7 @@ def forward_backward(
     log_initial_prob: Array,
     log_transition_prob: Array,
     glm_params: GLMParams,
-    glm_scale: Array,
+    glm_scale: GLMScale,
     inverse_link_function: Callable[[Array], Array],
     log_likelihood_func: Callable[[Array, Array, Array], Array],
     is_new_session: Array | None = None,
@@ -408,7 +409,9 @@ def forward_backward(
     # Here, log_likelihood_func is the ``log_likelihood`` method from
     # nemos.observation_models.Observations with ``aggregate_sample_scores = lambda x:x``
 
-    log_conditionals = log_likelihood_func(y, predicted_rate_given_state, glm_scale)
+    log_conditionals = log_likelihood_func(
+        y, predicted_rate_given_state, jnp.exp(glm_scale.log_scale)
+    )
 
     # Compute forward pass
     log_alphas, log_normalization = forward_pass(
@@ -461,28 +464,29 @@ def forward_backward(
     ],
 )
 def run_m_step(
+    params: GLMHMMParams,
     X: Array,
     y: Array,
     log_posteriors: Array,
     log_joint_posterior: Array,
-    glm_params: GLMParams,
-    glm_scale: Array,
     is_new_session: Array,
     m_step_fn_glm_params: Callable[
         [GLMParams, Array, Array, Array], Tuple[GLMParams, SolverState]
     ],
     m_step_fn_glm_scale: (
-        Callable[[Array, Array, Array, Array], Tuple[Array, SolverState]] | None
+        Callable[[GLMScale, Array, Array, Array], Tuple[GLMScale, SolverState]] | None
     ),
     inverse_link_function: Callable[[Array], Array],
     dirichlet_prior_alphas_init_prob: Array | None = None,
     dirichlet_prior_alphas_transition: Array | None = None,
-) -> Tuple[GLMParams, Array, Array, Array, SolverState]:
+) -> Tuple[GLMHMMParams, SolverState]:
     r"""
     Perform the M-step of the EM algorithm for GLM-HMM.
 
     Parameters
     ----------
+    params:
+        The current model parameters.
     X:
         Design matrix of observations, shape (n_samples, n_features).
     y:
@@ -492,12 +496,6 @@ def run_m_step(
     log_joint_posterior:
         Log joint posterior probabilities over pairs of states summed over samples. Shape ``(n_states, n_states)``.
         :math:`\sum_t P(z_{t-1}, z_t \mid X, y, \theta_{\text{old}})`.
-    glm_params:
-        Current GLM coefficients and intercept terms. Coefficients have shape ``(n_features, n_states)`` for
-        single observation fits and ``(n_features, n_neurons, n_states)`` for population fits. Intercepts have
-        shape ``(n_states,)`` for single observation fits and ``(n_states, n_neurons)`` for population fits.
-    glm_scale :
-        The scale parameter of the likelihood. Shape (n_states,) or (n_neurons, n_states).
     is_new_session:
         Boolean mask marking the first observation of each session. Shape ``(n_samples,)``.
     m_step_fn_glm_params:
@@ -516,14 +514,8 @@ def run_m_step(
 
     Returns
     -------
-    optimized_projection_weights:
-        Updated projection weights after optimization.
-    glm_scale:
-        Updated GLM scale.
-    log_initial_prob:
-        Updated initial state distribution in log-space.
-    log_transition_prob:
-        Updated transition matrix in log-space.
+    params:
+        The updated model parameters.
     state:
         State returned by the solver.
 
@@ -548,20 +540,29 @@ def run_m_step(
 
     # Minimize negative log-likelihood to update GLM weights
     optimized_projection_weights, state, _ = m_step_fn_glm_params(
-        glm_params, X, y, posteriors
+        params.glm_params, X, y, posteriors
     )
     predicted_rate = compute_rate_per_state(
         X, optimized_projection_weights, inverse_link_function=inverse_link_function
     )
+
     if m_step_fn_glm_scale is not None:
+        # Gaussian, Gamma, and other have a scale.
         glm_scale, state_scale = m_step_fn_glm_scale(
-            glm_scale, y, predicted_rate, posteriors
+            params.glm_scale, y, predicted_rate, posteriors
         )
+    else:
+        # Poisson, Bernoulli etc. do not have a scale
+        # just keep carrying the scale
+        glm_scale = params.glm_scale
+
+    params = GLMHMMParams(
+        hmm_params=HMMParams(jnp.log(initial_prob), jnp.log(transition_prob)),
+        glm_params=optimized_projection_weights,
+        glm_scale=glm_scale,
+    )
     return (
-        optimized_projection_weights,
-        glm_scale,
-        jnp.log(initial_prob),
-        jnp.log(transition_prob),
+        params,
         state,
     )
 
@@ -571,7 +572,7 @@ def _em_step(
     X: Array,
     y: Array,
     inverse_link_function: Callable[[Array], Array],
-    likelihood_func: Callable[[Array, Array, Array], Array],
+    log_likelihood_func: Callable[[Array, Array, Array], Array],
     m_step_fn_glm_params: Callable[
         [GLMParams, Array, Array, Array], Tuple[GLMParams, SolverState]
     ],
@@ -591,14 +592,14 @@ def _em_step(
     ----------
     carry :
         Tuple of current parameters and state:
-        ``((log_init_prob, log_trans_matrix, glm_params, glm_scale), previous_state)``
+        ``((log_init_prob, log_trans_matrix, glm_params, log_scale), previous_state)``
     X :
         Design matrix of observations.
     y :
         Target responses.
     inverse_link_function :
         Function mapping linear predictors to predicted rates.
-    likelihood_func :
+    log_likelihood_func :
         Log-likelihood function for the E-step.
     m_step_fn_glm_params :
         M-step update function for GLM coefficients and intercepts.
@@ -620,27 +621,26 @@ def _em_step(
     compile and execute the EM loop.
     """
 
-    (log_init_prob, log_trans_matrix, glm_params, glm_scale), previous_state = carry
+    params, previous_state = carry
 
     (log_posteriors, log_joint_posterior, _, new_log_like, _, _) = forward_backward(
         X,
         y,
-        log_init_prob,
-        log_trans_matrix,
-        glm_params,
-        glm_scale,
+        params.hmm_params.log_initial_prob,
+        params.hmm_params.log_transition_prob,
+        params.glm_params,
+        params.glm_scale,
         inverse_link_function,
-        likelihood_func,
+        log_likelihood_func,
         is_new_session,
     )
 
-    glm_params, glm_scale, log_init_prob, log_trans_matrix, _ = run_m_step(
+    new_params, _ = run_m_step(
+        params,
         X,
         y,
         log_posteriors=log_posteriors,
         log_joint_posterior=log_joint_posterior,
-        glm_params=glm_params,
-        glm_scale=glm_scale,
         is_new_session=is_new_session,
         m_step_fn_glm_params=m_step_fn_glm_params,
         m_step_fn_glm_scale=m_step_fn_glm_scale,
@@ -656,7 +656,72 @@ def _em_step(
         ].set(new_log_like),
     )
 
-    return (log_init_prob, log_trans_matrix, glm_params, glm_scale), new_state
+    return new_params, new_state
+
+
+def em_step(
+    params: GLMHMMParams,
+    state: GLMHMMState,
+    X: Array,
+    y: Array,
+    inverse_link_function: Callable,
+    log_likelihood_func: Callable,
+    m_step_fn_glm_params: Callable,
+    m_step_fn_glm_scale: Callable,
+    is_new_session: Array,
+) -> Tuple[GLMHMMParams, GLMHMMState]:
+    """
+    Perform a single EM iteration step for GLM-HMM.
+
+    This function provides a clean public API for running a single EM iteration,
+    compatible with the optimization API pattern used by solvers. It wraps the
+    internal `_em_step` function which operates on EMCarry tuples.
+
+    Parameters
+    ----------
+    params : GLMHMMParams
+        Current GLM-HMM parameters containing GLM coefficients/intercepts and
+        HMM initial/transition probabilities.
+    state : GLMHMMState
+        Current EM algorithm state containing iteration count and log-likelihood history.
+    X : Array
+        Design matrix of observations.
+    y : Array
+        Target responses.
+    inverse_link_function : Callable
+        Elementwise function mapping linear predictors to rates.
+    log_likelihood_func : Callable
+        Function computing the log-likelihood.
+    m_step_fn_glm_params : Callable
+        Callable that performs the M-step update for GLM parameters.
+    m_step_fn_glm_scale : Callable
+        Callable that performs the M-step update for GLM scale.
+    is_new_session : Array
+        Boolean mask for the first observation of each session.
+
+    Returns
+    -------
+    updated_params : GLMHMMParams
+        Updated parameters after one EM iteration.
+    updated_state : GLMHMMState
+        Updated state after one EM iteration.
+    """
+    # Pack params and state into EMCarry format (log-space for HMM params)
+    carry = params, state
+
+    # Run the internal EM step
+    params, state = _em_step(
+        carry,
+        X=X,
+        y=y,
+        inverse_link_function=inverse_link_function,
+        log_likelihood_func=log_likelihood_func,
+        m_step_fn_glm_params=m_step_fn_glm_params,
+        m_step_fn_glm_scale=m_step_fn_glm_scale,
+        is_new_session=is_new_session,
+    )
+
+    return params, state
 
 
 def check_log_likelihood_increment(state: GLMHMMState, tol: float) -> Array:
@@ -683,7 +748,7 @@ def check_log_likelihood_increment(state: GLMHMMState, tol: float) -> Array:
     jax.jit,
     static_argnames=[
         "inverse_link_function",
-        "likelihood_func",
+        "log_likelihood_func",
         "m_step_fn_glm_params",
         "m_step_fn_glm_scale",
         "maxiter",
@@ -692,21 +757,18 @@ def check_log_likelihood_increment(state: GLMHMMState, tol: float) -> Array:
     ],
 )
 def em_glm_hmm(
+    params: GLMHMMParams,
     X: Array,
     y: Array,
-    initial_prob: Array,
-    transition_prob: Array,
-    glm_params: GLMParams,
-    glm_scale: Array,
     inverse_link_function: Callable,
-    likelihood_func: Callable,
+    log_likelihood_func: Callable,
     m_step_fn_glm_params: Callable,
     m_step_fn_glm_scale: Callable | None,
     is_new_session: Optional[Array] = None,
     maxiter: int = 10**3,
     tol: float = 1e-8,
     check_convergence: Callable = check_log_likelihood_increment,
-) -> Tuple[Array, Array, Array, Array, GLMParams, Array, GLMHMMState]:
+) -> Tuple[GLMHMMParams, GLMHMMState]:
     """
     Perform EM optimization for a GLM-HMM.
 
@@ -715,20 +777,19 @@ def em_glm_hmm(
 
     Parameters
     ----------
+    params:
+        Initial GLM-HMM parameters. This includes:
+        - the GLM coef, shape ``(n_features, n_states)`` or ``(n_features, n_neurons, n_states)`` .
+        - the GLM intercept, shape  ``(n_states, )`` or ``(n_neurons, n_states)`` .
+        - the HMM initial probabilities, shape ``(n_states,)``.
+        - the HMM transition probabilities, shape ``(n_states, n_states)``.
     X:
         Design matrix of observations.
     y:
         Target responses.
-    initial_prob:
-        Initial state distribution.
-    transition_prob:
-        Initial transition matrix.
-    glm_params:
-        Initial projection coefficients and intercept for the GLM, shape ``(n_features, n_states)``
-        and ``(n_states,)``, respectively.
     inverse_link_function:
         Elementwise function mapping linear predictors to rates.
-    likelihood_func:
+    log_likelihood_func:
         Function computing the log-likelihood.
     m_step_fn_glm_params:
         Callable that performs the M-step update for GLM parameters (coefficients and intercepts).
@@ -749,18 +810,8 @@ def em_glm_hmm(
 
     Returns
     -------
-    posteriors:
-        Posterior probabilities over states for each observation.
-    joint_posterior:
-        Joint posterior probabilities over pairs of states.
-    initial_prob:
-        Final estimate of the initial state distribution.
-    transition_matrix:
-        Final estimate of the transition matrix.
-    glm_params:
-        Final optimized glm parameters.
-    glm_scale:
-        Final scale parameter.
+    params:
+        The fitted GLM-HMM parameters.
     state:
         Final GLMHMMState containing all parameters and diagnostics.
     """
@@ -778,7 +829,7 @@ def em_glm_hmm(
         X=X,
         y=y,
         inverse_link_function=inverse_link_function,
-        likelihood_func=likelihood_func,
+        log_likelihood_func=log_likelihood_func,
         m_step_fn_glm_params=m_step_fn_glm_params,
         m_step_fn_glm_scale=m_step_fn_glm_scale,
         is_new_session=is_new_session,
@@ -788,48 +839,16 @@ def em_glm_hmm(
         _, new_state = carry
         return ~check_convergence(new_state, tol)
 
-    init_carry = (
-        jnp.log(initial_prob),
-        jnp.log(transition_prob),
-        glm_params,
-        glm_scale,
-    ), state
-    (log_initial_prob, log_transition_matrix, glm_params, glm_scale), state = (
-        eqx.internal.while_loop(
-            stopping_condition_while,
-            em_step_fn_while,
-            init_carry,
-            max_steps=maxiter,
-            kind="lax",
-        )
+    init_carry = params, state
+    params, state = eqx.internal.while_loop(
+        stopping_condition_while,
+        em_step_fn_while,
+        init_carry,
+        max_steps=maxiter,
+        kind="lax",
     )
 
-    # final posterior calculation
-    (log_posteriors, log_joint_posterior, _, _, _, _) = forward_backward(
-        X,
-        y,
-        log_initial_prob,
-        log_transition_matrix,
-        glm_params,
-        glm_scale,
-        inverse_link_function,
-        likelihood_func,
-        is_new_session,
-    )
-
-    posteriors = jnp.exp(log_posteriors)
-    joint_posterior = jnp.exp(log_joint_posterior)
-    initial_prob = jnp.exp(log_initial_prob)
-    transition_matrix = jnp.exp(log_transition_matrix)
-    return (
-        posteriors,
-        joint_posterior,
-        initial_prob,
-        transition_matrix,
-        glm_params,
-        glm_scale,
-        state,
-    )
+    return params, state
 
 
 @partial(
