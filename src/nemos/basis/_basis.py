@@ -107,7 +107,7 @@ def min_max_rescale_samples(
 
 def get_equi_spaced_samples(
     *n_samples,
-    bounds: Optional[tuple[float, float] | tuple[tuple[float, float]]] = None,
+    bounds: Optional[tuple[float, float] | List[tuple[float, float] | None]] = None,
 ) -> Generator[NDArray]:
     """Get equi-spaced samples for all the input dimensions.
 
@@ -124,17 +124,14 @@ def get_equi_spaced_samples(
     Returns
     -------
     :
-        A generator yielding numpy arrays of linspaces from 0 to 1 of sizes specified by ``n_samples``.
+        A generator yielding numpy arrays of linspaces from 0 (or specified min) to 1 (or specified max) of sizes specified by ``n_samples``.
     """
-    # handling of defaults when evaluating on a grid
-    # (i.e. when we cannot use max and min of samples)
-    if bounds is None:
-        mn, mx = 0, 1
-    elif all(isinstance(b, tuple) and len(b) == 2 for b in bounds):
-        return (np.linspace(*b, samp) for b, samp in zip(bounds, n_samples))
-    else:
-        mn, mx = bounds
-    return (np.linspace(mn, mx, samp) for samp in n_samples)
+    if not isinstance(bounds, list):
+        bounds = [bounds]
+    return (
+        np.linspace(*((0, 1) if b is None else b), samp)
+        for b, samp in zip(bounds, n_samples)
+    )
 
 
 class Basis(Base, abc.ABC, BasisTransformerMixin):
@@ -1245,3 +1242,13 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
            inputs are available.
         """
         return get_input_shape(self)[:1]
+
+    @property
+    def bounds(self):
+        b1 = self.basis1.bounds
+        b2 = self.basis2.bounds
+        if b1 is None:
+            b1 = None
+        if b2 is None:
+            b2 = None
+        return [b1, b2]
