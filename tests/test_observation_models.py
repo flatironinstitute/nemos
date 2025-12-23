@@ -218,7 +218,7 @@ class TestPoissonObservations:
         )
         ll_scipy = sts.poisson(firing_rate).logpmf(y)
         if not np.allclose(ll_model, ll_scipy):
-            raise ValueError("Log-likelihood doesn't match scipy!")
+            raise ValueError(f"Log-likelihood doesn't match scipy!\nMax err: {np.max(np.abs(ll_model - ll_scipy))}")
 
     def test_emission_probability(selfself, poissonGLM_model_instantiation):
         """
