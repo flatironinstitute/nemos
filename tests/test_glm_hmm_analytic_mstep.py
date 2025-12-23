@@ -1,11 +1,8 @@
-from typing import Tuple
-
 import jax.numpy as jnp
 import numpy as np
 import pytest
 
 import nemos as nmo
-import nemos.regularizer
 from nemos.glm.params import GLMParams
 from nemos.glm_hmm.algorithm_configs import (
     get_analytical_scale_update,
@@ -16,7 +13,20 @@ from nemos.glm_hmm.algorithm_configs import (
 from nemos.glm_hmm.expectation_maximization import forward_backward, run_m_step
 from nemos.glm_hmm.params import GLMHMMParams, GLMScale, HMMParams
 from nemos.glm_hmm.utils import compute_rate_per_state
-from nemos.solvers import JaxoptLBFGS
+from nemos.regularizer import UnRegularized
+from nemos.solvers import solver_registry
+
+
+def setup_solver(objective, tol=1e-12, reg=UnRegularized()):
+    lbfgs_class = solver_registry["LBFGS"]
+    solver = lbfgs_class(
+        objective,
+        reg,
+        0.0,
+        False,
+        tol=tol,
+    )
+    return solver
 
 
 @pytest.fixture
@@ -125,21 +135,16 @@ class TestAnalyticMStepScale:
         def objective(scale, args):
             return expected_negative_log_likelihood_scale(scale, *args)
 
-        solver = JaxoptLBFGS(
-            objective,
-            regularizer=nemos.regularizer.UnRegularized(),
-            regularizer_strength=None,
-            tol=10**-14,
-        )
+        solver = setup_solver(objective, tol=10**-14)
         rate_per_state = compute_rate_per_state(
             X, glm_params, inverse_link_function=inv_link_func
         )
-        numerical_update, _ = solver.run(
+        numerical_update, _, _ = solver.run(
             GLMScale(jnp.zeros_like(glm_params.intercept)),
             (y, rate_per_state, jnp.exp(log_gammas_nemos)),
         )
         update = get_analytical_scale_update(obs, is_population_glm=is_population_glm)
-        analytical_update, _ = update(
+        analytical_update, _, _ = update(
             None, y, rate_per_state, jnp.exp(log_gammas_nemos)
         )
         np.testing.assert_allclose(
@@ -166,17 +171,10 @@ class TestAnalyticMStepScale:
             inverse_link_function=inv_link_func,
         )
 
-        solver = JaxoptLBFGS(
-            nll_fcn,
-            regularizer=nemos.regularizer.UnRegularized(),
-            regularizer_strength=None,
-            tol=10**-4,
-        )
+        solver = setup_solver(nll_fcn, tol=10**-4)
 
-        solver_scale = JaxoptLBFGS(
+        solver_scale = setup_solver(
             expected_negative_log_likelihood_scale,
-            regularizer=nemos.regularizer.UnRegularized(),
-            regularizer_strength=None,
             tol=10**-12,
         )
         new_sess = np.zeros(y.shape[0], dtype=bool)
