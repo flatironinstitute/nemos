@@ -3128,7 +3128,9 @@ class TestPytreeSupport:
 
         # Results should be identical (allow small numerical errors from floating point)
         np.testing.assert_allclose(posteriors, posteriors_ref, rtol=1e-13, atol=1e-14)
-        np.testing.assert_allclose(joint_posterior, joint_posterior_ref, rtol=1e-13, atol=1e-14)
+        np.testing.assert_allclose(
+            joint_posterior, joint_posterior_ref, rtol=1e-13, atol=1e-14
+        )
         np.testing.assert_allclose(ll, ll_ref, rtol=1e-13, atol=1e-14)
         np.testing.assert_allclose(ll_norm, ll_norm_ref, rtol=1e-13, atol=1e-14)
         np.testing.assert_allclose(alphas, alphas_ref, rtol=1e-13, atol=1e-14)
@@ -3620,7 +3622,9 @@ class TestEMScaleOptimization:
         # Initialize parameters
         init_coef = np.random.randn(*data["true_coef"].shape) * 0.1
         init_intercept = np.random.randn(data["n_states"]) - 1.0
-        init_scale = jnp.ones(data["n_states"]) * np.std(data["y"]) # Initialize to moderate value
+        init_scale = jnp.ones(data["n_states"]) * np.std(
+            data["y"]
+        )  # Initialize to moderate value
 
         # Prepare EM components
         likelihood_func = prepare_estep_log_likelihood(False, obs)
