@@ -134,10 +134,13 @@ class GLMHMMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         """Check the length of the glm parameters state axis."""
         wrapped = self.wrap_user_params(params)
         coef, intercept = wrapped[:2]
-        if coef.shape[-1] != self.n_states:
+        flat_coef = jax.tree_util.tree_leaves(coef)
+        invalid_shapes = jax.tree_util.tree_map(lambda x: x.shape[-1] != self.n_states, flat_coef)
+        if any(invalid_shapes):
             raise ValueError(
-                "GLM coef must be of shape ``(n_features, n_states)``. "
-                f"n_states is {self.n_states} but coef has shape ``{coef.shape}``."
+                "GLM coef must be of shape ``(n_features, n_states)`` or a dict of arrays "
+                "with shape ``(n_features, n_states)``. "
+                f"n_states is {self.n_states} but coef has shape(s) ``{invalid_shapes}``."
             )
         if intercept.shape[-1] != self.n_states:
             raise ValueError(

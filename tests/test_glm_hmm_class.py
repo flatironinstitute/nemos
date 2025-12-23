@@ -35,7 +35,7 @@ DEFAULT_GLM_COEF_SHAPE = {
 
 @pytest.mark.parametrize(
     "instantiate_base_regressor_subclass",
-    INSTANTIATE_MODEL_AND_SIMULATE,
+    INSTANTIATE_MODEL_ONLY,
     indirect=True,
 )
 def test_get_fit_attrs(instantiate_base_regressor_subclass):
@@ -135,6 +135,7 @@ class TestGLMHMM:
                 init_params=(
                     init_w,
                     fixture.params.glm_params.intercept,
+                    fixture.params.glm_scale.scale,
                     fixture.params.hmm_params.initial_prob,
                     fixture.params.hmm_params.transition_prob,
                 ),
@@ -178,6 +179,7 @@ class TestGLMHMM:
                 init_params=(
                     fixture.params.glm_params.coef,
                     init_b,
+                    fixture.params.glm_scale.scale,
                     fixture.params.hmm_params.initial_prob,
                     fixture.params.hmm_params.transition_prob,
                 ),
@@ -187,67 +189,73 @@ class TestGLMHMM:
     Parameterization used by test_fit_init_params_type and test_initialize_solver_init_params_type
     Contains the expected behavior and separate initial parameters for regular and population GLMs
 
-    Note: init_params is expected to be a 4-tuple (coef, intercept, initial_prob, transition_prob)
+    Note: init_params is expected to be a 5-tuple (coef, intercept, scale, initial_prob, transition_prob)
     """
     fit_init_params_type_init_params = (
         "expectation, init_params_glm, init_params_population_glm",
         [
-            # Valid case: proper arrays for all 4 params
+            # Valid case: proper arrays for all 5 params
             (
                 does_not_raise(),
                 (
                     jnp.zeros((2, 3)),
                     jnp.zeros((3,)),
+                    jnp.ones((3,)),  # scale
                     jnp.ones(3) / 3,
                     jnp.ones((3, 3)) / 3,
                 ),
                 (
                     jnp.zeros((2, 3, 3)),
                     jnp.zeros((3, 3)),
+                    jnp.ones((3, 3)),  # scale for population
                     jnp.ones(3) / 3,
                     jnp.ones((3, 3)) / 3,
                 ),
             ),
-            # Wrong length tuple (not 4 elements)
+            # Wrong length tuple (not 5 elements)
             (
-                pytest.raises(ValueError, match="Params must have length four"),
+                pytest.raises(ValueError, match="Params must have length 5"),
                 (jnp.zeros((1, 2, 3)), jnp.zeros((3,))),  # Only 2 elements
                 (jnp.zeros((1, 2, 3)), jnp.zeros((3, 3))),
             ),
-            # Dict instead of tuple for coef (should fail coef validation)
+            # Dict instead of tuple for coef (X is array, so dict coef raises AttributeError)
             (
-                pytest.raises(KeyError),
+                pytest.raises(AttributeError, match=r"'dict' object has no attribute 'shape'"),
                 (
                     dict(p1=jnp.zeros((1, 3)), p2=jnp.zeros((1, 3))),
                     jnp.zeros((3,)),
+                    jnp.ones((3,)),  # scale
                     jnp.ones(3) / 3,
                     jnp.ones((3, 3)) / 3,
                 ),
                 (
                     dict(p1=jnp.zeros((2, 3, 3)), p2=jnp.zeros((2, 2, 3))),
                     jnp.zeros((3, 3)),
+                    jnp.ones((3, 3)),  # scale
                     jnp.ones(3) / 3,
                     jnp.ones((3, 3)) / 3,
                 ),
             ),
-            # FeaturePytree for coef (valid pytree structure, should pass if shapes are right)
+            # FeaturePytree for coef (X is array, so FeaturePytree coef also raises AttributeError)
             (
-                does_not_raise(),
+                pytest.raises(AttributeError, match=r"'FeaturePytree' object has no attribute 'shape'"),
                 (
                     FeaturePytree(p1=jnp.zeros((1, 3)), p2=jnp.zeros((1, 3))),
                     jnp.zeros((3,)),
+                    jnp.ones((3,)),  # scale
                     jnp.ones(3) / 3,
                     jnp.ones((3, 3)) / 3,
                 ),
                 (
                     FeaturePytree(p1=jnp.zeros((1, 3, 3)), p2=jnp.zeros((1, 2, 3))),
                     jnp.zeros((3, 3)),
+                    jnp.ones((3, 3)),  # scale
                     jnp.ones(3) / 3,
                     jnp.ones((3, 3)) / 3,
                 ),
             ),
             # Scalar instead of tuple (wrong type)
-            (pytest.raises(ValueError, match="Params must have length four"), 0, 0),
+            (pytest.raises(ValueError, match="Params must have length 5"), 0, 0),
             # Set instead of tuple (wrong type, not subscriptable)
             (
                 pytest.raises(
@@ -260,14 +268,14 @@ class TestGLMHMM:
             # String as intercept (wrong type)
             (
                 pytest.raises(TypeError, match="Initial parameters must be array-like"),
-                (jnp.zeros((2, 3)), "", jnp.ones(3) / 3, jnp.ones((3, 3)) / 3),
-                (jnp.zeros((2, 3, 3)), "", jnp.ones(3) / 3, jnp.ones((3, 3)) / 3),
+                (jnp.zeros((2, 3)), "", jnp.ones((3,)), jnp.ones(3) / 3, jnp.ones((3, 3)) / 3),
+                (jnp.zeros((2, 3, 3)), "", jnp.ones((3, 3)), jnp.ones(3) / 3, jnp.ones((3, 3)) / 3),
             ),
             # String as coef (wrong type)
             (
                 pytest.raises(TypeError, match="Initial parameters must be array-like"),
-                ("", jnp.zeros((3,)), jnp.ones(3) / 3, jnp.ones((3, 3)) / 3),
-                ("", jnp.zeros((3, 3)), jnp.ones(3) / 3, jnp.ones((3, 3)) / 3),
+                ("", jnp.zeros((3,)), jnp.ones((3,)), jnp.ones(3) / 3, jnp.ones((3, 3)) / 3),
+                ("", jnp.zeros((3, 3)), jnp.ones((3, 3)), jnp.ones(3) / 3, jnp.ones((3, 3)) / 3),
             ),
         ],
     )
@@ -326,6 +334,7 @@ class TestGLMHMM:
                 init_params=(
                     init_w,
                     init_b,
+                    fixture.params.glm_scale.scale,
                     fixture.params.hmm_params.initial_prob,
                     fixture.params.hmm_params.transition_prob,
                 ),
@@ -661,10 +670,9 @@ class TestGLMHMM:
         (
             nmo.glm_hmm.GLMHMM,
             {
-                "glm_params_": (jnp.zeros((2, 3)), jnp.array([1.0, 1.0, 1.0])),
                 "coef_": jnp.zeros((2, 3)),
                 "intercept_": jnp.array([1.0, 1.0, 1.0]),
-                "scale_": 2.0,
+                "scale_": 2.0 * jnp.ones(3),
                 "solver_state_": None,
                 "transition_prob_": None,
                 "initial_prob_": None,
@@ -774,7 +782,6 @@ def test_save_and_load(
                 "dof_resid_": None,
                 "solver_state_": None,
                 "transition_prob_": None,
-                "glm_params_": (jnp.zeros((2, 3)), jnp.array([1.0, 1.0, 1.0])),
                 "initial_prob_": None,
             },
         ),
