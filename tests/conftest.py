@@ -1256,15 +1256,20 @@ def instantiate_glm_hmm_func(
         regularizer=regularizer,
         solver_name=solver_name,
     )
-    model.coef_ = coef
-    model.intercept_ = intercept
-    model.initial_prob_ = init_prob
-    model.transition_prob_ = transition_prob
 
     if simulate:
+        model.coef_ = coef
+        model.intercept_ = intercept
+        model.scale_ = jnp.ones_like(intercept)
+        model.initial_prob_ = init_prob
+        model.transition_prob_ = transition_prob
         counts, rates, latent_states = run_simulation_glm_hmm(X, model, seed=1234)
     else:
-        counts, rates, latent_states = None, None, None
+        # Generate simple dummy data for tests that need y but don't need simulation
+        # Use positive continuous values to work with all observation models (including Gamma)
+        np.random.seed(1234)
+        counts = np.random.exponential(scale=1.0, size=X.shape[0]) + 0.1
+        rates, latent_states = None, None
     return ModelFixture(
         X=X,
         y=counts,

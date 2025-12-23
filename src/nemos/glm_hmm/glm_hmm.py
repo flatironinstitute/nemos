@@ -467,10 +467,13 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         )
 
         # filter for non-nans, grab data if needed
-        data, y = self._preprocess_inputs(X, y)
+        data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
+
+        # make sure is_new_session starts with a 1
+        is_new_session = is_new_session.at[0].set(True)
 
         # set up optimization
-        self._initialize_optimization_and_state(X, y, init_params)
+        self._initialize_optimization_and_state(data, y, init_params)
 
         # run EM
         (
