@@ -23,7 +23,7 @@ The `AbstractSolver` interface requires implementing the following methods:
 
 `AbstractSolver` is a generic class parametrized by `SolverState` and `StepResult`.
 `SolverState` in concrete subclasses should be the type of the solver state.
-`StepResult` is the type of what is returned by each step of the solver. Typically this is a tuple of the parameters and the solver state.
+`StepResult` is the type of what is returned by each step of the solver. Typically this is a tuple of the parameters, the solver state, and auxiliary variables returned by the objective function.
 
 (optimization-info)=
 ### Optimization info

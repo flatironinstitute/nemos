@@ -1,15 +1,16 @@
 """Base class for adapters wrapping JAXopt solvers."""
 
-from typing import Any, Callable, ClassVar, NamedTuple, Type, TypeAlias
+from typing import Any, Callable, ClassVar, NamedTuple, Tuple, Type, TypeAlias
 
 from nemos.third_party.jaxopt import jaxopt
 
 from ..regularizer import Regularizer
-from ._abstract_solver import OptimizationInfo, Params
+from ..typing import Aux, Params
+from ._abstract_solver import OptimizationInfo
 from ._solver_adapter import SolverAdapter
 
 JaxoptSolverState: TypeAlias = NamedTuple
-JaxoptStepResult: TypeAlias = jaxopt.OptStep  # this is just a namedtuple(params, state)
+JaxoptStepResult: TypeAlias = Tuple[Params, JaxoptSolverState, Aux]
 
 
 class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
@@ -28,6 +29,7 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
         unregularized_loss: Callable,
         regularizer: Regularizer,
         regularizer_strength: float | None,
+        has_aux: bool,
         **solver_init_kwargs,
     ):
         if self._proximal:
@@ -47,6 +49,7 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
 
         self._solver = self._solver_cls(
             fun=self.fun,
+            has_aux=has_aux,
             **solver_init_kwargs,
         )
 
@@ -56,10 +59,16 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
     def update(
         self, params: Params, state: JaxoptSolverState, *args: Any
     ) -> JaxoptStepResult:
-        return self._solver.update(params, state, *self.hyperparams_prox, *args)
+        params, state = self._solver.update(
+            params, state, *self.hyperparams_prox, *args
+        )
+        aux = self._extract_aux(state, fallback_name="aux_batch")
+        return (params, state, aux)
 
     def run(self, init_params: Params, *args: Any) -> JaxoptStepResult:
-        return self._solver.run(init_params, *self.hyperparams_prox, *args)
+        params, state = self._solver.run(init_params, *self.hyperparams_prox, *args)
+        aux = self._extract_aux(state, fallback_name="aux_full")
+        return (params, state, aux)
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:
@@ -85,6 +94,20 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
     @property
     def maxiter(self):
         return self._solver.maxiter
+
+    def _extract_aux(self, state: JaxoptSolverState, fallback_name: str):
+        """
+        Return auxiliary output from a solver state.
+
+        Prefers `state.aux` when present; otherwise falls back to the provided field name
+        (e.g., `aux_batch` for SVRG updates or `aux_full` for SVRG run).
+        """
+        # solvers imported from jaxopt have state.aux
+        if hasattr(state, "aux"):
+            return state.aux
+
+        # for SVRG get state.aux_batch or state.aux_full
+        return getattr(state, fallback_name)
 
 
 class JaxoptProximalGradient(JaxoptAdapter):
