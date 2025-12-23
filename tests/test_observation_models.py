@@ -352,7 +352,7 @@ class TestGammaObservations:
             raise ValueError("Deviance doesn't match statsmodels!")
 
     @pytest.mark.parametrize("scale", [1.0, 2.0, 4.0])
-    @pytest.mark.requiresx64
+    @pytest.mark.requires_x64
     def test_loglikelihood_against_statsmodels(
         self, gammaGLM_model_instantiation, scale
     ):
