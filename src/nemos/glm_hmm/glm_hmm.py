@@ -639,16 +639,18 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
 
     def _get_model_params(self) -> GLMHMMParams:
         glm_params = GLMParams(self.coef_, self.intercept_)
-        scale = GLMScale(self.scale_)
-        hmm_params = HMMParams(self.initial_prob_, self.transition_prob_)
+        scale = GLMScale(jnp.log(self.scale_))
+        hmm_params = HMMParams(
+            jnp.log(self.initial_prob_), jnp.log(self.transition_prob_)
+        )
         return GLMHMMParams(glm_params, scale, hmm_params)
 
     def _set_model_params(self, params: GLMHMMParams):
         self.coef_ = params.glm_params.coef
         self.intercept_ = params.glm_params.intercept
-        self.scale_ = params.glm_scale.scale
-        self.initial_prob_ = params.hmm_params.initial_prob
-        self.transition_prob_ = params.hmm_params.transition_prob
+        self.scale_ = jnp.exp(params.glm_scale.log_scale)
+        self.initial_prob_ = jnp.exp(params.hmm_params.log_initial_prob)
+        self.transition_prob_ = jnp.exp(params.hmm_params.log_transition_prob)
 
     def update(
         self,

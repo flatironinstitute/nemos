@@ -1276,8 +1276,8 @@ def instantiate_glm_hmm_func(
         model=model,
         params=GLMHMMParams(
             GLMParams(*glm_params),
-            GLMScale(jnp.ones_like(intercept)),
-            HMMParams(init_prob, transition_prob),
+            GLMScale(jnp.zeros_like(intercept)),
+            HMMParams(jnp.log(init_prob), jnp.log(transition_prob)),
         ),
         rates=rates,
         extra=latent_states,

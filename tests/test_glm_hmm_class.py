@@ -103,6 +103,7 @@ class TestGLMHMM:
             }
 
     @pytest.mark.parametrize("dim_weights", [0, 1, 2, 3])
+    @pytest.mark.requires_x64
     def test_fit_weights_dimensionality(
         self,
         dim_weights,
@@ -135,9 +136,9 @@ class TestGLMHMM:
                 init_params=(
                     init_w,
                     fixture.params.glm_params.intercept,
-                    fixture.params.glm_scale.scale,
-                    fixture.params.hmm_params.initial_prob,
-                    fixture.params.hmm_params.transition_prob,
+                    jnp.exp(fixture.params.glm_scale.log_scale),
+                    jnp.exp(fixture.params.hmm_params.log_initial_prob),
+                    jnp.exp(fixture.params.hmm_params.log_transition_prob),
                 ),
             )
 
@@ -179,9 +180,9 @@ class TestGLMHMM:
                 init_params=(
                     fixture.params.glm_params.coef,
                     init_b,
-                    fixture.params.glm_scale.scale,
-                    fixture.params.hmm_params.initial_prob,
-                    fixture.params.hmm_params.transition_prob,
+                    jnp.exp(fixture.params.glm_scale.log_scale),
+                    jnp.exp(fixture.params.hmm_params.log_initial_prob),
+                    jnp.exp(fixture.params.hmm_params.log_transition_prob),
                 ),
             )
 
@@ -360,9 +361,9 @@ class TestGLMHMM:
                 init_params=(
                     init_w,
                     init_b,
-                    fixture.params.glm_scale.scale,
-                    fixture.params.hmm_params.initial_prob,
-                    fixture.params.hmm_params.transition_prob,
+                    jnp.exp(fixture.params.glm_scale.log_scale),
+                    jnp.exp(fixture.params.hmm_params.log_initial_prob),
+                    jnp.exp(fixture.params.hmm_params.log_transition_prob),
                 ),
             )
 
@@ -1044,9 +1045,11 @@ def test_save_and_load_fitted_model(instantiate_base_regressor_subclass, tmp_pat
     fixture = instantiate_base_regressor_subclass
     fixture.model.coef_ = fixture.params.glm_params.coef
     fixture.model.intercept_ = fixture.params.glm_params.intercept
-    fixture.model.transition_prob_ = fixture.params.hmm_params.transition_prob
-    fixture.model.initial_prob_ = fixture.params.hmm_params.initial_prob
-    fixture.model.scale_ = jnp.ones_like(fixture.params.glm_params.intercept) * 11.0
+    fixture.model.transition_prob_ = jnp.exp(
+        fixture.params.hmm_params.log_transition_prob
+    )
+    fixture.model.initial_prob_ = jnp.exp(fixture.params.hmm_params.log_initial_prob)
+    fixture.model.scale_ = jnp.zeros_like(fixture.params.glm_params.intercept) * 11.0
     fixture.model.dof_resid_ = 1.0
     initial_params = fixture.model.get_params()
     fit_state = fixture.model._get_fit_state()
