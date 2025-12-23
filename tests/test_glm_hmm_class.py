@@ -218,9 +218,10 @@ class TestGLMHMM:
                 (jnp.zeros((1, 2, 3)), jnp.zeros((3,))),  # Only 2 elements
                 (jnp.zeros((1, 2, 3)), jnp.zeros((3, 3))),
             ),
-            # Dict instead of tuple for coef (X is array, so dict coef raises AttributeError)
+            # Dict instead of tuple for coef (X is array, so dict coef raises error)
+            # Different observation models may raise AttributeError or TypeError
             (
-                pytest.raises(AttributeError, match=r"'dict' object has no attribute 'shape'"),
+                pytest.raises((AttributeError, TypeError)),
                 (
                     dict(p1=jnp.zeros((1, 3)), p2=jnp.zeros((1, 3))),
                     jnp.zeros((3,)),
@@ -236,9 +237,9 @@ class TestGLMHMM:
                     jnp.ones((3, 3)) / 3,
                 ),
             ),
-            # FeaturePytree for coef (X is array, so FeaturePytree coef also raises AttributeError)
+            # FeaturePytree for coef (X is array, so FeaturePytree coef raises TypeError)
             (
-                pytest.raises(AttributeError, match=r"'FeaturePytree' object has no attribute 'shape'"),
+                pytest.raises(TypeError, match=r"X and coef have mismatched structure"),
                 (
                     FeaturePytree(p1=jnp.zeros((1, 3)), p2=jnp.zeros((1, 3))),
                     jnp.zeros((3,)),
@@ -256,26 +257,51 @@ class TestGLMHMM:
             ),
             # Scalar instead of tuple (wrong type)
             (pytest.raises(ValueError, match="Params must have length 5"), 0, 0),
-            # Set instead of tuple (wrong type, not subscriptable)
+            # Set instead of tuple (wrong type, not subscriptable, raises ValueError about length)
             (
-                pytest.raises(
-                    TypeError,
-                    match="Initial parameters must be array-like|object is not subscriptable",
-                ),
+                pytest.raises(ValueError, match="Params must have length 5"),
                 {0, 1},
                 {0, 1},
             ),
             # String as intercept (wrong type)
             (
-                pytest.raises(TypeError, match="Initial parameters must be array-like"),
-                (jnp.zeros((2, 3)), "", jnp.ones((3,)), jnp.ones(3) / 3, jnp.ones((3, 3)) / 3),
-                (jnp.zeros((2, 3, 3)), "", jnp.ones((3, 3)), jnp.ones(3) / 3, jnp.ones((3, 3)) / 3),
+                pytest.raises(
+                    TypeError, match="Failed to convert parameters to JAX arrays"
+                ),
+                (
+                    jnp.zeros((2, 3)),
+                    "",
+                    jnp.ones((3,)),
+                    jnp.ones(3) / 3,
+                    jnp.ones((3, 3)) / 3,
+                ),
+                (
+                    jnp.zeros((2, 3, 3)),
+                    "",
+                    jnp.ones((3, 3)),
+                    jnp.ones(3) / 3,
+                    jnp.ones((3, 3)) / 3,
+                ),
             ),
             # String as coef (wrong type)
             (
-                pytest.raises(TypeError, match="Initial parameters must be array-like"),
-                ("", jnp.zeros((3,)), jnp.ones((3,)), jnp.ones(3) / 3, jnp.ones((3, 3)) / 3),
-                ("", jnp.zeros((3, 3)), jnp.ones((3, 3)), jnp.ones(3) / 3, jnp.ones((3, 3)) / 3),
+                pytest.raises(
+                    TypeError, match="Failed to convert parameters to JAX arrays"
+                ),
+                (
+                    "",
+                    jnp.zeros((3,)),
+                    jnp.ones((3,)),
+                    jnp.ones(3) / 3,
+                    jnp.ones((3, 3)) / 3,
+                ),
+                (
+                    "",
+                    jnp.zeros((3, 3)),
+                    jnp.ones((3, 3)),
+                    jnp.ones(3) / 3,
+                    jnp.ones((3, 3)) / 3,
+                ),
             ),
         ],
     )
@@ -438,9 +464,14 @@ class TestGLMHMM:
             dim_intercepts == 1 and not is_population
         ):
             expectation = does_not_raise()
-        else:
+        elif dim_intercepts == 0:
             expectation = pytest.raises(
-                ValueError, match=r"params\[1\] \(GLM intercepts\) must be"
+                ValueError, match=r"GLM intercept must be of shape"
+            )
+        else:
+
+            expectation = pytest.raises(
+                ValueError, match=r"Invalid parameter dimensionality"
             )
         if is_population:
             raise RuntimeError("Fill in the test case for population glmhmm")
@@ -1011,10 +1042,11 @@ def test_save_and_load_fitted_model(instantiate_base_regressor_subclass, tmp_pat
     Ensure all parameters are preserved.
     """
     fixture = instantiate_base_regressor_subclass
-    fixture.model.glm_params_ = fixture.params[0]
-    fixture.model.transition_prob_ = fixture.params[1]
-    fixture.model.initial_prob_ = fixture.params[2]
-    fixture.model.scale_ = 11.0
+    fixture.model.coef_ = fixture.params.glm_params.coef
+    fixture.model.intercept_ = fixture.params.glm_params.intercept
+    fixture.model.transition_prob_ = fixture.params.hmm_params.transition_prob
+    fixture.model.initial_prob_ = fixture.params.hmm_params.initial_prob
+    fixture.model.scale_ = jnp.ones_like(fixture.params.glm_params.intercept) * 11.0
     fixture.model.dof_resid_ = 1.0
     initial_params = fixture.model.get_params()
     fit_state = fixture.model._get_fit_state()

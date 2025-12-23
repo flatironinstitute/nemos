@@ -135,7 +135,9 @@ class GLMHMMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         wrapped = self.wrap_user_params(params)
         coef, intercept = wrapped[:2]
         flat_coef = jax.tree_util.tree_leaves(coef)
-        invalid_shapes = jax.tree_util.tree_map(lambda x: x.shape[-1] != self.n_states, flat_coef)
+        invalid_shapes = jax.tree_util.tree_map(
+            lambda x: x.shape[-1] != self.n_states, flat_coef
+        )
         if any(invalid_shapes):
             raise ValueError(
                 "GLM coef must be of shape ``(n_features, n_states)`` or a dict of arrays "
