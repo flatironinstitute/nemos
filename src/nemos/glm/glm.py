@@ -895,7 +895,6 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         ) = self._instantiate_solver(
             self._compute_loss, solver_kwargs=opt_solver_kwargs
         )
-
         opt_state = self.optimization_init_state(init_params, X, y)
         return opt_state
 
