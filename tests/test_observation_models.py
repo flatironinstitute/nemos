@@ -204,6 +204,22 @@ class TestPoissonObservations:
         if not np.allclose(ll_model, ll_scipy):
             raise ValueError("Log-likelihood doesn't match scipy!")
 
+    @pytest.mark.requires_x64
+    def test_loglikelihood_per_sample_against_scipy(
+        self, poissonGLM_model_instantiation
+    ):
+        """
+        Compare log-likelihood to scipy.
+        Assesses if the model estimates are close to statsmodels' results.
+        """
+        _, y, model, _, firing_rate = poissonGLM_model_instantiation
+        ll_model = model.observation_model.log_likelihood(
+            y, firing_rate, aggregate_sample_scores=lambda x: x
+        )
+        ll_scipy = sts.poisson(firing_rate).logpmf(y)
+        if not np.allclose(ll_model, ll_scipy):
+            raise ValueError("Log-likelihood doesn't match scipy!")
+
     def test_emission_probability(selfself, poissonGLM_model_instantiation):
         """
         Test the poisson emission probability.
@@ -344,6 +360,23 @@ class TestGammaObservations:
         if not np.allclose(ll_model, ll_sms):
             raise ValueError("Log-likelihood doesn't match statsmodels!")
 
+    @pytest.mark.parametrize("scale", [1.0, 1.5, 0.1])
+    @pytest.mark.requires_x64
+    def test_loglikelihood_per_sample_against_statsmodels(
+        self, gammaGLM_model_instantiation, scale
+    ):
+        """
+        Compare log-likelihood to scipy.
+        Assesses if the model estimates are close to statsmodels' results.
+        """
+        _, y, model, _, firing_rate = gammaGLM_model_instantiation
+        ll_model = model.observation_model.log_likelihood(
+            y, firing_rate, aggregate_sample_scores=lambda x: x, scale=scale
+        )
+        ll_sms = sm.families.Gamma().loglike_obs(y, firing_rate, scale=scale)
+        if not np.allclose(ll_model, ll_sms):
+            raise ValueError("Log-likelihood doesn't match statsmodels!")
+
     def test_emission_probability(self, gammaGLM_model_instantiation):
         """
         Test the gamma emission probability.
@@ -417,6 +450,22 @@ class TestBernoulliObservations:
         if not np.allclose(ll_model, ll_scipy):
             raise ValueError("Log-likelihood doesn't match scipy!")
 
+    @pytest.mark.requires_x64
+    def test_loglikelihood_per_sample_against_scipy(
+        self, bernoulliGLM_model_instantiation
+    ):
+        """
+        Compare log-likelihood to scipy.
+        Assesses if the model estimates are close to statsmodels' results.
+        """
+        _, y, model, _, firing_rate = bernoulliGLM_model_instantiation
+        ll_model = model.observation_model.log_likelihood(
+            y, firing_rate, aggregate_sample_scores=lambda x: x
+        )
+        ll_scipy = sts.bernoulli(firing_rate).logpmf(y)
+        if not np.allclose(ll_model, ll_scipy):
+            raise ValueError("Log-likelihood doesn't match scipy!")
+
     def test_emission_probability(self, bernoulliGLM_model_instantiation):
         """
         Test the poisson emission probability.
@@ -484,6 +533,24 @@ class TestNegativeBinomialObservations:
         ll_model = model.observation_model.log_likelihood(y, firing_rate)
         ll_scipy = sts.nbinom.logpmf(y, r, p).mean()
         if not np.allclose(ll_model, ll_scipy, atol=1e-5):
+            raise ValueError("Log-likelihood doesn't match scipy!")
+
+    @pytest.mark.requires_x64
+    def test_loglikelihood_per_sample_against_scipy(
+        self, negativeBinomialGLM_model_instantiation
+    ):
+        """
+        Compare log-likelihood to scipy.
+        Assesses if the model estimates are close to statsmodels' results.
+        """
+        _, y, model, _, firing_rate = negativeBinomialGLM_model_instantiation
+        ll_model = model.observation_model.log_likelihood(
+            y, firing_rate, aggregate_sample_scores=lambda x: x
+        )
+        r = 1.0 / model.observation_model.scale
+        p = r / (r + firing_rate)
+        ll_scipy = sts.nbinom.logpmf(y, r, p)
+        if not np.allclose(ll_model, ll_scipy):
             raise ValueError("Log-likelihood doesn't match scipy!")
 
     def test_emission_probability(self, negativeBinomialGLM_model_instantiation):
