@@ -1829,7 +1829,9 @@ class TestEMAlgorithm:
         # Start of the preparatory steps that will be carried out by the GLMHMM class.
         is_population_glm = projection_weights.ndim > 2
         obs = BernoulliObservations()
-        likelihood_func = prepare_estep_log_likelihood(y.ndim > 1, observation_model=obs)
+        likelihood_func = prepare_estep_log_likelihood(
+            y.ndim > 1, observation_model=obs
+        )
 
         inverse_link_function = obs.default_inverse_link_function
         partial_posterior_weighted_glm_negative_log_likelihood = (
@@ -2298,7 +2300,9 @@ class TestConvergence:
 
         obs = BernoulliObservations()
         likelihood_func = prepare_estep_log_likelihood(False, obs)
-        negative_log_likelihood_func = prepare_mstep_nll_for_analytical_scale(False, obs)
+        negative_log_likelihood_func = prepare_mstep_nll_for_analytical_scale(
+            False, obs
+        )
 
         def partial_posterior_weighted_glm_negative_log_likelihood(
             weights, design_matrix, observations, posterior_prob
@@ -2362,7 +2366,9 @@ class TestConvergence:
 
         obs = BernoulliObservations()
         likelihood_func = prepare_estep_log_likelihood(False, obs)
-        negative_log_likelihood_func = prepare_mstep_nll_for_analytical_scale(False, obs)
+        negative_log_likelihood_func = prepare_mstep_nll_for_analytical_scale(
+            False, obs
+        )
 
         def partial_posterior_weighted_glm_negative_log_likelihood(
             weights, design_matrix, observations, posterior_prob
@@ -2421,7 +2427,9 @@ class TestConvergence:
 
         obs = BernoulliObservations()
         likelihood_func = prepare_estep_log_likelihood(False, obs)
-        negative_log_likelihood_func = prepare_mstep_nll_for_analytical_scale(False, obs)
+        negative_log_likelihood_func = prepare_mstep_nll_for_analytical_scale(
+            False, obs
+        )
 
         def partial_posterior_weighted_glm_negative_log_likelihood(
             weights, design_matrix, observations, posterior_prob
@@ -2486,7 +2494,9 @@ class TestConvergence:
 
         obs = BernoulliObservations()
         likelihood_func = prepare_estep_log_likelihood(False, obs)
-        negative_log_likelihood_func = prepare_mstep_nll_for_analytical_scale(False, obs)
+        negative_log_likelihood_func = prepare_mstep_nll_for_analytical_scale(
+            False, obs
+        )
 
         def partial_posterior_weighted_glm_negative_log_likelihood(
             weights, design_matrix, observations, posterior_prob
@@ -2571,7 +2581,9 @@ class TestConvergence:
 
         obs = BernoulliObservations()
         likelihood_func = prepare_estep_log_likelihood(False, obs)
-        negative_log_likelihood_func = prepare_mstep_nll_for_analytical_scale(False, obs)
+        negative_log_likelihood_func = prepare_mstep_nll_for_analytical_scale(
+            False, obs
+        )
 
         def partial_posterior_weighted_glm_negative_log_likelihood(
             weights, design_matrix, observations, posterior_prob
@@ -2643,7 +2655,9 @@ class TestConvergence:
 
         obs = BernoulliObservations()
         likelihood_func = prepare_estep_log_likelihood(False, obs)
-        negative_log_likelihood_func = prepare_mstep_nll_for_analytical_scale(False, obs)
+        negative_log_likelihood_func = prepare_mstep_nll_for_analytical_scale(
+            False, obs
+        )
 
         def partial_posterior_weighted_glm_negative_log_likelihood(
             weights, design_matrix, observations, posterior_prob
@@ -2819,7 +2833,9 @@ class TestCompilation:
 
         obs = BernoulliObservations()
         likelihood_func = prepare_estep_log_likelihood(False, obs)
-        negative_log_likelihood_func = prepare_mstep_nll_for_analytical_scale(False, obs)
+        negative_log_likelihood_func = prepare_mstep_nll_for_analytical_scale(
+            False, obs
+        )
 
         def partial_posterior_weighted_glm_negative_log_likelihood(
             weights, design_matrix, observations, posterior_prob
@@ -2940,7 +2956,9 @@ class TestCompilation:
             inv_link,
         ) = generate_data_multi_state
         likelihood_func = prepare_estep_log_likelihood(False, obs)
-        negative_log_likelihood_func = prepare_mstep_nll_for_analytical_scale(False, obs)
+        negative_log_likelihood_func = prepare_mstep_nll_for_analytical_scale(
+            False, obs
+        )
 
         def partial_posterior_weighted_glm_negative_log_likelihood(
             weights, design_matrix, observations, posterior_prob
@@ -3283,28 +3301,38 @@ class TestEMScaleOptimization:
         # True parameters
         true_coef = np.random.randn(n_features, n_states) * 0.5
         true_intercept = np.random.randn(n_states)
-        true_scale = np.random.uniform(0.5, 2.0, n_states)  # Different variance per state
+        true_scale = np.random.uniform(
+            0.5, 2.0, n_states
+        )  # Different variance per state
 
         # HMM parameters
         initial_prob = np.ones(n_states) / n_states
-        transition_prob = np.eye(n_states) * 0.9 + (1 - np.eye(n_states)) * 0.1 / (n_states - 1)
+        transition_prob = np.eye(n_states) * 0.9 + (1 - np.eye(n_states)) * 0.1 / (
+            n_states - 1
+        )
 
         # Generate data
         X = np.random.randn(n_samples, n_features)
         states = np.zeros(n_samples, dtype=int)
         states[0] = np.random.choice(n_states, p=initial_prob)
         for t in range(1, n_samples):
-            states[t] = np.random.choice(n_states, p=transition_prob[states[t-1]])
+            states[t] = np.random.choice(n_states, p=transition_prob[states[t - 1]])
 
         # Generate observations
         rates = X @ true_coef + true_intercept
-        y = rates[np.arange(n_samples), states] + np.random.randn(n_samples) * np.sqrt(true_scale[states])
+        y = rates[np.arange(n_samples), states] + np.random.randn(n_samples) * np.sqrt(
+            true_scale[states]
+        )
 
         return {
-            'X': X, 'y': y,
-            'true_coef': true_coef, 'true_intercept': true_intercept, 'true_scale': true_scale,
-            'initial_prob': initial_prob, 'transition_prob': transition_prob,
-            'n_states': n_states
+            "X": X,
+            "y": y,
+            "true_coef": true_coef,
+            "true_intercept": true_intercept,
+            "true_scale": true_scale,
+            "initial_prob": initial_prob,
+            "transition_prob": transition_prob,
+            "n_states": n_states,
         }
 
     @pytest.fixture
@@ -3320,26 +3348,34 @@ class TestEMScaleOptimization:
 
         # HMM parameters
         initial_prob = np.ones(n_states) / n_states
-        transition_prob = np.eye(n_states) * 0.85 + (1 - np.eye(n_states)) * 0.15 / (n_states - 1)
+        transition_prob = np.eye(n_states) * 0.85 + (1 - np.eye(n_states)) * 0.15 / (
+            n_states - 1
+        )
 
         # Generate data
         X = np.random.randn(n_samples, n_features)
         states = np.zeros(n_samples, dtype=int)
         states[0] = np.random.choice(n_states, p=initial_prob)
         for t in range(1, n_samples):
-            states[t] = np.random.choice(n_states, p=transition_prob[states[t-1]])
+            states[t] = np.random.choice(n_states, p=transition_prob[states[t - 1]])
 
         # Generate observations
-        rates = np.einsum('tf,fnk->tnk', X, true_coef) + true_intercept
+        rates = np.einsum("tf,fnk->tnk", X, true_coef) + true_intercept
         y = np.zeros((n_samples, n_neurons))
         for t in range(n_samples):
-            y[t] = rates[t, :, states[t]] + np.random.randn(n_neurons) * np.sqrt(true_scale[:, states[t]])
+            y[t] = rates[t, :, states[t]] + np.random.randn(n_neurons) * np.sqrt(
+                true_scale[:, states[t]]
+            )
 
         return {
-            'X': X, 'y': y,
-            'true_coef': true_coef, 'true_intercept': true_intercept, 'true_scale': true_scale,
-            'initial_prob': initial_prob, 'transition_prob': transition_prob,
-            'n_states': n_states
+            "X": X,
+            "y": y,
+            "true_coef": true_coef,
+            "true_intercept": true_intercept,
+            "true_scale": true_scale,
+            "initial_prob": initial_prob,
+            "transition_prob": transition_prob,
+            "n_states": n_states,
         }
 
     @pytest.fixture
@@ -3350,19 +3386,23 @@ class TestEMScaleOptimization:
 
         # True parameters
         true_coef = np.random.randn(n_features, n_states) * 0.3
-        true_intercept = np.random.randn(n_states) - 1.0  # Negative to ensure positive rates after exp
+        true_intercept = (
+            np.random.randn(n_states) - 1.0
+        )  # Negative to ensure positive rates after exp
         true_scale = np.random.uniform(1.0, 3.0, n_states)
 
         # HMM parameters
         initial_prob = np.ones(n_states) / n_states
-        transition_prob = np.eye(n_states) * 0.9 + (1 - np.eye(n_states)) * 0.1 / (n_states - 1)
+        transition_prob = np.eye(n_states) * 0.9 + (1 - np.eye(n_states)) * 0.1 / (
+            n_states - 1
+        )
 
         # Generate data
         X = np.random.randn(n_samples, n_features)
         states = np.zeros(n_samples, dtype=int)
         states[0] = np.random.choice(n_states, p=initial_prob)
         for t in range(1, n_samples):
-            states[t] = np.random.choice(n_states, p=transition_prob[states[t-1]])
+            states[t] = np.random.choice(n_states, p=transition_prob[states[t - 1]])
 
         # Generate observations (Gamma with rate parameterization)
         rates = np.exp(X @ true_coef + true_intercept)
@@ -3374,13 +3414,19 @@ class TestEMScaleOptimization:
             y[t] = np.random.gamma(shape, 1.0 / rate_param)
 
         return {
-            'X': X, 'y': y,
-            'true_coef': true_coef, 'true_intercept': true_intercept, 'true_scale': true_scale,
-            'initial_prob': initial_prob, 'transition_prob': transition_prob,
-            'n_states': n_states
+            "X": X,
+            "y": y,
+            "true_coef": true_coef,
+            "true_intercept": true_intercept,
+            "true_scale": true_scale,
+            "initial_prob": initial_prob,
+            "transition_prob": transition_prob,
+            "n_states": n_states,
         }
 
-    def test_em_gaussian_analytical_scale_single_neuron(self, gaussian_data_single_neuron):
+    def test_em_gaussian_analytical_scale_single_neuron(
+        self, gaussian_data_single_neuron
+    ):
         """
         Test #1: Full EM with Gaussian observations using analytical scale update (single neuron).
 
@@ -3393,9 +3439,9 @@ class TestEMScaleOptimization:
         obs = GaussianObservations()
 
         # Initialize parameters (intentionally poor initialization)
-        init_coef = np.random.randn(*data['true_coef'].shape) * 0.1
-        init_intercept = np.random.randn(data['n_states']) * 0.1
-        init_scale = jnp.ones(data['n_states'])  # Start with all scales = 1
+        init_coef = np.random.randn(*data["true_coef"].shape) * 0.1
+        init_intercept = np.random.randn(data["n_states"]) * 0.1
+        init_scale = jnp.ones(data["n_states"])  # Start with all scales = 1
 
         # Prepare EM components
         likelihood_func = prepare_estep_log_likelihood(False, obs)
@@ -3414,10 +3460,10 @@ class TestEMScaleOptimization:
             final_scale,
             final_state,
         ) = em_glm_hmm(
-            data['X'],
-            data['y'],
-            initial_prob=data['initial_prob'],
-            transition_prob=data['transition_prob'],
+            data["X"],
+            data["y"],
+            initial_prob=data["initial_prob"],
+            transition_prob=data["transition_prob"],
             glm_params=GLMParams(init_coef, init_intercept),
             glm_scale=init_scale,
             inverse_link_function=lambda x: x,  # Identity link for Gaussian
@@ -3432,15 +3478,16 @@ class TestEMScaleOptimization:
         assert final_state.iterations > 0, "EM should have run at least one iteration"
 
         # Verify scale was updated (should differ from initialization)
-        assert not jnp.allclose(final_scale, init_scale, atol=0.1), \
-            "Scale should have been updated from initialization"
+        assert not jnp.allclose(
+            final_scale, init_scale, atol=0.1
+        ), "Scale should have been updated from initialization"
 
         # Verify scale is positive
         assert jnp.all(final_scale > 0), "All scale parameters should be positive"
 
         # Verify shapes
-        assert final_scale.shape == (data['n_states'],)
-        assert posteriors.shape == (data['X'].shape[0], data['n_states'])
+        assert final_scale.shape == (data["n_states"],)
+        assert posteriors.shape == (data["X"].shape[0], data["n_states"])
 
     def test_em_gaussian_scale_improves_likelihood(self, gaussian_data_single_neuron):
         """
@@ -3455,9 +3502,9 @@ class TestEMScaleOptimization:
 
         # Shared initialization (use fixed seed for reproducibility)
         np.random.seed(999)
-        init_coef = np.random.randn(*data['true_coef'].shape) * 0.1
-        init_intercept = np.random.randn(data['n_states']) * 0.1
-        init_scale = jnp.ones(data['n_states'])
+        init_coef = np.random.randn(*data["true_coef"].shape) * 0.1
+        init_intercept = np.random.randn(data["n_states"]) * 0.1
+        init_scale = jnp.ones(data["n_states"])
 
         # Prepare components
         likelihood_func = prepare_estep_log_likelihood(False, obs)
@@ -3476,10 +3523,10 @@ class TestEMScaleOptimization:
             _,
             state_no_scale,
         ) = em_glm_hmm(
-            data['X'],
-            data['y'],
-            initial_prob=data['initial_prob'],
-            transition_prob=data['transition_prob'],
+            data["X"],
+            data["y"],
+            initial_prob=data["initial_prob"],
+            transition_prob=data["transition_prob"],
             glm_params=GLMParams(init_coef.copy(), init_intercept.copy()),
             glm_scale=init_scale,
             inverse_link_function=lambda x: x,
@@ -3500,10 +3547,10 @@ class TestEMScaleOptimization:
             final_scale,
             state_with_scale,
         ) = em_glm_hmm(
-            data['X'],
-            data['y'],
-            initial_prob=data['initial_prob'],
-            transition_prob=data['transition_prob'],
+            data["X"],
+            data["y"],
+            initial_prob=data["initial_prob"],
+            transition_prob=data["transition_prob"],
             glm_params=GLMParams(init_coef.copy(), init_intercept.copy()),
             glm_scale=init_scale,
             inverse_link_function=lambda x: x,
@@ -3521,12 +3568,15 @@ class TestEMScaleOptimization:
         # The version with scale optimization should achieve equal or better likelihood
         # Note: We compare final log-likelihoods stored in the state
         # Since we're optimizing scale, it should at minimum match the fixed scale version
-        assert state_with_scale.data_log_likelihood >= state_no_scale.data_log_likelihood - 1e-3, \
-            "EM with scale optimization should achieve at least as good likelihood"
+        assert (
+            state_with_scale.data_log_likelihood
+            >= state_no_scale.data_log_likelihood - 1e-3
+        ), "EM with scale optimization should achieve at least as good likelihood"
 
         # Verify scale changed
-        assert not jnp.allclose(final_scale, init_scale, atol=0.1), \
-            "Scale parameters should have been optimized"
+        assert not jnp.allclose(
+            final_scale, init_scale, atol=0.1
+        ), "Scale parameters should have been optimized"
 
     def test_em_gamma_numerical_scale_single_neuron(self, gamma_data_single_neuron):
         """
@@ -3541,9 +3591,9 @@ class TestEMScaleOptimization:
         obs = GammaObservations()
 
         # Initialize parameters
-        init_coef = np.random.randn(*data['true_coef'].shape) * 0.1
-        init_intercept = np.random.randn(data['n_states']) - 1.0
-        init_scale = jnp.ones(data['n_states']) * 2.0  # Initialize to moderate value
+        init_coef = np.random.randn(*data["true_coef"].shape) * 0.1
+        init_intercept = np.random.randn(data["n_states"]) - 1.0
+        init_scale = jnp.ones(data["n_states"]) * 2.0  # Initialize to moderate value
 
         # Prepare EM components
         likelihood_func = prepare_estep_log_likelihood(False, obs)
@@ -3563,10 +3613,10 @@ class TestEMScaleOptimization:
             final_scale,
             final_state,
         ) = em_glm_hmm(
-            data['X'],
-            data['y'],
-            initial_prob=data['initial_prob'],
-            transition_prob=data['transition_prob'],
+            data["X"],
+            data["y"],
+            initial_prob=data["initial_prob"],
+            transition_prob=data["transition_prob"],
             glm_params=GLMParams(init_coef, init_intercept),
             glm_scale=init_scale,
             inverse_link_function=jnp.exp,
@@ -3581,15 +3631,18 @@ class TestEMScaleOptimization:
         assert final_state.iterations > 0, "EM should have run at least one iteration"
 
         # Verify scale was updated
-        assert not jnp.allclose(final_scale, init_scale, atol=0.1), \
-            "Scale should have been updated from initialization"
+        assert not jnp.allclose(
+            final_scale, init_scale, atol=0.1
+        ), "Scale should have been updated from initialization"
 
         # Verify scale is positive (required for Gamma)
-        assert jnp.all(final_scale > 0), "All scale parameters should be positive for Gamma"
+        assert jnp.all(
+            final_scale > 0
+        ), "All scale parameters should be positive for Gamma"
 
         # Verify shapes
-        assert final_scale.shape == (data['n_states'],)
-        assert posteriors.shape == (data['X'].shape[0], data['n_states'])
+        assert final_scale.shape == (data["n_states"],)
+        assert posteriors.shape == (data["X"].shape[0], data["n_states"])
 
     def test_em_gaussian_analytical_scale_population(self, gaussian_data_population):
         """
@@ -3604,12 +3657,14 @@ class TestEMScaleOptimization:
         obs = GaussianObservations()
 
         # Initialize parameters
-        init_coef = np.random.randn(*data['true_coef'].shape) * 0.1
-        init_intercept = np.random.randn(*data['true_intercept'].shape) * 0.1
-        init_scale = jnp.ones(data['true_scale'].shape)
+        init_coef = np.random.randn(*data["true_coef"].shape) * 0.1
+        init_intercept = np.random.randn(*data["true_intercept"].shape) * 0.1
+        init_scale = jnp.ones(data["true_scale"].shape)
 
         # Prepare EM components
-        likelihood_func = prepare_estep_log_likelihood(True, obs)  # is_population_glm=True
+        likelihood_func = prepare_estep_log_likelihood(
+            True, obs
+        )  # is_population_glm=True
         nll_params = prepare_mstep_nll_objective_param(True, obs, lambda x: x)
         scale_update_fn = get_analytical_scale_update(obs, is_population_glm=True)
 
@@ -3625,10 +3680,10 @@ class TestEMScaleOptimization:
             final_scale,
             final_state,
         ) = em_glm_hmm(
-            data['X'],
-            data['y'],
-            initial_prob=data['initial_prob'],
-            transition_prob=data['transition_prob'],
+            data["X"],
+            data["y"],
+            initial_prob=data["initial_prob"],
+            transition_prob=data["transition_prob"],
             glm_params=GLMParams(init_coef, init_intercept),
             glm_scale=init_scale,
             inverse_link_function=lambda x: x,
@@ -3643,16 +3698,19 @@ class TestEMScaleOptimization:
         assert final_state.iterations > 0, "EM should have run at least one iteration"
 
         # Verify scale shape (n_neurons, n_states)
-        n_neurons = data['y'].shape[1]
-        assert final_scale.shape == (n_neurons, data['n_states']), \
-            f"Expected scale shape ({n_neurons}, {data['n_states']}), got {final_scale.shape}"
+        n_neurons = data["y"].shape[1]
+        assert final_scale.shape == (
+            n_neurons,
+            data["n_states"],
+        ), f"Expected scale shape ({n_neurons}, {data['n_states']}), got {final_scale.shape}"
 
         # Verify scale was updated
-        assert not jnp.allclose(final_scale, init_scale, atol=0.1), \
-            "Scale should have been updated from initialization"
+        assert not jnp.allclose(
+            final_scale, init_scale, atol=0.1
+        ), "Scale should have been updated from initialization"
 
         # Verify all scales are positive
         assert jnp.all(final_scale > 0), "All scale parameters should be positive"
 
         # Verify posteriors shape
-        assert posteriors.shape == (data['X'].shape[0], data['n_states'])
+        assert posteriors.shape == (data["X"].shape[0], data["n_states"])
