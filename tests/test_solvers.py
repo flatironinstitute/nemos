@@ -588,7 +588,7 @@ def test_svrg_xk_update_step(request, regr_setup, to_tuple, prox, prox_lambda):
         solver = SVRG(loss)
     else:
         solver = ProxSVRG(loss, prox)
-    svrg_next_xk = solver._inner_loop_param_update_step(
+    svrg_next_xk, _ = solver._inner_loop_param_update_step(
         init_param, xs, df_xs, stepsize, prox_lambda, xi, yi
     )
 
@@ -642,3 +642,134 @@ def test_all_solvers_accept_maxiter_and_not_max_steps():
     for solver_class in nmo.solvers._solver_registry.solver_registry.values():
         assert "maxiter" in solver_class.get_accepted_arguments()
         assert "max_steps" not in solver_class.get_accepted_arguments()
+
+
+@pytest.mark.requires_x64
+@pytest.mark.parametrize(
+    "solver_name", [solver for solver in nmo.solvers.solver_registry.keys()]
+)
+@pytest.mark.parametrize(
+    "aux_gen_fn",
+    [
+        lambda: np.random.randint(1000),
+        lambda: {"a": 1, "b": 2},
+    ],
+)
+def test_solvers_use_aux_in_run(request, solver_name, aux_gen_fn):
+    X, y, _, true_params, loss = request.getfixturevalue("linear_regression")
+    solver_class = nmo.solvers.solver_registry[solver_name]
+
+    class TestAux:
+        def __init__(self, loss):
+            self.counter = 0
+            self.auxes = []
+            self.loss = loss
+
+        def __call__(self, params, X, y):
+            self.counter += 1
+            # print(f"Call #{self.counter}: {self.auxes}")
+            loss_val = self.loss(params, X, y)
+            aux = aux_gen_fn()
+            self.auxes.append(aux)
+            return loss_val, aux
+
+    run_loss = TestAux(loss)
+
+    param_init = jax.tree_util.tree_map(np.zeros_like, true_params)
+
+    # test solver.run
+    solver = solver_class(
+        unregularized_loss=run_loss,
+        regularizer=nmo.regularizer.UnRegularized(),
+        regularizer_strength=None,
+        has_aux=True,
+    )
+    run_params, run_state, run_aux = solver.run(param_init, X, y)
+
+    assert run_aux is not None
+    if hasattr(run_state, "aux"):
+        assert run_aux == run_state.aux
+    # testing this because there are extra evaluations whose aux is not saved
+    assert run_aux in run_loss.auxes
+
+
+@pytest.mark.parametrize(
+    "solver_name", [solver for solver in nmo.solvers.solver_registry.keys()]
+)
+@pytest.mark.parametrize(
+    "aux_gen_fn",
+    [
+        lambda: np.random.randint(1000),
+        lambda: {"a": 1, "b": 2},
+    ],
+)
+def test_solvers_use_aux_in_update(request, solver_name, aux_gen_fn):
+    jax.config.update("jax_enable_x64", True)
+    X, y, _, true_params, loss = request.getfixturevalue("linear_regression")
+    solver_class = nmo.solvers.solver_registry[solver_name]
+
+    class TestAux:
+        def __init__(self, loss):
+            self.counter = 0
+            self.auxes = []
+            self.loss = loss
+
+        def __call__(self, params, X, y):
+            self.counter += 1
+            # print(f"Call #{self.counter}: {self.auxes}")
+            loss_val = self.loss(params, X, y)
+            aux = aux_gen_fn()
+            self.auxes.append(aux)
+            return loss_val, aux
+
+    update_loss = TestAux(loss)
+
+    param_init = jax.tree_util.tree_map(np.zeros_like, true_params)
+
+    solver = solver_class(
+        unregularized_loss=update_loss,
+        regularizer=nmo.regularizer.UnRegularized(),
+        regularizer_strength=None,
+        has_aux=True,
+    )
+    init_state = solver.init_state(param_init, X, y)
+
+    if "svrg" in solver_name.lower():
+        full_grad, full_aux = jax.grad(update_loss, has_aux=True)(param_init, X, y)
+        init_state = init_state._replace(
+            full_grad_at_reference_point=full_grad,
+        )
+
+    update_params, update_state, update_aux = solver.update(
+        param_init, init_state, X, y
+    )
+
+    assert update_aux is not None
+
+    if hasattr(update_state, "aux"):
+        assert update_aux == update_state.aux
+
+    # testing this because there are extra evaluations whose aux is not saved
+    assert update_aux in update_loss.auxes
+
+
+@pytest.mark.parametrize(
+    "solver_name", [solver for solver in nmo.solvers.solver_registry.keys()]
+)
+def test_solvers_work_without_aux(request, solver_name):
+    jax.config.update("jax_enable_x64", True)
+    X, y, _, true_params, loss = request.getfixturevalue("linear_regression")
+    solver_class = nmo.solvers.solver_registry[solver_name]
+
+    param_init = jax.tree_util.tree_map(np.zeros_like, true_params)
+    solver = solver_class(
+        unregularized_loss=loss,
+        regularizer=nmo.regularizer.UnRegularized(),
+        regularizer_strength=None,
+        has_aux=False,
+        tol=1e-12,
+    )
+    params, state, returned_aux = solver.run(param_init, X, y)
+
+    assert returned_aux is None
+    assert np.allclose(true_params, params)
