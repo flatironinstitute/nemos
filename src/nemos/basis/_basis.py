@@ -895,6 +895,16 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         """Return the number of additive basis."""
         return len(self.basis1) + len(self.basis2)
 
+    @property
+    def bounds(self):
+        b1 = self.basis1.bounds
+        b2 = self.basis2.bounds
+        if b1 is None:
+            b1 = None
+        if b2 is None:
+            b2 = None
+        return [b1, b2]
+
 
 class MultiplicativeBasis(CompositeBasisMixin, Basis):
     """
