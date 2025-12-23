@@ -103,7 +103,7 @@ def _analytical_m_step_transition_prob(
 
 @partial(jax.jit, static_argnames=["negative_log_likelihood_func"])
 def _m_step_scale_gaussian_observations(
-    scale, y, rate, posteriors, negative_log_likelihood_func
+    log_scale, y, rate, posteriors, negative_log_likelihood_func
 ) -> Tuple[jnp.ndarray, None]:
     r"""
     Analytical M-step update for Gaussian observation model scale (variance).
@@ -115,8 +115,8 @@ def _m_step_scale_gaussian_observations(
 
     Parameters
     ----------
-    scale :
-        Current scale parameter values, shape ``(n_states,)`` for single observations
+    log_scale :
+        Current log-scale parameter values, shape ``(n_states,)`` for single observations
         or ``(n_neurons, n_states)`` for population data. Not used in computation
         but required to match the signature of numerical optimization methods.
     y :
@@ -134,8 +134,8 @@ def _m_step_scale_gaussian_observations(
 
     Returns
     -------
-    optimized_scale :
-        Updated variance estimates, shape ``(n_states,)`` for single observations
+    optimized_log_scale :
+        Updated log-scale estimates, shape ``(n_states,)`` for single observations
         or ``(n_neurons, n_states)`` for population data.
 
     Notes
@@ -160,9 +160,11 @@ def _m_step_scale_gaussian_observations(
         expected_nll = jnp.einsum(
             "ts, tns -> ns", posteriors, nll
         )  # (n_neurons, n_states)
+        optimized_log_scale = jnp.log(expected_nll) - jnp.log(sum_posteriors)
     else:
         expected_nll = jnp.sum(posteriors * nll, axis=0, keepdims=True)  # (1, n_states)
+        optimized_log_scale = jnp.squeeze(
+            jnp.log(expected_nll) - jnp.log(sum_posteriors), axis=0
+        )
 
-    optimized_scale = jnp.squeeze(expected_nll / sum_posteriors)
-
-    return optimized_scale, None
+    return optimized_log_scale, None
