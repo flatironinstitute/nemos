@@ -382,7 +382,8 @@ class TestUnRegularized:
         # set regularizer and solver name
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
-        model._instantiate_solver(model._compute_loss)
+        init_pars = model.initialize_params(X, y)
+        model.initialize_optimization_and_state(X, y, init_pars)
         params = GLMParams(true_params.coef * 0.0, true_params.intercept)
         model.optimization_run(params, X, y)
 
