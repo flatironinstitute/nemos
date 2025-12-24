@@ -7,7 +7,7 @@ import math
 import warnings
 from copy import deepcopy
 from functools import wraps
-from typing import Callable, Generator, Optional, Tuple, Union, List
+from typing import Callable, Generator, List, Optional, Tuple, Union
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
