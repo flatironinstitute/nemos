@@ -3,10 +3,8 @@
 # required to get ArrayLike to render correctly
 from __future__ import annotations
 
-import warnings
-from functools import wraps
 from pathlib import Path
-from typing import Callable, Literal, NamedTuple, Optional, Tuple, Union
+from typing import Callable, Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -18,41 +16,19 @@ from .. import tree_utils, validation
 from .._observation_model_builder import instantiate_observation_model
 from ..base_regressor import BaseRegressor, strip_metadata
 from ..exceptions import NotFittedError
+from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..pytrees import FeaturePytree
-from ..regularizer import GroupLasso, Lasso, Regularizer, Ridge
+from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
 from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
-from ..type_casting import jnp_asarray_if, support_pynapple
-from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength, SolverState, StepResult
+from ..type_casting import cast_to_jax, support_pynapple
+from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength, SolverState
 from ..utils import format_repr
 from .initialize_parameters import initialize_intercept_matching_mean_rate
-from .inverse_link_function_utils import (
-    check_inverse_link_function,
-    link_function_from_string,
-)
 
 ModelParams = Tuple[jnp.ndarray, jnp.ndarray]
 
 
-def cast_to_jax(func):
-    """Cast argument to jax."""
-
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            args, kwargs = jax.tree_util.tree_map(
-                lambda x: jnp_asarray_if(x, dtype=float), (args, kwargs)
-            )
-        except Exception:
-            raise TypeError(
-                "X and y should be array-like object (or trees of array like object) "
-                "with numeric data type!"
-            )
-        return func(*args, **kwargs)
-
-    return wrapper
-
-
-class GLM(BaseRegressor):
+class GLM(BaseRegressor[ModelParams]):
     r"""Generalized Linear Model (GLM) for neural activity data.
 
     This GLM implementation allows users to model neural activity based on a combination of exogenous inputs
@@ -73,6 +49,9 @@ class GLM(BaseRegressor):
     +---------------------+---------------------------------+
     | NegativeBinomial    | :math:`e^x`                     |
     +---------------------+---------------------------------+
+    | Gaussian            | :math:`x`                       |
+    +---------------------+---------------------------------+
+
 
     Below is a table listing the default and available solvers for each regularizer.
 
@@ -122,7 +101,7 @@ class GLM(BaseRegressor):
     ----------
     observation_model :
         Observation model to use. The model describes the distribution of the neural activity.
-        Default is the Poisson model.
+        Default is the Poisson model. Alternatives are "Gamma", "Bernoulli", "NegativeBinomial" and "Gaussian".
     inverse_link_function :
         A function that maps the linear combination of predictors into a firing rate. The default depends
         on the observation model, see the table above.
@@ -211,7 +190,7 @@ class GLM(BaseRegressor):
         # Replace this manual list after dropping support for 3.10?
         observation_model: (
             obs.Observations
-            | Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial"]
+            | Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial", "Gaussian"]
         ) = "Poisson",
         inverse_link_function: Optional[Callable] = None,
         regularizer: Optional[Union[str, Regularizer]] = None,
@@ -235,6 +214,7 @@ class GLM(BaseRegressor):
         self.solver_state_ = None
         self.scale_ = None
         self.dof_resid_ = None
+        self.aux_ = None
 
     def __sklearn_tags__(self):
         """Return GLM specific estimator tags."""
@@ -255,20 +235,9 @@ class GLM(BaseRegressor):
     @inverse_link_function.setter
     def inverse_link_function(self, inverse_link_function: Callable):
         """Setter for the inverse link function for the model."""
-        if inverse_link_function is None:
-            self._inverse_link_function = (
-                self.observation_model.default_inverse_link_function
-            )
-            return
-
-        elif isinstance(inverse_link_function, str):
-            self._inverse_link_function = link_function_from_string(
-                inverse_link_function
-            )
-            return
-
-        check_inverse_link_function(inverse_link_function)
-        self._inverse_link_function = inverse_link_function
+        self._inverse_link_function = resolve_inverse_link_function(
+            inverse_link_function, self._observation_model
+        )
 
     @property
     def observation_model(self) -> Union[None, obs.Observations]:
@@ -495,11 +464,13 @@ class GLM(BaseRegressor):
             data = X
         return self._predict(params, data)
 
-    def _predict_and_compute_loss(
+    def compute_loss(
         self,
         params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
+        *args,
+        **kwargs,
     ) -> jnp.ndarray:
         r"""Predict the rate and compute the negative log-likelihood against neural activity.
 
@@ -661,8 +632,10 @@ class GLM(BaseRegressor):
         return score
 
     def _initialize_parameters(
-        self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray
-    ) -> Tuple[Union[dict, jnp.ndarray], jnp.ndarray]:
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+    ) -> ModelParams:
         """Initialize the parameters based on the structure and dimensions X and y.
 
         This method initializes the coefficients (spike basis coefficients) and intercepts (bias terms)
@@ -799,7 +772,7 @@ class GLM(BaseRegressor):
 
         self.initialize_state(data, y, init_params, cast_to_jax_and_drop_nans=False)
 
-        params, state = self.solver_run(init_params, data, y)
+        params, state, aux = self.solver_run(init_params, data, y)
 
         if tree_utils.pytree_map_and_reduce(
             lambda x: jnp.any(jnp.isnan(x)), any, params
@@ -821,6 +794,7 @@ class GLM(BaseRegressor):
         # the output of loss. I believe it's the output of
         # solver.l2_optimality_error
         self.solver_state_ = state
+        self.aux_ = aux
         return self
 
     def _get_coef_and_intercept(self):
@@ -917,7 +891,7 @@ class GLM(BaseRegressor):
 
     def _estimate_resid_degrees_of_freedom(
         self, X: DESIGN_INPUT_TYPE, n_samples: Optional[int] = None
-    ):
+    ) -> jnp.ndarray:
         """
         Estimate the degrees of freedom of the residuals.
 
@@ -952,7 +926,7 @@ class GLM(BaseRegressor):
         # if the regularizer is lasso use the non-zero
         # coeff as an estimate of the dof
         # see https://arxiv.org/abs/0712.0881
-        if isinstance(self.regularizer, (GroupLasso, Lasso)):
+        if isinstance(self.regularizer, (GroupLasso, Lasso, ElasticNet)):
             resid_dof = tree_utils.pytree_map_and_reduce(
                 lambda x: ~jnp.isclose(x, jnp.zeros_like(x)),
                 lambda x: sum([jnp.sum(i, axis=0) for i in x]),
@@ -968,7 +942,6 @@ class GLM(BaseRegressor):
             rank = jnp.linalg.matrix_rank(X)
             return (n_samples - rank - 1) * jnp.ones_like(params[1])
 
-    @cast_to_jax
     def initialize_params(
         self,
         X: DESIGN_INPUT_TYPE,
@@ -1024,19 +997,7 @@ class GLM(BaseRegressor):
         >>> opt_state = model.initialize_state(X, y, params)
         >>> # Now ready to run optimization or update steps
         """
-        if init_params is None:
-            init_params = self._initialize_parameters(X, y)  # initialize
-        else:
-            err_message = "Initial parameters must be array-like objects (or pytrees of array-like objects) "
-            "with numeric data-type!"
-            init_params = validation.convert_tree_leaves_to_jax_array(
-                init_params, err_message=err_message, data_type=float
-            )
-
-        # validate input
-        self._validate(X, y, init_params)
-
-        return init_params
+        return super().initialize_params(X, y, init_params)
 
     def initialize_state(
         self,
@@ -1083,31 +1044,14 @@ class GLM(BaseRegressor):
         >>> opt_state = model.initialize_state(X, y, params)
         >>> # Now ready to run optimization or update steps
         """
-        if cast_to_jax_and_drop_nans:
-            # filter for non-nans
-            X, y = cast_to_jax(tree_utils.drop_nans)(X, y)
-            # grab the data
-            data = X.data if isinstance(X, FeaturePytree) else X
-        else:
-            data = X
-
-        # check if mask has been set is using group lasso
-        # if mask has not been set, use a single group as default
-        if isinstance(self.regularizer, GroupLasso):
-            if self.regularizer.mask is None:
-                warnings.warn(
-                    UserWarning(
-                        "Mask has not been set. Defaulting to a single group for all parameters. "
-                        "Please see the documentation on GroupLasso regularization for defining a "
-                        "mask."
-                    )
-                )
-                self.regularizer.mask = jnp.ones((1, data.shape[1]))
+        data, y = self._preprocess_inputs(
+            X, y, cast_to_jax_and_drop_nans=cast_to_jax_and_drop_nans
+        )
 
         opt_solver_kwargs = self._optimize_solver_params(data, y)
 
         #  set up the solver init/run/update attrs
-        self.instantiate_solver(solver_kwargs=opt_solver_kwargs)
+        self.instantiate_solver(self.compute_loss, solver_kwargs=opt_solver_kwargs)
 
         opt_state = self.solver_init_state(init_params, data, y)
         return opt_state
@@ -1115,14 +1059,14 @@ class GLM(BaseRegressor):
     @cast_to_jax
     def update(
         self,
-        params: Tuple[jnp.ndarray, jnp.ndarray],
-        opt_state: NamedTuple,
+        params: ModelParams,
+        opt_state: SolverState,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         *args,
         n_samples: Optional[int] = None,
         **kwargs,
-    ) -> StepResult:
+    ) -> Tuple[ModelParams, SolverState]:
         """
         Update the model parameters and solver state.
 
@@ -1156,7 +1100,7 @@ class GLM(BaseRegressor):
 
         Returns
         -------
-        StepResult
+        params, opt_state
             A tuple containing the updated parameters and optimization state. This tuple is
             typically used to continue the optimization process in subsequent steps.
 
@@ -1185,11 +1129,14 @@ class GLM(BaseRegressor):
         data = X.data if isinstance(X, FeaturePytree) else X
 
         # perform a one-step update
-        opt_step = self.solver_update(params, opt_state, data, y, *args, **kwargs)
+        params, opt_state, aux = self.solver_update(
+            params, opt_state, data, y, *args, **kwargs
+        )
 
         # store params and state
-        self._set_coef_and_intercept(opt_step[0])
-        self.solver_state_ = opt_step[1]
+        self._set_coef_and_intercept(params)
+        self.solver_state_ = opt_state
+        self.aux_ = aux
 
         # estimate the scale
         self.dof_resid_ = self._estimate_resid_degrees_of_freedom(
@@ -1199,7 +1146,7 @@ class GLM(BaseRegressor):
             y, self._predict(params, data), dof_resid=self.dof_resid_
         )
 
-        return opt_step
+        return (params, opt_state)
 
     def _get_optimal_solver_params_config(self):
         """Return the functions for computing default step and batch size for the solver."""

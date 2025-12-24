@@ -2,27 +2,26 @@ import dataclasses
 from typing import Any, Callable, ClassVar, Type, TypeAlias
 
 import equinox as eqx
-import jax
-import jax.numpy as jnp
 import optimistix as optx
 
 from ..regularizer import Regularizer
-from ..typing import Pytree
-from ._abstract_solver import OptimizationInfo, Params
+from ..typing import Aux, Params
+from ._abstract_solver import OptimizationInfo
+from ._aux_helpers import (
+    convert_fn,
+    drop_aux,
+    pack_args,
+    tree_map_inexact_asarray,
+    wrap_aux,
+)
 from ._solver_adapter import SolverAdapter
 
-DEFAULT_ATOL = 1e-8
+DEFAULT_ATOL = 1e-4
 DEFAULT_RTOL = 0.0
 DEFAULT_MAX_STEPS = 100_000
 
 OptimistixSolverState: TypeAlias = eqx.Module
-OptimistixStepResult: TypeAlias = tuple[Params, OptimistixSolverState]
-
-
-def _f_struct_factory():
-    """Create the output shape and dtype of the objective function using the currently set JAX precision."""
-    current_float_dtype = jnp.float64 if jax.config.jax_enable_x64 else jnp.float32
-    return jax.ShapeDtypeStruct((), current_float_dtype)
+OptimistixStepResult: TypeAlias = tuple[Params, OptimistixSolverState, Aux]
 
 
 @dataclasses.dataclass
@@ -39,25 +38,14 @@ class OptimistixConfig:
     maxiter: int
     # options dict passed around within optimistix
     options: dict[str, Any] = dataclasses.field(default_factory=dict)
-    # "The shape+dtype of the output of `fn`"
-    # dtype is dynamically determined by calling _f_struct_factory to read the currently
-    # set JAX floating point precision from the config
-    # f_struct: PyTree[jax.ShapeDtypeStruct] = dataclasses.field(
-    f_struct: Pytree = dataclasses.field(default_factory=_f_struct_factory)
-    # this would be the output shape + dtype of the aux variables fn returns
-    # aux_struct: PyTree[jax.ShapeDtypeStruct] = None
-    aux_struct: Pytree = None
     # "Any Lineax tags describing the structure of the Jacobian matrix d(fn)/dy."
     tags: frozenset = frozenset()
     # sets if the minimisation throws an error if an iterative solver runs out of steps
     throw: bool = False
     # norm used in the Cauchy convergence criterion. Required by all Optimistix solvers.
-    norm: Callable = optx.max_norm
+    norm: Callable = optx.two_norm
     # way of autodifferentiation: https://docs.kidger.site/optimistix/api/adjoints/
     adjoint: optx.AbstractAdjoint = optx.ImplicitAdjoint()
-    # whether the objective function returns any auxiliary results.
-    # We assume False throughout NeMoS.
-    has_aux: bool = False
 
 
 class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
@@ -86,6 +74,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
         unregularized_loss: Callable,
         regularizer: Regularizer,
         regularizer_strength: float | None,
+        has_aux: bool,
         tol: float = DEFAULT_ATOL,
         rtol: float = DEFAULT_RTOL,
         maxiter: int = DEFAULT_MAX_STEPS,
@@ -99,14 +88,12 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
 
         if self._proximal:
             loss_fn = unregularized_loss
-            self.prox = regularizer.get_proximal_operator()
-            self.regularizer_strength = regularizer_strength
+            solver_init_kwargs["prox"] = regularizer.get_proximal_operator()
+            solver_init_kwargs["regularizer_strength"] = regularizer_strength
         else:
             loss_fn = regularizer.penalized_loss(
                 unregularized_loss, regularizer_strength
             )
-        self.fun = lambda params, args: loss_fn(params, *args)
-        self.fun_with_aux = lambda params, args: (loss_fn(params, *args), None)
 
         # take out the arguments that go into minimise, init, terminate and so on
         # and only pass the actually needed things to __init__
@@ -116,6 +103,16 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
             if kw in solver_init_kwargs:
                 user_args[kw] = solver_init_kwargs.pop(kw)
         self.config = OptimistixConfig(maxiter=maxiter, **user_args)
+
+        if has_aux:
+            self.fun_with_aux = pack_args(loss_fn)
+            self.fun = drop_aux(self.fun_with_aux)
+        else:
+            self.fun = pack_args(loss_fn)
+            self.fun_with_aux = wrap_aux(self.fun)
+
+        # make custom adjustments such as adding a derived "while_loop_kind" parameter for FISTA
+        solver_init_kwargs = self.adjust_solver_init_kwargs(solver_init_kwargs)
 
         self._solver = self._solver_cls(
             atol=tol,
@@ -127,13 +124,17 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
         self.stats = {}
 
     def init_state(self, init_params: Params, *args: Any) -> OptimistixSolverState:
+        init_params = tree_map_inexact_asarray(init_params)
+        fn = convert_fn(self.fun_with_aux, True, init_params, args)
+        f_struct, aux_struct = fn.out_struct
+
         return self._solver.init(
-            self.fun_with_aux,
+            fn,
             init_params,
             args,
             self.config.options,
-            self.config.f_struct,
-            self.config.aux_struct,
+            f_struct,
+            aux_struct,
             self.config.tags,
         )
 
@@ -143,8 +144,12 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
         state: OptimistixSolverState,
         *args: Any,
     ) -> OptimistixStepResult:
+        params = tree_map_inexact_asarray(params)
+
+        fn = convert_fn(self.fun_with_aux, True, params, args)
+
         new_params, state, aux = self._solver.step(
-            fn=self.fun_with_aux,
+            fn=fn,
             y=params,
             args=args,
             state=state,
@@ -152,7 +157,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
             tags=self.config.tags,
         )
 
-        return new_params, state
+        return new_params, state, aux
 
     def run(
         self,
@@ -160,12 +165,12 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
         *args: Any,
     ) -> OptimistixStepResult:
         solution = optx.minimise(
-            fn=self.fun,
+            fn=self.fun_with_aux,
             solver=self._solver,
             y0=init_params,
             args=args,
             options=self.config.options,
-            has_aux=self.config.has_aux,
+            has_aux=True,
             max_steps=self.config.maxiter,
             adjoint=self.config.adjoint,
             throw=self.config.throw,
@@ -174,7 +179,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
 
         self.stats.update(solution.stats)
 
-        return solution.value, solution.state
+        return solution.value, solution.state, solution.aux
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:
@@ -188,6 +193,10 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
             [f.name for f in dataclasses.fields(OptimistixConfig)]
         )
         all_arguments = own_and_solver_args | common_optx_arguments
+
+        # prox is read from the regularizer, not provided as a solver argument
+        if cls._proximal:
+            all_arguments.remove("prox")
 
         return all_arguments
 
@@ -215,6 +224,25 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
             converged=state.terminate.item(),  # pyright: ignore
             reached_max_steps=(num_steps == self.maxiter),
         )
+
+    def adjust_solver_init_kwargs(
+        self, solver_init_kwargs: dict[str, Any]
+    ) -> dict[str, Any]:
+        """
+        Optionally adjust the parameters (e.g. derive from self.config) for instantiating the wrapped solver.
+
+        Parameters
+        ----------
+        solver_init_kwargs:
+            Original keyword arguments that would be passed to _solver_cls.__init__.
+
+        Returns
+        -------
+        dict with argument names of _solver_cls.__init__ as keys and
+        their corresponding values as values.
+        Default implementation just returns solver_init_kwargs.
+        """
+        return solver_init_kwargs
 
 
 class OptimistixBFGS(OptimistixAdapter):

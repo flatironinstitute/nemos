@@ -135,8 +135,6 @@ def prox_group_lasso(
     """
     weights, intercepts = params
     shape = weights.shape
-    # divide the reg strength by the number of neurons
-    regularizer_strength /= intercepts.shape[0]
     # add an extra dim if not 2D, do nothing otherwise.
     weights = jnp.atleast_2d(weights.T)
     # [(n_neurons, n_features), (n_groups, n_features)] -> (n_neurons, n_groups)

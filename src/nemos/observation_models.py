@@ -9,12 +9,14 @@ from numpy.typing import NDArray
 
 from . import utils
 from .base_class import Base
+from .inverse_link_function_utils import exp, identity, logistic
 
 __all__ = [
     "PoissonObservations",
     "GammaObservations",
     "BernoulliObservations",
     "NegativeBinomialObservations",
+    "GaussianObservations",
 ]
 
 
@@ -69,7 +71,10 @@ class Observations(Base, abc.ABC):
 
     @abc.abstractmethod
     def _negative_log_likelihood(
-        self, y, predicted_rate, aggregate_sample_scores: Callable = jnp.mean
+        self,
+        y,
+        predicted_rate,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ):
         r"""Compute the observation model negative log-likelihood.
 
@@ -96,7 +101,7 @@ class Observations(Base, abc.ABC):
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
-        aggregate_sample_scores: Callable = jnp.mean,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ):
         r"""Compute the observation model log-likelihood.
 
@@ -126,7 +131,7 @@ class Observations(Base, abc.ABC):
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
-        aggregate_sample_scores: Callable = jnp.mean,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ):
         r"""Compute the observation model likelihood.
 
@@ -247,7 +252,7 @@ class Observations(Base, abc.ABC):
             "pseudo-r2-McFadden", "pseudo-r2-Cohen"
         ] = "pseudo-r2-McFadden",
         scale: Union[float, jnp.ndarray, NDArray] = 1.0,
-        aggregate_sample_scores: Callable = jnp.mean,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ) -> jnp.ndarray:
         r"""Pseudo-:math:`R^2` calculation for a GLM.
 
@@ -328,7 +333,7 @@ class Observations(Base, abc.ABC):
         self,
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
-        aggregate_sample_scores: Callable = jnp.mean,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ) -> jnp.ndarray:
         r"""Cohen's pseudo-:math:`R^2`.
 
@@ -361,7 +366,7 @@ class Observations(Base, abc.ABC):
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
-        aggregate_sample_scores: Callable = jnp.mean,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ):
         """
         McFadden's pseudo-:math:`R^2`.
@@ -414,13 +419,13 @@ class PoissonObservations(Observations):
 
     @property
     def default_inverse_link_function(self):
-        return jnp.exp
+        return exp
 
     def _negative_log_likelihood(
         self,
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
-        aggregate_sample_scores: Callable = jnp.mean,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ) -> jnp.ndarray:
         r"""Compute the Poisson negative log-likelihood.
 
@@ -470,7 +475,7 @@ class PoissonObservations(Observations):
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
-        aggregate_sample_scores: Callable = jnp.mean,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ):
         r"""Compute the Poisson negative log-likelihood.
 
@@ -646,7 +651,7 @@ class GammaObservations(Observations):
         self,
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
-        aggregate_sample_scores: Callable = jnp.mean,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ) -> jnp.ndarray:
         r"""Compute the Gamma negative log-likelihood.
 
@@ -680,7 +685,7 @@ class GammaObservations(Observations):
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
-        aggregate_sample_scores: Callable = jnp.mean,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ):
         r"""Compute the Gamma negative log-likelihood.
 
@@ -705,11 +710,7 @@ class GammaObservations(Observations):
 
         """
         k = 1 / scale
-        norm = (
-            (k - 1) * jnp.mean(jnp.log(y))
-            + k * jnp.log(k)
-            - jax.scipy.special.gammaln(k)
-        )
+        norm = (k - 1) * jnp.log(y) + k * jnp.log(k) - jax.scipy.special.gammaln(k)
         return aggregate_sample_scores(
             norm - k * self._negative_log_likelihood(y, predicted_rate, lambda x: x)
         )
@@ -731,7 +732,7 @@ class GammaObservations(Observations):
         key :
             Random key used for the generation of random numbers in JAX.
         predicted_rate :
-            Expected rate (lambda) of the Poisson distribution. Shape (n_time_bins, ), or (n_time_bins, n_neurons)..
+            Expected rate (lambda) of the Gamma distribution. Shape (n_time_bins, ), or (n_time_bins, n_neurons)..
         scale:
             The scale parameter for the distribution.
 
@@ -809,8 +810,7 @@ class GammaObservations(Observations):
         y :
             Observed neural activity.
         predicted_rate :
-            The predicted rate values. This is not used in the Poisson model for estimating scale,
-            but is retained for compatibility with the abstract method signature.
+            The predicted rate values.
         dof_resid :
             The DOF of the residuals.
 
@@ -846,13 +846,13 @@ class BernoulliObservations(Observations):
 
     @property
     def default_inverse_link_function(self):
-        return jax.lax.logistic
+        return logistic
 
     def _negative_log_likelihood(
         self,
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
-        aggregate_sample_scores: Callable = jnp.mean,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ) -> jnp.ndarray:
         r"""Compute the Bernoulli negative log-likelihood.
 
@@ -899,7 +899,7 @@ class BernoulliObservations(Observations):
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
-        aggregate_sample_scores: Callable = jnp.mean,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ):
         r"""Compute the Bernoulli negative log-likelihood.
 
@@ -954,7 +954,7 @@ class BernoulliObservations(Observations):
         key :
             Random key used for the generation of random numbers in JAX.
         predicted_rate :
-            Expected rate (success probability) of the Poisson distribution. Shape ``(n_time_bins, )``, or
+            Expected rate (success probability) of the Bernoulli distribution. Shape ``(n_time_bins, )``, or
             ``(n_time_bins, n_observations)``.
         scale :
             Scale parameter. For Bernoulli should be equal to 1.
@@ -1049,7 +1049,9 @@ class BernoulliObservations(Observations):
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
-        aggregate_sample_scores: Callable = lambda x: jnp.exp(jnp.mean(jnp.log(x))),
+        aggregate_sample_scores: Callable = lambda x: jnp.exp(
+            jnp.mean(jnp.log(x), axis=0).sum()
+        ),
     ):
         r"""Compute the Binomial model likelihood.
 
@@ -1146,13 +1148,13 @@ class NegativeBinomialObservations(Observations):
 
     @property
     def default_inverse_link_function(self):
-        return jnp.exp
+        return exp
 
     def _negative_log_likelihood(
         self,
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
-        aggregate_sample_scores: Callable = jnp.mean,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ) -> jnp.ndarray:
         r"""Compute the Negative Binomial negative log-likelihood.
 
@@ -1189,7 +1191,7 @@ class NegativeBinomialObservations(Observations):
 
         """
         if self.scale is None:
-            self.estimate_scale(y, predicted_rate, aggregate_sample_scores)
+            self.estimate_scale(y, predicted_rate, 1.0)
         predicted_rate = jnp.clip(
             predicted_rate, min=jnp.finfo(predicted_rate.dtype).eps
         )
@@ -1203,7 +1205,7 @@ class NegativeBinomialObservations(Observations):
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray, None] = None,
-        aggregate_sample_scores: Callable = jnp.mean,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ):
         r"""Compute the Negative Binomial log-likelihood.
 
@@ -1375,6 +1377,207 @@ class NegativeBinomialObservations(Observations):
         for more details.
         """
         return jnp.array(self.scale)
+
+
+class GaussianObservations(Observations):
+    """
+    Model observations as Gaussian random variables.
+
+    The GaussianObservations is designed to model data based on a Gaussian distribution
+    with a given mean (predicted rate) and variance (scale). It provides methods for computing the negative
+    log-likelihood, generating samples, and computing the residual deviance for the given spike count data.
+
+    """
+
+    def __init__(
+        self,
+    ):
+        super().__init__()
+        self.scale = 1.0
+
+    @property
+    def default_inverse_link_function(self):
+        """Identity link function for Gaussian observations."""
+        return identity
+
+    def _negative_log_likelihood(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
+    ) -> jnp.ndarray:
+        r"""Compute the Gaussian negative log-likelihood.
+
+        This computes the Gaussian negative log-likelihood of the predicted rates
+        for the observed neural activity up to a constant.
+
+        Parameters
+        ----------
+        y :
+            The target activity to compare against. Shape ``(n_time_bins, )``, or ``(n_time_bins, n_neurons)``.
+        predicted_rate :
+            The predicted rate of the current model. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)``.
+        aggregate_sample_scores :
+            Function that aggregates the log-likelihood of each sample.
+
+        Returns
+        -------
+        :
+            The Gaussian negative log-likelihood. Shape (1,).
+        """
+        resid = y - predicted_rate
+        return aggregate_sample_scores(jnp.power(resid, 2))
+
+    def log_likelihood(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
+    ):
+        r"""Compute the Gaussian negative log-likelihood.
+
+        Compute the Gaussian log-likelihood of the predicted rates
+        for the observed neural activity up to a constant.
+
+        The formula for the Gaussian log-likelihood is given by:
+
+        .. math::
+            \ell(\mu,\sigma^2) = -\frac{n}{2}\log(2\pi\sigma^2) - \frac{1}{2\sigma^2}\sum_{i=1}^{n} (y_i - \mu_i)^2.
+
+        where :math:`\mu` is the predicted mean, :math:`\sigma^2` is the variance (scale), and :math:`y` is
+        the observed data.
+
+        Parameters
+        ----------
+        y :
+            The target activity to compare against. Shape ``(n_time_bins, )``, or ``(n_time_bins, n_neurons)``.
+        predicted_rate :
+            The predicted rate of the current model. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)``.
+        scale :
+            The scale parameter of the model.
+        aggregate_sample_scores :
+            Function that aggregates the log-likelihood of each sample.
+
+        Returns
+        -------
+        :
+            The Gaussian log-likelihood. Shape ``(1,)``.
+        """
+        norm = -0.5 * jnp.log(2 * jnp.pi * scale)
+        return aggregate_sample_scores(
+            norm
+            - (0.5 / scale)
+            * self._negative_log_likelihood(y, predicted_rate, lambda x: x)
+        )
+
+    def sample_generator(
+        self,
+        key: jax.Array,
+        predicted_rate: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
+    ) -> jnp.ndarray:
+        """
+        Sample from the Gaussian distribution.
+
+        This method generates random numbers from a Gaussian distribution based on the given
+        ``predicted_rate`` and ``scale``.
+
+        Parameters
+        ----------
+        key :
+            Random key used for the generation of random numbers in JAX.
+        predicted_rate :
+            Expected rate (mean) of the Gaussian distribution. Shape (n_time_bins, ) or
+            (n_time_bins, n_neurons).
+        scale :
+            The scale parameter (variance) for the distribution.
+
+        Returns
+        -------
+        jnp.ndarray
+            Random numbers generated from the Gaussian distribution based on the ``predicted_rate`` and the ``scale``.
+        """
+        return (
+            jax.random.normal(key, shape=predicted_rate.shape) * jnp.sqrt(scale)
+            + predicted_rate
+        )
+
+    def deviance(
+        self,
+        neural_activity: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
+    ) -> jnp.ndarray:
+        r"""Compute the residual deviance for a Gaussian model.
+
+        Parameters
+        ----------
+        neural_activity:
+            The spike count activity. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)`` for population models.
+        predicted_rate:
+            The predicted firing rates. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)`` for population models.
+        scale:
+            Scale parameter of the model.
+
+        Returns
+        -------
+        :
+            The residual deviance of the model.
+
+        Notes
+        -----
+        The deviance is a measure of the goodness of fit of a statistical model.
+        For a Gaussian model, the residual deviance is computed as:
+
+        .. math::
+            D(y_{tn}, \hat{y}_{tn}) = \frac{(y_{tn} - \hat{y}_{tn})^2}{\sigma^2}
+
+        where :math:`y` is the observed data, :math:`\hat{y}` is the predicted data, and :math:`\sigma^2` is
+        the scale (variance) of the model. Lower values of deviance indicate a better fit.
+
+        """
+        resid_dev = jnp.power(neural_activity - predicted_rate, 2)
+        return resid_dev / scale
+
+    def estimate_scale(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        dof_resid: Union[float, jnp.ndarray],
+    ) -> Union[float, jnp.ndarray]:
+        r"""
+        Estimate the scale of the model based on the GLM residuals.
+
+        For :math:`y \sim \mathcal{N}(\mu, \sigma^2)` the scale is equal to,
+
+        .. math::
+            \hat{\phi}
+            =
+            \frac{1}{n - p}
+            \sum_{i=1}^n (y_i - \hat{\mu}_i)^2.
+
+        with :math:`n` the number of samples and :math:`p` the number of parameters in the model.
+
+        Therefore, the scale can be estimated as the variance of the residuals.
+
+        Parameters
+        ----------
+        y :
+            Observed spike counts.
+        predicted_rate :
+            The predicted rate values.
+        dof_resid :
+            The DOF of the residuals.
+
+        Returns
+        -------
+        :
+            The scale parameter. If predicted_rate is ``(n_samples, n_neurons)``, this method will return a
+            scale for each neuron.
+        """
+        resid = jnp.power(y - predicted_rate, 2)
+        return jnp.sum(resid, axis=0) / dof_resid
 
 
 def check_observation_model(observation_model, force_checks=False):

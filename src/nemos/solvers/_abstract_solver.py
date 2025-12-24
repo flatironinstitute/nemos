@@ -33,6 +33,7 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         unregularized_loss: Callable,
         regularizer: Regularizer,
         regularizer_strength: float | None,
+        has_aux: bool,
         **solver_init_kwargs,
     ):
         """
@@ -42,12 +43,16 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         ---------
         unregularized_loss:
             Unregularized loss function.
-            Currently `BaseRegressor._predict_and_compute_loss`.
+            Currently `BaseRegressor.compute_loss`.
         regularizer:
             Regularizer object used to create the penalized loss
             or get the proximal operator from.
         regularizer_strength:
             Regularizer strength.
+        has_aux:
+            Whether `unregularized_loss` returns auxiliary variables.
+            If False, the loss function is expected to return a single scalar.
+            If True, the loss is expected to return a tuple of length 2 with a scalar and auxiliary variables.
         **solver_init_kwargs:
             Keyword arguments modifying the solver's behavior.
         """

@@ -19,11 +19,12 @@ For subclasses derived from `BaseRegressor` to function correctly, they must imp
 3. [`score`](nemos.glm.GLM.score): Score the accuracy of model predictions using input data `X` against the actual observations `y`.
 4. [`simulate`](nemos.glm.GLM.simulate): Simulate data based on the trained regression model.
 5. [`update`](nemos.glm.GLM.update): Run a single optimization step, and stores the updated parameter and solver state. Used by stochastic optimization schemes.
-6. `_predict_and_compute_loss`: Compute prediction and evaluates the loss function prvided the parameters and `X` and `y`. This is used by the `instantiate_solver` method which sets up the solver.
+6. `compute_loss`: Compute prediction and evaluates the loss function prvided the parameters and `X` and `y`. This is used by the `instantiate_solver` method which sets up the solver.
 7. `_check_params`: Check the parameter structure.
 8. `_check_input_dimensionality`: Check the input dimensionality matches model expectation.
 9. `_check_input_and_params_consistency`: Checks that the input and the parameters are consistent.
 10. `_get_coef_and_intercept` and `_set_coef_and_intercept`: set and get model coefficient and intercept term.
+11. `_has_aux`: If the model's objective function returns auxiliary variables, set this class attribute to `True`. Otherwise it defaults to `False` and the objective function is assumed to return a scalar value.
 
 All the `_check_<method-name>` methods are called by the `_validate` method which checks that the provided
 input and parameters conform with the model requirements.
@@ -40,7 +41,7 @@ Public attributes are stored as properties:
 
 When implementing a new subclass of `BaseRegressor`, the only attributes you must interact directly with are those that operate on the solver, i.e. `solver_init_state`, `solver_update`, `solver_run`.
 
-Typically, in `YourRegressor` you will call `self.solver_init_state` at the parameter initialization step, `self.sovler_run` in [`fit`](nemos.glm.GLM.fit), and `self.solver_update` in [`update`](nemos.glm.GLM.update).
+Typically, in `YourRegressor` you will call `self.solver_init_state` at the parameter initialization step, `self.solver_run` in [`fit`](nemos.glm.GLM.fit), and `self.solver_update` in [`update`](nemos.glm.GLM.update).
 
 :::{admonition} Solvers
 :class: note
