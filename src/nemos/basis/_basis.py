@@ -7,7 +7,7 @@ import math
 import warnings
 from copy import deepcopy
 from functools import wraps
-from typing import Callable, Generator, Optional, Tuple, Union
+from typing import Callable, Generator, Optional, Tuple, Union, List
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -124,7 +124,8 @@ def get_equi_spaced_samples(
     Returns
     -------
     :
-        A generator yielding numpy arrays of linspaces from 0 (or specified min) to 1 (or specified max) of sizes specified by ``n_samples``.
+        A generator yielding numpy arrays of linspaces from 0 (or specified min) 
+        to 1 (or specified max) of sizes specified by ``n_samples``.
     """
     if not isinstance(bounds, list):
         bounds = [bounds]
