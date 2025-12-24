@@ -130,7 +130,7 @@ def get_equi_spaced_samples(
     if not isinstance(bounds, list):
         bounds = [bounds]
     return (
-        np.linspace(*((0, 1) if b is None else b), s) for b, s in zip(bounds, n_samples)
+        np.linspace(*((0, 1) if b is None else b), s) for b, s in zip(bounds, n_samples, strict=True)
     )
 
 

@@ -126,7 +126,6 @@ def remap_parameters(method):
 
 
 class BasisMixin:
-
     def __init__(self, label: Optional[str] = None):
         if not hasattr(self, "_input_shape_"):
             self._input_shape_ = None
@@ -142,7 +141,6 @@ class BasisMixin:
         return format_repr(self)
 
     def __getitem__(self, index: str) -> Basis:
-
         if isinstance(index, (int, slice)):
             string = "Slicing" if isinstance(index, slice) else "Indexing with integer"
             raise IndexError(
@@ -935,7 +933,9 @@ class CompositeBasisMixin(BasisMixin):
                 b = [b]
             return b
 
-        return _format(self.basis1.bounds) + _format(self.basis2.bounds)
+        return _format(getattr(self.basis1, "bounds", None)) + _format(
+            getattr(self.basis2, "bounds", None)
+        )
 
     @property
     def _has_default_label(self):
@@ -1135,10 +1135,13 @@ class CompositeBasisMixin(BasisMixin):
         if n < rows:
             rep = (
                 start_str + f"{self.__class__.__name__}"
-                f"(\n{n*tab}basis1={basis1},\n{n*tab}basis2={basis2},\n{(n-1)*tab})"
+                f"(\n{n * tab}basis1={basis1},\n{n * tab}basis2={basis2},\n{(n - 1) * tab})"
             )
         elif n == rows:
-            rep = start_str + f"{self.__class__.__name__}(\n{n*tab}...\n{(n-1)*tab})"
+            rep = (
+                start_str
+                + f"{self.__class__.__name__}(\n{n * tab}...\n{(n - 1) * tab})"
+            )
         else:
             rep = None
         return rep
