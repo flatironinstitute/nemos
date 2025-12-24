@@ -129,8 +129,7 @@ def get_equi_spaced_samples(
     if not isinstance(bounds, list):
         bounds = [bounds]
     return (
-        np.linspace(*((0, 1) if b is None else b), samp)
-        for b, samp in zip(bounds, n_samples)
+        np.linspace(*((0, 1) if b is None else b), s) for b, s in zip(bounds, n_samples)
     )
 
 
@@ -895,16 +894,6 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         """Return the number of additive basis."""
         return len(self.basis1) + len(self.basis2)
 
-    @property
-    def bounds(self):
-        b1 = self.basis1.bounds
-        b2 = self.basis2.bounds
-        if b1 is None:
-            b1 = None
-        if b2 is None:
-            b2 = None
-        return [b1, b2]
-
 
 class MultiplicativeBasis(CompositeBasisMixin, Basis):
     """
@@ -1252,13 +1241,3 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
            inputs are available.
         """
         return get_input_shape(self)[:1]
-
-    @property
-    def bounds(self):
-        b1 = self.basis1.bounds
-        b2 = self.basis2.bounds
-        if b1 is None:
-            b1 = None
-        if b2 is None:
-            b2 = None
-        return [b1, b2]

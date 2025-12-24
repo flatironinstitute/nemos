@@ -929,6 +929,15 @@ class CompositeBasisMixin(BasisMixin):
         self._input_shape_update()
 
     @property
+    def bounds(self):
+        def _format(b):
+            if not isinstance(b, list):
+                b = [b]
+            return b
+
+        return _format(self.basis1.bounds) + _format(self.basis2.bounds)
+
+    @property
     def _has_default_label(self):
         return self._label is None
 
