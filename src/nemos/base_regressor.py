@@ -361,6 +361,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             loss,
             self.regularizer,
             self.regularizer_strength,
+            self._has_aux,
             **solver_kwargs,
         )
         self._solver = solver
