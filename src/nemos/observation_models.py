@@ -710,11 +710,7 @@ class GammaObservations(Observations):
 
         """
         k = 1 / scale
-        norm = (
-            (k - 1) * jnp.mean(jnp.log(y))
-            + k * jnp.log(k)
-            - jax.scipy.special.gammaln(k)
-        )
+        norm = (k - 1) * jnp.log(y) + k * jnp.log(k) - jax.scipy.special.gammaln(k)
         return aggregate_sample_scores(
             norm - k * self._negative_log_likelihood(y, predicted_rate, lambda x: x)
         )

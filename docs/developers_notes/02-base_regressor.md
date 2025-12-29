@@ -28,6 +28,7 @@ For subclasses derived from `BaseRegressor` to function correctly, they must imp
 8. `_set_model_params`: Unpack the internal parameter representation and store as sklearn-style attributes (`coef_`, `intercept_`).
 9. `save_params`: Serialize and save model parameters to disk.
 10. `_get_optimal_solver_params_config`: Return functions for computing default step size and batch size for the solver.
+11. `_has_aux`: If the model's objective function returns auxiliary variables, set this class attribute to `True`. Otherwise it defaults to `False` and the objective function is assumed to return a scalar value.
 
 ## Parameter Representation and Validation
 
@@ -55,7 +56,7 @@ Public attributes are stored as properties:
 
 When implementing a new subclass of `BaseRegressor`, the only attributes you must interact directly with are those that operate on the solver, i.e. `solver_init_state`, `solver_update`, `solver_run`.
 
-Typically, in `YourRegressor` you will call `self.solver_init_state` at the parameter initialization step, `self.sovler_run` in [`fit`](nemos.glm.GLM.fit), and `self.solver_update` in [`update`](nemos.glm.GLM.update).
+Typically, in `YourRegressor` you will call `self.solver_init_state` at the parameter initialization step, `self.solver_run` in [`fit`](nemos.glm.GLM.fit), and `self.solver_update` in [`update`](nemos.glm.GLM.update).
 
 :::{admonition} Solvers
 :class: note

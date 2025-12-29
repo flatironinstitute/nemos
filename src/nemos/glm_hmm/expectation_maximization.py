@@ -663,7 +663,7 @@ def run_m_step(
         Boolean mask marking the first observation of each session. Shape ``(n_samples,)``.
     m_step_fn_glm_params:
         Callable that performs the M-step update for GLM parameters (coefficients and intercepts).
-        Should have signature: ``f(glm_params, X, y, posteriors) -> (updated_params, state)``.
+        Should have signature: ``f(glm_params, X, y, posteriors) -> (updated_params, state, aux)``.
         The regularizer/prior for the GLM parameters should be configured within this callable.
     dirichlet_prior_alphas_init_prob:
         Prior for the initial states, shape ``(n_states,)``.
@@ -701,7 +701,7 @@ def run_m_step(
     )
 
     # Minimize negative log-likelihood to update GLM weights
-    optimized_projection_weights, state = m_step_fn_glm_params(
+    optimized_projection_weights, state, _ = m_step_fn_glm_params(
         glm_params, X, y, posteriors
     )
 
