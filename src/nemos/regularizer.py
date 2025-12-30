@@ -203,11 +203,12 @@ class Regularizer(Base, abc.ABC):
         self, params: ModelParamsT, strength: RegularizerStrength
     ) -> jnp.ndarray:
         penalty = jnp.array(0.0)
-
-        for where in params.regularizable_subtrees():
-            subtree = where(params)
-            penalty = penalty + self._penalty_on_subtree(subtree, strength)
-
+        if hasattr(params, "regularizable_subtrees"):
+            for where in params.regularizable_subtrees():
+                subtree = where(params)
+                penalty = penalty + self._penalty_on_subtree(subtree, strength)
+        else:
+            penalty = penalty + self._penalty_on_subtree(params, strength)
         return penalty
 
     @abc.abstractmethod
