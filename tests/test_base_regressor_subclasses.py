@@ -16,7 +16,6 @@ from conftest import is_population_model
 from numba import njit
 
 import nemos as nmo
-from nemos import inverse_link_function_utils
 from nemos._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
 from nemos.glm.params import GLMParams
 from nemos.glm.validation import (
@@ -878,6 +877,7 @@ class TestModelSimulation:
         [0, 1, 2, 3, 4],
     )
     @pytest.mark.solver_related
+    @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
     def test_fit_param_length(self, n_params, instantiate_base_regressor_subclass):
         """
         Test the `fit` method with different numbers of initial parameters.
@@ -886,23 +886,23 @@ class TestModelSimulation:
         fixture = instantiate_base_regressor_subclass
         X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
         model_name = model.__class__.__name__
+        model.solver_kwargs.update({"maxiter": 3})
         expectation = (
             pytest.raises(
                 ValueError,
-                match="Params must have length.|GLM-HMM requires three parameters",
+                match="Params must have length",
             )
             if n_params != INIT_PARAM_LENGTH[model_name]
             else does_not_raise()
         )
 
+        # Convert GLMParams to tuple for slicing
+        validator = VALIDATOR_REGISTRY[model_name]
+        params_tuple = validator.from_model_params(true_params)
         if n_params < INIT_PARAM_LENGTH[model_name]:
-            # Convert GLMParams to tuple for slicing
-            params_tuple = (true_params.coef, true_params.intercept)
             init_params = params_tuple[:n_params]
         else:
-            # Convert GLMParams to tuple for concatenation
-            params_tuple = (true_params.coef, true_params.intercept)
-            init_params = params_tuple + (true_params.coef,) * (
+            init_params = params_tuple + (params_tuple[0],) * (
                 n_params - INIT_PARAM_LENGTH[model_name]
             )
         with expectation:
@@ -917,6 +917,7 @@ class TestModelSimulation:
         ],
     )
     @pytest.mark.solver_related
+    @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
     def test_fit_x_dimensionality(
         self, delta_dim, expectation, instantiate_base_regressor_subclass
     ):
@@ -925,12 +926,14 @@ class TestModelSimulation:
         """
         fixture = instantiate_base_regressor_subclass
         X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
+        model.solver_kwargs.update({"maxiter": 3})
         if delta_dim == -1:
             X = np.zeros((X.shape[0],))
         elif delta_dim == 1:
             X = np.zeros((X.shape[0], 1, X.shape[1]))
+        validator = VALIDATOR_REGISTRY[model.__class__.__name__]
         with expectation:
-            model.fit(X, y, init_params=(true_params.coef, true_params.intercept))
+            model.fit(X, y, init_params=validator.from_model_params(true_params))
 
     @pytest.mark.parametrize(
         "delta_dim, expectation",
@@ -947,6 +950,7 @@ class TestModelSimulation:
         ],
     )
     @pytest.mark.solver_related
+    @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
     def test_fit_y_dimensionality(
         self, delta_dim, expectation, instantiate_base_regressor_subclass
     ):
@@ -955,6 +959,7 @@ class TestModelSimulation:
         """
         fixture = instantiate_base_regressor_subclass
         X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
+        model.solver_kwargs.update({"maxiter": 3})
         if is_population_model(model):
             if delta_dim == -1:
                 y = y[:, 0]
@@ -969,8 +974,9 @@ class TestModelSimulation:
                 y = np.zeros((y.shape[0], 1))
                 for i in range(getattr(model, "n_classes", 0)):
                     y[i] = i
+        validator = VALIDATOR_REGISTRY[model.__class__.__name__]
         with expectation:
-            model.fit(X, y, init_params=(true_params.coef, true_params.intercept))
+            model.fit(X, y, init_params=validator.from_model_params(true_params))
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -981,6 +987,7 @@ class TestModelSimulation:
         ],
     )
     @pytest.mark.solver_related
+    @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
     def test_fit_n_feature_consistency_x(
         self,
         delta_n_features,
@@ -993,12 +1000,14 @@ class TestModelSimulation:
         """
         fixture = instantiate_base_regressor_subclass
         X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
+        model.solver_kwargs.update({"maxiter": 3})
         if delta_n_features == 1:
             X = jnp.concatenate((X, jnp.zeros((X.shape[0], 1))), axis=1)
         elif delta_n_features == -1:
             X = X[..., :-1]
+        validator = VALIDATOR_REGISTRY[model.__class__.__name__]
         with expectation:
-            model.fit(X, y, init_params=(true_params.coef, true_params.intercept))
+            model.fit(X, y, init_params=validator.from_model_params(true_params))
 
     @pytest.mark.parametrize(
         "delta_tp, expectation",
@@ -1019,6 +1028,7 @@ class TestModelSimulation:
         ],
     )
     @pytest.mark.solver_related
+    @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
     def test_fit_time_points_x(
         self, delta_tp, expectation, instantiate_base_regressor_subclass
     ):
@@ -1027,9 +1037,11 @@ class TestModelSimulation:
         """
         fixture = instantiate_base_regressor_subclass
         X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
+        model.solver_kwargs.update({"maxiter": 3})
         X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
+        validator = VALIDATOR_REGISTRY[model.__class__.__name__]
         with expectation:
-            model.fit(X, y, init_params=(true_params.coef, true_params.intercept))
+            model.fit(X, y, init_params=validator.from_model_params(true_params))
 
     @pytest.mark.parametrize(
         "delta_tp, expectation",
@@ -1050,6 +1062,7 @@ class TestModelSimulation:
         ],
     )
     @pytest.mark.solver_related
+    @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
     @pytest.mark.requires_x64
     def test_fit_time_points_y(
         self, delta_tp, expectation, instantiate_base_regressor_subclass
@@ -1062,8 +1075,9 @@ class TestModelSimulation:
         n_samples = y.shape[0] + delta_tp
         y_samp = min(n_samples, y.shape[0])
         y = jnp.zeros((n_samples,) + y.shape[1:]).at[:y_samp].set(y[:y_samp])
+        validator = VALIDATOR_REGISTRY[model.__class__.__name__]
         with expectation:
-            model.fit(X, y, init_params=(true_params.coef, true_params.intercept))
+            model.fit(X, y, init_params=validator.from_model_params(true_params))
 
     @pytest.mark.parametrize(
         "fill_val, expectation",
@@ -1084,11 +1098,13 @@ class TestModelSimulation:
         ],
     )
     @pytest.mark.solver_related
+    @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
     def test_fit_all_invalid_X(
         self, fill_val, expectation, instantiate_base_regressor_subclass
     ):
         fixture = instantiate_base_regressor_subclass
         X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
+        model.solver_kwargs.update({"maxiter": 3})
         X.fill(fill_val)
         with expectation:
             model.fit(X, y)
@@ -1102,7 +1118,7 @@ class TestModelSimulation:
 class TestModelValidator:
     @pytest.mark.parametrize(
         "n_params",
-        [0, 1, 2, 3, 4],
+        [0, 1, 2, 3, 5],
     )
     @pytest.mark.solver_related
     def test_validate_param_length(self, n_params, instantiate_base_regressor_subclass):
@@ -1130,14 +1146,11 @@ class TestModelValidator:
             else does_not_raise()
         )
 
+        flat_params = jax.tree_util.tree_leaves(true_params)
         if n_params < INIT_PARAM_LENGTH[model_name]:
-            # Convert GLMParams to tuple for slicing
-            params_tuple = (true_params.coef, true_params.intercept)
-            init_params = params_tuple[:n_params]
+            init_params = flat_params[:n_params]
         else:
-            # Convert GLMParams to tuple for concatenation
-            params_tuple = (true_params.coef, true_params.intercept)
-            init_params = params_tuple + (true_params.coef,) * (
+            init_params = flat_params + [flat_params[-1]] * (
                 n_params - INIT_PARAM_LENGTH[model_name]
             )
         validator = VALIDATOR_REGISTRY[model_name]

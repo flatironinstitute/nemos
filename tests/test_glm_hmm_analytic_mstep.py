@@ -49,18 +49,18 @@ def generate_data_gaussian(request):
 
     is_population_glm = len(y_shape) > 0
     if is_population_glm:
-        rate = (
+        rate = inv_link_func(
             jnp.einsum("ij, jni->in", X, glm_params.coef[..., states])
             + glm_params.intercept[..., states].T
         )
     else:
-        rate = (
+        rate = inv_link_func(
             jnp.einsum("ij, ji->i", X, glm_params.coef[..., states])
             + glm_params.intercept[..., states].T
         )
 
     n_neurons = max(sum(y_shape), 1)
-    std = np.random.randn(n_states, n_neurons)
+    std = np.random.randn(n_states, n_neurons) * 0.1
     std = std[states]
     if not is_population_glm:
         std = jnp.squeeze(std)
