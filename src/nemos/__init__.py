@@ -9,6 +9,7 @@ from . import (
     exceptions,
     fetch,
     glm,
+    glm_hmm,
     identifiability_constraints,
     observation_models,
     pytrees,
