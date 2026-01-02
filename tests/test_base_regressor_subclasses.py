@@ -889,7 +889,8 @@ class TestObservationModel:
     [
         {"model": m, "obs_model": "Poisson", "simulate": True}
         # TODO: REMOVE WHEN FIT IS IMPLEMENTED
-        for m in MODEL_REGISTRY.keys() if m != "GLMHMM"
+        for m in MODEL_REGISTRY.keys()
+        if m != "GLMHMM"
     ],
     indirect=True,
 )
