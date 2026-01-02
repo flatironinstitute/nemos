@@ -593,6 +593,102 @@ class TestNegativeBinomialObservations:
         assert repr(obs) == f"NegativeBinomialObservations(scale=1.0)"
 
 
+class TestGaussianObservations:
+
+    def test_get_params(self, gaussian_observations):
+        """Test get_params() returns expected values."""
+        observation_model = gaussian_observations()
+
+        assert observation_model.get_params() == {}
+
+    def test_deviance_against_statsmodels(self, gaussianGLM_model_instantiation):
+        """
+        Compare fitted parameters to statsmodels.
+        Assesses if the model estimates are close to statsmodels' results.
+        """
+        _, y, model, _, firing_rate = gaussianGLM_model_instantiation
+        dev = sm.families.Gaussian().deviance(y, firing_rate)
+        dev_model = model.observation_model.deviance(y, firing_rate).sum()
+        if not np.allclose(dev, dev_model):
+            raise ValueError("Deviance doesn't match statsmodels!")
+
+    def test_loglikelihood_against_statsmodels(self, gaussianGLM_model_instantiation):
+        """
+        Compare log-likelihood to scipy.
+        Assesses if the model estimates are close to statsmodels' results.
+        """
+        _, y, model, _, firing_rate = gaussianGLM_model_instantiation
+        ll_model = model.observation_model.log_likelihood(y, firing_rate)
+        ll_sms = sm.families.Gaussian().loglike(y, firing_rate) / y.shape[0]
+        if not np.allclose(ll_model, ll_sms):
+            raise ValueError("Log-likelihood doesn't match statsmodels!")
+
+    @pytest.mark.parametrize("scale", [1.0, 1.5, 0.1])
+    @pytest.mark.requires_x64
+    def test_loglikelihood_per_sample_against_statsmodels(
+        self, gaussianGLM_model_instantiation, scale
+    ):
+        """
+        Compare log-likelihood to scipy.
+        Assesses if the model estimates are close to statsmodels' results.
+        """
+        _, y, model, _, firing_rate = gaussianGLM_model_instantiation
+        ll_model = model.observation_model.log_likelihood(
+            y, firing_rate, aggregate_sample_scores=lambda x: x, scale=scale
+        )
+        ll_sms = sm.families.Gaussian().loglike_obs(y, firing_rate, scale=scale)
+        if not np.allclose(ll_model, ll_sms):
+            raise ValueError("Log-likelihood doesn't match statsmodels!")
+
+    @pytest.mark.parametrize("scale", [1.0, 1.5, 0.1])
+    def test_emission_probability(self, gaussianGLM_model_instantiation, scale):
+        """
+        Test the gamma emission probability.
+
+        Check that the emission probability is set to jax.random.gamma.
+        """
+        _, _, model, _, _ = gaussianGLM_model_instantiation
+        key_array = jax.random.key(123)
+        actual = model.observation_model.sample_generator(
+            key_array, np.arange(1, 11), scale=scale
+        )
+        expected = jax.random.normal(key_array, shape=(10,)) * np.sqrt(
+            scale
+        ) + np.arange(1, 11)
+        if not jnp.all(actual == expected):
+            raise ValueError(
+                "The emission probability should output the results of a call to jax.random.normal."
+            )
+
+    @pytest.mark.requires_x64
+    def test_pseudo_r2_vs_statsmodels(self, gaussianGLM_model_instantiation):
+        """
+        Compare log-likelihood to scipy.
+        Assesses if the model estimates are close to statsmodels' results.
+        """
+        X, y, model, _, firing_rate = gaussianGLM_model_instantiation
+
+        # statsmodels mcfadden
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", message="The InversePower link function does"
+            )
+            mdl = sm.GLM(y, sm.add_constant(X), family=sm.families.Gaussian()).fit()
+        pr2_sms = mdl.pseudo_rsquared("mcf")
+
+        # set params
+        pr2_model = model.observation_model.pseudo_r2(
+            y, mdl.mu, score_type="pseudo-r2-McFadden", scale=mdl.scale
+        )
+
+        if not np.allclose(pr2_model, pr2_sms):
+            raise ValueError("Log-likelihood doesn't match statsmodels!")
+
+    def test_repr_out(self):
+        obs = nmo.observation_models.GaussianObservations()
+        assert repr(obs) == f"GaussianObservations()"
+
+
 @pytest.mark.parametrize("observation_model_string", AVAILABLE_OBSERVATION_MODELS)
 class TestCommonObservationModels:
 
