@@ -1,13 +1,14 @@
 """Initialization functions and related utility functions."""
 
 import inspect
-from typing import Callable, Literal, Optional, Tuple
+from typing import Any, Callable, Literal, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
 from numpy.typing import NDArray
 
 from ..glm.params import GLMUserParams
+from ..type_casting import is_numpy_array_like
 from ..typing import DESIGN_INPUT_TYPE
 from .params import GLMHMMUserParams
 
@@ -410,3 +411,50 @@ def _resolve_init_func(func_name: str, init_func: Callable | str) -> INIT_FUNCTI
         "- A callable with signature: (n_states: int, X: DESIGN_INPUT_TYPE, "
         "y: jnp.ndarray, key: jax.random.PRNGKey, **kwargs)"
     )
+
+
+def resolve_dirichlet_priors(
+    alphas: Any, expected_shape: Tuple[int, ...]
+) -> jnp.ndarray | None:
+    """Validate and convert Dirichlet prior alpha parameters.
+
+    Parameters
+    ----------
+    alphas :
+        Dirichlet prior alpha parameters. Can be None or array-like.
+    expected_shape :
+        Expected shape of the alpha parameter array.
+
+    Returns
+    -------
+    jnp.ndarray | None
+        Validated alpha parameters as a JAX array, or None if input is None.
+
+    Raises
+    ------
+    ValueError
+        If the shape doesn't match expected_shape or if any alpha < 1.
+    TypeError
+        If alphas is not None or array-like.
+    """
+    if alphas is None:
+        return None
+    elif is_numpy_array_like(alphas)[1]:
+        alphas = jnp.asarray(alphas, dtype=float)
+        if alphas.shape != expected_shape:
+            raise ValueError(
+                f"Dirichlet prior alpha parameters for initial state probabilities "
+                f"must have shape ``{expected_shape}``, "
+                f"but got shape ``{alphas.shape}``."
+            )
+        if not jnp.all(alphas >= 1):
+            raise ValueError(
+                f"Dirichlet prior alpha parameters must be >= 1, but got values < 1"
+                f":\n{alphas}"
+            )
+        return alphas
+    else:
+        raise TypeError(
+            f"Invalid type for Dirichlet prior alpha parameters: ``{type(alphas).__name__}``. "
+            f"Must be None or an array-like object of shape ``{expected_shape}`` with strictly positive values."
+        )
