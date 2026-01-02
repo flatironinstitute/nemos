@@ -22,7 +22,7 @@ from ..pytrees import FeaturePytree
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
 from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
 from ..type_casting import cast_to_jax, support_pynapple
-from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength, SolverState, StepResult
+from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength, SolverState
 from ..utils import format_repr
 from .initialize_parameters import initialize_intercept_matching_mean_rate
 from .params import GLMParams, GLMUserParams
@@ -905,7 +905,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         *args,
         n_samples: Optional[int] = None,
         **kwargs,
-    ) -> StepResult:
+    ) -> Tuple[GLMParams, SolverState]:
         """Update the model parameters and solver state.
 
         This method performs a single optimization step using the model's current solver.
