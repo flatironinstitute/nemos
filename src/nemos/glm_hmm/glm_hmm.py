@@ -943,7 +943,11 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         filename: Union[str, Path],
     ):
         """Save model params."""
-        pass
+        # initialize saving dictionary
+        fit_attrs = self._get_fit_state()
+        fit_attrs.pop("solver_state_")
+        string_attrs = ["inverse_link_function"]
+        self._save_params(filename, fit_attrs, string_attrs)
 
     # SVRG specific optimization not available.
     def _get_optimal_solver_params_config(self):
