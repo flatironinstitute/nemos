@@ -553,15 +553,16 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         self,
         X: DESIGN_INPUT_TYPE,
         y: Optional[jnp.ndarray] = None,
+        *args: jnp.ndarray,
         drop_nans: bool = True,
-    ) -> Tuple[dict[str, jnp.ndarray] | jnp.ndarray, jnp.ndarray | None]:
+    ) -> Tuple[dict[str, jnp.ndarray] | jnp.ndarray, jnp.ndarray, ...] | None:
         """Preprocess inputs before initializing state."""
         if drop_nans:
-            process = cast_to_jax(tree_utils.drop_nans)
-        else:
-            process = cast_to_jax(lambda *x: x)
+            res = tree_utils.drop_nans(X, y, *args)
+            X, y = res[:2]
+            args = res[2:]
 
-        X, y = process(X, y)
+        X, y = cast_to_jax(lambda *x: x)(X, y)
 
         data = X.data if isinstance(X, FeaturePytree) else X
 
@@ -578,7 +579,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
                 # Wrap into a GLM param structure.
                 self.regularizer.mask = GLMParams(self.regularizer.mask, None)
 
-        return data, y
+        return data, y, *args
 
     @abc.abstractmethod
     def _initialize_optimization_and_state(

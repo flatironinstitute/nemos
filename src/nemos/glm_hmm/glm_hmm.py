@@ -18,6 +18,7 @@ from ..base_regressor import BaseRegressor
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..observation_models import Observations
 from ..regularizer import GroupLasso, Lasso, Regularizer, Ridge
+from ..type_casting import is_pynapple_tsd
 from ..typing import (
     DESIGN_INPUT_TYPE,
     SolverState,
@@ -30,7 +31,12 @@ from .algorithm_configs import (
     prepare_mstep_nll_objective_param,
     prepare_mstep_nll_objective_scale,
 )
-from .expectation_maximization import GLMHMMState, em_glm_hmm, em_step
+from .expectation_maximization import (
+    GLMHMMState,
+    em_glm_hmm,
+    em_step,
+    initialize_new_session,
+)
 from .initialize_parameters import (
     INITIALIZATION_FN_DICT,
     _is_native_init_registry,
@@ -41,6 +47,19 @@ from .initialize_parameters import (
 )
 from .params import GLMHMMParams, GLMHMMUserParams
 from .validation import GLMHMMValidator
+
+
+def compute_is_new_session(time: NDArray, start: NDArray) -> jnp.ndarray:
+    """Compute new session indicator vector.
+
+    Parameters
+    ----------
+    time:
+        The timestamp associated to each sample.
+    start:
+        Start times of each new epoch/session.
+    """
+    return jax.numpy.zeros_like(time).at[jax.numpy.searchsorted(time, start)].set(1)
 
 
 class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
@@ -301,7 +320,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         # quick sanity check and assignment
         if isinstance(n_states, int) and n_states > 0:
             self._n_states = n_states
-            self._validator = GLMHMMValidator(n_states=n_states)
+            self._validator: GLMHMMValidator = GLMHMMValidator(n_states=n_states)
             return
 
         # further checks for other valid numeric types (like non-negative float with no-decimals)
@@ -594,6 +613,19 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         self._optimization_init_state = init_state_fn
         return init_state_fn()
 
+    @staticmethod
+    def _get_is_new_session(
+        X: DESIGN_INPUT_TYPE, y: ArrayLike | nap.Tsd | nap.TsdFrame
+    ) -> jnp.ndarray | None:
+        # define new session array
+        if is_pynapple_tsd(y):
+            is_new_session = compute_is_new_session(y.t, y.time_support.start)
+        elif is_pynapple_tsd(X):
+            is_new_session = compute_is_new_session(X.t, X.time_support.start)
+        else:
+            is_new_session = initialize_new_session(y.shape[0], None)
+        return is_new_session
+
     def fit(
         self,
         X: DESIGN_INPUT_TYPE,
@@ -601,7 +633,52 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         init_params: Optional[GLMHMMUserParams] = None,
     ) -> "GLMHMM":
         """Fit the GLM-HMM model to the data."""
-        pass
+        self._validator.validate_inputs(X=X, y=y)
+        is_new_session = self._get_is_new_session(X, y)
+
+        # validate the inputs & initialize solver
+        # initialize params if no params are provided
+        if init_params is None:
+            init_params = self._model_specific_initialization(X, y)
+        else:
+            init_params = self._validator.validate_and_cast_params(init_params)
+            self._validator.validate_consistency(init_params, X=X, y=y)
+
+        self._validator.feature_mask_consistency(
+            getattr(self, "_feature_mask", None), init_params
+        )
+
+        # filter for non-nans, grab data if needed
+        data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
+
+        # make sure is_new_session starts with a 1
+        is_new_session = is_new_session.at[0].set(True)
+
+        # set up optimization
+        self._initialize_optimization_and_state(data, y, init_params)
+
+        # run EM
+        (
+            fit_params,
+            self.solver_state_,
+        ) = self._optimization_run(
+            init_params, X=data, y=y, is_new_session=is_new_session
+        )
+
+        if self.solver_state_.iterations == self.maxiter:
+            warnings.warn(
+                "The fit did not converge. "
+                "Consider the following:"
+                "\n1) Enable float64 with ``jax.config.update('jax_enable_x64', True)``"
+                "\n2) Increase the ``maxiter`` parameter (max number of iterations of the EM) "
+                "or increase the ``tol`` parameter (tolerance).",
+                RuntimeWarning,
+            )
+
+        # assign fit attributes
+        self._set_model_params(fit_params)
+        self.dof_resid_ = self._estimate_resid_degrees_of_freedom(X)
+        return self
 
     def _estimate_resid_degrees_of_freedom(
         self, X: DESIGN_INPUT_TYPE, n_samples: Optional[int] = None
