@@ -1076,7 +1076,7 @@ class TestModelFit:
 class TestModelValidator:
     @pytest.mark.parametrize(
         "n_params",
-        [0, 1, 2, 3, 4],
+        [0, 1, 2, 3, 5],
     )
     @pytest.mark.solver_related
     def test_validate_param_length(self, n_params, instantiate_base_regressor_subclass):
@@ -1098,14 +1098,18 @@ class TestModelValidator:
             else does_not_raise()
         )
 
-        flat_params = jax.tree_util.tree_leaves(true_params)
+        validator = VALIDATOR_REGISTRY[model_name]
+
+        flat_params = jax.tree_util.tree_leaves(
+            validator.from_model_params(true_params)
+        )
         if n_params < INIT_PARAM_LENGTH[model_name]:
             init_params = flat_params[:n_params]
         else:
             init_params = flat_params + [flat_params[-1]] * (
                 n_params - INIT_PARAM_LENGTH[model_name]
             )
-        validator = VALIDATOR_REGISTRY[model_name]
+
         with expectation:
             params = validator.validate_and_cast_params(init_params)
             # check that params are set
