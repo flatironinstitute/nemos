@@ -51,11 +51,11 @@ Public attributes are stored as properties:
 - `regularizer_strength`: A float quantifying the amount of regularization.
 - `solver_name`: One of the supported solvers in the solver registry, currently "GradientDescent", "BFGS", "LBFGS", "ProximalGradient", "SVRG", and "NonlinearCG".
 - `solver_kwargs`: Extra keyword arguments to be passed at solver initialization.
-- `solver_init_state`, `solver_update`, `solver_run`: Read-only property with a partially evaluated `solver.init_state`, `solver.update` and, `solver.run` methods. The partial evaluation guarantees a consistent API for all solvers.
+- `optimization_init_state`, `optimization_update`, `optimization_run`: Read-only property with a partially evaluated `solver.init_state`, `solver.update` and, `solver.run` methods. The partial evaluation guarantees a consistent API for all solvers.
 
-When implementing a new subclass of `BaseRegressor`, the only attributes you must interact directly with are those that operate on the solver, i.e. `solver_init_state`, `solver_update`, `solver_run`.
+When implementing a new subclass of `BaseRegressor`, the only attributes you must interact directly with are those that run the optimization, i.e. `optimization_init_state`, `optimization_update`, `optimization_run`.
 
-Typically, in `YourRegressor` you will call `self.solver_init_state` at the parameter initialization step, `self.solver_run` in [`fit`](nemos.glm.GLM.fit), and `self.solver_update` in [`update`](nemos.glm.GLM.update).
+Typically, in `YourRegressor` you will call `self.optimization_init_state` at the parameter initialization step, `self.optimization_run` in [`fit`](nemos.glm.GLM.fit), and `self.optimization_update` in [`update`](nemos.glm.GLM.update).
 
 :::{admonition} Solvers
 :class: note
