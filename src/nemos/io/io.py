@@ -19,7 +19,7 @@ from .._observation_model_builder import (
 )
 from .._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from ..glm import GLM, PopulationGLM
-from ..glm_hmm.glm_hmm import GLMHMM
+from ..glm_hmm import GLMHMM
 from ..utils import _get_name, _unflatten_dict, get_env_metadata
 from ..validation import _suggest_keys
 
