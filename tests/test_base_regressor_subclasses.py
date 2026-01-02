@@ -25,21 +25,25 @@ from nemos.inverse_link_function_utils import LINK_NAME_TO_FUNC
 MODEL_REGISTRY = {
     "GLM": nmo.glm.GLM,
     "PopulationGLM": nmo.glm.PopulationGLM,
+    "GLMHMM": nmo.glm_hmm.GLMHMM,
 }
 
 VALIDATOR_REGISTRY = {
     "GLM": GLMValidator(),
     "PopulationGLM": PopulationGLMValidator(),
+    "GLMHMM": GLMHMMValidator(n_states=3),
 }
 
 INIT_PARAM_LENGTH = {
     "GLM": 2,
     "PopulationGLM": 2,
+    "GLMHMM": 5,
 }
 
 DEFAULT_OBS_SHAPE = {
     "GLM": (500,),
     "PopulationGLM": (500, 3),
+    "GLMHMM": (500,),
 }
 
 HARD_CODED_GET_PARAMS_KEYS = {
@@ -60,15 +64,31 @@ HARD_CODED_GET_PARAMS_KEYS = {
         "solver_name",
         "feature_mask",
     },
+    "GLMHMM": {
+        "dirichlet_prior_alphas_init_prob",
+        "dirichlet_prior_alphas_transition",
+        "initialization_funcs",
+        "inverse_link_function",
+        "maxiter",
+        "n_states",
+        "observation_model",
+        "regularizer",
+        "regularizer_strength",
+        "seed",
+        "solver_kwargs",
+        "solver_name",
+        "tol",
+    },
 }
 
 # as of now, all models are glm type... in the future this may change.
 MODEL_WITH_LINK_FUNCTION_REGISTRY = {
     "GLM": nmo.glm.GLM,
     "PopulationGLM": nmo.glm.PopulationGLM,
+    "GLMHMM": nmo.glm_hmm.GLMHMM,
 }
 
-DEFAULTS = {"GLM": dict(), "PopulationGLM": dict()}
+DEFAULTS = {"GLM": dict(), "PopulationGLM": dict(), "GLMHMM": dict(n_states=3)}
 
 
 INSTANTIATE_MODEL_ONLY = [
@@ -823,14 +843,15 @@ class TestObservationModel:
     "instantiate_base_regressor_subclass",
     [
         {"model": m, "obs_model": "Poisson", "simulate": True}
-        for m in MODEL_REGISTRY.keys()
+        # TODO: REMOVE WHEN FIT IS IMPLEMENTED
+        for m in MODEL_REGISTRY.keys() if m != "GLMHMM"
     ],
     indirect=True,
 )
-class TestModelSimulation:
+class TestModelFit:
     @pytest.mark.parametrize(
         "n_params",
-        [0, 1, 2, 3, 4],
+        [0, 1, 2, 3, 5],
     )
     @pytest.mark.solver_related
     @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
@@ -1063,7 +1084,7 @@ class TestModelSimulation:
 class TestModelValidator:
     @pytest.mark.parametrize(
         "n_params",
-        [0, 1, 2, 3, 5],
+        [0, 1, 2, 3, 4],
     )
     @pytest.mark.solver_related
     def test_validate_param_length(self, n_params, instantiate_base_regressor_subclass):
