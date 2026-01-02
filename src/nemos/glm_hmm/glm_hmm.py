@@ -119,7 +119,6 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         self.solver_state_: NamedTuple | None = None
         self.scale_: jnp.ndarray | None = None
         self.dof_resid_: int | None = None
-        self.aux_ = None
 
     @property
     def n_states(self) -> int:
