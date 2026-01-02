@@ -30,6 +30,7 @@ MODEL_REGISTRY = {
     "GLM": nmo.glm.GLM,
     "ClassifierGLM": nmo.glm.ClassifierGLM,
     "PopulationGLM": nmo.glm.PopulationGLM,
+    "GLMHMM": nmo.glm_hmm.GLMHMM,
 }
 
 VALIDATOR_REGISTRY = {
@@ -39,6 +40,7 @@ VALIDATOR_REGISTRY = {
         extra_params={"n_classes": 4}
     ),
     "PopulationGLM": PopulationGLMValidator(),
+    "GLMHMM": GLMHMMValidator(n_states=3),
 }
 
 INIT_PARAM_LENGTH = {
@@ -46,6 +48,7 @@ INIT_PARAM_LENGTH = {
     "ClassifierGLM": 2,
     "ClassifierPopulationGLM": 2,
     "PopulationGLM": 2,
+    "GLMHMM": 5,
 }
 
 DEFAULT_OBS_SHAPE = {
@@ -53,6 +56,7 @@ DEFAULT_OBS_SHAPE = {
     "ClassifierGLM": (500,),
     "ClassifierPopulationGLM": (500, 3),
     "PopulationGLM": (500, 3),
+    "GLMHMM": (500,),
 }
 
 HARD_CODED_GET_PARAMS_KEYS = {
@@ -89,6 +93,21 @@ HARD_CODED_GET_PARAMS_KEYS = {
         "solver_name",
         "feature_mask",
     },
+    "GLMHMM": {
+        "dirichlet_prior_alphas_init_prob",
+        "dirichlet_prior_alphas_transition",
+        "initialization_funcs",
+        "inverse_link_function",
+        "maxiter",
+        "n_states",
+        "observation_model",
+        "regularizer",
+        "regularizer_strength",
+        "seed",
+        "solver_kwargs",
+        "solver_name",
+        "tol",
+    },
 }
 
 OBSERVATION_PER_MODEL = {
@@ -105,6 +124,7 @@ MODEL_WITH_LINK_FUNCTION_REGISTRY = {
     "ClassifierGLM": nmo.glm.ClassifierGLM,
     "ClassifierPopulationGLM": nmo.glm.ClassifierPopulationGLM,
     "PopulationGLM": nmo.glm.PopulationGLM,
+    "GLMHMM": nmo.glm_hmm.GLMHMM,
 }
 
 DEFAULTS = {
@@ -112,6 +132,7 @@ DEFAULTS = {
     "PopulationGLM": dict(),
     "ClassifierGLM": dict(),
     "ClassifierPopulationGLM": dict(),
+    "GLMHMM": dict(n_states=3),
 }
 
 
@@ -867,14 +888,15 @@ class TestObservationModel:
     "instantiate_base_regressor_subclass",
     [
         {"model": m, "obs_model": "Poisson", "simulate": True}
-        for m in MODEL_REGISTRY.keys()
+        # TODO: REMOVE WHEN FIT IS IMPLEMENTED
+        for m in MODEL_REGISTRY.keys() if m != "GLMHMM"
     ],
     indirect=True,
 )
-class TestModelSimulation:
+class TestModelFit:
     @pytest.mark.parametrize(
         "n_params",
-        [0, 1, 2, 3, 4],
+        [0, 1, 2, 3, 5],
     )
     @pytest.mark.solver_related
     @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
@@ -1118,7 +1140,7 @@ class TestModelSimulation:
 class TestModelValidator:
     @pytest.mark.parametrize(
         "n_params",
-        [0, 1, 2, 3, 5],
+        [0, 1, 2, 3, 4],
     )
     @pytest.mark.solver_related
     def test_validate_param_length(self, n_params, instantiate_base_regressor_subclass):
