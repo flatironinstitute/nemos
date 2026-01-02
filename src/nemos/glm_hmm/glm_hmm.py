@@ -5,6 +5,7 @@ from numbers import Number
 from pathlib import Path
 from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import pynapple as nap
@@ -23,6 +24,13 @@ from ..typing import (
     StepResult,
 )
 from ..utils import format_repr
+from .algorithm_configs import (
+    get_analytical_scale_update,
+    prepare_estep_log_likelihood,
+    prepare_mstep_nll_objective_param,
+    prepare_mstep_nll_objective_scale,
+)
+from .expectation_maximization import GLMHMMState, em_glm_hmm, em_step
 from .initialize_parameters import (
     INITIALIZATION_FN_DICT,
     _is_native_init_registry,
@@ -527,7 +535,60 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         init_params: GLMHMMParams,
     ) -> SolverState:
         """Initialize the EM functions."""
-        pass
+        # glm params m-step setup
+        is_population = y.ndim > 1
+        log_likelihood = prepare_estep_log_likelihood(
+            is_population_glm=is_population,
+            observation_model=self.observation_model,
+        )
+        objective = prepare_mstep_nll_objective_param(
+            is_population_glm=is_population,
+            observation_model=self._observation_model,
+            inverse_link_function=self._inverse_link_function,
+        )
+        _, _, glm_params_update_fn = self._instantiate_solver(objective)
+
+        scale_update_fn = get_analytical_scale_update(
+            is_population_glm=is_population, observation_model=self._observation_model
+        )
+        if scale_update_fn is None:
+            objective_scale = prepare_mstep_nll_objective_scale(
+                is_population_glm=is_population,
+                observation_model=self._observation_model,
+            )
+            _, _, scale_update_fn = self._instantiate_solver(objective_scale)
+
+        # cannot wrap is_new_session, that's to be calculated at each update form the provided X and y.
+        # for consistency, do not make a partial of that argument in run as well.
+        self._optimization_run = eqx.Partial(
+            em_glm_hmm,
+            inverse_link_function=self.inverse_link_function,
+            log_likelihood_func=log_likelihood,
+            m_step_fn_glm_params=glm_params_update_fn,
+            m_step_fn_glm_scale=scale_update_fn,
+            maxiter=self.maxiter,
+            tol=self.tol,
+        )
+
+        self._optimization_update = eqx.Partial(
+            em_step,
+            inverse_link_function=self.inverse_link_function,
+            log_likelihood_func=log_likelihood,
+            m_step_fn_glm_params=glm_params_update_fn,
+            m_step_fn_glm_scale=scale_update_fn,
+        )
+
+        def init_state_fn(*args, **kwargs) -> SolverState:
+            state = GLMHMMState(
+                data_log_likelihood=-jnp.array(jnp.inf),
+                previous_data_log_likelihood=-jnp.array(jnp.inf),
+                log_likelihood_history=jnp.full(self.maxiter, jnp.nan),
+                iterations=0,
+            )
+            return state
+
+        self._optimization_init_state = init_state_fn
+        return init_state_fn()
 
     def fit(
         self,
