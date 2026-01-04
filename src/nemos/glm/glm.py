@@ -220,7 +220,6 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         self.aux_ = None
         self.optim_info_ = None
 
-
     def __sklearn_tags__(self):
         """Return GLM specific estimator tags."""
         tags = super().__sklearn_tags__()
@@ -1082,6 +1081,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         # initialize saving dictionary
         fit_attrs = self._get_fit_state()
         fit_attrs.pop("solver_state_")
+        fit_attrs.pop("optim_info_")
         string_attrs = ["inverse_link_function"]
 
         super().save_params(filename, fit_attrs, string_attrs)
@@ -1372,6 +1372,7 @@ class PopulationGLM(GLM):
         >>> import jax.numpy as jnp
         >>> import numpy as np
         >>> from nemos.glm import PopulationGLM
+        >>> np.random.seed(0)
         >>> # Define predictors (X), weights, and neural activity (y)
         >>> num_samples, num_features, num_neurons = 100, 3, 2
         >>> X = np.random.normal(size=(num_samples, num_features))

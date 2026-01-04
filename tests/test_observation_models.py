@@ -674,9 +674,16 @@ class TestGaussianObservations:
                 "ignore", message="The InversePower link function does"
             )
             mdl = sm.GLM(y, sm.add_constant(X), family=sm.families.Gaussian()).fit()
-        pr2_sms = mdl.pseudo_rsquared("mcf")
 
-        # set params
+        # NOTE - statsmodels has a bug when computing the linear gaussian PR2
+        # 1. It re-computes the scale for the ll_model
+        # 2. It uses the `mdl.scale` for ll_null
+        # But `mdl.scale` and the recomputed scale do not match.
+        # So, instead of using mdl.pseudo_r2("mcf") compute directly:
+        llnull = mdl.llnull
+        llmodel = mdl.family.loglike(y, mdl.mu, scale=mdl.scale)
+        pr2_sms = 1 - llmodel / llnull
+
         pr2_model = model.observation_model.pseudo_r2(
             y, mdl.mu, score_type="pseudo-r2-McFadden", scale=mdl.scale
         )

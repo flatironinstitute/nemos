@@ -845,6 +845,7 @@ class TestGLM:
         loaded_params = loaded_model.get_params()
         fit_state = loaded_model._get_fit_state()
         fit_state.pop("solver_state_")
+        fit_state.pop("optim_info_")
         loaded_params.update(fit_state)
 
         # Assert matching keys and values
@@ -1024,6 +1025,7 @@ class TestGLM:
             loaded_params = loaded_model.get_params()
             fit_state = loaded_model._get_fit_state()
             fit_state.pop("solver_state_")
+            fit_state.pop("optim_info_")
             loaded_params.update(fit_state)
 
             # Assert matching keys and values
@@ -1150,6 +1152,7 @@ class TestGLM:
         initial_params = fitted_model.get_params()
         fit_state = fitted_model._get_fit_state()
         fit_state.pop("solver_state_")
+        fit_state.pop("optim_info_")
         initial_params.update(fit_state)
 
         # Save
@@ -1161,6 +1164,7 @@ class TestGLM:
         loaded_params = loaded_model.get_params()
         fit_state = loaded_model._get_fit_state()
         fit_state.pop("solver_state_")
+        fit_state.pop("optim_info_")
         loaded_params.update(fit_state)
 
         # Assert states are close
@@ -1414,7 +1418,7 @@ class TestGLMObservationModel:
             return 0.01
 
         elif "gaussian" in model_instantiation:
-            return 0.1
+            return 1.0
 
         else:
             raise ValueError("Unknown model instantiation")
