@@ -148,7 +148,7 @@ def test_validate_lower_dimensional_data_X(instantiate_base_regressor_subclass):
         y = y[None]
     err_msg = "X must be 2-dimensional"
     with pytest.raises(ValueError, match=err_msg):
-        model._validate(X, y, model._model_specific_initialization(X, y))
+        model._validate(X, y, _zero_init_params(X, y))
 
 
 @pytest.mark.parametrize(
@@ -167,7 +167,7 @@ def test_preprocess_fit_higher_dimensional_data_y(instantiate_base_regressor_sub
     else:
         err_msg = "y must be 1-dimensional"
     with pytest.raises(ValueError, match=err_msg):
-        model._validate(X, y, model._model_specific_initialization(X, y))
+        model._validate(X, y, _zero_init_params(X, y))
 
 
 @pytest.mark.parametrize(
@@ -183,8 +183,8 @@ def test_validate_higher_dimensional_data_X(instantiate_base_regressor_subclass)
     y = jnp.array([1, 1])
     if is_population_model(model):
         y = y[None]
-    with pytest.raises(ValueError, match="X must be 2-dimensional\\."):
-        model._validate(X, y, model._model_specific_initialization(X, y))
+    with pytest.raises(ValueError, match="X must be 2-dimensional"):
+        model._validate(X, y, _zero_init_params(X, y))
 
 
 @pytest.mark.parametrize(
@@ -368,6 +368,41 @@ class TestModelCommons:
             regularizer_strength=1.0,
         )
         model.fit(X, y)
+
+    @pytest.mark.parametrize(
+        "fill_val, expectation",
+        [
+            (0, does_not_raise()),
+            (
+                jnp.inf,
+                pytest.raises(
+                    ValueError, match="At least a NaN or an Inf at all sample points"
+                ),
+            ),
+            (
+                jnp.nan,
+                pytest.raises(
+                    ValueError, match="At least a NaN or an Inf at all sample points"
+                ),
+            ),
+        ],
+    )
+    @pytest.mark.solver_related
+    def test_initialize_solver_all_invalid_X(
+        self, fill_val, expectation, instantiate_base_regressor_subclass
+    ):
+        fixture = instantiate_base_regressor_subclass
+        X, model, true_params = fixture.X, fixture.model, fixture.params
+        y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        y = _add_zeros(y)
+        X.fill(fill_val)
+        with expectation:
+            params = model.initialize_params(X, y)
+            init_state = model.initialize_solver_and_state(X, y, params)
+            # optimistix solvers do not have a velocity attr
+            assert getattr(
+                init_state, "velocity", model._validator.to_model_params(params)
+            ) == model._validator.to_model_params(params)
 
     @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso", "ElasticNet"])
     def test_reg_strength_reset(self, reg, instantiate_base_regressor_subclass):
@@ -1119,7 +1154,8 @@ class TestModelValidator:
         """
         fixture = instantiate_base_regressor_subclass
         X, model, true_params = fixture.X, fixture.model, fixture.params
-        y = np.zeros(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        y = _add_zeros(y)
         validator = VALIDATOR_REGISTRY[model.__class__.__name__]
         params = model.initialize_params(X, y)
         params = validator.to_model_params(params)

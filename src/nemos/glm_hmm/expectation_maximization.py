@@ -10,7 +10,6 @@ from numpy.typing import NDArray
 
 from ..glm.params import GLMParams
 from ..tree_utils import pytree_map_and_reduce
-from ..typing import Aux, SolverState
 
 Array = NDArray | jax.numpy.ndarray
 
@@ -18,9 +17,6 @@ Array = NDArray | jax.numpy.ndarray
 class GLMHMMState(eqx.Module):
     """State class for the GLMHHM EM-algorithm."""
 
-    log_initial_prob: Array
-    log_transition_matrix: Array
-    glm_params: GLMParams  # (coef, intercept)
     data_log_likelihood: float | Array
     previous_data_log_likelihood: float | Array
     log_likelihood_history: Array

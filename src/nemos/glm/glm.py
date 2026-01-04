@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import warnings
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Literal, Optional, Tuple, Union
 
@@ -23,7 +22,7 @@ from ..pytrees import FeaturePytree
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
 from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
 from ..type_casting import cast_to_jax, support_pynapple
-from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength, SolverState
+from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength, SolverState, StepResult
 from ..utils import format_repr
 from .initialize_parameters import initialize_intercept_matching_mean_rate
 from .params import GLMParams, GLMUserParams
@@ -267,7 +266,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
                 "This GLM instance is not fitted yet. Call 'fit' with appropriate arguments."
             )
 
-    def _predict(self, params: GLMParams, X: jnp.ndarray) -> jnp.ndarray:
+    def _predict(
+        self, params: GLMParams, X: Union[dict[str, jnp.ndarray], jnp.ndarray]
+    ) -> jnp.ndarray:
         """
         Predicts firing rates based on given parameters and design matrix.
 
@@ -646,7 +647,6 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
 
         """
         self._validator.validate_inputs(X, y)
-        init_params = self.initialize_params(X, y, init_params)
 
         # initialize params if no params are provided
         if init_params is None:
@@ -858,64 +858,6 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         self,
         X: dict[str, jnp.ndarray] | jnp.ndarray,
         y: jnp.ndarray,
-        init_params: Optional[Tuple[jnp.ndarray | dict, jnp.ndarray]] = None,
-    ) -> GLMParams:
-        """
-        Initialize the model parameters for the optimization process.
-
-        This method prepares the initializes model parameters if they are not provided. It is typically called
-        before starting the optimization process to ensure that all necessary
-        components and states are correctly configured.
-
-        Parameters
-        ----------
-        X :
-            The predictors used in the model fitting process. This can include feature matrices or other structures
-            compatible with the model's design.
-        y :
-            The response variables or outputs corresponding to the predictors. Used to initialize parameters when
-            they are not provided.
-        init_params :
-            Initial parameters for the model. If not provided, they will be initialized based on the input data X and y.
-            A tuple (coefficients, intercept).
-
-        Returns
-        -------
-        ModelParams
-            The initialized model parameters
-
-        Raises
-        ------
-        ValueError
-            If ``params`` is not of length two.
-        ValueError
-            If dimensionality of ``init_params`` are not correct.
-        ValueError
-            If ``X`` is not two-dimensional.
-        ValueError
-            If ``y`` is not correct (1D for GLM, 2D for populationGLM).
-
-        TypeError
-            If ``params`` are not array-like when provided.
-        TypeError
-            If ``init_params[i]`` cannot be converted to jnp.ndarray for all i
-
-        Examples
-        --------
-        >>> import numpy as np
-        >>> import nemos as nmo
-        >>> X, y = np.random.normal(size=(10, 2)), np.random.uniform(size=10)
-        >>> model = nmo.glm.GLM()
-        >>> params = model.initialize_params(X, y)
-        >>> opt_state = model.initialize_solver_and_state(X, y, params)
-        >>> # Now ready to run optimization or update steps
-        """
-        return super().initialize_params(X, y, init_params)
-
-    def initialize_solver_and_state(
-        self,
-        X: dict[str, jnp.ndarray] | jnp.ndarray,
-        y: jnp.ndarray,
         init_params: GLMParams,
     ) -> SolverState:
         """Initialize the solver by instantiating its init_state, update and, run methods.
@@ -1002,6 +944,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             Updated model parameters (coefficients, intercepts).
         state
             Updated optimizer state.
+
         Raises
         ------
         ValueError
@@ -1033,7 +976,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         params = self._validator.to_model_params(params)
 
         # perform a one-step update
-        updated_params, updated_state, aux  = self.solver_update(
+        updated_params, updated_state, aux = self.solver_update(
             params, opt_state, data, y, *args, **kwargs
         )
 
@@ -1049,6 +992,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         self.scale_ = self.observation_model.estimate_scale(
             y, self._predict(updated_params, data), dof_resid=self.dof_resid_
         )
+
         return self._validator.from_model_params(updated_params), updated_state
 
     def _get_optimal_solver_params_config(self):

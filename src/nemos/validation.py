@@ -4,7 +4,7 @@ import abc
 import difflib
 import warnings
 from dataclasses import dataclass
-from typing import Any, Callable, Generic, List, Optional, Tuple, TypeVar, Union
+from typing import Any, Callable, Generic, List, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -15,11 +15,6 @@ from .base_class import Base
 from .pytrees import FeaturePytree
 from .tree_utils import get_valid_multitree, pytree_map_and_reduce
 from .typing import DESIGN_INPUT_TYPE, ModelParamsT, UserProvidedParamsT
-
-# User provided init_params (e.g. for GLMs Tuple[array, array])
-UserProvidedParamsT = TypeVar("UserProvidedParamsT")
-# Model internal representation (e.g. for GLMs nemos.glm.glm.GLMParams)
-ModelParamsT = TypeVar("ModelParamsT")
 
 
 def error_invalid_entry(*pytree: Any):
@@ -566,8 +561,6 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
         The model class name (string, used for error messages).
     params_validation_sequence :
         Names of parameter validation methods to call in order.
-    validation_sequence_kwargs :
-        Keyword arguments for each validation method (None = no kwargs).
     """
 
     expected_param_dims: Tuple[int] = None
@@ -637,7 +630,6 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
         if hasattr(params, "ndim"):
             return [params]
         return list(params)
-
 
     def check_array_dimensions(
         self,
@@ -760,6 +752,7 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
 
         for method_name, method_kwargs in self.params_validation_sequence:
             method_kwargs = {} if method_kwargs is None else method_kwargs
+            # Merge default kwargs with any user-provided kwargs
             merged_kwargs = {**method_kwargs, **validation_kwargs}
             validated_params = getattr(self, method_name)(
                 validated_params, **merged_kwargs
@@ -853,139 +846,8 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
         """
         pass
 
-    def validate_inputs(
-        self, X: Optional[DESIGN_INPUT_TYPE] = None, y: Optional[jnp.ndarray] = None
-    ):
-        """
-        Validate input data dimensions and sample consistency.
-
-        Checks that X and y have the expected dimensionality (as specified by
-        X_dimensionality and y_dimensionality) and that they have the same
-        number of samples along axis 0.
-
-        Parameters
-        ----------
-        X : DESIGN_INPUT_TYPE, optional
-            Input features. Should have dimensionality matching X_dimensionality.
-        y : jnp.ndarray, optional
-            Output/target data. Should have dimensionality matching y_dimensionality.
-
-        Raises
-        ------
-        ValueError
-            If X or y don't have the expected dimensionality.
-        ValueError
-            If X and y have different number of samples along axis 0.
-        ValueError
-            If all samples are invalid (contain only NaN/Inf values).
-        """
-        if y is not None:
-            check_tree_leaves_dimensionality(
-                y,
-                expected_dim=self.y_dimensionality,
-                err_message=f"y must be {self.y_dimensionality}-dimensional.",
-            )
-
-        if X is not None:
-            check_tree_leaves_dimensionality(
-                X,
-                expected_dim=self.X_dimensionality,
-                err_message=f"X must be {self.X_dimensionality}-dimensional.",
-            )
-
-        if X is not None and y is not None:
-            if y.shape[0] != X.shape[0]:
-                raise ValueError(
-                    "X and y must have the same number of samples (same length along axis 0). "
-                    f"X has {X.shape[0]} samples, "
-                    f"y has {y.shape[0]} samples instead!"
-                )
-        # error if all samples are invalid
-        error_all_invalid(X, y)
-
-    @abc.abstractmethod
-    def validate_consistency(
-        self,
-        params: ModelParamsT,
-        X: Optional[DESIGN_INPUT_TYPE] = None,
-        y: Optional[jnp.ndarray] = None,
-    ):
-        """
-        Validate consistency between model parameters and input data.
-
-        This abstract method should be implemented by subclasses to check that
-        model parameters are compatible with the provided input data. For example,
-        checking that the number of features in parameters matches the number of
-        features in X, or that the number of neurons in parameters matches the
-        neuron dimension in y.
-
-        Parameters
-        ----------
-        params : ModelParamsT
-            Model parameters in their validated structure (e.g., GLMParams).
-        X : DESIGN_INPUT_TYPE, optional
-            Input features to validate against parameters.
-        y : jnp.ndarray, optional
-            Output/target data to validate against parameters.
-
-        Raises
-        ------
-        ValueError
-            If parameters and inputs are inconsistent (e.g., mismatched dimensions,
-            incompatible structures).
-        """
-        pass
-
     def __repr__(self):
         """Small repr for the validator class."""
         return utils.format_repr(
             self, multiline=True, use_name_keys=["to_model_params", "from_model_params"]
         )
-
-    def validate_and_cast_feature_mask(
-        self,
-        feature_mask: Union[dict[str, jnp.ndarray], jnp.ndarray],
-        params: Optional[ModelParamsT] = None,
-        data_type: Optional[jnp.dtype] = None,
-    ) -> Union[dict[str, jnp.ndarray], jnp.ndarray]:
-        """
-        Validate and cast a feature mask to JAX arrays.
-
-        Validates that the feature mask contains only 0s and 1s, then converts
-        it to JAX arrays with the specified data type. Subclasses can extend
-        this to add parameter-specific validation (e.g., checking that mask
-        shape matches parameter dimensions).
-
-        Parameters
-        ----------
-        feature_mask : dict[str, jnp.ndarray] or jnp.ndarray
-            Feature mask indicating which features are used. Must contain only 0s and 1s.
-        params : ModelParamsT, optional
-            Model parameters to validate mask against. If None, only validates
-            mask values (0s and 1s) without checking consistency with parameters.
-        data_type : jnp.dtype, optional
-            Target data type for the mask arrays. Defaults to float.
-
-        Returns
-        -------
-        dict[str, jnp.ndarray] or jnp.ndarray
-            The validated and cast feature mask.
-
-        Raises
-        ------
-        ValueError
-            If feature_mask contains values other than 0 or 1.
-        """
-        if pytree_map_and_reduce(
-            lambda x: jnp.any(jnp.logical_and(x != 0, x != 1)), any, feature_mask
-        ):
-            raise ValueError("'feature_mask' must contain only 0s and 1s!")
-
-        # cast to jax - default to float if not specified
-        if data_type is None:
-            data_type = float
-        feature_mask = jax.tree_util.tree_map(
-            lambda x: jnp.asarray(x, dtype=data_type), feature_mask
-        )
-
-        return feature_mask

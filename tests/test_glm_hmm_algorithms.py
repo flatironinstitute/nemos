@@ -217,7 +217,7 @@ def prepare_solver_for_m_step_single_neuron(
         y,
         initial_prob,
         transition_prob,
-        (coef, intercept),
+        GLMParams(coef, intercept),
         log_likelihood_func=likelihood,
         inverse_link_function=obs.default_inverse_link_function,
         is_new_session=new_sess.astype(bool),
@@ -1515,8 +1515,9 @@ class TestMStep:
             GLMParams(dummy_coef, dummy_intercept),
             is_new_session=is_new_session,
             m_step_fn_glm_params=lambda *a, **kw: (
-                GLMParams(dummy_coef, dummy_intercept),
-                None,
+                dummy_coef,
+                dummy_intercept,
+                dummy_aux,
             ),
             dirichlet_prior_alphas_init_prob=alphas_init,
             dirichlet_prior_alphas_transition=alphas_trans,
@@ -1967,9 +1968,6 @@ class TestConvergence:
         """Test that convergence checker detects convergence with small likelihood change."""
 
         state = GLMHMMState(
-            log_initial_prob=jnp.array([0.5, 0.5]),
-            log_transition_matrix=jnp.eye(2),
-            glm_params=GLMParams(jnp.zeros((2, 2)), jnp.zeros(2)),
             data_log_likelihood=-0.0,
             previous_data_log_likelihood=-0.0001,  # Very small change
             log_likelihood_history=jnp.zeros(1),
@@ -1986,9 +1984,6 @@ class TestConvergence:
         """Test that convergence checker detects non-convergence with large likelihood change."""
 
         state = GLMHMMState(
-            log_initial_prob=jnp.array([0.5, 0.5]),
-            log_transition_matrix=jnp.eye(2),
-            glm_params=GLMParams(jnp.zeros((2, 2)), jnp.zeros(2)),
             data_log_likelihood=-100.0,
             previous_data_log_likelihood=-130.0,  # Large change
             log_likelihood_history=jnp.zeros(1),
@@ -2002,9 +1997,6 @@ class TestConvergence:
         """Test convergence checker behavior on first iteration."""
 
         state = GLMHMMState(
-            log_initial_prob=jnp.array([0.5, 0.5]),
-            log_transition_matrix=jnp.eye(2),
-            glm_params=GLMParams(jnp.zeros((2, 2)), jnp.zeros(2)),
             data_log_likelihood=-jnp.inf,
             previous_data_log_likelihood=-jnp.inf,
             log_likelihood_history=jnp.zeros(1),

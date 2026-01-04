@@ -111,9 +111,10 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
     - [`PopulationGLM`](../glm/#nemos.glm.PopulationGLM): A population GLM implementation.
     """
 
+    _validator: RegressorValidator = None
+
     # overwrite this in subclasses if their objective functions return aux
     _has_aux: bool = False
-    _validator: RegressorValidator = None
 
     def __init__(
         self,
@@ -579,7 +580,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         pass
 
     @cast_to_jax
-    def initialize_params_and_solver(
+    def initialize_solver_and_state(
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
