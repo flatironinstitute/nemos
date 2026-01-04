@@ -985,7 +985,9 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         is_new_session = self._get_is_new_session(X, y)
 
         # cast to jax and find non-nans
-        X, y = cast_to_jax(tree_utils.drop_nans)(X, y)
+        X, y, is_new_session = tree_utils.drop_nans(X, y, is_new_session)
+        X, y = cast_to_jax(lambda *x: x)(X, y)
+        is_new_session = is_new_session.at[0].set(True)
 
         # grab the data
         data = X.data if isinstance(X, FeaturePytree) else X
