@@ -950,7 +950,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         # smooth with forward backward
         log_posteriors, _, _, _, _, _ = forward_backward(
             params=params,
-            X=X,
+            X=data,
             y=y,
             is_new_session=is_new_session,
             log_likelihood_func=prepare_estep_log_likelihood(
