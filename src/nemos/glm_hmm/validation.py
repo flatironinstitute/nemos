@@ -17,6 +17,28 @@ from ..typing import DESIGN_INPUT_TYPE
 from .params import GLMHMMParams, GLMHMMUserParams, GLMScale, HMMParams
 
 
+def has_nans_only_at_border(arr):
+    """Check if NaNs appear only at the start and end along axis=0."""
+    # Check which rows have any NaN values
+    is_nan = jnp.any(jnp.isnan(arr.reshape(arr.shape[0], -1)), axis=1)
+
+    # If no NaNs, it's valid
+    if not jnp.any(is_nan):
+        return True
+
+    # If all NaNs, it's valid
+    if jnp.all(is_nan):
+        return True
+
+    # Find first and last non-NaN positions
+    non_nan_indices = jnp.where(~is_nan)[0]
+    first_valid = non_nan_indices[0]
+    last_valid = non_nan_indices[-1]
+
+    # Check if there are any NaNs between first and last valid values
+    return not jnp.any(is_nan[first_valid : last_valid + 1])
+
+
 def to_glm_hmm_params(user_params: GLMHMMUserParams) -> GLMHMMParams:
     """Map from GLMHMMUserParams to GLMHMMParams.
 
@@ -295,13 +317,30 @@ class GLMHMMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         # (the forward-backward implementation assumes no nans in the inputs)
         if is_pynapple_tsd(X):
             # loop over epochs and check that nans are all at the border
-            pass
+            epoch_slices = [X.get_slice(ep) for ep in X.time_support]
+            y_array = y.d
+            is_continuous = all(
+                has_nans_only_at_border(X.d[s]) and has_nans_only_at_border(y_array[s])
+                for s in epoch_slices
+            )
         elif is_pynapple_tsd(y):
             # loop over epochs and check that nans are all at the border
-            pass
+            epoch_slices = [y.get_slice(ep) for ep in X.time_support]
+            is_continuous = all(
+                has_nans_only_at_border(X[s]) and has_nans_only_at_border(y.d[s])
+                for s in epoch_slices
+            )
         else:
             # check nans at the border
-            pass
+            is_continuous = has_nans_only_at_border(X) and has_nans_only_at_border(y)
+        if not is_continuous:
+            raise ValueError(
+                "GLM-HMM requires continuous time-series data. NaN values must only "
+                "appear at the beginning or end of the data, not in the middle. "
+                "Found NaN values within the time series, which would break the "
+                "forward-backward algorithm. Please ensure your data is continuous "
+                "or split it into separate epochs at the gaps."
+            )
 
     def get_empty_params(self, X, y) -> GLMHMMParams:
         """Return the param shape given the input data."""
