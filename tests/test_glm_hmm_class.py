@@ -912,6 +912,44 @@ class TestGLMHMM:
             ),
             jnp.array([1, 0, 1, 1, 1, 0]),
         ),
+        # NaN at the very end of data
+        (
+            np.ones((4, 1)),
+            np.array([0, 1, 2, np.nan]),
+            jnp.array([1, 0, 0, 0]),
+        ),
+        # X and y both have NaNs at different positions
+        (
+            np.array([[0], [np.nan], [2], [3], [np.nan]]),
+            np.array([0, 1, np.nan, 3, 4]),
+            jnp.array([1, 0, 1, 1, 0]),
+        ),
+        # X and y both have NaNs at same position
+        (
+            np.array([[0], [np.nan], [2], [3]]),
+            np.array([0, np.nan, 2, 3]),
+            jnp.array([1, 0, 1, 0]),
+        ),
+        # Entire epoch is NaN (with pynapple)
+        (
+            nap.TsdFrame(
+                t=np.arange(6),
+                d=np.zeros((6, 1)),
+                time_support=nap.IntervalSet([0, 2, 4], [1, 3, 5]),
+            ),
+            nap.Tsd(
+                t=np.arange(6),
+                d=np.array([0, 0, np.nan, np.nan, 3, 4]),
+                time_support=nap.IntervalSet([0, 2, 4], [1, 3, 5]),
+            ),
+            jnp.array([1, 0, 1, 1, 1, 0]),
+        ),
+        # Multiple NaNs at the end
+        (
+            np.ones((5, 1)),
+            np.array([0, 1, 2, np.nan, np.nan]),
+            jnp.array([1, 0, 0, 0, 1]),
+        ),
     ],
 )
 @pytest.mark.parametrize(
@@ -922,7 +960,17 @@ class TestGLMHMM:
 def test__get_is_new_session(
     X, y, expected_new_session, instantiate_base_regressor_subclass
 ):
-    """Test initialization of new session."""
+    """Test that session boundaries are correctly identified from epoch starts and NaN positions.
+
+    The GLM-HMM requires proper session segmentation to reset hidden states at discontinuities.
+    This test verifies that:
+    1. Epoch start times (from pynapple time_support) are marked as new sessions
+    2. Positions immediately following NaN values are marked as new sessions
+    3. Combined NaNs from both X and y are handled correctly
+
+    This ensures the forward-backward algorithm can properly handle gaps in time-series data
+    without incorrectly propagating state information across discontinuities.
+    """
     fixture = instantiate_base_regressor_subclass
     model = fixture.model
     is_new_session = model._get_is_new_session(X, y)
@@ -964,7 +1012,19 @@ def test__get_is_new_session(
     indirect=True,
 )
 def test__get_is_new_session_and_drop_nan(X, y, instantiate_base_regressor_subclass):
-    """Test initialization of new session + nan drop."""
+    """Test that session markers remain valid after NaN removal.
+
+    Critical integration test verifying that the NaN handling pipeline preserves session
+    boundaries correctly. When NaNs are dropped from the data, the new_session indicators
+    must still point to the correct first valid sample of each epoch.
+
+    This test ensures:
+    1. Number of sessions equals number of epochs after NaN removal
+    2. Session markers correctly identify the first valid value of each epoch
+
+    This is essential because the model marks positions *after* NaNs as new sessions
+    before dropping them, ensuring session boundaries survive the filtering step.
+    """
     fixture = instantiate_base_regressor_subclass
     model = fixture.model
     is_new_session = model._get_is_new_session(X, y)
