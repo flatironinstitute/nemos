@@ -42,8 +42,20 @@ from nemos.observation_models import (
     Observations,
     PoissonObservations,
 )
-from nemos.solvers import solver_registry
 from nemos.regularizer import UnRegularized
+from nemos.solvers import solver_registry
+
+
+def setup_solver(objective, tol=1e-12, reg=UnRegularized()):
+    lbfgs_class = solver_registry["LBFGS"]
+    solver = lbfgs_class(
+        objective,
+        reg,
+        0.0,
+        False,
+        tol=tol,
+    )
+    return solver
 
 
 def _add_prior_logspace(log_val: jnp.ndarray, offset: jnp.ndarray):
@@ -217,14 +229,8 @@ def prepare_partial_hmm_nll_single_neuron(obs):
             inverse_link_function=obs.default_inverse_link_function,
         )
     )
-
-    lbfgs_class = solver_registry["LBFGS"]
-    solver = lbfgs_class(
-        partial_posterior_weighted_glm_negative_log_likelihood,
-        UnRegularized(),
-        0.0,
-        False,
-        tol=10 ** -8,
+    solver = setup_solver(
+        partial_posterior_weighted_glm_negative_log_likelihood, tol=1e-8
     )
 
     return partial_posterior_weighted_glm_negative_log_likelihood, solver
@@ -1619,6 +1625,7 @@ class TestMStep:
         # Dummy GLM parameters
         dummy_coef = jnp.zeros((n_states, 1))
         dummy_intercept = jnp.zeros((1,))
+        dummy_aux = None
         X_dummy = jnp.ones((n_timesteps, n_states))
         y_dummy = jnp.ones((n_timesteps,))
 
@@ -1639,8 +1646,12 @@ class TestMStep:
             log_joint_posterior,
             is_new_session=is_new_session,
             m_step_fn_glm_params=lambda *a, **kw: (
-                params.glm_params,
+                GLMParams(
+                    dummy_coef,
+                    dummy_intercept,
+                ),
                 None,
+                dummy_aux,
             ),
             m_step_fn_glm_scale=None,
             inverse_link_function=obs.default_inverse_link_function,
@@ -1744,7 +1755,10 @@ class TestMStep:
         # Minimize negative log-likelihood to update GLM weights
         initial_log_like = updated_log_like
         objective = prepare_mstep_nll_objective_param(False, obs, inv_link)
-        new_glm_prams, state = LBFGS(objective).run(
+
+        solver = setup_solver(objective, tol=1e-8)
+
+        new_glm_prams, state, _ = solver.run(
             GLMParams(coef, intercept), X, y, posteriors
         )
         (_, _, _, updated_log_like, _, _) = forward_backward(
@@ -1767,7 +1781,10 @@ class TestMStep:
             X, new_glm_prams, inverse_link_function=inv_link
         )
         objective_scale = prepare_mstep_nll_objective_scale(False, obs)
-        new_scale, _ = LBFGS(objective_scale, tol=10**-12).run(
+
+        solver = setup_solver(objective_scale, tol=1e-8)
+
+        new_scale, _, _ = solver.run(
             GLMScale(jnp.zeros_like(intercept)), y, predicted_rate, posteriors
         )
         if not isinstance(obs, (PoissonObservations, BernoulliObservations)):
@@ -1807,8 +1824,8 @@ class TestMStep:
             log_joint_posterior=log_joint_posterior,
             inverse_link_function=inv_link,
             is_new_session=new_sess,
-            m_step_fn_glm_scale=LBFGS(objective_scale, tol=10**-12).run,
-            m_step_fn_glm_params=LBFGS(objective).run,
+            m_step_fn_glm_scale=setup_solver(objective_scale, tol=10**-12).run,
+            m_step_fn_glm_params=setup_solver(objective).run,
         )
 
         jax.tree_util.tree_map(
@@ -2132,21 +2149,13 @@ def test_e_and_m_step_for_population(generate_data_multi_state_population):
     )
     alphas_transition = np.random.uniform(1, 3, size=transition_prob.shape)
     alphas_init = np.random.uniform(1, 3, size=initial_prob.shape)
-    lbfgs_class = solver_registry["LBFGS"]
-    solver = lbfgs_class(
-        partial_posterior_weighted_glm_negative_log_likelihood,
-        UnRegularized(),
-        0.0,
-        False,
-        tol=1e-13,
+    solver = setup_solver(
+        partial_posterior_weighted_glm_negative_log_likelihood, tol=1e-13
     )
+
     nll_scale = prepare_mstep_nll_objective_scale(True, obs)
-    solver_scale = lbfgs_class(
-        nll_scale, UnRegularized(),
-        0.,
-        False,
-        tol=10 ** -13
-    )
+    solver_scale = setup_solver(nll_scale, tol=1e-13)
+
     params = GLMHMMParams(
         glm_params=GLMParams(np.zeros_like(coef), np.zeros_like(intercept)),
         glm_scale=GLMScale(jnp.zeros(intercept.shape)),
@@ -3482,7 +3491,7 @@ class TestEMScaleOptimization:
         nll_params = prepare_mstep_nll_objective_param(False, obs, lambda x: x)
         scale_update_fn = get_analytical_scale_update(obs, is_population_glm=False)
 
-        solver = LBFGS(nll_params, tol=10**-6)
+        solver = setup_solver(nll_params, tol=10**-6)
 
         # Create initial parameters
         params = GLMHMMParams(
@@ -3543,7 +3552,7 @@ class TestEMScaleOptimization:
         nll_params = prepare_mstep_nll_objective_param(False, obs, lambda x: x)
         scale_update_fn = get_analytical_scale_update(obs, is_population_glm=False)
 
-        solver = LBFGS(nll_params, tol=10**-6)
+        solver = setup_solver(nll_params, tol=10**-6)
 
         # Create initial parameters
         params_no_scale = GLMHMMParams(
@@ -3631,8 +3640,8 @@ class TestEMScaleOptimization:
         nll_params = prepare_mstep_nll_objective_param(False, obs, jnp.exp)
         nll_scale = prepare_mstep_nll_objective_scale(False, obs)
 
-        solver_params = LBFGS(nll_params, tol=10**-6)
-        solver_scale = LBFGS(nll_scale, tol=10**-6)
+        solver_params = setup_solver(nll_params, tol=10**-6)
+        solver_scale = setup_solver(nll_scale, tol=10**-6)
 
         # Create initial parameters
         params = GLMHMMParams(
@@ -3692,7 +3701,7 @@ class TestEMScaleOptimization:
         nll_params = prepare_mstep_nll_objective_param(True, obs, lambda x: x)
         scale_update_fn = get_analytical_scale_update(obs, is_population_glm=True)
 
-        solver = LBFGS(nll_params, tol=10**-6)
+        solver = setup_solver(nll_params, tol=10**-6)
 
         # Create initial parameters
         params = GLMHMMParams(
