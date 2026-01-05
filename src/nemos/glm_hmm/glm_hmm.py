@@ -965,7 +965,85 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: Union[NDArray, jnp.ndarray, nap.Tsd],
     ) -> jnp.ndarray | nap.TsdFrame:
-        """Compute the smoothing posteriors over-states."""
+        """Compute smoothing posterior probabilities over hidden states.
+
+        Computes the probability of being in each hidden state at each time point,
+        conditioned on the entire observed sequence. This method uses the forward-backward
+        algorithm to incorporate information from both past and future observations,
+        providing optimal state estimates given all available data.
+
+        The smoothing posteriors answer: "Given all observations, what is the probability
+        that the system was in state k at time t?"
+
+        Parameters
+        ----------
+        X
+            Predictors, shape ``(n_time_points, n_features)``.
+        y
+            Observed neural activity, shape ``(n_time_points,)`` for single neuron or
+            ``(n_time_points, n_neurons)`` for population.
+
+        Returns
+        -------
+        posteriors
+            Smoothing posterior probabilities, shape ``(n_time_points, n_states)``.
+            Each row sums to 1 and represents the probability distribution over states
+            at that time point.
+
+        Raises
+        ------
+        ValueError
+            If the model has not been fit (``fit()`` must be called first).
+        ValueError
+            If inputs contain NaN values in the middle of epochs (only boundary NaNs allowed).
+        ValueError
+            If X and y have inconsistent shapes or features.
+
+        See Also
+        --------
+        filter_proba : Compute filtering posteriors (conditioned on past observations only).
+        decode_state : Compute most likely state sequence (Viterbi decoding).
+
+        Notes
+        -----
+        - Smoothing provides better state estimates than filtering because it uses all data
+        - The algorithm properly handles session boundaries and NaN values at epoch borders
+
+        Examples
+        --------
+        Fit a GLM-HMM and compute smoothing posteriors:
+
+        >>> import numpy as np
+        >>> import nemos as nmo
+        >>> # Generate example data
+        >>> np.random.seed(123)
+        >>> X = np.random.randn(100, 5)  # 100 time points, 5 features
+        >>> y = np.random.poisson(2, size=100)  # Poisson spike counts
+        >>>
+        >>> # Fit model with 3 hidden states
+        >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson")
+        >>> model = model.fit(X, y)
+        >>> # Compute smoothing posteriors
+        >>> posteriors = model.smooth_proba(X, y)
+        >>> print(posteriors.shape)
+        (100, 3)
+        >>> # Each row sums to 1
+        >>> print(np.allclose(posteriors.sum(axis=1), 1.0))
+        True
+
+        Using with pynapple for time-series analysis:
+
+        >>> import pynapple as nap
+        >>> # Create time-indexed data
+        >>> t = np.arange(100) * 0.01  # 10ms bins
+        >>> X_tsd = nap.TsdFrame(t=t, d=X)
+        >>> y_tsd = nap.Tsd(t=t, d=y)
+        >>>
+        >>> # Posteriors returned as TsdFrame
+        >>> posteriors_tsd = model.smooth_proba(X_tsd, y_tsd)
+        >>> print(type(posteriors_tsd))
+        <class 'pynapple.core.time_series.TsdFrame'>
+        """
         # check if the model was fit
         self._check_is_fit()
         params = self._get_model_params()
