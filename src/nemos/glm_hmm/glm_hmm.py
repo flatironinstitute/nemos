@@ -943,6 +943,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
             "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"
         ] = "log-likelihood",
         aggregate_sample_scores: Callable = jnp.mean,
+        null_model: Optional[Literal["constant", "glm"]] = None,
     ) -> jnp.ndarray:
         """Compute the model score."""
         pass
