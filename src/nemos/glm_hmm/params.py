@@ -48,7 +48,7 @@ class GLMHMMParams(eqx.Module):
         return [lambda p: p.glm_params.coef]
 
 
-# Tuple[coef, intercept, init_proba, transition_proba]
+# Tuple[coef, intercept, scale, init_proba, transition_proba]
 GLMHMMUserParams = Tuple[
     Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike, ArrayLike, ArrayLike, ArrayLike
 ]
