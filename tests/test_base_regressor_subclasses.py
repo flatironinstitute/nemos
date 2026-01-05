@@ -326,7 +326,7 @@ class TestModelCommons:
     def test_initialize_solver_mask_grouplasso(
         self, instantiate_base_regressor_subclass
     ):
-        """Test that the group lasso initialize_solver goes through"""
+        """Test that the group lasso initialize_solver_and_state goes through"""
         fixture = instantiate_base_regressor_subclass
         X, model, params = fixture.X, fixture.model, fixture.params
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
@@ -538,9 +538,9 @@ class TestModelCommons:
         model.set_params(**params)
         assert model.regularizer_strength == (1.0, 0.5)
 
-    ################################
-    # Test model.initialize_solver #
-    ################################
+    ##########################################
+    # Test model.initialize_solver_and_state #
+    ##########################################
     @pytest.mark.solver_related
     def test_initializer_solver_set_solver_callable(
         self, instantiate_base_regressor_subclass
@@ -1039,7 +1039,7 @@ class TestModelValidator:
     @pytest.mark.solver_related
     def test_validate_param_length(self, n_params, instantiate_base_regressor_subclass):
         """
-        Test the `initialize_solver` method with different numbers of initial parameters.
+        Test the `_initialize_solver_and_state` method with different numbers of initial parameters.
         Check for correct number of parameters.
         """
         fixture = instantiate_base_regressor_subclass
@@ -1087,7 +1087,7 @@ class TestModelValidator:
         self, delta_dim, expectation, instantiate_base_regressor_subclass
     ):
         """
-        Test the `initialize_solver` method with X input data of different dimensionalities.
+        Test the `validate_inputs` method with X input data of different dimensionalities.
 
         Ensure correct dimensionality for X.
         """
@@ -1115,7 +1115,7 @@ class TestModelValidator:
         self, delta_dim, expectation, instantiate_base_regressor_subclass
     ):
         """
-        Test the `initialize_solver` method with y target data of different dimensionalities.
+        Test the `validate_inputs` method with y target data of different dimensionalities.
 
         Ensure correct dimensionality for y.
         """
@@ -1149,7 +1149,7 @@ class TestModelValidator:
         self, delta_n_features, expectation, instantiate_base_regressor_subclass
     ):
         """
-        Test the `initialize_solver` method for inconsistencies between data features and model's expectations.
+        Test the `validate_consistency` method for inconsistencies between data features and model's expectations.
         Ensure the number of features in X aligns.
         """
         fixture = instantiate_base_regressor_subclass
@@ -1190,7 +1190,7 @@ class TestModelValidator:
         self, delta_tp, expectation, instantiate_base_regressor_subclass
     ):
         """
-        Test the `initialize_solver` method for inconsistencies in time-points in data X.
+        Test the `validate_inputs` method for inconsistencies in time-points in data X.
 
         Ensure the correct number of time-points.
         """
@@ -1225,7 +1225,7 @@ class TestModelValidator:
         self, delta_tp, expectation, instantiate_base_regressor_subclass
     ):
         """
-        Test the `initialize_solver` method for inconsistencies in time-points in y.
+        Test the `validate_inputs` method for inconsistencies in time-points in y.
 
         Ensure the correct number of time-points.
         """
