@@ -6,6 +6,7 @@ from contextlib import nullcontext as does_not_raise
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pynapple as nap
 import pytest
 import scipy as sp
 import scipy.stats as sts
@@ -1412,4 +1413,15 @@ class TestModelValidator:
         y.fill(fill_val)
         validator = VALIDATOR_REGISTRY[model.__class__.__name__]
         with expectation:
+            validator.validate_inputs(X, y)
+
+    def test_X_y_pynapple_time_axis_mismatch(self, instantiate_base_regressor_subclass):
+        fixture = instantiate_base_regressor_subclass
+        X = fixture.X
+        model = fixture.model
+        time = np.arange(X.shape[0])
+        X = nap.TsdFrame(time, X)
+        y = nap.Tsd(time + 1, np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__]))
+        validator = VALIDATOR_REGISTRY[model.__class__.__name__]
+        with pytest.raises(ValueError, match="Time axis mismatch"):
             validator.validate_inputs(X, y)
