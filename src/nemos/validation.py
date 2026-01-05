@@ -790,6 +790,12 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
         ValueError
             If all samples are invalid (contain only NaN/Inf values).
         """
+        # check same support
+        if not all_same_time_info(X, y):
+            raise ValueError(
+                "Time axis mismatch. pynapple objects have mismatching time axis."
+            )
+
         check_vals = []
         if X is not None:
             if is_pynapple_tsd(X):
@@ -820,11 +826,6 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
                 )
         # error if all samples are invalid
         error_all_invalid(*check_vals)
-        # check same support
-        if not all_same_time_info(X, y):
-            raise ValueError(
-                "Time axis mismatch. pynapple objects have mismatching time axis."
-            )
 
     @abc.abstractmethod
     def validate_consistency(
