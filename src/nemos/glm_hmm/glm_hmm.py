@@ -19,7 +19,7 @@ from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..observation_models import Observations
 from ..pytrees import FeaturePytree
 from ..regularizer import GroupLasso, Lasso, Regularizer, Ridge
-from ..type_casting import cast_to_jax, is_pynapple_tsd
+from ..type_casting import cast_to_jax, is_pynapple_tsd, support_pynapple
 from ..typing import (
     DESIGN_INPUT_TYPE,
     SolverState,
@@ -933,6 +933,33 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         """Simulate spikes from the model, returns neural activity and states."""
         pass
 
+    @support_pynapple(conv_type="jax")
+    def _smooth_proba(
+        self,
+        params: GLMHMMParams,
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: Union[NDArray, jnp.ndarray, nap.Tsd],
+        is_new_session: jnp.ndarray,
+    ) -> jnp.ndarray:
+        # filter for non-nans, grab data if needed
+        data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
+
+        # make sure is_new_session starts with a 1
+        is_new_session = is_new_session.at[0].set(True)
+
+        # smooth with forward backward
+        log_posteriors, _, _, _, _, _ = forward_backward(
+            params=params,
+            X=X,
+            y=y,
+            is_new_session=is_new_session,
+            log_likelihood_func=prepare_estep_log_likelihood(
+                y.ndim > 1, self.observation_model
+            ),
+            inverse_link_function=self._inverse_link_function,
+        )
+        return jnp.exp(log_posteriors)
+
     def smooth_proba(
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
@@ -948,24 +975,9 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         is_new_session = self._get_is_new_session(X, y)
         self._validator.validate_consistency(params, X=X, y=y)
 
-        # filter for non-nans, grab data if needed
-        data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
-
         # safe conversion to jax arrays of float
         params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
-
-        # smooth with forward backward
-        log_posteriors = forward_backward(
-            params=params,
-            X=data,
-            y=y,
-            is_new_session=is_new_session,
-            log_likelihood_func=prepare_estep_log_likelihood(
-                y.ndim > 1, self.observation_model
-            ),
-            inverse_link_function=self._inverse_link_function,
-        )[0]
-        return jnp.exp(log_posteriors)
+        return self._smooth_proba(params, X, y, is_new_session)
 
     def filter_proba(
         self,
