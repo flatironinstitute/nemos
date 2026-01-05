@@ -26,6 +26,7 @@ from ..typing import (
     StepResult,
 )
 from ..utils import format_repr
+from . import forward_backward
 from .algorithm_configs import (
     get_analytical_scale_update,
     prepare_estep_log_likelihood,
@@ -607,6 +608,33 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
             )
         self._seed = value
 
+    def _check_is_fit(self):
+        """Ensure the instance has been fitted."""
+        flat_params = [
+            self.coef_,
+            self.intercept_,
+            self.scale_,
+            self.initial_prob_,
+            self.transition_prob_,
+        ]
+        is_missing = [x is None for x in flat_params]
+        if any(is_missing):
+            param_labels = [
+                "coef_",
+                "intercept_",
+                "scale_",
+                "initial_prob_",
+                "transition_prob_",
+            ]
+            missing_params = [
+                p for p, missing in zip(param_labels, is_missing) if missing
+            ]
+            raise ValueError(
+                "This GLMHMM instance is not fitted yet. The following attributes are not set:"
+                f" {missing_params}.\nPlease fit the GLM-HMM model first or "
+                "set the missing attributes."
+            )
+
     def _model_specific_initialization(
         self,
         X: DESIGN_INPUT_TYPE,
@@ -908,10 +936,36 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
     def smooth_proba(
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
-        y: NDArray,
+        y: Union[NDArray, jnp.ndarray, nap.Tsd],
     ) -> jnp.ndarray | nap.TsdFrame:
         """Compute the smoothing posteriors over-states."""
-        pass
+        # check if the model was fit
+        self._check_is_fit()
+        params = self._get_model_params()
+
+        # validate inputs
+        self._validator.validate_inputs(X=X, y=y)
+        is_new_session = self._get_is_new_session(X, y)
+        self._validator.validate_consistency(params, X=X, y=y)
+
+        # filter for non-nans, grab data if needed
+        data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
+
+        # safe conversion to jax arrays of float
+        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+
+        # smooth with forward backward
+        log_posteriors = forward_backward(
+            params=params,
+            X=data,
+            y=y,
+            is_new_session=is_new_session,
+            log_likelihood_func=prepare_estep_log_likelihood(
+                y.ndim > 1, self.observation_model
+            ),
+            inverse_link_function=self._inverse_link_function,
+        )[0]
+        return jnp.exp(log_posteriors)
 
     def filter_proba(
         self,
