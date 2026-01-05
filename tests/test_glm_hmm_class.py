@@ -904,6 +904,60 @@ class TestGLMHMM:
                 ),
                 does_not_raise(),
             ),
+            # Multiple consecutive NaNs in middle - should fail
+            (
+                np.array([[0], [np.nan], [np.nan], [0]]),
+                np.array([0, 1, 2, 3]),
+                pytest.raises(
+                    ValueError, match="GLM-HMM requires continuous time-series data"
+                ),
+            ),
+            # Multiple consecutive NaNs at start - should pass
+            (
+                np.array([[np.nan], [np.nan], [0]]),
+                np.array([0, 1, 2]),
+                does_not_raise(),
+            ),
+            # Multiple consecutive NaNs at end - should pass
+            (
+                np.array([[0], [np.nan], [np.nan]]),
+                np.array([0, 1, 2]),
+                does_not_raise(),
+            ),
+            # All NaNs - should fail (caught by parent validation)
+            (
+                np.array([[np.nan], [np.nan]]),
+                np.array([np.nan, np.nan]),
+                pytest.raises(ValueError),
+            ),
+            # No NaNs - should pass
+            (np.array([[0], [1]]), np.array([0, 1]), does_not_raise()),
+            # NaN at start of second epoch - should pass
+            (
+                nap.TsdFrame(
+                    t=np.arange(5),
+                    d=np.array([[0], [0], [np.nan], [0], [0]]),
+                    time_support=nap.IntervalSet([0, 2], [2, 5]),
+                ),
+                np.zeros(5),
+                does_not_raise(),
+            ),
+            # Both X and y with NaNs in middle at different positions - should fail
+            (
+                np.array([[0], [np.nan], [0], [0]]),
+                np.array([0, 1, np.nan, 3]),
+                pytest.raises(
+                    ValueError, match="GLM-HMM requires continuous time-series data"
+                ),
+            ),
+            # Both X and y with NaNs in middle at same position - should fail
+            (
+                np.array([[0], [np.nan], [0]]),
+                np.array([0, np.nan, 2]),
+                pytest.raises(
+                    ValueError, match="GLM-HMM requires continuous time-series data"
+                ),
+            ),
         ],
     )
     def test_nan_between_epochs(
@@ -913,6 +967,25 @@ class TestGLMHMM:
         y,
         expectation,
     ):
+        """Test that NaN values are only allowed at epoch boundaries, not in the middle.
+
+        The GLM-HMM forward-backward algorithm requires continuous time-series data within
+        each epoch. This validation ensures data quality by rejecting datasets with NaN
+        values that would break the algorithm's recurrence relations.
+
+        Test coverage:
+        - NaNs at start/end of data → allowed (epoch boundaries)
+        - NaNs in middle of epoch → rejected (breaks continuity)
+        - Multiple consecutive NaNs at borders → allowed
+        - Multiple consecutive NaNs in middle → rejected
+        - All NaN data → rejected (caught by parent validation)
+        - No NaNs → allowed (trivial case)
+        - NaNs at epoch boundaries in multi-epoch pynapple data → allowed
+        - NaNs in both X and y → properly combined and validated
+
+        This strict validation prevents runtime errors in the forward-backward algorithm
+        and ensures users provide properly formatted time-series data.
+        """
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
         with expectation:
