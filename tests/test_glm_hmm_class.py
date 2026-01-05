@@ -16,6 +16,7 @@ from test_base_regressor_subclasses import (
 )
 
 import nemos as nmo
+from nemos import tree_utils
 from nemos._observation_model_builder import (
     instantiate_observation_model,
 )
@@ -918,7 +919,7 @@ class TestGLMHMM:
     [{"model": "GLMHMM", "obs_model": "Poisson", "simulate": False}],
     indirect=True,
 )
-def test_is_new_session(
+def test__get_is_new_session(
     X, y, expected_new_session, instantiate_base_regressor_subclass
 ):
     """Test initialization of new session."""
@@ -926,6 +927,59 @@ def test_is_new_session(
     model = fixture.model
     is_new_session = model._get_is_new_session(X, y)
     assert jnp.all(is_new_session == expected_new_session)
+
+
+@pytest.mark.parametrize(
+    "X, y",
+    [
+        (
+            nap.TsdFrame(
+                t=np.arange(6),
+                d=np.zeros((6, 1)),
+                time_support=nap.IntervalSet([0, 1.5], [1.0, 5.0]),
+            ),
+            nap.Tsd(
+                t=np.arange(6),
+                d=np.arange(6),
+                time_support=nap.IntervalSet([0, 1.5], [1.0, 5.0]),
+            ),
+        ),
+        (
+            nap.TsdFrame(
+                t=np.arange(6),
+                d=np.zeros((6, 1)),
+                time_support=nap.IntervalSet([0, 1.5], [1.0, 5.0]),
+            ),
+            nap.Tsd(
+                t=np.arange(6),
+                d=np.array([0, 1, np.nan, np.nan, 2, 3]),
+                time_support=nap.IntervalSet([0, 1.5], [1.0, 5.0]),
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "instantiate_base_regressor_subclass",
+    [{"model": "GLMHMM", "obs_model": "Poisson", "simulate": False}],
+    indirect=True,
+)
+def test__get_is_new_session_and_drop_nan(X, y, instantiate_base_regressor_subclass):
+    """Test initialization of new session."""
+    fixture = instantiate_base_regressor_subclass
+    model = fixture.model
+    is_new_session = model._get_is_new_session(X, y)
+
+    _, drop_y, is_new_session = tree_utils.drop_nans(X.d, y.d, is_new_session)
+    assert is_new_session.sum() == len(X.time_support)
+    first_valid_per_epoch = []
+    for ep in y.time_support:
+        yep = np.asarray(y.get(ep.start[0], ep.end[0]))
+        Xep = np.asarray(X.get(ep.start[0], ep.end[0])).reshape(yep.shape[0], -1)
+        is_nan = np.isnan(yep) | np.any(np.isnan(Xep), axis=1)
+        first_valid_per_epoch.append(yep[~is_nan][0])
+    assert np.all(
+        np.array(first_valid_per_epoch) == drop_y[is_new_session.astype(bool)]
+    )
 
     # -------------------------------------------------------------------------
     # Tests for _initialize_optimization_and_state internal setup
