@@ -116,6 +116,7 @@ VALID_PAIRS = [
             r=2,
         )
     ),
+    {"is_nan", "is_nap"},
     {"features", "n_features"},
     {"first_n_params", "fit_params"},
     {"test_ridge_with_aux", "test_ridge_without_aux"},
