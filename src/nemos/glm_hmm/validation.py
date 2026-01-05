@@ -6,11 +6,13 @@ from typing import Any, Callable, Optional, Tuple, Union
 import jax
 import jax.numpy as jnp
 from jax.typing import DTypeLike
+from pynapple import Tsd, TsdFrame
 
 from .. import validation
 from ..base_validator import RegressorValidator
 from ..glm.params import GLMParams, GLMUserParams
 from ..glm.validation import GLMValidator
+from ..type_casting import is_pynapple_tsd
 from ..typing import DESIGN_INPUT_TYPE
 from .params import GLMHMMParams, GLMHMMUserParams, GLMScale, HMMParams
 
@@ -280,6 +282,26 @@ class GLMHMMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         """Check consistency of feature_mask and params."""
         self._glm_validator.feature_mask_consistency(feature_mask, params.glm_params)
         return
+
+    def validate_inputs(
+        self,
+        X: Optional[DESIGN_INPUT_TYPE] = None,
+        y: Optional[jnp.ndarray | Tsd | TsdFrame] = None,
+    ):
+        """Validate inputs for GLM-HMM model."""
+        super().validate_inputs(X, y)
+
+        # Additional checks due to the time-series structure.
+        # (the forward-backward implementation assumes no nans in the inputs)
+        if is_pynapple_tsd(X):
+            # loop over epochs and check that nans are all at the border
+            pass
+        elif is_pynapple_tsd(y):
+            # loop over epochs and check that nans are all at the border
+            pass
+        else:
+            # check nans at the border
+            pass
 
     def get_empty_params(self, X, y) -> GLMHMMParams:
         """Return the param shape given the input data."""
