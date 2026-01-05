@@ -106,7 +106,7 @@ def _analytical_m_step_transition_prob(
 @partial(jax.jit, static_argnames=["negative_log_likelihood_func"])
 def _m_step_scale_gaussian_observations(
     log_scale: GLMScale, y, rate, posteriors, negative_log_likelihood_func
-) -> Tuple[GLMScale, None]:
+) -> Tuple[GLMScale, None, None]:
     r"""
     Analytical M-step update for Gaussian observation model scale (variance).
 
@@ -169,4 +169,4 @@ def _m_step_scale_gaussian_observations(
             jnp.log(expected_nll) - jnp.log(sum_posteriors), axis=0
         )
 
-    return GLMScale(optimized_log_scale), None
+    return GLMScale(optimized_log_scale), None, None

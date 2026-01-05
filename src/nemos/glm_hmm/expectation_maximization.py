@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 
 from ..glm.params import GLMParams
-from ..typing import SolverState
+from ..typing import Aux, SolverState
 from .m_step_analytical_updates import (
     _analytical_m_step_initial_prob,
     _analytical_m_step_transition_prob,
@@ -471,7 +471,7 @@ def run_m_step(
     log_joint_posterior: Array,
     is_new_session: Array,
     m_step_fn_glm_params: Callable[
-        [GLMParams, Array, Array, Array], Tuple[GLMParams, SolverState]
+        [GLMParams, Array, Array, Array], Tuple[GLMParams, SolverState, Aux]
     ],
     m_step_fn_glm_scale: (
         Callable[[GLMScale, Array, Array, Array], Tuple[GLMScale, SolverState]] | None
@@ -548,7 +548,7 @@ def run_m_step(
 
     if m_step_fn_glm_scale is not None:
         # Gaussian, Gamma, and other have a scale.
-        glm_scale, state_scale = m_step_fn_glm_scale(
+        glm_scale, state_scale, _ = m_step_fn_glm_scale(
             params.glm_scale, y, predicted_rate, posteriors
         )
     else:
