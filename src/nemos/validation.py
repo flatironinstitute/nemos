@@ -793,7 +793,7 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
         # check same support
         if not all_same_time_info(X, y):
             raise ValueError(
-                "Time axis mismatch. pynapple objects have mismatching time axis."
+                "Time axis mismatch. X and y pynapple objects have mismatching time axis."
             )
 
         check_vals = []
