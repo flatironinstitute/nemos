@@ -75,6 +75,7 @@ def random_glm_params_init(
     coef = 0.001 * jax.random.normal(random_key, (n_features, n_neurons, n_states))
     # mean-rate
     intercept = initialize_intercept_matching_mean_rate(inverse_link_function, y)
+    intercept = jnp.tile(intercept[:, jnp.newaxis], (1, n_states))
     if is_one_dim:
         coef = jnp.squeeze(coef, axis=1)
         intercept = jnp.squeeze(intercept, axis=0)
