@@ -317,15 +317,19 @@ class GLMHMMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         # (the forward-backward implementation assumes no nans in the inputs)
         if is_pynapple_tsd(X):
             # loop over epochs and check that nans are all at the border
-            epoch_slices = [X.get_slice(ep) for ep in X.time_support]
-            y_array = y.d
+            epoch_slices = [
+                X.get_slice(ep.start[0], ep.end[0]) for ep in X.time_support
+            ]
+            y_array = jnp.asarray(y)
             is_continuous = all(
                 has_nans_only_at_border(X.d[s]) and has_nans_only_at_border(y_array[s])
                 for s in epoch_slices
             )
         elif is_pynapple_tsd(y):
             # loop over epochs and check that nans are all at the border
-            epoch_slices = [y.get_slice(ep) for ep in X.time_support]
+            epoch_slices = [
+                y.get_slice(ep.start[0], ep.end[0]) for ep in y.time_support
+            ]
             is_continuous = all(
                 has_nans_only_at_border(X[s]) and has_nans_only_at_border(y.d[s])
                 for s in epoch_slices

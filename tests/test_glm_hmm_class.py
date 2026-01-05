@@ -843,6 +843,81 @@ class TestGLMHMM:
                 fixture.X, fixture.y, params
             )
 
+    @pytest.mark.parametrize(
+        "X, y, expectation",
+        [
+            (np.array([[np.nan], [0]]), np.array([0, 1]), does_not_raise()),
+            (np.array([[0], [np.nan]]), np.array([0, 1]), does_not_raise()),
+            (np.array([[0], [0]]), np.array([np.nan, 1]), does_not_raise()),
+            (np.array([[0], [0]]), np.array([0, np.nan]), does_not_raise()),
+            (
+                np.array([[0], [np.nan], [0]]),
+                np.array([0, 1, 2]),
+                pytest.raises(
+                    ValueError, match="GLM-HMM requires continuous time-series data"
+                ),
+            ),
+            (
+                np.array([[0], [0], [0]]),
+                np.array([0, np.nan, 2]),
+                pytest.raises(
+                    ValueError, match="GLM-HMM requires continuous time-series data"
+                ),
+            ),
+            (
+                nap.TsdFrame(
+                    t=np.arange(5),
+                    d=np.array([[0], [np.nan], [0], [0], [0]]),
+                    time_support=nap.IntervalSet([0, 3], [2, 5]),
+                ),
+                np.array([0, 1, 2, 4, 5]),
+                pytest.raises(
+                    ValueError, match="GLM-HMM requires continuous time-series data"
+                ),
+            ),
+            (
+                nap.TsdFrame(
+                    t=np.arange(5),
+                    d=np.array([[0], [0], [np.nan], [0], [0]]),
+                    time_support=nap.IntervalSet([0, 3], [2, 5]),
+                ),
+                np.array([0, 1, 2, 4, 5]),
+                does_not_raise(),
+            ),
+            (
+                np.zeros((5, 1)),
+                nap.Tsd(
+                    t=np.arange(5),
+                    d=np.array([0, np.nan, 2, 4, 5]),
+                    time_support=nap.IntervalSet([0, 3], [2, 5]),
+                ),
+                pytest.raises(
+                    ValueError, match="GLM-HMM requires continuous time-series data"
+                ),
+            ),
+            (
+                np.zeros((5, 1)),
+                nap.Tsd(
+                    t=np.arange(5),
+                    d=np.array([0, 1, np.nan, 4, 5]),
+                    time_support=nap.IntervalSet([0, 3], [2, 5]),
+                ),
+                does_not_raise(),
+            ),
+        ],
+    )
+    def test_nan_between_epochs(
+        self,
+        instantiate_base_regressor_subclass,
+        X,
+        y,
+        expectation,
+    ):
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+        with expectation:
+            model._validator.validate_inputs(X, y)
+
 
 @pytest.mark.parametrize(
     "X, y, expected_new_session",
