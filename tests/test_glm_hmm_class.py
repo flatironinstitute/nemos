@@ -964,7 +964,7 @@ def test__get_is_new_session(
     indirect=True,
 )
 def test__get_is_new_session_and_drop_nan(X, y, instantiate_base_regressor_subclass):
-    """Test initialization of new session."""
+    """Test initialization of new session + nan drop."""
     fixture = instantiate_base_regressor_subclass
     model = fixture.model
     is_new_session = model._get_is_new_session(X, y)
