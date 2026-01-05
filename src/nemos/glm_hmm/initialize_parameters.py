@@ -7,21 +7,30 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import NDArray
 
+from ..glm.initialize_parameters import initialize_intercept_matching_mean_rate
 from ..glm.params import GLMUserParams
 from ..type_casting import is_numpy_array_like
 from ..typing import DESIGN_INPUT_TYPE
 from .params import GLMHMMUserParams
 
 RANDOM_KEY = jax.Array
-INIT_FUNCTION = Callable[
+INIT_FUNCTION_HMM = Callable[
     [int, DESIGN_INPUT_TYPE, NDArray | jnp.ndarray, RANDOM_KEY],
     Tuple[jnp.ndarray, jnp.ndarray],
+]
+INIT_FUNC_GLM_PARAMS = Callable[
+    [int, DESIGN_INPUT_TYPE, NDArray | jnp.ndarray, Callable, RANDOM_KEY],
+    Tuple[jnp.ndarray, jnp.ndarray],
+]
+INIT_FUNC_GLM_SCALE = Callable[
+    [int, DESIGN_INPUT_TYPE, NDArray | jnp.ndarray, RANDOM_KEY],
+    jnp.ndarray,
 ]
 INITIALIZATION_FN_DICT = dict[
     Literal[
         "glm_params_init", "scale_init", "initial_proba_init", "transition_proba_init"
     ],
-    INIT_FUNCTION,
+    INIT_FUNCTION_HMM | INIT_FUNC_GLM_SCALE | INIT_FUNC_GLM_PARAMS,
 ]
 
 
@@ -29,6 +38,7 @@ def random_glm_params_init(
     n_states: int,
     X: DESIGN_INPUT_TYPE,
     y: jnp.ndarray,
+    inverse_link_function: Callable,
     random_key=jax.random.PRNGKey(123),
 ) -> GLMUserParams:
     """
@@ -45,6 +55,8 @@ def random_glm_params_init(
         Design matrix with shape (n_samples, n_features).
     y : jnp.ndarray
         Observations, shape (n_samples,) or (n_samples, n_neurons).
+    inverse_link_function :
+        Inverse link function of the GLM.
     random_key : jax.random.PRNGKey
         Random key for reproducibility. Default is PRNGKey(123).
 
@@ -58,10 +70,11 @@ def random_glm_params_init(
     n_features = X.shape[1]
     is_one_dim = y.ndim == 1
     n_neurons = 1 if is_one_dim else y.shape[1]
-    random_param = 0.1 * jax.random.normal(
-        random_key, (n_features + 1, n_neurons, n_states)
-    )
-    coef, intercept = random_param[:-1], random_param[-1]
+
+    # small random noisy coef
+    coef = 0.001 * jax.random.normal(random_key, (n_features, n_neurons, n_states))
+    # mean-rate
+    intercept = initialize_intercept_matching_mean_rate(inverse_link_function, y)
     if is_one_dim:
         coef = jnp.squeeze(coef, axis=1)
         intercept = jnp.squeeze(intercept, axis=0)
@@ -220,6 +233,7 @@ def glm_hmm_initialization(
     n_states: int,
     X: DESIGN_INPUT_TYPE,
     y: NDArray | jnp.ndarray,
+    inverse_link_function: Callable,
     random_key=jax.random.PRNGKey(123),
     init_registry: Optional[dict] = None,
 ) -> GLMHMMUserParams:
@@ -238,6 +252,8 @@ def glm_hmm_initialization(
         Design matrix with shape (n_samples, n_features).
     y : NDArray | jnp.ndarray
         Observations, shape (n_samples,) or (n_samples, n_units).
+    inverse_link_function:
+        The inverse link function of the GLM.
     random_key : jax.random.PRNGKey
         Random key for reproducibility. Default is PRNGKey(123).
     init_registry : dict, optional
@@ -266,7 +282,9 @@ def glm_hmm_initialization(
     else:
         init_registry = _resolve_init_funcs_registry(init_registry)
     key, subkey = jax.random.split(random_key)
-    coef, intercept = init_registry["glm_params_init"](n_states, X, y, subkey)
+    coef, intercept = init_registry["glm_params_init"](
+        n_states, X, y, inverse_link_function, subkey
+    )
     key, subkey = jax.random.split(random_key)
     scale = init_registry["initial_proba_init"](n_states, X, y, subkey)
     key, subkey = jax.random.split(key)
@@ -322,7 +340,9 @@ def _is_native_init_registry(registry: INITIALIZATION_FN_DICT) -> bool:
     )
 
 
-def _resolve_init_func(func_name: str, init_func: Callable | str) -> INIT_FUNCTION:
+def _resolve_init_func(
+    func_name: str, init_func: Callable | str
+) -> INIT_FUNCTION_HMM | INIT_FUNC_GLM_SCALE | INIT_FUNC_GLM_PARAMS:
     """
     Validate and resolve an initialization function.
 
@@ -382,34 +402,56 @@ def _resolve_init_func(func_name: str, init_func: Callable | str) -> INIT_FUNCTI
         sig = inspect.signature(init_func)
         n_params = len(sig.parameters)
 
+        # GLM params init needs inverse_link_function, so expects 5 params
+        # Other init functions expect 4 params (n_states, X, y, key)
+        expected_params = 5 if func_name == "glm_params_init" else 4
+        param_desc = (
+            "(n_states, X, y, inverse_link_function, key)"
+            if func_name == "glm_params_init"
+            else "(n_states, X, y, key)"
+        )
+
         # Check minimum number of parameters
-        if n_params < 4:
+        if n_params < expected_params:
             param_names = list(sig.parameters.keys())
             raise ValueError(
-                f"'{func_name}' initialization function must have at least 4 parameters: "
-                f"(n_states, X, y, key), but got {n_params} parameter(s): {param_names}.\n"
+                f"'{func_name}' initialization function must have at least {expected_params} parameters: "
+                f"{param_desc}, but got {n_params} parameter(s): {param_names}.\n"
             )
 
         # Check that extra parameters have defaults
         params = list(sig.parameters.values())
         params_without_defaults = [
-            p.name for p in params[4:] if p.default is inspect.Parameter.empty
+            p.name
+            for p in params[expected_params:]
+            if p.default is inspect.Parameter.empty
         ]
 
         if params_without_defaults:
             raise ValueError(
-                f"All parameters beyond the required 4 (n_states, X, y, key) must have default values.\n"
+                f"All parameters beyond the required {expected_params} {param_desc} must have default values.\n"
                 f"Parameters without defaults: {params_without_defaults}"
             )
 
         return init_func
 
+    # Provide appropriate signature based on function type
+    if func_name == "glm_params_init":
+        signature_desc = (
+            "(n_states: int, X: DESIGN_INPUT_TYPE, y: jnp.ndarray, "
+            "inverse_link_function: Callable, key: jax.random.PRNGKey, **kwargs)"
+        )
+    else:
+        signature_desc = (
+            "(n_states: int, X: DESIGN_INPUT_TYPE, y: jnp.ndarray, "
+            "key: jax.random.PRNGKey, **kwargs)"
+        )
+
     raise TypeError(
         f"Invalid initialization function: {func_name}.\n"
         "The initialization function should be:\n"
         "- A string (e.g., 'random', 'sticky', 'uniform')\n"
-        "- A callable with signature: (n_states: int, X: DESIGN_INPUT_TYPE, "
-        "y: jnp.ndarray, key: jax.random.PRNGKey, **kwargs)"
+        f"- A callable with signature: {signature_desc}"
     )
 
 
