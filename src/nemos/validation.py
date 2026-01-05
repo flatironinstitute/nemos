@@ -9,11 +9,13 @@ from typing import Any, Callable, Generic, List, Optional, Tuple, Union
 import jax
 import jax.numpy as jnp
 from numpy.typing import DTypeLike, NDArray
+from pynapple import Tsd, TsdFrame
 
 from . import utils
 from .base_class import Base
 from .pytrees import FeaturePytree
 from .tree_utils import get_valid_multitree, pytree_map_and_reduce
+from .type_casting import is_pynapple_tsd
 from .typing import DESIGN_INPUT_TYPE, ModelParamsT, UserProvidedParamsT
 
 
@@ -761,7 +763,9 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
         return validated_params
 
     def validate_inputs(
-        self, X: Optional[DESIGN_INPUT_TYPE] = None, y: Optional[jnp.ndarray] = None
+        self,
+        X: Optional[DESIGN_INPUT_TYPE] = None,
+        y: Optional[jnp.ndarray | Tsd | TsdFrame] = None,
     ):
         """
         Validate input data dimensions and sample consistency.
@@ -788,6 +792,8 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
         """
         check_vals = []
         if X is not None:
+            if is_pynapple_tsd(X):
+                X = X.values
             check_tree_leaves_dimensionality(
                 X,
                 expected_dim=self.X_dimensionality,
@@ -796,6 +802,8 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
             check_vals.append(X)
 
         if y is not None:
+            if is_pynapple_tsd(y):
+                y = y.values
             check_tree_leaves_dimensionality(
                 y,
                 expected_dim=self.y_dimensionality,
