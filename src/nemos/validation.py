@@ -15,7 +15,7 @@ from . import utils
 from .base_class import Base
 from .pytrees import FeaturePytree
 from .tree_utils import get_valid_multitree, pytree_map_and_reduce
-from .type_casting import is_pynapple_tsd
+from .type_casting import all_same_time_info, is_pynapple_tsd
 from .typing import DESIGN_INPUT_TYPE, ModelParamsT, UserProvidedParamsT
 
 
@@ -820,6 +820,11 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
                 )
         # error if all samples are invalid
         error_all_invalid(*check_vals)
+        # check same support
+        if not all_same_time_info(X, y):
+            raise ValueError(
+                "Time axis mismatch. pynapple objects have mismatching time axis."
+            )
 
     @abc.abstractmethod
     def validate_consistency(
