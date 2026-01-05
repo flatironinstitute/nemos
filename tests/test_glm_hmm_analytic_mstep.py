@@ -77,7 +77,11 @@ def generate_data_gaussian(request):
         jnp.eye(n_states) * 0.94
         + (jnp.ones((n_states, n_states)) - jnp.eye(n_states)) * 0.03
     )
-
+    params = GLMHMMParams(
+        glm_params=glm_params,
+        glm_scale=GLMScale(jnp.zeros((*y_shape, n_states)).astype(float)),
+        hmm_params=HMMParams(jnp.log(init_proba), jnp.log(transition_probs)),
+    )
     (
         log_gammas,
         log_xis,
@@ -86,12 +90,9 @@ def generate_data_gaussian(request):
         _,
         _,
     ) = forward_backward(
+        params,
         X,
         y,
-        jnp.log(init_proba),
-        jnp.log(transition_probs),
-        glm_params,
-        glm_scale=GLMScale(jnp.zeros((*y_shape, n_states)).astype(float)),
         log_likelihood_func=log_likelihood_fn,
         inverse_link_function=inv_link_func,
         is_new_session=None,
