@@ -7,6 +7,7 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pynapple as nap
 import pytest
 from conftest import instantiate_base_regressor_subclass
 from test_base_regressor_subclasses import (
@@ -840,6 +841,91 @@ class TestGLMHMM:
             init_state = fixture.model.initialize_optimization_and_state(
                 fixture.X, fixture.y, params
             )
+
+
+@pytest.mark.parametrize(
+    "X, y, expected_new_session",
+    [
+        (np.ones((3, 1)), np.ones((3,)), jnp.array([1, 0, 0])),
+        (np.ones((3, 1)), np.array([0, np.nan, 0]), jnp.array([1, 0, 1])),
+        (
+            nap.TsdFrame(
+                t=np.arange(3),
+                d=np.zeros((3, 3)),
+            ),
+            nap.Tsd(
+                t=np.arange(3),
+                d=np.zeros((3,)),
+            ),
+            jnp.array([1, 0, 0]),
+        ),
+        (
+            nap.TsdFrame(
+                t=np.arange(3),
+                d=np.zeros((3, 3)),
+                time_support=nap.IntervalSet([0, 1.5], [1.0, 2.0]),
+            ),
+            nap.Tsd(
+                t=np.arange(3),
+                d=np.zeros((3,)),
+                time_support=nap.IntervalSet([0, 1.5], [1.0, 2.0]),
+            ),
+            jnp.array([1, 0, 1]),
+        ),
+        (
+            nap.TsdFrame(
+                t=np.arange(5),
+                d=np.zeros((5, 3)),
+                time_support=nap.IntervalSet([0, 1.5], [1.0, 5.0]),
+            ),
+            nap.Tsd(
+                t=np.arange(5),
+                d=np.array([0, 0, np.nan, np.nan, 0]),
+                time_support=nap.IntervalSet([0, 1.5], [1.0, 5.0]),
+            ),
+            jnp.array([1, 0, 1, 1, 1]),
+        ),
+        (
+            nap.TsdFrame(
+                t=np.arange(6),
+                d=np.zeros((6, 3)),
+                time_support=nap.IntervalSet([0, 1.5], [1.0, 5.0]),
+            ),
+            nap.Tsd(
+                t=np.arange(6),
+                d=np.array([0, 0, np.nan, np.nan, 0, 0]),
+                time_support=nap.IntervalSet([0, 1.5], [1.0, 5.0]),
+            ),
+            jnp.array([1, 0, 1, 1, 1, 0]),
+        ),
+        (
+            nap.TsdFrame(
+                t=np.arange(6),
+                d=np.array([[0], [0], [np.nan], [np.nan], [0], [0]]),
+                time_support=nap.IntervalSet([0, 1.5], [1.0, 5.0]),
+            ),
+            nap.Tsd(
+                t=np.arange(6),
+                d=np.zeros(6),
+                time_support=nap.IntervalSet([0, 1.5], [1.0, 5.0]),
+            ),
+            jnp.array([1, 0, 1, 1, 1, 0]),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "instantiate_base_regressor_subclass",
+    [{"model": "GLMHMM", "obs_model": "Poisson", "simulate": False}],
+    indirect=True,
+)
+def test_is_new_session(
+    X, y, expected_new_session, instantiate_base_regressor_subclass
+):
+    """Test initialization of new session."""
+    fixture = instantiate_base_regressor_subclass
+    model = fixture.model
+    is_new_session = model._get_is_new_session(X, y)
+    assert jnp.all(is_new_session == expected_new_session)
 
     # -------------------------------------------------------------------------
     # Tests for _initialize_optimization_and_state internal setup
