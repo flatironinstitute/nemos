@@ -35,6 +35,7 @@ from nemos.glm_hmm.m_step_analytical_updates import (
     _analytical_m_step_log_transition_prob,
 )
 from nemos.glm_hmm.params import GLMHMMParams, GLMScale, HMMParams
+from nemos.glm_hmm.validation import to_glm_hmm_params
 from nemos.observation_models import (
     BernoulliObservations,
     GammaObservations,
@@ -3023,13 +3024,13 @@ class TestCompilation:
                 negative_log_likelihood_func=negative_log_likelihood_func,
             )
 
+        params = to_glm_hmm_params(
+            [coef, intercept, jnp.ones_like(intercept), initial_prob, transition_prob]
+        )
         _ = forward_backward(
+            params,
             X,  # drop intercept
             y,
-            jnp.log(initial_prob),
-            jnp.log(transition_prob),
-            GLMParams(coef, intercept),
-            glm_scale=GLMScale(jnp.zeros(initial_prob.shape[0])),
             log_likelihood_func=likelihood_func,
             inverse_link_function=inv_link,
             is_new_session=new_sess.astype(bool),
@@ -3042,13 +3043,13 @@ class TestCompilation:
         transition_prob_new = np.ones_like(transition_prob) / len(initial_prob)
         coef_new = coef * np.random.randn(*coef.shape)
         intercept_new = intercept * np.random.randn(*intercept.shape)
+        params = to_glm_hmm_params(
+            [coef_new, intercept_new, jnp.ones_like(intercept_new), initial_prob_new, transition_prob_new]
+        )
         _ = forward_backward(
+            params,
             X_new,  # drop intercept
             y_new,
-            jnp.log(initial_prob_new),
-            jnp.log(transition_prob_new),
-            GLMParams(coef_new, intercept_new),
-            glm_scale=GLMScale(jnp.zeros(initial_prob.shape[0])),
             log_likelihood_func=likelihood_func,
             inverse_link_function=inv_link,
             is_new_session=new_sess.astype(bool),
