@@ -299,12 +299,9 @@ def backward_pass(
 
 @partial(jax.jit, static_argnames=["inverse_link_function", "log_likelihood_func"])
 def forward_backward(
+    params: GLMHMMParams,
     X: Array,
     y: Array,
-    log_initial_prob: Array,
-    log_transition_prob: Array,
-    glm_params: GLMParams,
-    glm_scale: GLMScale,
     inverse_link_function: Callable[[Array], Array],
     log_likelihood_func: Callable[[Array, Array, Array], Array],
     is_new_session: Array | None = None,
@@ -324,19 +321,8 @@ def forward_backward(
     y :
         Observations, pytree with leaves of shape ``(n_time_bins,)``.
 
-    log_initial_prob :
-        Log of the initial latent state probability, pytree with leaves of shape ``(n_states, 1)``.
-
-    log_transition_prob :
-        Latent state log-transition matrix, pytree with leaves of shape ``(n_states, n_states)``.
-        ``transition_prob[i, j]`` is the probability of transitioning from state ``i`` to state ``j``.
-
-    glm_params :
-        GLM coefficients of shape ``(n_features, n_states)``
-        and intercept of shape ``(n_states,)`` as GLMParams.
-
-    glm_scale :
-        The scale parameter of the likelihood. Shape (n_states,) or (n_neurons, n_states).
+    params :
+        The GLMHMM parameters.
 
     inverse_link_function :
         Function mapping linear predictors to the mean of the observation distribution
@@ -375,6 +361,12 @@ def forward_backward(
     ----------
     .. [1] Bishop, C. M. (2006). *Pattern recognition and machine learning*. Springer.
     """
+    # unpack parameters
+    glm_params = params.glm_params
+    glm_scale = params.glm_scale
+    log_initial_prob = params.hmm_params.log_initial_prob
+    log_transition_prob = params.hmm_params.log_transition_prob
+
     # Initialize variables
     n_time_bins = y.shape[0]
     is_new_session = initialize_new_session(y.shape[0], is_new_session)
@@ -623,13 +615,10 @@ def _em_step(
 
     params, previous_state = carry
 
-    log_posteriors, log_joint_posterior, _, new_log_like, _, _ = forward_backward(
+    (log_posteriors, log_joint_posterior, _, new_log_like, _, _) = forward_backward(
+        params,
         X,
         y,
-        params.hmm_params.log_initial_prob,
-        params.hmm_params.log_transition_prob,
-        params.glm_params,
-        params.glm_scale,
         inverse_link_function,
         log_likelihood_func,
         is_new_session,
