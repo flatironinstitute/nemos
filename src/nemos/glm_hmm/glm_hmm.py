@@ -276,7 +276,13 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         y: jnp.ndarray,
     ) -> GLMHMMParams:
         """GLM-HMM initialization."""
-        user_params = glm_hmm_initialization(self._n_states, X, y, self._seed)
+        user_params = glm_hmm_initialization(
+            self._n_states,
+            X,
+            y,
+            inverse_link_function=self._inverse_link_function,
+            random_key=self._seed,
+        )
 
         # check if registry uses NeMoS init funcs
         is_nemos_init = _is_native_init_registry(self._initialization_funcs)
