@@ -946,6 +946,12 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         null_model: Optional[Literal["constant", "glm"]] = None,
     ) -> jnp.ndarray:
         """Compute the model score."""
+        if score_type == "log-likelihood" and null_model is not None:
+            warnings.warn(
+                "The null model is not used for the log-likelihood computation.",
+                UserWarning,
+                stacklevel=2,
+            )
         pass
 
     def simulate(
