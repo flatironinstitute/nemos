@@ -760,7 +760,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
 
         # assign fit attributes
         self._set_model_params(fit_params)
-        self.dof_resid_ = self._estimate_resid_degrees_of_freedom(X)
+        self.dof_resid_ = self._estimate_resid_degrees_of_freedom(data)
         return self
 
     def _estimate_resid_degrees_of_freedom(
