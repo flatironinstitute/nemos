@@ -20,13 +20,13 @@ from nemos.glm_hmm.algorithm_configs import (
 )
 from nemos.glm_hmm.expectation_maximization import (
     GLMHMMState,
-    backward_pass,
+    _backward_pass,
+    _forward_pass,
     check_log_likelihood_increment,
     compute_rate_per_state,
     compute_xi_log,
     em_glm_hmm,
     forward_backward,
-    forward_pass,
     max_sum,
     run_m_step,
 )
@@ -681,7 +681,7 @@ class TestForwardBackward:
         predicted_rate_given_state = inv_link(X @ coef + intercept)
         log_conditionals = log_likelihood(y, predicted_rate_given_state)
 
-        log_alphas, log_normalization = forward_pass(
+        log_alphas, log_normalization = _forward_pass(
             np.log(initial_prob), np.log(transition_prob), log_conditionals, new_sess
         )
 
@@ -725,11 +725,11 @@ class TestForwardBackward:
         predicted_rate_given_state = inv_link(X @ coef + intercept)
         log_conditionals = log_likelihood(y, predicted_rate_given_state)
 
-        log_alphas, log_normalization = forward_pass(
+        log_alphas, log_normalization = _forward_pass(
             np.log(initial_prob), np.log(transition_prob), log_conditionals, new_sess
         )
 
-        log_betas = backward_pass(
+        log_betas = _backward_pass(
             np.log(transition_prob), log_conditionals, log_normalization, new_sess
         )
         betas_numpy = backward_step_numpy(
@@ -758,10 +758,10 @@ class TestForwardBackward:
         log_conditionals = log_likelihood(y, rate)
         new_sess = np.zeros(10)
         new_sess[0] = 1
-        log_alphas, log_norm = forward_pass(
+        log_alphas, log_norm = _forward_pass(
             np.log(initial_prob), np.log(transition_prob), log_conditionals, new_sess
         )
-        log_betas = backward_pass(
+        log_betas = _backward_pass(
             np.log(transition_prob), log_conditionals, log_norm, new_sess
         )
 
@@ -985,10 +985,10 @@ class TestMStep:
         log_conditionals = log_likelihood(y, rate, jnp.ones(coef.shape[-1]))
         new_sess = np.zeros(10)
         new_sess[0] = 1
-        log_alphas, log_norm = forward_pass(
+        log_alphas, log_norm = _forward_pass(
             np.log(initial_prob), np.log(transition_prob), log_conditionals, new_sess
         )
-        log_betas = backward_pass(
+        log_betas = _backward_pass(
             np.log(transition_prob), log_conditionals, log_norm, new_sess
         )
 
