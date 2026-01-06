@@ -37,6 +37,7 @@ from .expectation_maximization import (
     GLMHMMState,
     em_glm_hmm,
     em_step,
+    forward_pass,
 )
 from .initialize_parameters import (
     INITIALIZATION_FN_DICT,
@@ -1081,13 +1082,49 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
         return self._smooth_proba(params, X, y, is_new_session)
 
+    def _filter_proba(
+        self,
+        params: GLMHMMParams,
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: Union[NDArray, jnp.ndarray, nap.Tsd],
+        is_new_session: jnp.ndarray,
+    ):
+        """Private filter proba."""
+        # filter for non-nans, grab data if needed
+        data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
+
+        # make sure is_new_session starts with a 1
+        is_new_session = is_new_session.at[0].set(True)
+        log_proba = forward_pass(
+            params,
+            data,
+            y,
+            inverse_link_function=self.inverse_link_function,
+            is_new_session=is_new_session,
+            log_likelihood_func=prepare_estep_log_likelihood(
+                y.ndim > 1, self.observation_model
+            ),
+        )
+        return jnp.exp(log_proba)
+
     def filter_proba(
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: NDArray,
     ):
         """Compute the filtering posteriors over-states."""
-        pass
+        # check if the model was fit
+        self._check_is_fit()
+        params = self._get_model_params()
+
+        # validate inputs
+        self._validator.validate_inputs(X=X, y=y)
+        is_new_session = self._get_is_new_session(X, y)
+        self._validator.validate_consistency(params, X=X, y=y)
+
+        # safe conversion to jax arrays of float
+        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+        return self._filter_proba(params, X, y, is_new_session)
 
     def decode_state(
         self, X: Union[DESIGN_INPUT_TYPE, ArrayLike], y: ArrayLike
