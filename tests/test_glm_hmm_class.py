@@ -1677,6 +1677,7 @@ def test__get_is_new_session_and_drop_nan(X, y, instantiate_base_regressor_subcl
     ],
     indirect=True,
 )
+@pytest.mark.requires_x64
 class TestSmoothProba:
     """Test suite for smooth_proba method."""
 
@@ -1887,8 +1888,8 @@ class TestSmoothProba:
         y_with_nan = fixture.y.copy()
 
         # Add NaNs at specific indices
-        nan_indices = [10, 20, 30]
-        X_with_nan = X_with_nan.at[nan_indices].set(jnp.nan)
+        nan_indices = [0, 1, 2]
+        X_with_nan[nan_indices] = np.nan
 
         # This should work - NaNs get filtered internally
         posteriors = model.smooth_proba(X_with_nan, y_with_nan)
