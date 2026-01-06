@@ -34,12 +34,17 @@ def from_glm_hmm_params(params: GLMHMMParams) -> GLMHMMUserParams:
     Converts internal model parameters (log_scale and log probabilities)
     to user-facing parameters (scale and probabilities in regular space).
     """
+    # exponentiate and re-normalize
+    initial_prob = jnp.exp(params.hmm_params.log_initial_prob)
+    initial_prob /= initial_prob.sum()
+    transition_prob = jnp.exp(params.hmm_params.log_transition_prob)
+    transition_prob /= transition_prob.sum(axis=1, keepdims=True)
     return (
         params.glm_params.coef,
         params.glm_params.intercept,
         jnp.exp(params.glm_scale.log_scale),
-        jnp.exp(params.hmm_params.log_initial_prob),
-        jnp.exp(params.hmm_params.log_transition_prob),
+        initial_prob,
+        transition_prob,
     )
 
 
