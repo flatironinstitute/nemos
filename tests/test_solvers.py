@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 import nemos as nmo
+from nemos.glm.params import GLMParams
 from nemos.solvers._svrg import SVRG, ProxSVRG, SVRGState
 from nemos.third_party.jaxopt import jaxopt
 from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
@@ -137,7 +138,7 @@ def test_svrg_glm_instantiate_solver(regularizer_name, solver_class, mask):
         solver_name=solver_name,
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
     )
-    glm.instantiate_solver(glm.compute_loss)
+    glm._instantiate_solver(glm._compute_loss)
 
     # currently glm._solver is a Wrapped(Prox)SVRG
     solver = glm._solver._solver
@@ -173,7 +174,7 @@ def test_svrg_glm_passes_solver_kwargs(regularizer_name, solver_name, mask, glm_
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
         **kwargs,
     )
-    glm.instantiate_solver(glm.compute_loss)
+    glm._instantiate_solver(glm._compute_loss)
 
     # currently glm._solver is a Wrapped(Prox)SVRG
     solver = glm._solver._solver
@@ -228,9 +229,14 @@ def test_svrg_glm_initialize_state(
     )
 
     init_params = glm.initialize_params(X, y)
-    state = glm.initialize_state(X, y, init_params)
+    state = glm.initialize_solver_and_state(X, y, init_params)
 
-    assert state.reference_point == init_params
+    assert pytree_map_and_reduce(
+        lambda a, b: np.array_equal(a, b),
+        all,
+        state.reference_point,
+        GLMParams(*init_params),
+    )
 
     for f in (glm._solver_init_state, glm._solver_update, glm._solver_run):
         assert isinstance(f.__self__._solver, solver_class)
@@ -282,13 +288,15 @@ def test_svrg_glm_update(
     )
 
     init_params = glm.initialize_params(X, y)
-    state = glm.initialize_state(X, y, init_params)
+    state = glm.initialize_solver_and_state(X, y, init_params)
 
     loss_gradient = jax.jit(jax.grad(glm._solver_loss_fun))
 
     # initialize full gradient at the anchor point
     state = state._replace(
-        full_grad_at_reference_point=loss_gradient(init_params, X, y),
+        full_grad_at_reference_point=loss_gradient(
+            glm._validator.to_model_params(init_params), X, y
+        ),
     )
 
     params, state = glm.update(init_params, state, X, y)
@@ -325,6 +333,7 @@ def test_svrg_glm_update(
     "glm_class",
     [nmo.glm.GLM, nmo.glm.PopulationGLM],
 )
+@pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
 def test_maxiter_is_respected(
     glm_class,
     regularizer_name,
@@ -333,7 +342,7 @@ def test_maxiter_is_respected(
     poissonGLM_model_instantiation,
     maxiter,
 ):
-    X, y, model, (w_true, b_true), rate = poissonGLM_model_instantiation
+    X, y, model, true_params, rate = poissonGLM_model_instantiation
 
     # set the tolerance such that the solvers never hit their convergence criterion
     # and run until maxiter is reached
@@ -429,7 +438,7 @@ def test_svrg_glm_update_needs_full_grad_at_reference_point(
         match=r"Full gradient at the anchor point \(state\.full_grad_at_reference_point\) has to be set",
     ):
         params = glm.initialize_params(X, y)
-        state = glm.initialize_state(X, y, params)
+        state = glm.initialize_solver_and_state(X, y, params)
         glm.update(params, state, X, y)
 
 

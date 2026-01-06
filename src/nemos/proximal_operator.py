@@ -74,18 +74,17 @@ _vmap_norm2_masked_2 = jax.vmap(_vmap_norm2_masked_1, in_axes=(None, 0), out_axe
 
 
 def prox_group_lasso(
-    params: Tuple[jnp.ndarray, jnp.ndarray],
+    weights: jnp.ndarray,
     regularizer_strength: float,
     mask: jnp.ndarray,
     scaling: float = 1.0,
-) -> Tuple[jnp.ndarray, jnp.ndarray]:
+) -> jnp.ndarray:
     r"""Proximal gradient operator for group Lasso.
 
     Parameters
     ----------
-    params:
-        Weights, shape (n_neurons, n_features) or pytree of same; intercept,
-        shape (n_neurons, )
+    weights:
+        Weights, shape (n_neurons, n_features) or pytree of same;
     regularizer_strength:
         The regularization hyperparameter.
     mask:
@@ -133,7 +132,6 @@ def prox_group_lasso(
     Journal of the Royal Statistical Society Series B: Statistical Methodology 68.1 (2006): 49-67.
 
     """
-    weights, intercepts = params
     shape = weights.shape
     # add an extra dim if not 2D, do nothing otherwise.
     weights = jnp.atleast_2d(weights.T)
@@ -144,7 +142,7 @@ def prox_group_lasso(
     # Avoid shrinkage of features that do not belong to any group
     # by setting the shrinkage factor to 1.
     not_regularized = jnp.outer(jnp.ones(factor.shape[0]), 1 - mask.sum(axis=0))
-    return (weights * (factor @ mask + not_regularized)).T.reshape(shape), intercepts
+    return (weights * (factor @ mask + not_regularized)).T.reshape(shape)
 
 
 def prox_lasso(x: Any, l1reg: Optional[Any] = None, scaling: float = 1.0) -> Any:
