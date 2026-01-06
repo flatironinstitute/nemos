@@ -557,12 +557,11 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         drop_nans: bool = True,
     ) -> Tuple[dict[str, jnp.ndarray] | jnp.ndarray, jnp.ndarray, ...] | None:
         """Preprocess inputs before initializing state."""
+        X, y = cast_to_jax(lambda *x: x)(X, y)
         if drop_nans:
             res = tree_utils.drop_nans(X, y, *args)
             X, y = res[:2]
             args = res[2:]
-
-        X, y = cast_to_jax(lambda *x: x)(X, y)
 
         data = X.data if isinstance(X, FeaturePytree) else X
 
