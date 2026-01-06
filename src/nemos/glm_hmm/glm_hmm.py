@@ -1106,7 +1106,10 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
                 y.ndim > 1, self.observation_model
             ),
         )
-        return jnp.exp(log_proba)
+        proba = jnp.exp(log_proba)
+        # renormalize (numerical errors due to exponentiating)
+        proba /= proba.sum(axis=1, keepdims=True)
+        return proba
 
     def filter_proba(
         self,
