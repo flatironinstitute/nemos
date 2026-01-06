@@ -1939,7 +1939,7 @@ class TestFilterAndSmoothProba:
     @pytest.mark.parametrize("method_name", ["smooth_proba"])
     def test_smooth_proba_maxiter_effect(self, instantiate_base_regressor_subclass, method_name):
         """Test that smooth_proba results depend on model fit quality (maxiter)."""
-        fixture = instantiate_base_regressor_subclass, method_name
+        fixture = instantiate_base_regressor_subclass
 
         # Fit with very few iterations
         model_poor = nmo.glm_hmm.GLMHMM(
