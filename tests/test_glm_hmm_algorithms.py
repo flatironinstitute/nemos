@@ -27,6 +27,7 @@ from nemos.glm_hmm.expectation_maximization import (
     compute_xi_log,
     em_glm_hmm,
     forward_backward,
+    forward_pass,
     max_sum,
     run_m_step,
 )
@@ -567,6 +568,53 @@ def lagrange_mult_loss(param, args, loss, **kwargs):
         constraint = proba.sum() - 1
     lagrange_mult_term = (lam * constraint).sum()
     return loss(proba, args, **kwargs) + lagrange_mult_term
+
+
+@pytest.mark.requires_x64
+@pytest.mark.parametrize(
+    "generate_data_multi_state",
+    [{"observations": PoissonObservations(), "scale": 1.0}],
+    indirect=True,
+)
+def test_forward_private_vs_public(generate_data_multi_state):
+    (
+        new_sess,
+        initial_prob,
+        transition_prob,
+        coef,
+        intercept,
+        X,
+        y,
+        obs,
+        scale,
+        inv_link,
+    ) = generate_data_multi_state
+    scale = np.log(scale) * np.ones_like(intercept)
+    log_likelihood_func = prepare_estep_log_likelihood(
+        is_population_glm=y.ndim > 1, observation_model=obs
+    )
+    rate_by_state = inv_link(X.dot(coef) + intercept)
+    log_conditionals = log_likelihood_func(y, rate_by_state, scale)
+    private_forward, _ = _forward_pass(
+        np.log(initial_prob),
+        np.log(transition_prob),
+        log_conditionals,
+        new_sess,
+    )
+    params = GLMHMMParams(
+        GLMParams(coef, intercept),
+        GLMScale(scale),
+        HMMParams(np.log(initial_prob), np.log(transition_prob)),
+    )
+    public_forward = forward_pass(
+        params,
+        X,
+        y,
+        inverse_link_function=inv_link,
+        log_likelihood_func=log_likelihood_func,
+        is_new_session=new_sess,
+    )
+    np.testing.assert_allclose(public_forward, private_forward)
 
 
 class TestForwardBackward:
