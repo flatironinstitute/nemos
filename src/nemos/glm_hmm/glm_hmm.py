@@ -1082,14 +1082,15 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
         return self._smooth_proba(params, X, y, is_new_session)
 
+    @support_pynapple(conv_type="jax")
     def _filter_proba(
         self,
         params: GLMHMMParams,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: Union[NDArray, jnp.ndarray, nap.Tsd],
         is_new_session: jnp.ndarray,
-    ):
-        """Private filter proba."""
+    ) -> jnp.ndarray:
+        """Compute filtering probabilities without validation (internal method)."""
         # filter for non-nans, grab data if needed
         data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
 
@@ -1099,7 +1100,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
             params,
             data,
             y,
-            inverse_link_function=self.inverse_link_function,
+            inverse_link_function=self._inverse_link_function,
             is_new_session=is_new_session,
             log_likelihood_func=prepare_estep_log_likelihood(
                 y.ndim > 1, self.observation_model
@@ -1110,9 +1111,91 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
     def filter_proba(
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
-        y: NDArray,
-    ):
-        """Compute the filtering posteriors over-states."""
+        y: Union[NDArray, jnp.ndarray, nap.Tsd],
+    ) -> jnp.ndarray | nap.TsdFrame:
+        """Compute filtering posterior probabilities over hidden states.
+
+        Computes the probability of being in each hidden state at each time point,
+        conditioned only on observations up to that time point. This method uses the
+        forward pass of the forward-backward algorithm, providing causal (online) state
+        estimates that only use past and current observations.
+
+        The filtering posteriors answer: "Given observations up to time t, what is the
+        probability that the system is in state k at time t?"
+
+        Parameters
+        ----------
+        X
+            Predictors, shape ``(n_time_points, n_features)``.
+        y
+            Observed neural activity, shape ``(n_time_points,)`` for single neuron or
+            ``(n_time_points, n_neurons)`` for population.
+
+        Returns
+        -------
+        posteriors
+            Filtering posterior probabilities, shape ``(n_time_points, n_states)``.
+            Each row sums to 1 and represents the probability distribution over states
+            at that time point conditioned on past observations.
+
+        Raises
+        ------
+        ValueError
+            If the model has not been fit (``fit()`` must be called first).
+        ValueError
+            If inputs contain NaN values in the middle of epochs (only boundary NaNs allowed).
+        ValueError
+            If X and y have inconsistent shapes or features.
+
+        See Also
+        --------
+        smooth_proba : Compute smoothing posteriors (conditioned on all observations).
+        decode_state : Compute most likely state sequence (Viterbi decoding).
+
+        Notes
+        -----
+        - Filtering provides causal state estimates suitable for online/real-time applications
+        - Smoothing provides better estimates but requires all data (non-causal)
+        - The algorithm properly handles session boundaries and NaN values at epoch borders
+        - NaN values are removed before inference, but session markers are preserved
+        - For pynapple inputs, the output TsdFrame has columns named "state_0", "state_1", etc.
+
+        Examples
+        --------
+        Fit a GLM-HMM and compute filtering posteriors:
+
+        >>> import numpy as np
+        >>> import nemos as nmo
+        >>> # Generate example data
+        >>> np.random.seed(123)
+        >>> X = np.random.randn(100, 5)  # 100 time points, 5 features
+        >>> y = np.random.poisson(2, size=100)  # Poisson spike counts
+        >>>
+        >>> # Fit model with 3 hidden states
+        >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson")
+        >>> model = model.fit(X, y)
+        >>>
+        >>> # Compute filtering posteriors (causal/online)
+        >>> filter_posteriors = model.filter_proba(X, y)
+        >>> print(filter_posteriors.shape)
+        (100, 3)
+        >>> # Each row sums to 1
+        >>> print(np.allclose(filter_posteriors.sum(axis=1), 1.0))
+        True
+
+        Using with pynapple for real-time state estimation:
+
+        >>> import pynapple as nap
+        >>> # Create time-indexed data
+        >>> t = np.arange(100) * 0.01  # 10ms bins
+        >>> X_tsd = nap.TsdFrame(t=t, d=X)
+        >>> y_tsd = nap.Tsd(t=t, d=y)
+        >>>
+        >>> # Filtering posteriors returned as TsdFrame
+        >>> filter_tsd = model.filter_proba(X_tsd, y_tsd)
+        >>> print(type(filter_tsd))
+        <class 'pynapple.core.time_series.TsdFrame'>
+        """
         # check if the model was fit
         self._check_is_fit()
         params = self._get_model_params()
