@@ -958,7 +958,10 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
             ),
             inverse_link_function=self._inverse_link_function,
         )
-        return jnp.exp(log_posteriors)
+        proba = jnp.exp(log_posteriors)
+        # renormalize (numerical precision due to exponentiation)
+        proba /= proba.sum(axis=1, keepdims=True)
+        return proba
 
     def smooth_proba(
         self,
