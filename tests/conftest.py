@@ -1415,16 +1415,26 @@ def instantiate_glm_hmm_func(
     simulate=False,
 ):
     np.random.seed(123)
-    n_neurons = 1
+
+    model = nmo.glm_hmm.GLMHMM(
+        n_states=n_states,
+        observation_model=obs_model,
+        regularizer=regularizer,
+        solver_name=solver_name,
+    )
     n_features = 2
+
     X = np.ones((500, n_features))
     X[:250, 0] = 0
     X[np.arange(500) % 2 == 1, 1] = 0
+    y = np.zeros_like(X, shape=X.shape[0])
+    y[np.random.choice(y.shape[0], size=y.shape[0]//3, replace=False)] = 1
     glm_params = random_glm_params_init(
         n_states,
         X,
-        np.zeros_like(X, shape=X.shape[0]),
+        y,
         random_key=jax.random.PRNGKey(123),
+        inverse_link_function=model.inverse_link_function,
     )
     coef, intercept = jax.numpy.squeeze(glm_params[0]), np.squeeze(glm_params[1])
     transition_prob = sticky_transition_proba_init(
@@ -1432,13 +1442,6 @@ def instantiate_glm_hmm_func(
     )
     init_prob = uniform_initial_proba_init(
         n_states, X, None, random_key=jax.random.PRNGKey(124)
-    )
-
-    model = nmo.glm_hmm.GLMHMM(
-        n_states=n_states,
-        observation_model=obs_model,
-        regularizer=regularizer,
-        solver_name=solver_name,
     )
 
     if simulate:
