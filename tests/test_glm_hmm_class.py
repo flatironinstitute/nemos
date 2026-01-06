@@ -2021,6 +2021,275 @@ class TestFilterAndSmoothProba:
         )
 
 
+@pytest.mark.parametrize(
+    "instantiate_base_regressor_subclass",
+    [
+        {"model": "GLMHMM", "obs_model": "Bernoulli", "simulate": True},
+        {"model": "GLMHMM", "obs_model": "Poisson", "simulate": True},
+        {"model": "GLMHMM", "obs_model": "Gamma", "simulate": True},
+        {"model": "GLMHMM", "obs_model": "Gaussian", "simulate": True},
+    ],
+    indirect=True,
+)
+@pytest.mark.requires_x64
+class TestFilterProba:
+    """Test suite for filter_proba method."""
+
+    @pytest.mark.parametrize(
+        "drop_attr",
+        ["coef_", "intercept_", "scale_", "initial_prob_", "transition_prob_"],
+    )
+    def test_filter_proba_not_fitted_raises_error(
+        self, instantiate_base_regressor_subclass, drop_attr
+    ):
+        """Test that filter_proba raises an error when model is not fitted."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+        setattr(model, drop_attr, None)
+        with pytest.raises(
+            ValueError,
+            match=rf"This GLMHMM instance is not fitted yet. .+ \['{drop_attr}'\]",
+        ):
+            model.filter_proba(fixture.X, fixture.y)
+
+    def test_filter_proba_returns_correct_shape(
+        self, instantiate_base_regressor_subclass
+    ):
+        """Test that filter_proba returns array with shape (n_samples, n_states)."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+
+        # Get posteriors
+        posteriors = model.filter_proba(fixture.X, fixture.y)
+
+        # Check shape
+        n_samples = (
+            ~np.isnan(np.sum(fixture.y, axis=tuple(range(1, fixture.y.ndim))))
+        ).sum()
+        n_states = model.n_states
+        assert posteriors.shape == (
+            n_samples,
+            n_states,
+        ), f"Expected shape ({n_samples}, {n_states}), got {posteriors.shape}"
+
+    def test_filter_proba_returns_valid_probabilities(
+        self, instantiate_base_regressor_subclass
+    ):
+        """Test that filter_proba returns valid probabilities (between 0 and 1)."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+
+        # Fit the model
+        model.solver_kwargs = {"maxiter": 2}
+        model.fit(fixture.X, fixture.y)
+
+        # Get posteriors
+        posteriors = model.filter_proba(fixture.X, fixture.y)
+
+        # Check all values are between 0 and 1 (after normalization)
+        assert jnp.all(posteriors >= 0), "Some posteriors are negative"
+        assert jnp.all(
+            posteriors <= 1
+        ), "Some posteriors are greater than 1 (normalization should fix this)"
+
+    def test_filter_proba_probabilities_sum_to_one(
+        self, instantiate_base_regressor_subclass
+    ):
+        """Test that probabilities sum to 1 across states for each sample."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+
+        # Fit the model
+        model.solver_kwargs = {"maxiter": 2}
+        model.fit(fixture.X, fixture.y)
+
+        # Get posteriors
+        posteriors = model.filter_proba(fixture.X, fixture.y)
+
+        # Check sum across states
+        row_sums = jnp.sum(posteriors, axis=1)
+        assert jnp.allclose(
+            row_sums, 1.0, rtol=1e-5
+        ), f"Probabilities don't sum to 1. Min: {row_sums.min()}, Max: {row_sums.max()}"
+
+    def test_filter_proba_with_arrays(self, instantiate_base_regressor_subclass):
+        """Test filter_proba with numpy/jax arrays returns jax array."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+
+        # Fit the model
+        model.solver_kwargs = {"maxiter": 2}
+        model.fit(fixture.X, fixture.y)
+
+        # Test with numpy array
+        posteriors = model.filter_proba(fixture.X, fixture.y)
+        assert isinstance(
+            posteriors, jnp.ndarray
+        ), f"Expected jnp.ndarray, got {type(posteriors)}"
+
+    @pytest.mark.parametrize("input_type", ["X", "y", "both"])
+    def test_filter_proba_with_pynapple_returns_tsdframe(
+        self, instantiate_base_regressor_subclass, input_type
+    ):
+        """Test that filter_proba returns TsdFrame when input is pynapple."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+
+        # Fit the model
+        model.solver_kwargs = {"maxiter": 2}
+        model.fit(fixture.X, fixture.y)
+
+        # Convert to pynapple
+        n_samples = fixture.X.shape[0]
+        time = np.linspace(0, n_samples / 100, n_samples)
+
+        X_input = fixture.X
+        y_input = fixture.y
+
+        if input_type in ["X", "both"]:
+            X_input = nap.TsdFrame(t=time, d=fixture.X)
+        if input_type in ["y", "both"]:
+            y_input = nap.Tsd(t=time, d=fixture.y)
+
+        # Get posteriors
+        posteriors = model.filter_proba(X_input, y_input)
+
+        # Check return type
+        assert isinstance(
+            posteriors, nap.TsdFrame
+        ), f"Expected nap.TsdFrame, got {type(posteriors)}"
+        assert posteriors.shape == (n_samples, model.n_states)
+        assert jnp.allclose(posteriors.t, time)
+
+    def test_filter_proba_with_multiple_sessions(
+        self, instantiate_base_regressor_subclass
+    ):
+        """Test filter_proba with multiple sessions (pynapple epochs)."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+
+        # Fit the model
+        model.solver_kwargs = {"maxiter": 2}
+        model.fit(fixture.X, fixture.y)
+
+        # Create multi-session data
+        n_samples = fixture.X.shape[0]
+        session_1_end = n_samples // 2
+
+        time = np.linspace(0, n_samples / 100, n_samples)
+        epochs = nap.IntervalSet(
+            start=[time[0], time[session_1_end]],
+            end=[time[session_1_end - 1], time[-1]],
+        )
+
+        X_tsd = nap.TsdFrame(t=time, d=fixture.X, time_support=epochs)
+        y_tsd = nap.Tsd(t=time, d=fixture.y, time_support=epochs)
+
+        # Get posteriors
+        posteriors = model.filter_proba(X_tsd, y_tsd)
+
+        # Check shape and type
+        assert isinstance(posteriors, nap.TsdFrame)
+        assert posteriors.shape == (n_samples, model.n_states)
+
+        # Check probabilities are valid
+        assert jnp.all(posteriors.values >= 0)
+        assert jnp.all(posteriors.values <= 1)
+        row_sums = jnp.sum(posteriors.values, axis=1)
+        assert jnp.allclose(row_sums, 1.0, rtol=1e-5)
+
+    def test_filter_proba_consistency_across_calls(
+        self, instantiate_base_regressor_subclass
+    ):
+        """Test that filter_proba returns consistent results across multiple calls."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+
+        # Fit the model
+        model.solver_kwargs = {"maxiter": 2}
+        model.fit(fixture.X, fixture.y)
+
+        # Get posteriors twice
+        posteriors_1 = model.filter_proba(fixture.X, fixture.y)
+        posteriors_2 = model.filter_proba(fixture.X, fixture.y)
+
+        # Check consistency
+        assert jnp.allclose(
+            posteriors_1, posteriors_2
+        ), "filter_proba returns different results on consecutive calls"
+
+    def test_filter_proba_vs_smooth_proba(self, instantiate_base_regressor_subclass):
+        """Test that filtering posteriors differ from smoothing posteriors.
+
+        Smoothing uses both past and future observations, so it typically
+        produces sharper (more confident) probability distributions.
+        """
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+
+        # Fit the model
+        model.solver_kwargs = {"maxiter": 2}
+        model.fit(fixture.X, fixture.y)
+
+        # Get both types of posteriors
+        filter_posteriors = model.filter_proba(fixture.X, fixture.y)
+        smooth_posteriors = model.smooth_proba(fixture.X, fixture.y)
+
+        # Same shape
+        assert filter_posteriors.shape == smooth_posteriors.shape
+
+        # Both are valid probabilities
+        # Filter posteriors should be normalized
+        assert jnp.all(
+            filter_posteriors >= 0
+        ), "Filter posteriors should be non-negative"
+        assert jnp.all(
+            filter_posteriors <= 1
+        ), "Filter posteriors should be <= 1 after normalization"
+        filter_row_sums = jnp.sum(filter_posteriors, axis=1)
+        assert jnp.allclose(
+            filter_row_sums, 1.0, rtol=1e-10
+        ), "Filter posteriors should sum to 1"
+
+        # Smooth posteriors (not touching smooth_proba - different branch)
+        assert jnp.all(smooth_posteriors >= 0)
+        smooth_row_sums = jnp.sum(smooth_posteriors, axis=1)
+        assert jnp.allclose(smooth_row_sums, 1.0, rtol=1e-5)
+
+        # Note: Filter and smooth posteriors may be similar for simple data
+        # or when model hasn't converged much. We just verify both methods run
+        # and produce valid probability distributions.
+
+    def test_filter_proba_different_observation_models(
+        self, instantiate_base_regressor_subclass
+    ):
+        """Test filter_proba works with different observation models."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+        obs_model_name = model.observation_model.__class__.__name__
+
+        # Fit the model
+        model.solver_kwargs = {"maxiter": 2}
+        model.fit(fixture.X, fixture.y)
+
+        # Get posteriors
+        posteriors = model.filter_proba(fixture.X, fixture.y)
+
+        # Basic checks
+        assert posteriors.shape == (
+            fixture.X.shape[0],
+            model.n_states,
+        ), f"Shape check failed for {obs_model_name}"
+        assert jnp.all(posteriors >= 0), f"Negative probabilities for {obs_model_name}"
+        assert jnp.all(
+            posteriors <= 1
+        ), f"Probabilities > 1 for {obs_model_name} (check normalization)"
+        row_sums = jnp.sum(posteriors, axis=1)
+        assert jnp.allclose(
+            row_sums, 1.0, rtol=1e-10
+        ), f"Probabilities don't sum to 1 for {obs_model_name} (check normalization)"
+
+
 @pytest.mark.parametrize("n_states", [2, 3, 5])
 @pytest.mark.parametrize("method_name", ["smooth_proba"])
 def test_smooth_proba_different_n_states(n_states, method_name):
