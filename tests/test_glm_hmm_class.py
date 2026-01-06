@@ -1683,7 +1683,7 @@ class TestFilterAndSmoothProba:
 
     @pytest.mark.parametrize("drop_attr", ["coef_", "intercept_", "scale_", "initial_prob_", "transition_prob_"],)
     @pytest.mark.parametrize("method_name", ["smooth_proba"])
-    def test_smooth_proba_not_fitted_raises_error(
+    def test_posterior_proba_not_fitted_raises_error(
         self, instantiate_base_regressor_subclass, drop_attr, method_name
     ):
         """Test that smooth_proba raises an error when model is not fitted."""
@@ -1696,7 +1696,7 @@ class TestFilterAndSmoothProba:
             getattr(model, method_name)(fixture.X, fixture.y)
 
     @pytest.mark.parametrize("method_name", ["smooth_proba"])
-    def test_smooth_proba_returns_correct_shape(
+    def test_posterior_proba_returns_correct_shape(
         self, instantiate_base_regressor_subclass, method_name
     ):
         """Test that smooth_proba returns array with shape (n_samples, n_states)."""
@@ -1713,7 +1713,7 @@ class TestFilterAndSmoothProba:
             f"Expected shape ({n_samples}, {n_states}), got {posteriors.shape}"
 
     @pytest.mark.parametrize("method_name", ["smooth_proba"])
-    def test_smooth_proba_returns_valid_probabilities(
+    def test_posterior_proba_returns_valid_probabilities(
         self, instantiate_base_regressor_subclass, method_name
     ):
         """Test that smooth_proba returns valid probabilities (between 0 and 1)."""
@@ -1732,7 +1732,7 @@ class TestFilterAndSmoothProba:
         assert jnp.all(posteriors <= 1), "Some posteriors are greater than 1"
 
     @pytest.mark.parametrize("method_name", ["smooth_proba"])
-    def test_smooth_proba_probabilities_sum_to_one(
+    def test_posterior_proba_probabilities_sum_to_one(
         self, instantiate_base_regressor_subclass, method_name
     ):
         """Test that probabilities sum to 1 across states for each sample."""
@@ -1752,7 +1752,7 @@ class TestFilterAndSmoothProba:
             f"Probabilities don't sum to 1. Min: {row_sums.min()}, Max: {row_sums.max()}"
 
     @pytest.mark.parametrize("method_name", ["smooth_proba"])
-    def test_smooth_proba_with_arrays(self, instantiate_base_regressor_subclass, method_name):
+    def test_posterior_proba_with_arrays(self, instantiate_base_regressor_subclass, method_name):
         """Test smooth_proba with numpy/jax arrays returns jax array."""
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
@@ -1768,7 +1768,7 @@ class TestFilterAndSmoothProba:
 
     @pytest.mark.parametrize("input_type", ["X", "y", "both"])
     @pytest.mark.parametrize("method_name", ["smooth_proba"])
-    def test_smooth_proba_with_pynapple_returns_tsdframe(
+    def test_posterior_proba_with_pynapple_returns_tsdframe(
         self, instantiate_base_regressor_subclass, input_type, method_name
     ):
         """Test that smooth_proba returns TsdFrame when input is pynapple."""
@@ -1801,7 +1801,7 @@ class TestFilterAndSmoothProba:
         assert jnp.allclose(posteriors.t, time)
 
     @pytest.mark.parametrize("method_name", ["smooth_proba"])
-    def test_smooth_proba_with_multiple_sessions(
+    def test_posterior_proba_with_multiple_sessions(
         self, instantiate_base_regressor_subclass, method_name
     ):
         """Test smooth_proba with multiple sessions (pynapple epochs)."""
@@ -1839,7 +1839,7 @@ class TestFilterAndSmoothProba:
         assert jnp.allclose(row_sums, 1.0, rtol=1e-5)
 
     @pytest.mark.parametrize("method_name", ["smooth_proba"])
-    def test_smooth_proba_consistency_across_calls(
+    def test_posterior_proba_consistency_across_calls(
         self, instantiate_base_regressor_subclass, method_name
     ):
         """Test that smooth_proba returns consistent results across multiple calls."""
@@ -1859,7 +1859,7 @@ class TestFilterAndSmoothProba:
             "smooth_proba returns different results on consecutive calls"
 
     @pytest.mark.parametrize("method_name", ["smooth_proba"])
-    def test_smooth_proba_single_sample(self, instantiate_base_regressor_subclass, method_name):
+    def test_posterior_proba_single_sample(self, instantiate_base_regressor_subclass, method_name):
         """Test smooth_proba with a single sample."""
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
@@ -1882,7 +1882,7 @@ class TestFilterAndSmoothProba:
         assert jnp.allclose(jnp.sum(posteriors), 1.0, rtol=1e-5)
 
     @pytest.mark.parametrize("method_name", ["smooth_proba"])
-    def test_smooth_proba_with_nans_filtered(
+    def test_posterior_proba_with_nans_filtered(
         self, instantiate_base_regressor_subclass, method_name
     ):
         """Test that smooth_proba handles NaNs properly by filtering them."""
@@ -1910,7 +1910,7 @@ class TestFilterAndSmoothProba:
         assert posteriors.shape[0] == fixture.X.shape[0]
 
     @pytest.mark.parametrize("method_name", ["smooth_proba"])
-    def test_smooth_proba_different_observation_models(
+    def test_posterior_proba_different_observation_models(
         self, instantiate_base_regressor_subclass, method_name
     ):
         """Test smooth_proba works with different observation models."""
@@ -1937,7 +1937,7 @@ class TestFilterAndSmoothProba:
             f"Probabilities don't sum to 1 for {obs_model_name}"
 
     @pytest.mark.parametrize("method_name", ["smooth_proba"])
-    def test_smooth_proba_maxiter_effect(self, instantiate_base_regressor_subclass, method_name):
+    def test_posterior_proba_maxiter_effect(self, instantiate_base_regressor_subclass, method_name):
         """Test that smooth_proba results depend on model fit quality (maxiter)."""
         fixture = instantiate_base_regressor_subclass
 
