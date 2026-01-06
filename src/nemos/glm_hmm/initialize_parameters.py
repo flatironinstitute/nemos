@@ -282,15 +282,15 @@ def glm_hmm_initialization(
         init_registry = DEFAULT_INIT_FUNCTION
     else:
         init_registry = _resolve_init_funcs_registry(init_registry)
-    key, subkey = jax.random.split(random_key)
+    random_key, subkey = jax.random.split(random_key)
     coef, intercept = init_registry["glm_params_init"](
         n_states, X, y, inverse_link_function, subkey
     )
-    key, subkey = jax.random.split(random_key)
+    random_key, subkey = jax.random.split(random_key)
     scale = init_registry["scale_init"](n_states, X, y, subkey)
-    key, subkey = jax.random.split(key)
+    random_key, subkey = jax.random.split(random_key)
     initial_proba = init_registry["initial_proba_init"](n_states, X, y, subkey)
-    _, subkey = jax.random.split(key)
+    _, subkey = jax.random.split(random_key)
     transition_proba = init_registry["transition_proba_init"](n_states, X, y, subkey)
     return coef, intercept, scale, initial_proba, transition_proba
 
