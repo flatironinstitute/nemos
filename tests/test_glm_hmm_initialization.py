@@ -1,11 +1,14 @@
 """Tests for glm_hmm/initialize_parameters.py"""
 
+import itertools
+
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
 
 from nemos.glm_hmm.initialize_parameters import (
+    glm_hmm_initialization,
     ones_scale_init,
     random_glm_params_init,
     sticky_transition_proba_init,
@@ -395,3 +398,312 @@ class TestUniformInitialProbaInitialization:
 
         # Should be identical regardless of random key
         assert jnp.allclose(initial_prob1, initial_prob2)
+
+
+class TestGLMHMMInitialization:
+    """Test full GLM-HMM parameter initialization."""
+
+    @pytest.mark.parametrize("n_states", [1, 2, 3])
+    @pytest.mark.parametrize("n_neurons", [1, 3])
+    def test_default_initialization_shape(self, n_states, n_neurons):
+        """Test that default initialization returns correct shapes."""
+        n_samples = 100
+        n_features = 5
+        X = jnp.ones((n_samples, n_features))
+        y = jnp.ones((n_samples, n_neurons)) if n_neurons > 1 else jnp.ones(n_samples)
+        inverse_link = lambda x: x
+
+        coef, intercept, scale, initial_prob, transition_prob = glm_hmm_initialization(
+            n_states, X, y, inverse_link, random_key=jax.random.PRNGKey(123)
+        )
+
+        # Check shapes
+        if n_neurons == 1:
+            assert coef.shape == (n_features, n_states)
+            assert intercept.shape == (n_states,)
+            assert scale.shape == (n_states,)
+        else:
+            assert coef.shape == (n_features, n_neurons, n_states)
+            assert intercept.shape == (n_neurons, n_states)
+            assert scale.shape == (n_neurons, n_states)
+
+        assert initial_prob.shape == (n_states,)
+        assert transition_prob.shape == (n_states, n_states)
+
+    def test_default_initialization_types(self):
+        """Test that all outputs are JAX arrays."""
+        n_states = 2
+        X = jnp.ones((100, 5))
+        y = jnp.ones(100)
+        inverse_link = lambda x: x
+
+        coef, intercept, scale, initial_prob, transition_prob = glm_hmm_initialization(
+            n_states, X, y, inverse_link, random_key=jax.random.PRNGKey(123)
+        )
+
+        assert isinstance(coef, jnp.ndarray)
+        assert isinstance(intercept, jnp.ndarray)
+        assert isinstance(scale, jnp.ndarray)
+        assert isinstance(initial_prob, jnp.ndarray)
+        assert isinstance(transition_prob, jnp.ndarray)
+
+    def test_default_initialization_values(self):
+        """Test that default initialization uses expected default functions."""
+        n_states = 3
+        X = jnp.ones((100, 5))
+        y = jnp.full(100, 2.0)
+        inverse_link = lambda x: x
+
+        coef, intercept, scale, initial_prob, transition_prob = glm_hmm_initialization(
+            n_states, X, y, inverse_link, random_key=jax.random.PRNGKey(123)
+        )
+
+        # Check default values:
+        # - coef: small random (< 0.01)
+        assert jnp.abs(coef).max() < 0.01
+
+        # - intercept: mean of y (2.0)
+        assert jnp.allclose(intercept, 2.0)
+
+        # - scale: ones
+        assert jnp.all(scale == 1.0)
+
+        # - initial_prob: uniform (1/n_states)
+        assert jnp.allclose(initial_prob, 1.0 / n_states)
+
+        # - transition_prob: sticky (diagonal 0.95)
+        assert jnp.allclose(jnp.diag(transition_prob), 0.95)
+
+    def test_custom_registry_with_mocks(self):
+        """Test that custom registry functions are called with correct arguments."""
+        n_states = 3
+        n_features = 5
+        n_samples = 100
+        X = jnp.ones((n_samples, n_features))
+        y = jnp.ones(n_samples)
+        inverse_link = lambda x: x
+
+        # Create mock tracking
+        mock_calls = {
+            "glm_params": [],
+            "scale": [],
+            "initial_prob": [],
+            "transition_prob": [],
+        }
+
+        # Create mock functions with DISTINCTIVE outputs (zeros, ones, twos, threes, fours)
+        def mock_glm_params(n_states, X, y, inverse_link_function, random_key):
+            mock_calls["glm_params"].append(
+                (n_states, X, y, inverse_link_function, random_key)
+            )
+            return jnp.zeros((n_features, n_states)), jnp.ones(n_states)
+
+        def mock_scale(n_states, X, y, random_key):
+            mock_calls["scale"].append((n_states, X, y, random_key))
+            return jnp.full(n_states, 2.0)
+
+        def mock_initial_prob(n_states, X, y, random_key):
+            mock_calls["initial_prob"].append((n_states, X, y, random_key))
+            return jnp.full(n_states, 3.0)
+
+        def mock_transition_prob(n_states, X, y, random_key):
+            mock_calls["transition_prob"].append((n_states, X, y, random_key))
+            return jnp.full((n_states, n_states), 4.0)
+
+        custom_registry = {
+            "glm_params_init": mock_glm_params,
+            "scale_init": mock_scale,
+            "initial_proba_init": mock_initial_prob,
+            "transition_proba_init": mock_transition_prob,
+        }
+
+        coef, intercept, scale, initial_prob, transition_prob = glm_hmm_initialization(
+            n_states,
+            X,
+            y,
+            inverse_link,
+            random_key=jax.random.PRNGKey(123),
+            init_registry=custom_registry,
+        )
+
+        # Verify all mocks were called
+        assert len(mock_calls["glm_params"]) == 1
+        assert len(mock_calls["scale"]) == 1
+        assert len(mock_calls["initial_prob"]) == 1
+        assert len(mock_calls["transition_prob"]) == 1
+
+        # Verify they were called with correct arguments
+        call_args = mock_calls["glm_params"][0]
+        assert call_args[0] == n_states  # n_states
+        assert jnp.array_equal(call_args[1], X)  # X
+        assert jnp.array_equal(call_args[2], y)  # y
+        assert call_args[3] == inverse_link  # inverse_link_function
+
+        # Verify that the distinctive outputs are actually used
+        assert jnp.all(coef == 0.0)  # zeros
+        assert jnp.all(intercept == 1.0)  # ones
+        assert jnp.all(scale == 2.0)  # twos
+        assert jnp.all(initial_prob == 3.0)  # threes
+        assert jnp.all(transition_prob == 4.0)  # fours
+
+    def test_partial_registry(self):
+        """Test that partial registry merges with defaults."""
+        n_states = 2
+        n_features = 5
+        X = jnp.ones((100, n_features))
+        y = jnp.ones(100)
+        inverse_link = lambda x: x
+
+        # Create tracking for mock
+        mock_called = {"called": False}
+
+        # Only override glm_params_init
+        def mock_glm_params(n_states, X, y, inverse_link_function, random_key):
+            mock_called["called"] = True
+            return jnp.zeros((n_features, n_states)), jnp.full(n_states, 5.0)
+
+        partial_registry = {
+            "glm_params_init": mock_glm_params,
+        }
+
+        coef, intercept, scale, initial_prob, transition_prob = glm_hmm_initialization(
+            n_states,
+            X,
+            y,
+            inverse_link,
+            random_key=jax.random.PRNGKey(123),
+            init_registry=partial_registry,
+        )
+
+        # Mock was used for glm_params
+        assert mock_called["called"]
+        assert jnp.allclose(intercept, 5.0)  # From mock
+
+        # Defaults were used for others
+        assert jnp.all(scale == 1.0)  # Default ones_scale_init
+        assert jnp.allclose(initial_prob, 0.5)  # Default uniform
+        assert jnp.allclose(jnp.diag(transition_prob), 0.95)  # Default sticky
+
+    def test_random_key_splitting(self):
+        """Test that random key is properly split so each init function gets different subkey."""
+        n_states = 3
+        n_features = 5
+        X = jnp.ones((100, n_features))
+        y = jnp.ones(100)
+        inverse_link = lambda x: x
+
+        # Create mock functions that ALL return the SAME SHAPE (10,) array
+        # This allows us to check that all outputs differ within a single call
+        fixed_shape = (10,)
+
+        def random_glm_params(n_states, X, y, inverse_link_function, random_key):
+            # Split key to return two different arrays of fixed shape
+            key1, key2 = jax.random.split(random_key)
+            return jax.random.normal(key1, fixed_shape), jax.random.normal(
+                key2, fixed_shape
+            )
+
+        def random_scale(n_states, X, y, random_key):
+            return jax.random.normal(random_key, fixed_shape)
+
+        def random_initial_prob(n_states, X, y, random_key):
+            return jax.random.normal(random_key, fixed_shape)
+
+        def random_transition_prob(n_states, X, y, random_key):
+            return jax.random.normal(random_key, fixed_shape)
+
+        random_registry = {
+            "glm_params_init": random_glm_params,
+            "scale_init": random_scale,
+            "initial_proba_init": random_initial_prob,
+            "transition_proba_init": random_transition_prob,
+        }
+
+        # Single call with one seed
+        coef, intercept, scale, initial_prob, transition_prob = glm_hmm_initialization(
+            n_states,
+            X,
+            y,
+            inverse_link,
+            random_key=jax.random.PRNGKey(123),
+            init_registry=random_registry,
+        )
+
+        # All outputs should differ from each other (different subkeys were used)
+        for p1, p2 in itertools.combinations(
+            [coef, intercept, scale, initial_prob, transition_prob], 2
+        ):
+            assert not jnp.allclose(p1, p2)
+
+        # Run with different seed - all should differ from first call
+        coef2, intercept2, scale2, initial_prob2, transition_prob2 = (
+            glm_hmm_initialization(
+                n_states,
+                X,
+                y,
+                inverse_link,
+                random_key=jax.random.PRNGKey(456),
+                init_registry=random_registry,
+            )
+        )
+
+        assert not jnp.allclose(coef, coef2)
+        assert not jnp.allclose(intercept, intercept2)
+        assert not jnp.allclose(scale, scale2)
+        assert not jnp.allclose(initial_prob, initial_prob2)
+        assert not jnp.allclose(transition_prob, transition_prob2)
+
+    def test_inverse_link_function_passed_to_glm_init(self):
+        """Test that inverse_link_function is passed to glm_params_init."""
+        n_states = 2
+        X = jnp.ones((100, 5))
+        y = jnp.full(100, 10.0)
+
+        # Use exp inverse link
+        inverse_link = jnp.exp
+
+        _, intercept, _, _, _ = glm_hmm_initialization(
+            n_states, X, y, inverse_link, random_key=jax.random.PRNGKey(123)
+        )
+
+        # Intercept should be log(mean(y)) = log(10) for exp link
+        expected = jnp.log(10.0)
+        assert jnp.allclose(intercept, expected)
+
+    @pytest.mark.parametrize("n_neurons", [1, 3])
+    def test_population_vs_single_neuron(self, n_neurons):
+        """Test initialization works for both single neuron and population GLMs."""
+        n_states = 2
+        n_features = 5
+        n_samples = 100
+        X = jnp.ones((n_samples, n_features))
+        y = jnp.ones((n_samples, n_neurons)) if n_neurons > 1 else jnp.ones(n_samples)
+        inverse_link = lambda x: x
+
+        coef, intercept, scale, initial_prob, transition_prob = glm_hmm_initialization(
+            n_states, X, y, inverse_link, random_key=jax.random.PRNGKey(123)
+        )
+
+        # All parameters should be properly shaped
+        if n_neurons == 1:
+            assert coef.ndim == 2  # (n_features, n_states)
+            assert intercept.ndim == 1  # (n_states,)
+            assert scale.ndim == 1  # (n_states,)
+        else:
+            assert coef.ndim == 3  # (n_features, n_neurons, n_states)
+            assert intercept.ndim == 2  # (n_neurons, n_states)
+            assert scale.ndim == 2  # (n_neurons, n_states)
+
+    def test_returns_tuple_of_five_elements(self):
+        """Test that function returns exactly 5 elements."""
+        n_states = 2
+        X = jnp.ones((100, 5))
+        y = jnp.ones(100)
+        inverse_link = lambda x: x
+
+        result = glm_hmm_initialization(
+            n_states, X, y, inverse_link, random_key=jax.random.PRNGKey(123)
+        )
+
+        assert isinstance(result, tuple)
+        assert len(result) == 5
