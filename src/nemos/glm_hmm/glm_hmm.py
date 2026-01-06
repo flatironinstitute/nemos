@@ -942,6 +942,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         is_new_session: jnp.ndarray,
     ) -> jnp.ndarray:
         # filter for non-nans, grab data if needed
+        valid = tree_utils.get_valid_multitree(X, y)
         data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
 
         # make sure is_new_session starts with a 1
@@ -961,6 +962,8 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         proba = jnp.exp(log_posteriors)
         # renormalize (numerical precision due to exponentiation)
         proba /= proba.sum(axis=1, keepdims=True)
+        # re-attach nans
+        proba = jnp.full((valid.shape[0], proba.shape[1]), jnp.nan).at[valid].set(proba)
         return proba
 
     def smooth_proba(
