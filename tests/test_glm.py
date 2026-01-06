@@ -622,6 +622,137 @@ class TestGLM:
                 ),
             }
 
+    @pytest.mark.parametrize("dim_weights", [0, 1, 2, 3])
+    @pytest.mark.solver_related
+    def test_initialize_solver_weights_dimensionality(
+        self,
+        dim_weights,
+        request,
+        glm_class_type,
+        model_instantiation_type,
+        initialize_solver_weights_dimensionality_expectation,
+    ):
+        """
+        Test the `initialize_solver` method with weight matrices of different dimensionalities.
+        Check for correct dimensionality.
+        """
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            model_instantiation_type
+        )
+        expectation = initialize_solver_weights_dimensionality_expectation[dim_weights]
+        n_samples, n_features = X.shape
+        if "population" in glm_class_type:
+            n_neurons = 3
+        else:
+            n_neurons = 4
+        if dim_weights == 0:
+            init_w = jnp.array([])
+        elif dim_weights == 1:
+            init_w = jnp.zeros((n_features,))
+        elif dim_weights == 2:
+            init_w = jnp.zeros((n_features, n_neurons))
+        else:
+            init_w = jnp.zeros((n_features, n_neurons) + (1,) * (dim_weights - 2))
+        with expectation:
+            model.initialize_solver_and_state(X, y, (init_w, true_params.intercept))
+
+    @pytest.mark.parametrize(
+        "dim_intercepts, expectation",
+        [
+            (0, pytest.raises(ValueError, match=r"Invalid parameter dimensionality")),
+            (1, does_not_raise()),
+            (2, pytest.raises(ValueError, match=r"Invalid parameter dimensionality")),
+            (3, pytest.raises(ValueError, match=r"Invalid parameter dimensionality")),
+        ],
+    )
+    @pytest.mark.solver_related
+    def test_initialize_solver_intercepts_dimensionality(
+        self,
+        dim_intercepts,
+        expectation,
+        request,
+        glm_class_type,
+        model_instantiation_type,
+    ):
+        """
+        Test the `initialize_solver` method with intercepts of different dimensionalities.
+        Check for correct dimensionality.
+        """
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            model_instantiation_type
+        )
+        n_samples, n_features = X.shape
+        if "population" in glm_class_type:
+            init_b = jnp.zeros((y.shape[1],) * dim_intercepts)
+            init_w = jnp.zeros((n_features, y.shape[1]))
+        else:
+            init_b = jnp.zeros((1,) * dim_intercepts)
+            init_w = jnp.zeros((n_features,))
+        with expectation:
+            model.initialize_solver_and_state(X, y, (init_w, init_b))
+
+    @pytest.mark.parametrize(*fit_init_params_type_init_params)
+    @pytest.mark.solver_related
+    def test_initialize_solver_init_params_type(
+        self,
+        request,
+        glm_class_type,
+        model_instantiation_type,
+        expectation,
+        init_params_glm,
+        init_params_population_glm,
+    ):
+        """
+        Test the `initialize_solver` method with various types of initial parameters.
+        Ensure that the provided initial parameters are array-like.
+        """
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            model_instantiation_type
+        )
+        if "population" in glm_class_type:
+            init_params = init_params_population_glm
+        else:
+            init_params = init_params_glm
+        with expectation:
+            model.initialize_solver_and_state(X, y, init_params)
+
+    @pytest.mark.parametrize(
+        "delta_n_features, expectation",
+        [
+            (-1, pytest.raises(ValueError, match="Inconsistent number of features")),
+            (0, does_not_raise()),
+            (1, pytest.raises(ValueError, match="Inconsistent number of features")),
+        ],
+    )
+    @pytest.mark.solver_related
+    def test_initialize_solver_n_feature_consistency_weights(
+        self,
+        delta_n_features,
+        expectation,
+        request,
+        glm_class_type,
+        model_instantiation_type,
+    ):
+        """
+        Test the `initialize_solver` method for inconsistencies between data features and initial weights provided.
+        Ensure the number of features align.
+        """
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            model_instantiation_type
+        )
+        if "population" in glm_class_type:
+            init_w = jnp.zeros((X.shape[1] + delta_n_features, y.shape[1]))
+            init_b = jnp.zeros(
+                y.shape[1],
+            )
+        else:
+            init_w = jnp.zeros((X.shape[1] + delta_n_features))
+            init_b = jnp.zeros(
+                1,
+            )
+        with expectation:
+            model.initialize_solver_and_state(X, y, (init_w, init_b))
+
     #######################
     # Test model.simulate
     #######################
