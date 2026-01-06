@@ -116,6 +116,7 @@ VALID_PAIRS = [
             r=2,
         )
     ),
+    {"is_nan", "is_nap"},
 ]
 
 
