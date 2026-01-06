@@ -287,7 +287,7 @@ def glm_hmm_initialization(
         n_states, X, y, inverse_link_function, subkey
     )
     key, subkey = jax.random.split(random_key)
-    scale = init_registry["initial_proba_init"](n_states, X, y, subkey)
+    scale = init_registry["scale_init"](n_states, X, y, subkey)
     key, subkey = jax.random.split(key)
     initial_proba = init_registry["initial_proba_init"](n_states, X, y, subkey)
     _, subkey = jax.random.split(key)
