@@ -1728,10 +1728,6 @@ class TestFilterAndSmoothProba:
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
 
-        # Fit the model
-        model.solver_kwargs = {"maxiter": 2}
-        model.fit(fixture.X, fixture.y)
-
         # Get posteriors
         posteriors = getattr(model, method_name)(fixture.X, fixture.y)
 
@@ -1746,10 +1742,6 @@ class TestFilterAndSmoothProba:
         """Test that probabilities sum to 1 across states for each sample."""
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
-
-        # Fit the model
-        model.solver_kwargs = {"maxiter": 2}
-        model.fit(fixture.X, fixture.y)
 
         # Get posteriors
         posteriors = getattr(model, method_name)(fixture.X, fixture.y)
@@ -1768,10 +1760,6 @@ class TestFilterAndSmoothProba:
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
 
-        # Fit the model
-        model.solver_kwargs = {"maxiter": 2}
-        model.fit(fixture.X, fixture.y)
-
         # Test with numpy array
         posteriors = getattr(model, method_name)(fixture.X, fixture.y)
         assert isinstance(
@@ -1786,10 +1774,6 @@ class TestFilterAndSmoothProba:
         """Test that smooth_proba returns TsdFrame when input is pynapple."""
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
-
-        # Fit the model
-        model.solver_kwargs = {"maxiter": 2}
-        model.fit(fixture.X, fixture.y)
 
         # Convert to pynapple
         n_samples = fixture.X.shape[0]
@@ -1820,10 +1804,6 @@ class TestFilterAndSmoothProba:
         """Test smooth_proba with multiple sessions (pynapple epochs)."""
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
-
-        # Fit the model
-        model.solver_kwargs = {"maxiter": 2}
-        model.fit(fixture.X, fixture.y)
 
         # Create multi-session data
         n_samples = fixture.X.shape[0]
@@ -1859,10 +1839,6 @@ class TestFilterAndSmoothProba:
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
 
-        # Fit the model
-        model.solver_kwargs = {"maxiter": 2}
-        model.fit(fixture.X, fixture.y)
-
         # Get posteriors twice
         posteriors_1 = getattr(model, method_name)(fixture.X, fixture.y)
         posteriors_2 = getattr(model, method_name)(fixture.X, fixture.y)
@@ -1879,10 +1855,6 @@ class TestFilterAndSmoothProba:
         """Test smooth_proba with a single sample."""
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
-
-        # Fit the model
-        model.solver_kwargs = {"maxiter": 2}
-        model.fit(fixture.X, fixture.y)
 
         # Get posteriors for single sample
         X_single = fixture.X[:1]
@@ -1904,10 +1876,6 @@ class TestFilterAndSmoothProba:
         """Test that smooth_proba handles NaNs properly by filtering them."""
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
-
-        # Fit the model
-        model.solver_kwargs = {"maxiter": 2}
-        model.fit(fixture.X, fixture.y)
 
         # Create data with NaNs
         X_with_nan = fixture.X.copy()
@@ -1933,10 +1901,6 @@ class TestFilterAndSmoothProba:
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
         obs_model_name = model.observation_model.__class__.__name__
-
-        # Fit the model
-        model.solver_kwargs = {"maxiter": 2}
-        model.fit(fixture.X, fixture.y)
 
         # Get posteriors
         posteriors = getattr(model, method_name)(fixture.X, fixture.y)
