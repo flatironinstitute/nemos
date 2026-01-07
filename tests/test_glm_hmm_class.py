@@ -1990,7 +1990,7 @@ class TestFilterAndSmoothProba:
             np.isnan(posteriors[nan_location])
         ), f"Not returning NaNs in the expected location!"
 
-    @pytest.mark.parametrize("method_name", ["smooth_proba"])
+    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba"])
     def test_posterior_proba_int_vs_float_y(
         self, instantiate_base_regressor_subclass, method_name
     ):
