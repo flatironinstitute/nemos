@@ -1205,15 +1205,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         >>> print(type(filter_tsd))
         <class 'pynapple.core.time_series.TsdFrame'>
         """
-        # check if the model was fit
-        self._check_is_fit()
-        params = self._get_model_params()
-
-        # validate inputs
-        self._validator.validate_inputs(X=X, y=y)
-        is_new_session = self._get_is_new_session(X, y)
-        self._validator.validate_consistency(params, X=X, y=y)
-
+        params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
         return self._filter_proba(params, X, y, is_new_session)
 
     def decode_state(
