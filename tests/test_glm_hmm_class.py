@@ -1679,19 +1679,39 @@ def test__get_is_new_session_and_drop_nan(X, y, instantiate_base_regressor_subcl
 )
 @pytest.mark.requires_x64
 class TestInferenceMethods:
-    """Test suite for smooth_proba method."""
+    """Test suite for inference methods (smooth_proba, filter_proba, decode_state)."""
+
+    @staticmethod
+    def _get_expected_shape(method_name, kwargs, n_samples, n_states):
+        """Helper to compute expected output shape based on method and kwargs."""
+        if method_name in ["smooth_proba", "filter_proba"]:
+            return (n_samples, n_states)
+        elif method_name == "decode_state":
+            if kwargs.get("output_format") == "index":
+                return (n_samples,)
+            else:  # one-hot (default)
+                return (n_samples, n_states)
+        else:
+            raise ValueError(f"Unknown method: {method_name}")
 
     @pytest.mark.parametrize(
         "drop_attr",
         ["coef_", "intercept_", "scale_", "initial_prob_", "transition_prob_"],
     )
     @pytest.mark.parametrize(
-        "method_name", ["smooth_proba", "filter_proba", "decode_state"]
+        "method_config",
+        [
+            pytest.param(("smooth_proba", {}), id="smooth_proba"),
+            pytest.param(("filter_proba", {}), id="filter_proba"),
+            pytest.param(("decode_state", {}), id="decode_state-onehot"),
+            pytest.param(("decode_state", {"output_format": "index"}), id="decode_state-index"),
+        ],
     )
     def test_not_fitted_raises_error(
-        self, instantiate_base_regressor_subclass, drop_attr, method_name
+        self, instantiate_base_regressor_subclass, drop_attr, method_config
     ):
-        """Test that smooth_proba raises an error when model is not fitted."""
+        """Test that inference methods raise an error when model is not fitted."""
+        method_name, kwargs = method_config
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
         setattr(model, drop_attr, None)
@@ -1699,30 +1719,35 @@ class TestInferenceMethods:
             ValueError,
             match=rf"This GLMHMM instance is not fitted yet. .+ \['{drop_attr}'\]",
         ):
-            getattr(model, method_name)(fixture.X, fixture.y)
+            getattr(model, method_name)(fixture.X, fixture.y, **kwargs)
 
     @pytest.mark.parametrize(
-        "method_name", ["smooth_proba", "filter_proba", "decode_state"]
+        "method_config",
+        [
+            pytest.param(("smooth_proba", {}), id="smooth_proba"),
+            pytest.param(("filter_proba", {}), id="filter_proba"),
+            pytest.param(("decode_state", {}), id="decode_state-onehot"),
+            pytest.param(("decode_state", {"output_format": "index"}), id="decode_state-index"),
+        ],
     )
     def test_returns_correct_shape(
-        self, instantiate_base_regressor_subclass, method_name
+        self, instantiate_base_regressor_subclass, method_config
     ):
-        """Test that smooth_proba returns array with shape (n_samples, n_states)."""
+        """Test that inference methods return arrays with correct shapes."""
+        method_name, kwargs = method_config
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
 
-        # Get posteriors
-        out = getattr(model, method_name)(fixture.X, fixture.y)
+        # Get output
+        out = getattr(model, method_name)(fixture.X, fixture.y, **kwargs)
 
         # Check shape
         n_samples = (
             ~np.isnan(np.sum(fixture.y, axis=tuple(range(1, fixture.y.ndim))))
         ).sum()
         n_states = model.n_states
-        assert out.shape == (
-            n_samples,
-            n_states,
-        ), f"Expected shape ({n_samples}, {n_states}), got {out.shape}"
+        expected_shape = self._get_expected_shape(method_name, kwargs, n_samples, n_states)
+        assert out.shape == expected_shape, f"Expected shape {expected_shape}, got {out.shape}"
 
     @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba"])
     def test_posterior_proba_returns_valid_probabilities(
@@ -1757,25 +1782,39 @@ class TestInferenceMethods:
         ), f"Probabilities don't sum to 1. Min: {row_sums.min()}, Max: {row_sums.max()}"
 
     @pytest.mark.parametrize(
-        "method_name", ["smooth_proba", "filter_proba", "decode_state"]
+        "method_config",
+        [
+            pytest.param(("smooth_proba", {}), id="smooth_proba"),
+            pytest.param(("filter_proba", {}), id="filter_proba"),
+            pytest.param(("decode_state", {}), id="decode_state-onehot"),
+            pytest.param(("decode_state", {"output_format": "index"}), id="decode_state-index"),
+        ],
     )
-    def test_with_arrays(self, instantiate_base_regressor_subclass, method_name):
-        """Test smooth_proba with numpy/jax arrays returns jax array."""
+    def test_with_arrays(self, instantiate_base_regressor_subclass, method_config):
+        """Test inference methods with numpy/jax arrays return jax array."""
+        method_name, kwargs = method_config
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
 
         # Test with numpy array
-        out = getattr(model, method_name)(fixture.X, fixture.y)
+        out = getattr(model, method_name)(fixture.X, fixture.y, **kwargs)
         assert isinstance(out, jnp.ndarray), f"Expected jnp.ndarray, got {type(out)}"
 
     @pytest.mark.parametrize("input_type", ["X", "y", "both"])
     @pytest.mark.parametrize(
-        "method_name", ["smooth_proba", "filter_proba", "decode_state"]
+        "method_config",
+        [
+            pytest.param(("smooth_proba", {}), id="smooth_proba"),
+            pytest.param(("filter_proba", {}), id="filter_proba"),
+            pytest.param(("decode_state", {}), id="decode_state-onehot"),
+            pytest.param(("decode_state", {"output_format": "index"}), id="decode_state-index"),
+        ],
     )
     def test_with_pynapple_returns_tsdframe(
-        self, instantiate_base_regressor_subclass, input_type, method_name
+        self, instantiate_base_regressor_subclass, input_type, method_config
     ):
-        """Test that smooth_proba returns TsdFrame when input is pynapple."""
+        """Test that inference methods return TsdFrame/Tsd when input is pynapple."""
+        method_name, kwargs = method_config
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
 
@@ -1791,21 +1830,32 @@ class TestInferenceMethods:
         if input_type in ["y", "both"]:
             y_input = nap.Tsd(t=time, d=fixture.y)
 
-        # Get posteriors
-        out = getattr(model, method_name)(X_input, y_input)
+        # Get output
+        out = getattr(model, method_name)(X_input, y_input, **kwargs)
 
-        # Check return type
-        assert isinstance(out, nap.TsdFrame), f"Expected nap.TsdFrame, got {type(out)}"
-        assert out.shape == (n_samples, model.n_states)
+        # Check return type - decode_state with index format returns Tsd, others return TsdFrame
+        if method_name == "decode_state" and kwargs.get("output_format") == "index":
+            assert isinstance(out, nap.Tsd), f"Expected nap.Tsd, got {type(out)}"
+            assert out.shape == (n_samples,)
+        else:
+            assert isinstance(out, nap.TsdFrame), f"Expected nap.TsdFrame, got {type(out)}"
+            assert out.shape == (n_samples, model.n_states)
         assert jnp.allclose(out.t, time)
 
     @pytest.mark.parametrize(
-        "method_name", ["smooth_proba", "filter_proba", "decode_state"]
+        "method_config",
+        [
+            pytest.param(("smooth_proba", {}), id="smooth_proba"),
+            pytest.param(("filter_proba", {}), id="filter_proba"),
+            pytest.param(("decode_state", {}), id="decode_state-onehot"),
+            pytest.param(("decode_state", {"output_format": "index"}), id="decode_state-index"),
+        ],
     )
     def test_with_multiple_sessions(
-        self, instantiate_base_regressor_subclass, method_name
+        self, instantiate_base_regressor_subclass, method_config
     ):
-        """Test smooth_proba with multiple sessions (pynapple epochs)."""
+        """Test inference methods with multiple sessions (pynapple epochs)."""
+        method_name, kwargs = method_config
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
 
@@ -1822,38 +1872,49 @@ class TestInferenceMethods:
         X_tsd = nap.TsdFrame(t=time, d=fixture.X, time_support=epochs)
         y_tsd = nap.Tsd(t=time, d=fixture.y, time_support=epochs)
 
-        # Get posteriors
-        out = getattr(model, method_name)(X_tsd, y_tsd)
+        # Get output
+        out = getattr(model, method_name)(X_tsd, y_tsd, **kwargs)
 
         # Check shape and type
-        assert isinstance(out, nap.TsdFrame)
-        assert out.shape == (n_samples, model.n_states)
+        if method_name == "decode_state" and kwargs.get("output_format") == "index":
+            assert isinstance(out, nap.Tsd)
+            assert out.shape == (n_samples,)
+        else:
+            assert isinstance(out, nap.TsdFrame)
+            assert out.shape == (n_samples, model.n_states)
 
-        if method_name != "decode_state":
-            # Check probabilities are valid
+        # Check probabilities are valid for proba methods
+        if method_name in ["smooth_proba", "filter_proba"]:
             assert jnp.all(out.values >= 0)
             assert jnp.all(out.values <= 1)
             row_sums = jnp.sum(out.values, axis=1)
             assert jnp.allclose(row_sums, 1.0, rtol=1e-5)
 
     @pytest.mark.parametrize(
-        "method_name", ["smooth_proba", "filter_proba", "decode_state"]
+        "method_config",
+        [
+            pytest.param(("smooth_proba", {}), id="smooth_proba"),
+            pytest.param(("filter_proba", {}), id="filter_proba"),
+            pytest.param(("decode_state", {}), id="decode_state-onehot"),
+            pytest.param(("decode_state", {"output_format": "index"}), id="decode_state-index"),
+        ],
     )
     def test_consistency_across_calls(
-        self, instantiate_base_regressor_subclass, method_name
+        self, instantiate_base_regressor_subclass, method_config
     ):
-        """Test that smooth_proba returns consistent results across multiple calls."""
+        """Test that inference methods return consistent results across multiple calls."""
+        method_name, kwargs = method_config
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
 
         # Get output twice
-        out_1 = getattr(model, method_name)(fixture.X, fixture.y)
-        out_2 = getattr(model, method_name)(fixture.X, fixture.y)
+        out_1 = getattr(model, method_name)(fixture.X, fixture.y, **kwargs)
+        out_2 = getattr(model, method_name)(fixture.X, fixture.y, **kwargs)
 
         # Check consistency
         assert jnp.allclose(
             out_1, out_2
-        ), "smooth_proba returns different results on consecutive calls"
+        ), f"{method_name} returns different results on consecutive calls"
 
     @pytest.mark.parametrize(
         "method_name", ["smooth_proba", "filter_proba", "decode_state"]
