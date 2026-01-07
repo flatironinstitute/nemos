@@ -1681,10 +1681,7 @@ def test__get_is_new_session_and_drop_nan(X, y, instantiate_base_regressor_subcl
 class TestFilterAndSmoothProba:
     """Test suite for smooth_proba method."""
 
-    @pytest.mark.parametrize(
-        "drop_attr",
-        ["coef_", "intercept_", "scale_", "initial_prob_", "transition_prob_"],
-    )
+    @pytest.mark.parametrize("drop_attr", ["coef_", "intercept_", "scale_", "initial_prob_", "transition_prob_"],)
     @pytest.mark.parametrize("method_name", ["smooth_proba"])
     def test_posterior_proba_not_fitted_raises_error(
         self, instantiate_base_regressor_subclass, drop_attr, method_name
@@ -1694,8 +1691,7 @@ class TestFilterAndSmoothProba:
         model = fixture.model
         setattr(model, drop_attr, None)
         with pytest.raises(
-            ValueError,
-            match=rf"This GLMHMM instance is not fitted yet. .+ \['{drop_attr}'\]",
+            ValueError, match=fr"This GLMHMM instance is not fitted yet. .+ \['{drop_attr}'\]"
         ):
             getattr(model, method_name)(fixture.X, fixture.y)
 
@@ -1711,14 +1707,10 @@ class TestFilterAndSmoothProba:
         posteriors = getattr(model, method_name)(fixture.X, fixture.y)
 
         # Check shape
-        n_samples = (
-            ~np.isnan(np.sum(fixture.y, axis=tuple(range(1, fixture.y.ndim))))
-        ).sum()
+        n_samples = (~np.isnan(np.sum(fixture.y, axis=tuple(range(1, fixture.y.ndim))))).sum()
         n_states = model.n_states
-        assert posteriors.shape == (
-            n_samples,
-            n_states,
-        ), f"Expected shape ({n_samples}, {n_states}), got {posteriors.shape}"
+        assert posteriors.shape == (n_samples, n_states), \
+            f"Expected shape ({n_samples}, {n_states}), got {posteriors.shape}"
 
     @pytest.mark.parametrize("method_name", ["smooth_proba"])
     def test_posterior_proba_returns_valid_probabilities(
@@ -1774,9 +1766,8 @@ class TestFilterAndSmoothProba:
 
         # Test with numpy array
         posteriors = getattr(model, method_name)(fixture.X, fixture.y)
-        assert isinstance(
-            posteriors, jnp.ndarray
-        ), f"Expected jnp.ndarray, got {type(posteriors)}"
+        assert isinstance(posteriors, jnp.ndarray), \
+            f"Expected jnp.ndarray, got {type(posteriors)}"
 
     @pytest.mark.parametrize("input_type", ["X", "y", "both"])
     @pytest.mark.parametrize("method_name", ["smooth_proba"])
@@ -1807,9 +1798,8 @@ class TestFilterAndSmoothProba:
         posteriors = getattr(model, method_name)(X_input, y_input)
 
         # Check return type
-        assert isinstance(
-            posteriors, nap.TsdFrame
-        ), f"Expected nap.TsdFrame, got {type(posteriors)}"
+        assert isinstance(posteriors, nap.TsdFrame), \
+            f"Expected nap.TsdFrame, got {type(posteriors)}"
         assert posteriors.shape == (n_samples, model.n_states)
         assert jnp.allclose(posteriors.t, time)
 
@@ -1868,14 +1858,11 @@ class TestFilterAndSmoothProba:
         posteriors_2 = getattr(model, method_name)(fixture.X, fixture.y)
 
         # Check consistency
-        assert jnp.allclose(
-            posteriors_1, posteriors_2
-        ), "smooth_proba returns different results on consecutive calls"
+        assert jnp.allclose(posteriors_1, posteriors_2), \
+            "smooth_proba returns different results on consecutive calls"
 
     @pytest.mark.parametrize("method_name", ["smooth_proba"])
-    def test_posterior_proba_single_sample(
-        self, instantiate_base_regressor_subclass, method_name
-    ):
+    def test_posterior_proba_single_sample(self, instantiate_base_regressor_subclass, method_name):
         """Test smooth_proba with a single sample."""
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
@@ -1942,21 +1929,18 @@ class TestFilterAndSmoothProba:
         posteriors = getattr(model, method_name)(fixture.X, fixture.y)
 
         # Basic checks
-        assert posteriors.shape == (
-            fixture.X.shape[0],
-            model.n_states,
-        ), f"Shape check failed for {obs_model_name}"
-        assert jnp.all(posteriors >= 0), f"Negative probabilities for {obs_model_name}"
-        assert jnp.all(posteriors <= 1), f"Probabilities > 1 for {obs_model_name}"
+        assert posteriors.shape == (fixture.X.shape[0], model.n_states), \
+            f"Shape check failed for {obs_model_name}"
+        assert jnp.all(posteriors >= 0), \
+            f"Negative probabilities for {obs_model_name}"
+        assert jnp.all(posteriors <= 1), \
+            f"Probabilities > 1 for {obs_model_name}"
         row_sums = jnp.sum(posteriors, axis=1)
-        assert jnp.allclose(
-            row_sums, 1.0, rtol=1e-5
-        ), f"Probabilities don't sum to 1 for {obs_model_name}"
+        assert jnp.allclose(row_sums, 1.0, rtol=1e-5), \
+            f"Probabilities don't sum to 1 for {obs_model_name}"
 
     @pytest.mark.parametrize("method_name", ["smooth_proba"])
-    def test_posterior_proba_maxiter_effect(
-        self, instantiate_base_regressor_subclass, method_name
-    ):
+    def test_posterior_proba_maxiter_effect(self, instantiate_base_regressor_subclass, method_name):
         """Test that smooth_proba results depend on model fit quality (maxiter)."""
         fixture = instantiate_base_regressor_subclass
 
@@ -2003,15 +1987,11 @@ class TestFilterAndSmoothProba:
         model = fixture.model
         posteriors = getattr(model, method_name)(X, y)
         assert isinstance(posteriors, nap.TsdFrame), f"Did not return pynapple!"
-        assert np.all(
-            np.isnan(posteriors[nan_location])
-        ), f"Not returning NaNs in the expected location!"
+        assert np.all(np.isnan(posteriors[nan_location])), f"Not returning NaNs in the expected location!"
 
     @pytest.mark.parametrize("method_name", ["smooth_proba"])
     @pytest.mark.parametrize("nan_location", [[], [0, 1, 10, 11, 12]])
-    def test_pynapple_in_pynapple_out_y(
-        self, instantiate_base_regressor_subclass, method_name, nan_location
-    ):
+    def test_pynapple_in_pynapple_out_y(self, instantiate_base_regressor_subclass, method_name, nan_location):
         fixture = instantiate_base_regressor_subclass
         X = fixture.X
         y = np.array(fixture.y.copy(), dtype=float)
@@ -2021,14 +2001,10 @@ class TestFilterAndSmoothProba:
         model = fixture.model
         posteriors = getattr(model, method_name)(X, y)
         assert isinstance(posteriors, nap.TsdFrame), f"Did not return pynapple!"
-        assert np.all(
-            np.isnan(posteriors[nan_location])
-        ), f"Not returning NaNs in the expected location!"
+        assert np.all(np.isnan(posteriors[nan_location])), f"Not returning NaNs in the expected location!"
 
     @pytest.mark.parametrize("method_name", ["smooth_proba"])
-    def test_posterior_proba_int_vs_float_y(
-        self, instantiate_base_regressor_subclass, method_name
-    ):
+    def test_posterior_proba_int_vs_float_y(self, instantiate_base_regressor_subclass, method_name):
         """Test that integer and float y with same values give same posteriors.
 
         This is a regression test for a bug where y.dtype was used to cast params
@@ -2056,7 +2032,9 @@ class TestFilterAndSmoothProba:
         )
 
 
-@pytest.mark.parametrize("n_states", [2, 3, 5])
+@pytest.mark.parametrize(
+    "n_states", [2, 3, 5]
+)
 @pytest.mark.parametrize("method_name", ["smooth_proba"])
 def test_smooth_proba_different_n_states(n_states, method_name):
     """Test smooth_proba with different numbers of states."""
@@ -2075,10 +2053,8 @@ def test_smooth_proba_different_n_states(n_states, method_name):
     posteriors = getattr(model, method_name)(X, y)
 
     # Check shape
-    assert posteriors.shape == (
-        n_samples,
-        n_states,
-    ), f"Expected shape ({n_samples}, {n_states}), got {posteriors.shape}"
+    assert posteriors.shape == (n_samples, n_states), \
+        f"Expected shape ({n_samples}, {n_states}), got {posteriors.shape}"
 
     # Check probabilities are valid
     assert jnp.all(posteriors >= 0)
