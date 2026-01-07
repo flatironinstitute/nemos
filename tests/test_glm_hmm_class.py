@@ -1839,19 +1839,19 @@ class TestFilterAndSmoothProba:
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
 
-        # Get posteriors twice
-        posteriors_1 = getattr(model, method_name)(fixture.X, fixture.y)
-        posteriors_2 = getattr(model, method_name)(fixture.X, fixture.y)
+        # Get output twice
+        out_1 = getattr(model, method_name)(fixture.X, fixture.y, **kwargs)
+        out_2 = getattr(model, method_name)(fixture.X, fixture.y, **kwargs)
 
         # Check consistency
         assert jnp.allclose(
-            posteriors_1, posteriors_2
-        ), "smooth_proba returns different results on consecutive calls"
+            out_1, out_2
+        ), f"{method_name} returns different results on consecutive calls"
 
-    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba"])
-    def test_posterior_proba_single_sample(
-        self, instantiate_base_regressor_subclass, method_name
-    ):
+    @pytest.mark.parametrize(
+        "method_name", ["smooth_proba", "filter_proba", "decode_state"]
+    )
+    def test_single_sample(self, instantiate_base_regressor_subclass, method_name):
         """Test smooth_proba with a single sample."""
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
