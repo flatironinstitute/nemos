@@ -976,7 +976,7 @@ def max_sum(
     X: Array,
     y: Array,
     inverse_link_function: Callable,
-    log_likelihood_func: Callable[[Array, Array], Array],
+    log_likelihood_func: Callable[[Array, Array, Array], Array],
     is_new_session: Array | None = None,
     return_index: bool = False,
 ):
@@ -1000,6 +1000,9 @@ def max_sum(
         Function mapping linear predictors to the mean of the observation distribution
         (e.g., exp for Poisson, sigmoid for Bernoulli).
 
+    log_likelihood_func :
+        Function computing log p(y | rate, scale) for the observation model.
+
     is_new_session :
         Boolean array marking the start of a new session.
         If unspecified or empty, treats the full set of trials as a single session.
@@ -1017,15 +1020,16 @@ def max_sum(
     glm_params = params.glm_params
     log_transition = params.hmm_params.log_transition_prob
     log_init = params.hmm_params.log_initial_prob
+    glm_scale = params.glm_scale
+
     n_states = log_init.shape[0]
 
     # initialize new session
     is_new_session = initialize_new_session(y.shape[0], is_new_session)
 
-    predicted_rate_given_state = compute_rate_per_state(
-        X, glm_params, inverse_link_function
+    log_emission = _compute_log_likelihood(
+        glm_params, glm_scale, X, y, inverse_link_function, log_likelihood_func
     )
-    log_emission = log_likelihood_func(y, predicted_rate_given_state)
 
     def forward_max_sum(omega_prev, xs):
         log_em, is_new_sess = xs
