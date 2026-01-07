@@ -1699,7 +1699,7 @@ class TestInferenceMethods:
         ):
             getattr(model, method_name)(fixture.X, fixture.y)
 
-    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba, decode_state"])
+    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba", "decode_state"])
     def test_returns_correct_shape(
         self, instantiate_base_regressor_subclass, method_name
     ):
