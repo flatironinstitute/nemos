@@ -2093,6 +2093,14 @@ class TestInferenceMethods:
             err_msg=f"{method_name} gives different results for int vs float y with same values",
         )
 
+    def test_onehot_vs_index_decode(self, instantiate_base_regressor_subclass):
+        fixture = instantiate_base_regressor_subclass
+        X = fixture.X
+        y = fixture.y
+        model = fixture.model
+        out_onehot = model.decode_state(X, y, output_format="one-hot")
+        out_index = model.decode_state(X, y, output_format="index")
+        assert jnp.all(jnp.where(out_onehot == 1)[1] == out_index)
 
 @pytest.mark.parametrize("n_states", [2, 3, 5])
 @pytest.mark.parametrize(
