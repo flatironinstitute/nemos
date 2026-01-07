@@ -1678,15 +1678,15 @@ def test__get_is_new_session_and_drop_nan(X, y, instantiate_base_regressor_subcl
     indirect=True,
 )
 @pytest.mark.requires_x64
-class TestFilterAndSmoothProba:
+class TestInferenceMethods:
     """Test suite for smooth_proba method."""
 
     @pytest.mark.parametrize(
         "drop_attr",
         ["coef_", "intercept_", "scale_", "initial_prob_", "transition_prob_"],
     )
-    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba"])
-    def test_posterior_proba_not_fitted_raises_error(
+    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba", "decode_state"])
+    def test_not_fitted_raises_error(
         self, instantiate_base_regressor_subclass, drop_attr, method_name
     ):
         """Test that smooth_proba raises an error when model is not fitted."""
@@ -1699,8 +1699,8 @@ class TestFilterAndSmoothProba:
         ):
             getattr(model, method_name)(fixture.X, fixture.y)
 
-    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba"])
-    def test_posterior_proba_returns_correct_shape(
+    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba, decode_state"])
+    def test_returns_correct_shape(
         self, instantiate_base_regressor_subclass, method_name
     ):
         """Test that smooth_proba returns array with shape (n_samples, n_states)."""
@@ -1708,17 +1708,17 @@ class TestFilterAndSmoothProba:
         model = fixture.model
 
         # Get posteriors
-        posteriors = getattr(model, method_name)(fixture.X, fixture.y)
+        out = getattr(model, method_name)(fixture.X, fixture.y)
 
         # Check shape
         n_samples = (
             ~np.isnan(np.sum(fixture.y, axis=tuple(range(1, fixture.y.ndim))))
         ).sum()
         n_states = model.n_states
-        assert posteriors.shape == (
+        assert out.shape == (
             n_samples,
             n_states,
-        ), f"Expected shape ({n_samples}, {n_states}), got {posteriors.shape}"
+        ), f"Expected shape ({n_samples}, {n_states}), got {out.shape}"
 
     @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba"])
     def test_posterior_proba_returns_valid_probabilities(
@@ -1752,8 +1752,8 @@ class TestFilterAndSmoothProba:
             row_sums, 1.0, rtol=1e-5
         ), f"Probabilities don't sum to 1. Min: {row_sums.min()}, Max: {row_sums.max()}"
 
-    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba"])
-    def test_posterior_proba_with_arrays(
+    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba", "decode_state"])
+    def test_with_arrays(
         self, instantiate_base_regressor_subclass, method_name
     ):
         """Test smooth_proba with numpy/jax arrays returns jax array."""
@@ -1761,14 +1761,14 @@ class TestFilterAndSmoothProba:
         model = fixture.model
 
         # Test with numpy array
-        posteriors = getattr(model, method_name)(fixture.X, fixture.y)
+        out = getattr(model, method_name)(fixture.X, fixture.y)
         assert isinstance(
-            posteriors, jnp.ndarray
-        ), f"Expected jnp.ndarray, got {type(posteriors)}"
+            out, jnp.ndarray
+        ), f"Expected jnp.ndarray, got {type(out)}"
 
     @pytest.mark.parametrize("input_type", ["X", "y", "both"])
-    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba"])
-    def test_posterior_proba_with_pynapple_returns_tsdframe(
+    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba", "decode_state"])
+    def test_with_pynapple_returns_tsdframe(
         self, instantiate_base_regressor_subclass, input_type, method_name
     ):
         """Test that smooth_proba returns TsdFrame when input is pynapple."""
@@ -1788,17 +1788,17 @@ class TestFilterAndSmoothProba:
             y_input = nap.Tsd(t=time, d=fixture.y)
 
         # Get posteriors
-        posteriors = getattr(model, method_name)(X_input, y_input)
+        out = getattr(model, method_name)(X_input, y_input)
 
         # Check return type
         assert isinstance(
-            posteriors, nap.TsdFrame
-        ), f"Expected nap.TsdFrame, got {type(posteriors)}"
-        assert posteriors.shape == (n_samples, model.n_states)
-        assert jnp.allclose(posteriors.t, time)
+            out, nap.TsdFrame
+        ), f"Expected nap.TsdFrame, got {type(out)}"
+        assert out.shape == (n_samples, model.n_states)
+        assert jnp.allclose(out.t, time)
 
-    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba"])
-    def test_posterior_proba_with_multiple_sessions(
+    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba", "decode_state"])
+    def test_with_multiple_sessions(
         self, instantiate_base_regressor_subclass, method_name
     ):
         """Test smooth_proba with multiple sessions (pynapple epochs)."""
@@ -1819,20 +1819,21 @@ class TestFilterAndSmoothProba:
         y_tsd = nap.Tsd(t=time, d=fixture.y, time_support=epochs)
 
         # Get posteriors
-        posteriors = getattr(model, method_name)(X_tsd, y_tsd)
+        out = getattr(model, method_name)(X_tsd, y_tsd)
 
         # Check shape and type
-        assert isinstance(posteriors, nap.TsdFrame)
-        assert posteriors.shape == (n_samples, model.n_states)
+        assert isinstance(out, nap.TsdFrame)
+        assert out.shape == (n_samples, model.n_states)
 
-        # Check probabilities are valid
-        assert jnp.all(posteriors.values >= 0)
-        assert jnp.all(posteriors.values <= 1)
-        row_sums = jnp.sum(posteriors.values, axis=1)
-        assert jnp.allclose(row_sums, 1.0, rtol=1e-5)
+        if method_name != "decode_state":
+            # Check probabilities are valid
+            assert jnp.all(out.values >= 0)
+            assert jnp.all(out.values <= 1)
+            row_sums = jnp.sum(out.values, axis=1)
+            assert jnp.allclose(row_sums, 1.0, rtol=1e-5)
 
-    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba"])
-    def test_posterior_proba_consistency_across_calls(
+    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba", "decode_state"])
+    def test_consistency_across_calls(
         self, instantiate_base_regressor_subclass, method_name
     ):
         """Test that smooth_proba returns consistent results across multiple calls."""
@@ -1846,12 +1847,12 @@ class TestFilterAndSmoothProba:
         # Check consistency
         assert jnp.allclose(
             out_1, out_2
-        ), f"{method_name} returns different results on consecutive calls"
+        ), "smooth_proba returns different results on consecutive calls"
 
-    @pytest.mark.parametrize(
-        "method_name", ["smooth_proba", "filter_proba", "decode_state"]
-    )
-    def test_single_sample(self, instantiate_base_regressor_subclass, method_name):
+    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba", "decode_state"])
+    def test_single_sample(
+        self, instantiate_base_regressor_subclass, method_name
+    ):
         """Test smooth_proba with a single sample."""
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
@@ -1859,18 +1860,19 @@ class TestFilterAndSmoothProba:
         # Get posteriors for single sample
         X_single = fixture.X[:1]
         y_single = fixture.y[:1]
-        posteriors = getattr(model, method_name)(X_single, y_single)
+        out = getattr(model, method_name)(X_single, y_single)
 
         # Check shape
-        assert posteriors.shape == (1, model.n_states)
+        assert out.shape == (1, model.n_states)
 
-        # Check probabilities are valid
-        assert jnp.all(posteriors >= 0)
-        assert jnp.all(posteriors <= 1)
-        assert jnp.allclose(jnp.sum(posteriors), 1.0, rtol=1e-5)
+        if method_name != "decode_state":
+            # Check probabilities are valid
+            assert jnp.all(out >= 0)
+            assert jnp.all(out <= 1)
+            assert jnp.allclose(jnp.sum(out), 1.0, rtol=1e-5)
 
-    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba"])
-    def test_posterior_proba_with_nans_filtered(
+    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba", "decode_state"])
+    def test_with_nans_filtered(
         self, instantiate_base_regressor_subclass, method_name
     ):
         """Test that smooth_proba handles NaNs properly by filtering them."""
@@ -1893,8 +1895,8 @@ class TestFilterAndSmoothProba:
         # After filtering NaNs, shape[0] should be reduced
         assert posteriors.shape[0] == fixture.X.shape[0]
 
-    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba"])
-    def test_posterior_proba_different_observation_models(
+    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba", "decode_state"])
+    def test_different_observation_models(
         self, instantiate_base_regressor_subclass, method_name
     ):
         """Test smooth_proba works with different observation models."""
@@ -1903,19 +1905,21 @@ class TestFilterAndSmoothProba:
         obs_model_name = model.observation_model.__class__.__name__
 
         # Get posteriors
-        posteriors = getattr(model, method_name)(fixture.X, fixture.y)
+        out = getattr(model, method_name)(fixture.X, fixture.y)
 
         # Basic checks
-        assert posteriors.shape == (
+        assert out.shape == (
             fixture.X.shape[0],
             model.n_states,
         ), f"Shape check failed for {obs_model_name}"
-        assert jnp.all(posteriors >= 0), f"Negative probabilities for {obs_model_name}"
-        assert jnp.all(posteriors <= 1), f"Probabilities > 1 for {obs_model_name}"
-        row_sums = jnp.sum(posteriors, axis=1)
-        assert jnp.allclose(
-            row_sums, 1.0, rtol=1e-5
-        ), f"Probabilities don't sum to 1 for {obs_model_name}"
+
+        if method_name != "decode_state":
+            assert jnp.all(out >= 0), f"Negative probabilities for {obs_model_name}"
+            assert jnp.all(out <= 1), f"Probabilities > 1 for {obs_model_name}"
+            row_sums = jnp.sum(out, axis=1)
+            assert jnp.allclose(
+                row_sums, 1.0, rtol=1e-5
+            ), f"Probabilities don't sum to 1 for {obs_model_name}"
 
     @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba"])
     @pytest.mark.convergence
@@ -1950,11 +1954,8 @@ class TestFilterAndSmoothProba:
             row_sums = jnp.sum(posteriors, axis=1)
             assert jnp.allclose(row_sums, 1.0, rtol=1e-5)
 
-        # Results should differ (unless by chance they converge to same solution)
-        # We don't assert they're different because with very simple data they might be same
-        # but we do check that both runs produce valid results
 
-    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba"])
+    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba", "decode_state"])
     @pytest.mark.parametrize("nan_location", [[], [0, 1, 10, 11, 12]])
     def test_pynapple_in_pynapple_out_X(
         self, instantiate_base_regressor_subclass, method_name, nan_location
@@ -1966,13 +1967,13 @@ class TestFilterAndSmoothProba:
         X = nap.TsdFrame(t=np.arange(X.shape[0]), d=X, time_support=ep)
         y = fixture.y
         model = fixture.model
-        posteriors = getattr(model, method_name)(X, y)
-        assert isinstance(posteriors, nap.TsdFrame), f"Did not return pynapple!"
+        out = getattr(model, method_name)(X, y)
+        assert isinstance(out, nap.TsdFrame), f"Did not return pynapple!"
         assert np.all(
-            np.isnan(posteriors[nan_location])
+            np.isnan(out[nan_location])
         ), f"Not returning NaNs in the expected location!"
 
-    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba"])
+    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba", "decode_state"])
     @pytest.mark.parametrize("nan_location", [[], [0, 1, 10, 11, 12]])
     def test_pynapple_in_pynapple_out_y(
         self, instantiate_base_regressor_subclass, method_name, nan_location
@@ -1990,8 +1991,8 @@ class TestFilterAndSmoothProba:
             np.isnan(posteriors[nan_location])
         ), f"Not returning NaNs in the expected location!"
 
-    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba"])
-    def test_posterior_proba_int_vs_float_y(
+    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba", "decode_state"])
+    def test_int_vs_float_y(
         self, instantiate_base_regressor_subclass, method_name
     ):
         """Test that integer and float y with same values give same posteriors.
@@ -2007,23 +2008,23 @@ class TestFilterAndSmoothProba:
         model = fixture.model
 
         # Get posteriors with float y
-        posteriors_float = getattr(model, method_name)(X, y_float)
+        out_float = getattr(model, method_name)(X, y_float)
 
         # Get posteriors with int y (same values)
-        posteriors_int = getattr(model, method_name)(X, y_int)
+        out_int = getattr(model, method_name)(X, y_int)
 
         # Posteriors should be identical regardless of y dtype
         np.testing.assert_allclose(
-            posteriors_float,
-            posteriors_int,
+            out_float,
+            out_int,
             rtol=1e-10,
             err_msg=f"{method_name} gives different results for int vs float y with same values",
         )
 
 
 @pytest.mark.parametrize("n_states", [2, 3, 5])
-@pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba"])
-def test_posterior_proba_different_n_states(n_states, method_name):
+@pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba", "decode_state"])
+def test_different_n_states(n_states, method_name):
     """Test smooth_proba with different numbers of states."""
     np.random.seed(123)
     n_samples, n_features = 100, 2
@@ -2037,18 +2038,18 @@ def test_posterior_proba_different_n_states(n_states, method_name):
     )
     model.fit(X, y)
 
-    posteriors = getattr(model, method_name)(X, y)
+    out = getattr(model, method_name)(X, y)
 
     # Check shape
-    assert posteriors.shape == (
+    assert out.shape == (
         n_samples,
         n_states,
-    ), f"Expected shape ({n_samples}, {n_states}), got {posteriors.shape}"
+    ), f"Expected shape ({n_samples}, {n_states}), got {out.shape}"
 
     # Check probabilities are valid
-    assert jnp.all(posteriors >= 0)
-    assert jnp.all(posteriors <= 1)
-    row_sums = jnp.sum(posteriors, axis=1)
+    assert jnp.all(out >= 0)
+    assert jnp.all(out <= 1)
+    row_sums = jnp.sum(out, axis=1)
     assert jnp.allclose(row_sums, 1.0)
 
     # -------------------------------------------------------------------------
