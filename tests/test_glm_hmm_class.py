@@ -1998,6 +1998,34 @@ class TestFilterAndSmoothProba:
         assert isinstance(posteriors, nap.TsdFrame), f"Did not return pynapple!"
         assert np.all(np.isnan(posteriors[nan_location])), f"Not returning NaNs in the expected location!"
 
+    @pytest.mark.parametrize("method_name", ["smooth_proba"])
+    def test_posterior_proba_int_vs_float_y(self, instantiate_base_regressor_subclass, method_name):
+        """Test that integer and float y with same values give same posteriors.
+
+        This is a regression test for a bug where y.dtype was used to cast params
+        before preprocessing, causing integer y to round float params to integers.
+        """
+        fixture = instantiate_base_regressor_subclass
+        X = fixture.X
+        y = round(fixture.y.copy())
+        y_float = y.astype(float)
+        y_int = y.astype(int)
+        model = fixture.model
+
+        # Get posteriors with float y
+        posteriors_float = getattr(model, method_name)(X, y_float)
+
+        # Get posteriors with int y (same values)
+        posteriors_int = getattr(model, method_name)(X, y_int)
+
+        # Posteriors should be identical regardless of y dtype
+        np.testing.assert_allclose(
+            posteriors_float,
+            posteriors_int,
+            rtol=1e-10,
+            err_msg=f"{method_name} gives different results for int vs float y with same values"
+        )
+
 
 @pytest.mark.parametrize(
     "n_states", [2, 3, 5]
