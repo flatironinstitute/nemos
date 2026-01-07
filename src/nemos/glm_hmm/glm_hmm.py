@@ -1276,6 +1276,8 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         is_new_session: jnp.ndarray,
         return_index: bool,
     ) -> jnp.ndarray:
+        """Decode most likely state sequence without validation (internal method)."""
+        # filter for non-nans, grab data if needed
         valid = tree_utils.get_valid_multitree(X, y)
         data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
 
@@ -1311,7 +1313,117 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         y: ArrayLike,
         output_format: Literal["one-hot", "index"] = "one-hot",
     ) -> jnp.ndarray | nap.TsdFrame:
-        """Compute the most likely states over samples."""
+        """Compute the most likely hidden state sequence (Viterbi decoding).
+
+        Finds the single most likely sequence of hidden states that best explains
+        the observed data. This method uses the Viterbi (max-sum) algorithm to
+        compute the state sequence that maximizes the joint probability of states
+        and observations.
+
+        Unlike ``smooth_proba()`` and ``filter_proba()`` which return probability
+        distributions over states at each time point, this method makes a deterministic
+        choice of the single best state sequence.
+
+        The decoded states answer: "What is the most likely sequence of states that
+        generated the observed data?"
+
+        Parameters
+        ----------
+        X
+            Predictors, shape ``(n_time_points, n_features)``.
+        y
+            Observed neural activity, shape ``(n_time_points,)`` for single neuron or
+            ``(n_time_points, n_neurons)`` for population.
+        output_format
+            Format of the returned states:
+
+            - ``"one-hot"``: Binary matrix of shape ``(n_time_points, n_states)`` where
+              each row has a single 1 indicating the decoded state.
+            - ``"index"``: Integer array of shape ``(n_time_points,)`` with values
+              in ``[0, n_states-1]`` indicating the decoded state.
+
+        Returns
+        -------
+        decoded_states
+            Most likely state sequence:
+
+            - If ``output_format="one-hot"``: shape ``(n_time_points, n_states)``.
+              Each row is a one-hot vector with 1 in the position of the decoded state.
+            - If ``output_format="index"``: shape ``(n_time_points,)``.
+              Integer indices of the decoded states.
+
+        Raises
+        ------
+        ValueError
+            If the model has not been fit (``fit()`` must be called first).
+        ValueError
+            If inputs contain NaN values in the middle of epochs (only boundary NaNs allowed).
+        ValueError
+            If X and y have inconsistent shapes or features.
+
+        See Also
+        --------
+        smooth_proba : Compute smoothing posteriors (conditioned on all observations).
+        filter_proba : Compute filtering posteriors (conditioned on past observations only).
+
+        Notes
+        -----
+        - Viterbi decoding finds the globally optimal state sequence, not the sequence
+          of individually most likely states from ``smooth_proba()``
+        - This is a hard assignment (single best path) unlike probabilistic posteriors
+        - The algorithm properly handles session boundaries and NaN values at epoch borders
+        - Decoding is useful for segmenting continuous data into discrete behavioral states
+        - For uncertainty estimates about states, use ``smooth_proba()`` instead
+
+        Examples
+        --------
+        Fit a GLM-HMM and decode the most likely state sequence:
+
+        >>> import numpy as np
+        >>> import nemos as nmo
+        >>> # Generate example data
+        >>> np.random.seed(123)
+        >>> X = np.random.randn(100, 5)  # 100 time points, 5 features
+        >>> y = np.random.poisson(2, size=100)  # Poisson spike counts
+        >>>
+        >>> # Fit model with 3 hidden states
+        >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson")
+        >>> model = model.fit(X, y)
+        >>>
+        >>> # Decode states as one-hot encoding
+        >>> states_onehot = model.decode_state(X, y, output_format="one-hot")
+        >>> print(states_onehot.shape)
+        (100, 3)
+        >>> # Each row has exactly one 1
+        >>> print(np.all(states_onehot.sum(axis=1) == 1))
+        True
+        >>>
+        >>> # Decode states as integer indices
+        >>> states_idx = model.decode_state(X, y, output_format="index")
+        >>> print(states_idx.shape)
+        (100,)
+        >>> print(states_idx[:10])  # First 10 decoded states
+        [...]
+
+        Using with pynapple for time-series state decoding:
+
+        >>> import pynapple as nap
+        >>> # suppress jax to numpy conversion warning
+        >>> nap.nap_config.suppress_conversion_warnings = True
+        >>> # Create time-indexed data
+        >>> t = np.arange(100) * 0.01  # 10ms bins
+        >>> X_tsd = nap.TsdFrame(t=t, d=X)
+        >>> y_tsd = nap.Tsd(t=t, d=y)
+        >>>
+        >>> # Decoded states returned as TsdFrame or Tsd
+        >>> states_tsd = model.decode_state(X_tsd, y_tsd, output_format="one-hot")
+        >>> print(type(states_tsd))
+        <class 'pynapple.core.time_series.TsdFrame'>
+        >>> # With index format, returns Tsd
+        >>> states_idx_tsd = model.decode_state(X_tsd, y_tsd, output_format="index")
+        >>> print(type(states_idx_tsd))
+        <class 'pynapple.core.time_series.Tsd'>
+        """
         params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
         # define the return type for the max-sum
         if output_format == "one-hot":
