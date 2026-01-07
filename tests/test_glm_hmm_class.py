@@ -2100,8 +2100,8 @@ class TestInferenceMethods:
         model = fixture.model
         out_onehot = model.decode_state(X, y, output_format="one-hot")
         out_index = model.decode_state(X, y, output_format="index")
-        assert jnp.all(jnp.where(out_onehot == 1)[1] == out_index)
-        assert jnp.all(out_onehot.sum(axis=1) == 1)
+        assert jnp.all(jnp.where(out_onehot == 1)[1] == out_index), "index and one-hot do not match!"
+        assert jnp.all(out_onehot.sum(axis=1) == 1), "more than one hot value in one-hot array!"
 
 @pytest.mark.parametrize("n_states", [2, 3, 5])
 @pytest.mark.parametrize(
