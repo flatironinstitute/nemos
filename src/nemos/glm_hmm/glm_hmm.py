@@ -38,6 +38,7 @@ from .expectation_maximization import (
     em_glm_hmm,
     em_step,
     forward_pass,
+    max_sum,
 )
 from .initialize_parameters import (
     INITIALIZATION_FN_DICT,
@@ -1266,11 +1267,58 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
         return self._filter_proba(params, X, y, is_new_session)
 
+    @support_pynapple(conv_type="jax")
+    def _decode_state(
+        self,
+        params: GLMHMMParams,
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: Union[NDArray, jnp.ndarray, nap.Tsd],
+        is_new_session: jnp.ndarray,
+        return_index: bool,
+    ) -> jnp.ndarray:
+        valid = tree_utils.get_valid_multitree(X, y)
+        data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
+
+        # safe conversion to jax arrays of float
+        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+
+        # make sure is_new_session starts with a 1
+        is_new_session = is_new_session.at[0].set(True)
+
+        decoded_states = max_sum(
+            params,
+            data,
+            y,
+            inverse_link_function=self._inverse_link_function,
+            is_new_session=is_new_session,
+            log_likelihood_func=prepare_estep_log_likelihood(
+                y.ndim > 1, self.observation_model
+            ),
+            return_index=return_index,
+        )
+
+        # reattach nans
+        decoded_states = (
+            jnp.full((valid.shape[0], *decoded_states.shape[1:]), jnp.nan)
+            .at[valid]
+            .set(decoded_states)
+        )
+        return decoded_states
+
     def decode_state(
-        self, X: Union[DESIGN_INPUT_TYPE, ArrayLike], y: ArrayLike
+        self,
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: ArrayLike,
+        output_format: Literal["one-hot", "index"] = "one-hot",
     ) -> jnp.ndarray | nap.TsdFrame:
         """Compute the most likely states over samples."""
-        pass
+        params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
+        # define the return type for the max-sum
+        if output_format == "one-hot":
+            return_index = False
+        else:
+            return_index = True
+        return self._decode_state(params, X, y, is_new_session, return_index)
 
     def _compute_loss(
         self,
