@@ -1840,8 +1840,8 @@ class TestFilterAndSmoothProba:
         model = fixture.model
 
         # Get output twice
-        out_1 = getattr(model, method_name)(fixture.X, fixture.y, **kwargs)
-        out_2 = getattr(model, method_name)(fixture.X, fixture.y, **kwargs)
+        out_1 = getattr(model, method_name)(fixture.X, fixture.y)
+        out_2 = getattr(model, method_name)(fixture.X, fixture.y)
 
         # Check consistency
         assert jnp.allclose(
