@@ -2279,7 +2279,10 @@ class TestViterbi:
         transition_prob = data["transition_prob"]
         X, y = data["X"], data["y"]
         new_session = data["new_sess"] if use_new_sess else None
-        intercept, coef = data["projection_weights"][:1].squeeze(), data["projection_weights"][1:]
+        intercept, coef = (
+            data["projection_weights"][:1].squeeze(),
+            data["projection_weights"][1:],
+        )
 
         obs = BernoulliObservations()
         inverse_link_function = obs.default_inverse_link_function
@@ -2288,7 +2291,9 @@ class TestViterbi:
         )
 
         log_like_func = prepare_estep_log_likelihood(False, observation_model=obs)
-        log_emission_array = log_like_func(y, predicted_rate_given_state, jnp.ones_like(intercept))
+        log_emission_array = log_like_func(
+            y, predicted_rate_given_state, jnp.ones_like(intercept)
+        )
         params = GLMHMMParams(
             glm_params=GLMParams(coef, intercept),
             glm_scale=GLMScale(jnp.zeros(intercept.shape)),
@@ -2321,7 +2326,10 @@ class TestViterbi:
         transition_prob = data["transition_prob"]
         X, y = data["X"], data["y"]
         new_session = data["new_sess"][:100] if use_new_sess else None
-        intercept, coef = data["projection_weights"][:1].squeeze(), data["projection_weights"][1:]
+        intercept, coef = (
+            data["projection_weights"][:1].squeeze(),
+            data["projection_weights"][1:],
+        )
 
         obs = BernoulliObservations()
         inverse_link_function = obs.default_inverse_link_function
