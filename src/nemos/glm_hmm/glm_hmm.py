@@ -969,6 +969,20 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         proba = jnp.full((valid.shape[0], proba.shape[1]), jnp.nan).at[valid].set(proba)
         return proba
 
+    def _validate_and_prepare_inputs(self, X, y):
+        """Validate and prepare inputs."""
+        # check if the model was fit
+        self._check_is_fit()
+        params = self._get_model_params()
+
+        # validate inputs
+        self._validator.validate_inputs(X=X, y=y)
+        self._validator.validate_consistency(params, X=X, y=y)
+
+        # compute new session indicator
+        is_new_session = self._get_is_new_session(X, y)
+        return params, X, y, is_new_session
+
     def smooth_proba(
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
@@ -1053,15 +1067,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         >>> print(type(posteriors_tsd))
         <class 'pynapple.core.time_series.TsdFrame'>
         """
-        # check if the model was fit
-        self._check_is_fit()
-        params = self._get_model_params()
-
-        # validate inputs
-        self._validator.validate_inputs(X=X, y=y)
-        is_new_session = self._get_is_new_session(X, y)
-        self._validator.validate_consistency(params, X=X, y=y)
-
+        params, X, y, is_new_session = self._check_and_prepare_inputs(X, y)
         return self._smooth_proba(params, X, y, is_new_session)
 
     def filter_proba(
