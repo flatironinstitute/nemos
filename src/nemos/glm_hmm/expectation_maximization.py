@@ -273,7 +273,7 @@ def forward_pass(
     inverse_link_function: Callable[[Array], Array],
     log_likelihood_func: Callable[[Array, Array, Array], Array],
     is_new_session: Array | None = None,
-) -> jnp.ndarray:
+) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """
     Compute filtering probabilities (forward messages) for a GLM-HMM.
 
@@ -309,6 +309,9 @@ def forward_pass(
         Normalized log forward messages, shape ``(n_time_bins, n_states)``.
         Entry ``[t, k]`` is the log filtered probability log p(z_t=k | y_1:t).
         Each row is normalized: ``exp(log_alphas[t]).sum() == 1``.
+    log_normalizers :
+        Array of shape ``(n_time_bins,)`` containing the log-normalization constants at each
+        time step. The sum of these values gives the log-likelihood of the sequence.
 
     See Also
     --------
@@ -338,10 +341,10 @@ def forward_pass(
     )
 
     # Compute forward pass
-    log_alphas, _ = _forward_pass(
+    log_alphas, log_normalizers = _forward_pass(
         log_initial_prob, log_transition_prob, log_conditionals, is_new_session
     )  # these are equivalent to the forward pass with python loop
-    return log_alphas
+    return log_alphas, log_normalizers
 
 
 def _backward_pass(
