@@ -595,7 +595,7 @@ def test_forward_private_vs_public(generate_data_multi_state):
     )
     rate_by_state = inv_link(X.dot(coef) + intercept)
     log_conditionals = log_likelihood_func(y, rate_by_state, scale)
-    private_forward, _ = _forward_pass(
+    private_forward, private_norm = _forward_pass(
         np.log(initial_prob),
         np.log(transition_prob),
         log_conditionals,
@@ -606,7 +606,7 @@ def test_forward_private_vs_public(generate_data_multi_state):
         GLMScale(scale),
         HMMParams(np.log(initial_prob), np.log(transition_prob)),
     )
-    public_forward = forward_pass(
+    public_forward, public_norm = forward_pass(
         params,
         X,
         y,
@@ -615,6 +615,7 @@ def test_forward_private_vs_public(generate_data_multi_state):
         is_new_session=new_sess,
     )
     np.testing.assert_allclose(public_forward, private_forward)
+    np.testing.assert_allclose(public_norm, private_norm)
 
 
 class TestForwardBackward:

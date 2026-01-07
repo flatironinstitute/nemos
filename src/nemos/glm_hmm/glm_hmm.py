@@ -1097,7 +1097,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
 
         # make sure is_new_session starts with a 1
         is_new_session = is_new_session.at[0].set(True)
-        log_proba = forward_pass(
+        log_proba, _ = forward_pass(
             params,
             data,
             y,
