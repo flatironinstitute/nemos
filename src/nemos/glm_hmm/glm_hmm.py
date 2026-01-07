@@ -1067,7 +1067,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         >>> print(type(posteriors_tsd))
         <class 'pynapple.core.time_series.TsdFrame'>
         """
-        params, X, y, is_new_session = self._check_and_prepare_inputs(X, y)
+        params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
         return self._smooth_proba(params, X, y, is_new_session)
 
     def filter_proba(
