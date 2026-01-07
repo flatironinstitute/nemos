@@ -1685,7 +1685,9 @@ class TestInferenceMethods:
         "drop_attr",
         ["coef_", "intercept_", "scale_", "initial_prob_", "transition_prob_"],
     )
-    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba", "decode_state"])
+    @pytest.mark.parametrize(
+        "method_name", ["smooth_proba", "filter_proba", "decode_state"]
+    )
     def test_not_fitted_raises_error(
         self, instantiate_base_regressor_subclass, drop_attr, method_name
     ):
@@ -1699,7 +1701,9 @@ class TestInferenceMethods:
         ):
             getattr(model, method_name)(fixture.X, fixture.y)
 
-    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba", "decode_state"])
+    @pytest.mark.parametrize(
+        "method_name", ["smooth_proba", "filter_proba", "decode_state"]
+    )
     def test_returns_correct_shape(
         self, instantiate_base_regressor_subclass, method_name
     ):
@@ -1752,22 +1756,22 @@ class TestInferenceMethods:
             row_sums, 1.0, rtol=1e-5
         ), f"Probabilities don't sum to 1. Min: {row_sums.min()}, Max: {row_sums.max()}"
 
-    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba", "decode_state"])
-    def test_with_arrays(
-        self, instantiate_base_regressor_subclass, method_name
-    ):
+    @pytest.mark.parametrize(
+        "method_name", ["smooth_proba", "filter_proba", "decode_state"]
+    )
+    def test_with_arrays(self, instantiate_base_regressor_subclass, method_name):
         """Test smooth_proba with numpy/jax arrays returns jax array."""
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
 
         # Test with numpy array
         out = getattr(model, method_name)(fixture.X, fixture.y)
-        assert isinstance(
-            out, jnp.ndarray
-        ), f"Expected jnp.ndarray, got {type(out)}"
+        assert isinstance(out, jnp.ndarray), f"Expected jnp.ndarray, got {type(out)}"
 
     @pytest.mark.parametrize("input_type", ["X", "y", "both"])
-    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba", "decode_state"])
+    @pytest.mark.parametrize(
+        "method_name", ["smooth_proba", "filter_proba", "decode_state"]
+    )
     def test_with_pynapple_returns_tsdframe(
         self, instantiate_base_regressor_subclass, input_type, method_name
     ):
@@ -1791,13 +1795,13 @@ class TestInferenceMethods:
         out = getattr(model, method_name)(X_input, y_input)
 
         # Check return type
-        assert isinstance(
-            out, nap.TsdFrame
-        ), f"Expected nap.TsdFrame, got {type(out)}"
+        assert isinstance(out, nap.TsdFrame), f"Expected nap.TsdFrame, got {type(out)}"
         assert out.shape == (n_samples, model.n_states)
         assert jnp.allclose(out.t, time)
 
-    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba", "decode_state"])
+    @pytest.mark.parametrize(
+        "method_name", ["smooth_proba", "filter_proba", "decode_state"]
+    )
     def test_with_multiple_sessions(
         self, instantiate_base_regressor_subclass, method_name
     ):
@@ -1832,7 +1836,9 @@ class TestInferenceMethods:
             row_sums = jnp.sum(out.values, axis=1)
             assert jnp.allclose(row_sums, 1.0, rtol=1e-5)
 
-    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba", "decode_state"])
+    @pytest.mark.parametrize(
+        "method_name", ["smooth_proba", "filter_proba", "decode_state"]
+    )
     def test_consistency_across_calls(
         self, instantiate_base_regressor_subclass, method_name
     ):
@@ -1849,10 +1855,10 @@ class TestInferenceMethods:
             out_1, out_2
         ), "smooth_proba returns different results on consecutive calls"
 
-    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba", "decode_state"])
-    def test_single_sample(
-        self, instantiate_base_regressor_subclass, method_name
-    ):
+    @pytest.mark.parametrize(
+        "method_name", ["smooth_proba", "filter_proba", "decode_state"]
+    )
+    def test_single_sample(self, instantiate_base_regressor_subclass, method_name):
         """Test smooth_proba with a single sample."""
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
@@ -1871,10 +1877,10 @@ class TestInferenceMethods:
             assert jnp.all(out <= 1)
             assert jnp.allclose(jnp.sum(out), 1.0, rtol=1e-5)
 
-    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba", "decode_state"])
-    def test_with_nans_filtered(
-        self, instantiate_base_regressor_subclass, method_name
-    ):
+    @pytest.mark.parametrize(
+        "method_name", ["smooth_proba", "filter_proba", "decode_state"]
+    )
+    def test_with_nans_filtered(self, instantiate_base_regressor_subclass, method_name):
         """Test that smooth_proba handles NaNs properly by filtering them."""
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
@@ -1895,7 +1901,9 @@ class TestInferenceMethods:
         # After filtering NaNs, shape[0] should be reduced
         assert posteriors.shape[0] == fixture.X.shape[0]
 
-    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba", "decode_state"])
+    @pytest.mark.parametrize(
+        "method_name", ["smooth_proba", "filter_proba", "decode_state"]
+    )
     def test_different_observation_models(
         self, instantiate_base_regressor_subclass, method_name
     ):
@@ -1954,8 +1962,9 @@ class TestInferenceMethods:
             row_sums = jnp.sum(posteriors, axis=1)
             assert jnp.allclose(row_sums, 1.0, rtol=1e-5)
 
-
-    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba", "decode_state"])
+    @pytest.mark.parametrize(
+        "method_name", ["smooth_proba", "filter_proba", "decode_state"]
+    )
     @pytest.mark.parametrize("nan_location", [[], [0, 1, 10, 11, 12]])
     def test_pynapple_in_pynapple_out_X(
         self, instantiate_base_regressor_subclass, method_name, nan_location
@@ -1973,7 +1982,9 @@ class TestInferenceMethods:
             np.isnan(out[nan_location])
         ), f"Not returning NaNs in the expected location!"
 
-    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba", "decode_state"])
+    @pytest.mark.parametrize(
+        "method_name", ["smooth_proba", "filter_proba", "decode_state"]
+    )
     @pytest.mark.parametrize("nan_location", [[], [0, 1, 10, 11, 12]])
     def test_pynapple_in_pynapple_out_y(
         self, instantiate_base_regressor_subclass, method_name, nan_location
@@ -1991,10 +2002,10 @@ class TestInferenceMethods:
             np.isnan(posteriors[nan_location])
         ), f"Not returning NaNs in the expected location!"
 
-    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba", "decode_state"])
-    def test_int_vs_float_y(
-        self, instantiate_base_regressor_subclass, method_name
-    ):
+    @pytest.mark.parametrize(
+        "method_name", ["smooth_proba", "filter_proba", "decode_state"]
+    )
+    def test_int_vs_float_y(self, instantiate_base_regressor_subclass, method_name):
         """Test that integer and float y with same values give same posteriors.
 
         This is a regression test for a bug where y.dtype was used to cast params
@@ -2023,7 +2034,9 @@ class TestInferenceMethods:
 
 
 @pytest.mark.parametrize("n_states", [2, 3, 5])
-@pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba", "decode_state"])
+@pytest.mark.parametrize(
+    "method_name", ["smooth_proba", "filter_proba", "decode_state"]
+)
 def test_different_n_states(n_states, method_name):
     """Test smooth_proba with different numbers of states."""
     np.random.seed(123)

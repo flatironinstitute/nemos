@@ -1031,72 +1031,78 @@ def max_sum(
         glm_params, glm_scale, X, y, inverse_link_function, log_likelihood_func
     )
 
-    def forward_max_sum(omega_prev, xs):
-        log_em, is_new_sess = xs
-
-        def reset_chain(omega_prev, log_em):
-            # New session: reset to initial distribution
-            omega = log_init + log_em
-            max_prob_state = jnp.full(n_states, -1)  # Boundary marker
-            return omega, max_prob_state
-
-        def continue_chain(omega_prev, log_em):
-            # Continue existing session: Viterbi step
-            step = log_em[None, :] + log_transition + omega_prev[:, None]
-            max_prob_state = jnp.argmax(step, axis=0)
-            omega = step[max_prob_state, jnp.arange(n_states)]
-            return omega, max_prob_state
-
-        omega, max_prob_state = jax.lax.cond(
-            is_new_sess,
-            reset_chain,
-            continue_chain,
-            omega_prev,
-            log_em,
-        )
-
-        return omega, (omega, max_prob_state)
-
     init_omega = log_init + log_emission[0]
-    _, (omegas, max_prob_states) = jax.lax.scan(
-        forward_max_sum, init_omega, (log_emission[1:], is_new_session[1:])
-    )
 
-    # Backward pass
-    best_final_state = jnp.argmax(omegas[-1])
-    # Prepend initial omega and exclude last one, which is already considered.
-    omegas = jnp.concatenate([init_omega[None, :], omegas[:-1]], axis=0)
+    if len(y) == 1:
+        # single sample
+        map_path = jnp.atleast_1d(jnp.argmax(init_omega))
+    else:
 
-    def backward_max_sum(current_state_idx, xs):
-        max_prob_st, omega_t = xs
+        def forward_max_sum(omega_prev, xs):
+            log_em, is_new_sess = xs
 
-        def session_boundary(state_idx, max_prob, omega):
-            # Hit a session start, pick best state at this boundary
-            return jnp.argmax(omega)
+            def reset_chain(omega_prev, log_em):
+                # New session: reset to initial distribution
+                omega = log_init + log_em
+                max_prob_state = jnp.full(n_states, -1)  # Boundary marker
+                return omega, max_prob_state
 
-        def continue_backward(state_idx, max_prob, omega):
-            # Normal backtracking
-            return max_prob[state_idx]
+            def continue_chain(omega_prev, log_em):
+                # Continue existing session: Viterbi step
+                step = log_em[None, :] + log_transition + omega_prev[:, None]
+                max_prob_state = jnp.argmax(step, axis=0)
+                omega = step[max_prob_state, jnp.arange(n_states)]
+                return omega, max_prob_state
 
-        is_boundary = max_prob_st[current_state_idx] == -1
+            omega, max_prob_state = jax.lax.cond(
+                is_new_sess,
+                reset_chain,
+                continue_chain,
+                omega_prev,
+                log_em,
+            )
 
-        prev_state_idx = jax.lax.cond(
-            is_boundary,
-            session_boundary,
-            continue_backward,
-            current_state_idx,
-            max_prob_st,
-            omega_t,
+            return omega, (omega, max_prob_state)
+
+        _, (omegas, max_prob_states) = jax.lax.scan(
+            forward_max_sum, init_omega, (log_emission[1:], is_new_session[1:])
         )
 
-        return prev_state_idx, prev_state_idx
+        # Backward pass
+        best_final_state = jnp.argmax(omegas[-1])
+        # Prepend initial omega and exclude last one, which is already considered.
+        omegas = jnp.concatenate([init_omega[None, :], omegas[:-1]], axis=0)
 
-    _, map_path = jax.lax.scan(
-        backward_max_sum, best_final_state, (max_prob_states, omegas), reverse=True
-    )
+        def backward_max_sum(current_state_idx, xs):
+            max_prob_st, omega_t = xs
 
-    # Append the final state
-    map_path = jnp.concatenate([map_path, jnp.array([best_final_state])])
+            def session_boundary(state_idx, max_prob, omega):
+                # Hit a session start, pick best state at this boundary
+                return jnp.argmax(omega)
+
+            def continue_backward(state_idx, max_prob, omega):
+                # Normal backtracking
+                return max_prob[state_idx]
+
+            is_boundary = max_prob_st[current_state_idx] == -1
+
+            prev_state_idx = jax.lax.cond(
+                is_boundary,
+                session_boundary,
+                continue_backward,
+                current_state_idx,
+                max_prob_st,
+                omega_t,
+            )
+
+            return prev_state_idx, prev_state_idx
+
+        _, map_path = jax.lax.scan(
+            backward_max_sum, best_final_state, (max_prob_states, omegas), reverse=True
+        )
+
+        # Append the final state
+        map_path = jnp.concatenate([map_path, jnp.array([best_final_state])])
 
     if not return_index:
         map_path = jax.nn.one_hot(map_path, n_states, dtype=jnp.int32)
