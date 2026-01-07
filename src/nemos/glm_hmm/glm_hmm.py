@@ -935,6 +935,33 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
             rank = jnp.linalg.matrix_rank(X)
             return (n_samples - rank - dof_intercept_and_hmm) * jnp.ones(n_neurons)
 
+    def _score(
+        self,
+        params: GLMHMMParams,
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: Union[NDArray, jnp.ndarray, nap.Tsd],
+        is_new_session: jnp.ndarray,
+    ) -> jnp.ndarray:
+        """Private score compute."""
+        # filter for non-nans, grab data if needed
+        data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
+
+        # make sure is_new_session starts with a 1
+        is_new_session = is_new_session.at[0].set(True)
+
+        # smooth with forward backward
+        _, _, log_likelihood, _, _, _ = forward_backward(
+            params=params,
+            X=data,
+            y=y,
+            is_new_session=is_new_session,
+            log_likelihood_func=prepare_estep_log_likelihood(
+                y.ndim > 1, self.observation_model
+            ),
+            inverse_link_function=self._inverse_link_function,
+        )
+        return log_likelihood
+
     def score(
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
@@ -942,7 +969,6 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         score_type: Literal[
             "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"
         ] = "log-likelihood",
-        aggregate_sample_scores: Callable = jnp.mean,
         null_model: Optional[Literal["constant", "glm"]] = None,
     ) -> jnp.ndarray:
         """Compute the model score."""
@@ -952,7 +978,23 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
                 UserWarning,
                 stacklevel=2,
             )
-        pass
+        if score_type != "log-likelihood":
+            raise NotImplementedError(
+                f"score of type {score_type} not implemented yet!"
+            )
+
+        # check if the model was fit
+        self._check_is_fit()
+        params = self._get_model_params()
+
+        # validate inputs
+        self._validator.validate_inputs(X=X, y=y)
+        is_new_session = self._get_is_new_session(X, y)
+        self._validator.validate_consistency(params, X=X, y=y)
+
+        # safe conversion to jax arrays of float
+        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+        return self._score(params, X, y, is_new_session)
 
     def simulate(
         self,
