@@ -945,6 +945,8 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         """Private score compute."""
         # filter for non-nans, grab data if needed
         data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
+        # safe conversion to jax arrays of float
+        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
 
         # make sure is_new_session starts with a 1
         is_new_session = is_new_session.at[0].set(True)
@@ -992,8 +994,6 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         is_new_session = self._get_is_new_session(X, y)
         self._validator.validate_consistency(params, X=X, y=y)
 
-        # safe conversion to jax arrays of float
-        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
         return self._score(params, X, y, is_new_session)
 
     def simulate(
