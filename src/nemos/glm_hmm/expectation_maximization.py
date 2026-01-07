@@ -972,11 +972,9 @@ def em_glm_hmm(
     static_argnames=["inverse_link_function", "log_likelihood_func", "return_index"],
 )
 def max_sum(
+    params: GLMHMMParams,
     X: Array,
     y: Array,
-    initial_prob: Array,
-    transition_prob: Array,
-    glm_params: GLMParams,
     inverse_link_function: Callable,
     log_likelihood_func: Callable[[Array, Array], Array],
     is_new_session: Array | None = None,
@@ -989,22 +987,14 @@ def max_sum(
 
     Parameters
     ----------
+    params :
+        The GLMHMM parameters.
+
     X :
         Design matrix, pytree with leaves of shape ``(n_time_bins, n_features)``.
 
     y :
         Observations, pytree with leaves of shape ``(n_time_bins,)``.
-
-    initial_prob :
-        Initial latent state probability, pytree with leaves of shape ``(n_states, 1)``.
-
-    transition_prob :
-        Latent state transition matrix, pytree with leaves of shape ``(n_states, n_states)``.
-        ``transition_prob[i, j]`` is the probability of transitioning from state ``i`` to state ``j``.
-
-    glm_params :
-        Length two tuple with the GLM coefficients of shape ``(n_features, n_states)``
-        and intercept of shape ``(n_states,)``.
 
     inverse_link_function :
         Function mapping linear predictors to the mean of the observation distribution
@@ -1023,15 +1013,19 @@ def max_sum(
         The MAP state path.
 
     """
+    # unpack parameters
+    glm_params = params.glm_params
+    log_transition = params.hmm_params.log_transition_prob
+    log_init = params.hmm_params.log_initial_prob
+    n_states = log_init.shape[0]
+
+    # initialize new session
     is_new_session = initialize_new_session(y.shape[0], is_new_session)
+
     predicted_rate_given_state = compute_rate_per_state(
         X, glm_params, inverse_link_function
     )
     log_emission = log_likelihood_func(y, predicted_rate_given_state)
-
-    log_transition = jnp.log(transition_prob)
-    log_init = jnp.log(initial_prob)
-    n_states = initial_prob.shape[0]
 
     def forward_max_sum(omega_prev, xs):
         log_em, is_new_sess = xs

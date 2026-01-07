@@ -2293,12 +2293,15 @@ class TestViterbi:
             out_axes=1,
         )
         log_emission_array = log_like_func(y, predicted_rate_given_state)
+        params = GLMHMMParams(
+            glm_params=GLMParams(coef, intercept),
+            glm_scale=GLMScale(jnp.zeros(intercept.shape)),
+            hmm_params=HMMParams(jnp.log(initial_prob), jnp.log(transition_prob)),
+        )
         map_path = max_sum(
+            params,
             X[:, 1:],
             y,
-            initial_prob,
-            transition_prob,
-            GLMParams(coef, intercept),
             inverse_link_function,
             log_like_func,
             is_new_session=new_session,
@@ -2334,12 +2337,15 @@ class TestViterbi:
             in_axes=(None, 1),
             out_axes=1,
         )
+        params = GLMHMMParams(
+            glm_params=GLMParams(coef, intercept),
+            glm_scale=GLMScale(jnp.zeros(intercept.shape)),
+            hmm_params=HMMParams(jnp.log(initial_prob), jnp.log(transition_prob)),
+        )
         map_path = max_sum(
+            params,
             X[:100, 1:],
             y[:100],
-            initial_prob,
-            transition_prob,
-            GLMParams(coef, intercept),
             inverse_link_function,
             log_like_func,
             is_new_session=new_session,
