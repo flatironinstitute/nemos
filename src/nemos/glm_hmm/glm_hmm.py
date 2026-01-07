@@ -950,7 +950,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         is_new_session = is_new_session.at[0].set(True)
 
         # smooth with forward backward
-        _, _, log_likelihood, _, _, _ = forward_backward(
+        _, log_norm = forward_pass(
             params=params,
             X=data,
             y=y,
@@ -960,7 +960,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
             ),
             inverse_link_function=self._inverse_link_function,
         )
-        return log_likelihood
+        return jnp.sum(log_norm)
 
     def score(
         self,
