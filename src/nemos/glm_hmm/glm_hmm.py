@@ -984,16 +984,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
             raise NotImplementedError(
                 f"score of type {score_type} not implemented yet!"
             )
-
-        # check if the model was fit
-        self._check_is_fit()
-        params = self._get_model_params()
-
-        # validate inputs
-        self._validator.validate_inputs(X=X, y=y)
-        is_new_session = self._get_is_new_session(X, y)
-        self._validator.validate_consistency(params, X=X, y=y)
-
+        params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
         return self._score(params, X, y, is_new_session)
 
     def simulate(
