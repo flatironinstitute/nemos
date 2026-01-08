@@ -17,6 +17,7 @@ __all__ = [
     "BernoulliObservations",
     "NegativeBinomialObservations",
     "GaussianObservations",
+    "CategoricalObservations",
 ]
 
 
