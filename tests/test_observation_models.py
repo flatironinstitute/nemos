@@ -726,6 +726,99 @@ class TestGaussianObservations:
         assert repr(obs) == f"GaussianObservations()"
 
 
+class TestCategoricalObservations:
+
+    @staticmethod
+    def log_likelihood(y, log_proba):
+        proba = jnp.exp(log_proba)
+        proba = proba / proba.sum(axis=1, keepdims=True)
+        return np.array([sts.multinomial(1, pi).logpmf(yi) for pi, yi in zip(proba, y)])
+
+    def test_get_params(self, categorical_observations):
+        """Test get_params() returns expected values."""
+        observation_model = categorical_observations()
+
+        assert observation_model.get_params() == {}
+
+    def test_deviance_against_scipy(self, categoricalGLM_model_instantiation):
+        """
+        Compare fitted parameters to statsmodels.
+        Assesses if the model estimates are close to statsmodels' results.
+        """
+        _, y, model, _, firing_rate = categoricalGLM_model_instantiation
+        dev = - 2 * self.log_likelihood(y, firing_rate).sum()
+        dev_model = model.observation_model.deviance(y, firing_rate).sum()
+        if not np.allclose(dev, dev_model):
+            raise ValueError("Deviance doesn't match statsmodels!")
+
+    def test_loglikelihood_against_scipy(self, categoricalGLM_model_instantiation):
+        """
+        Compare log-likelihood to scipy.
+        Assesses if the model estimates are close to statsmodels' results.
+        """
+        _, y, model, _, firing_rate = categoricalGLM_model_instantiation
+        ll_model = model.observation_model.log_likelihood(y, firing_rate)
+        ll_scipy = self.log_likelihood(y, firing_rate).mean()
+        if not np.allclose(ll_model, ll_scipy):
+            raise ValueError("Log-likelihood doesn't match scipy!")
+
+    @pytest.mark.requires_x64
+    def test_loglikelihood_per_sample_against_scipy(
+        self, categoricalGLM_model_instantiation
+    ):
+        """
+        Compare log-likelihood to scipy.
+        Assesses if the model estimates are close to statsmodels' results.
+        """
+        _, y, model, _, firing_rate = categoricalGLM_model_instantiation
+        ll_model = model.observation_model.log_likelihood(
+            y, firing_rate, aggregate_sample_scores=lambda x: x
+        )
+        ll_scipy = self.log_likelihood(y, firing_rate)
+        if not np.allclose(ll_model, ll_scipy):
+            raise ValueError("Log-likelihood doesn't match scipy!")
+
+    def test_emission_probability(self, categoricalGLM_model_instantiation):
+        """
+        Test the poisson emission probability.
+
+        Check that the emission probability is set to jax.random.poisson.
+        """
+        _, _, model, _, _ = categoricalGLM_model_instantiation
+        key_array = jax.random.key(123)
+        p = jax.nn.log_softmax(np.random.randn(10, 4), axis=1)
+        counts = model.observation_model.sample_generator(key_array, p)
+        expected_counts = jax.nn.one_hot(jax.random.categorical(key_array, p), 4)
+        if not jnp.all(counts == expected_counts):
+            raise ValueError(
+                "The emission probability should output the results of a call to jax.random.poisson."
+            )
+
+    def test_pseudo_r2_vs_statsmodels(self, categoricalGLM_model_instantiation):
+        """
+        Compare log-likelihood to scipy.
+        Assesses if the model estimates are close to statsmodels' results.
+        """
+        X, y, model, _, firing_rate = categoricalGLM_model_instantiation
+
+        # statsmodels mcfadden
+        mdl = sm.MNLogit(y, sm.add_constant(X)).fit()
+        pr2_sms = mdl.prsquared
+
+        # set params
+        log_proba = jnp.log(mdl.predict(sm.add_constant(X)))
+        pr2_model = model.observation_model.pseudo_r2(
+            y, log_proba, score_type="pseudo-r2-McFadden"
+        )
+
+        if not np.allclose(pr2_model, pr2_sms):
+            raise ValueError("Log-likelihood doesn't match statsmodels!")
+
+    def test_repr_out(self):
+        obs = nmo.observation_models.CategoricalObservations()
+        assert repr(obs) == f"CategoricalObservations()"
+
+
 @pytest.mark.parametrize("observation_model_string", AVAILABLE_OBSERVATION_MODELS)
 class TestCommonObservationModels:
 
