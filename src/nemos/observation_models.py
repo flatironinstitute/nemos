@@ -1758,7 +1758,7 @@ class CategoricalObservations(Observations):
     def _negative_log_likelihood(
         self,
         y: jnp.ndarray,
-        logits: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
         aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ) -> jnp.ndarray:
         r"""Compute the categorical distribution negative log-likelihood.
@@ -1770,8 +1770,8 @@ class CategoricalObservations(Observations):
         ----------
         y :
             The target observation to compare against. Shape (n_time_bins, ).
-        logits :
-            The logits of each category.
+        predicted_rate :
+            The log-probabilities of each category (output of log_softmax).
             Shape (n_time_bins, n_categories).
         aggregate_sample_scores :
             Function that aggregates the log-likelihood of each sample.
@@ -1779,142 +1779,137 @@ class CategoricalObservations(Observations):
         Returns
         -------
         :
-            The Multinomial negative log-likelihood. Shape (1,).
+            The Categorical negative log-likelihood. Shape (1,).
 
         Notes
         -----
-        The formula for the Multinomial mean log-likelihood is the following,
+        The formula for the Categorical mean log-likelihood is the following,
 
         .. math::
-            \text{LL}(p | y) =
+            \text{LL}(\log(p) | y) = \frac{1}{T} \sum_{t=1}^{T} \sum_{k=1}^{K} y_{tk} \log(p_{tk})
 
         where :math:`p_k` is the predicted choice probability of category :math:`k`,
-        and :math:`y` is the observed binary variable.
+        :math:`y_{tk}` is a one-hot encoding of the observed category (1 if category k was observed, 0 otherwise),
+        and the predicted_rate input contains :math:`\log(p_{tk})`.
         """
-        y_one_hot = jax.nn.one_hot(y, logits.shape[1], dtype=bool)
-        nll = jnp.sum(y_one_hot * logits, axis=-1)
+        y_one_hot = jax.nn.one_hot(y, predicted_rate.shape[1], dtype=bool)
+        nll = jnp.sum(y_one_hot * predicted_rate, axis=-1)
         return -aggregate_sample_scores(nll)
 
     def log_likelihood(
         self,
         y: jnp.ndarray,
-        logits: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
         aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ):
-        r"""Compute the Bernoulli negative log-likelihood.
+        r"""Compute the Categorical log-likelihood.
 
-        This computes the Bernoulli negative log-likelihood of the predicted success probability (predicted rates)
-        for the observations up to a constant.
+        This computes the Categorical log-likelihood of the predicted category probabilities
+        for the observations.
 
         Parameters
         ----------
         y :
-            The target observation to compare against. Shape (n_time_bins, ), or (n_time_bins, n_observations).
+            The target category observations. Shape (n_time_bins, ). Each element is an integer
+            representing the observed category.
         predicted_rate :
-            The predicted rate (success probability) of the current model. Shape (n_time_bins, ),
-            or (n_time_bins, n_observations).
+            The log-probabilities for each category (output of log_softmax).
+            Shape (n_time_bins, n_categories).
         scale :
-            The scale parameter of the model.
+            The scale parameter of the model. For Categorical should be equal to 1.
         aggregate_sample_scores :
             Function that aggregates the log-likelihood of each sample.
 
         Returns
         -------
         :
-            The Bernoulli negative log-likelihood. Shape (1,).
+            The Categorical log-likelihood. Shape (1,).
 
         Notes
         -----
-        The formula for the Bernoulli mean log-likelihood is the following,
+        The formula for the Categorical mean log-likelihood is the following,
 
         .. math::
-            \text{LL}(p | y) = \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T}
-            [y_{tn} \log(p_{tn}) + (1 - y_{tn}) \log(1 - p_{tn})]
+            \text{LL}(\log(p) | y) = \frac{1}{T} \sum_{t=1}^{T} \sum_{k=1}^{K} y_{tk} \log(p_{tk})
 
-        where :math:`p` is the predicted success probability, given by the inverse link function, and :math:`y` is the
-        observed binary variable.
+        where :math:`p_{tk}` is the predicted probability of category :math:`k` at time :math:`t`,
+        :math:`y_{tk}` is a one-hot encoding of the observed category,
+        and the predicted_rate input contains :math:`\log(p_{tk})`.
         """
-        nll = self._negative_log_likelihood(y, logits, aggregate_sample_scores)
+        nll = self._negative_log_likelihood(y, predicted_rate, aggregate_sample_scores)
         return -nll
 
     def sample_generator(
         self,
         key: jax.Array,
-        logits: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
     ) -> jnp.ndarray:
         """
-        Sample from the Bernoulli distribution.
+        Sample from the Categorical distribution.
 
-        This method generates random numbers from a Bernoulli distribution based on the given
-        `predicted_rate`.
+        This method generates random category samples from a Categorical distribution based on the given
+        log-probabilities.
 
         Parameters
         ----------
         key :
             Random key used for the generation of random numbers in JAX.
         predicted_rate :
-            Expected rate (success probability) of the Bernoulli distribution. Shape ``(n_time_bins, )``, or
-            ``(n_time_bins, n_observations)``.
+            Log-probabilities for each category (output of log_softmax). Shape ``(n_time_bins, n_categories)``.
         scale :
-            Scale parameter. For Bernoulli should be equal to 1.
+            Scale parameter. For Categorical should be equal to 1.
 
         Returns
         -------
         jnp.ndarray
-            Random numbers generated from the Bernoulli distribution based on the `predicted_rate`.
+            Random category indices sampled from the Categorical distribution. Shape ``(n_time_bins,)``.
         """
-        return jax.random.categorical(key, logits)
+        return jax.random.categorical(key, predicted_rate)
 
     def deviance(
         self,
         observations: jnp.ndarray,
-        logits: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
     ) -> jnp.ndarray:
-        r"""Compute the residual deviance for a Bernoulli model.
+        r"""Compute the residual deviance for a Categorical model.
 
         Parameters
         ----------
         observations:
-            The binary observations. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_observations)`` for population
-            models (i.e. multiple observations).
-        logits:
-            The predicted rate (success probability). Shape ``(n_time_bins, )``  or ``(n_time_bins, n_observations)``
-            for population models (i.e. multiple observations).
+            The observed category indices. Shape ``(n_time_bins, )``. Each element is an integer
+            representing the observed category.
+        predicted_rate:
+            The log-probabilities of each category (output of log_softmax). Shape ``(n_time_bins, n_categories)``.
         scale:
-            Scale parameter of the model. For Bernoulli should be equal to 1.
+            Scale parameter of the model. For categorical should be equal to 1.
 
         Returns
         -------
         :
-            The residual deviance of the model.
+            The residual deviance of the model. Shape ``(n_time_bins, )``.
 
         Notes
         -----
         The deviance is a measure of the goodness of fit of a statistical model.
-        For a Bernoulli model, the residual deviance is computed as:
+        For a Categorical model, the residual deviance is computed as:
 
         .. math::
-            \begin{aligned}
-                D(y_{tn}, \hat{y}_{tn}) &= 2 \left( \text{LL}\left(y_{tn} | y_{tn}\right) - \text{LL}\left(y_{tn}
-                  | \hat{y}_{tn}\right)\right) \\\
-                &= 2 \left[ y_{tn} \log\left(\frac{y_{tn}}{\hat{y}_{tn}}\right) + (1 - y_{tn}) \log\left(\frac{1
-                  - y_{tn}}{1 - \hat{y}_{tn}}\right) \right]
-            \end{aligned}
+            D(y_t, \hat{p}_t) = 2 \left( \text{LL}\left(y_t | y_t\right) - \text{LL}\left(y_t | \hat{p}_t\right)\right)
+            = -2 \sum_{k=1}^{K} y_{tk} \log(\hat{p}_{tk})
 
-        where :math:`y` is the observed data, :math:`\hat{y}` is the predicted data, and :math:`\text{LL}` is
-        the model log-likelihood. Lower values of deviance indicate a better fit.
+        where :math:`y_t` is the observed category at time :math:`t` (as a one-hot vector :math:`y_{tk}`),
+        :math:`\hat{p}_{tk}` is the predicted probability for category :math:`k` at time :math:`t`,
+        and :math:`\text{LL}` is the model log-likelihood.
+        The saturated model has log-likelihood 0 for categorical (since :math:`\log(1) = 0` for the true category).
+        Lower values of deviance indicate a better fit.
         """
-        # this takes care of 0s in the log
-        # ratio1 = jnp.clip(
-        #     observations / predicted_rate, jnp.finfo(predicted_rate.dtype).eps, jnp.inf
-        # )
-        y_one_hot = jax.nn.one_hot(observations, logits.shape[1])
-        ratio = jnp.clip(y_one_hot / logits, jnp.finfo(logits.dtype).eps, jnp.inf)
-        deviance = 2 * jnp.sum(y_one_hot * ratio, axis=-1)
-        return deviance
+        # For categorical, saturated model has log-likelihood = 0
+        # Deviance = 2 * (LL_saturated - LL_model) = -2 * LL_model
+        nll = self._negative_log_likelihood(observations, predicted_rate, identity)
+        return 2 * nll
 
     def estimate_scale(
         self,
@@ -1923,17 +1918,17 @@ class CategoricalObservations(Observations):
         dof_resid: Union[float, jnp.ndarray],
     ) -> Union[float, jnp.ndarray]:
         r"""
-        Assign 1 to the scale parameter of the Bernoulli model.
+        Assign 1 to the scale parameter of the Categorical model.
 
-        For the Binomial exponential family distribution (to which the Bernoulli belongs), the scale parameter
+        For the Categorical (Multinomial with n=1) exponential family distribution, the scale parameter
         :math:`\phi` is always 1.
 
         Parameters
         ----------
         y :
-            Observed spike counts.
+            Observed category indices.
         predicted_rate :
-            The predicted rate values (success probabilities). This is not used in the Bernoulli model for estimating
+            The predicted log-probabilities. This is not used in the Categorical model for estimating
             scale, but is retained for compatibility with the abstract method signature.
         dof_resid :
             The DOF of the residuals.
@@ -1943,25 +1938,27 @@ class CategoricalObservations(Observations):
     def likelihood(
         self,
         y: jnp.ndarray,
-        logits: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
         aggregate_sample_scores: Callable = lambda x: jnp.exp(
             jnp.mean(jnp.log(x), axis=0).sum()
         ),
     ):
-        r"""Compute the Binomial model likelihood.
+        r"""Compute the Categorical model likelihood.
 
-        This computes the likelihood of the predicted rates
-        for the observed neural activity including the normalization constant.
+        This computes the likelihood of the predicted category probabilities
+        for the observed categories.
 
         Parameters
         ----------
         y :
-            The target activity to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
+            The target category observations. Shape (n_time_bins, ). Each element is an integer
+            representing the observed category.
         predicted_rate :
-            The predicted rate of the current model. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
+            The log-probabilities for each category (output of log_softmax).
+            Shape (n_time_bins, n_categories).
         scale :
-            The scale parameter of the model
+            The scale parameter of the model. For Categorical should be equal to 1.
         aggregate_sample_scores :
             Function that aggregates the likelihood of each sample.
 
@@ -1970,4 +1967,6 @@ class CategoricalObservations(Observations):
         :
             The likelihood. Shape (1,).
         """
-        return aggregate_sample_scores(self.log_likelihood(y, logits))
+        y_one_hot = jax.nn.one_hot(y, predicted_rate.shape[1])
+        log_probs = jnp.sum(y_one_hot * predicted_rate, axis=-1)
+        return aggregate_sample_scores(jnp.exp(log_probs))
