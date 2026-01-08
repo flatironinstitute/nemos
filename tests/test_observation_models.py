@@ -23,11 +23,11 @@ def observation_model_rate_and_samples(request, observation_model_string):
     Fixture that returns rate and samples for each observation model.
     """
     # Try to get shape from indirect parametrization
-    if hasattr(request, 'param'):
+    if hasattr(request, "param"):
         shape = request.param
     else:
         # Check if shape is in the test's funcargs (for direct parametrization)
-        shape = request.node.funcargs.get('shape', None)
+        shape = request.node.funcargs.get("shape", None)
 
     if observation_model_string == "Categorical":
         n_categories = 3
@@ -746,7 +746,7 @@ class TestCategoricalObservations:
         Assesses if the model estimates are close to statsmodels' results.
         """
         _, y, model, _, firing_rate = categoricalGLM_model_instantiation
-        dev = - 2 * self.log_likelihood(y, firing_rate).sum()
+        dev = -2 * self.log_likelihood(y, firing_rate).sum()
         dev_model = model.observation_model.deviance(y, firing_rate).sum()
         if not np.allclose(dev, dev_model):
             raise ValueError("Deviance doesn't match statsmodels!")
@@ -1097,9 +1097,11 @@ def test_nemos_model_pass_check(observation):
     """Test that a valid observation model passes all checks."""
     obs = instantiate_observation_model(observation)
     if isinstance(obs, nmo.observation_models.CategoricalObservations):
-        pytest.skip(reason="CategoricalObservations requires a different input shape. "
-                           "Revisit the ``check_observation_model`` function once the "
-                           "GLM validator logic allows more flexibility.")
+        pytest.skip(
+            reason="CategoricalObservations requires a different input shape. "
+            "Revisit the ``check_observation_model`` function once the "
+            "GLM validator logic allows more flexibility."
+        )
     nmo.observation_models.check_observation_model(obs, force_checks=True)
 
 
