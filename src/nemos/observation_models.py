@@ -1655,6 +1655,7 @@ def check_observation_model(observation_model, force_checks=False):
             GammaObservations,
             BernoulliObservations,
             NegativeBinomialObservations,
+            CategoricalObservations,
         ),
     )
 
