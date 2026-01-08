@@ -52,6 +52,12 @@ class Observations(Base, abc.ABC):
     def __repr__(self):
         return utils.format_repr(self)
 
+    @staticmethod
+    def _compute_null_model_predicted_rate(
+        y: jnp.ndarray,
+    ):
+        return jnp.ones(y.shape, dtype=float) * y.mean(axis=0)
+
     @property
     @abc.abstractmethod
     def default_inverse_link_function(self):
@@ -357,7 +363,7 @@ class Observations(Base, abc.ABC):
         model_dev_t = self.deviance(y, predicted_rate)
         model_deviance = aggregate_sample_scores(model_dev_t)
 
-        null_mu = jnp.ones(y.shape, dtype=jnp.float32) * jnp.mean(y, axis=0)
+        null_mu = self._compute_null_model_predicted_rate(y)
         null_dev_t = self.deviance(y, null_mu)
         null_deviance = aggregate_sample_scores(null_dev_t)
         return (null_deviance - model_deviance) / null_deviance
@@ -391,7 +397,7 @@ class Observations(Base, abc.ABC):
             whereas a value closer to 0 suggests that the model doesn't improve much over the null model.
         """
         # ruff: noqa D403
-        mean_y = jnp.ones(y.shape) * y.mean(axis=0)
+        mean_y = self._compute_null_model_predicted_rate(y)
         ll_null = self.log_likelihood(
             y, mean_y, scale=scale, aggregate_sample_scores=aggregate_sample_scores
         )
@@ -1765,15 +1771,16 @@ class CategoricalObservations(Observations):
         r"""Compute the categorical distribution negative log-likelihood.
 
         This computes the categorical distribution negative log-likelihood of
-        the observed category given their probabilities.
+        the observed categories given their log-probabilities.
 
         Parameters
         ----------
         y :
-            One-hot encoded categories. Shape (n_time_bins, n_features) or (n_time_bins, n_neurons, n_features).
+            One-hot encoded categories. Shape ``(n_time_bins, n_categories)`` or
+            ``(n_time_bins, n_neurons, n_categories)``.
         predicted_rate :
             The log-probabilities of each category (output of log_softmax).
-            Shape (n_time_bins, n_categories).
+            Shape ``(n_time_bins, n_categories)`` or ``(n_time_bins, n_neurons, n_categories)``.
         aggregate_sample_scores :
             Function that aggregates the log-likelihood of each sample.
 
@@ -1787,11 +1794,13 @@ class CategoricalObservations(Observations):
         The formula for the Categorical mean log-likelihood is the following,
 
         .. math::
-            \text{LL}(\log(p) | y) = \frac{1}{T} \sum_{t=1}^{T} \sum_{k=1}^{K} y_{tk} \log(p_{tk})
+            \text{LL}(y | \log(p)) = \frac{1}{T \cdot N} \sum_{n=1}^{N}
+            \sum_{t=1}^{T} \sum_{k=1}^{K} y_{tnk} \log(p_{tnk})
 
-        where :math:`p_k` is the predicted choice probability of category :math:`k`,
-        :math:`y_{tk}` is a one-hot encoding of the observed category (1 if category k was observed, 0 otherwise),
-        and the predicted_rate input contains :math:`\log(p_{tk})`.
+        where :math:`p_{tnk}` is the predicted probability of category :math:`k` for
+        neuron :math:`n` at time :math:`t`, :math:`y_{tnk}` is the one-hot encoding
+        (1 if category :math:`k` was observed, 0 otherwise), and the predicted_rate input
+        contains :math:`\log(p_{tnk})`.
         """
         nll = jnp.sum(y * predicted_rate, axis=-1)
         return -aggregate_sample_scores(nll)
@@ -1806,15 +1815,16 @@ class CategoricalObservations(Observations):
         r"""Compute the Categorical log-likelihood.
 
         This computes the Categorical log-likelihood of the predicted category probabilities
-        for the observations.
+        for the observed one-hot encoded categories.
 
         Parameters
         ----------
         y :
-            One-hot encoded categories. Shape or (n_time_bins, n_neurons, n_features)
+            One-hot encoded categories. Shape ``(n_time_bins, n_categories)`` or
+            ``(n_time_bins, n_neurons, n_categories)``.
         predicted_rate :
             The log-probabilities for each category (output of log_softmax).
-            Shape (n_time_bins, n_categories).
+            Shape ``(n_time_bins, n_categories)`` or ``(n_time_bins, n_neurons, n_categories)``.
         scale :
             The scale parameter of the model. For Categorical should be equal to 1.
         aggregate_sample_scores :
@@ -1830,11 +1840,13 @@ class CategoricalObservations(Observations):
         The formula for the Categorical mean log-likelihood is the following,
 
         .. math::
-            \text{LL}(\log(p) | y) = \frac{1}{T} \sum_{t=1}^{T} \sum_{k=1}^{K} y_{tk} \log(p_{tk})
+            \text{LL}(y | \log(p)) = \frac{1}{T \cdot N} \sum_{n=1}^{N}
+            \sum_{t=1}^{T} \sum_{k=1}^{K} y_{tnk} \log(p_{tnk})
 
-        where :math:`p_{tk}` is the predicted probability of category :math:`k` at time :math:`t`,
-        :math:`y_{tk}` is a one-hot encoding of the observed category,
-        and the predicted_rate input contains :math:`\log(p_{tk})`.
+        where :math:`p_{tnk}` is the predicted probability of category :math:`k` for neuron
+        :math:`n` at time :math:`t`, :math:`y_{tnk}` is the one-hot encoding
+        (1 if category :math:`k` was observed, 0 otherwise), and the predicted_rate input contains
+        :math:`\log(p_{tnk})`.
         """
         nll = self._negative_log_likelihood(y, predicted_rate, aggregate_sample_scores)
         return -nll
@@ -1848,22 +1860,24 @@ class CategoricalObservations(Observations):
         """
         Sample from the Categorical distribution.
 
-        This method generates random category samples from a Categorical distribution based on the given
-        log-probabilities.
+        This method generates random category indices from a Categorical distribution based on the given
+        log-probabilities. Note that this returns category indices, not one-hot encodings.
 
         Parameters
         ----------
         key :
             Random key used for the generation of random numbers in JAX.
         predicted_rate :
-            Log-probabilities for each category (output of log_softmax). Shape ``(n_time_bins, n_categories)``.
+            Log-probabilities for each category (output of log_softmax).
+            Shape ``(n_time_bins, n_categories)`` or ``(n_time_bins, n_neurons, n_categories)``.
         scale :
             Scale parameter. For Categorical should be equal to 1.
 
         Returns
         -------
         jnp.ndarray
-            Random category indices sampled from the Categorical distribution. Shape ``(n_time_bins,)``.
+            Random category indices sampled from the Categorical distribution.
+            Shape ``(n_time_bins,)`` or ``(n_time_bins, n_neurons)``.
         """
         return jax.random.categorical(key, predicted_rate)
 
@@ -1878,16 +1892,18 @@ class CategoricalObservations(Observations):
         Parameters
         ----------
         observations:
-            One-hot encoded categories. Shape or (n_time_bins, n_neurons, n_features)
+            One-hot encoded categories. Shape ``(n_time_bins, n_categories)`` or
+            ``(n_time_bins, n_neurons, n_categories)``.
         predicted_rate:
-            The log-probabilities of each category (output of log_softmax). Shape ``(n_time_bins, n_categories)``.
+            The log-probabilities of each category (output of log_softmax).
+            Shape ``(n_time_bins, n_categories)`` or ``(n_time_bins, n_neurons, n_categories)``.
         scale:
-            Scale parameter of the model. For categorical should be equal to 1.
+            Scale parameter of the model. For Categorical should be equal to 1.
 
         Returns
         -------
         :
-            The residual deviance of the model. Shape ``(n_time_bins, )``.
+            The residual deviance of the model. Shape ``(n_time_bins,)`` or ``(n_time_bins, n_neurons)``.
 
         Notes
         -----
@@ -1895,11 +1911,11 @@ class CategoricalObservations(Observations):
         For a Categorical model, the residual deviance is computed as:
 
         .. math::
-            D(y_t, \hat{p}_t) = 2 \left( \text{LL}\left(y_t | y_t\right) - \text{LL}\left(y_t | \hat{p}_t\right)\right)
-            = -2 \sum_{k=1}^{K} y_{tk} \log(\hat{p}_{tk})
+            D(y, \hat{p}) = 2 \left( \text{LL}\left(y | y\right) - \text{LL}\left(y | \hat{p}\right)\right)
+            = -2 \sum_{k=1}^{K} y_{k} \log(\hat{p}_{k})
 
-        where :math:`y_t` is the observed category at time :math:`t` (as a one-hot vector :math:`y_{tk}`),
-        :math:`\hat{p}_{tk}` is the predicted probability for category :math:`k` at time :math:`t`,
+        where :math:`y_k` is the one-hot encoded observed category (1 if category :math:`k` was observed, 0 otherwise),
+        :math:`\hat{p}_{k}` is the predicted probability for category :math:`k`,
         and :math:`\text{LL}` is the model log-likelihood.
         The saturated model has log-likelihood 0 for categorical (since :math:`\log(1) = 0` for the true category).
         Lower values of deviance indicate a better fit.
@@ -1924,7 +1940,8 @@ class CategoricalObservations(Observations):
         Parameters
         ----------
         y :
-            One-hot encoded categories. Shape (n_time_bins, n_features) or (n_time_bins, n_neurons, n_features).
+            One-hot encoded categories. Shape ``(n_time_bins, n_categories)`` or
+            ``(n_time_bins, n_neurons, n_categories)``.
         predicted_rate :
             The predicted log-probabilities. This is not used in the Categorical model for estimating
             scale, but is retained for compatibility with the abstract method signature.
@@ -1945,15 +1962,16 @@ class CategoricalObservations(Observations):
         r"""Compute the Categorical model likelihood.
 
         This computes the likelihood of the predicted category probabilities
-        for the observed categories.
+        for the observed one-hot encoded categories.
 
         Parameters
         ----------
         y :
-            One-hot encoded categories. Shape (n_time_bins, n_features) or (n_time_bins, n_neurons, n_features).
+            One-hot encoded categories. Shape ``(n_time_bins, n_categories)`` or
+            ``(n_time_bins, n_neurons, n_categories)``.
         predicted_rate :
             The log-probabilities for each category (output of log_softmax).
-            Shape (n_time_bins, n_categories).
+            Shape ``(n_time_bins, n_categories)`` or ``(n_time_bins, n_neurons, n_categories)``.
         scale :
             The scale parameter of the model. For Categorical should be equal to 1.
         aggregate_sample_scores :
@@ -1963,6 +1981,25 @@ class CategoricalObservations(Observations):
         -------
         :
             The likelihood. Shape (1,).
+
+        Notes
+        -----
+        The likelihood is computed as:
+
+        .. math::
+            L(y | p) = \prod_{n=1}^{N} \prod_{t=1}^{T} \prod_{k=1}^{K} p_{tnk}^{y_{tnk}}
+
+        where :math:`p_{tnk}` is the predicted probability of category :math:`k` for neuron :math:`n` at time :math:`t`,
+        and :math:`y_{tnk}` is the one-hot encoding.
         """
         log_probs = self.log_likelihood(y, predicted_rate, scale, identity)
         return aggregate_sample_scores(jnp.exp(log_probs))
+
+    @staticmethod
+    def _compute_null_model_predicted_rate(
+        y: jnp.ndarray,
+    ):
+        freq_per_sample = y.mean(
+            axis=0, keepdims=True
+        )  # (1, n_categories) or (1, n_neurons, n_categories)
+        return jnp.log(freq_per_sample) * jnp.ones_like(y, dtype=float)

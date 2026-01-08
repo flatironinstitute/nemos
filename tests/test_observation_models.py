@@ -22,12 +22,14 @@ def observation_model_rate_and_samples(observation_model_string, shape=None):
     """
     Fixture that returns rate and samples for each observation model.
     """
+    if observation_model_string == "Categorical":
+        n_categories = 3
     if shape is None and observation_model_string != "Categorical":
         shape = (10,)
-    elif shape is None:
-        shape = (10, 3)
+    elif shape is None and observation_model_string == "Categorical":
+        shape = (10, n_categories)
     elif observation_model_string == "Categorical":
-        shape = (*shape, 3)
+        shape = (*shape, n_categories)
     obs = instantiate_observation_model(observation_model_string)
     rate = jax.random.uniform(
         jax.random.PRNGKey(122), shape=shape, minval=0.1, maxval=10
@@ -50,6 +52,7 @@ def observation_model_rate_and_samples(observation_model_string, shape=None):
     elif observation_model_string == "Categorical":
         rate = jax.nn.log_softmax(rate)  # log-proba
         y = jax.random.categorical(jax.random.PRNGKey(123), rate)
+        y = jax.nn.one_hot(y, num_classes=3, dtype=float)
     else:
         raise ValueError(f"Unknown observation model {observation_model_string}.")
     return obs, y, rate
@@ -780,7 +783,11 @@ class TestCommonObservationModels:
         obs, y, rate = observation_model_rate_and_samples
         sm = obs.log_likelihood(y, rate, aggregate_sample_scores=jnp.sum)
         mn = obs.log_likelihood(y, rate, aggregate_sample_scores=jnp.mean)
-        assert np.allclose(sm, mn * math.prod(y.shape))
+        if isinstance(obs, nmo.observation_models.CategoricalObservations):
+            n_samp = math.prod(y[..., 0].shape)
+        else:
+            n_samp = math.prod(y.shape)
+        assert np.allclose(sm, mn * n_samp)
 
     @pytest.mark.parametrize("shape", [(10,), (10, 5), (10, 5, 2)])
     def test_aggregation_score_neg_ll(
@@ -852,8 +859,10 @@ class TestCommonObservationModels:
         """
         obs, y, rate = observation_model_rate_and_samples
         if isinstance(obs, nmo.observation_models.CategoricalObservations):
-            pytest.skip("CategoricalObservations models log-probabilities, not the mean, therefore"
-                        "this property does not hold.")
+            pytest.skip(
+                "CategoricalObservations models log-probabilities, not the mean, therefore"
+                "this property does not hold."
+            )
         pseudo_r2 = obs.pseudo_r2(y, y.mean(), score_type=score_type)
         if not np.allclose(pseudo_r2, 0, atol=10**-7, rtol=0.0):
             raise ValueError(
@@ -861,8 +870,13 @@ class TestCommonObservationModels:
             )
 
     @pytest.mark.parametrize("score_type", ["pseudo-r2-Cohen", "pseudo-r2-McFadden"])
+    @pytest.mark.parametrize("shape", [(100,)])
     def test_pseudo_r2_range(
-        self, score_type, observation_model_string, observation_model_rate_and_samples
+        self,
+        score_type,
+        observation_model_string,
+        observation_model_rate_and_samples,
+        shape,
     ):
         """
         Compute the pseudo-r2 and check that is < 1.
