@@ -113,12 +113,14 @@ def test_glm_instantiation_from_string_at_init(
         ("Gamma", does_not_raise()),
         ("Bernoulli", does_not_raise()),
         ("Gaussian", does_not_raise()),
+        ("Categorical", does_not_raise()),
+        ("NegativeBinomial", does_not_raise()),
         ("nemos.observation_models.PoissonObservations", does_not_raise()),
         ("nemos.observation_models.GammaObservations", does_not_raise()),
         ("nemos.observation_models.BernoulliObservations", does_not_raise()),
         ("nemos.observation_models.GaussianObservations", does_not_raise()),
-        ("NegativeBinomial", does_not_raise()),
-        ("nemos.observation_models.NegativeBinomial", does_not_raise()),
+        ("nemos.observation_models.CategoricalObservations", does_not_raise()),
+        ("nemos.observation_models.NegativeBinomialObservations", does_not_raise()),
         (
             "invalid",
             pytest.raises(ValueError, match="Unknown observation model: invalid"),
@@ -163,6 +165,10 @@ def test_glm_setter_observation_model(obs_model_string, glm_class, expectation):
     elif obs_model_string == "Gaussian":
         assert isinstance(
             model.observation_model, nmo.observation_models.GaussianObservations
+        )
+    elif obs_model_string == "Categorical":
+        assert isinstance(
+            model.observation_model, nmo.observation_models.CategoricalObservations
         )
 
 
