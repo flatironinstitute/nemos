@@ -9,7 +9,7 @@ from numpy.typing import NDArray
 
 from . import utils
 from .base_class import Base
-from .inverse_link_function_utils import exp, identity, logistic
+from .inverse_link_function_utils import exp, identity, log_softmax, logistic
 
 __all__ = [
     "PoissonObservations",
@@ -1733,3 +1733,241 @@ def check_observation_model(observation_model, force_checks=False):
 
         if check_info.get("test_scalar_func"):
             utils.assert_scalar_func(func, check_info["input"], attr_name)
+
+
+class CategoricalObservations(Observations):
+    """
+    Model observations as Categorical random variables.
+
+    The CategoricalObservations is designed to model an observed categorical variable based on a categorical
+    distribution with given success probability.
+    It provides methods for computing the negative log-likelihood,
+    generating samples, and computing the residual deviance for the given categorical observations.
+    This distribution is equivalent to a multinomial with ``n=1``.
+
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.scale = 1.0
+
+    @property
+    def default_inverse_link_function(self):
+        return log_softmax
+
+    def _negative_log_likelihood(
+        self,
+        y: jnp.ndarray,
+        logits: jnp.ndarray,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
+    ) -> jnp.ndarray:
+        r"""Compute the categorical distribution negative log-likelihood.
+
+        This computes the categorical distribution negative log-likelihood of
+        the observed category given their probabilities.
+
+        Parameters
+        ----------
+        y :
+            The target observation to compare against. Shape (n_time_bins, ).
+        logits :
+            The logits of each category.
+            Shape (n_time_bins, n_categories).
+        aggregate_sample_scores :
+            Function that aggregates the log-likelihood of each sample.
+
+        Returns
+        -------
+        :
+            The Multinomial negative log-likelihood. Shape (1,).
+
+        Notes
+        -----
+        The formula for the Multinomial mean log-likelihood is the following,
+
+        .. math::
+            \text{LL}(p | y) =
+
+        where :math:`p_k` is the predicted choice probability of category :math:`k`,
+        and :math:`y` is the observed binary variable.
+        """
+        y_one_hot = jax.nn.one_hot(y, logits.shape[1], dtype=bool)
+        nll = jnp.sum(y_one_hot * logits, axis=-1)
+        return -aggregate_sample_scores(nll)
+
+    def log_likelihood(
+        self,
+        y: jnp.ndarray,
+        logits: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
+    ):
+        r"""Compute the Bernoulli negative log-likelihood.
+
+        This computes the Bernoulli negative log-likelihood of the predicted success probability (predicted rates)
+        for the observations up to a constant.
+
+        Parameters
+        ----------
+        y :
+            The target observation to compare against. Shape (n_time_bins, ), or (n_time_bins, n_observations).
+        predicted_rate :
+            The predicted rate (success probability) of the current model. Shape (n_time_bins, ),
+            or (n_time_bins, n_observations).
+        scale :
+            The scale parameter of the model.
+        aggregate_sample_scores :
+            Function that aggregates the log-likelihood of each sample.
+
+        Returns
+        -------
+        :
+            The Bernoulli negative log-likelihood. Shape (1,).
+
+        Notes
+        -----
+        The formula for the Bernoulli mean log-likelihood is the following,
+
+        .. math::
+            \text{LL}(p | y) = \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T}
+            [y_{tn} \log(p_{tn}) + (1 - y_{tn}) \log(1 - p_{tn})]
+
+        where :math:`p` is the predicted success probability, given by the inverse link function, and :math:`y` is the
+        observed binary variable.
+        """
+        nll = self._negative_log_likelihood(y, logits, aggregate_sample_scores)
+        return -nll
+
+    def sample_generator(
+        self,
+        key: jax.Array,
+        logits: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
+    ) -> jnp.ndarray:
+        """
+        Sample from the Bernoulli distribution.
+
+        This method generates random numbers from a Bernoulli distribution based on the given
+        `predicted_rate`.
+
+        Parameters
+        ----------
+        key :
+            Random key used for the generation of random numbers in JAX.
+        predicted_rate :
+            Expected rate (success probability) of the Bernoulli distribution. Shape ``(n_time_bins, )``, or
+            ``(n_time_bins, n_observations)``.
+        scale :
+            Scale parameter. For Bernoulli should be equal to 1.
+
+        Returns
+        -------
+        jnp.ndarray
+            Random numbers generated from the Bernoulli distribution based on the `predicted_rate`.
+        """
+        return jax.random.categorical(key, logits)
+
+    def deviance(
+        self,
+        observations: jnp.ndarray,
+        logits: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
+    ) -> jnp.ndarray:
+        r"""Compute the residual deviance for a Bernoulli model.
+
+        Parameters
+        ----------
+        observations:
+            The binary observations. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_observations)`` for population
+            models (i.e. multiple observations).
+        logits:
+            The predicted rate (success probability). Shape ``(n_time_bins, )``  or ``(n_time_bins, n_observations)``
+            for population models (i.e. multiple observations).
+        scale:
+            Scale parameter of the model. For Bernoulli should be equal to 1.
+
+        Returns
+        -------
+        :
+            The residual deviance of the model.
+
+        Notes
+        -----
+        The deviance is a measure of the goodness of fit of a statistical model.
+        For a Bernoulli model, the residual deviance is computed as:
+
+        .. math::
+            \begin{aligned}
+                D(y_{tn}, \hat{y}_{tn}) &= 2 \left( \text{LL}\left(y_{tn} | y_{tn}\right) - \text{LL}\left(y_{tn}
+                  | \hat{y}_{tn}\right)\right) \\\
+                &= 2 \left[ y_{tn} \log\left(\frac{y_{tn}}{\hat{y}_{tn}}\right) + (1 - y_{tn}) \log\left(\frac{1
+                  - y_{tn}}{1 - \hat{y}_{tn}}\right) \right]
+            \end{aligned}
+
+        where :math:`y` is the observed data, :math:`\hat{y}` is the predicted data, and :math:`\text{LL}` is
+        the model log-likelihood. Lower values of deviance indicate a better fit.
+        """
+        # this takes care of 0s in the log
+        # ratio1 = jnp.clip(
+        #     observations / predicted_rate, jnp.finfo(predicted_rate.dtype).eps, jnp.inf
+        # )
+        y_one_hot = jax.nn.one_hot(observations, logits.shape[1])
+        ratio = jnp.clip(y_one_hot / logits, jnp.finfo(logits.dtype).eps, jnp.inf)
+        deviance = 2 * jnp.sum(y_one_hot * ratio, axis=-1)
+        return deviance
+
+    def estimate_scale(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        dof_resid: Union[float, jnp.ndarray],
+    ) -> Union[float, jnp.ndarray]:
+        r"""
+        Assign 1 to the scale parameter of the Bernoulli model.
+
+        For the Binomial exponential family distribution (to which the Bernoulli belongs), the scale parameter
+        :math:`\phi` is always 1.
+
+        Parameters
+        ----------
+        y :
+            Observed spike counts.
+        predicted_rate :
+            The predicted rate values (success probabilities). This is not used in the Bernoulli model for estimating
+            scale, but is retained for compatibility with the abstract method signature.
+        dof_resid :
+            The DOF of the residuals.
+        """
+        return jnp.ones_like(jnp.atleast_1d(y[0]))
+
+    def likelihood(
+        self,
+        y: jnp.ndarray,
+        logits: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
+        aggregate_sample_scores: Callable = lambda x: jnp.exp(
+            jnp.mean(jnp.log(x), axis=0).sum()
+        ),
+    ):
+        r"""Compute the Binomial model likelihood.
+
+        This computes the likelihood of the predicted rates
+        for the observed neural activity including the normalization constant.
+
+        Parameters
+        ----------
+        y :
+            The target activity to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
+        predicted_rate :
+            The predicted rate of the current model. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
+        scale :
+            The scale parameter of the model
+        aggregate_sample_scores :
+            Function that aggregates the likelihood of each sample.
+
+        Returns
+        -------
+        :
+            The likelihood. Shape (1,).
+        """
+        return aggregate_sample_scores(self.log_likelihood(y, logits))
