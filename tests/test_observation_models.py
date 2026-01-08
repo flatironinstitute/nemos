@@ -22,10 +22,14 @@ def shape(shape_val):
 
 
 @pytest.fixture
-def observation_model_rate_and_samples(observation_model_string, shape=None):
+def observation_model_rate_and_samples(request, observation_model_string):
     """
     Fixture that returns rate and samples for each observation model.
     """
+    if hasattr(request, 'param') and 'shape' in request.param:
+        shape = request.param['shape']
+    else:
+        shape = None
     if observation_model_string == "Categorical":
         n_categories = 3
     if shape is None and observation_model_string != "Categorical":
@@ -1107,13 +1111,13 @@ class TestCommonObservationModels:
             )
 
     @pytest.mark.parametrize("score_type", ["pseudo-r2-Cohen", "pseudo-r2-McFadden"])
-    @pytest.mark.parametrize("shape_val", [(100,)], indirect=True)
+    @pytest.mark.parametrize("shape", [(100,)])
     def test_pseudo_r2_range(
         self,
         score_type,
         observation_model_string,
         observation_model_rate_and_samples,
-        shape_val,
+        shape,
     ):
         """
         Compute the pseudo-r2 and check that is < 1.
