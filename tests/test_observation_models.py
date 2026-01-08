@@ -180,6 +180,7 @@ def test_glm_setter_observation_model(obs_model_string, glm_class, expectation):
         ("Bernoulli", does_not_raise()),
         ("NegativeBinomial", does_not_raise()),
         ("Gaussian", does_not_raise()),
+        ("Categorical", does_not_raise()),
         ("NB", pytest.raises(ValueError, match="Unknown observation model: NB")),
     ],
 )
