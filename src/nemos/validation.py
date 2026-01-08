@@ -321,10 +321,10 @@ def check_fraction_valid_samples(*pytree: Any, err_msg: str, warn_msg: str) -> N
         If more than 90% of the sample points contain NaNs or Infs.
     """
     valid = get_valid_multitree(pytree)
-    # if all(~valid):
-    #     raise ValueError(err_msg)
-    # if valid.mean() <= 0.1:
-    #     warnings.warn(warn_msg, UserWarning)
+    if all(~valid):
+        raise ValueError(err_msg)
+    if valid.mean() <= 0.1:
+        warnings.warn(warn_msg, UserWarning)
 
 
 def _warn_if_not_float64(feature_matrix: Any, message: str):

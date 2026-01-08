@@ -8,7 +8,7 @@ from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
-from ._basis import Basis, check_fraction_valid_samples, check_transform_input
+from ._basis import Basis, check_transform_input
 from ._basis_mixin import AtomicBasisMixin
 from ._check_basis import _check_input_dimensionality, _has_zero_samples
 
@@ -65,11 +65,11 @@ class IdentityBasis(AtomicBasisMixin, Basis):
         sample_pts = jnp.where(
             (sample_pts < vmin) | (sample_pts > vmax), jnp.nan, sample_pts
         )
-        check_fraction_valid_samples(
-            sample_pts,
-            err_msg="All the samples lie outside the [vmin, vmax] range.",
-            warn_msg="More than 90% of the samples lie outside the [vmin, vmax] range.",
-        )
+        # check_fraction_valid_samples(
+        #     sample_pts,
+        #     err_msg="All the samples lie outside the [vmin, vmax] range.",
+        #     warn_msg="More than 90% of the samples lie outside the [vmin, vmax] range.",
+        # )
         return sample_pts[..., np.newaxis]
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:

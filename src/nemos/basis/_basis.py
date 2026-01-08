@@ -18,7 +18,6 @@ from ..base_class import Base
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
 from ..utils import row_wise_kron
-from ..validation import check_fraction_valid_samples
 from ._basis_mixin import BasisMixin, BasisTransformerMixin, CompositeBasisMixin
 from ._check_basis import (
     _check_input_dimensionality,
@@ -96,11 +95,11 @@ def min_max_rescale_samples(
         jnp.where((sample_pts < vmin) | (sample_pts > vmax), np.nan, sample_pts) - vmin
     ) / scaling
 
-    check_fraction_valid_samples(
-        sample_pts,
-        err_msg="All the samples lie outside the [vmin, vmax] range.",
-        warn_msg="More than 90% of the samples lie outside the [vmin, vmax] range.",
-    )
+    # check_fraction_valid_samples(
+    #     sample_pts,
+    #     err_msg="All the samples lie outside the [vmin, vmax] range.",
+    #     warn_msg="More than 90% of the samples lie outside the [vmin, vmax] range.",
+    # )
 
     return sample_pts, scaling
 
