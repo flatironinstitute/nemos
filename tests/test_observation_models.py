@@ -22,8 +22,10 @@ def observation_model_rate_and_samples(observation_model_string, shape=None):
     """
     Fixture that returns rate and samples for each observation model.
     """
-    if shape is None:
+    if shape is None and observation_model_string != "Categorical":
         shape = (10,)
+    elif shape is None:
+        shape = (10, 3)
     obs = instantiate_observation_model(observation_model_string)
     rate = jax.random.uniform(
         jax.random.PRNGKey(122), shape=shape, minval=0.1, maxval=10
@@ -43,6 +45,9 @@ def observation_model_rate_and_samples(observation_model_string, shape=None):
         gamma_key, poisson_key = jax.random.split(jax.random.PRNGKey(123))
         gamma_sample = jax.random.gamma(gamma_key, r, shape=rate.shape) * (rate / r)
         y = jax.random.poisson(poisson_key, gamma_sample)
+    elif observation_model_string == "Categorical":
+        rate = jax.nn.log_softmax(rate) # log-proba
+        y = jax.random.categorical(jax.random.PRNGKey(123), rate)
     else:
         raise ValueError(f"Unknown observation model {observation_model_string}.")
     return obs, y, rate
@@ -71,6 +76,10 @@ def negative_binomial_observations():
 @pytest.fixture()
 def gaussian_observations():
     return nmo.observation_models.GaussianObservations
+
+@pytest.fixture()
+def categorical_observations():
+    return nmo.observation_models.CategoricalObservations
 
 
 @pytest.mark.parametrize(
