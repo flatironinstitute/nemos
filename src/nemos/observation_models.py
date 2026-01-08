@@ -1880,7 +1880,10 @@ class CategoricalObservations(Observations):
             Random category indices sampled from the Categorical distribution.
             Shape ``(n_time_bins,)`` or ``(n_time_bins, n_neurons)``.
         """
-        return jax.random.categorical(key, predicted_rate)
+        return jax.nn.one_hot(
+            jax.random.categorical(key, predicted_rate),
+            num_classes=predicted_rate.shape[-1],
+        )
 
     def deviance(
         self,
