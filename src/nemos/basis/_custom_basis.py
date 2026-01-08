@@ -12,6 +12,7 @@ from copy import deepcopy
 from numbers import Number
 from typing import TYPE_CHECKING, Callable, Iterable, List, Optional, Tuple
 
+import jax.numpy as jnp
 import numpy as np
 import pynapple as nap
 from numpy.typing import ArrayLike, NDArray
@@ -415,7 +416,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         ]
 
         # Stack functions first, then reorder
-        stacked = np.stack(
+        stacked = jnp.stack(
             func_results, axis=-1
         )  # (n_samples, *out_shape, n_vec_features, n_funcs)
         self.output_shape = stacked.shape[1:-2]

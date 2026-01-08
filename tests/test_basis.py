@@ -415,6 +415,7 @@ def test_add_docstring():
     ],
 )
 def test_expected_output_eval_on_grid(basis_instance, super_class):
+    jax.config.update("jax_enable_x64", True)
     x, y = super_class.evaluate_on_grid(basis_instance, 100)
     xx, yy = basis_instance.evaluate_on_grid(100)
     np.testing.assert_equal(xx, x)
@@ -504,6 +505,7 @@ def test_expected_output_compute_features(basis_instance, super_class):
     ],
 )
 def test_expected_output_split_by_feature(basis_instance, super_class):
+    jax.config.update("jax_enable_x64", True)
     inp = [np.linspace(0, 1, 100)] * basis_instance._n_input_dimensionality
     x = super_class.compute_features(basis_instance, *inp)
     xdict = super_class.split_by_feature(basis_instance, x)
@@ -1075,6 +1077,7 @@ class TestEvalBasis:
     def test_vmin_vmax_eval_on_grid_no_effect_on_eval(
         self, vmin, vmax, samples, nan_idx, cls
     ):
+        jax.config.update("jax_enable_x64", True)
         if cls == CustomBasis:
             pytest.skip(
                 f"Skipping test_vmin_vmax_eval_on_grid_no_effect_on_eval for {cls.__name__}"
@@ -1569,6 +1572,7 @@ class TestSharedMethods:
 
     @pytest.mark.parametrize("n_basis", [6, 7])
     def test_call_basis_number(self, n_basis, cls):
+        jax.config.update("jax_enable_x64", True)
         if cls is IdentityEval:
             n_basis = 1
         elif cls is HistoryConv:
@@ -1654,6 +1658,7 @@ class TestSharedMethods:
 
     @pytest.mark.parametrize("n_basis", [6])
     def test_call_nan_location(self, n_basis, cls):
+        jax.config.update("jax_enable_x64", True)
         if cls is HistoryConv or cls is CustomBasis:
             return
         if cls is IdentityEval:
@@ -1732,6 +1737,7 @@ class TestSharedMethods:
     def test_compute_features_returns_expected_number_of_basis(
         self, args, sample_size, cls
     ):
+        jax.config.update("jax_enable_x64", True)
         args_copy = args.copy()
         if cls == IdentityEval:
             args_copy["n_basis_funcs"] = 1
@@ -1753,6 +1759,38 @@ class TestSharedMethods:
             f"of the evaluated basis. The number of basis is {args['n_basis_funcs']}, but the "
             f"evaluated basis has dimension {eval_basis.shape[1]}"
         )
+
+    @pytest.mark.parametrize(
+        "args, sample_size",
+        [[{"n_basis_funcs": n_basis}, 100] for n_basis in [6, 10, 13]],
+    )
+    def test_jitted_compute_features(self, args, sample_size, cls):
+        args_copy = args.copy()
+        if issubclass(cls, (BSplineBasis, CyclicBSplineBasis, OrthExponentialBasis)):
+            pytest.skip(
+                f"Skipping test_jitted_compute_features for {cls.__name__}, which depends on un-jittable scipy functions."
+            )
+
+        if cls == IdentityEval:
+            args_copy["n_basis_funcs"] = 1
+        elif cls == HistoryConv:
+            args_copy["n_basis_funcs"] = 30
+        elif issubclass(cls, FourierBasis):
+            args_copy["n_basis_funcs"] = (
+                args_copy["n_basis_funcs"] + args_copy["n_basis_funcs"] % 2
+            )
+        basis_obj = instantiate_atomic_basis(
+            cls,
+            **args_copy,
+            window_size=30,
+            **extra_kwargs(cls, args_copy["n_basis_funcs"]),
+        )
+
+        @jax.jit
+        def jitted_compute_features(x):
+            return basis_obj.compute_features(x)
+
+        jitted_compute_features(np.linspace(0, 1, sample_size))
 
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 10, 11, 100])
     def test_evaluate_on_grid_basis_size(self, sample_size, cls):
@@ -3867,6 +3905,7 @@ class TestAdditiveBasis(CombinedBasis):
         Test whether the evaluation of the `AdditiveBasis` results in a number of basis
         that is the sum of the number of basis functions from two individual bases.
         """
+        jax.config.update("jax_enable_x64", True)
         # define the two basis
         basis_a_obj = self.instantiate_basis(
             n_basis_a, basis_a, basis_class_specific_params, window_size=window_size
@@ -3983,6 +4022,7 @@ class TestAdditiveBasis(CombinedBasis):
         """
         Test whether the resulting meshgrid size matches the sample size input.
         """
+        jax.config.update("jax_enable_x64", True)
         if basis_a == CustomBasis or basis_b == CustomBasis:
             pytest.skip(
                 f"Skipping test_evaluate_on_grid_meshgrid_size for {basis_a.__name__}"
@@ -4018,6 +4058,7 @@ class TestAdditiveBasis(CombinedBasis):
         """
         Test whether the number sample size output by evaluate_on_grid matches the sample size of the input.
         """
+        jax.config.update("jax_enable_x64", True)
         if basis_a == CustomBasis or basis_b == CustomBasis:
             pytest.skip(
                 f"Skipping test_evaluate_on_grid_basis_size for {basis_a.__name__}"
@@ -4053,6 +4094,7 @@ class TestAdditiveBasis(CombinedBasis):
         Test whether the number of inputs provided to `evaluate_on_grid` matches
         the sum of the number of input samples required from each of the basis objects.
         """
+        jax.config.update("jax_enable_x64", True)
         if basis_a == CustomBasis or basis_b == CustomBasis:
             pytest.skip(
                 f"Skipping test_evaluate_on_grid_input_number for {basis_a.__name__}"
@@ -4352,6 +4394,7 @@ class TestAdditiveBasis(CombinedBasis):
         window_size,
         basis_class_specific_params,
     ):
+        jax.config.update("jax_enable_x64", True)
         basis_a_obj = self.instantiate_basis(
             n_basis_a, basis_a, basis_class_specific_params, window_size=window_size
         )
@@ -5126,6 +5169,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         Test whether the evaluation of the `MultiplicativeBasis` results in a number of basis
         that is the product of the number of basis functions from two individual bases.
         """
+        jax.config.update("jax_enable_x64", True)
         # define the two basis
         basis_a_obj = self.instantiate_basis(
             n_basis_a, basis_a, basis_class_specific_params, window_size=window_size
@@ -5243,6 +5287,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         """
         Test whether the resulting meshgrid size matches the sample size input.
         """
+        jax.config.update("jax_enable_x64", True)
         basis_a_obj = self.instantiate_basis(
             n_basis_a, basis_a, basis_class_specific_params, window_size=10
         )
@@ -5274,6 +5319,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         """
         Test whether the number sample size output by evaluate_on_grid matches the sample size of the input.
         """
+        jax.config.update("jax_enable_x64", True)
         basis_a_obj = self.instantiate_basis(
             n_basis_a, basis_a, basis_class_specific_params, window_size=10
         )
@@ -5305,6 +5351,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         Test whether the number of inputs provided to `evaluate_on_grid` matches
         the sum of the number of input samples required from each of the basis objects.
         """
+        jax.config.update("jax_enable_x64", True)
         basis_a_obj = self.instantiate_basis(
             n_basis_a, basis_a, basis_class_specific_params, window_size=10
         )
@@ -5478,6 +5525,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         window_size,
         basis_class_specific_params,
     ):
+        jax.config.update("jax_enable_x64", True)
         does_raise = (
             any(b == AdditiveBasis for b in (basis_a, basis_b)) and inp.ndim != 1
         )
@@ -5651,6 +5699,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         window_size,
         basis_class_specific_params,
     ):
+        jax.config.update("jax_enable_x64", True)
         basis_a_obj = self.instantiate_basis(
             n_basis_a, basis_a, basis_class_specific_params, window_size=window_size
         )
@@ -6148,6 +6197,7 @@ class TestMultiplicativeBasis(CombinedBasis):
     )
     def test_vectorization_equivalence(self, bas, x_shape, basis_class_specific_params):
         """Test that vectorized computation equals explicit nested loops."""
+        jax.config.update("jax_enable_x64", True)
         bas = (
             self.instantiate_basis(5, bas, basis_class_specific_params, window_size=10)
             ** 2

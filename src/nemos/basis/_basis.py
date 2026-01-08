@@ -9,6 +9,7 @@ from copy import deepcopy
 from functools import wraps
 from typing import Callable, Generator, Optional, Tuple, Union
 
+import jax.numpy as jnp
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame, TsdTensor
@@ -86,15 +87,14 @@ def min_max_rescale_samples(
     """
     sample_pts = sample_pts.astype(float)
     # if not normalize all array
-    vmin = np.nanmin(sample_pts, axis=0) if bounds is None else bounds[0]
-    vmax = np.nanmax(sample_pts, axis=0) if bounds is None else bounds[1]
-    sample_pts[(sample_pts < vmin) | (sample_pts > vmax)] = np.nan
-    sample_pts -= vmin
-
-    scaling = np.asarray(vmax - vmin)
+    vmin = jnp.nanmin(sample_pts, axis=0) if bounds is None else bounds[0]
+    vmax = jnp.nanmax(sample_pts, axis=0) if bounds is None else bounds[1]
+    scaling = jnp.asarray(vmax - vmin)
     # do not normalize if samples contain a single value (in which case vmax=vmin)
-    scaling[scaling == 0] = 1.0
-    sample_pts /= scaling
+    scaling = jnp.where(scaling == 0, 1.0, scaling)
+    sample_pts = (
+        jnp.where((sample_pts < vmin) | (sample_pts > vmax), np.nan, sample_pts) - vmin
+    ) / scaling
 
     check_fraction_valid_samples(
         sample_pts,
