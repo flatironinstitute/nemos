@@ -16,20 +16,18 @@ from nemos._observation_model_builder import (
 )
 from nemos.glm.initialize_parameters import initialize_intercept_matching_mean_rate
 
-@pytest.fixture()
-def shape(shape_val):
-    return shape
-
-
 @pytest.fixture
 def observation_model_rate_and_samples(request, observation_model_string):
     """
     Fixture that returns rate and samples for each observation model.
     """
-    if hasattr(request, 'param') and 'shape' in request.param:
-        shape = request.param['shape']
+    # Try to get shape from indirect parametrization
+    if hasattr(request, 'param'):
+        shape = request.param
     else:
-        shape = None
+        # Check if shape is in the test's funcargs (for direct parametrization)
+        shape = request.node.funcargs.get('shape', None)
+
     if observation_model_string == "Categorical":
         n_categories = 3
     if shape is None and observation_model_string != "Categorical":
@@ -1115,9 +1113,9 @@ class TestCommonObservationModels:
     def test_pseudo_r2_range(
         self,
         score_type,
+        shape,
         observation_model_string,
         observation_model_rate_and_samples,
-        shape,
     ):
         """
         Compute the pseudo-r2 and check that is < 1.
@@ -1416,9 +1414,9 @@ def test_sample_generator_wrong_shape(return_value, description):
     def test_pseudo_r2_range(
         self,
         score_type,
+        shape,
         observation_model_string,
         observation_model_rate_and_samples,
-        shape,
     ):
         """
         Compute the pseudo-r2 and check that is < 1.
