@@ -323,7 +323,7 @@ def check_fraction_valid_samples(*pytree: Any, err_msg: str, warn_msg: str) -> N
     valid = get_valid_multitree(pytree)
     if all(~valid):
         raise ValueError(err_msg)
-    elif valid.mean() <= 0.1:
+    if valid.mean() <= 0.1:
         warnings.warn(warn_msg, UserWarning)
 
 

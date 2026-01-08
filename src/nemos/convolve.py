@@ -300,8 +300,7 @@ def _shift_time_axis_and_convolve(
     # convert axis
     axis = axis if axis >= 0 else array.ndim + axis
     # move time axis to first
-    new_axis = (jnp.arange(array.ndim) + axis) % array.ndim
-    array = jnp.transpose(array, new_axis)
+    array = jnp.swapaxes(array, 0, axis)
 
     # convolve
     conv = _tensor_convolve(
@@ -309,8 +308,7 @@ def _shift_time_axis_and_convolve(
     )
 
     # reverse transposition
-    new_axis = (*((jnp.arange(array.ndim) - axis) % array.ndim), array.ndim)
-    conv = jnp.transpose(conv, new_axis)
+    conv = jnp.swapaxes(conv, axis, 0)
     return conv
 
 
