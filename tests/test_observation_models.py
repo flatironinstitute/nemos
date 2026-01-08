@@ -46,7 +46,7 @@ def observation_model_rate_and_samples(observation_model_string, shape=None):
         gamma_sample = jax.random.gamma(gamma_key, r, shape=rate.shape) * (rate / r)
         y = jax.random.poisson(poisson_key, gamma_sample)
     elif observation_model_string == "Categorical":
-        rate = jax.nn.log_softmax(rate) # log-proba
+        rate = jax.nn.log_softmax(rate)  # log-proba
         y = jax.random.categorical(jax.random.PRNGKey(123), rate)
     else:
         raise ValueError(f"Unknown observation model {observation_model_string}.")
@@ -77,6 +77,7 @@ def negative_binomial_observations():
 def gaussian_observations():
     return nmo.observation_models.GaussianObservations
 
+
 @pytest.fixture()
 def categorical_observations():
     return nmo.observation_models.CategoricalObservations
@@ -90,6 +91,7 @@ def categorical_observations():
         ("Bernoulli", does_not_raise()),
         ("NegativeBinomial", does_not_raise()),
         ("Gaussian", does_not_raise()),
+        ("Categorical", does_not_raise()),
         (
             "invalid",
             pytest.raises(ValueError, match="Unknown observation model: invalid"),
