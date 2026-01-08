@@ -1770,7 +1770,7 @@ class CategoricalObservations(Observations):
         Parameters
         ----------
         y :
-            The target observation to compare against. Shape (n_time_bins, ).
+            One-hot encoded categories. Shape (n_time_bins, n_features) or (n_time_bins, n_neurons, n_features).
         predicted_rate :
             The log-probabilities of each category (output of log_softmax).
             Shape (n_time_bins, n_categories).
@@ -1793,8 +1793,7 @@ class CategoricalObservations(Observations):
         :math:`y_{tk}` is a one-hot encoding of the observed category (1 if category k was observed, 0 otherwise),
         and the predicted_rate input contains :math:`\log(p_{tk})`.
         """
-        y_one_hot = jax.nn.one_hot(y, predicted_rate.shape[1], dtype=bool)
-        nll = jnp.sum(y_one_hot * predicted_rate, axis=-1)
+        nll = jnp.sum(y * predicted_rate, axis=-1)
         return -aggregate_sample_scores(nll)
 
     def log_likelihood(
@@ -1812,8 +1811,7 @@ class CategoricalObservations(Observations):
         Parameters
         ----------
         y :
-            The target category observations. Shape (n_time_bins, ). Each element is an integer
-            representing the observed category.
+            One-hot encoded categories. Shape or (n_time_bins, n_neurons, n_features)
         predicted_rate :
             The log-probabilities for each category (output of log_softmax).
             Shape (n_time_bins, n_categories).
@@ -1880,8 +1878,7 @@ class CategoricalObservations(Observations):
         Parameters
         ----------
         observations:
-            The observed category indices. Shape ``(n_time_bins, )``. Each element is an integer
-            representing the observed category.
+            One-hot encoded categories. Shape or (n_time_bins, n_neurons, n_features)
         predicted_rate:
             The log-probabilities of each category (output of log_softmax). Shape ``(n_time_bins, n_categories)``.
         scale:
@@ -1927,14 +1924,14 @@ class CategoricalObservations(Observations):
         Parameters
         ----------
         y :
-            Observed category indices.
+            One-hot encoded categories. Shape (n_time_bins, n_features) or (n_time_bins, n_neurons, n_features).
         predicted_rate :
             The predicted log-probabilities. This is not used in the Categorical model for estimating
             scale, but is retained for compatibility with the abstract method signature.
         dof_resid :
             The DOF of the residuals.
         """
-        return jnp.ones_like(jnp.atleast_1d(y[0]))
+        return jnp.ones_like(jnp.atleast_1d(y[0, ..., 0]))
 
     def likelihood(
         self,
@@ -1953,8 +1950,7 @@ class CategoricalObservations(Observations):
         Parameters
         ----------
         y :
-            The target category observations. Shape (n_time_bins, ). Each element is an integer
-            representing the observed category.
+            One-hot encoded categories. Shape (n_time_bins, n_features) or (n_time_bins, n_neurons, n_features).
         predicted_rate :
             The log-probabilities for each category (output of log_softmax).
             Shape (n_time_bins, n_categories).
@@ -1968,6 +1964,5 @@ class CategoricalObservations(Observations):
         :
             The likelihood. Shape (1,).
         """
-        y_one_hot = jax.nn.one_hot(y, predicted_rate.shape[1])
-        log_probs = jnp.sum(y_one_hot * predicted_rate, axis=-1)
+        log_probs = self.log_likelihood(y, predicted_rate, scale, identity)
         return aggregate_sample_scores(jnp.exp(log_probs))

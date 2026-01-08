@@ -26,6 +26,8 @@ def observation_model_rate_and_samples(observation_model_string, shape=None):
         shape = (10,)
     elif shape is None:
         shape = (10, 3)
+    elif observation_model_string == "Categorical":
+        shape = (*shape, 3)
     obs = instantiate_observation_model(observation_model_string)
     rate = jax.random.uniform(
         jax.random.PRNGKey(122), shape=shape, minval=0.1, maxval=10
@@ -849,6 +851,9 @@ class TestCommonObservationModels:
         Check that the pseudo-r2 of the null model is 0.
         """
         obs, y, rate = observation_model_rate_and_samples
+        if isinstance(obs, nmo.observation_models.CategoricalObservations):
+            pytest.skip("CategoricalObservations models log-probabilities, not the mean, therefore"
+                        "this property does not hold.")
         pseudo_r2 = obs.pseudo_r2(y, y.mean(), score_type=score_type)
         if not np.allclose(pseudo_r2, 0, atol=10**-7, rtol=0.0):
             raise ValueError(
