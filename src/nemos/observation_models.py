@@ -2002,4 +2002,8 @@ class CategoricalObservations(Observations):
         freq_per_sample = y.mean(
             axis=0, keepdims=True
         )  # (1, n_categories) or (1, n_neurons, n_categories)
+        # Clip to avoid log(0) which would give -inf
+        freq_per_sample = jnp.clip(
+            freq_per_sample, jnp.finfo(freq_per_sample.dtype).eps, 1.0
+        )
         return jnp.log(freq_per_sample) * jnp.ones_like(y, dtype=float)
