@@ -1466,9 +1466,23 @@ class PopulationGLM(GLM):
         """
         if self._feature_mask is None:
             return super()._predict(params, X)
-        # expand dims (categorical)
-        extra_dims = [self.feature_mask.ndim + i for i in range(params.coef.ndim - 2)]
-        feature_mask = jnp.expand_dims(self._feature_mask, extra_dims)
+
+        # Expand dims for categorical (extra dimensions beyond features and neurons)
+        # Handle both array and dict (pytree) feature masks
+        if isinstance(self._feature_mask, dict):
+            # For dict masks, need to determine extra dims from one of the coef arrays
+            sample_coef = next(iter(params.coef.values()))
+            extra_dims = [1 + i for i in range(sample_coef.ndim - 2)]
+            feature_mask = jax.tree_util.tree_map(
+                lambda m: jnp.expand_dims(m, extra_dims), self._feature_mask
+            )
+        else:
+            # For array masks, use ndim directly
+            extra_dims = [
+                self._feature_mask.ndim + i for i in range(params.coef.ndim - 2)
+            ]
+            feature_mask = jnp.expand_dims(self._feature_mask, extra_dims)
+
         return self.inverse_link_function(
             # First, multiply each feature by its corresponding coefficient,
             # then sum across all features and add the intercept, before

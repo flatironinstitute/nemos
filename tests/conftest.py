@@ -256,7 +256,9 @@ class MockRegressor(nmo.base_regressor.BaseRegressor):
     Implements all required abstract methods as empty methods.
     """
 
-    _validator = GLMValidator()
+    _validator = GLMValidator(
+        expected_param_dims=(1, 1), X_dimensionality=2, y_dimensionality=1
+    )
 
     def __init__(self, std_param: int = 0):
         """Initialize a MockBaseRegressor instance with optional standard parameters."""
