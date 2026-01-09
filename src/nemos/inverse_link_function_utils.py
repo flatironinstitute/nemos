@@ -49,20 +49,23 @@ expit = _make_wrapper(
 
 identity = _make_wrapper(lambda x: x, "identity", "Identity link function.")
 
+log_softmax = _make_wrapper(jax.nn.log_softmax, "log_softmax", "Softmax link function.")
+
 LINK_NAME_TO_FUNC = {
     "exp": exp,
     "expit": expit,
-    "jax._src.lax.lax.logistic": jax.scipy.special.expit,
-    "jax._src.nn.functions.softplus": jax.nn.softplus,
-    "jax._src.numpy.ufuncs.exp": jnp.exp,
-    "jax._src.scipy.special.expit": jax.scipy.special.expit,
+    "jax._src.lax.lax.logistic": expit,
+    "jax._src.nn.functions.softplus": softplus,
+    "jax._src.numpy.ufuncs.exp": exp,
+    "jax._src.scipy.special.expit": expit,
     "jax._src.scipy.stats.norm.cdf": jax.scipy.stats.norm.cdf,
-    "jax.lax.logistic": jax.lax.logistic,
-    "jax._src.scipy.special.logistic": jax.lax.logistic,
-    "jax.nn.softplus": jax.nn.softplus,
+    "jax.lax.logistic": logistic,
+    "jax._src.scipy.special.logistic": logistic,
+    "jax.nn.softplus": softplus,
+    "jax.nn.log_softmax": log_softmax,
     "jax.numpy.exp": jnp.exp,
-    "jax.scipy.special.expit": jax.scipy.special.expit,
-    "jax.scipy.stats.norm.cdf": jax.scipy.stats.norm.cdf,
+    "jax.scipy.special.expit": expit,
+    "jax.scipy.stats.norm.cdf": norm_cdf,
     "logistic": logistic,
     "nemos.inverse_link_function_utils.exp": exp,
     "nemos.inverse_link_function_utils.expit": expit,
@@ -70,10 +73,12 @@ LINK_NAME_TO_FUNC = {
     "nemos.inverse_link_function_utils.norm_cdf": norm_cdf,
     "nemos.inverse_link_function_utils.one_over_x": one_over_x,
     "nemos.inverse_link_function_utils.softplus": softplus,
+    "nemos.inverse_link_function_utils.log_softmax": log_softmax,
     "nemos.utils.one_over_x": one_over_x,
     "norm.cdf": norm_cdf,
     "one_over_x": one_over_x,
     "softplus": softplus,
+    "log_softmax": log_softmax,
     "identity": lambda x: x,
 }
 

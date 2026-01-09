@@ -1,5 +1,6 @@
 from .observation_models import (
     BernoulliObservations,
+    CategoricalObservations,
     GammaObservations,
     GaussianObservations,
     NegativeBinomialObservations,
@@ -12,6 +13,7 @@ AVAILABLE_OBSERVATION_MODELS = [
     "Gamma",
     "Poisson",
     "Gaussian",
+    "Categorical",
 ]
 
 
@@ -53,6 +55,8 @@ def instantiate_observation_model(observation_model: str, **kwargs):
         return NegativeBinomialObservations(**kwargs)
     elif observation_model == "Gaussian":
         return GaussianObservations(**kwargs)
+    elif observation_model == "Categorical":
+        return CategoricalObservations(**kwargs)
     else:
         raise ValueError(
             f"Unknown observation model: {observation_model}. "
