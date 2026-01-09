@@ -278,7 +278,10 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
                     f"model coefficients have {jax.tree_util.tree_map(lambda x: x.shape[1], params.coef)}  instead!",
                 )
         else:
-            shape_match = feature_mask.shape == params.coef.shape
+            # Compare either shape (n_features,) or (n_features, n_neurons)
+            # Note: params.coef can be  (n_features, n_neurons, n_categories) but
+            # the mask will be broadcasted over categories.
+            shape_match = feature_mask.shape == params.coef.shape[:2]
             if not shape_match:
                 raise ValueError(
                     "The shape of the ``feature_mask`` array must match that of the ``coef``. "
