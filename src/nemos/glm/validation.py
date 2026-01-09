@@ -41,15 +41,9 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
     and input data.
     """
 
-    expected_param_dims: Tuple[int] = (
-        1,
-        1,
-    )  # this should be (coef.ndim, intercept.ndim)
     to_model_params: Callable[[GLMUserParams], GLMParams] = to_glm_params
     from_model_params: Callable[[GLMParams], GLMUserParams] = from_glm_params
     model_class: str = "GLM"
-    X_dimensionality: int = 2
-    y_dimensionality: int = 1
     params_validation_sequence: Tuple[Tuple[str, None] | Tuple[str, dict[str, Any]]] = (
         *RegressorValidator.params_validation_sequence[:2],
         (
@@ -310,7 +304,6 @@ class PopulationGLMValidator(GLMValidator):
     checking that the number of neurons is consistent between model parameters and output y.
     """
 
-    y_dimensionality: int = 2
     expected_param_dims: Tuple[int] = (
         2,
         1,
