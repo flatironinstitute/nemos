@@ -285,8 +285,8 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
             if not shape_match:
                 raise ValueError(
                     "The shape of the ``feature_mask`` array must match that of the ``coef``. "
-                    f"The shape of the ``coef`` is ``{params.coef.shape}``, "
-                    f"that of the ``feature_mask`` is ``{feature_mask.shape}`` instead!"
+                    f"Expected shape (n_features,) or (n_features, n_neurons) = {params.coef.shape[:2]}, "
+                    f"but got {feature_mask.shape}."
                 )
         return
 
