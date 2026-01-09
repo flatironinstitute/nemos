@@ -21,14 +21,58 @@ from nemos._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
 from nemos.glm.validation import GLMValidator, PopulationGLMValidator
 from nemos.inverse_link_function_utils import LINK_NAME_TO_FUNC
 
+
+OBS_MODEL_DIMS = {
+    "GLM": {
+        **{
+            key: {
+                "X_dimensionality": 2,
+                "y_dimensionality": 1,
+                "expected_param_dims": (1, 1)
+            }
+            for key in AVAILABLE_OBSERVATION_MODELS
+            if key != "Categorical"
+        },
+        "Categorical": {
+            "X_dimensionality": 2,
+            "y_dimensionality": 2,
+            "expected_param_dims": (2, 1)
+        }
+    },
+    "PopulationGLM": {
+        **{
+            key: {
+                "X_dimensionality": 2,
+                "y_dimensionality": 2,
+                "expected_param_dims": (2, 1)
+            }
+            for key in AVAILABLE_OBSERVATION_MODELS
+            if key != "Categorical"
+        },
+        "Categorical": {
+            "X_dimensionality": 2,
+            "y_dimensionality": 3,
+            "expected_param_dims": (3, 2)
+        }
+    }
+}
+
+VALIDATOR_CLASS = {
+    "GLM": GLMValidator,
+    "PopulationGLM": PopulationGLMValidator,
+}
+
 MODEL_REGISTRY = {
     "GLM": nmo.glm.GLM,
     "PopulationGLM": nmo.glm.PopulationGLM,
 }
 
 VALIDATOR_REGISTRY = {
-    "GLM": GLMValidator(),
-    "PopulationGLM": PopulationGLMValidator(),
+    model_name: {
+        obs_model_name: VALIDATOR_CLASS[model_name](**params)
+        for obs_model_name, params in item.items()
+    }
+    for model_name, item in OBS_MODEL_DIMS.items()
 }
 
 INIT_PARAM_LENGTH = {
@@ -37,8 +81,14 @@ INIT_PARAM_LENGTH = {
 }
 
 DEFAULT_OBS_SHAPE = {
-    "GLM": (500,),
-    "PopulationGLM": (500, 3),
+    "GLM": {
+        **{key: (500,) for key in AVAILABLE_OBSERVATION_MODELS if key != "Categorical"},
+        "Categorical": (500, 4),
+    },
+    "PopulationGLM": {
+        **{key: (500, 3) for key in AVAILABLE_OBSERVATION_MODELS if key != "Categorical"},
+        "Categorical": (500, 3, 4),
+    },
 }
 
 HARD_CODED_GET_PARAMS_KEYS = {
@@ -102,6 +152,18 @@ def _add_zeros(y):
     return y
 
 
+def _default_y_from_config(model, n_samples=500):
+    model_name = model.__class__.__name__
+    obs_name = model.observation_model.__class__.__name__.replace("Observations", "")
+    shape = DEFAULT_OBS_SHAPE[model_name][obs_name]
+    return np.ones(shape)
+
+def _validator_from_config(model):
+    model_name = model.__class__.__name__
+    obs_name = model.observation_model.__class__.__name__.replace("Observations", "")
+    return VALIDATOR_REGISTRY[model_name][obs_name]
+
+
 def _zero_init_params(X, y):
     return (
         jax.tree_util.tree_map(lambda x: jnp.zeros((*x[0].shape, *y.shape[1:])), X),
@@ -161,11 +223,11 @@ def test_preprocess_fit_higher_dimensional_data_y(instantiate_base_regressor_sub
     fixture = instantiate_base_regressor_subclass
     model = fixture.model
     X = jnp.array([[1, 2], [3, 4]])  # Valid 2D X
-    y = jnp.array([[[1.0, 1.0, 1.0]]])  # Invalid 3D y
-    if is_population_model(model):
-        err_msg = "y must be 2-dimensional"
-    else:
-        err_msg = "y must be 1-dimensional"
+    # Create y with too many dimensions (expected + 1)
+    expected_y_dim = model._validator.y_dimensionality
+    y_shape = [2] + [3] * expected_y_dim  # Always one dimension too many
+    y = jnp.ones(y_shape)
+    err_msg = r"y must be [123]-dimensional"
     with pytest.raises(ValueError, match=err_msg):
         model._validate(X, y, _zero_init_params(X, y))
 
@@ -329,7 +391,7 @@ class TestModelCommons:
         """Test that the group lasso initialize_solver_and_state goes through"""
         fixture = instantiate_base_regressor_subclass
         X, model, params = fixture.X, fixture.model, fixture.params
-        y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        y = _default_y_from_config(model)
         y = _add_zeros(y)
         n_groups = 2
         n_features = X.shape[1]
@@ -355,7 +417,7 @@ class TestModelCommons:
 
         fixture = instantiate_base_regressor_subclass
         X, model = fixture.X, fixture.model
-        y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        y = _default_y_from_config(model)
         y = _add_zeros(y)
         n_groups = 2
         n_features = X.shape[1]
@@ -393,7 +455,7 @@ class TestModelCommons:
     ):
         fixture = instantiate_base_regressor_subclass
         X, model, true_params = fixture.X, fixture.model, fixture.params
-        y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        y = _default_y_from_config(model)
         y = _add_zeros(y)
         X.fill(fill_val)
         with expectation:
@@ -547,7 +609,7 @@ class TestModelCommons:
     ):
         fixture = instantiate_base_regressor_subclass
         X, model, true_params = fixture.X, fixture.model, fixture.params
-        y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        y = _default_y_from_config(model)
         y = _add_zeros(y)
 
         assert model.solver_init_state is None
@@ -1046,7 +1108,7 @@ class TestModelValidator:
         X, model, true_params = fixture.X, fixture.model, fixture.params
 
         model_name = model.__class__.__name__
-        y = np.zeros(DEFAULT_OBS_SHAPE[model_name])
+        y = _default_y_from_config(model)
         expectation = (
             pytest.raises(
                 ValueError,
@@ -1066,7 +1128,7 @@ class TestModelValidator:
             init_params = params_tuple + (true_params.coef,) * (
                 n_params - INIT_PARAM_LENGTH[model_name]
             )
-        validator = VALIDATOR_REGISTRY[model_name]
+        validator = _validator_from_config(model)
         with expectation:
             params = validator.validate_and_cast_params(init_params)
             # check that params are set
@@ -1093,21 +1155,21 @@ class TestModelValidator:
         """
         fixture = instantiate_base_regressor_subclass
         X, model, true_params = fixture.X, fixture.model, fixture.params
-        y = np.zeros(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        y = _default_y_from_config(model)
         if delta_dim == -1:
             X = np.zeros((X.shape[0],))
         elif delta_dim == 1:
             X = np.zeros((X.shape[0], 1, X.shape[1]))
-        validator = VALIDATOR_REGISTRY[model.__class__.__name__]
+        validator = _validator_from_config(model)
         with expectation:
             validator.validate_inputs(X, y)
 
     @pytest.mark.parametrize(
         "delta_dim, expectation",
         [
-            (-1, pytest.raises(ValueError, match="y must be [12]-dimensional\\.")),
+            (-1, pytest.raises(ValueError, match="y must be [123]-dimensional\\.")),
             (0, does_not_raise()),
-            (1, pytest.raises(ValueError, match="y must be [12]-dimensional\\.")),
+            (1, pytest.raises(ValueError, match="y must be [123]-dimensional\\.")),
         ],
     )
     @pytest.mark.solver_related
@@ -1121,18 +1183,11 @@ class TestModelValidator:
         """
         fixture = instantiate_base_regressor_subclass
         X, model, true_params = fixture.X, fixture.model, fixture.params
-        y = np.zeros(DEFAULT_OBS_SHAPE[model.__class__.__name__])
-        if is_population_model(model):
-            if delta_dim == -1:
-                y = y[:, 0]
-            elif delta_dim == 1:
-                y = np.zeros((*y.shape, 1))
-        else:
-            if delta_dim == -1:
-                y = np.zeros([])
-            elif delta_dim == 1:
-                y = np.zeros((y.shape[0], 1))
-        validator = VALIDATOR_REGISTRY[model.__class__.__name__]
+        y = _default_y_from_config(model)
+        if delta_dim == -1:
+            y = y[..., 0]
+        elif delta_dim == 1:
+            y = np.zeros((*y.shape, 1))
         with expectation:
             model._validator.validate_inputs(X, y)
 
@@ -1154,9 +1209,9 @@ class TestModelValidator:
         """
         fixture = instantiate_base_regressor_subclass
         X, model, true_params = fixture.X, fixture.model, fixture.params
-        y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        y = _default_y_from_config(model)
         y = _add_zeros(y)
-        validator = VALIDATOR_REGISTRY[model.__class__.__name__]
+        validator = _validator_from_config(model)
         params = model.initialize_params(X, y)
         params = validator.to_model_params(params)
         if delta_n_features == 1:
@@ -1196,9 +1251,9 @@ class TestModelValidator:
         """
         fixture = instantiate_base_regressor_subclass
         X, model, true_params = fixture.X, fixture.model, fixture.params
-        y = np.zeros(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        y = _default_y_from_config(model)
         X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
-        validator = VALIDATOR_REGISTRY[model.__class__.__name__]
+        validator = _validator_from_config(model)
         with expectation:
             validator.validate_inputs(X, y)
 
@@ -1231,9 +1286,9 @@ class TestModelValidator:
         """
         fixture = instantiate_base_regressor_subclass
         X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
-        shape = DEFAULT_OBS_SHAPE[model.__class__.__name__]
+        shape = _default_y_from_config(model).shape
         y = jnp.zeros((shape[0] + delta_tp,) + shape[1:])
-        validator = VALIDATOR_REGISTRY[model.__class__.__name__]
+        validator = _validator_from_config(model)
         with expectation:
             validator.validate_inputs(X, y)
 
@@ -1261,9 +1316,9 @@ class TestModelValidator:
     ):
         fixture = instantiate_base_regressor_subclass
         X, model, true_params = fixture.X, fixture.model, fixture.params
-        y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        y = _default_y_from_config(model)
         X.fill(fill_val)
-        validator = VALIDATOR_REGISTRY[model.__class__.__name__]
+        validator = _validator_from_config(model)
         with expectation:
             validator.validate_inputs(X, y)
 
@@ -1291,8 +1346,8 @@ class TestModelValidator:
     ):
         fixture = instantiate_base_regressor_subclass
         X, model, true_params = fixture.X, fixture.model, fixture.params
-        y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        y = _default_y_from_config(model)
         y.fill(fill_val)
-        validator = VALIDATOR_REGISTRY[model.__class__.__name__]
+        validator = _validator_from_config(model)
         with expectation:
             validator.validate_inputs(X, y)
