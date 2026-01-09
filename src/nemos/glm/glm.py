@@ -185,7 +185,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
     Observation model:  <class 'nemos.observation_models.PoissonObservations'>
     """
 
-    _validator = GLMValidator()
+    _validator_class = GLMValidator
 
     def __init__(
         self,
@@ -227,6 +227,16 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         self.aux_ = None
         self.optim_info_ = None
 
+        # setup validator
+        (expected_param_dims, X_dimensionality, y_dimensionality) = (
+            self._get_validator_config()
+        )
+        self._validator = self._validator_class(
+            expected_param_dims=expected_param_dims,
+            X_dimensionality=X_dimensionality,
+            y_dimensionality=y_dimensionality,
+        )
+
     def __sklearn_tags__(self):
         """Return GLM specific estimator tags."""
         tags = super().__sklearn_tags__()
@@ -249,6 +259,14 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         self._inverse_link_function = resolve_inverse_link_function(
             inverse_link_function, self._observation_model
         )
+
+    def _get_validator_config(self) -> Tuple[Tuple[int, int], int, int]:
+        coef_dim, intercept_dim = 1, 1
+        y_dim = 1
+        if isinstance(self.observation_model, obs.CategoricalObservations):
+            coef_dim += 1
+            y_dim += 1
+        return (coef_dim, intercept_dim), 2, y_dim
 
     @property
     def observation_model(self) -> Union[None, obs.Observations]:
@@ -1251,7 +1269,7 @@ class PopulationGLM(GLM):
     dict_keys(['feature_1', 'feature_2'])
     """
 
-    _validator = PopulationGLMValidator()
+    _validator_class = PopulationGLMValidator
 
     def __init__(
         self,
@@ -1280,6 +1298,15 @@ class PopulationGLM(GLM):
         )
         self._metadata = None
         self.feature_mask = feature_mask
+
+    def _get_validator_config(self) -> Tuple[Tuple[int, int], int, int]:
+        coef_dim, intercept_dim = 2, 1
+        y_dim = 2
+        if isinstance(self.observation_model, obs.CategoricalObservations):
+            coef_dim += 1
+            intercept_dim += 1
+            y_dim += 1
+        return (coef_dim, intercept_dim), 2, y_dim
 
     def __sklearn_tags__(self):
         """Return Population GLM specific estimator tags."""
