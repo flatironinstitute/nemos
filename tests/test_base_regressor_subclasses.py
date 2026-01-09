@@ -22,14 +22,13 @@ from nemos.glm.params import GLMParams
 from nemos.glm.validation import GLMValidator, PopulationGLMValidator
 from nemos.inverse_link_function_utils import LINK_NAME_TO_FUNC
 
-
 OBS_MODEL_DIMS = {
     "GLM": {
         **{
             key: {
                 "X_dimensionality": 2,
                 "y_dimensionality": 1,
-                "expected_param_dims": (1, 1)
+                "expected_param_dims": (1, 1),
             }
             for key in AVAILABLE_OBSERVATION_MODELS
             if key != "Categorical"
@@ -37,15 +36,15 @@ OBS_MODEL_DIMS = {
         "Categorical": {
             "X_dimensionality": 2,
             "y_dimensionality": 2,
-            "expected_param_dims": (2, 1)
-        }
+            "expected_param_dims": (2, 1),
+        },
     },
     "PopulationGLM": {
         **{
             key: {
                 "X_dimensionality": 2,
                 "y_dimensionality": 2,
-                "expected_param_dims": (2, 1)
+                "expected_param_dims": (2, 1),
             }
             for key in AVAILABLE_OBSERVATION_MODELS
             if key != "Categorical"
@@ -53,9 +52,9 @@ OBS_MODEL_DIMS = {
         "Categorical": {
             "X_dimensionality": 2,
             "y_dimensionality": 3,
-            "expected_param_dims": (3, 2)
-        }
-    }
+            "expected_param_dims": (3, 2),
+        },
+    },
 }
 
 VALIDATOR_CLASS = {
@@ -87,7 +86,11 @@ DEFAULT_OBS_SHAPE = {
         "Categorical": (500, 4),
     },
     "PopulationGLM": {
-        **{key: (500, 3) for key in AVAILABLE_OBSERVATION_MODELS if key != "Categorical"},
+        **{
+            key: (500, 3)
+            for key in AVAILABLE_OBSERVATION_MODELS
+            if key != "Categorical"
+        },
         "Categorical": (500, 3, 4),
     },
 }
@@ -158,6 +161,7 @@ def _default_y_from_config(model, n_samples=500):
     obs_name = model.observation_model.__class__.__name__.replace("Observations", "")
     shape = DEFAULT_OBS_SHAPE[model_name][obs_name]
     return np.ones(shape)
+
 
 def _validator_from_config(model):
     model_name = model.__class__.__name__
