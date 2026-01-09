@@ -1231,6 +1231,7 @@ def instantiate_glm_func(
 ):
     np.random.seed(123)
     n_features = 2
+    n_categories = 3 # only for categorical
     X = np.ones((500, n_features))
     X[:250, 0] = 0
     X[np.arange(500) % 2 == 1, 1] = 0
@@ -1239,8 +1240,9 @@ def instantiate_glm_func(
         regularizer=regularizer,
         solver_name=solver_name,
     )
-    model.coef_ = np.random.randn(n_features)
-    model.intercept_ = np.random.randn(1)
+    coef_ndim = model._validator.expected_param_dims[0]
+    model.coef_ = np.random.randn(*(n_features , n_categories)[:coef_ndim])
+    model.intercept_ = np.random.randn(1) if coef_ndim == 1 else np.random.randn(n_categories)
     if simulate:
         counts, rates = model.simulate(jax.random.PRNGKey(1234), X)
     else:
@@ -1267,6 +1269,7 @@ def instantiate_population_glm_func(
 ):
     np.random.seed(123)
     n_features = 2
+    n_categories = 4
     X = np.ones((500, n_features))
     X[:250, 0] = 0
     X[np.arange(500) % 2 == 1, 1] = 0
@@ -1275,8 +1278,9 @@ def instantiate_population_glm_func(
         regularizer=regularizer,
         solver_name=solver_name,
     )
-    model.coef_ = np.random.randn(n_features, n_neurons)
-    model.intercept_ = np.random.randn(n_neurons)
+    coef_ndim = model._validator.expected_param_dims[0]
+    model.coef_ = np.random.randn(*(n_features, n_neurons, n_categories)[:coef_ndim])
+    model.intercept_ = np.random.randn(*(n_neurons, n_categories)[:coef_ndim - 1])
     if simulate:
         model._initialize_feature_mask(X, np.empty(shape=(X.shape[0], n_neurons)))
         counts, rates = model.simulate(jax.random.PRNGKey(1234), X)
