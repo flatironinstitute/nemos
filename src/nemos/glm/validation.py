@@ -46,25 +46,43 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
     model_class: str = "GLM"
     params_validation_sequence: Tuple[Tuple[str, None] | Tuple[str, dict[str, Any]]] = (
         *RegressorValidator.params_validation_sequence[:2],
-        (
-            "check_array_dimensions",
-            dict(
-                err_message_format="Invalid parameter dimensionality. coef must be an array "
-                "or nemos.pytree.FeaturePytree with array leafs of shape "
-                "(n_features, ). intercept must be of shape (1,)."
-                "\nThe provided coef and intercept have shape ``{}`` and ``{}`` "
-                "instead."
-            ),
-        ),
+        ("check_array_dimensions", None),
         *RegressorValidator.params_validation_sequence[3:],
         ("validate_intercept_shape", None),
     )
+
+    def _get_shape_description(self) -> Tuple[str, str]:
+        """
+        Generate human-readable shape descriptions based on expected parameter dimensions.
+
+        Returns
+        -------
+        Tuple[str, str]
+            A tuple of (coef_shape_description, intercept_shape_description) strings.
+        """
+        coef_dim, intercept_dim = self.expected_param_dims
+
+        if coef_dim == 1:
+            coef_shape = "(n_features,)"
+            intercept_shape = "(1,)"
+        elif coef_dim == 2:
+            # Categorical GLM: coef has extra category dimension
+            coef_shape = "(n_features, n_categories)"
+            intercept_shape = "(n_categories,)"
+        else:
+            # Fallback for unexpected dimensions
+            coef_shape = f"{coef_dim}-dimensional"
+            intercept_shape = f"{intercept_dim}-dimensional"
+
+        return coef_shape, intercept_shape
 
     def validate_intercept_shape(self, params: GLMParams, **kwargs):
         """
         Perform GLM-specific parameter validation.
 
         Validates that the intercept has the correct shape for a single-neuron GLM.
+        For standard GLMs, intercept should be shape (1,). For categorical GLMs,
+        intercept should be shape (n_categories,).
 
         Parameters
         ----------
@@ -81,13 +99,19 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         Raises
         ------
         ValueError
-            If intercept does not have shape (1,).
+            If intercept does not have the expected shape.
         """
-        # check intercept shape
-        if params.intercept.shape != (1,):
+        # Get expected shapes from the dimension configuration
+        _, intercept_shape_desc = self._get_shape_description()
+
+        # For standard GLM: intercept should be 1D with one element
+        # For categorical GLM: intercept should be 1D with n_categories elements
+        if params.intercept.ndim != 1:
             raise ValueError(
-                "Intercept term should be a one-dimensional array with shape ``(1,)``."
+                f"Intercept term should be a one-dimensional array with shape {intercept_shape_desc}. "
+                f"Got shape {params.intercept.shape} instead."
             )
+
         return params
 
     def check_array_dimensions(
@@ -100,16 +124,17 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         Check array dimensions with custom error formatting for GLM parameters.
 
         Overrides the base implementation to provide GLM-specific error messages
-        that include the actual shapes of the provided coefficient and intercept arrays.
+        that dynamically adapt based on the observation model (e.g., categorical
+        vs non-categorical models have different expected shapes).
 
         Parameters
         ----------
         params : GLMUserParams
             User-provided parameters as a tuple (coef, intercept).
         err_msg : str, optional
-            Custom error message (unused, overridden by err_message_format).
+            Custom error message (unused, generated dynamically).
         err_message_format : str, optional
-            Format string for error message that takes two shape arguments.
+            Format string for error message.
 
         Returns
         -------
@@ -123,7 +148,16 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         """
         wrapped = self.wrap_user_params(params)
         shapes = tuple(jax.tree_util.tree_map(lambda x: x.shape, p) for p in wrapped)
-        err_msg = err_message_format.format(*shapes)
+
+        # Generate error message dynamically based on expected dimensions
+        coef_shape_desc, intercept_shape_desc = self._get_shape_description()
+        err_msg = (
+            f"Invalid parameter dimensionality. coef must be an array "
+            f"or nemos.pytree.FeaturePytree with array leafs of shape "
+            f"{coef_shape_desc}. intercept must be of shape {intercept_shape_desc}."
+            f"\nThe provided coef and intercept have shape ``{shapes[0]}`` and ``{shapes[1]}`` instead."
+        )
+
         return super().check_array_dimensions(params, err_msg=err_msg)
 
     def check_user_params_structure(
@@ -314,18 +348,35 @@ class PopulationGLMValidator(GLMValidator):
     model_class: str = "PopulationGLM"
     params_validation_sequence: Tuple[Tuple[str, None] | Tuple[str, dict[str, Any]]] = (
         *RegressorValidator.params_validation_sequence[:2],
-        (
-            "check_array_dimensions",
-            dict(
-                err_message_format="Invalid parameter dimensionality. "
-                "coef must be an array or nemos.pytree.FeaturePytree "
-                "with array leafs of shape (n_features, n_neurons). "
-                "intercept must be of shape (n_neurons,)."
-                "\nThe provided coef and intercept have shape ``{}`` and ``{}`` instead."
-            ),
-        ),
+        ("check_array_dimensions", None),
         *RegressorValidator.params_validation_sequence[3:],
     )
+
+    def _get_shape_description(self) -> Tuple[str, str]:
+        """
+        Generate human-readable shape descriptions for population GLM parameters.
+
+        Returns
+        -------
+        Tuple[str, str]
+            A tuple of (coef_shape_description, intercept_shape_description) strings.
+        """
+        coef_dim, intercept_dim = self.expected_param_dims
+
+        if coef_dim == 2:
+            # Standard PopulationGLM
+            coef_shape = "(n_features, n_neurons)"
+            intercept_shape = "(n_neurons,)"
+        elif coef_dim == 3:
+            # Categorical PopulationGLM: extra category dimension
+            coef_shape = "(n_features, n_neurons, n_categories)"
+            intercept_shape = "(n_neurons, n_categories)"
+        else:
+            # Fallback for unexpected dimensions
+            coef_shape = f"{coef_dim}-dimensional"
+            intercept_shape = f"{intercept_dim}-dimensional"
+
+        return coef_shape, intercept_shape
 
     def validate_consistency(
         self,
