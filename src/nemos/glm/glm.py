@@ -319,7 +319,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             # then sum across all features and add the intercept, before
             # passing to the inverse link function
             tree_utils.pytree_map_and_reduce(
-                lambda x, w: jnp.dot(x, w), sum, X, params.coef
+                lambda x, w: jnp.einsum("tj, j...->t...", x, w), sum, X, params.coef
             )
             + params.intercept
         )
@@ -1466,16 +1466,19 @@ class PopulationGLM(GLM):
         """
         if self._feature_mask is None:
             return super()._predict(params, X)
+        # expand dims (categorical)
+        extra_dims = [self.feature_mask.ndim + i for i in range(params.coef.ndim - 2)]
+        feature_mask = jnp.expand_dims(self._feature_mask, extra_dims)
         return self.inverse_link_function(
             # First, multiply each feature by its corresponding coefficient,
             # then sum across all features and add the intercept, before
             # passing to the inverse link function
             tree_utils.pytree_map_and_reduce(
-                lambda x, w, m: jnp.dot(x, w * m),
+                lambda x, w, m: jnp.einsum("ti, i...->t...", x, w * m),
                 sum,
                 X,
                 params.coef,
-                self._feature_mask,
+                feature_mask,
             )
             + params.intercept
         )
