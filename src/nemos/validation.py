@@ -3,7 +3,7 @@
 import abc
 import difflib
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, Generic, List, Optional, Tuple, Union
 
 import jax
@@ -563,12 +563,12 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
         Names of parameter validation methods to call in order.
     """
 
-    expected_param_dims: Tuple[int] = None
+    expected_param_dims: Tuple[int, ...] = field(kw_only=True)
     model_class: str = None
     to_model_params: Callable[[UserProvidedParamsT], ModelParamsT] = None
     from_model_params: Callable[[ModelParamsT], UserProvidedParamsT] = None
-    X_dimensionality: int = None
-    y_dimensionality: int = None
+    X_dimensionality: int = field(kw_only=True)
+    y_dimensionality: int = field(kw_only=True)
 
     # tuples [(meth, kwargs), (meth,), ]
     params_validation_sequence: Tuple[
