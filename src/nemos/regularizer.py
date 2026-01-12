@@ -60,9 +60,9 @@ def apply_operator(func, params, *args, filter_kwargs=None, **kwargs):
         It receives each regularizable subtree ``x`` and must return a value
         with the same pytree structure that should replace that subtree.
     params :
-        An object implementing ``regularizable_subtrees()`` which returns an
-        iterable of selector functions (suitable for ``eqx.tree_at``) that
-        identify the leaves/subtrees to be transformed.
+       params any parameter object. If it implements ``regularizable_subtrees()``, the
+       method is used to return an iterable of selector functions (
+       suitable for ``eqx.tree_at``) that identify the leaves/subtrees to be transformed.
     *args :
         Additional positional arguments passed directly to ``func``.
     filter_kwargs :
@@ -143,8 +143,14 @@ def apply_operator(func, params, *args, filter_kwargs=None, **kwargs):
     10.0
     """
     filter_kwargs = filter_kwargs or {}
+    # if there is a list of regularizable sub-trees use that
+    if hasattr(params, "regularizable_subtrees"):
+        regularizable_subtrees = params.regularizable_subtrees()
+    # otherwise regularize all the tree
+    else:
+        regularizable_subtrees = [lambda x: x]
 
-    for where in params.regularizable_subtrees():
+    for where in regularizable_subtrees:
         # Extract subtree-specific kwargs by applying the selector to each value
         subtree_kwargs = {key: where(val) for key, val in filter_kwargs.items()}
         params = eqx.tree_at(
