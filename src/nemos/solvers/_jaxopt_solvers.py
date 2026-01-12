@@ -30,7 +30,7 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
         regularizer: Regularizer,
         regularizer_strength: float | None,
         has_aux: bool,
-        init_params: Params,
+        init_params: Params = None,
         **solver_init_kwargs,
     ):
         if self._proximal:
