@@ -760,7 +760,12 @@ class GroupLasso(Regularizer):
         struct = jax.tree_util.tree_structure(x)
         mask = jax.tree_util.tree_unflatten(struct, [None] * struct.num_leaves)
         for where in reg_subtrees:
-            mask = eqx.tree_at(where, mask, self._initialize_subtree_mask(where(x)))
+            mask = eqx.tree_at(
+                where,
+                mask,
+                self._initialize_subtree_mask(where(x)),
+                is_leaf=lambda m: m is None,
+            )
         return mask
 
     @staticmethod
@@ -889,13 +894,14 @@ class GroupLasso(Regularizer):
             The proximal operator, applying Group Lasso regularization to the provided parameters. The
             intercept term is not regularized.
         """
+        filter_kwargs = self._get_filter_kwargs(init_params=init_params)
 
         def prox_op(params, regularizer_strength, scaling=1.0):
             return apply_operator(
                 prox_group_lasso,
                 params,
                 regularizer_strength,
-                filter_kwargs=self._get_filter_kwargs(init_params=init_params),
+                filter_kwargs=filter_kwargs,
                 scaling=scaling,
             )
 

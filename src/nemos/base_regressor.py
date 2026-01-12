@@ -26,6 +26,7 @@ from numpy.typing import NDArray
 from . import solvers, tree_utils, utils
 from ._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from .base_class import Base
+from .glm.params import GLMParams
 from .regularizer import GroupLasso, Regularizer
 from .type_casting import cast_to_jax
 from .typing import (
@@ -561,12 +562,17 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         data = X.data if isinstance(X, FeaturePytree) else X
 
         if isinstance(self.regularizer, GroupLasso):
-            if self.regularizer.mask is None:
+            if self.regularizer.mask is None and not isinstance(data, dict):
+                # User is calling GroupLasso but not using the FeaturePytree to
+                # group variables nor providing mask.
                 warnings.warn(
                     "Mask has not been set. Defaulting to a single group for all parameters. "
                     "Please see the documentation on GroupLasso regularization for defining a mask."
                 )
-                self.regularizer.mask = jnp.ones((1, data.shape[1]))
+
+            if isinstance(self.regularizer.mask, jnp.ndarray):
+                # Wrap into a GLM param structure.
+                self.regularizer.mask = GLMParams(self.regularizer.mask, None)
 
         return data, y
 

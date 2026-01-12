@@ -1907,7 +1907,7 @@ class TestGroupLasso:
     def test_mask_dimension(self, n_dim, poissonGLM_model_instantiation):
         """Test that mask works with PyTree structure."""
 
-        raise_exception = n_dim in [0, 1, 3]
+        raise_exception = n_dim in [0, 1]
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
 
         valid_mask_array = np.zeros((2, X.shape[1]))
