@@ -2133,12 +2133,12 @@ class TestPenalizedLossAuxiliaryVariables:
 
         # Get penalized loss
         penalized = regularizer.penalized_loss(
-            loss_with_aux, regularizer_strength=reg_strength, init_params=None
+            loss_with_aux, regularizer_strength=reg_strength, init_params=params
         )
         penalized_loss_value, aux = penalized(params, X, y)
 
         # Calculate expected penalty
-        expected_penalty = regularizer._penalization(params, reg_strength, {})
+        expected_penalty = regularizer._penalization(params, reg_strength, regularizer._get_filter_kwargs(params))
 
         # Check that penalized loss = unpenalized loss + penalty
         assert jnp.isclose(penalized_loss_value, unpenalized_loss + expected_penalty)
