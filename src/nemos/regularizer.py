@@ -37,7 +37,7 @@ def __dir__() -> list[str]:
     return __all__
 
 
-def apply_operator(func, params, *args, **kwargs):
+def apply_operator(func, params, *args, filter_kwargs=None, **kwargs):
     """
     Apply an operator to all regularizable subtrees of a parameter pytree.
 
@@ -60,6 +60,15 @@ def apply_operator(func, params, *args, **kwargs):
         identify the leaves/subtrees to be transformed.
     *args :
         Additional positional arguments passed directly to ``func``.
+    filter_kwargs :
+        Optional keyword-only dictionary of keyword arguments with PyTree values
+        that should be filtered per subtree. For each regularizable subtree, the
+        subtree selector is applied to each value in this dict, extracting only
+        the portion relevant to that subtree. These extracted kwargs are then
+        passed to ``func`` along with the subtree. This is useful for operators
+        that need PyTree-structured metadata (e.g., masks) aligned with the
+        parameter structure. Must be passed as a keyword argument. Default is
+        None, which results in no filtering.
     **kwargs :
         Additional keyword arguments passed directly to ``func``.
 
@@ -76,6 +85,8 @@ def apply_operator(func, params, *args, **kwargs):
       from ``params``.
     - ``func`` must be pure and JAX-compatible if this function is used inside
       JIT-compiled code.
+    - When ``filter_kwargs`` is provided, each value in the dict must be a PyTree
+      with the same structure as ``params`` (or compatible with the subtree selectors).
 
     Examples
     --------
@@ -107,9 +118,35 @@ def apply_operator(func, params, *args, **kwargs):
 
     The bias `b` is unchanged because it is not listed in
     `regularizable_subtrees`.
+
+    Example with ``filter_kwargs`` for PyTree-structured metadata:
+
+    >>> def masked_op(x, mask=None):
+    ...     if mask is not None:
+    ...         return x * mask
+    ...     return x
+
+    >>> # Create a mask with same structure as params
+    >>> mask_tree = Params(w=0.5, b=1.0)
+
+    >>> # Apply operator with filtered kwargs - only the relevant mask piece
+    >>> # is passed to each subtree
+    >>> p3 = apply_operator(masked_op, p, filter_kwargs={"mask": mask_tree})
+    >>> p3.w  # w was multiplied by mask.w (0.5)
+    1.5
+    >>> p3.b  # b is not regularizable, so unchanged
+    10.0
     """
+    filter_kwargs = filter_kwargs or {}
+
     for where in params.regularizable_subtrees():
-        params = eqx.tree_at(where, params, func(where(params), *args, **kwargs))
+        # Extract subtree-specific kwargs by applying the selector to each value
+        subtree_kwargs = {key: where(val) for key, val in filter_kwargs.items()}
+        params = eqx.tree_at(
+            where,
+            params,
+            func(where(params), *args, **kwargs, **subtree_kwargs),
+        )
 
     return params
 
@@ -657,8 +694,7 @@ class GroupLasso(Regularizer):
             mask = self._cast_and_check_mask(mask)
         self._mask = mask
 
-    @staticmethod
-    def initialize_mask(x: Any) -> Any:
+    def initialize_mask(self, x: Any) -> Any:
         """
         Initialize a default group mask for a PyTree of parameters.
 
@@ -694,7 +730,21 @@ class GroupLasso(Regularizer):
         >>> mask['w'].shape
         (6, 5, 3, 2)
         """
-        flat_x, struct = jax.tree_util.tree_flatten(x)
+        reg_subtrees = (
+            x.regularizable_subtrees()
+            if hasattr(x, "regularizable_subtrees")
+            else [lambda z: z]
+        )
+        struct = jax.tree_util.tree_structure(x)
+        mask = jax.tree_util.tree_unflatten(struct, [None] * struct.num_leaves)
+        for where in reg_subtrees:
+            mask = eqx.tree_at(where, mask, self._initialize_subtree_mask(where(x)))
+        return mask
+
+    @staticmethod
+    def _initialize_subtree_mask(x_subtree: Any) -> Any:
+        """Initialize individual subtree mask matching structure."""
+        flat_x, struct = jax.tree_util.tree_flatten(x_subtree)
 
         # Calculate total number of groups across all leaves
         n_groups_per_leaf = [math.prod(leaf.shape[1:]) for leaf in flat_x]
@@ -715,7 +765,7 @@ class GroupLasso(Regularizer):
                 extra_shape = leaf.shape[1:]
                 multi_idx = jnp.unravel_index(i, extra_shape)
                 # Build index tuple: (group_id, slice(:), *multi_idx)
-                # When dropping support for Python 3.10, replace with
+                # When dropping support for Python < 3.11, replace with
                 # mask = mask.at[group_offset + i, :, *multi_idx].set(1.0)
                 full_idx = (group_offset + i, slice(None)) + multi_idx
                 mask = mask.at[full_idx].set(1.0)
@@ -830,13 +880,17 @@ class GroupLasso(Regularizer):
             The proximal operator, applying Group Lasso regularization to the provided parameters. The
             intercept term is not regularized.
         """
+        if self.mask is None:
+            mask = self.initialize_mask(init_params)
+        else:
+            mask = self.mask
 
         def prox_op(params, regularizer_strength, scaling=1.0):
             return apply_operator(
                 prox_group_lasso,
                 params,
                 regularizer_strength,
-                mask=self.mask,
+                filter_kwargs={"mask": mask},
                 scaling=scaling,
             )
 
