@@ -30,7 +30,6 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
         unregularized_loss: Callable,
         regularizer: Regularizer,
         regularizer_strength: RegularizerStrength,
-        regularizer_strength: float | None,
         has_aux: bool,
         **solver_init_kwargs,
     ):
@@ -82,9 +81,7 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
 
     def get_optim_info(self, state: JaxoptSolverState) -> OptimizationInfo:
         num_steps = state.iter_num.item()  # pyright: ignore
-        function_val = (
-            state.value if hasattr(state, "value") else None
-        )  # pyright: ignore
+        function_val = state.value if hasattr(state, "value") else None  # pyright: ignore
 
         return OptimizationInfo(
             function_val=function_val,  # pyright: ignore
