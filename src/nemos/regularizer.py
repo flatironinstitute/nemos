@@ -7,7 +7,7 @@ with various optimization methods, and they can be applied depending on the mode
 """
 
 import abc
-from typing import Callable, Tuple, Union
+from typing import Any, Callable, Tuple, Union
 
 import equinox as eqx
 import jax
@@ -19,6 +19,7 @@ from nemos.third_party.jaxopt import jaxopt
 from . import tree_utils
 from .base_class import Base
 from .proximal_operator import prox_elastic_net, prox_group_lasso
+from .tree_utils import pytree_map_and_reduce
 from .typing import (
     DESIGN_INPUT_TYPE,
     ModelParamsT,
@@ -26,6 +27,7 @@ from .typing import (
     RegularizerStrength,
 )
 from .utils import format_repr
+from .validation import convert_tree_leaves_to_jax_array
 
 __all__ = ["UnRegularized", "Ridge", "Lasso", "GroupLasso", "ElasticNet"]
 
@@ -640,52 +642,62 @@ class GroupLasso(Regularizer):
         """Setter for the mask attribute."""
         # check mask if passed by user, else will be initialized later
         if mask is not None:
-            self._check_mask(mask)
+            mask = self._cast_and_check_mask(mask)
         self._mask = mask
 
     @staticmethod
-    def _check_mask(mask: jnp.ndarray):
+    def _cast_and_check_mask(mask: Any) -> Any:
         """
-        Validate the mask array.
+        Cast to jax array of floats and validate the mask.
 
         This method ensures the mask adheres to requirements:
-        - It should be 2-dimensional.
+        - The mask should be castable to a PyTree of arrays of float type.
         - Each element must be either 0 or 1.
         - Each feature should belong to only one group.
         - The mask should not be empty.
-        - The mask is an array of float type.
 
         Raises
         ------
         ValueError
             If any of the above conditions are not met.
         """
-        if mask.ndim != 2:
+        mask = convert_tree_leaves_to_jax_array(
+            mask,
+            "Unable to convert mask to a tree ``jax.ndarray`` leaves.",
+        )
+
+        flat_mask = jax.tree_util.tree_leaves(mask)
+        n_groups = flat_mask[0].shape[0]
+        if not all(f.shape[0] == n_groups for f in flat_mask[1:]):
+            n_groups = {f.shape[0] == n_groups for f in flat_mask[1:]}
             raise ValueError(
-                "`mask` must be 2-dimensional. "
-                f"{mask.ndim} dimensional mask provided instead!"
+                "The length of the first dimension array leaves in the mask PyTree "
+                "should be equal to ``n_groups``. "
+                f"Leaves of the mask tree have inconsistent first dimension lengths: {n_groups}."
             )
 
-        if mask.shape[0] == 0:
-            raise ValueError(f"Empty mask provided! Mask has shape {mask.shape}.")
-
-        if jnp.any((mask != 1) & (mask != 0)):
-            raise ValueError("Mask elements be 0s and 1s!")
-
-        if mask.sum() == 0:
+        if n_groups == 0:
             raise ValueError("Empty mask provided!")
 
-        if jnp.any(mask.sum(axis=0) > 1):
+        has_invalid_entries = pytree_map_and_reduce(
+            lambda m: jnp.any((m != 1) & (m != 0)), any, mask
+        )
+        if has_invalid_entries:
+            raise ValueError("Mask elements be 0s and 1s!")
+
+        all_zeros = pytree_map_and_reduce(lambda m: jnp.all(m == 0), all, mask)
+        if all_zeros:
+            raise ValueError("Empty mask provided!")
+
+        multi_group_assignment = pytree_map_and_reduce(
+            lambda m: jnp.any(m.sum(axis=0) > 1), any, mask
+        )
+        if multi_group_assignment:
             raise ValueError(
                 "Incorrect group assignment. Some of the features are assigned "
                 "to more than one group."
             )
-
-        if not jnp.issubdtype(mask.dtype, jnp.floating):
-            raise ValueError(
-                "Mask should be a floating point jnp.ndarray. "
-                f"Data type {mask.dtype} provided instead!"
-            )
+        return mask
 
     def _penalty_on_subtree(
         self, sub_params, regularizer_strength: float
