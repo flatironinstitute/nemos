@@ -2141,17 +2141,19 @@ class TestPenalizedLossAuxiliaryVariables:
         def bad_loss(params, X, y):
             return (jnp.mean((y - X @ params.coef - params.intercept) ** 2),)
 
+        params = GLMParams(jnp.ones(5), jnp.array(0.0))
+        X = jnp.ones((10, 5))
+        y = jnp.ones(10)
+
         # ElasticNet requires (strength, ratio) tuple
         reg_strength = (
             (0.1, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 0.1
         )
-        penalized = regularizer.penalized_loss(
-            bad_loss, regularizer_strength=reg_strength
+        reg_strength = regularizer._validate_regularizer_strength(reg_strength)
+        reg_strength = regularizer._validate_regularizer_strength_structure(
+            params, reg_strength
         )
-
-        params = GLMParams(jnp.ones(5), jnp.array(0.0))
-        X = jnp.ones((10, 5))
-        y = jnp.ones(10)
+        penalized = regularizer.penalized_loss(bad_loss, strength=reg_strength)
 
         with pytest.raises(
             ValueError,
@@ -2166,17 +2168,19 @@ class TestPenalizedLossAuxiliaryVariables:
             loss = jnp.mean((y - X @ params.coef - params.intercept) ** 2)
             return loss, {"aux": 1}, {"extra": 2}
 
+        params = GLMParams(jnp.ones(5), jnp.array(0.0))
+        X = jnp.ones((10, 5))
+        y = jnp.ones(10)
+
         # ElasticNet requires (strength, ratio) tuple
         reg_strength = (
             (0.1, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 0.1
         )
-        penalized = regularizer.penalized_loss(
-            bad_loss, regularizer_strength=reg_strength
+        reg_strength = regularizer._validate_regularizer_strength(reg_strength)
+        reg_strength = regularizer._validate_regularizer_strength_structure(
+            params, reg_strength
         )
-
-        params = GLMParams(jnp.ones(5), jnp.array(0.0))
-        X = jnp.ones((10, 5))
-        y = jnp.ones(10)
+        penalized = regularizer.penalized_loss(bad_loss, strength=reg_strength)
 
         with pytest.raises(
             ValueError,
@@ -2203,11 +2207,13 @@ class TestPenalizedLossAuxiliaryVariables:
         reg_strength = (
             (1.0, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 1.0
         )
+        reg_strength = regularizer._validate_regularizer_strength(reg_strength)
+        reg_strength = regularizer._validate_regularizer_strength_structure(
+            params, reg_strength
+        )
 
         # Get penalized loss
-        penalized = regularizer.penalized_loss(
-            loss_with_aux, regularizer_strength=reg_strength
-        )
+        penalized = regularizer.penalized_loss(loss_with_aux, strength=reg_strength)
         penalized_loss_value, aux = penalized(params, X, y)
 
         # Calculate expected penalty
