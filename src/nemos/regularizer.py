@@ -165,18 +165,25 @@ class Regularizer(Base, abc.ABC):
         else:
 
             def _validate(substrength, extra_msg=""):
-                if not isinstance(substrength, (float, jnp.ndarray, np.ndarray)):
+                if substrength is None:
+                    substrength = 1.0
+                if not isinstance(
+                    substrength, (int, float, jnp.ndarray, np.ndarray, dict)
+                ):
                     raise TypeError(
                         "Regularizer strength should be either a float or a pytree of floats, "
                         f"you passed {substrength} of type {type(substrength)}"
                         + extra_msg
                     )
+                return substrength
 
             if isinstance(strength, list):
-                for i, s in enumerate(strength):
+                strength = [
                     _validate(s, extra_msg=f", at index {i} of {strength}")
+                    for i, s in enumerate(strength)
+                ]
             else:
-                _validate(strength)
+                strength = _validate(strength)
 
         return strength
 
@@ -264,29 +271,34 @@ class UnRegularized(Regularizer):
 
     _default_solver = "GradientDescent"
 
-    _proximal_operator = staticmethod(prox_none)
-
     def __init__(
         self,
     ):
         super().__init__()
 
-    def _validate_regularizer_strength(self, strength: None):
-        return strength
+    def get_proximal_operator(
+        self,
+    ) -> ProximalOperator:
+        def prox_op(params, strength, scaling=1.0):
+            return params
+
+        return prox_op
+
+    def _validate_regularizer_strength(self, strength: any):
+        return None
 
     def _validate_regularizer_strength_structure(
         self,
         params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
         strength: Union[None, float],
     ):
-        return [None] * len(params.regularizable_subtrees())
+        return None
 
-    def _penalty_on_subtree(
-        self,
-        subtree: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
-        substrength: float,
-    ):
-        return 0.0
+    def _penalization(self, params: ModelParamsT, strength: any) -> jnp.ndarray:
+        return jnp.array(0.0)
+
+    def _penalty_on_subtree(self, subtree, substrength: any) -> jnp.ndarray:
+        return jnp.array(0.0)
 
 
 class Ridge(Regularizer):
@@ -471,10 +483,24 @@ class ElasticNet(Regularizer):
 
         return prox_op
 
+    def _penalization(
+        self, params: ModelParamsT, strength: RegularizerStrength
+    ) -> jnp.ndarray:
+        penalty = jnp.array(0.0)
+
+        for where, substrength, subratio in zip(
+            params.regularizable_subtrees(), *strength
+        ):
+            subtree = where(params)
+            penalty = penalty + self._penalty_on_subtree(subtree, substrength, subratio)
+
+        return penalty
+
     def _penalty_on_subtree(
         self,
         subtree,
         substrength: ElasticNetRegularizerStrength,
+        subratio: ElasticNetRegularizerStrength,
     ) -> jnp.ndarray:
         r"""
         Compute the Elastic Net penalization for given parameters.
@@ -512,11 +538,11 @@ class ElasticNet(Regularizer):
 
         # tree map the computation and sum over leaves
         return tree_utils.pytree_map_and_reduce(
-            lambda x, strength, ratio: net_penalty(x),
+            net_penalty,
             sum,
             subtree,
-            substrength[0],
-            substrength[1],
+            substrength,
+            subratio,
         )
 
     def _validate_regularizer_strength(
@@ -525,35 +551,39 @@ class ElasticNet(Regularizer):
         if strength is None:
             _strength, _ratio = (1.0, 0.5)
         elif isinstance(strength, Tuple):
-            _strength = super()._validate_regularizer_strength(strength[0])
-            try:
-                _ratio = super()._validate_regularizer_strength(strength[1])
-            except TypeError as e:
-                raise TypeError(str(e).replace("strength", "ratio")) from None
-
-            def _verify_ratio(ratio, extra_msg=""):
-                if jnp.any((ratio > 1) | (ratio < 0)):
-                    raise ValueError(
-                        f"Regularization ratio must be between 0 and 1: {ratio}"
-                        + extra_msg
-                    )
-                if jnp.any(ratio == 0):
-                    raise ValueError(
-                        f"Regularization ratio of 0 is not supported: {ratio}"
-                        + extra_msg
-                    )
-
-            if isinstance(_ratio, list):
-                for i, r in enumerate(_ratio):
-                    jax.tree_util.tree_map(
-                        lambda r: _verify_ratio(
-                            r, extra_msg=f", at index {i} of {strength[1]}"
-                        ),
-                        r,
-                    )
+            if len(strength) != 2:
+                raise TypeError(
+                    f"ElasticNet regularizer strength should be a tuple of two floats, you passed: {strength}"
+                )
             else:
-                jax.tree_util.tree_map(_verify_ratio, _ratio)
+                _strength = super()._validate_regularizer_strength(strength[0])
+                try:
+                    _ratio = super()._validate_regularizer_strength(strength[1])
+                except TypeError as e:
+                    raise TypeError(str(e).replace("strength", "ratio")) from None
 
+                def _verify_ratio(ratio, extra_msg=""):
+                    if jnp.any((ratio > 1) | (ratio < 0)):
+                        raise ValueError(
+                            f"Regularization ratio must be between 0 and 1: {ratio}"
+                            + extra_msg
+                        )
+                    if jnp.any(ratio == 0):
+                        raise ValueError(
+                            f"Regularization ratio of 0 is not supported: {ratio}"
+                            + extra_msg
+                        )
+
+                if isinstance(_ratio, list):
+                    for i, r in enumerate(_ratio):
+                        jax.tree_util.tree_map(
+                            lambda r: _verify_ratio(
+                                r, extra_msg=f", at index {i} of {strength[1]}"
+                            ),
+                            r,
+                        )
+                else:
+                    jax.tree_util.tree_map(_verify_ratio, _ratio)
         else:
             _strength = super()._validate_regularizer_strength(strength)
             _ratio = 0.5
