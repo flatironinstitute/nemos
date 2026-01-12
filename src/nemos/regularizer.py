@@ -148,11 +148,14 @@ class Regularizer(Base, abc.ABC):
         return self._default_solver
 
     @abc.abstractmethod
-    def get_proximal_operator(
-        self,
-    ) -> ProximalOperator:
+    def get_proximal_operator(self, init_params: Any = None) -> ProximalOperator:
         """
         Abstract method to retrieve the proximal operator for this solver.
+
+        Parameters
+        ----------
+        init_params:
+            The parameters to be regularized.
 
         Returns
         -------
@@ -260,14 +263,16 @@ class UnRegularized(Regularizer):
     ):
         super().__init__()
 
-    def get_proximal_operator(
-        self,
-    ) -> ProximalOperator:
+    def get_proximal_operator(self, init_params=None) -> ProximalOperator:
         """
         Return the identity operator.
 
         Unregularized method corresponds to an identity proximal operator, since no
         shrinkage factor is applied.
+
+        Parameters
+        ----------
+        init_params
         """
         return jaxopt.prox.prox_none
 
@@ -336,11 +341,13 @@ class Ridge(Regularizer):
             lambda x: l2_penalty(x), sum, sub_params
         )
 
-    def get_proximal_operator(
-        self,
-    ) -> ProximalOperator:
+    def get_proximal_operator(self, init_params=None) -> ProximalOperator:
         """
         Retrieve the proximal operator for Ridge regularization (L2 penalty).
+
+        Parameters
+        ----------
+        init_params
 
         Returns
         -------
@@ -377,11 +384,13 @@ class Lasso(Regularizer):
     ):
         super().__init__()
 
-    def get_proximal_operator(
-        self,
-    ) -> ProximalOperator:
+    def get_proximal_operator(self, init_params=None) -> ProximalOperator:
         """
         Retrieve the proximal operator for Lasso regularization (L1 penalty).
+
+        Parameters
+        ----------
+        init_params
 
         Returns
         -------
@@ -465,11 +474,13 @@ class ElasticNet(Regularizer):
     ):
         super().__init__()
 
-    def get_proximal_operator(
-        self,
-    ) -> ProximalOperator:
+    def get_proximal_operator(self, init_params=None) -> ProximalOperator:
         """
         Retrieve the proximal operator for Elastic Net regularization (L1 + L2 penalty).
+
+        Parameters
+        ----------
+        init_params
 
         Returns
         -------
@@ -805,11 +816,13 @@ class GroupLasso(Regularizer):
 
         return penalty * regularizer_strength
 
-    def get_proximal_operator(
-        self,
-    ) -> ProximalOperator:
+    def get_proximal_operator(self, init_params=None) -> ProximalOperator:
         """
         Retrieve the proximal operator for Group Lasso regularization.
+
+        Parameters
+        ----------
+        init_params
 
         Returns
         -------
