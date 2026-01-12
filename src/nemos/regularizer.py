@@ -19,7 +19,12 @@ from nemos.third_party.jaxopt import jaxopt
 
 from . import tree_utils
 from .base_class import Base
-from .proximal_operator import prox_elastic_net, prox_group_lasso
+from .proximal_operator import (
+    compute_normalization,
+    masked_norm_2,
+    prox_elastic_net,
+    prox_group_lasso,
+)
 from .tree_utils import pytree_map_and_reduce
 from .typing import (
     DESIGN_INPUT_TYPE,
@@ -227,12 +232,18 @@ class Regularizer(Base, abc.ABC):
                 "or a tuple with two values, the loss and an auxiliary variable."
             )
 
-    def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
+    def penalized_loss(
+        self, loss: Callable, regularizer_strength: float, init_params: Any
+    ) -> Callable:
         """Return a function for calculating the penalized loss using Lasso regularization."""
+
+        filter_kwargs = self._get_filter_kwargs(init_params)
 
         def _penalized_loss(params, *args, **kwargs):
             result = loss(params, *args, **kwargs)
-            penalty = self._penalization(params, regularizer_strength)
+            penalty = self._penalization(
+                params, regularizer_strength, filter_kwargs=filter_kwargs
+            )
             if isinstance(result, tuple):
                 self._check_loss_output_tuple(result)
                 loss_value, aux = result
@@ -243,20 +254,28 @@ class Regularizer(Base, abc.ABC):
         return _penalized_loss
 
     def _penalization(
-        self, params: ModelParamsT, strength: RegularizerStrength
+        self,
+        params: ModelParamsT,
+        strength: RegularizerStrength,
+        filter_kwargs: dict,
     ) -> jnp.ndarray:
         penalty = jnp.array(0.0)
         if hasattr(params, "regularizable_subtrees"):
             for where in params.regularizable_subtrees():
                 subtree = where(params)
-                penalty = penalty + self._penalty_on_subtree(subtree, strength)
+                subtree_kwargs = {key: where(val) for key, val in filter_kwargs.items()}
+                penalty = penalty + self._penalty_on_subtree(
+                    subtree, strength, **subtree_kwargs
+                )
         else:
-            penalty = penalty + self._penalty_on_subtree(params, strength)
+            penalty = penalty + self._penalty_on_subtree(
+                params, strength, **filter_kwargs
+            )
         return penalty
 
     @abc.abstractmethod
     def _penalty_on_subtree(
-        self, sub_params, strength: RegularizerStrength
+        self, sub_params, regularizer_strength: RegularizerStrength, **kwargs
     ) -> jnp.ndarray:
         pass
 
@@ -273,6 +292,11 @@ class Regularizer(Base, abc.ABC):
                     f"Could not convert the regularizer strength: {strength} to a float."
                 )
         return strength
+
+    @staticmethod
+    def _get_filter_kwargs(init_params: Any) -> dict:
+        """Return kwargs that need subtree filtering."""
+        return {}
 
 
 class UnRegularized(Regularizer):
@@ -320,6 +344,7 @@ class UnRegularized(Regularizer):
         self,
         sub_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
         regularizer_strength: float,
+        **kwargs,
     ):
         return 0.0
 
@@ -350,9 +375,7 @@ class Ridge(Regularizer):
         super().__init__()
 
     def _penalty_on_subtree(
-        self,
-        sub_params,
-        regularizer_strength: float,
+        self, sub_params, regularizer_strength: float, **kwargs
     ) -> jnp.ndarray:
         """
         Compute the Ridge penalization for given parameters.
@@ -361,8 +384,6 @@ class Ridge(Regularizer):
         ----------
         sub_params :
             Model parameter subtree for which to compute the penalization.
-        regularizer_strength :
-            The regularization strength.
 
         Returns
         -------
@@ -444,9 +465,7 @@ class Lasso(Regularizer):
         return prox_op
 
     def _penalty_on_subtree(
-        self,
-        sub_params: ModelParamsT,
-        regularizer_strength: float,
+        self, sub_params: ModelParamsT, regularizer_strength: float, **kwargs
     ) -> jnp.ndarray:
         """
         Compute the Lasso penalization for given parameters.
@@ -543,9 +562,7 @@ class ElasticNet(Regularizer):
         return prox_op
 
     def _penalty_on_subtree(
-        self,
-        sub_params,
-        net_regularization: Tuple[float, float],
+        self, sub_params, net_regularization: Tuple[float, float], **kwargs
     ) -> jnp.ndarray:
         r"""
         Compute the Elastic Net penalization for given parameters.
@@ -830,7 +847,7 @@ class GroupLasso(Regularizer):
         return mask
 
     def _penalty_on_subtree(
-        self, sub_params, regularizer_strength: float
+        self, sub_params, regularizer_strength: float, mask: None = Any
     ) -> jnp.ndarray:
         r"""
         Calculate the penalization.
@@ -844,27 +861,9 @@ class GroupLasso(Regularizer):
         where :math:`g` is the number of groups, :math:`\dim(\cdot)` is the dimension of the vector,
         i.e. the number of coefficient in each :math:`\beta_j`, and :math:`||\cdot||_2` is the euclidean norm.
         """
-        # conform to shape (1, n_features) if param is (n_features,) or (n_neurons, n_features) if
-        # param is (n_features, n_neurons)
-        param_with_extra_axis = jnp.atleast_2d(sub_params.T)
-
-        vec_prod = jax.vmap(
-            lambda x: self.mask * x, in_axes=0, out_axes=2
-        )  # this vectorizes the product over the neurons, and adds the neuron axis as the last axis
-
-        masked_param = vec_prod(
-            param_with_extra_axis
-        )  # this masks the param, (group, feature, neuron)
-
-        penalty = jax.numpy.sum(
-            jax.numpy.linalg.norm(masked_param, axis=1).T
-            * jax.numpy.sqrt(self.mask.sum(axis=1))
-        )
-
-        # divide regularization strength by number of neurons
-        regularizer_strength = regularizer_strength
-
-        return penalty * regularizer_strength
+        l2_norms = masked_norm_2(sub_params, mask, normalize=False)
+        norm = compute_normalization(mask)
+        return jnp.sum(norm * l2_norms) * regularizer_strength
 
     def get_proximal_operator(self, init_params=None) -> ProximalOperator:
         """
@@ -880,18 +879,22 @@ class GroupLasso(Regularizer):
             The proximal operator, applying Group Lasso regularization to the provided parameters. The
             intercept term is not regularized.
         """
-        if self.mask is None:
-            mask = self.initialize_mask(init_params)
-        else:
-            mask = self.mask
 
         def prox_op(params, regularizer_strength, scaling=1.0):
             return apply_operator(
                 prox_group_lasso,
                 params,
                 regularizer_strength,
-                filter_kwargs={"mask": mask},
+                filter_kwargs=self._get_filter_kwargs(init_params=init_params),
                 scaling=scaling,
             )
 
         return prox_op
+
+    def _get_filter_kwargs(self, init_params: Any) -> dict:
+        """Return kwargs that need subtree filtering."""
+        if self.mask is None:
+            mask = self.initialize_mask(init_params)
+        else:
+            mask = self.mask
+        return {"mask": mask}

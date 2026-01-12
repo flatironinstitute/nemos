@@ -93,7 +93,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
             solver_init_kwargs["regularizer_strength"] = regularizer_strength
         else:
             loss_fn = regularizer.penalized_loss(
-                unregularized_loss, regularizer_strength
+                unregularized_loss, regularizer_strength, init_params=init_params
             )
 
         # take out the arguments that go into minimise, init, terminate and so on

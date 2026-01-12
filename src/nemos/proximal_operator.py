@@ -24,6 +24,7 @@ References
 [1]  Parikh, Neal, and Stephen Boyd. *"Proximal Algorithms, ser. Foundations and Trends (r) in Optimization."* (2013).
 """
 
+from functools import partial
 from typing import Any, Optional, Tuple
 
 import jax
@@ -33,7 +34,17 @@ import jax.tree_util as tree_util
 from nemos.tree_utils import pytree_map_and_reduce
 
 
-def masked_norm_2(x: Any, mask: Any):
+def compute_normalization(mask):
+    """Compute normalization constant over group size."""
+    return jnp.sqrt(
+        pytree_map_and_reduce(
+            lambda mi: jnp.sum(mi.reshape(mi.shape[0], -1), axis=1), sum, mask
+        )
+    )
+
+
+@partial(jax.jit, static_argnames=("normalize",))
+def masked_norm_2(x: Any, mask: Any, normalize: bool = True) -> Any:
     """Euclidean norm of the group.
 
     Calculate the Euclidean norm of the weights for a specified group within a
@@ -51,6 +62,8 @@ def masked_norm_2(x: Any, mask: Any):
     mask:
         PyTree of ND array of 0,1 as floats with the same struct as x. The shape of the i-th leaf is
         ``(n_groups, *x_leaf[i].shape)``, where x_leaf is the ``jax.tree_util.tree_leaves(x)[i]``.
+    normalize:
+        True if normalization over the sqrt of the group size is needed.
 
     Returns
     -------
@@ -58,12 +71,6 @@ def masked_norm_2(x: Any, mask: Any):
         The norm of the weight vector corresponding to the feature in mask, scaled by the
         squared root of the size of the vector.
     """
-    # [(n_groups, )]
-    sqrt_group_size = jnp.sqrt(
-        pytree_map_and_reduce(
-            lambda mi: jnp.sum(mi.reshape(mi.shape[0], -1), axis=1), sum, mask
-        )
-    )
     # [(n_groups, )]
     norms = jnp.sqrt(
         pytree_map_and_reduce(
@@ -75,7 +82,11 @@ def masked_norm_2(x: Any, mask: Any):
             mask,
         )
     )
-    return norms / sqrt_group_size
+    if normalize:
+        # [(n_groups, )]
+        sqrt_group_size = compute_normalization(mask)
+        norms /= sqrt_group_size
+    return norms
 
 
 def prox_group_lasso(

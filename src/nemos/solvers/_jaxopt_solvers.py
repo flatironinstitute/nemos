@@ -38,7 +38,7 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
             solver_init_kwargs["prox"] = regularizer.get_proximal_operator(init_params)
         else:
             self.fun = regularizer.penalized_loss(
-                unregularized_loss, regularizer_strength
+                unregularized_loss, regularizer_strength, init_params=init_params
             )
 
         self.regularizer_strength = regularizer_strength

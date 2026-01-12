@@ -1374,7 +1374,7 @@ class TestElasticNet:
 
         # use the penalized loss function to solve optimization via Nelder-Mead
         penalized_loss = lambda p, x, y: model_PG.regularizer.penalized_loss(
-            model_PG._compute_loss, model_PG.regularizer_strength
+            model_PG._compute_loss, model_PG.regularizer_strength, init_params=None
         )(
             GLMParams(
                 p[1:],
@@ -2003,7 +2003,7 @@ class TestPenalizedLossAuxiliaryVariables:
             (0.1, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 0.1
         )
         penalized = regularizer.penalized_loss(
-            simple_loss, regularizer_strength=reg_strength
+            simple_loss, regularizer_strength=reg_strength, init_params=None
         )
 
         params = GLMParams(jnp.ones(5), jnp.array(0.0))
@@ -2031,7 +2031,7 @@ class TestPenalizedLossAuxiliaryVariables:
             (0.1, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 0.1
         )
         penalized = regularizer.penalized_loss(
-            loss_with_aux, regularizer_strength=reg_strength
+            loss_with_aux, regularizer_strength=reg_strength, init_params=None
         )
 
         params = GLMParams(jnp.ones(5), jnp.array(0.0))
@@ -2072,7 +2072,7 @@ class TestPenalizedLossAuxiliaryVariables:
             (0.1, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 0.1
         )
         penalized = regularizer.penalized_loss(
-            bad_loss, regularizer_strength=reg_strength
+            bad_loss, regularizer_strength=reg_strength, init_params=None
         )
 
         params = GLMParams(jnp.ones(5), jnp.array(0.0))
@@ -2097,7 +2097,7 @@ class TestPenalizedLossAuxiliaryVariables:
             (0.1, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 0.1
         )
         penalized = regularizer.penalized_loss(
-            bad_loss, regularizer_strength=reg_strength
+            bad_loss, regularizer_strength=reg_strength, init_params=None
         )
 
         params = GLMParams(jnp.ones(5), jnp.array(0.0))
@@ -2132,7 +2132,7 @@ class TestPenalizedLossAuxiliaryVariables:
 
         # Get penalized loss
         penalized = regularizer.penalized_loss(
-            loss_with_aux, regularizer_strength=reg_strength
+            loss_with_aux, regularizer_strength=reg_strength, init_params=None
         )
         penalized_loss_value, aux = penalized(params, X, y)
 
