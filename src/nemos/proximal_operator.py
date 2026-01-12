@@ -157,7 +157,10 @@ def prox_group_lasso(
     # the leaf dim of regularized match that of x
     regularized = jax.tree_util.tree_map(lambda mi: mi.sum(axis=0).astype(bool), mask)
     return jax.tree_util.tree_map(
-        lambda r, xi, mi: jnp.where(r, xi * (factor @ mi), xi), regularized, x, mask
+        lambda r, xi, mi: jnp.where(r, xi * jnp.einsum("i, i...->...", factor, mi), xi),
+        regularized,
+        x,
+        mask,
     )
 
 
