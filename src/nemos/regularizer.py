@@ -40,6 +40,83 @@ def __dir__() -> list[str]:
     return __all__
 
 
+def apply_operator(func, params, *args, **kwargs):
+    """
+    Apply an operator to all regularizable subtrees of a parameter pytree.
+
+    This function iterates over all locations returned by
+    ``params.regularizable_subtrees()`` and applies ``func`` to each selected
+    subtree. The updated values are written back into ``params`` using
+    :func:`equinox.tree_at`. Typical use cases include applying proximal
+    operators or other transformations to parameter tensors while leaving
+    non-regularized fields (e.g., intercepts or structural metadata) unchanged.
+
+    Parameters
+    ----------
+    func :
+        A callable with signature ``func(x, *args, **kwargs) -> Any``.
+        It receives each regularizable subtree ``x`` and must return a value
+        with the same pytree structure that should replace that subtree.
+    params :
+        An object implementing ``regularizable_subtrees()`` which returns an
+        iterable of selector functions (suitable for ``eqx.tree_at``) that
+        identify the leaves/subtrees to be transformed.
+    *args :
+        Additional positional arguments passed directly to ``func``.
+    **kwargs :
+        Additional keyword arguments passed directly to ``func``.
+
+    Returns
+    -------
+    params_new : same type as ``params``
+        A new pytree/module with ``func`` applied to all regularizable
+        subtrees. Non-regularized fields are preserved unchanged.
+
+    Notes
+    -----
+    - ``regularizable_subtrees()`` must return a sequence of callables
+      compatible with ``eqx.tree_at``. Each callable should extract a subtree
+      from ``params``.
+    - ``func`` must be pure and JAX-compatible if this function is used inside
+      JIT-compiled code.
+
+    Examples
+    --------
+    A minimal working example with a fake ``Params`` object:
+
+    >>> import equinox as eqx
+    >>> class Params(eqx.Module):
+    ...     w: float
+    ...     b: float
+    ...
+    ...     # Only `w` is regularizable
+    ...     def regularizable_subtrees(self):
+    ...         return [lambda p: p.w]
+
+    >>> p = Params(w=3.0, b=10.0)
+
+    Define an operator that halves the value:
+
+    >>> def halve(x):
+    ...     return x / 2
+
+    Apply it only to the regularizable subtree (`w`):
+
+    >>> p2 = apply_operator(halve, p)
+    >>> p2.w
+    1.5
+    >>> p2.b
+    10.0
+
+    The bias `b` is unchanged because it is not listed in
+    `regularizable_subtrees`.
+    """
+    for where in params.regularizable_subtrees():
+        params = eqx.tree_at(where, params, func(where(params), *args, **kwargs))
+
+    return params
+
+
 class Regularizer(Base, abc.ABC):
     """
     Abstract base class for regularized solvers.
@@ -145,10 +222,12 @@ class Regularizer(Base, abc.ABC):
     ) -> jnp.ndarray:
         penalty = jnp.array(0.0)
 
-        for where, substrength in zip(params.regularizable_subtrees(), strength):
-            subtree = where(params)
-            penalty = penalty + self._penalty_on_subtree(subtree, substrength)
-
+        if hasattr(params, "regularizable_subtrees"):
+            for where, substrength in zip(params.regularizable_subtrees(), strength):
+                subtree = where(params)
+                penalty = penalty + self._penalty_on_subtree(subtree, substrength)
+        else:
+            penalty = penalty + self._penalty_on_subtree(params, strength)
         return penalty
 
     @abc.abstractmethod
@@ -726,13 +805,25 @@ class GroupLasso(Regularizer):
         subtree,
         strength: jnp.ndarray,
     ) -> jnp.ndarray:
-        # (n_neurons, n_features)
-        param_with_extra_axis = jnp.atleast_2d(subtree.T)
+        r"""
+        Note: the penalty is being calculated according to the following formula:
 
-        # (group, feature, neuron)
-        masked_param = jax.vmap(lambda x: self.mask * x, in_axes=0, out_axes=2)(
-            param_with_extra_axis
-        )
+        .. math::
+
+            \\text{loss}(\beta_1,...,\beta_g) + \alpha \cdot \sum _{j=1...,g} \sqrt{\dim(\beta_j)} || \beta_j||_2
+
+        where :math:`g` is the number of groups, :math:`\dim(\cdot)` is the dimension of the vector,
+        i.e. the number of coefficient in each :math:`\beta_j`, and :math:`||\cdot||_2` is the euclidean norm.
+        """
+        # conform to shape (1, n_features) if param is (n_features,) or (n_neurons, n_features) if
+        # param is (n_features, n_neurons)
+        param_with_extra_axis = jnp.atleast_2d(sub_params.T)
+
+        vec_prod = jax.vmap(
+            lambda x: self.mask * x, in_axes=0, out_axes=2
+        )  # this vectorizes the product over the neurons, and adds the neuron axis as the last axis
+
+        masked_param = vec_prod(param_with_extra_axis)
 
         # ||β_g||₂ per group, summed over neurons
         # (group, neuron) -> (group,)

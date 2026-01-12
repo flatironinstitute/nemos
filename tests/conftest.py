@@ -1390,7 +1390,7 @@ def gaussianGLM_model_instantiation():
     )  # , solver_kwargs={"tol":1e-12})
     model.scale_ = 1.0
     rate = jax.numpy.einsum("k,tk->t", w_true, X) + b_true
-    return X, 0.1 * np.random.normal(rate), model, GLMParams(w_true, b_true), rate
+    return X, np.random.normal(rate), model, GLMParams(w_true, b_true), rate
 
 
 @pytest.fixture

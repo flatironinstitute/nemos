@@ -13,8 +13,9 @@ from .pytrees import FeaturePytree
 
 Pytree: TypeAlias = Any
 Params: TypeAlias = Pytree
+Aux = TypeVar("Aux")
 SolverState = TypeVar("SolverState")
-StepResult: TypeAlias = Tuple[Params, SolverState]
+StepResult: TypeAlias = Tuple[Params, SolverState, Aux]
 DESIGN_INPUT_TYPE = Union[jnp.ndarray, FeaturePytree, nap.TsdFrame]
 
 # copying jax.random's annotation
@@ -61,7 +62,9 @@ FeatureMatrix = nap.TsdFrame | NDArray
 
 _RegularizerStrength = float | NDArray
 RegularizerStrength = _RegularizerStrength | list[_RegularizerStrength]
-ElasticNetRegularizerStrength = RegularizerStrength | Tuple[RegularizerStrength, RegularizerStrength]
+ElasticNetRegularizerStrength = (
+    RegularizerStrength | Tuple[RegularizerStrength, RegularizerStrength]
+)
 
 # User provided init_params (e.g. for GLMs Tuple[array, array])
 UserProvidedParamsT = TypeVar("UserProvidedParamsT")

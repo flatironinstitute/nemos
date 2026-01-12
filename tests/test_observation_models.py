@@ -204,6 +204,24 @@ class TestPoissonObservations:
         if not np.allclose(ll_model, ll_scipy):
             raise ValueError("Log-likelihood doesn't match scipy!")
 
+    @pytest.mark.requires_x64
+    def test_loglikelihood_per_sample_against_scipy(
+        self, poissonGLM_model_instantiation
+    ):
+        """
+        Compare log-likelihood to scipy.
+        Assesses if the model estimates are close to statsmodels' results.
+        """
+        _, y, model, _, firing_rate = poissonGLM_model_instantiation
+        ll_model = model.observation_model.log_likelihood(
+            y.astype(float), firing_rate, aggregate_sample_scores=lambda x: x
+        )
+        ll_scipy = sts.poisson(firing_rate).logpmf(y)
+        if not np.allclose(ll_model, ll_scipy):
+            raise ValueError(
+                f"Log-likelihood doesn't match scipy!\nMax err: {np.max(np.abs(ll_model - ll_scipy))}"
+            )
+
     def test_emission_probability(selfself, poissonGLM_model_instantiation):
         """
         Test the poisson emission probability.
@@ -344,6 +362,23 @@ class TestGammaObservations:
         if not np.allclose(ll_model, ll_sms):
             raise ValueError("Log-likelihood doesn't match statsmodels!")
 
+    @pytest.mark.parametrize("scale", [1.0, 1.5, 0.1])
+    @pytest.mark.requires_x64
+    def test_loglikelihood_per_sample_against_statsmodels(
+        self, gammaGLM_model_instantiation, scale
+    ):
+        """
+        Compare log-likelihood to scipy.
+        Assesses if the model estimates are close to statsmodels' results.
+        """
+        _, y, model, _, firing_rate = gammaGLM_model_instantiation
+        ll_model = model.observation_model.log_likelihood(
+            y, firing_rate, aggregate_sample_scores=lambda x: x, scale=scale
+        )
+        ll_sms = sm.families.Gamma().loglike_obs(y, firing_rate, scale=scale)
+        if not np.allclose(ll_model, ll_sms):
+            raise ValueError("Log-likelihood doesn't match statsmodels!")
+
     def test_emission_probability(self, gammaGLM_model_instantiation):
         """
         Test the gamma emission probability.
@@ -417,6 +452,22 @@ class TestBernoulliObservations:
         if not np.allclose(ll_model, ll_scipy):
             raise ValueError("Log-likelihood doesn't match scipy!")
 
+    @pytest.mark.requires_x64
+    def test_loglikelihood_per_sample_against_scipy(
+        self, bernoulliGLM_model_instantiation
+    ):
+        """
+        Compare log-likelihood to scipy.
+        Assesses if the model estimates are close to statsmodels' results.
+        """
+        _, y, model, _, firing_rate = bernoulliGLM_model_instantiation
+        ll_model = model.observation_model.log_likelihood(
+            y, firing_rate, aggregate_sample_scores=lambda x: x
+        )
+        ll_scipy = sts.bernoulli(firing_rate).logpmf(y)
+        if not np.allclose(ll_model, ll_scipy):
+            raise ValueError("Log-likelihood doesn't match scipy!")
+
     def test_emission_probability(self, bernoulliGLM_model_instantiation):
         """
         Test the poisson emission probability.
@@ -486,6 +537,24 @@ class TestNegativeBinomialObservations:
         if not np.allclose(ll_model, ll_scipy, atol=1e-5):
             raise ValueError("Log-likelihood doesn't match scipy!")
 
+    @pytest.mark.requires_x64
+    def test_loglikelihood_per_sample_against_scipy(
+        self, negativeBinomialGLM_model_instantiation
+    ):
+        """
+        Compare log-likelihood to scipy.
+        Assesses if the model estimates are close to statsmodels' results.
+        """
+        _, y, model, _, firing_rate = negativeBinomialGLM_model_instantiation
+        ll_model = model.observation_model.log_likelihood(
+            y, firing_rate, aggregate_sample_scores=lambda x: x
+        )
+        r = 1.0 / model.observation_model.scale
+        p = r / (r + firing_rate)
+        ll_scipy = sts.nbinom.logpmf(y, r, p)
+        if not np.allclose(ll_model, ll_scipy):
+            raise ValueError("Log-likelihood doesn't match scipy!")
+
     def test_emission_probability(self, negativeBinomialGLM_model_instantiation):
         _, _, model, _, _ = negativeBinomialGLM_model_instantiation
         key_array = jax.random.key(123)
@@ -522,6 +591,109 @@ class TestNegativeBinomialObservations:
     def test_repr_out(self):
         obs = nmo.observation_models.NegativeBinomialObservations()
         assert repr(obs) == f"NegativeBinomialObservations(scale=1.0)"
+
+
+class TestGaussianObservations:
+
+    def test_get_params(self, gaussian_observations):
+        """Test get_params() returns expected values."""
+        observation_model = gaussian_observations()
+
+        assert observation_model.get_params() == {}
+
+    def test_deviance_against_statsmodels(self, gaussianGLM_model_instantiation):
+        """
+        Compare fitted parameters to statsmodels.
+        Assesses if the model estimates are close to statsmodels' results.
+        """
+        _, y, model, _, firing_rate = gaussianGLM_model_instantiation
+        dev = sm.families.Gaussian().deviance(y, firing_rate)
+        dev_model = model.observation_model.deviance(y, firing_rate).sum()
+        if not np.allclose(dev, dev_model):
+            raise ValueError("Deviance doesn't match statsmodels!")
+
+    def test_loglikelihood_against_statsmodels(self, gaussianGLM_model_instantiation):
+        """
+        Compare log-likelihood to scipy.
+        Assesses if the model estimates are close to statsmodels' results.
+        """
+        _, y, model, _, firing_rate = gaussianGLM_model_instantiation
+        ll_model = model.observation_model.log_likelihood(y, firing_rate)
+        ll_sms = sm.families.Gaussian().loglike(y, firing_rate) / y.shape[0]
+        if not np.allclose(ll_model, ll_sms):
+            raise ValueError("Log-likelihood doesn't match statsmodels!")
+
+    @pytest.mark.parametrize("scale", [1.0, 1.5, 0.1])
+    @pytest.mark.requires_x64
+    def test_loglikelihood_per_sample_against_statsmodels(
+        self, gaussianGLM_model_instantiation, scale
+    ):
+        """
+        Compare log-likelihood to scipy.
+        Assesses if the model estimates are close to statsmodels' results.
+        """
+        _, y, model, _, firing_rate = gaussianGLM_model_instantiation
+        ll_model = model.observation_model.log_likelihood(
+            y, firing_rate, aggregate_sample_scores=lambda x: x, scale=scale
+        )
+        ll_sms = sm.families.Gaussian().loglike_obs(y, firing_rate, scale=scale)
+        if not np.allclose(ll_model, ll_sms):
+            raise ValueError("Log-likelihood doesn't match statsmodels!")
+
+    @pytest.mark.parametrize("scale", [1.0, 1.5, 0.1])
+    def test_emission_probability(self, gaussianGLM_model_instantiation, scale):
+        """
+        Test the gamma emission probability.
+
+        Check that the emission probability is set to jax.random.gamma.
+        """
+        _, _, model, _, _ = gaussianGLM_model_instantiation
+        key_array = jax.random.key(123)
+        actual = model.observation_model.sample_generator(
+            key_array, np.arange(1, 11), scale=scale
+        )
+        expected = jax.random.normal(key_array, shape=(10,)) * np.sqrt(
+            scale
+        ) + np.arange(1, 11)
+        if not jnp.all(actual == expected):
+            raise ValueError(
+                "The emission probability should output the results of a call to jax.random.normal."
+            )
+
+    @pytest.mark.requires_x64
+    def test_pseudo_r2_vs_statsmodels(self, gaussianGLM_model_instantiation):
+        """
+        Compare log-likelihood to scipy.
+        Assesses if the model estimates are close to statsmodels' results.
+        """
+        X, y, model, _, firing_rate = gaussianGLM_model_instantiation
+
+        # statsmodels mcfadden
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", message="The InversePower link function does"
+            )
+            mdl = sm.GLM(y, sm.add_constant(X), family=sm.families.Gaussian()).fit()
+
+        # NOTE - statsmodels has a bug when computing the linear gaussian PR2
+        # 1. It re-computes the scale for the ll_model
+        # 2. It uses the `mdl.scale` for ll_null
+        # But `mdl.scale` and the recomputed scale do not match.
+        # So, instead of using mdl.pseudo_r2("mcf") compute directly:
+        llnull = mdl.llnull
+        llmodel = mdl.family.loglike(y, mdl.mu, scale=mdl.scale)
+        pr2_sms = 1 - llmodel / llnull
+
+        pr2_model = model.observation_model.pseudo_r2(
+            y, mdl.mu, score_type="pseudo-r2-McFadden", scale=mdl.scale
+        )
+
+        if not np.allclose(pr2_model, pr2_sms):
+            raise ValueError("Log-likelihood doesn't match statsmodels!")
+
+    def test_repr_out(self):
+        obs = nmo.observation_models.GaussianObservations()
+        assert repr(obs) == f"GaussianObservations()"
 
 
 @pytest.mark.parametrize("observation_model_string", AVAILABLE_OBSERVATION_MODELS)

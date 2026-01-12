@@ -217,6 +217,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         self.solver_state_ = None
         self.scale_ = None
         self.dof_resid_ = None
+        self.aux_ = None
+        self.optim_info_ = None
 
     def __sklearn_tags__(self):
         """Return GLM specific estimator tags."""
@@ -668,7 +670,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
 
         self._initialize_solver_and_state(data, y, init_params)
 
-        params, state = self.solver_run(init_params, data, y)
+        params, state, aux = self.solver_run(init_params, data, y)
 
         if tree_utils.pytree_map_and_reduce(
             lambda x: jnp.any(jnp.isnan(x)), any, params
@@ -689,6 +691,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
                 "For the available options see the ``self.solver.__init__`` docstrings.",
                 RuntimeWarning,
             )
+        self.optim_info_ = self._solver.get_optim_info(state)
 
         self._set_model_params(params)
 
@@ -701,6 +704,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         # the output of loss. I believe it's the output of
         # solver.l2_optimality_error
         self.solver_state_ = state
+        self.aux_ = aux
         return self
 
     def _get_model_params(self):
@@ -978,20 +982,21 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         params = self._validator.to_model_params(params)
 
         # perform a one-step update
-        updated_params, updated_state = self.solver_update(
+        updated_params, updated_state, aux = self.solver_update(
             params, opt_state, data, y, *args, **kwargs
         )
 
         # store params and state
         self._set_model_params(updated_params)
         self.solver_state_ = updated_state
+        self.aux_ = aux
 
         # estimate the scale
         self.dof_resid_ = self._estimate_resid_degrees_of_freedom(
             X, n_samples=n_samples
         )
         self.scale_ = self.observation_model.estimate_scale(
-            y, self._predict(params, data), dof_resid=self.dof_resid_
+            y, self._predict(updated_params, data), dof_resid=self.dof_resid_
         )
 
         return self._validator.from_model_params(updated_params), updated_state
@@ -1083,6 +1088,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         # initialize saving dictionary
         fit_attrs = self._get_fit_state()
         fit_attrs.pop("solver_state_")
+        fit_attrs.pop("optim_info_")
         string_attrs = ["inverse_link_function"]
 
         super().save_params(filename, fit_attrs, string_attrs)
@@ -1373,6 +1379,7 @@ class PopulationGLM(GLM):
         >>> import jax.numpy as jnp
         >>> import numpy as np
         >>> from nemos.glm import PopulationGLM
+        >>> np.random.seed(0)
         >>> # Define predictors (X), weights, and neural activity (y)
         >>> num_samples, num_features, num_neurons = 100, 3, 2
         >>> X = np.random.normal(size=(num_samples, num_features))

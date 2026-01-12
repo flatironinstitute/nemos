@@ -1742,7 +1742,7 @@ class TestGroupLasso:
         if solver_name == "ProxSVRG":
             state = state._replace(full_grad_at_reference_point=state.reference_point)
 
-        params, state = model.solver_update(true_params, state, X, y)
+        params, state, _ = model.solver_update(true_params, state, X, y)
         # asses that state is a NamedTuple by checking tuple type and the availability of some NamedTuple
         # specific namespace attributes
         assert isinstance(state, tuple | eqx.Module)
@@ -1897,7 +1897,7 @@ class TestGroupLasso:
         model.solver_name = "ProximalGradient"
 
         runner = model._instantiate_solver(model._compute_loss).solver_run
-        params, _ = runner(
+        params, _, _ = runner(
             GLMParams(true_params.coef * 0.0, true_params.intercept), X, y
         )
 

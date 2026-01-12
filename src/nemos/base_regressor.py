@@ -113,6 +113,9 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
 
     _validator: RegressorValidator = None
 
+    # overwrite this in subclasses if their objective functions return aux
+    _has_aux: bool = False
+
     def __init__(
         self,
         regularizer: Union[str, Regularizer] = "UnRegularized",
@@ -358,6 +361,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             loss,
             self.regularizer,
             self.regularizer_strength,
+            has_aux=self._has_aux,
             **solver_kwargs,
         )
         self._solver = solver

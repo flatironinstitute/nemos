@@ -55,7 +55,7 @@ Public attributes are stored as properties:
 
 When implementing a new subclass of `BaseRegressor`, the only attributes you must interact directly with are those that operate on the solver, i.e. `solver_init_state`, `solver_update`, `solver_run`.
 
-Typically, in `YourRegressor` you will call `self.solver_init_state` at the parameter initialization step, `self.sovler_run` in [`fit`](nemos.glm.GLM.fit), and `self.solver_update` in [`update`](nemos.glm.GLM.update).
+Typically, in `YourRegressor` you will call `self.solver_init_state` at the parameter initialization step, `self.solver_run` in [`fit`](nemos.glm.GLM.fit), and `self.solver_update` in [`update`](nemos.glm.GLM.update).
 
 :::{admonition} Solvers
 :class: note

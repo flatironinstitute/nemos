@@ -183,7 +183,7 @@ def test_validate_higher_dimensional_data_X(instantiate_base_regressor_subclass)
     y = jnp.array([1, 1])
     if is_population_model(model):
         y = y[None]
-    with pytest.raises(ValueError, match="X must be two-dimensional"):
+    with pytest.raises(ValueError, match="X must be 2-dimensional"):
         model._validate(X, y, _zero_init_params(X, y))
 
 
@@ -326,7 +326,7 @@ class TestModelCommons:
     def test_initialize_solver_mask_grouplasso(
         self, instantiate_base_regressor_subclass
     ):
-        """Test that the group lasso initialize_solver goes through"""
+        """Test that the group lasso initialize_solver_and_state goes through"""
         fixture = instantiate_base_regressor_subclass
         X, model, params = fixture.X, fixture.model, fixture.params
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
@@ -342,9 +342,11 @@ class TestModelCommons:
             regularizer_strength=1.0,
         )
         params = model.initialize_params(X, y)
-        init_state = model._initialize_solver_and_state(X, y, params)
+        init_state = model.initialize_solver_and_state(X, y, params)
         # optimistix solvers do not have a velocity attr
-        assert getattr(init_state, "velocity", params) == params
+        assert getattr(
+            init_state, "velocity", model._validator.to_model_params(params)
+        ) == model._validator.to_model_params(params)
 
     @pytest.mark.solver_related
     @pytest.mark.requires_x64
@@ -396,9 +398,11 @@ class TestModelCommons:
         X.fill(fill_val)
         with expectation:
             params = model.initialize_params(X, y)
-            init_state = model.initialize_state(X, y, params)
+            init_state = model.initialize_solver_and_state(X, y, params)
             # optimistix solvers do not have a velocity attr
-            assert getattr(init_state, "velocity", params) == params
+            assert getattr(
+                init_state, "velocity", model._validator.to_model_params(params)
+            ) == model._validator.to_model_params(params)
 
     @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso", "ElasticNet"])
     def test_reg_strength_reset(self, reg, instantiate_base_regressor_subclass):
@@ -534,9 +538,9 @@ class TestModelCommons:
         model.set_params(**params)
         assert model.regularizer_strength == (1.0, 0.5)
 
-    ################################
-    # Test model.initialize_solver #
-    ################################
+    ##########################################
+    # Test model.initialize_solver_and_state #
+    ##########################################
     @pytest.mark.solver_related
     def test_initializer_solver_set_solver_callable(
         self, instantiate_base_regressor_subclass
@@ -550,7 +554,7 @@ class TestModelCommons:
         assert model.solver_update is None
         assert model.solver_run is None
         init_params = model.initialize_params(X, y)
-        model._initialize_solver_and_state(X, y, init_params)
+        model.initialize_solver_and_state(X, y, init_params)
         assert callable(model.solver_init_state)
         assert callable(model.solver_update)
         assert callable(model.solver_run)
@@ -1035,7 +1039,7 @@ class TestModelValidator:
     @pytest.mark.solver_related
     def test_validate_param_length(self, n_params, instantiate_base_regressor_subclass):
         """
-        Test the `initialize_solver` method with different numbers of initial parameters.
+        Test the `_initialize_solver_and_state` method with different numbers of initial parameters.
         Check for correct number of parameters.
         """
         fixture = instantiate_base_regressor_subclass
@@ -1083,7 +1087,7 @@ class TestModelValidator:
         self, delta_dim, expectation, instantiate_base_regressor_subclass
     ):
         """
-        Test the `initialize_solver` method with X input data of different dimensionalities.
+        Test the `validate_inputs` method with X input data of different dimensionalities.
 
         Ensure correct dimensionality for X.
         """
@@ -1111,7 +1115,7 @@ class TestModelValidator:
         self, delta_dim, expectation, instantiate_base_regressor_subclass
     ):
         """
-        Test the `initialize_solver` method with y target data of different dimensionalities.
+        Test the `validate_inputs` method with y target data of different dimensionalities.
 
         Ensure correct dimensionality for y.
         """
@@ -1145,12 +1149,13 @@ class TestModelValidator:
         self, delta_n_features, expectation, instantiate_base_regressor_subclass
     ):
         """
-        Test the `initialize_solver` method for inconsistencies between data features and model's expectations.
+        Test the `validate_consistency` method for inconsistencies between data features and model's expectations.
         Ensure the number of features in X aligns.
         """
         fixture = instantiate_base_regressor_subclass
         X, model, true_params = fixture.X, fixture.model, fixture.params
-        y = np.zeros(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
+        y = _add_zeros(y)
         validator = VALIDATOR_REGISTRY[model.__class__.__name__]
         params = model.initialize_params(X, y)
         params = validator.to_model_params(params)
@@ -1185,7 +1190,7 @@ class TestModelValidator:
         self, delta_tp, expectation, instantiate_base_regressor_subclass
     ):
         """
-        Test the `initialize_solver` method for inconsistencies in time-points in data X.
+        Test the `validate_inputs` method for inconsistencies in time-points in data X.
 
         Ensure the correct number of time-points.
         """
@@ -1220,7 +1225,7 @@ class TestModelValidator:
         self, delta_tp, expectation, instantiate_base_regressor_subclass
     ):
         """
-        Test the `initialize_solver` method for inconsistencies in time-points in y.
+        Test the `validate_inputs` method for inconsistencies in time-points in y.
 
         Ensure the correct number of time-points.
         """
