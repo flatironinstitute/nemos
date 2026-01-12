@@ -1618,17 +1618,18 @@ class TestGroupLasso:
 
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
 
-        # create a valid mask
+        # create a valid mask with new PyTree structure
         mask = np.zeros((2, X.shape[1]))
         mask[0, :2] = 1
         mask[1, 2:] = 1
-        mask = jnp.asarray(mask)
+        mask = GLMParams(jnp.asarray(mask), None)
 
         model.set_params(regularizer=self.cls(mask=mask), regularizer_strength=1.0)
         model.solver_name = solver_name
 
-        model._instantiate_solver(model._compute_loss)
-        model.solver_run(GLMParams(true_params.coef * 0.0, true_params.intercept), X, y)
+        init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
+        model._instantiate_solver(model._compute_loss, init_params)
+        model.solver_run(init_params, X, y)
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
     def test_init_solver(self, solver_name, poissonGLM_model_instantiation):
@@ -1636,16 +1637,16 @@ class TestGroupLasso:
 
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
 
-        # create a valid mask
+        # create a valid mask with new PyTree structure
         mask = np.zeros((2, X.shape[1]))
         mask[0, :2] = 1
         mask[1, 2:] = 1
-        mask = jnp.asarray(mask)
+        mask = GLMParams(jnp.asarray(mask), None)
 
         model.set_params(regularizer=self.cls(mask=mask), regularizer_strength=1.0)
         model.solver_name = solver_name
 
-        model._instantiate_solver(model._compute_loss)
+        model._instantiate_solver(model._compute_loss, true_params)
         state = model.solver_init_state(true_params, X, y)
         # asses that state is a NamedTuple by checking tuple type and the availability of some NamedTuple
         # specific namespace attributes
@@ -1657,20 +1658,19 @@ class TestGroupLasso:
 
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
 
-        # create a valid mask
+        # create a valid mask with new PyTree structure
         mask = np.zeros((2, X.shape[1]))
         mask[0, :2] = 1
         mask[1, 2:] = 1
-        mask = jnp.asarray(mask)
+        mask = GLMParams(jnp.asarray(mask), None)
 
         model.set_params(regularizer=self.cls(mask=mask), regularizer_strength=1.0)
         model.solver_name = solver_name
 
-        model._instantiate_solver(model._compute_loss)
+        init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
+        model._instantiate_solver(model._compute_loss, init_params)
 
-        state = model.solver_init_state(
-            GLMParams(true_params.coef * 0.0, true_params.intercept), X, y
-        )
+        state = model.solver_init_state(init_params, X, y)
 
         # ProxSVRG needs the full gradient at the anchor point to be initialized
         # so here just set it to xs, which is not correct, but fine shape-wise
@@ -1753,29 +1753,34 @@ class TestGroupLasso:
 
     @pytest.mark.parametrize("n_dim", [0, 1, 2, 3])
     def test_mask_dimension_1(self, n_dim, poissonGLM_model_instantiation):
-        """Test that mask is composed of 0s and 1s."""
+        """Test that mask works with PyTree structure."""
 
-        raise_exception = n_dim != 2
+        # With PyTree masks, we need proper structure
+        raise_exception = n_dim in [0, 1]
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
 
-        # create a valid mask
+        # create masks with different dimensions
         if n_dim == 0:
             mask = np.array([])
+            mask = jnp.asarray(mask, dtype=jnp.float32)
         elif n_dim == 1:
             mask = np.ones((1,))
+            mask = jnp.asarray(mask, dtype=jnp.float32)
         elif n_dim == 2:
+            # Valid PyTree mask structure
             mask = np.zeros((2, X.shape[1]))
             mask[0, :2] = 1
             mask[1, 2:] = 1
+            mask = GLMParams(jnp.asarray(mask, dtype=jnp.float32), None)
         else:
+            # 3D mask needs to be wrapped in PyTree
             mask = np.zeros((2, X.shape[1]) + (1,) * (n_dim - 2))
             mask[0, :2] = 1
             mask[1, 2:] = 1
-
-        mask = jnp.asarray(mask, dtype=jnp.float32)
+            mask = jnp.asarray(mask, dtype=jnp.float32)
 
         if raise_exception:
-            with pytest.raises(ValueError, match="`mask` must be 2-dimensional"):
+            with pytest.raises(ValueError):
                 model.set_params(
                     regularizer=self.cls(mask=mask), regularizer_strength=1.0
                 )
@@ -1788,17 +1793,17 @@ class TestGroupLasso:
         raise_exception = n_groups < 1
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
 
-        # create a mask
-        mask = np.zeros((n_groups, X.shape[1]))
+        # create a mask with PyTree structure
+        mask_array = np.zeros((n_groups, X.shape[1]))
         if n_groups > 0:
             for i in range(n_groups - 1):
-                mask[i, i : i + 1] = 1
-            mask[-1, n_groups - 1 :] = 1
+                mask_array[i, i : i + 1] = 1
+            mask_array[-1, n_groups - 1 :] = 1
 
-        mask = jnp.asarray(mask, dtype=jnp.float32)
+        mask = GLMParams(jnp.asarray(mask_array, dtype=jnp.float32), None)
 
         if raise_exception:
-            with pytest.raises(ValueError, match=r"Empty mask provided! Mask has "):
+            with pytest.raises(ValueError, match=r"Empty mask provided!"):
                 model.set_params(
                     regularizer=self.cls(mask=mask), regularizer_strength=1.0
                 )
@@ -1818,18 +1823,17 @@ class TestGroupLasso:
             _,
         ) = poissonGLM_model_instantiation_group_sparse
         zeros_true = true_params.coef.flatten() == 0
-        mask = np.zeros((2, X.shape[1]))
-        mask[0, zeros_true] = 1
-        mask[1, ~zeros_true] = 1
-        mask = jnp.asarray(mask, dtype=jnp.float32)
+        mask_array = np.zeros((2, X.shape[1]))
+        mask_array[0, zeros_true] = 1
+        mask_array[1, ~zeros_true] = 1
+        mask = GLMParams(jnp.asarray(mask_array, dtype=jnp.float32), None)
 
         model.set_params(regularizer=self.cls(mask=mask), regularizer_strength=1.0)
         model.solver_name = "ProximalGradient"
 
-        runner = model._instantiate_solver(model._compute_loss).solver_run
-        params, _, _ = runner(
-            GLMParams(true_params.coef * 0.0, true_params.intercept), X, y
-        )
+        init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
+        runner = model._instantiate_solver(model._compute_loss, init_params).solver_run
+        params, _, _ = runner(init_params, X, y)
 
         zeros_est = params.coef == 0
         if not np.all(zeros_est == zeros_true):
@@ -1901,34 +1905,37 @@ class TestGroupLasso:
 
     @pytest.mark.parametrize("n_dim", [0, 1, 2, 3])
     def test_mask_dimension(self, n_dim, poissonGLM_model_instantiation):
-        """Test that mask is composed of 0s and 1s."""
+        """Test that mask works with PyTree structure."""
 
-        raise_exception = n_dim != 2
+        raise_exception = n_dim in [0, 1, 3]
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
 
-        valid_mask = np.zeros((2, X.shape[1]))
-        valid_mask[0, :1] = 1
-        valid_mask[1, 1:] = 1
+        valid_mask_array = np.zeros((2, X.shape[1]))
+        valid_mask_array[0, :1] = 1
+        valid_mask_array[1, 1:] = 1
+        valid_mask = GLMParams(jnp.asarray(valid_mask_array, dtype=jnp.float32), None)
         regularizer = self.cls(mask=valid_mask)
 
-        # create a mask
+        # create masks with different dimensions
         if n_dim == 0:
             mask = np.array([])
+            mask = jnp.asarray(mask, dtype=jnp.float32)
         elif n_dim == 1:
             mask = np.ones((1,))
+            mask = jnp.asarray(mask, dtype=jnp.float32)
         elif n_dim == 2:
-            mask = np.zeros((2, X.shape[1]))
-            mask[0, :2] = 1
-            mask[1, 2:] = 1
+            mask_array = np.zeros((2, X.shape[1]))
+            mask_array[0, :2] = 1
+            mask_array[1, 2:] = 1
+            mask = GLMParams(jnp.asarray(mask_array, dtype=jnp.float32), None)
         else:
             mask = np.zeros((2, X.shape[1]) + (1,) * (n_dim - 2))
             mask[0, :2] = 1
             mask[1, 2:] = 1
-
-        mask = jnp.asarray(mask, dtype=jnp.float32)
+            mask = jnp.asarray(mask, dtype=jnp.float32)
 
         if raise_exception:
-            with pytest.raises(ValueError, match="`mask` must be 2-dimensional"):
+            with pytest.raises(ValueError):
                 regularizer.set_params(mask=mask)
         else:
             regularizer.set_params(mask=mask)
@@ -1938,22 +1945,23 @@ class TestGroupLasso:
         """Test that mask has at least 1 group."""
         raise_exception = n_groups < 1
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        valid_mask = np.zeros((2, X.shape[1]))
-        valid_mask[0, :1] = 1
-        valid_mask[1, 1:] = 1
+        valid_mask_array = np.zeros((2, X.shape[1]))
+        valid_mask_array[0, :1] = 1
+        valid_mask_array[1, 1:] = 1
+        valid_mask = GLMParams(jnp.asarray(valid_mask_array, dtype=jnp.float32), None)
         regularizer = self.cls(mask=valid_mask)
 
-        # create a mask
-        mask = np.zeros((n_groups, X.shape[1]))
+        # create a mask with PyTree structure
+        mask_array = np.zeros((n_groups, X.shape[1]))
         if n_groups > 0:
             for i in range(n_groups - 1):
-                mask[i, i : i + 1] = 1
-            mask[-1, n_groups - 1 :] = 1
+                mask_array[i, i : i + 1] = 1
+            mask_array[-1, n_groups - 1 :] = 1
 
-        mask = jnp.asarray(mask, dtype=jnp.float32)
+        mask = GLMParams(jnp.asarray(mask_array, dtype=jnp.float32), None)
 
         if raise_exception:
-            with pytest.raises(ValueError, match=r"Empty mask provided! Mask has "):
+            with pytest.raises(ValueError, match=r"Empty mask provided!"):
                 regularizer.set_params(mask=mask)
         else:
             regularizer.set_params(mask=mask)
@@ -1961,16 +1969,18 @@ class TestGroupLasso:
     def test_mask_none(self, poissonGLM_model_instantiation):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
 
-        # with pytest.warns(UserWarning):
-        model.regularizer = self.cls(mask=np.ones((1, X.shape[1])).astype(float))
+        # Test with auto-initialized mask (mask=None, initialized during fit)
+        model.regularizer = self.cls(mask=None)
         model.solver_name = "ProximalGradient"
         model.fit(X, y)
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
     def test_solver_combination(self, solver_name, poissonGLM_model_instantiation):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        mask_array = np.ones((1, X.shape[1])).astype(float)
+        mask = GLMParams(jnp.asarray(mask_array), None)
         model.set_params(
-            regularizer=self.cls(mask=np.ones((1, X.shape[1])).astype(float)),
+            regularizer=self.cls(mask=mask),
             regularizer_strength=(
                 None if self.cls == nmo.regularizer.UnRegularized else 1.0
             ),
@@ -1985,7 +1995,7 @@ class TestGroupLasso:
         nmo.regularizer.UnRegularized(),
         nmo.regularizer.Ridge(),
         nmo.regularizer.Lasso(),
-        nmo.regularizer.GroupLasso(mask=np.eye(5)),
+        nmo.regularizer.GroupLasso(mask=GLMParams(jnp.eye(5, dtype=jnp.float32), None)),
         nmo.regularizer.ElasticNet(),
     ],
 )

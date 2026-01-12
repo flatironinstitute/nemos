@@ -828,6 +828,11 @@ class GroupLasso(Regularizer):
                 f"Leaves of the mask tree have inconsistent first dimension lengths: {n_groups}."
             )
 
+        if any(m.ndim < 2 for m in flat_mask):
+            raise ValueError(
+                "Mask arrays should have at least 2 dimensions ``(n_groups, n_features, ...)``."
+            )
+
         if n_groups == 0:
             raise ValueError("Empty mask provided!")
 
