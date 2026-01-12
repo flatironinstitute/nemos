@@ -161,6 +161,7 @@ def test_group_lasso_convergence(solver_name):
     mask = np.zeros((num_groups, num_features))
     mask[0] = [1, 1, 0]  # Group 0 includes features 0 and 1
     mask[1] = [0, 0, 1]  # Group 1 includes features 1
+    mask = GLMParams(mask, None)
 
     # instantiate and fit GLM with ProximalGradient
     model_PG = nmo.glm.GLM(

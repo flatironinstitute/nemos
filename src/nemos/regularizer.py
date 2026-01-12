@@ -13,7 +13,6 @@ from typing import Any, Callable, Tuple, Union
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from numpy.typing import NDArray
 
 from nemos.third_party.jaxopt import jaxopt
 
@@ -698,7 +697,7 @@ class GroupLasso(Regularizer):
 
     def __init__(
         self,
-        mask: Union[NDArray, jnp.ndarray] = None,
+        mask: Any = None,
     ):
         super().__init__()
 
