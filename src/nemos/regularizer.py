@@ -7,6 +7,7 @@ with various optimization methods, and they can be applied depending on the mode
 """
 
 import abc
+import math
 from typing import Any, Callable, Tuple, Union
 
 import equinox as eqx
@@ -644,6 +645,74 @@ class GroupLasso(Regularizer):
         if mask is not None:
             mask = self._cast_and_check_mask(mask)
         self._mask = mask
+
+    @staticmethod
+    def initialize_mask(x: Any) -> Any:
+        """
+        Initialize a default group mask for a PyTree of parameters.
+
+        Creates a mask where each leaf array and each of its trailing dimensions
+        (beyond the first) are assigned to separate groups. This default grouping
+        treats:
+        - Each leaf in the PyTree as a distinct parameter set
+        - The first dimension (axis 0) as the feature dimension
+        - Each trailing dimension as a separate group of features
+
+        For a leaf with shape (n_features, d1, d2, ..., dk), this creates
+        (d1 * d2 * ... * dk) groups, where each group's mask is 1.0 for all
+        features in that specific trailing dimension combination and 0.0 elsewhere.
+
+        Parameters
+        ----------
+        x : Any
+            PyTree of parameter arrays. Each leaf should have shape
+            (n_features, ...) where n_features is the number of features
+            and trailing dimensions define additional grouping structure.
+
+        Returns
+        -------
+        mask : Any
+            PyTree with the same structure as x, where each leaf has shape
+            (n_groups, n_features, ...) matching the original leaf shape.
+            The mask contains 1.0 for elements in each group and 0.0 elsewhere.
+
+        Examples
+        --------
+        >>> params = {'w': jnp.ones((5, 3, 2))}  # 5 features, 3x2=6 groups
+        >>> mask = _initialize_mask(params)
+        >>> mask['w'].shape
+        (6, 5, 3, 2)
+        """
+        flat_x, struct = jax.tree_util.tree_flatten(x)
+
+        # Calculate total number of groups across all leaves
+        n_groups_per_leaf = [math.prod(leaf.shape[1:]) for leaf in flat_x]
+        total_groups = sum(n_groups_per_leaf)
+
+        # Build mask for each leaf
+        mask_flat = []
+        group_offset = 0
+
+        for leaf, n_groups in zip(flat_x, n_groups_per_leaf):
+            # Create mask: (total_groups, n_features, *extra_dims)
+            mask_shape = (total_groups, *leaf.shape)
+            mask = jnp.zeros(mask_shape, dtype=float)
+
+            # Set 1.0 for this leaf's groups along the flattened extra dimensions
+            for i in range(n_groups):
+                # Use reshape to map linear index to multi-dimensional index
+                extra_shape = leaf.shape[1:]
+                multi_idx = jnp.unravel_index(i, extra_shape)
+                # Build index tuple: (group_id, slice(:), *multi_idx)
+                # When dropping support for Python 3.10, replace with
+                # mask = mask.at[group_offset + i, :, *multi_idx].set(1.0)
+                full_idx = (group_offset + i, slice(None)) + multi_idx
+                mask = mask.at[full_idx].set(1.0)
+
+            mask_flat.append(mask)
+            group_offset += n_groups
+
+        return jax.tree_util.tree_unflatten(struct, mask_flat)
 
     @staticmethod
     def _cast_and_check_mask(mask: Any) -> Any:

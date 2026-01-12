@@ -658,6 +658,10 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             getattr(self, "_feature_mask", None), init_params
         )
 
+        # mask initialization for group lasso
+        if isinstance(self.regularizer, GroupLasso) and self.regularizer.mask is None:
+            self.regularizer.initialize_mask(init_params)
+
         # filter for non-nans, grab data if needed
         data, y = self._preprocess_inputs(X, y)
 
