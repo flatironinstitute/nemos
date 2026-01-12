@@ -42,7 +42,7 @@ def test_glm_passes_adjoint_to_optimistix_config(
         solver_name=solver_name,
         solver_kwargs={"adjoint": adjoint},
     )
-    glm._instantiate_solver(glm.compute_loss)
+    glm._instantiate_solver(glm.compute_loss, None)
 
     solver_adapter = glm._solver
     assert isinstance(solver_adapter.config.adjoint, type(adjoint))
