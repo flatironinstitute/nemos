@@ -270,7 +270,7 @@ def test_svrg_glm_update(
     # only pass mask if it's not None
     kwargs = {}
     if glm_class == nmo.glm.PopulationGLM:
-        kwargs["feature_mask"] = mask.coef
+        kwargs["feature_mask"] = mask.coef if mask is not None else None
     reg_cls = getattr(nmo.regularizer, regularizer_name)
     if regularizer_name == "GroupLasso":
         reg = reg_cls(mask=mask)
