@@ -30,8 +30,10 @@ import jax
 import jax.numpy as jnp
 import jax.tree_util as tree_util
 
+from nemos.tree_utils import pytree_map_and_reduce
 
-def _norm2_masked(weight_neuron: jnp.ndarray, mask: jnp.ndarray) -> jnp.ndarray:
+
+def masked_norm_2(x: Any, mask: Any):
     """Euclidean norm of the group.
 
     Calculate the Euclidean norm of the weights for a specified group within a
@@ -44,52 +46,55 @@ def _norm2_masked(weight_neuron: jnp.ndarray, mask: jnp.ndarray) -> jnp.ndarray:
 
     Parameters
     ----------
-    weight_neuron:
-        The feature vector for a neuron. Shape (n_features, ).
+    x:
+        A PyTree with array leaves.
     mask:
-        The mask vector for group. mask[i] = 1, if the i-th element of weight_neuron
-        belongs to the group, 0 otherwise. Shape (n_features, ).
+        PyTree of ND array of 0,1 as floats with the same struct as x. The shape of the i-th leaf is
+        ``(n_groups, *x_leaf[i].shape)``, where x_leaf is the ``jax.tree_util.tree_leaves(x)[i]``.
 
     Returns
     -------
     :
-        The norm of the weight vector corresponding to the feature in mask.
-
-    Notes
-    -----
-        The proximal gradient operator is described in Ming at al.[^1], Proposition 1.
-
-    [^1]:
-        Yuan, Ming, and Yi Lin. "Model selection and estimation in regression with grouped variables."
-        Journal of the Royal Statistical Society Series B: Statistical Methodology 68.1 (2006): 49-67.
+        The norm of the weight vector corresponding to the feature in mask, scaled by the
+        squared root of the size of the vector.
     """
-    return jnp.linalg.norm(weight_neuron * mask, 2) / jnp.sqrt(mask.sum())
-
-
-# vectorize the norm function above
-# [(n_neurons, n_features), (n_features)] -> (n_neurons, )
-_vmap_norm2_masked_1 = jax.vmap(_norm2_masked, in_axes=(0, None), out_axes=0)
-# [(n_neurons, n_features), (n_groups, n_features)] -> (n_neurons, n_groups)
-_vmap_norm2_masked_2 = jax.vmap(_vmap_norm2_masked_1, in_axes=(None, 0), out_axes=1)
+    # [(n_groups, )]
+    sqrt_group_size = jnp.sqrt(
+        pytree_map_and_reduce(
+            lambda mi: jnp.sum(mi.reshape(mi.shape[0], -1), axis=1), sum, mask
+        )
+    )
+    # [(n_groups, )]
+    norms = jnp.sqrt(
+        pytree_map_and_reduce(
+            lambda xi, mi: jnp.sum(
+                (xi.reshape(1, -1) * mi.reshape(mi.shape[0], -1)) ** 2, axis=1
+            ),
+            sum,
+            x,
+            mask,
+        )
+    )
+    return norms / sqrt_group_size
 
 
 def prox_group_lasso(
-    weights: jnp.ndarray,
+    x: Any,
     regularizer_strength: float,
-    mask: jnp.ndarray,
+    mask: Any,
     scaling: float = 1.0,
-) -> jnp.ndarray:
+) -> Any:
     r"""Proximal gradient operator for group Lasso.
 
     Parameters
     ----------
-    weights:
-        Weights, shape (n_neurons, n_features) or pytree of same;
+    x:
+        PyTree of arrays;
     regularizer_strength:
         The regularization hyperparameter.
     mask:
-        ND array of 0,1 as float32, feature mask. size (n_groups, n_features)
-        or pytree of same.
+        PyTree of ND array of 0,1 as floats with the same struct as x. The shape of the i-th leaf is
+        ``(n_groups, *x_leaf[i].shape)``, where x_leaf is the ``jax.tree_util.tree_leaves(x)[i]``.
     scaling:
         The scaling factor for the group-lasso (it will be set
         depending on the step-size).
@@ -132,17 +137,17 @@ def prox_group_lasso(
     Journal of the Royal Statistical Society Series B: Statistical Methodology 68.1 (2006): 49-67.
 
     """
-    shape = weights.shape
-    # add an extra dim if not 2D, do nothing otherwise.
-    weights = jnp.atleast_2d(weights.T)
-    # [(n_neurons, n_features), (n_groups, n_features)] -> (n_neurons, n_groups)
-    l2_norm = _vmap_norm2_masked_2(weights, mask)
+    # shape: (n_groups, )
+    l2_norm = masked_norm_2(x, mask)
+    # compute shrinkage
     factor = 1 - regularizer_strength * scaling / l2_norm
     factor = jax.nn.relu(factor)
-    # Avoid shrinkage of features that do not belong to any group
-    # by setting the shrinkage factor to 1.
-    not_regularized = jnp.outer(jnp.ones(factor.shape[0]), 1 - mask.sum(axis=0))
-    return (weights * (factor @ mask + not_regularized)).T.reshape(shape)
+
+    # the leaf dim of regularized match that of x
+    regularized = jax.tree_util.tree_map(lambda mi: mi.sum(axis=0).astype(bool), mask)
+    return jax.tree_util.tree_map(
+        lambda r, xi, mi: jnp.where(r, xi * (factor @ mi), xi), regularized, x, mask
+    )
 
 
 def prox_lasso(x: Any, l1reg: Optional[Any] = None, scaling: float = 1.0) -> Any:
