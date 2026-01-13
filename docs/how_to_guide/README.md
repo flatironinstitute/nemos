@@ -213,7 +213,7 @@ convolve_large_arrays.md
 
 <figure>
 <a href="variable_selection_group_lasso.html">
-<img src="../_static/variable_selection_group_lasso.svg" style="height: 100px", alt="Variable selection."/>
+<img src="../_static/thumbnails/how_to_guide/variable_selection_group_lasso.svg" style="height: 100px", alt="Variable selection."/>
 </a>
 </figure>
 
