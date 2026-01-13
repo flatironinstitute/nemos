@@ -552,20 +552,6 @@ def coupled_model_simulate():
 
 
 @pytest.fixture
-def jaxopt_solvers():
-    return [
-        "GradientDescent",
-        "BFGS",
-        "LBFGS",
-        "ScipyMinimize",
-        "NonlinearCG",
-        "ScipyBoundedMinimize",
-        "LBFGSB",
-        "ProximalGradient",
-    ]
-
-
-@pytest.fixture
 def poissonGLM_model_instantiation_group_sparse():
     """Set up a Poisson GLM for testing purposes with group sparse weights.
 
@@ -1308,14 +1294,6 @@ _common_solvers = {
     "ProxSVRG": nmo.solvers.WrappedProxSVRG,
 }
 _solver_registry_per_backend = {
-    "jaxopt": {
-        **_common_solvers,
-        "GradientDescent": nmo.solvers.JaxoptGradientDescent,
-        "ProximalGradient": nmo.solvers.JaxoptProximalGradient,
-        "LBFGS": nmo.solvers.JaxoptLBFGS,
-        "BFGS": nmo.solvers.JaxoptBFGS,
-        "NonlinearCG": nmo.solvers.JaxoptNonlinearCG,
-    },
     "optimistix": {
         **_common_solvers,
         "GradientDescent": nmo.solvers.OptimistixNAG,
@@ -1325,6 +1303,16 @@ _solver_registry_per_backend = {
         "NonlinearCG": nmo.solvers.OptimistixNonlinearCG,
     },
 }
+
+if nmo.solvers.JAXOPT_AVAILABLE:
+    _solver_registry_per_backend["jaxopt"] = {
+        **_common_solvers,
+        "GradientDescent": nmo.solvers.JaxoptGradientDescent,
+        "ProximalGradient": nmo.solvers.JaxoptProximalGradient,
+        "LBFGS": nmo.solvers.JaxoptLBFGS,
+        "BFGS": nmo.solvers.JaxoptBFGS,
+        "NonlinearCG": nmo.solvers.JaxoptNonlinearCG,
+    }
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -1343,6 +1331,8 @@ def configure_solver_backend(request):
     if backend is None:
         _solver_registry_to_use = nmo.solvers.solver_registry.copy()
     else:
+        if backend == "jaxopt" and not nmo.solvers.JAXOPT_AVAILABLE:
+            pytest.fail("jaxopt backend requested but jaxopt is not installed.")
         try:
             _solver_registry_to_use = _solver_registry_per_backend[backend]
         except KeyError:
