@@ -18,6 +18,7 @@ from ._fourier_basis import FourierBasis
 from ._identity import HistoryBasis, IdentityBasis
 from ._raised_cosine_basis import RaisedCosineBasisLinear, RaisedCosineBasisLog
 from ._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis
+from ._zero_basis import ZeroBasis
 
 
 class BSplineEval(EvalBasisMixin, BSplineBasis):
@@ -2251,6 +2252,169 @@ class IdentityEval(EvalBasisMixin, IdentityBasis):
         >>> _ = basis.set_input_shape(x)
         >>> basis.n_output_features
         20
+
+        """
+        # ruff: noqa: D205, D400
+        return AtomicBasisMixin.set_input_shape(self, xi)
+
+
+class Zero(EvalBasisMixin, ZeroBasis):
+    """
+    Zero basis function.
+
+    This basis returns an empty feature matrix and is primarily used for variable
+    selection in composite bases. When you want to exclude a particular input from
+    contributing to the model without changing the structure of composite bases,
+    this basis can be used as a placeholder.
+
+    Parameters
+    ----------
+    label :
+        The label of the basis, intended to be descriptive of the task variable being processed.
+        For example: velocity, position, spike_counts.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from nemos.basis import Zero
+    >>> # Create a zero basis
+    >>> basis = Zero(label="excluded_variable")
+    >>> # The basis has 0 basis functions
+    >>> basis.n_basis_funcs
+    0
+    >>> # Evaluating returns an empty array with the correct shape
+    >>> x = np.linspace(0, 1, 10)
+    >>> result = basis.compute_features(x)
+    >>> result.shape
+    (10, 0)
+
+    Notes
+    -----
+    This basis is particularly useful in variable selection workflows where you want to
+    systematically test the inclusion/exclusion of different features by swapping them
+    with a Zero basis.
+    """
+
+    def __init__(
+        self,
+        label: Optional[str] = "Zero",
+    ):
+        EvalBasisMixin.__init__(self, bounds=None)
+        ZeroBasis.__init__(
+            self,
+            label=label,
+        )
+
+    @property
+    def bounds(self):
+        """Bounds are not applicable for Zero basis (always returns None)."""
+        return None
+
+    @bounds.setter
+    def bounds(self, value):
+        """Zero basis does not use bounds."""
+        pass
+
+    @add_docstring("evaluate_on_grid", ZeroBasis)
+    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import matplotlib.pyplot as plt
+        >>> from nemos.basis import Zero
+        >>> basis = Zero()
+        >>> sample_points, basis_values = basis.evaluate_on_grid(100)
+        >>> sample_points.shape
+        (100,)
+        >>> basis_values.shape
+        (100, 0)
+
+        """
+        # ruff: noqa: D205, D400
+        return super().evaluate_on_grid(n_samples=n_samples)
+
+    @add_docstring("evaluate", ZeroBasis)
+    def evaluate(self, sample_pts: NDArray) -> NDArray:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import Zero
+        >>> basis = Zero()
+        >>> out = basis.evaluate(np.random.randn(100, 5, 2))
+        >>> out.shape
+        (100, 5, 2, 0)
+        """
+        # ruff: noqa: D205, D400
+        return super().evaluate(sample_pts)
+
+    @add_docstring("_compute_features", ZeroBasis)
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import Zero
+
+        >>> # Generate data
+        >>> num_samples = 1000
+        >>> X = np.random.normal(size=(num_samples, ))  # raw time series
+        >>> basis = Zero()
+        >>> features = basis.compute_features(X)  # returns empty feature matrix
+        >>> features.shape
+        (1000, 0)
+
+        """
+        # ruff: noqa: D205, D400
+        return super().compute_features(xi)
+
+    @add_docstring("split_by_feature", ZeroBasis)
+    def split_by_feature(
+        self,
+        x: NDArray,
+        axis: int = 1,
+    ):
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import Zero
+        >>> # Define a zero basis
+        >>> basis = Zero(label="excluded")
+        >>> # Generate a sample input array and compute features
+        >>> inp = np.random.randn(20)
+        >>> X = basis.compute_features(inp)
+        >>> # Split returns an empty dict since there are no features
+        >>> split_features = basis.split_by_feature(X, axis=1)
+        >>> split_features
+        {'excluded': array([], shape=(20, 0), dtype=float64)}
+
+        """
+        # ruff: noqa: D205, D400
+        return super().split_by_feature(x, axis=axis)
+
+    @add_docstring("set_input_shape", AtomicBasisMixin)
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
+        """
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> basis = nmo.basis.Zero()
+        >>> # Configure with an integer input:
+        >>> _ = basis.set_input_shape(3)
+        >>> basis.n_output_features
+        0
+        >>> # Configure with a tuple:
+        >>> _ = basis.set_input_shape((4, 5))
+        >>> basis.n_output_features
+        0
+        >>> # Configure with an array:
+        >>> x = np.ones((10, 4, 5))
+        >>> _ = basis.set_input_shape(x)
+        >>> basis.n_output_features
+        0
 
         """
         # ruff: noqa: D205, D400
