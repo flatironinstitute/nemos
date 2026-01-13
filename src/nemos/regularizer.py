@@ -7,7 +7,7 @@ with various optimization methods, and they can be applied depending on the mode
 """
 
 import abc
-from typing import Callable, Tuple, Union
+from typing import Callable, Tuple, Union, Any
 
 import equinox as eqx
 import jax
@@ -21,7 +21,6 @@ from .proximal_operator import (
     prox_elastic_net,
     prox_group_lasso,
     prox_lasso,
-    prox_none,
     prox_ridge,
 )
 from .typing import (
@@ -363,7 +362,7 @@ class UnRegularized(Regularizer):
 
         return prox_op
 
-    def _validate_regularizer_strength(self, strength: any):
+    def _validate_regularizer_strength(self, strength: Any):
         return None
 
     def _validate_regularizer_strength_structure(
@@ -373,10 +372,10 @@ class UnRegularized(Regularizer):
     ):
         return None
 
-    def _penalization(self, params: ModelParamsT, strength: any) -> jnp.ndarray:
+    def _penalization(self, params: ModelParamsT, strength: Any) -> jnp.ndarray:
         return jnp.array(0.0)
 
-    def _penalty_on_subtree(self, subtree, substrength: any) -> jnp.ndarray:
+    def _penalty_on_subtree(self, subtree, substrength: Any) -> jnp.ndarray:
         return jnp.array(0.0)
 
 
