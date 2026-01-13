@@ -57,6 +57,8 @@ To install NeMoS on a system without a GPU, run this command from within your ac
  python -m pip install nemos
  ```
 
+Earlier versions of NeMoS used [JAXopt](https://jaxopt.github.io/stable/) as its optimization backend. As JAXopt is not maintained anymore, NeMoS now relies on [Optimistix](https://docs.kidger.site/optimistix/) and [Optax](https://optax.readthedocs.io/en/latest/). If you still want to use solvers from JAXopt, install it with `pip install jaxopt` or install NeMoS with `pip install "nemos[jaxopt]"` and specify a solver name like `LBFGS[jaxopt]` when creating models.
+
 ### GPU Installation
 
 :::{warning}
