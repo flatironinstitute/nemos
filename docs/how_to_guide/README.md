@@ -220,7 +220,7 @@ convolve_large_arrays.md
 ```{toctree}
 :maxdepth: 2
 
-convolve_large_arrays.md
+variable_selection_group_lasso.md
 ```
 
 :::

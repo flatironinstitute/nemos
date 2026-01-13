@@ -17,7 +17,7 @@ kernelspec:
 
 Fitting an encoding model—such as a Generalized Linear Model (GLM)—with multiple predictors is common practice in neuroscience (e.g., speed and position, head direction and theta phase, multiple stimulus features). When working with many potential covariates, a key question arises: **which predictors actually contribute to neural activity?**
 
-The [GroupLasso](~nemos.regularizer.GroupLasso) regularizer addresses this by performing **structured variable selection**: it can shrink entire groups of related coefficients to exactly zero, effectively removing uninformative predictors from the model. This is particularly useful when:
+The [GroupLasso](nemos.regularizer.GroupLasso) regularizer addresses this by performing **structured variable selection**: it can shrink entire groups of related coefficients to exactly zero, effectively removing uninformative predictors from the model. This is particularly useful when:
 
 - Working with basis expansions (e.g., splines, raised cosines) where each covariate is represented by multiple coefficients
 - Testing multiple competing hypotheses about neural coding
@@ -142,7 +142,7 @@ While the automatic grouping (one group per FeaturePytree feature) is convenient
 - Working with multi-neuron recordings where you want to enforce joint sparsity across neurons
 - Defining hierarchical or overlapping group structures
 
-For details on specifying custom masks, see the [GroupLasso API documentation](~nemos.regularizer.GroupLasso) and the [Group Lasso regularizer tutorial](k-fold-selection).
+For details on specifying custom masks, see the [GroupLasso API documentation](nemos.regularizer.GroupLasso) and the [Group Lasso regularizer tutorial](k-fold-selection).
 
 ## Summary
 
