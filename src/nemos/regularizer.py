@@ -21,15 +21,15 @@ from .proximal_operator import (
     prox_elastic_net,
     prox_group_lasso,
     prox_lasso,
-    prox_ridge,
     prox_none,
+    prox_ridge,
 )
 from .typing import (
     DESIGN_INPUT_TYPE,
+    ElasticNetRegularizerStrength,
     ModelParamsT,
     ProximalOperator,
     RegularizerStrength,
-    ElasticNetRegularizerStrength,
 )
 from .utils import format_repr
 

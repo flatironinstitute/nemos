@@ -5,10 +5,9 @@ from typing import Any, Callable, ClassVar, NamedTuple, Tuple, Type, TypeAlias
 from nemos.third_party.jaxopt import jaxopt
 
 from ..regularizer import Regularizer
-from ..typing import Aux, Params
+from ..typing import Aux, Params, RegularizerStrength
 from ._abstract_solver import OptimizationInfo
 from ._solver_adapter import SolverAdapter
-from ..typing import RegularizerStrength
 
 JaxoptSolverState: TypeAlias = NamedTuple
 JaxoptStepResult: TypeAlias = Tuple[Params, JaxoptSolverState, Aux]
