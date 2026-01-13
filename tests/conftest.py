@@ -34,13 +34,12 @@ import pytest
 import nemos as nmo
 import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
-from nemos.tree_utils import tree_full_like
-
 from nemos.basis import AdditiveBasis, CustomBasis, MultiplicativeBasis
 from nemos.basis._basis import Basis
 from nemos.basis._basis_mixin import BasisMixin
 from nemos.basis._transformer_basis import TransformerBasis
 from nemos.glm.params import GLMParams
+from nemos.tree_utils import tree_full_like
 
 DEFAULT_KWARGS = {
     "n_basis_funcs": 5,

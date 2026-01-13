@@ -13,10 +13,10 @@ from nemos.solvers._svrg import SVRG, ProxSVRG, SVRGState
 from nemos.third_party.jaxopt import jaxopt
 from nemos.tree_utils import (
     pytree_map_and_reduce,
+    tree_full_like,
     tree_l2_norm,
     tree_slice,
     tree_sub,
-    tree_full_like,
 )
 
 # Register every test here as solver-related
