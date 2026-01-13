@@ -34,6 +34,41 @@ import jax.tree_util as tree_util
 from nemos.tree_utils import pytree_map_and_reduce
 
 
+def prox_none(x: Any, hyperparams: Optional[Any] = None, scaling: float = 1.0) -> Any:
+    """Identity proximal operator."""
+    del hyperparams, scaling
+    return x
+
+
+def prox_ridge(x: Any, l2reg: Optional[float] = None, scaling: float = 1.0) -> Any:
+    r"""Proximal operator for the squared l2 norm. From JAXopt.
+
+    .. math::
+
+      \underset{y}{\text{argmin}} ~ \frac{1}{2} ||x - y||_2^2
+      + \text{scaling} \cdot \text{l2reg} \cdot ||y||_2^2
+
+    Parameters
+    ----------
+    x :
+        Input pytree.
+    l2reg :
+        Regularization strength. Default is None (interpreted as 1.0).
+    scaling :
+        A scaling factor.
+
+    Returns
+    -------
+    :
+        Output pytree with the same structure as ``x``.
+    """
+    if l2reg is None:
+        l2reg = 1.0
+
+    factor = 1.0 / (1.0 + scaling * l2reg)
+    return tree_util.tree_map(lambda y: factor * y, x)
+
+
 def compute_normalization(mask):
     """Compute normalization constant over group size."""
     return jnp.sqrt(

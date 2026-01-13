@@ -14,8 +14,6 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 
-from nemos.third_party.jaxopt import jaxopt
-
 from . import tree_utils
 from .base_class import Base
 from .proximal_operator import (
@@ -23,6 +21,9 @@ from .proximal_operator import (
     masked_norm_2,
     prox_elastic_net,
     prox_group_lasso,
+    prox_lasso,
+    prox_none,
+    prox_ridge,
 )
 from .tree_utils import pytree_map_and_reduce
 from .typing import (
@@ -338,7 +339,7 @@ class UnRegularized(Regularizer):
         ----------
         init_params
         """
-        return jaxopt.prox.prox_none
+        return prox_none
 
     def _validate_regularizer_strength(self, strength: None):
         return None
@@ -416,9 +417,7 @@ class Ridge(Regularizer):
         """
 
         def prox_op(params, l2reg, scaling=1.0):
-            return apply_operator(
-                jaxopt.prox.prox_ridge, params, l2reg, scaling=scaling
-            )
+            return apply_operator(prox_ridge, params, l2reg, scaling=scaling)
 
         return prox_op
 
@@ -459,9 +458,7 @@ class Lasso(Regularizer):
         """
 
         def prox_op(params, l1reg, scaling=1.0):
-            return apply_operator(
-                jaxopt.prox.prox_lasso, params, l1reg, scaling=scaling
-            )
+            return apply_operator(prox_lasso, params, l1reg, scaling=scaling)
 
         return prox_op
 
