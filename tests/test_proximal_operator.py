@@ -388,7 +388,7 @@ def test_masked_norm_2_dict_structure():
     expected = jnp.array(
         [jnp.sqrt(21.0) / jnp.sqrt(3.0), jnp.sqrt(34.0) / jnp.sqrt(2.0)]
     )
-    assert jnp.allclose(l2_norm, expected, rtol=1e-5)
+    assert jnp.allclose(l2_norm, expected)
 
 
 def test_prox_lasso_dict_structure():
