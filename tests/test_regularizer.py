@@ -1241,7 +1241,7 @@ class TestElasticNet:
                 (1.0, 0.5, 0.1),
                 pytest.raises(
                     ValueError,
-                    match="regularizer_strength must be a tuple of two floats",
+                    match="strength must be a tuple of two floats",
                 ),
             ),
         ],

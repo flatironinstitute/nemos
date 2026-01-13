@@ -628,7 +628,7 @@ class ElasticNet(Regularizer):
                 )
             if len(strength) != 2:
                 raise ValueError(
-                    f"Invalid regularization strength and regularizer ratio: {strength}. strength must "
+                    f"Invalid regularization strength and regularizer ratio: {strength}. Regularization strength must "
                     "be a tuple of two floats."
                 )
             if (strength[1] > 1) | (strength[1] < 0):
