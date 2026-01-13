@@ -316,7 +316,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             )
 
     def _instantiate_solver(
-        self, loss, init_params: Any, solver_kwargs: Optional[dict] = None
+        self, loss, init_params: ModelParamsT, solver_kwargs: Optional[dict] = None
     ) -> BaseRegressor:
         """
         Instantiate the solver with the provided loss function.
@@ -337,6 +337,8 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         ----------
         loss:
             The un-regularized loss function.
+        init_params:
+            The model parameters.
         solver_kwargs:
             Optional dictionary with the solver kwargs.
             If nothing is provided, it defaults to self.solver_kwargs.
