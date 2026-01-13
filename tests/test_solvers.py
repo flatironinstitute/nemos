@@ -8,8 +8,8 @@ import pytest
 
 import nemos as nmo
 from nemos.glm.params import GLMParams
+from nemos.proximal_operator import prox_none, prox_ridge
 from nemos.solvers._svrg import SVRG, ProxSVRG, SVRGState
-from nemos.third_party.jaxopt import jaxopt
 from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
 
 # Register every test here as solver-related
@@ -92,7 +92,7 @@ def test_svrg_init_state_key(request, regr_setup):
 )
 @pytest.mark.parametrize(
     "solver_class, prox, prox_lambda",
-    [(SVRG, None, None), (ProxSVRG, jaxopt.prox.prox_ridge, 0.1)],
+    [(SVRG, None, None), (ProxSVRG, prox_ridge, 0.1)],
 )
 @pytest.mark.requires_x64
 def test_svrg_update_needs_df_xs(request, regr_setup, solver_class, prox, prox_lambda):
@@ -522,9 +522,9 @@ def test_svrg_update_converges(request, regr_setup, stepsize):
 @pytest.mark.parametrize(
     "prox, prox_lambda",
     [
-        (jaxopt.prox.prox_none, None),
-        (jaxopt.prox.prox_ridge, 0.1),
-        (jaxopt.prox.prox_none, 0.1),
+        (prox_none, None),
+        (prox_ridge, 0.1),
+        (prox_none, 0.1),
         (nmo.proximal_operator.prox_lasso, 0.1),
     ],
 )
@@ -607,7 +607,7 @@ def test_svrg_xk_update_step(request, regr_setup, to_tuple, prox, prox_lambda):
     next_xk = prox(next_xk, prox_lambda, scaling=stepsize)
 
     if prox_lambda is None:
-        assert prox == jaxopt.prox.prox_none
+        assert prox == prox_none
         solver = SVRG(loss)
     else:
         solver = ProxSVRG(loss, prox)
