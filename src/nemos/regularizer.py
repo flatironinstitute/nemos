@@ -238,7 +238,7 @@ class Regularizer(Base, abc.ABC):
             )
 
     def penalized_loss(
-        self, loss: Callable, regularizer_strength: float, init_params: Any
+        self, loss: Callable, strength: float, init_params: Any
     ) -> Callable:
         """Return a function for calculating the penalized loss using Lasso regularization."""
 
@@ -246,9 +246,7 @@ class Regularizer(Base, abc.ABC):
 
         def _penalized_loss(params, *args, **kwargs):
             result = loss(params, *args, **kwargs)
-            penalty = self._penalization(
-                params, regularizer_strength, filter_kwargs=filter_kwargs
-            )
+            penalty = self._penalization(params, strength, filter_kwargs=filter_kwargs)
             if isinstance(result, tuple):
                 self._check_loss_output_tuple(result)
                 loss_value, aux = result
@@ -280,7 +278,7 @@ class Regularizer(Base, abc.ABC):
 
     @abc.abstractmethod
     def _penalty_on_subtree(
-        self, sub_params, regularizer_strength: RegularizerStrength, **kwargs
+        self, sub_params, strength: RegularizerStrength, **kwargs
     ) -> jnp.ndarray:
         pass
 
@@ -348,7 +346,7 @@ class UnRegularized(Regularizer):
     def _penalty_on_subtree(
         self,
         sub_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
-        regularizer_strength: float,
+        strength: float,
         **kwargs,
     ):
         return 0.0
@@ -379,9 +377,7 @@ class Ridge(Regularizer):
     ):
         super().__init__()
 
-    def _penalty_on_subtree(
-        self, sub_params, regularizer_strength: float, **kwargs
-    ) -> jnp.ndarray:
+    def _penalty_on_subtree(self, sub_params, strength: float, **kwargs) -> jnp.ndarray:
         """
         Compute the Ridge penalization for given parameters.
 
@@ -397,7 +393,7 @@ class Ridge(Regularizer):
         """
 
         def l2_penalty(coeff: jnp.ndarray) -> jnp.ndarray:
-            return 0.5 * regularizer_strength * jnp.sum(jnp.power(coeff, 2))
+            return 0.5 * strength * jnp.sum(jnp.power(coeff, 2))
 
         # tree map the computation and sum over leaves
         return tree_utils.pytree_map_and_reduce(
@@ -470,7 +466,7 @@ class Lasso(Regularizer):
         return prox_op
 
     def _penalty_on_subtree(
-        self, sub_params: ModelParamsT, regularizer_strength: float, **kwargs
+        self, sub_params: ModelParamsT, strength: float, **kwargs
     ) -> jnp.ndarray:
         """
         Compute the Lasso penalization for given parameters.
@@ -487,7 +483,7 @@ class Lasso(Regularizer):
         """
 
         def l1_penalty(coeff: jnp.ndarray) -> jnp.ndarray:
-            return regularizer_strength * jnp.sum(jnp.abs(coeff))
+            return strength * jnp.sum(jnp.abs(coeff))
 
         # tree map the computation and sum over leaves
         return tree_utils.pytree_map_and_reduce(
@@ -552,8 +548,8 @@ class ElasticNet(Regularizer):
 
         def tree_prox_op(params, netreg, scaling=1.0):
             # since we do not allow array regularization assume we pass a tuple
-            regularizer_strength, regularizer_ratio = netreg
-            lam = regularizer_strength * regularizer_ratio  # hyperparams[0]
+            strength, regularizer_ratio = netreg
+            lam = strength * regularizer_ratio  # hyperparams[0]
             gam = (1 - regularizer_ratio) / regularizer_ratio  # hyperparams[1]
             # if Ws is a pytree, netreg needs to be a pytree with the same
             # structure
@@ -595,8 +591,8 @@ class ElasticNet(Regularizer):
         """
 
         def net_penalty(coeff: jnp.ndarray) -> jnp.ndarray:
-            regularizer_strength, regularizer_ratio = net_regularization
-            return regularizer_strength * (
+            strength, regularizer_ratio = net_regularization
+            return strength * (
                 0.5 * (1 - regularizer_ratio) * jnp.sum(jnp.power(coeff, 2))
                 + regularizer_ratio * jnp.sum(jnp.abs(coeff))
             )
@@ -632,7 +628,7 @@ class ElasticNet(Regularizer):
                 )
             if len(strength) != 2:
                 raise ValueError(
-                    f"Invalid regularization strength and regularizer ratio: {strength}. regularizer_strength must "
+                    f"Invalid regularization strength and regularizer ratio: {strength}. strength must "
                     "be a tuple of two floats."
                 )
             if (strength[1] > 1) | (strength[1] < 0):
@@ -683,7 +679,7 @@ class GroupLasso(Regularizer):
     >>> # Create the GroupLasso regularizer instance
     >>> group_lasso = GroupLasso(mask=mask)
     >>> # fit a group-lasso glm
-    >>> model = GLM(regularizer=group_lasso, regularizer_strength=0.1).fit(X, y)
+    >>> model = GLM(regularizer=group_lasso, strength=0.1).fit(X, y)
     >>> print(f"coeff shape: {model.coef_.shape}")
     coeff shape: (5,)
     """
@@ -856,7 +852,7 @@ class GroupLasso(Regularizer):
         return mask
 
     def _penalty_on_subtree(
-        self, sub_params, regularizer_strength: float, mask: None = Any
+        self, sub_params, strength: float, mask: None = Any
     ) -> jnp.ndarray:
         r"""
         Calculate the penalization.
@@ -872,7 +868,7 @@ class GroupLasso(Regularizer):
         """
         l2_norms = masked_norm_2(sub_params, mask, normalize=False)
         norm = compute_normalization(mask)
-        return jnp.sum(norm * l2_norms) * regularizer_strength
+        return jnp.sum(norm * l2_norms) * strength
 
     def get_proximal_operator(self, init_params=None) -> ProximalOperator:
         """
@@ -890,11 +886,11 @@ class GroupLasso(Regularizer):
         """
         filter_kwargs = self._get_filter_kwargs(init_params=init_params)
 
-        def prox_op(params, regularizer_strength, scaling=1.0):
+        def prox_op(params, strength, scaling=1.0):
             return apply_operator(
                 prox_group_lasso,
                 params,
-                regularizer_strength,
+                strength,
                 filter_kwargs=filter_kwargs,
                 scaling=scaling,
             )

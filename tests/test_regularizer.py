@@ -2186,7 +2186,7 @@ class TestPenalizedLossAuxiliaryVariables:
             (0.1, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 0.1
         )
         penalized = regularizer.penalized_loss(
-            simple_loss, regularizer_strength=reg_strength, init_params=None
+            simple_loss, strength=reg_strength, init_params=None
         )
 
         params = GLMParams(jnp.ones(5), jnp.array(0.0))
@@ -2214,7 +2214,7 @@ class TestPenalizedLossAuxiliaryVariables:
             (0.1, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 0.1
         )
         penalized = regularizer.penalized_loss(
-            loss_with_aux, regularizer_strength=reg_strength, init_params=None
+            loss_with_aux, strength=reg_strength, init_params=None
         )
 
         params = GLMParams(jnp.ones(5), jnp.array(0.0))
@@ -2255,7 +2255,7 @@ class TestPenalizedLossAuxiliaryVariables:
             (0.1, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 0.1
         )
         penalized = regularizer.penalized_loss(
-            bad_loss, regularizer_strength=reg_strength, init_params=None
+            bad_loss, strength=reg_strength, init_params=None
         )
 
         params = GLMParams(jnp.ones(5), jnp.array(0.0))
@@ -2280,7 +2280,7 @@ class TestPenalizedLossAuxiliaryVariables:
             (0.1, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 0.1
         )
         penalized = regularizer.penalized_loss(
-            bad_loss, regularizer_strength=reg_strength, init_params=None
+            bad_loss, strength=reg_strength, init_params=None
         )
 
         params = GLMParams(jnp.ones(5), jnp.array(0.0))
@@ -2315,7 +2315,7 @@ class TestPenalizedLossAuxiliaryVariables:
 
         # Get penalized loss
         penalized = regularizer.penalized_loss(
-            loss_with_aux, regularizer_strength=reg_strength, init_params=params
+            loss_with_aux, strength=reg_strength, init_params=params
         )
         penalized_loss_value, aux = penalized(params, X, y)
 
