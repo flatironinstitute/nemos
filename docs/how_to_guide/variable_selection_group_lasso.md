@@ -121,7 +121,7 @@ if root or Path("../assets/stylesheets").exists():
    path.mkdir(parents=True, exist_ok=True)
 
 if path.exists():
-  fig.fig.savefig(path / "variable_selection_group_lasso.svg")
+  fig.savefig(path / "variable_selection_group_lasso.svg")
 ```
 
 ## Interpreting the Results
