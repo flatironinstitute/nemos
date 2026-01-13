@@ -13,9 +13,21 @@ kernelspec:
 
 # Selecting Covariates via Group Lasso
 
-Fitting an encoding model—such as a Generalized Linear Model (GLM)—with multiple predictors is common practice (e.g., speed and position, head direction and theta phase). In this note, we demonstrate how to use the [GroupLasso](~nemos.regularizer.GroupLasso) regularizer to identify the most informative covariates.
+## Overview
 
-We begin by generating artificial data consisting of an animal’s position on a linear maze, its speed, and simultaneously recorded spike counts.
+Fitting an encoding model—such as a Generalized Linear Model (GLM)—with multiple predictors is common practice in neuroscience (e.g., speed and position, head direction and theta phase, multiple stimulus features). When working with many potential covariates, a key question arises: **which predictors actually contribute to neural activity?**
+
+The [GroupLasso](~nemos.regularizer.GroupLasso) regularizer addresses this by performing **structured variable selection**: it can shrink entire groups of related coefficients to exactly zero, effectively removing uninformative predictors from the model. This is particularly useful when:
+
+- Working with basis expansions (e.g., splines, raised cosines) where each covariate is represented by multiple coefficients
+- Testing multiple competing hypotheses about neural coding
+- Building interpretable models by identifying the minimal set of informative features
+
+In this guide, we demonstrate how to use Group Lasso to identify the most informative covariates from a set of candidates.
+
+## Generating Example Data
+
+We begin by generating artificial data consisting of an animal's position on a linear maze, its speed, and simultaneously recorded spike counts. The true model only depends on position.
 
 ```{code-cell}
 import nemos as nmo
@@ -39,7 +51,11 @@ firing = np.exp(np.dot(X, coef))
 counts = np.random.poisson(firing)
 ```
 
-Next, we model the neuronal response using a NeMoS [basis](table-basis) and [FeaturePytree](pytrees_howto) and fit a [Group Lasso–regularized](~nemos.regularizer.GroupLasso) GLM across a range of regularization strengths.
+## Fitting a Group Lasso GLM
+
+Next, we model the neuronal response using both position and speed as candidate predictors. We represent each covariate with a [basis expansion](table-basis), creating multiple coefficients per covariate. We organize these features into a [FeaturePytree](pytrees_howto), which allows Group Lasso to treat each covariate's coefficients as a separate group.
+
+**Key insight**: When using `FeaturePytree` with Group Lasso (without specifying a custom mask), each feature in the PyTree is automatically treated as a separate group. This means the model can shrink all coefficients for a particular covariate (e.g., "speed") to zero together, effectively performing variable selection.
 
 ```{code-cell}
 import matplotlib.pyplot as plt
@@ -108,4 +124,33 @@ if path.exists():
   fig.fig.savefig(path / "variable_selection_group_lasso.svg")
 ```
 
-As the regularization strength increases, the Group Lasso progressively shrinks entire groups of coefficients toward zero. In this example, the weaker predictor is eliminated first, and the Group Lasso correctly identifies `position` as the most informative covariate.
+## Interpreting the Results
+
+As the regularization strength increases, the Group Lasso progressively shrinks entire groups of coefficients toward zero. In this example:
+
+1. **At low regularization** (left side): Both position and speed coefficients have non-zero values
+2. **At intermediate regularization**: The speed coefficients (the uninformative predictor) are shrunk to zero first
+3. **At high regularization** (right side): Both groups are heavily regularized, but position coefficients persist longer
+
+The Group Lasso correctly identifies `position` as the most informative covariate by eliminating the `speed` group first. This demonstrates the method's ability to perform automatic variable selection based on predictive relevance.
+
+## Advanced: Custom Grouping Structures
+
+While the automatic grouping (one group per FeaturePytree feature) is convenient for covariate selection, Group Lasso also supports custom grouping structures via explicit masks. This is useful when:
+
+- You want to group coefficients within a single covariate (e.g., grouping spline coefficients by spatial regions)
+- Working with multi-neuron recordings where you want to enforce joint sparsity across neurons
+- Defining hierarchical or overlapping group structures
+
+For details on specifying custom masks, see the [GroupLasso API documentation](~nemos.regularizer.GroupLasso) and the [Group Lasso regularizer tutorial](k-fold-selection).
+
+## Summary
+
+Group Lasso provides a principled approach to covariate selection in neural encoding models:
+
+- **Structured sparsity**: Removes entire groups of coefficients together
+- **Automatic grouping**: Works seamlessly with FeaturePytree for covariate-level selection
+- **Flexible**: Supports custom masks for advanced grouping structures
+- **Interpretable**: Produces models with fewer, more interpretable predictors
+
+By fitting models across a range of regularization strengths, you can explore which covariates contribute most to neural activity and build more parsimonious encoding models.
