@@ -74,7 +74,7 @@ for i, reg in enumerate(reg_strengths):
     position_coef_norm[i] = np.linalg.norm(model.coef_["position"])
 
 # Plot results
-plt.figure()
+fig = plt.figure()
 plt.title("Regularization Path of Grouped Coefficients")
 plt.xscale("log")
 plt.plot(reg_strengths, speed_coef_norm, label="speed")
@@ -83,6 +83,29 @@ plt.xlabel("Regularization strength")
 plt.ylabel("Coefficient norm")
 plt.legend()
 plt.tight_layout()
+```
+
+
+```{code-cell} ipython3
+:tags: [hide-input]
+
+# save image for thumbnail
+from pathlib import Path
+import os
+
+root = os.environ.get("READTHEDOCS_OUTPUT")
+if root:
+   path = Path(root) / "html/_static/thumbnails/how_to_guide"
+# if local store in ../_build/html/...
+else:
+   path = Path("../_build/html/_static/thumbnails/how_to_guide")
+
+# make sure the folder exists if run from build
+if root or Path("../assets/stylesheets").exists():
+   path.mkdir(parents=True, exist_ok=True)
+
+if path.exists():
+  fig.fig.savefig(path / "variable_selection_group_lasso.svg")
 ```
 
 As the regularization strength increases, the Group Lasso progressively shrinks entire groups of coefficients toward zero. In this example, the weaker predictor is eliminated first, and the Group Lasso correctly identifies `position` as the most informative covariate.
