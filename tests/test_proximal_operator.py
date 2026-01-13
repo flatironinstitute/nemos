@@ -9,12 +9,12 @@ from nemos.proximal_operator import _vmap_norm2_masked_2, prox_group_lasso, prox
     [
         (
             prox_lasso,
-            lambda d: (d[0], d[1], d[3]),
+            lambda d: [d[0], d[1], d[3]],
             tuple,
         ),  # (params, regularizer_strength, scaling)
         (
             prox_group_lasso,
-            lambda d: (d[0][0], d[1], d[2], d[3]),
+            lambda d: [d[0][0], d[1][0], d[2], d[3]],
             jnp.ndarray,
         ),  # (weights, regularizer_strength, mask, scaling)
     ],
@@ -38,7 +38,7 @@ def test_prox_operator_returns_correct_type(
         ),  # (params, regularizer_strength, scaling)
         (
             prox_group_lasso,
-            lambda d: (d[0][0], d[1], d[2], d[3]),
+            lambda d: (d[0][0], d[1][0], d[2], d[3]),
             jnp.ndarray,
         ),  # (weights, regularizer_strength, mask, scaling)
     ],
@@ -76,7 +76,7 @@ def test_prox_lasso_tuple_length_multineuron(example_data_prox_operator_multineu
         ),  # (params, regularizer_strength, scaling)
         (
             prox_group_lasso,
-            lambda d: (d[0][0], d[1], d[2], d[3]),
+            lambda d: (d[0][0], d[1][0], d[2], d[3]),
             lambda result, d: (result.shape, d[0][0].shape),
         ),  # (weights, regularizer_strength, mask, scaling)
     ],
@@ -101,7 +101,7 @@ def test_prox_operator_weights_shape(
         ),  # (params, regularizer_strength, scaling)
         (
             prox_group_lasso,
-            lambda d: (d[0][0], d[1], d[2], d[3]),
+            lambda d: (d[0][0], d[1][0], d[2], d[3]),
             lambda result, d: (result.shape, d[0][0].shape),
         ),  # (weights, regularizer_strength, mask, scaling)
     ],
