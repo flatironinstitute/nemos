@@ -660,10 +660,13 @@ def example_data_prox_operator_multineuron():
     # Mask as PyTree with same structure as params
     # For multi-neuron: mask shape is (n_groups, n_features, n_neurons)
     # Intercept mask is zeros (not regularized)
-    mask_coef = jnp.array([
-        [[1, 1, 1], [0, 0, 0], [1, 1, 1], [0, 0, 0]],
-        [[0, 0, 0], [1, 1, 1], [0, 0, 0], [1, 1, 1]]
-    ], dtype=jnp.float32)
+    mask_coef = jnp.array(
+        [
+            [[1, 1, 1], [0, 0, 0], [1, 1, 1], [0, 0, 0]],
+            [[0, 0, 0], [1, 1, 1], [0, 0, 0], [1, 1, 1]],
+        ],
+        dtype=jnp.float32,
+    )
     mask = GLMParams(
         mask_coef,
         jnp.zeros((2, n_neurons), dtype=jnp.float32),

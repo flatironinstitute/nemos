@@ -770,7 +770,9 @@ class TestRidge:
         model_bfgs.solver_name = "BFGS"
 
         init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
-        runner_gd = model._instantiate_solver(model._compute_loss, init_params).solver_run
+        runner_gd = model._instantiate_solver(
+            model._compute_loss, init_params
+        ).solver_run
         runner_bfgs = model_bfgs._instantiate_solver(
             model_bfgs._compute_loss, init_params
         ).solver_run
@@ -795,7 +797,9 @@ class TestRidge:
         model.solver_name = "BFGS"
 
         init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
-        runner_bfgs = model._instantiate_solver(model._compute_loss, init_params).solver_run
+        runner_bfgs = model._instantiate_solver(
+            model._compute_loss, init_params
+        ).solver_run
         params = runner_bfgs(init_params, X, y)[0]
         model_skl = PoissonRegressor(
             fit_intercept=True,
@@ -822,7 +826,9 @@ class TestRidge:
         model.regularizer_strength = 0.1
         model.solver_name = solver_name
         init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
-        runner_bfgs = model._instantiate_solver(model._compute_loss, init_params).solver_run
+        runner_bfgs = model._instantiate_solver(
+            model._compute_loss, init_params
+        ).solver_run
         params = runner_bfgs(init_params, X, y)[0]
         model_skl = GammaRegressor(
             fit_intercept=True,
@@ -1293,7 +1299,9 @@ class TestElasticNet:
             true_params.intercept,
         )
         runner = model._instantiate_solver(model._compute_loss, params).solver_run
-        runner(params, X.data,
+        runner(
+            params,
+            X.data,
             y,
         )
 
@@ -2082,11 +2090,7 @@ class TestGroupLasso:
             else:
                 return x * 2  # Return doubled if mask is present
 
-        result = apply_operator(
-            masked_operation,
-            params,
-            filter_kwargs={"mask": mask}
-        )
+        result = apply_operator(masked_operation, params, filter_kwargs={"mask": mask})
 
         # Check that mask was correctly routed to coef but not intercept
         # coef should be doubled (mask was passed)
@@ -2118,7 +2122,9 @@ class TestGroupLasso:
 
         # Test that penalization doesn't crash with dict structure
         filter_kwargs = regularizer._get_filter_kwargs(params_dict)
-        penalty = regularizer._penalization(params_dict, strength=0.1, filter_kwargs=filter_kwargs)
+        penalty = regularizer._penalization(
+            params_dict, strength=0.1, filter_kwargs=filter_kwargs
+        )
 
         # Check penalty is a scalar and non-negative
         assert isinstance(penalty, jnp.ndarray)
@@ -2132,8 +2138,8 @@ class TestGroupLasso:
         # Create GLMParams mask
         n_features = X.shape[1]
         mask_array = np.ones((2, n_features), dtype=float)
-        mask_array[0, n_features // 2:] = 0
-        mask_array[1, :n_features // 2] = 0
+        mask_array[0, n_features // 2 :] = 0
+        mask_array[1, : n_features // 2] = 0
         mask = GLMParams(jnp.asarray(mask_array), None)
 
         regularizer = self.cls(mask=mask)
@@ -2146,7 +2152,9 @@ class TestGroupLasso:
 
         # Test that penalization works
         filter_kwargs = regularizer._get_filter_kwargs(params)
-        penalty = regularizer._penalization(params, strength=0.1, filter_kwargs=filter_kwargs)
+        penalty = regularizer._penalization(
+            params, strength=0.1, filter_kwargs=filter_kwargs
+        )
 
         # Check penalty is a scalar and non-negative
         assert isinstance(penalty, jnp.ndarray)
@@ -2312,7 +2320,9 @@ class TestPenalizedLossAuxiliaryVariables:
         penalized_loss_value, aux = penalized(params, X, y)
 
         # Calculate expected penalty
-        expected_penalty = regularizer._penalization(params, reg_strength, regularizer._get_filter_kwargs(params))
+        expected_penalty = regularizer._penalization(
+            params, reg_strength, regularizer._get_filter_kwargs(params)
+        )
 
         # Check that penalized loss = unpenalized loss + penalty
         assert jnp.isclose(penalized_loss_value, unpenalized_loss + expected_penalty)

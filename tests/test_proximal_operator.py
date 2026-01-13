@@ -57,16 +57,18 @@ def test_prox_lasso_has_coef_and_intercept(example_data_prox_operator):
     """Test whether the returned GLMParams has both coef and intercept."""
     params, regularizer_strength, _, scaling = example_data_prox_operator
     params_new = prox_lasso(params, regularizer_strength, scaling)
-    assert hasattr(params_new, 'coef')
-    assert hasattr(params_new, 'intercept')
+    assert hasattr(params_new, "coef")
+    assert hasattr(params_new, "intercept")
 
 
-def test_prox_lasso_has_coef_and_intercept_multineuron(example_data_prox_operator_multineuron):
+def test_prox_lasso_has_coef_and_intercept_multineuron(
+    example_data_prox_operator_multineuron,
+):
     """Test whether the returned GLMParams has both coef and intercept."""
     params, regularizer_strength, _, scaling = example_data_prox_operator_multineuron
     params_new = prox_lasso(params, regularizer_strength, scaling)
-    assert hasattr(params_new, 'coef')
-    assert hasattr(params_new, 'intercept')
+    assert hasattr(params_new, "coef")
+    assert hasattr(params_new, "intercept")
 
 
 @pytest.mark.parametrize(
@@ -221,7 +223,9 @@ def test_prox_group_lasso_dict_structure():
 
     # Create matching mask structure: (n_groups, *param_shape) for each leaf
     mask = {
-        "spatial": jnp.array([[1, 1, 0], [0, 0, 1]], dtype=float),  # 2 groups, 3 features
+        "spatial": jnp.array(
+            [[1, 1, 0], [0, 0, 1]], dtype=float
+        ),  # 2 groups, 3 features
         "temporal": jnp.array([[1, 0], [0, 1]], dtype=float),  # 2 groups, 2 features
         "intercept": jnp.zeros((2, 1), dtype=float),  # Not regularized
     }
@@ -295,10 +299,13 @@ def test_prox_group_lasso_equivalence_array_vs_dict():
         intercept=jnp.zeros(1),
     )
     mask_array = GLMParams(
-        coef=jnp.array([
-            [1, 1, 1, 0, 0, 0],  # group 0: first half
-            [0, 0, 0, 1, 1, 1],  # group 1: second half
-        ], dtype=float),
+        coef=jnp.array(
+            [
+                [1, 1, 1, 0, 0, 0],  # group 0: first half
+                [0, 0, 0, 1, 1, 1],  # group 1: second half
+            ],
+            dtype=float,
+        ),
         intercept=jnp.zeros((2, 1), dtype=float),
     )
 
@@ -309,14 +316,20 @@ def test_prox_group_lasso_equivalence_array_vs_dict():
         "intercept": jnp.zeros(1),
     }
     mask_dict = {
-        "position": jnp.array([
-            [1, 1, 0, 0],  # group 0: first 2 position features
-            [0, 0, 1, 1],  # group 1: last 2 position features
-        ], dtype=float),
-        "speed": jnp.array([
-            [1, 0],  # group 0: first speed feature
-            [0, 1],  # group 1: second speed feature
-        ], dtype=float),
+        "position": jnp.array(
+            [
+                [1, 1, 0, 0],  # group 0: first 2 position features
+                [0, 0, 1, 1],  # group 1: last 2 position features
+            ],
+            dtype=float,
+        ),
+        "speed": jnp.array(
+            [
+                [1, 0],  # group 0: first speed feature
+                [0, 1],  # group 1: second speed feature
+            ],
+            dtype=float,
+        ),
         "intercept": jnp.zeros((2, 1), dtype=float),
     }
 
@@ -327,10 +340,12 @@ def test_prox_group_lasso_equivalence_array_vs_dict():
     result_dict = prox_group_lasso(params_dict, regularizer_strength, mask_dict)
 
     # Concatenate dict results to compare with array
-    result_dict_concat = jnp.concatenate([
-        result_dict["position"],
-        result_dict["speed"],
-    ])
+    result_dict_concat = jnp.concatenate(
+        [
+            result_dict["position"],
+            result_dict["speed"],
+        ]
+    )
 
     # The results should be similar (not exactly equal due to different group norm calculations)
     # Each structure computes group norms differently:
@@ -339,7 +354,9 @@ def test_prox_group_lasso_equivalence_array_vs_dict():
     # So we just check that shapes match and regularization was applied
     assert result_array.coef.shape == result_dict_concat.shape
     assert jnp.all(jnp.abs(result_array.coef) <= jnp.abs(params_array.coef))
-    assert jnp.all(jnp.abs(result_dict_concat) <= jnp.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]))
+    assert jnp.all(
+        jnp.abs(result_dict_concat) <= jnp.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+    )
 
 
 def test_masked_norm_2_dict_structure():
@@ -368,7 +385,9 @@ def test_masked_norm_2_dict_structure():
     #   Unnormalized: sqrt(3^2 + 5^2) = sqrt(34)
     #   Group size: 2 elements
     #   Normalized (default): sqrt(34) / sqrt(2) ≈ 4.123
-    expected = jnp.array([jnp.sqrt(21.0) / jnp.sqrt(3.0), jnp.sqrt(34.0) / jnp.sqrt(2.0)])
+    expected = jnp.array(
+        [jnp.sqrt(21.0) / jnp.sqrt(3.0), jnp.sqrt(34.0) / jnp.sqrt(2.0)]
+    )
     assert jnp.allclose(l2_norm, expected, rtol=1e-5)
 
 
