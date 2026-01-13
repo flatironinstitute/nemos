@@ -2,29 +2,38 @@
 
 from typing import Type
 
-from ._jaxopt_solvers import (
-    JaxoptBFGS,
-    JaxoptGradientDescent,
-    JaxoptLBFGS,
-    JaxoptNonlinearCG,
-    JaxoptProximalGradient,
-)
+from ._fista import OptimistixFISTA, OptimistixNAG
+from ._optimistix_solvers import OptimistixBFGS, OptimistixNonlinearCG
+from ._optax_optimistix_solvers import OptimistixOptaxLBFGS
+from ._jaxopt_solvers import JAXOPT_AVAILABLE
 from ._svrg import WrappedProxSVRG, WrappedSVRG
 
 solver_registry: dict[str, Type] = {
-    "GradientDescent": JaxoptGradientDescent,
-    #
-    "ProximalGradient": JaxoptProximalGradient,
-    #
-    "LBFGS": JaxoptLBFGS,
-    #
-    "BFGS": JaxoptBFGS,
+    "GradientDescent": OptimistixNAG,
+    "ProximalGradient": OptimistixFISTA,
+    "LBFGS": OptimistixOptaxLBFGS,
+    "BFGS": OptimistixBFGS,
     #
     "SVRG": WrappedSVRG,
     "ProxSVRG": WrappedProxSVRG,
     #
-    "NonlinearCG": JaxoptNonlinearCG,
+    "NonlinearCG": OptimistixNonlinearCG,
 }
+
+if JAXOPT_AVAILABLE:
+    from ._jaxopt_solvers import (
+        JaxoptBFGS,
+        JaxoptGradientDescent,
+        JaxoptLBFGS,
+        JaxoptNonlinearCG,
+        JaxoptProximalGradient,
+    )
+
+    solver_registry["GradientDescent[jaxopt]"] = JaxoptGradientDescent
+    solver_registry["ProximalGradient[jaxopt]"] = JaxoptProximalGradient
+    solver_registry["LBFGS[jaxopt]"] = JaxoptLBFGS
+    solver_registry["BFGS[jaxopt]"] = JaxoptBFGS
+    solver_registry["NonlinearCG[jaxopt]"] = JaxoptNonlinearCG
 
 
 def list_available_solvers():
