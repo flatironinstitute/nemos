@@ -125,6 +125,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
     ):
         self.regularizer = "UnRegularized" if regularizer is None else regularizer
         self.regularizer_strength = regularizer_strength
+        self.structured_regularizer_strength = None
 
         # no solver name provided, use default
         if solver_name is None:
@@ -360,7 +361,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         solver = solver_cls(
             loss,
             self.regularizer,
-            self.regularizer_strength,
+            self.structured_regularizer_strength,
             has_aux=self._has_aux,
             **solver_kwargs,
         )

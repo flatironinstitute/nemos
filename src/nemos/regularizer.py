@@ -285,8 +285,6 @@ class Regularizer(Base, abc.ABC):
         else:
             _strength = [strength] * len(regularizable_subtrees)
 
-        print(_strength)
-
         # validate structure
         for i, where in enumerate(regularizable_subtrees):
             subtree = where(params)

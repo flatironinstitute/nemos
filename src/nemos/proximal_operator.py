@@ -101,7 +101,7 @@ def prox_none(x: Any, hyperparams: Any, scaling: float = 1.0) -> Any:
 
 def prox_group_lasso(
     weights: jnp.ndarray,
-    regularizer_strength: Any,
+    strength: Any,
     mask: jnp.ndarray,
     scaling: float = 1.0,
 ) -> jnp.ndarray:
@@ -111,8 +111,8 @@ def prox_group_lasso(
     ----------
     weights:
         Weights, shape (n_neurons, n_features) or pytree of same;
-    regularizer_strength:
-        The regularization hyperparameter.
+    strength :
+        Regularization strength, pytree with the same structure as `x`.
     mask:
         ND array of 0,1 as float32, feature mask. size (n_groups, n_features)
         or pytree of same.
@@ -163,7 +163,7 @@ def prox_group_lasso(
     weights = jnp.atleast_2d(weights.T)
     # [(n_neurons, n_features), (n_groups, n_features)] -> (n_neurons, n_groups)
     l2_norm = _vmap_norm2_masked_2(weights, mask)
-    factor = 1 - regularizer_strength * scaling / l2_norm
+    factor = 1 - strength * scaling / l2_norm
     factor = jax.nn.relu(factor)
     # Avoid shrinkage of features that do not belong to any group
     # by setting the shrinkage factor to 1.

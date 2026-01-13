@@ -891,7 +891,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         >>> # Now ready to run optimization or update steps
         """
         # validate regularizer strength and params consistency
-        self.regularizer_strength = (
+        self.structured_regularizer_strength = (
             self.regularizer._validate_regularizer_strength_structure(
                 init_params, self.regularizer_strength
             )

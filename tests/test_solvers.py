@@ -3,6 +3,7 @@ import os
 from contextlib import nullcontext as does_not_raise
 
 import jax
+import jax.numpy as jnp
 import numpy as np
 import pytest
 
@@ -10,7 +11,13 @@ import nemos as nmo
 from nemos.glm.params import GLMParams
 from nemos.solvers._svrg import SVRG, ProxSVRG, SVRGState
 from nemos.third_party.jaxopt import jaxopt
-from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
+from nemos.tree_utils import (
+    pytree_map_and_reduce,
+    tree_l2_norm,
+    tree_slice,
+    tree_sub,
+    tree_full_like,
+)
 
 # Register every test here as solver-related
 pytestmark = pytest.mark.solver_related
@@ -530,6 +537,9 @@ def test_svrg_xk_update_step(request, regr_setup, to_tuple, prox, prox_lambda):
 
     stepsize = 1e-2
     loss_gradient = jax.jit(jax.grad(loss))
+
+    if "nemos.proximal_operator" in prox.__module__:
+        prox_lambda = tree_full_like(true_params, prox_lambda)
 
     # set the initial parameters to zero and
     # set the anchor point to a random value that's not just zeros

@@ -379,7 +379,7 @@ class TestUnRegularized:
         # set regularizer and solver name
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
-        model.regularizer_strength = (
+        model.structured_regularizer_strength = (
             model.regularizer._validate_regularizer_strength_structure(
                 true_params, model.regularizer_strength
             )
@@ -729,7 +729,7 @@ class TestRidge:
 
         # set regularizer and solver name
         model.set_params(regularizer=self.cls(), regularizer_strength=1.0)
-        model.regularizer_strength = (
+        model.structured_regularizer_strength = (
             model.regularizer._validate_regularizer_strength_structure(
                 true_params, model.regularizer_strength
             )
@@ -749,7 +749,7 @@ class TestRidge:
 
         # set regularizer and solver name
         model.set_params(regularizer=self.cls(), regularizer_strength=1.0)
-        model.regularizer_strength = (
+        model.structured_regularizer_strength = (
             model.regularizer._validate_regularizer_strength_structure(
                 true_params, model.regularizer_strength
             )
@@ -775,7 +775,7 @@ class TestRidge:
 
         # set model params
         model.set_params(regularizer=self.cls(), regularizer_strength=1.0)
-        model.regularizer_strength = (
+        model.structured_regularizer_strength = (
             model.regularizer._validate_regularizer_strength_structure(
                 true_params, model.regularizer_strength
             )
@@ -811,7 +811,7 @@ class TestRidge:
         """Test that different solvers converge to the same solution."""
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         model.set_params(regularizer=self.cls(), regularizer_strength=1.0)
-        model.regularizer_strength = (
+        model.structured_regularizer_strength = (
             model.regularizer._validate_regularizer_strength_structure(
                 true_params, model.regularizer_strength
             )
@@ -842,7 +842,7 @@ class TestRidge:
         model.set_params(regularizer=self.cls(), regularizer_strength=1.0)
         model.solver_kwargs = {"tol": 10**-12}
         model.regularizer_strength = 0.1
-        model.regularizer_strength = (
+        model.structured_regularizer_strength = (
             model.regularizer._validate_regularizer_strength_structure(
                 true_params, model.regularizer_strength
             )
@@ -1013,7 +1013,7 @@ class TestLasso:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
 
         model.set_params(regularizer=self.cls(), regularizer_strength=1)
-        model.regularizer_strength = (
+        model.structured_regularizer_strength = (
             model.regularizer._validate_regularizer_strength_structure(
                 true_params, model.regularizer_strength
             )
@@ -1030,7 +1030,7 @@ class TestLasso:
 
         # set regularizer and solver name
         model.set_params(regularizer=self.cls(), regularizer_strength=1.0)
-        model.regularizer_strength = (
+        model.structured_regularizer_strength = (
             model.regularizer._validate_regularizer_strength_structure(
                 true_params, model.regularizer_strength
             )
@@ -1056,7 +1056,7 @@ class TestLasso:
         # set precision to float64 for accurate matching of the results
         model.data_type = jnp.float64
         model.set_params(regularizer=self.cls(), regularizer_strength=1)
-        model.regularizer_strength = (
+        model.structured_regularizer_strength = (
             model.regularizer._validate_regularizer_strength_structure(
                 true_params, model.regularizer_strength
             )
@@ -1322,7 +1322,7 @@ class TestElasticNet:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
 
         model.set_params(regularizer=self.cls(), regularizer_strength=(1, 0.5))
-        model.regularizer_strength = (
+        model.structured_regularizer_strength = (
             model.regularizer._validate_regularizer_strength_structure(
                 true_params, model.regularizer_strength
             )
@@ -1339,7 +1339,7 @@ class TestElasticNet:
 
         # set regularizer and solver name
         model.set_params(regularizer=self.cls(), regularizer_strength=(1, 0.5))
-        model.regularizer_strength = (
+        model.structured_regularizer_strength = (
             model.regularizer._validate_regularizer_strength_structure(
                 true_params, model.regularizer_strength
             )
@@ -1371,7 +1371,7 @@ class TestElasticNet:
         model.set_params(
             regularizer=self.cls(), regularizer_strength=(reg_strength, reg_ratio)
         )
-        model.regularizer_strength = (
+        model.structured_regularizer_strength = (
             model.regularizer._validate_regularizer_strength_structure(
                 true_params, model.regularizer_strength
             )
@@ -1429,7 +1429,7 @@ class TestElasticNet:
 
         # use the penalized loss function to solve optimization via Nelder-Mead
         penalized_loss = lambda p, x, y: model_PG.regularizer.penalized_loss(
-            model_PG._compute_loss, model_PG.regularizer_strength
+            model_PG._compute_loss, model_PG.structured_regularizer_strength
         )(
             GLMParams(
                 p[1:],
@@ -1680,7 +1680,7 @@ class TestGroupLasso:
         mask = jnp.asarray(mask)
 
         model.set_params(regularizer=self.cls(mask=mask), regularizer_strength=1.0)
-        model.regularizer_strength = (
+        model.structured_regularizer_strength = (
             model.regularizer._validate_regularizer_strength_structure(
                 true_params, model.regularizer_strength
             )
@@ -1724,7 +1724,7 @@ class TestGroupLasso:
         mask = jnp.asarray(mask)
 
         model.set_params(regularizer=self.cls(mask=mask), regularizer_strength=1.0)
-        model.regularizer_strength = (
+        model.structured_regularizer_strength = (
             model.regularizer._validate_regularizer_strength_structure(
                 true_params, model.regularizer_strength
             )
@@ -1889,7 +1889,7 @@ class TestGroupLasso:
         mask = jnp.asarray(mask, dtype=jnp.float32)
 
         model.set_params(regularizer=self.cls(mask=mask), regularizer_strength=1.0)
-        model.regularizer_strength = (
+        model.structured_regularizer_strength = (
             model.regularizer._validate_regularizer_strength_structure(
                 true_params, model.regularizer_strength
             )
