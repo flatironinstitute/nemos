@@ -940,9 +940,11 @@ class TestMStep:
         )
         # Initial probability:
         sum_gammas = np.sum(gammas[np.where(new_sess)[0]], axis=0)
-        lagrange_multiplier = -jax.grad(expected_log_likelihood_wrt_initial_prob)(
-            new_initial_prob, sum_gammas
-        ).mean()  # note that the lagrange mult makes the gradient all the same for each prob.
+        lagrange_multiplier = (
+            -jax.grad(expected_log_likelihood_wrt_initial_prob)(
+                new_initial_prob, sum_gammas
+            ).mean()
+        )  # note that the lagrange mult makes the gradient all the same for each prob.
         grad_objective = jax.grad(lagrange_mult_loss)
         (grad_at_init, grad_at_lagr) = grad_objective(
             (new_initial_prob, lagrange_multiplier),
@@ -1094,9 +1096,11 @@ class TestMStep:
         )
         # Initial probabilities:
         sum_gammas = np.sum(np.exp(log_gammas)[np.where(new_sess)[0]], axis=0)
-        lagrange_multiplier = -jax.grad(expected_log_likelihood_wrt_initial_prob)(
-            new_initial_prob, sum_gammas, dirichlet_alphas=alphas_init
-        ).mean()  # note that the lagrange mult makes the gradient all the same for each prob.
+        lagrange_multiplier = (
+            -jax.grad(expected_log_likelihood_wrt_initial_prob)(
+                new_initial_prob, sum_gammas, dirichlet_alphas=alphas_init
+            ).mean()
+        )  # note that the lagrange mult makes the gradient all the same for each prob.
         # 2) Check that the gradient of the loss is zero
         grad_objective = jax.grad(lagrange_mult_loss)
         (grad_at_init, grad_at_lagr) = grad_objective(
@@ -1592,6 +1596,12 @@ class TestEMAlgorithm:
         glm = GLM(
             observation_model=obs, regularizer=regularization, solver_name=solver_name
         )
+        glm_params = GLMParams(coef, intercept)
+        glm.structured_regularizer_strength = (
+            glm.regularizer._validate_regularizer_strength_structure(
+                glm_params, glm.regularizer_strength
+            )
+        )
         glm._instantiate_solver(partial_hmm_negative_log_likelihood)
         solver_run = glm._solver_run
         # End of preparatory step.
@@ -1607,7 +1617,7 @@ class TestEMAlgorithm:
             y,
             initial_prob=initial_prob,
             transition_prob=transition_prob,
-            glm_params=GLMParams(coef, intercept),
+            glm_params=glm_params,
             is_new_session=(
                 new_sess.astype(bool)[: X.shape[0]] if require_new_session else None
             ),
@@ -1648,9 +1658,9 @@ class TestEMAlgorithm:
             log_likelihood_func=likelihood_func,
             inverse_link_function=obs.default_inverse_link_function,
         )
-        assert (
-            log_likelihood_true_params < log_likelihood_em
-        ), "log-likelihood did not increase."
+        assert log_likelihood_true_params < log_likelihood_em, (
+            "log-likelihood did not increase."
+        )
 
     @pytest.mark.parametrize("n_neurons", [5])
     @pytest.mark.requires_x64
@@ -1781,12 +1791,12 @@ class TestEMAlgorithm:
         max_corr = np.max(corr_matrix, axis=1)
         print("\nMAX CORR", max_corr)
         assert np.all(max_corr > 0.9), "State recovery failed."
-        assert np.all(
-            max_corr > max_corr_before_em
-        ), "Latent state recovery did not improve."
-        assert (
-            log_likelihood_noisy_params < log_likelihood_em
-        ), "Log-likelihood decreased."
+        assert np.all(max_corr > max_corr_before_em), (
+            "Latent state recovery did not improve."
+        )
+        assert log_likelihood_noisy_params < log_likelihood_em, (
+            "Log-likelihood decreased."
+        )
 
 
 @pytest.mark.requires_x64
@@ -2193,9 +2203,9 @@ class TestConvergence:
         )
 
         # Should have actually converged according to the criterion
-        assert check_log_likelihood_increment(
-            final_state, tol=tol
-        ), "EM stopped but did not meet convergence criterion"
+        assert check_log_likelihood_increment(final_state, tol=tol), (
+            "EM stopped but did not meet convergence criterion"
+        )
 
     @pytest.mark.requires_x64
     def test_em_nan_diagnostics_after_convergence(self):
@@ -2254,26 +2264,26 @@ class TestConvergence:
         )
 
         # Final state should have valid likelihood
-        assert jnp.isfinite(
-            final_state.data_log_likelihood
-        ), "Final state has non-finite log-likelihood"
+        assert jnp.isfinite(final_state.data_log_likelihood), (
+            "Final state has non-finite log-likelihood"
+        )
 
         # Final state should have valid previous likelihood
-        assert jnp.isfinite(
-            final_state.previous_data_log_likelihood
-        ), "Final state has non-finite previous log-likelihood"
+        assert jnp.isfinite(final_state.previous_data_log_likelihood), (
+            "Final state has non-finite previous log-likelihood"
+        )
 
         # All outputs should be valid
         assert jnp.all(jnp.isfinite(posteriors)), "Posteriors contain non-finite values"
-        assert jnp.all(
-            jnp.isfinite(joint_posterior)
-        ), "Joint posteriors contain non-finite values"
-        assert jnp.all(
-            jnp.isfinite(final_initial_prob)
-        ), "Final initial_prob contains non-finite values"
-        assert jnp.all(
-            jnp.isfinite(final_transition_prob)
-        ), "Final transition_prob contains non-finite values"
+        assert jnp.all(jnp.isfinite(joint_posterior)), (
+            "Joint posteriors contain non-finite values"
+        )
+        assert jnp.all(jnp.isfinite(final_initial_prob)), (
+            "Final initial_prob contains non-finite values"
+        )
+        assert jnp.all(jnp.isfinite(final_transition_prob)), (
+            "Final transition_prob contains non-finite values"
+        )
 
     @pytest.mark.requires_x64
     def test_convergence_with_different_tolerances(self):
@@ -2401,9 +2411,9 @@ class TestConvergence:
         final_state = result[-1]
 
         # Should stop at or just after 5 iterations
-        assert (
-            final_state.iterations <= 6
-        ), f"EM should stop around 5 iterations, but ran for {final_state.iterations}"
+        assert final_state.iterations <= 6, (
+            f"EM should stop around 5 iterations, but ran for {final_state.iterations}"
+        )
 
 
 class TestCompilation:
