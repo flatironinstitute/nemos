@@ -1979,6 +1979,180 @@ class TestGroupLasso:
         model.solver_name = solver_name
         model.fit(X, y)
 
+    @pytest.mark.parametrize(
+        "params_factory,expected_type,check_mask_fn",
+        [
+            # GLMParams single neuron (with regularizable_subtrees)
+            (
+                lambda: GLMParams(coef=jnp.ones((10, 3)), intercept=jnp.zeros(3)),
+                GLMParams,
+                lambda mask: (
+                    mask.coef is not None
+                    and mask.intercept is None
+                    and mask.coef.ndim == 3
+                    and mask.coef.shape[1:] == (10, 3)
+                ),
+            ),
+            # Plain dict (without regularizable_subtrees)
+            (
+                lambda: {"spatial": jnp.ones((5, 2)), "temporal": jnp.ones((3, 2))},
+                dict,
+                lambda mask: (
+                    "spatial" in mask
+                    and "temporal" in mask
+                    and mask["spatial"].ndim == 3
+                    and mask["spatial"].shape[1:] == (5, 2)
+                    and mask["temporal"].ndim == 3
+                    and mask["temporal"].shape[1:] == (3, 2)
+                ),
+            ),
+            # GLMParams multi-neuron (PopulationGLM case)
+            (
+                lambda: GLMParams(coef=jnp.ones((10, 5)), intercept=jnp.zeros(5)),
+                GLMParams,
+                lambda mask: (
+                    mask.coef is not None
+                    and mask.intercept is None
+                    and mask.coef.ndim == 3
+                    and mask.coef.shape[1:] == (10, 5)
+                    and mask.coef.shape[0] == 5  # 5 groups (one per neuron)
+                ),
+            ),
+        ],
+    )
+    def test_initialize_mask_different_structures(
+        self, params_factory, expected_type, check_mask_fn
+    ):
+        """Test mask initialization for different parameter structures."""
+        params = params_factory()
+        regularizer = self.cls(mask=None)
+        mask = regularizer.initialize_mask(params)
+
+        # Check mask has expected type
+        assert isinstance(mask, expected_type)
+
+        # Check structure-specific properties
+        assert check_mask_fn(mask)
+
+    def test_apply_operator_dict_structure(self):
+        """Test apply_operator with dict-based PyTree parameters."""
+        from nemos.regularizer import apply_operator
+
+        # Define a simple operation that doubles values
+        def double_func(x):
+            return jax.tree_util.tree_map(lambda a: a * 2, x)
+
+        # Test with dict structure (no regularizable_subtrees)
+        params = {
+            "coef": jnp.ones((5,)),
+            "bias": jnp.zeros((1,)),
+        }
+
+        result = apply_operator(double_func, params)
+
+        # Check structure preserved
+        assert isinstance(result, dict)
+        assert set(result.keys()) == {"coef", "bias"}
+
+        # Check operation was applied
+        assert jnp.allclose(result["coef"], jnp.ones((5,)) * 2)
+        assert jnp.allclose(result["bias"], jnp.zeros((1,)) * 2)
+
+    def test_apply_operator_with_filter_kwargs(self):
+        """Test apply_operator with filter_kwargs for routing masks."""
+        from nemos.regularizer import apply_operator
+
+        # Create GLMParams with regularizable_subtrees
+        params = GLMParams(
+            coef=jnp.ones((5,)),
+            intercept=jnp.zeros((1,)),
+        )
+
+        # Create mask with matching structure
+        mask = GLMParams(
+            coef=jnp.array([[1, 1, 0, 0, 0], [0, 0, 1, 1, 1]], dtype=float),
+            intercept=None,
+        )
+
+        # Define a function that uses the mask to check it's passed correctly
+        def masked_operation(x, mask=None):
+            # Return a marker value to verify mask is passed/not passed
+            if mask is None:
+                return x * 0  # Return zeros if no mask
+            else:
+                return x * 2  # Return doubled if mask is present
+
+        result = apply_operator(
+            masked_operation,
+            params,
+            filter_kwargs={"mask": mask}
+        )
+
+        # Check that mask was correctly routed to coef but not intercept
+        # coef should be doubled (mask was passed)
+        assert jnp.allclose(result.coef, params.coef * 2)
+        # intercept should be zeros (no mask, returned x * 0)
+        assert jnp.allclose(result.intercept, jnp.zeros((1,)))
+
+    def test_penalized_loss_dict_structure(self, poissonGLM_model_instantiation):
+        """Test penalized_loss with dict-based PyTree parameters."""
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+
+        # Create dict-based mask (simulating FeaturePytree structure)
+        # Split features into two groups
+        n_features = X.shape[1]
+        mask_dict = {
+            "group1": jnp.array([[1] * (n_features // 2)], dtype=float),
+            "group2": jnp.array([[1] * (n_features - n_features // 2)], dtype=float),
+        }
+
+        # Note: For this test we're just checking that the method can be called
+        # with dict structure, not testing actual GLM fitting
+        regularizer = self.cls(mask=mask_dict)
+
+        # Create matching dict params
+        params_dict = {
+            "group1": jnp.ones((n_features // 2,)),
+            "group2": jnp.ones((n_features - n_features // 2,)),
+        }
+
+        # Test that penalization doesn't crash with dict structure
+        filter_kwargs = regularizer._get_filter_kwargs(params_dict)
+        penalty = regularizer._penalization(params_dict, strength=0.1, filter_kwargs=filter_kwargs)
+
+        # Check penalty is a scalar and non-negative
+        assert isinstance(penalty, jnp.ndarray)
+        assert penalty.ndim == 0
+        assert penalty >= 0
+
+    def test_penalized_loss_glmparams_structure(self, poissonGLM_model_instantiation):
+        """Test penalized_loss with GLMParams structure."""
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+
+        # Create GLMParams mask
+        n_features = X.shape[1]
+        mask_array = np.ones((2, n_features), dtype=float)
+        mask_array[0, n_features // 2:] = 0
+        mask_array[1, :n_features // 2] = 0
+        mask = GLMParams(jnp.asarray(mask_array), None)
+
+        regularizer = self.cls(mask=mask)
+
+        # Create matching GLMParams params
+        params = GLMParams(
+            coef=jnp.ones((n_features,)),
+            intercept=jnp.zeros((1,)),
+        )
+
+        # Test that penalization works
+        filter_kwargs = regularizer._get_filter_kwargs(params)
+        penalty = regularizer._penalization(params, strength=0.1, filter_kwargs=filter_kwargs)
+
+        # Check penalty is a scalar and non-negative
+        assert isinstance(penalty, jnp.ndarray)
+        assert penalty.ndim == 0
+        assert penalty >= 0
+
 
 @pytest.mark.parametrize(
     "regularizer",

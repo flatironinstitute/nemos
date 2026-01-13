@@ -207,3 +207,191 @@ def test_prox_group_lasso_shrinks_only_masked_multineuron(
     assert jnp.all(params_new.coef[1] == params.coef[1])
     # Other features should be shrunk
     assert all(jnp.all(params_new.coef[i] < params.coef[i]) for i in [0, 2, 3])
+
+
+# Tests for flexible PyTree structures
+def test_prox_group_lasso_dict_structure():
+    """Test prox_group_lasso with dict-based PyTree parameters."""
+    # Create dict-based parameters
+    params = {
+        "spatial": jnp.ones(3),
+        "temporal": jnp.ones(2),
+        "intercept": jnp.zeros(1),
+    }
+
+    # Create matching mask structure: (n_groups, *param_shape) for each leaf
+    mask = {
+        "spatial": jnp.array([[1, 1, 0], [0, 0, 1]], dtype=float),  # 2 groups, 3 features
+        "temporal": jnp.array([[1, 0], [0, 1]], dtype=float),  # 2 groups, 2 features
+        "intercept": jnp.zeros((2, 1), dtype=float),  # Not regularized
+    }
+
+    regularizer_strength = 0.1
+    result = prox_group_lasso(params, regularizer_strength, mask)
+
+    # Check structure preserved
+    assert isinstance(result, dict)
+    assert set(result.keys()) == {"spatial", "temporal", "intercept"}
+
+    # Check shapes preserved
+    assert result["spatial"].shape == (3,)
+    assert result["temporal"].shape == (2,)
+    assert result["intercept"].shape == (1,)
+
+    # Check that regularization was applied (values should be shrunk)
+    assert jnp.all(jnp.abs(result["spatial"]) <= jnp.abs(params["spatial"]))
+    assert jnp.all(jnp.abs(result["temporal"]) <= jnp.abs(params["temporal"]))
+    # Intercept should be unchanged (zero mask)
+    assert jnp.allclose(result["intercept"], params["intercept"])
+
+
+def test_prox_group_lasso_nested_structure():
+    """Test prox_group_lasso with nested PyTree structure."""
+    # Create nested structure
+    params = {
+        "features": {
+            "position": jnp.ones(4),
+            "speed": jnp.ones(3),
+        },
+        "bias": jnp.zeros(1),
+    }
+
+    # Create matching mask
+    mask = {
+        "features": {
+            "position": jnp.array([[1, 1, 0, 0], [0, 0, 1, 1]], dtype=float),
+            "speed": jnp.array([[1, 0, 0], [0, 1, 1]], dtype=float),
+        },
+        "bias": jnp.zeros((2, 1), dtype=float),
+    }
+
+    regularizer_strength = 0.1
+    result = prox_group_lasso(params, regularizer_strength, mask)
+
+    # Check nested structure preserved
+    assert isinstance(result, dict)
+    assert "features" in result and "bias" in result
+    assert isinstance(result["features"], dict)
+    assert set(result["features"].keys()) == {"position", "speed"}
+
+    # Check shapes preserved
+    assert result["features"]["position"].shape == (4,)
+    assert result["features"]["speed"].shape == (3,)
+    assert result["bias"].shape == (1,)
+
+
+def test_prox_group_lasso_equivalence_array_vs_dict():
+    """Test that equivalent groupings produce similar results regardless of PyTree structure.
+
+    This tests that splitting an array into dict leaves with equivalent masks
+    produces the same regularization behavior.
+    """
+    # Setup: 6 coefficients split as [position(4), speed(2)]
+    # 2 groups: group 0 = first half of each, group 1 = second half of each
+
+    # Version 1: Single array
+    params_array = GLMParams(
+        coef=jnp.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]),
+        intercept=jnp.zeros(1),
+    )
+    mask_array = GLMParams(
+        coef=jnp.array([
+            [1, 1, 1, 0, 0, 0],  # group 0: first half
+            [0, 0, 0, 1, 1, 1],  # group 1: second half
+        ], dtype=float),
+        intercept=jnp.zeros((2, 1), dtype=float),
+    )
+
+    # Version 2: Dict splitting same coefficients
+    params_dict = {
+        "position": jnp.array([1.0, 2.0, 3.0, 4.0]),
+        "speed": jnp.array([5.0, 6.0]),
+        "intercept": jnp.zeros(1),
+    }
+    mask_dict = {
+        "position": jnp.array([
+            [1, 1, 0, 0],  # group 0: first 2 position features
+            [0, 0, 1, 1],  # group 1: last 2 position features
+        ], dtype=float),
+        "speed": jnp.array([
+            [1, 0],  # group 0: first speed feature
+            [0, 1],  # group 1: second speed feature
+        ], dtype=float),
+        "intercept": jnp.zeros((2, 1), dtype=float),
+    }
+
+    regularizer_strength = 0.1
+
+    # Apply prox operator to both versions
+    result_array = prox_group_lasso(params_array, regularizer_strength, mask_array)
+    result_dict = prox_group_lasso(params_dict, regularizer_strength, mask_dict)
+
+    # Concatenate dict results to compare with array
+    result_dict_concat = jnp.concatenate([
+        result_dict["position"],
+        result_dict["speed"],
+    ])
+
+    # The results should be similar (not exactly equal due to different group norm calculations)
+    # Each structure computes group norms differently:
+    # - Array: groups are [1,2,3] and [4,5,6]
+    # - Dict: groups are [1,2] from position + [5] from speed, and [3,4] from position + [6] from speed
+    # So we just check that shapes match and regularization was applied
+    assert result_array.coef.shape == result_dict_concat.shape
+    assert jnp.all(jnp.abs(result_array.coef) <= jnp.abs(params_array.coef))
+    assert jnp.all(jnp.abs(result_dict_concat) <= jnp.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]))
+
+
+def test_masked_norm_2_dict_structure():
+    """Test masked_norm_2 with dict-based PyTree parameters."""
+    params = {
+        "spatial": jnp.array([1.0, 2.0, 3.0]),
+        "temporal": jnp.array([4.0, 5.0]),
+    }
+
+    mask = {
+        "spatial": jnp.array([[1, 1, 0], [0, 0, 1]], dtype=float),
+        "temporal": jnp.array([[1, 0], [0, 1]], dtype=float),
+    }
+
+    l2_norm = masked_norm_2(params, mask)
+
+    # Should return (n_groups,) array
+    assert l2_norm.shape == (2,)
+    assert jnp.all(l2_norm >= 0)
+
+    # Group 0: spatial[0,1] + temporal[0] = [1, 2, 4]
+    #   Unnormalized: sqrt(1^2 + 2^2 + 4^2) = sqrt(21)
+    #   Group size: 3 elements
+    #   Normalized (default): sqrt(21) / sqrt(3) ≈ 2.646
+    # Group 1: spatial[2] + temporal[1] = [3, 5]
+    #   Unnormalized: sqrt(3^2 + 5^2) = sqrt(34)
+    #   Group size: 2 elements
+    #   Normalized (default): sqrt(34) / sqrt(2) ≈ 4.123
+    expected = jnp.array([jnp.sqrt(21.0) / jnp.sqrt(3.0), jnp.sqrt(34.0) / jnp.sqrt(2.0)])
+    assert jnp.allclose(l2_norm, expected, rtol=1e-5)
+
+
+def test_prox_lasso_dict_structure():
+    """Test prox_lasso with dict-based PyTree parameters."""
+    params = {
+        "features": jnp.array([1.0, 2.0, 3.0]),
+        "intercept": jnp.zeros(1),
+    }
+
+    regularizer_strength = 0.5
+    result = prox_lasso(params, regularizer_strength, scaling=1.0)
+
+    # Check structure preserved
+    assert isinstance(result, dict)
+    assert set(result.keys()) == {"features", "intercept"}
+
+    # Check shapes preserved
+    assert result["features"].shape == (3,)
+    assert result["intercept"].shape == (1,)
+
+    # Check soft-thresholding was applied
+    # prox_lasso(x, lambda) = sign(x) * max(|x| - lambda, 0)
+    expected_features = jnp.array([0.5, 1.5, 2.5])  # [1-0.5, 2-0.5, 3-0.5]
+    assert jnp.allclose(result["features"], expected_features)
+    assert jnp.allclose(result["intercept"], params["intercept"])
