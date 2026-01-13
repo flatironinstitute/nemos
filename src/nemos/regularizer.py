@@ -745,12 +745,6 @@ class GroupLasso(Regularizer):
             (n_groups, n_features, ...) matching the original leaf shape.
             The mask contains 1.0 for elements in each group and 0.0 elsewhere.
 
-        Examples
-        --------
-        >>> params = {'w': jnp.ones((5, 3, 2))}  # 5 features, 3x2=6 groups
-        >>> mask = _initialize_mask(params)
-        >>> mask['w'].shape
-        (6, 5, 3, 2)
         """
         reg_subtrees = (
             x.regularizable_subtrees()
