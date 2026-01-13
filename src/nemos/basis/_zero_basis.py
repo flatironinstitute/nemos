@@ -45,7 +45,9 @@ class ZeroBasis(AtomicBasisMixin, Basis):
         self, sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor
     ) -> FeatureMatrix:
         """
-        Return the samples as a 2D array.
+        Evaluate the Zero basis functions.
+
+        Define an empty array with shape ``(*sample_pts.shape, 0)``.
 
         Parameters
         ----------

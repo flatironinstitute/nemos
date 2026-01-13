@@ -2299,6 +2299,7 @@ class Zero(EvalBasisMixin, ZeroBasis):
         self,
         label: Optional[str] = "Zero",
     ):
+        self._initialized = False
         EvalBasisMixin.__init__(self, bounds=None)
         ZeroBasis.__init__(
             self,
@@ -2313,7 +2314,9 @@ class Zero(EvalBasisMixin, ZeroBasis):
     @bounds.setter
     def bounds(self, value):
         """Zero basis does not use bounds."""
-        pass
+        if self._initialized:
+            raise AttributeError("Zero basis does not use bounds.")
+        self._initialized = True
 
     @add_docstring("evaluate_on_grid", ZeroBasis)
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -2349,7 +2352,7 @@ class Zero(EvalBasisMixin, ZeroBasis):
         # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
-    @add_docstring("_compute_features", ZeroBasis)
+    @add_docstring("_compute_features", EvalBasisMixin)
     def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
         """
         Examples
