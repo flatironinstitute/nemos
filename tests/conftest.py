@@ -34,7 +34,7 @@ import pytest
 import nemos as nmo
 import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
-from nemos.basis import AdditiveBasis, CustomBasis, MultiplicativeBasis
+from nemos.basis import AdditiveBasis, CustomBasis, MultiplicativeBasis, Zero
 from nemos.basis._basis import Basis
 from nemos.basis._basis_mixin import BasisMixin
 from nemos.basis._transformer_basis import TransformerBasis
@@ -81,7 +81,9 @@ def set_jax_precision_per_test(request):
 def basis_class_specific_params():
     """Returns all the params for each class."""
     all_cls = (
-        list_all_basis_classes("Conv") + list_all_basis_classes("Eval") + [CustomBasis]
+        list_all_basis_classes("Conv")
+        + list_all_basis_classes("Eval")
+        + [CustomBasis, Zero]
     )
     return {cls.__name__: cls._get_param_names() for cls in all_cls}
 
@@ -207,6 +209,16 @@ class CombinedBasis(BasisFuncsTesting):
         return basis_obj
 
 
+def is_eval_basis(basis_cls) -> bool:
+    is_eval = "Eval" in basis_cls.__name__ or issubclass(basis_cls, basis.Zero)
+    return is_eval
+
+
+def is_conv_basis(basis_cls) -> bool:
+    is_eval = "Conv" in basis_cls.__name__
+    return is_eval
+
+
 # automatic define user accessible basis and check the methods
 def list_all_basis_classes(filter_basis="all") -> list[BasisMixin]:
     """
@@ -227,7 +239,8 @@ def list_all_basis_classes(filter_basis="all") -> list[BasisMixin]:
         + [CustomBasis]
     )
     if filter_basis != "all":
-        all_basis = [a for a in all_basis if filter_basis in a.__name__]
+        cond_fn = is_eval_basis if filter_basis == "Eval" else is_conv_basis
+        all_basis = [a for a in all_basis if cond_fn(a)]
     return all_basis
 
 
