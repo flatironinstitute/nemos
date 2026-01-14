@@ -2,6 +2,7 @@ from contextlib import nullcontext as does_not_raise
 from copy import deepcopy
 from typing import Callable
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -16,6 +17,7 @@ from sklearn.linear_model import (
     PoissonRegressor,
 )
 from sklearn.model_selection import GridSearchCV
+from test_base_regressor_subclasses import _add_zeros, _default_y_from_config
 
 import nemos as nmo
 from nemos import solvers
@@ -47,6 +49,26 @@ POPULATION_GLM_EXTRA_PARAMS = {"feature_mask"}
 
 def convert_to_nap(arr, t):
     return TsdFrame(t=t, d=getattr(arr, "d", arr))
+
+
+def _create_grouplasso_mask(X, y, model):
+    params = model._validator.to_model_params(model.initialize_params(X, y))
+
+    def set_mask(par):
+        msk = jax.tree_util.tree_map(
+            lambda x: jnp.zeros((2, *x.shape), dtype=float), par
+        )
+        msk = jax.tree_util.tree_map(lambda x: x.at[0, ::2].set(1), msk)
+        msk = jax.tree_util.tree_map(lambda x: x.at[1, 1::2].set(1), msk)
+        return msk
+
+    struct = jax.tree_util.tree_structure(params)
+    mask = jax.tree_util.tree_unflatten(struct, [None] * struct.num_leaves)
+    for where in params.regularizable_subtrees():
+        mask = eqx.tree_at(
+            where, mask, replace=set_mask(where(params)), is_leaf=lambda x: x is None
+        )
+    return mask
 
 
 @pytest.fixture
@@ -1428,6 +1450,27 @@ class TestGLM:
 
         with pytest.raises(ValueError, match=match):
             nmo.load_model(save_path, mapping_dict=invalid_mapping)
+
+    @pytest.mark.solver_related
+    @pytest.mark.requires_x64
+    def test_fit_mask_grouplasso(self, glm_class_type):
+        """Test that the group lasso fit goes through"""
+        if "population" in glm_class_type:
+            model = nmo.glm.PopulationGLM()
+        else:
+            model = nmo.glm.GLM()
+        y = _default_y_from_config(model)
+        y = _add_zeros(y)
+        X = np.random.randn(y.shape[0], 5)
+
+        mask = _create_grouplasso_mask(X, y, model)
+
+        model.set_params(
+            regularizer=nmo.regularizer.GroupLasso(mask=mask),
+            solver_name="ProximalGradient",
+            regularizer_strength=1.0,
+        )
+        model.fit(X, y)
 
 
 @pytest.mark.parametrize("glm_type", ["", "population_"])
