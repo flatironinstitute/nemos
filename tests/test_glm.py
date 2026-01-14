@@ -756,7 +756,7 @@ class TestGLM:
                 par_shape.coef + (1,) * (dim_weights - len(par_shape.coef))
             )
         with expectation:
-            model.initialize_solver_and_state(X, y, (init_w, true_params.intercept))
+            model.initialize_optimization_and_state(X, y, (init_w, true_params.intercept))
 
     @pytest.mark.parametrize("dim_intercepts", [0, 1, 2, 3])
     @pytest.mark.solver_related
@@ -802,7 +802,7 @@ class TestGLM:
 
         init_w = jnp.zeros(par_shape.coef)
         with expectation:
-            model.initialize_solver_and_state(X, y, (init_w, init_b))
+            model.initialize_optimization_and_state(X, y, (init_w, init_b))
 
     @pytest.mark.parametrize(*fit_init_params_type_init_params)
     @pytest.mark.solver_related
@@ -823,7 +823,7 @@ class TestGLM:
         )
         init_params = self.get_init_params_for_model(init_params_by_model, model)
         with expectation:
-            model.initialize_solver_and_state(X, y, init_params)
+            model.initialize_optimization_and_state(X, y, init_params)
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -855,7 +855,7 @@ class TestGLM:
         init_w = jnp.zeros(wrong_coef_shape)
         init_b = jnp.zeros(par_shape.intercept)
         with expectation:
-            model.initialize_solver_and_state(X, y, (init_w, init_b))
+            model.initialize_optimization_and_state(X, y, (init_w, init_b))
 
     #######################
     # Test model.simulate
