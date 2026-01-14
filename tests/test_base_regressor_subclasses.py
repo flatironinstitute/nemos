@@ -214,7 +214,7 @@ class TestModelCommons:
             ("ProxSVRG", does_not_raise()),
             (
                 1,
-                pytest.raises(ValueError, match="The solver: 1 is not allowed "),
+                pytest.raises(TypeError, match="solver_name must be a string"),
             ),
         ],
     )
