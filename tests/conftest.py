@@ -644,14 +644,17 @@ def population_poissonGLM_model_instantiation_group_sparse():
 def example_data_prox_operator():
     n_features = 4
 
-    params = (
+    params = GLMParams(
         jnp.ones((n_features)),
-        jnp.zeros(
-            1,
-        ),
+        jnp.zeros(1),
     )
     regularizer_strength = 0.1
-    mask = jnp.array([[1, 0, 1, 0], [0, 1, 0, 1]]).astype(float)
+    # Mask as PyTree with same structure as params, shape (n_groups, *param_shape)
+    # Intercept mask is zeros (not regularized)
+    mask = GLMParams(
+        jnp.array([[1, 0, 1, 0], [0, 1, 0, 1]]).astype(float),
+        jnp.zeros((2, 1), dtype=float),
+    )
     scaling = 0.5
 
     return params, regularizer_strength, mask, scaling
@@ -662,14 +665,25 @@ def example_data_prox_operator_multineuron():
     n_features = 4
     n_neurons = 3
 
-    params = (
+    params = GLMParams(
         jnp.ones((n_features, n_neurons)),
-        jnp.zeros(
-            n_neurons,
-        ),
+        jnp.zeros(n_neurons),
     )
     regularizer_strength = 0.1
-    mask = jnp.array([[1, 0, 1, 0], [0, 1, 0, 1]], dtype=jnp.float32)
+    # Mask as PyTree with same structure as params
+    # For multi-neuron: mask shape is (n_groups, n_features, n_neurons)
+    # Intercept mask is zeros (not regularized)
+    mask_coef = jnp.array(
+        [
+            [[1, 1, 1], [0, 0, 0], [1, 1, 1], [0, 0, 0]],
+            [[0, 0, 0], [1, 1, 1], [0, 0, 0], [1, 1, 1]],
+        ],
+        dtype=jnp.float32,
+    )
+    mask = GLMParams(
+        mask_coef,
+        jnp.zeros((2, n_neurons), dtype=jnp.float32),
+    )
     scaling = 0.5
 
     return params, regularizer_strength, mask, scaling
