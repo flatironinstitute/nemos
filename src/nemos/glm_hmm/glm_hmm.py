@@ -546,7 +546,9 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
             observation_model=self._observation_model,
             inverse_link_function=self._inverse_link_function,
         )
-        _, _, glm_params_update_fn = self._instantiate_solver(objective)
+        _, _, glm_params_update_fn = self._instantiate_solver(
+            objective, init_params.glm_params
+        )
 
         scale_update_fn = get_analytical_scale_update(
             is_population_glm=is_population, observation_model=self._observation_model
@@ -556,7 +558,9 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
                 is_population_glm=is_population,
                 observation_model=self._observation_model,
             )
-            _, _, scale_update_fn = self._instantiate_solver(objective_scale)
+            _, _, scale_update_fn = self._instantiate_solver(
+                objective_scale, init_params.glm_scale
+            )
 
         # cannot wrap is_new_session, that's to be calculated at each update form the provided X and y.
         # for consistency, do not make a partial of that argument in run as well.

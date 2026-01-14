@@ -1428,7 +1428,7 @@ def instantiate_glm_hmm_func(
     X[:250, 0] = 0
     X[np.arange(500) % 2 == 1, 1] = 0
     y = np.zeros_like(X, shape=X.shape[0])
-    y[np.random.choice(y.shape[0], size=y.shape[0]//3, replace=False)] = 1
+    y[np.random.choice(y.shape[0], size=y.shape[0] // 3, replace=False)] = 1
     glm_params = random_glm_params_init(
         n_states,
         X,

@@ -792,7 +792,9 @@ class TestGLM:
                 par_shape.coef + (1,) * (dim_weights - len(par_shape.coef))
             )
         with expectation:
-            model.initialize_optimization_and_state(X, y, (init_w, true_params.intercept))
+            model.initialize_optimization_and_state(
+                X, y, (init_w, true_params.intercept)
+            )
 
     @pytest.mark.parametrize("dim_intercepts", [0, 1, 2, 3])
     @pytest.mark.solver_related
