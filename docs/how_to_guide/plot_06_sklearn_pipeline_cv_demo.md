@@ -16,6 +16,7 @@ kernelspec:
 
 %matplotlib inline
 import warnings
+import jax
 
 # Ignore the first specific warning
 warnings.filterwarnings(
@@ -38,6 +39,8 @@ warnings.filterwarnings(
     ),
     category=RuntimeWarning,
 )
+
+jax.config.update("jax_enable_x64", True)
 ```
 
 (sklearn-how-to)=
@@ -183,7 +186,7 @@ pipeline = Pipeline(
         ),
         (
             "glm",
-            nmo.glm.GLM(regularizer_strength=0.5, regularizer="Ridge"),
+            nmo.glm.GLM(regularizer_strength=0.5, regularizer="Ridge", solver_name="LBFGS"),
         ),
     ]
 )

@@ -35,7 +35,7 @@ position = data["position"].restrict(data["trials"])
 theta = data["theta_phase"]
 
 # Select one neuron and bin spikes
-neuron = spikes[92]
+neuron = spikes[82]
 bin_size = 0.1
 counts = neuron.count(bin_size, ep=position.time_support)
 
@@ -70,7 +70,7 @@ basis_theta.label = "theta"
 # Set up pipeline
 pipeline = Pipeline([
     ("basis", basis_both.to_transformer()),
-    ("glm", nmo.glm.GLM())
+    ("glm", nmo.glm.GLM(solver_name="LBFGS"))
 ])
 
 # Test different input combinations
@@ -84,13 +84,54 @@ param_grid = {
 
 # Run grid search
 gridsearch = GridSearchCV(pipeline, param_grid=param_grid, cv=5)
-X = np.column_stack([position.d, theta.d])
+X = np.column_stack([position, theta])
 gridsearch.fit(X, counts.d)
-
-# Display results
-import pandas as pd
-results = pd.DataFrame(gridsearch.cv_results_)
-print(results[["params", "mean_test_score"]])
+gridsearch
 ```
 
-The results show which inputs contribute to predicting neural activity.
+The most predictive encoding model for this neuron includes position only. Below the comparison of the tuning curves.
+
+```{code-cell} ipython3
+import matplotlib.pyplot as plt
+
+# Compute and plot tuning curves
+tc_position = nap.compute_tuning_curves(
+    neuron, position, bins=10, feature_names=["position"]
+)
+tc_position_model = nap.compute_tuning_curves(
+    gridsearch.predict(X) * X.rate, position, bins=10, feature_names=["position"]
+)
+
+# Plot tuning curves
+fig, ax = plt.subplots(1, 1, figsize=(4, 3))
+tc_position.squeeze().plot(ax=ax, linewidth=2, markersize=6, label="true")
+tc_position_model.squeeze().plot(ax=ax, linewidth=3, markersize=6, label="model")
+ax.set_ylabel('Firing rate (Hz)', fontsize=15)
+ax.set_xlabel('Position', fontsize=15)
+ax.set_title(f'Unit {tc_position.coords["unit"].values[0]}', fontsize=20)
+ax.grid(True, alpha=0.3)
+plt.legend(fontsize=15)
+plt.tight_layout()
+```
+
+```{code-cell} ipython3
+:tags: [hide-input]
+
+# save image for thumbnail
+from pathlib import Path
+import os
+
+root = os.environ.get("READTHEDOCS_OUTPUT")
+if root:
+   path = Path(root) / "html/_static/thumbnails/how_to_guide"
+# if local store in ../_build/html/...
+else:
+   path = Path("../_build/html/_static/thumbnails/how_to_guide")
+
+# make sure the folder exists if run from build
+if root or Path("../assets/stylesheets").exists():
+   path.mkdir(parents=True, exist_ok=True)
+
+if path.exists():
+  fig.savefig(path / "variable_selection_zero_basis.svg")
+```
