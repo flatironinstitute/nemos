@@ -11,7 +11,7 @@ from optimistix._custom_types import Aux, Y
 
 from ..proximal_operator import prox_none
 from ..tree_utils import tree_add_scalar_mul, tree_sub
-from ._optimistix_solvers import OptimistixAdapter
+from ._optimistix_adapter import OptimistixAdapter
 
 
 def tree_nan_like(x: PyTree):

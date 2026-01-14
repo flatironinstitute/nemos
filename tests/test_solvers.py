@@ -4,6 +4,7 @@ from contextlib import nullcontext as does_not_raise
 
 import jax
 import numpy as np
+import optimistix as optx
 import pytest
 
 import nemos as nmo
@@ -790,3 +791,29 @@ def test_all_solvers_work_without_aux(request):
 
         assert returned_aux is None
         assert np.allclose(true_params, params)
+
+
+@pytest.mark.parametrize(
+    "solver_class", [nmo.solvers.OptimistixBFGS, nmo.solvers.OptimistixNonlinearCG]
+)
+@pytest.mark.parametrize(
+    "stepsize,expected_search",
+    [
+        (-1, optx.BacktrackingArmijo),
+        (None, optx.BacktrackingArmijo),
+        (0.01, optx.LearningRate),
+    ],
+)
+def test_optimistix_solvers_have_correct_search(
+    request, solver_class, stepsize, expected_search
+):
+    """Custom Optimistix solvers should use fixed stepsize or linesearch based on stepsize."""
+    _, _, _, _, loss = request.getfixturevalue("linear_regression")
+    solver = solver_class(
+        unregularized_loss=loss,
+        regularizer=nmo.regularizer.UnRegularized(),
+        regularizer_strength=None,
+        has_aux=False,
+        stepsize=stepsize,
+    )
+    assert isinstance(solver.search, expected_search)
