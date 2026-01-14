@@ -3,9 +3,9 @@
 from typing import Type
 
 from ._fista import OptimistixFISTA, OptimistixNAG
-from ._optimistix_solvers import OptimistixBFGS, OptimistixNonlinearCG
-from ._optax_optimistix_solvers import OptimistixOptaxLBFGS
 from ._jaxopt_solvers import JAXOPT_AVAILABLE
+from ._optax_optimistix_solvers import OptimistixOptaxLBFGS
+from ._optimistix_solvers import OptimistixBFGS, OptimistixNonlinearCG
 from ._svrg import WrappedProxSVRG, WrappedSVRG
 
 solver_registry: dict[str, Type] = {

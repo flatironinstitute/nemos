@@ -5,7 +5,7 @@ from ._jaxopt_adapter import JaxoptAdapter
 JAXOPT_AVAILABLE = False
 
 try:
-    from jaxopt import BFGS, GradientDescent, LBFGS, NonlinearCG, ProximalGradient
+    from jaxopt import BFGS, LBFGS, GradientDescent, NonlinearCG, ProximalGradient
 except ModuleNotFoundError:  # pragma: no cover - exercised when jaxopt is optional
     pass
 else:
