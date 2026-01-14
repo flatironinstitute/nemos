@@ -47,7 +47,7 @@ def list_available_solvers():
     -------
     >>> import nemos as nmo
     >>> nmo.solvers.list_available_solvers()
-    ['GradientDescent', 'ProximalGradient', 'LBFGS', 'BFGS', 'SVRG', 'ProxSVRG', 'NonlinearCG']
+    ['GradientDescent', 'ProximalGradient', 'LBFGS', 'BFGS', 'SVRG', 'ProxSVRG', 'NonlinearCG'...]
     >>> print(nmo.solvers.get_solver_documentation("SVRG"))
     Showing docstring of nemos.solvers._svrg.WrappedSVRG.
     For potentially more info, use `show_help=True`.
