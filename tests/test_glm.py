@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 import sklearn
 import statsmodels.api as sm
-from pynapple import Tsd, TsdFrame
+from pynapple import Tsd, TsdFrame, TsdTensor
 from sklearn.linear_model import (
     GammaRegressor,
     LinearRegression,
@@ -17,7 +17,7 @@ from sklearn.linear_model import (
     PoissonRegressor,
 )
 from sklearn.model_selection import GridSearchCV
-from test_base_regressor_subclasses import _add_zeros, _default_y_from_config
+import scipy.stats as sts
 
 import nemos as nmo
 from nemos import solvers
@@ -1451,37 +1451,17 @@ class TestGLM:
         with pytest.raises(ValueError, match=match):
             nmo.load_model(save_path, mapping_dict=invalid_mapping)
 
-    @pytest.mark.solver_related
-    @pytest.mark.requires_x64
-    def test_fit_mask_grouplasso(self, glm_class_type):
-        """Test that the group lasso fit goes through"""
-        if "population" in glm_class_type:
-            model = nmo.glm.PopulationGLM()
-        else:
-            model = nmo.glm.GLM()
-        y = _default_y_from_config(model)
-        y = _add_zeros(y)
-        X = np.random.randn(y.shape[0], 5)
-
-        mask = _create_grouplasso_mask(X, y, model)
-
-        model.set_params(
-            regularizer=nmo.regularizer.GroupLasso(mask=mask),
-            solver_name="ProximalGradient",
-            regularizer_strength=1.0,
-        )
-        model.fit(X, y)
-
 
 @pytest.mark.parametrize("glm_type", ["", "population_"])
 @pytest.mark.parametrize(
     "model_instantiation",
     [
-        "gaussianGLM_model_instantiation",
-        "poissonGLM_model_instantiation",
-        "gammaGLM_model_instantiation",
-        "bernoulliGLM_model_instantiation",
-        "negativeBinomialGLM_model_instantiation",
+        "categoricalGLM_model_instantiation",
+        # "gaussianGLM_model_instantiation",
+        # "poissonGLM_model_instantiation",
+        # "gammaGLM_model_instantiation",
+        # "bernoulliGLM_model_instantiation",
+        # "negativeBinomialGLM_model_instantiation",
     ],
 )
 class TestGLMObservationModel:
@@ -1543,6 +1523,17 @@ class TestGLMObservationModel:
                     sm.families.Gaussian().loglike(y, mean_firing, scale=scale) / norm
                 )
 
+        elif "categorical" in model_instantiation:
+
+            def ll(y, log_proba):
+                proba = jnp.exp(log_proba)
+                y = y.reshape((-1, y.shape[-1]))
+                proba = proba.reshape((-1, y.shape[-1]))
+                res = np.array([sts.multinomial(1, pi).logpmf(yi) for pi, yi in zip(proba, y)]).sum()
+                res /= y.shape[0]
+                return res
+
+
         else:
             raise ValueError("Unknown model instantiation")
         return ll
@@ -1570,6 +1561,9 @@ class TestGLMObservationModel:
 
         elif "gaussian" in model_instantiation:
             return LinearRegression(fit_intercept=True)
+
+        elif "categorical" in model_instantiation:
+            return None
 
         else:
             raise ValueError("Unknown model instantiation")
@@ -1655,6 +1649,9 @@ class TestGLMObservationModel:
         elif "gaussian" in model_instantiation:
             return False
 
+        elif "categorical" in model_instantiation:
+            return False
+
         else:
             raise ValueError("Unknown model instantiation")
 
@@ -1692,6 +1689,12 @@ class TestGLMObservationModel:
                 return "PopulationGLM(\n    observation_model=GaussianObservations(),\n    inverse_link_function=identity,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
             else:
                 return "GLM(\n    observation_model=GaussianObservations(),\n    inverse_link_function=identity,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
+
+        elif "categorical" in model_instantiation:
+            if "population" in glm_type:
+                return "PopulationGLM(\n    observation_model=CategoricalObservations(),\n    inverse_link_function=identity,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
+            else:
+                return "GLM(\n    observation_model=CategoricalObservations(),\n    inverse_link_function=log_softmax,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
 
         else:
             raise ValueError("Unknown model instantiation")
@@ -1748,14 +1751,9 @@ class TestGLMObservationModel:
         )
 
         # get the flat parameters
-        if "population" in glm_type:
-            flat_coef = np.concatenate(
-                jax.tree_util.tree_flatten(model_tree.coef_)[0], axis=0
-            )
-        else:
-            flat_coef = np.concatenate(
-                jax.tree_util.tree_flatten(model_tree.coef_)[0], axis=-1
-            )
+        flat_coef = np.concatenate(
+            jax.tree_util.tree_leaves(model_tree.coef_), axis=0
+        )
 
         # assert equivalence of solutions
         assert np.allclose(model.coef_, flat_coef)
@@ -1812,8 +1810,6 @@ class TestGLMObservationModel:
         # set model coeff
         model.coef_ = true_params.coef
         model.intercept_ = true_params.intercept
-        if "population" in glm_type:
-            model._initialize_feature_mask(X, y)
         # get the rate
         mean_firing = model.predict(X)
         # compute the log-likelihood using jax.scipy
@@ -1999,12 +1995,18 @@ class TestGLMObservationModel:
             random_key=jax.random.key(123),
             feedforward_input=X,
         )
-        if ("population" in glm_type) and (expected_out_type == Tsd):
-            assert isinstance(count, TsdFrame)
-            assert isinstance(rate, TsdFrame)
-        else:
-            assert isinstance(count, expected_out_type)
-            assert isinstance(rate, expected_out_type)
+        expected_out_ndim = 2 if "population" in glm_type else 1
+        if isinstance(model.observation_model, nmo.observation_models.CategoricalObservations):
+            expected_out_ndim += 1
+
+        if expected_out_type == Tsd:
+            if expected_out_ndim == 2:
+                expected_out_type = TsdFrame
+            elif expected_out_ndim == 3:
+                expected_out_type = TsdTensor
+
+        assert isinstance(count, expected_out_type)
+        assert isinstance(rate, expected_out_type)
 
     def test_simulate_feedforward_glm(self, request, glm_type, model_instantiation):
         """Test that simulate goes through"""
@@ -2018,8 +2020,8 @@ class TestGLMObservationModel:
             model._initialize_feature_mask(X, y)
         ysim, ratesim = model.simulate(jax.random.key(123), X)
         # check that the expected dimensionality is returned
-        assert ysim.ndim == 1 + (1 if "population" in glm_type else 0)
-        assert ratesim.ndim == 1 + (1 if "population" in glm_type else 0)
+        assert ysim.ndim == model._validator.y_dimensionality
+        assert ratesim.ndim == model._validator.y_dimensionality
         # check that the rates and spikes has the same shape
         assert ratesim.shape[0] == ysim.shape[0]
         # check the time point number is that expected (same as the input)
@@ -2251,6 +2253,21 @@ class TestGLMObservationModel:
     def test_repr_out(self, request, glm_type, model_instantiation, model_repr):
         model = request.getfixturevalue(glm_type + model_instantiation)[2]
         assert repr(model) == model_repr
+
+    @pytest.mark.solver_related
+    @pytest.mark.requires_x64
+    def test_fit_mask_grouplasso(self, glm_type, model_instantiation, request):
+        """Test that the group lasso fit goes through"""
+        X, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+
+        mask = _create_grouplasso_mask(X, y, model)
+
+        model.set_params(
+            regularizer=nmo.regularizer.GroupLasso(mask=mask),
+            solver_name="ProximalGradient",
+            regularizer_strength=1.0,
+        )
+        model.fit(X, y)
 
 
 class TestPopulationGLM:

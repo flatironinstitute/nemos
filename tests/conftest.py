@@ -991,7 +991,7 @@ def categoricalGLM_model_instantiation():
 
 
 @pytest.fixture
-def categoricalGLM_model_instantiation_pytree():
+def categoricalGLM_model_instantiation_pytree(categoricalGLM_model_instantiation):
     """Set up a categorical GLM for testing purposes.
 
     This fixture initializes a categorical GLM with random parameters, simulates its response, and
@@ -1006,7 +1006,7 @@ def categoricalGLM_model_instantiation_pytree():
             - GLMParams(w_true, b_true) (tuple): True weight and bias parameters.
             - rate (jax.numpy.ndarray): Simulated rate of log-proba.
     """
-    X, spikes, model, true_params, rate = bernoulliGLM_model_instantiation
+    X, spikes, model, true_params, rate = categoricalGLM_model_instantiation
     X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
     true_params_tree = GLMParams(
         dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
@@ -1014,6 +1014,59 @@ def categoricalGLM_model_instantiation_pytree():
     )
     model_tree = nmo.glm.GLM(model.observation_model, regularizer=model.regularizer)
     return X_tree, spikes, model_tree, true_params_tree, rate
+
+@pytest.fixture
+def population_categoricalGLM_model_instantiation():
+    """Set up a categorical GLM for testing purposes.
+
+    This fixture initializes a categorical GLM with random parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response.
+
+    Returns:
+        tuple: A tuple containing:
+            - X (numpy.ndarray): Simulated input data.
+            - jax.random.categorical(key, rate) (numpy.ndarray): Simulated spike responses.
+            - model (nmo.glm.GLM): Initialized model instance.
+            - GLMParams(w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of log-proba.
+    """
+    np.random.seed(123)
+    X = np.random.normal(size=(100, 5))
+    b_true = np.zeros((2, 3))
+    w_true = np.random.normal(size=(5, 2, 3))
+    model = nmo.glm.PopulationGLM("Categorical", regularizer="UnRegularized")
+    rate = jax.nn.log_softmax(jnp.einsum("kni,tk->tni", w_true, X) + b_true)
+    key = jax.random.PRNGKey(123)
+    y = jax.random.categorical(key, rate)
+    y = jax.nn.one_hot(y, num_classes=3).astype(float)
+    return X, y, model, GLMParams(w_true, b_true), rate
+
+@pytest.fixture
+def population_categoricalGLM_model_instantiation_pytree(categoricalGLM_model_instantiation):
+    """Set up a categorical GLM for testing purposes.
+
+    This fixture initializes a categorical GLM with random parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response.
+
+    Returns:
+        tuple: A tuple containing:
+            - X (numpy.ndarray): Simulated input data.
+            - jax.random.categorical(key, rate) (numpy.ndarray): Simulated spike responses.
+            - model (nmo.glm.GLM): Initialized model instance.
+            - GLMParams(w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of log-proba.
+    """
+    X, spikes, model, true_params, rate = categoricalGLM_model_instantiation
+    X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
+    true_params_tree = GLMParams(
+        dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
+        true_params.intercept,
+    )
+    model_tree = nmo.glm.GLM(model.observation_model, regularizer=model.regularizer)
+    return X_tree, spikes, model_tree, true_params_tree, rate
+
 
 
 @pytest.fixture
