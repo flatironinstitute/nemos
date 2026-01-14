@@ -1809,9 +1809,7 @@ class TestGroupLasso:
 
         init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
         runner = model._instantiate_solver(model._compute_loss, init_params)[-1]
-        params, _, _ = runner(
-            init_params, X, y
-        )
+        params, _, _ = runner(init_params, X, y)
 
         zeros_est = params.coef == 0
         if not np.all(zeros_est == zeros_true):

@@ -585,7 +585,7 @@ class TestModelCommons:
         assert model.optimization_update is None
         assert model.optimization_run is None
         init_params = model.initialize_params(X, y)
-        model._initialize_optimization_and_state(X, y, init_params)
+        model.initialize_optimization_and_state(X, y, init_params)
         assert callable(model.optimization_init_state)
         assert callable(model.optimization_update)
         assert callable(model.optimization_run)
