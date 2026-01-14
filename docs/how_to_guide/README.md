@@ -13,6 +13,7 @@ pip install nemos[examples]
 ```
 :::
 
+## GLM Fundamentals
 
 ::::{grid} 1 2 3 3
 
@@ -59,41 +60,15 @@ plot_03_population_glm.md
 :::{grid-item-card}
 
 <figure>
-<img src="../_static/thumbnails/how_to_guide/plot_04_batch_glm.svg" style="height: 100px", alt="Batched GLM."/>
-</figure>
-
-```{toctree}
-:maxdepth: 2
-
-plot_04_batch_glm.md
-```
-:::
-
-:::{grid-item-card}
-
-<figure>
-<img src="../_static/nemos_sklearn.svg" style="height: 100px", alt="NeMoS vs sklearn."/>
-</figure>
-
-```{toctree}
-:maxdepth: 2
-
-plot_05_transformer_basis.md
-```
-:::
-
-:::{grid-item-card}
-
-<figure>
-<a href="plot_06_sklearn_pipeline_cv_demo.html">
-<img src="../_static/thumbnails/how_to_guide/plot_06_sklearn_pipeline_cv_demo.svg" style="height: 100px", alt="PyTrees."/>
+<a href="raw_history_feature.html">
+<img src="../_static/glm_population_scheme.svg" style="height: 100px", alt="Coupled GLM."/>
 </a>
 </figure>
 
 ```{toctree}
 :maxdepth: 2
 
-plot_06_sklearn_pipeline_cv_demo.md
+raw_history_feature.md
 ```
 
 :::
@@ -110,6 +85,40 @@ plot_06_sklearn_pipeline_cv_demo.md
 :maxdepth: 2
 
 plot_07_glm_pytree.md
+```
+
+:::
+
+::::
+
+## Feature Engineering
+
+::::{grid} 1 2 3 3
+
+:::{grid-item-card}
+
+
+```{toctree}
+:maxdepth: 2
+
+handling_composite_bases.md
+```
+
+:::
+
+:::{grid-item-card}
+
+```{eval-rst}
+
+.. plot:: scripts/basis_figs.py plot_laguerre_basis
+   :show-source-link: False
+   :height: 100px
+```
+
+```{toctree}
+:maxdepth: 2
+
+define_a_custom_basis.md
 ```
 
 :::
@@ -149,19 +158,37 @@ custom_predictors.md
 
 :::
 
+::::
+
+## Model Selection and `scikit-learn` Integration
+
+::::{grid} 1 2 3 3
+
 :::{grid-item-card}
 
-```{eval-rst}
-
-.. plot:: scripts/basis_figs.py plot_laguerre_basis
-   :show-source-link: False
-   :height: 100px
-```
+<figure>
+<img src="../_static/nemos_sklearn.svg" style="height: 100px", alt="NeMoS vs sklearn."/>
+</figure>
 
 ```{toctree}
 :maxdepth: 2
 
-define_a_custom_basis.md
+plot_05_transformer_basis.md
+```
+:::
+
+:::{grid-item-card}
+
+<figure>
+<a href="plot_06_sklearn_pipeline_cv_demo.html">
+<img src="../_static/thumbnails/how_to_guide/plot_06_sklearn_pipeline_cv_demo.svg" style="height: 100px", alt="PyTrees."/>
+</a>
+</figure>
+
+```{toctree}
+:maxdepth: 2
+
+plot_06_sklearn_pipeline_cv_demo.md
 ```
 
 :::
@@ -169,29 +196,38 @@ define_a_custom_basis.md
 :::{grid-item-card}
 
 <figure>
-<a href="raw_history_feature.html">
-<img src="../_static/glm_population_scheme.svg" style="height: 100px", alt="Coupled GLM."/>
-</a>
+<img src="../_static/thumbnails/how_to_guide/variable_selection_zero_basis.svg" style="height: 100px", alt="Model Selection."/>
 </figure>
 
 ```{toctree}
 :maxdepth: 2
 
-raw_history_feature.md
+variable_selection_zero_basis.md
 ```
 
 :::
 
 :::{grid-item-card}
 
+<figure>
+<a href="variable_selection_group_lasso.html">
+<img src="../_static/thumbnails/how_to_guide/variable_selection_group_lasso.svg" style="height: 100px", alt="Variable selection."/>
+</a>
+</figure>
 
 ```{toctree}
 :maxdepth: 2
 
-handling_composite_bases.md
+variable_selection_group_lasso.md
 ```
 
 :::
+
+::::
+
+## Performance and Scaling
+
+::::{grid} 1 2 3 3
 
 :::{grid-item-card}
 
@@ -212,17 +248,14 @@ convolve_large_arrays.md
 :::{grid-item-card}
 
 <figure>
-<a href="variable_selection_group_lasso.html">
-<img src="../_static/thumbnails/how_to_guide/variable_selection_group_lasso.svg" style="height: 100px", alt="Variable selection."/>
-</a>
+<img src="../_static/thumbnails/how_to_guide/plot_04_batch_glm.svg" style="height: 100px", alt="Batched GLM."/>
 </figure>
 
 ```{toctree}
 :maxdepth: 2
 
-variable_selection_group_lasso.md
+plot_04_batch_glm.md
 ```
-
 :::
 
 ::::
