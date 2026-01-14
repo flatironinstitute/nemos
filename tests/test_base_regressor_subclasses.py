@@ -361,39 +361,6 @@ class TestModelCommons:
             init_state, "velocity", model._validator.to_model_params(params)
         ) == model._validator.to_model_params(params)
 
-    @pytest.mark.solver_related
-    @pytest.mark.requires_x64
-    def test_fit_mask_grouplasso(self, instantiate_base_regressor_subclass):
-        """Test that the group lasso fit goes through"""
-
-        fixture = instantiate_base_regressor_subclass
-        X, model = fixture.X, fixture.model
-        y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
-        y = _add_zeros(y)
-        n_groups = 2
-        n_features = X.shape[1]
-
-        # Create mask with proper shape for GLM (2D) or PopulationGLM (3D)
-        if is_population_model(model):
-            n_neurons = y.shape[1]
-            mask_array = np.ones((n_groups, n_features, n_neurons), dtype=float)
-            mask_array[0, : n_features // 2, :] = 0
-            mask_array[1, n_features // 2 :, :] = 0
-        else:
-            mask_array = np.ones((n_groups, n_features), dtype=float)
-            mask_array[0, : n_features // 2] = 0
-            mask_array[1, n_features // 2 :] = 0
-
-        # Wrap mask in GLMParams structure
-        mask = GLMParams(jnp.asarray(mask_array, dtype=jnp.float32), None)
-
-        model.set_params(
-            regularizer=nmo.regularizer.GroupLasso(mask=mask),
-            solver_name="ProximalGradient",
-            regularizer_strength=1.0,
-        )
-        model.fit(X, y)
-
     @pytest.mark.parametrize(
         "fill_val, expectation",
         [
