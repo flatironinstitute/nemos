@@ -138,7 +138,7 @@ def test_svrg_glm_instantiate_solver(regularizer_name, solver_class, mask):
         solver_name=solver_name,
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
     )
-    glm._instantiate_solver(glm._compute_loss)
+    glm._instantiate_solver(glm._compute_loss, np.zeros(1))
 
     # currently glm._solver is a Wrapped(Prox)SVRG
     solver = glm._solver._solver
@@ -174,7 +174,7 @@ def test_svrg_glm_passes_solver_kwargs(regularizer_name, solver_name, mask, glm_
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
         **kwargs,
     )
-    glm._instantiate_solver(glm._compute_loss)
+    glm._instantiate_solver(glm._compute_loss, np.zeros(1))
 
     # currently glm._solver is a Wrapped(Prox)SVRG
     solver = glm._solver._solver
@@ -250,7 +250,7 @@ def test_svrg_glm_initialize_state(
         (
             "GroupLasso",
             ProxSVRG,
-            np.array([[0.0], [0.0], [1.0]]),
+            GLMParams(jax.numpy.array([[0.0], [0.0], [1.0]]), None),
         ),
         ("Ridge", SVRG, None),
         ("UnRegularized", SVRG, None),
@@ -270,8 +270,7 @@ def test_svrg_glm_update(
     # only pass mask if it's not None
     kwargs = {}
     if glm_class == nmo.glm.PopulationGLM:
-        kwargs["feature_mask"] = mask
-
+        kwargs["feature_mask"] = mask.coef if mask is not None else None
     reg_cls = getattr(nmo.regularizer, regularizer_name)
     if regularizer_name == "GroupLasso":
         reg = reg_cls(mask=mask)
@@ -311,15 +310,27 @@ def test_svrg_glm_update(
         (
             "GroupLasso",
             "ProxSVRG",
-            np.array([[0, 1, 0, 1, 1], [1, 0, 1, 0, 0]]).astype(float),
+            GLMParams(
+                jax.numpy.array([[0, 1, 0, 1, 1], [1, 0, 1, 0, 0]]).astype(float), None
+            ),
         ),
-        ("GroupLasso", "ProxSVRG", np.array([[1, 1, 1, 1, 1]]).astype(float)),
+        (
+            "GroupLasso",
+            "ProxSVRG",
+            GLMParams(jax.numpy.array([[1, 1, 1, 1, 1]]).astype(float), None),
+        ),
         (
             "GroupLasso",
             "ProximalGradient",
-            np.array([[0, 1, 0, 1, 1], [1, 0, 1, 0, 0]]).astype(float),
+            GLMParams(
+                jax.numpy.array([[0, 1, 0, 1, 1], [1, 0, 1, 0, 0]]).astype(float), None
+            ),
         ),
-        ("GroupLasso", "ProximalGradient", np.array([[1, 1, 1, 1, 1]]).astype(float)),
+        (
+            "GroupLasso",
+            "ProximalGradient",
+            GLMParams(jax.numpy.array([[1, 1, 1, 1, 1]]).astype(float), None),
+        ),
         ("Ridge", "GradientDescent", None),
         ("Ridge", "SVRG", None),
         ("UnRegularized", "SVRG", None),
@@ -365,6 +376,9 @@ def test_maxiter_is_respected(
     # only pass mask if it's not None
     reg_cls = getattr(nmo.regularizer, regularizer_name)
     if regularizer_name == "GroupLasso":
+        if glm_class == nmo.glm.PopulationGLM:
+            # add the extra neuron dim
+            mask = GLMParams(mask.coef[..., None], None)
         reg = reg_cls(mask=mask)
     else:
         reg = reg_cls()

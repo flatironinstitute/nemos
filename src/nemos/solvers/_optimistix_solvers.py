@@ -75,6 +75,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
         regularizer: Regularizer,
         regularizer_strength: float | None,
         has_aux: bool,
+        init_params: Params = None,
         tol: float = DEFAULT_ATOL,
         rtol: float = DEFAULT_RTOL,
         maxiter: int = DEFAULT_MAX_STEPS,
@@ -88,11 +89,11 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
 
         if self._proximal:
             loss_fn = unregularized_loss
-            solver_init_kwargs["prox"] = regularizer.get_proximal_operator()
+            solver_init_kwargs["prox"] = regularizer.get_proximal_operator(init_params)
             solver_init_kwargs["regularizer_strength"] = regularizer_strength
         else:
             loss_fn = regularizer.penalized_loss(
-                unregularized_loss, regularizer_strength
+                unregularized_loss, regularizer_strength, init_params=init_params
             )
 
         # take out the arguments that go into minimise, init, terminate and so on
