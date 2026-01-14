@@ -1893,7 +1893,7 @@ class TestEMAlgorithm:
         )
         glm._instantiate_solver(
             partial_posterior_weighted_glm_negative_log_likelihood,
-            GLMParams(coef, intercept)
+            GLMParams(coef, intercept),
         )
         solver_run = glm._solver_run
         # End of preparatory step.
@@ -2347,7 +2347,8 @@ class TestConvergence:
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
         glm._instantiate_solver(
-            partial_posterior_weighted_glm_negative_log_likelihood, GLMParams(coef, intercept)
+            partial_posterior_weighted_glm_negative_log_likelihood,
+            GLMParams(coef, intercept),
         )
 
         # Create initial parameters
@@ -2415,7 +2416,8 @@ class TestConvergence:
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
         glm._instantiate_solver(
-            partial_posterior_weighted_glm_negative_log_likelihood, GLMParams(coef, intercept)
+            partial_posterior_weighted_glm_negative_log_likelihood,
+            GLMParams(coef, intercept),
         )
 
         # Create initial parameters
@@ -2478,7 +2480,8 @@ class TestConvergence:
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
         glm._instantiate_solver(
-            partial_posterior_weighted_glm_negative_log_likelihood, GLMParams(coef, intercept)
+            partial_posterior_weighted_glm_negative_log_likelihood,
+            GLMParams(coef, intercept),
         )
 
         # Create initial parameters
@@ -2547,7 +2550,8 @@ class TestConvergence:
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
         glm._instantiate_solver(
-            partial_posterior_weighted_glm_negative_log_likelihood, GLMParams(coef, intercept)
+            partial_posterior_weighted_glm_negative_log_likelihood,
+            GLMParams(coef, intercept),
         )
 
         # Create initial parameters
@@ -2629,7 +2633,8 @@ class TestConvergence:
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
         glm._instantiate_solver(
-            partial_posterior_weighted_glm_negative_log_likelihood, GLMParams(coef, intercept)
+            partial_posterior_weighted_glm_negative_log_likelihood,
+            GLMParams(coef, intercept),
         )
 
         # Create initial parameters
@@ -2707,7 +2712,8 @@ class TestConvergence:
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
         glm._instantiate_solver(
-            partial_posterior_weighted_glm_negative_log_likelihood, GLMParams(coef, intercept)
+            partial_posterior_weighted_glm_negative_log_likelihood,
+            GLMParams(coef, intercept),
         )
 
         # Create initial parameters
@@ -2889,7 +2895,8 @@ class TestCompilation:
 
         glm = GLM(observation_model=obs, solver_name=solver_name)
         glm._instantiate_solver(
-            partial_posterior_weighted_glm_negative_log_likelihood, GLMParams(coef, intercept)
+            partial_posterior_weighted_glm_negative_log_likelihood,
+            GLMParams(coef, intercept),
         )
 
         # Clear compilation cache
@@ -3018,7 +3025,8 @@ class TestCompilation:
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
         glm._instantiate_solver(
-            partial_posterior_weighted_glm_negative_log_likelihood, GLMParams(coef, intercept)
+            partial_posterior_weighted_glm_negative_log_likelihood,
+            GLMParams(coef, intercept),
         )
 
         _ = forward_backward(
@@ -3269,7 +3277,8 @@ class TestPytreeSupport:
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
         glm._instantiate_solver(
-            partial_posterior_weighted_glm_negative_log_likelihood, GLMParams(coef_tree, intercept)
+            partial_posterior_weighted_glm_negative_log_likelihood,
+            GLMParams(coef_tree, intercept),
         )
         solver_run = glm._solver_run
 
