@@ -214,7 +214,12 @@ class Regularizer(Base, abc.ABC):
 
     def check_solver(self, solver_name: str):
         """Raise an error if the given solver is not allowed."""
-        if solver_name not in self._allowed_solvers:
+        # Temporary parsing until an improved registry is implemented.
+        algo_name = solver_name.split("[", 1)[0]
+        if (
+            solver_name not in self._allowed_solvers
+            and algo_name not in self._allowed_solvers
+        ):
             raise ValueError(
                 f"The solver: {solver_name} is not allowed for "
                 f"{self.__class__.__name__} regularization. Allowed solvers are "
