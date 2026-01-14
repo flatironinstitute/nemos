@@ -11,6 +11,48 @@ kernelspec:
   name: python3
 ---
 
+```{code-cell} ipython3
+:tags: [hide-input]
+
+%matplotlib inline
+import warnings
+import jax
+
+# Ignore the first specific warning
+warnings.filterwarnings(
+    "ignore",
+    message="plotting functions contained within `_documentation_utils` are intended for nemos's documentation.",
+    category=UserWarning,
+)
+
+# Ignore the second specific warning
+warnings.filterwarnings(
+    "ignore",
+    message="Ignoring cached namespace 'core'",
+    category=UserWarning,
+)
+
+warnings.filterwarnings(
+    "ignore",
+    message=(
+        "invalid value encountered in div "
+    ),
+    category=RuntimeWarning,
+)
+
+# Ignore convergence (irrelevant for this note)
+# For real neural data analyis, increase solver maxiter if warning is raised.
+warnings.filterwarnings(
+    "ignore",
+    message=(
+        "The fit did not converge"
+    ),
+    category=RuntimeWarning,
+)
+
+jax.config.update("jax_enable_x64", True)
+```
+
 (variable_selection)=
 # Model Selection: Cross-validate over Inputs
 
