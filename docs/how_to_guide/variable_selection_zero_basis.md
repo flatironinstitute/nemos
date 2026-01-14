@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-(variable-selection)=
+(variable_selection)=
 # Model Selection: Cross-validate over Inputs
 
 When modeling neural activity with multiple inputs, you may want to determine which inputs are necessary. The `Zero` basis acts as a placeholder that contributes no features, allowing you to systematically test different input combinations.
