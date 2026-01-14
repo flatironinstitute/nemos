@@ -95,6 +95,7 @@ These classes are the building blocks for the concrete basis classes.
     FourierEval
     OrthExponentialEval
     IdentityEval
+    Zero
 
 **Composite Bases:**
 
