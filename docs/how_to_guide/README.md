@@ -209,4 +209,20 @@ convolve_large_arrays.md
 
 :::
 
+:::{grid-item-card}
+
+<figure>
+<a href="variable_selection_group_lasso.html">
+<img src="../_static/thumbnails/how_to_guide/variable_selection_group_lasso.svg" style="height: 100px", alt="Variable selection."/>
+</a>
+</figure>
+
+```{toctree}
+:maxdepth: 2
+
+variable_selection_group_lasso.md
+```
+
+:::
+
 ::::

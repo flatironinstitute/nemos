@@ -30,14 +30,15 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
         regularizer: Regularizer,
         regularizer_strength: float | None,
         has_aux: bool,
+        init_params: Params = None,
         **solver_init_kwargs,
     ):
         if self._proximal:
             self.fun = unregularized_loss
-            solver_init_kwargs["prox"] = regularizer.get_proximal_operator()
+            solver_init_kwargs["prox"] = regularizer.get_proximal_operator(init_params)
         else:
             self.fun = regularizer.penalized_loss(
-                unregularized_loss, regularizer_strength
+                unregularized_loss, regularizer_strength, init_params=init_params
             )
 
         self.regularizer_strength = regularizer_strength

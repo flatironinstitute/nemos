@@ -186,6 +186,7 @@ print("True weights:      ", w_true)
 print("Recovered weights: ", model.coef_)
 ```
 
+(k-fold-selection)=
 ## K-fold Cross Validation with `sklearn`
 Our implementation follows the `scikit-learn` api,  this enables us
 to take advantage of the `scikit-learn` tool-box seamlessly, while at the same time
