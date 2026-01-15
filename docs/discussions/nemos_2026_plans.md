@@ -17,6 +17,11 @@
   - IBL ViSp (Camila's tutorial)?
   - IBL Ashwood (For GLM-HMM)?
   - Vision/sensory? Which one?
+- [ ] **Authors:**
+  - Should include major contributors. Major contribution includes: doc pages, source code, and insights and planning discussions.
+      - neuroRSE
+      - Alex and Eero
+      - Bence, Wolf, Camila (IBL dataset + docs GLMHMM), Arina (if we decide to include the PPGLM)
 
 ---
 
@@ -268,16 +273,17 @@ Note: I assume neuroRSE have more flexible time allocation.
 
 ## Milestones & Timeline
 
+I need a deadline otherwise I'll never have a paper.
+
 **Key dates** (to be filled in):
 
+- [ ] **Target submission date**: _________________
+- [ ] **Draft ready**: _________________
+- [ ] **Internal review draft**: _________________
+- [ ] **External collaborator review**: _________________
 - [ ] **Feature freeze date**: _________________
 - [ ] **Code review complete**: _________________
 - [ ] **Documentation complete**: _________________
-- [ ] **Example notebooks complete**: _________________
-- [ ] **Internal review draft**: _________________
-- [ ] **External collaborator review**: _________________
-- [ ] **Submission ready**: _________________
-- [ ] **Target submission date**: _________________
 
 ---
 
@@ -295,28 +301,12 @@ Discussion items:
 
 **Main differentiator(s)**: _________________
 
----
-
-## Success Criteria
-
-**What does a successful publication look like?**
-
-- [ ] **Technical contribution**: _________________
-- [ ] **Scientific impact**: _________________
-- [ ] **Community adoption goals**: _________________
-- [ ] **Comparison benchmarks**: What should we compare against? _________________
 
 ---
 
 ## Action Items
 
-*To be filled in during/after meeting*: create a project for this.
-
-| Action | Owner | Deadline | Status |
-|--------|-------|----------|--------|
-|        |       |          |        |
-|        |       |          |        |
-|        |       |          |        |
+Create a GitHub project for the publication and include there all the action items and deadlines.
 
 ---
 
