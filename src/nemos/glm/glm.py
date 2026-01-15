@@ -21,6 +21,7 @@ from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..pytrees import FeaturePytree
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
 from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
+from ..tree_utils import pytree_map_and_reduce
 from ..type_casting import cast_to_jax, support_pynapple
 from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength, SolverState, StepResult
 from ..utils import format_repr
@@ -840,6 +841,23 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             predicted_rate,
         )
 
+    def _get_param_dimensions(self: GLM | PopulationGLM) -> Tuple[int, int, int | None]:
+        is_categorical = isinstance(self.observation_model, obs.CategoricalObservations)
+        n_categories = None
+        ndim_coef, _ = self._validator.expected_param_dims
+        n_features = pytree_map_and_reduce(lambda x: x.shape[0], sum, self.coef_)
+        if is_categorical:
+            if ndim_coef == 2:
+                n_categories = jax.tree_util.tree_leaves(self.coef_)[0].shape[1]
+                n_neurons = 1
+            else:
+                n_neurons, n_categories = jax.tree_util.tree_leaves(self.coef_)[
+                    0
+                ].shape[1:]
+        else:
+            n_neurons = len(self.intercept_)
+        return n_features, n_neurons, n_categories
+
     def _estimate_resid_degrees_of_freedom(
         self, X: DESIGN_INPUT_TYPE, n_samples: Optional[int] = None
     ) -> jnp.ndarray:
@@ -874,24 +892,38 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
                 )
 
         params = self._get_model_params()
+        n_features, n_neurons, n_categories = self._get_param_dimensions()
+
         # if the regularizer is lasso use the non-zero
         # coeff as an estimate of the dof
         # see https://arxiv.org/abs/0712.0881
         if isinstance(self.regularizer, (GroupLasso, Lasso, ElasticNet)):
+            if n_categories is None:
+                sum_axis = 0
+            else:
+                sum_axis = (0, -1)
+            n_categories = 1 if n_categories is None else n_categories
             resid_dof = tree_utils.pytree_map_and_reduce(
-                lambda x: ~jnp.isclose(x, jnp.zeros_like(x)),
-                lambda x: sum([jnp.sum(i, axis=0) for i in x]),
+                lambda x: ~jnp.isclose(x, 0),
+                lambda x: sum([jnp.sum(i, axis=sum_axis) for i in x]),
                 params.coef,
             )
-            return n_samples - resid_dof - 1
+            return n_samples - resid_dof - n_categories
 
         elif isinstance(self.regularizer, Ridge):
             # for Ridge, use the tot parameters (X.shape[1] + intercept)
-            return (n_samples - X.shape[1] - 1) * jnp.ones_like(params.intercept)
+            n_categories = 1 if n_categories is None else n_categories
+            return (n_samples - n_categories * n_features - n_categories) * jnp.ones(
+                n_neurons
+            )
         else:
             # for UnRegularized, use the rank
             rank = jnp.linalg.matrix_rank(X)
-            return (n_samples - rank - 1) * jnp.ones_like(params.intercept)
+            if n_categories is None:
+                n_categories = 1
+            return (n_samples - rank * n_categories - n_categories) * jnp.ones(
+                n_neurons
+            )
 
     def _initialize_solver_and_state(
         self,
