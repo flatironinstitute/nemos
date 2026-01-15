@@ -2,21 +2,24 @@
 
 ## Publication Target
 
-**Journal target**: eLife or similar
+**Journal target**: Nature Methods, eLife?
 
 **Questions for discussion:**
 - [ ] **Submission deadline**: When do we want to submit? (Options: Q2 2026, Q3 2026, Q4 2026)
+  - Q4?
 - [ ] **Manuscript preparation timeline**: How much time do we need for writing after features are complete?
 - [ ] **Publication story**: What is the core narrative?
-    - [ ] "NeMoS: A composable framework for neural encoding models"
+    - [ ] "NeMoS: A modular framework for neural encoding models" <- favourite so far
     - [ ] "NeMoS: A comprehensive GLM toolkit for neuroscience"
     - [ ] "NeMoS: Flexible statistical modeling framework for neural data"
     - [ ] Other: _________________
+- [ ] Point of emphasis: GPU, ecosystem compatible, modular, neural encoding, scalability, feature construction.
 - [ ] **Example datasets**: What datasets should we showcase?
-  - Head-direction (docs tutorial)?
+  - Head-direction (docs tutorial)? feature construction, functional connectivity, pynapple integration
   - IBL ViSp (Camila's tutorial)?
-  - IBL Ashwood (For GLM-HMM)?
+  - IBL Ashwood (For GLM-HMM)? behavior, choice
   - Vision/sensory? Which one?
+    - Space/time separable GLM, fit retina LGN dataset, receptive field estimation
 - [ ] **Authors:**
   - Should include major contributors. Major contribution includes: doc pages, source code, and insights and planning discussions.
       - neuroRSE
@@ -32,7 +35,7 @@
 - Basis system with compositional algebra
 - Observations: Poisson, Gamma, Gaussian<sup>1</sup>, NegativeBinomial<sup>2</sup>, Bernoulli
 - FeaturePytree
-- Regularization: Ridge, Lasso, GroupLasso
+- Regularization: Ridge, Lasso, GroupLasso, ElasticNet
 
 **Open question on observations:**
 1. [ ] Do we need to have a least-square solver for Linear Gaussian with Ridge or UnRegularized (and smoothing penalty when we have it)?
@@ -64,7 +67,8 @@
 - Improve initialization: add k-means initialization
 
 **Discussion items:**
-- [ ] **Priority**: Essential for publication / Nice to have / Post-publication?
+- [ x ] **Priority**: Essential for publication / Nice to have / Post-publication?
+  - Essential
 - [ ] **Timeline**: When can review/merge be completed? _________________
 - [ ] **Ownership**: Who owns documentation? _________________
 - [ ] **Ownership**: Who owns k-means initialization? _________________
