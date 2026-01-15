@@ -8,10 +8,9 @@ import optax
 import optimistix as optx
 
 from ..regularizer import Regularizer
-from ..typing import Pytree, Params
+from ..typing import Params, Pytree
 from ._optimistix_adapter import (
     DEFAULT_ATOL,
-    DEFAULT_MAX_STEPS,
     DEFAULT_RTOL,
     OptimistixAdapter,
 )

@@ -830,9 +830,7 @@ def test_optimistix_solvers_have_correct_search(
         (nmo.solvers.OptimistixNonlinearCG, 10_000),
     ],
 )
-def test_optimistix_solvers_default_maxiter(
-    request, solver_class, expected_maxiter
-):
+def test_optimistix_solvers_default_maxiter(request, solver_class, expected_maxiter):
     _, _, _, _, loss = request.getfixturevalue("linear_regression")
     solver = solver_class(
         unregularized_loss=loss,
