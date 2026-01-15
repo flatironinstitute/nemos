@@ -18,7 +18,7 @@ from ._solver_adapter import SolverAdapter
 
 DEFAULT_ATOL = 1e-4
 DEFAULT_RTOL = 0.0
-DEFAULT_MAX_STEPS = 100_000
+DEFAULT_MAX_STEPS = 10_000
 
 OptimistixSolverState: TypeAlias = eqx.Module
 OptimistixStepResult: TypeAlias = tuple[Params, OptimistixSolverState, Aux]
