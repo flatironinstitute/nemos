@@ -69,15 +69,18 @@
 **Discussion items:**
 - [ x ] **Priority**: Essential for publication / Nice to have / Post-publication?
   - Essential
-- [ ] **Timeline**: When can review/merge be completed? _________________
-- [ ] **Ownership**: Who owns documentation? _________________
-- [ ] **Ownership**: Who owns k-means initialization? _________________
+- [ ] **Timeline**: When can review/merge be completed? class ~3 months development, ~1 month docs.
+- [ ] **Ownership**: Who owns documentation? Camila
+- [ ] **Ownership**: Who owns k-means initialization? (not needed for the paper) Camila/Edoardo
 - [ ] **Scope question**: Is k-means initialization required for publication or can it come later?
-- [ ] **Demo requirements**: Is Ashwood Fig 2 reproduction sufficient or do we need additional examples?
+- [ ] **Demo requirements**: Is Ashwood Fig 2 reproduction sufficient or do we need additional examples? Needed for the paper
 
 ---
 
 ### 2. PGAM (Penalized Generalized Additive Models)
+
+Note: ping Savin for the hiring of Bence
+Current contract until end of the month. Start with the germa
 
 **Added value:**
 - Automatic variable selection without combinatorial explosion
@@ -94,8 +97,9 @@
 - Integration with existing regularization framework
 
 **Discussion items:**
-- [ ] **Priority**: Essential for publication / Nice to have / Post-publication?
-- [ ] **Bence's allocation**: How much time can Bence realistically allocate? _________________
+- [ x ] **Priority**: Essential for publication / Nice to have / Post-publication?
+  - Essential (or Nice to have)
+- [ ] **Bence's allocation**: How much time can Bence realistically allocate? 10h/week SF, 20/week German contract
 - [ ] **Timeline**: Completion date if included? _________________
 - [ ] **Scope question**: Do we need both penalty types for publication or can we start with one?
 - [ ] **Scope question**: Can basis derivatives be scoped as part of PGAM work or separate feature?
@@ -111,14 +115,18 @@
 - Temporal precision for spike timing analysis
 - Improved functional connectivity estimates
 
-**Current status**: Arina working on NeMoS compatibility
+**Current status**: Arina working on NeMoS compatibility.
+- How to integrate it better questions in regular nemos meeting.
+- Not a lot of work
+- Test code? use the test_base_regressor_subclasses to check if the model is aligned with NeMoS;
 
 **Discussion items:**
 - [ ] **Priority**: Essential for publication / Nice to have / Post-publication?
-- [ ] **Arina's status**: Where is the compatibility work currently? _________________
-- [ ] **Timeline**: Completion date if included? _________________
-- [ ] **Ownership**: Who supports Arina on this? _________________
-- [ ] **Publication value**: Does PPGLM fit our publication story or is it better suited for follow-up work?
+  - Nice to have
+- [ ] **Arina's status**: Where is the compatibility work currently? easy to plug in
+- [ ] **Timeline**: Completion date if included? end of june
+- [ ] **Ownership**: Who supports Arina on this? Arina
+- [ ] **Publication value**: Does PPGLM fit our publication story or is it better suited for follow-up work? yes, but we will see if where we are
 
 ---
 
@@ -152,10 +160,11 @@
 
 **Discussion items:**
 - [ ] **Priority**: Essential for publication / Nice to have / Post-publication?
+  - Nice to have
 - [ ] **Value proposition**: Does this enable new use cases or is it primarily convenience?
-- [ ] **Timeline**: Completion date if included? _________________
-- [ ] **Ownership**: Who implements this? _________________
-- [ ] **Scope question**: Is this critical for the types of datasets we'll showcase in the paper?
+- [ ] **Timeline**: Completion date if included? 3 weeks
+- [ ] **Ownership**: Who implements this? Bence
+- [ ] **Scope question**: Is this critical for the types of datasets we'll showcase in the paper? no
 
 ---
 
@@ -163,7 +172,7 @@
 
 **Proposed improvements**:
 - Allow JIT compilation of `compute_features`
-- Convert BSpline to JAX (currently uses scipy)
+- Convert BSpline to JAX (currently uses scipy) Needed
 - Implement derivative methods for basis (needed for PGAM)
 
 **Added value:**
@@ -195,6 +204,13 @@
 - Smooth response modeling.
 - PGAM integration (per coefficient group-specific regularization needed).
 
+**Discussion items:**
+- [ ] **Priority**: Essential / Can wait?
+  - Essential
+- [ ] **Timeline**: When should this be completed? mid Feb pytree,
+- [ ] **Status**: Is the transition essentially complete or is work remaining? pytree almost done
+- [ ] **Ownership**: Who handles remaining transition work? Wolf
+
 ### 8. Solver Maintenance
 
 **Added value:**
@@ -206,9 +222,10 @@
 
 **Discussion items:**
 - [ ] **Priority**: Essential / Can wait?
-- [ ] **Timeline**: When should this be completed? _________________
-- [ ] **Status**: Is the transition essentially complete or is work remaining? _________________
-- [ ] **Ownership**: Who handles remaining transition work? _________________
+  - Essential
+- [ ] **Timeline**: When should this be completed? pr open.
+- [ ] **Status**: Is the transition essentially complete or is work remaining? Zoom linesearch...
+- [ ] **Ownership**: Who handles remaining transition work? Bence
 
 ---
 
@@ -250,17 +267,18 @@
 **External collaborators:**
 
 - [ ] **Arina's availability**:
-  - Time? _________________
-  - Features? PPGLM, _________________
+  - Time? 2/3 months development starting after mid Feb. Goal finish before grad-school.
+  - Features? PPGLM (MCMC fitting no control variate, no PolyApprox)
 - [ ] **Bence's availability**:
-  - Time? _________________
-  - Features? PGAM, _________________
+  - Time? Ideally gap between this contract sith SF (until Feb 2nd 2026) and new one ~ 3 months. PGAM on German contract, right away.
+  - Features? PGAM, scalability (batching)
 - [ ] **Camila's availability**:
-  - Time? _________________
+  - Time? 10h/week since Feb, ask Allison for extension.
+  - Priority: Ashwood reproducing fig 2
   - Features? GLM-HMM docs, _________________
 - [ ] **Wolf's availability**:
-  - Time? _________________
-  - Features? Regularization pytree, fix basis bounds,  _________________
+  - Time? 10h/week split between pynapple, nemos and plenoptic...
+  - Features? Regularization pytree, multiplicative basis bounds, smoothing penalty.
 
 Note: I assume neuroRSE have more flexible time allocation.
 
@@ -317,5 +335,5 @@ Create a GitHub project for the publication and include there all the action ite
 
 ## Next Meeting
 
-- [ ] **Date**: _________________
+- [ ] **Date**: Mid February.
 - [ ] **Agenda**: Review progress on action items, adjust timeline if needed
