@@ -569,6 +569,9 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
     from_model_params: Callable[[ModelParamsT], UserProvidedParamsT] = None
     X_dimensionality: int = field(kw_only=True)
     y_dimensionality: int = field(kw_only=True)
+    # Offset between param's category dim and y's category dim.
+    # For categorical models with reference parameterization: params have K-1, y has K.
+    category_dim_offset: int = 0
 
     # tuples [(meth, kwargs), (meth,), ]
     params_validation_sequence: Tuple[

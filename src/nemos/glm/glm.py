@@ -228,13 +228,17 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         self.optim_info_ = None
 
         # setup validator
-        (expected_param_dims, X_dimensionality, y_dimensionality) = (
-            self._get_validator_config()
-        )
+        (
+            expected_param_dims,
+            X_dimensionality,
+            y_dimensionality,
+            category_dim_offset,
+        ) = self._get_validator_config()
         self._validator = self._validator_class(
             expected_param_dims=expected_param_dims,
             X_dimensionality=X_dimensionality,
             y_dimensionality=y_dimensionality,
+            category_dim_offset=category_dim_offset,
         )
 
     def __sklearn_tags__(self):
@@ -260,13 +264,15 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             inverse_link_function, self._observation_model
         )
 
-    def _get_validator_config(self) -> Tuple[Tuple[int, int], int, int]:
+    def _get_validator_config(self) -> Tuple[Tuple[int, int], int, int, int]:
         coef_dim, intercept_dim = 1, 1
         y_dim = 1
+        category_offset = 0
         if isinstance(self.observation_model, obs.CategoricalObservations):
             coef_dim += 1
             y_dim += 1
-        return (coef_dim, intercept_dim), 2, y_dim
+            category_offset = 1  # params have K-1 categories, y has K
+        return (coef_dim, intercept_dim), 2, y_dim, category_offset
 
     @property
     def observation_model(self) -> Union[None, obs.Observations]:
@@ -596,6 +602,15 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             self._inverse_link_function, y
         )
 
+        # Compute param shape suffix from y, accounting for category offset.
+        # For categorical with reference parameterization: params have K-1, y has K.
+        category_offset = self._validator.category_dim_offset
+        if category_offset > 0 and y.ndim > 1:
+            # Reduce the last dimension by the offset
+            y_shape_for_params = y.shape[1:-1] + (y.shape[-1] - category_offset,)
+        else:
+            y_shape_for_params = y.shape[1:]
+
         # Initialize parameters
         init_params = GLMParams(
             # coeff, spike basis coeffs.
@@ -605,7 +620,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             # - If X is an array of shape (n_timebins,
             #   n_features), this will be an array of shape (n_features,).
             jax.tree_util.tree_map(
-                lambda x: jnp.zeros((*x[0].shape, *y.shape[1:])), data
+                lambda x: jnp.zeros((*x[0].shape, *y_shape_for_params)), data
             ),
             # intercept, bias terms, keepdims=False needed by PopulationGLM
             initial_intercept,
@@ -1299,14 +1314,16 @@ class PopulationGLM(GLM):
         self._metadata = None
         self.feature_mask = feature_mask
 
-    def _get_validator_config(self) -> Tuple[Tuple[int, int], int, int]:
+    def _get_validator_config(self) -> Tuple[Tuple[int, int], int, int, int]:
         coef_dim, intercept_dim = 2, 1
         y_dim = 2
+        category_offset = 0
         if isinstance(self.observation_model, obs.CategoricalObservations):
             coef_dim += 1
             intercept_dim += 1
             y_dim += 1
-        return (coef_dim, intercept_dim), 2, y_dim
+            category_offset = 1  # params have K-1 categories, y has K
+        return (coef_dim, intercept_dim), 2, y_dim, category_offset
 
     def __sklearn_tags__(self):
         """Return Population GLM specific estimator tags."""

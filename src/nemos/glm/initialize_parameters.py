@@ -19,18 +19,23 @@ from ..utils import one_over_x
 
 
 def _inverse_log_softmax(empirical_frequencies):
-    """Inverse log softmax.
+    """Inverse log softmax for reference-category parameterization.
+
+    Given empirical frequencies (probabilities) p_1, ..., p_K, returns the
+    linear predictors η_1, ..., η_{K-1} where η_i = log(p_i / p_K).
+    The last category K is the reference with η_K = 0 (implicit).
 
     Parameters
     ----------
     empirical_frequencies:
-        The empirical frequencies, shape (..., n_categories).
+        The empirical frequencies (probabilities), shape (..., n_categories).
+
+    Returns
+    -------
+    :
+        Linear predictors relative to reference category, shape (..., n_categories - 1).
     """
-    return (
-        jnp.zeros(empirical_frequencies.shape)
-        .at[..., :-1]
-        .set(jnp.log(empirical_frequencies[..., :-1] / empirical_frequencies[..., -1:]))
-    )
+    return jnp.log(empirical_frequencies[..., :-1] / empirical_frequencies[..., -1:])
 
 
 # dictionary of known inverse link functions.

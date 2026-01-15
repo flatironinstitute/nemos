@@ -66,9 +66,13 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
             coef_shape = "(n_features,)"
             intercept_shape = "(1,)"
         elif coef_dim == 2:
-            # Categorical GLM: coef has extra category dimension
-            coef_shape = "(n_features, n_categories)"
-            intercept_shape = "(n_categories,)"
+            # Categorical GLM with reference parameterization: K-1 categories
+            if self.category_dim_offset > 0:
+                coef_shape = f"(n_features, n_categories-{self.category_dim_offset})"
+                intercept_shape = f"(n_categories-{self.category_dim_offset},)"
+            else:
+                coef_shape = "(n_features, n_categories)"
+                intercept_shape = "(n_categories,)"
         else:
             # Fallback for unexpected dimensions
             coef_shape = f"{coef_dim}-dimensional"

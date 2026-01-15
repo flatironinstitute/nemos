@@ -538,6 +538,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         params
             Initial parameter tuple of (coefficients, intercept).
         """
+        self._validator.validate_inputs(X, y)
         init_params = self._model_specific_initialization(X, y)
         return self._validator.from_model_params(init_params)
 

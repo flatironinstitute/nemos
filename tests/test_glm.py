@@ -7,6 +7,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+import scipy.stats as sts
 import sklearn
 import statsmodels.api as sm
 from pynapple import Tsd, TsdFrame, TsdTensor
@@ -17,7 +18,6 @@ from sklearn.linear_model import (
     PoissonRegressor,
 )
 from sklearn.model_selection import GridSearchCV
-import scipy.stats as sts
 
 import nemos as nmo
 from nemos import solvers
@@ -1529,10 +1529,11 @@ class TestGLMObservationModel:
                 proba = jnp.exp(log_proba)
                 y = y.reshape((-1, y.shape[-1]))
                 proba = proba.reshape((-1, y.shape[-1]))
-                res = np.array([sts.multinomial(1, pi).logpmf(yi) for pi, yi in zip(proba, y)]).sum()
+                res = np.array(
+                    [sts.multinomial(1, pi).logpmf(yi) for pi, yi in zip(proba, y)]
+                ).sum()
                 res /= y.shape[0]
                 return res
-
 
         else:
             raise ValueError("Unknown model instantiation")
@@ -1751,9 +1752,7 @@ class TestGLMObservationModel:
         )
 
         # get the flat parameters
-        flat_coef = np.concatenate(
-            jax.tree_util.tree_leaves(model_tree.coef_), axis=0
-        )
+        flat_coef = np.concatenate(jax.tree_util.tree_leaves(model_tree.coef_), axis=0)
 
         # assert equivalence of solutions
         assert np.allclose(model.coef_, flat_coef)
@@ -1996,7 +1995,9 @@ class TestGLMObservationModel:
             feedforward_input=X,
         )
         expected_out_ndim = 2 if "population" in glm_type else 1
-        if isinstance(model.observation_model, nmo.observation_models.CategoricalObservations):
+        if isinstance(
+            model.observation_model, nmo.observation_models.CategoricalObservations
+        ):
             expected_out_ndim += 1
 
         if expected_out_type == Tsd:

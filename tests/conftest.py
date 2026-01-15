@@ -968,6 +968,8 @@ def categoricalGLM_model_instantiation():
     returns the test data, expected output, the model instance, true parameters, and the rate
     of response.
 
+    Uses reference-category parameterization with K-1 parameters for K categories.
+
     Returns:
         tuple: A tuple containing:
             - X (numpy.ndarray): Simulated input data.
@@ -976,17 +978,23 @@ def categoricalGLM_model_instantiation():
             - GLMParams(w_true, b_true) (tuple): True weight and bias parameters.
             - rate (jax.numpy.ndarray): Simulated rate of log-proba.
     """
+    from nemos.inverse_link_function_utils import log_softmax
+
     np.random.seed(123)
+    n_categories = 3
     X = np.random.normal(size=(100, 5))
-    b_true = np.zeros((3,))
-    w_true = np.random.normal(size=(5, 3))
+    # K-1 parameters for reference-category parameterization
+    b_true = np.zeros((n_categories - 1,))
+    w_true = np.random.normal(size=(5, n_categories - 1))
     observation_model = nmo.observation_models.CategoricalObservations()
     regularizer = nmo.regularizer.UnRegularized()
     model = nmo.glm.GLM(observation_model, regularizer=regularizer)
-    rate = jax.nn.log_softmax(jnp.einsum("ki,tk->ti", w_true, X) + b_true)
+    # Compute rate using padded log_softmax (same as model)
+    eta = jnp.einsum("ki,tk->ti", w_true, X) + b_true
+    rate = log_softmax(eta)
     key = jax.random.PRNGKey(123)
     y = jax.random.categorical(key, rate)
-    y = jax.nn.one_hot(y, num_classes=3).astype(float)
+    y = jax.nn.one_hot(y, num_classes=n_categories).astype(float)
     return X, y, model, GLMParams(w_true, b_true), rate
 
 
@@ -1015,6 +1023,7 @@ def categoricalGLM_model_instantiation_pytree(categoricalGLM_model_instantiation
     model_tree = nmo.glm.GLM(model.observation_model, regularizer=model.regularizer)
     return X_tree, spikes, model_tree, true_params_tree, rate
 
+
 @pytest.fixture
 def population_categoricalGLM_model_instantiation():
     """Set up a categorical GLM for testing purposes.
@@ -1042,8 +1051,11 @@ def population_categoricalGLM_model_instantiation():
     y = jax.nn.one_hot(y, num_classes=3).astype(float)
     return X, y, model, GLMParams(w_true, b_true), rate
 
+
 @pytest.fixture
-def population_categoricalGLM_model_instantiation_pytree(categoricalGLM_model_instantiation):
+def population_categoricalGLM_model_instantiation_pytree(
+    categoricalGLM_model_instantiation,
+):
     """Set up a categorical GLM for testing purposes.
 
     This fixture initializes a categorical GLM with random parameters, simulates its response, and
@@ -1066,7 +1078,6 @@ def population_categoricalGLM_model_instantiation_pytree(categoricalGLM_model_in
     )
     model_tree = nmo.glm.GLM(model.observation_model, regularizer=model.regularizer)
     return X_tree, spikes, model_tree, true_params_tree, rate
-
 
 
 @pytest.fixture
@@ -1294,9 +1305,12 @@ def instantiate_glm_func(
         solver_name=solver_name,
     )
     coef_ndim = model._validator.expected_param_dims[0]
-    model.coef_ = np.random.randn(*(n_features, n_categories)[:coef_ndim])
+    category_offset = model._validator.category_dim_offset
+    # For categorical with reference parameterization: params have K-1 categories
+    n_param_categories = n_categories - category_offset
+    model.coef_ = np.random.randn(*(n_features, n_param_categories)[:coef_ndim])
     model.intercept_ = (
-        np.random.randn(1) if coef_ndim == 1 else np.random.randn(n_categories)
+        np.random.randn(1) if coef_ndim == 1 else np.random.randn(n_param_categories)
     )
     if simulate:
         counts, rates = model.simulate(jax.random.PRNGKey(1234), X)
@@ -1334,8 +1348,15 @@ def instantiate_population_glm_func(
         solver_name=solver_name,
     )
     coef_ndim = model._validator.expected_param_dims[0]
-    model.coef_ = np.random.randn(*(n_features, n_neurons, n_categories)[:coef_ndim])
-    model.intercept_ = np.random.randn(*(n_neurons, n_categories)[: coef_ndim - 1])
+    category_offset = model._validator.category_dim_offset
+    # For categorical with reference parameterization: params have K-1 categories
+    n_param_categories = n_categories - category_offset
+    model.coef_ = np.random.randn(
+        *(n_features, n_neurons, n_param_categories)[:coef_ndim]
+    )
+    model.intercept_ = np.random.randn(
+        *(n_neurons, n_param_categories)[: coef_ndim - 1]
+    )
     if simulate:
         model._initialize_feature_mask(X, np.empty(shape=(X.shape[0], n_neurons)))
         counts, rates = model.simulate(jax.random.PRNGKey(1234), X)

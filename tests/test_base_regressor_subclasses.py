@@ -37,6 +37,7 @@ OBS_MODEL_DIMS = {
             "X_dimensionality": 2,
             "y_dimensionality": 2,
             "expected_param_dims": (2, 1),
+            "category_dim_offset": 1,  # params have K-1, y has K
         },
     },
     "PopulationGLM": {
@@ -53,6 +54,7 @@ OBS_MODEL_DIMS = {
             "X_dimensionality": 2,
             "y_dimensionality": 3,
             "expected_param_dims": (3, 2),
+            "category_dim_offset": 1,  # params have K-1, y has K
         },
     },
 }

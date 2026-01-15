@@ -49,7 +49,12 @@ expit = _make_wrapper(
 
 identity = _make_wrapper(lambda x: x, "identity", "Identity link function.")
 
-log_softmax = _make_wrapper(jax.nn.log_softmax, "log_softmax", "Softmax link function.")
+
+def log_softmax(x):
+    """Pad with zero and apply log-softmax."""
+    xpad = jnp.pad(x, (*[(0, 0)] * (x.ndim - 1), (0, 1)))
+    return jax.nn.log_softmax(xpad)
+
 
 LINK_NAME_TO_FUNC = {
     "exp": exp,
