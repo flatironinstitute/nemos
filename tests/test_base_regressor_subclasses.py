@@ -214,7 +214,7 @@ class TestModelCommons:
             ("ProxSVRG", does_not_raise()),
             (
                 1,
-                pytest.raises(ValueError, match="The solver: 1 is not allowed "),
+                pytest.raises(TypeError, match="solver_name must be a string"),
             ),
         ],
     )
@@ -977,6 +977,7 @@ class TestModelSimulation:
         ],
     )
     @pytest.mark.solver_related
+    @pytest.mark.requires_x64
     def test_fit_time_points_y(
         self, delta_tp, expectation, instantiate_base_regressor_subclass
     ):

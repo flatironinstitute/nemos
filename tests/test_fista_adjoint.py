@@ -126,6 +126,7 @@ def test_fista_explicit_while_loop_kind_overrides_adjoint(
     os.getenv("NEMOS_SOLVER_BACKEND") != "optimistix",
     reason="Only run with the Optimistix backend",
 )
+@pytest.mark.filterwarnings(r"ignore:.*fit did not converge.*:RuntimeWarning")
 def test_fit_succeeds_with_mismatched_adjoint_and_while_loop_kind(
     optimistix_solver_registry,
     request,

@@ -894,7 +894,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
         >>> model = nmo.glm.GLM()
         >>> params = model.initialize_params(X, y)
-        >>> opt_state = model._initialize_solver_and_state(X, y, params)
+        >>> opt_state = model.initialize_solver_and_state(X, y, params)
         >>> # Now ready to run optimization or update steps
         """
         opt_solver_kwargs = self._optimize_solver_params(X, y)
