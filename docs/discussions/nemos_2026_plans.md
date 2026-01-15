@@ -50,6 +50,7 @@
 **Added value:**
 - State-dependent neural encoding models
 - Captures latent behavioral/neural state transitions
+- Behavior (choice) modeling
 - Differentiator vs standard GLM packages
 
 **Current status**: Class designed, needs review and merge
