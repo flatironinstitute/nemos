@@ -1589,6 +1589,9 @@ class TestGLMObservationModel:
         elif "gaussian" in model_instantiation:
             return 1.0
 
+        elif "categorical" in model_instantiation:
+            return 0.1
+
         else:
             raise ValueError("Unknown model instantiation")
 
@@ -1627,8 +1630,30 @@ class TestGLMObservationModel:
             else:
                 return np.array([3])
 
+        elif "categorical" in model_instantiation:
+            if "population" in glm_type:
+                return np.array([2, 2])
+            else:
+                return np.array([3])
+
         else:
             raise ValueError("Unknown model instantiation")
+
+    @pytest.fixture
+    def dof_non_lasso_dof(self, glm_type, model_instantiation):
+        """
+        Fixture for test_estimate_dof_resid
+        """
+        if "categorical" in model_instantiation:
+            if "population" in glm_type:
+                return np.array([10, 10])
+            else:
+                return np.array([10])
+        else:
+            if "population" in glm_type:
+                return np.array([5, 5, 5])
+            else:
+                return np.array([5])
 
     @pytest.fixture
     def obs_has_defaults(self, model_instantiation):
@@ -1693,7 +1718,7 @@ class TestGLMObservationModel:
 
         elif "categorical" in model_instantiation:
             if "population" in glm_type:
-                return "PopulationGLM(\n    observation_model=CategoricalObservations(),\n    inverse_link_function=identity,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
+                return "PopulationGLM(\n    observation_model=CategoricalObservations(),\n    inverse_link_function=log_softmax,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
             else:
                 return "GLM(\n    observation_model=CategoricalObservations(),\n    inverse_link_function=log_softmax,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
 
@@ -2149,14 +2174,14 @@ class TestGLMObservationModel:
     @pytest.mark.parametrize(
         "reg, dof, strength",
         [
-            (nmo.regularizer.UnRegularized(), np.array([5, 5, 5]), None),
+            (nmo.regularizer.UnRegularized(), "dof_non_lasso_dof", None),
             (
                 nmo.regularizer.Lasso(),
                 "dof_lasso_dof",
                 "dof_lasso_strength",
             ),  # this lasso fit has only 3 coeff of the first neuron
             # surviving
-            (nmo.regularizer.Ridge(), np.array([5, 5, 5]), 1.0),
+            (nmo.regularizer.Ridge(), "dof_non_lasso_dof", 1.0),
         ],
     )
     @pytest.mark.parametrize("n_samples", [1, 20])
@@ -2180,22 +2205,24 @@ class TestGLMObservationModel:
             glm_type + model_instantiation
         )
         # different dof for different obs models with lasso
-        if isinstance(dof, str):
-            dof = request.getfixturevalue(dof)
-        if "population" not in glm_type:
-            # this should exclude lasso dof, where pop vs single neuron
-            # is handled in the fixture
-            dof = np.array([dof[0]])
+        dof = request.getfixturevalue(dof)
         # need different strengths for different obs models with lasso reg
         # for 3 coefs to survive
         if isinstance(strength, str):
             strength = request.getfixturevalue(strength)
+        if isinstance(
+            model.observation_model, nmo.observation_models.CategoricalObservations
+        ):
+            n_categories = y.shape[-1] - 1
+        else:
+            n_categories = 1
         model.set_params(regularizer=reg, regularizer_strength=strength)
         model.solver_name = model.regularizer.default_solver
         model.solver_kwargs.update({"maxiter": 10**5})
         model.fit(X, y)
         num = model._estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
-        assert np.allclose(num, n_samples - dof - 1)
+        expected_dof_resid = n_samples - dof - n_categories
+        assert np.allclose(num, expected_dof_resid)
 
     ######################
     # Optimizer defaults #
