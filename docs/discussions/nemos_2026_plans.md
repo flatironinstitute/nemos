@@ -239,15 +239,18 @@
 
 **External collaborators:**
 
-- [ ] **Bence's availability**:
-  - Time? _________________
-  - Features? PGAM, _________________
 - [ ] **Arina's availability**:
   - Time? _________________
   - Features? PPGLM, _________________
+- [ ] **Bence's availability**:
+  - Time? _________________
+  - Features? PGAM, _________________
 - [ ] **Camila's availability**:
   - Time? _________________
   - Features? GLM-HMM docs, _________________
+- [ ] **Wolf's availability**:
+  - Time? _________________
+  - Features? Regularization pytree, fix basis bounds,  _________________
 
 Note: I assume neuroRSE have more flexible time allocation.
 
