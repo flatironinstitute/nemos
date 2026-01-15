@@ -6,8 +6,6 @@ from jaxtyping import Array, PyTree, Scalar
 
 from ._optimistix_adapter import OptimistixAdapter
 
-# TODO: Are all the accepted arguments exposed?
-
 
 def _make_rate_scaler(
     stepsize: float | None,
