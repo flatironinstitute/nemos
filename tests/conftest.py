@@ -1053,7 +1053,7 @@ def population_categoricalGLM_model_instantiation():
 
 @pytest.fixture
 def population_categoricalGLM_model_instantiation_pytree(
-    categoricalGLM_model_instantiation,
+    population_categoricalGLM_model_instantiation,
 ):
     """Set up a categorical GLM for testing purposes.
 
@@ -1069,13 +1069,15 @@ def population_categoricalGLM_model_instantiation_pytree(
             - GLMParams(w_true, b_true) (tuple): True weight and bias parameters.
             - rate (jax.numpy.ndarray): Simulated rate of log-proba.
     """
-    X, spikes, model, true_params, rate = categoricalGLM_model_instantiation
+    X, spikes, model, true_params, rate = population_categoricalGLM_model_instantiation
     X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
     true_params_tree = GLMParams(
         dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
         true_params.intercept,
     )
-    model_tree = nmo.glm.GLM(model.observation_model, regularizer=model.regularizer)
+    model_tree = nmo.glm.PopulationGLM(
+        model.observation_model, regularizer=model.regularizer
+    )
     return X_tree, spikes, model_tree, true_params_tree, rate
 
 
@@ -1285,7 +1287,7 @@ def population_negativeBinomialGLM_model_instantiation_pytree(
 
 def instantiate_glm_func(
     obs_model: (
-        Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial"]
+        Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial", "Categorical"]
         | nmo.observation_models.Observations
     ) = "Bernoulli",
     regularizer: str = "UnRegularized",
@@ -1294,7 +1296,7 @@ def instantiate_glm_func(
 ):
     np.random.seed(123)
     n_features = 2
-    n_categories = 3  # only for categorical
+    n_categories = 4  # only for categorical
     X = np.ones((500, n_features))
     X[:250, 0] = 0
     X[np.arange(500) % 2 == 1, 1] = 0

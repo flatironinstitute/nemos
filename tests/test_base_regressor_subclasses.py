@@ -16,7 +16,6 @@ from conftest import is_population_model
 from numba import njit
 
 import nemos as nmo
-from nemos import inverse_link_function_utils
 from nemos._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
 from nemos.glm.params import GLMParams
 from nemos.glm.validation import GLMValidator, PopulationGLMValidator
@@ -158,10 +157,14 @@ def _add_zeros(y):
     return y
 
 
-def _default_y_from_config(model, n_samples=500):
+def _get_entry_from_config(model, registry):
     model_name = model.__class__.__name__
     obs_name = model.observation_model.__class__.__name__.replace("Observations", "")
-    shape = DEFAULT_OBS_SHAPE[model_name][obs_name]
+    return registry[model_name][obs_name]
+
+
+def _default_y_from_config(model, n_samples=500):
+    shape = _get_entry_from_config(model, DEFAULT_OBS_SHAPE)
     return np.ones(shape)
 
 
@@ -391,7 +394,7 @@ class TestModelCommons:
         assert set(model.get_params().keys()) == expected_keys
         assert all(np.all(actual_values[k] == v) for k, v in expected_values.items())
 
-    @pytest.mark.solver_related
+    # @pytest.mark.solver_related
     def test_initialize_solver_mask_grouplasso(
         self, instantiate_base_regressor_subclass
     ):
@@ -447,7 +450,7 @@ class TestModelCommons:
             ),
         ],
     )
-    @pytest.mark.solver_related
+    # @pytest.mark.solver_related
     def test_initialize_solver_all_invalid_X(
         self, fill_val, expectation, instantiate_base_regressor_subclass
     ):
@@ -601,7 +604,7 @@ class TestModelCommons:
     ##########################################
     # Test model.initialize_solver_and_state #
     ##########################################
-    @pytest.mark.solver_related
+    # @pytest.mark.solver_related
     def test_initializer_solver_set_solver_callable(
         self, instantiate_base_regressor_subclass
     ):
@@ -882,7 +885,7 @@ class TestModelSimulation:
         "n_params",
         [0, 1, 2, 3, 4],
     )
-    @pytest.mark.solver_related
+    # @pytest.mark.solver_related
     def test_fit_param_length(self, n_params, instantiate_base_regressor_subclass):
         """
         Test the `fit` method with different numbers of initial parameters.
@@ -921,7 +924,7 @@ class TestModelSimulation:
             (1, pytest.raises(ValueError, match="X must be 2-dimensional\\.")),
         ],
     )
-    @pytest.mark.solver_related
+    # @pytest.mark.solver_related
     def test_fit_x_dimensionality(
         self, delta_dim, expectation, instantiate_base_regressor_subclass
     ):
@@ -945,7 +948,7 @@ class TestModelSimulation:
             (1, pytest.raises(ValueError, match=r"y must be [12]-dimensional\.")),
         ],
     )
-    @pytest.mark.solver_related
+    # @pytest.mark.solver_related
     def test_fit_y_dimensionality(
         self, delta_dim, expectation, instantiate_base_regressor_subclass
     ):
@@ -975,7 +978,7 @@ class TestModelSimulation:
             (1, pytest.raises(ValueError, match="Inconsistent number of features")),
         ],
     )
-    @pytest.mark.solver_related
+    # @pytest.mark.solver_related
     def test_fit_n_feature_consistency_x(
         self,
         delta_n_features,
@@ -1013,7 +1016,7 @@ class TestModelSimulation:
             ),
         ],
     )
-    @pytest.mark.solver_related
+    # @pytest.mark.solver_related
     def test_fit_time_points_x(
         self, delta_tp, expectation, instantiate_base_regressor_subclass
     ):
@@ -1044,7 +1047,7 @@ class TestModelSimulation:
             ),
         ],
     )
-    @pytest.mark.solver_related
+    # @pytest.mark.solver_related
     @pytest.mark.requires_x64
     def test_fit_time_points_y(
         self, delta_tp, expectation, instantiate_base_regressor_subclass
@@ -1076,7 +1079,7 @@ class TestModelSimulation:
             ),
         ],
     )
-    @pytest.mark.solver_related
+    # @pytest.mark.solver_related
     def test_fit_all_invalid_X(
         self, fill_val, expectation, instantiate_base_regressor_subclass
     ):
@@ -1106,26 +1109,25 @@ class TestModelValidator:
         fixture = instantiate_base_regressor_subclass
         X, model, true_params = fixture.X, fixture.model, fixture.params
 
-        model_name = model.__class__.__name__
         y = _default_y_from_config(model)
         expectation = (
             pytest.raises(
                 ValueError,
                 match="Params must have length",
             )
-            if n_params != INIT_PARAM_LENGTH[model_name]
+            if n_params != INIT_PARAM_LENGTH[model.__class__.__name__]
             else does_not_raise()
         )
 
-        if n_params < INIT_PARAM_LENGTH[model_name]:
+        if n_params < INIT_PARAM_LENGTH[model.__class__.__name__]:
             # Convert GLMParams to tuple for slicing
-            params_tuple = (true_params.coef, true_params.intercept)
+            params_tuple = model._validator.from_model_params(true_params)
             init_params = params_tuple[:n_params]
         else:
             # Convert GLMParams to tuple for concatenation
             params_tuple = (true_params.coef, true_params.intercept)
             init_params = params_tuple + (true_params.coef,) * (
-                n_params - INIT_PARAM_LENGTH[model_name]
+                n_params - INIT_PARAM_LENGTH[model.__class__.__name__]
             )
         validator = _validator_from_config(model)
         with expectation:
@@ -1285,7 +1287,7 @@ class TestModelValidator:
         Ensure the correct number of time-points.
         """
         fixture = instantiate_base_regressor_subclass
-        X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
+        X, y, model, _ = fixture.X, fixture.y, fixture.model, fixture.params
         shape = _default_y_from_config(model).shape
         y = jnp.zeros((shape[0] + delta_tp,) + shape[1:])
         validator = _validator_from_config(model)
