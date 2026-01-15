@@ -132,12 +132,13 @@
 
 ### 5. Batched Optimization Support
 
+**Proposed**: Add `fit_iterator` method for batch processing
+
 **Added value:**
 - Scalability to large datasets
 - User convenience: no need to write outer loop externally
 - Memory-efficient fitting
 
-**Proposed**: Add `fit_iterator` method for batch processing
 
 **Discussion items:**
 - [ ] **Priority**: Essential for publication / Nice to have / Post-publication?
@@ -150,16 +151,17 @@
 
 ### 6. Basis System Improvements
 
+**Proposed improvements**:
+- Allow JIT compilation of `compute_features`
+- Convert BSpline to JAX (currently uses scipy)
+- Implement derivative methods for basis (needed for PGAM)
+
 **Added value:**
 - Performance: JIT compilation efficiency
 - Enables derivative-based penalization (PGAM)
 - Direct basis usage in complex model implementations (e.g., as non-linearities in Gaussian Process inference)
 - Pure JAX implementation (no scipy dependency for BSpline)
 
-**Proposed improvements**:
-- Allow JIT compilation of `compute_features`
-- Convert BSpline to JAX (currently uses scipy)
-- Implement derivative methods for basis (needed for PGAM)
 
 **Discussion items:**
 - [ ] **Priority**: Which improvements are essential vs nice-to-have?
@@ -172,7 +174,18 @@
 
 ---
 
-### 7. Solver Maintenance
+### 7. Regularization
+
+**Proposed improvements**:
+- Allow pytree regularizer as an alternative to a single scalar regularizer strength.
+- Smoothing penalization
+
+**Added value:**
+- Flexible penalization
+- Smooth response modeling.
+- PGAM integration (per coefficient group-specific regularization needed).
+
+### 8. Solver Maintenance
 
 **Added value:**
 - Maintainability: no need to patch jaxopt port
