@@ -12,6 +12,11 @@
     - [ ] "NeMoS: A comprehensive GLM toolkit for neuroscience"
     - [ ] "NeMoS: Flexible statistical modeling framework for neural data"
     - [ ] Other: _________________
+- [ ] **Example datasets**: What datasets should we showcase?
+  - Head-direction (docs tutorial)?
+  - IBL ViSp (Camila's tutorial)?
+  - IBL Ashwood (For GLM-HMM)?
+  - Vision/sensory? Which one?
 
 ---
 
@@ -218,10 +223,31 @@
 ### Team capacity assessment:
 
 **Discussion items:**
-- [ ] **Edoardo's availability**: % time on NeMoS development? _________________
-- [ ] **Bence's availability**: % time on PGAM? _________________
-- [ ] **Arina's availability**: % time on PPGLM? _________________
-- [ ] **Other contributors**: Who else can contribute and at what capacity? _________________
+
+**External collaborators:**
+
+- [ ] **Bence's availability**:
+  - Time? _________________
+  - Features? PGAM, _________________
+- [ ] **Arina's availability**:
+  - Time? _________________
+  - Features? PPGLM, _________________
+- [ ] **Camila's availability**:
+  - Time? _________________
+  - Features? GLM-HMM docs, _________________
+
+Note: I assume neuroRSE have more flexible time allocation.
+
+**NeuroRSE**
+- [ ] **Sarah's availability**:
+  - Features? Any of the implementation, paper writing.
+- [ ] **Sarah's availability**:
+  - Features? Basis compilation, _________________
+- [ ] **Guillaume's availability**:
+  - Features? _________________
+- [ ] **Billy's availability**:
+  - Features? _________________
+
 
 ---
 
