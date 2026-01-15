@@ -67,7 +67,7 @@ def _check_samples_consistency(*xi: NDArray) -> None:
 def _check_transform_input(
     bas: "BasisMixin | Basis",
     *xi: ArrayLike,
-    conv_type: Literal["numpy", "jax", "none"] = "jax",
+    conv_type: Literal["numpy", "jax", "none"] = "numpy",
 ) -> Tuple[NDArray]:
     # conversion type
     if conv_type == "numpy":

@@ -358,7 +358,7 @@ class BSplineBasis(SplineBasis, abc.ABC):
         from SciPy to compute the basis values.
         """
         sample_pts, _ = min_max_rescale_samples(
-            sample_pts, getattr(self, "bounds", None)
+            sample_pts, getattr(self, "bounds", None), use_jax=False
         )
         # add knots
         knot_locs = self._generate_knots(is_cyclic=False)
@@ -467,7 +467,7 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
 
         """
         sample_pts, _ = min_max_rescale_samples(
-            sample_pts, getattr(self, "bounds", None)
+            sample_pts, getattr(self, "bounds", None), use_jax=False
         )
         knot_locs = self._generate_knots(is_cyclic=True)
 
@@ -497,18 +497,14 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
         ind = sample_pts > xc
 
         basis_eval = bspline(sample_pts, knots, order=self.order, der=0, outer_ok=True)
-        sample_pts = sample_pts.at[ind].set(
-            sample_pts[ind] - knots.max() + knot_locs[0]
-        )
+        sample_pts[ind] = sample_pts[ind] - knots.max() + knot_locs[0]
 
         if np.sum(ind):
             basis_eval[ind] = basis_eval[ind] + bspline(
                 sample_pts[ind], knots, order=self.order, outer_ok=True, der=0
             )
         # restore points
-        sample_pts = sample_pts.at[ind].set(
-            sample_pts[ind] - knots.max() + knot_locs[0]
-        )
+        sample_pts[ind] = sample_pts[ind] + knots.max() - knot_locs[0]
 
         basis_eval = basis_eval.reshape(*shape, basis_eval.shape[1])
         return basis_eval

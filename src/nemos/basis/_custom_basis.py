@@ -406,8 +406,10 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         if self._pynapple_support:
             conv_type = "numpy" if nap.nap_config.backend == "numba" else "jax"
             apply_func = support_pynapple(conv_type)(apply_f_vectorized)
+            stack = np.stack
         else:
             apply_func = apply_f_vectorized
+            stack = jnp.stack
 
         # Get individual function results
         func_results = [
@@ -416,7 +418,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         ]
 
         # Stack functions first, then reorder
-        stacked = jnp.stack(
+        stacked = stack(
             func_results, axis=-1
         )  # (n_samples, *out_shape, n_vec_features, n_funcs)
         self.output_shape = stacked.shape[1:-2]

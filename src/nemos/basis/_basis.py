@@ -68,6 +68,7 @@ def check_one_dimensional(func: Callable) -> Callable:
 def min_max_rescale_samples(
     sample_pts: NDArray,
     bounds: Optional[Tuple[float, float]] = None,
+    use_jax: Optional[bool] = True,
 ) -> Tuple[NDArray, NDArray]:
     """Rescale samples to [0,1].
 
@@ -85,14 +86,20 @@ def min_max_rescale_samples(
         If more than 90% of the sample points contain NaNs or Infs.
     """
     sample_pts = sample_pts.astype(float)
+    # get function from correct library
+    if use_jax:
+        nanmin, nanmax, asarray, where = jnp.nanmin, jnp.nanmax, jnp.asarray, jnp.where
+    else:
+        nanmin, nanmax, asarray, where = np.nanmin, np.nanmax, np.asarray, np.where
+
     # if not normalize all array
-    vmin = jnp.nanmin(sample_pts, axis=0) if bounds is None else bounds[0]
-    vmax = jnp.nanmax(sample_pts, axis=0) if bounds is None else bounds[1]
-    scaling = jnp.asarray(vmax - vmin)
+    vmin = nanmin(sample_pts, axis=0) if bounds is None else bounds[0]
+    vmax = nanmax(sample_pts, axis=0) if bounds is None else bounds[1]
+    scaling = asarray(vmax - vmin)
     # do not normalize if samples contain a single value (in which case vmax=vmin)
-    scaling = jnp.where(scaling == 0, 1.0, scaling)
+    scaling = where(scaling == 0, 1.0, scaling)
     sample_pts = (
-        jnp.where((sample_pts < vmin) | (sample_pts > vmax), np.nan, sample_pts) - vmin
+        where((sample_pts < vmin) | (sample_pts > vmax), np.nan, sample_pts) - vmin
     ) / scaling
 
     # check_fraction_valid_samples(
