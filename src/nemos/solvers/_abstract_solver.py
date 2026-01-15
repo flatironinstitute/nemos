@@ -34,6 +34,7 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         regularizer: Regularizer,
         regularizer_strength: float | None,
         has_aux: bool,
+        init_params: Params | None = None,
         **solver_init_kwargs,
     ):
         """
@@ -53,6 +54,8 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
             Whether `unregularized_loss` returns auxiliary variables.
             If False, the loss function is expected to return a single scalar.
             If True, the loss is expected to return a tuple of length 2 with a scalar and auxiliary variables.
+        init_params:
+            Initial model parameters. Passed to the regularizer's `get_proximal_operator` or `penalized_loss`.
         **solver_init_kwargs:
             Keyword arguments modifying the solver's behavior.
         """
