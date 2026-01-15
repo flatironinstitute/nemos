@@ -255,15 +255,14 @@
 Note: I assume neuroRSE have more flexible time allocation.
 
 **NeuroRSE**
-- [ ] **Sarah's availability**:
-  - Features? Any of the implementation, paper writing.
-- [ ] **Sarah's availability**:
-  - Features? Basis compilation, _________________
-- [ ] **Guillaume's availability**:
-  - Features? _________________
 - [ ] **Billy's availability**:
   - Features? _________________
-
+- [ ] **Edoardo's availability**:
+  - Features? Any of the implementation, paper writing.
+- [ ] **Guillaume's availability**:
+  - Features? _________________
+- [ ] **Sarah's availability**:
+  - Features? Basis compilation, _________________
 
 ---
 
