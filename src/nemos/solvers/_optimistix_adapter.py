@@ -75,7 +75,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
         regularizer: Regularizer,
         regularizer_strength: float | None,
         has_aux: bool,
-        init_params: Params = None,
+        init_params: Params | None = None,
         tol: float = DEFAULT_ATOL,
         rtol: float = DEFAULT_RTOL,
         maxiter: int = DEFAULT_MAX_STEPS,
