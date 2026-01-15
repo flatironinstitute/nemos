@@ -58,10 +58,14 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
 
     Note that for backward compatibility the `atol` parameter used in Optimistix
     is referred to as `tol` in NeMoS.
+
+    The `maxiter` default is taken from `DEFAULT_MAXITER`, which subclasses may
+    override to set solver-specific defaults.
     """
 
     _solver_cls: ClassVar[Type]
     _solver: optx.AbstractMinimiser
+    DEFAULT_MAXITER: ClassVar[int] = DEFAULT_MAX_STEPS
 
     # used for storing info after an optimization run
     # updated with the dict from an optimistix._solution.Solution.stats
@@ -78,7 +82,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
         init_params: Params | None = None,
         tol: float = DEFAULT_ATOL,
         rtol: float = DEFAULT_RTOL,
-        maxiter: int = DEFAULT_MAX_STEPS,
+        maxiter: int | None = None,
         **solver_init_kwargs,
     ):
         if "atol" in solver_init_kwargs:
@@ -103,6 +107,9 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
             kw = f.name
             if kw in solver_init_kwargs:
                 user_args[kw] = solver_init_kwargs.pop(kw)
+        if maxiter is None:
+            maxiter = self.DEFAULT_MAXITER
+
         self.config = OptimistixConfig(maxiter=maxiter, **user_args)
 
         if has_aux:

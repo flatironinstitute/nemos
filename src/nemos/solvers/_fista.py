@@ -359,6 +359,7 @@ class OptimistixFISTA(OptimistixAdapter):
 
     _solver_cls = FISTA
     _proximal = True
+    DEFAULT_MAXITER = 500
 
     def adjust_solver_init_kwargs(
         self, solver_init_kwargs: dict[str, Any]
@@ -381,5 +382,6 @@ class OptimistixNAG(OptimistixAdapter):
 
     _solver_cls = GradientDescent
     _proximal = False
+    DEFAULT_MAXITER = 500
 
     adjust_solver_init_kwargs = OptimistixFISTA.adjust_solver_init_kwargs

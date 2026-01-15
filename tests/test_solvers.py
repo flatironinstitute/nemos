@@ -817,3 +817,28 @@ def test_optimistix_solvers_have_correct_search(
         stepsize=stepsize,
     )
     assert isinstance(solver.search, expected_search)
+
+
+@pytest.mark.parametrize(
+    ("solver_class", "expected_maxiter"),
+    [
+        (nmo.solvers.OptimistixFISTA, 500),
+        (nmo.solvers.OptimistixNAG, 500),
+        (nmo.solvers.OptimistixOptaxGradientDescent, 500),
+        (nmo.solvers.OptimistixOptaxLBFGS, 500),
+        (nmo.solvers.OptimistixBFGS, 10_000),
+        (nmo.solvers.OptimistixNonlinearCG, 10_000),
+    ],
+)
+def test_optimistix_solvers_default_maxiter(
+    request, solver_class, expected_maxiter
+):
+    _, _, _, _, loss = request.getfixturevalue("linear_regression")
+    solver = solver_class(
+        unregularized_loss=loss,
+        regularizer=nmo.regularizer.UnRegularized(),
+        regularizer_strength=None,
+        has_aux=False,
+    )
+
+    assert solver.maxiter == expected_maxiter
