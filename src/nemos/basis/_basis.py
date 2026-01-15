@@ -1027,10 +1027,14 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         shape = xi[0].shape
         x1 = self.basis1.evaluate(*xi[: self.basis1._n_input_dimensionality])
         x2 = self.basis2.evaluate(*xi[self.basis1._n_input_dimensionality :])
+        # Required in case xi.shape[-1] == 0
+        # For example, in a multiplication with Zero basis
+        x1_shape = math.prod(x1.shape[:-1])
+        x2_shape = math.prod(x2.shape[:-1])
         X = np.asarray(
             row_wise_kron(
-                x1.reshape(-1, x1.shape[-1]),
-                x2.reshape(-1, x2.shape[-1]),
+                x1.reshape(x1_shape, x1.shape[-1]),
+                x2.reshape(x2_shape, x2.shape[-1]),
                 transpose=False,
             )
         )

@@ -1592,7 +1592,9 @@ class TestEMAlgorithm:
         glm = GLM(
             observation_model=obs, regularizer=regularization, solver_name=solver_name
         )
-        glm._instantiate_solver(partial_hmm_negative_log_likelihood)
+        glm._instantiate_solver(
+            partial_hmm_negative_log_likelihood, GLMParams(coef, intercept)
+        )
         solver_run = glm._solver_run
         # End of preparatory step.
         (
@@ -1702,7 +1704,10 @@ class TestEMAlgorithm:
 
         # use the BaseRegressor initialize_solver (this will be avaialble also in the GLMHHM class)
         glm = GLM(observation_model=obs, solver_name="LBFGS")
-        glm._instantiate_solver(partial_hmm_negative_log_likelihood)
+        glm._instantiate_solver(
+            partial_hmm_negative_log_likelihood,
+            GLMParams(intercept, coef),
+        )
         solver_run = glm._solver_run
         # End of preparatory step.
 
@@ -2047,7 +2052,9 @@ class TestConvergence:
             )
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
-        glm._instantiate_solver(partial_hmm_negative_log_likelihood)
+        glm._instantiate_solver(
+            partial_hmm_negative_log_likelihood, GLMParams(coef, intercept)
+        )
 
         # Run EM with custom checker - should stop after 1 iteration
         result = em_glm_hmm(
@@ -2110,7 +2117,9 @@ class TestConvergence:
             )
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
-        glm._instantiate_solver(partial_hmm_negative_log_likelihood)
+        glm._instantiate_solver(
+            partial_hmm_negative_log_likelihood, GLMParams(coef, intercept)
+        )
 
         maxiter = 10
         result = em_glm_hmm(
@@ -2166,7 +2175,9 @@ class TestConvergence:
             )
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
-        glm._instantiate_solver(partial_hmm_negative_log_likelihood)
+        glm._instantiate_solver(
+            partial_hmm_negative_log_likelihood, GLMParams(coef, intercept)
+        )
 
         maxiter = 1000
         tol = 1e-3  # Loose tolerance for faster convergence
@@ -2228,7 +2239,9 @@ class TestConvergence:
             )
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
-        glm._instantiate_solver(partial_hmm_negative_log_likelihood)
+        glm._instantiate_solver(
+            partial_hmm_negative_log_likelihood, GLMParams(coef, intercept)
+        )
 
         maxiter = 100
         tol = 1e-6
@@ -2311,7 +2324,9 @@ class TestConvergence:
             )
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
-        glm._instantiate_solver(partial_hmm_negative_log_likelihood)
+        glm._instantiate_solver(
+            partial_hmm_negative_log_likelihood, GLMParams(coef, intercept)
+        )
 
         tolerances = [1e-2, 1e-4, 1e-6]
         iteration_counts = []
@@ -2382,7 +2397,9 @@ class TestConvergence:
             )
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
-        glm._instantiate_solver(partial_hmm_negative_log_likelihood)
+        glm._instantiate_solver(
+            partial_hmm_negative_log_likelihood, GLMParams(coef, intercept)
+        )
 
         result = em_glm_hmm(
             X[:, 1:],
@@ -2519,7 +2536,9 @@ class TestCompilation:
             )
 
         glm = GLM(observation_model=obs, solver_name=solver_name)
-        glm._instantiate_solver(partial_hmm_negative_log_likelihood)
+        glm._instantiate_solver(
+            partial_hmm_negative_log_likelihood, GLMParams(coef, intercept)
+        )
 
         # Clear compilation cache
         initial_cache_size = em_glm_hmm._cache_size()
@@ -2623,7 +2642,9 @@ class TestCompilation:
             )
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
-        glm._instantiate_solver(partial_hmm_negative_log_likelihood)
+        glm._instantiate_solver(
+            partial_hmm_negative_log_likelihood, GLMParams(coef, intercept)
+        )
 
         _ = forward_backward(
             X,  # drop intercept
@@ -2827,7 +2848,9 @@ class TestPytreeSupport:
             )
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
-        glm._instantiate_solver(partial_hmm_negative_log_likelihood)
+        glm._instantiate_solver(
+            partial_hmm_negative_log_likelihood, GLMParams(coef_tree, intercept)
+        )
         solver_run = glm._solver_run
 
         # Run EM with pytrees (just a few iterations)

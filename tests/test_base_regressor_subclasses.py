@@ -18,6 +18,7 @@ from numba import njit
 import nemos as nmo
 from nemos import inverse_link_function_utils
 from nemos._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
+from nemos.glm.params import GLMParams
 from nemos.glm.validation import GLMValidator, PopulationGLMValidator
 from nemos.inverse_link_function_utils import LINK_NAME_TO_FUNC
 
@@ -213,7 +214,7 @@ class TestModelCommons:
             ("ProxSVRG", does_not_raise()),
             (
                 1,
-                pytest.raises(ValueError, match="The solver: 1 is not allowed "),
+                pytest.raises(TypeError, match="solver_name must be a string"),
             ),
         ],
     )
@@ -333,9 +334,21 @@ class TestModelCommons:
         y = _add_zeros(y)
         n_groups = 2
         n_features = X.shape[1]
-        mask = np.ones((n_groups, n_features), dtype=float)
-        mask[0, : n_features // 2] = 0
-        mask[1, n_features // 2 :] = 0
+
+        # Create mask with proper shape for GLM (2D) or PopulationGLM (3D)
+        if is_population_model(model):
+            n_neurons = y.shape[1]
+            mask_array = np.ones((n_groups, n_features, n_neurons), dtype=float)
+            mask_array[0, : n_features // 2, :] = 0
+            mask_array[1, n_features // 2 :, :] = 0
+        else:
+            mask_array = np.ones((n_groups, n_features), dtype=float)
+            mask_array[0, : n_features // 2] = 0
+            mask_array[1, n_features // 2 :] = 0
+
+        # Wrap mask in GLMParams structure
+        mask = GLMParams(jnp.asarray(mask_array, dtype=jnp.float32), None)
+
         model.set_params(
             regularizer=nmo.regularizer.GroupLasso(mask=mask),
             solver_name="ProximalGradient",
@@ -359,9 +372,21 @@ class TestModelCommons:
         y = _add_zeros(y)
         n_groups = 2
         n_features = X.shape[1]
-        mask = np.ones((n_groups, n_features), dtype=float)
-        mask[0, : n_features // 2] = 0
-        mask[1, n_features // 2 :] = 0
+
+        # Create mask with proper shape for GLM (2D) or PopulationGLM (3D)
+        if is_population_model(model):
+            n_neurons = y.shape[1]
+            mask_array = np.ones((n_groups, n_features, n_neurons), dtype=float)
+            mask_array[0, : n_features // 2, :] = 0
+            mask_array[1, n_features // 2 :, :] = 0
+        else:
+            mask_array = np.ones((n_groups, n_features), dtype=float)
+            mask_array[0, : n_features // 2] = 0
+            mask_array[1, n_features // 2 :] = 0
+
+        # Wrap mask in GLMParams structure
+        mask = GLMParams(jnp.asarray(mask_array, dtype=jnp.float32), None)
+
         model.set_params(
             regularizer=nmo.regularizer.GroupLasso(mask=mask),
             solver_name="ProximalGradient",
@@ -985,6 +1010,7 @@ class TestModelSimulation:
         ],
     )
     @pytest.mark.solver_related
+    @pytest.mark.requires_x64
     def test_fit_time_points_y(
         self, delta_tp, expectation, instantiate_base_regressor_subclass
     ):
