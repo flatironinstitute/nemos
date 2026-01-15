@@ -1761,6 +1761,45 @@ class TestGLMObservationModel:
         assert np.allclose(model.predict(X), model_tree.predict(X_tree))
         assert np.allclose(model.scale_, model_tree.scale_)
 
+    @pytest.mark.parametrize(
+        "delta_categories, expectation",
+        [
+            (-1, pytest.raises(ValueError, match="Inconsistent number of categories")),
+            (1, pytest.raises(ValueError, match="Inconsistent number of categories")),
+        ],
+    )
+    def test_validate_category_consistency(
+        self, delta_categories, expectation, request, glm_type, model_instantiation
+    ):
+        """
+        Test that validate_consistency catches wrong category count in coef.
+
+        For categorical models with reference parameterization, coef should have
+        K-1 categories where K is the number of categories in y.
+        """
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        # Only run for categorical models
+        if model._validator.category_dim_offset == 0:
+            pytest.skip("Test only applies to categorical models")
+
+        # Modify y to have wrong category count
+        if delta_categories > 0:
+            y_test = jnp.concatenate(
+                [y, jnp.zeros(y.shape[:-1] + (delta_categories,))], axis=-1
+            )
+        elif delta_categories < 0:
+            y_test = y[..., :delta_categories]
+        else:
+            y_test = y
+
+        params = model._validator.from_model_params(true_params)
+        with expectation:
+            model.fit(X, y_test, init_params=params)
+        with expectation:
+            model.initialize_solver_and_state(X, y_test, init_params=params)
+
     ####################
     # Test model.score #
     ####################

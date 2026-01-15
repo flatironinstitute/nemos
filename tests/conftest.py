@@ -24,7 +24,6 @@ ModelFixture = namedtuple(
     ["X", "y", "model", "params", "rates", "extra"],
     defaults=[None, None],  # rates and extra default to None
 )
-
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -39,6 +38,7 @@ from nemos.basis._basis import Basis
 from nemos.basis._basis_mixin import BasisMixin
 from nemos.basis._transformer_basis import TransformerBasis
 from nemos.glm.params import GLMParams
+from nemos.inverse_link_function_utils import log_softmax
 
 DEFAULT_KWARGS = {
     "n_basis_funcs": 5,
@@ -978,7 +978,6 @@ def categoricalGLM_model_instantiation():
             - GLMParams(w_true, b_true) (tuple): True weight and bias parameters.
             - rate (jax.numpy.ndarray): Simulated rate of log-proba.
     """
-    from nemos.inverse_link_function_utils import log_softmax
 
     np.random.seed(123)
     n_categories = 3
@@ -1042,10 +1041,10 @@ def population_categoricalGLM_model_instantiation():
     """
     np.random.seed(123)
     X = np.random.normal(size=(100, 5))
-    b_true = np.zeros((2, 3))
-    w_true = np.random.normal(size=(5, 2, 3))
+    b_true = np.zeros((2, 2))
+    w_true = np.random.normal(size=(5, 2, 2))
     model = nmo.glm.PopulationGLM("Categorical", regularizer="UnRegularized")
-    rate = jax.nn.log_softmax(jnp.einsum("kni,tk->tni", w_true, X) + b_true)
+    rate = log_softmax(jnp.einsum("kni,tk->tni", w_true, X) + b_true)
     key = jax.random.PRNGKey(123)
     y = jax.random.categorical(key, rate)
     y = jax.nn.one_hot(y, num_classes=3).astype(float)

@@ -201,8 +201,8 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         """
         Validate consistency between parameters and inputs for single-neuron GLM.
 
-        For single-neuron GLM, only validates feature consistency with X.
-        Does not validate y since it's 1D (single neuron, no neuron axis to check).
+        For single-neuron GLM, validates feature consistency with X.
+        For categorical models, also validates the category dimension accounting for offset.
         """
         if X is not None:
             # check that X and params.coef have the same structure
@@ -234,6 +234,20 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
                 err_message="Inconsistent number of features. "
                 f"Model coefficients have {jax.tree_util.tree_map(lambda p: p.shape[0], params.coef)} features, "
                 f"X has {jax.tree_util.tree_map(lambda x: x.shape[1], X)} features instead!",
+            )
+
+        # For categorical models, validate category dimension with offset
+        if y is not None and self.category_dim_offset > 0:
+            expected_coef_categories = y.shape[-1] - self.category_dim_offset
+            validation.check_array_shape_match_tree(
+                params.coef,
+                expected_coef_categories,
+                axis=-1,
+                err_message=f"Inconsistent number of categories. "
+                f"Model coefficients have "
+                f"{jax.tree_util.tree_map(lambda p: p.shape[-1], params.coef)} categories, "
+                f"but expected {expected_coef_categories} (y has {y.shape[-1]} categories, "
+                f"minus {self.category_dim_offset} for reference parameterization).",
             )
 
     @staticmethod
@@ -393,6 +407,7 @@ class PopulationGLMValidator(GLMValidator):
 
         For population GLM, validates both feature consistency with X and
         neuron count consistency with y (since y is 2D with shape (n_timebins, n_neurons)).
+        For categorical models, also validates the category dimension accounting for offset.
         """
         # First validate X consistency (features) using parent implementation
         super().validate_consistency(params, X=X, y=None)
@@ -408,3 +423,17 @@ class PopulationGLMValidator(GLMValidator):
                 f"{jax.tree_util.tree_map(lambda p: p.shape[1], params.coef)} neurons, "
                 f"y has {jax.tree_util.tree_map(lambda x: x.shape[1], y)} neurons instead!",
             )
+
+            # For categorical models, validate category dimension with offset
+            if self.category_dim_offset > 0:
+                expected_coef_categories = y.shape[-1] - self.category_dim_offset
+                validation.check_array_shape_match_tree(
+                    params.coef,
+                    expected_coef_categories,
+                    axis=-1,
+                    err_message=f"Inconsistent number of categories. "
+                    f"Model coefficients have "
+                    f"{jax.tree_util.tree_map(lambda p: p.shape[-1], params.coef)} categories, "
+                    f"but expected {expected_coef_categories} (y has {y.shape[-1]} categories, "
+                    f"minus {self.category_dim_offset} for reference parameterization).",
+                )
