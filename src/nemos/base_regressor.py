@@ -399,7 +399,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
 
     @abc.abstractmethod
     def predict(self, X: DESIGN_INPUT_TYPE) -> jnp.ndarray:
-        """Predict rates based on fit parameters."""
+        """Predict based on fit parameters."""
         pass
 
     @abc.abstractmethod
@@ -410,7 +410,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         # may include score_type or other additional model dependent kwargs
         **kwargs,
     ) -> jnp.ndarray:
-        """Score the predicted firing rates (based on fit) to the target neural activity."""
+        """Evaluate the goodness-of-fit of the model to the target neural activity."""
         pass
 
     @abc.abstractmethod
@@ -465,8 +465,8 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         X
             Input data, array of shape ``(n_time_bins, n_features)`` or pytree of same.
         y
-            Target data, array of shape ``(n_time_bins,)`` for single neuron models or
-            ``(n_time_bins, n_neurons)`` for population models.
+            Target data. Shape depends on the model and observation type. See the
+            concrete model class documentation for details.
         *args
             Additional positional arguments passed to the model-specific loss function.
         **kwargs
@@ -523,15 +523,15 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
     ) -> UserProvidedParamsT:
         """Initialize model parameters.
 
-        Initialize coefficients with zeros and intercept by matching the mean firing rate.
+        Initialize coefficients with zeros and intercept based on the mean activity.
 
         Parameters
         ----------
         X
             Input data, array of shape ``(n_time_bins, n_features)`` or pytree of same.
         y
-            Target data, array of shape ``(n_time_bins,)`` for single neuron models or
-            ``(n_time_bins, n_neurons)`` for population models.
+            Target data. Shape depends on the model and observation type. See the
+            concrete model class documentation for details.
 
         Returns
         -------
@@ -609,8 +609,8 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         X
             Input data, array of shape ``(n_time_bins, n_features)`` or pytree of same.
         y
-            Target data, array of shape ``(n_time_bins,)`` for single neuron models or
-            ``(n_time_bins, n_neurons)`` for population models.
+            Target data. Shape depends on the model and observation type. See the
+            concrete model class documentation for details.
         init_params
             Initial parameter tuple of (coefficients, intercept).
 
