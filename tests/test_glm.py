@@ -2116,6 +2116,32 @@ class TestGLMObservationModel:
         # check that the repr works after cloning
         repr(cls)
 
+    @staticmethod
+    def _convert_sklearn_categorical_params(sklearn_model):
+        """Convert sklearn's multinomial params to reference-category parameterization.
+
+        sklearn uses full parameterization with K sets of parameters.
+        nemos uses reference-category parameterization with K-1 parameters,
+        where the last category has implicit zero parameters.
+
+        Returns coef and intercept in nemos format: coef (n_features, K-1), intercept (K-1,).
+        """
+        coef = (sklearn_model.coef_[:-1] - sklearn_model.coef_[-1:]).T
+        intercept = sklearn_model.intercept_[:-1] - sklearn_model.intercept_[-1]
+        return coef, intercept
+
+    @staticmethod
+    def _assert_params_match(
+        sklearn_coef, sklearn_intercept, nemos_coef, nemos_intercept, atol=1e-6
+    ):
+        """Assert that sklearn and nemos parameters match within tolerance."""
+        match_weights = jnp.allclose(sklearn_coef, nemos_coef, atol=atol, rtol=0.0)
+        match_intercepts = jnp.allclose(
+            sklearn_intercept, nemos_intercept, atol=atol, rtol=0.0
+        )
+        if not (match_weights and match_intercepts):
+            raise ValueError("GLM.fit estimate does not match sklearn!")
+
     @pytest.mark.parametrize("solver_name", ["LBFGS"])
     @pytest.mark.solver_related
     @pytest.mark.requires_x64
@@ -2123,9 +2149,10 @@ class TestGLMObservationModel:
     def test_glm_fit_matches_sklearn(
         self, solver_name, request, glm_type, model_instantiation, sklearn_model
     ):
-        """Test that different solvers converge to the same solution."""
+        """Test that nemos GLM produces the same estimates as sklearn."""
         if sklearn_model is None:
             pytest.skip(f"sklearn model is not available for {model_instantiation}")
+
         X, y, model_obs, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
@@ -2137,93 +2164,49 @@ class TestGLMObservationModel:
             solver_kwargs={"tol": 10**-10},
         )
 
-        # set gamma inverse link function to match sklearn
         if "gamma" in model_instantiation:
             model.inverse_link_function = jnp.exp
 
         model.fit(X, y)
 
         is_categorical = "categorical" in model_instantiation
+        is_population = "population" in glm_type
+        atol = 1e-5 if is_categorical else 1e-6
 
-        if "population" in glm_type:
-            if is_categorical:
-                # For population categorical: y shape (n_samples, n_neurons, n_categories)
-                # Test each neuron separately
-                for n in range(y.shape[1]):
-                    yn_onehot = y[:, n, :]
-                    yn_discrete = yn_onehot.argmax(axis=-1)
-                    sklearn_model.fit(X, yn_discrete)
-                    # Convert sklearn's full parameterization to reference-category
-                    # sklearn: coef_ (K, n_features), intercept_ (K,)
-                    # nemos: coef_ (n_features, n_neurons, K-1), intercept_ (n_neurons, K-1)
-                    sklearn_coef_ref = (
-                        sklearn_model.coef_[:-1] - sklearn_model.coef_[-1:]
-                    ).T
-                    sklearn_intercept_ref = (
-                        sklearn_model.intercept_[:-1] - sklearn_model.intercept_[-1]
+        if is_population:
+            # Population GLM: fit each neuron separately in sklearn and compare
+            for n in range(y.shape[1]):
+                if is_categorical:
+                    sklearn_model.fit(X, y[:, n, :].argmax(axis=-1))
+                    sk_coef, sk_intercept = self._convert_sklearn_categorical_params(
+                        sklearn_model
                     )
-                    match_weights = jnp.allclose(
-                        sklearn_coef_ref, model.coef_[:, n, :], atol=1e-5, rtol=0.0
+                    self._assert_params_match(
+                        sk_coef, sk_intercept,
+                        model.coef_[:, n, :], model.intercept_[n, :],
+                        atol=atol,
                     )
-                    match_intercepts = jnp.allclose(
-                        sklearn_intercept_ref,
-                        model.intercept_[n, :],
-                        atol=1e-5,
-                        rtol=0.0,
+                else:
+                    sklearn_model.fit(X, y[:, n])
+                    self._assert_params_match(
+                        sklearn_model.coef_, sklearn_model.intercept_,
+                        model.coef_[:, n], model.intercept_[n],
+                        atol=atol,
                     )
-                    if (not match_weights) or (not match_intercepts):
-                        raise ValueError("GLM.fit estimate does not match sklearn!")
-            else:
-                # test by fitting each neuron separately in sklearn
-                for n, yn in enumerate(y.T):
-                    sklearn_model.fit(X, yn)
-                    abs_tol = 1e-6
-                    # this will fail for poisson with GradientDescent for the third neuron
-                    # with tol=1.57e-5 (note that other algorithm do just fine)
-                    match_weights = jnp.allclose(
-                        sklearn_model.coef_, model.coef_[:, n], atol=abs_tol, rtol=0.0
-                    )
-
-                    match_intercepts = jnp.allclose(
-                        sklearn_model.intercept_,
-                        model.intercept_[n],
-                        atol=1e-6,
-                        rtol=0.0,
-                    )
-                    if (not match_weights) or (not match_intercepts):
-                        raise ValueError("GLM.fit estimate does not match sklearn!")
-
-        elif is_categorical:
-            # For categorical GLM: convert one-hot to discrete labels for sklearn
-            y_discrete = y.argmax(axis=-1)
-            sklearn_model.fit(X, y_discrete)
-            # Convert sklearn's full parameterization to reference-category
-            # sklearn: coef_ (K, n_features), intercept_ (K,)
-            # nemos: coef_ (n_features, K-1), intercept_ (K-1,)
-            sklearn_coef_ref = (sklearn_model.coef_[:-1] - sklearn_model.coef_[-1:]).T
-            sklearn_intercept_ref = (
-                sklearn_model.intercept_[:-1] - sklearn_model.intercept_[-1]
-            )
-            match_weights = jnp.allclose(
-                sklearn_coef_ref, model.coef_, atol=1e-5, rtol=0.0
-            )
-            match_intercepts = jnp.allclose(
-                sklearn_intercept_ref, model.intercept_, atol=1e-5, rtol=0.0
-            )
-            if (not match_weights) or (not match_intercepts):
-                raise ValueError("GLM.fit estimate does not match sklearn!")
-
         else:
-            sklearn_model.fit(X, y)
+            # Single-neuron GLM
+            if is_categorical:
+                sklearn_model.fit(X, y.argmax(axis=-1))
+                sk_coef, sk_intercept = self._convert_sklearn_categorical_params(
+                    sklearn_model
+                )
+            else:
+                sklearn_model.fit(X, y)
+                sk_coef, sk_intercept = sklearn_model.coef_, sklearn_model.intercept_
 
-            match_weights = jnp.allclose(
-                sklearn_model.coef_, model.coef_, atol=1e-6, rtol=0.0
+            self._assert_params_match(
+                sk_coef, sk_intercept, model.coef_, model.intercept_, atol=atol
             )
-            match_intercepts = jnp.allclose(
-                sklearn_model.intercept_, model.intercept_, atol=1e-6, rtol=0.0
-            )
-            if (not match_weights) or (not match_intercepts):
-                raise ValueError("GLM.fit estimate does not match sklearn!")
 
     #####################
     # Test residual DOF #
