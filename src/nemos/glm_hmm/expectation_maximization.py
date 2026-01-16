@@ -10,8 +10,8 @@ import jax.numpy as jnp
 from ..glm.params import GLMParams
 from ..typing import Aux, SolverState
 from .m_step_analytical_updates import (
-    _analytical_m_step_initial_prob,
-    _analytical_m_step_transition_prob,
+    _analytical_m_step_log_initial_prob,
+    _analytical_m_step_log_transition_prob,
 )
 from .params import GLMHMMParams, GLMScale, HMMParams
 from .utils import Array, compute_rate_per_state, initialize_new_session
@@ -526,25 +526,25 @@ def run_m_step(
     using alternative optimization methods such as proximal gradient descent.
     """
     posteriors = jnp.exp(log_posteriors)
-    joint_posterior = jnp.exp(log_joint_posterior)
 
     # Update Initial state probability Eq. 13.18
-    initial_prob = _analytical_m_step_initial_prob(
-        posteriors,
+    log_initial_prob = _analytical_m_step_log_initial_prob(
+        log_posteriors,
         is_new_session=is_new_session,
         dirichlet_prior_alphas=dirichlet_prior_alphas_init_prob,
     )
-    transition_prob = _analytical_m_step_transition_prob(
-        joint_posterior, dirichlet_prior_alphas=dirichlet_prior_alphas_transition
+    log_transition_prob = _analytical_m_step_log_transition_prob(
+        log_joint_posterior, dirichlet_prior_alphas=dirichlet_prior_alphas_transition
     )
 
-    # Minimize negative log-likelihood to update GLM weights
-    optimized_projection_weights, state, _ = m_step_fn_glm_params(
-        params.glm_params, X, y, posteriors
-    )
-    predicted_rate = compute_rate_per_state(
-        X, optimized_projection_weights, inverse_link_function=inverse_link_function
-    )
+    with jax.disable_jit(False):
+        # Minimize negative log-likelihood to update GLM weights
+        optimized_projection_weights, state, _ = m_step_fn_glm_params(
+            params.glm_params, X, y, posteriors
+        )
+        predicted_rate = compute_rate_per_state(
+            X, optimized_projection_weights, inverse_link_function=inverse_link_function
+        )
 
     if m_step_fn_glm_scale is not None:
         # Gaussian, Gamma, and other have a scale.
@@ -557,7 +557,7 @@ def run_m_step(
         glm_scale = params.glm_scale
 
     params = GLMHMMParams(
-        hmm_params=HMMParams(jnp.log(initial_prob), jnp.log(transition_prob)),
+        hmm_params=HMMParams(log_initial_prob, log_transition_prob),
         glm_params=optimized_projection_weights,
         glm_scale=glm_scale,
     )

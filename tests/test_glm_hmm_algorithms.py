@@ -31,8 +31,8 @@ from nemos.glm_hmm.expectation_maximization import (
     run_m_step,
 )
 from nemos.glm_hmm.m_step_analytical_updates import (
-    _analytical_m_step_initial_prob,
-    _analytical_m_step_transition_prob,
+    _analytical_m_step_log_initial_prob,
+    _analytical_m_step_log_transition_prob,
 )
 from nemos.glm_hmm.params import GLMHMMParams, GLMScale, HMMParams
 from nemos.observation_models import (
@@ -1715,15 +1715,14 @@ class TestMStep:
         # apply update:
         # Update Initial state probability Eq. 13.18
         posteriors = jnp.exp(log_posteriors)
-        joint_posterior = jnp.exp(log_joint_posterior)
-        new_initial_prob = _analytical_m_step_initial_prob(
-            posteriors,
+        new_log_initial_prob = _analytical_m_step_log_initial_prob(
+            log_posteriors,
             is_new_session=new_sess,
         )
         (_, _, _, updated_log_like, _, _) = forward_backward(
             X,
             y,
-            jnp.log(new_initial_prob),
+            new_log_initial_prob,
             jnp.log(transition_prob),
             glm_params=GLMParams(coef, intercept),
             glm_scale=GLMScale(jnp.zeros_like(intercept)),
@@ -1736,12 +1735,14 @@ class TestMStep:
         ), "M-step for initial prob did not increase likelihood"
 
         initial_log_like = updated_log_like
-        new_transition_prob = _analytical_m_step_transition_prob(joint_posterior)
+        new_log_transition_prob = _analytical_m_step_log_transition_prob(
+            log_joint_posterior
+        )
         (_, _, _, updated_log_like, _, _) = forward_backward(
             X,
             y,
-            np.log(new_initial_prob),
-            np.log(new_transition_prob),
+            new_log_initial_prob,
+            new_log_transition_prob,
             glm_params=GLMParams(coef, intercept),
             glm_scale=GLMScale(jnp.zeros_like(intercept)),
             inverse_link_function=inv_link,
@@ -1764,8 +1765,8 @@ class TestMStep:
         (_, _, _, updated_log_like, _, _) = forward_backward(
             X,
             y,
-            np.log(new_initial_prob),
-            np.log(new_transition_prob),
+            new_log_initial_prob,
+            new_log_transition_prob,
             glm_params=new_glm_prams,
             glm_scale=GLMScale(jnp.zeros_like(intercept)),
             inverse_link_function=inv_link,
@@ -1791,8 +1792,8 @@ class TestMStep:
             (_, _, _, updated_log_like, _, _) = forward_backward(
                 X,
                 y,
-                np.log(new_initial_prob),
-                np.log(new_transition_prob),
+                new_log_initial_prob,
+                new_log_transition_prob,
                 glm_params=new_glm_prams,
                 glm_scale=new_scale,
                 inverse_link_function=inv_link,
@@ -1833,10 +1834,12 @@ class TestMStep:
         )
         np.testing.assert_allclose(new_params.glm_scale.log_scale, new_scale.log_scale)
         np.testing.assert_allclose(
-            jnp.exp(new_params.hmm_params.log_initial_prob), new_initial_prob
+            jnp.exp(new_params.hmm_params.log_initial_prob),
+            jnp.exp(new_log_initial_prob),
         )
         np.testing.assert_allclose(
-            jnp.exp(new_params.hmm_params.log_transition_prob), new_transition_prob
+            jnp.exp(new_params.hmm_params.log_transition_prob),
+            jnp.exp(new_log_transition_prob),
         )
 
 
@@ -2528,7 +2531,7 @@ class TestConvergence:
         initial_prob = data["initial_prob"]
         transition_prob = data["transition_prob"]
         projection_weights = data["projection_weights"]
-        intercept, coef = projection_weights[:1], projection_weights[1:]
+        intercept, coef = projection_weights[:1].squeeze(), projection_weights[1:]
 
         obs = BernoulliObservations()
         likelihood_func = prepare_estep_log_likelihood(False, obs)
@@ -2563,18 +2566,18 @@ class TestConvergence:
 
         maxiter = 100
         tol = 1e-6
-
-        learned_params, final_state = em_glm_hmm(
-            params=params,
-            X=X[:100, 1:],
-            y=y[:100],
-            inverse_link_function=obs.default_inverse_link_function,
-            log_likelihood_func=likelihood_func,
-            m_step_fn_glm_params=glm._solver_run,
-            m_step_fn_glm_scale=None,
-            maxiter=maxiter,
-            tol=tol,
-        )
+        with jax.disable_jit(True):
+            learned_params, final_state = em_glm_hmm(
+                params=params,
+                X=X[:100, 1:],
+                y=y[:100],
+                inverse_link_function=obs.default_inverse_link_function,
+                log_likelihood_func=likelihood_func,
+                m_step_fn_glm_params=glm._solver_run,
+                m_step_fn_glm_scale=None,
+                maxiter=maxiter,
+                tol=tol,
+            )
 
         # Final state should have valid likelihood
         assert jnp.isfinite(
