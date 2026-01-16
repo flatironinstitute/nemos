@@ -65,11 +65,6 @@ class IdentityBasis(AtomicBasisMixin, Basis):
         sample_pts = jnp.where(
             (sample_pts < vmin) | (sample_pts > vmax), jnp.nan, sample_pts
         )
-        # check_fraction_valid_samples(
-        #     sample_pts,
-        #     err_msg="All the samples lie outside the [vmin, vmax] range.",
-        #     warn_msg="More than 90% of the samples lie outside the [vmin, vmax] range.",
-        # )
         return sample_pts[..., np.newaxis]
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
