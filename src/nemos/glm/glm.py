@@ -105,8 +105,10 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         Observation model to use. The model describes the distribution of the neural activity.
         Default is the Poisson model. Alternatives are "Gamma", "Bernoulli", "NegativeBinomial" and "Gaussian".
     inverse_link_function :
-        A function that maps the linear combination of predictors into a firing rate. The default depends
-        on the observation model, see the table above.
+        A function that maps the linear combination of predictors to the model's output.
+        For rate-based observation models, this produces firing rates. For CategoricalObservations,
+        this produces log-probabilities. The default depends on the observation model, see the
+        table above.
     regularizer :
         Regularization to use for model optimization. Defines the regularization scheme
         and related parameters.
@@ -127,8 +129,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
     Attributes
     ----------
     intercept_ :
-        Model baseline linked firing rate parameters, e.g. if the link is the logarithm, the baseline
-        firing rate will be ``jnp.exp(model.intercept_)``.
+        Model baseline parameters in the linear predictor space. For rate-based observation models
+        with a log link, ``jnp.exp(model.intercept_)`` gives baseline firing rates. For
+        CategoricalObservations, these are log-odds relative to the reference category.
     coef_ :
         Basis coefficients for the model.
     solver_state_ :
@@ -301,13 +304,17 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         self, params: GLMParams, X: Union[dict[str, jnp.ndarray], jnp.ndarray]
     ) -> jnp.ndarray:
         """
-        Predicts firing rates based on given parameters and design matrix.
+        Predict the output of the inverse link function.
 
-        This function computes the predicted firing rates using the provided parameters
-        and model design matrix ``X``. It is a streamlined version used internally within
-        optimization routines, where it serves as the loss function. Unlike the ``GLM.predict``
-        method, it does not perform any input validation, assuming that the inputs are pre-validated.
+        This function computes the model's prediction by applying the inverse link
+        function to the linear combination of features and parameters. The output
+        depends on the observation model:
 
+        - For rate-based models (Poisson, Gamma, etc.): returns firing rates.
+        - For CategoricalObservations: returns log-probabilities over categories.
+
+        This is a streamlined version used internally within optimization routines.
+        Unlike ``GLM.predict``, it does not perform input validation.
 
         Parameters
         ----------
@@ -319,7 +326,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         Returns
         -------
         :
-            The predicted rates. Shape (n_time_bins, ).
+            The model prediction. Shape ``(n_time_bins,)`` for all observation models except CategoricalObservations,
+            or ``(n_time_bins, n_categories)`` for CategoricalObservations.
         """
         return self._inverse_link_function(
             # First, multiply each feature by its corresponding coefficient,
@@ -333,7 +341,14 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
 
     @support_pynapple(conv_type="jax")
     def predict(self, X: DESIGN_INPUT_TYPE) -> jnp.ndarray:
-        """Predict rates based on fit parameters.
+        """Predict based on fit parameters.
+
+        Computes the model's prediction by applying the inverse link function
+        to the linear combination of features and fitted parameters. The output
+        depends on the observation model:
+
+        - For rate-based models (Poisson, Gamma, etc.): returns firing rates.
+        - For CategoricalObservations: returns log-probabilities over categories.
 
         Parameters
         ----------
@@ -343,7 +358,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         Returns
         -------
         :
-            The predicted rates with shape ``(n_time_bins, )``.
+            The model prediction. Shape ``(n_time_bins,)`` for all observation models except CategoricalObservations,
+            or ``(n_time_bins, n_categories)`` for CategoricalObservations.
 
         Raises
         ------
@@ -374,7 +390,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         See Also
         --------
         :meth:`nemos.glm.GLM.score`
-            Score predicted rates against target spike counts.
+            Evaluate the goodness-of-fit of the model to observed neural data.
 
         :meth:`nemos.glm.GLM.simulate`
             Simulate neural activity in response to a feed-forward input (feed-forward only).
@@ -458,7 +474,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         X :
             The exogenous variables. Shape ``(n_time_bins, n_features)``.
         y :
-            Neural activity. Shape ``(n_time_bins, )``.
+            Neural activity. Shape ``(n_time_bins,)`` for all observation models except CategoricalObservations,
+            or ``(n_time_bins, n_categories)`` (one-hot encoded) for CategoricalObservations.
         score_type :
             Type of scoring: either log-likelihood or pseudo-:math:`R^2`.
         aggregate_sample_scores :
@@ -583,8 +600,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             The input data which can be a :class:`nemos.pytrees.FeaturePytree` with n_features arrays of shape
             ``(n_timebins, n_features)``, or a simple ndarray of shape ``(n_timebins, n_features)``.
         y :
-            The target data array of shape ``(n_timebins, )``, representing
-            the neuron firing rates or similar metrics.
+            The target data array. Shape ``(n_timebins,)`` for all observation models except CategoricalObservations,
+            or ``(n_timebins, n_categories)`` for CategoricalObservations.
 
         Returns
         -------
@@ -646,13 +663,15 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             Predictors, array of shape (n_time_bins, n_features) or pytree of the same
             shape.
         y :
-            Target neural activity arranged in a matrix, shape (n_time_bins, ).
+            Target neural activity. Shape ``(n_time_bins,)`` for all observation models except CategoricalObservations,
+            or ``(n_time_bins, n_categories)`` (one-hot encoded) for CategoricalObservations.
         init_params :
             2-tuple of initial parameter values: (coefficients, intercepts). If
             None, we initialize coefficients with zeros, intercepts with the
-            log of the mean neural activity. coefficients is an array of shape
-            (n_features,) or pytree of same, intercepts is an array
-            of shape (1, )
+            log of the mean neural activity. For all observation models except CategoricalObservations, coefficients
+            is an array of shape ``(n_features,)`` or pytree of same, intercepts is an
+            array of shape ``(1,)``. For CategoricalObservations, coefficients has shape
+            ``(n_features, n_categories-1)`` and intercepts has shape ``(n_categories-1,)``.
 
         Raises
         ------
@@ -663,7 +682,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         ValueError
             If ``X`` is not two-dimensional.
         ValueError
-            If ``y`` is not one-dimensional.
+            If ``y`` does not have the expected dimensionality.
         ValueError
             If solver returns at least one NaN parameter, which means it found
               an invalid solution. Try tuning optimization hyperparameters.
@@ -780,10 +799,14 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         Returns
         -------
         simulated_activity :
-            Simulated activity (spike counts for Poisson GLMs) for the neuron over time.
-            Shape: ``(n_time_bins, )``.
-        firing_rates :
-            Simulated rates for the neuron over time. Shape, ``(n_time_bins, )``.
+            Simulated activity for the neuron over time. For all observation models except CategoricalObservations,
+            this is spike counts with shape ``(n_time_bins,)``. For CategoricalObservations,
+            this is one-hot encoded category samples with shape ``(n_time_bins, n_categories)``.
+        model_prediction :
+            The model's prediction (inverse link output). For rate-based models (Poisson,
+            Gamma, etc.), this is firing rates with shape ``(n_time_bins,)``. For
+            CategoricalObservations, this is log-probabilities with shape
+            ``(n_time_bins, n_categories)``.
 
         Raises
         ------
@@ -801,15 +824,15 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         >>> import nemos as nmo
         >>> model = nmo.glm.GLM()
         >>> model = model.fit(X, y)
-        >>> # generate spikes and rates
+        >>> # generate simulated activity and model predictions
         >>> random_key = jax.random.key(123)
         >>> Xnew = np.random.normal(size=(20, X.shape[1]))
-        >>> spikes, rates = model.simulate(random_key, Xnew)
+        >>> activity, predictions = model.simulate(random_key, Xnew)
 
         See Also
         --------
         :meth:`nemos.glm.GLM.predict`
-            Method to predict rates based on the model's parameters.
+            Method to generate model predictions based on the model's parameters.
         """
         # check if the model is fit
         self._check_is_fit()
@@ -1221,8 +1244,10 @@ class PopulationGLM(GLM):
         Observation model to use. The model describes the distribution of the neural activity.
         Default is the Poisson model.
     inverse_link_function :
-        A function that maps the linear combination of predictors into a firing rate. The default depends
-        on the observation model, see the table above.
+        A function that maps the linear combination of predictors to the model's output.
+        For rate-based observation models, this produces firing rates. For CategoricalObservations,
+        this produces log-probabilities. The default depends on the observation model, see the
+        table above.
     regularizer :
         Regularization to use for model optimization. Defines the regularization scheme
         and related parameters.
@@ -1247,8 +1272,9 @@ class PopulationGLM(GLM):
     Attributes
     ----------
     intercept_ :
-        Model baseline linked firing rate parameters, e.g. if the link is the logarithm, the baseline
-        firing rate will be ``jnp.exp(model.intercept_)``.
+        Model baseline parameters in the linear predictor space. For rate-based observation models
+        with a log link, ``jnp.exp(model.intercept_)`` gives baseline firing rates. For
+        CategoricalObservations, these are log-odds relative to the reference category.
     coef_ :
         Basis coefficients for the model.
     solver_state_ :
@@ -1414,13 +1440,17 @@ class PopulationGLM(GLM):
             Predictors, array of shape (n_timebins, n_features) or pytree of the same
             shape.
         y :
-            Target neural activity arranged in a matrix, shape (n_timebins, n_neurons).
+            Target neural activity. Shape ``(n_timebins, n_neurons)`` for most observation
+            models, or ``(n_timebins, n_neurons, n_categories)`` (one-hot encoded) for
+            CategoricalObservations.
         init_params :
             2-tuple of initial parameter values: (coefficients, intercepts). If
             None, we initialize coefficients with zeros, intercepts with the
-            log of the mean neural activity. coefficients is an array of shape
-            (n_features, n_neurons) or pytree of the same shape, intercepts is an array
-            of shape (n_neurons, )
+            log of the mean neural activity. For all observation models except CategoricalObservations, coefficients
+            is an array of shape ``(n_features, n_neurons)`` or pytree of the same shape,
+            intercepts is an array of shape ``(n_neurons,)``. For CategoricalObservations,
+            coefficients has shape ``(n_features, n_neurons, n_categories-1)`` and
+            intercepts has shape ``(n_neurons, n_categories-1)``.
 
         Raises
         ------
@@ -1431,7 +1461,7 @@ class PopulationGLM(GLM):
         ValueError
             If ``X`` is not two-dimensional.
         ValueError
-            If ``y`` is not two-dimensional.
+            If ``y`` does not have the expected dimensionality.
         ValueError
             If the ``feature_mask`` is not of the right shape.
         ValueError
@@ -1492,14 +1522,17 @@ class PopulationGLM(GLM):
 
     def _predict(self, params: GLMParams, X: jnp.ndarray) -> jnp.ndarray:
         """
-        Predicts firing rates based on given parameters and design matrix.
+        Predict the output of the inverse link function for population models.
 
-        This function computes the predicted firing rates using the provided parameters, the feature
-        mask and model design matrix ``X``. It is a streamlined version used internally within
-        optimization routines, where it serves as the loss function. Unlike the ``GLM.predict``
-        method, it does not perform any input validation, assuming that the inputs are pre-validated.
-        The parameters are first element-wise multiplied with the mask, then the canonical
-        linear-non-linear GLM map is applied.
+        This function computes the model's prediction using the provided parameters,
+        feature mask, and design matrix ``X``. The output depends on the observation model:
+
+        - For rate-based models (Poisson, Gamma, etc.): returns firing rates.
+        - For CategoricalObservations: returns log-probabilities over categories.
+
+        This is a streamlined version used internally within optimization routines.
+        The parameters are first element-wise multiplied with the mask, then the
+        canonical linear-non-linear GLM map is applied.
 
         Parameters
         ----------
@@ -1511,7 +1544,8 @@ class PopulationGLM(GLM):
         Returns
         -------
         :
-            The predicted rates. Shape (n_timebins, n_neurons).
+            The model prediction. Shape ``(n_timebins, n_neurons)`` for most observation
+            models, or ``(n_timebins, n_neurons, n_categories)`` for CategoricalObservations.
         """
         if self._feature_mask is None:
             return super()._predict(params, X)

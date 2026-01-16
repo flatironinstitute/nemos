@@ -51,7 +51,26 @@ identity = _make_wrapper(lambda x: x, "identity", "Identity link function.")
 
 
 def log_softmax(x):
-    """Pad with zero and apply log-softmax."""
+    """Inverse link function for categorical models with reference parameterization.
+
+    Pads the input with a zero (for the reference category) and applies log-softmax
+    to produce log-probabilities over all categories.
+
+    This implements the reference-category parameterization where K-1 parameters
+    are fit for K categories. The last category serves as the reference with
+    linear predictor fixed at 0.
+
+    Parameters
+    ----------
+    x : jnp.ndarray
+        Linear predictor values with shape ``(..., n_categories - 1)``.
+
+    Returns
+    -------
+    jnp.ndarray
+        Log-probabilities with shape ``(..., n_categories)``.
+        The output sums to 0 in log-space (probabilities sum to 1).
+    """
     xpad = jnp.pad(x, (*[(0, 0)] * (x.ndim - 1), (0, 1)))
     return jax.nn.log_softmax(xpad)
 
