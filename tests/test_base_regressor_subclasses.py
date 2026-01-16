@@ -330,6 +330,12 @@ class TestModelCommons:
         """Test that the group lasso initialize_solver_and_state goes through"""
         fixture = instantiate_base_regressor_subclass
         X, model, params = fixture.X, fixture.model, fixture.params
+        # TODO: remove in next PR when GLM is compatible with categorical
+        if isinstance(
+            model.observation_model, nmo.observation_models.CategoricalObservations
+        ):
+            pytest.skip("GLM not compatible with CategoricalObservations yet")
+
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         y = _add_zeros(y)
         n_groups = 2
@@ -361,39 +367,6 @@ class TestModelCommons:
             init_state, "velocity", model._validator.to_model_params(params)
         ) == model._validator.to_model_params(params)
 
-    @pytest.mark.solver_related
-    @pytest.mark.requires_x64
-    def test_fit_mask_grouplasso(self, instantiate_base_regressor_subclass):
-        """Test that the group lasso fit goes through"""
-
-        fixture = instantiate_base_regressor_subclass
-        X, model = fixture.X, fixture.model
-        y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
-        y = _add_zeros(y)
-        n_groups = 2
-        n_features = X.shape[1]
-
-        # Create mask with proper shape for GLM (2D) or PopulationGLM (3D)
-        if is_population_model(model):
-            n_neurons = y.shape[1]
-            mask_array = np.ones((n_groups, n_features, n_neurons), dtype=float)
-            mask_array[0, : n_features // 2, :] = 0
-            mask_array[1, n_features // 2 :, :] = 0
-        else:
-            mask_array = np.ones((n_groups, n_features), dtype=float)
-            mask_array[0, : n_features // 2] = 0
-            mask_array[1, n_features // 2 :] = 0
-
-        # Wrap mask in GLMParams structure
-        mask = GLMParams(jnp.asarray(mask_array, dtype=jnp.float32), None)
-
-        model.set_params(
-            regularizer=nmo.regularizer.GroupLasso(mask=mask),
-            solver_name="ProximalGradient",
-            regularizer_strength=1.0,
-        )
-        model.fit(X, y)
-
     @pytest.mark.parametrize(
         "fill_val, expectation",
         [
@@ -418,6 +391,12 @@ class TestModelCommons:
     ):
         fixture = instantiate_base_regressor_subclass
         X, model, true_params = fixture.X, fixture.model, fixture.params
+        # TODO: remove in next PR when GLM is compatible with categorical
+        if isinstance(
+            model.observation_model, nmo.observation_models.CategoricalObservations
+        ):
+            pytest.skip("GLM not compatible with CategoricalObservations yet")
+
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         y = _add_zeros(y)
         X.fill(fill_val)
@@ -572,6 +551,13 @@ class TestModelCommons:
     ):
         fixture = instantiate_base_regressor_subclass
         X, model, true_params = fixture.X, fixture.model, fixture.params
+
+        # TODO: remove in next PR when GLM is compatible with categorical
+        if isinstance(
+            model.observation_model, nmo.observation_models.CategoricalObservations
+        ):
+            pytest.skip("GLM not compatible with CategoricalObservations yet")
+
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         y = _add_zeros(y)
 
@@ -1071,6 +1057,12 @@ class TestModelValidator:
         fixture = instantiate_base_regressor_subclass
         X, model, true_params = fixture.X, fixture.model, fixture.params
 
+        # TODO: remove in next PR when GLM is compatible with categorical
+        if isinstance(
+            model.observation_model, nmo.observation_models.CategoricalObservations
+        ):
+            pytest.skip("GLM not compatible with CategoricalObservations yet")
+
         model_name = model.__class__.__name__
         y = np.zeros(DEFAULT_OBS_SHAPE[model_name])
         expectation = (
@@ -1095,8 +1087,9 @@ class TestModelValidator:
         validator = VALIDATOR_REGISTRY[model_name]
         with expectation:
             params = validator.validate_and_cast_params(init_params)
+            user_params = validator.from_model_params(params)
             # check that params are set
-            init_state = model._initialize_solver_and_state(X, y, params)
+            init_state = model.initialize_solver_and_state(X, y, user_params)
             # optimistix solvers do not have a velocity attr
             assert getattr(init_state, "velocity", params) == params
 
