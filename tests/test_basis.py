@@ -2481,6 +2481,18 @@ class TestMSplineBasis(BasisFuncsTesting):
         _, out2 = bas_no_range.evaluate_on_grid(10)
         assert np.allclose(out1 * scaling, out2)
 
+    @pytest.mark.requires_x64
+    def test_output_against_R(self):
+        """
+        Compares the output of the MSpline basis functions against precomputed values from R
+        """
+        m_basis = np.loadtxt(
+            "tests/mspline_output_nointercept.csv", delimiter=",", skiprows=1
+        )
+        bas = basis.MSplineEval(5)
+        m_basis_nemos = bas.compute_features(np.linspace(0, 1, 100))
+        assert np.allclose(m_basis, m_basis_nemos)
+
 
 class TestOrthExponentialBasis(BasisFuncsTesting):
     cls = {"eval": basis.OrthExponentialEval, "conv": basis.OrthExponentialConv}
