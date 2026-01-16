@@ -1,6 +1,7 @@
 import inspect
 import itertools
 import re
+import sys
 from contextlib import nullcontext as does_not_raise
 from functools import partial
 from unittest.mock import patch
@@ -1704,7 +1705,7 @@ class TestSharedMethods:
         "args, sample_size",
         [[{"n_basis_funcs": n_basis}, 100] for n_basis in [6, 10, 13]],
     )
-    def test_jitted_compute_features(self, args, sample_size, cls):
+    def test_jitted_compute_features(self, args, sample_size, cls, capsys):
         args_copy = args.copy()
         if issubclass(cls, (BSplineBasis, CyclicBSplineBasis, OrthExponentialBasis)):
             pytest.skip(
@@ -1715,6 +1716,8 @@ class TestSharedMethods:
             args_copy["n_basis_funcs"] = 1
         elif cls == HistoryConv:
             args_copy["n_basis_funcs"] = 30
+        elif cls == CustomBasis:
+            args_copy["pynapple_support"] = False
         elif issubclass(cls, FourierBasis):
             args_copy["n_basis_funcs"] = (
                 args_copy["n_basis_funcs"] + args_copy["n_basis_funcs"] % 2
@@ -1728,9 +1731,14 @@ class TestSharedMethods:
 
         @jax.jit
         def jitted_compute_features(x):
+            print("Compiling...")
             return basis_obj.compute_features(x)
 
         jitted_compute_features(np.linspace(0, 1, sample_size))
+        assert "Compiling..." in capsys.readouterr().out
+        # test for recompilation
+        jitted_compute_features(np.linspace(0, 1, sample_size))
+        assert "Compiling..." not in capsys.readouterr().out
 
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 10, 11, 100])
     def test_evaluate_on_grid_basis_size(self, sample_size, cls):
