@@ -1564,7 +1564,14 @@ class TestGLMObservationModel:
             return LinearRegression(fit_intercept=True)
 
         elif "categorical" in model_instantiation:
-            return None
+            # In sklearn 1.5+, multinomial is the default with lbfgs solver
+            return LogisticRegression(
+                fit_intercept=True,
+                tol=10**-12,
+                C=np.inf,
+                solver="lbfgs",
+                max_iter=1000,
+            )
 
         else:
             raise ValueError("Unknown model instantiation")
@@ -2136,25 +2143,75 @@ class TestGLMObservationModel:
 
         model.fit(X, y)
 
-        if "population" in glm_type:
-            # test by fitting each neuron separately in sklearn
-            for n, yn in enumerate(y.T):
-                sklearn_model.fit(X, yn)
-                abs_tol = 1e-6
-                # this will fail for poisson with GradientDescent for the third neuron
-                # with tol=1.57e-5 (note that other algorithm do just fine)
-                match_weights = jnp.allclose(
-                    sklearn_model.coef_, model.coef_[:, n], atol=abs_tol, rtol=0.0
-                )
+        is_categorical = "categorical" in model_instantiation
 
-                match_intercepts = jnp.allclose(
-                    sklearn_model.intercept_,
-                    model.intercept_[n],
-                    atol=1e-6,
-                    rtol=0.0,
-                )
-                if (not match_weights) or (not match_intercepts):
-                    raise ValueError("GLM.fit estimate does not match sklearn!")
+        if "population" in glm_type:
+            if is_categorical:
+                # For population categorical: y shape (n_samples, n_neurons, n_categories)
+                # Test each neuron separately
+                for n in range(y.shape[1]):
+                    yn_onehot = y[:, n, :]
+                    yn_discrete = yn_onehot.argmax(axis=-1)
+                    sklearn_model.fit(X, yn_discrete)
+                    # Convert sklearn's full parameterization to reference-category
+                    # sklearn: coef_ (K, n_features), intercept_ (K,)
+                    # nemos: coef_ (n_features, n_neurons, K-1), intercept_ (n_neurons, K-1)
+                    sklearn_coef_ref = (
+                        sklearn_model.coef_[:-1] - sklearn_model.coef_[-1:]
+                    ).T
+                    sklearn_intercept_ref = (
+                        sklearn_model.intercept_[:-1] - sklearn_model.intercept_[-1]
+                    )
+                    match_weights = jnp.allclose(
+                        sklearn_coef_ref, model.coef_[:, n, :], atol=1e-5, rtol=0.0
+                    )
+                    match_intercepts = jnp.allclose(
+                        sklearn_intercept_ref,
+                        model.intercept_[n, :],
+                        atol=1e-5,
+                        rtol=0.0,
+                    )
+                    if (not match_weights) or (not match_intercepts):
+                        raise ValueError("GLM.fit estimate does not match sklearn!")
+            else:
+                # test by fitting each neuron separately in sklearn
+                for n, yn in enumerate(y.T):
+                    sklearn_model.fit(X, yn)
+                    abs_tol = 1e-6
+                    # this will fail for poisson with GradientDescent for the third neuron
+                    # with tol=1.57e-5 (note that other algorithm do just fine)
+                    match_weights = jnp.allclose(
+                        sklearn_model.coef_, model.coef_[:, n], atol=abs_tol, rtol=0.0
+                    )
+
+                    match_intercepts = jnp.allclose(
+                        sklearn_model.intercept_,
+                        model.intercept_[n],
+                        atol=1e-6,
+                        rtol=0.0,
+                    )
+                    if (not match_weights) or (not match_intercepts):
+                        raise ValueError("GLM.fit estimate does not match sklearn!")
+
+        elif is_categorical:
+            # For categorical GLM: convert one-hot to discrete labels for sklearn
+            y_discrete = y.argmax(axis=-1)
+            sklearn_model.fit(X, y_discrete)
+            # Convert sklearn's full parameterization to reference-category
+            # sklearn: coef_ (K, n_features), intercept_ (K,)
+            # nemos: coef_ (n_features, K-1), intercept_ (K-1,)
+            sklearn_coef_ref = (sklearn_model.coef_[:-1] - sklearn_model.coef_[-1:]).T
+            sklearn_intercept_ref = (
+                sklearn_model.intercept_[:-1] - sklearn_model.intercept_[-1]
+            )
+            match_weights = jnp.allclose(
+                sklearn_coef_ref, model.coef_, atol=1e-5, rtol=0.0
+            )
+            match_intercepts = jnp.allclose(
+                sklearn_intercept_ref, model.intercept_, atol=1e-5, rtol=0.0
+            )
+            if (not match_weights) or (not match_intercepts):
+                raise ValueError("GLM.fit estimate does not match sklearn!")
 
         else:
             sklearn_model.fit(X, y)
