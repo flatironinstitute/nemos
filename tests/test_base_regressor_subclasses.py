@@ -331,7 +331,9 @@ class TestModelCommons:
         fixture = instantiate_base_regressor_subclass
         X, model, params = fixture.X, fixture.model, fixture.params
         # TODO: remove in next PR when GLM is compatible with categorical
-        if isinstance(model.observation_model, nmo.observation_models.CategoricalObservations):
+        if isinstance(
+            model.observation_model, nmo.observation_models.CategoricalObservations
+        ):
             pytest.skip("GLM not compatible with CategoricalObservations yet")
 
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
@@ -390,7 +392,9 @@ class TestModelCommons:
         fixture = instantiate_base_regressor_subclass
         X, model, true_params = fixture.X, fixture.model, fixture.params
         # TODO: remove in next PR when GLM is compatible with categorical
-        if isinstance(model.observation_model, nmo.observation_models.CategoricalObservations):
+        if isinstance(
+            model.observation_model, nmo.observation_models.CategoricalObservations
+        ):
             pytest.skip("GLM not compatible with CategoricalObservations yet")
 
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
@@ -549,7 +553,9 @@ class TestModelCommons:
         X, model, true_params = fixture.X, fixture.model, fixture.params
 
         # TODO: remove in next PR when GLM is compatible with categorical
-        if isinstance(model.observation_model, nmo.observation_models.CategoricalObservations):
+        if isinstance(
+            model.observation_model, nmo.observation_models.CategoricalObservations
+        ):
             pytest.skip("GLM not compatible with CategoricalObservations yet")
 
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
@@ -1052,7 +1058,9 @@ class TestModelValidator:
         X, model, true_params = fixture.X, fixture.model, fixture.params
 
         # TODO: remove in next PR when GLM is compatible with categorical
-        if isinstance(model.observation_model, nmo.observation_models.CategoricalObservations):
+        if isinstance(
+            model.observation_model, nmo.observation_models.CategoricalObservations
+        ):
             pytest.skip("GLM not compatible with CategoricalObservations yet")
 
         model_name = model.__class__.__name__
