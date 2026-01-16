@@ -1632,7 +1632,7 @@ class TestGLMObservationModel:
 
         elif "categorical" in model_instantiation:
             if "population" in glm_type:
-                return np.array([2, 2])
+                return np.array([3, 3])
             else:
                 return np.array([3])
 
