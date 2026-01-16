@@ -7,8 +7,31 @@ import jax.numpy as jnp
 from numpy.typing import ArrayLike
 from scipy.optimize import root_scalar
 
-from ..inverse_link_function_utils import exp, identity, logistic, norm_cdf, softplus
+from ..inverse_link_function_utils import (
+    exp,
+    identity,
+    log_softmax,
+    logistic,
+    norm_cdf,
+    softplus,
+)
 from ..utils import one_over_x
+
+
+def _inverse_log_softmax(empirical_frequencies):
+    """Inverse log softmax.
+
+    Parameters
+    ----------
+    empirical_frequencies:
+        The empirical frequencies, shape (..., n_categories).
+    """
+    return (
+        jnp.zeros(empirical_frequencies.shape)
+        .at[..., :-1]
+        .set(jnp.log(empirical_frequencies[..., :-1] / empirical_frequencies[..., -1:]))
+    )
+
 
 # dictionary of known inverse link functions.
 INVERSE_FUNCS = {
@@ -18,6 +41,7 @@ INVERSE_FUNCS = {
     norm_cdf: jax.scipy.stats.norm.ppf,
     one_over_x: one_over_x,
     identity: identity,
+    log_softmax: _inverse_log_softmax,
 }
 
 # Name-based lookup (for after pickling/copying)
@@ -28,6 +52,7 @@ INVERSE_FUNCS_BY_SIMPLE_NAME = {
     "norm_cdf": jax.scipy.stats.norm.ppf,
     "one_over_x": one_over_x,
     "identity": identity,
+    "log_softmax": _inverse_log_softmax,
 }
 
 non_finite_error = ValueError(
