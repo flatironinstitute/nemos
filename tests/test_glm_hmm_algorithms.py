@@ -2566,18 +2566,17 @@ class TestConvergence:
 
         maxiter = 100
         tol = 1e-6
-        with jax.disable_jit(True):
-            learned_params, final_state = em_glm_hmm(
-                params=params,
-                X=X[:100, 1:],
-                y=y[:100],
-                inverse_link_function=obs.default_inverse_link_function,
-                log_likelihood_func=likelihood_func,
-                m_step_fn_glm_params=glm._solver_run,
-                m_step_fn_glm_scale=None,
-                maxiter=maxiter,
-                tol=tol,
-            )
+        learned_params, final_state = em_glm_hmm(
+            params=params,
+            X=X[:100, 1:],
+            y=y[:100],
+            inverse_link_function=obs.default_inverse_link_function,
+            log_likelihood_func=likelihood_func,
+            m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_scale=None,
+            maxiter=maxiter,
+            tol=tol,
+        )
 
         # Final state should have valid likelihood
         assert jnp.isfinite(
