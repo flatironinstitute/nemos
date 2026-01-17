@@ -120,7 +120,7 @@ def apply_f_vectorized(
         results.append(result[..., np.newaxis])
 
     # Concatenate along the last axis
-    return np.concatenate(results, axis=-1)
+    return jnp.concatenate(results, axis=-1)
 
 
 def check_valid_shape(shape):

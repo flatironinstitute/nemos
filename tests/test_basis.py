@@ -1702,10 +1702,14 @@ class TestSharedMethods:
         )
 
     @pytest.mark.parametrize(
-        "args, sample_size",
-        [[{"n_basis_funcs": n_basis}, 100] for n_basis in [6, 10, 13]],
+        "args",
+        [{"n_basis_funcs": n_basis} for n_basis in [6, 10, 13]],
     )
-    def test_compute_features_compilation(self, args, sample_size, cls):
+    @pytest.mark.parametrize(
+        "shape",
+        [(20,), (20, 2)],
+    )
+    def test_compute_features_compilation(self, args, shape, cls):
         if issubclass(cls, (BSplineBasis, CyclicBSplineBasis, OrthExponentialBasis)):
             pytest.skip(
                 f"Skipping test_jitted_compute_features for {cls.__name__}, which depends on un-jittable scipy functions."
@@ -1716,6 +1720,7 @@ class TestSharedMethods:
             args_copy["n_basis_funcs"] = 1
         elif cls == HistoryConv:
             args_copy["n_basis_funcs"] = 30
+            shape = shape if len(shape) == 1 else (21,)
         elif cls == CustomBasis:
             args_copy["pynapple_support"] = False
         elif issubclass(cls, FourierBasis):
@@ -1730,21 +1735,19 @@ class TestSharedMethods:
             **extra_kwargs(cls, args_copy["n_basis_funcs"]),
         )
 
-        @jax.jit
-        def jitted_compute_features(x):
-            return basis_obj.compute_features(x)
+        for method in  ["evaluate", "compute_features"]:
+            jitted_compute_features = jax.jit(getattr(basis_obj, method))
+            # Clear any existing cache
+            jitted_compute_features._cache_size()  # warmup if needed
+            initial_cache_size = jitted_compute_features._cache_size()
 
-        # Clear any existing cache
-        jitted_compute_features._cache_size()  # warmup if needed
-        initial_cache_size = jitted_compute_features._cache_size()
+            # First call should compile
+            jitted_compute_features(np.random.randn(*shape))
+            assert jitted_compute_features._cache_size() == initial_cache_size + 1
 
-        # First call should compile
-        jitted_compute_features(np.linspace(0, 1, sample_size))
-        assert jitted_compute_features._cache_size() == initial_cache_size + 1
-
-        # Second call should NOT recompile
-        jitted_compute_features(np.linspace(0, 1, sample_size))
-        assert jitted_compute_features._cache_size() == initial_cache_size + 1
+            # Second call should NOT recompile
+            jitted_compute_features(np.random.randn(*shape))
+            assert jitted_compute_features._cache_size() == initial_cache_size + 1
 
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 10, 11, 100])
     def test_evaluate_on_grid_basis_size(self, sample_size, cls):
