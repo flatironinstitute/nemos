@@ -355,7 +355,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
                 f"Each input must have at least {self.ndim_input} dimensions, as required by this basis. "
                 f"However, some inputs have fewer dimensions: {invalid_dims}."
             )
-        _check_unique_shapes(*xi, basis=self)
+        _check_unique_shapes(xi, basis=self)
         set_input_shape(self, *xi)
         design_matrix = self.evaluate(
             *xi

@@ -193,7 +193,14 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         # Replace this manual list after dropping support for 3.10?
         observation_model: (
             obs.Observations
-            | Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial", "Gaussian"]
+            | Literal[
+                "Poisson",
+                "Gamma",
+                "Bernoulli",
+                "NegativeBinomial",
+                "Gaussian",
+                "Categorical",
+            ]
         ) = "Poisson",
         inverse_link_function: Optional[Callable] = None,
         regularizer: Optional[Union[str, Regularizer]] = None,
@@ -1250,7 +1257,9 @@ class PopulationGLM(GLM):
         self,
         observation_model: (
             obs.Observations
-            | Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial"]
+            | Literal[
+                "Poisson", "Gamma", "Bernoulli", "NegativeBinomial", "Categorical"
+            ]
         ) = "Poisson",
         inverse_link_function: Optional[Callable] = None,
         regularizer: Union[str, Regularizer] = "UnRegularized",

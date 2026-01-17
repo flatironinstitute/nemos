@@ -148,6 +148,7 @@ Statistical models to describe the distribution of neural responses or other pre
     NegativeBinomialObservations
     GammaObservations
     BernoulliObservations
+    CategoricalObservations
 
 .. _regularizers:
 
