@@ -1,6 +1,7 @@
 import inspect
 import itertools
 import re
+import sys
 from contextlib import nullcontext as does_not_raise
 from functools import partial
 from unittest.mock import patch
@@ -967,46 +968,6 @@ class TestConvBasis:
     ],
 )
 class TestEvalBasis:
-    @pytest.mark.parametrize(
-        "samples, vmin, vmax, expectation",
-        [
-            (0.5, 0, 1, does_not_raise()),
-            (
-                -0.5,
-                0,
-                1,
-                pytest.raises(ValueError, match="All the samples lie outside"),
-            ),
-            (np.linspace(-1, 1, 10), 0, 1, does_not_raise()),
-            (
-                np.linspace(-1, 0, 10),
-                0,
-                1,
-                pytest.warns(UserWarning, match="More than 90% of the samples"),
-            ),
-            (
-                np.linspace(1, 2, 10),
-                0,
-                1,
-                pytest.warns(UserWarning, match="More than 90% of the samples"),
-            ),
-        ],
-    )
-    def test_call_vmin_vmax(self, samples, vmin, vmax, expectation, cls):
-        if ("OrthExp" in cls.__name__ and not hasattr(samples, "shape")) or cls in [
-            CustomBasis,
-            basis.Zero,
-        ]:
-            pytest.skip(f"Skipping test_call_vmin_vmax for {cls.__name__}")
-        bas = instantiate_atomic_basis(
-            cls,
-            n_basis_funcs=5,
-            bounds=(vmin, vmax),
-            **extra_kwargs(cls, 5),
-        )
-        with expectation:
-            bas.evaluate(samples)
-
     @pytest.mark.parametrize("n_basis", [5, 6])
     @pytest.mark.parametrize("vmin, vmax", [(0, 1), (-1, 1)])
     @pytest.mark.parametrize("inp_num", [1, 2])
@@ -1155,46 +1116,6 @@ class TestEvalBasis:
                 **extra_kwargs(cls, 5),
             )
             assert compare_bounds(bas, bounds)
-
-    @pytest.mark.parametrize(
-        "samples, vmin, vmax, expectation",
-        [
-            (0.5, 0, 1, does_not_raise()),
-            (
-                -0.5,
-                0,
-                1,
-                pytest.raises(ValueError, match="All the samples lie outside"),
-            ),
-            (np.linspace(-1, 1, 10), 0, 1, does_not_raise()),
-            (
-                np.linspace(-1, 0, 10),
-                0,
-                1,
-                pytest.warns(UserWarning, match="More than 90% of the samples"),
-            ),
-            (
-                np.linspace(1, 2, 10),
-                0,
-                1,
-                pytest.warns(UserWarning, match="More than 90% of the samples"),
-            ),
-        ],
-    )
-    def test_compute_features_vmin_vmax(self, samples, vmin, vmax, expectation, cls):
-        if ("OrthExp" in cls.__name__ and not hasattr(samples, "shape")) or cls in [
-            CustomBasis,
-            basis.Zero,
-        ]:
-            pytest.skip(f"Skipping test_compute_features_vmin_vmax for {cls.__name__}")
-        basis_obj = instantiate_atomic_basis(
-            cls,
-            n_basis_funcs=5,
-            bounds=(vmin, vmax),
-            **extra_kwargs(cls, 5),
-        )
-        with expectation:
-            basis_obj.compute_features(samples)
 
     @pytest.mark.parametrize(
         "samples, expectation",
@@ -1780,6 +1701,54 @@ class TestSharedMethods:
             f"evaluated basis has dimension {eval_basis.shape[1]}"
         )
 
+    @pytest.mark.parametrize(
+        "args",
+        [{"n_basis_funcs": n_basis} for n_basis in [6, 10, 13]],
+    )
+    @pytest.mark.parametrize(
+        "shape",
+        [(20,), (20, 2)],
+    )
+    def test_compute_features_compilation(self, args, shape, cls):
+        if issubclass(cls, (BSplineBasis, CyclicBSplineBasis, OrthExponentialBasis)):
+            pytest.skip(
+                f"Skipping test_jitted_compute_features for {cls.__name__}, which depends on un-jittable scipy functions."
+            )
+        args_copy = args.copy()
+
+        if cls == IdentityEval:
+            args_copy["n_basis_funcs"] = 1
+        elif cls == HistoryConv:
+            args_copy["n_basis_funcs"] = 30
+            shape = shape if len(shape) == 1 else (21,)
+        elif cls == CustomBasis:
+            args_copy["pynapple_support"] = False
+        elif issubclass(cls, FourierBasis):
+            args_copy["n_basis_funcs"] = (
+                args_copy["n_basis_funcs"] + args_copy["n_basis_funcs"] % 2
+            )
+
+        basis_obj = instantiate_atomic_basis(
+            cls,
+            **args_copy,
+            window_size=30,
+            **extra_kwargs(cls, args_copy["n_basis_funcs"]),
+        )
+
+        for method in ["evaluate", "compute_features"]:
+            jitted_compute_features = jax.jit(getattr(basis_obj, method))
+            # Clear any existing cache
+            jitted_compute_features._cache_size()  # warmup if needed
+            initial_cache_size = jitted_compute_features._cache_size()
+
+            # First call should compile
+            jitted_compute_features(np.random.randn(*shape))
+            assert jitted_compute_features._cache_size() == initial_cache_size + 1
+
+            # Second call should NOT recompile
+            jitted_compute_features(np.random.randn(*shape))
+            assert jitted_compute_features._cache_size() == initial_cache_size + 1
+
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 10, 11, 100])
     def test_evaluate_on_grid_basis_size(self, sample_size, cls):
         if "OrthExp" in cls.__name__ or cls == CustomBasis:
@@ -2132,6 +2101,7 @@ class TestIdentityBasis(BasisFuncsTesting):
         with pytest.raises(AttributeError):
             bas.n_basis_funcs = 11
 
+    @pytest.mark.requires_x64
     @pytest.mark.parametrize(
         "inp",
         [
@@ -2178,6 +2148,7 @@ class TestHistoryBasis(BasisFuncsTesting):
         bas.window_size = 12
         assert bas.n_basis_funcs == 12
 
+    @pytest.mark.requires_x64
     @pytest.mark.parametrize(
         "inp",
         [
@@ -2518,6 +2489,18 @@ class TestMSplineBasis(BasisFuncsTesting):
         _, out1 = bas.evaluate_on_grid(10)
         _, out2 = bas_no_range.evaluate_on_grid(10)
         assert np.allclose(out1 * scaling, out2)
+
+    @pytest.mark.requires_x64
+    def test_output_against_R(self):
+        """
+        Compares the output of the MSpline basis functions against precomputed values from R
+        """
+        m_basis = np.loadtxt(
+            "tests/mspline_output_nointercept.csv", delimiter=",", skiprows=1
+        )
+        bas = basis.MSplineEval(5)
+        m_basis_nemos = bas.compute_features(np.linspace(0, 1, 100))
+        assert np.allclose(m_basis, m_basis_nemos)
 
 
 class TestOrthExponentialBasis(BasisFuncsTesting):

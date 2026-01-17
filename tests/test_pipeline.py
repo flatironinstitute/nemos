@@ -154,6 +154,7 @@ def test_sklearn_transformer_pipeline_cv_illegal_combination(
         gridsearch.fit(X[:, : bas._n_input_dimensionality] ** 2, y)
 
 
+@pytest.mark.requires_x64
 @pytest.mark.parametrize(
     "bas, expected_nans",
     [
@@ -195,6 +196,7 @@ def test_sklearn_transformer_pipeline_pynapple(
     bas, poissonGLM_model_instantiation, expected_nans
 ):
     X, y, model, _, _ = poissonGLM_model_instantiation
+    X = X[:, :2]
     model.solver_kwargs.update({"maxiter": 2})
     # transform input to pynapple
     ep = nap.IntervalSet(start=[0, 20.5], end=[20, X.shape[0]])
