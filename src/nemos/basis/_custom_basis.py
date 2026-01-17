@@ -543,7 +543,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
                 [ 4., 16.]],
         ...
                [[ 5., 25.],
-                [ 6., 36.]]])
+                [ 6., 36.]]], dtype=float32)
         """
         # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)

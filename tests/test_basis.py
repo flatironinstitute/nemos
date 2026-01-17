@@ -1735,7 +1735,7 @@ class TestSharedMethods:
             **extra_kwargs(cls, args_copy["n_basis_funcs"]),
         )
 
-        for method in  ["evaluate", "compute_features"]:
+        for method in ["evaluate", "compute_features"]:
             jitted_compute_features = jax.jit(getattr(basis_obj, method))
             # Clear any existing cache
             jitted_compute_features._cache_size()  # warmup if needed
