@@ -121,6 +121,7 @@ def test_vec_function_output_shape(vectorize_func, x, expected_out_shape):
     [(1, 1), (2, 2)],
     indirect=["vectorize_func"],
 )
+@pytest.mark.requires_x64
 def test_vectorization_equivalence(x_shape, vectorize_func, ndim):
     """Test that vectorized computation equals explicit nested loops."""
     if len(x_shape) <= ndim:
@@ -444,6 +445,7 @@ def test_inconsistent_input_num():
     [(1, 1), (2, 2)],
     indirect=["vectorize_func"],
 )
+@pytest.mark.requires_x64
 def test_vectorization_equivalence_basis(x_shape, vectorize_func, ndim):
     """Test that vectorized computation equals explicit nested loops."""
     if len(x_shape) <= ndim:
