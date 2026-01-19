@@ -9,7 +9,7 @@ from numpy.typing import NDArray
 
 from . import utils
 from .base_class import Base
-from .inverse_link_function_utils import exp, identity, logistic
+from .inverse_link_function_utils import exp, identity, log_softmax, logistic
 
 __all__ = [
     "PoissonObservations",
@@ -17,6 +17,7 @@ __all__ = [
     "BernoulliObservations",
     "NegativeBinomialObservations",
     "GaussianObservations",
+    "CategoricalObservations",
 ]
 
 
@@ -50,6 +51,12 @@ class Observations(Base, abc.ABC):
 
     def __repr__(self):
         return utils.format_repr(self)
+
+    @staticmethod
+    def _compute_null_model_predicted_rate(
+        y: jnp.ndarray,
+    ):
+        return jnp.ones(y.shape, dtype=float) * y.mean(axis=0)
 
     @property
     @abc.abstractmethod
@@ -356,7 +363,7 @@ class Observations(Base, abc.ABC):
         model_dev_t = self.deviance(y, predicted_rate)
         model_deviance = aggregate_sample_scores(model_dev_t)
 
-        null_mu = jnp.ones(y.shape, dtype=jnp.float32) * jnp.mean(y, axis=0)
+        null_mu = self._compute_null_model_predicted_rate(y)
         null_dev_t = self.deviance(y, null_mu)
         null_deviance = aggregate_sample_scores(null_dev_t)
         return (null_deviance - model_deviance) / null_deviance
@@ -390,7 +397,7 @@ class Observations(Base, abc.ABC):
             whereas a value closer to 0 suggests that the model doesn't improve much over the null model.
         """
         # ruff: noqa D403
-        mean_y = jnp.ones(y.shape) * y.mean(axis=0)
+        mean_y = self._compute_null_model_predicted_rate(y)
         ll_null = self.log_likelihood(
             y, mean_y, scale=scale, aggregate_sample_scores=aggregate_sample_scores
         )
@@ -1648,6 +1655,7 @@ def check_observation_model(observation_model, force_checks=False):
             GammaObservations,
             BernoulliObservations,
             NegativeBinomialObservations,
+            CategoricalObservations,
         ),
     )
 
@@ -1733,3 +1741,273 @@ def check_observation_model(observation_model, force_checks=False):
 
         if check_info.get("test_scalar_func"):
             utils.assert_scalar_func(func, check_info["input"], attr_name)
+
+
+class CategoricalObservations(Observations):
+    """
+    Model observations as Categorical random variables.
+
+    The CategoricalObservations is designed to model an observed categorical variable based on a categorical
+    distribution with given success probability.
+    It provides methods for computing the negative log-likelihood,
+    generating samples, and computing the residual deviance for the given categorical observations.
+    This distribution is equivalent to a multinomial with ``n=1``.
+
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.scale = 1.0
+
+    @property
+    def default_inverse_link_function(self):
+        return log_softmax
+
+    def _negative_log_likelihood(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
+    ) -> jnp.ndarray:
+        r"""Compute the categorical distribution negative log-likelihood.
+
+        This computes the categorical distribution negative log-likelihood of
+        the observed categories given their log-probabilities.
+
+        Parameters
+        ----------
+        y :
+            One-hot encoded categories. Shape ``(n_time_bins, n_categories)`` or
+            ``(n_time_bins, n_neurons, n_categories)``.
+        predicted_rate :
+            The log-probabilities of each category (output of log_softmax).
+            Shape ``(n_time_bins, n_categories)`` or ``(n_time_bins, n_neurons, n_categories)``.
+        aggregate_sample_scores :
+            Function that aggregates the log-likelihood of each sample.
+
+        Returns
+        -------
+        :
+            The Categorical negative log-likelihood. Shape (1,).
+
+        Notes
+        -----
+        The formula for the Categorical mean log-likelihood is the following,
+
+        .. math::
+            \text{LL}(y | \log(p)) = \frac{1}{T \cdot N} \sum_{n=1}^{N}
+            \sum_{t=1}^{T} \sum_{k=1}^{K} y_{tnk} \log(p_{tnk})
+
+        where :math:`p_{tnk}` is the predicted probability of category :math:`k` for
+        neuron :math:`n` at time :math:`t`, :math:`y_{tnk}` is the one-hot encoding
+        (1 if category :math:`k` was observed, 0 otherwise), and the predicted_rate input
+        contains :math:`\log(p_{tnk})`.
+        """
+        nll = jnp.sum(y * predicted_rate, axis=-1)
+        return -aggregate_sample_scores(nll)
+
+    def log_likelihood(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
+    ):
+        r"""Compute the Categorical log-likelihood.
+
+        This computes the Categorical log-likelihood of the predicted category probabilities
+        for the observed one-hot encoded categories.
+
+        Parameters
+        ----------
+        y :
+            One-hot encoded categories. Shape ``(n_time_bins, n_categories)`` or
+            ``(n_time_bins, n_neurons, n_categories)``.
+        predicted_rate :
+            The log-probabilities for each category (output of log_softmax).
+            Shape ``(n_time_bins, n_categories)`` or ``(n_time_bins, n_neurons, n_categories)``.
+        scale :
+            The scale parameter of the model. For Categorical should be equal to 1.
+        aggregate_sample_scores :
+            Function that aggregates the log-likelihood of each sample.
+
+        Returns
+        -------
+        :
+            The Categorical log-likelihood. Shape (1,).
+
+        Notes
+        -----
+        The formula for the Categorical mean log-likelihood is the following,
+
+        .. math::
+            \text{LL}(y | \log(p)) = \frac{1}{T \cdot N} \sum_{n=1}^{N}
+            \sum_{t=1}^{T} \sum_{k=1}^{K} y_{tnk} \log(p_{tnk})
+
+        where :math:`p_{tnk}` is the predicted probability of category :math:`k` for neuron
+        :math:`n` at time :math:`t`, :math:`y_{tnk}` is the one-hot encoding
+        (1 if category :math:`k` was observed, 0 otherwise), and the predicted_rate input contains
+        :math:`\log(p_{tnk})`.
+        """
+        nll = self._negative_log_likelihood(y, predicted_rate, aggregate_sample_scores)
+        return -nll
+
+    def sample_generator(
+        self,
+        key: jax.Array,
+        predicted_rate: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
+    ) -> jnp.ndarray:
+        """
+        Sample from the Categorical distribution.
+
+        This method generates random category indices from a Categorical distribution based on the given
+        log-probabilities. Note that this returns category indices, not one-hot encodings.
+
+        Parameters
+        ----------
+        key :
+            Random key used for the generation of random numbers in JAX.
+        predicted_rate :
+            Log-probabilities for each category (output of log_softmax).
+            Shape ``(n_time_bins, n_categories)`` or ``(n_time_bins, n_neurons, n_categories)``.
+        scale :
+            Scale parameter. For Categorical should be equal to 1.
+
+        Returns
+        -------
+        jnp.ndarray
+            Random category indices sampled from the Categorical distribution.
+            Shape ``(n_time_bins,)`` or ``(n_time_bins, n_neurons)``.
+        """
+        return jax.nn.one_hot(
+            jax.random.categorical(key, predicted_rate),
+            num_classes=predicted_rate.shape[-1],
+        )
+
+    def deviance(
+        self,
+        observations: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
+    ) -> jnp.ndarray:
+        r"""Compute the residual deviance for a Categorical model.
+
+        Parameters
+        ----------
+        observations:
+            One-hot encoded categories. Shape ``(n_time_bins, n_categories)`` or
+            ``(n_time_bins, n_neurons, n_categories)``.
+        predicted_rate:
+            The log-probabilities of each category (output of log_softmax).
+            Shape ``(n_time_bins, n_categories)`` or ``(n_time_bins, n_neurons, n_categories)``.
+        scale:
+            Scale parameter of the model. For Categorical should be equal to 1.
+
+        Returns
+        -------
+        :
+            The residual deviance of the model. Shape ``(n_time_bins,)`` or ``(n_time_bins, n_neurons)``.
+
+        Notes
+        -----
+        The deviance is a measure of the goodness of fit of a statistical model.
+        For a Categorical model, the residual deviance is computed as:
+
+        .. math::
+            D(y, \hat{p}) = 2 \left( \text{LL}\left(y | y\right) - \text{LL}\left(y | \hat{p}\right)\right)
+            = -2 \sum_{k=1}^{K} y_{k} \log(\hat{p}_{k})
+
+        where :math:`y_k` is the one-hot encoded observed category (1 if category :math:`k` was observed, 0 otherwise),
+        :math:`\hat{p}_{k}` is the predicted probability for category :math:`k`,
+        and :math:`\text{LL}` is the model log-likelihood.
+        The saturated model has log-likelihood 0 for categorical (since :math:`\log(1) = 0` for the true category).
+        Lower values of deviance indicate a better fit.
+        """
+        # For categorical, saturated model has log-likelihood = 0
+        # Deviance = 2 * (LL_saturated - LL_model) = -2 * LL_model
+        nll = self._negative_log_likelihood(observations, predicted_rate, identity)
+        return 2 * nll
+
+    def estimate_scale(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        dof_resid: Union[float, jnp.ndarray],
+    ) -> Union[float, jnp.ndarray]:
+        r"""
+        Assign 1 to the scale parameter of the Categorical model.
+
+        For the Categorical (Multinomial with n=1) exponential family distribution, the scale parameter
+        :math:`\phi` is always 1.
+
+        Parameters
+        ----------
+        y :
+            One-hot encoded categories. Shape ``(n_time_bins, n_categories)`` or
+            ``(n_time_bins, n_neurons, n_categories)``.
+        predicted_rate :
+            The predicted log-probabilities. This is not used in the Categorical model for estimating
+            scale, but is retained for compatibility with the abstract method signature.
+        dof_resid :
+            The DOF of the residuals.
+        """
+        return jnp.ones_like(jnp.atleast_1d(y[0, ..., 0]))
+
+    def likelihood(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
+        aggregate_sample_scores: Callable = lambda x: jnp.exp(
+            jnp.mean(jnp.log(x), axis=0).sum()
+        ),
+    ):
+        r"""Compute the Categorical model likelihood.
+
+        This computes the likelihood of the predicted category probabilities
+        for the observed one-hot encoded categories.
+
+        Parameters
+        ----------
+        y :
+            One-hot encoded categories. Shape ``(n_time_bins, n_categories)`` or
+            ``(n_time_bins, n_neurons, n_categories)``.
+        predicted_rate :
+            The log-probabilities for each category (output of log_softmax).
+            Shape ``(n_time_bins, n_categories)`` or ``(n_time_bins, n_neurons, n_categories)``.
+        scale :
+            The scale parameter of the model. For Categorical should be equal to 1.
+        aggregate_sample_scores :
+            Function that aggregates the likelihood of each sample.
+
+        Returns
+        -------
+        :
+            The likelihood. Shape (1,).
+
+        Notes
+        -----
+        The likelihood is computed as:
+
+        .. math::
+            L(y | p) = \prod_{n=1}^{N} \prod_{t=1}^{T} \prod_{k=1}^{K} p_{tnk}^{y_{tnk}}
+
+        where :math:`p_{tnk}` is the predicted probability of category :math:`k` for neuron :math:`n` at time :math:`t`,
+        and :math:`y_{tnk}` is the one-hot encoding.
+        """
+        log_probs = self.log_likelihood(y, predicted_rate, scale, identity)
+        return aggregate_sample_scores(jnp.exp(log_probs))
+
+    @staticmethod
+    def _compute_null_model_predicted_rate(
+        y: jnp.ndarray,
+    ):
+        freq_per_sample = y.mean(
+            axis=0, keepdims=True
+        )  # (1, n_categories) or (1, n_neurons, n_categories)
+        # Clip to avoid log(0) which would give -inf
+        freq_per_sample = jnp.clip(
+            freq_per_sample, jnp.finfo(freq_per_sample.dtype).eps, 1.0
+        )
+        return jnp.log(freq_per_sample) * jnp.ones_like(y, dtype=float)

@@ -26,6 +26,7 @@ from numpy.typing import NDArray
 from . import solvers, tree_utils, utils
 from ._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from .base_class import Base
+from .glm.params import GLMParams
 from .regularizer import GroupLasso, Regularizer
 from .type_casting import cast_to_jax
 from .typing import (
@@ -267,6 +268,9 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
     @solver_name.setter
     def solver_name(self, solver_name: str):
         """Setter for the solver_name attribute."""
+        if not isinstance(solver_name, str):
+            raise TypeError("solver_name must be a string.")
+
         # check if solver str passed is valid for regularizer
         self._regularizer.check_solver(solver_name)
         self._solver_name = solver_name
@@ -316,7 +320,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             )
 
     def _instantiate_solver(
-        self, loss, solver_kwargs: Optional[dict] = None
+        self, loss, init_params: ModelParamsT, solver_kwargs: Optional[dict] = None
     ) -> BaseRegressor:
         """
         Instantiate the solver with the provided loss function.
@@ -337,6 +341,8 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         ----------
         loss:
             The un-regularized loss function.
+        init_params:
+            The model parameters.
         solver_kwargs:
             Optional dictionary with the solver kwargs.
             If nothing is provided, it defaults to self.solver_kwargs.
@@ -363,6 +369,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             self.regularizer,
             self.structured_regularizer_strength,
             has_aux=self._has_aux,
+            init_params=init_params,
             **solver_kwargs,
         )
         self._solver = solver
@@ -561,12 +568,17 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         data = X.data if isinstance(X, FeaturePytree) else X
 
         if isinstance(self.regularizer, GroupLasso):
-            if self.regularizer.mask is None:
+            if self.regularizer.mask is None and not isinstance(data, dict):
+                # User is calling GroupLasso but not using the FeaturePytree to
+                # group variables nor providing mask.
                 warnings.warn(
                     "Mask has not been set. Defaulting to a single group for all parameters. "
                     "Please see the documentation on GroupLasso regularization for defining a mask."
                 )
-                self.regularizer.mask = jnp.ones((1, data.shape[1]))
+
+            if isinstance(self.regularizer.mask, jnp.ndarray):
+                # Wrap into a GLM param structure.
+                self.regularizer.mask = GLMParams(self.regularizer.mask, None)
 
         return data, y
 

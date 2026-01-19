@@ -193,7 +193,14 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         # Replace this manual list after dropping support for 3.10?
         observation_model: (
             obs.Observations
-            | Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial", "Gaussian"]
+            | Literal[
+                "Poisson",
+                "Gamma",
+                "Bernoulli",
+                "NegativeBinomial",
+                "Gaussian",
+                "Categorical",
+            ]
         ) = "Poisson",
         inverse_link_function: Optional[Callable] = None,
         regularizer: Optional[Union[str, Regularizer]] = None,
@@ -887,7 +894,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
         >>> model = nmo.glm.GLM()
         >>> params = model.initialize_params(X, y)
-        >>> opt_state = model._initialize_solver_and_state(X, y, params)
+        >>> opt_state = model.initialize_solver_and_state(X, y, params)
         >>> # Now ready to run optimization or update steps
         """
         # validate regularizer strength and params consistency
@@ -899,7 +906,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
 
         opt_solver_kwargs = self._optimize_solver_params(X, y)
         #  set up the solver init/run/update attrs
-        self._instantiate_solver(self._compute_loss, solver_kwargs=opt_solver_kwargs)
+        self._instantiate_solver(
+            self._compute_loss, init_params=init_params, solver_kwargs=opt_solver_kwargs
+        )
 
         opt_state = self.solver_init_state(init_params, X, y)
         return opt_state
@@ -1255,7 +1264,9 @@ class PopulationGLM(GLM):
         self,
         observation_model: (
             obs.Observations
-            | Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial"]
+            | Literal[
+                "Poisson", "Gamma", "Bernoulli", "NegativeBinomial", "Categorical"
+            ]
         ) = "Poisson",
         inverse_link_function: Optional[Callable] = None,
         regularizer: Union[str, Regularizer] = "UnRegularized",

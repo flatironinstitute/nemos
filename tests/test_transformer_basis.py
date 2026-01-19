@@ -5,7 +5,7 @@ from contextlib import nullcontext as does_not_raise
 from copy import deepcopy
 from unittest.mock import patch
 
-import jax
+import jax.numpy as jnp
 import numpy as np
 import pytest
 from conftest import (
@@ -153,7 +153,12 @@ def test_basis_to_transformer_makes_a_copy(
     basis_cls, basis_class_specific_params, ndim
 ):
 
-    if basis_cls in [nmo.basis.IdentityEval, nmo.basis.HistoryConv, CustomBasis]:
+    if basis_cls in [
+        nmo.basis.IdentityEval,
+        nmo.basis.HistoryConv,
+        CustomBasis,
+        nmo.basis.Zero,
+    ]:
         pytest.skip(f"{basis_cls} n_basis_funcs is not settable.")
 
     bas_a = CombinedBasis().instantiate_basis(
@@ -248,7 +253,7 @@ def test_transformerbasis_getattr(
 def test_transformerbasis_set_params(
     basis_cls, n_basis_funcs_init, n_basis_funcs_new, basis_class_specific_params
 ):
-    if basis_cls in [nmo.basis.IdentityEval]:
+    if basis_cls in [nmo.basis.IdentityEval, nmo.basis.Zero]:
         return  # no settable params
 
     bas = CombinedBasis().instantiate_basis(
@@ -308,7 +313,7 @@ def test_transformerbasis_setattr_basis(basis_cls, basis_class_specific_params):
 def test_transformerbasis_setattr_basis_attribute(
     basis_cls, basis_class_specific_params
 ):
-    if basis_cls in [nmo.basis.IdentityEval]:
+    if basis_cls in [nmo.basis.IdentityEval, nmo.basis.Zero]:
         return
     # setting an attribute that is an attribute of the underlying _basis
     # should propagate setting it on _basis itself
@@ -344,7 +349,7 @@ def test_transformerbasis_setattr_basis_attribute(
 def test_transformerbasis_copy_basis_on_construct(
     basis_cls, basis_class_specific_params
 ):
-    if basis_cls in [nmo.basis.IdentityEval]:
+    if basis_cls in [nmo.basis.IdentityEval, nmo.basis.Zero]:
         return
 
     # modifying the transformerbasis's attributes shouldn't
@@ -404,7 +409,7 @@ def test_transformerbasis_setattr_illegal_attribute(
 )
 def test_transformerbasis_addition(basis_cls, basis_class_specific_params):
 
-    if basis_cls in [nmo.basis.IdentityEval, nmo.basis.HistoryConv]:
+    if basis_cls in [nmo.basis.IdentityEval, nmo.basis.HistoryConv, nmo.basis.Zero]:
         return
 
     n_basis_funcs_a = 5
@@ -540,13 +545,13 @@ def test_transformerbasis_sk_clone_kernel_noned(basis_cls, basis_class_specific_
 
     # kernel should be saved in the object after fit
     trans_bas.fit(np.random.randn(100, 1))
-    assert isinstance(trans_bas.kernel_, np.ndarray)
+    assert isinstance(trans_bas.kernel_, (np.ndarray, jnp.ndarray))
 
     # cloning should set kernel_ to None
     trans_bas_clone = sk_clone(trans_bas)
 
     # the original object should still have kernel_
-    assert isinstance(trans_bas.kernel_, np.ndarray)
+    assert isinstance(trans_bas.kernel_, (np.ndarray, jnp.ndarray))
     # but the clone should not have one
     assert trans_bas_clone.kernel_ is None
 
@@ -860,7 +865,7 @@ def test_transformer_fit_transform_input_struct(
 @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
 def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
 
-    if basis_cls is IdentityEval:
+    if basis_cls in [IdentityEval, nmo.basis.Zero]:
         return
     elif basis_cls is HistoryConv:
         cv_attr = "window_size"
@@ -1151,6 +1156,7 @@ def test_check_input(inp, expectation, basis_cls, basis_class_specific_params, m
             basis.AdditiveBasis: "Transformer('(MSplineEval + RaisedCosineLinearConv)': AdditiveBasis(\n    basis1=MSplineEval(n_basis_funcs=5, order=4),\n    basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n))",
             basis.MultiplicativeBasis: "Transformer('(MSplineEval * RaisedCosineLinearConv)': MultiplicativeBasis(\n    basis1=MSplineEval(n_basis_funcs=5, order=4),\n    basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n))",
             basis.FourierEval: "Transformer(FourierEval(frequencies=[Array([0., 1., 2.], dtype=float64)], ndim=1, frequency_mask='all'))",
+            basis.Zero: "Transformer(Zero())",
         }
     ],
 )

@@ -40,6 +40,7 @@ warnings.filterwarnings(
 )
 ```
 
+(pytrees_howto)=
 # FeaturePytree example
 
 This small example notebook shows how to use our custom FeaturePytree objects

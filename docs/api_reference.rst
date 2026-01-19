@@ -95,6 +95,7 @@ These classes are the building blocks for the concrete basis classes.
     FourierEval
     OrthExponentialEval
     IdentityEval
+    Zero
 
 **Composite Bases:**
 
@@ -147,6 +148,7 @@ Statistical models to describe the distribution of neural responses or other pre
     NegativeBinomialObservations
     GammaObservations
     BernoulliObservations
+    CategoricalObservations
 
 .. _regularizers:
 

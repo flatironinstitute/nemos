@@ -34,7 +34,7 @@ import pytest
 import nemos as nmo
 import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
-from nemos.basis import AdditiveBasis, CustomBasis, MultiplicativeBasis
+from nemos.basis import AdditiveBasis, CustomBasis, MultiplicativeBasis, Zero
 from nemos.basis._basis import Basis
 from nemos.basis._basis_mixin import BasisMixin
 from nemos.basis._transformer_basis import TransformerBasis
@@ -82,7 +82,9 @@ def set_jax_precision_per_test(request):
 def basis_class_specific_params():
     """Returns all the params for each class."""
     all_cls = (
-        list_all_basis_classes("Conv") + list_all_basis_classes("Eval") + [CustomBasis]
+        list_all_basis_classes("Conv")
+        + list_all_basis_classes("Eval")
+        + [CustomBasis, Zero]
     )
     return {cls.__name__: cls._get_param_names() for cls in all_cls}
 
@@ -208,6 +210,16 @@ class CombinedBasis(BasisFuncsTesting):
         return basis_obj
 
 
+def is_eval_basis(basis_cls) -> bool:
+    is_eval = "Eval" in basis_cls.__name__ or issubclass(basis_cls, basis.Zero)
+    return is_eval
+
+
+def is_conv_basis(basis_cls) -> bool:
+    is_eval = "Conv" in basis_cls.__name__
+    return is_eval
+
+
 # automatic define user accessible basis and check the methods
 def list_all_basis_classes(filter_basis="all") -> list[BasisMixin]:
     """
@@ -228,7 +240,8 @@ def list_all_basis_classes(filter_basis="all") -> list[BasisMixin]:
         + [CustomBasis]
     )
     if filter_basis != "all":
-        all_basis = [a for a in all_basis if filter_basis in a.__name__]
+        cond_fn = is_eval_basis if filter_basis == "Eval" else is_conv_basis
+        all_basis = [a for a in all_basis if cond_fn(a)]
     return all_basis
 
 
@@ -553,20 +566,6 @@ def coupled_model_simulate():
 
 
 @pytest.fixture
-def jaxopt_solvers():
-    return [
-        "GradientDescent",
-        "BFGS",
-        "LBFGS",
-        "ScipyMinimize",
-        "NonlinearCG",
-        "ScipyBoundedMinimize",
-        "LBFGSB",
-        "ProximalGradient",
-    ]
-
-
-@pytest.fixture
 def poissonGLM_model_instantiation_group_sparse():
     """Set up a Poisson GLM for testing purposes with group sparse weights.
 
@@ -632,14 +631,17 @@ def population_poissonGLM_model_instantiation_group_sparse():
 def example_data_prox_operator():
     n_features = 4
 
-    params = (
+    params = GLMParams(
         jnp.ones((n_features)),
-        jnp.zeros(
-            1,
-        ),
+        jnp.zeros(1),
     )
     regularizer_strength = tree_full_like(params, 0.1)
-    mask = jnp.array([[1, 0, 1, 0], [0, 1, 0, 1]]).astype(float)
+    # Mask as PyTree with same structure as params, shape (n_groups, *param_shape)
+    # Intercept mask is zeros (not regularized)
+    mask = GLMParams(
+        jnp.array([[1, 0, 1, 0], [0, 1, 0, 1]]).astype(float),
+        jnp.zeros((2, 1), dtype=float),
+    )
     scaling = 0.5
 
     return params, regularizer_strength, mask, scaling
@@ -650,14 +652,25 @@ def example_data_prox_operator_multineuron():
     n_features = 4
     n_neurons = 3
 
-    params = (
+    params = GLMParams(
         jnp.ones((n_features, n_neurons)),
-        jnp.zeros(
-            n_neurons,
-        ),
+        jnp.zeros(n_neurons),
     )
     regularizer_strength = tree_full_like(params, 0.1)
-    mask = jnp.array([[1, 0, 1, 0], [0, 1, 0, 1]], dtype=jnp.float32)
+    # Mask as PyTree with same structure as params
+    # For multi-neuron: mask shape is (n_groups, n_features, n_neurons)
+    # Intercept mask is zeros (not regularized)
+    mask_coef = jnp.array(
+        [
+            [[1, 1, 1], [0, 0, 0], [1, 1, 1], [0, 0, 0]],
+            [[0, 0, 0], [1, 1, 1], [0, 0, 0], [1, 1, 1]],
+        ],
+        dtype=jnp.float32,
+    )
+    mask = GLMParams(
+        mask_coef,
+        jnp.zeros((2, n_neurons), dtype=jnp.float32),
+    )
     scaling = 0.5
 
     return params, regularizer_strength, mask, scaling
@@ -943,7 +956,63 @@ def bernoulliGLM_model_instantiation_pytree(bernoulliGLM_model_instantiation):
         true_params.intercept,
     )
     model_tree = nmo.glm.GLM(model.observation_model, regularizer=model.regularizer)
-    return X_tree, np.random.binomial(1, rate), model_tree, true_params_tree, rate
+    return X_tree, spikes, model_tree, true_params_tree, rate
+
+
+@pytest.fixture
+def categoricalGLM_model_instantiation():
+    """Set up a categorical GLM for testing purposes.
+
+    This fixture initializes a categorical GLM with random parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response.
+
+    Returns:
+        tuple: A tuple containing:
+            - X (numpy.ndarray): Simulated input data.
+            - jax.random.categorical(key, rate) (numpy.ndarray): Simulated spike responses.
+            - model (nmo.glm.GLM): Initialized model instance.
+            - GLMParams(w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of log-proba.
+    """
+    np.random.seed(123)
+    X = np.random.normal(size=(100, 5))
+    b_true = np.zeros((3,))
+    w_true = np.random.normal(size=(5, 3))
+    observation_model = nmo.observation_models.CategoricalObservations()
+    regularizer = nmo.regularizer.UnRegularized()
+    model = nmo.glm.GLM(observation_model, regularizer=regularizer)
+    rate = jax.nn.log_softmax(jnp.einsum("ki,tk->ti", w_true, X) + b_true)
+    key = jax.random.PRNGKey(123)
+    y = jax.random.categorical(key, rate)
+    y = jax.nn.one_hot(y, num_classes=3).astype(float)
+    return X, y, model, GLMParams(w_true, b_true), rate
+
+
+@pytest.fixture
+def categoricalGLM_model_instantiation_pytree():
+    """Set up a categorical GLM for testing purposes.
+
+    This fixture initializes a categorical GLM with random parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response.
+
+    Returns:
+        tuple: A tuple containing:
+            - X (numpy.ndarray): Simulated input data.
+            - jax.random.categorical(key, rate) (numpy.ndarray): Simulated spike responses.
+            - model (nmo.glm.GLM): Initialized model instance.
+            - GLMParams(w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of log-proba.
+    """
+    X, spikes, model, true_params, rate = bernoulliGLM_model_instantiation
+    X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
+    true_params_tree = GLMParams(
+        dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
+        true_params.intercept,
+    )
+    model_tree = nmo.glm.GLM(model.observation_model, regularizer=model.regularizer)
+    return X_tree, spikes, model_tree, true_params_tree, rate
 
 
 @pytest.fixture
@@ -1295,14 +1364,6 @@ _common_solvers = {
     "ProxSVRG": nmo.solvers.WrappedProxSVRG,
 }
 _solver_registry_per_backend = {
-    "jaxopt": {
-        **_common_solvers,
-        "GradientDescent": nmo.solvers.JaxoptGradientDescent,
-        "ProximalGradient": nmo.solvers.JaxoptProximalGradient,
-        "LBFGS": nmo.solvers.JaxoptLBFGS,
-        "BFGS": nmo.solvers.JaxoptBFGS,
-        "NonlinearCG": nmo.solvers.JaxoptNonlinearCG,
-    },
     "optimistix": {
         **_common_solvers,
         "GradientDescent": nmo.solvers.OptimistixNAG,
@@ -1312,6 +1373,16 @@ _solver_registry_per_backend = {
         "NonlinearCG": nmo.solvers.OptimistixNonlinearCG,
     },
 }
+
+if nmo.solvers.JAXOPT_AVAILABLE:
+    _solver_registry_per_backend["jaxopt"] = {
+        **_common_solvers,
+        "GradientDescent": nmo.solvers.JaxoptGradientDescent,
+        "ProximalGradient": nmo.solvers.JaxoptProximalGradient,
+        "LBFGS": nmo.solvers.JaxoptLBFGS,
+        "BFGS": nmo.solvers.JaxoptBFGS,
+        "NonlinearCG": nmo.solvers.JaxoptNonlinearCG,
+    }
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -1330,6 +1401,8 @@ def configure_solver_backend(request):
     if backend is None:
         _solver_registry_to_use = nmo.solvers.solver_registry.copy()
     else:
+        if backend == "jaxopt" and not nmo.solvers.JAXOPT_AVAILABLE:
+            pytest.fail("jaxopt backend requested but jaxopt is not installed.")
         try:
             _solver_registry_to_use = _solver_registry_per_backend[backend]
         except KeyError:

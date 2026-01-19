@@ -1,146 +1,45 @@
-"""Base class for adapters wrapping JAXopt solvers."""
+"""Adapters wrapping JAXopt solvers, if available."""
 
-from typing import Any, Callable, ClassVar, NamedTuple, Tuple, Type, TypeAlias
+from ._jaxopt_adapter import JaxoptAdapter
 
-from nemos.third_party.jaxopt import jaxopt
+JAXOPT_AVAILABLE = False
 
-from ..regularizer import Regularizer
-from ..typing import Aux, Params, RegularizerStrength
-from ._abstract_solver import OptimizationInfo
-from ._solver_adapter import SolverAdapter
+try:
+    from jaxopt import BFGS, LBFGS, GradientDescent, NonlinearCG, ProximalGradient
+except ModuleNotFoundError:  # pragma: no cover - exercised when jaxopt is optional
+    pass
+else:
+    JAXOPT_AVAILABLE = True
 
-JaxoptSolverState: TypeAlias = NamedTuple
-JaxoptStepResult: TypeAlias = Tuple[Params, JaxoptSolverState, Aux]
+if JAXOPT_AVAILABLE:
 
+    class JaxoptGradientDescent(JaxoptAdapter):
+        """Adapter for jaxopt.GradientDescent."""
 
-class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
-    """
-    Base class for adapters wrapping JAXopt solvers.
+        _solver_cls = GradientDescent
 
-    Besides `_solver_cls`, for proximal solvers the `_proximal` class variable
-    needs to be set to `True`.
-    """
-
-    _solver_cls: ClassVar[Type]
-    _proximal: ClassVar[bool] = False
-
-    def __init__(
-        self,
-        unregularized_loss: Callable,
-        regularizer: Regularizer,
-        regularizer_strength: RegularizerStrength,
-        has_aux: bool,
-        **solver_init_kwargs,
-    ):
-        if self._proximal:
-            self.fun = unregularized_loss
-            solver_init_kwargs["prox"] = regularizer.get_proximal_operator()
-        else:
-            self.fun = regularizer.penalized_loss(
-                unregularized_loss, regularizer_strength
-            )
-
-        self.regularizer_strength = regularizer_strength
-
-        # Prepend the regularizer strength to args for proximal solvers.
-        # Methods of `jaxopt.ProximalGradient` expect `hyperparams_prox` before
-        # the objective function's arguments, while others do not need this.
-        self.hyperparams_prox = (self.regularizer_strength,) if self._proximal else ()
-
-        self._solver = self._solver_cls(
-            fun=self.fun,
-            has_aux=has_aux,
-            **solver_init_kwargs,
-        )
-
-    def init_state(self, init_params: Params, *args: Any) -> JaxoptSolverState:
-        return self._solver.init_state(init_params, *self.hyperparams_prox, *args)
-
-    def update(
-        self, params: Params, state: JaxoptSolverState, *args: Any
-    ) -> JaxoptStepResult:
-        params, state = self._solver.update(
-            params, state, *self.hyperparams_prox, *args
-        )
-        aux = self._extract_aux(state, fallback_name="aux_batch")
-        return (params, state, aux)
-
-    def run(self, init_params: Params, *args: Any) -> JaxoptStepResult:
-        params, state = self._solver.run(init_params, *self.hyperparams_prox, *args)
-        aux = self._extract_aux(state, fallback_name="aux_full")
-        return (params, state, aux)
-
-    @classmethod
-    def get_accepted_arguments(cls) -> set[str]:
-        arguments = super().get_accepted_arguments()
-        # prox is read from the regularizer, not provided as a solver argument
-        if cls._proximal:
-            arguments.remove("prox")
-        return arguments
-
-    def get_optim_info(self, state: JaxoptSolverState) -> OptimizationInfo:
-        num_steps = state.iter_num.item()  # pyright: ignore
-        function_val = (
-            state.value if hasattr(state, "value") else None
-        )  # pyright: ignore
-
-        return OptimizationInfo(
-            function_val=function_val,  # pyright: ignore
-            num_steps=num_steps,
-            converged=state.error.item() <= self.tol,  # pyright: ignore
-            reached_max_steps=(num_steps == self.maxiter),
-        )
-
-    @property
-    def maxiter(self):
-        return self._solver.maxiter
-
-    def _extract_aux(self, state: JaxoptSolverState, fallback_name: str):
+    class JaxoptProximalGradient(JaxoptAdapter):
         """
-        Return auxiliary output from a solver state.
+        Adapter for jaxopt.ProximalGradient.
 
-        Prefers `state.aux` when present; otherwise falls back to the provided field name
-        (e.g., `aux_batch` for SVRG updates or `aux_full` for SVRG run).
+        The `prox` argument passed to `jaxopt.ProximalGradient`
+        is read from the regularizer.
         """
-        # solvers imported from jaxopt have state.aux
-        if hasattr(state, "aux"):
-            return state.aux
 
-        # for SVRG get state.aux_batch or state.aux_full
-        return getattr(state, fallback_name)
+        _solver_cls = ProximalGradient
+        _proximal = True
 
+    class JaxoptBFGS(JaxoptAdapter):
+        """Adapter for jaxopt.BFGS."""
 
-class JaxoptProximalGradient(JaxoptAdapter):
-    """
-    Adapter for `jaxopt.ProximalGradient`.
+        _solver_cls = BFGS
 
-    The `prox` argument passed to `jaxopt.ProximalGradient`
-    is read from the regularizer.
-    """
+    class JaxoptLBFGS(JaxoptAdapter):
+        """Adapter for jaxopt.LBFGS."""
 
-    _solver_cls = jaxopt.ProximalGradient
-    _proximal = True
+        _solver_cls = LBFGS
 
+    class JaxoptNonlinearCG(JaxoptAdapter):
+        """Adapter for jaxopt.NonlinearCG."""
 
-class JaxoptGradientDescent(JaxoptAdapter):
-    """Adapter for jaxopt.GradientDescent."""
-
-    _solver_cls = jaxopt.GradientDescent
-
-
-class JaxoptBFGS(JaxoptAdapter):
-    """Adapter for jaxopt.BFGS."""
-
-    _solver_cls = jaxopt.BFGS
-
-
-class JaxoptLBFGS(JaxoptAdapter):
-    """Adapter for jaxopt.LBFGS."""
-
-    _solver_cls = jaxopt.LBFGS
-
-
-class JaxoptNonlinearCG(JaxoptAdapter):
-    """Adapter for jaxopt.NonlinearCG."""
-
-    _solver_cls = jaxopt.NonlinearCG
+        _solver_cls = NonlinearCG

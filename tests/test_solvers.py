@@ -5,18 +5,19 @@ from contextlib import nullcontext as does_not_raise
 import jax
 import jax.numpy as jnp
 import numpy as np
+import optimistix as optx
 import pytest
 
 import nemos as nmo
 from nemos.glm.params import GLMParams
+from nemos.proximal_operator import prox_none, prox_ridge
 from nemos.solvers._svrg import SVRG, ProxSVRG, SVRGState
-from nemos.third_party.jaxopt import jaxopt
 from nemos.tree_utils import (
     pytree_map_and_reduce,
-    tree_full_like,
     tree_l2_norm,
     tree_slice,
     tree_sub,
+    tree_full_like,
 )
 
 # Register every test here as solver-related
@@ -99,7 +100,7 @@ def test_svrg_init_state_key(request, regr_setup):
 )
 @pytest.mark.parametrize(
     "solver_class, prox, prox_lambda",
-    [(SVRG, None, None), (ProxSVRG, jaxopt.prox.prox_ridge, 0.1)],
+    [(SVRG, None, None), (ProxSVRG, prox_ridge, 0.1)],
 )
 @pytest.mark.requires_x64
 def test_svrg_update_needs_df_xs(request, regr_setup, solver_class, prox, prox_lambda):
@@ -145,7 +146,7 @@ def test_svrg_glm_instantiate_solver(regularizer_name, solver_class, mask):
         solver_name=solver_name,
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
     )
-    glm._instantiate_solver(glm._compute_loss)
+    glm._instantiate_solver(glm._compute_loss, np.zeros(1))
 
     # currently glm._solver is a Wrapped(Prox)SVRG
     solver = glm._solver._solver
@@ -181,7 +182,7 @@ def test_svrg_glm_passes_solver_kwargs(regularizer_name, solver_name, mask, glm_
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
         **kwargs,
     )
-    glm._instantiate_solver(glm._compute_loss)
+    glm._instantiate_solver(glm._compute_loss, np.zeros(1))
 
     # currently glm._solver is a Wrapped(Prox)SVRG
     solver = glm._solver._solver
@@ -257,7 +258,7 @@ def test_svrg_glm_initialize_state(
         (
             "GroupLasso",
             ProxSVRG,
-            np.array([[0.0], [0.0], [1.0]]),
+            GLMParams(jax.numpy.array([[0.0], [0.0], [1.0]]), None),
         ),
         ("Ridge", SVRG, None),
         ("UnRegularized", SVRG, None),
@@ -277,8 +278,7 @@ def test_svrg_glm_update(
     # only pass mask if it's not None
     kwargs = {}
     if glm_class == nmo.glm.PopulationGLM:
-        kwargs["feature_mask"] = mask
-
+        kwargs["feature_mask"] = mask.coef if mask is not None else None
     reg_cls = getattr(nmo.regularizer, regularizer_name)
     if regularizer_name == "GroupLasso":
         reg = reg_cls(mask=mask)
@@ -318,15 +318,27 @@ def test_svrg_glm_update(
         (
             "GroupLasso",
             "ProxSVRG",
-            np.array([[0, 1, 0, 1, 1], [1, 0, 1, 0, 0]]).astype(float),
+            GLMParams(
+                jax.numpy.array([[0, 1, 0, 1, 1], [1, 0, 1, 0, 0]]).astype(float), None
+            ),
         ),
-        ("GroupLasso", "ProxSVRG", np.array([[1, 1, 1, 1, 1]]).astype(float)),
+        (
+            "GroupLasso",
+            "ProxSVRG",
+            GLMParams(jax.numpy.array([[1, 1, 1, 1, 1]]).astype(float), None),
+        ),
         (
             "GroupLasso",
             "ProximalGradient",
-            np.array([[0, 1, 0, 1, 1], [1, 0, 1, 0, 0]]).astype(float),
+            GLMParams(
+                jax.numpy.array([[0, 1, 0, 1, 1], [1, 0, 1, 0, 0]]).astype(float), None
+            ),
         ),
-        ("GroupLasso", "ProximalGradient", np.array([[1, 1, 1, 1, 1]]).astype(float)),
+        (
+            "GroupLasso",
+            "ProximalGradient",
+            GLMParams(jax.numpy.array([[1, 1, 1, 1, 1]]).astype(float), None),
+        ),
         ("Ridge", "GradientDescent", None),
         ("Ridge", "SVRG", None),
         ("UnRegularized", "SVRG", None),
@@ -372,6 +384,9 @@ def test_maxiter_is_respected(
     # only pass mask if it's not None
     reg_cls = getattr(nmo.regularizer, regularizer_name)
     if regularizer_name == "GroupLasso":
+        if glm_class == nmo.glm.PopulationGLM:
+            # add the extra neuron dim
+            mask = GLMParams(mask.coef[..., None], None)
         reg = reg_cls(mask=mask)
     else:
         reg = reg_cls()
@@ -515,9 +530,9 @@ def test_svrg_update_converges(request, regr_setup, stepsize):
 @pytest.mark.parametrize(
     "prox, prox_lambda",
     [
-        (jaxopt.prox.prox_none, None),
-        (jaxopt.prox.prox_ridge, 0.1),
-        (jaxopt.prox.prox_none, 0.1),
+        (prox_none, None),
+        (prox_ridge, 0.1),
+        (prox_none, 0.1),
         (nmo.proximal_operator.prox_lasso, 0.1),
     ],
 )
@@ -603,7 +618,7 @@ def test_svrg_xk_update_step(request, regr_setup, to_tuple, prox, prox_lambda):
     next_xk = prox(next_xk, prox_lambda, scaling=stepsize)
 
     if prox_lambda is None:
-        assert prox == jaxopt.prox.prox_none
+        assert prox == prox_none
         solver = SVRG(loss)
     else:
         solver = ProxSVRG(loss, prox)
@@ -665,18 +680,14 @@ def test_all_solvers_accept_maxiter_and_not_max_steps():
 
 @pytest.mark.requires_x64
 @pytest.mark.parametrize(
-    "solver_name", [solver for solver in nmo.solvers.solver_registry.keys()]
-)
-@pytest.mark.parametrize(
     "aux_gen_fn",
     [
         lambda: np.random.randint(1000),
         lambda: {"a": 1, "b": 2},
     ],
 )
-def test_solvers_use_aux_in_run(request, solver_name, aux_gen_fn):
+def test_all_solvers_use_aux_in_run(request, aux_gen_fn):
     X, y, _, true_params, loss = request.getfixturevalue("linear_regression")
-    solver_class = nmo.solvers.solver_registry[solver_name]
 
     class TestAux:
         def __init__(self, loss):
@@ -692,29 +703,28 @@ def test_solvers_use_aux_in_run(request, solver_name, aux_gen_fn):
             self.auxes.append(aux)
             return loss_val, aux
 
-    run_loss = TestAux(loss)
-
     param_init = jax.tree_util.tree_map(np.zeros_like, true_params)
 
-    # test solver.run
-    solver = solver_class(
-        unregularized_loss=run_loss,
-        regularizer=nmo.regularizer.UnRegularized(),
-        regularizer_strength=None,
-        has_aux=True,
-    )
-    run_params, run_state, run_aux = solver.run(param_init, X, y)
+    for solver_name in nmo.solvers.list_available_solvers():
+        run_loss = TestAux(loss)
+        solver_class = nmo.solvers.solver_registry[solver_name]
 
-    assert run_aux is not None
-    if hasattr(run_state, "aux"):
-        assert run_aux == run_state.aux
-    # testing this because there are extra evaluations whose aux is not saved
-    assert run_aux in run_loss.auxes
+        # test solver.run
+        solver = solver_class(
+            unregularized_loss=run_loss,
+            regularizer=nmo.regularizer.UnRegularized(),
+            regularizer_strength=None,
+            has_aux=True,
+        )
+        run_params, run_state, run_aux = solver.run(param_init, X, y)
+
+        assert run_aux is not None
+        if hasattr(run_state, "aux"):
+            assert run_aux == run_state.aux
+        # testing this because there are extra evaluations whose aux is not saved
+        assert run_aux in run_loss.auxes
 
 
-@pytest.mark.parametrize(
-    "solver_name", [solver for solver in nmo.solvers.solver_registry.keys()]
-)
 @pytest.mark.parametrize(
     "aux_gen_fn",
     [
@@ -722,10 +732,9 @@ def test_solvers_use_aux_in_run(request, solver_name, aux_gen_fn):
         lambda: {"a": 1, "b": 2},
     ],
 )
-def test_solvers_use_aux_in_update(request, solver_name, aux_gen_fn):
+def test_all_solvers_use_aux_in_update(request, aux_gen_fn):
     jax.config.update("jax_enable_x64", True)
     X, y, _, true_params, loss = request.getfixturevalue("linear_regression")
-    solver_class = nmo.solvers.solver_registry[solver_name]
 
     class TestAux:
         def __init__(self, loss):
@@ -741,54 +750,103 @@ def test_solvers_use_aux_in_update(request, solver_name, aux_gen_fn):
             self.auxes.append(aux)
             return loss_val, aux
 
-    update_loss = TestAux(loss)
-
     param_init = jax.tree_util.tree_map(np.zeros_like, true_params)
 
-    solver = solver_class(
-        unregularized_loss=update_loss,
-        regularizer=nmo.regularizer.UnRegularized(),
-        regularizer_strength=None,
-        has_aux=True,
-    )
-    init_state = solver.init_state(param_init, X, y)
+    for solver_name in nmo.solvers.list_available_solvers():
+        update_loss = TestAux(loss)
+        solver_class = nmo.solvers.solver_registry[solver_name]
+        solver = solver_class(
+            unregularized_loss=update_loss,
+            regularizer=nmo.regularizer.UnRegularized(),
+            regularizer_strength=None,
+            has_aux=True,
+        )
+        init_state = solver.init_state(param_init, X, y)
 
-    if "svrg" in solver_name.lower():
-        full_grad, full_aux = jax.grad(update_loss, has_aux=True)(param_init, X, y)
-        init_state = init_state._replace(
-            full_grad_at_reference_point=full_grad,
+        if "svrg" in solver_name.lower():
+            full_grad, full_aux = jax.grad(update_loss, has_aux=True)(param_init, X, y)
+            init_state = init_state._replace(
+                full_grad_at_reference_point=full_grad,
+            )
+
+        update_params, update_state, update_aux = solver.update(
+            param_init, init_state, X, y
         )
 
-    update_params, update_state, update_aux = solver.update(
-        param_init, init_state, X, y
-    )
+        assert update_aux is not None
 
-    assert update_aux is not None
+        if hasattr(update_state, "aux"):
+            assert update_aux == update_state.aux
 
-    if hasattr(update_state, "aux"):
-        assert update_aux == update_state.aux
+        # testing this because there are extra evaluations whose aux is not saved
+        assert update_aux in update_loss.auxes
 
-    # testing this because there are extra evaluations whose aux is not saved
-    assert update_aux in update_loss.auxes
+
+def test_all_solvers_work_without_aux(request):
+    jax.config.update("jax_enable_x64", True)
+    X, y, _, true_params, loss = request.getfixturevalue("linear_regression")
+
+    for solver_name in nmo.solvers.list_available_solvers():
+        solver_class = nmo.solvers.solver_registry[solver_name]
+
+        param_init = jax.tree_util.tree_map(np.zeros_like, true_params)
+        solver = solver_class(
+            unregularized_loss=loss,
+            regularizer=nmo.regularizer.UnRegularized(),
+            regularizer_strength=None,
+            has_aux=False,
+            tol=1e-12,
+        )
+        params, state, returned_aux = solver.run(param_init, X, y)
+
+        assert returned_aux is None
+        assert np.allclose(true_params, params)
 
 
 @pytest.mark.parametrize(
-    "solver_name", [solver for solver in nmo.solvers.solver_registry.keys()]
+    "solver_class", [nmo.solvers.OptimistixBFGS, nmo.solvers.OptimistixNonlinearCG]
 )
-def test_solvers_work_without_aux(request, solver_name):
-    jax.config.update("jax_enable_x64", True)
-    X, y, _, true_params, loss = request.getfixturevalue("linear_regression")
-    solver_class = nmo.solvers.solver_registry[solver_name]
-
-    param_init = jax.tree_util.tree_map(np.zeros_like, true_params)
+@pytest.mark.parametrize(
+    "stepsize,expected_search",
+    [
+        (-1, optx.BacktrackingArmijo),
+        (None, optx.BacktrackingArmijo),
+        (0.01, optx.LearningRate),
+    ],
+)
+def test_optimistix_solvers_have_correct_search(
+    request, solver_class, stepsize, expected_search
+):
+    """Custom Optimistix solvers should use fixed stepsize or linesearch based on stepsize."""
+    _, _, _, _, loss = request.getfixturevalue("linear_regression")
     solver = solver_class(
         unregularized_loss=loss,
         regularizer=nmo.regularizer.UnRegularized(),
         regularizer_strength=None,
         has_aux=False,
-        tol=1e-12,
+        stepsize=stepsize,
     )
-    params, state, returned_aux = solver.run(param_init, X, y)
+    assert isinstance(solver.search, expected_search)
 
-    assert returned_aux is None
-    assert np.allclose(true_params, params)
+
+@pytest.mark.parametrize(
+    ("solver_class", "expected_maxiter"),
+    [
+        (nmo.solvers.OptimistixFISTA, 500),
+        (nmo.solvers.OptimistixNAG, 500),
+        (nmo.solvers.OptimistixOptaxGradientDescent, 500),
+        (nmo.solvers.OptimistixOptaxLBFGS, 500),
+        (nmo.solvers.OptimistixBFGS, 10_000),
+        (nmo.solvers.OptimistixNonlinearCG, 10_000),
+    ],
+)
+def test_optimistix_solvers_default_maxiter(request, solver_class, expected_maxiter):
+    _, _, _, _, loss = request.getfixturevalue("linear_regression")
+    solver = solver_class(
+        unregularized_loss=loss,
+        regularizer=nmo.regularizer.UnRegularized(),
+        regularizer_strength=None,
+        has_aux=False,
+    )
+
+    assert solver.maxiter == expected_maxiter
