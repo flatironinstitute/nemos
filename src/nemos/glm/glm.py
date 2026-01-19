@@ -897,12 +897,6 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         >>> opt_state = model.initialize_solver_and_state(X, y, params)
         >>> # Now ready to run optimization or update steps
         """
-        # validate regularizer strength and params consistency
-        self.structured_regularizer_strength = (
-            self.regularizer._validate_regularizer_strength_structure(
-                init_params, self.regularizer_strength
-            )
-        )
 
         opt_solver_kwargs = self._optimize_solver_params(X, y)
         #  set up the solver init/run/update attrs

@@ -153,6 +153,7 @@ def apply_operator(func, params, *args, filter_kwargs=None, **kwargs):
     else:
         regularizable_subtrees = [lambda x: x]
 
+    # TODO: see how strength gets added
     for where in regularizable_subtrees:
         # Extract subtree-specific kwargs by applying the selector to each value
         subtree_kwargs = {key: where(val) for key, val in filter_kwargs.items()}
@@ -181,15 +182,9 @@ class Regularizer(Base, abc.ABC):
         String of the default solver name allowed for use with this regularizer.
     """
 
-    _allowed_solvers: Tuple[str] = tuple()
-    _default_solver: str = None
-    _proximal_operator: Callable = None
-
-    def __init__(
-        self,
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
+    _allowed_solvers: Tuple[str]
+    _default_solver: str
+    _proximal_operator: Callable
 
     @property
     def allowed_solvers(self) -> Tuple[str]:
@@ -199,10 +194,9 @@ class Regularizer(Base, abc.ABC):
     def default_solver(self) -> str:
         return self._default_solver
 
-    @abc.abstractmethod
     def get_proximal_operator(self, init_params: Any = None) -> ProximalOperator:
         """
-        Retrieve the proximal operator for this solver.
+        Retrieve the proximal operator.
 
         Parameters
         ----------
@@ -214,21 +208,20 @@ class Regularizer(Base, abc.ABC):
         :
             The proximal operator, applying regularization to the provided parameters.
         """
+        filter_kwargs = self._get_filter_kwargs(init_params=init_params)
 
         def prox_op(params, strength, scaling=1.0):
-            for where, substrength in zip(params.regularizable_subtrees(), strength):
-                params = eqx.tree_at(
-                    where,
-                    params,
-                    self._proximal_operator(
-                        where(params), substrength, scaling=scaling
-                    ),
-                )
-            return params
+            return apply_operator(
+                self._proximal_operator,
+                params,
+                strength,
+                filter_kwargs=filter_kwargs,
+                scaling=scaling,
+            )
 
         return prox_op
 
-    def check_solver(self, solver_name: str):
+    def check_solver(self, solver_name: str) -> None:
         """Raise an error if the given solver is not allowed."""
         # Temporary parsing until an improved registry is implemented.
         algo_name = solver_name.split("[", 1)[0]
@@ -242,10 +235,10 @@ class Regularizer(Base, abc.ABC):
                 f"{self.allowed_solvers}."
             )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return format_repr(self)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return format_repr(self)
 
     @staticmethod
@@ -260,7 +253,7 @@ class Regularizer(Base, abc.ABC):
             )
 
     def penalized_loss(
-        self, loss: Callable, strength: float, init_params: Any
+        self, loss: Callable, strength: Any, init_params: Any
     ) -> Callable:
         """Return a function for calculating the penalized loss using Lasso regularization."""
 
@@ -279,10 +272,7 @@ class Regularizer(Base, abc.ABC):
         return _penalized_loss
 
     def _penalization(
-        self,
-        params: ModelParamsT,
-        strength: RegularizerStrength,
-        filter_kwargs: dict,
+        self, params: Any, strength: Any, filter_kwargs: dict
     ) -> jnp.ndarray:
         penalty = jnp.array(0.0)
 
@@ -291,7 +281,7 @@ class Regularizer(Base, abc.ABC):
                 subtree = where(params)
                 subtree_kwargs = {key: where(val) for key, val in filter_kwargs.items()}
                 penalty = penalty + self._penalty_on_subtree(
-                    subtree, strength, **subtree_kwargs
+                    subtree, substrength, **subtree_kwargs
                 )
         else:
             penalty = penalty + self._penalty_on_subtree(
@@ -300,14 +290,10 @@ class Regularizer(Base, abc.ABC):
         return penalty
 
     @abc.abstractmethod
-    def _penalty_on_subtree(
-        self, sub_params, strength: RegularizerStrength, **kwargs
-    ) -> jnp.ndarray:
+    def _penalty_on_subtree(self, subtree, substrength: Any, **kwargs) -> jnp.ndarray:
         pass
 
-    def _validate_regularizer_strength(
-        self, strength: Union[None, RegularizerStrength]
-    ):
+    def _validate_regularizer_strength(self, strength: Any):
         if strength is None:
             strength = 1.0
         else:
@@ -335,11 +321,7 @@ class Regularizer(Base, abc.ABC):
 
         return strength
 
-    def _validate_regularizer_strength_structure(
-        self,
-        params: ModelParamsT,
-        strength: Union[None, RegularizerStrength],
-    ):
+    def _validate_regularizer_strength_structure(self, params: Any, strength: Any):
         regularizable_subtrees = params.regularizable_subtrees()
 
         # validate length
@@ -396,6 +378,7 @@ class Regularizer(Base, abc.ABC):
                     f"Could not convert regularizer strength to floats: {_strength[i]}"
                 )
 
+        print(_strength)
         return _strength
 
     @staticmethod
@@ -424,38 +407,20 @@ class UnRegularized(Regularizer):
 
     _default_solver = "GradientDescent"
 
-    def __init__(
-        self,
-    ):
-        super().__init__()
-
-    def get_proximal_operator(self, init_params=None) -> ProximalOperator:
-        """
-        Return the identity operator.
-
-        Unregularized method corresponds to an identity proximal operator, since no
-        shrinkage factor is applied.
-
-        Parameters
-        ----------
-        init_params
-        """
-        return prox_none
+    def _penalization(
+        self, params: Any, strength: Any, filter_kwargs: dict
+    ) -> jnp.ndarray:
+        return jnp.array(0.0)
 
     def _validate_regularizer_strength(self, strength: Any):
         return None
 
     def _validate_regularizer_strength_structure(
-        self,
-        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
-        strength: Union[None, float],
+        self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], strength: Any
     ):
         return None
 
-    def _penalization(self, params: ModelParamsT, strength: Any) -> jnp.ndarray:
-        return jnp.array(0.0)
-
-    def _penalty_on_subtree(self, subtree, substrength: Any) -> jnp.ndarray:
+    def _penalty_on_subtree(self, subtree, substrength: Any, **kwargs) -> jnp.ndarray:
         return jnp.array(0.0)
 
 
@@ -481,16 +446,7 @@ class Ridge(Regularizer):
 
     _proximal_operator = staticmethod(prox_ridge)
 
-    def __init__(
-        self,
-    ):
-        super().__init__()
-
-    def _penalty_on_subtree(
-        self,
-        subtree,
-        substrength: RegularizerStrength,
-    ) -> jnp.ndarray:
+    def _penalty_on_subtree(self, subtree, substrength: Any, **kwargs) -> jnp.ndarray:
         """
         Compute the Ridge penalization for given parameters.
 
@@ -517,26 +473,6 @@ class Ridge(Regularizer):
             substrength,
         )
 
-    def get_proximal_operator(self, init_params=None) -> ProximalOperator:
-        """
-        Retrieve the proximal operator for Ridge regularization (L2 penalty).
-
-        Parameters
-        ----------
-        init_params
-
-        Returns
-        -------
-        :
-            The proximal operator, applying L2 regularization to the provided parameters. The intercept
-            term is not regularized.
-        """
-
-        def prox_op(params, l2reg, scaling=1.0):
-            return apply_operator(prox_ridge, params, l2reg, scaling=scaling)
-
-        return prox_op
-
 
 class Lasso(Regularizer):
     """
@@ -555,36 +491,7 @@ class Lasso(Regularizer):
 
     _proximal_operator = staticmethod(prox_lasso)
 
-    def __init__(
-        self,
-    ):
-        super().__init__()
-
-    def get_proximal_operator(self, init_params=None) -> ProximalOperator:
-        """
-        Retrieve the proximal operator for Lasso regularization (L1 penalty).
-
-        Parameters
-        ----------
-        init_params
-
-        Returns
-        -------
-        :
-            The proximal operator, applying L1 regularization to the provided parameters. The intercept
-            term is not regularized.
-        """
-
-        def prox_op(params, l1reg, scaling=1.0):
-            return apply_operator(prox_lasso, params, l1reg, scaling=scaling)
-
-        return prox_op
-
-    def _penalty_on_subtree(
-        self,
-        subtree: ModelParamsT,
-        substrength: RegularizerStrength,
-    ) -> jnp.ndarray:
+    def _penalty_on_subtree(self, subtree, substrength: Any, **kwargs) -> jnp.ndarray:
         """
         Compute the Lasso penalization for given parameters.
 
@@ -649,58 +556,8 @@ class ElasticNet(Regularizer):
 
     _proximal_operator = staticmethod(prox_elastic_net)
 
-    def __init__(
-        self,
-    ):
-        super().__init__()
-
-    def get_proximal_operator(self, init_params=None) -> ProximalOperator:
-        """
-        Retrieve the proximal operator ElasticNet regularization.
-
-        Parameters
-        ----------
-        init_params
-
-        Returns
-        -------
-        :
-            The proximal operator, applying regularization to the provided parameters.
-        """
-
-        def prox_op(params, strength, scaling=1.0):
-            for where, substrength, subratio in zip(
-                params.regularizable_subtrees(), *strength
-            ):
-                params = eqx.tree_at(
-                    where,
-                    params,
-                    self._proximal_operator(
-                        where(params), substrength, subratio, scaling=scaling
-                    ),
-                )
-            return params
-
-        return prox_op
-
-    def _penalization(
-        self, params: ModelParamsT, strength: RegularizerStrength
-    ) -> jnp.ndarray:
-        penalty = jnp.array(0.0)
-
-        for where, substrength, subratio in zip(
-            params.regularizable_subtrees(), *strength
-        ):
-            subtree = where(params)
-            penalty = penalty + self._penalty_on_subtree(subtree, substrength, subratio)
-
-        return penalty
-
     def _penalty_on_subtree(
-        self,
-        subtree,
-        substrength: ElasticNetRegularizerStrength,
-        subratio: ElasticNetRegularizerStrength,
+        self, subtree: Any, substrength: Any, **kwargs
     ) -> jnp.ndarray:
         r"""
         Compute the Elastic Net penalization for given parameters.
@@ -732,9 +589,10 @@ class ElasticNet(Regularizer):
         def net_penalty(
             coeff: jnp.ndarray, strength: jnp.ndarray, ratio: jnp.ndarray
         ) -> jnp.ndarray:
-            quad = 0.5 * (1.0 - ratio) * jnp.power(coeff, 2)
-            l1 = ratio * jnp.abs(coeff)
-            return jnp.sum(strength * (quad + l1))
+            _strength, _ratio = strength
+            quad = 0.5 * (1.0 - _ratio) * jnp.power(coeff, 2)
+            l1 = _ratio * jnp.abs(coeff)
+            return jnp.sum(_strength * (quad + l1))
 
         # tree map the computation and sum over leaves
         return tree_utils.pytree_map_and_reduce(
@@ -742,12 +600,9 @@ class ElasticNet(Regularizer):
             sum,
             subtree,
             substrength,
-            subratio,
         )
 
-    def _validate_regularizer_strength(
-        self, strength: Union[None, ElasticNetRegularizerStrength]
-    ):
+    def _validate_regularizer_strength(self, strength: Any):
         if strength is None:
             _strength, _ratio = (1.0, 0.5)
         elif isinstance(strength, Tuple):
@@ -790,11 +645,7 @@ class ElasticNet(Regularizer):
 
         return _strength, _ratio
 
-    def _validate_regularizer_strength_structure(
-        self,
-        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
-        strength: Union[None, ElasticNetRegularizerStrength],
-    ):
+    def _validate_regularizer_strength_structure(self, params: Any, strength: Any):
         _strength = super()._validate_regularizer_strength_structure(
             params, strength[0]
         )
@@ -1017,9 +868,11 @@ class GroupLasso(Regularizer):
         return mask
 
     def _penalty_on_subtree(
-        self, subtree, strength: jnp.ndarray, mask: None = Any
+        self, subtree, substrength: Any, mask: Any = None, **kwargs
     ) -> jnp.ndarray:
         r"""
+        Apply the Group Lasso penaly to a subtree.
+
         Note: the penalty is being calculated according to the following formula:
 
         .. math::
@@ -1029,34 +882,11 @@ class GroupLasso(Regularizer):
         where :math:`g` is the number of groups, :math:`\dim(\cdot)` is the dimension of the vector,
         i.e. the number of coefficient in each :math:`\beta_j`, and :math:`||\cdot||_2` is the euclidean norm.
         """
-        # l2_norms = masked_norm_2(sub_params, mask, normalize=False)
-        # norm = compute_normalization(mask)
-        # return jnp.sum(norm * l2_norms) * strength
+        l2_norms = masked_norm_2(subtree, mask, normalize=False)
+        norm = compute_normalization(mask)
+        return jnp.sum(norm * l2_norms) * substrength
 
-        # conform to shape (1, n_features) if param is (n_features,) or (n_neurons, n_features) if
-        # param is (n_features, n_neurons)
-        param_with_extra_axis = jnp.atleast_2d(subtree.T)
-
-        vec_prod = jax.vmap(
-            lambda x: self.mask * x, in_axes=0, out_axes=2
-        )  # this vectorizes the product over the neurons, and adds the neuron axis as the last axis
-
-        masked_param = vec_prod(param_with_extra_axis)
-
-        # ||β_g||₂ per group, summed over neurons
-        # (group, neuron) -> (group,)
-        group_norms = jnp.linalg.norm(masked_param, axis=1).sum(axis=1)
-
-        # sqrt(p_g)
-        group_sizes = jnp.sqrt(self.mask.sum(axis=1))
-
-        return jnp.sum(strength * group_sizes * group_norms)
-
-    def _validate_regularizer_strength_structure(
-        self,
-        params: ModelParamsT,
-        strength: Union[None, RegularizerStrength],
-    ):
+    def _validate_regularizer_strength_structure(self, params, strength: Any):
         n_groups = self.mask.shape[0]
         regularizable_subtrees = params.regularizable_subtrees()
 
@@ -1094,42 +924,6 @@ class GroupLasso(Regularizer):
             _strengths.append(jnp.asarray(s, dtype=float))
 
         return _strengths
-
-    def get_proximal_operator(self, init_params=None) -> ProximalOperator:
-        """
-        Retrieve the proximal operator for Group Lasso regularization.
-
-        Parameters
-        ----------
-        init_params
-
-        Returns
-        -------
-        :
-            The proximal operator, applying Group Lasso regularization to the provided parameters. The
-            intercept term is not regularized.
-        """
-        filter_kwargs = self._get_filter_kwargs(init_params=init_params)
-
-        def prox_op(params, strength, scaling=1.0):
-            for where, substrength in zip(params.regularizable_subtrees(), strength):
-                params = eqx.tree_at(
-                    where,
-                    params,
-                    self._proximal_operator(
-                        where(params), substrength, scaling=scaling, mask=self.mask
-                    ),
-                )
-            return params
-            # return apply_operator(
-            #    prox_group_lasso,
-            #    params,
-            #    strength,
-            #    filter_kwargs=filter_kwargs,
-            #    scaling=scaling,
-            # )
-
-        return prox_op
 
     def _get_filter_kwargs(self, init_params: Any) -> dict:
         """Return kwargs that need subtree filtering."""

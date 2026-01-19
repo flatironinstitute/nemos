@@ -120,7 +120,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
     def __init__(
         self,
         regularizer: Union[str, Regularizer] = "UnRegularized",
-        regularizer_strength: Optional[RegularizerStrength] = None,
+        regularizer_strength: RegularizerStrength | None = None,
         solver_name: Optional[str] = None,
         solver_kwargs: Optional[dict] = None,
     ):
@@ -354,6 +354,14 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         """
         # final check that solver is valid for chosen regularizer
         self._regularizer.check_solver(self.solver_name)
+
+        # validate regularizer strength and params consistency
+        self.structured_regularizer_strength = (
+            self.regularizer._validate_regularizer_strength_structure(
+                init_params, self.regularizer_strength
+            )
+        )
+        print(self.structured_regularizer_strength)
 
         if solver_kwargs is None:
             # copy dictionary of kwargs to avoid modifying user settings
