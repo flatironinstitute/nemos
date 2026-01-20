@@ -60,12 +60,6 @@ ProximalOperator = Callable[
 
 FeatureMatrix = nap.TsdFrame | NDArray
 
-_RegularizerStrength = float | NDArray
-RegularizerStrength = _RegularizerStrength | list[_RegularizerStrength]
-ElasticNetRegularizerStrength = (
-    RegularizerStrength | Tuple[RegularizerStrength, RegularizerStrength]
-)
-
 # User provided init_params (e.g. for GLMs Tuple[array, array])
 UserProvidedParamsT = TypeVar("UserProvidedParamsT")
 # Model internal representation (e.g. for GLMs nemos.glm.glm.GLMParams)

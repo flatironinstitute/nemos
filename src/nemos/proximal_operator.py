@@ -34,12 +34,6 @@ import jax.tree_util as tree_util
 from nemos.tree_utils import pytree_map_and_reduce
 
 
-def prox_none(x: Any, hyperparams: Optional[Any] = None, scaling: float = 1.0) -> Any:
-    """Identity proximal operator."""
-    del hyperparams, scaling
-    return x
-
-
 def prox_ridge(x: Any, l2reg: Optional[float] = None, scaling: float = 1.0) -> Any:
     r"""Proximal operator for the squared l2 norm. From JAXopt.
 
@@ -124,7 +118,7 @@ def masked_norm_2(x: Any, mask: Any, normalize: bool = True) -> Any:
     return norms
 
 
-def prox_none(x: Any, hyperparams: Any, scaling: float = 1.0) -> Any:
+def prox_none(x: Any, scaling: float = 1.0) -> Any:
     r"""Proximal operator for :math:`g(x) = 0`, i.e., the identity function.
 
     Since :math:`g(x) = 0`, the output is:
@@ -137,8 +131,6 @@ def prox_none(x: Any, hyperparams: Any, scaling: float = 1.0) -> Any:
     ----------
     x :
         Input pytree.
-    hyperparams :
-        ignored
     scaling :
         ignored
 
@@ -146,7 +138,7 @@ def prox_none(x: Any, hyperparams: Any, scaling: float = 1.0) -> Any:
     -------
       output pytree, with the same structure as ``x``.
     """
-    del hyperparams, scaling
+    del scaling
     return x
 
 

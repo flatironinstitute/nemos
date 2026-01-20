@@ -33,7 +33,6 @@ from .typing import (
     DESIGN_INPUT_TYPE,
     FeaturePytree,
     ModelParamsT,
-    RegularizerStrength,
     SolverInit,
     SolverRun,
     SolverState,
@@ -120,13 +119,12 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
     def __init__(
         self,
         regularizer: Union[str, Regularizer] = "UnRegularized",
-        regularizer_strength: RegularizerStrength | None = None,
+        regularizer_strength: Any = None,
         solver_name: Optional[str] = None,
         solver_kwargs: Optional[dict] = None,
     ):
         self.regularizer = "UnRegularized" if regularizer is None else regularizer
         self.regularizer_strength = regularizer_strength
-        self.structured_regularizer_strength = None
 
         # no solver name provided, use default
         if solver_name is None:
@@ -250,12 +248,12 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             self.regularizer_strength = self._regularizer_strength
 
     @property
-    def regularizer_strength(self) -> RegularizerStrength:
+    def regularizer_strength(self) -> Any:
         """Regularizer strength getter."""
         return self._regularizer_strength
 
     @regularizer_strength.setter
-    def regularizer_strength(self, strength: Union[None, RegularizerStrength]):
+    def regularizer_strength(self, strength: Any):
         self._regularizer_strength = self.regularizer._validate_regularizer_strength(
             strength
         )
@@ -355,14 +353,6 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         # final check that solver is valid for chosen regularizer
         self._regularizer.check_solver(self.solver_name)
 
-        # validate regularizer strength and params consistency
-        self.structured_regularizer_strength = (
-            self.regularizer._validate_regularizer_strength_structure(
-                init_params, self.regularizer_strength
-            )
-        )
-        print(self.structured_regularizer_strength)
-
         if solver_kwargs is None:
             # copy dictionary of kwargs to avoid modifying user settings
             solver_kwargs = deepcopy(self.solver_kwargs)
@@ -375,7 +365,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         solver = solver_cls(
             loss,
             self.regularizer,
-            self.structured_regularizer_strength,
+            self.regularizer_strength,
             has_aux=self._has_aux,
             init_params=init_params,
             **solver_kwargs,

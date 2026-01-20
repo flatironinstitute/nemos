@@ -93,11 +93,13 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
 
         if self._proximal:
             loss_fn = unregularized_loss
-            solver_init_kwargs["prox"] = regularizer.get_proximal_operator(init_params)
+            solver_init_kwargs["prox"] = regularizer.get_proximal_operator(
+                params=init_params, strength=regularizer_strength
+            )
             solver_init_kwargs["regularizer_strength"] = regularizer_strength
         else:
             loss_fn = regularizer.penalized_loss(
-                unregularized_loss, regularizer_strength, init_params=init_params
+                unregularized_loss, params=init_params, strength=regularizer_strength
             )
 
         # take out the arguments that go into minimise, init, terminate and so on
@@ -222,9 +224,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
     def get_optim_info(self, state: OptimistixSolverState) -> OptimizationInfo:
         num_steps = self.stats["num_steps"].item()
 
-        function_val = (
-            state.f.item() if hasattr(state, "f") else state.f_info.f.item()
-        )  # pyright: ignore
+        function_val = state.f.item() if hasattr(state, "f") else state.f_info.f.item()  # pyright: ignore
 
         return OptimizationInfo(
             function_val=function_val,
