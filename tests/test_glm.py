@@ -309,8 +309,14 @@ class TestGLM:
             (
                 pytest.raises(TypeError, match="X and coef have mismatched structure"),
                 {
-                    "GLM": [dict(p1=jnp.zeros((5,)), p2=jnp.zeros((1,))), jnp.zeros((1,))],
-                    "PopulationGLM": [dict(p1=jnp.zeros((3, 3)), p2=jnp.zeros((2, 3))), jnp.zeros((3,))],
+                    "GLM": [
+                        dict(p1=jnp.zeros((5,)), p2=jnp.zeros((1,))),
+                        jnp.zeros((1,)),
+                    ],
+                    "PopulationGLM": [
+                        dict(p1=jnp.zeros((3, 3)), p2=jnp.zeros((2, 3))),
+                        jnp.zeros((3,)),
+                    ],
                 },
             ),
             (
@@ -352,7 +358,10 @@ class TestGLM:
     @staticmethod
     def get_init_params_for_model(init_params_by_model, model):
         """Get init_params for a specific model from dict or return as-is if model-independent."""
-        if isinstance(init_params_by_model, dict) and model.__class__.__name__ in init_params_by_model:
+        if (
+            isinstance(init_params_by_model, dict)
+            and model.__class__.__name__ in init_params_by_model
+        ):
             return init_params_by_model[model.__class__.__name__]
         return init_params_by_model
 
