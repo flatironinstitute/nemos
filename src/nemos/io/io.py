@@ -18,13 +18,15 @@ from .._observation_model_builder import (
     instantiate_observation_model,
 )
 from .._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
-from ..glm import GLM, PopulationGLM
+from ..glm import GLM, CategoricalGLM, CategoricalPopulationGLM, PopulationGLM
 from ..utils import _get_name, _unflatten_dict, get_env_metadata
 from ..validation import _suggest_keys
 
 MODEL_REGISTRY = {
     "nemos.glm.glm.GLM": GLM,
     "nemos.glm.glm.PopulationGLM": PopulationGLM,
+    "nemos.glm.glm.CategoricalGLM": CategoricalGLM,
+    "nemos.glm.glm.CategoricalPopulationGLM": CategoricalPopulationGLM,
 }
 
 ERROR_MSG_OVERRIDE_NOT_ALLOWED = (
