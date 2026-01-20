@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 import sklearn
 import statsmodels.api as sm
+from conftest import initialize_feature_mask_for_population_glm
 from pynapple import Tsd, TsdFrame
 from sklearn.linear_model import (
     GammaRegressor,
@@ -43,6 +44,13 @@ OBSERVATION_MODEL_EXTRA_PARAMS_NAMES = {
     "NegativeBinomialObservations": {"observation_model__scale"},
 }
 POPULATION_GLM_EXTRA_PARAMS = {"feature_mask"}
+
+DIMENSIONALITY_PARAMS = {
+    "GLM": {"coef": 1, "intercept": 1},
+    "PopulationGLM": {"coef": 2, "intercept": 1},
+    "CategoricalGLM": {"coef": 2, "intercept": 1},
+    "CategoricalPopulationGLM": {"coef": 3, "intercept": 2},
+}
 
 
 def convert_to_nap(arr, t):
@@ -85,6 +93,10 @@ def test_get_fit_attrs(request, glm_class_type, model_instantiation_type):
     assert model._get_fit_state().keys() == expected_state.keys()
 
 
+def get_param_shape(model, X, y):
+    empty_par = model._validator.get_empty_params(X, y)
+    return jax.tree_util.tree_map(lambda x: x.shape, empty_par)
+
 @pytest.mark.parametrize("glm_class_type", ["glm_class", "population_glm_class"])
 class TestGLM:
     """
@@ -93,43 +105,23 @@ class TestGLM:
     observation model methods are called (e.g. error testing for input validation)
     """
 
-    @pytest.fixture
-    def fit_weights_dimensionality_expectation(self, glm_class_type):
+    @staticmethod
+    def fit_weights_dimensionality_expectation(model, expected_dim: int, param_name: str):
         """
         Fixture to define the expected behavior for test_fit_weights_dimensionality based on the type of GLM class.
         """
-        if "population" in glm_class_type:
-            return {
-                0: pytest.raises(
-                    ValueError,
-                    match=r"coef must be an array or .* of shape \(n_features",
-                ),
-                1: pytest.raises(
-                    ValueError,
-                    match=r"coef must be an array or .* of shape \(n_features",
-                ),
-                2: does_not_raise(),
-                3: pytest.raises(
-                    ValueError,
-                    match=r"coef must be an array or .* of shape \(n_features",
-                ),
-            }
+        correct_dim = DIMENSIONALITY_PARAMS[model.__class__.__name__][param_name]
+
+        if expected_dim == correct_dim:
+            return does_not_raise()
         else:
-            return {
-                0: pytest.raises(
-                    ValueError,
-                    match=r"Inconsistent number of features",
-                ),
-                1: does_not_raise(),
-                2: pytest.raises(
-                    ValueError,
-                    match=r"coef must be an array or .* of shape \(n_features",
-                ),
-                3: pytest.raises(
-                    ValueError,
-                    match=r"coef must be an array or .* of shape \(n_features",
-                ),
-            }
+            if param_name == "intercept":
+                message = "Intercept term should be a|Invalid parameter dimensionality"
+            else:
+                message = r"coef must be an array or .* of shape \(n_features|Inconsistent number of features"
+            return pytest.raises(
+                ValueError, match=message
+            )
 
     @pytest.mark.parametrize("dim_weights", [0, 1, 2, 3])
     @pytest.mark.solver_related
@@ -139,46 +131,35 @@ class TestGLM:
         request,
         glm_class_type,
         model_instantiation_type,
-        fit_weights_dimensionality_expectation,
     ):
         """
         Test the `fit` method with weight matrices of different dimensionalities.
         Check for correct dimensionality.
         """
-        expectation = fit_weights_dimensionality_expectation[dim_weights]
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation_type
         )
-        n_samples, n_features = X.shape
-        if "population" in glm_class_type:
-            n_neurons = 3
-        else:
-            n_neurons = 4
+        expectation = self.fit_weights_dimensionality_expectation(model, dim_weights, "coef")
+        par_shape = get_param_shape(model, X, y)
         if dim_weights == 0:
             init_w = jnp.array([])
-        elif dim_weights == 1:
-            init_w = jnp.zeros((n_features,))
-        elif dim_weights == 2:
-            init_w = jnp.zeros((n_features, n_neurons))
+        elif dim_weights <= len(par_shape.coef):
+            slc = (slice(None), ) * dim_weights + (0,) * (len(par_shape.coef) - dim_weights)
+            init_w = np.zeros(par_shape.coef)[slc]
         else:
-            init_w = jnp.zeros((n_features, n_neurons) + (1,) * (dim_weights - 2))
+            delta = dim_weights - len(par_shape.coef)
+            init_w = jnp.zeros((*par_shape.coef, *(1,) * delta))
+
         with expectation:
             model.fit(X, y, init_params=(init_w, true_params.intercept))
 
     @pytest.mark.parametrize(
-        "dim_intercepts, expectation",
-        [
-            (0, pytest.raises(ValueError, match=r"intercept must be of shape")),
-            (1, does_not_raise()),
-            (2, pytest.raises(ValueError, match=r"intercept must be of shape")),
-            (3, pytest.raises(ValueError, match=r"intercept must be of shape")),
-        ],
+        "dim_intercepts", [0, 1, 2, 3, 4]
     )
     @pytest.mark.solver_related
     def test_fit_intercepts_dimensionality(
         self,
         dim_intercepts,
-        expectation,
         request,
         glm_class_type,
         model_instantiation_type,
@@ -189,14 +170,18 @@ class TestGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation_type
         )
-        n_samples, n_features = X.shape
+        expectation = self.fit_weights_dimensionality_expectation(model, dim_intercepts, "intercept")
 
-        if "population" in glm_class_type:
-            init_b = jnp.zeros((y.shape[1],) * dim_intercepts)
-            init_w = jnp.zeros((n_features, y.shape[1]))
+        par_shape = get_param_shape(model, X, y)
+        init_w = jnp.zeros(par_shape.coef)
+        if dim_intercepts == 0:
+            init_b = jnp.array([])
+        elif dim_intercepts <= len(par_shape.intercept):
+            slc = (slice(None), ) * dim_intercepts + (0,) * (len(par_shape.intercept) - dim_intercepts)
+            init_b = np.zeros(par_shape.intercept)[slc]
         else:
-            init_b = jnp.zeros((1,) * dim_intercepts)
-            init_w = jnp.zeros((n_features,))
+            delta = dim_intercepts - len(par_shape.intercept)
+            init_b = jnp.zeros((*par_shape.intercept, *(1,) * delta))
 
         with expectation:
             model.fit(X, y, init_params=(init_w, init_b))
