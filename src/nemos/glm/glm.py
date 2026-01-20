@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import warnings
+from numbers import Number
 from pathlib import Path
 from typing import Callable, Literal, Optional, Tuple, Union
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 from numpy.typing import ArrayLike
@@ -26,7 +28,27 @@ from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength, SolverState, StepRe
 from ..utils import format_repr
 from .initialize_parameters import initialize_intercept_matching_mean_rate
 from .params import GLMParams, GLMUserParams
-from .validation import GLMValidator, PopulationGLMValidator
+from .validation import (
+    CategoricalGLMValidator,
+    GLMValidator,
+    PopulationCategoricalGLMValidator,
+    PopulationGLMValidator,
+)
+
+REGRESSION_GLM_TYPES = Union[
+    obs.BernoulliObservations,
+    obs.GammaObservations,
+    obs.GaussianObservations,
+    obs.NegativeBinomialObservations,
+    obs.PoissonObservations,
+    Literal[
+        "Poisson",
+        "Gamma",
+        "Bernoulli",
+        "NegativeBinomial",
+        "Gaussian",
+    ],
+]
 
 
 class GLM(BaseRegressor[GLMUserParams, GLMParams]):
@@ -185,23 +207,12 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
     Observation model:  <class 'nemos.observation_models.PoissonObservations'>
     """
 
-    _validator = GLMValidator()
+    _invalid_observation_types = (obs.CategoricalObservations,)
+    _validator_class = GLMValidator
 
     def __init__(
         self,
-        # With python 3.11 Literal[*AVAILABLE_OBSERVATION_MODELS] will be allowed.
-        # Replace this manual list after dropping support for 3.10?
-        observation_model: (
-            obs.Observations
-            | Literal[
-                "Poisson",
-                "Gamma",
-                "Bernoulli",
-                "NegativeBinomial",
-                "Gaussian",
-                "Categorical",
-            ]
-        ) = "Poisson",
+        observation_model: REGRESSION_GLM_TYPES = "Poisson",
         inverse_link_function: Optional[Callable] = None,
         regularizer: Optional[Union[str, Regularizer]] = None,
         regularizer_strength: Optional[RegularizerStrength] = None,
@@ -218,6 +229,10 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         self.observation_model = observation_model
         self.inverse_link_function = inverse_link_function
 
+        self._validator = self._validator_class(
+            extra_params=self._get_validator_extra_params()
+        )
+
         # initialize to None fit output
         self.intercept_ = None
         self.coef_ = None
@@ -226,6 +241,33 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         self.dof_resid_ = None
         self.aux_ = None
         self.optim_info_ = None
+
+    @classmethod
+    def _validate_observation_class(cls, observation: obs.Observations):
+        if observation.__class__ in cls._invalid_observation_types:
+            model_name = cls.__name__
+            obs_name = observation.__class__.__name__
+            error_msg = f"The ``{obs_name}`` observation type is not supported for ``{model_name}`` models."
+            is_categorical = isinstance(observation, obs.CategoricalObservations)
+            if is_categorical:
+                correct_model = (
+                    "CategoricalPopulationGLM"
+                    if issubclass(cls, PopulationGLM)
+                    else "CategoricalGLM"
+                )
+                error_msg += (
+                    f" To use a GLM for classification instantiate a ``{correct_model}`` "
+                    f"object."
+                )
+            else:
+                correct_model = (
+                    "PopulationGLM" if issubclass(cls, PopulationGLM) else "GLM"
+                )
+                error_msg += (
+                    f" To use a GLM for regression with ``{obs_name}`` instantiate a ``{correct_model}`` "
+                    f"object."
+                )
+            raise TypeError(error_msg)
 
     def __sklearn_tags__(self):
         """Return GLM specific estimator tags."""
@@ -259,11 +301,13 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
     def observation_model(self, observation: obs.Observations):
         if isinstance(observation, str):
             self._observation_model = instantiate_observation_model(observation)
+            self._validate_observation_class(self.observation_model)
             return
         # check that the model has the required attributes
         # and that the attribute can be called
         obs.check_observation_model(observation)
         self._observation_model = observation
+        self._validate_observation_class(self.observation_model)
 
     def _check_is_fit(self):
         """Ensure the instance has been fitted."""
@@ -301,7 +345,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             # then sum across all features and add the intercept, before
             # passing to the inverse link function
             tree_utils.pytree_map_and_reduce(
-                lambda x, w: jnp.dot(x, w), sum, X, params.coef
+                lambda x, w: jnp.einsum("tj, j...->t...", x, w), sum, X, params.coef
             )
             + params.intercept
         )
@@ -574,23 +618,19 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         else:
             data = X
 
+        empty_params = self._validator.get_empty_params(data, y)
+
         initial_intercept = initialize_intercept_matching_mean_rate(
             self._inverse_link_function, y
         )
+        initial_coef = jax.tree_util.tree_map(
+            lambda x: jnp.zeros(x.shape), empty_params.coef
+        )
 
-        # Initialize parameters
-        init_params = GLMParams(
-            # coeff, spike basis coeffs.
-            # - If X is a FeaturePytree with n_features arrays of shape
-            #   (n_timebins, n_features), then this will be a
-            #   dict with n_features arrays of shape (n_features,).
-            # - If X is an array of shape (n_timebins,
-            #   n_features), this will be an array of shape (n_features,).
-            jax.tree_util.tree_map(
-                lambda x: jnp.zeros((*x[0].shape, *y.shape[1:])), data
-            ),
-            # intercept, bias terms, keepdims=False needed by PopulationGLM
-            initial_intercept,
+        init_params = eqx.tree_at(
+            lambda p: (p.coef, p.intercept),
+            empty_params,
+            (initial_coef, initial_intercept),
         )
         return init_params
 
@@ -654,6 +694,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         """
         self._validator.validate_inputs(X, y)
 
+        # filter for non-nans, grab data if needed
+        data, y = self._preprocess_inputs(X, y)
         # initialize params if no params are provided
         if init_params is None:
             init_params = self._model_specific_initialization(X, y)
@@ -664,9 +706,6 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         self._validator.feature_mask_consistency(
             getattr(self, "_feature_mask", None), init_params
         )
-
-        # filter for non-nans, grab data if needed
-        data, y = self._preprocess_inputs(X, y)
 
         self._initialize_solver_and_state(data, y, init_params)
 
@@ -1251,15 +1290,13 @@ class PopulationGLM(GLM):
     dict_keys(['feature_1', 'feature_2'])
     """
 
-    _validator = PopulationGLMValidator()
+    _validator_class = PopulationGLMValidator
 
     def __init__(
         self,
         observation_model: (
-            obs.Observations
-            | Literal[
-                "Poisson", "Gamma", "Bernoulli", "NegativeBinomial", "Categorical"
-            ]
+            REGRESSION_GLM_TYPES
+            | Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial"]
         ) = "Poisson",
         inverse_link_function: Optional[Callable] = None,
         regularizer: Union[str, Regularizer] = "UnRegularized",
@@ -1292,27 +1329,32 @@ class PopulationGLM(GLM):
 
     @property
     def feature_mask(self) -> Union[jnp.ndarray, dict[str, jnp.ndarray]]:
-        """Define a feature mask of shape ``(n_features, n_neurons)``."""
+        """
+        Mask indicating which features are used for each neuron.
+
+        The feature mask has a tree structure matching the coefficients (``coef_``):
+
+        - **Array input**: Shape ``(n_features, n_neurons)``. Each entry ``[i, j]``
+          indicates whether feature ``i`` is used for neuron ``j`` (1 = used, 0 = masked).
+
+        - **Dict/FeaturePytree input**: A dict with keys matching ``coef_``.
+          Each leaf array has shape ``(n_neurons,)``, indicating whether that feature
+          group is used for each neuron.
+
+        Returns
+        -------
+        jnp.ndarray or dict[str, jnp.ndarray]
+            The feature mask, or None if not set.
+        """
         return self._feature_mask
 
     @feature_mask.setter
-    @cast_to_jax
     def feature_mask(self, feature_mask: Union[DESIGN_INPUT_TYPE, dict]):
         # do not allow reassignment after fit
         if (self.coef_ is not None) and (self.intercept_ is not None):
             raise AttributeError(
                 "property 'feature_mask' of 'populationGLM' cannot be set after fitting."
             )
-
-        if feature_mask is None:
-            self._feature_mask = feature_mask
-            return
-
-        elif isinstance(feature_mask, FeaturePytree):
-            feature_mask = feature_mask.data
-
-        if isinstance(feature_mask, dict):
-            feature_mask = dict((i, jnp.asarray(v)) for i, v in feature_mask.items())
 
         self._feature_mask = self._validator.validate_and_cast_feature_mask(
             feature_mask
@@ -1400,20 +1442,6 @@ class PopulationGLM(GLM):
         """
         return super().fit(X, y, init_params)
 
-    def _initialize_feature_mask(self, X: FeaturePytree, y: jnp.ndarray):
-        if self.feature_mask is None:
-            # static checker does not realize conversion to ndarray happened in cast_to_jax.
-            if isinstance(X, FeaturePytree):
-                self._feature_mask = jax.tree_util.tree_map(
-                    lambda x: jnp.ones((y.shape[1],)), X.data
-                )
-            elif isinstance(X, dict):
-                self._feature_mask = jax.tree_util.tree_map(
-                    lambda x: jnp.ones((y.shape[1],)), X
-                )
-            else:
-                self._feature_mask = jnp.ones((X.shape[1], y.shape[1]))
-
     def _predict(self, params: GLMParams, X: jnp.ndarray) -> jnp.ndarray:
         """
         Predicts firing rates based on given parameters and design matrix.
@@ -1444,7 +1472,7 @@ class PopulationGLM(GLM):
             # then sum across all features and add the intercept, before
             # passing to the inverse link function
             tree_utils.pytree_map_and_reduce(
-                lambda x, w, m: jnp.dot(x, w * m),
+                lambda x, w, m: jnp.einsum("ti, i...->t...", x, w * m),
                 sum,
                 X,
                 params.coef,
@@ -1461,3 +1489,282 @@ class PopulationGLM(GLM):
         # reattach metadata
         klass._metadata = self._metadata
         return klass
+
+
+class CategoricalMixin:
+    """GLM for classification."""
+
+    # observation model inferred
+    _invalid_observation_types = ()
+
+    @property
+    def n_categories(self):
+        """Number of categories."""
+        return self._n_categories
+
+    @n_categories.setter
+    def n_categories(self, value: int):
+        if not isinstance(value, Number) or value < 2 or not int(value) == value:
+            raise ValueError(
+                "The number of categories must be an integer greater than or equal to 2."
+            )
+        self._n_categories = int(value)
+        # reset validator.
+        self._validator = self._validator_class(
+            extra_params=self._get_validator_extra_params()
+        )
+
+    def _get_validator_extra_params(self) -> dict:
+        """Get validator extra parameters."""
+        return {"n_categories": self._n_categories}
+
+    def _preprocess_inputs(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: Optional[jnp.ndarray] = None,
+        drop_nans: bool = True,
+    ) -> Tuple[dict[str, jnp.ndarray] | jnp.ndarray, jnp.ndarray | None]:
+        """Preprocess inputs before initializing state."""
+        X, y = super()._preprocess_inputs(X, y=y, drop_nans=drop_nans)
+        if y is not None:
+            y = jax.nn.one_hot(y, self._n_categories)
+        return X, y
+
+    def predict(self, X: DESIGN_INPUT_TYPE) -> jnp.ndarray:
+        """
+        Predict class labels for samples in X.
+
+        Parameters
+        ----------
+        X :
+            The input samples. Can be an array of shape ``(n_samples, n_features)``
+            or a ``FeaturePytree`` with arrays as leaves.
+
+        Returns
+        -------
+        :
+            Predicted class labels for each sample.
+            Returns an integer array of shape  ``(n_samples, )`` with values in
+            ``[0, n_categories - 1]``.
+        """
+        log_proba = super().predict(X)
+        return log_proba.argmax(axis=-1)
+
+    def predict_proba(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        return_type: Literal["log-proba", "proba"] = "log-proba",
+    ) -> jnp.ndarray:
+        """
+        Predict class probabilities for samples in X.
+
+        Parameters
+        ----------
+        X :
+            The input samples. Can be an array of shape ``(n_samples, n_features)``
+            or a ``FeaturePytree`` with arrays as leaves.
+        return_type :
+            The format of the returned probabilities. If ``"log-proba"``, returns
+            log-probabilities. If ``"proba"``, returns probabilities. Defaults to
+            ``"log-proba"``.
+
+        Returns
+        -------
+        :
+            Predicted class probabilities. Rreturns an array of shape ``(n_samples, n_categories)``
+            where each row sums to 1 (for probabilities) or to 0 in log-space (for log-probabilities).
+        """
+        # log-proba for categorical, proba for Bernoulli
+        log_proba = super().predict(X)
+        if return_type == "log-proba":
+            return log_proba
+        else:
+            proba = jnp.exp(log_proba)
+            # renormalize (sum to 1 constraint)
+            proba /= proba.sum(axis=-1, keepdims=True)
+
+            return proba
+
+    def _estimate_resid_degrees_of_freedom(
+        self, X: DESIGN_INPUT_TYPE, n_samples: Optional[int] = None
+    ) -> jnp.ndarray:
+        """
+        Estimate the degrees of freedom of the residuals for categorical GLM.
+
+        Parameters
+        ----------
+        X :
+            The design matrix.
+        n_samples :
+            The number of samples observed. If not provided, n_samples is set to
+            ``X.shape[0]``. If the fit is batched, n_samples could be larger than
+            ``X.shape[0]``.
+
+        Returns
+        -------
+        :
+            An estimate of the degrees of freedom of the residuals.
+        """
+        # Convert a pytree to a design-matrix
+        X = jnp.hstack(jax.tree_util.tree_leaves(X))
+
+        if n_samples is None:
+            n_samples = X.shape[0]
+        else:
+            if not isinstance(n_samples, int):
+                raise TypeError(
+                    f"`n_samples` must be `None` or of type `int`. "
+                    f"Type {type(n_samples)} provided instead!"
+                )
+
+        n_features = X.shape[1]
+        n_categories = self._n_categories
+        params = self._get_model_params()
+
+        # Infer n_neurons from coef shape:
+        # CategoricalGLM: coef is (n_features, n_categories-1) -> n_neurons = 1
+        # PopulationCategoricalGLM: coef is (n_features, n_neurons, n_categories-1) -> n_neurons = shape[1]
+        coef_leaf = jax.tree_util.tree_leaves(params.coef)[0]
+        n_neurons = 1 if coef_leaf.ndim == 2 else coef_leaf.shape[1]
+
+        # For Lasso-type regularizers, use the non-zero coefficients as DOF estimate
+        # see https://arxiv.org/abs/0712.0881
+        if isinstance(self.regularizer, (GroupLasso, Lasso, ElasticNet)):
+            # Sum over features (axis 0) and categories (axis -1)
+            # This leaves shape (n_neurons,) for PopulationCategoricalGLM
+            # or scalar for CategoricalGLM
+            resid_dof = tree_utils.pytree_map_and_reduce(
+                lambda x: ~jnp.isclose(x, jnp.zeros_like(x)),
+                lambda x: sum([jnp.sum(i, axis=(0, -1)) for i in x]),
+                params.coef,
+            )
+            return jnp.atleast_1d(n_samples - resid_dof - n_categories)
+
+        elif isinstance(self.regularizer, Ridge):
+            # For Ridge, use total parameters
+            return (n_samples - n_categories * n_features - n_categories) * jnp.ones(
+                n_neurons
+            )
+
+        else:
+            # For UnRegularized, use the rank
+            rank = jnp.linalg.matrix_rank(X)
+            return (n_samples - rank * n_categories - n_categories) * jnp.ones(
+                n_neurons
+            )
+
+    def simulate(
+        self,
+        random_key: jax.Array,
+        feedforward_input: DESIGN_INPUT_TYPE,
+    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        """
+        Simulate categorical responses from the model.
+
+        Parameters
+        ----------
+        random_key :
+            A JAX random key used to generate the simulated responses.
+        feedforward_input :
+            The input samples used to generate the responses. Can be an array of
+            shape ``(n_samples, n_features)`` or a ``FeaturePytree`` with arrays
+            as leaves.
+
+        Returns
+        -------
+        :
+            A tuple ``(y, log_prob)`` where:
+            - ``y`` is an integer array of shape ``(n_samples,)`` containing the
+              simulated class labels, with values in ``[0, n_categories - 1]``.
+            - ``log_prob`` is an array of shape ``(n_samples,)`` containing the
+              log-probability of the simulated responses under the model.
+        """
+        y, log_prob = super().simulate(random_key, feedforward_input)
+        y = jnp.argmax(y, axis=-1)
+        return y, log_prob
+
+
+class CategoricalGLM(CategoricalMixin, GLM):
+    """GLM for classification."""
+
+    _validator_class = CategoricalGLMValidator
+
+    def __init__(
+        self,
+        n_categories: Optional[int] = 2,
+        inverse_link_function: Optional[Callable] = None,
+        regularizer: Optional[Union[str, Regularizer]] = None,
+        regularizer_strength: Optional[RegularizerStrength] = None,
+        solver_name: str = None,
+        solver_kwargs: dict = None,
+    ):
+        self.n_categories = n_categories
+        observation_model = obs.CategoricalObservations()
+        super().__init__(
+            observation_model=observation_model,
+            inverse_link_function=inverse_link_function,
+            regularizer=regularizer,
+            regularizer_strength=regularizer_strength,
+            solver_name=solver_name,
+            solver_kwargs=solver_kwargs,
+        )
+
+
+class CategoricalPopulationGLM(CategoricalMixin, PopulationGLM):
+    """GLM for classification."""
+
+    _validator_class = PopulationCategoricalGLMValidator
+
+    def __init__(
+        self,
+        n_categories: Optional[int] = 2,
+        inverse_link_function: Optional[Callable] = None,
+        regularizer: Optional[Union[str, Regularizer]] = None,
+        regularizer_strength: Optional[RegularizerStrength] = None,
+        solver_name: str = None,
+        solver_kwargs: dict = None,
+    ):
+        self.n_categories = n_categories
+        observation_model = obs.CategoricalObservations()
+        super().__init__(
+            observation_model=observation_model,
+            inverse_link_function=inverse_link_function,
+            regularizer=regularizer,
+            regularizer_strength=regularizer_strength,
+            solver_name=solver_name,
+            solver_kwargs=solver_kwargs,
+        )
+
+    @property
+    def feature_mask(self) -> Union[jnp.ndarray, dict[str, jnp.ndarray]]:
+        """
+        Mask indicating which weights are used, matching the coefficients shape.
+
+        The feature mask has the same structure and shape as the coefficients (``coef_``):
+
+        - **Array input**: Shape ``(n_features, n_neurons, n_categories - 1)``.
+          Each entry ``[i, j, k]`` indicates whether the weight for feature ``i``,
+          neuron ``j``, and category ``k`` is used (1 = used, 0 = masked).
+
+        - **Dict/FeaturePytree input**: A dict with keys matching ``coef_``.
+          Each leaf array has the same shape as the corresponding coefficient leaf
+          ``(n_features_per_key, n_neurons, n_categories - 1)``.
+
+        Returns
+        -------
+        jnp.ndarray or dict[str, jnp.ndarray]
+            The feature mask, or None if not set.
+        """
+        return self._feature_mask
+
+    @feature_mask.setter
+    def feature_mask(self, feature_mask: Union[DESIGN_INPUT_TYPE, dict]):
+        # do not allow reassignment after fit
+        if (self.coef_ is not None) and (self.intercept_ is not None):
+            raise AttributeError(
+                "property 'feature_mask' of 'populationGLM' cannot be set after fitting."
+            )
+
+        self._feature_mask = self._validator.validate_and_cast_feature_mask(
+            feature_mask
+        )

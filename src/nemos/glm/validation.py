@@ -1,17 +1,24 @@
 """Validation classes for GLM and PopulationGLM models."""
 
-from dataclasses import dataclass
-from typing import Any, Callable, Optional, Tuple, Union
+from dataclasses import dataclass, field
+from typing import Any, Callable, Optional, Tuple, TypedDict, Union
 
 import jax
 import jax.numpy as jnp
 from jax.typing import DTypeLike
+from numpy.typing import ArrayLike
 
 from .. import validation
 from ..tree_utils import pytree_map_and_reduce
 from ..typing import DESIGN_INPUT_TYPE, FeaturePytree
 from ..validation import RegressorValidator
 from .params import GLMParams, GLMUserParams
+
+
+class CategoricalExtraParams(TypedDict):
+    """Extra parameters for categorical GLM validators."""
+
+    n_categories: int
 
 
 def to_glm_params(user_params: GLMUserParams) -> GLMParams:
@@ -41,6 +48,7 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
     and input data.
     """
 
+    extra_params: dict = None
     expected_param_dims: Tuple[int] = (
         1,
         1,
@@ -206,45 +214,52 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
 
     @staticmethod
     def validate_and_cast_feature_mask(
-        feature_mask: Union[dict[str, jnp.ndarray], jnp.ndarray],
+        feature_mask: Union[DESIGN_INPUT_TYPE, dict[str, ArrayLike], ArrayLike, None],
         data_type: Optional[DTypeLike] = None,
-    ) -> Union[dict[str, jnp.ndarray], jnp.ndarray]:
+    ) -> Union[dict[str, jnp.ndarray], jnp.ndarray, None]:
         """
         Validate and cast a feature mask to JAX arrays.
 
         Validates that the feature mask contains only 0s and 1s, then converts
-        it to JAX arrays with the specified data type. Subclasses can extend
+        it to JAX arrays with the specified data type. Handles FeaturePytree
+        inputs by extracting the underlying data. Subclasses can extend
         this to add parameter-specific validation (e.g., checking that mask
         shape matches parameter dimensions).
 
         Parameters
         ----------
-        feature_mask : dict[str, jnp.ndarray] or jnp.ndarray
+        feature_mask : FeaturePytree, dict[str, jnp.ndarray], jnp.ndarray, or None
             Feature mask indicating which features are used. Must contain only 0s and 1s.
+            If a FeaturePytree, the underlying data dict is extracted.
         data_type : jnp.dtype, optional
             Target data type for the mask arrays. Defaults to float.
 
         Returns
         -------
-        dict[str, jnp.ndarray] or jnp.ndarray
-            The validated and cast feature mask.
+        dict[str, jnp.ndarray], jnp.ndarray, or None
+            The validated and cast feature mask, or None if input was None.
 
         Raises
         ------
         ValueError
             If feature_mask contains values other than 0 or 1.
         """
+        if feature_mask is None:
+            return None
+
+        # Extract data from FeaturePytree
+        if isinstance(feature_mask, FeaturePytree):
+            feature_mask = feature_mask.data
+
+        # Convert values to jnp.asarray
+        feature_mask = jax.tree_util.tree_map(
+            lambda x: jnp.asarray(x, dtype=data_type), feature_mask
+        )
+
         if pytree_map_and_reduce(
             lambda x: jnp.any(jnp.logical_and(x != 0, x != 1)), any, feature_mask
         ):
             raise ValueError("'feature_mask' must contain only 0s and 1s!")
-
-        # cast to jax - default to float if not specified
-        if data_type is None:
-            data_type = float
-        feature_mask = jax.tree_util.tree_map(
-            lambda x: jnp.asarray(x, dtype=data_type), feature_mask
-        )
 
         return feature_mask
 
@@ -371,4 +386,260 @@ class PopulationGLMValidator(GLMValidator):
             lambda x: jnp.empty((x.shape[1], n_neurons)), X
         )
         empty_intercept = jnp.empty((n_neurons,))
+        return to_glm_params((empty_coef, empty_intercept))
+
+
+@dataclass(frozen=True, repr=False)
+class CategoricalGLMValidator(GLMValidator):
+    """
+    Validator for categorical GLM models.
+
+    Validates and transforms user-provided parameters, inputs, and checks consistency
+    between parameters and data for categorical GLMs. Categorical GLMs have:
+    - 2D coefficients: shape (n_features, n_categories - 1) or dict of (n_features, n_categories - 1) arrays
+    - 1D intercept: shape (n_categories - 1,)
+    - 2D input X: shape (n_samples, n_features) or pytree of same
+    - 1D output y: shape (n_samples,) containing integer class labels
+    """
+
+    extra_params: CategoricalExtraParams = field(kw_only=True)
+    expected_param_dims: Tuple[int] = (2, 1)
+    model_class: str = "CategoricalGLM"
+    params_validation_sequence: Tuple[Tuple[str, None] | Tuple[str, dict[str, Any]]] = (
+        *RegressorValidator.params_validation_sequence[:2],
+        (
+            "check_array_dimensions",
+            dict(
+                err_message_format="Invalid parameter dimensionality. "
+                "coef must be an array or nemos.pytree.FeaturePytree "
+                "with array leafs of shape (n_features, n_categories - 1). "
+                "intercept must be of shape (n_categories - 1,)."
+                "\nThe provided coef and intercept have shape ``{}`` and ``{}`` instead."
+            ),
+        ),
+        (
+            "validate_n_categories_shape",
+            dict(
+                intercept_err_format="intercept must have shape ({},) for n_categories={}. "
+                "Got intercept with shape {}."
+            ),
+        ),
+        *RegressorValidator.params_validation_sequence[3:],
+    )
+
+    def validate_n_categories_shape(
+        self,
+        params: GLMUserParams,
+        intercept_err_format: str = None,
+        **kwargs,
+    ) -> GLMUserParams:
+        """
+        Validate that coef and intercept last dimensions match n_categories - 1.
+
+        Parameters
+        ----------
+        params : GLMUserParams
+            User-provided parameters as a tuple (coef, intercept).
+        intercept_err_format : str
+            Format string for intercept error message. Should have 3 placeholders:
+            expected_cat_dim, n_categories, actual_shape.
+        """
+
+        coef, intercept = params
+        n_categories = self.extra_params["n_categories"]
+        expected_cat_dim = n_categories - 1
+
+        # Check coef last dimension
+        coef_cat_mismatch = pytree_map_and_reduce(
+            lambda c: c.shape[-1] != expected_cat_dim, any, coef
+        )
+        if coef_cat_mismatch:
+            coef_shapes = jax.tree_util.tree_map(lambda c: c.shape, coef)
+            raise ValueError(
+                f"coef last dimension must be n_categories - 1 = {expected_cat_dim}. "
+                f"Got coef with shape(s) {coef_shapes}."
+            )
+
+        # Check intercept last dimension
+        if intercept.shape[-1] != expected_cat_dim:
+            raise ValueError(
+                intercept_err_format.format(
+                    expected_cat_dim, n_categories, intercept.shape
+                )
+            )
+
+        return params
+
+    def validate_consistency(
+        self,
+        params: GLMParams,
+        X: Optional[DESIGN_INPUT_TYPE] = None,
+        y: Optional[jnp.ndarray] = None,
+    ):
+        """
+        Validate consistency between parameters and inputs for categorical GLM.
+
+        For categorical GLM, validates feature consistency with X.
+        Does not validate y since it's 1D (single output, no neuron axis to check).
+        """
+        if X is not None:
+            # check that X and params.coef have the same structure
+            msg = "X and coef have mismatched structure."
+            if isinstance(X, FeaturePytree):
+                data = X.data
+                msg += (
+                    " X was provided as a FeaturePytree, and coef should be a dictionary with matching keys. "
+                    f"X keys are ``{X.keys()}``, the provided coef is {params.coef} instead."
+                )
+            else:
+                data = X
+                msg += (
+                    f" X was provided as an array, and coef should be an array too. "
+                    f"The provided coef is of type ``{type(params.coef)}`` instead."
+                )
+
+            validation.check_tree_structure(
+                data,
+                params.coef,
+                err_message=msg,
+            )
+            # check the consistency of the feature axis
+            # For categorical GLM: coef is (n_features, n_categories - 1), X is (n_samples, n_features)
+            validation.check_tree_axis_consistency(
+                params.coef,
+                data,
+                axis_1=0,
+                axis_2=1,
+                err_message="Inconsistent number of features. "
+                f"Model coefficients have {jax.tree_util.tree_map(lambda p: p.shape[0], params.coef)} features, "
+                f"X has {jax.tree_util.tree_map(lambda x: x.shape[1], X)} features instead!",
+            )
+
+    def feature_mask_consistency(
+        self,
+        feature_mask: Union[dict[str, jnp.ndarray], jnp.ndarray] | None,
+        params: GLMParams,
+    ):
+        """Check consistency of feature_mask and params for categorical GLM."""
+        if feature_mask is None:
+            return
+        validation.check_tree_structure(
+            params.coef,
+            feature_mask,
+            err_message=f"feature_mask and coef must have the same structure, but feature_mask has structure "
+            f"{jax.tree_util.tree_structure(feature_mask)}, coef is of "
+            f"{jax.tree_util.tree_structure(params.coef)} structure instead!",
+        )
+
+        shape_match = pytree_map_and_reduce(
+            lambda fm, coef: fm.shape == coef.shape,
+            all,
+            feature_mask,
+            params.coef,
+        )
+
+        if not shape_match:
+            if isinstance(params.coef, jnp.ndarray):
+                raise ValueError(
+                    "The shape of the ``feature_mask`` array must match coef shape. "
+                    f"Expected shape ``{params.coef.shape}``, "
+                    f"got ``{feature_mask.shape}`` instead!"
+                )
+            else:
+                raise ValueError(
+                    "Inconsistent feature mask shape. "
+                    f"feature_mask has shapes {jax.tree_util.tree_map(lambda m: m.shape, feature_mask)}, "
+                    f"expected shapes {jax.tree_util.tree_map(lambda c: c.shape, params.coef)}!"
+                )
+
+    def get_empty_params(self, X, y) -> GLMParams:
+        """Return the param shape given the input data."""
+        n_categories = self.extra_params["n_categories"]
+        empty_coef = jax.tree_util.tree_map(
+            lambda x: jnp.empty((x.shape[1], n_categories - 1)), X
+        )
+        empty_intercept = jnp.empty((n_categories - 1,))
+        return to_glm_params((empty_coef, empty_intercept))
+
+
+@dataclass(frozen=True, repr=False)
+class PopulationCategoricalGLMValidator(CategoricalGLMValidator):
+    """
+    Validator for population (multi-neuron) categorical GLM models.
+
+    Validates and transforms user-provided parameters, inputs, and checks consistency
+    between parameters and data for population categorical GLMs. Population categorical GLMs have:
+    - 3D coefficients: shape (n_features, n_neurons, n_categories - 1) or dict of same
+    - 2D intercept: shape (n_neurons, n_categories - 1)
+    - 2D input X: shape (n_samples, n_features) or pytree of same
+    - 2D output y: shape (n_samples, n_neurons) containing integer class labels per neuron
+    """
+
+    y_dimensionality: int = 2
+    expected_param_dims: Tuple[int] = (3, 2)  # coef is 3D, intercept is 2D
+    model_class: str = "PopulationCategoricalGLM"
+    params_validation_sequence: Tuple[Tuple[str, None] | Tuple[str, dict[str, Any]]] = (
+        *RegressorValidator.params_validation_sequence[:2],
+        (
+            "check_array_dimensions",
+            dict(
+                err_message_format="Invalid parameter dimensionality. "
+                "coef must be an array or nemos.pytree.FeaturePytree "
+                "with array leafs of shape (n_features, n_neurons, n_categories - 1). "
+                "intercept must be of shape (n_neurons, n_categories - 1)."
+                "\nThe provided coef and intercept have shape ``{}`` and ``{}`` instead."
+            ),
+        ),
+        (
+            "validate_n_categories_shape",
+            dict(
+                intercept_err_format="intercept last dimension must be n_categories - 1 = {} "
+                "for n_categories={}. Got intercept with shape {}."
+            ),
+        ),
+        *RegressorValidator.params_validation_sequence[3:],
+    )
+
+    def validate_consistency(
+        self,
+        params: GLMParams,
+        X: Optional[DESIGN_INPUT_TYPE] = None,
+        y: Optional[jnp.ndarray] = None,
+    ):
+        """
+        Validate consistency between parameters and inputs for population categorical GLM.
+
+        For population categorical GLM, validates both feature consistency with X and
+        neuron count consistency with y.
+        """
+        # First validate X consistency (features) using parent implementation
+        super().validate_consistency(params, X=X, y=None)
+
+        # Then validate y consistency (neurons) - specific to population categorical GLM
+        if y is not None:
+            # coef shape is (n_features, n_neurons, n_categories - 1), y shape is (n_samples, n_neurons)
+            validation.check_array_shape_match_tree(
+                params.coef,
+                y,
+                axis=1,
+                err_message="Inconsistent number of neurons. "
+                f"Model coefficients assume "
+                f"{jax.tree_util.tree_map(lambda p: p.shape[1], params.coef)} neurons, "
+                f"y has {jax.tree_util.tree_map(lambda x: x.shape[1], y)} neurons instead!",
+            )
+
+    def get_empty_params(self, X, y) -> GLMParams:
+        """Return the param shape given the input data."""
+        n_neurons = y.shape[1]
+        n_categories = self.extra_params["n_categories"]
+        if n_categories != 2:
+            empty_coef = jax.tree_util.tree_map(
+                lambda x: jnp.empty((x.shape[1], n_neurons, n_categories - 1)), X
+            )
+            empty_intercept = jnp.empty((n_neurons, n_categories - 1))
+        else:
+            empty_coef = jax.tree_util.tree_map(
+                lambda x: jnp.empty((x.shape[1], n_neurons)), X
+            )
+            empty_intercept = jnp.empty((n_neurons,))
         return to_glm_params((empty_coef, empty_intercept))

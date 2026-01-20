@@ -750,3 +750,11 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             and not name.endswith("__")
             and (not callable(getattr(self, name)))
         }
+
+    @staticmethod
+    def _get_validator_extra_params() -> dict | None:
+        """Get validator extra parameters.
+
+        Provide instance specific validator configuration if needed.
+        """
+        return {}

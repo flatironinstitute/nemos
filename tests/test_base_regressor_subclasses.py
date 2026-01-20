@@ -19,26 +19,33 @@ import nemos as nmo
 from nemos import inverse_link_function_utils
 from nemos._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
 from nemos.glm.params import GLMParams
-from nemos.glm.validation import GLMValidator, PopulationGLMValidator
+from nemos.glm.validation import CategoricalGLMValidator, GLMValidator, PopulationGLMValidator, PopulationCategoricalGLMValidator
 from nemos.inverse_link_function_utils import LINK_NAME_TO_FUNC
 
 MODEL_REGISTRY = {
     "GLM": nmo.glm.GLM,
+    "CategoricalGLM": nmo.glm.CategoricalGLM,
     "PopulationGLM": nmo.glm.PopulationGLM,
 }
 
 VALIDATOR_REGISTRY = {
     "GLM": GLMValidator(),
+    "CategoricalGLM": CategoricalGLMValidator(extra_params={"n_categories": 4}),
+    "CategoricalPopulationGLM": PopulationCategoricalGLMValidator(extra_params={"n_categories": 4}),
     "PopulationGLM": PopulationGLMValidator(),
 }
 
 INIT_PARAM_LENGTH = {
     "GLM": 2,
+    "CategoricalGLM": 2,
+    "CategoricalPopulationGLM": 2,
     "PopulationGLM": 2,
 }
 
 DEFAULT_OBS_SHAPE = {
     "GLM": (500,),
+    "CategoricalGLM": (500,),
+    "CategoricalPopulationGLM": (500, 3),
     "PopulationGLM": (500, 3),
 }
 
@@ -46,6 +53,22 @@ HARD_CODED_GET_PARAMS_KEYS = {
     "GLM": {
         "inverse_link_function",
         "observation_model",
+        "regularizer",
+        "regularizer_strength",
+        "solver_kwargs",
+        "solver_name",
+    },
+    "CategoricalGLM": {
+        "inverse_link_function",
+        "n_categories",
+        "regularizer",
+        "regularizer_strength",
+        "solver_kwargs",
+        "solver_name",
+    },
+    "CategoricalPopulationGLM": {
+        "inverse_link_function",
+        "n_categories",
         "regularizer",
         "regularizer_strength",
         "solver_kwargs",
@@ -62,37 +85,47 @@ HARD_CODED_GET_PARAMS_KEYS = {
     },
 }
 
+OBSERVATION_PER_MODEL = {
+    "GLM": [o for o in AVAILABLE_OBSERVATION_MODELS if o != "Categorical"],
+    "CategoricalGLM": ["Categorical"],
+    "CategoricalPopulationGLM": ["Categorical"],
+    "PopulationGLM": [o for o in AVAILABLE_OBSERVATION_MODELS if o != "Categorical"],
+}
+
+
 # as of now, all models are glm type... in the future this may change.
 MODEL_WITH_LINK_FUNCTION_REGISTRY = {
     "GLM": nmo.glm.GLM,
+    "CategoricalGLM": nmo.glm.CategoricalGLM,
+    "CategoricalPopulationGLM": nmo.glm.CategoricalPopulationGLM,
     "PopulationGLM": nmo.glm.PopulationGLM,
 }
 
-DEFAULTS = {"GLM": dict(), "PopulationGLM": dict()}
+DEFAULTS = {"GLM": dict(), "PopulationGLM": dict(), "CategoricalGLM": dict(), "CategoricalPopulationGLM": dict()}
 
 
 INSTANTIATE_MODEL_ONLY = [
     {"model": m, "obs_model": o, "simulate": False}
-    for m, o in itertools.product(MODEL_REGISTRY.keys(), AVAILABLE_OBSERVATION_MODELS)
+    for m in MODEL_REGISTRY.keys()
+    for o in OBSERVATION_PER_MODEL[m]
 ]
 
 INSTANTIATE_MODEL_AND_SIMULATE = [
     {"model": m, "obs_model": o, "simulate": True}
-    for m, o in itertools.product(MODEL_REGISTRY.keys(), AVAILABLE_OBSERVATION_MODELS)
+    for m in MODEL_REGISTRY.keys()
+    for o in OBSERVATION_PER_MODEL[m]
 ]
 
 INSTANTIATE_MODEL_ONLY_LINK = [
     {"model": m, "obs_model": o, "simulate": False}
-    for m, o in itertools.product(
-        MODEL_WITH_LINK_FUNCTION_REGISTRY.keys(), AVAILABLE_OBSERVATION_MODELS
-    )
+    for m in MODEL_WITH_LINK_FUNCTION_REGISTRY.keys()
+    for o in OBSERVATION_PER_MODEL[m]
 ]
 
 INSTANTIATE_MODEL_AND_SIMULATE_LINK = [
     {"model": m, "obs_model": o, "simulate": True}
-    for m, o in itertools.product(
-        MODEL_WITH_LINK_FUNCTION_REGISTRY.keys(), AVAILABLE_OBSERVATION_MODELS
-    )
+    for m in MODEL_WITH_LINK_FUNCTION_REGISTRY.keys()
+    for o in OBSERVATION_PER_MODEL[m]
 ]
 
 
@@ -816,6 +849,8 @@ class TestObservationModel:
         """
         fixture = instantiate_base_regressor_subclass
         model_cls = fixture.model.__class__
+        if "observation_model" not in HARD_CODED_GET_PARAMS_KEYS[model_cls.__name__]:
+            pytest.skip(f"model {model_cls.__name__} don't require obervation model.")
         with expectation:
             model_cls(**DEFAULTS[model_cls.__name__], observation_model=observation)
 

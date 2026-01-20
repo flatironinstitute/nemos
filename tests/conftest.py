@@ -39,8 +39,8 @@ from nemos.basis._basis import Basis
 from nemos.basis._basis_mixin import BasisMixin
 from nemos.basis._transformer_basis import TransformerBasis
 from nemos.glm.params import GLMParams
-from nemos.inverse_link_function_utils import log_softmax
 from nemos.pytrees import FeaturePytree
+from nemos.inverse_link_function_utils import log_softmax
 
 
 def initialize_feature_mask_for_population_glm(X, n_neurons: int, coef=None):
@@ -1014,21 +1014,20 @@ def categoricalGLM_model_instantiation():
             - rate (jax.numpy.ndarray): Simulated rate of log-proba.
     """
     np.random.seed(123)
+    num_classes = 3
     X = np.random.normal(size=(100, 5))
-    b_true = np.zeros((3,))
-    w_true = np.random.normal(size=(5, 3))
-    observation_model = nmo.observation_models.CategoricalObservations()
+    b_true = np.zeros((num_classes-1,))
+    w_true = np.random.normal(size=(5, num_classes-1))
     regularizer = nmo.regularizer.UnRegularized()
-    model = nmo.glm.GLM(observation_model, regularizer=regularizer)
-    rate = jax.nn.log_softmax(jnp.einsum("ki,tk->ti", w_true, X) + b_true)
+    model = nmo.glm.CategoricalGLM(regularizer=regularizer)
+    rate = log_softmax(jnp.einsum("ki,tk->ti", w_true, X) + b_true)
     key = jax.random.PRNGKey(123)
     y = jax.random.categorical(key, rate)
-    y = jax.nn.one_hot(y, num_classes=3).astype(float)
     return X, y, model, GLMParams(w_true, b_true), rate
 
 
 @pytest.fixture
-def categoricalGLM_model_instantiation_pytree():
+def categoricalGLM_model_instantiation_pytree(categoricalGLM_model_instantiation):
     """Set up a categorical GLM for testing purposes.
 
     This fixture initializes a categorical GLM with random parameters, simulates its response, and
@@ -1043,7 +1042,7 @@ def categoricalGLM_model_instantiation_pytree():
             - GLMParams(w_true, b_true) (tuple): True weight and bias parameters.
             - rate (jax.numpy.ndarray): Simulated rate of log-proba.
     """
-    X, spikes, model, true_params, rate = bernoulliGLM_model_instantiation
+    X, spikes, model, true_params, rate = categoricalGLM_model_instantiation
     X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
     true_params_tree = GLMParams(
         dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
@@ -1315,7 +1314,7 @@ def instantiate_population_glm_func(
     model.coef_ = np.random.randn(n_features, n_neurons)
     model.intercept_ = np.random.randn(n_neurons)
     if simulate:
-        model._initialize_feature_mask(X, np.empty(shape=(X.shape[0], n_neurons)))
+        model._feature_mask = initialize_feature_mask_for_population_glm(X, n_neurons)
         counts, rates = model.simulate(jax.random.PRNGKey(1234), X)
     else:
         counts, rates = None, None
@@ -1328,6 +1327,71 @@ def instantiate_population_glm_func(
         extra=None,
     )
 
+def instantiate_categorical_glm_func(
+    n_neurons=3,
+    regularizer: str = "UnRegularized",
+    solver_name: str = None,
+    simulate=False,
+):
+    np.random.seed(124)
+    n_features = 2
+    n_categories = 4
+    X = np.ones((500, n_features))
+    X[:250, 0] = 0
+    X[np.arange(500) % 2 == 1, 1] = 0
+    model = nmo.glm.CategoricalGLM(
+        n_categories=n_categories,
+        regularizer=regularizer,
+        solver_name=solver_name,
+    )
+    model.coef_ = np.random.randn(n_features, n_categories - 1)
+    model.intercept_ = np.random.randn(n_categories - 1)
+    if simulate:
+        counts, rates = model.simulate(jax.random.PRNGKey(123), X)
+    else:
+        counts, rates = None, None
+    return ModelFixture(
+        X=X,
+        y=counts,
+        model=model,
+        params=GLMParams(model.coef_, model.intercept_),
+        rates=rates,
+        extra=None,
+    )
+
+
+def instantiate_population_categorical_glm_func(
+    n_neurons=3,
+    regularizer: str = "UnRegularized",
+    solver_name: str = None,
+    simulate=False,
+):
+    np.random.seed(124)
+    n_features = 2
+    n_categories = 4
+    X = np.ones((500, n_features))
+    X[:250, 0] = 0
+    X[np.arange(500) % 2 == 1, 1] = 0
+    model = nmo.glm.CategoricalPopulationGLM(
+        n_categories=n_categories,
+        regularizer=regularizer,
+        solver_name=solver_name,
+    )
+    model.coef_ = np.random.randn(n_features, n_neurons, n_categories - 1)
+    model.intercept_ = np.random.randn(n_neurons, n_categories - 1)
+    if simulate:
+        model._feature_mask = initialize_feature_mask_for_population_glm(X, n_neurons)
+        counts, rates = model.simulate(jax.random.PRNGKey(123), X)
+    else:
+        counts, rates = None, None
+    return ModelFixture(
+        X=X,
+        y=counts,
+        model=model,
+        params=GLMParams(model.coef_, model.intercept_),
+        rates=rates,
+        extra=None,
+    )
 
 _MODEL_CACHE = {}
 
@@ -1338,7 +1402,15 @@ MODEL_CONFIG = {
         "is_population": False,
         "default_y_shape": (500,),
     },
+    "CategoricalGLM": {
+        "is_population": False,
+        "default_y_shape": (500,),
+    },
     "PopulationGLM": {
+        "is_population": True,
+        "default_y_shape": (500, 3),
+    },
+    "CategoricalPopulationGLM": {
         "is_population": True,
         "default_y_shape": (500, 3),
     },
@@ -1375,6 +1447,14 @@ def instantiate_base_regressor_subclass(request):
         elif model_name == "PopulationGLM":
             result = instantiate_population_glm_func(
                 obs_model=obs_model, simulate=simulate
+            )
+        elif model_name == "CategoricalGLM":
+            result = instantiate_categorical_glm_func(
+                simulate=simulate
+            )
+        elif model_name == "CategoricalPopulationGLM":
+            result = instantiate_categorical_glm_func(
+                simulate=simulate
             )
         else:
             raise ValueError("model_name {} unknown".format(model_name))
