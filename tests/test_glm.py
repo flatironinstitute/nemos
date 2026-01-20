@@ -81,7 +81,7 @@ MODEL_CONFIG = {
         "is_population": True,
         "is_categorical": True,
         "class_fixture": "categorical_population_glm_class",
-        "instantiation_fixture": "categorical_population_GLM_model_instantiation",
+        "instantiation_fixture": "population_categoricalGLM_model_instantiation",
         "glm_type_prefix": "categorical_population_",
     },
 }
@@ -357,12 +357,14 @@ class TestGLM:
 
     @staticmethod
     def get_init_params_for_model(init_params_by_model, model):
-        """Get init_params for a specific model from dict or return as-is if model-independent."""
-        if (
-            isinstance(init_params_by_model, dict)
-            and model.__class__.__name__ in init_params_by_model
-        ):
-            return init_params_by_model[model.__class__.__name__]
+        """Get init_params for a specific model from dict or return as-is if model-independent.
+
+        If init_params_by_model is a dict keyed by model class names and the model's class
+        is not present, raises KeyError. This ensures test data is explicitly added for new models.
+        """
+        model_name = model.__class__.__name__
+        if isinstance(init_params_by_model, dict):
+            return init_params_by_model[model_name]
         return init_params_by_model
 
     @pytest.mark.parametrize(*fit_init_params_type_init_params)
@@ -636,7 +638,7 @@ class TestGLM:
         model.intercept_ = true_params.intercept
         if is_population_model(model):
             model._feature_mask = initialize_feature_mask_for_population_glm(
-                X, y.shape[1]
+                X, y.shape[1], coef=true_params.coef
             )
         if delta_dim == -1:
             X = np.zeros((X.shape[0],))
@@ -672,7 +674,7 @@ class TestGLM:
         model.intercept_ = true_params.intercept
         if is_population_model(model):
             model._feature_mask = initialize_feature_mask_for_population_glm(
-                X, y.shape[1]
+                X, y.shape[1], coef=true_params.coef
             )
         if delta_n_features == 1:
             X = jnp.concatenate((X, jnp.zeros((X.shape[0], 1))), axis=1)
@@ -859,7 +861,7 @@ class TestGLM:
         model.intercept_ = true_params.intercept
         if is_population_model(model):
             model._feature_mask = initialize_feature_mask_for_population_glm(
-                X, y.shape[1]
+                X, y.shape[1], coef=true_params.coef
             )
         if delta_dim == -1:
             X = np.zeros(X.shape[:-1])
@@ -895,7 +897,7 @@ class TestGLM:
             model.intercept_ = true_params.intercept
             if is_population_model(model):
                 model._feature_mask = initialize_feature_mask_for_population_glm(
-                    X, y.shape[1]
+                    X, y.shape[1], model._validator.get_empty_params(X, y).coef
                 )
         with expectation:
             model.simulate(
@@ -947,7 +949,7 @@ class TestGLM:
         model.intercept_ = true_params.intercept
         if is_population_model(model):
             model._feature_mask = initialize_feature_mask_for_population_glm(
-                X, y.shape[1]
+                X, y.shape[1], coef=true_params.coef
             )
         feedforward_input = jnp.zeros(
             (
@@ -1042,11 +1044,14 @@ class TestGLM:
             regularizer_strength=2.0,
             solver_kwargs={"tol": 10**-6},
         )
+        clean_kwargs = dict(
+            (k, p) for k, p in kwargs.items() if k in model_class._get_param_names()
+        )
 
         if regularizer == "UnRegularized":
             kwargs.pop("regularizer_strength")
 
-        model = model_class(**kwargs)
+        model = model_class(**clean_kwargs)
 
         initial_params = model.get_params()
         # set fit states
@@ -1858,7 +1863,7 @@ class TestGLMObservationModel:
         model.intercept_ = true_params.intercept
         if is_population_model(model):
             model._feature_mask = initialize_feature_mask_for_population_glm(
-                X, y.shape[1]
+                X, y.shape[1], coef=true_params.coef
             )
         # get the rate
         mean_firing = model.predict(X)
@@ -2039,7 +2044,7 @@ class TestGLMObservationModel:
         model.intercept_ = true_params.intercept
         if is_population_model(model):
             model._feature_mask = initialize_feature_mask_for_population_glm(
-                X, y.shape[1]
+                X, y.shape[1], coef=true_params.coef
             )
         if input_type == TsdFrame:
             X = TsdFrame(t=np.arange(X.shape[0]), d=X)
@@ -2064,7 +2069,7 @@ class TestGLMObservationModel:
         model.scale_ = model.observation_model.scale
         if is_population_model(model):
             model._feature_mask = initialize_feature_mask_for_population_glm(
-                X, y.shape[1]
+                X, y.shape[1], coef=true_params.coef
             )
         ysim, ratesim = model.simulate(jax.random.key(123), X)
         # check that the expected dimensionality is returned

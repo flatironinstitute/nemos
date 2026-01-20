@@ -43,7 +43,7 @@ from nemos.inverse_link_function_utils import log_softmax
 from nemos.pytrees import FeaturePytree
 
 
-def initialize_feature_mask_for_population_glm(X, n_neurons: int):
+def initialize_feature_mask_for_population_glm(X, n_neurons: int, coef=None):
     """
     Create a feature mask of ones for PopulationGLM testing.
 
@@ -56,14 +56,21 @@ def initialize_feature_mask_for_population_glm(X, n_neurons: int):
         The design matrix. Can be a FeaturePytree, dict, or array.
     n_neurons :
         Number of neurons (determines the second dimension of the mask).
+        Ignored if coef is provided.
+    coef :
+        Optional coefficient array/pytree. If provided, the mask shape will match
+        coef shape exactly (required for CategoricalPopulationGLM).
 
     Returns
     -------
     :
-        A feature mask with all ones. If X is a FeaturePytree or dict,
-        returns a dict with arrays of shape (n_neurons,) for each key.
+        A feature mask with all ones. If coef is provided, returns ones_like(coef).
+        Otherwise, if X is a FeaturePytree or dict, returns a dict with arrays
+        of shape (n_neurons,) for each key.
         If X is an array, returns an array of shape (n_features, n_neurons).
     """
+    if coef is not None:
+        return jax.tree_util.tree_map(lambda c: jnp.ones(c.shape), coef)
     if isinstance(X, FeaturePytree):
         return jax.tree_util.tree_map(lambda x: jnp.ones((n_neurons,)), X.data)
     elif isinstance(X, dict):
