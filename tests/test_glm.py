@@ -179,6 +179,7 @@ def get_param_shape(model, X, y):
     empty_par = model._validator.get_empty_params(X, y)
     return jax.tree_util.tree_map(lambda x: x.shape, empty_par)
 
+
 @pytest.mark.parametrize("glm_class_type", ["glm_class", "population_glm_class"])
 class TestGLM:
     """
@@ -188,7 +189,9 @@ class TestGLM:
     """
 
     @staticmethod
-    def fit_weights_dimensionality_expectation(model, expected_dim: int, param_name: str):
+    def fit_weights_dimensionality_expectation(
+        model, expected_dim: int, param_name: str
+    ):
         """
         Fixture to define the expected behavior for test_fit_weights_dimensionality based on the type of GLM class.
         """
@@ -201,9 +204,7 @@ class TestGLM:
                 message = "Intercept term should be a|Invalid parameter dimensionality"
             else:
                 message = r"coef must be an array or .* of shape \(n_features|Inconsistent number of features"
-            return pytest.raises(
-                ValueError, match=message
-            )
+            return pytest.raises(ValueError, match=message)
 
     @pytest.mark.parametrize("dim_weights", [0, 1, 2, 3])
     @pytest.mark.solver_related
@@ -221,12 +222,16 @@ class TestGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation_type
         )
-        expectation = self.fit_weights_dimensionality_expectation(model, dim_weights, "coef")
+        expectation = self.fit_weights_dimensionality_expectation(
+            model, dim_weights, "coef"
+        )
         par_shape = get_param_shape(model, X, y)
         if dim_weights == 0:
             init_w = jnp.array([])
         elif dim_weights <= len(par_shape.coef):
-            slc = (slice(None), ) * dim_weights + (0,) * (len(par_shape.coef) - dim_weights)
+            slc = (slice(None),) * dim_weights + (0,) * (
+                len(par_shape.coef) - dim_weights
+            )
             init_w = np.zeros(par_shape.coef)[slc]
         else:
             delta = dim_weights - len(par_shape.coef)
@@ -235,9 +240,7 @@ class TestGLM:
         with expectation:
             model.fit(X, y, init_params=(init_w, true_params.intercept))
 
-    @pytest.mark.parametrize(
-        "dim_intercepts", [0, 1, 2, 3, 4]
-    )
+    @pytest.mark.parametrize("dim_intercepts", [0, 1, 2, 3, 4])
     @pytest.mark.solver_related
     def test_fit_intercepts_dimensionality(
         self,
@@ -252,14 +255,18 @@ class TestGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation_type
         )
-        expectation = self.fit_weights_dimensionality_expectation(model, dim_intercepts, "intercept")
+        expectation = self.fit_weights_dimensionality_expectation(
+            model, dim_intercepts, "intercept"
+        )
 
         par_shape = get_param_shape(model, X, y)
         init_w = jnp.zeros(par_shape.coef)
         if dim_intercepts == 0:
             init_b = jnp.array([])
         elif dim_intercepts <= len(par_shape.intercept):
-            slc = (slice(None), ) * dim_intercepts + (0,) * (len(par_shape.intercept) - dim_intercepts)
+            slc = (slice(None),) * dim_intercepts + (0,) * (
+                len(par_shape.intercept) - dim_intercepts
+            )
             init_b = np.zeros(par_shape.intercept)[slc]
         else:
             delta = dim_intercepts - len(par_shape.intercept)
@@ -607,7 +614,9 @@ class TestGLM:
         model.coef_ = true_params.coef
         model.intercept_ = true_params.intercept
         if is_population_model(model):
-            model._feature_mask = initialize_feature_mask_for_population_glm(X, y.shape[1])
+            model._feature_mask = initialize_feature_mask_for_population_glm(
+                X, y.shape[1]
+            )
         if delta_dim == -1:
             X = np.zeros((X.shape[0],))
         elif delta_dim == 1:
@@ -641,7 +650,9 @@ class TestGLM:
         model.coef_ = true_params.coef
         model.intercept_ = true_params.intercept
         if is_population_model(model):
-            model._feature_mask = initialize_feature_mask_for_population_glm(X, y.shape[1])
+            model._feature_mask = initialize_feature_mask_for_population_glm(
+                X, y.shape[1]
+            )
         if delta_n_features == 1:
             X = jnp.concatenate((X, jnp.zeros((X.shape[0], 1))), axis=1)
         elif delta_n_features == -1:
@@ -691,11 +702,15 @@ class TestGLM:
             init_w = jnp.array([])
         elif dim_weights <= len(par_shape.coef):
             # Use correct shape up to dim_weights, then slice off extra dims
-            slc = (slice(None),) * dim_weights + (0,) * (len(par_shape.coef) - dim_weights)
+            slc = (slice(None),) * dim_weights + (0,) * (
+                len(par_shape.coef) - dim_weights
+            )
             init_w = jnp.zeros(par_shape.coef)[slc]
         else:
             # Add extra dimensions beyond what's expected
-            init_w = jnp.zeros(par_shape.coef + (1,) * (dim_weights - len(par_shape.coef)))
+            init_w = jnp.zeros(
+                par_shape.coef + (1,) * (dim_weights - len(par_shape.coef))
+            )
         with expectation:
             model.initialize_solver_and_state(X, y, (init_w, true_params.intercept))
 
@@ -716,22 +731,30 @@ class TestGLM:
             model_instantiation_type
         )
         par_shape = get_param_shape(model, X, y)
-        expected_intercept_dim = DIMENSIONALITY_PARAMS[model.__class__.__name__]["intercept"]
+        expected_intercept_dim = DIMENSIONALITY_PARAMS[model.__class__.__name__][
+            "intercept"
+        ]
 
         # Determine expectation based on model's expected intercept dimensionality
         if dim_intercepts == expected_intercept_dim:
             expectation = does_not_raise()
         else:
-            expectation = pytest.raises(ValueError, match=r"Invalid parameter dimensionality")
+            expectation = pytest.raises(
+                ValueError, match=r"Invalid parameter dimensionality"
+            )
 
         # Build init_b of the requested dimensionality
         if dim_intercepts == 0:
             init_b = jnp.array([])
         elif dim_intercepts <= len(par_shape.intercept):
-            slc = (slice(None),) * dim_intercepts + (0,) * (len(par_shape.intercept) - dim_intercepts)
+            slc = (slice(None),) * dim_intercepts + (0,) * (
+                len(par_shape.intercept) - dim_intercepts
+            )
             init_b = jnp.zeros(par_shape.intercept)[slc]
         else:
-            init_b = jnp.zeros(par_shape.intercept + (1,) * (dim_intercepts - len(par_shape.intercept)))
+            init_b = jnp.zeros(
+                par_shape.intercept + (1,) * (dim_intercepts - len(par_shape.intercept))
+            )
 
         init_w = jnp.zeros(par_shape.coef)
         with expectation:
@@ -818,7 +841,9 @@ class TestGLM:
         model.coef_ = true_params.coef
         model.intercept_ = true_params.intercept
         if is_population_model(model):
-            model._feature_mask = initialize_feature_mask_for_population_glm(X, y.shape[1])
+            model._feature_mask = initialize_feature_mask_for_population_glm(
+                X, y.shape[1]
+            )
         if delta_dim == -1:
             X = np.zeros(X.shape[:-1])
         elif delta_dim == 1:
@@ -852,7 +877,9 @@ class TestGLM:
             model.coef_ = true_params.coef
             model.intercept_ = true_params.intercept
             if is_population_model(model):
-                model._feature_mask = initialize_feature_mask_for_population_glm(X, y.shape[1])
+                model._feature_mask = initialize_feature_mask_for_population_glm(
+                    X, y.shape[1]
+                )
         with expectation:
             model.simulate(
                 random_key=jax.random.key(123),
@@ -902,7 +929,9 @@ class TestGLM:
         model.coef_ = true_params.coef
         model.intercept_ = true_params.intercept
         if is_population_model(model):
-            model._feature_mask = initialize_feature_mask_for_population_glm(X, y.shape[1])
+            model._feature_mask = initialize_feature_mask_for_population_glm(
+                X, y.shape[1]
+            )
         feedforward_input = jnp.zeros(
             (
                 X.shape[0],
@@ -1811,7 +1840,9 @@ class TestGLMObservationModel:
         model.coef_ = true_params.coef
         model.intercept_ = true_params.intercept
         if is_population_model(model):
-            model._feature_mask = initialize_feature_mask_for_population_glm(X, y.shape[1])
+            model._feature_mask = initialize_feature_mask_for_population_glm(
+                X, y.shape[1]
+            )
         # get the rate
         mean_firing = model.predict(X)
         # compute the log-likelihood using jax.scipy
@@ -1990,7 +2021,9 @@ class TestGLMObservationModel:
         model.coef_ = true_params.coef
         model.intercept_ = true_params.intercept
         if is_population_model(model):
-            model._feature_mask = initialize_feature_mask_for_population_glm(X, y.shape[1])
+            model._feature_mask = initialize_feature_mask_for_population_glm(
+                X, y.shape[1]
+            )
         if input_type == TsdFrame:
             X = TsdFrame(t=np.arange(X.shape[0]), d=X)
         count, rate = model.simulate(
@@ -2013,7 +2046,9 @@ class TestGLMObservationModel:
         model.intercept_ = params.intercept
         model.scale_ = model.observation_model.scale
         if is_population_model(model):
-            model._feature_mask = initialize_feature_mask_for_population_glm(X, y.shape[1])
+            model._feature_mask = initialize_feature_mask_for_population_glm(
+                X, y.shape[1]
+            )
         ysim, ratesim = model.simulate(jax.random.key(123), X)
         # check that the expected dimensionality is returned
         assert ysim.ndim == 1 + (1 if is_population_model(model) else 0)
