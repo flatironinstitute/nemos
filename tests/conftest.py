@@ -1048,7 +1048,9 @@ def categoricalGLM_model_instantiation_pytree(categoricalGLM_model_instantiation
         dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
         true_params.intercept,
     )
-    model_tree = nmo.glm.CategoricalGLM(model.observation_model, regularizer=model.regularizer)
+    model_tree = nmo.glm.CategoricalGLM(
+        n_categories=model.n_categories, regularizer=model.regularizer
+    )
     return X_tree, spikes, model_tree, true_params_tree, rate
 
 
@@ -1105,13 +1107,15 @@ def population_categoricalGLM_model_instantiation_pytree(
             - GLMParams(w_true, b_true) (tuple): True weight and bias parameters.
             - rate (jax.numpy.ndarray): Simulated rate of log-proba.
     """
-    X, spikes, model, true_params, rate = categoricalGLM_model_instantiation
+    X, spikes, model, true_params, rate = population_categoricalGLM_model_instantiation
     X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
     true_params_tree = GLMParams(
         dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
         true_params.intercept,
     )
-    model_tree = nmo.glm.CategoricalPopulationGLM(model.observation_model, regularizer=model.regularizer)
+    model_tree = nmo.glm.CategoricalPopulationGLM(
+        model.observation_model, regularizer=model.regularizer
+    )
     return X_tree, spikes, model_tree, true_params_tree, rate
 
 
