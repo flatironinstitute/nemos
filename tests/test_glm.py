@@ -276,51 +276,62 @@ class TestGLM:
             model.fit(X, y, init_params=(init_w, init_b))
 
     """
-    Parameterization used by test_fit_init_params_type and test_initialize_solver_init_params_type
-    Contains the expected behavior and separate initial parameters for regular and population GLMs
+    Parameterization used by test_fit_init_params_type and test_initialize_solver_init_params_type.
+    Uses a dict keyed by model class name for model-specific params, or a single value for
+    model-independent test cases. Easy to extend by adding new model keys to the dicts.
     """
     fit_init_params_type_init_params = (
-        "expectation, init_params_glm, init_params_population_glm",
+        "expectation, init_params_by_model",
         [
             (
                 does_not_raise(),
-                [jnp.zeros((5,)), jnp.zeros((1,))],
-                [jnp.zeros((5, 3)), jnp.zeros((3,))],
+                {
+                    "GLM": [jnp.zeros((5,)), jnp.zeros((1,))],
+                    "PopulationGLM": [jnp.zeros((5, 3)), jnp.zeros((3,))],
+                },
             ),
             (
                 pytest.raises(ValueError, match="Params must have length two."),
-                [[jnp.zeros((1, 5)), jnp.zeros((1,))]],
-                [[jnp.zeros((1, 5)), jnp.zeros((3,))]],
+                {
+                    "GLM": [[jnp.zeros((1, 5)), jnp.zeros((1,))]],
+                    "PopulationGLM": [[jnp.zeros((1, 5)), jnp.zeros((3,))]],
+                },
             ),
             (
                 pytest.raises(
                     TypeError, match="GLM params must be a tuple/list of length two"
                 ),
-                dict(p1=jnp.zeros((5,)), p2=jnp.zeros((1,))),
-                dict(p1=jnp.zeros((3, 3)), p2=jnp.zeros((3, 2))),
+                {
+                    "GLM": dict(p1=jnp.zeros((5,)), p2=jnp.zeros((1,))),
+                    "PopulationGLM": dict(p1=jnp.zeros((3, 3)), p2=jnp.zeros((3, 2))),
+                },
             ),
             (
                 pytest.raises(TypeError, match="X and coef have mismatched structure"),
-                [dict(p1=jnp.zeros((5,)), p2=jnp.zeros((1,))), jnp.zeros((1,))],
-                [dict(p1=jnp.zeros((3, 3)), p2=jnp.zeros((2, 3))), jnp.zeros((3,))],
+                {
+                    "GLM": [dict(p1=jnp.zeros((5,)), p2=jnp.zeros((1,))), jnp.zeros((1,))],
+                    "PopulationGLM": [dict(p1=jnp.zeros((3, 3)), p2=jnp.zeros((2, 3))), jnp.zeros((3,))],
+                },
             ),
             (
                 pytest.raises(TypeError, match="X and coef have mismatched structure"),
-                [
-                    FeaturePytree(p1=jnp.zeros((5,)), p2=jnp.zeros((5,))),
-                    jnp.zeros((1,)),
-                ],
-                [
-                    FeaturePytree(p1=jnp.zeros((3, 3)), p2=jnp.zeros((3, 2))),
-                    jnp.zeros((3,)),
-                ],
+                {
+                    "GLM": [
+                        FeaturePytree(p1=jnp.zeros((5,)), p2=jnp.zeros((5,))),
+                        jnp.zeros((1,)),
+                    ],
+                    "PopulationGLM": [
+                        FeaturePytree(p1=jnp.zeros((3, 3)), p2=jnp.zeros((3, 2))),
+                        jnp.zeros((3,)),
+                    ],
+                },
             ),
-            (pytest.raises(ValueError, match="Params must have length two."), 0, 0),
+            # Model-independent invalid params - single value used for all models
+            (pytest.raises(ValueError, match="Params must have length two."), 0),
             (
                 pytest.raises(
                     TypeError, match="GLM params must be a tuple/list of length two"
                 ),
-                {0, 1},
                 {0, 1},
             ),
             (
@@ -328,17 +339,22 @@ class TestGLM:
                     TypeError, match="Failed to convert parameters to JAX arrays"
                 ),
                 [jnp.zeros((1, 5)), ""],
-                [jnp.zeros((1, 5)), ""],
             ),
             (
                 pytest.raises(
                     TypeError, match="Failed to convert parameters to JAX arrays"
                 ),
-                ["", jnp.zeros((1,))],
                 ["", jnp.zeros((1,))],
             ),
         ],
     )
+
+    @staticmethod
+    def get_init_params_for_model(init_params_by_model, model):
+        """Get init_params for a specific model from dict or return as-is if model-independent."""
+        if isinstance(init_params_by_model, dict) and model.__class__.__name__ in init_params_by_model:
+            return init_params_by_model[model.__class__.__name__]
+        return init_params_by_model
 
     @pytest.mark.parametrize(*fit_init_params_type_init_params)
     @pytest.mark.solver_related
@@ -348,8 +364,7 @@ class TestGLM:
         glm_class_type,
         model_instantiation_type,
         expectation,
-        init_params_glm,
-        init_params_population_glm,
+        init_params_by_model,
     ):
         """
         Test the `fit` method with various types of initial parameters. Ensure that the provided initial parameters
@@ -358,10 +373,7 @@ class TestGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation_type
         )
-        if is_population_model(model):
-            init_params = init_params_population_glm
-        else:
-            init_params = init_params_glm
+        init_params = self.get_init_params_for_model(init_params_by_model, model)
         with expectation:
             model.fit(X, y, init_params=init_params)
 
@@ -768,8 +780,7 @@ class TestGLM:
         glm_class_type,
         model_instantiation_type,
         expectation,
-        init_params_glm,
-        init_params_population_glm,
+        init_params_by_model,
     ):
         """
         Test the `initialize_solver` method with various types of initial parameters.
@@ -778,10 +789,7 @@ class TestGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation_type
         )
-        if is_population_model(model):
-            init_params = init_params_population_glm
-        else:
-            init_params = init_params_glm
+        init_params = self.get_init_params_for_model(init_params_by_model, model)
         with expectation:
             model.initialize_solver_and_state(X, y, init_params)
 
