@@ -201,7 +201,7 @@ def get_param_shape(model, X, y):
     return jax.tree_util.tree_map(lambda x: x.shape, empty_par)
 
 
-@pytest.mark.parametrize("glm_class_type", ["glm_class", "population_glm_class"])
+@pytest.mark.parametrize("glm_class_type", ["glm_class", "population_glm_class", "categorical_glm_class", "categorical_population_glm_class"])
 class TestGLM:
     """
     Unit tests for the GLM class that do not depend on the observation model.
