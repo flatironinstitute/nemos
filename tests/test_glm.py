@@ -45,18 +45,74 @@ OBSERVATION_MODEL_EXTRA_PARAMS_NAMES = {
 }
 POPULATION_GLM_EXTRA_PARAMS = {"feature_mask"}
 
-DIMENSIONALITY_PARAMS = {
-    "GLM": {"coef": 1, "intercept": 1},
-    "PopulationGLM": {"coef": 2, "intercept": 1},
-    "CategoricalGLM": {"coef": 2, "intercept": 1},
-    "CategoricalPopulationGLM": {"coef": 3, "intercept": 2},
+# Comprehensive model configuration - single source of truth for all model types
+# Each model class has its configuration for dimensions, fixtures, and properties
+MODEL_CONFIG = {
+    "GLM": {
+        "coef_dim": 1,
+        "intercept_dim": 1,
+        "is_population": False,
+        "is_categorical": False,
+        "class_fixture": "glm_class",
+        "instantiation_fixture": "poissonGLM_model_instantiation",
+        "glm_type_prefix": "",  # Used in glm_type parametrization (e.g., "" + "poissonGLM_model_instantiation")
+    },
+    "PopulationGLM": {
+        "coef_dim": 2,
+        "intercept_dim": 1,
+        "is_population": True,
+        "is_categorical": False,
+        "class_fixture": "population_glm_class",
+        "instantiation_fixture": "population_poissonGLM_model_instantiation",
+        "glm_type_prefix": "population_",
+    },
+    "CategoricalGLM": {
+        "coef_dim": 2,
+        "intercept_dim": 1,
+        "is_population": False,
+        "is_categorical": True,
+        "class_fixture": "categorical_glm_class",
+        "instantiation_fixture": "categoricalGLM_model_instantiation",
+        "glm_type_prefix": "categorical_",
+    },
+    "CategoricalPopulationGLM": {
+        "coef_dim": 3,
+        "intercept_dim": 2,
+        "is_population": True,
+        "is_categorical": True,
+        "class_fixture": "categorical_population_glm_class",
+        "instantiation_fixture": "categorical_population_GLM_model_instantiation",
+        "glm_type_prefix": "categorical_population_",
+    },
 }
 
-# Model class names that are population models (have feature_mask, multi-neuron output)
-POPULATION_MODEL_NAMES = {"PopulationGLM", "CategoricalPopulationGLM"}
+# Derived lookups from MODEL_CONFIG for backwards compatibility and convenience
+DIMENSIONALITY_PARAMS = {
+    name: {"coef": cfg["coef_dim"], "intercept": cfg["intercept_dim"]}
+    for name, cfg in MODEL_CONFIG.items()
+}
 
-# glm_type parameter values that indicate population models
-POPULATION_GLM_TYPE_PREFIXES = {"population_"}
+POPULATION_MODEL_NAMES = {
+    name for name, cfg in MODEL_CONFIG.items() if cfg["is_population"]
+}
+
+CATEGORICAL_MODEL_NAMES = {
+    name for name, cfg in MODEL_CONFIG.items() if cfg["is_categorical"]
+}
+
+# Build mappings from various parametrization styles to class names
+# Supports: glm_class_type (e.g., "glm_class"), glm_type prefix (e.g., "population_")
+GLM_CLASS_TYPE_TO_NAME = {}
+GLM_TYPE_PREFIX_TO_NAME = {}
+MODEL_INSTANTIATION_FIXTURES = {}
+
+for name, cfg in MODEL_CONFIG.items():
+    # Map class fixture name to class name
+    GLM_CLASS_TYPE_TO_NAME[cfg["class_fixture"]] = name
+    # Map glm_type prefix to class name
+    GLM_TYPE_PREFIX_TO_NAME[cfg["glm_type_prefix"]] = name
+    # Map class fixture to instantiation fixture
+    MODEL_INSTANTIATION_FIXTURES[cfg["class_fixture"]] = cfg["instantiation_fixture"]
 
 
 def is_population_model(model) -> bool:
@@ -64,32 +120,26 @@ def is_population_model(model) -> bool:
     return model.__class__.__name__ in POPULATION_MODEL_NAMES
 
 
+def is_categorical_model(model) -> bool:
+    """Check if a model is a categorical model based on its class name."""
+    return model.__class__.__name__ in CATEGORICAL_MODEL_NAMES
+
+
 def is_population_glm_type(glm_type: str) -> bool:
     """Check if a glm_type parameter string indicates a population model."""
-    return glm_type in POPULATION_GLM_TYPE_PREFIXES
+    class_name = GLM_TYPE_PREFIX_TO_NAME.get(glm_type)
+    if class_name:
+        return MODEL_CONFIG[class_name]["is_population"]
+    return False
+
+
+def get_model_config(model) -> dict:
+    """Get the configuration for a model instance."""
+    return MODEL_CONFIG[model.__class__.__name__]
 
 
 def convert_to_nap(arr, t):
     return TsdFrame(t=t, d=getattr(arr, "d", arr))
-
-
-# Mapping from glm_class_type parameter to model instantiation fixture name
-# Supports both ["", "population"] and ["glm_class", "population_glm_class"] parametrization styles
-MODEL_INSTANTIATION_FIXTURES = {
-    "": "poissonGLM_model_instantiation",
-    "population": "population_poissonGLM_model_instantiation",
-    "glm_class": "poissonGLM_model_instantiation",
-    "population_glm_class": "population_poissonGLM_model_instantiation",
-}
-
-# Mapping from glm_class_type parameter to class name (for DIMENSIONALITY_PARAMS lookup)
-# Supports both parametrization styles
-GLM_CLASS_TYPE_TO_NAME = {
-    "": "GLM",
-    "population": "PopulationGLM",
-    "glm_class": "GLM",
-    "population_glm_class": "PopulationGLM",
-}
 
 
 @pytest.fixture
@@ -101,7 +151,7 @@ def model_instantiation_type(glm_class_type):
     return MODEL_INSTANTIATION_FIXTURES[glm_class_type]
 
 
-@pytest.mark.parametrize("glm_class_type", ["", "population"])
+@pytest.mark.parametrize("glm_class_type", ["glm_class", "population_glm_class"])
 @pytest.mark.solver_related
 @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
 def test_get_fit_attrs(request, glm_class_type, model_instantiation_type):
