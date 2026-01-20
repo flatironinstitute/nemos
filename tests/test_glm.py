@@ -201,7 +201,15 @@ def get_param_shape(model, X, y):
     return jax.tree_util.tree_map(lambda x: x.shape, empty_par)
 
 
-@pytest.mark.parametrize("glm_class_type", ["glm_class", "population_glm_class", "categorical_glm_class", "categorical_population_glm_class"])
+@pytest.mark.parametrize(
+    "glm_class_type",
+    [
+        "glm_class",
+        "population_glm_class",
+        "categorical_glm_class",
+        "categorical_population_glm_class",
+    ],
+)
 class TestGLM:
     """
     Unit tests for the GLM class that do not depend on the observation model.
@@ -309,6 +317,11 @@ class TestGLM:
                 {
                     "GLM": [jnp.zeros((5,)), jnp.zeros((1,))],
                     "PopulationGLM": [jnp.zeros((5, 3)), jnp.zeros((3,))],
+                    "CategoricalGLM": [jnp.zeros((5, 2)), jnp.zeros((2,))],
+                    "CategoricalPopulationGLM": [
+                        jnp.zeros((5, 3, 2)),
+                        jnp.zeros((3, 2)),
+                    ],
                 },
             ),
             (
@@ -316,6 +329,10 @@ class TestGLM:
                 {
                     "GLM": [[jnp.zeros((1, 5)), jnp.zeros((1,))]],
                     "PopulationGLM": [[jnp.zeros((1, 5)), jnp.zeros((3,))]],
+                    "CategoricalGLM": [[jnp.zeros((1, 5)), jnp.zeros((2,))]],
+                    "CategoricalPopulationGLM": [
+                        [jnp.zeros((1, 5)), jnp.zeros((3, 2))]
+                    ],
                 },
             ),
             (
@@ -325,6 +342,10 @@ class TestGLM:
                 {
                     "GLM": dict(p1=jnp.zeros((5,)), p2=jnp.zeros((1,))),
                     "PopulationGLM": dict(p1=jnp.zeros((3, 3)), p2=jnp.zeros((3, 2))),
+                    "CategoricalGLM": dict(p1=jnp.zeros((5, 2)), p2=jnp.zeros((2,))),
+                    "CategoricalPopulationGLM": dict(
+                        p1=jnp.zeros((5, 3, 2)), p2=jnp.zeros((3, 2))
+                    ),
                 },
             ),
             (
@@ -338,6 +359,14 @@ class TestGLM:
                         dict(p1=jnp.zeros((3, 3)), p2=jnp.zeros((2, 3))),
                         jnp.zeros((3,)),
                     ],
+                    "CategoricalGLM": [
+                        dict(p1=jnp.zeros((5, 2)), p2=jnp.zeros((1, 2))),
+                        jnp.zeros((2,)),
+                    ],
+                    "CategoricalPopulationGLM": [
+                        dict(p1=jnp.zeros((5, 3, 2)), p2=jnp.zeros((1, 3, 2))),
+                        jnp.zeros((3, 2)),
+                    ],
                 },
             ),
             (
@@ -350,6 +379,14 @@ class TestGLM:
                     "PopulationGLM": [
                         FeaturePytree(p1=jnp.zeros((3, 3)), p2=jnp.zeros((3, 2))),
                         jnp.zeros((3,)),
+                    ],
+                    "CategoricalGLM": [
+                        FeaturePytree(p1=jnp.zeros((5, 2)), p2=jnp.zeros((5, 2))),
+                        jnp.zeros((2,)),
+                    ],
+                    "CategoricalPopulationGLM": [
+                        FeaturePytree(p1=jnp.zeros((5, 3, 2)), p2=jnp.zeros((5, 3, 2))),
+                        jnp.zeros((3, 2)),
                     ],
                 },
             ),
@@ -1027,6 +1064,26 @@ class TestGLM:
                 {
                     "coef_": jnp.zeros((3, 1)),
                     "intercept_": jnp.array([1.0]),
+                    "scale_": 2.0,
+                    "dof_resid_": 3,
+                    "aux_": None,
+                },
+            ),
+            (
+                nmo.glm.CategoricalGLM,
+                {
+                    "coef_": jnp.zeros((3, 2, 1)),
+                    "intercept_": jnp.array([1.0]),
+                    "scale_": 2.0,
+                    "dof_resid_": 3,
+                    "aux_": None,
+                },
+            ),
+            (
+                nmo.glm.CategoricalPopulationGLM,
+                {
+                    "coef_": jnp.zeros((3, 2, 1)),
+                    "intercept_": jnp.ones((2, 1)),
                     "scale_": 2.0,
                     "dof_resid_": 3,
                     "aux_": None,
