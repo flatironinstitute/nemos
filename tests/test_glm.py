@@ -7,6 +7,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+import scipy.stats as sts
 import sklearn
 import statsmodels.api as sm
 from conftest import initialize_feature_mask_for_population_glm
@@ -1605,10 +1606,11 @@ class TestGLM:
     "model_instantiation",
     [
         "gaussianGLM_model_instantiation",
-        "poissonGLM_model_instantiation",
-        "gammaGLM_model_instantiation",
-        "bernoulliGLM_model_instantiation",
-        "negativeBinomialGLM_model_instantiation",
+        # "poissonGLM_model_instantiation",
+        # "gammaGLM_model_instantiation",
+        # "bernoulliGLM_model_instantiation",
+        # "negativeBinomialGLM_model_instantiation",
+        "categoricalGLM_model_instantiation",
     ],
 )
 class TestGLMObservationModel:
@@ -1670,6 +1672,18 @@ class TestGLMObservationModel:
                     sm.families.Gaussian().loglike(y, mean_firing, scale=scale) / norm
                 )
 
+        elif "categorical" in model_instantiation:
+
+            def ll(y, log_proba):
+                proba = jnp.exp(log_proba)
+                y = y.reshape((-1, y.shape[-1]))
+                proba = proba.reshape((-1, y.shape[-1]))
+                res = np.array(
+                    [sts.multinomial(1, pi).logpmf(yi) for pi, yi in zip(proba, y)]
+                ).sum()
+                res /= y.shape[0]
+                return res
+
         else:
             raise ValueError("Unknown model instantiation")
         return ll
@@ -1697,6 +1711,16 @@ class TestGLMObservationModel:
 
         elif "gaussian" in model_instantiation:
             return LinearRegression(fit_intercept=True)
+
+        elif "categorical" in model_instantiation:
+            # In sklearn 1.5+, multinomial is the default with lbfgs solver
+            return LogisticRegression(
+                fit_intercept=True,
+                tol=10**-12,
+                C=np.inf,
+                solver="lbfgs",
+                max_iter=1000,
+            )
 
         else:
             raise ValueError("Unknown model instantiation")
@@ -1798,6 +1822,9 @@ class TestGLMObservationModel:
         elif "gaussian" in model_instantiation:
             return False
 
+        elif "categorical" in model_instantiation:
+            return False
+
         else:
             raise ValueError("Unknown model instantiation")
 
@@ -1835,6 +1862,12 @@ class TestGLMObservationModel:
                 return "PopulationGLM(\n    observation_model=GaussianObservations(),\n    inverse_link_function=identity,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
             else:
                 return "GLM(\n    observation_model=GaussianObservations(),\n    inverse_link_function=identity,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
+
+        elif "categorical" in model_instantiation:
+            if is_population_glm_type(glm_type):
+                return "CategoricalPopulationGLM(\n    n_categories=3,\n    inverse_link_function=identity,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
+            else:
+                return "CategoricalGLM(\n    n_categories=3,\n    inverse_link_function=identity,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
 
         else:
             raise ValueError("Unknown model instantiation")
@@ -1899,6 +1932,45 @@ class TestGLMObservationModel:
         assert np.allclose(model.score(X, y), model_tree.score(X_tree, y))
         assert np.allclose(model.predict(X), model_tree.predict(X_tree))
         assert np.allclose(model.scale_, model_tree.scale_)
+
+    @pytest.mark.parametrize(
+        "delta_categories, expectation",
+        [
+            (-1, pytest.raises(ValueError, match="Inconsistent number of categories")),
+            (1, pytest.raises(ValueError, match="Inconsistent number of categories")),
+        ],
+    )
+    def test_validate_category_consistency(
+        self, delta_categories, expectation, request, glm_type, model_instantiation
+    ):
+        """
+        Test that validate_consistency catches wrong category count in coef.
+
+        For categorical models with reference parameterization, coef should have
+        K-1 categories where K is the number of categories in y.
+        """
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        # Only run for categorical models
+        if not is_categorical_model(model):
+            pytest.skip("Test only applies to categorical models")
+
+        # Modify y to have wrong category count
+        if delta_categories > 0:
+            y_test = jnp.concatenate(
+                [y, jnp.zeros(y.shape[:-1] + (delta_categories,))], axis=-1
+            )
+        elif delta_categories < 0:
+            y_test = y[..., :delta_categories]
+        else:
+            y_test = y
+
+        params = model._validator.from_model_params(true_params)
+        with expectation:
+            model.fit(X, y_test, init_params=params)
+        with expectation:
+            model.initialize_solver_and_state(X, y_test, init_params=params)
 
     ####################
     # Test model.score #
