@@ -19,7 +19,12 @@ import nemos as nmo
 from nemos import inverse_link_function_utils
 from nemos._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
 from nemos.glm.params import GLMParams
-from nemos.glm.validation import CategoricalGLMValidator, GLMValidator, PopulationGLMValidator, PopulationCategoricalGLMValidator
+from nemos.glm.validation import (
+    CategoricalGLMValidator,
+    GLMValidator,
+    PopulationCategoricalGLMValidator,
+    PopulationGLMValidator,
+)
 from nemos.inverse_link_function_utils import LINK_NAME_TO_FUNC
 
 MODEL_REGISTRY = {
@@ -31,7 +36,9 @@ MODEL_REGISTRY = {
 VALIDATOR_REGISTRY = {
     "GLM": GLMValidator(),
     "CategoricalGLM": CategoricalGLMValidator(extra_params={"n_categories": 4}),
-    "CategoricalPopulationGLM": PopulationCategoricalGLMValidator(extra_params={"n_categories": 4}),
+    "CategoricalPopulationGLM": PopulationCategoricalGLMValidator(
+        extra_params={"n_categories": 4}
+    ),
     "PopulationGLM": PopulationGLMValidator(),
 }
 
@@ -101,7 +108,12 @@ MODEL_WITH_LINK_FUNCTION_REGISTRY = {
     "PopulationGLM": nmo.glm.PopulationGLM,
 }
 
-DEFAULTS = {"GLM": dict(), "PopulationGLM": dict(), "CategoricalGLM": dict(), "CategoricalPopulationGLM": dict()}
+DEFAULTS = {
+    "GLM": dict(),
+    "PopulationGLM": dict(),
+    "CategoricalGLM": dict(),
+    "CategoricalPopulationGLM": dict(),
+}
 
 
 INSTANTIATE_MODEL_ONLY = [
