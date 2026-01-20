@@ -1676,10 +1676,10 @@ class TestGLMObservationModel:
 
             def ll(y, log_proba):
                 proba = jnp.exp(log_proba)
-                y = y.reshape((-1, y.shape[-1]))
-                proba = proba.reshape((-1, y.shape[-1]))
+                proba = proba.reshape(-1, proba.shape[-1])
+                y = y.reshape(-1)
                 res = np.array(
-                    [sts.multinomial(1, pi).logpmf(yi) for pi, yi in zip(proba, y)]
+                    [sts.multinomial(1, pi).logpmf(jax.nn.one_hot(yi, proba.shape[-1])) for pi, yi in zip(proba, y)]
                 ).sum()
                 res /= y.shape[0]
                 return res
@@ -1986,7 +1986,7 @@ class TestGLMObservationModel:
                 X, y.shape[1], coef=true_params.coef
             )
         # get the rate
-        mean_firing = model.predict(X)
+        mean_firing = getattr(model, "predict_proba", model.predict)(X)
         # compute the log-likelihood using jax.scipy
         if "gamma" in model_instantiation or "gaussian" in model_instantiation:
             mean_ll_jax = ll_scipy_stats(y, mean_firing, model.scale_)
