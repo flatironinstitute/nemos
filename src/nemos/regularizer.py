@@ -197,32 +197,6 @@ class Regularizer(Base, abc.ABC):
     def default_solver(self) -> str:
         return self._default_solver
 
-    def get_proximal_operator(self, params: Any, strength: Any) -> ProximalOperator:
-        """
-        Retrieve the proximal operator.
-
-        Parameters
-        ----------
-        init_params:
-            The parameters to be regularized.
-
-        Returns
-        -------
-        :
-            The proximal operator, applying regularization to the provided parameters.
-        """
-        filter_kwargs = self._get_filter_kwargs(strength=strength, params=params)
-
-        def prox_op(params, scaling=1.0):
-            return apply_operator(
-                self._proximal_operator,
-                params,
-                filter_kwargs=filter_kwargs,
-                scaling=scaling,
-            )
-
-        return prox_op
-
     def check_solver(self, solver_name: str) -> None:
         """Raise an error if the given solver is not allowed."""
         # Temporary parsing until an improved registry is implemented.
@@ -253,6 +227,32 @@ class Regularizer(Base, abc.ABC):
                 "A valid loss function can return either a single value (float or a 0-dim array), the loss, "
                 "or a tuple with two values, the loss and an auxiliary variable."
             )
+
+    def get_proximal_operator(self, params: Any, strength: Any) -> ProximalOperator:
+        """
+        Retrieve the proximal operator.
+
+        Parameters
+        ----------
+        init_params:
+            The parameters to be regularized.
+
+        Returns
+        -------
+        :
+            The proximal operator, applying regularization to the provided parameters.
+        """
+        filter_kwargs = self._get_filter_kwargs(strength=strength, params=params)
+
+        def prox_op(params, scaling=1.0):
+            return apply_operator(
+                self._proximal_operator,
+                params,
+                filter_kwargs=filter_kwargs,
+                scaling=scaling,
+            )
+
+        return prox_op
 
     def penalized_loss(self, loss: Callable, params: Any, strength: Any) -> Callable:
         """Return a function for calculating the penalized loss."""
@@ -622,7 +622,7 @@ class ElasticNet(Regularizer):
     _proximal_operator = staticmethod(prox_elastic_net)
 
     def _penalty_on_subtree(
-        self, subtree: Any, substrength: Any, **kwargs
+        self, subtree: Any, strength: Any, ratio: Any, **kwargs
     ) -> jnp.ndarray:
         r"""
         Compute the Elastic Net penalization for given parameters.
@@ -642,8 +642,10 @@ class ElasticNet(Regularizer):
         ----------
         subtree :
             Model parameters for which to compute the penalization.
-        substrength :
+        strength :
             Regularization strength.
+        ratio :
+            Regularization ratio.
 
         Returns
         -------
