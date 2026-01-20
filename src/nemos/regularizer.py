@@ -28,11 +28,7 @@ from .proximal_operator import (
     prox_ridge,
 )
 from .tree_utils import pytree_map_and_reduce
-from .typing import (
-    DESIGN_INPUT_TYPE,
-    ModelParamsT,
-    ProximalOperator,
-)
+from .typing import ProximalOperator
 from .utils import format_repr
 from .validation import convert_tree_leaves_to_jax_array
 
@@ -41,12 +37,6 @@ __all__ = ["UnRegularized", "Ridge", "Lasso", "GroupLasso", "ElasticNet"]
 
 def __dir__() -> list[str]:
     return __all__
-
-
-def broadcast_scalar_to_subtree(subtree, scalar_val):
-    return jax.tree_util.tree_map(
-        lambda leaf: jnp.full(leaf.shape, scalar_val, dtype=float), subtree
-    )
 
 
 def apply_operator(func, params, *args, filter_kwargs=None, **kwargs):
@@ -287,7 +277,7 @@ class Regularizer(Base, abc.ABC):
     def _penalty_on_subtree(self, subtree, **kwargs) -> jnp.ndarray:
         pass
 
-    def _validate_regularizer_strength(self, strength: Any):
+    def _validate_strength(self, strength: Any):
         """
         Normalize regularizer strength into a PyTree of JAX float arrays.
 
@@ -325,7 +315,7 @@ class Regularizer(Base, abc.ABC):
                 f"Could not convert regularizer strength to floats: {e}"
             ) from None
 
-    def _validate_regularizer_strength_structure(self, params: Any, strength: Any):
+    def _validate_strength_structure(self, params: Any, strength: Any):
         """
         Validate and broadcast regularizer strength to match regularizable parameters.
 
@@ -451,7 +441,7 @@ class Regularizer(Base, abc.ABC):
         return structured_strength
 
     def _get_filter_kwargs(self, params: Any, strength: Any):
-        strength = self._validate_regularizer_strength_structure(params, strength)
+        strength = self._validate_strength_structure(params, strength)
         return {"strength": strength}
 
 
@@ -479,13 +469,13 @@ class UnRegularized(Regularizer):
     def _penalty_on_subtree(self, subtree, **kwargs) -> jnp.ndarray:
         return jnp.array(0.0)
 
-    def _validate_regularizer_strength(self, strength: Any):
+    def _validate_strength(self, strength: Any):
         return None
 
-    def _validate_regularizer_strength_structure(self, params: Any, strength: Any):
+    def _validate_strength_structure(self, params: Any, strength: Any):
         return None
 
-    def _get_filter_kwargs(self, strength: Any, params: Any):
+    def _get_filter_kwargs(self, params: Any, strength: Any):
         return {}
 
 
@@ -580,7 +570,7 @@ class Lasso(Regularizer):
             l1_penalty,
             sum,
             subtree,
-            substrength,
+            strength,
         )
 
 
@@ -621,9 +611,7 @@ class ElasticNet(Regularizer):
 
     _proximal_operator = staticmethod(prox_elastic_net)
 
-    def _penalty_on_subtree(
-        self, subtree: Any, strength: Any, ratio: Any, **kwargs
-    ) -> jnp.ndarray:
+    def _penalty_on_subtree(self, subtree: Any, strength: Any, **kwargs) -> jnp.ndarray:
         r"""
         Compute the Elastic Net penalization for given parameters.
 
@@ -653,77 +641,57 @@ class ElasticNet(Regularizer):
             The Elastic Net penalization value.
         """
 
-        def net_penalty(
-            coeff: jnp.ndarray, strength: jnp.ndarray, ratio: jnp.ndarray
-        ) -> jnp.ndarray:
-            _strength, _ratio = strength
-            quad = 0.5 * (1.0 - _ratio) * jnp.power(coeff, 2)
-            l1 = _ratio * jnp.abs(coeff)
-            return jnp.sum(_strength * (quad + l1))
+        def net_penalty(coeff, strength):
+            strength, ratio = strength
+            quad = 0.5 * (1.0 - ratio) * jnp.square(coeff)
+            l1 = ratio * jnp.abs(coeff)
+            return jnp.sum(strength * (quad + l1))
 
-        # tree map the computation and sum over leaves
         return tree_utils.pytree_map_and_reduce(
             net_penalty,
             sum,
             subtree,
-            substrength,
+            strength,
         )
 
-    def _validate_regularizer_strength(self, strength: Any):
+    def _validate_strength(self, strength: Any):
         if strength is None:
-            _strength, _ratio = (1.0, 0.5)
-        elif isinstance(strength, Tuple):
+            strength, ratio = 1.0, 0.5
+
+        elif isinstance(strength, tuple):
             if len(strength) != 2:
                 raise TypeError(
-                    f"ElasticNet regularizer strength should be a tuple of two floats, you passed: {strength}"
+                    "ElasticNet regularizer strength must be a tuple (strength, ratio)"
                 )
-            else:
-                _strength = super()._validate_regularizer_strength(strength[0])
-                try:
-                    _ratio = super()._validate_regularizer_strength(strength[1])
-                except TypeError as e:
-                    raise TypeError(str(e).replace("strength", "ratio")) from None
+            strength, ratio = strength
 
-                def _verify_ratio(ratio, extra_msg=""):
-                    if jnp.any((ratio > 1) | (ratio < 0)):
-                        raise ValueError(
-                            f"Regularization ratio must be between 0 and 1: {ratio}"
-                            + extra_msg
-                        )
-                    if jnp.any(ratio == 0):
-                        raise ValueError(
-                            f"Regularization ratio of 0 is not supported: {ratio}"
-                            + extra_msg
-                        )
-
-                if isinstance(_ratio, list):
-                    for i, r in enumerate(_ratio):
-                        jax.tree_util.tree_map(
-                            lambda r: _verify_ratio(
-                                r, extra_msg=f", at index {i} of {strength[1]}"
-                            ),
-                            r,
-                        )
-                else:
-                    jax.tree_util.tree_map(_verify_ratio, _ratio)
         else:
-            _strength = super()._validate_regularizer_strength(strength)
-            _ratio = 0.5
+            strength, ratio = strength, 0.5
 
-        return _strength, _ratio
+        strength = super()._validate_strength(strength)
+        ratio = super()._validate_strength(ratio)
 
-    def _validate_regularizer_strength_structure(self, params: Any, strength: Any):
-        _strength = super()._validate_regularizer_strength_structure(
-            params, strength[0]
-        )
-        try:
-            _ratio = super()._validate_regularizer_strength_structure(
-                params, strength[1]
-            )
-        except ValueError as e:
-            raise ValueError(str(e).replace("strength", "ratio")) from None
+        def check_ratio(r):
+            if jnp.any((r <= 0) | (r > 1)):
+                raise ValueError(
+                    f"ElasticNet regularization ratio must be in (0, 1], got {r}"
+                )
+            return r
 
-        return _strength, _ratio
+        ratio = jax.tree_util.tree_map(check_ratio, ratio)
+
+        return strength, ratio
+
+    def _validate_strength_structure(self, params: Any, strength: Any):
+        strength = super()._validate_strength_structure(params, strength[0])
+        ratio = super()._validate_strength_structure(params, strength[1])
+
+        def zip_leaves(s, r):
+            if s is None:
+                return None
+            return (s, r)
+
+        return jax.tree_util.tree_map(zip_leaves, strength, ratio)
 
 
 class GroupLasso(Regularizer):
@@ -741,6 +709,11 @@ class GroupLasso(Regularizer):
         Each column corresponds to a feature, where a value of 1 indicates that the feature belongs
         to the group, and a value of 0 indicates it doesn't.
         Default is ``mask = np.ones((1, num_features))``, grouping all features in a single group.
+
+    Notes
+    -----
+    For GroupLasso, the regularizer strength is defined **per group**, not per parameter.
+    It must be either a scalar or a 1D array of length ``n_groups``.
 
     Examples
     --------
@@ -935,7 +908,7 @@ class GroupLasso(Regularizer):
         return mask
 
     def _penalty_on_subtree(
-        self, subtree, substrength: Any, mask: Any = None, **kwargs
+        self, subtree, strength: Any, mask: Any = None, **kwargs
     ) -> jnp.ndarray:
         r"""
         Apply the Group Lasso penaly to a subtree.
@@ -951,51 +924,53 @@ class GroupLasso(Regularizer):
         """
         l2_norms = masked_norm_2(subtree, mask, normalize=False)
         norm = compute_normalization(mask)
-        return jnp.sum(norm * l2_norms) * substrength
+        return jnp.sum(strength * norm * l2_norms)
 
-    def _validate_regularizer_strength_structure(self, params, strength: Any):
-        n_groups = self.mask.shape[0]
-        regularizable_subtrees = params.regularizable_subtrees()
+    def _validate_strength(self, strength: Any) -> Any:
+        if strength is None:
+            return strength
 
-        # normalize to per-subtree list
+        if isinstance(strength, (float, int)):
+            return strength
+
+        if isinstance(strength, (jnp.ndarray, np.ndarray)):
+            return strength
+
+        raise TypeError(
+            "GroupLasso regularizer strength must be a float or a 1D array "
+            "specifying one value per group."
+        )
+
+    def _validate_strength_structure(self, params: Any, strength: Any):
+        flat_mask = jax.tree_util.tree_leaves(self.mask)
+        n_groups = flat_mask[0].shape[0]
+
+        # Default scalar
         if strength is None:
             strength = 1.0
 
-        if isinstance(strength, list):
-            if len(strength) != len(regularizable_subtrees):
+        # Validate / convert
+        if isinstance(strength, (float, int)):
+            per_group_strength = jnp.ones(n_groups, dtype=float) * float(strength)
+        elif isinstance(strength, (jnp.ndarray, np.ndarray)):
+            strength = jnp.asarray(strength, dtype=float)
+            if strength.ndim != 1 or strength.shape[0] != n_groups:
                 raise ValueError(
-                    f"Length of regularizer strength ({len(strength)}) must match "
-                    f"number of regularizable parameter sets ({len(regularizable_subtrees)})"
+                    f"GroupLasso strength must have shape ({n_groups},), got {strength.shape}"
                 )
-            strengths = strength
+            per_group_strength = strength
         else:
-            strengths = [strength] * len(regularizable_subtrees)
+            raise TypeError(
+                f"GroupLasso strength must be a float or 1D array of length {n_groups}"
+            )
 
-        _strengths = []
+        # Broadcast per-group strength to **mask PyTree structure**
+        def leaf_strength(_):
+            return per_group_strength
 
-        for s in strengths:
-            if isinstance(s, (float, int)):
-                s = jnp.ones(n_groups) * float(s)
+        return jax.tree_util.tree_map(leaf_strength, self.mask)
 
-            elif isinstance(s, (jnp.ndarray, np.ndarray)):
-                if s.ndim != 1 or s.shape[0] != n_groups:
-                    raise ValueError(
-                        f"GroupLasso regularizer strength must match number of groups: {s.shape} vs. {n_groups}"
-                    )
-            else:
-                raise TypeError(
-                    "GroupLasso regularizer strength must be a float or "
-                    f"a 1D array of length {n_groups}"
-                )
-
-            _strengths.append(jnp.asarray(s, dtype=float))
-
-        return _strengths
-
-    def _get_filter_kwargs(self, init_params: Any) -> dict:
-        """Return kwargs that need subtree filtering."""
+    def _get_filter_kwargs(self, params: Any, strength: Any) -> dict:
         if self.mask is None:
-            mask = self.initialize_mask(init_params)
-        else:
-            mask = self.mask
-        return {"mask": mask, **super()._get_filter_kwargs()}
+            self.mask = self.initialize_mask(params)
+        return {"mask": self.mask, **super()._get_filter_kwargs(params, strength)}

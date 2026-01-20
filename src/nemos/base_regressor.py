@@ -254,9 +254,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
 
     @regularizer_strength.setter
     def regularizer_strength(self, strength: Any):
-        self._regularizer_strength = self.regularizer._validate_regularizer_strength(
-            strength
-        )
+        self._regularizer_strength = self.regularizer._validate_strength(strength)
 
     @property
     def solver_name(self) -> str:
