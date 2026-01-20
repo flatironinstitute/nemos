@@ -1048,7 +1048,7 @@ def categoricalGLM_model_instantiation_pytree(categoricalGLM_model_instantiation
         dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
         true_params.intercept,
     )
-    model_tree = nmo.glm.GLM(model.observation_model, regularizer=model.regularizer)
+    model_tree = nmo.glm.CategoricalGLM(model.observation_model, regularizer=model.regularizer)
     return X_tree, spikes, model_tree, true_params_tree, rate
 
 
@@ -1111,7 +1111,7 @@ def population_categoricalGLM_model_instantiation_pytree(
         dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
         true_params.intercept,
     )
-    model_tree = nmo.glm.GLM(model.observation_model, regularizer=model.regularizer)
+    model_tree = nmo.glm.CategoricalPopulationGLM(model.observation_model, regularizer=model.regularizer)
     return X_tree, spikes, model_tree, true_params_tree, rate
 
 
