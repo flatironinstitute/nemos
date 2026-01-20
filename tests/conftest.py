@@ -1114,7 +1114,7 @@ def population_categoricalGLM_model_instantiation_pytree(
         true_params.intercept,
     )
     model_tree = nmo.glm.CategoricalPopulationGLM(
-        model.observation_model, regularizer=model.regularizer
+        n_categories=model.n_categories, regularizer=model.regularizer
     )
     return X_tree, spikes, model_tree, true_params_tree, rate
 
