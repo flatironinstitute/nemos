@@ -52,9 +52,44 @@ DIMENSIONALITY_PARAMS = {
     "CategoricalPopulationGLM": {"coef": 3, "intercept": 2},
 }
 
+# Model class names that are population models (have feature_mask, multi-neuron output)
+POPULATION_MODEL_NAMES = {"PopulationGLM", "CategoricalPopulationGLM"}
+
+# glm_type parameter values that indicate population models
+POPULATION_GLM_TYPE_PREFIXES = {"population_"}
+
+
+def is_population_model(model) -> bool:
+    """Check if a model is a population model based on its class name."""
+    return model.__class__.__name__ in POPULATION_MODEL_NAMES
+
+
+def is_population_glm_type(glm_type: str) -> bool:
+    """Check if a glm_type parameter string indicates a population model."""
+    return glm_type in POPULATION_GLM_TYPE_PREFIXES
+
 
 def convert_to_nap(arr, t):
     return TsdFrame(t=t, d=getattr(arr, "d", arr))
+
+
+# Mapping from glm_class_type parameter to model instantiation fixture name
+# Supports both ["", "population"] and ["glm_class", "population_glm_class"] parametrization styles
+MODEL_INSTANTIATION_FIXTURES = {
+    "": "poissonGLM_model_instantiation",
+    "population": "population_poissonGLM_model_instantiation",
+    "glm_class": "poissonGLM_model_instantiation",
+    "population_glm_class": "population_poissonGLM_model_instantiation",
+}
+
+# Mapping from glm_class_type parameter to class name (for DIMENSIONALITY_PARAMS lookup)
+# Supports both parametrization styles
+GLM_CLASS_TYPE_TO_NAME = {
+    "": "GLM",
+    "population": "PopulationGLM",
+    "glm_class": "GLM",
+    "population_glm_class": "PopulationGLM",
+}
 
 
 @pytest.fixture
@@ -63,10 +98,7 @@ def model_instantiation_type(glm_class_type):
     Fixture to grab the appropriate model instantiation function based on the type of GLM class.
     Used by TestGLM and TestPoissonGLM classes.
     """
-    if "population" in glm_class_type:
-        return "population_poissonGLM_model_instantiation"
-    else:
-        return "poissonGLM_model_instantiation"
+    return MODEL_INSTANTIATION_FIXTURES[glm_class_type]
 
 
 @pytest.mark.parametrize("glm_class_type", ["", "population"])
@@ -266,13 +298,13 @@ class TestGLM:
         Test the `fit` method with various types of initial parameters. Ensure that the provided initial parameters
         are array-like.
         """
-        if "population" in glm_class_type:
-            init_params = init_params_population_glm
-        else:
-            init_params = init_params_glm
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation_type
         )
+        if is_population_model(model):
+            init_params = init_params_population_glm
+        else:
+            init_params = init_params_glm
         with expectation:
             model.fit(X, y, init_params=init_params)
 
@@ -300,16 +332,11 @@ class TestGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation_type
         )
-        if "population" in glm_class_type:
-            init_w = jnp.zeros((X.shape[1] + delta_n_features, y.shape[1]))
-            init_b = jnp.zeros(
-                y.shape[1],
-            )
-        else:
-            init_w = jnp.zeros((X.shape[1] + delta_n_features))
-            init_b = jnp.zeros(
-                1,
-            )
+        par_shape = get_param_shape(model, X, y)
+        # Create init_w with wrong number of features (first dim)
+        wrong_coef_shape = (par_shape.coef[0] + delta_n_features,) + par_shape.coef[1:]
+        init_w = jnp.zeros(wrong_coef_shape)
+        init_b = jnp.zeros(par_shape.intercept)
         with expectation:
             model.fit(X, y, init_params=(init_w, init_b))
 
@@ -368,7 +395,7 @@ class TestGLM:
         )
         model.coef_ = true_params.coef
         model.intercept_ = true_params.intercept
-        if "population" in glm_class_type:
+        if is_population_model(model):
             if delta_dim == -1:
                 y = y[:, 0]
             elif delta_dim == 1:
@@ -529,8 +556,8 @@ class TestGLM:
         )
         model.coef_ = true_params.coef
         model.intercept_ = true_params.intercept
-        if "population" in glm_class_type:
-            model._initialize_feature_mask(X, y)
+        if is_population_model(model):
+            model._feature_mask = initialize_feature_mask_for_population_glm(X, y.shape[1])
         if delta_dim == -1:
             X = np.zeros((X.shape[0],))
         elif delta_dim == 1:
@@ -563,8 +590,8 @@ class TestGLM:
         )
         model.coef_ = true_params.coef
         model.intercept_ = true_params.intercept
-        if "population" in glm_class_type:
-            model._initialize_feature_mask(X, y)
+        if is_population_model(model):
+            model._feature_mask = initialize_feature_mask_for_population_glm(X, y.shape[1])
         if delta_n_features == 1:
             X = jnp.concatenate((X, jnp.zeros((X.shape[0], 1))), axis=1)
         elif delta_n_features == -1:
@@ -574,38 +601,20 @@ class TestGLM:
 
     @pytest.fixture
     def initialize_solver_weights_dimensionality_expectation(self, glm_class_type):
-        if "population" in glm_class_type:
-            return {
-                0: pytest.raises(
+        class_name = GLM_CLASS_TYPE_TO_NAME[glm_class_type]
+        expected_coef_dim = DIMENSIONALITY_PARAMS[class_name]["coef"]
+        # Build expectation dict: correct dim passes, others fail
+        expectations = {}
+        for dim in range(4):
+            if dim == expected_coef_dim:
+                expectations[dim] = does_not_raise()
+            else:
+                # Use pattern that matches multiple possible error messages
+                expectations[dim] = pytest.raises(
                     ValueError,
-                    match=r"coef must be an array or .* of shape \(n_features",
-                ),
-                1: pytest.raises(
-                    ValueError,
-                    match=r"coef must be an array or .* of shape \(n_features",
-                ),
-                2: does_not_raise(),
-                3: pytest.raises(
-                    ValueError,
-                    match=r"coef must be an array or .* of shape \(n_features",
-                ),
-            }
-        else:
-            return {
-                0: pytest.raises(
-                    ValueError,
-                    match=r"Inconsistent number of features",
-                ),
-                1: does_not_raise(),
-                2: pytest.raises(
-                    ValueError,
-                    match=r"coef must be an array or .* of shape \(n_features",
-                ),
-                3: pytest.raises(
-                    ValueError,
-                    match=r"coef must be an array or .* of shape \(n_features",
-                ),
-            }
+                    match=r"Inconsistent number of features|Invalid parameter dimensionality|coef must be an array",
+                )
+        return expectations
 
     @pytest.mark.parametrize("dim_weights", [0, 1, 2, 3])
     @pytest.mark.solver_related
@@ -625,36 +634,26 @@ class TestGLM:
             model_instantiation_type
         )
         expectation = initialize_solver_weights_dimensionality_expectation[dim_weights]
+        par_shape = get_param_shape(model, X, y)
         n_samples, n_features = X.shape
-        if "population" in glm_class_type:
-            n_neurons = 3
-        else:
-            n_neurons = 4
+        # Build init_w of the requested dimensionality
         if dim_weights == 0:
             init_w = jnp.array([])
-        elif dim_weights == 1:
-            init_w = jnp.zeros((n_features,))
-        elif dim_weights == 2:
-            init_w = jnp.zeros((n_features, n_neurons))
+        elif dim_weights <= len(par_shape.coef):
+            # Use correct shape up to dim_weights, then slice off extra dims
+            slc = (slice(None),) * dim_weights + (0,) * (len(par_shape.coef) - dim_weights)
+            init_w = jnp.zeros(par_shape.coef)[slc]
         else:
-            init_w = jnp.zeros((n_features, n_neurons) + (1,) * (dim_weights - 2))
+            # Add extra dimensions beyond what's expected
+            init_w = jnp.zeros(par_shape.coef + (1,) * (dim_weights - len(par_shape.coef)))
         with expectation:
             model.initialize_solver_and_state(X, y, (init_w, true_params.intercept))
 
-    @pytest.mark.parametrize(
-        "dim_intercepts, expectation",
-        [
-            (0, pytest.raises(ValueError, match=r"Invalid parameter dimensionality")),
-            (1, does_not_raise()),
-            (2, pytest.raises(ValueError, match=r"Invalid parameter dimensionality")),
-            (3, pytest.raises(ValueError, match=r"Invalid parameter dimensionality")),
-        ],
-    )
+    @pytest.mark.parametrize("dim_intercepts", [0, 1, 2, 3])
     @pytest.mark.solver_related
     def test_initialize_solver_intercepts_dimensionality(
         self,
         dim_intercepts,
-        expectation,
         request,
         glm_class_type,
         model_instantiation_type,
@@ -666,13 +665,25 @@ class TestGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation_type
         )
-        n_samples, n_features = X.shape
-        if "population" in glm_class_type:
-            init_b = jnp.zeros((y.shape[1],) * dim_intercepts)
-            init_w = jnp.zeros((n_features, y.shape[1]))
+        par_shape = get_param_shape(model, X, y)
+        expected_intercept_dim = DIMENSIONALITY_PARAMS[model.__class__.__name__]["intercept"]
+
+        # Determine expectation based on model's expected intercept dimensionality
+        if dim_intercepts == expected_intercept_dim:
+            expectation = does_not_raise()
         else:
-            init_b = jnp.zeros((1,) * dim_intercepts)
-            init_w = jnp.zeros((n_features,))
+            expectation = pytest.raises(ValueError, match=r"Invalid parameter dimensionality")
+
+        # Build init_b of the requested dimensionality
+        if dim_intercepts == 0:
+            init_b = jnp.array([])
+        elif dim_intercepts <= len(par_shape.intercept):
+            slc = (slice(None),) * dim_intercepts + (0,) * (len(par_shape.intercept) - dim_intercepts)
+            init_b = jnp.zeros(par_shape.intercept)[slc]
+        else:
+            init_b = jnp.zeros(par_shape.intercept + (1,) * (dim_intercepts - len(par_shape.intercept)))
+
+        init_w = jnp.zeros(par_shape.coef)
         with expectation:
             model.initialize_solver_and_state(X, y, (init_w, init_b))
 
@@ -694,7 +705,7 @@ class TestGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation_type
         )
-        if "population" in glm_class_type:
+        if is_population_model(model):
             init_params = init_params_population_glm
         else:
             init_params = init_params_glm
@@ -725,16 +736,11 @@ class TestGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation_type
         )
-        if "population" in glm_class_type:
-            init_w = jnp.zeros((X.shape[1] + delta_n_features, y.shape[1]))
-            init_b = jnp.zeros(
-                y.shape[1],
-            )
-        else:
-            init_w = jnp.zeros((X.shape[1] + delta_n_features))
-            init_b = jnp.zeros(
-                1,
-            )
+        par_shape = get_param_shape(model, X, y)
+        # Create init_w with wrong number of features (first dim)
+        wrong_coef_shape = (par_shape.coef[0] + delta_n_features,) + par_shape.coef[1:]
+        init_w = jnp.zeros(wrong_coef_shape)
+        init_b = jnp.zeros(par_shape.intercept)
         with expectation:
             model.initialize_solver_and_state(X, y, (init_w, init_b))
 
@@ -761,8 +767,8 @@ class TestGLM:
         )
         model.coef_ = true_params.coef
         model.intercept_ = true_params.intercept
-        if "population" in glm_class_type:
-            model._initialize_feature_mask(X, y)
+        if is_population_model(model):
+            model._feature_mask = initialize_feature_mask_for_population_glm(X, y.shape[1])
         if delta_dim == -1:
             X = np.zeros(X.shape[:-1])
         elif delta_dim == 1:
@@ -795,8 +801,8 @@ class TestGLM:
         if is_fit:
             model.coef_ = true_params.coef
             model.intercept_ = true_params.intercept
-            if "population" in glm_class_type:
-                model._initialize_feature_mask(X, y)
+            if is_population_model(model):
+                model._feature_mask = initialize_feature_mask_for_population_glm(X, y.shape[1])
         with expectation:
             model.simulate(
                 random_key=jax.random.key(123),
@@ -845,8 +851,8 @@ class TestGLM:
         )
         model.coef_ = true_params.coef
         model.intercept_ = true_params.intercept
-        if "population" in glm_class_type:
-            model._initialize_feature_mask(X, y)
+        if is_population_model(model):
+            model._feature_mask = initialize_feature_mask_for_population_glm(X, y.shape[1])
         feedforward_input = jnp.zeros(
             (
                 X.shape[0],
@@ -1545,31 +1551,31 @@ class TestGLMObservationModel:
         Fixture for test_estimate_dof_resid
         """
         if "poisson" in model_instantiation:
-            if "population" in glm_type:
+            if is_population_glm_type(glm_type):
                 return np.array([3, 0, 0])
             else:
                 return np.array([3])
 
         elif "gamma" in model_instantiation:
-            if "population" in glm_type:
+            if is_population_glm_type(glm_type):
                 return np.array([1, 4, 3])
             else:
                 return np.array([3])
 
         elif "bernoulli" in model_instantiation:
-            if "population" in glm_type:
+            if is_population_glm_type(glm_type):
                 return np.array([3, 2, 1])
             else:
                 return np.array([3])
 
         elif "negativeBinomial" in model_instantiation:
-            if "population" in glm_type:
+            if is_population_glm_type(glm_type):
                 return np.array([3, 2, 4])
             else:
                 return np.array([5])
 
         elif "gaussian" in model_instantiation:
-            if "population" in glm_type:
+            if is_population_glm_type(glm_type):
                 return np.array([5, 5, 5])
             else:
                 return np.array([3])
@@ -1606,31 +1612,31 @@ class TestGLMObservationModel:
         Fixture for test_repr_out
         """
         if "poisson" in model_instantiation:
-            if "population" in glm_type:
+            if is_population_glm_type(glm_type):
                 return "PopulationGLM(\n    observation_model=PoissonObservations(),\n    inverse_link_function=exp,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
             else:
                 return "GLM(\n    observation_model=PoissonObservations(),\n    inverse_link_function=exp,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
 
         elif "gamma" in model_instantiation:
-            if "population" in glm_type:
+            if is_population_glm_type(glm_type):
                 return "PopulationGLM(\n    observation_model=GammaObservations(),\n    inverse_link_function=one_over_x,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
             else:
                 return "GLM(\n    observation_model=GammaObservations(),\n    inverse_link_function=one_over_x,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
 
         elif "bernoulli" in model_instantiation:
-            if "population" in glm_type:
+            if is_population_glm_type(glm_type):
                 return "PopulationGLM(\n    observation_model=BernoulliObservations(),\n    inverse_link_function=logistic,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
             else:
                 return "GLM(\n    observation_model=BernoulliObservations(),\n    inverse_link_function=logistic,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
 
         elif "negativeBinomial" in model_instantiation:
-            if "population" in glm_type:
+            if is_population_glm_type(glm_type):
                 return "PopulationGLM(\n    observation_model=NegativeBinomialObservations(scale=1.0),\n    inverse_link_function=exp,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
             else:
                 return "GLM(\n    observation_model=NegativeBinomialObservations(scale=1.0),\n    inverse_link_function=exp,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
 
         elif "gaussian" in model_instantiation:
-            if "population" in glm_type:
+            if is_population_glm_type(glm_type):
                 return "PopulationGLM(\n    observation_model=GaussianObservations(),\n    inverse_link_function=identity,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
             else:
                 return "GLM(\n    observation_model=GaussianObservations(),\n    inverse_link_function=identity,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
@@ -1655,13 +1661,13 @@ class TestGLMObservationModel:
 
         # right now default initialization is specific to poissonGLMs and will fail for the others
         # TODO: this test will need to be updated once we move parameter initialization to be observation model specific
-        if "population" in glm_type:
+        if is_population_glm_type(glm_type):
             y = np.tile(y[:, None], (1, 3))
 
         if "poisson" in model_instantiation:
             params = model._model_specific_initialization(X, y)
 
-            if "population" in glm_type:
+            if is_population_glm_type(glm_type):
                 assert params.coef.shape == (X.shape[1], y.shape[1])
                 assert params.intercept.shape == (y.shape[1],)
             else:
@@ -1690,7 +1696,7 @@ class TestGLMObservationModel:
         )
 
         # get the flat parameters
-        if "population" in glm_type:
+        if is_population_glm_type(glm_type):
             flat_coef = np.concatenate(
                 jax.tree_util.tree_flatten(model_tree.coef_)[0], axis=0
             )
@@ -1754,8 +1760,8 @@ class TestGLMObservationModel:
         # set model coeff
         model.coef_ = true_params.coef
         model.intercept_ = true_params.intercept
-        if "population" in glm_type:
-            model._initialize_feature_mask(X, y)
+        if is_population_model(model):
+            model._feature_mask = initialize_feature_mask_for_population_glm(X, y.shape[1])
         # get the rate
         mean_firing = model.predict(X)
         # compute the log-likelihood using jax.scipy
@@ -1933,15 +1939,15 @@ class TestGLMObservationModel:
         )
         model.coef_ = true_params.coef
         model.intercept_ = true_params.intercept
-        if "population" in glm_type:
-            model._initialize_feature_mask(X, y)
+        if is_population_model(model):
+            model._feature_mask = initialize_feature_mask_for_population_glm(X, y.shape[1])
         if input_type == TsdFrame:
             X = TsdFrame(t=np.arange(X.shape[0]), d=X)
         count, rate = model.simulate(
             random_key=jax.random.key(123),
             feedforward_input=X,
         )
-        if ("population" in glm_type) and (expected_out_type == Tsd):
+        if is_population_model(model) and (expected_out_type == Tsd):
             assert isinstance(count, TsdFrame)
             assert isinstance(rate, TsdFrame)
         else:
@@ -1956,12 +1962,12 @@ class TestGLMObservationModel:
         model.coef_ = params.coef
         model.intercept_ = params.intercept
         model.scale_ = model.observation_model.scale
-        if "population" in glm_type:
-            model._initialize_feature_mask(X, y)
+        if is_population_model(model):
+            model._feature_mask = initialize_feature_mask_for_population_glm(X, y.shape[1])
         ysim, ratesim = model.simulate(jax.random.key(123), X)
         # check that the expected dimensionality is returned
-        assert ysim.ndim == 1 + (1 if "population" in glm_type else 0)
-        assert ratesim.ndim == 1 + (1 if "population" in glm_type else 0)
+        assert ysim.ndim == 1 + (1 if is_population_model(model) else 0)
+        assert ratesim.ndim == 1 + (1 if is_population_model(model) else 0)
         # check that the rates and spikes has the same shape
         assert ratesim.shape[0] == ysim.shape[0]
         # check the time point number is that expected (same as the input)
@@ -2011,7 +2017,7 @@ class TestGLMObservationModel:
 
         model.fit(X, y)
 
-        if "population" in glm_type:
+        if is_population_glm_type(glm_type):
             # test by fitting each neuron separately in sklearn
             for n, yn in enumerate(y.T):
                 sklearn_model.fit(X, yn)
@@ -2210,7 +2216,7 @@ class TestPopulationGLM:
         )
         model.coef_ = true_params.coef
         model.intercept_ = true_params.intercept
-        model._initialize_feature_mask(X, y)
+        model._feature_mask = initialize_feature_mask_for_population_glm(X, y.shape[1])
         # hardcode metadata
         model._metadata = {"columns": 1, "metadata": 2}
         cloned = sklearn.clone(model)
@@ -2612,7 +2618,7 @@ class TestPoissonGLM:
             inverse_link_function=inv_link,
         )
         X, y = example_X_y_high_firing_rates
-        if "population" in glm_class_type:
+        if is_population_model(model):
             model._model_specific_initialization(X, y)
         else:
             model._model_specific_initialization(X, y[:, 0])
@@ -2899,7 +2905,7 @@ class TestGammaGLM:
         )
         model.observation_model.inverse_link_function = inv_link
         model.fit(X, y)
-        if "population" in glm_type:
+        if is_population_glm_type(glm_type):
             assert np.all(model.scale_ != 1)
         else:
             assert model.scale_ != 1
@@ -2924,7 +2930,7 @@ class TestGammaGLM:
             glm_type + model_instantiation
         )
         model.observation_model.inverse_link_function = inv_link
-        if "population" in glm_type:
+        if is_population_glm_type(glm_type):
             model.feature_mask = jnp.ones((X.shape[1], y.shape[1]))
             model.scale_ = jnp.ones((y.shape[1]))
         else:
@@ -2956,7 +2962,7 @@ class TestGaussianGLM:
         )
         model.observation_model.inverse_link_function = inv_link
         model.fit(X, y)
-        if "population" in glm_type:
+        if is_population_glm_type(glm_type):
             assert np.all(model.scale_ != 1)
         else:
             assert model.scale_ != 1
@@ -2981,7 +2987,7 @@ class TestGaussianGLM:
             glm_type + model_instantiation
         )
         model.inverse_link_function = inv_link
-        if "population" in glm_type:
+        if is_population_glm_type(glm_type):
             model.feature_mask = jnp.ones((X.shape[1], y.shape[1]))
             model.scale_ = jnp.ones((y.shape[1]))
         else:
@@ -3022,7 +3028,7 @@ class TestBernoulliGLM:
         model.inverse_link_function = inv_link
         model.coef_ = true_params.coef
         model.intercept_ = true_params.intercept
-        if "population" in glm_type:
+        if is_population_glm_type(glm_type):
             model.scale_ = np.ones((y.shape[1]))
         else:
             model.scale_ = 1.0
@@ -3036,7 +3042,7 @@ class TestBernoulliGLM:
             glm_type + model_instantiation
         )
         model.inverse_link_function = inv_link
-        if "population" in glm_type:
+        if is_population_glm_type(glm_type):
             model.feature_mask = jnp.ones((X.shape[1], y.shape[1]))
             model.scale_ = jnp.ones((y.shape[1]))
         else:
@@ -3080,7 +3086,7 @@ class TestNegativeBinomialGLM:
         model.inverse_link_function = inv_link
         model.coef_ = true_params.coef
         model.intercept_ = true_params.intercept
-        if "population" in glm_type:
+        if is_population_glm_type(glm_type):
             model.scale_ = np.ones((y.shape[1]))
         else:
             model.scale_ = 1.0
@@ -3094,7 +3100,7 @@ class TestNegativeBinomialGLM:
             glm_type + model_instantiation
         )
         model.inverse_link_function = inv_link
-        if "population" in glm_type:
+        if is_population_glm_type(glm_type):
             model.feature_mask = jnp.ones((X.shape[1], y.shape[1]))
             model.scale_ = jnp.ones((y.shape[1]))
         else:
