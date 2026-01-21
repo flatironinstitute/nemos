@@ -1788,7 +1788,64 @@ class CategoricalMixin:
 
 
 class CategoricalGLM(CategoricalMixin, GLM):
-    """GLM for classification."""
+    """
+    Generalized Linear Model for multi-class classification.
+
+    This model performs categorical logistic regression.
+    It predicts discrete class labels from input features by modeling the log-odds
+    of each class relative to a reference category.
+
+    The model uses ``n_categories - 1`` sets of coefficients (one per non-reference class),
+    resulting in coefficient shape ``(n_features, n_categories - 1)`` and intercept
+    shape ``(n_categories - 1,)``.
+
+    Parameters
+    ----------
+    n_categories
+        The number of classes/categories. Must be >= 2. Default is 2 (binary classification).
+    inverse_link_function
+        The inverse link function. Defaults to
+        ``nemos.inverse_link_function_utils.log_softmax``.
+    regularizer
+        The regularization scheme to use.
+    regularizer_strength
+        The strength of the regularization.
+    solver_name
+        The solver to use for optimization. Defaults to ``"GradientDescent"``.
+    solver_kwargs
+        Additional keyword arguments for the solver.
+
+    Attributes
+    ----------
+    coef_
+        Fitted coefficients of shape ``(n_features, n_categories - 1)`` after calling :meth:`fit`.
+    intercept_
+        Fitted intercepts of shape ``(n_categories - 1,)`` after calling :meth:`fit`.
+
+    Notes
+    -----
+    Class labels ``y`` should contain integer values in ``[0, n_categories - 1]``.
+    Float arrays with integer values (e.g., ``[0.0, 1.0, 2.0]``) are accepted and
+    converted automatically, but passing integer arrays directly is recommended
+    for best performance.
+
+    See Also
+    --------
+    CategoricalPopulationGLM : Multi-class classification for multiple neurons.
+    GLM : Generalized Linear Model for continuous/count responses.
+
+    Examples
+    --------
+    >>> import jax.numpy as jnp
+    >>> import nemos as nmo
+    >>> # Binary classification
+    >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
+    >>> y = jnp.array([0, 0, 1, 1])  # Integer class labels
+    >>> model = nmo.glm.CategoricalGLM(n_categories=2)
+    >>> model = model.fit(X, y)
+    >>> predictions = model.predict(X)  # Returns class labels
+    >>> probabilities = model.predict_proba(X, return_type="proba")
+    """
 
     _validator_class = CategoricalGLMValidator
 
@@ -1812,9 +1869,147 @@ class CategoricalGLM(CategoricalMixin, GLM):
             solver_kwargs=solver_kwargs,
         )
 
+    def fit(
+        self,
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: ArrayLike,
+        init_params: Optional[GLMUserParams] = None,
+    ):
+        """
+        Fit the categorical GLM to training data.
+
+        Learns the coefficients and intercepts that maximize the likelihood of
+        the observed class labels given the input features.
+
+        Parameters
+        ----------
+        X
+            Training input samples of shape ``(n_samples, n_features)`` or FeaturePytree.
+        y
+            Target class labels of shape ``(n_samples,)``. Should contain integer values in
+            ``[0, n_categories - 1]``. Float arrays with integer values are
+            accepted and converted automatically, but integer arrays are
+            recommended for best performance.
+        init_params
+            Initial parameter values as tuple of ``(coef, intercept)``. If None, parameters
+            are initialized automatically based on class proportions.
+
+        Returns
+        -------
+        :
+            The fitted model.
+
+        Raises
+        ------
+        ValueError
+            If ``y`` contains non-integer values or values outside
+            ``[0, n_categories - 1]``.
+        """
+        return super().fit(X, y, init_params)
+
+    def score(
+        self,
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: ArrayLike,
+        score_type: Literal[
+            "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"
+        ] = "log-likelihood",
+        aggregate_sample_scores: Optional[Callable] = jnp.mean,
+    ) -> jnp.ndarray:
+        """
+        Score the model on test data.
+
+        Compute the log-likelihood or pseudo-R² of the model predictions.
+
+        Parameters
+        ----------
+        X
+            Test input samples of shape ``(n_samples, n_features)`` or FeaturePytree.
+        y
+            True class labels of shape ``(n_samples,)``. Should contain integer values in
+            ``[0, n_categories - 1]``. Float arrays with integer values are
+            accepted and converted automatically, but integer arrays are
+            recommended for best performance.
+        score_type
+            The type of score to compute. One of ``"log-likelihood"``,
+            ``"pseudo-r2-McFadden"``, or ``"pseudo-r2-Cohen"``. Default is ``"log-likelihood"``.
+        aggregate_sample_scores
+            Function to aggregate per-sample scores. Default is ``jnp.mean``.
+            Use ``None`` to return per-sample scores.
+
+        Returns
+        -------
+        :
+            The computed score. Shape depends on ``aggregate_sample_scores``.
+        """
+        return super().score(X, y, score_type, aggregate_sample_scores)
+
 
 class CategoricalPopulationGLM(CategoricalMixin, PopulationGLM):
-    """GLM for classification."""
+    """
+    Population Generalized Linear Model for multi-class classification.
+
+    This model performs multinomial logistic regression for multiple neurons/subjects
+    simultaneously. It predicts discrete class labels
+    from input features by modeling the log-odds of each class relative to a reference
+    category.
+
+    The model uses ``n_categories - 1`` sets of coefficients per neuron, resulting in
+    coefficient shape ``(n_features, n_neurons, n_categories - 1)`` and intercept
+    shape ``(n_neurons, n_categories - 1)``.
+
+    Parameters
+    ----------
+    n_categories
+        The number of classes/categories. Must be >= 2. Default is 2 (binary classification).
+    inverse_link_function
+        The inverse link function. Defaults to
+        ``nemos.inverse_link_function_utils.log_softmax``.
+    regularizer
+        The regularization scheme to use. Can be ``"Ridge"``, ``"Lasso"``,
+        ``"GroupLasso"``.
+    regularizer_strength
+        The strength of the regularization.
+    solver_name
+        The solver to use for optimization. Defaults to ``"GradientDescent"``.
+    solver_kwargs
+        Additional keyword arguments for the solver.
+    feature_mask
+        Mask indicating which features are used for each neuron. Shape
+        ``(n_features, n_neurons, n_categories - 1)`` or a FeaturePytree with
+        matching structure.
+
+    Attributes
+    ----------
+    coef_
+        Fitted coefficients of shape ``(n_features, n_neurons, n_categories - 1)``
+        after calling :meth:`fit`.
+    intercept_
+        Fitted intercepts of shape ``(n_neurons, n_categories - 1)`` after calling :meth:`fit`.
+
+    Notes
+    -----
+    Class labels ``y`` should contain integer values in ``[0, n_categories - 1]``.
+    Float arrays with integer values (e.g., ``[0.0, 1.0, 2.0]``) are accepted and
+    converted automatically, but passing integer arrays directly is recommended
+    for best performance.
+
+    See Also
+    --------
+    CategoricalGLM : Multi-class classification for a single neuron.
+    PopulationGLM : Population GLM for continuous/count responses.
+
+    Examples
+    --------
+    >>> import jax.numpy as jnp
+    >>> import nemos as nmo
+    >>> # Multi-class classification for 2 neurons
+    >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
+    >>> y = jnp.array([[0, 1], [0, 2], [1, 0], [1, 1]])  # (n_samples, n_neurons)
+    >>> model = nmo.glm.CategoricalPopulationGLM(n_categories=3)
+    >>> model = model.fit(X, y)
+    >>> predictions = model.predict(X)  # Returns class labels, shape (n_samples, n_neurons)
+    """
 
     _validator_class = PopulationCategoricalGLMValidator
 
@@ -1857,7 +2052,7 @@ class CategoricalPopulationGLM(CategoricalMixin, PopulationGLM):
 
         Returns
         -------
-        jnp.ndarray or dict[str, jnp.ndarray]
+        :
             The feature mask, or None if not set.
         """
         return self._feature_mask
@@ -1873,3 +2068,80 @@ class CategoricalPopulationGLM(CategoricalMixin, PopulationGLM):
         self._feature_mask = self._validator.validate_and_cast_feature_mask(
             feature_mask
         )
+
+    def fit(
+        self,
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: ArrayLike,
+        init_params: Optional[GLMUserParams] = None,
+    ):
+        """
+        Fit the categorical population GLM to training data.
+
+        Learns the coefficients and intercepts that maximize the likelihood of
+        the observed class labels given the input features, for all neurons
+        simultaneously.
+
+        Parameters
+        ----------
+        X
+            Training input samples of shape ``(n_samples, n_features)`` or FeaturePytree.
+        y
+            Target class labels of shape ``(n_samples, n_neurons)``. Should contain
+            integer values in ``[0, n_categories - 1]``. Float arrays with integer
+            values are accepted and converted automatically, but integer arrays are
+            recommended for best performance.
+        init_params
+            Initial parameter values as tuple of ``(coef, intercept)``. If None, parameters
+            are initialized automatically based on class proportions.
+
+        Returns
+        -------
+        :
+            The fitted model.
+
+        Raises
+        ------
+        ValueError
+            If ``y`` contains non-integer values or values outside
+            ``[0, n_categories - 1]``.
+        """
+        return super().fit(X, y, init_params)
+
+    def score(
+        self,
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: ArrayLike,
+        score_type: Literal[
+            "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"
+        ] = "log-likelihood",
+        aggregate_sample_scores: Optional[Callable] = jnp.mean,
+    ) -> jnp.ndarray:
+        """
+        Score the model on test data.
+
+        Compute the log-likelihood or pseudo-R² of the model predictions
+        across all neurons.
+
+        Parameters
+        ----------
+        X
+            Test input samples of shape ``(n_samples, n_features)`` or FeaturePytree.
+        y
+            True class labels of shape ``(n_samples, n_neurons)``. Should contain
+            integer values in ``[0, n_categories - 1]``. Float arrays with integer
+            values are accepted and converted automatically, but integer arrays are
+            recommended for best performance.
+        score_type
+            The type of score to compute. One of ``"log-likelihood"``,
+            ``"pseudo-r2-McFadden"``, or ``"pseudo-r2-Cohen"``. Default is ``"log-likelihood"``.
+        aggregate_sample_scores
+            Function to aggregate per-sample scores. Default is ``jnp.mean``.
+            Use ``None`` to return per-sample scores.
+
+        Returns
+        -------
+        :
+            The computed score. Shape depends on ``aggregate_sample_scores``.
+        """
+        return super().score(X, y, score_type, aggregate_sample_scores)
