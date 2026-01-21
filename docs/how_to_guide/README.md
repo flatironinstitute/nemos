@@ -70,7 +70,21 @@ plot_03_population_glm.md
 
 raw_history_feature.md
 ```
+:::
 
+:::{grid-item-card}
+
+<figure>
+<a href="glm_for_classification.html">
+<img src="../_static/thumbnails/how_to_guide/glm_for_classification.svg" style="height: 100px", alt="Confusion Matrix."/>
+</a>
+</figure>
+
+```{toctree}
+:maxdepth: 2
+
+glm_for_classification.md
+```
 :::
 
 :::{grid-item-card}

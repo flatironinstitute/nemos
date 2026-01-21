@@ -16,7 +16,9 @@ Classes for creating Generalized Linear Models (GLMs) for both single neurons an
     :nosignatures:
 
     GLM
+    CategoricalGLM
     PopulationGLM
+    CategoricalPopulationlGLM
 
 .. _nemos_io:
 
