@@ -245,6 +245,7 @@ convolve_large_arrays.md
 
 :::
 
+
 :::{grid-item-card}
 
 <figure>
@@ -256,6 +257,17 @@ convolve_large_arrays.md
 
 plot_04_batch_glm.md
 ```
+:::
+
+:::{grid-item-card}
+
+
+```{toctree}
+:maxdepth: 2
+
+custom_solvers.md
+```
+
 :::
 
 ::::
