@@ -1606,10 +1606,10 @@ class TestGLM:
     "model_instantiation",
     [
         "gaussianGLM_model_instantiation",
-        # "poissonGLM_model_instantiation",
-        # "gammaGLM_model_instantiation",
-        # "bernoulliGLM_model_instantiation",
-        # "negativeBinomialGLM_model_instantiation",
+        "poissonGLM_model_instantiation",
+        "gammaGLM_model_instantiation",
+        "bernoulliGLM_model_instantiation",
+        "negativeBinomialGLM_model_instantiation",
         "categoricalGLM_model_instantiation",
     ],
 )
