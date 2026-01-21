@@ -68,8 +68,8 @@ class ProxSVRG:
 
     Borrowing from jaxopt.ProximalGradient, this solver minimizes:
 
-      objective(params, *args, **kwargs) =
-        fun(params, *args, **kwargs) + non_smooth(params)
+      objective(params, hyperparams_prox, *args, **kwargs) =
+        fun(params, *args, **kwargs) + non_smooth(params, hyperparams_prox)
 
     Attributes
     ----------
@@ -77,7 +77,7 @@ class ProxSVRG:
         Smooth function of the form ``fun(x, *args, **kwargs)``.
     prox : Callable
         Proximal operator associated with the function ``non_smooth``.
-        It should be of the form ``prox(params, scale=1.0)``.
+        It should be of the form ``prox(params, hyperparams_prox, scale=1.0)``.
         See ``nemos.proximal_operator`` for examples.
     maxiter : int
         Maximum number of epochs to run the optimization for.
@@ -96,8 +96,9 @@ class ProxSVRG:
     >>> import numpy as np
     >>> from nemos.proximal_operator import prox_lasso
     >>> loss_fn = lambda params, X, y: ((X.dot(params) - y)**2).sum()
-    >>> svrg = ProxSVRG(loss_fn, prox_none)
-    >>> params, state = svrg.run(np.zeros(2), np.ones((10, 2)), np.zeros(10))
+    >>> svrg = ProxSVRG(loss_fn, prox_lasso)
+    >>> hyperparams_prox = 0.1
+    >>> params, state = svrg.run(np.zeros(2), hyperparams_prox, np.ones((10, 2)), np.zeros(10))
 
 
     References
@@ -192,6 +193,7 @@ class ProxSVRG:
         reference_point: Pytree,
         full_grad_at_reference_point: Pytree,
         stepsize: float,
+        hyperparams_prox: Union[float, None],
         *args: Any,
     ) -> Tuple[Pytree, Any]:
         """
@@ -207,6 +209,8 @@ class ProxSVRG:
             Full gradient at the anchor point.
         stepsize :
             Step size.
+        hyperparams_prox :
+            Hyperparameters to `prox`, most commonly regularization strength.
         args:
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
@@ -249,7 +253,9 @@ class ProxSVRG:
         next_params = tree_add_scalar_mul(params, -stepsize, gk)
 
         # apply the proximal operator
-        next_params = self.proximal_operator(next_params, scaling=stepsize)
+        next_params = self.proximal_operator(
+            next_params, hyperparams_prox, scaling=stepsize
+        )
 
         return next_params, minibatch_aux_at_current_params
 
@@ -258,6 +264,7 @@ class ProxSVRG:
         self,
         params: Pytree,
         state: SVRGState,
+        hyperparams_prox: Union[float, None],
         *args: Any,
     ) -> OptStep:
         """
@@ -275,6 +282,8 @@ class ProxSVRG:
             Optimizer state at the end of the previous update.
             Needs to have the current anchor point (`reference_point`) and the gradient at the anchor point
             (`full_grad_at_reference_point`) already set.
+        hyperparams_prox :
+            Hyperparameters to `prox`, most commonly regularization strength.
         args:
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
@@ -306,10 +315,16 @@ class ProxSVRG:
             raise ValueError(
                 "Full gradient at the anchor point (state.full_grad_at_reference_point) has to be set."
             )
-        return self._update_on_batch(params, state, *args)
+        return self._update_on_batch(params, state, hyperparams_prox, *args)
 
     @partial(jit, static_argnums=(0,))
-    def _update_on_batch(self, params: Pytree, state: SVRGState, *args: Any) -> OptStep:
+    def _update_on_batch(
+        self,
+        params: Pytree,
+        state: SVRGState,
+        hyperparams_prox: Union[float, None],
+        *args: Any,
+    ) -> OptStep:
         """
         Update parameters given a mini-batch of data and increment iteration/epoch number in state.
 
@@ -324,6 +339,8 @@ class ProxSVRG:
             Optimizer state at the end of the previous update.
             Needs to have the current anchor point (`reference_point`) and the gradient at the anchor point
             (`full_grad_at_reference_point`) already set.
+        hyperparams_prox :
+            Hyperparameters to `prox`, most commonly regularization strength.
         args:
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
@@ -348,6 +365,7 @@ class ProxSVRG:
             state.reference_point,
             state.full_grad_at_reference_point,
             state.stepsize,
+            hyperparams_prox,
             *args,
         )
 
@@ -359,7 +377,12 @@ class ProxSVRG:
         return OptStep(params=next_params, state=state)
 
     @partial(jit, static_argnums=(0,))
-    def run(self, init_params: Pytree, *args: Any) -> OptStep:
+    def run(
+        self,
+        init_params: Pytree,
+        hyperparams_prox: Union[float, None],
+        *args: Any,
+    ) -> OptStep:
         """
         Run a whole optimization until convergence or until `maxiter` epochs are reached.
 
@@ -370,6 +393,8 @@ class ProxSVRG:
         ----------
         init_params :
             Initial parameters to start from.
+        hyperparams_prox :
+            Hyperparameters to `prox`, most commonly regularization strength.
         args:
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
@@ -396,10 +421,16 @@ class ProxSVRG:
             *args,
         )
 
-        return self._run(init_params, init_state, *args)
+        return self._run(init_params, init_state, hyperparams_prox, *args)
 
     @partial(jit, static_argnums=(0,))
-    def _run(self, init_params: Pytree, init_state: SVRGState, *args: Any) -> OptStep:
+    def _run(
+        self,
+        init_params: Pytree,
+        init_state: SVRGState,
+        hyperparams_prox: Union[float, None],
+        *args: Any,
+    ) -> OptStep:
         """
         Run a whole optimization until convergence or until `maxiter` epochs are reached.
 
@@ -413,6 +444,8 @@ class ProxSVRG:
             Initial parameters to start from.
         init_state :
             Initialized optimizer state returned by `ProxSVRG.init_state`
+        hyperparams_prox :
+            Hyperparameters to `prox`, most commonly regularization strength.
         args:
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
@@ -449,7 +482,7 @@ class ProxSVRG:
 
             # run an update over the whole data
             params, state = self._update_per_random_samples(
-                prev_reference_point, state, *args
+                prev_reference_point, state, hyperparams_prox, *args
             )
 
             # update reference point (x_{s}) with the final parameters (x_{m}) or an average over
@@ -494,6 +527,7 @@ class ProxSVRG:
         self,
         params: Pytree,
         state: SVRGState,
+        hyperparams_prox: Union[float, None],
         *args: Any,
     ) -> OptStep:
         """
@@ -510,6 +544,8 @@ class ProxSVRG:
             Optimizer state at the end of the previous sweep.
             Needs to have the current anchor point (`reference_point`) and the gradient at the anchor point
             (`full_grad_at_reference_point`) already set.
+        hyperparams_prox :
+            Hyperparameters to `prox`, most commonly regularization strength. Can be None.
         args :
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
@@ -555,6 +591,7 @@ class ProxSVRG:
                 state.reference_point,
                 state.full_grad_at_reference_point,
                 state.stepsize,
+                hyperparams_prox,
                 *tree_slice(args, ind),
             )
 
@@ -601,8 +638,8 @@ class SVRG(ProxSVRG):
     """
     SVRG solver.
 
-    This solver implements "Algorithm 3" of [1].
-    Equivalent to ProxSVRG with prox as the identity function.
+    This solver implements "Algorithm 3" of [1]. Equivalent to ProxSVRG with prox as the identity
+    function and hyperparams_prox=None.
 
     Attributes
     ----------
@@ -731,7 +768,8 @@ class SVRG(ProxSVRG):
             to be calculated and is expected to be stored in `state.full_grad_at_reference_point`.
             So if `state.full_grad_at_reference_point` is None, a ValueError is raised.
         """
-        return super().update(params, state, *args, **kwargs)
+        # substitute None for hyperparams_prox
+        return super().update(params, state, None, *args, **kwargs)
 
     @partial(jit, static_argnums=(0,))
     def run(
@@ -770,9 +808,11 @@ class SVRG(ProxSVRG):
                 Final optimizer state.
         """
         # initialize the state, including the full gradient at the initial parameters
+        # don't have to pass hyperparams_prox here
         init_state = self.init_state(init_params, *args)
 
-        return self._run(init_params, init_state, *args)
+        # substitute None for hyperparams_prox
+        return self._run(init_params, init_state, None, *args)
 
 
 class WrappedSVRG(JaxoptAdapter):

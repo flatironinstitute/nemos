@@ -10,14 +10,14 @@ import pytest
 
 import nemos as nmo
 from nemos.glm.params import GLMParams
-from nemos.proximal_operator import prox_none, prox_ridge, prox_lasso
+from nemos.proximal_operator import prox_lasso, prox_none, prox_ridge
 from nemos.solvers._svrg import SVRG, ProxSVRG, SVRGState
 from nemos.tree_utils import (
     pytree_map_and_reduce,
+    tree_full_like,
     tree_l2_norm,
     tree_slice,
     tree_sub,
-    tree_full_like,
 )
 
 # Register every test here as solver-related

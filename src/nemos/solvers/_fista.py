@@ -44,8 +44,6 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
         Norm to use in Cauchy termination.
     prox:
         Proximal operator function.
-    regularizer_strength:
-        Regularizer strength passed to the proximal operator.
     stepsize:
         If None (default), use backtracking linesearch to determine an
         appropriate stepsize on each iteration.
@@ -74,7 +72,6 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
     norm: Callable
 
     prox: Callable
-    regularizer_strength: float | None
 
     stepsize: float | None = None
     maxls: int = 15
@@ -351,7 +348,6 @@ class GradientDescent(FISTA):
     """Gradient descent with Nesterov acceleration. Adapted from JAXopt."""
 
     prox: ClassVar[Callable] = staticmethod(prox_none)
-    regularizer_strength: float | None = None
 
 
 class OptimistixFISTA(OptimistixAdapter):
