@@ -155,7 +155,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         observation_model=PoissonObservations(),
         inverse_link_function=exp,
         regularizer=UnRegularized(),
-        solver_name='GradientDescent'
+        solver_name='GradientDescent[...]'
     )
     >>> print("Regularizer type: ", type(model.regularizer))
     Regularizer type:  <class 'nemos.regularizer.UnRegularized'>
@@ -167,7 +167,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         observation_model=GammaObservations(),
         inverse_link_function=one_over_x,
         regularizer=UnRegularized(),
-        solver_name='GradientDescent'
+        solver_name='GradientDescent[...]'
     )
     >>> # or equivalently, passing the observation model object
     >>> nmo.glm.GLM(observation_model=nmo.observation_models.GammaObservations())
@@ -175,7 +175,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         observation_model=GammaObservations(),
         inverse_link_function=one_over_x,
         regularizer=UnRegularized(),
-        solver_name='GradientDescent'
+        solver_name='GradientDescent[...]'
     )
     >>> # define GLM model of PoissonObservations model with soft-plus NL
     >>> model = nmo.glm.GLM(inverse_link_function=jax.nn.softplus, solver_name="LBFGS")
@@ -1050,7 +1050,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         regularizer: Ridge()
         regularizer_strength: 0.1
         solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
-        solver_name: BFGS
+        solver_name: BFGS[...]
         >>> # Save the model parameters to a file
         >>> model.save_params("model_params.npz")
         >>> # Load the model from the saved file
@@ -1063,7 +1063,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         regularizer: Ridge()
         regularizer_strength: 0.1
         solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
-        solver_name: BFGS
+        solver_name: BFGS[...]
 
         >>> # Saving and loading a custom inverse link function
         >>> model = nmo.glm.GLM(
@@ -1084,7 +1084,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         regularizer: UnRegularized()
         regularizer_strength: None
         solver_kwargs: {}
-        solver_name: GradientDescent
+        solver_name: GradientDescent[...]
         """
 
         # initialize saving dictionary
@@ -1220,7 +1220,7 @@ class PopulationGLM(GLM):
         observation_model=PoissonObservations(),
         inverse_link_function=exp,
         regularizer=UnRegularized(),
-        solver_name='GradientDescent'
+        solver_name='GradientDescent[...]'
     )
     >>> # Check the fitted coefficients
     >>> print(model.coef_.shape)
