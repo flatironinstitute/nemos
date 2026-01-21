@@ -302,15 +302,19 @@ class Regularizer(Base, abc.ABC):
             If conversion to float arrays fails.
         """
         if strength is None:
-            strength = 1.0
+            return 1.0
 
         try:
             return jax.tree_util.tree_map(
-                lambda x: jnp.asarray(x, dtype=float),
+                lambda x: (
+                    jnp.asarray(x, dtype=float)
+                    if isinstance(x, (list, tuple, np.ndarray, jnp.ndarray))
+                    else x
+                ),
                 strength,
                 is_leaf=lambda x: isinstance(x, (list, tuple, np.ndarray, jnp.ndarray)),
             )
-        except (TypeError, ValueError) as e:
+        except (TypeError, ValueError):
             raise TypeError(
                 f"Could not convert regularizer strength to floats: {strength}"
             ) from None
@@ -939,16 +943,18 @@ class GroupLasso(Regularizer):
         flat_mask = jax.tree_util.tree_leaves(self.mask)
         n_groups = flat_mask[0].shape[0]
 
-        if strength.ndim == 0:
-            per_group_strength = jnp.full(n_groups, strength)
-        elif strength.ndim == 1 and strength.shape[0] == n_groups:
-            per_group_strength = strength
+        if isinstance(strength, (int, float)):
+            per_group_strength = jnp.full(n_groups, strength, dtype=float)
         else:
-            raise ValueError(
-                f"GroupLasso strength must be a scalar or shape ({n_groups},), "
-                f"got shape {strength.shape}"
-            )
+            strength = jnp.asarray(strength, dtype=float)
+            if strength.ndim != 1 or strength.shape[0] != n_groups:
+                raise ValueError(
+                    f"GroupLasso strength must be a scalar or shape ({n_groups},), "
+                    f"got shape {strength.shape}"
+                )
+            per_group_strength = strength
 
+        # broadcast per-group strength to match mask PyTree structure
         return jax.tree_util.tree_map(
             lambda _: per_group_strength,
             self.mask,
