@@ -13,10 +13,10 @@ kernelspec:
 
 # Fit GLM for Classification
 
-The logistic regression classification model is a type of GLM where the observations are modeled as a categorical random variable. In NeMoS, this model goes under the name of [`CategoricalGLM`](~nemos.glm.CategoricalGLM). The [`CategoricalGLM`](~nemos.glm.CategoricalGLM) follows a very similar syntax to the GLM but with few key differences:
+The logistic regression classification model is a type of GLM where the observations are modeled as a categorical random variable. In NeMoS, this model goes under the name of [`CategoricalGLM`](nemos.glm.CategoricalGLM). The [`CategoricalGLM`](nemos.glm.CategoricalGLM) follows a very similar syntax to the GLM but with few key differences:
 
-- [**predict**](~nemos.glm.CategoricalGLM.predict_proba): The predict method of the model returns the predicted categories (instead of the predicted rate).
-- [**`predict_proba`**](~nemos.glm.CategoricalGLM.predict_proba): An additional method returning either the (log-)probabilities of each category.
+- [predict](nemos.glm.CategoricalGLM.predict): The predict method of the model returns the predicted categories (instead of the predicted rate).
+- [predict_proba](nemos.glm.CategoricalGLM.predict_proba): An additional method returning either the (log-)probabilities of each category.
 
 ```{code-cell}
 import jax
