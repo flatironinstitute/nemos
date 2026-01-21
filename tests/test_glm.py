@@ -2566,7 +2566,8 @@ class TestGLMObservationModel:
     "model_instantiation",
     [
         "population_poissonGLM_model_instantiation",
-    ],
+        "population_categoricalGLM_model_instantiation",
+    ]
 )
 class TestPopulationGLM:
     """
@@ -2578,8 +2579,8 @@ class TestPopulationGLM:
     #######################################
 
     def test_sklearn_clone(self, model_instantiation, request):
-        X, y, model, true_params, firing_rate = request.getfixturevalue(
-            model_instantiation
+        X, y, model, true_params, firing_rate = (
+            request.getfixturevalue(model_instantiation)
         )
         model.coef_ = true_params.coef
         model.intercept_ = true_params.intercept
@@ -2617,7 +2618,9 @@ class TestPopulationGLM:
             ),
         ],
     )
-    def test_feature_mask_setter(self, mask, expectation, model_instantiation, request):
+    def test_feature_mask_setter(
+        self, mask, expectation, model_instantiation, request
+    ):
         _, _, model, _, _ = request.getfixturevalue(model_instantiation)
         with expectation:
             model.feature_mask = mask
