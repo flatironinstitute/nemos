@@ -2258,7 +2258,7 @@ class TestGLMObservationModel:
             X = np.ones(X_shape)
         else:
             X = {f"{k}": np.ones(s) for k, s in enumerate(X_shape)}
-        y = y[:y_shape[0]]
+        y = y[: y_shape[0]]
         coef, intercept = model.initialize_params(X, y)
         coef_shape, intercept_shape = self._get_expected_par_shape(X, y, model)
 
