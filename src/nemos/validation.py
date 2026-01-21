@@ -718,7 +718,6 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
         ------
         ValueError, TypeError
             If any validation step fails.
-            If any validation step fails.
         """
         validated_params = params
 
