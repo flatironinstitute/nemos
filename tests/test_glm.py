@@ -1679,7 +1679,12 @@ class TestGLMObservationModel:
                 proba = proba.reshape(-1, proba.shape[-1])
                 y = y.reshape(-1)
                 res = np.array(
-                    [sts.multinomial(1, pi).logpmf(jax.nn.one_hot(yi, proba.shape[-1])) for pi, yi in zip(proba, y)]
+                    [
+                        sts.multinomial(1, pi).logpmf(
+                            jax.nn.one_hot(yi, proba.shape[-1])
+                        )
+                        for pi, yi in zip(proba, y)
+                    ]
                 ).sum()
                 res /= y.shape[0]
                 return res
@@ -1745,6 +1750,9 @@ class TestGLMObservationModel:
         elif "gaussian" in model_instantiation:
             return 1.0
 
+        elif "categorical" in model_instantiation:
+            return 1.0
+
         else:
             raise ValueError("Unknown model instantiation")
 
@@ -1782,6 +1790,16 @@ class TestGLMObservationModel:
                 return np.array([5, 5, 5])
             else:
                 return np.array([3])
+
+        elif "categorical" in model_instantiation:
+            # Categorical models have (n_features, n_categories-1) coef shape
+            # For lasso, estimate surviving coefficients per neuron
+            if is_population_glm_type(glm_type):
+                return np.array([6, 6, 6])  # 3 neurons, ~6 params each (3 per category)
+            else:
+                return np.array(
+                    [6]
+                )  # ~6 surviving params (3 per category * 2 categories)
 
         else:
             raise ValueError("Unknown model instantiation")
@@ -1865,9 +1883,9 @@ class TestGLMObservationModel:
 
         elif "categorical" in model_instantiation:
             if is_population_glm_type(glm_type):
-                return "CategoricalPopulationGLM(\n    n_categories=3,\n    inverse_link_function=identity,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
+                return "CategoricalPopulationGLM(\n    n_categories=3,\n    inverse_link_function=log_softmax,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
             else:
-                return "CategoricalGLM(\n    n_categories=3,\n    inverse_link_function=identity,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
+                return "CategoricalGLM(\n    n_categories=3,\n    inverse_link_function=log_softmax,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
 
         else:
             raise ValueError("Unknown model instantiation")
@@ -2008,10 +2026,17 @@ class TestGLMObservationModel:
         [
             (None, does_not_raise()),
             (100, does_not_raise()),
-            (1.0, pytest.raises(TypeError, match="`n_samples` must either `None` or")),
+            (
+                1.0,
+                pytest.raises(
+                    TypeError, match="`n_samples` must be `None` or of type `int`"
+                ),
+            ),
             (
                 "str",
-                pytest.raises(TypeError, match="`n_samples` must either `None` or"),
+                pytest.raises(
+                    TypeError, match="`n_samples` must be `None` or of type `int`"
+                ),
             ),
         ],
     )
@@ -2174,6 +2199,16 @@ class TestGLMObservationModel:
         )
         if is_population_model(model) and (expected_out_type == Tsd):
             assert isinstance(count, TsdFrame)
+            # For categorical population models, rate has shape (n_samples, n_neurons, n_categories)
+            if is_categorical_model(model):
+                from pynapple.core.time_series import TsdTensor
+
+                assert isinstance(rate, TsdTensor)
+            else:
+                assert isinstance(rate, TsdFrame)
+        elif is_categorical_model(model) and (expected_out_type == Tsd):
+            # For categorical single neuron, count is Tsd but rate is TsdFrame (n_samples, n_categories)
+            assert isinstance(count, expected_out_type)
             assert isinstance(rate, TsdFrame)
         else:
             assert isinstance(count, expected_out_type)

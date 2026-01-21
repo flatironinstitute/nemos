@@ -24,7 +24,13 @@ from ..pytrees import FeaturePytree
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
 from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
 from ..type_casting import cast_to_jax, support_pynapple
-from ..typing import DESIGN_INPUT_TYPE, RegularizerStrength, SolverState, StepResult
+from ..typing import (
+    DESIGN_INPUT_TYPE,
+    RegularizerStrength,
+    SolverState,
+    StepResult,
+    UserProvidedParamsT,
+)
 from ..utils import format_repr
 from .initialize_parameters import initialize_intercept_matching_mean_rate
 from .params import GLMParams, GLMUserParams
@@ -875,7 +881,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         else:
             if not isinstance(n_samples, int):
                 raise TypeError(
-                    "`n_samples` must either `None` or of type `int`. Type {type(n_sample)} provided "
+                    "`n_samples` must be `None` or of type `int`. Type {type(n_sample)} provided "
                     "instead!"
                 )
 
@@ -1548,7 +1554,8 @@ class CategoricalMixin:
             ``[0, n_categories - 1]``.
         """
         log_proba = super().predict(X)
-        return log_proba.argmax(axis=-1)
+        argmax = support_pynapple(conv_type="jax")(lambda x: jnp.argmax(x, axis=-1))
+        return argmax(log_proba)
 
     def predict_proba(
         self,
@@ -1579,10 +1586,10 @@ class CategoricalMixin:
         if return_type == "log-proba":
             return log_proba
         else:
-            proba = jnp.exp(log_proba)
+            exp = support_pynapple(conv_type="jax")(jnp.exp)
+            proba = exp(log_proba)
             # renormalize (sum to 1 constraint)
             proba /= proba.sum(axis=-1, keepdims=True)
-
             return proba
 
     def _estimate_resid_degrees_of_freedom(
@@ -1680,8 +1687,87 @@ class CategoricalMixin:
               log-probability of the simulated responses under the model.
         """
         y, log_prob = super().simulate(random_key, feedforward_input)
-        y = jnp.argmax(y, axis=-1)
+        argmax = support_pynapple(conv_type="jax")(lambda x: jnp.argmax(x, axis=-1))
+        y = argmax(y)
         return y, log_prob
+
+    def initialize_params(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+    ) -> UserProvidedParamsT:
+        """
+        Initialize model parameters for categorical GLM.
+
+        Initialize coefficients with zeros and intercept by matching the mean class
+        proportions. Class labels are automatically converted to one-hot encoding.
+
+        Parameters
+        ----------
+        X :
+            Input data, array of shape ``(n_time_bins, n_features)`` or pytree of same.
+        y :
+            Class labels as integers, array of shape ``(n_time_bins,)`` for single neuron
+            models or ``(n_time_bins, n_neurons)`` for population models. Values should be
+            in the range ``[0, n_categories - 1]``.
+
+        Returns
+        -------
+        :
+            Initial parameter tuple of (coefficients, intercept).
+        """
+        y = jax.nn.one_hot(y, self.n_categories)
+        return super().initialize_params(X, y)
+
+    def update(
+        self,
+        params: GLMUserParams,
+        opt_state: SolverState,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        *args,
+        n_samples: Optional[int] = None,
+        **kwargs,
+    ) -> StepResult:
+        """
+        Update the model parameters and solver state.
+
+        Performs a single optimization step using the model's solver. Class labels
+        are automatically converted to one-hot encoding before the update.
+
+        Parameters
+        ----------
+        params :
+            The current model parameters, typically a tuple of coefficients and intercepts.
+        opt_state :
+            The current state of the optimizer, encapsulating information necessary for the
+            optimization algorithm to continue from the current state.
+        X :
+            The predictors used in the model fitting process. Shape ``(n_time_bins, n_features)``
+            or a ``FeaturePytree``.
+        y :
+            Class labels as integers, array of shape ``(n_time_bins,)`` for single neuron
+            models or ``(n_time_bins, n_neurons)`` for population models. Values should be
+            in the range ``[0, n_categories - 1]``.
+        *args :
+            Additional positional arguments to be passed to the solver's update method.
+        n_samples :
+            The total number of samples. Usually larger than the samples of an individual batch,
+            used to estimate the scale parameter of the GLM.
+        **kwargs :
+            Additional keyword arguments to be passed to the solver's update method.
+
+        Returns
+        -------
+        params :
+            Updated model parameters (coefficients, intercepts).
+        state :
+            Updated optimizer state.
+        """
+        y = jax.nn.one_hot(y, self._n_categories)
+        return super().update(
+            params, opt_state, X, y, *args, n_samples=n_samples, **kwargs
+        )
 
 
 class CategoricalGLM(CategoricalMixin, GLM):
@@ -1723,6 +1809,7 @@ class CategoricalPopulationGLM(CategoricalMixin, PopulationGLM):
         regularizer_strength: Optional[RegularizerStrength] = None,
         solver_name: str = None,
         solver_kwargs: dict = None,
+        feature_mask: Optional[jnp.ndarray] = None,
     ):
         self.n_categories = n_categories
         observation_model = obs.CategoricalObservations()
@@ -1733,6 +1820,7 @@ class CategoricalPopulationGLM(CategoricalMixin, PopulationGLM):
             regularizer_strength=regularizer_strength,
             solver_name=solver_name,
             solver_kwargs=solver_kwargs,
+            feature_mask=feature_mask,
         )
 
     @property
