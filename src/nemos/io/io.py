@@ -6,6 +6,7 @@ import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Tuple, Union
 
+import jax.numpy as jnp
 import numpy as np
 
 if TYPE_CHECKING:
@@ -372,7 +373,7 @@ def inspect_npz(file_path: Union[str, Path]):
         print("Metadata\n--------")
         for k, v in metadata.items():
             label = f"{k} version"
-            print(f"{label:<{pad_len}}: {v}" f" (installed: {installed_env[k]})")
+            print(f"{label:<{pad_len}}: {v} (installed: {installed_env[k]})")
 
     print("\nModel class\n-----------")
     model_class = data.pop("model_class", None)
@@ -386,6 +387,8 @@ def inspect_npz(file_path: Union[str, Path]):
         # If the value is a callable, print its name, otherwise print the value
         if hasattr(val, "__name__"):
             print(f"{key:<{pad_len}}: {_get_name(val)}")
+        elif isinstance(val, float):
+            print(f"{key:<{pad_len}}: {val:.6g}")
         else:
             print(f"{key:<{pad_len}}: {val}")
 
