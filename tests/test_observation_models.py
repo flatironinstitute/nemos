@@ -103,7 +103,12 @@ def categorical_observations():
         ("Bernoulli", does_not_raise()),
         ("NegativeBinomial", does_not_raise()),
         ("Gaussian", does_not_raise()),
-        ("Categorical", does_not_raise()),
+        (
+            "Categorical",
+            pytest.raises(
+                TypeError, match="The ``CategoricalObservations`` observation type is"
+            ),
+        ),
         (
             "invalid",
             pytest.raises(ValueError, match="Unknown observation model: invalid"),
@@ -125,13 +130,23 @@ def test_glm_instantiation_from_string_at_init(
         ("Gamma", does_not_raise()),
         ("Bernoulli", does_not_raise()),
         ("Gaussian", does_not_raise()),
-        ("Categorical", does_not_raise()),
+        (
+            "Categorical",
+            pytest.raises(
+                TypeError, match="The ``CategoricalObservations`` observation type is"
+            ),
+        ),
         ("NegativeBinomial", does_not_raise()),
         ("nemos.observation_models.PoissonObservations", does_not_raise()),
         ("nemos.observation_models.GammaObservations", does_not_raise()),
         ("nemos.observation_models.BernoulliObservations", does_not_raise()),
         ("nemos.observation_models.GaussianObservations", does_not_raise()),
-        ("nemos.observation_models.CategoricalObservations", does_not_raise()),
+        (
+            "nemos.observation_models.CategoricalObservations",
+            pytest.raises(
+                TypeError, match="The ``CategoricalObservations`` observation type is"
+            ),
+        ),
         ("nemos.observation_models.NegativeBinomialObservations", does_not_raise()),
         (
             "invalid",
@@ -731,8 +746,15 @@ class TestCategoricalObservations:
     @staticmethod
     def log_likelihood(y, log_proba):
         proba = jnp.exp(log_proba)
-        proba = proba / proba.sum(axis=1, keepdims=True)
-        return np.array([sts.multinomial(1, pi).logpmf(yi) for pi, yi in zip(proba, y)])
+        proba = proba.reshape(-1, proba.shape[-1])
+        y = y.reshape(-1)
+        res = np.array(
+            [
+                sts.multinomial(1, pi).logpmf(jax.nn.one_hot(yi, proba.shape[-1]))
+                for pi, yi in zip(proba, y)
+            ]
+        )
+        return res
 
     def test_get_params(self, categorical_observations):
         """Test get_params() returns expected values."""
@@ -747,7 +769,9 @@ class TestCategoricalObservations:
         """
         _, y, model, _, firing_rate = categoricalGLM_model_instantiation
         dev = -2 * self.log_likelihood(y, firing_rate).sum()
-        dev_model = model.observation_model.deviance(y, firing_rate).sum()
+        dev_model = model.observation_model.deviance(
+            jax.nn.one_hot(jnp.asarray(y, dtype=int), model.n_categories), firing_rate
+        ).sum()
         if not np.allclose(dev, dev_model):
             raise ValueError("Deviance doesn't match statsmodels!")
 
@@ -757,7 +781,9 @@ class TestCategoricalObservations:
         Assesses if the model estimates are close to statsmodels' results.
         """
         _, y, model, _, firing_rate = categoricalGLM_model_instantiation
-        ll_model = model.observation_model.log_likelihood(y, firing_rate)
+        ll_model = model.observation_model.log_likelihood(
+            jax.nn.one_hot(jnp.asarray(y, dtype=int), model.n_categories), firing_rate
+        )
         ll_scipy = self.log_likelihood(y, firing_rate).mean()
         if not np.allclose(ll_model, ll_scipy):
             raise ValueError("Log-likelihood doesn't match scipy!")
@@ -772,7 +798,9 @@ class TestCategoricalObservations:
         """
         _, y, model, _, firing_rate = categoricalGLM_model_instantiation
         ll_model = model.observation_model.log_likelihood(
-            y, firing_rate, aggregate_sample_scores=lambda x: x
+            jax.nn.one_hot(jnp.asarray(y, dtype=int), model.n_categories),
+            firing_rate,
+            aggregate_sample_scores=lambda x: x,
         )
         ll_scipy = self.log_likelihood(y, firing_rate)
         if not np.allclose(ll_model, ll_scipy):
@@ -808,7 +836,9 @@ class TestCategoricalObservations:
         # set params
         log_proba = jnp.log(mdl.predict(sm.add_constant(X)))
         pr2_model = model.observation_model.pseudo_r2(
-            y, log_proba, score_type="pseudo-r2-McFadden"
+            jax.nn.one_hot(jnp.asarray(y, dtype=int), model.n_categories),
+            log_proba,
+            score_type="pseudo-r2-McFadden",
         )
 
         if not np.allclose(pr2_model, pr2_sms):
