@@ -24,7 +24,7 @@ import nemos as nmo
 from nemos import solvers
 from nemos._observation_model_builder import instantiate_observation_model
 from nemos._regularizer_builder import instantiate_regularizer
-from nemos.inverse_link_function_utils import identity
+from nemos.inverse_link_function_utils import identity, log_softmax
 from nemos.pytrees import FeaturePytree
 from nemos.tree_utils import (
     pytree_map_and_reduce,
@@ -3543,3 +3543,218 @@ class TestNegativeBinomialGLM:
         ysim, ratesim = model.simulate(jax.random.PRNGKey(123), X)
         assert ysim.shape == y.shape
         assert ratesim.shape == y.shape
+
+
+@pytest.mark.parametrize("inv_link", [log_softmax])
+@pytest.mark.parametrize("glm_type", ["", "population_"])
+@pytest.mark.parametrize("model_instantiation", ["categoricalGLM_model_instantiation"])
+class TestCategoricalGLM:
+    """
+    Unit tests specific to categorical GLM.
+    """
+
+    @pytest.mark.solver_related
+    def test_fit_glm(self, inv_link, request, glm_type, model_instantiation):
+        """
+        Ensure that the model can be fit with different link functions.
+        """
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        model.inverse_link_function = inv_link
+        model.fit(X, y)
+
+    def test_score_glm(self, inv_link, request, glm_type, model_instantiation):
+        """
+        Ensure that the model can be scored with different link functions.
+        """
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        model.inverse_link_function = inv_link
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
+        if is_population_glm_type(glm_type):
+            model.scale_ = np.ones((y.shape[1]))
+        else:
+            model.scale_ = 1.0
+        model.score(X, y)
+
+    def test_simulate_glm(self, inv_link, request, glm_type, model_instantiation):
+        """
+        Ensure that data can be simulated with different link functions.
+        """
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        model.inverse_link_function = inv_link
+        if is_population_glm_type(glm_type):
+            model.feature_mask = jnp.ones(
+                (X.shape[1], y.shape[1], model.n_categories - 1)
+            )
+            model.scale_ = jnp.ones((y.shape[1]))
+            shape_log_proba = (X.shape[0], y.shape[1], model.n_categories)
+        else:
+            model.scale_ = 1.0
+            shape_log_proba = (X.shape[0], model.n_categories)
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
+        ysim, log_proba = model.simulate(jax.random.PRNGKey(123), X)
+        assert ysim.shape == y.shape
+        assert log_proba.shape == shape_log_proba
+        assert jnp.all(ysim == ysim.astype(int))
+
+    @pytest.mark.parametrize(
+        "n_categories, expectation",
+        [
+            (
+                0,
+                pytest.raises(
+                    ValueError, match="The number of categories must be an integer"
+                ),
+            ),
+            (
+                1,
+                pytest.raises(
+                    ValueError, match="The number of categories must be an integer"
+                ),
+            ),
+            (2, does_not_raise()),
+            (3, does_not_raise()),
+            (
+                "2",
+                pytest.raises(
+                    ValueError, match="The number of categories must be an integer"
+                ),
+            ),
+            (
+                -2,
+                pytest.raises(
+                    ValueError, match="The number of categories must be an integer"
+                ),
+            ),
+            (np.array(2), does_not_raise()),
+        ],
+    )
+    def test_n_categories_kind(
+        self,
+        inv_link,
+        n_categories,
+        expectation,
+        glm_type,
+        model_instantiation,
+        request,
+    ):
+        _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        with expectation:
+            model.__class__(n_categories=n_categories)
+
+        with expectation:
+            model.n_categories = n_categories
+
+    @pytest.mark.parametrize(
+        "extra_x_dim, expectation",
+        [
+            (0, does_not_raise()),
+            (-1, pytest.raises(ValueError, match="X must be 2-dimensional")),
+            (1, pytest.raises(ValueError, match="X must be 2-dimensional")),
+        ],
+    )
+    @pytest.mark.parametrize("xtype", ["", "_pytree"])
+    def test_predict_proba_xshape(
+        self,
+        extra_x_dim,
+        expectation,
+        inv_link,
+        glm_type,
+        model_instantiation,
+        request,
+        xtype,
+    ):
+        X, _, model, true_params, _ = request.getfixturevalue(
+            glm_type + model_instantiation + xtype
+        )
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
+        if extra_x_dim == 1:
+            X = jax.tree_util.tree_map(lambda x: np.expand_dims(x, axis=-1), X)
+        if extra_x_dim == -1:
+            X = jax.tree_util.tree_map(lambda x: x[..., 0], X)
+        with expectation:
+            model.predict_proba(X)
+
+    @pytest.mark.parametrize(
+        "return_type, expectation",
+        [
+            ("proba", does_not_raise()),
+            ("log-proba", does_not_raise()),
+            ("invalid", pytest.raises(ValueError, match="Unrecognized return type")),
+        ],
+    )
+    def test_predict_proba_return_type(
+        self,
+        return_type,
+        expectation,
+        inv_link,
+        glm_type,
+        model_instantiation,
+        request,
+    ):
+        X, _, model, true_params, _ = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
+        with expectation:
+            model.predict_proba(X, return_type=return_type)
+
+    @pytest.mark.parametrize(
+        "X, expectation",
+        [
+            (np.ones((3, 5)), does_not_raise()),
+            (
+                nmo.pytrees.FeaturePytree(
+                    input_1=np.ones((3, 3)), input_2=np.ones((3, 2))
+                ),
+                does_not_raise(),
+            ),
+            # string type
+            (
+                "invalid",
+                pytest.raises(
+                    AttributeError, match="'str' object has no attribute 'ndim'"
+                ),
+            ),
+            # wrong number of features
+            (
+                np.ones((3, 4)),
+                pytest.raises(ValueError, match="Inconsistent number of features"),
+            ),
+            (
+                nmo.pytrees.FeaturePytree(
+                    input_1=np.ones((3, 1)), input_2=np.ones((3, 2))
+                ),
+                pytest.raises(ValueError, match="Inconsistent number of features"),
+            ),
+        ],
+    )
+    def test_predict_proba_x_structure(
+        self,
+        X,
+        expectation,
+        inv_link,
+        glm_type,
+        model_instantiation,
+        request,
+    ):
+        if isinstance(X, nmo.pytrees.FeaturePytree):
+            xtype = "_pytree"
+        else:
+            xtype = ""
+        _, _, model, true_params, _ = request.getfixturevalue(
+            glm_type + model_instantiation + xtype
+        )
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
+        with expectation:
+            model.predict_proba(X)
