@@ -1,5 +1,13 @@
 """Custom solvers module."""
 
+from ._abstract_solver import (
+    AbstractSolver,
+    OptimizationInfo,
+    Params,
+    SolverProtocol,
+    SolverState,
+    StepResult,
+)
 from ._fista import OptimistixFISTA, OptimistixNAG
 from ._jaxopt_solvers import JAXOPT_AVAILABLE
 from ._optax_optimistix_solvers import (
@@ -8,7 +16,15 @@ from ._optax_optimistix_solvers import (
 )
 from ._optimistix_solvers import OptimistixBFGS, OptimistixNonlinearCG
 from ._solver_doc_helper import get_solver_documentation
-from ._solver_registry import list_available_solvers, solver_registry
+from ._solver_registry import (
+    SolverSpec,
+    get_solver,
+    list_algo_backends,
+    list_available_algorithms,
+    list_available_solvers,
+    register,
+    set_default,
+)
 from ._svrg import SVRG, ProxSVRG, WrappedProxSVRG, WrappedSVRG
 from ._svrg_defaults import (
     glm_softplus_poisson_l_max_and_l,

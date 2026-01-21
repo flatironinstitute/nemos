@@ -1,24 +1,250 @@
-"""Registry for mapping from solver name to concrete implementation."""
+"""Registry of optimization algorithms and their implementations."""
 
+from dataclasses import dataclass
 from typing import Type
 
+from ._abstract_solver import SolverProtocol
 from ._fista import OptimistixFISTA, OptimistixNAG
 from ._jaxopt_solvers import JAXOPT_AVAILABLE
 from ._optax_optimistix_solvers import OptimistixOptaxLBFGS
 from ._optimistix_solvers import OptimistixBFGS, OptimistixNonlinearCG
 from ._svrg import WrappedProxSVRG, WrappedSVRG
 
-solver_registry: dict[str, Type] = {
-    "GradientDescent": OptimistixNAG,
-    "ProximalGradient": OptimistixFISTA,
-    "LBFGS": OptimistixOptaxLBFGS,
-    "BFGS": OptimistixBFGS,
-    #
-    "SVRG": WrappedSVRG,
-    "ProxSVRG": WrappedProxSVRG,
-    #
-    "NonlinearCG": OptimistixNonlinearCG,
-}
+
+@dataclass
+class SolverSpec:
+    """
+    Solver specification representing an entry in the solver registry.
+
+    A solver is specified by:
+    - name of the algorithm it implements
+    - its backend (optimization library or custom)
+    - the class implementing the optimization method
+      (ideally compatible with the AbstractSolver and SolverProtocol interface)
+    """
+
+    algo_name: str
+    backend: str
+    implementation: Type[SolverProtocol]
+
+    @property
+    def full_name(self) -> str:
+        return f"{self.algo_name}[{self.backend}]"
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.full_name!r} - "
+            f"{self.__class__.__name__}("
+            f"algo_name={self.algo_name!r}, "
+            f"backend={self.backend!r}, "
+            f"implementation={f'{self.implementation.__module__}.{self.implementation.__qualname__}'!r})"
+        )
+
+
+# mapping is {algo_name : {backend : implementation}}
+_registry: dict[str, dict[str, SolverSpec]] = {}
+# mapping is {algo_name : backend}
+_defaults: dict[str, str] = {}
+
+
+def _parse_name(name: str) -> tuple[str, str | None]:
+    """Parse an algo_name[backend] string."""
+    algo_name = name
+    backend = None
+    if "[" in name and name.endswith("]"):
+        algo_name = name[: name.index("[")]
+        backend = name[name.index("[") + 1 : -1]
+
+    return algo_name, backend
+
+
+def _raise_if_not_in_registry(algo_name: str):
+    """Raise an error if an algorithm is not in the registry."""
+    if algo_name not in _registry:
+        raise ValueError(f"No solver registered for algorithm {algo_name}.")
+
+
+def _resolve_backend(name: str, raise_if_given: bool) -> str:
+    """
+    Return the backend that will be used for the algorithm if not specified.
+
+    Parameters
+    ----------
+    name:
+        Name of the algorithm.
+    raise_if_given:
+        Raise an error if a backend is given, i.e. algo_name[backend_name]
+        format is used.
+
+    Returns
+    -------
+    Backend name extracted from the registry.
+    """
+    algo_name, backend = _parse_name(name)
+
+    if backend is not None:
+        if not raise_if_given:
+            return backend
+
+        raise ValueError(
+            f"Provide an algorithm name only. Got {algo_name} with backend {backend}."
+        )
+
+    _raise_if_not_in_registry(algo_name)
+    algo_versions = _registry[algo_name]
+
+    backend = _defaults.get(algo_name, None)
+    if backend is None:
+        if len(algo_versions) == 1:
+            backend = next(iter(algo_versions.keys()))
+        else:
+            _spec = " " if raise_if_given else " specify or "
+            raise ValueError(
+                f"Multiple backends and no default found for {algo_name}. "
+                f"Please{_spec}set a default backend."
+            )
+
+    return backend
+
+
+def get_solver(name: str) -> SolverSpec:
+    """
+    Fetch the solver spec. from the registry for a given solver.
+
+    Parameters
+    ----------
+    name :
+        Name of the solver with or without backend specified.
+
+    Returns
+    -------
+    spec :
+        Specification for the solver, listing algorithm name, backend, implementation class.
+    """
+    algo_name, _ = _parse_name(name)
+    backend = _resolve_backend(name, False)
+
+    # make sure we have the algorithm
+    _raise_if_not_in_registry(algo_name)
+    algo_versions = _registry[algo_name]
+
+    if backend not in algo_versions:
+        raise ValueError(
+            f"{backend} backend not available for {algo_name}. "
+            f"Available backends: {list_algo_backends(algo_name)}"
+        )
+
+    return algo_versions[backend]
+
+
+def register(
+    algo_name: str,
+    implementation: Type[SolverProtocol],
+    backend: str = "custom",
+    replace: bool = False,
+    default: bool = False,
+) -> None:
+    """
+    Register a solver implementation in the registry.
+
+    Parameters
+    ----------
+    algo_name :
+        Name of the optimization algorithm.
+    implementation :
+        Class implementing the solver.
+        Has to adhere to the AbstractSolver interface.
+    backend :
+        Backend name. Defaults to "custom".
+        When wrapping and registering an existing solver from an external
+        package, this would be the package name.
+    replace :
+        If an implementation for the given algorithm and backend names
+        is already present in the registry, overwrite it.
+    default :
+        Set this implementation as the default for the algorithm.
+        Can also be done with `set_default`.
+    """
+    if not replace and backend in _registry.get(algo_name, {}):
+        raise ValueError(
+            f"{algo_name}[{backend}] already registered. Use replace=True to overwrite."
+        )
+    if algo_name not in _registry:
+        _registry[algo_name] = {}
+
+    _registry[algo_name][backend] = SolverSpec(algo_name, backend, implementation)
+
+    if default:
+        set_default(algo_name, backend)
+
+
+def set_default(algo_name: str, backend: str) -> None:
+    """
+    Set the default backend for a given algorithm.
+
+    Parameters
+    ----------
+    algo_name :
+        Name of the optimization algorithm whose default
+        backend to set.
+    backend :
+        Name of the backend to set as default.
+    """
+    _raise_if_not_in_registry(algo_name)
+
+    if backend not in _registry[algo_name]:
+        raise ValueError(
+            f"{backend} backend not available for {algo_name}."
+            f"Available backends: {list_algo_backends(algo_name)}"
+        )
+    _defaults[algo_name] = backend
+
+
+def list_algo_backends(algo_name: str) -> list[str]:
+    """
+    List the available backends for an algorithm.
+
+    Parameters
+    ----------
+    algo_name :
+        Name of the optimization algorithm.
+    """
+    return list(_registry[algo_name].keys())
+
+
+def list_available_solvers() -> list[SolverSpec]:
+    """List all available solvers."""
+    return [
+        spec for algo_versions in _registry.values() for spec in algo_versions.values()
+    ]
+
+
+def list_available_algorithms() -> list[str]:
+    """
+    List the available algorithms that can be used for fitting models.
+
+    To list the available backends for a given algorithm,
+    see `list_algo_backends`.
+
+    To access an extended documentation about a specific solver,
+    see `nemos.solvers.get_solver_documentation`.
+
+    Example
+    -------
+    >>> import nemos as nmo
+    >>> nmo.solvers.list_available_algorithms()
+    ['GradientDescent', 'ProximalGradient', 'LBFGS', 'BFGS', 'NonlinearCG', 'SVRG', 'ProxSVRG']
+    """
+    return list(_registry.keys())
+
+
+register("GradientDescent", OptimistixNAG, "optimistix", default=True)
+register("ProximalGradient", OptimistixFISTA, "optimistix", default=True)
+register("LBFGS", OptimistixOptaxLBFGS, "optax+optimistix", default=True)
+register("BFGS", OptimistixBFGS, "optimistix", default=True)
+register("NonlinearCG", OptimistixNonlinearCG, "optimistix", default=True)
+register("SVRG", WrappedSVRG, "nemos", default=True)
+register("ProxSVRG", WrappedProxSVRG, "nemos", default=True)
 
 if JAXOPT_AVAILABLE:
     from ._jaxopt_solvers import (
@@ -29,31 +255,8 @@ if JAXOPT_AVAILABLE:
         JaxoptProximalGradient,
     )
 
-    solver_registry["GradientDescent[jaxopt]"] = JaxoptGradientDescent
-    solver_registry["ProximalGradient[jaxopt]"] = JaxoptProximalGradient
-    solver_registry["LBFGS[jaxopt]"] = JaxoptLBFGS
-    solver_registry["BFGS[jaxopt]"] = JaxoptBFGS
-    solver_registry["NonlinearCG[jaxopt]"] = JaxoptNonlinearCG
-
-
-def list_available_solvers():
-    """
-    List the available solvers that can be used for fitting models.
-
-    To access an extended documentation about a specific solver,
-    see `get_solver_documentation`.
-
-    Example
-    -------
-    >>> import nemos as nmo
-    >>> nmo.solvers.list_available_solvers()
-    ['GradientDescent', 'ProximalGradient', 'LBFGS', 'BFGS', 'SVRG', 'ProxSVRG', 'NonlinearCG'...]
-    >>> print(nmo.solvers.get_solver_documentation("SVRG"))
-    Showing docstring of nemos.solvers._svrg.WrappedSVRG.
-    For potentially more info, use `show_help=True`.
-    <BLANKLINE>
-    Adapter for NeMoS's implementation of SVRG following the AbstractSolver interface.
-    <BLANKLINE>
-    ...
-    """
-    return list(solver_registry.keys())
+    register("GradientDescent", JaxoptGradientDescent, "jaxopt", default=False)
+    register("ProximalGradient", JaxoptProximalGradient, "jaxopt", default=False)
+    register("LBFGS", JaxoptLBFGS, "jaxopt", default=False)
+    register("BFGS", JaxoptBFGS, "jaxopt", default=False)
+    register("NonlinearCG", JaxoptNonlinearCG, "jaxopt", default=False)
