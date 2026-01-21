@@ -281,11 +281,6 @@ class Regularizer(Base, abc.ABC):
         """
         Normalize regularizer strength into a PyTree of JAX float arrays.
 
-        This function performs *type normalization only*:
-          - `None` is returned unchanged
-          - Python scalars, lists, and array-likes are converted to `jnp.ndarray`
-          - Lists/tuples are treated as atomic leaves (not PyTree containers)
-
         Parameters
         ----------
         strength : Any
@@ -294,7 +289,7 @@ class Regularizer(Base, abc.ABC):
         Returns
         -------
         Any
-            PyTree with `jnp.ndarray` float leaves, or `None`.
+            PyTree with `jnp.ndarray` float leaves.
 
         Raises
         ------
@@ -302,22 +297,11 @@ class Regularizer(Base, abc.ABC):
             If conversion to float arrays fails.
         """
         if strength is None:
-            return 1.0
+            strength = 1.0
 
-        try:
-            return jax.tree_util.tree_map(
-                lambda x: (
-                    jnp.asarray(x, dtype=float)
-                    if isinstance(x, (list, tuple, np.ndarray, jnp.ndarray))
-                    else x
-                ),
-                strength,
-                is_leaf=lambda x: isinstance(x, (list, tuple, np.ndarray, jnp.ndarray)),
-            )
-        except (TypeError, ValueError):
-            raise TypeError(
-                f"Could not convert regularizer strength to floats: {strength}"
-            ) from None
+        return convert_tree_leaves_to_jax_array(
+            strength, f"Could not convert regularizer strength to floats: {strength}"
+        )
 
     def _validate_strength_structure(self, params: Any, strength: Any):
         """
@@ -407,9 +391,11 @@ class Regularizer(Base, abc.ABC):
         strengths = (
             [strength]
             if len(wheres) == 1
-            else strength
-            if isinstance(strength, (list, tuple)) and len(strength) == len(wheres)
-            else None
+            else (
+                strength
+                if isinstance(strength, (list, tuple)) and len(strength) == len(wheres)
+                else None
+            )
         )
 
         if strengths is None:
@@ -943,7 +929,7 @@ class GroupLasso(Regularizer):
         flat_mask = jax.tree_util.tree_leaves(self.mask)
         n_groups = flat_mask[0].shape[0]
 
-        if isinstance(strength, (int, float)):
+        if isinstance(strength, (int, float)) or strength.ndim == 0:
             per_group_strength = jnp.full(n_groups, strength, dtype=float)
         else:
             strength = jnp.asarray(strength, dtype=float)

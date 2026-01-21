@@ -1597,11 +1597,6 @@ class TestEMAlgorithm:
             observation_model=obs, regularizer=regularization, solver_name=solver_name
         )
         glm_params = GLMParams(coef, intercept)
-        glm.structured_regularizer_strength = (
-            glm.regularizer._validate_regularizer_strength_structure(
-                glm_params, glm.regularizer_strength
-            )
-        )
         glm._instantiate_solver(partial_hmm_negative_log_likelihood, glm_params)
         solver_run = glm._solver_run
         # End of preparatory step.
