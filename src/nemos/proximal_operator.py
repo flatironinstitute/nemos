@@ -102,6 +102,8 @@ def prox_none(x: Any, scaling: float = 1.0) -> Any:
     ----------
     x :
         Input pytree.
+    strength :
+        ignored
     scaling :
         ignored
 

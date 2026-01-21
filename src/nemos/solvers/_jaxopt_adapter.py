@@ -33,18 +33,15 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
     ):
         if self._proximal:
             self.fun = unregularized_loss
-            solver_init_kwargs["prox"] = regularizer.get_proximal_operator(init_params)
+            solver_init_kwargs["prox"] = regularizer.get_proximal_operator(
+                params=init_params, strength=regularizer_strength
+            )
         else:
             self.fun = regularizer.penalized_loss(
-                unregularized_loss, regularizer_strength, init_params=init_params
+                unregularized_loss,
+                params=init_params,
+                strength=regularizer_strength,
             )
-
-        self.regularizer_strength = regularizer_strength
-
-        # Prepend the regularizer strength to args for proximal solvers.
-        # Methods of `jaxopt.ProximalGradient` expect `hyperparams_prox` before
-        # the objective function's arguments, while others do not need this.
-        self.hyperparams_prox = (self.regularizer_strength,) if self._proximal else ()
 
         self._solver = self._solver_cls(
             fun=self.fun,
@@ -53,19 +50,17 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
         )
 
     def init_state(self, init_params: Params, *args: Any) -> JaxoptSolverState:
-        return self._solver.init_state(init_params, *self.hyperparams_prox, *args)
+        return self._solver.init_state(init_params, *args)
 
     def update(
         self, params: Params, state: JaxoptSolverState, *args: Any
     ) -> JaxoptStepResult:
-        params, state = self._solver.update(
-            params, state, *self.hyperparams_prox, *args
-        )
+        params, state = self._solver.update(params, state, *args)
         aux = self._extract_aux(state, fallback_name="aux_batch")
         return (params, state, aux)
 
     def run(self, init_params: Params, *args: Any) -> JaxoptStepResult:
-        params, state = self._solver.run(init_params, *self.hyperparams_prox, *args)
+        params, state = self._solver.run(init_params, *args)
         aux = self._extract_aux(state, fallback_name="aux_full")
         return (params, state, aux)
 
@@ -79,9 +74,7 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
 
     def get_optim_info(self, state: JaxoptSolverState) -> OptimizationInfo:
         num_steps = state.iter_num.item()  # pyright: ignore
-        function_val = (
-            state.value if hasattr(state, "value") else None
-        )  # pyright: ignore
+        function_val = state.value if hasattr(state, "value") else None  # pyright: ignore
 
         return OptimizationInfo(
             function_val=function_val,  # pyright: ignore

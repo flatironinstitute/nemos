@@ -302,7 +302,7 @@ class Regularizer(Base, abc.ABC):
             If conversion to float arrays fails.
         """
         if strength is None:
-            return None
+            strength = 1.0
 
         try:
             return jax.tree_util.tree_map(
@@ -311,8 +311,8 @@ class Regularizer(Base, abc.ABC):
                 is_leaf=lambda x: isinstance(x, (list, tuple, np.ndarray, jnp.ndarray)),
             )
         except (TypeError, ValueError) as e:
-            raise ValueError(
-                f"Could not convert regularizer strength to floats: {e}"
+            raise TypeError(
+                f"Could not convert regularizer strength to floats: {strength}"
             ) from None
 
     def _validate_strength_structure(self, params: Any, strength: Any):
@@ -370,9 +370,6 @@ class Regularizer(Base, abc.ABC):
         structured_strength = jax.tree_util.tree_unflatten(
             struct, [None] * struct.num_leaves
         )
-
-        if strength is None:
-            strength = 1.0
 
         def broadcast_leaf(param_leaf, strength_leaf):
             s = jnp.asarray(strength_leaf, dtype=float)
@@ -684,7 +681,7 @@ class ElasticNet(Regularizer):
         return strength, ratio
 
     def _validate_strength_structure(self, params: Any, strength: Any):
-        strength = super()._validate_strength_structure(params, strength[0])
+        _strength = super()._validate_strength_structure(params, strength[0])
         ratio = super()._validate_strength_structure(params, strength[1])
 
         def zip_leaves(s, r):
@@ -692,7 +689,7 @@ class ElasticNet(Regularizer):
                 return None
             return (s, r)
 
-        return jax.tree_util.tree_map(zip_leaves, strength, ratio)
+        return jax.tree_util.tree_map(zip_leaves, _strength, ratio)
 
 
 class GroupLasso(Regularizer):
@@ -923,53 +920,39 @@ class GroupLasso(Regularizer):
         where :math:`g` is the number of groups, :math:`\dim(\cdot)` is the dimension of the vector,
         i.e. the number of coefficient in each :math:`\beta_j`, and :math:`||\cdot||_2` is the euclidean norm.
         """
-        l2_norms = masked_norm_2(subtree, mask, normalize=False)
-        norm = compute_normalization(mask)
-        return jnp.sum(strength * norm * l2_norms)
 
-    def _validate_strength(self, strength: Any) -> Any:
-        if strength is None:
-            return strength
+        def penalty_leaf(leaf, leaf_mask, leaf_strength):
+            leaf_l2_norm = masked_norm_2(leaf, leaf_mask, normalize=False)
+            leaf_norm = compute_normalization(leaf_mask)
+            return jnp.sum(leaf_strength * leaf_norm * leaf_l2_norm)
 
-        if isinstance(strength, (float, int)):
-            return strength
-
-        if isinstance(strength, (jnp.ndarray, np.ndarray)):
-            return strength
-
-        raise TypeError(
-            "GroupLasso regularizer strength must be a float or a 1D array "
-            "specifying one value per group."
+        penalties = jax.tree_util.tree_map(
+            penalty_leaf,
+            subtree,
+            mask,
+            strength,
         )
+
+        return jnp.sum(jnp.array(jax.tree_util.tree_leaves(penalties)))
 
     def _validate_strength_structure(self, params: Any, strength: Any):
         flat_mask = jax.tree_util.tree_leaves(self.mask)
         n_groups = flat_mask[0].shape[0]
 
-        # Default scalar
-        if strength is None:
-            strength = 1.0
-
-        # Validate / convert
-        if isinstance(strength, (float, int)):
-            per_group_strength = jnp.ones(n_groups, dtype=float) * float(strength)
-        elif isinstance(strength, (jnp.ndarray, np.ndarray)):
-            strength = jnp.asarray(strength, dtype=float)
-            if strength.ndim != 1 or strength.shape[0] != n_groups:
-                raise ValueError(
-                    f"GroupLasso strength must have shape ({n_groups},), got {strength.shape}"
-                )
+        if strength.ndim == 0:
+            per_group_strength = jnp.full(n_groups, strength)
+        elif strength.ndim == 1 and strength.shape[0] == n_groups:
             per_group_strength = strength
         else:
-            raise TypeError(
-                f"GroupLasso strength must be a float or 1D array of length {n_groups}"
+            raise ValueError(
+                f"GroupLasso strength must be a scalar or shape ({n_groups},), "
+                f"got shape {strength.shape}"
             )
 
-        # Broadcast per-group strength to **mask PyTree structure**
-        def leaf_strength(_):
-            return per_group_strength
-
-        return jax.tree_util.tree_map(leaf_strength, self.mask)
+        return jax.tree_util.tree_map(
+            lambda _: per_group_strength,
+            self.mask,
+        )
 
     def _get_filter_kwargs(self, params: Any, strength: Any) -> dict:
         if self.mask is None:

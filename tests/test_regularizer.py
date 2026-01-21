@@ -94,8 +94,7 @@ def test_regularizer(regularizer_strength, reg_type):
     if not isinstance(regularizer_strength, float):
         with pytest.raises(
             TypeError,
-            match="Regularizer strength should be either a float or a pytree of floats, "
-            f"you passed {regularizer_strength} of type {type(regularizer_strength)}",
+            match=f"Could not convert regularizer strength to floats: {regularizer_strength}",
         ):
             nmo.glm.GLM(
                 regularizer=reg_type(), regularizer_strength=regularizer_strength
@@ -121,8 +120,7 @@ def test_regularizer_setter(regularizer_strength, regularizer):
     if not isinstance(regularizer_strength, float):
         with pytest.raises(
             TypeError,
-            match="Regularizer strength should be either a float or a pytree of floats, "
-            f"you passed {regularizer_strength} of type {type(regularizer_strength)}",
+            match=f"Could not convert regularizer strength to floats: {regularizer_strength}",
         ):
             nmo.glm.GLM(
                 regularizer=regularizer, regularizer_strength=regularizer_strength
@@ -361,11 +359,6 @@ class TestUnRegularized:
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
         params = GLMParams(true_params.coef * 0.0, true_params.intercept)
-        model.structured_regularizer_strength = (
-            model.regularizer._validate_regularizer_strength_structure(
-                params, model.regularizer_strength
-            )
-        )
         model._instantiate_solver(model._compute_loss, params)
         model.solver_run(params, X, y)
 
@@ -685,11 +678,6 @@ class TestRidge:
 
         # set regularizer and solver name
         model.set_params(regularizer=self.cls(), regularizer_strength=1.0)
-        model.structured_regularizer_strength = (
-            model.regularizer._validate_regularizer_strength_structure(
-                true_params, model.regularizer_strength
-            )
-        )
         model.solver_name = solver_name
         params = GLMParams(true_params.coef * 0.0, true_params.intercept)
         runner = model._instantiate_solver(model._compute_loss, params).solver_run
@@ -706,11 +694,6 @@ class TestRidge:
 
         # set regularizer and solver name
         model.set_params(regularizer=self.cls(), regularizer_strength=1.0)
-        model.structured_regularizer_strength = (
-            model.regularizer._validate_regularizer_strength_structure(
-                true_params, model.regularizer_strength
-            )
-        )
         model.solver_name = solver_name
         params = GLMParams(
             jax.tree_util.tree_map(jnp.zeros_like, true_params.coef),
@@ -729,11 +712,6 @@ class TestRidge:
 
         # set model params
         model.set_params(regularizer=self.cls(), regularizer_strength=1.0)
-        model.structured_regularizer_strength = (
-            model.regularizer._validate_regularizer_strength_structure(
-                true_params, model.regularizer_strength
-            )
-        )
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-12}
 
@@ -764,11 +742,6 @@ class TestRidge:
         """Test that different solvers converge to the same solution."""
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         model.set_params(regularizer=self.cls(), regularizer_strength=1.0)
-        model.structured_regularizer_strength = (
-            model.regularizer._validate_regularizer_strength_structure(
-                true_params, model.regularizer_strength
-            )
-        )
         model.solver_kwargs = {"tol": 10**-12}
         model.solver_name = "BFGS"
 
@@ -777,11 +750,7 @@ class TestRidge:
             model._compute_loss, init_params
         ).solver_run
         params = runner_bfgs(init_params, X, y)[0]
-        model_skl = PoissonRegressor(
-            fit_intercept=True,
-            tol=10**-12,
-            alpha=model.regularizer_strength,
-        )
+        model_skl = PoissonRegressor(fit_intercept=True, tol=10**-12, alpha=1.0)
         model_skl.fit(X, y)
 
         match_weights = np.allclose(model_skl.coef_, params.coef)
@@ -800,11 +769,6 @@ class TestRidge:
         model.set_params(regularizer=self.cls(), regularizer_strength=1.0)
         model.solver_kwargs = {"tol": 10**-12}
         model.regularizer_strength = 0.1
-        model.structured_regularizer_strength = (
-            model.regularizer._validate_regularizer_strength_structure(
-                true_params, model.regularizer_strength
-            )
-        )
         model.solver_name = solver_name
         init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
         runner_bfgs = model._instantiate_solver(
@@ -958,11 +922,6 @@ class TestLasso:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
 
         model.set_params(regularizer=self.cls(), regularizer_strength=1)
-        model.structured_regularizer_strength = (
-            model.regularizer._validate_regularizer_strength_structure(
-                true_params, model.regularizer_strength
-            )
-        )
         model.solver_name = solver_name
         params = GLMParams(true_params.coef * 0.0, true_params.intercept)
         runner = model._instantiate_solver(model._compute_loss, params).solver_run
@@ -976,11 +935,6 @@ class TestLasso:
 
         # set regularizer and solver name
         model.set_params(regularizer=self.cls(), regularizer_strength=1.0)
-        model.structured_regularizer_strength = (
-            model.regularizer._validate_regularizer_strength_structure(
-                true_params, model.regularizer_strength
-            )
-        )
         model.solver_name = solver_name
         params = GLMParams(
             jax.tree_util.tree_map(jnp.zeros_like, true_params.coef),
@@ -999,11 +953,6 @@ class TestLasso:
         # set precision to float64 for accurate matching of the results
         model.data_type = jnp.float64
         model.set_params(regularizer=self.cls(), regularizer_strength=1)
-        model.structured_regularizer_strength = (
-            model.regularizer._validate_regularizer_strength_structure(
-                true_params, model.regularizer_strength
-            )
-        )
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-12}
 
@@ -1179,28 +1128,34 @@ class TestElasticNet:
                 (1.0, 0.0),
                 pytest.raises(
                     ValueError,
-                    match=f"Regularization ratio of 0 is not supported: 0.0",
+                    match=re.escape(
+                        f"ElasticNet regularization ratio must be in (0, 1], got 0.0"
+                    ),
                 ),
             ),
             (
                 (1.0, 1.1),
                 pytest.raises(
                     ValueError,
-                    match=f"Regularization ratio must be between 0 and 1: 1.1",
+                    match=re.escape(
+                        f"ElasticNet regularization ratio must be in (0, 1], got 1.1"
+                    ),
                 ),
             ),
             (
                 (1.0, -0.1),
                 pytest.raises(
                     ValueError,
-                    match=f"Regularization ratio must be between 0 and 1: -0.1",
+                    match=re.escape(
+                        f"ElasticNet regularization ratio must be in (0, 1], got -0.1"
+                    ),
                 ),
             ),
             (
                 (1.0, "bah"),
                 pytest.raises(
                     TypeError,
-                    match="Regularizer ratio should be either a float or a pytree of floats, you passed bah of type <class 'str'>",
+                    match="Could not convert regularizer strength to floats: bah",
                 ),
             ),
             (
@@ -1208,7 +1163,7 @@ class TestElasticNet:
                 pytest.raises(
                     TypeError,
                     match=re.escape(
-                        "ElasticNet regularizer strength should be a tuple of two floats, you passed: (1.0, 0.5, 0.1)"
+                        "ElasticNet regularizer strength must be a tuple (strength, ratio)"
                     ),
                 ),
             ),
@@ -1248,11 +1203,6 @@ class TestElasticNet:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
 
         model.set_params(regularizer=self.cls(), regularizer_strength=(1, 0.5))
-        model.structured_regularizer_strength = (
-            model.regularizer._validate_regularizer_strength_structure(
-                true_params, model.regularizer_strength
-            )
-        )
         model.solver_name = solver_name
         params = GLMParams(true_params.coef * 0.0, true_params.intercept)
         runner = model._instantiate_solver(model._compute_loss, params).solver_run
@@ -1266,11 +1216,6 @@ class TestElasticNet:
 
         # set regularizer and solver name
         model.set_params(regularizer=self.cls(), regularizer_strength=(1, 0.5))
-        model.structured_regularizer_strength = (
-            model.regularizer._validate_regularizer_strength_structure(
-                true_params, model.regularizer_strength
-            )
-        )
         model.solver_name = solver_name
         params = GLMParams(
             jax.tree_util.tree_map(jnp.zeros_like, true_params.coef),
@@ -1284,12 +1229,16 @@ class TestElasticNet:
         )
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
-    @pytest.mark.parametrize("reg_strength", [1.0, 0.5, 0.1])
+    @pytest.mark.parametrize("regularizer_strength", [1.0, 0.5, 0.1])
     @pytest.mark.parametrize("reg_ratio", [1.0, 0.5, 0.2])
     @pytest.mark.requires_x64
     @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
     def test_solver_match_statsmodels(
-        self, solver_name, reg_strength, reg_ratio, poissonGLM_model_instantiation
+        self,
+        solver_name,
+        regularizer_strength,
+        reg_ratio,
+        poissonGLM_model_instantiation,
     ):
         """Test that different solvers converge to the same solution."""
         # with jax.disable_jit():
@@ -1297,12 +1246,8 @@ class TestElasticNet:
         # set precision to float64 for accurate matching of the results
         model.data_type = jnp.float64
         model.set_params(
-            regularizer=self.cls(), regularizer_strength=(reg_strength, reg_ratio)
-        )
-        model.structured_regularizer_strength = (
-            model.regularizer._validate_regularizer_strength_structure(
-                true_params, model.regularizer_strength
-            )
+            regularizer=self.cls(),
+            regularizer_strength=(regularizer_strength, reg_ratio),
         )
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-12, "maxiter": 10000}
@@ -1316,7 +1261,7 @@ class TestElasticNet:
         glm_sm = sm.GLM(endog=y, exog=sm.add_constant(X), family=sm.families.Poisson())
 
         # regularize everything except intercept
-        alpha_sm = np.ones(X.shape[1] + 1) * reg_strength
+        alpha_sm = np.ones(X.shape[1] + 1) * regularizer_strength
         alpha_sm[0] = 0
 
         # pure lasso = elastic net with L1 weight = 1
@@ -1357,8 +1302,13 @@ class TestElasticNet:
         # use the penalized loss function to solve optimization via Nelder-Mead
         penalized_loss = lambda p, x, y: model_PG.regularizer.penalized_loss(
             model_PG._compute_loss,
-            model_PG.structured_regularizer_strength,
-            init_params=None,
+            params=GLMParams(
+                p[1:],
+                p[0].reshape(
+                    1,
+                ),
+            ),
+            strength=model_PG.regularizer_strength,
         )(
             GLMParams(
                 p[1:],
@@ -1591,11 +1541,6 @@ class TestGroupLasso:
         mask = GLMParams(jnp.asarray(mask), None)
 
         model.set_params(regularizer=self.cls(mask=mask), regularizer_strength=1.0)
-        model.structured_regularizer_strength = (
-            model.regularizer._validate_regularizer_strength_structure(
-                true_params, model.regularizer_strength
-            )
-        )
         model.solver_name = solver_name
 
         init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
@@ -1636,11 +1581,6 @@ class TestGroupLasso:
         mask = GLMParams(jnp.asarray(mask), None)
 
         model.set_params(regularizer=self.cls(mask=mask), regularizer_strength=1.0)
-        model.structured_regularizer_strength = (
-            model.regularizer._validate_regularizer_strength_structure(
-                true_params, model.regularizer_strength
-            )
-        )
         model.solver_name = solver_name
 
         init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
@@ -1720,7 +1660,7 @@ class TestGroupLasso:
         mask = jnp.asarray(mask, dtype=jnp.float32)
 
         if raise_exception:
-            with pytest.raises(ValueError, match="Mask elements be 0s and 1s"):
+            with pytest.raises(ValueError, match="Mask elements must be 0s and 1s"):
                 model.set_params(
                     regularizer=self.cls(mask=mask), regularizer_strength=1.0
                 )
@@ -1805,11 +1745,6 @@ class TestGroupLasso:
         mask = GLMParams(jnp.asarray(mask_array, dtype=jnp.float32), None)
 
         model.set_params(regularizer=self.cls(mask=mask), regularizer_strength=1.0)
-        model.structured_regularizer_strength = (
-            model.regularizer._validate_regularizer_strength_structure(
-                true_params, model.regularizer_strength
-            )
-        )
         model.solver_name = "ProximalGradient"
 
         init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
@@ -1879,7 +1814,7 @@ class TestGroupLasso:
         mask = jnp.asarray(mask, dtype=jnp.float32)
 
         if raise_exception:
-            with pytest.raises(ValueError, match="Mask elements be 0s and 1s"):
+            with pytest.raises(ValueError, match="Mask elements must be 0s and 1s"):
                 regularizer.set_params(mask=mask)
         else:
             regularizer.set_params(mask=mask)
@@ -2103,10 +2038,10 @@ class TestGroupLasso:
         }
 
         # Test that penalization doesn't crash with dict structure
-        filter_kwargs = regularizer._get_filter_kwargs(params_dict)
-        penalty = regularizer._penalization(
-            params_dict, strength=0.1, filter_kwargs=filter_kwargs
+        filter_kwargs = regularizer._get_filter_kwargs(
+            params_dict, strength=regularizer._validate_strength(0.1)
         )
+        penalty = regularizer._penalization(params_dict, filter_kwargs=filter_kwargs)
 
         # Check penalty is a scalar and non-negative
         assert isinstance(penalty, jnp.ndarray)
@@ -2133,10 +2068,10 @@ class TestGroupLasso:
         )
 
         # Test that penalization works
-        filter_kwargs = regularizer._get_filter_kwargs(params)
-        penalty = regularizer._penalization(
-            params, strength=0.1, filter_kwargs=filter_kwargs
+        filter_kwargs = regularizer._get_filter_kwargs(
+            params, strength=regularizer._validate_strength(0.1)
         )
+        penalty = regularizer._penalization(params, filter_kwargs=filter_kwargs)
 
         # Check penalty is a scalar and non-negative
         assert isinstance(penalty, jnp.ndarray)
@@ -2168,15 +2103,11 @@ class TestPenalizedLossAuxiliaryVariables:
         y = jnp.ones(10)
 
         # ElasticNet requires (strength, ratio) tuple
-        reg_strength = (
+        regularizer_strength = regularizer._validate_strength(
             (0.1, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 0.1
         )
-        reg_strength = regularizer._validate_regularizer_strength(reg_strength)
-        reg_strength = regularizer._validate_regularizer_strength_structure(
-            params, reg_strength
-        )
         penalized = regularizer.penalized_loss(
-            simple_loss, strength=reg_strength, init_params=None
+            simple_loss, params=params, strength=regularizer_strength
         )
 
         result = penalized(params, X, y)
@@ -2200,15 +2131,11 @@ class TestPenalizedLossAuxiliaryVariables:
         y = jnp.ones(10)
 
         # ElasticNet requires (strength, ratio) tuple
-        reg_strength = (
-            (0.1, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 0.1
-        )
-        reg_strength = regularizer._validate_regularizer_strength(reg_strength)
-        reg_strength = regularizer._validate_regularizer_strength_structure(
-            params, reg_strength
+        regularizer_strength = regularizer._validate_strength(
+            (1.0, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 1.0
         )
         penalized = regularizer.penalized_loss(
-            loss_with_aux, strength=reg_strength, init_params=None
+            loss_with_aux, params=params, strength=regularizer_strength
         )
 
         result = penalized(params, X, y)
@@ -2245,15 +2172,11 @@ class TestPenalizedLossAuxiliaryVariables:
         y = jnp.ones(10)
 
         # ElasticNet requires (strength, ratio) tuple
-        reg_strength = (
-            (0.1, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 0.1
-        )
-        reg_strength = regularizer._validate_regularizer_strength(reg_strength)
-        reg_strength = regularizer._validate_regularizer_strength_structure(
-            params, reg_strength
+        regularizer_strength = regularizer._validate_strength(
+            (1.0, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 1.0
         )
         penalized = regularizer.penalized_loss(
-            bad_loss, strength=reg_strength, init_params=None
+            bad_loss, params=params, strength=regularizer_strength
         )
 
         with pytest.raises(
@@ -2274,15 +2197,11 @@ class TestPenalizedLossAuxiliaryVariables:
         y = jnp.ones(10)
 
         # ElasticNet requires (strength, ratio) tuple
-        reg_strength = (
-            (0.1, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 0.1
-        )
-        reg_strength = regularizer._validate_regularizer_strength(reg_strength)
-        reg_strength = regularizer._validate_regularizer_strength_structure(
-            params, reg_strength
+        regularizer_strength = regularizer._validate_strength(
+            (1.0, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 1.0
         )
         penalized = regularizer.penalized_loss(
-            bad_loss, strength=reg_strength, init_params=None
+            bad_loss, params=params, strength=regularizer_strength
         )
 
         with pytest.raises(
@@ -2307,24 +2226,23 @@ class TestPenalizedLossAuxiliaryVariables:
         unpenalized_loss, _ = loss_with_aux(params, X, y)
 
         # ElasticNet requires (strength, ratio) tuple
-        reg_strength = (
+        regularizer_strength = regularizer._validate_strength(
             (1.0, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 1.0
-        )
-        reg_strength = regularizer._validate_regularizer_strength(reg_strength)
-        reg_strength = regularizer._validate_regularizer_strength_structure(
-            params, reg_strength
         )
 
         # Get penalized loss
         penalized = regularizer.penalized_loss(
-            loss_with_aux, strength=reg_strength, init_params=params
+            loss_with_aux,
+            params=params,
+            strength=regularizer_strength,
         )
         penalized_loss_value, aux = penalized(params, X, y)
 
         # Calculate expected penalty
-        expected_penalty = regularizer._penalization(
-            params, reg_strength, regularizer._get_filter_kwargs(params)
+        filter_kwargs = regularizer._get_filter_kwargs(
+            strength=regularizer_strength, params=params
         )
+        expected_penalty = regularizer._penalization(params, filter_kwargs)
 
         # Check that penalized loss = unpenalized loss + penalty
         assert jnp.isclose(penalized_loss_value, unpenalized_loss + expected_penalty)
