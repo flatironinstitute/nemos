@@ -1751,7 +1751,7 @@ class TestGLMObservationModel:
             return 1.0
 
         elif "categorical" in model_instantiation:
-            return 1.0
+            return 0.1
 
         else:
             raise ValueError("Unknown model instantiation")
@@ -1795,11 +1795,9 @@ class TestGLMObservationModel:
             # Categorical models have (n_features, n_categories-1) coef shape
             # For lasso, estimate surviving coefficients per neuron
             if is_population_glm_type(glm_type):
-                return np.array([6, 6, 6])  # 3 neurons, ~6 params each (3 per category)
+                return np.array([4, 5, 2])
             else:
-                return np.array(
-                    [6]
-                )  # ~6 surviving params (3 per category * 2 categories)
+                return np.array([3])
 
         else:
             raise ValueError("Unknown model instantiation")

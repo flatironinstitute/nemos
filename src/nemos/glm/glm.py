@@ -1617,10 +1617,10 @@ class CategoricalMixin:
             An estimate of the degrees of freedom of the residuals.
         """
         # Convert a pytree to a design-matrix
-        X = jnp.hstack(jax.tree_util.tree_leaves(X))
+        x_leaf = jax.tree_util.tree_leaves(X)
 
         if n_samples is None:
-            n_samples = X.shape[0]
+            n_samples = x_leaf[0].shape[0]
         else:
             if not isinstance(n_samples, int):
                 raise TypeError(
@@ -1628,8 +1628,8 @@ class CategoricalMixin:
                     f"Type {type(n_samples)} provided instead!"
                 )
 
-        n_features = X.shape[1]
-        n_categories = self._n_categories
+        n_features = sum(x.shape[1] for x in x_leaf)
+        n_m1_categories = self._n_categories - 1
         params = self._get_model_params()
 
         # Infer n_neurons from coef shape:
@@ -1649,18 +1649,18 @@ class CategoricalMixin:
                 lambda x: sum([jnp.sum(i, axis=(0, -1)) for i in x]),
                 params.coef,
             )
-            return jnp.atleast_1d(n_samples - resid_dof - n_categories)
+            return jnp.atleast_1d(n_samples - resid_dof - n_m1_categories)
 
         elif isinstance(self.regularizer, Ridge):
             # For Ridge, use total parameters
-            return (n_samples - n_categories * n_features - n_categories) * jnp.ones(
-                n_neurons
-            )
+            return (
+                n_samples - n_m1_categories * n_features - n_m1_categories
+            ) * jnp.ones(n_neurons)
 
         else:
             # For UnRegularized, use the rank
             rank = jnp.linalg.matrix_rank(X)
-            return (n_samples - rank * n_categories - n_categories) * jnp.ones(
+            return (n_samples - rank * n_m1_categories - n_m1_categories) * jnp.ones(
                 n_neurons
             )
 
