@@ -23,7 +23,7 @@ from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..pytrees import FeaturePytree
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
 from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
-from ..type_casting import cast_to_jax, support_pynapple
+from ..type_casting import cast_to_jax, is_numpy_array_like, support_pynapple
 from ..typing import (
     DESIGN_INPUT_TYPE,
     RegularizerStrength,
@@ -1510,6 +1510,10 @@ class CategoricalMixin:
 
     @n_categories.setter
     def n_categories(self, value: int):
+        # extract item from scalar arrays
+        if is_numpy_array_like(value)[1] and value.size == 1:
+            value = value.item()
+
         if not isinstance(value, Number) or value < 2 or not int(value) == value:
             raise ValueError(
                 "The number of categories must be an integer greater than or equal to 2."
@@ -1533,7 +1537,7 @@ class CategoricalMixin:
         """Preprocess inputs before initializing state."""
         X, y = super()._preprocess_inputs(X, y=y, drop_nans=drop_nans)
         if y is not None:
-            y = jax.nn.one_hot(y, self._n_categories)
+            y = jax.nn.one_hot(y.astype(int), self._n_categories)
         return X, y
 
     # Note: necessary double decorator. The super().predict is decorated as well,
@@ -1589,12 +1593,14 @@ class CategoricalMixin:
         log_proba = super().predict(X)
         if return_type == "log-proba":
             return log_proba
-        else:
+        elif return_type == "proba":
             exp = support_pynapple(conv_type="jax")(jnp.exp)
             proba = exp(log_proba)
             # renormalize (sum to 1 constraint)
             proba /= proba.sum(axis=-1, keepdims=True)
             return proba
+        else:
+            raise ValueError(f"Unrecognized return type ``'{return_type}'``")
 
     def _estimate_resid_degrees_of_freedom(
         self, X: DESIGN_INPUT_TYPE, n_samples: Optional[int] = None
@@ -1659,7 +1665,7 @@ class CategoricalMixin:
 
         else:
             # For UnRegularized, use the rank
-            rank = jnp.linalg.matrix_rank(X)
+            rank = jnp.linalg.matrix_rank(jnp.concatenate(x_leaf, axis=1))
             return (n_samples - rank * n_m1_categories - n_m1_categories) * jnp.ones(
                 n_neurons
             )
@@ -1720,7 +1726,7 @@ class CategoricalMixin:
         :
             Initial parameter tuple of (coefficients, intercept).
         """
-        y = jax.nn.one_hot(y, self.n_categories)
+        y = jax.nn.one_hot(y.astype(int), self.n_categories)
         return super().initialize_params(X, y)
 
     def update(
@@ -1768,7 +1774,7 @@ class CategoricalMixin:
         state :
             Updated optimizer state.
         """
-        y = jax.nn.one_hot(y, self._n_categories)
+        y = jax.nn.one_hot(y.astype(int), self._n_categories)
         return super().update(
             params, opt_state, X, y, *args, n_samples=n_samples, **kwargs
         )
