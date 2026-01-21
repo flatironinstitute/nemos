@@ -1049,7 +1049,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         inverse_link_function: <function one_over_x at ...>
         observation_model: GammaObservations()
         regularizer: Ridge()
-        regularizer_strength: 0.1
+        regularizer_strength: 0.1...
         solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
         solver_name: BFGS
         >>> # Save the model parameters to a file
