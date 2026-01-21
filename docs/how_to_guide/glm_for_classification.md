@@ -41,18 +41,15 @@ model.intercept_ = true_intercept
 true_choice, _ = model.simulate(jax.random.PRNGKey(124), X)
 ```
 
-## Fit the Model
+## Fit the Model and Predict Choices
 
 ```{code-cell}
 model = nmo.glm.CategoricalGLM(n_categories)
 
 train_samples = 500
 model.fit(X[:train_samples], true_choice[:train_samples])
-```
 
-## Predict and Evaluate
-
-```{code-cell}
+# predict
 predicted_choice = model.predict(X)
 
 # get class probabilities
