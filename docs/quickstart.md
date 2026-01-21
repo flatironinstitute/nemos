@@ -143,7 +143,7 @@ print(f"Model intercept shape: {population_model.intercept_.shape}")
 
 ### **Categorical GLM**
 
-For classification tasks, such as modeling behavioral choices, NeMoS provides the `CategoricalGLM`. This model treats observations as categorical random variables and uses softmax regression (multinomial logistic regression) under the hood.
+For classification tasks, such as modeling behavioral choices, NeMoS provides the `CategoricalGLM`. This model treats observations as categorical random variables.
 
 ```{code-cell}
 
