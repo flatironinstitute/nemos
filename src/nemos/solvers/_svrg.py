@@ -96,7 +96,7 @@ class ProxSVRG:
     >>> import numpy as np
     >>> from nemos.proximal_operator import prox_lasso
     >>> loss_fn = lambda params, X, y: ((X.dot(params) - y)**2).sum()
-    >>> svrg = ProxSVRG(loss_fn, prox_lasso)
+    >>> svrg = ProxSVRG(loss_fn, prox_none)
     >>> params, state = svrg.run(np.zeros(2), np.ones((10, 2)), np.zeros(10))
 
 
