@@ -398,6 +398,7 @@ class Regularizer(Base, abc.ABC):
                         lambda p: jnp.full(p.shape, scalar, dtype=float),
                         subtree,
                     ),
+                    is_leaf=lambda x: x is None,
                 )
             return structured_strength
 
