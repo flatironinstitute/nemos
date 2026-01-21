@@ -254,7 +254,7 @@ class ProxSVRG:
 
         # apply the proximal operator
         next_params = self.proximal_operator(
-            next_params, hyperparams_prox, scaling=stepsize
+            next_params, **hyperparams_prox, scaling=stepsize
         )
 
         return next_params, minibatch_aux_at_current_params
@@ -428,7 +428,7 @@ class ProxSVRG:
         self,
         init_params: Pytree,
         init_state: SVRGState,
-        hyperparams_prox: Union[float, None],
+        hyperparams_prox: Any,
         *args: Any,
     ) -> OptStep:
         """
@@ -812,7 +812,7 @@ class SVRG(ProxSVRG):
         init_state = self.init_state(init_params, *args)
 
         # substitute None for hyperparams_prox
-        return self._run(init_params, init_state, None, *args)
+        return self._run(init_params, init_state, *args)
 
 
 class WrappedSVRG(JaxoptAdapter):

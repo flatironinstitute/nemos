@@ -234,7 +234,8 @@ class Regularizer(Base, abc.ABC):
         """
         filter_kwargs = self._get_filter_kwargs(strength=strength, params=params)
 
-        def prox_op(params, scaling=1.0):
+        def prox_op(params, scaling=1.0, *args):
+            print(params)
             return apply_operator(
                 self._proximal_operator,
                 params,
