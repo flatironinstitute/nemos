@@ -591,6 +591,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         """Initialize the solver and the state of the solver for running fit and update."""
         pass
 
+    @cast_to_jax
     def initialize_solver_and_state(
         self,
         X: DESIGN_INPUT_TYPE,
