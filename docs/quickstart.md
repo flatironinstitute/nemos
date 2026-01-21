@@ -141,6 +141,57 @@ print(f"Model intercept shape: {population_model.intercept_.shape}")
 
 ```
 
+### **Categorical GLM**
+
+For classification tasks, such as modeling behavioral choices, NeMoS provides the `CategoricalGLM`. This model treats observations as categorical random variables and uses softmax regression (multinomial logistic regression) under the hood.
+
+```{code-cell}
+
+import nemos as nmo
+
+# Instantiate a categorical model for 3 categories
+n_categories = 3
+model = nmo.glm.CategoricalGLM(n_categories)
+
+```
+
+The `CategoricalGLM` follows a similar API to the standard GLM, with a few key differences:
+
+- `predict` returns predicted category labels (not rates)
+- `predict_proba` returns the probability of each category
+
+```{code-cell}
+
+import numpy as np
+num_samples, num_features = 100, 3
+
+# Generate a design matrix
+X = np.random.normal(size=(num_samples, num_features))
+# generate categorical observations (values 0, 1, or 2)
+choices = np.random.choice(n_categories, size=num_samples)
+
+# fit the model
+model = model.fit(X, choices)
+
+# predict categories
+predicted_categories = model.predict(X)
+
+# get probability for each category
+probabilities = model.predict_proba(X)
+probabilities.shape  # expected shape: (num_samples, n_categories)
+
+```
+
+For fitting multiple subjects in parallel, use `CategoricalPopulationGLM`:
+
+```{code-cell}
+
+# fit multiple subjects simultaneously
+population_model = nmo.glm.CategoricalPopulationGLM(n_categories)
+
+```
+
+For a complete example with confusion matrix visualization, see the [GLM for Classification how-to guide](how_to_guide/glm_for_classification).
 
 ## **Basis: Feature Construction**
 
@@ -250,8 +301,8 @@ For additional information on one-dimensional convolutions, see [here](convoluti
 
 ### **Continuous Observations**
 
-By default, NeMoS' GLM uses [Poisson observations](nemos.observation_models.PoissonObservations), which are a natural choice for spike counts. However, the 
-package also supports a [Gamma](nemos.observation_models.GammaObservations) GLM and a [Gaussian](nemos.observation_models.GaussianObservations) GLM. 
+By default, NeMoS' GLM uses [Poisson observations](nemos.observation_models.PoissonObservations), which are a natural choice for spike counts. However, the
+package also supports a [Gamma](nemos.observation_models.GammaObservations) GLM and a [Gaussian](nemos.observation_models.GaussianObservations) GLM.
 
 #### Gamma Observations
 
