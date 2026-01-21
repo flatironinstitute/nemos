@@ -3,6 +3,7 @@ import pytest
 
 from nemos.glm.params import GLMParams
 from nemos.proximal_operator import masked_norm_2, prox_group_lasso, prox_lasso
+from nemos.tree_utils import tree_full_like
 
 
 @pytest.mark.parametrize(
@@ -39,7 +40,7 @@ def test_prox_operator_returns_correct_type(
         ),  # (params, regularizer_strength, scaling)
         (
             prox_group_lasso,
-            lambda d: (d[0][0], d[1][0], d[2], d[3]),
+            lambda d: (d[0], d[1], d[2], d[3]),
             GLMParams,
         ),  # (weights, regularizer_strength, mask, scaling)
     ],
@@ -81,7 +82,7 @@ def test_prox_lasso_has_coef_and_intercept_multineuron(
         ),  # (params, regularizer_strength, scaling)
         (
             prox_group_lasso,
-            lambda d: (d[0][0], d[1][0], d[2], d[3]),
+            lambda d: (d[0], d[1], d[2], d[3]),
             lambda result, d: (result.coef.shape, d[0].coef.shape),
         ),  # (weights, regularizer_strength, mask, scaling)
     ],
@@ -186,7 +187,7 @@ def test_prox_group_lasso_shrinks_only_masked(example_data_prox_operator):
     n_groups = mask.coef.shape[0]
     mask_array = mask.coef.at[:, 1].set(jnp.zeros(n_groups))
     mask = GLMParams(mask_array, mask.intercept)
-    params_new = prox_group_lasso(params, 0.05, mask)
+    params_new = prox_group_lasso(params, tree_full_like(params, 0.05), mask)
     # Feature 1 should not be shrunk (no group assignment)
     assert params_new.coef[1] == params.coef[1]
     # Other features should be shrunk
@@ -204,7 +205,7 @@ def test_prox_group_lasso_shrinks_only_masked_multineuron(
     n_neurons = mask.coef.shape[2]
     mask_array = mask.coef.at[:, 1].set(jnp.zeros((n_groups, n_neurons)))
     mask = GLMParams(mask_array, mask.intercept)
-    params_new = prox_group_lasso(params, 0.05, mask)
+    params_new = prox_group_lasso(params, tree_full_like(params, 0.05), mask)
     # Feature 1 should not be shrunk across all neurons
     assert jnp.all(params_new.coef[1] == params.coef[1])
     # Other features should be shrunk
@@ -231,7 +232,9 @@ def test_prox_group_lasso_dict_structure():
     }
 
     regularizer_strength = 0.1
-    result = prox_group_lasso(params, regularizer_strength, mask)
+    result = prox_group_lasso(
+        params, tree_full_like(params, regularizer_strength), mask
+    )
 
     # Check structure preserved
     assert isinstance(result, dict)
@@ -270,7 +273,9 @@ def test_prox_group_lasso_nested_structure():
     }
 
     regularizer_strength = 0.1
-    result = prox_group_lasso(params, regularizer_strength, mask)
+    result = prox_group_lasso(
+        params, tree_full_like(params, regularizer_strength), mask
+    )
 
     # Check nested structure preserved
     assert isinstance(result, dict)
@@ -336,8 +341,12 @@ def test_prox_group_lasso_equivalence_array_vs_dict():
     regularizer_strength = 0.1
 
     # Apply prox operator to both versions
-    result_array = prox_group_lasso(params_array, regularizer_strength, mask_array)
-    result_dict = prox_group_lasso(params_dict, regularizer_strength, mask_dict)
+    result_array = prox_group_lasso(
+        params_array, tree_full_like(params_array, regularizer_strength), mask_array
+    )
+    result_dict = prox_group_lasso(
+        params_dict, tree_full_like(params_dict, regularizer_strength), mask_dict
+    )
 
     # Concatenate dict results to compare with array
     result_dict_concat = jnp.concatenate(
@@ -399,7 +408,9 @@ def test_prox_lasso_dict_structure():
     }
 
     regularizer_strength = 0.5
-    result = prox_lasso(params, regularizer_strength, scaling=1.0)
+    result = prox_lasso(
+        params, tree_full_like(params, regularizer_strength), scaling=1.0
+    )
 
     # Check structure preserved
     assert isinstance(result, dict)
