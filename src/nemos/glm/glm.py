@@ -1537,7 +1537,8 @@ class CategoricalMixin:
         """Preprocess inputs before initializing state."""
         X, y = super()._preprocess_inputs(X, y=y, drop_nans=drop_nans)
         if y is not None:
-            y = jax.nn.one_hot(y.astype(int), self._n_categories)
+            y = self._validator.check_and_cast_y_to_integer(y)
+            y = jax.nn.one_hot(y, self._n_categories)
         return X, y
 
     # Note: necessary double decorator. The super().predict is decorated as well,
@@ -1726,7 +1727,8 @@ class CategoricalMixin:
         :
             Initial parameter tuple of (coefficients, intercept).
         """
-        y = jax.nn.one_hot(y.astype(int), self.n_categories)
+        y = self._validator.check_and_cast_y_to_integer(y)
+        y = jax.nn.one_hot(y, self.n_categories)
         return super().initialize_params(X, y)
 
     def update(
@@ -1744,6 +1746,9 @@ class CategoricalMixin:
 
         Performs a single optimization step using the model's solver. Class labels
         are automatically converted to one-hot encoding before the update.
+
+        **Important**: `y` will be converted to integers if floats are provided.
+        For max performance provide an array of integers directly.
 
         Parameters
         ----------
@@ -1774,7 +1779,9 @@ class CategoricalMixin:
         state :
             Updated optimizer state.
         """
-        y = jax.nn.one_hot(y.astype(int), self._n_categories)
+        # note: do not check and cast here. Risky but the performance of
+        # the update has priority.
+        y = jax.nn.one_hot(jnp.asarray(y, dtype=int), self._n_categories)
         return super().update(
             params, opt_state, X, y, *args, n_samples=n_samples, **kwargs
         )

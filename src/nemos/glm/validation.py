@@ -515,6 +515,24 @@ class CategoricalGLMValidator(GLMValidator):
                 f"X has {jax.tree_util.tree_map(lambda x: x.shape[1], X)} features instead!",
             )
 
+    @staticmethod
+    def check_and_cast_y_to_integer(
+        y: ArrayLike,
+    ) -> jnp.ndarray:
+        """Check that y is an array of integers.
+
+        This method checks that the entries of y are all integers.
+        If so, it converts the array to integer type.
+        """
+        y = jnp.asarray(y)
+        if not jnp.issubdtype(y.dtype, jnp.integer):
+            y_int = y.astype(int)
+            if not jnp.all(y == y_int):
+                raise ValueError("y must be an array of integers.")
+        else:
+            y_int = y
+        return y_int
+
     def feature_mask_consistency(
         self,
         feature_mask: Union[dict[str, jnp.ndarray], jnp.ndarray] | None,
