@@ -1536,6 +1536,11 @@ class CategoricalMixin:
             y = jax.nn.one_hot(y, self._n_categories)
         return X, y
 
+    # Note: necessary double decorator. The super().predict is decorated as well,
+    # but the pynapple metadata would be dropped if we do not decorate here.
+    # This happens because super().predict returns the log-proba which have the same
+    # shape of one_hot(y), not matching the original y.shape.
+    @support_pynapple(conv_type="jax")
     def predict(self, X: DESIGN_INPUT_TYPE) -> jnp.ndarray:
         """
         Predict class labels for samples in X.
@@ -1554,8 +1559,7 @@ class CategoricalMixin:
             ``[0, n_categories - 1]``.
         """
         log_proba = super().predict(X)
-        argmax = support_pynapple(conv_type="jax")(lambda x: jnp.argmax(x, axis=-1))
-        return argmax(log_proba)
+        return jnp.argmax(log_proba, axis=-1)
 
     def predict_proba(
         self,
