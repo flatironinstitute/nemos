@@ -484,7 +484,7 @@ class CategoricalGLMValidator(GLMValidator):
         """
         if X is not None:
             # check that X and params.coef have the same structure
-            msg = "X and coef have mismatched structure."
+            msg = "X and coef have mismatched structure. "
             if isinstance(X, FeaturePytree):
                 data = X.data
                 msg += (
@@ -495,7 +495,7 @@ class CategoricalGLMValidator(GLMValidator):
                 data = X
                 msg += (
                     f" X was provided as an array, and coef should be an array too. "
-                    f"The provided coef is of type ``{type(params.coef)}`` instead."
+                    f"The coef are of type ``{type(params.coef)}`` instead."
                 )
 
             validation.check_tree_structure(
