@@ -206,7 +206,7 @@ def prepare_solver_for_m_step_single_neuron(
     xis
         Joint posterior probabilities for consecutive states.
     """
-    (coef, intercept) = glm_params
+    coef, intercept = glm_params
     likelihood = jax.vmap(
         lambda x, z: obs.likelihood(x, z, aggregate_sample_scores=lambda w: w),
         in_axes=(None, 1),
@@ -304,7 +304,7 @@ def prepare_gammas_and_xis_for_m_step_single_neuron(
     xis
         Joint posterior probabilities for consecutive states.
     """
-    (coef, intercept) = glm_params
+    coef, intercept = glm_params
     likelihood = jax.vmap(
         lambda x, z: obs.log_likelihood(x, z, aggregate_sample_scores=lambda w: w),
         in_axes=(None, 1),
@@ -927,7 +927,7 @@ class TestMStep:
         )  # note that the lagrange mult makes the gradient all the same for each prob.
         # 2) Check that the gradient of the loss is zero
         grad_objective = jax.grad(lagrange_mult_loss)
-        (grad_at_transition, grad_at_lagr) = grad_objective(
+        grad_at_transition, grad_at_lagr = grad_objective(
             (new_transition_prob, lagrange_multiplier),
             xis,
             expected_log_likelihood_wrt_transitions,
@@ -944,7 +944,7 @@ class TestMStep:
             new_initial_prob, sum_gammas
         ).mean()  # note that the lagrange mult makes the gradient all the same for each prob.
         grad_objective = jax.grad(lagrange_mult_loss)
-        (grad_at_init, grad_at_lagr) = grad_objective(
+        grad_at_init, grad_at_lagr = grad_objective(
             (new_initial_prob, lagrange_multiplier),
             sum_gammas,
             expected_log_likelihood_wrt_initial_prob,
@@ -1080,7 +1080,7 @@ class TestMStep:
         )  # note that the lagrange mult makes the gradient all the same for each prob.
         # 2) Check that the gradient of the loss is zero
         grad_objective = jax.grad(lagrange_mult_loss)
-        (grad_at_transition, grad_at_lagr) = grad_objective(
+        grad_at_transition, grad_at_lagr = grad_objective(
             (new_transition_prob, lagrange_multiplier),
             np.exp(log_xis),
             expected_log_likelihood_wrt_transitions,
@@ -1099,7 +1099,7 @@ class TestMStep:
         ).mean()  # note that the lagrange mult makes the gradient all the same for each prob.
         # 2) Check that the gradient of the loss is zero
         grad_objective = jax.grad(lagrange_mult_loss)
-        (grad_at_init, grad_at_lagr) = grad_objective(
+        grad_at_init, grad_at_lagr = grad_objective(
             (new_initial_prob, lagrange_multiplier),
             sum_gammas,
             expected_log_likelihood_wrt_initial_prob,

@@ -636,7 +636,8 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
             self.wrap_user_params(params), self.expected_param_dims
         ):
             dim_match = pytree_map_and_reduce(lambda x: x.ndim == exp_dim, all, par)
-            if not dim_match:
+            is_empty = pytree_map_and_reduce(lambda x: x.size == 0, all, par)
+            if not dim_match or is_empty:
                 if err_msg is None:
                     provided_dims = jax.tree_util.tree_map(lambda x: x.ndim, params)
                     provided_dims_flat = tuple(jax.tree_util.tree_leaves(provided_dims))
@@ -821,3 +822,8 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
         return utils.format_repr(
             self, multiline=True, use_name_keys=["to_model_params", "from_model_params"]
         )
+
+    @abc.abstractmethod
+    def get_empty_params(self, X, y) -> ModelParamsT:
+        """Return the param shape given the input data."""
+        pass
