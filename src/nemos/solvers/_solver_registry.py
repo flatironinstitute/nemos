@@ -172,6 +172,9 @@ def register(
     if algo_name not in _registry:
         _registry[algo_name] = {}
 
+    if not issubclass(implementation, SolverProtocol):
+        raise TypeError(f"{implementation.__name__} doesn't implement SolverProtocol.")
+
     _registry[algo_name][backend] = SolverSpec(algo_name, backend, implementation)
 
     if default:
