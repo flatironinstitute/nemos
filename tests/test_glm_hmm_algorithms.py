@@ -25,7 +25,7 @@ from nemos.glm_hmm.expectation_maximization import (
 )
 from nemos.observation_models import BernoulliObservations, PoissonObservations
 from nemos.regularizer import UnRegularized
-from nemos.solvers import solver_registry
+from nemos.solvers import get_solver
 
 
 def _add_prior_logspace(log_val: jnp.ndarray, offset: jnp.ndarray):
@@ -262,7 +262,7 @@ def prepare_partial_hmm_nll_single_neuron(obs):
             negative_log_likelihood_func=negative_log_likelihood,
         )
 
-    lbfgs_class = solver_registry["LBFGS"]
+    lbfgs_class = get_solver("LBFGS").implementation
     solver = lbfgs_class(
         partial_hmm_negative_log_likelihood,
         UnRegularized(),
@@ -1855,7 +1855,7 @@ def test_e_and_m_step_for_population(generate_data_multi_state_population):
 
     alphas_transition = np.random.uniform(1, 3, size=transition_prob.shape)
     alphas_init = np.random.uniform(1, 3, size=initial_prob.shape)
-    lbfgs_class = solver_registry["LBFGS"]
+    lbfgs_class = get_solver("LBFGS").implementation
     solver = lbfgs_class(
         partial_hmm_negative_log_likelihood,
         UnRegularized(),
