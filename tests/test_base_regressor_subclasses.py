@@ -29,7 +29,7 @@ from nemos.inverse_link_function_utils import LINK_NAME_TO_FUNC
 
 MODEL_REGISTRY = {
     "GLM": nmo.glm.GLM,
-    "CategoricalGLM": nmo.glm.CategoricalGLM,
+    "CategoricalGLM": nmo.glm.ClassifierGLM,
     "PopulationGLM": nmo.glm.PopulationGLM,
 }
 
@@ -103,8 +103,8 @@ OBSERVATION_PER_MODEL = {
 # as of now, all models are glm type... in the future this may change.
 MODEL_WITH_LINK_FUNCTION_REGISTRY = {
     "GLM": nmo.glm.GLM,
-    "CategoricalGLM": nmo.glm.CategoricalGLM,
-    "CategoricalPopulationGLM": nmo.glm.CategoricalPopulationGLM,
+    "CategoricalGLM": nmo.glm.ClassifierGLM,
+    "CategoricalPopulationGLM": nmo.glm.ClassifierPopulationGLM,
     "PopulationGLM": nmo.glm.PopulationGLM,
 }
 

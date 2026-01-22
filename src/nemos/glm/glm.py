@@ -1497,7 +1497,7 @@ class PopulationGLM(GLM):
         return klass
 
 
-class CategoricalMixin:
+class ClassifierMixin:
     """GLM for classification."""
 
     # observation model inferred
@@ -1569,7 +1569,7 @@ class CategoricalMixin:
         >>> import nemos as nmo
         >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
         >>> y = jnp.array([0, 0, 1, 1])
-        >>> model = nmo.glm.CategoricalGLM(n_categories=2).fit(X, y)
+        >>> model = nmo.glm.ClassifierGLM(n_categories=2).fit(X, y)
         >>> predictions = model.predict(X)
         >>> predictions.shape
         (4,)
@@ -1607,7 +1607,7 @@ class CategoricalMixin:
         >>> import nemos as nmo
         >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
         >>> y = jnp.array([0, 0, 1, 1])
-        >>> model = nmo.glm.CategoricalGLM(n_categories=2).fit(X, y)
+        >>> model = nmo.glm.ClassifierGLM(n_categories=2).fit(X, y)
         >>> proba = model.predict_proba(X, return_type="proba")
         >>> proba.shape
         (4, 2)
@@ -1726,7 +1726,7 @@ class CategoricalMixin:
         >>> import nemos as nmo
         >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
         >>> y = jnp.array([0, 0, 1, 1])
-        >>> model = nmo.glm.CategoricalGLM(n_categories=2).fit(X, y)
+        >>> model = nmo.glm.ClassifierGLM(n_categories=2).fit(X, y)
         >>> key = jax.random.key(0)
         >>> simulated_y, log_prob = model.simulate(key, X)
         >>> simulated_y.shape
@@ -1768,7 +1768,7 @@ class CategoricalMixin:
         >>> import nemos as nmo
         >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
         >>> y = jnp.array([0, 0, 1, 1])
-        >>> model = nmo.glm.CategoricalGLM(n_categories=2)
+        >>> model = nmo.glm.ClassifierGLM(n_categories=2)
         >>> coef, intercept = model.initialize_params(X, y)
         >>> coef.shape
         (2, 1)
@@ -1831,7 +1831,7 @@ class CategoricalMixin:
         >>> import nemos as nmo
         >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
         >>> y = jnp.array([0, 0, 1, 1])
-        >>> model = nmo.glm.CategoricalGLM(n_categories=2)
+        >>> model = nmo.glm.ClassifierGLM(n_categories=2)
         >>> params = model.initialize_params(X, y)
         >>> opt_state = model.initialize_solver_and_state(X, y, params)
         >>> new_params, new_state = model.update(params, opt_state, X, y)
@@ -1844,7 +1844,7 @@ class CategoricalMixin:
         )
 
 
-class CategoricalGLM(CategoricalMixin, GLM):
+class ClassifierGLM(ClassifierMixin, GLM):
     """
     Generalized Linear Model for multi-class classification.
 
@@ -1896,7 +1896,7 @@ class CategoricalGLM(CategoricalMixin, GLM):
     >>> # Binary classification
     >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
     >>> y = jnp.array([0, 0, 1, 1])  # Integer class labels
-    >>> model = nmo.glm.CategoricalGLM(n_categories=2)
+    >>> model = nmo.glm.ClassifierGLM(n_categories=2)
     >>> model = model.fit(X, y)
     >>> predictions = model.predict(X)  # Returns class labels
     >>> probabilities = model.predict_proba(X, return_type="proba")
@@ -1957,7 +1957,7 @@ class CategoricalGLM(CategoricalMixin, GLM):
         >>> import nemos as nmo
         >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
         >>> y = jnp.array([0, 0, 1, 1])
-        >>> model = nmo.glm.CategoricalGLM(n_categories=2)
+        >>> model = nmo.glm.ClassifierGLM(n_categories=2)
         >>> model = model.fit(X, y)
         >>> model.coef_.shape
         (2, 1)
@@ -2001,13 +2001,13 @@ class CategoricalGLM(CategoricalMixin, GLM):
         >>> import nemos as nmo
         >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
         >>> y = jnp.array([0, 0, 1, 1])
-        >>> model = nmo.glm.CategoricalGLM(n_categories=2).fit(X, y)
+        >>> model = nmo.glm.ClassifierGLM(n_categories=2).fit(X, y)
         >>> score = model.score(X, y)
         """
         return super().score(X, y, score_type, aggregate_sample_scores)
 
 
-class CategoricalPopulationGLM(CategoricalMixin, PopulationGLM):
+class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     """
     Population Generalized Linear Model for multi-class classification.
 
@@ -2063,7 +2063,7 @@ class CategoricalPopulationGLM(CategoricalMixin, PopulationGLM):
     >>> # Multi-class classification for 2 neurons
     >>> X = jnp.array([[1., 2.], [2., 3.], [3., 4.], [4., 5.], [5., 6.], [6., 7.]])
     >>> y = jnp.array([[0, 0], [0, 1], [1, 0], [1, 2], [2, 1], [2, 2]])
-    >>> model = nmo.glm.CategoricalPopulationGLM(n_categories=3)
+    >>> model = nmo.glm.ClassifierPopulationGLM(n_categories=3)
     >>> model = model.fit(X, y)
     >>> predictions = model.predict(X)  # Returns class labels, shape (n_samples, n_neurons)
     """
@@ -2159,7 +2159,7 @@ class CategoricalPopulationGLM(CategoricalMixin, PopulationGLM):
         >>> import nemos as nmo
         >>> X = jnp.array([[1., 2.], [2., 3.], [3., 4.], [4., 5.], [5., 6.], [6., 7.]])
         >>> y = jnp.array([[0, 0], [0, 1], [1, 0], [1, 2], [2, 1], [2, 2]])
-        >>> model = nmo.glm.CategoricalPopulationGLM(n_categories=3)
+        >>> model = nmo.glm.ClassifierPopulationGLM(n_categories=3)
         >>> model = model.fit(X, y)
         >>> model.coef_.shape
         (2, 2, 2)
@@ -2203,7 +2203,7 @@ class CategoricalPopulationGLM(CategoricalMixin, PopulationGLM):
         >>> import nemos as nmo
         >>> X = jnp.array([[1., 2.], [2., 3.], [3., 4.], [4., 5.], [5., 6.], [6., 7.]])
         >>> y = jnp.array([[0, 0], [0, 1], [1, 0], [1, 2], [2, 1], [2, 2]])
-        >>> model = nmo.glm.CategoricalPopulationGLM(n_categories=3).fit(X, y)
+        >>> model = nmo.glm.ClassifierPopulationGLM(n_categories=3).fit(X, y)
         >>> score = model.score(X, y)
         """
         return super().score(X, y, score_type, aggregate_sample_scores)

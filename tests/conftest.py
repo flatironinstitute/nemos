@@ -1019,7 +1019,7 @@ def categoricalGLM_model_instantiation():
     b_true = np.zeros((num_classes - 1,))
     w_true = np.random.normal(size=(5, num_classes - 1))
     regularizer = nmo.regularizer.UnRegularized()
-    model = nmo.glm.CategoricalGLM(num_classes, regularizer=regularizer)
+    model = nmo.glm.ClassifierGLM(num_classes, regularizer=regularizer)
     rate = log_softmax(jnp.einsum("ki,tk->ti", w_true, X) + b_true)
     key = jax.random.PRNGKey(123)
     y = jax.random.categorical(key, rate)
@@ -1048,7 +1048,7 @@ def categoricalGLM_model_instantiation_pytree(categoricalGLM_model_instantiation
         dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
         true_params.intercept,
     )
-    model_tree = nmo.glm.CategoricalGLM(
+    model_tree = nmo.glm.ClassifierGLM(
         n_categories=model.n_categories, regularizer=model.regularizer
     )
     return X_tree, spikes, model_tree, true_params_tree, rate
@@ -1082,7 +1082,7 @@ def population_categoricalGLM_model_instantiation():
     )
     w_true = np.random.normal(size=(5, n_neurons, num_classes - 1))
     regularizer = nmo.regularizer.UnRegularized()
-    model = nmo.glm.CategoricalPopulationGLM(num_classes, regularizer=regularizer)
+    model = nmo.glm.ClassifierPopulationGLM(num_classes, regularizer=regularizer)
     rate = log_softmax(jnp.einsum("kni,tk->tni", w_true, X) + b_true)
     key = jax.random.PRNGKey(123)
     y = jax.random.categorical(key, rate)
@@ -1113,7 +1113,7 @@ def population_categoricalGLM_model_instantiation_pytree(
         dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
         true_params.intercept,
     )
-    model_tree = nmo.glm.CategoricalPopulationGLM(
+    model_tree = nmo.glm.ClassifierPopulationGLM(
         n_categories=model.n_categories, regularizer=model.regularizer
     )
     return X_tree, spikes, model_tree, true_params_tree, rate
@@ -1407,7 +1407,7 @@ def instantiate_categorical_glm_func(
     X = np.ones((500, n_features))
     X[:250, 0] = 0
     X[np.arange(500) % 2 == 1, 1] = 0
-    model = nmo.glm.CategoricalGLM(
+    model = nmo.glm.ClassifierGLM(
         n_categories=n_categories,
         regularizer=regularizer,
         solver_name=solver_name,
@@ -1440,7 +1440,7 @@ def instantiate_population_categorical_glm_func(
     X = np.ones((500, n_features))
     X[:250, 0] = 0
     X[np.arange(500) % 2 == 1, 1] = 0
-    model = nmo.glm.CategoricalPopulationGLM(
+    model = nmo.glm.ClassifierPopulationGLM(
         n_categories=n_categories,
         regularizer=regularizer,
         solver_name=solver_name,

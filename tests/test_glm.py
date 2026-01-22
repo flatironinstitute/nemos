@@ -1071,7 +1071,7 @@ class TestGLM:
                 },
             ),
             (
-                nmo.glm.CategoricalGLM,
+                nmo.glm.ClassifierGLM,
                 {
                     "coef_": jnp.zeros((3, 2, 1)),
                     "intercept_": jnp.array([1.0]),
@@ -1081,7 +1081,7 @@ class TestGLM:
                 },
             ),
             (
-                nmo.glm.CategoricalPopulationGLM,
+                nmo.glm.ClassifierPopulationGLM,
                 {
                     "coef_": jnp.zeros((3, 2, 1)),
                     "intercept_": jnp.ones((2, 1)),

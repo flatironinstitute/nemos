@@ -1,3 +1,3 @@
 """GLM modeling module."""
 
-from .glm import GLM, CategoricalGLM, CategoricalPopulationGLM, PopulationGLM
+from .glm import GLM, ClassifierGLM, ClassifierPopulationGLM, PopulationGLM
