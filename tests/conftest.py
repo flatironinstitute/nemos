@@ -1049,7 +1049,7 @@ def categoricalGLM_model_instantiation_pytree(categoricalGLM_model_instantiation
         true_params.intercept,
     )
     model_tree = nmo.glm.ClassifierGLM(
-        n_categories=model.n_categories, regularizer=model.regularizer
+        n_classes=model.n_classes, regularizer=model.regularizer
     )
     return X_tree, spikes, model_tree, true_params_tree, rate
 
@@ -1114,7 +1114,7 @@ def population_categoricalGLM_model_instantiation_pytree(
         true_params.intercept,
     )
     model_tree = nmo.glm.ClassifierPopulationGLM(
-        n_categories=model.n_categories, regularizer=model.regularizer
+        n_classes=model.n_classes, regularizer=model.regularizer
     )
     return X_tree, spikes, model_tree, true_params_tree, rate
 
@@ -1408,7 +1408,7 @@ def instantiate_categorical_glm_func(
     X[:250, 0] = 0
     X[np.arange(500) % 2 == 1, 1] = 0
     model = nmo.glm.ClassifierGLM(
-        n_categories=n_categories,
+        n_classes=n_categories,
         regularizer=regularizer,
         solver_name=solver_name,
     )
@@ -1441,7 +1441,7 @@ def instantiate_population_categorical_glm_func(
     X[:250, 0] = 0
     X[np.arange(500) % 2 == 1, 1] = 0
     model = nmo.glm.ClassifierPopulationGLM(
-        n_categories=n_categories,
+        n_classes=n_categories,
         regularizer=regularizer,
         solver_name=solver_name,
     )

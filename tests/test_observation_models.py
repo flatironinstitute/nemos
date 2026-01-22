@@ -770,7 +770,7 @@ class TestCategoricalObservations:
         _, y, model, _, firing_rate = categoricalGLM_model_instantiation
         dev = -2 * self.log_likelihood(y, firing_rate).sum()
         dev_model = model.observation_model.deviance(
-            jax.nn.one_hot(jnp.asarray(y, dtype=int), model.n_categories), firing_rate
+            jax.nn.one_hot(jnp.asarray(y, dtype=int), model.n_classes), firing_rate
         ).sum()
         if not np.allclose(dev, dev_model):
             raise ValueError("Deviance doesn't match statsmodels!")
@@ -782,7 +782,7 @@ class TestCategoricalObservations:
         """
         _, y, model, _, firing_rate = categoricalGLM_model_instantiation
         ll_model = model.observation_model.log_likelihood(
-            jax.nn.one_hot(jnp.asarray(y, dtype=int), model.n_categories), firing_rate
+            jax.nn.one_hot(jnp.asarray(y, dtype=int), model.n_classes), firing_rate
         )
         ll_scipy = self.log_likelihood(y, firing_rate).mean()
         if not np.allclose(ll_model, ll_scipy):
@@ -798,7 +798,7 @@ class TestCategoricalObservations:
         """
         _, y, model, _, firing_rate = categoricalGLM_model_instantiation
         ll_model = model.observation_model.log_likelihood(
-            jax.nn.one_hot(jnp.asarray(y, dtype=int), model.n_categories),
+            jax.nn.one_hot(jnp.asarray(y, dtype=int), model.n_classes),
             firing_rate,
             aggregate_sample_scores=lambda x: x,
         )
@@ -836,7 +836,7 @@ class TestCategoricalObservations:
         # set params
         log_proba = jnp.log(mdl.predict(sm.add_constant(X)))
         pr2_model = model.observation_model.pseudo_r2(
-            jax.nn.one_hot(jnp.asarray(y, dtype=int), model.n_categories),
+            jax.nn.one_hot(jnp.asarray(y, dtype=int), model.n_classes),
             log_proba,
             score_type="pseudo-r2-McFadden",
         )

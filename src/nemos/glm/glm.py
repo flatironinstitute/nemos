@@ -1504,12 +1504,12 @@ class ClassifierMixin:
     _invalid_observation_types = ()
 
     @property
-    def n_categories(self):
+    def n_classes(self):
         """Number of categories."""
-        return self._n_categories
+        return self._n_classes
 
-    @n_categories.setter
-    def n_categories(self, value: int):
+    @n_classes.setter
+    def n_classes(self, value: int):
         # extract item from scalar arrays
         if is_numpy_array_like(value)[1] and value.size == 1:
             value = value.item()
@@ -1518,7 +1518,7 @@ class ClassifierMixin:
             raise ValueError(
                 "The number of categories must be an integer greater than or equal to 2."
             )
-        self._n_categories = int(value)
+        self._n_classes = int(value)
         # reset validator.
         self._validator = self._validator_class(
             extra_params=self._get_validator_extra_params()
@@ -1526,7 +1526,7 @@ class ClassifierMixin:
 
     def _get_validator_extra_params(self) -> dict:
         """Get validator extra parameters."""
-        return {"n_categories": self._n_categories}
+        return {"n_categories": self._n_classes}
 
     def _preprocess_inputs(
         self,
@@ -1538,7 +1538,7 @@ class ClassifierMixin:
         X, y = super()._preprocess_inputs(X, y=y, drop_nans=drop_nans)
         if y is not None:
             y = self._validator.check_and_cast_y_to_integer(y)
-            y = jax.nn.one_hot(y, self._n_categories)
+            y = jax.nn.one_hot(y, self._n_classes)
         return X, y
 
     # Note: necessary double decorator. The super().predict is decorated as well,
@@ -1569,7 +1569,7 @@ class ClassifierMixin:
         >>> import nemos as nmo
         >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
         >>> y = jnp.array([0, 0, 1, 1])
-        >>> model = nmo.glm.ClassifierGLM(n_categories=2).fit(X, y)
+        >>> model = nmo.glm.ClassifierGLM(n_classes=2).fit(X, y)
         >>> predictions = model.predict(X)
         >>> predictions.shape
         (4,)
@@ -1607,7 +1607,7 @@ class ClassifierMixin:
         >>> import nemos as nmo
         >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
         >>> y = jnp.array([0, 0, 1, 1])
-        >>> model = nmo.glm.ClassifierGLM(n_categories=2).fit(X, y)
+        >>> model = nmo.glm.ClassifierGLM(n_classes=2).fit(X, y)
         >>> proba = model.predict_proba(X, return_type="proba")
         >>> proba.shape
         (4, 2)
@@ -1658,7 +1658,7 @@ class ClassifierMixin:
                 )
 
         n_features = sum(x.shape[1] for x in x_leaf)
-        n_m1_categories = self._n_categories - 1
+        n_m1_classes = self._n_classes - 1
         params = self._get_model_params()
 
         # Infer n_neurons from coef shape:
@@ -1678,18 +1678,18 @@ class ClassifierMixin:
                 lambda x: sum([jnp.sum(i, axis=(0, -1)) for i in x]),
                 params.coef,
             )
-            return jnp.atleast_1d(n_samples - resid_dof - n_m1_categories)
+            return jnp.atleast_1d(n_samples - resid_dof - n_m1_classes)
 
         elif isinstance(self.regularizer, Ridge):
             # For Ridge, use total parameters
-            return (
-                n_samples - n_m1_categories * n_features - n_m1_categories
-            ) * jnp.ones(n_neurons)
+            return (n_samples - n_m1_classes * n_features - n_m1_classes) * jnp.ones(
+                n_neurons
+            )
 
         else:
             # For UnRegularized, use the rank
             rank = jnp.linalg.matrix_rank(jnp.concatenate(x_leaf, axis=1))
-            return (n_samples - rank * n_m1_categories - n_m1_categories) * jnp.ones(
+            return (n_samples - rank * n_m1_classes - n_m1_classes) * jnp.ones(
                 n_neurons
             )
 
@@ -1726,7 +1726,7 @@ class ClassifierMixin:
         >>> import nemos as nmo
         >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
         >>> y = jnp.array([0, 0, 1, 1])
-        >>> model = nmo.glm.ClassifierGLM(n_categories=2).fit(X, y)
+        >>> model = nmo.glm.ClassifierGLM(n_classes=2).fit(X, y)
         >>> key = jax.random.key(0)
         >>> simulated_y, log_prob = model.simulate(key, X)
         >>> simulated_y.shape
@@ -1768,13 +1768,13 @@ class ClassifierMixin:
         >>> import nemos as nmo
         >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
         >>> y = jnp.array([0, 0, 1, 1])
-        >>> model = nmo.glm.ClassifierGLM(n_categories=2)
+        >>> model = nmo.glm.ClassifierGLM(n_classes=2)
         >>> coef, intercept = model.initialize_params(X, y)
         >>> coef.shape
         (2, 1)
         """
         y = self._validator.check_and_cast_y_to_integer(y)
-        y = jax.nn.one_hot(y, self.n_categories)
+        y = jax.nn.one_hot(y, self.n_classes)
         return super().initialize_params(X, y)
 
     def update(
@@ -1831,14 +1831,14 @@ class ClassifierMixin:
         >>> import nemos as nmo
         >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
         >>> y = jnp.array([0, 0, 1, 1])
-        >>> model = nmo.glm.ClassifierGLM(n_categories=2)
+        >>> model = nmo.glm.ClassifierGLM(n_classes=2)
         >>> params = model.initialize_params(X, y)
         >>> opt_state = model.initialize_solver_and_state(X, y, params)
         >>> new_params, new_state = model.update(params, opt_state, X, y)
         """
         # note: do not check and cast here. Risky but the performance of
         # the update has priority.
-        y = jax.nn.one_hot(jnp.asarray(y, dtype=int), self._n_categories)
+        y = jax.nn.one_hot(jnp.asarray(y, dtype=int), self._n_classes)
         return super().update(
             params, opt_state, X, y, *args, n_samples=n_samples, **kwargs
         )
@@ -1857,7 +1857,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
 
     Parameters
     ----------
-    n_categories
+    n_classes
         The number of classes/categories. Must be >= 2.
     inverse_link_function
         The inverse link function.
@@ -1896,7 +1896,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
     >>> # Binary classification
     >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
     >>> y = jnp.array([0, 0, 1, 1])  # Integer class labels
-    >>> model = nmo.glm.ClassifierGLM(n_categories=2)
+    >>> model = nmo.glm.ClassifierGLM(n_classes=2)
     >>> model = model.fit(X, y)
     >>> predictions = model.predict(X)  # Returns class labels
     >>> probabilities = model.predict_proba(X, return_type="proba")
@@ -1906,14 +1906,14 @@ class ClassifierGLM(ClassifierMixin, GLM):
 
     def __init__(
         self,
-        n_categories: Optional[int] = 2,
+        n_classes: Optional[int] = 2,
         inverse_link_function: Optional[Callable] = None,
         regularizer: Optional[Union[str, Regularizer]] = None,
         regularizer_strength: Optional[RegularizerStrength] = None,
         solver_name: str = None,
         solver_kwargs: dict = None,
     ):
-        self.n_categories = n_categories
+        self.n_classes = n_classes
         observation_model = obs.CategoricalObservations()
         super().__init__(
             observation_model=observation_model,
@@ -1957,7 +1957,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
         >>> import nemos as nmo
         >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
         >>> y = jnp.array([0, 0, 1, 1])
-        >>> model = nmo.glm.ClassifierGLM(n_categories=2)
+        >>> model = nmo.glm.ClassifierGLM(n_classes=2)
         >>> model = model.fit(X, y)
         >>> model.coef_.shape
         (2, 1)
@@ -2001,7 +2001,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
         >>> import nemos as nmo
         >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
         >>> y = jnp.array([0, 0, 1, 1])
-        >>> model = nmo.glm.ClassifierGLM(n_categories=2).fit(X, y)
+        >>> model = nmo.glm.ClassifierGLM(n_classes=2).fit(X, y)
         >>> score = model.score(X, y)
         """
         return super().score(X, y, score_type, aggregate_sample_scores)
@@ -2021,7 +2021,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
 
     Parameters
     ----------
-    n_categories
+    n_classes
         The number of classes/categories. Must be >= 2.
     inverse_link_function
         The inverse link function.
@@ -2063,7 +2063,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     >>> # Multi-class classification for 2 neurons
     >>> X = jnp.array([[1., 2.], [2., 3.], [3., 4.], [4., 5.], [5., 6.], [6., 7.]])
     >>> y = jnp.array([[0, 0], [0, 1], [1, 0], [1, 2], [2, 1], [2, 2]])
-    >>> model = nmo.glm.ClassifierPopulationGLM(n_categories=3)
+    >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3)
     >>> model = model.fit(X, y)
     >>> predictions = model.predict(X)  # Returns class labels, shape (n_samples, n_neurons)
     """
@@ -2072,7 +2072,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
 
     def __init__(
         self,
-        n_categories: Optional[int] = 2,
+        n_classes: Optional[int] = 2,
         inverse_link_function: Optional[Callable] = None,
         regularizer: Optional[Union[str, Regularizer]] = None,
         regularizer_strength: Optional[RegularizerStrength] = None,
@@ -2080,7 +2080,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         solver_kwargs: dict = None,
         feature_mask: Optional[jnp.ndarray] = None,
     ):
-        self.n_categories = n_categories
+        self.n_classes = n_classes
         observation_model = obs.CategoricalObservations()
         super().__init__(
             observation_model=observation_model,
@@ -2159,7 +2159,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         >>> import nemos as nmo
         >>> X = jnp.array([[1., 2.], [2., 3.], [3., 4.], [4., 5.], [5., 6.], [6., 7.]])
         >>> y = jnp.array([[0, 0], [0, 1], [1, 0], [1, 2], [2, 1], [2, 2]])
-        >>> model = nmo.glm.ClassifierPopulationGLM(n_categories=3)
+        >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3)
         >>> model = model.fit(X, y)
         >>> model.coef_.shape
         (2, 2, 2)
@@ -2203,7 +2203,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         >>> import nemos as nmo
         >>> X = jnp.array([[1., 2.], [2., 3.], [3., 4.], [4., 5.], [5., 6.], [6., 7.]])
         >>> y = jnp.array([[0, 0], [0, 1], [1, 0], [1, 2], [2, 1], [2, 2]])
-        >>> model = nmo.glm.ClassifierPopulationGLM(n_categories=3).fit(X, y)
+        >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3).fit(X, y)
         >>> score = model.score(X, y)
         """
         return super().score(X, y, score_type, aggregate_sample_scores)

@@ -2348,7 +2348,7 @@ class TestGLMObservationModel:
         if is_population:
             n_neurons = y.shape[1]
         if is_categorical_model(model):
-            n_categories = model.n_categories
+            n_categories = model.n_classes
             if is_population:
                 coef_shape = [(nf, n_neurons, n_categories - 1) for nf in n_features]
                 intercept_shape = (n_neurons, n_categories - 1)
@@ -3589,14 +3589,12 @@ class TestCategoricalGLM:
         )
         model.inverse_link_function = inv_link
         if is_population_glm_type(glm_type):
-            model.feature_mask = jnp.ones(
-                (X.shape[1], y.shape[1], model.n_categories - 1)
-            )
+            model.feature_mask = jnp.ones((X.shape[1], y.shape[1], model.n_classes - 1))
             model.scale_ = jnp.ones((y.shape[1]))
-            shape_log_proba = (X.shape[0], y.shape[1], model.n_categories)
+            shape_log_proba = (X.shape[0], y.shape[1], model.n_classes)
         else:
             model.scale_ = 1.0
-            shape_log_proba = (X.shape[0], model.n_categories)
+            shape_log_proba = (X.shape[0], model.n_classes)
         model.coef_ = true_params.coef
         model.intercept_ = true_params.intercept
         ysim, log_proba = model.simulate(jax.random.PRNGKey(123), X)
@@ -3650,7 +3648,7 @@ class TestCategoricalGLM:
             model.__class__(n_categories=n_categories)
 
         with expectation:
-            model.n_categories = n_categories
+            model.n_classes = n_categories
 
     @pytest.mark.parametrize(
         "extra_x_dim, expectation",
