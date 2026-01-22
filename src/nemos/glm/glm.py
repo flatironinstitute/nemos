@@ -1504,29 +1504,65 @@ class ClassifierMixin:
     # observation model inferred
     _invalid_observation_types = ()
 
-    def _infer_class_labels(self, y: ArrayLike) -> NDArray | None:
+    def set_classes(self, y: ArrayLike) -> NDArray | None:
         """
-        Infer classes from the input array ``y``.
+        Infer unique classes labels and set the ``classes_`` attribute.
 
-        If y contains integers from ``[0, n_classes-1]`` returns None
-        indicating that no label transformation will be required
+        By default, ``classes_`` is assumed to be ``np.arange(n_classes)``. Calling
+        ``set_classes`` will set the ``classes_`` attribute to ``np.unique(y)`` instead.
 
         Parameters
         ----------
         y
-            Array of categories.
+            Array of classes.
 
-        Returns
-        -------
-        classes
-            An array storing the class labels. ``classes[i]`` will be the label of the i-th class.
+        Notes
+        -----
+        ``fit`` and ``initialize_params`` call ``set_classes`` internally, making sure that
+        the ``classes_`` attribute always matches the provided input.
+        On the other hand, ``update`` **will not** set the ``classes_`` attribue at each call for
+        perfomance reason. Make sure to call ``set_classes`` manually before calling ``update``.
+
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> model = nmo.glm.ClassifierGLM(3)
+        >>> # Default classes
+        >>> model.classes_
+        array([0, 1, 2])
+        >>> # Integer classes
+        >>> y = np.array([2, 3, 2, 5, 5])
+        >>> model.set_classes(y)
+        >>> model.classes_
+        array([2, 3, 5])
+        >>> # String classes
+        >>> y = np.array(["a", "a", "c", "b", "b"])
+        >>> model.set_classes(y)
+        >>> model.classes_
+        array(['a', 'b', 'c'], dtype='<U1')
 
         """
         # note that we must use NumPy, Jax do allow only numeric types
         classes = np.unique(y)
         if np.array_equal(classes, np.arange(self.n_classes)):
-            return None
-        return classes
+            self._classes_ = None
+            return
+
+        n_unique = len(classes)
+        # Validation
+        if n_unique > self.n_classes:
+            raise ValueError(
+                f"Found {n_unique} unique class labels in y, but n_classes={self.n_classes}. "
+                f"Increase n_classes or check your data."
+            )
+        elif n_unique < self.n_classes:
+            warnings.warn(
+                f"Found only {n_unique} unique class labels in y, but n_classes={self.n_classes}. "
+                f"Some classes have no training samples.",
+                UserWarning,
+            )
+        self._classes_ = classes
 
     def _encode_labels(self, y):
         if self._classes_ is None:
@@ -1547,7 +1583,7 @@ class ClassifierMixin:
 
     @property
     def n_classes(self):
-        """Number of categories."""
+        """Number of classes."""
         return self._n_classes
 
     @n_classes.setter
@@ -1558,7 +1594,7 @@ class ClassifierMixin:
 
         if not isinstance(value, Number) or value < 2 or not int(value) == value:
             raise ValueError(
-                "The number of categories must be an integer greater than or equal to 2."
+                "The number of classes must be an integer greater than or equal to 2."
             )
         self._n_classes = int(value)
         # reset validator.
@@ -1712,7 +1748,7 @@ class ClassifierMixin:
         # For Lasso-type regularizers, use the non-zero coefficients as DOF estimate
         # see https://arxiv.org/abs/0712.0881
         if isinstance(self.regularizer, (GroupLasso, Lasso, ElasticNet)):
-            # Sum over features (axis 0) and categories (axis -1)
+            # Sum over features (axis 0) and classes (axis -1)
             # This leaves shape (n_neurons,) for ClassifierPopulationGLM
             # or scalar for ClassifierGLM
             resid_dof = tree_utils.pytree_map_and_reduce(
@@ -1815,6 +1851,7 @@ class ClassifierMixin:
         >>> coef.shape
         (2, 1)
         """
+        self.set_classes(y)
         y = self._encode_labels(y)
         y = self._validator.check_and_cast_y_to_integer(y)
         y = jax.nn.one_hot(y, self.n_classes)
@@ -1902,7 +1939,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
     Parameters
     ----------
     n_classes
-        The number of classes/categories. Must be >= 2.
+        The number of classes. Must be >= 2.
     inverse_link_function
         The inverse link function.
     regularizer
@@ -2007,7 +2044,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
         >>> model.coef_.shape
         (2, 1)
         """
-        self._classes_ = self._infer_class_labels(y)
+        self.set_classes(y)
         y = self._encode_labels(y)
         return super().fit(X, y, init_params)
 
@@ -2070,7 +2107,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     Parameters
     ----------
     n_classes
-        The number of classes/categories. Must be >= 2.
+        The number of classes. Must be >= 2.
     inverse_link_function
         The inverse link function.
     regularizer
@@ -2213,7 +2250,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         >>> model.coef_.shape
         (2, 2, 2)
         """
-        self._classes_ = self._infer_class_labels(y)
+        self.set_classes(y)
         y = self._encode_labels(y)
         return super().fit(X, y, init_params)
 
