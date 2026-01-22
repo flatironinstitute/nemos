@@ -54,7 +54,7 @@ MODEL_CONFIG = {
         "coef_dim": 1,
         "intercept_dim": 1,
         "is_population": False,
-        "is_categorical": False,
+        "is_classifier": False,
         "class_fixture": "glm_class",
         "instantiation_fixture": "poissonGLM_model_instantiation",
         "glm_type_prefix": "",  # Used in glm_type parametrization (e.g., "" + "poissonGLM_model_instantiation")
@@ -63,28 +63,28 @@ MODEL_CONFIG = {
         "coef_dim": 2,
         "intercept_dim": 1,
         "is_population": True,
-        "is_categorical": False,
+        "is_classifier": False,
         "class_fixture": "population_glm_class",
         "instantiation_fixture": "population_poissonGLM_model_instantiation",
         "glm_type_prefix": "population_",
     },
-    "CategoricalGLM": {
+    "ClassifierGLM": {
         "coef_dim": 2,
         "intercept_dim": 1,
         "is_population": False,
-        "is_categorical": True,
-        "class_fixture": "categorical_glm_class",
-        "instantiation_fixture": "categoricalGLM_model_instantiation",
-        "glm_type_prefix": "categorical_",
+        "is_classifier": True,
+        "class_fixture": "classifier_glm_class",
+        "instantiation_fixture": "classifierGLM_model_instantiation",
+        "glm_type_prefix": "classifier_",
     },
-    "CategoricalPopulationGLM": {
+    "ClassifierPopulationGLM": {
         "coef_dim": 3,
         "intercept_dim": 2,
         "is_population": True,
-        "is_categorical": True,
-        "class_fixture": "categorical_population_glm_class",
-        "instantiation_fixture": "population_categoricalGLM_model_instantiation",
-        "glm_type_prefix": "categorical_population_",
+        "is_classifier": True,
+        "class_fixture": "classifier_population_glm_class",
+        "instantiation_fixture": "population_classifierGLM_model_instantiation",
+        "glm_type_prefix": "classifier_population_",
     },
 }
 
@@ -98,8 +98,8 @@ POPULATION_MODEL_NAMES = {
     name for name, cfg in MODEL_CONFIG.items() if cfg["is_population"]
 }
 
-CATEGORICAL_MODEL_NAMES = {
-    name for name, cfg in MODEL_CONFIG.items() if cfg["is_categorical"]
+CLASSIFIER_MODEL_NAMES = {
+    name for name, cfg in MODEL_CONFIG.items() if cfg["is_classifier"]
 }
 
 # Build mappings from various parametrization styles to class names
@@ -122,9 +122,9 @@ def is_population_model(model) -> bool:
     return model.__class__.__name__ in POPULATION_MODEL_NAMES
 
 
-def is_categorical_model(model) -> bool:
-    """Check if a model is a categorical model based on its class name."""
-    return model.__class__.__name__ in CATEGORICAL_MODEL_NAMES
+def is_classifier_model(model) -> bool:
+    """Check if a model is a classifier model based on its class name."""
+    return model.__class__.__name__ in CLASSIFIER_MODEL_NAMES
 
 
 def is_population_glm_type(glm_type: str) -> bool:
@@ -207,8 +207,8 @@ def get_param_shape(model, X, y):
     [
         "glm_class",
         "population_glm_class",
-        "categorical_glm_class",
-        "categorical_population_glm_class",
+        "classifier_glm_class",
+        "classifier_population_glm_class",
     ],
 )
 class TestGLM:
@@ -318,8 +318,8 @@ class TestGLM:
                 {
                     "GLM": [jnp.zeros((5,)), jnp.zeros((1,))],
                     "PopulationGLM": [jnp.zeros((5, 3)), jnp.zeros((3,))],
-                    "CategoricalGLM": [jnp.zeros((5, 2)), jnp.zeros((2,))],
-                    "CategoricalPopulationGLM": [
+                    "ClassifierGLM": [jnp.zeros((5, 2)), jnp.zeros((2,))],
+                    "ClassifierPopulationGLM": [
                         jnp.zeros((5, 3, 2)),
                         jnp.zeros((3, 2)),
                     ],
@@ -330,8 +330,8 @@ class TestGLM:
                 {
                     "GLM": [[jnp.zeros((1, 5)), jnp.zeros((1,))]],
                     "PopulationGLM": [[jnp.zeros((1, 5)), jnp.zeros((3,))]],
-                    "CategoricalGLM": [[jnp.zeros((1, 5)), jnp.zeros((2,))]],
-                    "CategoricalPopulationGLM": [
+                    "ClassifierGLM": [[jnp.zeros((1, 5)), jnp.zeros((2,))]],
+                    "ClassifierPopulationGLM": [
                         [jnp.zeros((1, 5)), jnp.zeros((3, 2))]
                     ],
                 },
@@ -343,8 +343,8 @@ class TestGLM:
                 {
                     "GLM": dict(p1=jnp.zeros((5,)), p2=jnp.zeros((1,))),
                     "PopulationGLM": dict(p1=jnp.zeros((3, 3)), p2=jnp.zeros((3, 2))),
-                    "CategoricalGLM": dict(p1=jnp.zeros((5, 2)), p2=jnp.zeros((2,))),
-                    "CategoricalPopulationGLM": dict(
+                    "ClassifierGLM": dict(p1=jnp.zeros((5, 2)), p2=jnp.zeros((2,))),
+                    "ClassifierPopulationGLM": dict(
                         p1=jnp.zeros((5, 3, 2)), p2=jnp.zeros((3, 2))
                     ),
                 },
@@ -360,11 +360,11 @@ class TestGLM:
                         dict(p1=jnp.zeros((3, 3)), p2=jnp.zeros((2, 3))),
                         jnp.zeros((3,)),
                     ],
-                    "CategoricalGLM": [
+                    "ClassifierGLM": [
                         dict(p1=jnp.zeros((5, 2)), p2=jnp.zeros((1, 2))),
                         jnp.zeros((2,)),
                     ],
-                    "CategoricalPopulationGLM": [
+                    "ClassifierPopulationGLM": [
                         dict(p1=jnp.zeros((5, 3, 2)), p2=jnp.zeros((1, 3, 2))),
                         jnp.zeros((3, 2)),
                     ],
@@ -381,11 +381,11 @@ class TestGLM:
                         FeaturePytree(p1=jnp.zeros((3, 3)), p2=jnp.zeros((3, 2))),
                         jnp.zeros((3,)),
                     ],
-                    "CategoricalGLM": [
+                    "ClassifierGLM": [
                         FeaturePytree(p1=jnp.zeros((5, 2)), p2=jnp.zeros((5, 2))),
                         jnp.zeros((2,)),
                     ],
-                    "CategoricalPopulationGLM": [
+                    "ClassifierPopulationGLM": [
                         FeaturePytree(p1=jnp.zeros((5, 3, 2)), p2=jnp.zeros((5, 3, 2))),
                         jnp.zeros((3, 2)),
                     ],
@@ -1610,7 +1610,7 @@ class TestGLM:
         "gammaGLM_model_instantiation",
         "bernoulliGLM_model_instantiation",
         "negativeBinomialGLM_model_instantiation",
-        "categoricalGLM_model_instantiation",
+        "classifierGLM_model_instantiation",
     ],
 )
 class TestGLMObservationModel:
@@ -1672,7 +1672,7 @@ class TestGLMObservationModel:
                     sm.families.Gaussian().loglike(y, mean_firing, scale=scale) / norm
                 )
 
-        elif "categorical" in model_instantiation:
+        elif "classifier" in model_instantiation:
 
             def ll(y, log_proba):
                 proba = jnp.exp(log_proba)
@@ -1717,7 +1717,7 @@ class TestGLMObservationModel:
         elif "gaussian" in model_instantiation:
             return LinearRegression(fit_intercept=True)
 
-        elif "categorical" in model_instantiation:
+        elif "classifier" in model_instantiation:
             # In sklearn 1.5+, multinomial is the default with lbfgs solver
             return LogisticRegression(
                 fit_intercept=True,
@@ -1750,7 +1750,7 @@ class TestGLMObservationModel:
         elif "gaussian" in model_instantiation:
             return 1.0
 
-        elif "categorical" in model_instantiation:
+        elif "classifier" in model_instantiation:
             return 0.1
 
         else:
@@ -1791,8 +1791,8 @@ class TestGLMObservationModel:
             else:
                 return np.array([3])
 
-        elif "categorical" in model_instantiation:
-            # Categorical models have (n_features, n_categories-1) coef shape
+        elif "classifier" in model_instantiation:
+            # Classifier models have (n_features, n_classes-1) coef shape
             # For lasso, estimate surviving coefficients per neuron
             if is_population_glm_type(glm_type):
                 return np.array([4, 5, 2])
@@ -1807,7 +1807,7 @@ class TestGLMObservationModel:
         """
         Fixture for test_estimate_dof_resid
         """
-        if "categorical" in model_instantiation:
+        if "classifier" in model_instantiation:
             if "population" in glm_type:
                 return np.array([10, 10, 10])
             else:
@@ -1838,7 +1838,7 @@ class TestGLMObservationModel:
         elif "gaussian" in model_instantiation:
             return False
 
-        elif "categorical" in model_instantiation:
+        elif "classifier" in model_instantiation:
             return False
 
         else:
@@ -1879,11 +1879,11 @@ class TestGLMObservationModel:
             else:
                 return "GLM(\n    observation_model=GaussianObservations(),\n    inverse_link_function=identity,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
 
-        elif "categorical" in model_instantiation:
+        elif "classifier" in model_instantiation:
             if is_population_glm_type(glm_type):
-                return "CategoricalPopulationGLM(\n    n_categories=3,\n    inverse_link_function=log_softmax,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
+                return "ClassifierPopulationGLM(\n    n_classes=3,\n    inverse_link_function=log_softmax,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
             else:
-                return "CategoricalGLM(\n    n_categories=3,\n    inverse_link_function=log_softmax,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
+                return "ClassifierGLM(\n    n_classes=3,\n    inverse_link_function=log_softmax,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
 
         else:
             raise ValueError("Unknown model instantiation")
@@ -2197,15 +2197,15 @@ class TestGLMObservationModel:
         )
         if is_population_model(model) and (expected_out_type == Tsd):
             assert isinstance(count, TsdFrame)
-            # For categorical population models, rate has shape (n_samples, n_neurons, n_categories)
-            if is_categorical_model(model):
+            # For classifier population models, rate has shape (n_samples, n_neurons, n_classes)
+            if is_classifier_model(model):
                 from pynapple.core.time_series import TsdTensor
 
                 assert isinstance(rate, TsdTensor)
             else:
                 assert isinstance(rate, TsdFrame)
-        elif is_categorical_model(model) and (expected_out_type == Tsd):
-            # For categorical single neuron, count is Tsd but rate is TsdFrame (n_samples, n_categories)
+        elif is_classifier_model(model) and (expected_out_type == Tsd):
+            # For classifier single neuron, count is Tsd but rate is TsdFrame (n_samples, n_classes)
             assert isinstance(count, expected_out_type)
             assert isinstance(rate, TsdFrame)
         else:
@@ -2226,12 +2226,12 @@ class TestGLMObservationModel:
             )
         ysim, ratesim = model.simulate(jax.random.key(123), X)
         # check that the expected dimensionality is returned
-        # Categorical models have an extra dimension for categories in ratesim (log-probabilities)
+        # Classifier models have an extra dimension for categories in ratesim (log-probabilities)
         expected_base_ndim = 1 + (1 if is_population_model(model) else 0)
         assert ysim.ndim == expected_base_ndim
-        # ratesim has +1 dimension for categorical models (probabilities per category)
+        # ratesim has +1 dimension for classifier models (probabilities per category)
         assert ratesim.ndim == expected_base_ndim + (
-            1 if is_categorical_model(model) else 0
+            1 if is_classifier_model(model) else 0
         )
         # check that the rates and spikes has the same shape for the first dims
         assert ratesim.shape[0] == ysim.shape[0]
@@ -2265,7 +2265,7 @@ class TestGLMObservationModel:
 
         Returns coef and intercept in nemos format: coef (n_features, K-1), intercept (K-1,).
         """
-        if is_categorical_model(nemos_model):
+        if is_classifier_model(nemos_model):
             coef = (sklearn_model.coef_[:-1] - sklearn_model.coef_[-1:]).T
             intercept = sklearn_model.intercept_[:-1] - sklearn_model.intercept_[-1]
         else:
@@ -2299,7 +2299,7 @@ class TestGLMObservationModel:
             glm_type + model_instantiation
         )
         kwargs = dict(
-            n_categories=getattr(model_obs, "n_categories", None),
+            n_classes=getattr(model_obs, "n_classes", None),
             regularizer=nmo.regularizer.UnRegularized(),
             observation_model=model_obs.observation_model,
             solver_name=solver_name,
@@ -2347,14 +2347,14 @@ class TestGLMObservationModel:
         is_population = is_population_model(model)
         if is_population:
             n_neurons = y.shape[1]
-        if is_categorical_model(model):
-            n_categories = model.n_classes
+        if is_classifier_model(model):
+            n_classes = model.n_classes
             if is_population:
-                coef_shape = [(nf, n_neurons, n_categories - 1) for nf in n_features]
-                intercept_shape = (n_neurons, n_categories - 1)
+                coef_shape = [(nf, n_neurons, n_classes - 1) for nf in n_features]
+                intercept_shape = (n_neurons, n_classes - 1)
             else:
-                coef_shape = [(nf, n_categories - 1) for nf in n_features]
-                intercept_shape = (n_categories - 1,)
+                coef_shape = [(nf, n_classes - 1) for nf in n_features]
+                intercept_shape = (n_classes - 1,)
         else:
             if is_population:
                 coef_shape = [(nf, n_neurons) for nf in n_features]
@@ -2433,13 +2433,13 @@ class TestGLMObservationModel:
         # for 3 coefs to survive
         if isinstance(strength, str):
             strength = request.getfixturevalue(strength)
-        n_m1_categories = getattr(model, "n_categories", 2) - 1
+        n_m1_classes = getattr(model, "n_classes", 2) - 1
         model.set_params(regularizer=reg, regularizer_strength=strength)
         model.solver_name = model.regularizer.default_solver
         model.solver_kwargs.update({"maxiter": 10**5})
         model.fit(X, y)
         num = model._estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
-        expected_dof_resid = n_samples - dof - n_m1_categories
+        expected_dof_resid = n_samples - dof - n_m1_classes
         assert np.allclose(num, expected_dof_resid)
 
     ######################
@@ -2500,7 +2500,7 @@ class TestGLMObservationModel:
         # if the regularizer is not allowed for the solver type, return
         try:
             kwargs = dict(
-                n_categories=getattr(model, "n_categories", None),
+                n_classes=getattr(model, "n_classes", None),
                 regularizer=regularizer,
                 solver_name=solver_name,
                 inverse_link_function=inv_link,
@@ -2564,7 +2564,7 @@ class TestGLMObservationModel:
     "model_instantiation",
     [
         "population_poissonGLM_model_instantiation",
-        "population_categoricalGLM_model_instantiation",
+        "population_classifierGLM_model_instantiation",
     ],
 )
 class TestPopulationGLM:
@@ -2625,25 +2625,25 @@ class TestPopulationGLM:
     def feature_mask_compatibility_fit_expectation(self, model_instantiation):
         """
         Fixture to return the expected exceptions for test_feature_mask_compatibility_fit
-        based on the model type (categorical vs non-categorical).
+        based on the model type (classifier vs non-classifier).
 
-        For categorical models, the feature_mask shape is (n_features, n_neurons, n_categories-1)
-        which means all the test masks (which lack the n_categories-1 dimension) will fail
+        For classifier models, the feature_mask shape is (n_features, n_neurons, n_classes-1)
+        which means all the test masks (which lack the n_classes-1 dimension) will fail
         shape validation.
         """
-        is_categorical = "categorical" in model_instantiation
+        is_classifier = "classifier" in model_instantiation
 
         type_error_match = "feature_mask and X must have the same structure|feature_mask and coef must have the same structure"
         shape_mismatch_match = "Inconsistent feature mask shape|The shape of the ``feature_mask`` array must match"
 
-        if is_categorical:
-            # Categorical models expect feature_mask shape (n_features, n_neurons, n_categories-1)
-            # Masks without n_categories-1 dimension fail shape validation
+        if is_classifier:
+            # Classifier models expect feature_mask shape (n_features, n_neurons, n_classes-1)
+            # Masks without n_classes-1 dimension fail shape validation
             return {
                 "correct_shape_np": pytest.raises(
                     ValueError, match=shape_mismatch_match
                 ),
-                "correct_shape_categorical_np": does_not_raise(),
+                "correct_shape_classifier_np": does_not_raise(),
                 "wrong_n_features_np": pytest.raises(
                     ValueError, match=shape_mismatch_match
                 ),
@@ -2653,7 +2653,7 @@ class TestPopulationGLM:
                 "correct_shape_pytree": pytest.raises(
                     ValueError, match=shape_mismatch_match
                 ),
-                "correct_shape_categorical_pytree": does_not_raise(),
+                "correct_shape_classifier_pytree": does_not_raise(),
                 "wrong_n_neurons_pytree": pytest.raises(
                     ValueError, match=shape_mismatch_match
                 ),
@@ -2663,10 +2663,10 @@ class TestPopulationGLM:
                 ),
             }
         else:
-            # Non-categorical models expect feature_mask shape (n_features, n_neurons)
+            # Non-classifier models expect feature_mask shape (n_features, n_neurons)
             return {
                 "correct_shape_np": does_not_raise(),
-                "correct_shape_categorical_np": pytest.raises(
+                "correct_shape_classifier_np": pytest.raises(
                     ValueError, match=shape_mismatch_match
                 ),
                 "wrong_n_features_np": pytest.raises(
@@ -2678,7 +2678,7 @@ class TestPopulationGLM:
                     match="The shape of the ``feature_mask`` array must match that of the ``coef``",
                 ),
                 "correct_shape_pytree": does_not_raise(),
-                "correct_shape_categorical_pytree": pytest.raises(
+                "correct_shape_classifier_pytree": pytest.raises(
                     ValueError, match="Inconsistent number of neurons. feature_mask has"
                 ),
                 "wrong_n_neurons_pytree": pytest.raises(
@@ -2694,16 +2694,16 @@ class TestPopulationGLM:
     feature_mask_compatibility_fit_masks = (
         "mask, mask_key_np, mask_key_pytree",
         [
-            # Non-categorical correct shape: (n_features, n_neurons) = (5, 3)
+            # Non-classifier correct shape: (n_features, n_neurons) = (5, 3)
             (
                 np.array([0, 1, 1] * 5).reshape(5, 3),
                 "correct_shape_np",
                 "missing_key_pytree",  # pytree expects dict, not array
             ),
-            # Categorical correct shape: (n_features, n_neurons, n_categories-1) = (5, 3, 2)
+            # Classifier correct shape: (n_features, n_neurons, n_classes-1) = (5, 3, 2)
             (
                 np.ones((5, 3, 2), dtype=int),
-                "correct_shape_categorical_np",
+                "correct_shape_classifier_np",
                 "missing_key_pytree",  # pytree expects dict, not array
             ),
             (
@@ -2716,20 +2716,20 @@ class TestPopulationGLM:
                 "wrong_n_neurons_np",
                 "missing_key_pytree",
             ),
-            # Non-categorical pytree correct shape: {'input_1': (3, 3), 'input_2': (2, 3)}
+            # Non-classifier pytree correct shape: {'input_1': (3, 3), 'input_2': (2, 3)}
             (
                 {"input_1": np.array([0, 1, 0]), "input_2": np.array([1, 0, 1])},
                 "missing_key_pytree",  # np expects array, not dict
                 "correct_shape_pytree",
             ),
-            # Categorical pytree correct shape: {'input_1': (3, 3, 2), 'input_2': (2, 3, 2)}
+            # Classifier pytree correct shape: {'input_1': (3, 3, 2), 'input_2': (2, 3, 2)}
             (
                 {
                     "input_1": np.ones((3, 3, 2), dtype=int),
                     "input_2": np.ones((2, 3, 2), dtype=int),
                 },
                 "missing_key_pytree",  # np expects array, not dict
-                "correct_shape_categorical_pytree",
+                "correct_shape_classifier_pytree",
             ),
             (
                 {"input_1": np.array([0, 1, 0, 1]), "input_2": np.array([1, 0, 1, 0])},
@@ -3547,10 +3547,10 @@ class TestNegativeBinomialGLM:
 
 @pytest.mark.parametrize("inv_link", [log_softmax])
 @pytest.mark.parametrize("glm_type", ["", "population_"])
-@pytest.mark.parametrize("model_instantiation", ["categoricalGLM_model_instantiation"])
-class TestCategoricalGLM:
+@pytest.mark.parametrize("model_instantiation", ["classifierGLM_model_instantiation"])
+class TestClassifierGLM:
     """
-    Unit tests specific to categorical GLM.
+    Unit tests specific to classifier GLM.
     """
 
     @pytest.mark.solver_related
@@ -3603,18 +3603,18 @@ class TestCategoricalGLM:
         assert jnp.all(ysim == ysim.astype(int))
 
     @pytest.mark.parametrize(
-        "n_categories, expectation",
+        "n_classes, expectation",
         [
             (
                 0,
                 pytest.raises(
-                    ValueError, match="The number of categories must be an integer"
+                    ValueError, match="The number of classes must be an integer"
                 ),
             ),
             (
                 1,
                 pytest.raises(
-                    ValueError, match="The number of categories must be an integer"
+                    ValueError, match="The number of classes must be an integer"
                 ),
             ),
             (2, does_not_raise()),
@@ -3622,22 +3622,22 @@ class TestCategoricalGLM:
             (
                 "2",
                 pytest.raises(
-                    ValueError, match="The number of categories must be an integer"
+                    ValueError, match="The number of classes must be an integer"
                 ),
             ),
             (
                 -2,
                 pytest.raises(
-                    ValueError, match="The number of categories must be an integer"
+                    ValueError, match="The number of classes must be an integer"
                 ),
             ),
             (np.array(2), does_not_raise()),
         ],
     )
-    def test_n_categories_kind(
+    def test_n_classes_kind(
         self,
         inv_link,
-        n_categories,
+        n_classes,
         expectation,
         glm_type,
         model_instantiation,
@@ -3645,10 +3645,10 @@ class TestCategoricalGLM:
     ):
         _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
         with expectation:
-            model.__class__(n_categories=n_categories)
+            model.__class__(n_classes=n_classes)
 
         with expectation:
-            model.n_classes = n_categories
+            model.n_classes = n_classes
 
     @pytest.mark.parametrize(
         "extra_x_dim, expectation",

@@ -13,11 +13,11 @@ kernelspec:
 
 # Fit GLM for Classification
 
-The [`CategoricalGLM`](nemos.glm.CategoricalGLM) models categorical outcomes such as behavioral choices.
+The [`ClassifierGLM`](nemos.glm.ClassifierGLM) models categorical outcomes such as behavioral choices.
 
 **Key differences from standard GLM:**
-- [`predict`](nemos.glm.CategoricalGLM.predict) returns predicted category labels
-- [`predict_proba`](nemos.glm.CategoricalGLM.predict_proba) returns (log-)probabilities for each category
+- [`predict`](nemos.glm.ClassifierGLM.predict) returns predicted category labels
+- [`predict_proba`](nemos.glm.ClassifierGLM.predict_proba) returns (log-)probabilities for each category
 
 ## Generate Synthetic Data
 
@@ -28,14 +28,14 @@ import nemos as nmo
 
 np.random.seed(200)
 
-n_samples, n_features, n_categories = 1000, 5, 3
+n_samples, n_features, n_classes = 1000, 5, 3
 X = np.random.randn(n_samples, n_features)
 
 # simulate categorical choices using known coefficients
-true_coef = 2 * np.random.randn(n_features, n_categories - 1)
-true_intercept = np.zeros(n_categories - 1)
+true_coef = 2 * np.random.randn(n_features, n_classes - 1)
+true_intercept = np.zeros(n_classes - 1)
 
-model = nmo.glm.CategoricalGLM(n_categories)
+model = nmo.glm.ClassifierGLM(n_classes)
 model.coef_ = true_coef
 model.intercept_ = true_intercept
 true_choice, _ = model.simulate(jax.random.PRNGKey(124), X)
@@ -44,7 +44,7 @@ true_choice, _ = model.simulate(jax.random.PRNGKey(124), X)
 ## Fit the Model and Predict Choices
 
 ```{code-cell}
-model = nmo.glm.CategoricalGLM(n_categories)
+model = nmo.glm.ClassifierGLM(n_classes)
 
 train_samples = 500
 model.fit(X[:train_samples], true_choice[:train_samples])
@@ -54,7 +54,7 @@ predicted_choice = model.predict(X)
 
 # get class probabilities
 probs = model.predict_proba(X)
-print(f"Probability shape: {probs.shape}")  # (n_samples, n_categories)
+print(f"Probability shape: {probs.shape}")  # (n_samples, n_classes)
 ```
 
 ## Visualize Results

@@ -30,13 +30,13 @@ def observation_model_rate_and_samples(request, observation_model_string):
         shape = request.node.funcargs.get("shape", None)
 
     if observation_model_string == "Categorical":
-        n_categories = 3
+        n_classes = 3
     if shape is None and observation_model_string != "Categorical":
         shape = (10,)
     elif shape is None and observation_model_string == "Categorical":
-        shape = (10, n_categories)
+        shape = (10, n_classes)
     elif observation_model_string == "Categorical":
-        shape = (*shape, n_categories)
+        shape = (*shape, n_classes)
     obs = instantiate_observation_model(observation_model_string)
     rate = jax.random.uniform(
         jax.random.PRNGKey(122), shape=shape, minval=0.1, maxval=10

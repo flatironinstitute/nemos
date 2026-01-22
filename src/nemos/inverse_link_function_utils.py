@@ -63,12 +63,12 @@ def log_softmax(x):
     Parameters
     ----------
     x : jnp.ndarray
-        Linear predictor values with shape ``(..., n_categories - 1)``.
+        Linear predictor values with shape ``(..., n_classes - 1)``.
 
     Returns
     -------
     jnp.ndarray
-        Log-probabilities with shape ``(..., n_categories)``.
+        Log-probabilities with shape ``(..., n_classes)``.
         The output sums to 0 in log-space (probabilities sum to 1).
     """
     xpad = jnp.pad(x, (*[(0, 0)] * (x.ndim - 1), (0, 1)))

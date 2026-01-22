@@ -28,12 +28,12 @@ def _inverse_log_softmax(empirical_frequencies):
     Parameters
     ----------
     empirical_frequencies:
-        The empirical frequencies (probabilities), shape (..., n_categories).
+        The empirical frequencies (probabilities), shape (..., n_classes).
 
     Returns
     -------
     :
-        Linear predictors relative to reference category, shape (..., n_categories - 1).
+        Linear predictors relative to reference category, shape (..., n_classes - 1).
     """
     return jnp.log(empirical_frequencies[..., :-1] / empirical_frequencies[..., -1:])
 

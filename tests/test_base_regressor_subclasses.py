@@ -20,39 +20,39 @@ from nemos import inverse_link_function_utils
 from nemos._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
 from nemos.glm.params import GLMParams
 from nemos.glm.validation import (
-    CategoricalGLMValidator,
+    ClassifierGLMValidator,
     GLMValidator,
-    PopulationCategoricalGLMValidator,
+    PopulationClassifierGLMValidator,
     PopulationGLMValidator,
 )
 from nemos.inverse_link_function_utils import LINK_NAME_TO_FUNC
 
 MODEL_REGISTRY = {
     "GLM": nmo.glm.GLM,
-    "CategoricalGLM": nmo.glm.ClassifierGLM,
+    "ClassifierGLM": nmo.glm.ClassifierGLM,
     "PopulationGLM": nmo.glm.PopulationGLM,
 }
 
 VALIDATOR_REGISTRY = {
     "GLM": GLMValidator(),
-    "CategoricalGLM": CategoricalGLMValidator(extra_params={"n_categories": 4}),
-    "CategoricalPopulationGLM": PopulationCategoricalGLMValidator(
-        extra_params={"n_categories": 4}
+    "ClassifierGLM": ClassifierGLMValidator(extra_params={"n_classes": 4}),
+    "ClassifierPopulationGLM": PopulationClassifierGLMValidator(
+        extra_params={"n_classes": 4}
     ),
     "PopulationGLM": PopulationGLMValidator(),
 }
 
 INIT_PARAM_LENGTH = {
     "GLM": 2,
-    "CategoricalGLM": 2,
-    "CategoricalPopulationGLM": 2,
+    "ClassifierGLM": 2,
+    "ClassifierPopulationGLM": 2,
     "PopulationGLM": 2,
 }
 
 DEFAULT_OBS_SHAPE = {
     "GLM": (500,),
-    "CategoricalGLM": (500,),
-    "CategoricalPopulationGLM": (500, 3),
+    "ClassifierGLM": (500,),
+    "ClassifierPopulationGLM": (500, 3),
     "PopulationGLM": (500, 3),
 }
 
@@ -65,17 +65,17 @@ HARD_CODED_GET_PARAMS_KEYS = {
         "solver_kwargs",
         "solver_name",
     },
-    "CategoricalGLM": {
+    "ClassifierGLM": {
         "inverse_link_function",
-        "n_categories",
+        "n_classes",
         "regularizer",
         "regularizer_strength",
         "solver_kwargs",
         "solver_name",
     },
-    "CategoricalPopulationGLM": {
+    "ClassifierPopulationGLM": {
         "inverse_link_function",
-        "n_categories",
+        "n_classes",
         "regularizer",
         "regularizer_strength",
         "solver_kwargs",
@@ -94,8 +94,8 @@ HARD_CODED_GET_PARAMS_KEYS = {
 
 OBSERVATION_PER_MODEL = {
     "GLM": [o for o in AVAILABLE_OBSERVATION_MODELS if o != "Categorical"],
-    "CategoricalGLM": ["Categorical"],
-    "CategoricalPopulationGLM": ["Categorical"],
+    "ClassifierGLM": ["Categorical"],
+    "ClassifierPopulationGLM": ["Categorical"],
     "PopulationGLM": [o for o in AVAILABLE_OBSERVATION_MODELS if o != "Categorical"],
 }
 
@@ -103,16 +103,16 @@ OBSERVATION_PER_MODEL = {
 # as of now, all models are glm type... in the future this may change.
 MODEL_WITH_LINK_FUNCTION_REGISTRY = {
     "GLM": nmo.glm.GLM,
-    "CategoricalGLM": nmo.glm.ClassifierGLM,
-    "CategoricalPopulationGLM": nmo.glm.ClassifierPopulationGLM,
+    "ClassifierGLM": nmo.glm.ClassifierGLM,
+    "ClassifierPopulationGLM": nmo.glm.ClassifierPopulationGLM,
     "PopulationGLM": nmo.glm.PopulationGLM,
 }
 
 DEFAULTS = {
     "GLM": dict(),
     "PopulationGLM": dict(),
-    "CategoricalGLM": dict(),
-    "CategoricalPopulationGLM": dict(),
+    "ClassifierGLM": dict(),
+    "ClassifierPopulationGLM": dict(),
 }
 
 

@@ -143,19 +143,19 @@ print(f"Model intercept shape: {population_model.intercept_.shape}")
 
 ### **Categorical GLM**
 
-For classification tasks, such as modeling behavioral choices, NeMoS provides the `CategoricalGLM`. This model treats observations as categorical random variables.
+For classification tasks, such as modeling behavioral choices, NeMoS provides the `ClassifierGLM`. This model treats observations as categorical random variables.
 
 ```{code-cell}
 
 import nemos as nmo
 
 # Instantiate a categorical model for 3 categories
-n_categories = 3
-model = nmo.glm.CategoricalGLM(n_categories)
+n_classes = 3
+model = nmo.glm.ClassifierGLM(n_classes)
 
 ```
 
-The `CategoricalGLM` follows a similar API to the standard GLM, with a few key differences:
+The `ClassifierGLM` follows a similar API to the standard GLM, with a few key differences:
 
 - `predict` returns predicted category labels (not rates)
 - `predict_proba` returns the probability of each category
@@ -168,7 +168,7 @@ num_samples, num_features = 100, 3
 # Generate a design matrix
 X = np.random.normal(size=(num_samples, num_features))
 # generate categorical observations (values 0, 1, or 2)
-choices = np.random.choice(n_categories, size=num_samples)
+choices = np.random.choice(n_classes, size=num_samples)
 
 # fit the model
 model = model.fit(X, choices)
@@ -178,16 +178,16 @@ predicted_categories = model.predict(X)
 
 # get probability for each category
 probabilities = model.predict_proba(X)
-probabilities.shape  # expected shape: (num_samples, n_categories)
+probabilities.shape  # expected shape: (num_samples, n_classes)
 
 ```
 
-For fitting multiple subjects in parallel, use `CategoricalPopulationGLM`:
+For fitting multiple subjects in parallel, use `ClassifierPopulationGLM`:
 
 ```{code-cell}
 
 # fit multiple subjects simultaneously
-population_model = nmo.glm.CategoricalPopulationGLM(n_categories)
+population_model = nmo.glm.ClassifierPopulationGLM(n_classes)
 
 ```
 
