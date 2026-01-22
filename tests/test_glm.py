@@ -3873,7 +3873,9 @@ class TestClassifierGLM:
         assert jnp.array_equal(model._encode_labels(y_label), y)
         assert jnp.array_equal(log_prob_label, log_prob)
 
-    def test_classes_none_initially(self, inv_link, glm_type, model_instantiation, request):
+    def test_classes_none_initially(
+        self, inv_link, glm_type, model_instantiation, request
+    ):
         """Test that classes_ is None before set_classes is called."""
         _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
         # Create a fresh model without set_classes
