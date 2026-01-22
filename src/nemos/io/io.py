@@ -6,7 +6,6 @@ import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Tuple, Union
 
-import jax.numpy as jnp
 import numpy as np
 
 if TYPE_CHECKING:

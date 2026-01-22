@@ -134,6 +134,7 @@ def test_lasso_convergence(solver_name):
                 1,
             ),
         ),
+        {},
         x,
         y,
     )
@@ -185,6 +186,7 @@ def test_group_lasso_convergence(solver_name):
                 1,
             ),
         ),
+        {},
         x,
         y,
     )

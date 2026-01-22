@@ -97,7 +97,7 @@ class ProxSVRG:
     >>> from nemos.proximal_operator import prox_lasso
     >>> loss_fn = lambda params, X, y: ((X.dot(params) - y)**2).sum()
     >>> svrg = ProxSVRG(loss_fn, prox_lasso)
-    >>> hyperparams_prox = {}
+    >>> hyperparams_prox = 0.1
     >>> params, state = svrg.run(np.zeros(2), hyperparams_prox, np.ones((10, 2)), np.zeros(10))
 
 
@@ -254,7 +254,7 @@ class ProxSVRG:
 
         # apply the proximal operator
         next_params = self.proximal_operator(
-            next_params, **hyperparams_prox, scaling=stepsize
+            next_params, hyperparams_prox, scaling=stepsize
         )
 
         return next_params, minibatch_aux_at_current_params
@@ -428,7 +428,7 @@ class ProxSVRG:
         self,
         init_params: Pytree,
         init_state: SVRGState,
-        hyperparams_prox: Any,
+        hyperparams_prox: Union[float, None],
         *args: Any,
     ) -> OptStep:
         """
@@ -662,8 +662,7 @@ class SVRG(ProxSVRG):
     >>> import numpy as np
     >>> loss_fn = lambda params, X, y: ((X.dot(params) - y)**2).sum()
     >>> svrg = SVRG(loss_fn)
-    >>> hyperparams_prox = {}
-    >>> params, state = svrg.run(np.zeros(2), hyperparams_prox, np.ones((10, 2)), np.zeros(10))
+    >>> params, state = svrg.run(np.zeros(2), np.ones((10, 2)), np.zeros(10))
 
     References
     ----------
@@ -813,7 +812,7 @@ class SVRG(ProxSVRG):
         init_state = self.init_state(init_params, *args)
 
         # substitute None for hyperparams_prox
-        return self._run(init_params, init_state, *args)
+        return self._run(init_params, init_state, None, *args)
 
 
 class WrappedSVRG(JaxoptAdapter):

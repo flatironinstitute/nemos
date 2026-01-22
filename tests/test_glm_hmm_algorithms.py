@@ -265,9 +265,10 @@ def prepare_partial_hmm_nll_single_neuron(obs):
     lbfgs_class = solver_registry["LBFGS"]
     solver = lbfgs_class(
         partial_hmm_negative_log_likelihood,
-        UnRegularized(),
-        0.0,
-        False,
+        regularizer=UnRegularized(),
+        regularizer_strength=None,
+        has_aux=False,
+        init_params=GLMParams(jnp.zeros((4, 2)), jnp.zeros((2, 1))),
         tol=10**-8,
     )
 
@@ -1857,9 +1858,10 @@ def test_e_and_m_step_for_population(generate_data_multi_state_population):
     lbfgs_class = solver_registry["LBFGS"]
     solver = lbfgs_class(
         partial_hmm_negative_log_likelihood,
-        UnRegularized(),
-        0.0,
-        False,
+        regularizer=UnRegularized(),
+        regularizer_strength=None,
+        init_params=GLMParams(jnp.zeros((4, 2)), jnp.zeros((2, 1))),
+        has_aux=False,
         tol=1e-13,
     )
 

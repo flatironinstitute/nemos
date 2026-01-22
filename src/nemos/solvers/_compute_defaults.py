@@ -54,9 +54,7 @@ def glm_compute_optimal_stepsize_configs(
     compute_optimal_params = None
     compute_smoothness = None
     strong_convexity = (
-        None
-        if not isinstance(model.regularizer, Ridge)
-        else model.regularizer_strength.item()
+        None if not isinstance(model.regularizer, Ridge) else model.regularizer_strength
     )
 
     # look-up table for selecting the optimal step and batch

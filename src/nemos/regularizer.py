@@ -14,7 +14,6 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
-from numpy.typing import NDArray
 
 from . import tree_utils
 from .base_class import Base
@@ -234,7 +233,7 @@ class Regularizer(Base, abc.ABC):
         """
         filter_kwargs = self._get_filter_kwargs(strength=strength, params=params)
 
-        def prox_op(params, scaling=1.0, *args):
+        def prox_op(params, hyperparams, scaling=1.0, *args):
             return apply_operator(
                 self._proximal_operator,
                 params,
@@ -249,7 +248,7 @@ class Regularizer(Base, abc.ABC):
 
         filter_kwargs = self._get_filter_kwargs(strength=strength, params=params)
 
-        def _penalized_loss(params, *args, **kwargs):
+        def _penalized_loss(params, hyperparams, *args, **kwargs):
             result = loss(params, *args, **kwargs)
             penalty = self._penalization(params, filter_kwargs=filter_kwargs)
             if isinstance(result, tuple):
@@ -297,7 +296,7 @@ class Regularizer(Base, abc.ABC):
             If conversion to float arrays fails.
         """
         if strength is None:
-            strength = 1.0
+            return 1.0
 
         return convert_tree_leaves_to_jax_array(
             strength, f"Could not convert regularizer strength to floats: {strength}"
@@ -349,77 +348,59 @@ class Regularizer(Base, abc.ABC):
               parameter leaf.
         """
 
-        if hasattr(params, "regularizable_subtrees"):
-            wheres = params.regularizable_subtrees()
-        else:
-            wheres = [lambda x: x]
-
+        wheres = getattr(params, "regularizable_subtrees", lambda: [lambda x: x])()
         struct = jax.tree_util.tree_structure(params)
         structured_strength = jax.tree_util.tree_unflatten(
             struct, [None] * struct.num_leaves
         )
 
-        def broadcast_leaf(param_leaf, strength_leaf):
-            s = jnp.asarray(strength_leaf, dtype=float)
-            try:
-                return jnp.broadcast_to(s, param_leaf.shape)
-            except ValueError:
-                raise ValueError(
-                    f"Regularizer strength shape {s.shape} cannot be broadcast "
-                    f"to parameter shape {param_leaf.shape}"
-                ) from None
-
-        # Scalar or 0-D array
-        if isinstance(strength, (int, float)) or (
-            isinstance(strength, (np.ndarray, jnp.ndarray)) and strength.ndim == 0
+        # handle scalar or None strength
+        if (
+            strength is None
+            or isinstance(strength, (int, float))
+            or (isinstance(strength, (np.ndarray, jnp.ndarray)) and strength.ndim == 0)
         ):
-            scalar = float(strength)
+            scalar = 1.0 if strength is None else float(strength)
             for where in wheres:
                 subtree = where(params)
                 structured_strength = eqx.tree_at(
                     where,
                     structured_strength,
                     jax.tree_util.tree_map(
-                        lambda p: jnp.full(p.shape, scalar, dtype=float),
-                        subtree,
+                        lambda p: jnp.full(p.shape, scalar, dtype=float), subtree
                     ),
                     is_leaf=lambda x: x is None,
                 )
             return structured_strength
 
-        # Align strengths with subtrees
+        # handle PyTree-aligned strength
         strengths = (
             [strength]
             if len(wheres) == 1
-            else (
-                strength
-                if isinstance(strength, (list, tuple)) and len(strength) == len(wheres)
-                else None
-            )
+            else (strength if len(strength) == len(wheres) else None)
         )
-
         if strengths is None:
             raise ValueError(f"Expected {len(wheres)} strength values, got {strength}")
 
-        # Validate and broadcast per subtree
         for s, where in zip(strengths, wheres):
             subtree = where(params)
             param_leaves, treedef = jax.tree_util.tree_flatten(subtree)
 
-            if isinstance(s, (np.ndarray, jnp.ndarray)) and s.ndim == 0:
-                strength_leaves = [s] * len(param_leaves)
-            else:
-                strength_leaves = jax.tree_util.tree_leaves(s)
-                if len(strength_leaves) != len(param_leaves):
-                    raise ValueError(
-                        f"Strength tree has {len(strength_leaves)} leaves, "
-                        f"but parameter subtree has {len(param_leaves)} leaves"
-                    )
+            strength_leaves = (
+                [s] * len(param_leaves)
+                if isinstance(s, (np.ndarray, jnp.ndarray)) and s.ndim == 0
+                else jax.tree_util.tree_leaves(s)
+            )
+            if len(strength_leaves) != len(param_leaves):
+                raise ValueError(
+                    f"Strength tree has {len(strength_leaves)} leaves, "
+                    f"but parameter subtree has {len(param_leaves)} leaves"
+                )
 
             validated = [
-                broadcast_leaf(p, sl) for p, sl in zip(param_leaves, strength_leaves)
+                jnp.broadcast_to(jnp.asarray(sl, dtype=float), p.shape)
+                for p, sl in zip(param_leaves, strength_leaves)
             ]
-
             structured_strength = eqx.tree_at(
                 where,
                 structured_strength,
@@ -459,12 +440,6 @@ class UnRegularized(Regularizer):
 
     def _validate_strength(self, strength: Any):
         return None
-
-    def _validate_strength_structure(self, params: Any, strength: Any):
-        return None
-
-    def _get_filter_kwargs(self, params: Any, strength: Any):
-        return {}
 
 
 class Ridge(Regularizer):
@@ -940,11 +915,7 @@ class GroupLasso(Regularizer):
                 )
             per_group_strength = strength
 
-        # broadcast per-group strength to match mask PyTree structure
-        return jax.tree_util.tree_map(
-            lambda _: per_group_strength,
-            self.mask,
-        )
+        return jax.tree_util.tree_map(lambda _: per_group_strength, self.mask)
 
     def _get_filter_kwargs(self, params: Any, strength: Any) -> dict:
         if self.mask is None:

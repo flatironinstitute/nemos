@@ -297,7 +297,12 @@ def test_svrg_glm_update(
     init_params = glm.initialize_params(X, y)
     state = glm.initialize_solver_and_state(X, y, init_params)
 
-    loss_gradient = jax.jit(jax.grad(glm._solver_loss_fun))
+    if solver_class is SVRG:
+        loss_gradient = jax.jit(
+            jax.grad(lambda params, X, y: glm._solver_loss_fun(params, {}, X, y))
+        )
+    else:
+        loss_gradient = jax.jit(jax.grad(glm._solver_loss_fun))
 
     # initialize full gradient at the anchor point
     state = state._replace(
@@ -553,13 +558,10 @@ def test_svrg_xk_update_step(request, regr_setup, to_tuple, prox, prox_lambda):
     stepsize = 1e-2
     loss_gradient = jax.jit(jax.grad(loss))
 
-    def prox_op(params, scaling=1.0):
+    def prox_op(params, hyperparams, scaling=1.0):
         return prox(params, prox_lambda, scaling)
 
-    if prox is prox_none:
-        prox_op = prox_none
-    else:
-        prox_lambda = tree_full_like(true_params, prox_lambda)
+    prox_lambda = tree_full_like(true_params, prox_lambda)
 
     # set the initial parameters to zero and
     # set the anchor point to a random value that's not just zeros
@@ -620,7 +622,7 @@ def test_svrg_xk_update_step(request, regr_setup, to_tuple, prox, prox_lambda):
     else:
         raise TypeError
 
-    next_xk = prox_op(next_xk, scaling=stepsize)
+    next_xk = prox_op(next_xk, {}, scaling=stepsize)
 
     if prox_lambda is None:
         assert prox == prox_none
@@ -628,7 +630,7 @@ def test_svrg_xk_update_step(request, regr_setup, to_tuple, prox, prox_lambda):
     else:
         solver = ProxSVRG(loss, prox_op)
     svrg_next_xk, _ = solver._inner_loop_param_update_step(
-        init_param, xs, df_xs, stepsize, xi, yi
+        init_param, xs, df_xs, stepsize, {}, xi, yi
     )
 
     assert pytree_map_and_reduce(

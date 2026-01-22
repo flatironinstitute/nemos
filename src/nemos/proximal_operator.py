@@ -25,11 +25,10 @@ References
 """
 
 from functools import partial
-from typing import Any, Optional, Tuple
+from typing import Any
 
 import jax
 import jax.numpy as jnp
-import jax.tree_util as tree_util
 
 from nemos.tree_utils import pytree_map_and_reduce
 
@@ -89,7 +88,7 @@ def masked_norm_2(x: Any, mask: Any, normalize: bool = True) -> Any:
     return norms
 
 
-def prox_none(x: Any, scaling: float = 1.0) -> Any:
+def prox_none(x: Any, strength, scaling: float = 1.0) -> Any:
     r"""Proximal operator for :math:`g(x) = 0`, i.e., the identity function.
 
     Since :math:`g(x) = 0`, the output is:
@@ -111,7 +110,7 @@ def prox_none(x: Any, scaling: float = 1.0) -> Any:
     -------
       output pytree, with the same structure as ``x``.
     """
-    del scaling
+    del strength, scaling
     return x
 
 
@@ -179,7 +178,11 @@ def prox_group_lasso(
     def prox_leaf(xi, mi, s, l2):
         factor = jax.nn.relu(1.0 - scaling * s / l2)  # (n_groups,)
         regularized = mi.sum(axis=0) > 0  # (n_features,)
-        return jnp.where(regularized, xi * jnp.einsum("i, i...->...", factor, mi), xi)
+        return jnp.where(
+            regularized,
+            xi * jnp.einsum("i, i...->...", factor, mi),
+            xi,
+        )
 
     l2_tree = jax.tree_util.tree_map(lambda _: l2_norm, x)
     return jax.tree_util.tree_map(prox_leaf, x, mask, strength, l2_tree)

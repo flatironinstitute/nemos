@@ -2708,7 +2708,7 @@ class TestPoissonGLM:
             ("Lasso", type(None)),
             ("ElasticNet", type(None)),
             ("GroupLasso", type(None)),
-            ("Ridge", float),
+            ("Ridge", jnp.ndarray),
         ],
     )
     @pytest.mark.parametrize(
@@ -2852,7 +2852,13 @@ class TestPoissonGLM:
 
         # NOTE these two are not the same because for example Ridge augments the loss
         # loss_grad = jax.jit(jax.grad(glm.compute_loss))
-        loss_grad = jax.jit(jax.grad(glm._solver_loss_fun))
+
+        if solver_name == "SVRG":
+            loss_grad = jax.jit(
+                jax.grad(lambda params, X, y: glm._solver_loss_fun(params, {}, X, y))
+            )
+        else:
+            loss_grad = jax.jit(jax.grad(glm._solver_loss_fun))
 
         # copied from GLM.fit
         # grab data if needed (tree map won't function because param is never a FeaturePytree).

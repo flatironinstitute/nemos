@@ -46,7 +46,7 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
         # Prepend the regularizer strength to args for proximal solvers.
         # Methods of `jaxopt.ProximalGradient` expect `hyperparams_prox` before
         # the objective function's arguments, while others do not need this.
-        self.hyperparams_prox = {}
+        self.hyperparams_prox = ()
 
         self._solver = self._solver_cls(
             fun=self.fun,
@@ -55,7 +55,7 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
         )
 
     def init_state(self, init_params: Params, *args: Any) -> JaxoptSolverState:
-        return self._solver.init_state(init_params, *self.hyperparams_prox, *args)
+        return self._solver.init_state(init_params, self.hyperparams_prox, *args)
 
     def update(
         self, params: Params, state: JaxoptSolverState, *args: Any
