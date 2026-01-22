@@ -1678,7 +1678,7 @@ class ClassifierMixin:
         )
         # reset classes cache
         self._classes_ = None
-        self._skip_encoding = False
+        self._skip_encoding = True
         self._class_to_index_ = None
 
     def _get_validator_extra_params(self) -> dict:
