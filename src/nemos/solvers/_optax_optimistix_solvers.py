@@ -42,9 +42,11 @@ class AbstractOptimistixOptaxSolver(OptimistixAdapter, abc.ABC):
         )
         init_doc = init_header + "\n" + init_doc
 
-        optax_header = inspect.cleandoc(f"""
+        optax_header = inspect.cleandoc(
+            f"""
             More info from Optax's {cls._optax_solver.__name__} documentation:
-            """)
+            """
+        )
         optax_header += "\n" + "-" * len(optax_header)
         optax_doc = inspect.cleandoc(
             inspect.getdoc(cls._optax_solver) or "No documentation found in Optax."
@@ -164,10 +166,12 @@ class OptimistixOptaxGradientDescent(AbstractOptimistixOptaxSolver):
     @classmethod
     def _note_about_accepted_arguments(cls) -> str:
         note = super()._note_about_accepted_arguments()
-        accel_nesterov = inspect.cleandoc("""
+        accel_nesterov = inspect.cleandoc(
+            """
             `acceleration` is passed to `optax.sgd` as the `nesterov` parameter.
             Note that this only has an effect if `momentum` is used as well.
-            """)
+            """
+        )
         return inspect.cleandoc(note + "\n" + accel_nesterov)
 
 
