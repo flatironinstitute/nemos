@@ -1023,6 +1023,7 @@ def classifierGLM_model_instantiation():
     rate = log_softmax(jnp.einsum("ki,tk->ti", w_true, X) + b_true)
     key = jax.random.PRNGKey(123)
     y = jax.random.categorical(key, rate)
+    model.set_classes(np.arange(num_classes))
     return X, y, model, GLMParams(w_true, b_true), rate
 
 
@@ -1051,6 +1052,7 @@ def classifierGLM_model_instantiation_pytree(classifierGLM_model_instantiation):
     model_tree = nmo.glm.ClassifierGLM(
         n_classes=model.n_classes, regularizer=model.regularizer
     )
+    model_tree.set_classes(np.arange(model.n_classes))
     return X_tree, spikes, model_tree, true_params_tree, rate
 
 
@@ -1086,6 +1088,7 @@ def population_classifierGLM_model_instantiation():
     rate = log_softmax(jnp.einsum("kni,tk->tni", w_true, X) + b_true)
     key = jax.random.PRNGKey(123)
     y = jax.random.categorical(key, rate)
+    model.set_classes(np.arange(num_classes))
     return X, y, model, GLMParams(w_true, b_true), rate
 
 
@@ -1116,6 +1119,7 @@ def population_classifierGLM_model_instantiation_pytree(
     model_tree = nmo.glm.ClassifierPopulationGLM(
         n_classes=model.n_classes, regularizer=model.regularizer
     )
+    model_tree.set_classes(np.arange(model.n_classes))
     return X_tree, spikes, model_tree, true_params_tree, rate
 
 
@@ -1414,6 +1418,7 @@ def instantiate_classifier_glm_func(
     )
     model.coef_ = np.random.randn(n_features, n_classes - 1)
     model.intercept_ = np.random.randn(n_classes - 1)
+    model.set_classes(np.arange(n_classes))
     if simulate:
         counts, rates = model.simulate(jax.random.PRNGKey(123), X)
     else:
@@ -1445,6 +1450,7 @@ def instantiate_population_classifier_glm_func(
         regularizer=regularizer,
         solver_name=solver_name,
     )
+    model.set_classes(np.arange(n_classes))
     model.coef_ = np.random.randn(n_features, n_neurons, n_classes - 1)
     model.intercept_ = np.random.randn(n_neurons, n_classes - 1)
     if simulate:
