@@ -25,8 +25,8 @@ from ..validation import _suggest_keys
 MODEL_REGISTRY = {
     "nemos.glm.glm.GLM": GLM,
     "nemos.glm.glm.PopulationGLM": PopulationGLM,
-    "nemos.glm.glm.CategoricalGLM": ClassifierGLM,
-    "nemos.glm.glm.CategoricalPopulationGLM": ClassifierPopulationGLM,
+    "nemos.glm.glm.ClassifierGLM": ClassifierGLM,
+    "nemos.glm.glm.ClassifierPopulationGLM": ClassifierPopulationGLM,
 }
 
 ERROR_MSG_OVERRIDE_NOT_ALLOWED = (
