@@ -3872,3 +3872,195 @@ class TestClassifierGLM:
         y_label, log_prob_label = model.simulate(jax.random.PRNGKey(1), X)
         assert jnp.array_equal(model._encode_labels(y_label), y)
         assert jnp.array_equal(log_prob_label, log_prob)
+
+    def test_classes_none_initially(self, inv_link, glm_type, model_instantiation, request):
+        """Test that classes_ is None before set_classes is called."""
+        _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        # Create a fresh model without set_classes
+        if "population" in glm_type:
+            fresh_model = nmo.glm.ClassifierPopulationGLM(n_classes=model.n_classes)
+        else:
+            fresh_model = nmo.glm.ClassifierGLM(n_classes=model.n_classes)
+        assert fresh_model.classes_ is None
+        assert fresh_model._skip_encoding is True
+
+    def test_skip_encoding_flag(self, inv_link, glm_type, model_instantiation, request):
+        """Test that _skip_encoding is True for default labels, False otherwise."""
+        _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        model = deepcopy(model)
+
+        # Default labels [0, 1, ..., n-1] should skip encoding
+        model.set_classes(np.arange(model.n_classes))
+        assert model._skip_encoding is True
+        assert model._class_to_index_ is None
+
+        # Non-default labels should not skip encoding
+        label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
+        model.set_classes(label)
+        assert model._skip_encoding is False
+        assert model._class_to_index_ is not None
+
+    def test_set_classes_too_many_classes(
+        self, inv_link, glm_type, model_instantiation, request
+    ):
+        """Test that set_classes raises when y has more classes than n_classes."""
+        _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        model = deepcopy(model)
+        # Create labels with more classes than model.n_classes
+        too_many = np.arange(model.n_classes + 2)
+        with pytest.raises(ValueError, match="Found .* unique class labels"):
+            model.set_classes(too_many)
+
+    def test_set_classes_too_few_classes(
+        self, inv_link, glm_type, model_instantiation, request
+    ):
+        """Test that set_classes raises when y has fewer classes than n_classes."""
+        _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        model = deepcopy(model)
+        # Create labels with fewer classes than model.n_classes
+        too_few = np.arange(model.n_classes - 1)
+        with pytest.raises(ValueError, match="Found only .* unique class labels"):
+            model.set_classes(too_few)
+
+    def test_encode_invalid_label_raises(
+        self, inv_link, glm_type, model_instantiation, request
+    ):
+        """Test that encoding an unknown label raises ValueError."""
+        X, y, model, true_params, _ = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        model = deepcopy(model)
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
+
+        # Set up string labels
+        label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
+        model.set_classes(label)
+
+        # Create y with an invalid label
+        if is_population_glm_type(glm_type):
+            y_invalid = np.full(y.shape, "z")  # 'z' is not in labels
+        else:
+            y_invalid = np.array(["z"] * len(y))
+
+        with pytest.raises(ValueError, match="Unrecognized label"):
+            model.score(X, y_invalid)
+
+    def test_non_contiguous_integer_labels(
+        self, inv_link, glm_type, model_instantiation, request
+    ):
+        """Test that non-contiguous integer labels work correctly."""
+        X, y, model, true_params, _ = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        model_nc = deepcopy(model)
+
+        # Fit with default labels first
+        model.fit(X, y)
+
+        # Use non-contiguous integers like [5, 10, 15] instead of [0, 1, 2]
+        nc_labels = np.array([5 + i * 5 for i in range(model.n_classes)])
+        y_nc = nc_labels[y]  # Map 0->5, 1->10, 2->15, etc.
+
+        model_nc.fit(X, y_nc)
+
+        # Coefficients should be the same
+        assert jnp.allclose(model.coef_, model_nc.coef_, atol=1e-5)
+        assert jnp.allclose(model.intercept_, model_nc.intercept_, atol=1e-5)
+
+        # Predictions should use the non-contiguous labels
+        pred_nc = model_nc.predict(X)
+        pred = model.predict(X)
+        assert jnp.array_equal(pred_nc, nc_labels[pred])
+
+    def test_compute_loss_with_labels(
+        self, inv_link, glm_type, model_instantiation, request
+    ):
+        """Test that compute_loss works with custom labels."""
+        X, y, model, true_params, _ = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        model = deepcopy(model)
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
+
+        # Compute loss with default labels
+        model.set_classes(np.arange(model.n_classes))
+        loss_default = model.compute_loss((model.coef_, model.intercept_), X, y)
+
+        # Compute loss with string labels
+        label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
+        model.set_classes(label)
+        y_label = model._decode_labels(y)
+        loss_label = model.compute_loss((model.coef_, model.intercept_), X, y_label)
+
+        assert jnp.allclose(loss_default, loss_label)
+
+    @pytest.mark.parametrize("return_type", ["proba", "log-proba"])
+    def test_predict_proba_with_labels(
+        self, inv_link, glm_type, model_instantiation, request, return_type
+    ):
+        """Test that predict_proba works correctly with custom labels."""
+        X, y, model, true_params, _ = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        model = deepcopy(model)
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
+
+        # Get probabilities with default labels
+        model.set_classes(np.arange(model.n_classes))
+        proba_default = model.predict_proba(X, return_type=return_type)
+
+        # Get probabilities with string labels
+        label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
+        model.set_classes(label)
+        proba_label = model.predict_proba(X, return_type=return_type)
+
+        # Probabilities should be identical (only label interpretation changes)
+        assert jnp.allclose(proba_default, proba_label)
+
+    def test_encode_decode_roundtrip(
+        self, inv_link, glm_type, model_instantiation, request
+    ):
+        """Test that encoding then decoding returns original labels."""
+        _, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        model = deepcopy(model)
+
+        # Test with string labels
+        label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
+        model.set_classes(label)
+        y_label = model._decode_labels(y)
+
+        # Roundtrip: decode -> encode should give original indices
+        y_roundtrip = model._encode_labels(y_label)
+        assert np.array_equal(y, y_roundtrip)
+
+        # Roundtrip: encode -> decode should give original labels
+        y_label_roundtrip = model._decode_labels(model._encode_labels(y_label))
+        assert np.array_equal(y_label, y_label_roundtrip)
+
+    def test_initialize_solver_sets_classes(
+        self, inv_link, glm_type, model_instantiation, request
+    ):
+        """Test that initialize_solver_and_state sets classes from y."""
+        X, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+
+        # Create fresh model
+        if "population" in glm_type:
+            fresh_model = nmo.glm.ClassifierPopulationGLM(n_classes=model.n_classes)
+        else:
+            fresh_model = nmo.glm.ClassifierGLM(n_classes=model.n_classes)
+
+        assert fresh_model.classes_ is None
+
+        # Use string labels
+        label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
+        y_label = label[y]
+
+        init_params = fresh_model.initialize_params(X, y_label)
+        fresh_model.initialize_solver_and_state(X, y_label, init_params)
+
+        # Classes should now be set
+        assert fresh_model.classes_ is not None
+        assert np.array_equal(fresh_model.classes_, label)
