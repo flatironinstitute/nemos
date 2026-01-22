@@ -248,7 +248,7 @@ class Regularizer(Base, abc.ABC):
 
         filter_kwargs = self._get_filter_kwargs(strength=strength, params=params)
 
-        def _penalized_loss(params, hyperparams, *args, **kwargs):
+        def _penalized_loss(params, *args, **kwargs):
             result = loss(params, *args, **kwargs)
             penalty = self._penalization(params, filter_kwargs=filter_kwargs)
             if isinstance(result, tuple):

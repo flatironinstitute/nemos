@@ -34,7 +34,7 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
         if self._proximal:
             self.fun = unregularized_loss
             solver_init_kwargs["prox"] = regularizer.get_proximal_operator(
-                init_params, strength=regularizer_strength
+                params=init_params, strength=regularizer_strength
             )
         else:
             self.fun = regularizer.penalized_loss(
@@ -46,7 +46,7 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
         # Prepend the regularizer strength to args for proximal solvers.
         # Methods of `jaxopt.ProximalGradient` expect `hyperparams_prox` before
         # the objective function's arguments, while others do not need this.
-        self.hyperparams_prox = ()
+        self.hyperparams_prox = (self.regularizer_strength,) if self._proximal else ()
 
         self._solver = self._solver_cls(
             fun=self.fun,
@@ -55,17 +55,19 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
         )
 
     def init_state(self, init_params: Params, *args: Any) -> JaxoptSolverState:
-        return self._solver.init_state(init_params, self.hyperparams_prox, *args)
+        return self._solver.init_state(init_params, *self.hyperparams_prox, *args)
 
     def update(
         self, params: Params, state: JaxoptSolverState, *args: Any
     ) -> JaxoptStepResult:
-        params, state = self._solver.update(params, state, self.hyperparams_prox, *args)
+        params, state = self._solver.update(
+            params, state, *self.hyperparams_prox, *args
+        )
         aux = self._extract_aux(state, fallback_name="aux_batch")
         return (params, state, aux)
 
     def run(self, init_params: Params, *args: Any) -> JaxoptStepResult:
-        params, state = self._solver.run(init_params, self.hyperparams_prox, *args)
+        params, state = self._solver.run(init_params, *self.hyperparams_prox, *args)
         aux = self._extract_aux(state, fallback_name="aux_full")
         return (params, state, aux)
 
