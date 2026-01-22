@@ -740,7 +740,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         :
             A dictionary of attribute names and their values.
         """
-        return {
+        set_attr = {
             name: getattr(self, name)
             for name in dir(self)
             # sklearn has "_repr_html_" and "_repr_mimebundle_" methods
@@ -749,6 +749,15 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             and not name.endswith("__")
             and (not callable(getattr(self, name)))
         }
+        # drop attributes that have a private equivalent
+        # those are likely properties without a setter.
+        private_set_attr_names = [
+            name for name in set_attr.keys() if name.startswith("_")
+        ]
+        for name in private_set_attr_names:
+            if name[1:] in set_attr:
+                set_attr.pop(name[1:])
+        return set_attr
 
     @staticmethod
     def _get_validator_extra_params() -> dict | None:

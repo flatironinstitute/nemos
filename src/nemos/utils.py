@@ -568,7 +568,7 @@ def _flatten_dict(nested_dict: dict, parent_key: str = "") -> dict:
         A flattened dictionary where the hierarchy is represented by concatenated keys (using __ as a separator).
     """
 
-    sep = "__"
+    sep = "::"
     items = []
     # Iterate over key-value pairs in the dictionary
     for k, v in nested_dict.items():
@@ -622,7 +622,7 @@ def _unflatten_dict(flat_dict: dict) -> dict:
     dict :
         The reconstructed nested dictionary with original structure and types.
     """
-    sep = "__"
+    sep = "::"
     root = {}
 
     for key, value in flat_dict.items():
@@ -636,8 +636,7 @@ def _unflatten_dict(flat_dict: dict) -> dict:
             elif issubclass(value.dtype.type, np.floating):
                 value = None if np.isnan(value) else float(value)
 
-        # split correctly `varname_` type of params
-        parts = [part[::-1] for part in key[::-1].split(sep)[::-1]]
+        parts = key.split(sep)
 
         current = root
 
