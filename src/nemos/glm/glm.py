@@ -2094,10 +2094,26 @@ class ClassifierGLM(ClassifierMixin, GLM):
 
     Notes
     -----
-    Class labels ``y`` should contain integer values in ``[0, n_classes - 1]``.
-    Float arrays with integer values (e.g., ``[0.0, 1.0, 2.0]``) are accepted and
-    converted automatically, but passing integer arrays directly is recommended
-    for best performance.
+    **Class Labels**
+
+    The target array ``y`` can contain any hashable class labels that can be stored
+    in a NumPy array, including integers, strings, or other hashable types. The model
+    internally maps these labels to indices ``[0, n_classes - 1]`` for computation
+    and maps them back when returning predictions.
+
+    **Performance Considerations**
+
+    For optimal performance, use integer labels ``[0, 1, ..., n_classes - 1]``. When
+    labels follow this convention, the model skips the encoding/decoding steps entirely.
+    Using other label formats (e.g., ``["cat", "dog"]`` or ``[5, 10, 15]``) incurs a
+    small overhead for label translation.
+
+    **Setting Class Labels**
+
+    The :meth:`fit` and :meth:`initialize_solver_and_state` methods automatically infer
+    class labels from the provided ``y``. If you set ``coef_`` and ``intercept_`` manually,
+    you must call :meth:`set_classes` before using :meth:`predict`, :meth:`predict_proba`,
+    :meth:`simulate`, :meth:`score`, or :meth:`compute_loss`.
 
     See Also
     --------
@@ -2108,9 +2124,9 @@ class ClassifierGLM(ClassifierMixin, GLM):
     --------
     >>> import jax.numpy as jnp
     >>> import nemos as nmo
-    >>> # Binary classification
+    >>> # Binary classification with integer labels (most efficient)
     >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
-    >>> y = jnp.array([0, 0, 1, 1])  # Integer class labels
+    >>> y = jnp.array([0, 0, 1, 1])
     >>> model = nmo.glm.ClassifierGLM(n_classes=2)
     >>> model = model.fit(X, y)
     >>> predictions = model.predict(X)  # Returns class labels
@@ -2271,10 +2287,26 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
 
     Notes
     -----
-    Class labels ``y`` should contain integer values in ``[0, n_classes - 1]``.
-    Float arrays with integer values (e.g., ``[0.0, 1.0, 2.0]``) are accepted and
-    converted automatically, but passing integer arrays directly is recommended
-    for best performance.
+    **Class Labels**
+
+    The target array ``y`` can contain any hashable class labels that can be stored
+    in a NumPy array, including integers, strings, or other hashable types. The model
+    internally maps these labels to indices ``[0, n_classes - 1]`` for computation
+    and maps them back when returning predictions.
+
+    **Performance Considerations**
+
+    For optimal performance, use integer labels ``[0, 1, ..., n_classes - 1]``. When
+    labels follow this convention, the model skips the encoding/decoding steps entirely.
+    Using other label formats (e.g., ``["cat", "dog"]`` or ``[5, 10, 15]``) incurs a
+    small overhead for label translation.
+
+    **Setting Class Labels**
+
+    The :meth:`fit` and :meth:`initialize_solver_and_state` methods automatically infer
+    class labels from the provided ``y``. If you set ``coef_`` and ``intercept_`` manually,
+    you must call :meth:`set_classes` before using :meth:`predict`, :meth:`predict_proba`,
+    :meth:`simulate`, :meth:`score`, or :meth:`compute_loss`.
 
     See Also
     --------
@@ -2285,7 +2317,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     --------
     >>> import jax.numpy as jnp
     >>> import nemos as nmo
-    >>> # Multi-class classification for 2 neurons
+    >>> # Multi-class classification for 2 neurons (integer labels, most efficient)
     >>> X = jnp.array([[1., 2.], [2., 3.], [3., 4.], [4., 5.], [5., 6.], [6., 7.]])
     >>> y = jnp.array([[0, 0], [0, 1], [1, 0], [1, 2], [2, 1], [2, 2]])
     >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3)
