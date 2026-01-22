@@ -40,6 +40,46 @@ from nemos.basis._basis_mixin import BasisMixin
 from nemos.basis._transformer_basis import TransformerBasis
 from nemos.glm.params import GLMParams
 from nemos.tree_utils import tree_full_like
+from nemos.inverse_link_function_utils import log_softmax
+from nemos.pytrees import FeaturePytree
+
+
+def initialize_feature_mask_for_population_glm(X, n_neurons: int, coef=None):
+    """
+    Create a feature mask of ones for PopulationGLM testing.
+
+    This is a test utility function that creates a feature mask with all ones,
+    matching the structure of X.
+
+    Parameters
+    ----------
+    X :
+        The design matrix. Can be a FeaturePytree, dict, or array.
+    n_neurons :
+        Number of neurons (determines the second dimension of the mask).
+        Ignored if coef is provided.
+    coef :
+        Optional coefficient array/pytree. If provided, the mask shape will match
+        coef shape exactly (required for CategoricalPopulationGLM).
+
+    Returns
+    -------
+    :
+        A feature mask with all ones. If coef is provided, returns ones_like(coef).
+        Otherwise, if X is a FeaturePytree or dict, returns a dict with arrays
+        of shape (n_neurons,) for each key.
+        If X is an array, returns an array of shape (n_features, n_neurons).
+    """
+    if coef is not None:
+        return jax.tree_util.tree_map(lambda c: jnp.ones(c.shape), coef)
+    if isinstance(X, FeaturePytree):
+        return jax.tree_util.tree_map(lambda x: jnp.ones((n_neurons,)), X.data)
+    elif isinstance(X, dict):
+        return jax.tree_util.tree_map(lambda x: jnp.ones((n_neurons,)), X)
+    else:
+        return jnp.ones((X.shape[1], n_neurons))
+
+>>>>>>> origin/development
 
 DEFAULT_KWARGS = {
     "n_basis_funcs": 5,

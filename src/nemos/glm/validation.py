@@ -293,6 +293,12 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
                 )
         return
 
+    def get_empty_params(self, X, y) -> GLMParams:
+        """Return the param shape given the input data."""
+        empty_coef = jax.tree_util.tree_map(lambda x: jnp.empty((x.shape[1],)), X)
+        empty_intercept = jnp.empty((1,))
+        return to_glm_params((empty_coef, empty_intercept))
+
 
 @dataclass(frozen=True, repr=False)
 class PopulationGLMValidator(GLMValidator):
@@ -357,3 +363,12 @@ class PopulationGLMValidator(GLMValidator):
                 f"{jax.tree_util.tree_map(lambda p: p.shape[1], params.coef)} neurons, "
                 f"y has {jax.tree_util.tree_map(lambda x: x.shape[1], y)} neurons instead!",
             )
+
+    def get_empty_params(self, X, y) -> GLMParams:
+        """Return the param shape given the input data."""
+        n_neurons = y.shape[1]
+        empty_coef = jax.tree_util.tree_map(
+            lambda x: jnp.empty((x.shape[1], n_neurons)), X
+        )
+        empty_intercept = jnp.empty((n_neurons,))
+        return to_glm_params((empty_coef, empty_intercept))
