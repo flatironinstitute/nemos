@@ -3806,3 +3806,69 @@ class TestClassifierGLM:
         )
         with expectation:
             method(**{k: input_dict[k] for k in required})
+
+    def test_predict_to_label(self, inv_link, glm_type, model_instantiation, request):
+        X, _, model, true_params, _ = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
+        model.set_classes(np.arange(model.n_classes))
+        y = model.predict(X)
+        label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
+        model.set_classes(label)
+        y_label = model.predict(X)
+        assert set(y_label.flatten()).intersection(label) == set(y_label.flatten())
+        for i, l in enumerate(label):
+            assert np.array_equal(y_label == l, y == i)
+
+    def test_score_from_label(self, inv_link, glm_type, model_instantiation, request):
+        X, y, model, true_params, _ = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
+        model.set_classes(np.arange(model.n_classes))
+        score_regular = model.score(X, y)
+        label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
+        model.set_classes(label)
+        y_label = model._decode_labels(y)
+        score = model.score(X, y_label)
+        assert isinstance(score, jnp.ndarray)
+        assert jnp.issubdtype(score.dtype, np.floating)
+        assert score == score_regular
+
+    def test_fit_from_label(self, inv_link, glm_type, model_instantiation, request):
+        X, y, model, true_params, _ = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        model_label = deepcopy(model)
+
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
+        model.set_classes(np.arange(model.n_classes))
+        model.fit(X, y)
+
+        label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
+        model_label.set_classes(label)
+        y_label = model._decode_labels(y)
+        model_label.fit(X, y_label)
+        assert jnp.array_equal(model.coef_, model_label.coef_)
+        assert jnp.array_equal(model.intercept_, model_label.intercept_)
+
+    def test_simulate_from_label(
+        self, inv_link, glm_type, model_instantiation, request
+    ):
+        X, _, model, true_params, _ = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
+        model.set_classes(np.arange(model.n_classes))
+        y, log_prob = model.simulate(jax.random.PRNGKey(1), X)
+
+        label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
+        model.set_classes(label)
+        y_label, log_prob_label = model.simulate(jax.random.PRNGKey(1), X)
+        assert jnp.array_equal(model._encode_labels(y_label), y)
+        assert jnp.array_equal(log_prob_label, log_prob)

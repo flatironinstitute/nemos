@@ -1584,16 +1584,20 @@ class ClassifierMixin:
         )
         return self
 
-    def _encode_labels(self, y):
+    def _encode_labels(self, y: ArrayLike) -> NDArray[int]:
         """Convert user-provided class labels to internal indices [0, n_classes-1]."""
         if self._skip_encoding:
             return y
         # use dict lookup instead of `np.searchsorted`
         # this approach will fail for label mismatches
         try:
+            y = np.asarray(y)
+            original_shape = y.shape
             y = np.fromiter(
-                (self._class_to_index_[label] for label in y), dtype=int, count=len(y)
-            )
+                (self._class_to_index_[label] for label in y.ravel()),
+                dtype=int,
+                count=y.size,
+            ).reshape(original_shape)
         except KeyError as e:
             unq_labels = np.unique(y)
             valid = list(self._class_to_index_.keys())
@@ -1603,7 +1607,7 @@ class ClassifierMixin:
             ) from e
         return y
 
-    def _decode_labels(self, indices):
+    def _decode_labels(self, indices: NDArray[int]) -> NDArray:
         """Convert internal indices [0, n_classes-1] back to user-provided class labels."""
         if self._skip_encoding:
             return indices
