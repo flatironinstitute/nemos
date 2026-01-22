@@ -1506,7 +1506,7 @@ class ClassifierMixin:
 
     def _check_classes_is_set(self, method_name, y=None):
         if self._classes_ is None:
-            raise ValueError(
+            raise RuntimeError(
                 f"Classes are not set. Must call ``set_classes`` before calling ``{method_name}``."
             )
 
@@ -1676,6 +1676,10 @@ class ClassifierMixin:
         self._validator = self._validator_class(
             extra_params=self._get_validator_extra_params()
         )
+        # reset classes cache
+        self._classes_ = None
+        self._skip_encoding = False
+        self._class_to_index_ = None
 
     def _get_validator_extra_params(self) -> dict:
         """Get validator extra parameters."""

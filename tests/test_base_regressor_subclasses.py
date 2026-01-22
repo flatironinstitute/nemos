@@ -938,7 +938,13 @@ class TestModelSimulation:
     @pytest.mark.parametrize(
         "delta_dim, expectation",
         [
-            (-1, pytest.raises(ValueError, match=r"y must be [12]-dimensional\.")),
+            (
+                -1,
+                pytest.raises(
+                    ValueError,
+                    match=r"y must be [12]-dimensional\.|Found only 1 unique class",
+                ),
+            ),
             (0, does_not_raise()),
             (1, pytest.raises(ValueError, match=r"y must be [12]-dimensional\.")),
         ],
@@ -957,11 +963,15 @@ class TestModelSimulation:
                 y = y[:, 0]
             elif delta_dim == 1:
                 y = np.zeros((*y.shape, 1))
+                for i in range(getattr(model, "n_classes", 0)):
+                    y[i] = i
         else:
             if delta_dim == -1:
                 y = np.zeros([])
             elif delta_dim == 1:
                 y = np.zeros((y.shape[0], 1))
+                for i in range(getattr(model, "n_classes", 0)):
+                    y[i] = i
         with expectation:
             model.fit(X, y, init_params=(true_params.coef, true_params.intercept))
 
@@ -1052,7 +1062,9 @@ class TestModelSimulation:
         """
         fixture = instantiate_base_regressor_subclass
         X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
-        y = jnp.zeros((y.shape[0] + delta_tp,) + y.shape[1:])
+        n_samples = y.shape[0] + delta_tp
+        y_samp = min(n_samples, y.shape[0])
+        y = jnp.zeros((n_samples,) + y.shape[1:]).at[:y_samp].set(y[:y_samp])
         with expectation:
             model.fit(X, y, init_params=(true_params.coef, true_params.intercept))
 
@@ -1222,6 +1234,8 @@ class TestModelValidator:
         X, model, true_params = fixture.X, fixture.model, fixture.params
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         y = _add_zeros(y)
+        for i in range(getattr(model, "n_classes", 0)):
+            y[i] = i
         validator = VALIDATOR_REGISTRY[model.__class__.__name__]
         params = model.initialize_params(X, y)
         params = validator.to_model_params(params)

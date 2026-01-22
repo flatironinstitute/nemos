@@ -1,3 +1,4 @@
+import inspect
 from contextlib import nullcontext as does_not_raise
 from copy import deepcopy
 from typing import Callable
@@ -3758,3 +3759,50 @@ class TestClassifierGLM:
         model.intercept_ = true_params.intercept
         with expectation:
             model.predict_proba(X)
+
+    @pytest.mark.parametrize(
+        "method_name",
+        ["predict_proba", "predict", "update", "compute_loss", "simulate"],
+    )
+    def test_must_set_classes_before_calling(
+        self,
+        method_name,
+        inv_link,
+        glm_type,
+        model_instantiation,
+        request,
+    ):
+        _, _, model, true_params, _ = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        model = deepcopy(model)
+        model._classes_ = None
+
+        # superset of all possible required inputs
+        input_dict = {
+            "X": None,
+            "y": None,
+            "params": None,
+            "random_key": None,
+            "feedforward_input": None,
+            "opt_state": None,
+        }
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
+        method = getattr(model, method_name)
+        required = [
+            name
+            for name, param in inspect.signature(method).parameters.items()
+            if param.default is inspect.Parameter.empty
+            and param.kind
+            in (
+                inspect.Parameter.POSITIONAL_ONLY,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                inspect.Parameter.KEYWORD_ONLY,
+            )
+        ]
+        expectation = pytest.raises(
+            RuntimeError, match=rf"Classes are not set\..*{method_name}"
+        )
+        with expectation:
+            method(**{k: input_dict[k] for k in required})

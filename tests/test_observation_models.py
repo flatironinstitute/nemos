@@ -762,12 +762,12 @@ class TestCategoricalObservations:
 
         assert observation_model.get_params() == {}
 
-    def test_deviance_against_scipy(self, categoricalGLM_model_instantiation):
+    def test_deviance_against_scipy(self, classifierGLM_model_instantiation):
         """
         Compare fitted parameters to statsmodels.
         Assesses if the model estimates are close to statsmodels' results.
         """
-        _, y, model, _, firing_rate = categoricalGLM_model_instantiation
+        _, y, model, _, firing_rate = classifierGLM_model_instantiation
         dev = -2 * self.log_likelihood(y, firing_rate).sum()
         dev_model = model.observation_model.deviance(
             jax.nn.one_hot(jnp.asarray(y, dtype=int), model.n_classes), firing_rate
@@ -775,12 +775,12 @@ class TestCategoricalObservations:
         if not np.allclose(dev, dev_model):
             raise ValueError("Deviance doesn't match statsmodels!")
 
-    def test_loglikelihood_against_scipy(self, categoricalGLM_model_instantiation):
+    def test_loglikelihood_against_scipy(self, classifierGLM_model_instantiation):
         """
         Compare log-likelihood to scipy.
         Assesses if the model estimates are close to statsmodels' results.
         """
-        _, y, model, _, firing_rate = categoricalGLM_model_instantiation
+        _, y, model, _, firing_rate = classifierGLM_model_instantiation
         ll_model = model.observation_model.log_likelihood(
             jax.nn.one_hot(jnp.asarray(y, dtype=int), model.n_classes), firing_rate
         )
@@ -790,13 +790,13 @@ class TestCategoricalObservations:
 
     @pytest.mark.requires_x64
     def test_loglikelihood_per_sample_against_scipy(
-        self, categoricalGLM_model_instantiation
+        self, classifierGLM_model_instantiation
     ):
         """
         Compare log-likelihood to scipy.
         Assesses if the model estimates are close to statsmodels' results.
         """
-        _, y, model, _, firing_rate = categoricalGLM_model_instantiation
+        _, y, model, _, firing_rate = classifierGLM_model_instantiation
         ll_model = model.observation_model.log_likelihood(
             jax.nn.one_hot(jnp.asarray(y, dtype=int), model.n_classes),
             firing_rate,
@@ -806,13 +806,13 @@ class TestCategoricalObservations:
         if not np.allclose(ll_model, ll_scipy):
             raise ValueError("Log-likelihood doesn't match scipy!")
 
-    def test_emission_probability(self, categoricalGLM_model_instantiation):
+    def test_emission_probability(self, classifierGLM_model_instantiation):
         """
         Test the poisson emission probability.
 
         Check that the emission probability is set to jax.random.poisson.
         """
-        _, _, model, _, _ = categoricalGLM_model_instantiation
+        _, _, model, _, _ = classifierGLM_model_instantiation
         key_array = jax.random.key(123)
         p = jax.nn.log_softmax(np.random.randn(10, 4), axis=1)
         counts = model.observation_model.sample_generator(key_array, p)
@@ -822,12 +822,12 @@ class TestCategoricalObservations:
                 "The emission probability should output the results of a call to jax.random.poisson."
             )
 
-    def test_pseudo_r2_vs_statsmodels(self, categoricalGLM_model_instantiation):
+    def test_pseudo_r2_vs_statsmodels(self, classifierGLM_model_instantiation):
         """
         Compare log-likelihood to scipy.
         Assesses if the model estimates are close to statsmodels' results.
         """
-        X, y, model, _, firing_rate = categoricalGLM_model_instantiation
+        X, y, model, _, firing_rate = classifierGLM_model_instantiation
 
         # statsmodels mcfadden
         mdl = sm.MNLogit(y, sm.add_constant(X)).fit()
