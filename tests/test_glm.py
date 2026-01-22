@@ -1488,7 +1488,7 @@ class TestGLM:
         [
             # Replace observation model class name  with a string
             (
-                "observation_model__class",
+                "observation_model::class",
                 "InvalidObservations",
                 pytest.raises(
                     ValueError, match="The class '[A-z]+' is not a native NeMoS"
@@ -1496,7 +1496,7 @@ class TestGLM:
             ),
             # Full path string
             (
-                "observation_model__class",
+                "observation_model::class",
                 "nemos.observation_models.InvalidObservations",
                 pytest.raises(
                     ValueError, match="The class '[A-z]+' is not a native NeMoS"
@@ -1504,7 +1504,7 @@ class TestGLM:
             ),
             # Replace observation model class name  with an instance
             (
-                "observation_model__class",
+                "observation_model::class",
                 nmo.observation_models.GammaObservations(),
                 pytest.raises(
                     ValueError,
@@ -1513,7 +1513,7 @@ class TestGLM:
             ),
             # Replace observation model class name with class
             (
-                "observation_model__class",
+                "observation_model::class",
                 nmo.observation_models.GammaObservations,
                 pytest.raises(
                     ValueError,
@@ -1522,7 +1522,7 @@ class TestGLM:
             ),
             # Replace link function with another callable
             (
-                "observation_model__params__inverse_link_function",
+                "observation_model::params::inverse_link_function",
                 np.exp,
                 pytest.raises(
                     ValueError,
@@ -1531,7 +1531,7 @@ class TestGLM:
             ),
             # Unexpected dtype for class name
             (
-                "dict__regularizer__item__class",
+                "dict::regularizer::item::class",
                 1,
                 pytest.raises(
                     ValueError, match="Parameter ``regularizer`` cannot be initialized"
