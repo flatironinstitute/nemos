@@ -1512,15 +1512,16 @@ class ClassifierMixin:
 
     def set_classes(self, y: ArrayLike) -> ClassifierMixin:
         """
-        Infer unique classes labels and set the ``classes_`` attribute.
+        Infer unique class labels and set the ``classes_`` attribute.
 
-        By default, ``classes_`` is assumed to be ``np.arange(n_classes)``. Calling
-        ``set_classes`` will set the ``classes_`` attribute to ``np.unique(y)`` instead.
+        This method infers class labels from ``y`` and sets up the internal
+        encoding/decoding machinery. When labels are the default ``[0, 1, ..., n_classes-1]``,
+        encoding is skipped for performance.
 
         Parameters
         ----------
         y
-            An array that must contain all the classes labels,
+            An array that must contain all the class labels,
             i.e. ``len(np.unique(y)) == n_classes``.
 
         Notes
@@ -1535,31 +1536,27 @@ class ClassifierMixin:
         >>> import nemos as nmo
         >>> import numpy as np
         >>> model = nmo.glm.ClassifierGLM(3)
-        >>> # Default classes
-        >>> model.classes_
-        array([0, 1, 2])
+        >>> # classes_ is None until set
+        >>> model.classes_ is None
+        True
         >>> # Integer classes
         >>> y = np.array([2, 3, 2, 5, 5])
         >>> model.set_classes(y)
+        ClassifierGLM(...)
         >>> model.classes_
         array([2, 3, 5])
         >>> # String classes
         >>> y = np.array(["a", "a", "c", "b", "b"])
         >>> model.set_classes(y)
+        ClassifierGLM(...)
         >>> model.classes_
         array(['a', 'b', 'c'], dtype='<U1')
 
         """
-        # note that we must use NumPy, Jax do allow only numeric types
+        # note that we must use NumPy, Jax does not allow non-numeric types
         classes = np.unique(y)
-        if np.array_equal(classes, np.arange(self.n_classes)):
-            # marker for integer labels 0,...,n-1
-            self._classes_ = 0
-            # reset cache
-            self._class_to_index_ = None
-            return self
-
         n_unique = len(classes)
+
         # Validation
         if n_unique > self.n_classes:
             raise ValueError(
@@ -1569,16 +1566,27 @@ class ClassifierMixin:
         elif n_unique < self.n_classes:
             raise ValueError(
                 f"Found only {n_unique} unique class labels in y, but n_classes={self.n_classes}. "
-                f"To correctly set the ``classes_` attribute, provide an array containing all the "
+                f"To correctly set the ``classes_`` attribute, provide an array containing all the "
                 f"unique class labels.",
             )
+
+        # Always store the actual classes array
         self._classes_ = classes
-        # Create a dict lookup of class label to intex mapping
-        self._class_to_index_ = {label: i for i, label in enumerate(classes)}
+
+        # Check if classes are the default [0, 1, ..., n_classes-1]
+        # If so, we can skip encoding/decoding for performance
+        is_default = np.array_equal(classes, np.arange(self.n_classes))
+        self._skip_encoding = is_default
+
+        # Create dict lookup only when needed (non-default classes)
+        self._class_to_index_ = (
+            None if is_default else {label: i for i, label in enumerate(classes)}
+        )
         return self
 
     def _encode_labels(self, y):
-        if isinstance(self._classes_, int):
+        """Convert user-provided class labels to internal indices [0, n_classes-1]."""
+        if self._skip_encoding:
             return y
         # use dict lookup instead of `np.searchsorted`
         # this approach will fail for label mismatches
@@ -1596,16 +1604,57 @@ class ClassifierMixin:
         return y
 
     def _decode_labels(self, indices):
-        if isinstance(self._classes_, int):
+        """Convert internal indices [0, n_classes-1] back to user-provided class labels."""
+        if self._skip_encoding:
             return indices
         return self._classes_[indices]
 
     @property
     def classes_(self) -> NDArray | None:
-        """Class labels."""
-        if isinstance(self._classes_, int):
-            return np.arange(self.n_classes)
+        """Class labels, or None if not set."""
         return self._classes_
+
+    def compute_loss(
+        self,
+        params,
+        X,
+        y,
+        *args,
+        **kwargs,
+    ):
+        """
+        Compute the loss function for the model.
+
+        This method validates inputs, encodes class labels to internal indices,
+        and computes the loss (negative log-likelihood).
+
+        Parameters
+        ----------
+        params
+            Parameter tuple of (coefficients, intercept).
+        X
+            Input data, array of shape ``(n_time_bins, n_features)`` or pytree of same.
+        y
+            Target class labels in the same format as ``classes_``.
+        *args
+            Additional positional arguments passed to the model-specific loss function.
+        **kwargs
+            Additional keyword arguments passed to the model-specific loss function.
+
+        Returns
+        -------
+        loss
+            The loss value (negative log-likelihood).
+
+        Raises
+        ------
+        ValueError
+            If ``classes_`` has not been set, or if inputs/parameters have
+            incompatible shapes or invalid values.
+        """
+        self._check_classes_is_set("compute_loss")
+        y = self._encode_labels(y)
+        return super().compute_loss(params, X, y, *args, **kwargs)
 
     @property
     def n_classes(self):
@@ -1830,10 +1879,16 @@ class ClassifierMixin:
         -------
         :
             A tuple ``(y, log_prob)`` where:
-            - ``y`` is an integer array of shape ``(n_samples,)`` containing the
-              simulated class labels, with values in ``[0, n_classes - 1]``.
+            - ``y`` is an array of shape ``(n_samples,)`` containing the
+              simulated class labels (in the same format as ``classes_``).
             - ``log_prob`` is an array of shape ``(n_samples,)`` containing the
               log-probability of the simulated responses under the model.
+
+        Raises
+        ------
+        ValueError
+            If ``classes_`` has not been set. Call :meth:`set_classes` or :meth:`fit`
+            before calling this method.
 
         Examples
         --------
@@ -1848,10 +1903,7 @@ class ClassifierMixin:
         >>> simulated_y.shape
         (4,)
         """
-        if self._classes_ is None:
-            # classes are not set, user must have provided coef
-            # assume arange classes.
-            self.set_classes(np.arange(self.n_classes))
+        self._check_classes_is_set("simulate")
         y, log_prob = super().simulate(random_key, feedforward_input)
         argmax = support_pynapple(conv_type="jax")(lambda x: jnp.argmax(x, axis=-1))
         y = self._decode_labels(argmax(y))
@@ -2084,6 +2136,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
         )
         self._classes_ = None
         self._class_to_index_ = None
+        self._skip_encoding = True  # default: assume labels are [0, n_classes-1]
 
     def fit(
         self,
@@ -2261,6 +2314,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         )
         self._classes_ = None
         self._class_to_index_ = None
+        self._skip_encoding = True  # default: assume labels are [0, n_classes-1]
 
     @property
     def feature_mask(self) -> Union[jnp.ndarray, dict[str, jnp.ndarray]]:
@@ -2378,5 +2432,6 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3).fit(X, y)
         >>> score = model.score(X, y)
         """
+        self._check_classes_is_set("score")
         y = self._encode_labels(y)
         return super().score(X, y, score_type, aggregate_sample_scores)
