@@ -79,8 +79,6 @@ def initialize_feature_mask_for_population_glm(X, n_neurons: int, coef=None):
     else:
         return jnp.ones((X.shape[1], n_neurons))
 
->>>>>>> origin/development
-
 DEFAULT_KWARGS = {
     "n_basis_funcs": 5,
     "frequencies": 4,
