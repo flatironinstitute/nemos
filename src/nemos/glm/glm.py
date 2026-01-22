@@ -1504,7 +1504,13 @@ class ClassifierMixin:
     # observation model inferred
     _invalid_observation_types = ()
 
-    def set_classes(self, y: ArrayLike) -> NDArray | None:
+    def _check_classes_is_set(self, method_name, y=None):
+        if self._classes_ is None:
+            raise ValueError(
+                f"Classes are not set. Must call ``set_classes`` before calling ``{method_name}``."
+            )
+
+    def set_classes(self, y: ArrayLike) -> ClassifierMixin:
         """
         Infer unique classes labels and set the ``classes_`` attribute.
 
@@ -1514,14 +1520,15 @@ class ClassifierMixin:
         Parameters
         ----------
         y
-            Array of classes.
+            An array that must contain all the classes labels,
+            i.e. ``len(np.unique(y)) == n_classes``.
 
         Notes
         -----
-        ``fit`` and ``initialize_params`` call ``set_classes`` internally, making sure that
-        the ``classes_`` attribute always matches the provided input.
-        On the other hand, ``update`` **will not** set the ``classes_`` attribue at each call for
-        perfomance reason. Make sure to call ``set_classes`` manually before calling ``update``.
+        :meth:`fit` and :meth:`initialize_solver_and_state` call ``set_classes`` internally,
+        making sure that the ``classes_`` attribute matches the provided input.
+        If you are fitting in batches by calling :meth:`update`, make sure that the ``classes_``
+        are correctly set by calling ``set_classes`` before starting the :meth:`update` loop.
 
         Examples
         --------
@@ -1546,8 +1553,11 @@ class ClassifierMixin:
         # note that we must use NumPy, Jax do allow only numeric types
         classes = np.unique(y)
         if np.array_equal(classes, np.arange(self.n_classes)):
-            self._classes_ = None
-            return
+            # marker for integer labels 0,...,n-1
+            self._classes_ = 0
+            # reset cache
+            self._class_to_index_ = None
+            return self
 
         n_unique = len(classes)
         # Validation
@@ -1557,27 +1567,43 @@ class ClassifierMixin:
                 f"Increase n_classes or check your data."
             )
         elif n_unique < self.n_classes:
-            warnings.warn(
+            raise ValueError(
                 f"Found only {n_unique} unique class labels in y, but n_classes={self.n_classes}. "
-                f"Some classes have no training samples.",
-                UserWarning,
+                f"To correctly set the ``classes_` attribute, provide an array containing all the "
+                f"unique class labels.",
             )
         self._classes_ = classes
+        # Create a dict lookup of class label to intex mapping
+        self._class_to_index_ = {label: i for i, label in enumerate(classes)}
+        return self
 
     def _encode_labels(self, y):
-        if self._classes_ is None:
+        if isinstance(self._classes_, int):
             return y
-        return np.searchsorted(self._classes_, y)
+        # use dict lookup instead of `np.searchsorted`
+        # this approach will fail for label mismatches
+        try:
+            y = np.fromiter(
+                (self._class_to_index_[label] for label in y), dtype=int, count=len(y)
+            )
+        except KeyError as e:
+            unq_labels = np.unique(y)
+            valid = list(self._class_to_index_.keys())
+            invalid = [lab for lab in unq_labels if lab not in valid]
+            raise ValueError(
+                f"Unrecognized label(s) {invalid}. " f"Valid labels are {valid}."
+            ) from e
+        return y
 
     def _decode_labels(self, indices):
-        if self._classes_ is None:
+        if isinstance(self._classes_, int):
             return indices
         return self._classes_[indices]
 
     @property
-    def classes_(self):
+    def classes_(self) -> NDArray | None:
         """Class labels."""
-        if self._classes_ is None:
+        if isinstance(self._classes_, int):
             return np.arange(self.n_classes)
         return self._classes_
 
@@ -1652,6 +1678,11 @@ class ClassifierMixin:
         >>> predictions.shape
         (4,)
         """
+        # Below will raise if user set manually coef and intercept
+        # and calls predict.
+        # One could assume default labels 0,...,n-1
+        # but requiring to be explicit is safer
+        self._check_classes_is_set("predict")
         log_proba = super().predict(X)
         return self._decode_labels(jnp.argmax(log_proba, axis=-1))
 
@@ -1690,6 +1721,13 @@ class ClassifierMixin:
         >>> proba.shape
         (4, 2)
         """
+        # Below will raise if user set manually coef and intercept
+        # and calls predict without setting the class label mapping.
+        # One could assume default labels 0,...,n-1
+        # but requiring to be explicit makes the mapping between
+        # the class labels and the probability index less ambiguous:
+        #   `log_proba[:, i]` is the log-proba of class `self.classes_[i]`
+        self._check_classes_is_set("predict_proba")
         # log-proba for categorical, proba for Bernoulli
         log_proba = super().predict(X)
         if return_type == "log-proba":
@@ -1810,10 +1848,49 @@ class ClassifierMixin:
         >>> simulated_y.shape
         (4,)
         """
+        if self._classes_ is None:
+            # classes are not set, user must have provided coef
+            # assume arange classes.
+            self.set_classes(np.arange(self.n_classes))
         y, log_prob = super().simulate(random_key, feedforward_input)
         argmax = support_pynapple(conv_type="jax")(lambda x: jnp.argmax(x, axis=-1))
         y = self._decode_labels(argmax(y))
         return y, log_prob
+
+    def initialize_solver_and_state(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        init_params: UserProvidedParamsT,
+    ) -> SolverState:
+        """Initialize the solver and its state for running fit and update.
+
+        This method must be called before using :meth:`update` for iterative optimization.
+        It sets up the solver with the provided initial parameters and data.
+
+        Parameters
+        ----------
+        X
+            Input data, array of shape ``(n_time_bins, n_features)`` or pytree of same.
+        y
+            Target labels, array of shape ``(n_time_bins,)`` for single neuron/subject models or
+            ``(n_time_bins, n_neurons)`` for population models.
+        init_params
+            Initial parameter tuple of (coefficients, intercept).
+
+        Returns
+        -------
+        state
+            Initial solver state.
+
+        Raises
+        ------
+        ValueError
+            If inputs or parameters have incompatible shapes or invalid values.
+        """
+        self.set_classes(y)
+        y = self._encode_labels(y)
+        return super().initialize_solver_and_state(X, y, init_params)
 
     def initialize_params(
         self,
@@ -1916,6 +1993,7 @@ class ClassifierMixin:
         >>> opt_state = model.initialize_solver_and_state(X, y, params)
         >>> new_params, new_state = model.update(params, opt_state, X, y)
         """
+        self._check_classes_is_set("update")
         y = self._encode_labels(y)
         # note: do not check and cast here. Risky but the performance of
         # the update has priority.
@@ -2005,6 +2083,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
             solver_kwargs=solver_kwargs,
         )
         self._classes_ = None
+        self._class_to_index_ = None
 
     def fit(
         self,
@@ -2088,6 +2167,10 @@ class ClassifierGLM(ClassifierMixin, GLM):
         >>> model = nmo.glm.ClassifierGLM(n_classes=2).fit(X, y)
         >>> score = model.score(X, y)
         """
+        # check if classes are not set, aka user set the coef and intercept
+        # manually, raise otherwise there may be ambiguity in interpreting
+        # the labels.
+        self._check_classes_is_set("score")
         y = self._encode_labels(y)
         return super().score(X, y, score_type, aggregate_sample_scores)
 
@@ -2177,6 +2260,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
             feature_mask=feature_mask,
         )
         self._classes_ = None
+        self._class_to_index_ = None
 
     @property
     def feature_mask(self) -> Union[jnp.ndarray, dict[str, jnp.ndarray]]:

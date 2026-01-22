@@ -1077,6 +1077,7 @@ class TestGLM:
                     "dof_resid_": 3,
                     "aux_": None,
                     "_classes_": np.array([2, 3, 5]),
+                    "_class_to_index_": {0: 2, 1: 3, 2: 5},
                 },
             ),
             (
@@ -1088,6 +1089,7 @@ class TestGLM:
                     "dof_resid_": 3,
                     "aux_": None,
                     "_classes_": np.array([2, 3, 5]),
+                    "_class_to_index_": {0: 2, 1: 3, 2: 5},
                 },
             ),
         ],
