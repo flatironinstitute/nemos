@@ -1504,7 +1504,7 @@ class ClassifierMixin:
     # observation model inferred
     _invalid_observation_types = ()
 
-    def _infer_classes(self, y: ArrayLike) -> NDArray | None:
+    def _infer_class_labels(self, y: ArrayLike) -> NDArray | None:
         """
         Infer classes from the input array ``y``.
 
@@ -1528,16 +1528,10 @@ class ClassifierMixin:
             return None
         return classes
 
-    @staticmethod
-    def _construct_index_mapping(classes):
-        return {label: i for i, label in enumerate(classes)}
-
     def _encode_labels(self, y):
-        if self._class_to_index_ is None:
+        if self._classes_ is None:
             return y
-        return np.fromiter(
-            (self._class_to_index_[label] for label in y), dtype=int, count=len(y)
-        )
+        return np.searchsorted(self._classes_, y)
 
     def _decode_labels(self, indices):
         if self._classes_ is None:
@@ -1974,8 +1968,6 @@ class ClassifierGLM(ClassifierMixin, GLM):
             solver_kwargs=solver_kwargs,
         )
         self._classes_ = None
-        # dict with the mapping
-        self._class_to_index_ = None
 
     def fit(
         self,
@@ -2015,8 +2007,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
         >>> model.coef_.shape
         (2, 1)
         """
-        self._classes_ = self._infer_classes(y)
-        self._class_to_index_ = self._construct_index_mapping(self._classes_)
+        self._classes_ = self._infer_class_labels(y)
         y = self._encode_labels(y)
         return super().fit(X, y, init_params)
 
@@ -2149,8 +2140,6 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
             feature_mask=feature_mask,
         )
         self._classes_ = None
-        # dict with the mapping
-        self._class_to_index_ = None
 
     @property
     def feature_mask(self) -> Union[jnp.ndarray, dict[str, jnp.ndarray]]:
@@ -2224,8 +2213,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         >>> model.coef_.shape
         (2, 2, 2)
         """
-        self._classes_ = self._infer_classes(y)
-        self._class_to_index_ = self._construct_index_mapping(self._classes_)
+        self._classes_ = self._infer_class_labels(y)
         y = self._encode_labels(y)
         return super().fit(X, y, init_params)
 
