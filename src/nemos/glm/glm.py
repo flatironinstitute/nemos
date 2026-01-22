@@ -11,7 +11,8 @@ from typing import Callable, Literal, Optional, Tuple, Union
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from numpy.typing import ArrayLike
+import numpy as np
+from numpy.typing import ArrayLike, NDArray
 from sklearn.utils import InputTags, TargetTags
 
 from .. import observation_models as obs
@@ -1503,6 +1504,53 @@ class ClassifierMixin:
     # observation model inferred
     _invalid_observation_types = ()
 
+    def _infer_classes(self, y: ArrayLike) -> NDArray | None:
+        """
+        Infer classes from the input array ``y``.
+
+        If y contains integers from ``[0, n_classes-1]`` returns None
+        indicating that no label transformation will be required
+
+        Parameters
+        ----------
+        y
+            Array of categories.
+
+        Returns
+        -------
+        classes
+            An array storing the class labels. ``classes[i]`` will be the label of the i-th class.
+
+        """
+        # note that we must use NumPy, Jax do allow only numeric types
+        classes = np.unique(y)
+        if np.array_equal(classes, np.arange(self.n_classes)):
+            return None
+        return classes
+
+    @staticmethod
+    def _construct_index_mapping(classes):
+        return {label: i for i, label in enumerate(classes)}
+
+    def _encode_labels(self, y):
+        if self._class_to_index_ is None:
+            return y
+        return np.fromiter(
+            (self._class_to_index_[label] for label in y), dtype=int, count=len(y)
+        )
+
+    def _decode_labels(self, indices):
+        if self._classes_ is None:
+            return indices
+        return self._classes_[indices]
+
+    @property
+    def classes_(self):
+        """Class labels."""
+        if self._classes_ is None:
+            return np.arange(self.n_classes)
+        return self._classes_
+
     @property
     def n_classes(self):
         """Number of categories."""
@@ -1575,7 +1623,7 @@ class ClassifierMixin:
         (4,)
         """
         log_proba = super().predict(X)
-        return jnp.argmax(log_proba, axis=-1)
+        return self._decode_labels(jnp.argmax(log_proba, axis=-1))
 
     def predict_proba(
         self,
@@ -1734,7 +1782,7 @@ class ClassifierMixin:
         """
         y, log_prob = super().simulate(random_key, feedforward_input)
         argmax = support_pynapple(conv_type="jax")(lambda x: jnp.argmax(x, axis=-1))
-        y = argmax(y)
+        y = self._decode_labels(argmax(y))
         return y, log_prob
 
     def initialize_params(
@@ -1773,6 +1821,7 @@ class ClassifierMixin:
         >>> coef.shape
         (2, 1)
         """
+        y = self._encode_labels(y)
         y = self._validator.check_and_cast_y_to_integer(y)
         y = jax.nn.one_hot(y, self.n_classes)
         return super().initialize_params(X, y)
@@ -1836,6 +1885,7 @@ class ClassifierMixin:
         >>> opt_state = model.initialize_solver_and_state(X, y, params)
         >>> new_params, new_state = model.update(params, opt_state, X, y)
         """
+        y = self._encode_labels(y)
         # note: do not check and cast here. Risky but the performance of
         # the update has priority.
         y = jax.nn.one_hot(jnp.asarray(y, dtype=int), self._n_classes)
@@ -1923,6 +1973,9 @@ class ClassifierGLM(ClassifierMixin, GLM):
             solver_name=solver_name,
             solver_kwargs=solver_kwargs,
         )
+        self._classes_ = None
+        # dict with the mapping
+        self._class_to_index_ = None
 
     def fit(
         self,
@@ -1962,6 +2015,9 @@ class ClassifierGLM(ClassifierMixin, GLM):
         >>> model.coef_.shape
         (2, 1)
         """
+        self._classes_ = self._infer_classes(y)
+        self._class_to_index_ = self._construct_index_mapping(self._classes_)
+        y = self._encode_labels(y)
         return super().fit(X, y, init_params)
 
     def score(
@@ -2004,6 +2060,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
         >>> model = nmo.glm.ClassifierGLM(n_classes=2).fit(X, y)
         >>> score = model.score(X, y)
         """
+        y = self._encode_labels(y)
         return super().score(X, y, score_type, aggregate_sample_scores)
 
 
@@ -2091,6 +2148,9 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
             solver_kwargs=solver_kwargs,
             feature_mask=feature_mask,
         )
+        self._classes_ = None
+        # dict with the mapping
+        self._class_to_index_ = None
 
     @property
     def feature_mask(self) -> Union[jnp.ndarray, dict[str, jnp.ndarray]]:
@@ -2164,6 +2224,9 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         >>> model.coef_.shape
         (2, 2, 2)
         """
+        self._classes_ = self._infer_classes(y)
+        self._class_to_index_ = self._construct_index_mapping(self._classes_)
+        y = self._encode_labels(y)
         return super().fit(X, y, init_params)
 
     def score(
@@ -2206,4 +2269,5 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3).fit(X, y)
         >>> score = model.score(X, y)
         """
+        y = self._encode_labels(y)
         return super().score(X, y, score_type, aggregate_sample_scores)

@@ -331,9 +331,7 @@ class TestGLM:
                     "GLM": [[jnp.zeros((1, 5)), jnp.zeros((1,))]],
                     "PopulationGLM": [[jnp.zeros((1, 5)), jnp.zeros((3,))]],
                     "ClassifierGLM": [[jnp.zeros((1, 5)), jnp.zeros((2,))]],
-                    "ClassifierPopulationGLM": [
-                        [jnp.zeros((1, 5)), jnp.zeros((3, 2))]
-                    ],
+                    "ClassifierPopulationGLM": [[jnp.zeros((1, 5)), jnp.zeros((3, 2))]],
                 },
             ),
             (
