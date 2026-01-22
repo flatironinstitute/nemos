@@ -1076,6 +1076,7 @@ class TestGLM:
                     "scale_": 2.0,
                     "dof_resid_": 3,
                     "aux_": None,
+                    "_classes_": np.array([2, 3, 5]),
                 },
             ),
             (
@@ -1086,6 +1087,7 @@ class TestGLM:
                     "scale_": 2.0,
                     "dof_resid_": 3,
                     "aux_": None,
+                    "_classes_": np.array([2, 3, 5]),
                 },
             ),
         ],
