@@ -35,9 +35,9 @@ from ..utils import format_repr
 from .initialize_parameters import initialize_intercept_matching_mean_rate
 from .params import GLMParams, GLMUserParams
 from .validation import (
-    CategoricalGLMValidator,
+    ClassifierGLMValidator,
     GLMValidator,
-    PopulationCategoricalGLMValidator,
+    PopulationClassifierGLMValidator,
     PopulationGLMValidator,
 )
 
@@ -257,9 +257,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             is_categorical = isinstance(observation, obs.CategoricalObservations)
             if is_categorical:
                 correct_model = (
-                    "CategoricalPopulationGLM"
+                    "ClassifierPopulationGLM"
                     if issubclass(cls, PopulationGLM)
-                    else "CategoricalGLM"
+                    else "ClassifierGLM"
                 )
                 error_msg += (
                     f" To use a GLM for classification instantiate a ``{correct_model}`` "
@@ -1526,7 +1526,7 @@ class ClassifierMixin:
 
     def _get_validator_extra_params(self) -> dict:
         """Get validator extra parameters."""
-        return {"n_categories": self._n_classes}
+        return {"n_classes": self._n_classes}
 
     def _preprocess_inputs(
         self,
@@ -1561,7 +1561,7 @@ class ClassifierMixin:
         :
             Predicted class labels for each sample.
             Returns an integer array of shape  ``(n_samples, )`` with values in
-            ``[0, n_categories - 1]``.
+            ``[0, n_classes - 1]``.
 
         Examples
         --------
@@ -1598,7 +1598,7 @@ class ClassifierMixin:
         Returns
         -------
         :
-            Predicted class probabilities. Rreturns an array of shape ``(n_samples, n_categories)``
+            Predicted class probabilities. Returns an array of shape ``(n_samples, n_classes)``
             where each row sums to 1 (for probabilities) or to 0 in log-space (for log-probabilities).
 
         Examples
@@ -1662,8 +1662,8 @@ class ClassifierMixin:
         params = self._get_model_params()
 
         # Infer n_neurons from coef shape:
-        # CategoricalGLM: coef is (n_features, n_categories-1) -> n_neurons = 1
-        # PopulationCategoricalGLM: coef is (n_features, n_neurons, n_categories-1) -> n_neurons = shape[1]
+        # ClassifierGLM: coef is (n_features, n_classes-1) -> n_neurons = 1
+        # ClassifierPopulationGLM: coef is (n_features, n_neurons, n_classes-1) -> n_neurons = shape[1]
         coef_leaf = jax.tree_util.tree_leaves(params.coef)[0]
         n_neurons = 1 if coef_leaf.ndim == 2 else coef_leaf.shape[1]
 
@@ -1671,8 +1671,8 @@ class ClassifierMixin:
         # see https://arxiv.org/abs/0712.0881
         if isinstance(self.regularizer, (GroupLasso, Lasso, ElasticNet)):
             # Sum over features (axis 0) and categories (axis -1)
-            # This leaves shape (n_neurons,) for PopulationCategoricalGLM
-            # or scalar for CategoricalGLM
+            # This leaves shape (n_neurons,) for ClassifierPopulationGLM
+            # or scalar for ClassifierGLM
             resid_dof = tree_utils.pytree_map_and_reduce(
                 lambda x: ~jnp.isclose(x, jnp.zeros_like(x)),
                 lambda x: sum([jnp.sum(i, axis=(0, -1)) for i in x]),
@@ -1715,7 +1715,7 @@ class ClassifierMixin:
         :
             A tuple ``(y, log_prob)`` where:
             - ``y`` is an integer array of shape ``(n_samples,)`` containing the
-              simulated class labels, with values in ``[0, n_categories - 1]``.
+              simulated class labels, with values in ``[0, n_classes - 1]``.
             - ``log_prob`` is an array of shape ``(n_samples,)`` containing the
               log-probability of the simulated responses under the model.
 
@@ -1755,7 +1755,7 @@ class ClassifierMixin:
         y :
             Class labels as integers, array of shape ``(n_time_bins,)`` for single neuron
             models or ``(n_time_bins, n_neurons)`` for population models. Values should be
-            in the range ``[0, n_categories - 1]``.
+            in the range ``[0, n_classes - 1]``.
 
         Returns
         -------
@@ -1809,7 +1809,7 @@ class ClassifierMixin:
         y :
             Class labels as integers, array of shape ``(n_time_bins,)`` for single neuron
             models or ``(n_time_bins, n_neurons)`` for population models. Values should be
-            in the range ``[0, n_categories - 1]``.
+            in the range ``[0, n_classes - 1]``.
         *args :
             Additional positional arguments to be passed to the solver's update method.
         n_samples :
@@ -1851,9 +1851,9 @@ class ClassifierGLM(ClassifierMixin, GLM):
     This model predicts discrete class labels from input features by modeling
     the log-odds of each class relative to a reference category.
 
-    The model uses ``n_categories - 1`` sets of coefficients (one per non-reference class),
-    resulting in coefficient shape ``(n_features, n_categories - 1)`` and intercept
-    shape ``(n_categories - 1,)``.
+    The model uses ``n_classes - 1`` sets of coefficients (one per non-reference class),
+    resulting in coefficient shape ``(n_features, n_classes - 1)`` and intercept
+    shape ``(n_classes - 1,)``.
 
     Parameters
     ----------
@@ -1873,20 +1873,20 @@ class ClassifierGLM(ClassifierMixin, GLM):
     Attributes
     ----------
     coef_
-        Fitted coefficients of shape ``(n_features, n_categories - 1)`` after calling :meth:`fit`.
+        Fitted coefficients of shape ``(n_features, n_classes - 1)`` after calling :meth:`fit`.
     intercept_
-        Fitted intercepts of shape ``(n_categories - 1,)`` after calling :meth:`fit`.
+        Fitted intercepts of shape ``(n_classes - 1,)`` after calling :meth:`fit`.
 
     Notes
     -----
-    Class labels ``y`` should contain integer values in ``[0, n_categories - 1]``.
+    Class labels ``y`` should contain integer values in ``[0, n_classes - 1]``.
     Float arrays with integer values (e.g., ``[0.0, 1.0, 2.0]``) are accepted and
     converted automatically, but passing integer arrays directly is recommended
     for best performance.
 
     See Also
     --------
-    CategoricalPopulationGLM : Multi-class classification for multiple neurons.
+    ClassifierPopulationGLM : Multi-class classification for multiple neurons.
     GLM : Generalized Linear Model for continuous/count responses.
 
     Examples
@@ -1902,7 +1902,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
     >>> probabilities = model.predict_proba(X, return_type="proba")
     """
 
-    _validator_class = CategoricalGLMValidator
+    _validator_class = ClassifierGLMValidator
 
     def __init__(
         self,
@@ -1939,7 +1939,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
             Training input samples of shape ``(n_samples, n_features)`` or FeaturePytree.
         y
             Target class labels of shape ``(n_samples,)``. Values should be in
-            ``[0, n_categories - 1]``. Float arrays with integer values are
+            ``[0, n_classes - 1]``. Float arrays with integer values are
             accepted and converted automatically, but integer arrays are
             recommended for best performance.
         init_params
@@ -1982,7 +1982,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
             Test input samples of shape ``(n_samples, n_features)`` or FeaturePytree.
         y
             True class labels of shape ``(n_samples,)``. Values should be in
-            ``[0, n_categories - 1]``. Float arrays with integer values are
+            ``[0, n_classes - 1]``. Float arrays with integer values are
             accepted and converted automatically, but integer arrays are
             recommended for best performance.
         score_type
@@ -2015,9 +2015,9 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     the log-odds of each class relative to a reference category, for multiple
     neurons simultaneously.
 
-    The model uses ``n_categories - 1`` sets of coefficients per neuron, resulting in
-    coefficient shape ``(n_features, n_neurons, n_categories - 1)`` and intercept
-    shape ``(n_neurons, n_categories - 1)``.
+    The model uses ``n_classes - 1`` sets of coefficients per neuron, resulting in
+    coefficient shape ``(n_features, n_neurons, n_classes - 1)`` and intercept
+    shape ``(n_neurons, n_classes - 1)``.
 
     Parameters
     ----------
@@ -2039,21 +2039,21 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     Attributes
     ----------
     coef_
-        Fitted coefficients of shape ``(n_features, n_neurons, n_categories - 1)``
+        Fitted coefficients of shape ``(n_features, n_neurons, n_classes - 1)``
         after calling :meth:`fit`.
     intercept_
-        Fitted intercepts of shape ``(n_neurons, n_categories - 1)`` after calling :meth:`fit`.
+        Fitted intercepts of shape ``(n_neurons, n_classes - 1)`` after calling :meth:`fit`.
 
     Notes
     -----
-    Class labels ``y`` should contain integer values in ``[0, n_categories - 1]``.
+    Class labels ``y`` should contain integer values in ``[0, n_classes - 1]``.
     Float arrays with integer values (e.g., ``[0.0, 1.0, 2.0]``) are accepted and
     converted automatically, but passing integer arrays directly is recommended
     for best performance.
 
     See Also
     --------
-    CategoricalGLM : Multi-class classification for a single neuron.
+    ClassifierGLM : Multi-class classification for a single neuron.
     PopulationGLM : Population GLM for continuous/count responses.
 
     Examples
@@ -2068,7 +2068,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     >>> predictions = model.predict(X)  # Returns class labels, shape (n_samples, n_neurons)
     """
 
-    _validator_class = PopulationCategoricalGLMValidator
+    _validator_class = PopulationClassifierGLMValidator
 
     def __init__(
         self,
@@ -2099,13 +2099,13 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
 
         The feature mask has the same structure and shape as the coefficients (``coef_``):
 
-        - **Array input**: Shape ``(n_features, n_neurons, n_categories - 1)``.
+        - **Array input**: Shape ``(n_features, n_neurons, n_classes - 1)``.
           Each entry ``[i, j, k]`` indicates whether the weight for feature ``i``,
           neuron ``j``, and category ``k`` is used (1 = used, 0 = masked).
 
         - **Dict/FeaturePytree input**: A dict with keys matching ``coef_``.
           Each leaf array has the same shape as the corresponding coefficient leaf
-          ``(n_features_per_key, n_neurons, n_categories - 1)``.
+          ``(n_features_per_key, n_neurons, n_classes - 1)``.
 
         Returns
         -------
@@ -2141,7 +2141,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
             Training input samples of shape ``(n_samples, n_features)`` or FeaturePytree.
         y
             Target class labels of shape ``(n_samples, n_neurons)``. Values should be in
-            ``[0, n_categories - 1]``. Float arrays with integer values are
+            ``[0, n_classes - 1]``. Float arrays with integer values are
             accepted and converted automatically, but integer arrays are
             recommended for best performance.
         init_params
@@ -2184,7 +2184,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
             Test input samples of shape ``(n_samples, n_features)`` or FeaturePytree.
         y
             True class labels of shape ``(n_samples, n_neurons)``. Values should be in
-            ``[0, n_categories - 1]``. Float arrays with integer values are
+            ``[0, n_classes - 1]``. Float arrays with integer values are
             accepted and converted automatically, but integer arrays are
             recommended for best performance.
         score_type
