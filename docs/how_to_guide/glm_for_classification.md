@@ -38,6 +38,8 @@ true_intercept = np.zeros(n_classes - 1)
 model = nmo.glm.ClassifierGLM(n_classes)
 model.coef_ = true_coef
 model.intercept_ = true_intercept
+# set classes
+model.set_classes(np.arange(n_classes))
 true_choice, _ = model.simulate(jax.random.PRNGKey(124), X)
 ```
 
