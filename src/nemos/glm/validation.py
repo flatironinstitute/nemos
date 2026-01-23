@@ -447,7 +447,7 @@ class ClassifierGLMValidator(GLMValidator):
 
         coef, intercept = params
         n_classes = self.extra_params["n_classes"]
-        expected_class_dim = n_classes - 1
+        expected_class_dim = n_classes
 
         # Check coef last dimension
         coef_class_mismatch = pytree_map_and_reduce(
@@ -456,7 +456,7 @@ class ClassifierGLMValidator(GLMValidator):
         if coef_class_mismatch:
             coef_shapes = jax.tree_util.tree_map(lambda c: c.shape, coef)
             raise ValueError(
-                f"coef last dimension must be n_classes - 1 = {expected_class_dim}. "
+                f"coef last dimension must be n_classes = {expected_class_dim}. "
                 f"Got coef with shape(s) {coef_shapes}."
             )
 
@@ -574,9 +574,9 @@ class ClassifierGLMValidator(GLMValidator):
         """Return the param shape given the input data."""
         n_classes = self.extra_params["n_classes"]
         empty_coef = jax.tree_util.tree_map(
-            lambda x: jnp.empty((x.shape[1], n_classes - 1)), X
+            lambda x: jnp.empty((x.shape[1], n_classes)), X
         )
-        empty_intercept = jnp.empty((n_classes - 1,))
+        empty_intercept = jnp.empty((n_classes,))
         return to_glm_params((empty_coef, empty_intercept))
 
 
@@ -650,14 +650,9 @@ class PopulationClassifierGLMValidator(ClassifierGLMValidator):
         """Return the param shape given the input data."""
         n_neurons = y.shape[1]
         n_classes = self.extra_params["n_classes"]
-        if n_classes != 2:
-            empty_coef = jax.tree_util.tree_map(
-                lambda x: jnp.empty((x.shape[1], n_neurons, n_classes - 1)), X
-            )
-            empty_intercept = jnp.empty((n_neurons, n_classes - 1))
-        else:
-            empty_coef = jax.tree_util.tree_map(
-                lambda x: jnp.empty((x.shape[1], n_neurons)), X
-            )
-            empty_intercept = jnp.empty((n_neurons,))
+        empty_coef = jax.tree_util.tree_map(
+            lambda x: jnp.empty((x.shape[1], n_neurons, n_classes)), X
+        )
+        empty_intercept = jnp.empty((n_neurons, n_classes))
+
         return to_glm_params((empty_coef, empty_intercept))

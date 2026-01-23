@@ -18,6 +18,7 @@ The [`ClassifierGLM`](nemos.glm.ClassifierGLM) models categorical outcomes such 
 **Key differences from standard GLM:**
 - [`predict`](nemos.glm.ClassifierGLM.predict) returns predicted category labels
 - [`predict_proba`](nemos.glm.ClassifierGLM.predict_proba) returns (log-)probabilities for each category
+- [`set_classes`](nemos.glm.ClassifierGLM.set_classes) set class labels. By Default, classes are assumed to be `{0, ..., n_classes - 1}` however, this assumption can be overridden by calling `set_classes` passing an array of class labels.
 
 ## Generate Synthetic Data
 
@@ -32,8 +33,8 @@ n_samples, n_features, n_classes = 1000, 5, 3
 X = np.random.randn(n_samples, n_features)
 
 # simulate categorical choices using known coefficients
-true_coef = 2 * np.random.randn(n_features, n_classes - 1)
-true_intercept = np.zeros(n_classes - 1)
+true_coef = 2 * np.random.randn(n_features, n_classes)
+true_intercept = np.zeros(n_classes)
 
 model = nmo.glm.ClassifierGLM(n_classes)
 model.coef_ = true_coef

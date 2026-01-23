@@ -49,30 +49,9 @@ expit = _make_wrapper(
 
 identity = _make_wrapper(lambda x: x, "identity", "Identity link function.")
 
-
-def log_softmax(x):
-    """Inverse link function for categorical models with reference parameterization.
-
-    Pads the input with a zero (for the reference category) and applies log-softmax
-    to produce log-probabilities over all categories.
-
-    This implements the reference-category parameterization where K-1 parameters
-    are fit for K categories. The last category serves as the reference with
-    linear predictor fixed at 0.
-
-    Parameters
-    ----------
-    x : jnp.ndarray
-        Linear predictor values with shape ``(..., n_classes - 1)``.
-
-    Returns
-    -------
-    jnp.ndarray
-        Log-probabilities with shape ``(..., n_classes)``.
-        The output sums to 0 in log-space (probabilities sum to 1).
-    """
-    xpad = jnp.pad(x, (*[(0, 0)] * (x.ndim - 1), (0, 1)))
-    return jax.nn.log_softmax(xpad)
+log_softmax = _make_wrapper(
+    jax.nn.log_softmax, "log_softmax", "Log-softmax link function."
+)
 
 
 LINK_NAME_TO_FUNC = {
@@ -80,6 +59,7 @@ LINK_NAME_TO_FUNC = {
     "expit": expit,
     "jax._src.lax.lax.logistic": expit,
     "jax._src.nn.functions.softplus": softplus,
+    "jax._src.nn.functions.log_softmax": log_softmax,
     "jax._src.numpy.ufuncs.exp": exp,
     "jax._src.scipy.special.expit": expit,
     "jax._src.scipy.stats.norm.cdf": jax.scipy.stats.norm.cdf,

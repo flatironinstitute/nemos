@@ -1016,11 +1016,13 @@ def classifierGLM_model_instantiation():
     np.random.seed(123)
     num_classes = 3
     X = np.random.normal(size=(100, 5))
-    b_true = np.zeros((num_classes - 1,))
-    w_true = np.random.normal(size=(5, num_classes - 1))
+    # Over-parameterized model: one set of params per class
+    b_true = np.zeros((num_classes,))
+    w_true = np.random.normal(size=(5, num_classes))
     regularizer = nmo.regularizer.UnRegularized()
     model = nmo.glm.ClassifierGLM(num_classes, regularizer=regularizer)
-    rate = log_softmax(jnp.einsum("ki,tk->ti", w_true, X) + b_true)
+    # Use jax.nn.log_softmax directly (no padding)
+    rate = jax.nn.log_softmax(jnp.einsum("ki,tk->ti", w_true, X) + b_true)
     key = jax.random.PRNGKey(123)
     y = jax.random.categorical(key, rate)
     model.set_classes(np.arange(num_classes))
@@ -1076,16 +1078,13 @@ def population_classifierGLM_model_instantiation():
     num_classes = 3
     n_neurons = 3
     X = np.random.normal(size=(100, 5))
-    b_true = np.zeros(
-        (
-            n_neurons,
-            num_classes - 1,
-        )
-    )
-    w_true = np.random.normal(size=(5, n_neurons, num_classes - 1))
+    # Over-parameterized model: one set of params per class
+    b_true = np.zeros((n_neurons, num_classes))
+    w_true = np.random.normal(size=(5, n_neurons, num_classes))
     regularizer = nmo.regularizer.UnRegularized()
     model = nmo.glm.ClassifierPopulationGLM(num_classes, regularizer=regularizer)
-    rate = log_softmax(jnp.einsum("kni,tk->tni", w_true, X) + b_true)
+    # Use jax.nn.log_softmax directly (no padding)
+    rate = jax.nn.log_softmax(jnp.einsum("kni,tk->tni", w_true, X) + b_true)
     key = jax.random.PRNGKey(123)
     y = jax.random.categorical(key, rate)
     model.set_classes(np.arange(num_classes))
@@ -1416,8 +1415,8 @@ def instantiate_classifier_glm_func(
         regularizer=regularizer,
         solver_name=solver_name,
     )
-    model.coef_ = np.random.randn(n_features, n_classes - 1)
-    model.intercept_ = np.random.randn(n_classes - 1)
+    model.coef_ = np.random.randn(n_features, n_classes)
+    model.intercept_ = np.random.randn(n_classes)
     model.set_classes(np.arange(n_classes))
     if simulate:
         counts, rates = model.simulate(jax.random.PRNGKey(123), X)
@@ -1451,8 +1450,8 @@ def instantiate_population_classifier_glm_func(
         solver_name=solver_name,
     )
     model.set_classes(np.arange(n_classes))
-    model.coef_ = np.random.randn(n_features, n_neurons, n_classes - 1)
-    model.intercept_ = np.random.randn(n_neurons, n_classes - 1)
+    model.coef_ = np.random.randn(n_features, n_neurons, n_classes)
+    model.intercept_ = np.random.randn(n_neurons, n_classes)
     if simulate:
         model._feature_mask = initialize_feature_mask_for_population_glm(X, n_neurons)
         counts, rates = model.simulate(jax.random.PRNGKey(123), X)

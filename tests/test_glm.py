@@ -319,10 +319,10 @@ class TestGLM:
                 {
                     "GLM": [jnp.zeros((5,)), jnp.zeros((1,))],
                     "PopulationGLM": [jnp.zeros((5, 3)), jnp.zeros((3,))],
-                    "ClassifierGLM": [jnp.zeros((5, 2)), jnp.zeros((2,))],
+                    "ClassifierGLM": [jnp.zeros((5, 3)), jnp.zeros((3,))],
                     "ClassifierPopulationGLM": [
-                        jnp.zeros((5, 3, 2)),
-                        jnp.zeros((3, 2)),
+                        jnp.zeros((5, 3, 3)),
+                        jnp.zeros((3, 3)),
                     ],
                 },
             ),
@@ -331,8 +331,8 @@ class TestGLM:
                 {
                     "GLM": [[jnp.zeros((1, 5)), jnp.zeros((1,))]],
                     "PopulationGLM": [[jnp.zeros((1, 5)), jnp.zeros((3,))]],
-                    "ClassifierGLM": [[jnp.zeros((1, 5)), jnp.zeros((2,))]],
-                    "ClassifierPopulationGLM": [[jnp.zeros((1, 5)), jnp.zeros((3, 2))]],
+                    "ClassifierGLM": [[jnp.zeros((1, 5)), jnp.zeros((3,))]],
+                    "ClassifierPopulationGLM": [[jnp.zeros((1, 5)), jnp.zeros((3, 3))]],
                 },
             ),
             (
@@ -342,9 +342,9 @@ class TestGLM:
                 {
                     "GLM": dict(p1=jnp.zeros((5,)), p2=jnp.zeros((1,))),
                     "PopulationGLM": dict(p1=jnp.zeros((3, 3)), p2=jnp.zeros((3, 2))),
-                    "ClassifierGLM": dict(p1=jnp.zeros((5, 2)), p2=jnp.zeros((2,))),
+                    "ClassifierGLM": dict(p1=jnp.zeros((5, 3)), p2=jnp.zeros((3,))),
                     "ClassifierPopulationGLM": dict(
-                        p1=jnp.zeros((5, 3, 2)), p2=jnp.zeros((3, 2))
+                        p1=jnp.zeros((5, 3, 3)), p2=jnp.zeros((3, 3))
                     ),
                 },
             ),
@@ -360,12 +360,12 @@ class TestGLM:
                         jnp.zeros((3,)),
                     ],
                     "ClassifierGLM": [
-                        dict(p1=jnp.zeros((5, 2)), p2=jnp.zeros((1, 2))),
-                        jnp.zeros((2,)),
+                        dict(p1=jnp.zeros((5, 3)), p2=jnp.zeros((1, 3))),
+                        jnp.zeros((3,)),
                     ],
                     "ClassifierPopulationGLM": [
-                        dict(p1=jnp.zeros((5, 3, 2)), p2=jnp.zeros((1, 3, 2))),
-                        jnp.zeros((3, 2)),
+                        dict(p1=jnp.zeros((5, 3, 3)), p2=jnp.zeros((1, 3, 3))),
+                        jnp.zeros((3, 3)),
                     ],
                 },
             ),
@@ -381,12 +381,12 @@ class TestGLM:
                         jnp.zeros((3,)),
                     ],
                     "ClassifierGLM": [
-                        FeaturePytree(p1=jnp.zeros((5, 2)), p2=jnp.zeros((5, 2))),
-                        jnp.zeros((2,)),
+                        FeaturePytree(p1=jnp.zeros((5, 3)), p2=jnp.zeros((5, 3))),
+                        jnp.zeros((3,)),
                     ],
                     "ClassifierPopulationGLM": [
-                        FeaturePytree(p1=jnp.zeros((5, 3, 2)), p2=jnp.zeros((5, 3, 2))),
-                        jnp.zeros((3, 2)),
+                        FeaturePytree(p1=jnp.zeros((5, 3, 3)), p2=jnp.zeros((5, 3, 3))),
+                        jnp.zeros((3, 3)),
                     ],
                 },
             ),
@@ -1722,10 +1722,11 @@ class TestGLMObservationModel:
 
         elif "classifier" in model_instantiation:
             # In sklearn 1.5+, multinomial is the default with lbfgs solver
+            # Use C=1.0 (Ridge with strength=1.0) for identifiable parameters
             return LogisticRegression(
                 fit_intercept=True,
                 tol=10**-12,
-                C=np.inf,
+                C=1.0,
                 solver="lbfgs",
                 max_iter=1000,
             )
@@ -1795,12 +1796,13 @@ class TestGLMObservationModel:
                 return np.array([3])
 
         elif "classifier" in model_instantiation:
-            # Classifier models have (n_features, n_classes-1) coef shape
-            # For lasso, estimate surviving coefficients per neuron
+            # Classifier models have (n_features, n_classes) coef shape
+            # For lasso, count surviving coefficients across all classes
+            # Note: LASSO convergence can vary slightly across environments
             if is_population_glm_type(glm_type):
-                return np.array([4, 5, 2])
+                return np.array([6, 4, 5])
             else:
-                return np.array([3])
+                return np.array([5])
 
         else:
             raise ValueError("Unknown model instantiation")
@@ -2260,17 +2262,17 @@ class TestGLMObservationModel:
 
     @staticmethod
     def _format_sklearn_params(sklearn_model, nemos_model):
-        """Convert sklearn's multinomial params to reference-category parameterization.
+        """Format sklearn params for comparison with nemos.
 
-        sklearn uses full parameterization with K sets of parameters.
-        nemos uses reference-category parameterization with K-1 parameters,
-        where the last category has implicit zero parameters.
+        sklearn LogisticRegression uses shape (n_classes, n_features).
+        nemos uses shape (n_features, n_classes).
 
-        Returns coef and intercept in nemos format: coef (n_features, K-1), intercept (K-1,).
+        Returns coef and intercept in nemos format.
         """
         if is_classifier_model(nemos_model):
-            coef = (sklearn_model.coef_[:-1] - sklearn_model.coef_[-1:]).T
-            intercept = sklearn_model.intercept_[:-1] - sklearn_model.intercept_[-1]
+            # sklearn: (n_classes, n_features) -> nemos: (n_features, n_classes)
+            coef = sklearn_model.coef_.T
+            intercept = sklearn_model.intercept_
         else:
             coef, intercept = sklearn_model.coef_, sklearn_model.intercept_
         return coef, intercept
@@ -2301,12 +2303,28 @@ class TestGLMObservationModel:
         X, y, model_obs, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
+
+        n_samples = (
+            X.shape[0] if not isinstance(X, dict) else list(X.values())[0].shape[0]
+        )
+
+        # Classifier models need Ridge regularization for identifiable parameters
+        # (over-parameterized model). sklearn uses sum(NLL) + (1/2C)*||w||^2,
+        # nemos uses mean(NLL) + strength/2*||w||^2, so strength = 1/(C*n_samples).
+        if "classifier" in model_instantiation.lower():
+            regularizer = nmo.regularizer.Ridge()
+            regularizer_strength = 1.0 / n_samples  # Match sklearn C=1.0
+        else:
+            regularizer = nmo.regularizer.UnRegularized()
+            regularizer_strength = None
+
         kwargs = dict(
             n_classes=getattr(model_obs, "n_classes", None),
-            regularizer=nmo.regularizer.UnRegularized(),
+            regularizer=regularizer,
+            regularizer_strength=regularizer_strength,
             observation_model=model_obs.observation_model,
             solver_name=solver_name,
-            solver_kwargs={"tol": 10**-10},
+            solver_kwargs={"tol": 10**-12},
         )
         clean_kwargs = dict(
             (k, p) for k, p in kwargs.items() if k in model_obs._get_param_names()
@@ -2321,6 +2339,7 @@ class TestGLMObservationModel:
         model.fit(X, y)
 
         is_population = is_population_model(model)
+
         if is_population:
             # Population GLM: fit each neuron separately in sklearn and compare
             for n in range(y.shape[1]):
@@ -2339,7 +2358,11 @@ class TestGLMObservationModel:
             sklearn_model.fit(X, y)
             sk_coef, sk_intercept = self._format_sklearn_params(sklearn_model, model)
             self._assert_params_match(
-                sk_coef, sk_intercept, model.coef_, model.intercept_, atol=1e-6
+                sk_coef,
+                sk_intercept,
+                model.coef_,
+                model.intercept_,
+                atol=1e-6,
             )
 
     @staticmethod
@@ -2353,11 +2376,11 @@ class TestGLMObservationModel:
         if is_classifier_model(model):
             n_classes = model.n_classes
             if is_population:
-                coef_shape = [(nf, n_neurons, n_classes - 1) for nf in n_features]
-                intercept_shape = (n_neurons, n_classes - 1)
+                coef_shape = [(nf, n_neurons, n_classes) for nf in n_features]
+                intercept_shape = (n_neurons, n_classes)
             else:
-                coef_shape = [(nf, n_classes - 1) for nf in n_features]
-                intercept_shape = (n_classes - 1,)
+                coef_shape = [(nf, n_classes) for nf in n_features]
+                intercept_shape = (n_classes,)
         else:
             if is_population:
                 coef_shape = [(nf, n_neurons) for nf in n_features]
@@ -2630,8 +2653,8 @@ class TestPopulationGLM:
         Fixture to return the expected exceptions for test_feature_mask_compatibility_fit
         based on the model type (classifier vs non-classifier).
 
-        For classifier models, the feature_mask shape is (n_features, n_neurons, n_classes-1)
-        which means all the test masks (which lack the n_classes-1 dimension) will fail
+        For classifier models, the feature_mask shape is (n_features, n_neurons, n_classes)
+        which means all the test masks (which lack the n_classes dimension) will fail
         shape validation.
         """
         is_classifier = "classifier" in model_instantiation
@@ -2640,8 +2663,8 @@ class TestPopulationGLM:
         shape_mismatch_match = "Inconsistent feature mask shape|The shape of the ``feature_mask`` array must match"
 
         if is_classifier:
-            # Classifier models expect feature_mask shape (n_features, n_neurons, n_classes-1)
-            # Masks without n_classes-1 dimension fail shape validation
+            # Classifier models expect feature_mask shape (n_features, n_neurons, n_classes)
+            # Masks without n_classes dimension fail shape validation
             return {
                 "correct_shape_np": pytest.raises(
                     ValueError, match=shape_mismatch_match
@@ -2703,9 +2726,9 @@ class TestPopulationGLM:
                 "correct_shape_np",
                 "missing_key_pytree",  # pytree expects dict, not array
             ),
-            # Classifier correct shape: (n_features, n_neurons, n_classes-1) = (5, 3, 2)
+            # Classifier correct shape: (n_features, n_neurons, n_classes) = (5, 3, 3)
             (
-                np.ones((5, 3, 2), dtype=int),
+                np.ones((5, 3, 3), dtype=int),
                 "correct_shape_classifier_np",
                 "missing_key_pytree",  # pytree expects dict, not array
             ),
@@ -2725,11 +2748,11 @@ class TestPopulationGLM:
                 "missing_key_pytree",  # np expects array, not dict
                 "correct_shape_pytree",
             ),
-            # Classifier pytree correct shape: {'input_1': (3, 3, 2), 'input_2': (2, 3, 2)}
+            # Classifier pytree correct shape: {'input_1': (3, 3, 3), 'input_2': (2, 3, 3)}
             (
                 {
-                    "input_1": np.ones((3, 3, 2), dtype=int),
-                    "input_2": np.ones((2, 3, 2), dtype=int),
+                    "input_1": np.ones((3, 3, 3), dtype=int),
+                    "input_2": np.ones((2, 3, 3), dtype=int),
                 },
                 "missing_key_pytree",  # np expects array, not dict
                 "correct_shape_classifier_pytree",
@@ -3592,7 +3615,7 @@ class TestClassifierGLM:
         )
         model.inverse_link_function = inv_link
         if is_population_glm_type(glm_type):
-            model.feature_mask = jnp.ones((X.shape[1], y.shape[1], model.n_classes - 1))
+            model.feature_mask = jnp.ones((X.shape[1], y.shape[1], model.n_classes))
             model.scale_ = jnp.ones((y.shape[1]))
             shape_log_proba = (X.shape[0], y.shape[1], model.n_classes)
         else:

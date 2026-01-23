@@ -1831,12 +1831,13 @@ class ClassifierMixin:
                 )
 
         n_features = sum(x.shape[1] for x in x_leaf)
+        # Effective degrees of freedom is n_classes - 1 due to probability simplex constraint
         n_m1_classes = self._n_classes - 1
         params = self._get_model_params()
 
         # Infer n_neurons from coef shape:
-        # ClassifierGLM: coef is (n_features, n_classes-1) -> n_neurons = 1
-        # ClassifierPopulationGLM: coef is (n_features, n_neurons, n_classes-1) -> n_neurons = shape[1]
+        # ClassifierGLM: coef is (n_features, n_classes) -> n_neurons = 1
+        # ClassifierPopulationGLM: coef is (n_features, n_neurons, n_classes) -> n_neurons = shape[1]
         coef_leaf = jax.tree_util.tree_leaves(params.coef)[0]
         n_neurons = 1 if coef_leaf.ndim == 2 else coef_leaf.shape[1]
 
@@ -2067,21 +2068,22 @@ class ClassifierGLM(ClassifierMixin, GLM):
     """
     Generalized Linear Model for multi-class classification.
 
-    This model predicts discrete class labels from input features by modeling
-    the log-odds of each class relative to a reference category.
-
-    The model uses ``n_classes - 1`` sets of coefficients (one per non-reference class),
-    resulting in coefficient shape ``(n_features, n_classes - 1)`` and intercept
-    shape ``(n_classes - 1,)``.
+    This model predicts discrete class labels from input features using a
+    softmax (multinomial logistic) model. It uses an over-parameterized
+    representation with one set of coefficients per class, resulting in
+    coefficient shape ``(n_features, n_classes)`` and intercept shape ``(n_classes,)``.
 
     Parameters
     ----------
     n_classes
         The number of classes. Must be >= 2.
     inverse_link_function
-        The inverse link function.
+        The inverse link function. Default is ``log_softmax``.
     regularizer
-        The regularization scheme.
+        The regularization scheme. Default is ``Ridge``. Note that the
+        model is over-parameterized: one set of coefficients for each class.
+        Regularization makes the parameters identifiable. Setting ``UnRegularized``
+        will result in non-identifiable coefficients, see note below.
     regularizer_strength
         The strength of the regularization.
     solver_name
@@ -2092,12 +2094,25 @@ class ClassifierGLM(ClassifierMixin, GLM):
     Attributes
     ----------
     coef_
-        Fitted coefficients of shape ``(n_features, n_classes - 1)`` after calling :meth:`fit`.
+        Fitted coefficients of shape ``(n_features, n_classes)`` after calling :meth:`fit`.
     intercept_
-        Fitted intercepts of shape ``(n_classes - 1,)`` after calling :meth:`fit`.
+        Fitted intercepts of shape ``(n_classes,)`` after calling :meth:`fit`.
 
     Notes
     -----
+    **Identifiability**
+
+    This model uses an over-parameterized (symmetric) representation where each class
+    has its own set of coefficients. Since probabilities from softmax are invariant to
+    adding a constant to all linear predictors, the parameters are not uniquely
+    identifiable without regularization. For example, if ``(coef, intercept)`` is a
+    solution, so is ``(coef + c, intercept + c)`` for any constant ``c``.
+
+    Using regularization (default is ``Ridge``) resolves this ambiguity by penalizing
+    the parameter magnitudes, effectively centering the solution. If you use
+    ``UnRegularized``, the optimization may converge to different equivalent solutions
+    depending on initialization, though predictions will be identical.
+
     **Class Labels**
 
     The target array ``y`` can contain any hashable class labels that can be stored
@@ -2150,6 +2165,8 @@ class ClassifierGLM(ClassifierMixin, GLM):
     ):
         self.n_classes = n_classes
         observation_model = obs.CategoricalObservations()
+        if regularizer is None:
+            regularizer = "Ridge"
         super().__init__(
             observation_model=observation_model,
             inverse_link_function=inverse_link_function,
@@ -2256,22 +2273,23 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     """
     Population Generalized Linear Model for multi-class classification.
 
-    This model predicts discrete class labels from input features by modeling
-    the log-odds of each class relative to a reference category, for multiple
-    neurons simultaneously.
-
-    The model uses ``n_classes - 1`` sets of coefficients per neuron, resulting in
-    coefficient shape ``(n_features, n_neurons, n_classes - 1)`` and intercept
-    shape ``(n_neurons, n_classes - 1)``.
+    This model predicts discrete class labels from input features using a
+    softmax (multinomial logistic) model for multiple neurons simultaneously.
+    It uses an over-parameterized representation with one set of coefficients
+    per class, resulting in coefficient shape ``(n_features, n_neurons, n_classes)``
+    and intercept shape ``(n_neurons, n_classes)``.
 
     Parameters
     ----------
     n_classes
         The number of classes. Must be >= 2.
     inverse_link_function
-        The inverse link function.
+        The inverse link function. Default is ``log_softmax``.
     regularizer
-        The regularization scheme.
+        The regularization scheme. Default is ``Ridge``. Note that the
+        model is over-parameterized: one set of coefficients for each class.
+        Regularization makes the parameters identifiable. Setting ``UnRegularized``
+        will result in non-identifiable coefficients, see note below.
     regularizer_strength
         The strength of the regularization.
     solver_name
@@ -2284,13 +2302,26 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     Attributes
     ----------
     coef_
-        Fitted coefficients of shape ``(n_features, n_neurons, n_classes - 1)``
+        Fitted coefficients of shape ``(n_features, n_neurons, n_classes)``
         after calling :meth:`fit`.
     intercept_
-        Fitted intercepts of shape ``(n_neurons, n_classes - 1)`` after calling :meth:`fit`.
+        Fitted intercepts of shape ``(n_neurons, n_classes)`` after calling :meth:`fit`.
 
     Notes
     -----
+    **Identifiability**
+
+    This model uses an over-parameterized (symmetric) representation where each class
+    has its own set of coefficients. Since probabilities from softmax are invariant to
+    adding a constant to all linear predictors, the parameters are not uniquely
+    identifiable without regularization. For example, if ``(coef, intercept)`` is a
+    solution, so is ``(coef + c, intercept + c)`` for any constant ``c``.
+
+    Using regularization (default is ``Ridge``) resolves this ambiguity by penalizing
+    the parameter magnitudes, effectively centering the solution. If you use
+    ``UnRegularized``, the optimization may converge to different equivalent solutions
+    depending on initialization, though predictions will be identical.
+
     **Class Labels**
 
     The target array ``y`` can contain any hashable class labels that can be stored
@@ -2343,6 +2374,8 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     ):
         self.n_classes = n_classes
         observation_model = obs.CategoricalObservations()
+        if regularizer is None:
+            regularizer = "Ridge"
         super().__init__(
             observation_model=observation_model,
             inverse_link_function=inverse_link_function,
@@ -2363,13 +2396,13 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
 
         The feature mask has the same structure and shape as the coefficients (``coef_``):
 
-        - **Array input**: Shape ``(n_features, n_neurons, n_classes - 1)``.
+        - **Array input**: Shape ``(n_features, n_neurons, n_classes)``.
           Each entry ``[i, j, k]`` indicates whether the weight for feature ``i``,
           neuron ``j``, and category ``k`` is used (1 = used, 0 = masked).
 
         - **Dict/FeaturePytree input**: A dict with keys matching ``coef_``.
           Each leaf array has the same shape as the corresponding coefficient leaf
-          ``(n_features_per_key, n_neurons, n_classes - 1)``.
+          ``(n_features_per_key, n_neurons, n_classes)``.
 
         Returns
         -------
