@@ -2215,7 +2215,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
         >>> model = nmo.glm.ClassifierGLM(n_classes=2)
         >>> model = model.fit(X, y)
         >>> model.coef_.shape
-        (2, 2pytest)
+        (2, 2)
         """
         self.set_classes(y)
         y = self._encode_labels(y)
