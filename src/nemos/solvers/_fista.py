@@ -246,7 +246,7 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
             # use the fixed stepsize
             new_stepsize = self.stepsize
             new_y = tree_add_scalar_mul(update_point, -new_stepsize, grad_at_point)
-            new_y = self.prox(new_y, new_stepsize)
+            new_y = self.prox(new_y, (), new_stepsize)
 
         return new_y, new_stepsize
 
@@ -287,11 +287,11 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
             stepsize = carry[1]
             new_stepsize = stepsize * self.decrease_factor
             next_x = tree_add_scalar_mul(x, -new_stepsize, grad)
-            next_x = self.prox(next_x, new_stepsize)
+            next_x = self.prox(next_x, (), new_stepsize)
             return next_x, new_stepsize
 
         init_x = tree_add_scalar_mul(x, -stepsize, grad)
-        init_x = self.prox(init_x, stepsize)
+        init_x = self.prox(init_x, (), stepsize)
         init_val = (init_x, stepsize)
 
         return eqx.internal.while_loop(

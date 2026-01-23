@@ -299,7 +299,8 @@ class Regularizer(Base, abc.ABC):
             return 1.0
 
         return convert_tree_leaves_to_jax_array(
-            strength, f"Could not convert regularizer strength to floats: {strength}"
+            strength,
+            f"Could not convert regularizer strength to floats: {strength}",
         )
 
     def _validate_strength_structure(self, params: Any, strength: Any):

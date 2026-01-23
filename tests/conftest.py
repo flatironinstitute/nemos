@@ -39,9 +39,9 @@ from nemos.basis._basis import Basis
 from nemos.basis._basis_mixin import BasisMixin
 from nemos.basis._transformer_basis import TransformerBasis
 from nemos.glm.params import GLMParams
-from nemos.tree_utils import tree_full_like
 from nemos.inverse_link_function_utils import log_softmax
 from nemos.pytrees import FeaturePytree
+from nemos.tree_utils import tree_full_like
 
 
 def initialize_feature_mask_for_population_glm(X, n_neurons: int, coef=None):

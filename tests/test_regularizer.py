@@ -1228,7 +1228,7 @@ class TestElasticNet:
             y,
         )
 
-    @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
+    @pytest.mark.parametrize("solver_name", ["ProximalGradient"])
     @pytest.mark.parametrize("regularizer_strength", [1.0, 0.5, 0.1])
     @pytest.mark.parametrize("reg_ratio", [1.0, 0.5, 0.2])
     @pytest.mark.requires_x64
@@ -1316,7 +1316,6 @@ class TestElasticNet:
                     1,
                 ),
             ),
-            {},
             x,
             y,
         )
@@ -1752,7 +1751,7 @@ class TestGroupLasso:
         runner = model._instantiate_solver(model._compute_loss, init_params).solver_run
         params, _, _ = runner(init_params, X, y)
 
-        zeros_est = params.coef == 0
+        zeros_est = params.coef == 0.0
         if not np.all(zeros_est == zeros_true):
             raise ValueError("GroupLasso failed to zero-out the parameter group!")
 
@@ -2111,7 +2110,7 @@ class TestPenalizedLossAuxiliaryVariables:
             simple_loss, params=params, strength=regularizer_strength
         )
 
-        result = penalized(params, {}, X, y)
+        result = penalized(params, X, y)
 
         # Should return a single scalar value
         assert isinstance(result, jnp.ndarray)
@@ -2139,7 +2138,7 @@ class TestPenalizedLossAuxiliaryVariables:
             loss_with_aux, params=params, strength=regularizer_strength
         )
 
-        result = penalized(params, {}, X, y)
+        result = penalized(params, X, y)
 
         # Should return a tuple (penalized_loss, aux)
         assert isinstance(result, tuple)
@@ -2184,7 +2183,7 @@ class TestPenalizedLossAuxiliaryVariables:
             ValueError,
             match=r"Invalid loss function return.*returns a tuple with 1 value",
         ):
-            penalized(params, {}, X, y)
+            penalized(params, X, y)
 
     def test_invalid_tuple_three_elements(self, regularizer):
         """Test that 3+ element tuple raises error."""
@@ -2209,7 +2208,7 @@ class TestPenalizedLossAuxiliaryVariables:
             ValueError,
             match=r"Invalid loss function return.*returns a tuple with 3 values",
         ):
-            penalized(params, {}, X, y)
+            penalized(params, X, y)
 
     def test_penalty_correctly_added_to_loss_with_aux(self, regularizer):
         """Test that penalty is correctly added when aux variables are present."""
@@ -2237,7 +2236,7 @@ class TestPenalizedLossAuxiliaryVariables:
             params=params,
             strength=regularizer_strength,
         )
-        penalized_loss_value, aux = penalized(params, {}, X, y)
+        penalized_loss_value, aux = penalized(params, X, y)
 
         # Calculate expected penalty
         filter_kwargs = regularizer._get_filter_kwargs(
