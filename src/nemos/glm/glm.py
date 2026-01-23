@@ -1987,7 +1987,7 @@ class ClassifierMixin:
         >>> model = nmo.glm.ClassifierGLM(n_classes=2)
         >>> coef, intercept = model.initialize_params(X, y)
         >>> coef.shape
-        (2, 1)
+        (2, 2)
         """
         self.set_classes(y)
         y = self._encode_labels(y)
@@ -2215,7 +2215,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
         >>> model = nmo.glm.ClassifierGLM(n_classes=2)
         >>> model = model.fit(X, y)
         >>> model.coef_.shape
-        (2, 1)
+        (2, 2pytest)
         """
         self.set_classes(y)
         y = self._encode_labels(y)
@@ -2459,7 +2459,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3)
         >>> model = model.fit(X, y)
         >>> model.coef_.shape
-        (2, 2, 2)
+        (2, 2, 3)
         """
         self.set_classes(y)
         y = self._encode_labels(y)
