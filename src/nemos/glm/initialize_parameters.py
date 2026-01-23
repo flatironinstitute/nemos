@@ -17,27 +17,6 @@ from ..inverse_link_function_utils import (
 )
 from ..utils import one_over_x
 
-
-def _inverse_log_softmax(empirical_frequencies):
-    """Inverse log softmax for reference-category parameterization.
-
-    Given empirical frequencies (probabilities) p_1, ..., p_K, returns the
-    linear predictors η_1, ..., η_{K-1} where η_i = log(p_i / p_K).
-    The last category K is the reference with η_K = 0 (implicit).
-
-    Parameters
-    ----------
-    empirical_frequencies:
-        The empirical frequencies (probabilities), shape (..., n_classes).
-
-    Returns
-    -------
-    :
-        Linear predictors relative to reference category, shape (..., n_classes - 1).
-    """
-    return jnp.log(empirical_frequencies[..., :-1] / empirical_frequencies[..., -1:])
-
-
 # dictionary of known inverse link functions.
 INVERSE_FUNCS = {
     exp: jnp.log,
@@ -46,7 +25,7 @@ INVERSE_FUNCS = {
     norm_cdf: jax.scipy.stats.norm.ppf,
     one_over_x: one_over_x,
     identity: identity,
-    log_softmax: _inverse_log_softmax,
+    log_softmax: jnp.log,
 }
 
 # Name-based lookup (for after pickling/copying)
@@ -57,7 +36,7 @@ INVERSE_FUNCS_BY_SIMPLE_NAME = {
     "norm_cdf": jax.scipy.stats.norm.ppf,
     "one_over_x": one_over_x,
     "identity": identity,
-    "log_softmax": _inverse_log_softmax,
+    "log_softmax": jnp.log,
 }
 
 non_finite_error = ValueError(

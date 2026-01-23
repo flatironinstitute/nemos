@@ -2081,7 +2081,10 @@ class ClassifierGLM(ClassifierMixin, GLM):
     inverse_link_function
         The inverse link function.
     regularizer
-        The regularization scheme.
+        The regularization scheme. Default is ``Ridge``. Note that the
+        model is over-parametrized: one set of coefficients for each class.
+        Regularization makes the parameter identifiable. Setting UnRegularized will
+        result in non-identifiable coefficients, see note below.
     regularizer_strength
         The strength of the regularization.
     solver_name
@@ -2098,6 +2101,9 @@ class ClassifierGLM(ClassifierMixin, GLM):
 
     Notes
     -----
+    **Indentifiability**
+    TODO: fill explenaiton of parameter identifiability
+
     **Class Labels**
 
     The target array ``y`` can contain any hashable class labels that can be stored
@@ -2150,6 +2156,8 @@ class ClassifierGLM(ClassifierMixin, GLM):
     ):
         self.n_classes = n_classes
         observation_model = obs.CategoricalObservations()
+        if regularizer is None:
+            regularizer = "Ridge"
         super().__init__(
             observation_model=observation_model,
             inverse_link_function=inverse_link_function,
