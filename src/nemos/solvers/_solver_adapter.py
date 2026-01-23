@@ -65,12 +65,10 @@ class SolverAdapter(AbstractSolver[SolverState], abc.ABC):
         )
 
         # make a list of accepted arguments
-        accepted_doc_header = inspect.cleandoc(
-            """
+        accepted_doc_header = inspect.cleandoc("""
             Accepted arguments:
             -------------------
-            """
-        )
+            """)
         accepted_doc = "\n".join(f"- {a}" for a in sorted(cls.get_accepted_arguments()))
         accepted_doc = accepted_doc_header + "\n" + accepted_doc
 
@@ -80,11 +78,9 @@ class SolverAdapter(AbstractSolver[SolverState], abc.ABC):
             accepted_doc = accepted_doc + "\n\n" + after_accepted
 
         # read the underlying solver class's documentation
-        solver_doc_header = inspect.cleandoc(
-            f"""
+        solver_doc_header = inspect.cleandoc(f"""
             {solver_cls.__name__}'s documentation:
-            """
-        )
+            """)
         solver_doc_header += "\n" + "-" * len(solver_doc_header)
         solver_doc = inspect.cleandoc(
             inspect.getdoc(solver_cls) or "No class documentation found."
@@ -92,11 +88,9 @@ class SolverAdapter(AbstractSolver[SolverState], abc.ABC):
         solver_doc = solver_doc_header + "\n" + solver_doc
 
         # read the underlying solver's __init__'s documentation
-        solver_init_doc_header = inspect.cleandoc(
-            f"""
+        solver_init_doc_header = inspect.cleandoc(f"""
             More info from {solver_cls.__name__}.__init__
-            """
-        )
+            """)
         solver_init_doc_header += "\n" + "-" * len(solver_init_doc_header)
         solver_init_doc = inspect.cleandoc(
             inspect.getdoc(solver_cls.__init__) or "No __init__ documentation found."
