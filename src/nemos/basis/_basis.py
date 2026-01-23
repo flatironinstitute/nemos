@@ -326,11 +326,13 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         input_idx = 0
         for b in self:
             # check if exact shape matching for multiplicative bases
+            n_input = infer_input_dimensionality(b)
             if isinstance(b, MultiplicativeBasis):
-                n_input = infer_input_dimensionality(b)
                 b_input = inp[input_idx : input_idx + n_input]
                 _check_unique_shapes(b_input, basis=b)
-                input_idx += n_input
+            input_idx += n_input
+        return inp
+
         return inp
 
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
@@ -936,6 +938,8 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
     )
     """
 
+    _allow_inputs_of_different_shape = False
+
     def __init__(
         self, basis1: BasisMixin, basis2: BasisMixin, label: Optional[str] = None
     ) -> None:
@@ -1231,7 +1235,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
 
         """
         # ruff: noqa: D400, D205
-        super().set_input_shape(*xi, allow_inputs_of_different_shape=False)
+        super().set_input_shape(*xi)
         return self
 
     @property

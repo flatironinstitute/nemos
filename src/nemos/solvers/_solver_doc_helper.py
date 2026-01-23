@@ -48,12 +48,10 @@ def get_solver_documentation(solver: str | Type, show_help: bool = False) -> str
         return render_doc(solver, title="Help on %s")
 
     solver_class_path = f"{solver.__module__}.{solver.__name__}"
-    intro = inspect.cleandoc(
-        f"""
+    intro = inspect.cleandoc(f"""
         Showing docstring of {solver_class_path}.
         For potentially more info, use `show_help=True`.
-        """
-    )
+        """)
     solver_doc = inspect.getdoc(solver) or f"No documentation found for {solver}."
     doc = intro + "\n\n" + solver_doc
 
