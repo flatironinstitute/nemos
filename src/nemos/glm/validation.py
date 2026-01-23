@@ -456,7 +456,7 @@ class ClassifierGLMValidator(GLMValidator):
         if coef_class_mismatch:
             coef_shapes = jax.tree_util.tree_map(lambda c: c.shape, coef)
             raise ValueError(
-                f"coef last dimension must be n_classes - 1 = {expected_class_dim}. "
+                f"coef last dimension must be n_classes = {expected_class_dim}. "
                 f"Got coef with shape(s) {coef_shapes}."
             )
 
