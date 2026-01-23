@@ -779,9 +779,9 @@ class GroupLasso(Regularizer):
         return mask
 
     @staticmethod
-    def _initialize_subtree_mask(x_subtree: Any) -> Any:
+    def _initialize_subtree_mask(subtree: Any) -> Any:
         """Initialize individual subtree mask matching structure."""
-        flat_x, struct = jax.tree_util.tree_flatten(x_subtree)
+        flat_x, struct = jax.tree_util.tree_flatten(subtree)
 
         # Calculate total number of groups across all leaves
         n_groups_per_leaf = [math.prod(leaf.shape[1:]) for leaf in flat_x]
