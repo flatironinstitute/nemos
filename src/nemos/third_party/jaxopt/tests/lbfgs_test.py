@@ -332,7 +332,7 @@ class LbfgsTest(test_util.JaxoptTestCase):
     def f(x):
       return  jnp.cos(jnp.sum(jnp.exp(-x)) ** 2).astype(out_dtype)
 
-    with jax.experimental.enable_x64():
+    with jax.enable_x64(True):
       x0 = jnp.ones([5, 5], dtype=jnp.float32)
       lbfgs = LBFGS(fun=f, tol=1e-3, maxiter=500)
       x, state = lbfgs.run(x0)

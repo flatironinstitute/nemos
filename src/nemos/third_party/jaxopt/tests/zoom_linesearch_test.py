@@ -386,7 +386,7 @@ class ZoomLinesearchTest(test_util.JaxoptTestCase):
     def fun(x):
       return jnp.cos(jnp.sum(jnp.exp(-x)) ** 2).astype(out_dtype)
 
-    with jax.experimental.enable_x64():
+    with jax.enable_x64(True):
       xk = jnp.ones(2, dtype=jnp.float32)
       pk = jnp.array([-0.5, -0.25], dtype=jnp.float32)
       ls = ZoomLineSearch(fun, maxiter=100)
