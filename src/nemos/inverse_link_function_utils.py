@@ -59,6 +59,7 @@ LINK_NAME_TO_FUNC = {
     "expit": expit,
     "jax._src.lax.lax.logistic": expit,
     "jax._src.nn.functions.softplus": softplus,
+    "jax._src.nn.functions.log_softmax": log_softmax,
     "jax._src.numpy.ufuncs.exp": exp,
     "jax._src.scipy.special.expit": expit,
     "jax._src.scipy.stats.norm.cdf": jax.scipy.stats.norm.cdf,
