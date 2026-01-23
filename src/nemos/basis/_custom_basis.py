@@ -189,6 +189,8 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
     (50, 20)
     """
 
+    _allow_inputs_of_different_shape = False
+
     def __init__(
         self,
         funcs: List[Callable[[NDArray], NDArray]] | Callable[[NDArray], NDArray],
@@ -613,7 +615,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         >>> basis.n_output_features
         30
         """
-        super().set_input_shape(*xi, allow_inputs_of_different_shape=False)
+        super().set_input_shape(*xi)
         # CustomBasis acts as a multiplicative basis in n-dimension
         # i.e. multiple inputs must have the same shape and are
         # treated in a paired-way in vectorization

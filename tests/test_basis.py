@@ -6301,6 +6301,32 @@ class TestMultiplicativeBasis(CombinedBasis):
         ):
             basis_complex * basis_real * basis_complex
 
+    def test_multi_dim_input_checks(self):
+        b1 = basis.BSplineEval(5) ** 2
+        b2 = basis.BSplineEval(6) ** 2
+        b3 = basis.BSplineEval(7) ** 2
+        b1.label = "x"
+        b2.label = "y"
+        b3.label = "z"
+        bas = b1 + b2 + b3
+        bas.set_input_shape(2, 2, 3, 3, (4, 1), (4, 1))
+        x = np.zeros((1, bas.n_output_features))
+        out = bas.split_by_feature(x)
+        assert out["x"].shape == (1, 2, 5**2)
+        assert out["y"].shape == (1, 3, 6**2)
+        assert out["z"].shape == (1, 4, 1, 7**2)
+
+    def test_multi_dim_input_checks_raises(self):
+        b1 = basis.BSplineEval(5) ** 2
+        b2 = basis.BSplineEval(6) ** 2
+        b3 = basis.BSplineEval(7) ** 2
+        b1.label = "x"
+        b2.label = "y"
+        b3.label = "z"
+        bas = b1 + b2 + b3
+        with pytest.raises(ValueError, match="MultiplicativeBasis requires all"):
+            bas.set_input_shape(2, 2, 3, 3, (4, 1), (1, 4))
+
 
 @pytest.mark.parametrize(
     "exponent", [-1, 0, 0.5, basis.RaisedCosineLogEval(4), 1, 2, 3]
