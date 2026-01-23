@@ -81,20 +81,21 @@ class LbfgsbTest(test_util.JaxoptTestCase):
     def fun(x):  # Rosenbrock function.
       return 100.0 * (x["b"] - x["a"]**2.0)**2.0 + (1 - x["a"])**2.0
 
-    x0 = {"a": jnp.zeros([]), "b": jnp.zeros([])}
-    upper = {"a": jnp.asarray(2.), "b": jnp.asarray(3.)}
-    lower = {"a": jnp.asarray(-1), "b": jnp.asarray(-0.5)}
-    lbfgsb = LBFGSB(
-        fun=fun,
-        tol=1e-3,
-        stepsize=-1.,
-        maxiter=500,
-        linesearch=linesearch,
-        implicit_diff=implicit_diff)
-    x, _ = lbfgsb.run(x0, bounds=(lower, upper))
+    with jax.enable_x64(True):
+        x0 = {"a": jnp.zeros([]), "b": jnp.zeros([])}
+        upper = {"a": jnp.asarray(2.), "b": jnp.asarray(3.)}
+        lower = {"a": jnp.asarray(-1), "b": jnp.asarray(-0.5)}
+        lbfgsb = LBFGSB(
+            fun=fun,
+            tol=1e-3,
+            stepsize=-1.,
+            maxiter=500,
+            linesearch=linesearch,
+            implicit_diff=implicit_diff)
+        x, _ = lbfgsb.run(x0, bounds=(lower, upper))
 
-    # the Rosenbrock function is zero at its minimum
-    self.assertLessEqual(fun(x), 1e-3)
+        # the Rosenbrock function is zero at its minimum
+        self.assertLessEqual(fun(x), 1e-3)
 
   @parameterized.parameters(
       ((0., -5., 0), (2., 0., 1)),
@@ -213,7 +214,7 @@ class LbfgsbTest(test_util.JaxoptTestCase):
     def f(x):
       return jnp.cos(jnp.sum(jnp.exp(-x)) ** 2).astype(out_dtype)
 
-    with jax.experimental.enable_x64():
+    with jax.enable_x64(True):
       x0 = jnp.ones([5, 5], dtype=jnp.float32)
       lbfgs = LBFGSB(fun=f, tol=1e-3, maxiter=500)
       x, state = lbfgs.run(x0, bounds=None)
