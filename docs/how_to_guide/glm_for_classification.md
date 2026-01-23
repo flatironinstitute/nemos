@@ -18,7 +18,7 @@ The [`ClassifierGLM`](nemos.glm.ClassifierGLM) models categorical outcomes such 
 **Key differences from standard GLM:**
 - [`predict`](nemos.glm.ClassifierGLM.predict) returns predicted category labels
 - [`predict_proba`](nemos.glm.ClassifierGLM.predict_proba) returns (log-)probabilities for each category
-- [`set_classes`](nemos.glm.ClassifierGLM.set_classes) set class labels. By Default, classes are assumed to be integers `{0, ..., n_classes}` however, this assumption can be overridden by calling `set_classes` passing an array of class labels.
+- [`set_classes`](nemos.glm.ClassifierGLM.set_classes) set class labels. By Default, classes are assumed to be `{0, ..., n_classes - 1}` however, this assumption can be overridden by calling `set_classes` passing an array of class labels.
 
 ## Generate Synthetic Data
 
