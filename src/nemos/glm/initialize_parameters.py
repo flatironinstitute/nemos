@@ -17,6 +17,18 @@ from ..inverse_link_function_utils import (
 )
 from ..utils import one_over_x
 
+
+def _log_softmax_inv(x):
+    """Inverse of log_softmax with centering.
+
+    For over-parameterized multinomial models, we center the log-probabilities
+    by subtracting the mean. This ensures the intercepts sum to zero, matching
+    sklearn's implicit constraint and making the parameters identifiable.
+    """
+    log_x = jnp.log(x)
+    return log_x - jnp.mean(log_x, axis=-1, keepdims=True)
+
+
 # dictionary of known inverse link functions.
 INVERSE_FUNCS = {
     exp: jnp.log,
@@ -25,7 +37,7 @@ INVERSE_FUNCS = {
     norm_cdf: jax.scipy.stats.norm.ppf,
     one_over_x: one_over_x,
     identity: identity,
-    log_softmax: jnp.log,
+    log_softmax: _log_softmax_inv,
 }
 
 # Name-based lookup (for after pickling/copying)
@@ -36,7 +48,7 @@ INVERSE_FUNCS_BY_SIMPLE_NAME = {
     "norm_cdf": jax.scipy.stats.norm.ppf,
     "one_over_x": one_over_x,
     "identity": identity,
-    "log_softmax": jnp.log,
+    "log_softmax": _log_softmax_inv,
 }
 
 non_finite_error = ValueError(
