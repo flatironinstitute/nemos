@@ -2304,7 +2304,9 @@ class TestGLMObservationModel:
             glm_type + model_instantiation
         )
 
-        n_samples = X.shape[0] if not isinstance(X, dict) else list(X.values())[0].shape[0]
+        n_samples = (
+            X.shape[0] if not isinstance(X, dict) else list(X.values())[0].shape[0]
+        )
 
         # Classifier models need Ridge regularization for identifiable parameters
         # (over-parameterized model). sklearn uses sum(NLL) + (1/2C)*||w||^2,
