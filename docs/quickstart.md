@@ -431,6 +431,7 @@ y = nap.Tsd(t=np.arange(100), d=np.random.poisson(size=(100, )))
 
 print(type(X))  # shape (num samples, num features)
 
+model = nmo.glm.GLM()
 model = model.fit(X, y)  # the following works
 
 firing_rate = model.predict(X)  # predict the firing rate of the neuron
