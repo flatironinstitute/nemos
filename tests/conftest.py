@@ -1449,16 +1449,12 @@ def instantiate_glm_hmm_func(
         model.scale_ = jnp.ones_like(intercept)
         model.initial_prob_ = init_prob
         model.transition_prob_ = transition_prob
-        counts, rates, latent_states = run_simulation_glm_hmm(X, model, seed=1234)
+        y, rates, latent_states = run_simulation_glm_hmm(X, model, seed=1234)
     else:
-        # Generate simple dummy data for tests that need y but don't need simulation
-        # Use positive continuous values to work with all observation models (including Gamma)
-        np.random.seed(1234)
-        counts = np.random.exponential(scale=1.0, size=X.shape[0]) + 0.1
         rates, latent_states = None, None
     return ModelFixture(
         X=X,
-        y=counts,
+        y=y,
         model=model,
         params=GLMHMMParams(
             GLMParams(*glm_params),
