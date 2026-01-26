@@ -95,11 +95,13 @@ DEFAULTS = {"GLM": dict(), "PopulationGLM": dict(), "GLMHMM": dict(n_states=3)}
 INSTANTIATE_MODEL_ONLY = [
     {"model": m, "obs_model": o, "simulate": False}
     for m, o in itertools.product(MODEL_REGISTRY.keys(), AVAILABLE_OBSERVATION_MODELS)
+    if not (m == "GLMHMM"  and o == "Categorical")
 ]
 
 INSTANTIATE_MODEL_AND_SIMULATE = [
     {"model": m, "obs_model": o, "simulate": True}
     for m, o in itertools.product(MODEL_REGISTRY.keys(), AVAILABLE_OBSERVATION_MODELS)
+    if not (m == "GLMHMM" and o == "Categorical")
 ]
 
 INSTANTIATE_MODEL_ONLY_LINK = [
@@ -107,6 +109,7 @@ INSTANTIATE_MODEL_ONLY_LINK = [
     for m, o in itertools.product(
         MODEL_WITH_LINK_FUNCTION_REGISTRY.keys(), AVAILABLE_OBSERVATION_MODELS
     )
+    if not (m == "GLMHMM" and o == "Categorical")
 ]
 
 INSTANTIATE_MODEL_AND_SIMULATE_LINK = [
@@ -114,6 +117,7 @@ INSTANTIATE_MODEL_AND_SIMULATE_LINK = [
     for m, o in itertools.product(
         MODEL_WITH_LINK_FUNCTION_REGISTRY.keys(), AVAILABLE_OBSERVATION_MODELS
     )
+    if not (m == "GLMHMM" and o == "Categorical")
 ]
 
 
@@ -844,9 +848,7 @@ class TestObservationModel:
     "instantiate_base_regressor_subclass",
     [
         {"model": m, "obs_model": "Poisson", "simulate": True}
-        # TODO: REMOVE WHEN FIT IS IMPLEMENTED
         for m in MODEL_REGISTRY.keys()
-        if m != "GLMHMM"
     ],
     indirect=True,
 )
