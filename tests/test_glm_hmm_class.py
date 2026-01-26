@@ -195,7 +195,7 @@ class TestGLMHMM:
             expectation = does_not_raise()
         elif dim_intercepts == 0:
             expectation = pytest.raises(
-                ValueError, match=r"GLM intercept must be of shape"
+                ValueError, match=r"Invalid parameter dimensionality"
             )
         else:
 
