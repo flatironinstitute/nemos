@@ -9,6 +9,7 @@ from ._jaxopt_solvers import JAXOPT_AVAILABLE
 from ._optax_optimistix_solvers import OptimistixOptaxLBFGS
 from ._optimistix_solvers import OptimistixBFGS, OptimistixNonlinearCG
 from ._svrg import WrappedProxSVRG, WrappedSVRG
+from ._validation import validate_solver_class
 
 
 @dataclass
@@ -143,6 +144,9 @@ def register(
     backend: str = "custom",
     replace: bool = False,
     default: bool = False,
+    validate: bool = True,
+    test_ridge_without_aux: bool = False,
+    test_ridge_with_aux: bool = False,
 ) -> None:
     """
     Register a solver implementation in the registry.
@@ -164,16 +168,34 @@ def register(
     default :
         Set this implementation as the default for the algorithm.
         Can also be done with `set_default`.
+    validate :
+        Validate all required methods exist and have correct signatures.
+    test_ridge_without_aux :
+        Validate solver signatures and functionality by running a small ridge
+        regression, objective function without aux.
+    test_ridge_with_aux :
+        Validate solver signatures and functionality by running a small ridgeregression,
+        testing that objective functions with auxiliary variables are handled.
     """
     if not replace and backend in _registry.get(algo_name, {}):
         raise ValueError(
             f"{algo_name}[{backend}] already registered. Use replace=True to overwrite."
         )
-    if algo_name not in _registry:
-        _registry[algo_name] = {}
 
     if not issubclass(implementation, SolverProtocol):
         raise TypeError(f"{implementation.__name__} doesn't implement SolverProtocol.")
+
+    if validate:
+        validate_solver_class(implementation, False, False)
+
+    if test_ridge_without_aux:
+        validate_solver_class(implementation, True, False)
+
+    if test_ridge_with_aux:
+        validate_solver_class(implementation, True, True)
+
+    if algo_name not in _registry:
+        _registry[algo_name] = {}
 
     _registry[algo_name][backend] = SolverSpec(algo_name, backend, implementation)
 

@@ -116,7 +116,9 @@ Please note that not a solver instance but a class/type has to be passed.
 3. Referring to the algorithm by name when creating a `GLM` (or any `BaseRegressor`): \
 `GLM(solver_name="Fancy-Algorithm[custom]")`
 
-Currently, NeMoS does basic checks validating if the custom solver's compatibility by checking if the required methods are implemented, i.e. if the class implements the [`SolverProtocol`](nemos.solvers.SolverProtocol).
+When registering a solver, NeMoS does basic checks validating the custom solver's compatibility by checking if the required methods are implemented, i.e. if the class implements the  and that their signatures match [`AbstractSolver`](nemos.solvers.AbstractSolver) (and [`SolverProtocol`](nemos.solvers.SolverProtocol)).
+There are also options in `nemos.solvers.register` to run a small ridge regression problem, testing that the solver's methods can be used as intended.
+To validate a solver without registering, the `nemos.solvers.validate_solver_class` can be used.
 While it is not necessary, a way to ensure adherence to the interface is subclassing `AbstractSolver`.
 
 ## Stochastic optimization

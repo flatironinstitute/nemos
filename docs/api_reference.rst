@@ -250,6 +250,7 @@ Classes useful for creating completely custom solvers.
     AbstractSolver
     OptimizationInfo
     SolverProtocol
+    validate_solver_class
 
 .. seealso::
 

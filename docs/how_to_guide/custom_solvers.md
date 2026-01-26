@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.19.0
+    jupytext_version: 1.19.1
 kernelspec:
   display_name: nemos (3.12.11)
   language: python
@@ -223,16 +223,16 @@ class ScipyPowell(ScipySolver):
 `SolverProtocol` defines the same interface as `AbstractSolver` and can be used to check the existence of all required methods:
 
 ```{code-cell} ipython3
-from nemos.solvers import SolverProtocol
+import nemos as nmo
 
-issubclass(ScipyPowell, SolverProtocol)
+issubclass(ScipyPowell, nmo.solvers.SolverProtocol)
 ```
 
-Now let's validate in more detail, checking the number of accepted arguments.
+Now let's validate in more detail, checking that all methods have the expected signature and that the solver can be used on a small ridge regression problem.
 
 ```{code-cell} ipython3
-# TODO: Implement this
-# nemos.solvers.validate_solver(ScipyPowell)
+# validate signature and test on small ridge problem not requiring aux support
+nmo.solvers.validate_solver_class(ScipyPowell, test_ridge=True, loss_has_aux=False)
 ```
 
 ## Using `ScipyPowell` for model fitting
@@ -242,7 +242,6 @@ Now let's validate in more detail, checking the number of accepted arguments.
 ### Generate toy data
 
 ```{code-cell} ipython3
-import nemos as nmo
 import numpy as np
 from sklearn.datasets import make_regression
 
@@ -285,6 +284,9 @@ Setting this to `True` can be handy when developing a solver, as changes require
 - `default`: Set this implementation as the default for the algorithm. Can also be done with `nmo.solvers.set_default`.
 <br>
 Setting this to `True` would tell NeMoS that we want to use this as the default Powell implementation.
+- `validate`: Validate all required methods exist and have correct signatures. True by default.
+- `test_ridge_without_aux` : Validate solver signatures and functionality by running a small ridge regression, objective function without aux.
+- `test_ridge_with_aux`: same as before, also testing that objective functions with auxiliary variables are handled.
 
 +++
 
@@ -413,8 +415,4 @@ After these 2 lines NeMoS knows where to find the implementation and that it is 
 
 ```{code-cell} ipython3
 nmo.load_model(save_path)
-```
-
-```{code-cell} ipython3
-
 ```
