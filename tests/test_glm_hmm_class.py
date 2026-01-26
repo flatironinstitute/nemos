@@ -341,6 +341,9 @@ def test_get_fit_attrs(instantiate_base_regressor_subclass):
     }
     assert fixture.model._get_fit_state() == expected_state
     fixture.model.solver_kwargs = {"maxiter": 1}
+    fixture.model.fit(fixture.X, fixture.y)
+    assert all(val is not None for val in fixture.model._get_fit_state().values())
+    assert fixture.model._get_fit_state().keys() == expected_state.keys()
 
 
 @pytest.mark.parametrize(
@@ -385,54 +388,16 @@ class TestGLMHMM:
                 ),
             }
 
-    @pytest.fixture
-    def initialize_solver_weights_dimensionality_expectation(
-        self, instantiate_base_regressor_subclass
-    ):
-        name = instantiate_base_regressor_subclass.model.__class__.__name__
-        if "Population" in name:
-            return {
-                0: pytest.raises(
-                    ValueError,
-                    match=r"params\[0\] must be an array or .* of shape \(n_features",
-                ),
-                1: pytest.raises(
-                    ValueError,
-                    match=r"params\[0\] must be an array or .* of shape \(n_features",
-                ),
-                2: pytest.raises(
-                    ValueError,
-                    match=r"params\[0\] must be an array or .* of shape \(n_features",
-                ),
-                3: does_not_raise(),
-            }
-        else:
-            return {
-                0: pytest.raises(
-                    ValueError,
-                    match=r"Inconsistent number of features",
-                ),
-                1: pytest.raises(
-                    ValueError,
-                    match=r"params\[0\] must be an array or .* of shape \(n_features",
-                ),
-                2: does_not_raise(),
-                3: pytest.raises(
-                    ValueError,
-                    match=r"params\[0\] must be an array or .* of shape \(n_features",
-                ),
-            }
-
-    #
     @pytest.mark.parametrize("dim_weights", [0, 1, 2, 3])
-    def test_initialize_solver_weights_dimensionality(
+    @pytest.mark.requires_x64
+    def test_fit_weights_dimensionality(
         self,
         dim_weights,
         instantiate_base_regressor_subclass,
         fit_weights_dimensionality_expectation,
     ):
         """
-        Test the `initialize_solver` method with weight matrices of different dimensionalities.
+        Test the `fit` method with weight matrices of different dimensionalities.
         Check for correct dimensionality.
         """
         fixture = instantiate_base_regressor_subclass
@@ -444,72 +409,68 @@ class TestGLMHMM:
         elif dim_weights == 1:
             init_w = jnp.zeros((n_features,))
         elif dim_weights == 2:
-            init_w = jnp.zeros((n_features, 3))
-        elif dim_weights == 3:
-            init_w = jnp.zeros(
-                (n_features, fixture.y.shape[1] if fixture.y.ndim > 1 else 1, 3)
-            )
+            init_w = jnp.zeros(DEFAULT_GLM_COEF_SHAPE[fixture.model.__class__.__name__])
         else:
-            init_w = jnp.zeros((n_features, 3) + (1,) * (dim_weights - 2))
+            init_w = jnp.zeros(
+                DEFAULT_GLM_COEF_SHAPE[fixture.model.__class__.__name__]
+                + (1,) * (dim_weights - 2)
+            )
         with expectation:
-            params = fixture.model.initialize_params(
+            fixture.model.fit(
                 fixture.X,
                 fixture.y,
-            )
-            params = tuple([init_w, *params[1:]])
-            # check that params are set
-            init_state = fixture.model.initialize_optimization_and_state(
-                fixture.X, fixture.y, params
+                init_params=(
+                    init_w,
+                    fixture.params.glm_params.intercept,
+                    jnp.exp(fixture.params.glm_scale.log_scale),
+                    jnp.exp(fixture.params.hmm_params.log_initial_prob),
+                    jnp.exp(fixture.params.hmm_params.log_transition_prob),
+                ),
             )
 
     @pytest.mark.parametrize(
-        "dim_intercepts",
-        [0, 1, 2, 3],
+        "dim_intercepts, expectation",
+        [
+            (
+                0,
+                pytest.raises(ValueError, match=r"Invalid parameter dimensionality"),
+            ),
+            (1, does_not_raise()),
+            (
+                2,
+                pytest.raises(ValueError, match=r"Invalid parameter dimensionality"),
+            ),
+            (
+                3,
+                pytest.raises(ValueError, match=r"Invalid parameter dimensionality"),
+            ),
+        ],
     )
-    def test_initialize_solver_intercepts_dimensionality(
-        self,
-        dim_intercepts,
-        instantiate_base_regressor_subclass,
+    @pytest.mark.requires_x64
+    def test_fit_intercepts_dimensionality(
+        self, dim_intercepts, expectation, instantiate_base_regressor_subclass
     ):
         """
-        Test the `initialize_solver` method with intercepts of different dimensionalities.
-
-        Check for correct dimensionality.
+        Test the `fit` method with intercepts of different dimensionalities. Check for correct dimensionality.
         """
         fixture = instantiate_base_regressor_subclass
-        n_samples, n_features = fixture.X.shape
-        is_population = "Population" in fixture.model.__class__.__name__
-        if (dim_intercepts == 2 and is_population) or (
-            dim_intercepts == 1 and not is_population
-        ):
-            expectation = does_not_raise()
-        elif dim_intercepts == 0:
-            expectation = pytest.raises(
-                ValueError, match=r"Invalid parameter dimensionality"
+        if dim_intercepts == 1:
+            init_b = jnp.ones(
+                DEFAULT_GLM_COEF_SHAPE[fixture.model.__class__.__name__][1]
             )
         else:
-
-            expectation = pytest.raises(
-                ValueError, match=r"Invalid parameter dimensionality"
-            )
-        if is_population:
-            raise RuntimeError("Fill in the test case for population glmhmm")
-        else:
-            init_b = (
-                jnp.zeros((3,) + (1,) * (dim_intercepts - 1))
-                if dim_intercepts > 0
-                else jnp.array([])
-            )
-            init_w = jnp.zeros((n_features, 3))
+            init_b = jnp.ones((1,) * dim_intercepts)
         with expectation:
-            params = fixture.model.initialize_params(
+            fixture.model.fit(
                 fixture.X,
                 fixture.y,
-            )
-            params = tuple([init_w, init_b, *params[2:]])
-            # check that params are set
-            init_state = fixture.model.initialize_optimization_and_state(
-                fixture.X, fixture.y, params
+                init_params=(
+                    fixture.params.glm_params.coef,
+                    init_b,
+                    jnp.exp(fixture.params.glm_scale.log_scale),
+                    jnp.exp(fixture.params.hmm_params.log_initial_prob),
+                    jnp.exp(fixture.params.hmm_params.log_transition_prob),
+                ),
             )
 
     """
@@ -632,6 +593,194 @@ class TestGLMHMM:
             ),
         ],
     )
+
+    @pytest.mark.parametrize(*fit_init_params_type_init_params)
+    @pytest.mark.requires_x64
+    def test_fit_init_glm_params_type(
+        self,
+        instantiate_base_regressor_subclass,
+        expectation,
+        init_params_glm,
+        init_params_population_glm,
+    ):
+        """
+        Test the `fit` method with various types of initial parameters. Ensure that the provided initial parameters
+        are array-like.
+        """
+        fixture = instantiate_base_regressor_subclass
+        if "Population" in fixture.model.__class__.__name__:
+            init_params = init_params_population_glm
+        else:
+            init_params = init_params_glm
+
+        with expectation:
+            fixture.model.fit(fixture.X, fixture.y, init_params=init_params)
+
+    @pytest.mark.parametrize(
+        "delta_n_features, expectation",
+        [
+            (-1, pytest.raises(ValueError, match="Inconsistent number of features")),
+            (0, does_not_raise()),
+            (1, pytest.raises(ValueError, match="Inconsistent number of features")),
+        ],
+    )
+    @pytest.mark.requires_x64
+    def test_fit_n_feature_consistency_weights(
+        self,
+        delta_n_features,
+        instantiate_base_regressor_subclass,
+        expectation,
+    ):
+        """
+        Test the `fit` method for inconsistencies between data features and initial weights provided.
+        Ensure the number of features align.
+        """
+        fixture = instantiate_base_regressor_subclass
+        if "Population" in fixture.model.__class__.__name__:
+            raise RuntimeError("Fill in the test case for population glmhmm")
+        else:
+            init_w = jnp.zeros((fixture.X.shape[1] + delta_n_features, 3))
+            init_b = jnp.ones(
+                3,
+            )
+        with expectation:
+            fixture.model.fit(
+                fixture.X,
+                fixture.y,
+                init_params=(
+                    init_w,
+                    init_b,
+                    jnp.exp(fixture.params.glm_scale.log_scale),
+                    jnp.exp(fixture.params.hmm_params.log_initial_prob),
+                    jnp.exp(fixture.params.hmm_params.log_transition_prob),
+                ),
+            )
+
+    @pytest.fixture
+    def initialize_solver_weights_dimensionality_expectation(
+        self, instantiate_base_regressor_subclass
+    ):
+        name = instantiate_base_regressor_subclass.model.__class__.__name__
+        if "Population" in name:
+            return {
+                0: pytest.raises(
+                    ValueError,
+                    match=r"params\[0\] must be an array or .* of shape \(n_features",
+                ),
+                1: pytest.raises(
+                    ValueError,
+                    match=r"params\[0\] must be an array or .* of shape \(n_features",
+                ),
+                2: pytest.raises(
+                    ValueError,
+                    match=r"params\[0\] must be an array or .* of shape \(n_features",
+                ),
+                3: does_not_raise(),
+            }
+        else:
+            return {
+                0: pytest.raises(
+                    ValueError,
+                    match=r"Inconsistent number of features",
+                ),
+                1: pytest.raises(
+                    ValueError,
+                    match=r"params\[0\] must be an array or .* of shape \(n_features",
+                ),
+                2: does_not_raise(),
+                3: pytest.raises(
+                    ValueError,
+                    match=r"params\[0\] must be an array or .* of shape \(n_features",
+                ),
+            }
+
+    @pytest.mark.parametrize("dim_weights", [0, 1, 2, 3])
+    def test_initialize_solver_weights_dimensionality(
+        self,
+        dim_weights,
+        instantiate_base_regressor_subclass,
+        fit_weights_dimensionality_expectation,
+    ):
+        """
+        Test the `initialize_solver` method with weight matrices of different dimensionalities.
+        Check for correct dimensionality.
+        """
+        fixture = instantiate_base_regressor_subclass
+        expectation = fit_weights_dimensionality_expectation[dim_weights]
+        n_samples, n_features = fixture.X.shape
+
+        if dim_weights == 0:
+            init_w = jnp.array([])
+        elif dim_weights == 1:
+            init_w = jnp.zeros((n_features,))
+        elif dim_weights == 2:
+            init_w = jnp.zeros((n_features, 3))
+        elif dim_weights == 3:
+            init_w = jnp.zeros(
+                (n_features, fixture.y.shape[1] if fixture.y.ndim > 1 else 1, 3)
+            )
+        else:
+            init_w = jnp.zeros((n_features, 3) + (1,) * (dim_weights - 2))
+        with expectation:
+            params = fixture.model.initialize_params(
+                fixture.X,
+                fixture.y,
+            )
+            params = tuple([init_w, *params[1:]])
+            # check that params are set
+            init_state = fixture.model.initialize_optimization_and_state(
+                fixture.X, fixture.y, params
+            )
+
+    @pytest.mark.parametrize(
+        "dim_intercepts",
+        [0, 1, 2, 3],
+    )
+    def test_initialize_solver_intercepts_dimensionality(
+        self,
+        dim_intercepts,
+        instantiate_base_regressor_subclass,
+    ):
+        """
+        Test the `initialize_solver` method with intercepts of different dimensionalities.
+
+        Check for correct dimensionality.
+        """
+        fixture = instantiate_base_regressor_subclass
+        n_samples, n_features = fixture.X.shape
+        is_population = "Population" in fixture.model.__class__.__name__
+        if (dim_intercepts == 2 and is_population) or (
+            dim_intercepts == 1 and not is_population
+        ):
+            expectation = does_not_raise()
+        elif dim_intercepts == 0:
+            expectation = pytest.raises(
+                ValueError, match=r"Invalid parameter dimensionality"
+            )
+        else:
+
+            expectation = pytest.raises(
+                ValueError, match=r"Invalid parameter dimensionality"
+            )
+        if is_population:
+            raise RuntimeError("Fill in the test case for population glmhmm")
+        else:
+            init_b = (
+                jnp.zeros((3,) + (1,) * (dim_intercepts - 1))
+                if dim_intercepts > 0
+                else jnp.array([])
+            )
+            init_w = jnp.zeros((n_features, 3))
+        with expectation:
+            params = fixture.model.initialize_params(
+                fixture.X,
+                fixture.y,
+            )
+            params = tuple([init_w, init_b, *params[2:]])
+            # check that params are set
+            init_state = fixture.model.initialize_optimization_and_state(
+                fixture.X, fixture.y, params
+            )
 
     @pytest.mark.parametrize(*fit_init_params_type_init_params)
     def test_initialize_solver_init_glm_params_type(
