@@ -1893,7 +1893,7 @@ class TestMStep:
             new_params.hmm_params.log_initial_prob, new_log_initial_prob
         )
         np.testing.assert_allclose(
-            new_params.hmm_params.log_transition_prob, new_log_initial_prob
+            new_params.hmm_params.log_transition_prob, new_log_transition_prob
         )
 
 
