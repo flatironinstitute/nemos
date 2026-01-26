@@ -668,9 +668,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         # filter for non-nans, grab data if needed
         data, y = self._preprocess_inputs(X, y)
 
-        self._initialize_solver_and_state(data, y, init_params)
+        self._initialize_optimization_and_state(data, y, init_params)
 
-        params, state, aux = self.solver_run(init_params, data, y)
+        params, state, aux = self.optimization_run(init_params, data, y)
 
         if tree_utils.pytree_map_and_reduce(
             lambda x: jnp.any(jnp.isnan(x)), any, params
@@ -860,7 +860,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             rank = jnp.linalg.matrix_rank(X)
             return (n_samples - rank - 1) * jnp.ones_like(params.intercept)
 
-    def _initialize_solver_and_state(
+    def _initialize_optimization_and_state(
         self,
         X: dict[str, jnp.ndarray] | jnp.ndarray,
         y: jnp.ndarray,
@@ -894,16 +894,19 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
         >>> model = nmo.glm.GLM()
         >>> params = model.initialize_params(X, y)
-        >>> opt_state = model.initialize_solver_and_state(X, y, params)
+        >>> opt_state = model._initialize_optimization_and_state(X, y, params)
         >>> # Now ready to run optimization or update steps
         """
         opt_solver_kwargs = self._optimize_solver_params(X, y)
         #  set up the solver init/run/update attrs
-        self._instantiate_solver(
+        (
+            self._optimization_init_state,
+            self._optimization_update,
+            self._optimization_run,
+        ) = self._instantiate_solver(
             self._compute_loss, init_params=init_params, solver_kwargs=opt_solver_kwargs
         )
-
-        opt_state = self.solver_init_state(init_params, X, y)
+        opt_state = self.optimization_init_state(init_params, X, y)
         return opt_state
 
     @cast_to_jax
@@ -968,7 +971,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
         >>> glm_instance = nmo.glm.GLM()
         >>> params = glm_instance.initialize_params(X, y)
-        >>> opt_state = glm_instance.initialize_solver_and_state(X, y, params)
+        >>> opt_state = glm_instance.initialize_optimization_and_state(X, y, params)
         >>> new_params, new_opt_state = glm_instance.update(params, opt_state, X, y)
 
         """
@@ -978,13 +981,13 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         # grab the data
         data = X.data if isinstance(X, FeaturePytree) else X
 
-        # wrap into GLM params, this assumes params are well structured,
-        # if initializaiton is done via `initialize_solver_and_state` it
+        # wrap into GLM params, this assumes params are well-structured,
+        # if initialization is done via `initialize_solver_and_state` it
         # should be fine
         params = self._validator.to_model_params(params)
 
         # perform a one-step update
-        updated_params, updated_state, aux = self.solver_update(
+        updated_params, updated_state, aux = self._optimization_update(
             params, opt_state, data, y, *args, **kwargs
         )
 
@@ -1062,7 +1065,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         observation_model: GammaObservations()
         regularizer: Ridge()
         regularizer_strength: 0.1
-        solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
+        solver_kwargs: {'maxiter': 1000, 'stepsize': 0.1, 'tol': 1e-06}
         solver_name: BFGS
 
         >>> # Saving and loading a custom inverse link function
@@ -1093,7 +1096,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         fit_attrs.pop("optim_info_")
         string_attrs = ["inverse_link_function"]
 
-        super().save_params(filename, fit_attrs, string_attrs)
+        self._save_params(filename, fit_attrs, string_attrs)
 
 
 class PopulationGLM(GLM):

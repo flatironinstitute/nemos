@@ -756,7 +756,9 @@ class TestGLM:
                 par_shape.coef + (1,) * (dim_weights - len(par_shape.coef))
             )
         with expectation:
-            model.initialize_solver_and_state(X, y, (init_w, true_params.intercept))
+            model.initialize_optimization_and_state(
+                X, y, (init_w, true_params.intercept)
+            )
 
     @pytest.mark.parametrize("dim_intercepts", [0, 1, 2, 3])
     @pytest.mark.solver_related
@@ -802,7 +804,7 @@ class TestGLM:
 
         init_w = jnp.zeros(par_shape.coef)
         with expectation:
-            model.initialize_solver_and_state(X, y, (init_w, init_b))
+            model.initialize_optimization_and_state(X, y, (init_w, init_b))
 
     @pytest.mark.parametrize(*fit_init_params_type_init_params)
     @pytest.mark.solver_related
@@ -823,7 +825,7 @@ class TestGLM:
         )
         init_params = self.get_init_params_for_model(init_params_by_model, model)
         with expectation:
-            model.initialize_solver_and_state(X, y, init_params)
+            model.initialize_optimization_and_state(X, y, init_params)
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -855,7 +857,7 @@ class TestGLM:
         init_w = jnp.zeros(wrong_coef_shape)
         init_b = jnp.zeros(par_shape.intercept)
         with expectation:
-            model.initialize_solver_and_state(X, y, (init_w, init_b))
+            model.initialize_optimization_and_state(X, y, (init_w, init_b))
 
     #######################
     # Test model.simulate
@@ -1934,7 +1936,7 @@ class TestGLMObservationModel:
             glm_type + model_instantiation
         )
         params = model.initialize_params(X, y)
-        state = model.initialize_solver_and_state(X, y, params)
+        state = model.initialize_optimization_and_state(X, y, params)
         with expectation:
             model.update(
                 params,
@@ -1953,7 +1955,7 @@ class TestGLMObservationModel:
             glm_type + model_instantiation
         )
         params = model.initialize_params(X, y)
-        state = model.initialize_solver_and_state(X, y, params)
+        state = model.initialize_optimization_and_state(X, y, params)
         assert model.coef_ is None
         assert model.intercept_ is None
         if "gamma" not in model_instantiation and "gaussian" not in model_instantiation:
@@ -1988,7 +1990,7 @@ class TestGLMObservationModel:
             X[: X.shape[0] // 2, :] = np.nan
 
         params = model.initialize_params(X, y)
-        state = model.initialize_solver_and_state(X, y, params)
+        state = model.initialize_optimization_and_state(X, y, params)
         assert model.coef_ is None
         assert model.intercept_ is None
         if "gamma" not in model_instantiation and "gaussian" not in model_instantiation:
@@ -2019,7 +2021,7 @@ class TestGLMObservationModel:
         )
         model.solver_kwargs.update({"stepsize": 0.01})
         params = model.initialize_params(X, y)
-        state = model.initialize_solver_and_state(X, y, params)
+        state = model.initialize_optimization_and_state(X, y, params)
         # extract batch and add nans
         Xnan = X[:batch_size]
         Xnan[: batch_size // 2] = np.nan
@@ -2985,7 +2987,7 @@ class TestPoissonGLM:
             regularizer=reg,
             regularizer_strength=None if reg == "UnRegularized" else 1.0,
         )
-        opt_state = model._initialize_solver_and_state(X, y, true_params)
+        opt_state = model._initialize_optimization_and_state(X, y, true_params)
         solver = model._solver
 
         if stepsize is not None:
@@ -3147,7 +3149,7 @@ class TestPoissonGLM:
         glm2.fit(X, y)
 
         params = glm.initialize_params(X, y)
-        state = glm.initialize_solver_and_state(X, y, params)
+        state = glm.initialize_optimization_and_state(X, y, params)
         # glm.instantiate_solver(glm.compute_loss)
 
         # NOTE these two are not the same because for example Ridge augments the loss
