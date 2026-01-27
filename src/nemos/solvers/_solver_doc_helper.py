@@ -3,7 +3,7 @@ import re
 from pydoc import render_doc
 from typing import Type
 
-from ._solver_registry import solver_registry
+from ._solver_registry import get_solver
 
 
 def get_solver_documentation(solver: str | Type, show_help: bool = False) -> str:
@@ -43,7 +43,7 @@ def get_solver_documentation(solver: str | Type, show_help: bool = False) -> str
     ...
     """
     if isinstance(solver, str):
-        solver = solver_registry[solver]
+        solver = get_solver(solver).implementation
 
     if show_help:
         return render_doc(solver, title="Help on %s")

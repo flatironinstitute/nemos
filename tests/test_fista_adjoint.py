@@ -12,12 +12,20 @@ pytestmark = pytest.mark.solver_related
 @pytest.fixture
 def optimistix_solver_registry(monkeypatch):
     """Point GLM solver registry at the Optimistix implementations for this module."""
-    registry = nmo.solvers.solver_registry.copy()
-    optimistix_registry = registry | {
-        "GradientDescent": nmo.solvers.OptimistixNAG,
-        "ProximalGradient": nmo.solvers.OptimistixFISTA,
+    optimistix_registry = nmo.solvers._solver_registry._registry.copy()
+    nag_spec = nmo.solvers.SolverSpec(
+        "GradientDescent", "optimistix", nmo.solvers.OptimistixNAG
+    )
+    fista_spec = nmo.solvers.SolverSpec(
+        "ProximalGradient", "optimistix", nmo.solvers.OptimistixFISTA
+    )
+    optimistix_registry["GradientDescent"] = optimistix_registry["GradientDescent"] | {
+        "optimistix": nag_spec
     }
-    monkeypatch.setattr(nmo.solvers, "solver_registry", optimistix_registry)
+    optimistix_registry["ProximalGradient"] = optimistix_registry[
+        "ProximalGradient"
+    ] | {"optimistix": fista_spec}
+    monkeypatch.setattr(nmo.solvers._solver_registry, "_registry", optimistix_registry)
     return optimistix_registry
 
 

@@ -1,21 +1,23 @@
 """Base class defining the interface for solvers that can be used by `BaseRegressor`."""
 
 import abc
-from typing import Any, Callable, Generic, NamedTuple
+from dataclasses import dataclass
+from typing import Any, Callable, Generic, Protocol, runtime_checkable
 
 from ..regularizer import Regularizer
 from ..typing import Params, SolverState, StepResult
 
 
-class OptimizationInfo(NamedTuple):
+@dataclass
+class OptimizationInfo:
     """Basic diagnostic information about finished optimization runs."""
 
     # Not all JAXopt solvers store the function value.
     # None means missing value, while NaN usually indicates a diverged optimization
-    function_val: float | None
-    num_steps: int
-    converged: bool
-    reached_max_steps: bool
+    function_val: float | None  #: Function value. Optional as not all solvers store it.
+    num_steps: int  #: Number of optimization steps taken.
+    converged: bool  #: Whether the optimization converged.
+    reached_max_steps: bool  #: Reached the maximum number of allowed steps.
 
 
 class AbstractSolver(abc.ABC, Generic[SolverState]):
@@ -110,3 +112,34 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         - whether the max number of steps were reached
         """
         pass
+
+
+@runtime_checkable
+class SolverProtocol(Protocol, Generic[SolverState]):
+    """
+    Protocol mirroring the interface of AbstractSolver.
+
+    Implementations can be checked at runtime via isinstance(solver_object, SolverProtocol)
+    and issubclass(solver_class, SolverProtocol).
+    """
+
+    def __init__(
+        self,
+        unregularized_loss: Callable,
+        regularizer: Regularizer,
+        regularizer_strength: float | None,
+        has_aux: bool,
+        init_params: Params | None = None,
+        **solver_init_kwargs: Any,
+    ) -> None: ...
+
+    def init_state(self, init_params: Params, *args: Any) -> SolverState: ...
+
+    def update(self, params: Params, state: SolverState, *args: Any) -> StepResult: ...
+
+    def run(self, init_params: Params, *args: Any) -> StepResult: ...
+
+    @classmethod
+    def get_accepted_arguments(cls) -> set[str]: ...
+
+    def get_optim_info(self, state: SolverState) -> OptimizationInfo: ...

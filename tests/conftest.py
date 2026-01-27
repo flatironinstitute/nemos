@@ -17,6 +17,7 @@ from functools import partial
 from typing import Literal
 
 from nemos.glm.validation import GLMValidator
+from nemos.solvers._solver_registry import SolverSpec
 
 # Named tuple for model fixture returns (clearer than tuple indexing)
 ModelFixture = namedtuple(
@@ -1397,30 +1398,40 @@ def _clear_model_cache():
 
 
 # Select solver backend for tests if requested via environment variable
-_common_solvers = {
-    "SVRG": nmo.solvers.WrappedSVRG,
-    "ProxSVRG": nmo.solvers.WrappedProxSVRG,
-}
-_solver_registry_per_backend = {
-    "optimistix": {
-        **_common_solvers,
-        "GradientDescent": nmo.solvers.OptimistixNAG,
-        "ProximalGradient": nmo.solvers.OptimistixFISTA,
-        "LBFGS": nmo.solvers.OptimistixOptaxLBFGS,
-        "BFGS": nmo.solvers.OptimistixBFGS,
-        "NonlinearCG": nmo.solvers.OptimistixNonlinearCG,
-    },
+_common_solvers = [
+    nmo.solvers.SolverSpec("SVRG", "nemos", nmo.solvers.WrappedSVRG),
+    nmo.solvers.SolverSpec("ProxSVRG", "nemos", nmo.solvers.WrappedProxSVRG),
+]
+_solvers_per_backend = {
+    "optimistix": [
+        *_common_solvers,
+        nmo.solvers.SolverSpec(
+            "GradientDescent", "optimistix", nmo.solvers.OptimistixNAG
+        ),
+        nmo.solvers.SolverSpec(
+            "ProximalGradient", "optimistix", nmo.solvers.OptimistixFISTA
+        ),
+        nmo.solvers.SolverSpec("LBFGS", "optimistix", nmo.solvers.OptimistixOptaxLBFGS),
+        nmo.solvers.SolverSpec("BFGS", "optimistix", nmo.solvers.OptimistixBFGS),
+        nmo.solvers.SolverSpec(
+            "NonlinearCG", "optimistix", nmo.solvers.OptimistixNonlinearCG
+        ),
+    ],
 }
 
 if nmo.solvers.JAXOPT_AVAILABLE:
-    _solver_registry_per_backend["jaxopt"] = {
-        **_common_solvers,
-        "GradientDescent": nmo.solvers.JaxoptGradientDescent,
-        "ProximalGradient": nmo.solvers.JaxoptProximalGradient,
-        "LBFGS": nmo.solvers.JaxoptLBFGS,
-        "BFGS": nmo.solvers.JaxoptBFGS,
-        "NonlinearCG": nmo.solvers.JaxoptNonlinearCG,
-    }
+    _solvers_per_backend["jaxopt"] = [
+        *_common_solvers,
+        nmo.solvers.SolverSpec(
+            "GradientDescent", "jaxopt", nmo.solvers.JaxoptGradientDescent
+        ),
+        nmo.solvers.SolverSpec(
+            "ProximalGradient", "jaxopt", nmo.solvers.JaxoptProximalGradient
+        ),
+        nmo.solvers.SolverSpec("LBFGS", "jaxopt", nmo.solvers.JaxoptLBFGS),
+        nmo.solvers.SolverSpec("BFGS", "jaxopt", nmo.solvers.JaxoptBFGS),
+        nmo.solvers.SolverSpec("NonlinearCG", "jaxopt", nmo.solvers.JaxoptNonlinearCG),
+    ]
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -1437,14 +1448,19 @@ def configure_solver_backend(request):
     backend = os.getenv("NEMOS_SOLVER_BACKEND")
 
     if backend is None:
-        _solver_registry_to_use = nmo.solvers.solver_registry.copy()
+        # use the defaults for each algorithm
+        _solvers_to_use = [
+            nmo.solvers.get_solver(algo)
+            for algo in nmo.solvers.list_available_algorithms()
+        ]
+
     else:
         if backend == "jaxopt" and not nmo.solvers.JAXOPT_AVAILABLE:
             pytest.fail("jaxopt backend requested but jaxopt is not installed.")
         try:
-            _solver_registry_to_use = _solver_registry_per_backend[backend]
+            _solvers_to_use = _solvers_per_backend[backend]
         except KeyError:
-            available = ", ".join(_solver_registry_per_backend.keys())
+            available = ", ".join(_solvers_per_backend.keys())
             pytest.fail(f"Unknown solver backend: {backend}. Available: {available}")
 
     override_solver = request.config.getini("override_solver")
@@ -1455,18 +1471,29 @@ def configure_solver_backend(request):
             raise ValueError(
                 f"override_solver must be in format 'algo:implementation', got: {override_solver}"
             )
-        _solver_registry_to_use[algo_name] = getattr(nmo.solvers, impl_name)
+        for i, solver in enumerate(_solvers_to_use):
+            if solver.algo_name == algo_name:
+                _solvers_to_use[i] = nmo.solvers.SolverSpec(
+                    algo_name, "replaced_for_pytest", getattr(nmo.solvers, impl_name)
+                )
 
     # save the original registry so that we can restore it after
-    original = nmo.solvers.solver_registry.copy()
-    nmo.solvers.solver_registry.clear()
-    nmo.solvers.solver_registry.update(_solver_registry_to_use)
+    original_registry = nmo.solvers._solver_registry._registry.copy()
+    original_defaults = nmo.solvers._solver_registry._defaults.copy()
+    nmo.solvers._solver_registry._registry.clear()
+    nmo.solvers._solver_registry._defaults.clear()
+    for solver in _solvers_to_use:
+        nmo.solvers._solver_registry.register(
+            solver.algo_name, solver.implementation, solver.backend, default=True
+        )
 
     try:
         yield
     finally:
-        nmo.solvers.solver_registry.clear()
-        nmo.solvers.solver_registry.update(original)
+        nmo.solvers._solver_registry._registry.clear()
+        nmo.solvers._solver_registry._defaults.clear()
+        nmo.solvers._solver_registry._registry.update(original_registry)
+        nmo.solvers._solver_registry._defaults.update(original_defaults)
 
 
 def pytest_addoption(parser):
