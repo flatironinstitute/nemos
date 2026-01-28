@@ -25,7 +25,10 @@ def _log_softmax_inv(x):
     by subtracting the mean. This ensures the intercepts sum to zero, matching
     sklearn's implicit constraint and making the parameters identifiable.
     """
-    log_x = jnp.log(x)
+    # Clipping is needed when initializing with a batch that do not contain
+    # a category. In that case, the empirical frequency associated to the
+    # category would be zero, and log(0) will be -inf.
+    log_x = jnp.log(jnp.clip(x, jnp.finfo(float).eps, jnp.inf))
     return log_x - jnp.mean(log_x, axis=-1, keepdims=True)
 
 
