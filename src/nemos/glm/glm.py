@@ -1701,7 +1701,7 @@ class ClassifierMixin:
         )
         # reset classes cache
         self._classes_ = None
-        self._skip_encoding = True
+        self._skip_encoding = False
         self._class_to_index_ = None
 
     def _get_validator_extra_params(self) -> dict:
@@ -2028,10 +2028,12 @@ class ClassifierMixin:
         Update the model parameters and solver state.
 
         Performs a single optimization step using the model's solver. Class labels
-        are automatically converted to one-hot encoding before the update.
+        are automatically encoded to internal indices and converted to one-hot
+        encoding before the update.
 
-        **Important**: `y` will be converted to integers if floats are provided.
-        For max performance provide an array of integers directly.
+        **Important**: Labels of any dtype (integers, floats, strings, etc.) are
+        supported and will be encoded using the ``classes_`` attribute set via
+        :meth:`set_classes`. For best performance, use integer labels ``[0, n_classes - 1]``.
 
         Parameters
         ----------
@@ -2044,9 +2046,9 @@ class ClassifierMixin:
             The predictors used in the model fitting process. Shape ``(n_time_bins, n_features)``
             or a ``FeaturePytree``.
         y :
-            Class labels as integers, array of shape ``(n_time_bins,)`` for single neuron
-            models or ``(n_time_bins, n_neurons)`` for population models. Values should be
-            in the range ``[0, n_classes - 1]``.
+            Class labels, array of shape ``(n_time_bins,)`` for single neuron
+            models or ``(n_time_bins, n_neurons)`` for population models. Labels must
+            match those defined in ``classes_``.
         *args :
             Additional positional arguments to be passed to the solver's update method.
         n_samples :
@@ -2196,7 +2198,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
         )
         self._classes_ = None
         self._class_to_index_ = None
-        self._skip_encoding = True  # default: assume labels are [0, n_classes-1]
+        self._skip_encoding = False
 
     def fit(
         self,
@@ -2406,7 +2408,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         )
         self._classes_ = None
         self._class_to_index_ = None
-        self._skip_encoding = True  # default: assume labels are [0, n_classes-1]
+        self._skip_encoding = False
 
     @property
     def feature_mask(self) -> Union[jnp.ndarray, dict[str, jnp.ndarray]]:
