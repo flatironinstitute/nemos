@@ -23,6 +23,8 @@ The [`ClassifierGLM`](nemos.glm.ClassifierGLM) models categorical or discrete ou
 
 ## Generate Synthetic Data
 
+In this example, we simulate categorical choice data to demonstrate the classifier. With real data, you would replace this section by loading your experimental observations.
+
 ```{code-cell}
 import jax
 import numpy as np
