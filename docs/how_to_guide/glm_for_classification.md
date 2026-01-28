@@ -13,12 +13,13 @@ kernelspec:
 
 # Fit GLM for Classification
 
-The [`ClassifierGLM`](nemos.glm.ClassifierGLM) models categorical outcomes such as behavioral choices.
+The [`ClassifierGLM`](nemos.glm.ClassifierGLM) models categorical or discrete outcomes such as behavioral choices.
 
 **Key differences from standard GLM:**
-- [`predict`](nemos.glm.ClassifierGLM.predict) returns predicted category labels
-- [`predict_proba`](nemos.glm.ClassifierGLM.predict_proba) returns (log-)probabilities for each category
+- [`predict`](nemos.glm.ClassifierGLM.predict) returns predicted class labels
+- [`predict_proba`](nemos.glm.ClassifierGLM.predict_proba) returns (log-)probabilities for each class
 - [`set_classes`](nemos.glm.ClassifierGLM.set_classes) set class labels. By Default, classes are assumed to be `{0, ..., n_classes - 1}` however, this assumption can be overridden by calling `set_classes` passing an array of class labels.
+- The `observation_model` parameter cannot be set at model initialization, since [`CategoricalObservations`](nemos.observation_models.CategoricalObservations) is the only compatible observation model.
 
 ## Generate Synthetic Data
 

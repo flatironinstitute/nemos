@@ -1802,7 +1802,7 @@ class ClassifierMixin:
         self, X: DESIGN_INPUT_TYPE, n_samples: Optional[int] = None
     ) -> jnp.ndarray:
         """
-        Estimate the degrees of freedom of the residuals for categorical GLM.
+        Estimate the degrees of freedom of the residuals for classifier GLM.
 
         Parameters
         ----------

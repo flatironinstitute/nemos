@@ -3590,6 +3590,36 @@ class TestClassifierGLM:
         model.inverse_link_function = inv_link
         model.fit(X, y)
 
+    @pytest.mark.solver_related
+    def test_fit_glm_too_few_classes(
+        self, inv_link, request, glm_type, model_instantiation
+    ):
+        """
+        Ensure that the model can be fit with different link functions.
+        """
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        model.inverse_link_function = inv_link
+        y = jnp.where(y == 2, 1, y)  # reduce to only 2 classes
+        with pytest.raises(ValueError, match="Found only .* unique class labels"):
+            model.fit(X, y)
+
+    @pytest.mark.solver_related
+    def test_fit_glm_too_many_classes(
+        self, inv_link, request, glm_type, model_instantiation
+    ):
+        """
+        Ensure that the model can be fit with different link functions.
+        """
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        model.inverse_link_function = inv_link
+        y = y.at[:10].set(3)  # add another class
+        with pytest.raises(ValueError, match="Found .* unique class labels"):
+            model.fit(X, y)
+
     def test_score_glm(self, inv_link, request, glm_type, model_instantiation):
         """
         Ensure that the model can be scored with different link functions.

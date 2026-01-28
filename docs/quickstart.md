@@ -141,7 +141,7 @@ print(f"Model intercept shape: {population_model.intercept_.shape}")
 
 ```
 
-### **Categorical GLM**
+### **Classifier GLM**
 
 For classification tasks, such as modeling behavioral choices, NeMoS provides the `ClassifierGLM`. This model treats observations as categorical random variables.
 
@@ -155,10 +155,11 @@ model = nmo.glm.ClassifierGLM(n_classes)
 
 ```
 
-The `ClassifierGLM` follows a similar API to the standard GLM, with a few key differences:
+The [`ClassifierGLM`](nemos.glm.ClassifierGLM) follows a similar API to the standard GLM, with a few key differences:
 
-- `predict` returns predicted category labels (not rates)
-- `predict_proba` returns the probability of each category
+- [`predict`](nemos.glm.ClassifierGLM.predict) returns predicted category labels (unlike the standard `GLM` model, which returns predicted firing rates).
+- [`predict_proba`](nemos.glm.ClassifierGLM.predict_proba) returns the probability of each category.
+- The `observation_model` parameter cannot be set at model initialization, since [`CategoricalObservations`](nemos.observation_models.CategoricalObservations) is the only compatible observation model.
 
 ```{code-cell}
 
@@ -167,7 +168,7 @@ num_samples, num_features = 100, 3
 
 # Generate a design matrix
 X = np.random.normal(size=(num_samples, num_features))
-# generate categorical observations (values 0, 1, or 2)
+# simulate categorical observations (values 0, 1, or 2)
 choices = np.random.choice(n_classes, size=num_samples)
 
 # fit the model

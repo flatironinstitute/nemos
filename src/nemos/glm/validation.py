@@ -390,8 +390,8 @@ class ClassifierGLMValidator(GLMValidator):
 
     Validates and transforms user-provided parameters, inputs, and checks consistency
     between parameters and data for classifier GLMs. Classifier GLMs have:
-    - 2D coefficients: shape (n_features, n_classes - 1) or dict of (n_features, n_classes - 1) arrays
-    - 1D intercept: shape (n_classes - 1,)
+    - 2D coefficients: shape (n_features, n_classes) or dict of (n_features, n_classes) arrays
+    - 1D intercept: shape (n_classes,)
     - 2D input X: shape (n_samples, n_features) or pytree of same
     - 1D output y: shape (n_samples,) containing integer class labels
     """
@@ -406,8 +406,8 @@ class ClassifierGLMValidator(GLMValidator):
             dict(
                 err_message_format="Invalid parameter dimensionality. "
                 "coef must be an array or nemos.pytree.FeaturePytree "
-                "with array leafs of shape (n_features, n_classes - 1). "
-                "intercept must be of shape (n_classes - 1,)."
+                "with array leafs of shape (n_features, n_classes). "
+                "intercept must be of shape (n_classes,)."
                 "\nThe provided coef and intercept have shape ``{}`` and ``{}`` instead."
             ),
         ),
@@ -428,7 +428,7 @@ class ClassifierGLMValidator(GLMValidator):
         **kwargs,
     ) -> GLMUserParams:
         """
-        Validate that coef and intercept last dimensions match n_classes - 1.
+        Validate that coef and intercept last dimensions match n_classes.
 
         Parameters
         ----------
@@ -498,7 +498,7 @@ class ClassifierGLMValidator(GLMValidator):
                 err_message=msg,
             )
             # check the consistency of the feature axis
-            # For classifier GLM: coef is (n_features, n_classes - 1), X is (n_samples, n_features)
+            # For classifier GLM: coef is (n_features, n_classes), X is (n_samples, n_features)
             validation.check_tree_axis_consistency(
                 params.coef,
                 data,
@@ -581,8 +581,8 @@ class PopulationClassifierGLMValidator(ClassifierGLMValidator):
 
     Validates and transforms user-provided parameters, inputs, and checks consistency
     between parameters and data for population classifier GLMs. Population classifier GLMs have:
-    - 3D coefficients: shape (n_features, n_neurons, n_classes - 1) or dict of same
-    - 2D intercept: shape (n_neurons, n_classes - 1)
+    - 3D coefficients: shape (n_features, n_neurons, n_classes) or dict of same
+    - 2D intercept: shape (n_neurons, n_classes)
     - 2D input X: shape (n_samples, n_features) or pytree of same
     - 2D output y: shape (n_samples, n_neurons) containing integer class labels per neuron
     """
@@ -597,15 +597,15 @@ class PopulationClassifierGLMValidator(ClassifierGLMValidator):
             dict(
                 err_message_format="Invalid parameter dimensionality. "
                 "coef must be an array or nemos.pytree.FeaturePytree "
-                "with array leafs of shape (n_features, n_neurons, n_classes - 1). "
-                "intercept must be of shape (n_neurons, n_classes - 1)."
+                "with array leafs of shape (n_features, n_neurons, n_classes). "
+                "intercept must be of shape (n_neurons, n_classes)."
                 "\nThe provided coef and intercept have shape ``{}`` and ``{}`` instead."
             ),
         ),
         (
             "validate_n_classes_shape",
             dict(
-                intercept_err_format="intercept last dimension must be n_classes - 1 = {} "
+                intercept_err_format="intercept last dimension must be n_classes = {} "
                 "for n_classes={}. Got intercept with shape {}."
             ),
         ),
@@ -629,7 +629,7 @@ class PopulationClassifierGLMValidator(ClassifierGLMValidator):
 
         # Then validate y consistency (neurons) - specific to population classifier GLM
         if y is not None:
-            # coef shape is (n_features, n_neurons, n_classes - 1), y shape is (n_samples, n_neurons)
+            # coef shape is (n_features, n_neurons, n_classes), y shape is (n_samples, n_neurons)
             validation.check_array_shape_match_tree(
                 params.coef,
                 y,
