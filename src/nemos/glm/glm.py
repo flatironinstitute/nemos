@@ -1538,24 +1538,38 @@ class ClassifierMixin:
 
         Examples
         --------
+        When fitting in batches with :meth:`update`, use ``set_classes`` to define
+        all class labels before initialization. This is necessary when individual
+        batches may not contain all classes.
+
         >>> import nemos as nmo
         >>> import numpy as np
         >>> model = nmo.glm.ClassifierGLM(3)
-        >>> # classes_ is None until set
-        >>> model.classes_ is None
-        True
-        >>> # Integer classes
-        >>> y = np.array([2, 3, 2, 5, 5])
-        >>> model.set_classes(y)
+
+        Generate sample data where the first batch only contains 2 of 3 classes:
+
+        >>> X = np.random.randn(100, 5)
+        >>> y_all_classes = np.array([0, 1, 2])  # all possible classes
+        >>> y_batch1 = np.array([0, 1, 0, 1, 0])  # first batch missing class 2
+        >>> X_batch1 = X[:5]
+
+        Without ``set_classes``, initialization fails if batch lacks all classes:
+
+        >>> _ = model.initialize_solver_and_state(X_batch1, y_batch1, init_params=None)
+        Traceback (most recent call last):
+        ValueError: Found only 2 unique class labels in y, but n_classes=3...
+
+        Call ``set_classes`` first to define all labels, then initialize:
+
+        >>> model.set_classes(y_all_classes)
         ClassifierGLM(...)
-        >>> model.classes_
-        array([2, 3, 5])
-        >>> # String classes
-        >>> y = np.array(["a", "a", "c", "b", "b"])
-        >>> model.set_classes(y)
-        ClassifierGLM(...)
-        >>> model.classes_
-        array(['a', 'b', 'c'], dtype='<U1')
+        >>> init_params = model.initialize_params(X, y_all_classes)
+        >>> state = model.initialize_solver_and_state(X_batch1, y_batch1, init_params)
+        >>> params = (model.coef_, model.intercept_)
+
+        Now batches with any subset of classes work with :meth:`update`:
+
+        >>> result = model.update(params, state, X_batch1, y_batch1)
 
         """
         # note that we must use NumPy, Jax does not allow non-numeric types
