@@ -62,6 +62,7 @@ dev = [
     "seaborn",                      # Required by doctest for _documentation_utils module
     "myst-nb",                      # Test myst_nb utils for glue
     "hmmlearn",                     # Test algorithmic implementations of HMM
+    "tox-uv",                       # Run tox with uv for faster installs
 ]
 docs = [
     "numpydoc",
