@@ -213,8 +213,8 @@ def prox_ridge(x: Any, strength: Any, scaling: float = 1.0) -> Any:
         Output pytree with the same structure as `x`.
     """
 
-    def fun(u, v):
-        return u * (1.0 / (1 + scaling * v))
+    def fun(u, s):
+        return u * (1.0 / (1 + scaling * s))
 
     return jax.tree_util.tree_map(fun, x, strength)
 
@@ -246,8 +246,8 @@ def prox_lasso(x: Any, strength: Any, scaling: float = 1.0) -> Any:
         Output pytree with the same structure as `x`.
     """
 
-    def fun(u, v):
-        return jnp.sign(u) * jax.nn.relu(jnp.abs(u) - v * scaling)
+    def fun(u, s):
+        return jnp.sign(u) * jax.nn.relu(jnp.abs(u) - s * scaling)
 
     return jax.tree_util.tree_map(fun, x, strength)
 
@@ -281,11 +281,11 @@ def prox_elastic_net(x: Any, strength: Any, scaling: float = 1.0) -> Any:
     def prox_l1(u, lambd):
         return jnp.sign(u) * jax.nn.relu(jnp.abs(u) - lambd)
 
-    def fun(u, strength):
-        strength, ratio = strength
+    def fun(u, substrength):
+        s, r = substrength
 
-        lam = strength * ratio
-        gamma = (1.0 - ratio) / ratio
+        lam = s * r
+        gamma = (1.0 - r) / r
 
         return prox_l1(u, scaling * lam) / (1.0 + scaling * lam * gamma)
 

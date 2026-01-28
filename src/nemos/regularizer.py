@@ -13,7 +13,6 @@ from typing import Any, Callable, Tuple, Union
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-import numpy as np
 
 from . import tree_utils
 from .base_class import Base
@@ -27,6 +26,7 @@ from .proximal_operator import (
     prox_ridge,
 )
 from .tree_utils import pytree_map_and_reduce
+from .type_casting import _is_scalar_or_0d
 from .typing import ProximalOperator
 from .utils import format_repr
 from .validation import convert_tree_leaves_to_jax_array
@@ -278,26 +278,35 @@ class Regularizer(Base, abc.ABC):
 
     def _validate_strength(self, strength: Any):
         """
-        Normalize regularizer strength into a PyTree of JAX float arrays.
+        Validate regularizer strength type.
 
         Parameters
         ----------
         strength : Any
-            Regularizer strength specified as a scalar, array-like, or PyTree.
+            Regularizer strength specified as one of:
+            - None
+                Defaults to a scalar strength of 1.0.
+            - scalar (Python number or 0-D array)
+                Preserved as-is.
+            - array-like or PyTree
+                Converted leaf-wise to JAX arrays.
 
         Returns
         -------
         Any
-            PyTree with `jnp.ndarray` float leaves.
+            A scalar or PyTree where:
+            - Python scalar leaves are preserved
+            - Array-like leaves are converted to `jnp.ndarray`
 
         Raises
         ------
         ValueError
-            If conversion to float arrays fails.
+            If conversion of array-like leaves to JAX arrays fails.
         """
         if strength is None:
             return 1.0
-
+        if _is_scalar_or_0d(strength):
+            return strength
         return convert_tree_leaves_to_jax_array(
             strength,
             f"Could not convert regularizer strength to floats: {strength}",
@@ -305,37 +314,39 @@ class Regularizer(Base, abc.ABC):
 
     def _validate_strength_structure(self, params: Any, strength: Any):
         """
-        Validate and broadcast regularizer strength to match regularizable parameters.
+        Align and broadcast regularizer strength to match model parameters.
 
-        This function aligns the provided regularizer strength with the structure of
-        `params`, filling only the regularizable subtrees and broadcasting strength
-        values to match parameter leaf shapes.
+        This function takes a validated regularizer strength specification and
+        aligns it with the structure of `params`, filling only regularizable
+        subtrees and inserting `None` elsewhere.
+
+        Regularizable subtrees are determined via
+        `params.regularizable_subtrees()` if available; otherwise, the entire
+        parameter tree is treated as regularizable.
 
         Parameters
         ----------
         params : Any
-            Model parameters structured as a PyTree. Regularizable subtrees are
-            determined via `params.regularizable_subtrees()` if present; otherwise
-            the entire parameter tree is treated as regularizable.
+            Model parameters structured as a PyTree.
 
         strength : Any
             Regularizer strength specification. Accepted forms:
-
             - None
-                Defaults to a scalar strength of 1.0 for all regularizable parameters.
+                Uses a scalar strength of 1.0 for all regularizable parameters.
             - scalar or 0-D array
-                Broadcast to every regularizable parameter leaf.
+                Logically broadcast to all regularizable parameter leaves.
             - PyTree
                 Must match the structure of the regularizable subtrees. Each leaf
-                may be a scalar or an array broadcastable to the corresponding
+                may be a scalar, 0-D array, or an array matching the corresponding
                 parameter leaf shape.
 
         Returns
         -------
         structured_strength : Any
-            PyTree with the same structure as `params`. Regularizable parameter leaves
-            contain `jnp.ndarray` strengths broadcast to the parameter shapes; all
-            non-regularizable leaves are `None`.
+            PyTree with the same structure as `params`:
+            - Regularizable parameter leaves contain strength values
+              (scalars or arrays)
+            - Non-regularizable leaves are `None`
 
         Raises
         ------
@@ -343,10 +354,10 @@ class Regularizer(Base, abc.ABC):
             If:
             - The number of provided strength subtrees does not match the number of
               regularizable subtrees.
-            - A strength PyTree does not have the same number of leaves as the
-              corresponding parameter subtree.
-            - A strength leaf cannot be broadcast to the shape of the corresponding
-              parameter leaf.
+            - A strength PyTree does not match the structure of its corresponding
+              parameter subtree.
+            - A non-scalar strength leaf does not match the shape of the
+              corresponding parameter leaf.
         """
 
         wheres = getattr(params, "regularizable_subtrees", lambda: [lambda x: x])()
@@ -355,57 +366,32 @@ class Regularizer(Base, abc.ABC):
             struct, [None] * struct.num_leaves
         )
 
-        # handle scalar or None strength
-        if (
-            strength is None
-            or isinstance(strength, (int, float))
-            or (isinstance(strength, (np.ndarray, jnp.ndarray)) and strength.ndim == 0)
-        ):
-            scalar = 1.0 if strength is None else float(strength)
-            for where in wheres:
-                subtree = where(params)
-                structured_strength = eqx.tree_at(
-                    where,
-                    structured_strength,
-                    jax.tree_util.tree_map(
-                        lambda p: jnp.full(p.shape, scalar, dtype=float), subtree
-                    ),
-                    is_leaf=lambda x: x is None,
-                )
-            return structured_strength
+        if strength is None:
+            strength = 1.0
 
-        # handle PyTree-aligned strength
-        strengths = (
-            [strength]
-            if len(wheres) == 1
-            else (strength if len(strength) == len(wheres) else None)
-        )
-        if strengths is None:
+        substrengths = [strength] if len(wheres) == 1 else list(strength)
+        if len(substrengths) != len(wheres):
             raise ValueError(f"Expected {len(wheres)} strength values, got {strength}")
 
-        for s, where in zip(strengths, wheres):
-            subtree = where(params)
-            param_leaves, treedef = jax.tree_util.tree_flatten(subtree)
-
-            strength_leaves = (
-                [s] * len(param_leaves)
-                if isinstance(s, (np.ndarray, jnp.ndarray)) and s.ndim == 0
-                else jax.tree_util.tree_leaves(s)
-            )
-            if len(strength_leaves) != len(param_leaves):
+        def _structured_strength(strength_leaf, param_leaf):
+            if _is_scalar_or_0d(strength_leaf):
+                return strength_leaf
+            if strength_leaf.shape != param_leaf.shape:
                 raise ValueError(
-                    f"Strength tree has {len(strength_leaves)} leaves, "
-                    f"but parameter subtree has {len(param_leaves)} leaves"
+                    f"Strength shape {strength_leaf.shape} does not match "
+                    f"parameter shape {param_leaf.shape}"
                 )
+            return strength_leaf
 
-            validated = [
-                jnp.broadcast_to(jnp.asarray(sl, dtype=float), p.shape)
-                for p, sl in zip(param_leaves, strength_leaves)
-            ]
+        for substrength, where in zip(substrengths, wheres):
+            subtree = where(params)
+            validated = (
+                jax.tree_util.tree_map(lambda p: substrength, subtree)
+                if _is_scalar_or_0d(substrength)
+                else jax.tree_util.tree_map(_structured_strength, substrength, subtree)
+            )
             structured_strength = eqx.tree_at(
-                where,
-                structured_strength,
-                jax.tree_util.tree_unflatten(treedef, validated),
+                where, structured_strength, validated, is_leaf=lambda x: x is None
             )
 
         return structured_strength
@@ -482,8 +468,8 @@ class Ridge(Regularizer):
             The Ridge penalization value.
         """
 
-        def l2_penalty(coeff: jnp.ndarray, strength: jnp.ndarray):
-            return 0.5 * jnp.sum(strength * jnp.square(coeff))
+        def l2_penalty(coeff: jnp.ndarray, leaf_strength: jnp.ndarray):
+            return 0.5 * jnp.sum(leaf_strength * jnp.square(coeff))
 
         return tree_utils.pytree_map_and_reduce(
             l2_penalty,
@@ -518,7 +504,7 @@ class Lasso(Regularizer):
         ----------
         subtree :
             Model parameters for which to compute the penalization.
-        substrength :
+        strength :
             Regularization strength.
 
         Returns
@@ -527,8 +513,8 @@ class Lasso(Regularizer):
             The Lasso penalization value.
         """
 
-        def l1_penalty(coeff: jnp.ndarray, strength: jnp.ndarray):
-            return jnp.sum(strength * jnp.abs(coeff))
+        def l1_penalty(coeff: jnp.ndarray, leaf_strength: jnp.ndarray):
+            return jnp.sum(leaf_strength * jnp.abs(coeff))
 
         return tree_utils.pytree_map_and_reduce(
             l1_penalty,
@@ -596,8 +582,6 @@ class ElasticNet(Regularizer):
             Model parameters for which to compute the penalization.
         strength :
             Regularization strength.
-        ratio :
-            Regularization ratio.
 
         Returns
         -------
@@ -605,11 +589,11 @@ class ElasticNet(Regularizer):
             The Elastic Net penalization value.
         """
 
-        def net_penalty(coeff, strength):
-            strength, ratio = strength
-            quad = 0.5 * (1.0 - ratio) * jnp.square(coeff)
-            l1 = ratio * jnp.abs(coeff)
-            return jnp.sum(strength * (quad + l1))
+        def net_penalty(coeff, leaf_strength):
+            s, r = leaf_strength
+            quad = 0.5 * (1.0 - r) * jnp.square(coeff)
+            l1 = r * jnp.abs(coeff)
+            return jnp.sum(s * (quad + l1))
 
         return tree_utils.pytree_map_and_reduce(
             net_penalty,
