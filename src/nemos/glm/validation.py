@@ -222,15 +222,15 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
 
         Parameters
         ----------
-        feature_mask : FeaturePytree, dict[str, jnp.ndarray], jnp.ndarray, or None
+        feature_mask :
             Feature mask indicating which features are used. Must contain only 0s and 1s.
             If a FeaturePytree, the underlying data dict is extracted.
-        data_type : jnp.dtype, optional
+        data_type :
             Target data type for the mask arrays. Defaults to float.
 
         Returns
         -------
-        dict[str, jnp.ndarray], jnp.ndarray, or None
+        :
             The validated and cast feature mask, or None if input was None.
 
         Raises
