@@ -3815,7 +3815,15 @@ class TestClassifierGLM:
 
     @pytest.mark.parametrize(
         "method_name",
-        ["predict_proba", "predict", "update", "compute_loss", "simulate"],
+        [
+            "predict_proba",
+            "predict",
+            "update",
+            "compute_loss",
+            "simulate",
+            "initialize_params",
+            "initialize_solver_and_state",
+        ],
     )
     def test_must_set_classes_before_calling(
         self,
@@ -3839,6 +3847,7 @@ class TestClassifierGLM:
             "random_key": None,
             "feedforward_input": None,
             "opt_state": None,
+            "init_params": None,
         }
         model.coef_ = true_params.coef
         model.intercept_ = true_params.intercept
@@ -4094,28 +4103,3 @@ class TestClassifierGLM:
         # Roundtrip: encode -> decode should give original labels
         y_label_roundtrip = model._decode_labels(model._encode_labels(y_label))
         assert np.array_equal(y_label, y_label_roundtrip)
-
-    def test_initialize_solver_sets_classes(
-        self, inv_link, glm_type, model_instantiation, request
-    ):
-        """Test that initialize_solver_and_state sets classes from y."""
-        X, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
-
-        # Create fresh model
-        if "population" in glm_type:
-            fresh_model = nmo.glm.ClassifierPopulationGLM(n_classes=model.n_classes)
-        else:
-            fresh_model = nmo.glm.ClassifierGLM(n_classes=model.n_classes)
-
-        assert fresh_model.classes_ is None
-
-        # Use string labels
-        label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
-        y_label = label[y]
-
-        init_params = fresh_model.initialize_params(X, y_label)
-        fresh_model.initialize_solver_and_state(X, y_label, init_params)
-
-        # Classes should now be set
-        assert fresh_model.classes_ is not None
-        assert np.array_equal(fresh_model.classes_, label)
