@@ -1,7 +1,7 @@
 """Validation classes for GLM and PopulationGLM models."""
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional, Tuple, TypedDict, Union
+from typing import Any, Callable, Dict, Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -13,12 +13,6 @@ from ..tree_utils import pytree_map_and_reduce
 from ..typing import DESIGN_INPUT_TYPE, FeaturePytree
 from ..validation import RegressorValidator
 from .params import GLMParams, GLMUserParams
-
-
-class ClassifierExtraParams(TypedDict):
-    """Extra parameters for classifier GLM validators."""
-
-    n_classes: int
 
 
 def to_glm_params(user_params: GLMUserParams) -> GLMParams:
@@ -402,7 +396,7 @@ class ClassifierGLMValidator(GLMValidator):
     - 1D output y: shape (n_samples,) containing integer class labels
     """
 
-    extra_params: ClassifierExtraParams = field(kw_only=True)
+    extra_params: Dict[Literal["n_classes"], int] = field(kw_only=True)
     expected_param_dims: Tuple[int] = (2, 1)
     model_class: str = "ClassifierGLM"
     params_validation_sequence: Tuple[Tuple[str, None] | Tuple[str, dict[str, Any]]] = (
