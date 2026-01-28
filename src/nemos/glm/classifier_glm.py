@@ -91,19 +91,18 @@ class ClassifierMixin:
 
         >>> _ = model.initialize_solver_and_state(X_batch1, y_batch1, init_params=None)
         Traceback (most recent call last):
-        ValueError: Found only 2 unique class labels in y, but n_classes=3...
+        RuntimeError: Classes are not set. Must call ``set_classes`` before calling...
 
         Call ``set_classes`` first to define all labels, then initialize:
 
         >>> model.set_classes(y_all_classes)
         ClassifierGLM(...)
-        >>> init_params = model.initialize_params(X, y_all_classes)
+        >>> init_params = model.initialize_params(X_batch1, y_batch1)
         >>> state = model.initialize_solver_and_state(X_batch1, y_batch1, init_params)
-        >>> params = (model.coef_, model.intercept_)
 
         Now batches with any subset of classes work with :meth:`update`:
 
-        >>> result = model.update(params, state, X_batch1, y_batch1)
+        >>> result = model.update(init_params, state, X_batch1, y_batch1)
 
         """
         # note that we must use NumPy, Jax does not allow non-numeric types
@@ -502,7 +501,7 @@ class ClassifierMixin:
         ValueError
             If inputs or parameters have incompatible shapes or invalid values.
         """
-        self.set_classes(y)
+        self._check_classes_is_set("initialize_solver_and_state")
         y = self._encode_labels(y)
         return super().initialize_solver_and_state(X, y, init_params)
 
@@ -538,11 +537,13 @@ class ClassifierMixin:
         >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
         >>> y = jnp.array([0, 0, 1, 1])
         >>> model = nmo.glm.ClassifierGLM(n_classes=2)
+        >>> model.set_classes(y)
+        ClassifierGLM(...)
         >>> coef, intercept = model.initialize_params(X, y)
         >>> coef.shape
         (2, 2)
         """
-        self.set_classes(y)
+        self._check_classes_is_set("initialize_params")
         y = self._encode_labels(y)
         y = self._validator.check_and_cast_y_to_integer(y)
         y = jax.nn.one_hot(y, self.n_classes)
@@ -605,6 +606,8 @@ class ClassifierMixin:
         >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
         >>> y = jnp.array([0, 0, 1, 1])
         >>> model = nmo.glm.ClassifierGLM(n_classes=2)
+        >>> model.set_classes(y)
+        ClassifierGLM(...)
         >>> params = model.initialize_params(X, y)
         >>> opt_state = model.initialize_solver_and_state(X, y, params)
         >>> new_params, new_state = model.update(params, opt_state, X, y)
