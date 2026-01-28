@@ -281,8 +281,8 @@ def prox_elastic_net(x: Any, strength: Any, scaling: float = 1.0) -> Any:
     def prox_l1(u, lambd):
         return jnp.sign(u) * jax.nn.relu(jnp.abs(u) - lambd)
 
-    def fun(u, substrength):
-        s, r = substrength
+    def fun(u, leaf_strength):
+        s, r = leaf_strength
 
         lam = s * r
         gamma = (1.0 - r) / r
