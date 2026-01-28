@@ -3007,7 +3007,7 @@ class TestPoissonGLM:
             ("Lasso", type(None)),
             ("ElasticNet", type(None)),
             ("GroupLasso", type(None)),
-            ("Ridge", jnp.ndarray),
+            ("Ridge", float),
         ],
     )
     @pytest.mark.parametrize(
