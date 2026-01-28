@@ -207,6 +207,11 @@ def tree_zeros_like(pytree_x):
     return jax.tree_util.tree_map(jnp.zeros_like, pytree_x)
 
 
+def tree_full_like(pytree_x, fill_value):
+    """Create a tree with the same structure as pytree_x and fill it with fill_value."""
+    return jax.tree_util.tree_map(lambda _: fill_value, pytree_x)
+
+
 def has_matching_axis_pytree(*pytree: Any, axis: int = 0):
     """Check if an arbitrary number of trees have matching axis length."""
     ax_lengths = {

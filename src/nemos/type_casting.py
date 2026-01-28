@@ -10,6 +10,7 @@ to JAX arrays and, where applicable, converts outputs back to pynapple TSD objec
 """
 
 from functools import wraps
+from numbers import Number
 from typing import Any, Callable, List, Literal, Optional, Tuple, Type, Union
 
 import jax
@@ -22,6 +23,11 @@ from . import tree_utils
 from .pytrees import FeaturePytree
 
 _NAP_TIME_PRECISION = 10 ** (-nap.nap_config.time_index_precision)
+
+
+def _is_scalar_or_0d(x):
+    """Return True if x is a Python number or a 0-D array/array-like."""
+    return isinstance(x, Number) or (hasattr(x, "ndim") and x.ndim == 0)
 
 
 def is_numpy_array_like(obj) -> Tuple[Any, bool]:

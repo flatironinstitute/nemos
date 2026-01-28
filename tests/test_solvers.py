@@ -3,15 +3,22 @@ import os
 from contextlib import nullcontext as does_not_raise
 
 import jax
+import jax.numpy as jnp
 import numpy as np
 import optimistix as optx
 import pytest
 
 import nemos as nmo
 from nemos.glm.params import GLMParams
-from nemos.proximal_operator import prox_none, prox_ridge
+from nemos.proximal_operator import prox_lasso, prox_none, prox_ridge
 from nemos.solvers._svrg import SVRG, ProxSVRG, SVRGState
-from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
+from nemos.tree_utils import (
+    pytree_map_and_reduce,
+    tree_full_like,
+    tree_l2_norm,
+    tree_slice,
+    tree_sub,
+)
 
 # Register every test here as solver-related
 pytestmark = pytest.mark.solver_related
@@ -524,9 +531,9 @@ def test_svrg_update_converges(request, regr_setup, stepsize):
     "prox, prox_lambda",
     [
         (prox_none, None),
-        (prox_ridge, 0.1),
         (prox_none, 0.1),
-        (nmo.proximal_operator.prox_lasso, 0.1),
+        (prox_ridge, 0.1),
+        (prox_lasso, 0.1),
     ],
 )
 def test_svrg_xk_update_step(request, regr_setup, to_tuple, prox, prox_lambda):
@@ -545,6 +552,11 @@ def test_svrg_xk_update_step(request, regr_setup, to_tuple, prox, prox_lambda):
 
     stepsize = 1e-2
     loss_gradient = jax.jit(jax.grad(loss))
+
+    def prox_op(params, hyperparams, scaling=1.0):
+        return prox(params, prox_lambda, scaling)
+
+    prox_lambda = tree_full_like(true_params, prox_lambda)
 
     # set the initial parameters to zero and
     # set the anchor point to a random value that's not just zeros
@@ -605,15 +617,15 @@ def test_svrg_xk_update_step(request, regr_setup, to_tuple, prox, prox_lambda):
     else:
         raise TypeError
 
-    next_xk = prox(next_xk, prox_lambda, scaling=stepsize)
+    next_xk = prox_op(next_xk, {}, scaling=stepsize)
 
     if prox_lambda is None:
         assert prox == prox_none
         solver = SVRG(loss)
     else:
-        solver = ProxSVRG(loss, prox)
+        solver = ProxSVRG(loss, prox_op)
     svrg_next_xk, _ = solver._inner_loop_param_update_step(
-        init_param, xs, df_xs, stepsize, prox_lambda, xi, yi
+        init_param, xs, df_xs, stepsize, {}, xi, yi
     )
 
     assert pytree_map_and_reduce(

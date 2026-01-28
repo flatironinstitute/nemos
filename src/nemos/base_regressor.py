@@ -33,7 +33,6 @@ from .typing import (
     DESIGN_INPUT_TYPE,
     FeaturePytree,
     ModelParamsT,
-    RegularizerStrength,
     SolverInit,
     SolverRun,
     SolverState,
@@ -120,7 +119,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
     def __init__(
         self,
         regularizer: Union[str, Regularizer] = "UnRegularized",
-        regularizer_strength: Optional[RegularizerStrength] = None,
+        regularizer_strength: Any = None,
         solver_name: Optional[str] = None,
         solver_kwargs: Optional[dict] = None,
     ):
@@ -249,15 +248,13 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             self.regularizer_strength = self._regularizer_strength
 
     @property
-    def regularizer_strength(self) -> RegularizerStrength:
+    def regularizer_strength(self) -> Any:
         """Regularizer strength getter."""
         return self._regularizer_strength
 
     @regularizer_strength.setter
-    def regularizer_strength(self, strength: Union[None, RegularizerStrength]):
-        # check regularizer strength
-        strength = self.regularizer._validate_regularizer_strength(strength)
-        self._regularizer_strength = strength
+    def regularizer_strength(self, strength: Any):
+        self._regularizer_strength = self.regularizer._validate_strength(strength)
 
     @property
     def solver_name(self) -> str:
