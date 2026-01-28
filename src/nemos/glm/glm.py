@@ -1524,6 +1524,11 @@ class ClassifierMixin:
             An array that must contain all the class labels,
             i.e. ``len(np.unique(y)) == n_classes``.
 
+        Raises
+        ------
+        ValueError
+            If the number of unique class labels in ``y`` does not match ``n_classes``.
+
         Notes
         -----
         :meth:`fit` and :meth:`initialize_solver_and_state` call ``set_classes`` internally,
