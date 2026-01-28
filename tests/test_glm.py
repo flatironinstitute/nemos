@@ -3937,7 +3937,7 @@ class TestClassifierGLM:
         else:
             fresh_model = nmo.glm.ClassifierGLM(n_classes=model.n_classes)
         assert fresh_model.classes_ is None
-        assert fresh_model._skip_encoding is True
+        assert fresh_model._skip_encoding is False
 
     def test_skip_encoding_flag(self, inv_link, glm_type, model_instantiation, request):
         """Test that _skip_encoding is True for default labels, False otherwise."""
