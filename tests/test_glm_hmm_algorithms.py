@@ -2857,7 +2857,7 @@ class TestCompilation:
         )
 
         assert compilation_counter["n_compilations"] == 1, (
-            f"forward_backward compiled {compilation_counter["n_compilations"]} times, "
+            f"forward_backward compiled {compilation_counter['n_compilations']} times, "
             f"expected 1 compilation"
         )
 
