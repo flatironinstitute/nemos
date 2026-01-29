@@ -1205,8 +1205,11 @@ class PopulationGLM(GLM):
         and related parameters.
         Default is UnRegularized regression.
     regularizer_strength :
-        Float that is default None. Sets the regularizer strength. If a user does not pass a value, and it is needed for
-        regularization, a warning will be raised and the strength will default to 1.0.
+        Typically a float. Default is None. Sets the regularizer strength.
+        If a user does not pass a value, and it is needed for regularization,
+        a warning will be raised and the strength will default to 1.0.
+        For finer control, the user can pass a pytree that matches the
+        parameter structure to regularize parameters differentially.
     solver_name :
         Solver to use for model optimization. Defines the optimization scheme and related parameters.
         The solver must be an appropriate match for the chosen regularizer.

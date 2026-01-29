@@ -13,6 +13,7 @@ from typing import Any, Callable, Tuple, Union
 import equinox as eqx
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 from . import tree_utils
 from .base_class import Base
@@ -307,10 +308,22 @@ class Regularizer(Base, abc.ABC):
             return 1.0
         if _is_scalar_or_0d(strength):
             return strength
-        return convert_tree_leaves_to_jax_array(
-            strength,
-            f"Could not convert regularizer strength to floats: {strength}",
-        )
+
+        def _convert_if_arraylike(x):
+            if isinstance(x, (np.ndarray, list, tuple)):
+                return jnp.asarray(x)
+            return x  # leave scalars and jax arrays alone
+
+        try:
+            return jax.tree_util.tree_map(
+                _convert_if_arraylike,
+                strength,
+                is_leaf=lambda x: isinstance(x, (np.ndarray, jnp.ndarray, list, tuple)),
+            )
+        except (ValueError, TypeError) as e:
+            raise TypeError(
+                f"Could not convert regularizer strength to floats: {strength}"
+            ) from e
 
     def _validate_strength_structure(self, params: Any, strength: Any):
         """
