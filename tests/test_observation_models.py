@@ -396,14 +396,18 @@ class TestGammaObservations:
         if not np.allclose(dev, dev_model):
             raise ValueError("Deviance doesn't match statsmodels!")
 
-    def test_loglikelihood_against_statsmodels(self, gammaGLM_model_instantiation):
+    @pytest.mark.parametrize("scale", [1.0, 2.0, 4.0])
+    @pytest.mark.requires_x64
+    def test_loglikelihood_against_statsmodels(
+        self, gammaGLM_model_instantiation, scale
+    ):
         """
         Compare log-likelihood to scipy.
         Assesses if the model estimates are close to statsmodels' results.
         """
         _, y, model, _, firing_rate = gammaGLM_model_instantiation
-        ll_model = model.observation_model.log_likelihood(y, firing_rate)
-        ll_sms = sm.families.Gamma().loglike(y, firing_rate) / y.shape[0]
+        ll_model = model.observation_model.log_likelihood(y, firing_rate, scale=scale)
+        ll_sms = sm.families.Gamma().loglike(y, firing_rate, scale=scale) / y.shape[0]
         if not np.allclose(ll_model, ll_sms):
             raise ValueError("Log-likelihood doesn't match statsmodels!")
 
