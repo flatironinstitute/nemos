@@ -63,6 +63,7 @@ plt.style.use(nmo.styles.plot_style)
 nap.nap_config.suppress_conversion_warnings = True
 ```
 
+(place-cells-data)=
 ## Data Streaming
 
 Here we load the data from OSF. The data is a NWB file.

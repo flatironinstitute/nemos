@@ -16,6 +16,7 @@ kernelspec:
 
 %matplotlib inline
 import warnings
+import jax
 
 # Ignore the first specific warning
 warnings.filterwarnings(
@@ -38,6 +39,18 @@ warnings.filterwarnings(
     ),
     category=RuntimeWarning,
 )
+
+# Ignore convergence (irrelevant for this note)
+# For real neural data analyis, increase solver maxiter if warning is raised.
+warnings.filterwarnings(
+    "ignore",
+    message=(
+        "The fit did not converge"
+    ),
+    category=RuntimeWarning,
+)
+
+jax.config.update("jax_enable_x64", True)
 ```
 
 (sklearn-how-to)=
@@ -183,7 +196,7 @@ pipeline = Pipeline(
         ),
         (
             "glm",
-            nmo.glm.GLM(regularizer_strength=0.5, regularizer="Ridge"),
+            nmo.glm.GLM(regularizer_strength=0.5, regularizer="Ridge", solver_kwargs={"maxiter": 50}),
         ),
     ]
 )

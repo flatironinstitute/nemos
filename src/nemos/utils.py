@@ -550,7 +550,42 @@ def one_over_x(x: NDArray):
     return jnp.power(x, -1)
 
 
-def _flatten_dict(nested_dict: dict, parent_key: str = "") -> dict:
+def _encode_dict_key(k):
+    """
+    Encode a dict key with type prefix to distinguish from list/tuple indices.
+
+    List/tuple indices remain plain digits (e.g., "0", "1"), while dict keys
+    get a type prefix to preserve their original type during serialization.
+    """
+    if isinstance(k, str):
+        return f"strkey:{k}"
+    elif isinstance(k, int):
+        return f"intkey:{k}"
+    elif isinstance(k, float):
+        return f"floatkey:{k}"
+    else:
+        # fallback for other hashable types (tuples, etc.)
+        return f"reprkey:{repr(k)}"
+
+
+def _decode_dict_key(k):
+    """Decode a dict key that was encoded with _encode_dict_key."""
+    if k.startswith("strkey:"):
+        return k[7:]
+    elif k.startswith("intkey:"):
+        return int(k[7:])
+    elif k.startswith("floatkey:"):
+        return float(k[9:])
+    elif k.startswith("reprkey:"):
+        import ast
+
+        return ast.literal_eval(k[8:])
+    return k  # fallback for old format (plain string keys)
+
+
+def _flatten_dict(
+    nested_dict: dict, parent_key: str = "", _is_sequence: bool = False
+) -> dict:
     """
     Flatten a nested dictionary into a single-level dictionary with keys representing the hierarchy.
 
@@ -568,10 +603,16 @@ def _flatten_dict(nested_dict: dict, parent_key: str = "") -> dict:
         A flattened dictionary where the hierarchy is represented by concatenated keys (using __ as a separator).
     """
 
-    sep = "__"
+    sep = "::"
     items = []
     # Iterate over key-value pairs in the dictionary
     for k, v in nested_dict.items():
+        # Encode dict keys with type prefix, but leave list/tuple indices as plain digits
+        if _is_sequence:
+            key_repr = str(k)  # list/tuple index, keep as plain digit
+        else:
+            key_repr = _encode_dict_key(k)  # dict key, encode with type
+
         # containers (tuple, dict, list for our purposes are labeled)
         if isinstance(v, dict):
             container_label = "dict"
@@ -583,18 +624,22 @@ def _flatten_dict(nested_dict: dict, parent_key: str = "") -> dict:
             container_label = "item"
 
         new_key = (
-            f"{parent_key}{sep}{container_label}{sep}{k}"
+            f"{parent_key}{sep}{container_label}{sep}{key_repr}"
             if parent_key
-            else f"{container_label}{sep}{k}"
+            else f"{container_label}{sep}{key_repr}"
         )
 
         # Recursively flatten if the value is a dictionary
         if isinstance(v, dict):
-            items.extend(_flatten_dict(v, new_key).items())
+            items.extend(_flatten_dict(v, new_key, _is_sequence=False).items())
         # if tuple or list, convert to dict using item index and recursively flatten
         elif isinstance(v, (list, tuple)):
             items.extend(
-                _flatten_dict({f"{i}": vi for i, vi in enumerate(v)}, new_key).items()
+                _flatten_dict(
+                    {i: vi for i, vi in enumerate(v)},
+                    new_key,
+                    _is_sequence=True,
+                ).items()
             )
         else:
             # None values and non-standard types are converted to numpy
@@ -622,7 +667,7 @@ def _unflatten_dict(flat_dict: dict) -> dict:
     dict :
         The reconstructed nested dictionary with original structure and types.
     """
-    sep = "__"
+    sep = "::"
     root = {}
 
     for key, value in flat_dict.items():
@@ -636,8 +681,7 @@ def _unflatten_dict(flat_dict: dict) -> dict:
             elif issubclass(value.dtype.type, np.floating):
                 value = None if np.isnan(value) else float(value)
 
-        # split correctly `varname_` type of params
-        parts = [part[::-1] for part in key[::-1].split(sep)[::-1]]
+        parts = key.split(sep)
 
         current = root
 
@@ -674,15 +718,26 @@ def reconstruct_object_from_structured_dict(obj):
 
     container_type = obj.pop("__container_type__", None)
 
-    # Check if numeric keys (list/tuple)
+    # Check if this is a list/tuple (plain numeric indices, no type prefixes)
     keys = [k for k in obj.keys() if k != "__container_type__"]
-    if keys and all(k.isdigit() for k in keys):
+
+    # List/tuple indices are plain digits; dict keys have type prefixes (strkey:, intkey:, etc.)
+    # Also handle legacy format where string keys had no prefix
+    has_typed_keys = any(
+        k.startswith(("strkey:", "intkey:", "floatkey:", "reprkey:")) for k in keys
+    )
+    is_sequence = keys and all(k.isdigit() for k in keys) and not has_typed_keys
+
+    if is_sequence:
         sorted_items = sorted(obj.items(), key=lambda x: int(x[0]))
         items = [reconstruct_object_from_structured_dict(v) for k, v in sorted_items]
         return tuple(items) if container_type == "tuple" else items
 
-    # Regular dict
-    return {k: reconstruct_object_from_structured_dict(v) for k, v in obj.items()}
+    # Regular dict - decode keys
+    return {
+        _decode_dict_key(k): reconstruct_object_from_structured_dict(v)
+        for k, v in obj.items()
+    }
 
 
 def _get_name(x: object) -> str:

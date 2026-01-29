@@ -116,6 +116,7 @@ VALID_PAIRS = [
             r=2,
         )
     ),
+    {"classes", "n_classes"},
 ]
 
 

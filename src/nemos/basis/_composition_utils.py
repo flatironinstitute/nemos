@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 
 __PUBLIC_BASES__ = [
     "IdentityEval",
+    "Zero",
     "HistoryConv",
     "MSplineEval",
     "MSplineConv",

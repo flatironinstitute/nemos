@@ -13,6 +13,7 @@ from sklearn.linear_model import GammaRegressor, PoissonRegressor
 from statsmodels.tools.sm_exceptions import DomainWarning
 
 import nemos as nmo
+from nemos.glm.params import GLMParams
 
 # Register every test here as solver-related
 pytestmark = pytest.mark.solver_related
@@ -245,70 +246,51 @@ class TestUnRegularized:
     cls = nmo.regularizer.UnRegularized
 
     @pytest.mark.parametrize(
-        "solver_name",
+        "solver_name, expectation",
         [
-            "GradientDescent",
-            "BFGS",
-            "ProximalGradient",
-            "AGradientDescent",
-            1,
-            "SVRG",
-            "ProxSVRG",
+            ("GradientDescent", does_not_raise()),
+            ("BFGS", does_not_raise()),
+            ("ProximalGradient", does_not_raise()),
+            (
+                "AGradientDescent",
+                pytest.raises(
+                    ValueError,
+                    match="The solver: AGradientDescent is not allowed for",
+                ),
+            ),
+            (1, pytest.raises(TypeError, match="solver_name must be a string")),
+            ("SVRG", does_not_raise()),
+            ("ProxSVRG", does_not_raise()),
         ],
     )
-    def test_init_solver_name(self, solver_name):
+    def test_init_solver_name(self, solver_name, expectation):
         """Test UnRegularized acceptable solvers."""
-        acceptable_solvers = [
-            "GradientDescent",
-            "BFGS",
-            "LBFGSB",
-            "NonlinearCG",
-            "ProximalGradient",
-            "SVRG",
-            "ProxSVRG",
-        ]
-
-        raise_exception = solver_name not in acceptable_solvers
-        if raise_exception:
-            with pytest.raises(
-                ValueError, match=f"The solver: {solver_name} is not allowed for "
-            ):
-                nmo.glm.GLM(regularizer=self.cls(), solver_name=solver_name)
-        else:
+        with expectation:
             nmo.glm.GLM(regularizer=self.cls(), solver_name=solver_name)
 
     @pytest.mark.parametrize(
-        "solver_name",
+        "solver_name, expectation",
         [
-            "GradientDescent",
-            "BFGS",
-            "ProximalGradient",
-            "AGradientDescent",
-            1,
-            "SVRG",
-            "ProxSVRG",
+            ("GradientDescent", does_not_raise()),
+            ("BFGS", does_not_raise()),
+            ("ProximalGradient", does_not_raise()),
+            (
+                "AGradientDescent",
+                pytest.raises(
+                    ValueError,
+                    match="The solver: AGradientDescent is not allowed for",
+                ),
+            ),
+            (1, pytest.raises(TypeError, match="solver_name must be a string")),
+            ("SVRG", does_not_raise()),
+            ("ProxSVRG", does_not_raise()),
         ],
     )
-    def test_set_solver_name_allowed(self, solver_name):
+    def test_set_solver_name_allowed(self, solver_name, expectation):
         """Test UnRegularized acceptable solvers."""
-        acceptable_solvers = [
-            "GradientDescent",
-            "BFGS",
-            "LBFGS",
-            "NonlinearCG",
-            "ProximalGradient",
-            "SVRG",
-            "ProxSVRG",
-        ]
         regularizer = self.cls()
         model = nmo.glm.GLM(regularizer=regularizer)
-        raise_exception = solver_name not in acceptable_solvers
-        if raise_exception:
-            with pytest.raises(
-                ValueError, match=f"The solver: {solver_name} is not allowed for "
-            ):
-                model.set_params(solver_name=solver_name)
-        else:
+        with expectation:
             model.set_params(solver_name=solver_name)
 
     def test_regularizer_strength_none(self):
@@ -337,7 +319,7 @@ class TestUnRegularized:
     )
     @pytest.mark.parametrize("solver_kwargs", [{"tol": 10**-10}, {"tols": 10**-10}])
     def test_init_solver_kwargs(self, solver_name, solver_kwargs):
-        """Test RidgeSolver acceptable kwargs."""
+        """Test Ridge acceptable kwargs."""
         regularizer = self.cls()
         raise_exception = "tols" in list(solver_kwargs.keys())
         if raise_exception:
@@ -362,12 +344,12 @@ class TestUnRegularized:
         raise_exception = not callable(loss)
         regularizer = self.cls()
         model = nmo.glm.GLM(regularizer=regularizer)
-        model.compute_loss = loss
+        model._compute_loss = loss
         if raise_exception:
             with pytest.raises(TypeError, match="The `loss` must be a Callable"):
-                nmo.utils.assert_is_callable(model.compute_loss, "loss")
+                nmo.utils.assert_is_callable(model._compute_loss, "loss")
         else:
-            nmo.utils.assert_is_callable(model.compute_loss, "loss")
+            nmo.utils.assert_is_callable(model._compute_loss, "loss")
 
     @pytest.mark.parametrize(
         "solver_name",
@@ -381,8 +363,9 @@ class TestUnRegularized:
         # set regularizer and solver name
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
-        model.instantiate_solver(model.compute_loss)
-        model.solver_run((true_params[0] * 0.0, true_params[1]), X, y)
+        params = GLMParams(true_params.coef * 0.0, true_params.intercept)
+        model._instantiate_solver(model._compute_loss, params)
+        model.solver_run(params, X, y)
 
     @pytest.mark.parametrize(
         "solver_name",
@@ -396,9 +379,13 @@ class TestUnRegularized:
         # set regularizer and solver name
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
-        model.instantiate_solver(model.compute_loss)
+        params = GLMParams(
+            jax.tree_util.tree_map(jnp.zeros_like, true_params.coef),
+            true_params.intercept,
+        )
+        model._instantiate_solver(model._compute_loss, params)
         model.solver_run(
-            (jax.tree_util.tree_map(jnp.zeros_like, true_params[0]), true_params[1]),
+            params,
             X.data,
             y,
         )
@@ -408,27 +395,23 @@ class TestUnRegularized:
     def test_solver_output_match(self, poissonGLM_model_instantiation, solver_name):
         """Test that different solvers converge to the same solution."""
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        # set precision to float64 for accurate matching of the results
-        model.data_type = jnp.float64
         # set model params
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-12}
-        model.instantiate_solver(model.compute_loss)
+
+        init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
+        model._instantiate_solver(model._compute_loss, init_params)
 
         # update solver name
         model_bfgs = copy.deepcopy(model)
         model_bfgs.solver_name = "BFGS"
-        model_bfgs.instantiate_solver(model_bfgs.compute_loss)
-        weights_gd, intercepts_gd = model.solver_run(
-            (true_params[0] * 0.0, true_params[1]), X, y
-        )[0]
-        weights_bfgs, intercepts_bfgs = model_bfgs.solver_run(
-            (true_params[0] * 0.0, true_params[1]), X, y
-        )[0]
+        model_bfgs._instantiate_solver(model_bfgs._compute_loss, init_params)
+        params_gd = model.solver_run(init_params, X, y)[0]
+        params_bfgs = model_bfgs.solver_run(init_params, X, y)[0]
 
-        match_weights = np.allclose(weights_gd, weights_bfgs)
-        match_intercepts = np.allclose(intercepts_gd, intercepts_bfgs)
+        match_weights = np.allclose(params_gd.coef, params_bfgs.coef)
+        match_intercepts = np.allclose(params_gd.intercept, params_bfgs.intercept)
 
         if (not match_weights) or (not match_intercepts):
             raise ValueError(
@@ -440,20 +423,17 @@ class TestUnRegularized:
     def test_solver_match_sklearn(self, poissonGLM_model_instantiation, solver_name):
         """Test that different solvers converge to the same solution."""
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        # set precision to float64 for accurate matching of the results
-        model.data_type = jnp.float64
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-12}
-        model.instantiate_solver(model.compute_loss)
-        weights_bfgs, intercepts_bfgs = model.solver_run(
-            (true_params[0] * 0.0, true_params[1]), X, y
-        )[0]
+        init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
+        model._instantiate_solver(model._compute_loss, init_params)
+        params = model.solver_run(init_params, X, y)[0]
         model_skl = PoissonRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
         model_skl.fit(X, y)
 
-        match_weights = np.allclose(model_skl.coef_, weights_bfgs)
-        match_intercepts = np.allclose(model_skl.intercept_, intercepts_bfgs)
+        match_weights = np.allclose(model_skl.coef_, params.coef)
+        match_intercepts = np.allclose(model_skl.intercept_, params.intercept)
         if (not match_weights) or (not match_intercepts):
             raise ValueError("UnRegularized GLM estimate does not match sklearn!")
 
@@ -464,21 +444,18 @@ class TestUnRegularized:
     ):
         """Test that different solvers converge to the same solution."""
         X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
-        # set precision to float64 for accurate matching of the results
-        model.data_type = jnp.float64
         model.inverse_link_function = jnp.exp
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-12}
-        model.instantiate_solver(model.compute_loss)
-        weights_bfgs, intercepts_bfgs = model.solver_run(
-            (true_params[0] * 0.0, true_params[1]), X, y
-        )[0]
+        init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
+        model._instantiate_solver(model._compute_loss, init_params)
+        params = model.solver_run(init_params, X, y)[0]
         model_skl = GammaRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
         model_skl.fit(X, y)
 
-        match_weights = np.allclose(model_skl.coef_, weights_bfgs)
-        match_intercepts = np.allclose(model_skl.intercept_, intercepts_bfgs)
+        match_weights = np.allclose(model_skl.coef_, params.coef)
+        match_intercepts = np.allclose(model_skl.intercept_, params.intercept)
         if (not match_weights) or (not match_intercepts):
             raise ValueError("Unregularized GLM estimate does not match sklearn!")
 
@@ -489,7 +466,6 @@ class TestUnRegularized:
             (lambda x: 1 / x, sm.families.links.InversePower()),
         ],
     )
-    # @pytest.mark.parametrize("solver_name", ["LBFGS", "GradientDescent", "SVRG"])
     @pytest.mark.parametrize("solver_name", ["LBFGS", "SVRG"])
     @pytest.mark.requires_x64
     def test_solver_match_statsmodels_gamma(
@@ -497,16 +473,13 @@ class TestUnRegularized:
     ):
         """Test that different solvers converge to the same solution."""
         X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
-        # set precision to float64 for accurate matching of the results
-        model.data_type = jnp.float64
         model.inverse_link_function = inv_link_jax
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-13}
-        model.instantiate_solver(model.compute_loss)
-        weights_bfgs, intercepts_bfgs = model.solver_run(
-            model._initialize_parameters(X, y), X, y
-        )[0]
+        init_params = model._model_specific_initialization(X, y)
+        model._instantiate_solver(model._compute_loss, init_params)
+        params = model.solver_run(init_params, X, y)[0]
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore", message="The InversePower link function does "
@@ -517,8 +490,8 @@ class TestUnRegularized:
 
         res_sm = model_sm.fit(cnvrg_tol=10**-12)
 
-        match_weights = np.allclose(res_sm.params[1:], weights_bfgs)
-        match_intercepts = np.allclose(res_sm.params[:1], intercepts_bfgs)
+        match_weights = np.allclose(res_sm.params[1:], params.coef)
+        match_intercepts = np.allclose(res_sm.params[:1], params.intercept)
         if (not match_weights) or (not match_intercepts):
             raise ValueError("Unregularized GLM estimate does not match statsmodels!")
 
@@ -528,7 +501,7 @@ class TestUnRegularized:
             (jnp.exp, sm.families.links.Log()),
         ],
     )
-    @pytest.mark.parametrize("solver_name", ["LBFGS", "SVRG"])
+    @pytest.mark.parametrize("solver_name", ["LBFGS", "SVRG", "ProximalGradient"])
     @pytest.mark.requires_x64
     def test_solver_match_statsmodels_negative_binomial(
         self,
@@ -548,10 +521,9 @@ class TestUnRegularized:
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-13}
-        model.instantiate_solver(model.compute_loss)
-        weights_bfgs, intercepts_bfgs = model.solver_run(
-            model._initialize_parameters(X, y), X, y
-        )[0]
+        init_params = model._model_specific_initialization(X, y)
+        model._instantiate_solver(model._compute_loss, init_params)
+        params = model.solver_run(init_params, X, y)[0]
         model_sm = sm.GLM(
             endog=y,
             exog=sm.add_constant(X),
@@ -562,13 +534,13 @@ class TestUnRegularized:
 
         res_sm = model_sm.fit(cnvrg_tol=10**-12)
 
-        match_weights = np.allclose(res_sm.params[1:], weights_bfgs, atol=10**-6)
-        match_intercepts = np.allclose(res_sm.params[:1], intercepts_bfgs, atol=10**-6)
+        match_weights = np.allclose(res_sm.params[1:], params.coef, atol=10**-6)
+        match_intercepts = np.allclose(res_sm.params[:1], params.intercept, atol=10**-6)
         if (not match_weights) or (not match_intercepts):
             raise ValueError(
                 "Unregularized GLM estimate does not match statsmodels!\n"
-                f"Intercept difference is: {res_sm.params[:1] - intercepts_bfgs}\n"
-                f"Coefficient difference is: {res_sm.params[1:] - weights_bfgs}"
+                f"Intercept difference is: {res_sm.params[:1] - params.intercept}\n"
+                f"Coefficient difference is: {res_sm.params[1:] - params.coef}"
             )
 
     @pytest.mark.parametrize(
@@ -594,78 +566,51 @@ class TestRidge:
     cls = nmo.regularizer.Ridge
 
     @pytest.mark.parametrize(
-        "solver_name",
+        "solver_name, expectation",
         [
-            "GradientDescent",
-            "BFGS",
-            "ProximalGradient",
-            "AGradientDescent",
-            1,
-            "SVRG",
-            "ProxSVRG",
+            ("GradientDescent", does_not_raise()),
+            ("BFGS", does_not_raise()),
+            ("ProximalGradient", does_not_raise()),
+            (
+                "AGradientDescent",
+                pytest.raises(
+                    ValueError,
+                    match="The solver: AGradientDescent is not allowed for",
+                ),
+            ),
+            (1, pytest.raises(TypeError, match="solver_name must be a string")),
+            ("SVRG", does_not_raise()),
+            ("ProxSVRG", does_not_raise()),
         ],
     )
-    def test_init_solver_name(self, solver_name):
-        """Test RidgeSolver acceptable solvers."""
-        acceptable_solvers = [
-            "GradientDescent",
-            "BFGS",
-            "LBFGS",
-            "NonlinearCG",
-            "ProximalGradient",
-            "SVRG",
-            "ProxSVRG",
-        ]
-        raise_exception = solver_name not in acceptable_solvers
-        if raise_exception:
-            with pytest.raises(
-                ValueError, match=f"The solver: {solver_name} is not allowed for "
-            ):
-                nmo.glm.GLM(
-                    regularizer=self.cls(),
-                    solver_name=solver_name,
-                    regularizer_strength=1.0,
-                )
-        else:
-            nmo.glm.GLM(
-                regularizer=self.cls(),
-                solver_name=solver_name,
-                regularizer_strength=1.0,
-            )
+    def test_init_solver_name(self, solver_name, expectation):
+        """Test Ridge acceptable solvers."""
+        with expectation:
+            nmo.glm.GLM(regularizer=self.cls(), solver_name=solver_name)
 
     @pytest.mark.parametrize(
-        "solver_name",
+        "solver_name, expectation",
         [
-            "GradientDescent",
-            "BFGS",
-            "ProximalGradient",
-            "AGradientDescent",
-            1,
-            "SVRG",
-            "ProxSVRG",
+            ("GradientDescent", does_not_raise()),
+            ("BFGS", does_not_raise()),
+            ("ProximalGradient", does_not_raise()),
+            (
+                "AGradientDescent",
+                pytest.raises(
+                    ValueError,
+                    match="The solver: AGradientDescent is not allowed for",
+                ),
+            ),
+            (1, pytest.raises(TypeError, match="solver_name must be a string")),
+            ("SVRG", does_not_raise()),
+            ("ProxSVRG", does_not_raise()),
         ],
     )
-    def test_set_solver_name_allowed(self, solver_name):
-        """Test RidgeSolver acceptable solvers."""
-        acceptable_solvers = [
-            "GradientDescent",
-            "BFGS",
-            "LBFGS",
-            "LBFGSB",
-            "NonlinearCG",
-            "ProximalGradient",
-            "SVRG",
-            "ProxSVRG",
-        ]
+    def test_set_solver_name_allowed(self, solver_name, expectation):
+        """Test Ridge acceptable solvers."""
         regularizer = self.cls()
         model = nmo.glm.GLM(regularizer=regularizer, regularizer_strength=1.0)
-        raise_exception = solver_name not in acceptable_solvers
-        if raise_exception:
-            with pytest.raises(
-                ValueError, match=f"The solver: {solver_name} is not allowed for "
-            ):
-                model.set_params(solver_name=solver_name)
-        else:
+        with expectation:
             model.set_params(solver_name=solver_name)
 
     @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS", "SVRG"])
@@ -720,12 +665,12 @@ class TestRidge:
         raise_exception = not callable(loss)
         regularizer = self.cls()
         model = nmo.glm.GLM(regularizer=regularizer, regularizer_strength=1.0)
-        model.compute_loss = loss
+        model._compute_loss = loss
         if raise_exception:
             with pytest.raises(TypeError, match="The `loss` must be a Callable"):
-                nmo.utils.assert_is_callable(model.compute_loss, "loss")
+                nmo.utils.assert_is_callable(model._compute_loss, "loss")
         else:
-            nmo.utils.assert_is_callable(model.compute_loss, "loss")
+            nmo.utils.assert_is_callable(model._compute_loss, "loss")
 
     @pytest.mark.parametrize(
         "solver_name",
@@ -739,8 +684,9 @@ class TestRidge:
         # set regularizer and solver name
         model.set_params(regularizer=self.cls(), regularizer_strength=1.0)
         model.solver_name = solver_name
-        runner = model.instantiate_solver(model.compute_loss).solver_run
-        runner((true_params[0] * 0.0, true_params[1]), X, y)
+        params = GLMParams(true_params.coef * 0.0, true_params.intercept)
+        runner = model._instantiate_solver(model._compute_loss, params).solver_run
+        runner(params, X, y)
 
     @pytest.mark.parametrize(
         "solver_name",
@@ -754,12 +700,12 @@ class TestRidge:
         # set regularizer and solver name
         model.set_params(regularizer=self.cls(), regularizer_strength=1.0)
         model.solver_name = solver_name
-        runner = model.instantiate_solver(model.compute_loss).solver_run
-        runner(
-            (jax.tree_util.tree_map(jnp.zeros_like, true_params[0]), true_params[1]),
-            X.data,
-            y,
+        params = GLMParams(
+            jax.tree_util.tree_map(jnp.zeros_like, true_params.coef),
+            true_params.intercept,
         )
+        runner = model._instantiate_solver(model._compute_loss, params).solver_run
+        runner(params, X.data, y)
 
     @pytest.mark.parametrize("solver_name", ["GradientDescent", "SVRG"])
     @pytest.mark.requires_x64
@@ -777,18 +723,19 @@ class TestRidge:
         model_bfgs = copy.deepcopy(model)
         model_bfgs.solver_name = "BFGS"
 
-        runner_gd = model.instantiate_solver(model.compute_loss).solver_run
-        runner_bfgs = model_bfgs.instantiate_solver(model_bfgs.compute_loss).solver_run
+        init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
+        runner_gd = model._instantiate_solver(
+            model._compute_loss, init_params
+        ).solver_run
+        runner_bfgs = model_bfgs._instantiate_solver(
+            model_bfgs._compute_loss, init_params
+        ).solver_run
 
-        weights_gd, intercepts_gd = runner_gd(
-            (true_params[0] * 0.0, true_params[1]), X, y
-        )[0]
-        weights_bfgs, intercepts_bfgs = runner_bfgs(
-            (true_params[0] * 0.0, true_params[1]), X, y
-        )[0]
+        params_gd = runner_gd(init_params, X, y)[0]
+        params_bfgs = runner_bfgs(init_params, X, y)[0]
 
-        match_weights = np.allclose(weights_gd, weights_bfgs)
-        match_intercepts = np.allclose(intercepts_gd, intercepts_bfgs)
+        match_weights = np.allclose(params_gd.coef, params_bfgs.coef)
+        match_intercepts = np.allclose(params_gd.intercept, params_bfgs.intercept)
 
         if (not match_weights) or (not match_intercepts):
             raise ValueError(
@@ -799,16 +746,15 @@ class TestRidge:
     def test_solver_match_sklearn(self, poissonGLM_model_instantiation):
         """Test that different solvers converge to the same solution."""
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        # set precision to float64 for accurate matching of the results
-        model.data_type = jnp.float64
         model.set_params(regularizer=self.cls(), regularizer_strength=1.0)
         model.solver_kwargs = {"tol": 10**-12}
         model.solver_name = "BFGS"
 
-        runner_bfgs = model.instantiate_solver(model.compute_loss).solver_run
-        weights_bfgs, intercepts_bfgs = runner_bfgs(
-            (true_params[0] * 0.0, true_params[1]), X, y
-        )[0]
+        init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
+        runner_bfgs = model._instantiate_solver(
+            model._compute_loss, init_params
+        ).solver_run
+        params = runner_bfgs(init_params, X, y)[0]
         model_skl = PoissonRegressor(
             fit_intercept=True,
             tol=10**-12,
@@ -816,26 +762,28 @@ class TestRidge:
         )
         model_skl.fit(X, y)
 
-        match_weights = np.allclose(model_skl.coef_, weights_bfgs)
-        match_intercepts = np.allclose(model_skl.intercept_, intercepts_bfgs)
+        match_weights = np.allclose(model_skl.coef_, params.coef)
+        match_intercepts = np.allclose(model_skl.intercept_, params.intercept)
         if (not match_weights) or (not match_intercepts):
             raise ValueError("Ridge GLM solver estimate does not match sklearn!")
 
+    @pytest.mark.parametrize("solver_name", ["LBFGS", "ProximalGradient"])
     @pytest.mark.requires_x64
-    def test_solver_match_sklearn_gamma(self, gammaGLM_model_instantiation):
+    def test_solver_match_sklearn_gamma(
+        self, solver_name, gammaGLM_model_instantiation
+    ):
         """Test that different solvers converge to the same solution."""
         X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
-        # set precision to float64 for accurate matching of the results
-        model.data_type = jnp.float64
         model.inverse_link_function = jnp.exp
         model.set_params(regularizer=self.cls(), regularizer_strength=1.0)
         model.solver_kwargs = {"tol": 10**-12}
         model.regularizer_strength = 0.1
-        model.solver_name = "BFGS"
-        runner_bfgs = model.instantiate_solver(model.compute_loss).solver_run
-        weights_bfgs, intercepts_bfgs = runner_bfgs(
-            (true_params[0] * 0.0, true_params[1]), X, y
-        )[0]
+        model.solver_name = solver_name
+        init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
+        runner_bfgs = model._instantiate_solver(
+            model._compute_loss, init_params
+        ).solver_run
+        params = runner_bfgs(init_params, X, y)[0]
         model_skl = GammaRegressor(
             fit_intercept=True,
             tol=10**-12,
@@ -843,8 +791,8 @@ class TestRidge:
         )
         model_skl.fit(X, y)
 
-        match_weights = np.allclose(model_skl.coef_, weights_bfgs)
-        match_intercepts = np.allclose(model_skl.intercept_, intercepts_bfgs)
+        match_weights = np.allclose(model_skl.coef_, params.coef)
+        match_intercepts = np.allclose(model_skl.intercept_, params.intercept)
         if (not match_weights) or (not match_intercepts):
             raise ValueError("Ridge GLM estimate does not match sklearn!")
 
@@ -869,65 +817,51 @@ class TestLasso:
     cls = nmo.regularizer.Lasso
 
     @pytest.mark.parametrize(
-        "solver_name",
+        "solver_name, expectation",
         [
-            "GradientDescent",
-            "BFGS",
-            "ProximalGradient",
-            "AGradientDescent",
-            1,
-            "SVRG",
-            "ProxSVRG",
+            ("GradientDescent", pytest.raises(ValueError, match="not allowed for")),
+            ("BFGS", pytest.raises(ValueError, match="not allowed for")),
+            ("ProximalGradient", does_not_raise()),
+            (
+                "AGradientDescent",
+                pytest.raises(
+                    ValueError,
+                    match="The solver: AGradientDescent is not allowed for",
+                ),
+            ),
+            (1, pytest.raises(TypeError, match="solver_name must be a string")),
+            ("SVRG", pytest.raises(ValueError, match="not allowed for")),
+            ("ProxSVRG", does_not_raise()),
         ],
     )
-    def test_init_solver_name(self, solver_name):
+    def test_init_solver_name(self, solver_name, expectation):
         """Test Lasso acceptable solvers."""
-        acceptable_solvers = [
-            "ProximalGradient",
-            "ProxSVRG",
-        ]
-        raise_exception = solver_name not in acceptable_solvers
-        if raise_exception:
-            with pytest.raises(
-                ValueError, match=f"The solver: {solver_name} is not allowed for "
-            ):
-                nmo.glm.GLM(
-                    regularizer=self.cls(),
-                    solver_name=solver_name,
-                    regularizer_strength=1,
-                )
-        else:
-            nmo.glm.GLM(
-                regularizer=self.cls(), solver_name=solver_name, regularizer_strength=1
-            )
+        with expectation:
+            nmo.glm.GLM(regularizer=self.cls(), solver_name=solver_name)
 
     @pytest.mark.parametrize(
-        "solver_name",
+        "solver_name, expectation",
         [
-            "GradientDescent",
-            "BFGS",
-            "ProximalGradient",
-            "AGradientDescent",
-            1,
-            "SVRG",
-            "ProxSVRG",
+            ("GradientDescent", pytest.raises(ValueError, match="not allowed for")),
+            ("BFGS", pytest.raises(ValueError, match="not allowed for")),
+            ("ProximalGradient", does_not_raise()),
+            (
+                "AGradientDescent",
+                pytest.raises(
+                    ValueError,
+                    match="The solver: AGradientDescent is not allowed for",
+                ),
+            ),
+            (1, pytest.raises(TypeError, match="solver_name must be a string")),
+            ("SVRG", pytest.raises(ValueError, match="not allowed for")),
+            ("ProxSVRG", does_not_raise()),
         ],
     )
-    def test_set_solver_name_allowed(self, solver_name):
+    def test_set_solver_name_allowed(self, solver_name, expectation):
         """Test Lasso acceptable solvers."""
-        acceptable_solvers = [
-            "ProximalGradient",
-            "ProxSVRG",
-        ]
         regularizer = self.cls()
         model = nmo.glm.GLM(regularizer=regularizer, regularizer_strength=1)
-        raise_exception = solver_name not in acceptable_solvers
-        if raise_exception:
-            with pytest.raises(
-                ValueError, match=f"The solver: {solver_name} is not allowed for "
-            ):
-                model.set_params(solver_name=solver_name)
-        else:
+        with expectation:
             model.set_params(solver_name=solver_name)
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
@@ -983,12 +917,12 @@ class TestLasso:
         raise_exception = not callable(loss)
         regularizer = self.cls()
         model = nmo.glm.GLM(regularizer=regularizer, regularizer_strength=1)
-        model.compute_loss = loss
+        model._compute_loss = loss
         if raise_exception:
             with pytest.raises(TypeError, match="The `loss` must be a Callable"):
-                nmo.utils.assert_is_callable(model.compute_loss, "loss")
+                nmo.utils.assert_is_callable(model._compute_loss, "loss")
         else:
-            nmo.utils.assert_is_callable(model.compute_loss, "loss")
+            nmo.utils.assert_is_callable(model._compute_loss, "loss")
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
     def test_run_solver(self, solver_name, poissonGLM_model_instantiation):
@@ -998,8 +932,9 @@ class TestLasso:
 
         model.set_params(regularizer=self.cls(), regularizer_strength=1)
         model.solver_name = solver_name
-        runner = model.instantiate_solver(model.compute_loss).solver_run
-        runner((true_params[0] * 0.0, true_params[1]), X, y)
+        params = GLMParams(true_params.coef * 0.0, true_params.intercept)
+        runner = model._instantiate_solver(model._compute_loss, params).solver_run
+        runner(params, X, y)
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
     def test_run_solver_tree(self, solver_name, poissonGLM_model_instantiation_pytree):
@@ -1010,12 +945,12 @@ class TestLasso:
         # set regularizer and solver name
         model.set_params(regularizer=self.cls(), regularizer_strength=1)
         model.solver_name = solver_name
-        runner = model.instantiate_solver(model.compute_loss).solver_run
-        runner(
-            (jax.tree_util.tree_map(jnp.zeros_like, true_params[0]), true_params[1]),
-            X.data,
-            y,
+        params = GLMParams(
+            jax.tree_util.tree_map(jnp.zeros_like, true_params.coef),
+            true_params.intercept,
         )
+        runner = model._instantiate_solver(model._compute_loss, params).solver_run
+        runner(params, X.data, y)
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
     @pytest.mark.requires_x64
@@ -1030,8 +965,9 @@ class TestLasso:
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-12}
 
-        runner = model.instantiate_solver(model.compute_loss).solver_run
-        weights, intercepts = runner((true_params[0] * 0.0, true_params[1]), X, y)[0]
+        init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
+        runner = model._instantiate_solver(model._compute_loss, init_params).solver_run
+        params = runner(init_params, X, y)[0]
 
         # instantiate the glm with statsmodels
         glm_sm = sm.GLM(endog=y, exog=sm.add_constant(X), family=sm.families.Poisson())
@@ -1046,7 +982,7 @@ class TestLasso:
         )
         # compare params
         sm_params = res_sm.params
-        glm_params = jnp.hstack((intercepts, weights.flatten()))
+        glm_params = jnp.hstack((params.intercept, params.coef.flatten()))
         match_weights = np.allclose(sm_params, glm_params)
         if not match_weights:
             raise ValueError("Lasso GLM solver estimate does not match statsmodels!")
@@ -1098,67 +1034,51 @@ class TestElasticNet:
     cls = nmo.regularizer.ElasticNet
 
     @pytest.mark.parametrize(
-        "solver_name",
+        "solver_name, expectation",
         [
-            "GradientDescent",
-            "BFGS",
-            "ProximalGradient",
-            "AGradientDescent",
-            1,
-            "SVRG",
-            "ProxSVRG",
+            ("GradientDescent", pytest.raises(ValueError, match="not allowed for")),
+            ("BFGS", pytest.raises(ValueError, match="not allowed for")),
+            ("ProximalGradient", does_not_raise()),
+            (
+                "AGradientDescent",
+                pytest.raises(
+                    ValueError,
+                    match="The solver: AGradientDescent is not allowed for",
+                ),
+            ),
+            (1, pytest.raises(TypeError, match="solver_name must be a string")),
+            ("SVRG", pytest.raises(ValueError, match="not allowed for")),
+            ("ProxSVRG", does_not_raise()),
         ],
     )
-    def test_init_solver_name(self, solver_name):
+    def test_init_solver_name(self, solver_name, expectation):
         """Test ElasticNet acceptable solvers."""
-        acceptable_solvers = [
-            "ProximalGradient",
-            "ProxSVRG",
-        ]
-        raise_exception = solver_name not in acceptable_solvers
-        if raise_exception:
-            with pytest.raises(
-                ValueError, match=f"The solver: {solver_name} is not allowed for "
-            ):
-                nmo.glm.GLM(
-                    regularizer=self.cls(),
-                    solver_name=solver_name,
-                    regularizer_strength=(1, 0.5),
-                )
-        else:
-            nmo.glm.GLM(
-                regularizer=self.cls(),
-                solver_name=solver_name,
-                regularizer_strength=(1, 0.5),
-            )
+        with expectation:
+            nmo.glm.GLM(regularizer=self.cls(), solver_name=solver_name)
 
     @pytest.mark.parametrize(
-        "solver_name",
+        "solver_name, expectation",
         [
-            "GradientDescent",
-            "BFGS",
-            "ProximalGradient",
-            "AGradientDescent",
-            1,
-            "SVRG",
-            "ProxSVRG",
+            ("GradientDescent", pytest.raises(ValueError, match="not allowed for")),
+            ("BFGS", pytest.raises(ValueError, match="not allowed for")),
+            ("ProximalGradient", does_not_raise()),
+            (
+                "AGradientDescent",
+                pytest.raises(
+                    ValueError,
+                    match="The solver: AGradientDescent is not allowed for",
+                ),
+            ),
+            (1, pytest.raises(TypeError, match="solver_name must be a string")),
+            ("SVRG", pytest.raises(ValueError, match="not allowed for")),
+            ("ProxSVRG", does_not_raise()),
         ],
     )
-    def test_set_solver_name_allowed(self, solver_name):
+    def test_set_solver_name_allowed(self, solver_name, expectation):
         """Test ElasticNet acceptable solvers."""
-        acceptable_solvers = [
-            "ProximalGradient",
-            "ProxSVRG",
-        ]
         regularizer = self.cls()
         model = nmo.glm.GLM(regularizer=regularizer, regularizer_strength=(1, 0.5))
-        raise_exception = solver_name not in acceptable_solvers
-        if raise_exception:
-            with pytest.raises(
-                ValueError, match=f"The solver: {solver_name} is not allowed for "
-            ):
-                model.set_params(solver_name=solver_name)
-        else:
+        with expectation:
             model.set_params(solver_name=solver_name)
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
@@ -1245,7 +1165,7 @@ class TestElasticNet:
                 (1.0, 0.5, 0.1),
                 pytest.raises(
                     ValueError,
-                    match="regularizer_strength must be a tuple of two floats",
+                    match="strength must be a tuple of two floats",
                 ),
             ),
         ],
@@ -1270,12 +1190,12 @@ class TestElasticNet:
         raise_exception = not callable(loss)
         regularizer = self.cls()
         model = nmo.glm.GLM(regularizer=regularizer, regularizer_strength=(1, 0.5))
-        model.compute_loss = loss
+        model._compute_loss = loss
         if raise_exception:
             with pytest.raises(TypeError, match="The `loss` must be a Callable"):
-                nmo.utils.assert_is_callable(model.compute_loss, "loss")
+                nmo.utils.assert_is_callable(model._compute_loss, "loss")
         else:
-            nmo.utils.assert_is_callable(model.compute_loss, "loss")
+            nmo.utils.assert_is_callable(model._compute_loss, "loss")
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
     def test_run_solver(self, solver_name, poissonGLM_model_instantiation):
@@ -1285,8 +1205,9 @@ class TestElasticNet:
 
         model.set_params(regularizer=self.cls(), regularizer_strength=(1, 0.5))
         model.solver_name = solver_name
-        runner = model.instantiate_solver(model.compute_loss).solver_run
-        runner((true_params[0] * 0.0, true_params[1]), X, y)
+        params = GLMParams(true_params.coef * 0.0, true_params.intercept)
+        runner = model._instantiate_solver(model._compute_loss, params).solver_run
+        runner(params, X, y)
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
     def test_run_solver_tree(self, solver_name, poissonGLM_model_instantiation_pytree):
@@ -1297,9 +1218,13 @@ class TestElasticNet:
         # set regularizer and solver name
         model.set_params(regularizer=self.cls(), regularizer_strength=(1, 0.5))
         model.solver_name = solver_name
-        runner = model.instantiate_solver(model.compute_loss).solver_run
+        params = GLMParams(
+            jax.tree_util.tree_map(jnp.zeros_like, true_params.coef),
+            true_params.intercept,
+        )
+        runner = model._instantiate_solver(model._compute_loss, params).solver_run
         runner(
-            (jax.tree_util.tree_map(jnp.zeros_like, true_params[0]), true_params[1]),
+            params,
             X.data,
             y,
         )
@@ -1308,6 +1233,7 @@ class TestElasticNet:
     @pytest.mark.parametrize("reg_strength", [1.0, 0.5, 0.1])
     @pytest.mark.parametrize("reg_ratio", [1.0, 0.5, 0.2])
     @pytest.mark.requires_x64
+    @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
     def test_solver_match_statsmodels(
         self, solver_name, reg_strength, reg_ratio, poissonGLM_model_instantiation
     ):
@@ -1322,8 +1248,9 @@ class TestElasticNet:
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-12, "maxiter": 10000}
 
-        runner = model.instantiate_solver(model.compute_loss).solver_run
-        weights, intercepts = runner((true_params[0] * 0.0, true_params[1]), X, y)[0]
+        init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
+        runner = model._instantiate_solver(model._compute_loss, init_params).solver_run
+        params = runner(init_params, X, y)[0]
 
         model.fit(X, y)
         # instantiate the glm with statsmodels
@@ -1344,10 +1271,11 @@ class TestElasticNet:
         )
         # compare params
         sm_params = res_sm.params
-        glm_params = jnp.hstack((intercepts, weights.flatten()))
+        glm_params = jnp.hstack((params.intercept, params.coef.flatten()))
         assert np.allclose(sm_params, glm_params)
 
     @pytest.mark.requires_x64
+    @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
     def test_loss_convergence(self):
         """Test that penalized loss converges to the same value as statsmodels and the proximal operator."""
         # generate toy data
@@ -1369,9 +1297,9 @@ class TestElasticNet:
 
         # use the penalized loss function to solve optimization via Nelder-Mead
         penalized_loss = lambda p, x, y: model_PG.regularizer.penalized_loss(
-            model_PG.compute_loss, model_PG.regularizer_strength
+            model_PG._compute_loss, model_PG.regularizer_strength, init_params=None
         )(
-            (
+            GLMParams(
                 p[1:],
                 p[0].reshape(
                     1,
@@ -1456,79 +1384,61 @@ class TestGroupLasso:
     cls = nmo.regularizer.GroupLasso
 
     @pytest.mark.parametrize(
-        "solver_name",
+        "solver_name, expectation",
         [
-            "GradientDescent",
-            "BFGS",
-            "ProximalGradient",
-            "AGradientDescent",
-            1,
-            "SVRG",
-            "ProxSVRG",
+            ("GradientDescent", pytest.raises(ValueError, match="not allowed for")),
+            ("BFGS", pytest.raises(ValueError, match="not allowed for")),
+            ("ProximalGradient", does_not_raise()),
+            (
+                "AGradientDescent",
+                pytest.raises(
+                    ValueError,
+                    match="The solver: AGradientDescent is not allowed for",
+                ),
+            ),
+            (1, pytest.raises(TypeError, match="solver_name must be a string")),
+            ("SVRG", pytest.raises(ValueError, match="not allowed for")),
+            ("ProxSVRG", does_not_raise()),
         ],
     )
-    def test_init_solver_name(self, solver_name):
+    def test_init_solver_name(self, solver_name, expectation):
         """Test GroupLasso acceptable solvers."""
-        acceptable_solvers = [
-            "ProximalGradient",
-            "ProxSVRG",
-        ]
-        raise_exception = solver_name not in acceptable_solvers
-
         # create a valid mask
         mask = np.zeros((2, 10))
         mask[0, :5] = 1
         mask[1, 5:] = 1
         mask = jnp.asarray(mask)
-
-        if raise_exception:
-            with pytest.raises(
-                ValueError, match=f"The solver: {solver_name} is not allowed for "
-            ):
-                nmo.glm.GLM(
-                    regularizer=self.cls(mask=mask),
-                    solver_name=solver_name,
-                    regularizer_strength=1,
-                )
-        else:
-            nmo.glm.GLM(
-                regularizer=self.cls(mask=mask),
-                solver_name=solver_name,
-                regularizer_strength=1,
-            )
+        with expectation:
+            nmo.glm.GLM(regularizer=self.cls(mask=mask), solver_name=solver_name)
 
     @pytest.mark.parametrize(
-        "solver_name",
+        "solver_name, expectation",
         [
-            "GradientDescent",
-            "BFGS",
-            "ProximalGradient",
-            "AGradientDescent",
-            1,
-            "SVRG",
-            "ProxSVRG",
+            ("GradientDescent", pytest.raises(ValueError, match="not allowed for")),
+            ("BFGS", pytest.raises(ValueError, match="not allowed for")),
+            ("ProximalGradient", does_not_raise()),
+            (
+                "AGradientDescent",
+                pytest.raises(
+                    ValueError,
+                    match="The solver: AGradientDescent is not allowed for",
+                ),
+            ),
+            (1, pytest.raises(TypeError, match="solver_name must be a string")),
+            ("SVRG", pytest.raises(ValueError, match="not allowed for")),
+            ("ProxSVRG", does_not_raise()),
         ],
     )
-    def test_set_solver_name_allowed(self, solver_name):
+    def test_set_solver_name_allowed(self, solver_name, expectation):
         """Test GroupLassoSolver acceptable solvers."""
-        acceptable_solvers = [
-            "ProximalGradient",
-            "ProxSVRG",
-        ]
         # create a valid mask
         mask = np.zeros((2, 10))
         mask[0, :5] = 1
         mask[1, 5:] = 1
         mask = jnp.asarray(mask)
         regularizer = self.cls(mask=mask)
-        raise_exception = solver_name not in acceptable_solvers
         model = nmo.glm.GLM(regularizer=regularizer, regularizer_strength=1)
-        if raise_exception:
-            with pytest.raises(
-                ValueError, match=f"The solver: {solver_name} is not allowed for "
-            ):
-                model.set_params(solver_name=solver_name)
-        else:
+        with expectation:
             model.set_params(solver_name=solver_name)
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
@@ -1599,13 +1509,13 @@ class TestGroupLasso:
 
         regularizer = self.cls(mask=mask)
         model = nmo.glm.GLM(regularizer=regularizer, regularizer_strength=1.0)
-        model.compute_loss = loss
+        model._compute_loss = loss
 
         if raise_exception:
             with pytest.raises(TypeError, match="The `loss` must be a Callable"):
-                nmo.utils.assert_is_callable(model.compute_loss, "loss")
+                nmo.utils.assert_is_callable(model._compute_loss, "loss")
         else:
-            nmo.utils.assert_is_callable(model.compute_loss, "loss")
+            nmo.utils.assert_is_callable(model._compute_loss, "loss")
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
     def test_run_solver(self, solver_name, poissonGLM_model_instantiation):
@@ -1613,17 +1523,18 @@ class TestGroupLasso:
 
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
 
-        # create a valid mask
+        # create a valid mask with new PyTree structure
         mask = np.zeros((2, X.shape[1]))
         mask[0, :2] = 1
         mask[1, 2:] = 1
-        mask = jnp.asarray(mask)
+        mask = GLMParams(jnp.asarray(mask), None)
 
         model.set_params(regularizer=self.cls(mask=mask), regularizer_strength=1.0)
         model.solver_name = solver_name
 
-        model.instantiate_solver(model.compute_loss)
-        model.solver_run((true_params[0] * 0.0, true_params[1]), X, y)
+        init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
+        model._instantiate_solver(model._compute_loss, init_params)
+        model.solver_run(init_params, X, y)
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
     def test_init_solver(self, solver_name, poissonGLM_model_instantiation):
@@ -1631,16 +1542,16 @@ class TestGroupLasso:
 
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
 
-        # create a valid mask
+        # create a valid mask with new PyTree structure
         mask = np.zeros((2, X.shape[1]))
         mask[0, :2] = 1
         mask[1, 2:] = 1
-        mask = jnp.asarray(mask)
+        mask = GLMParams(jnp.asarray(mask), None)
 
         model.set_params(regularizer=self.cls(mask=mask), regularizer_strength=1.0)
         model.solver_name = solver_name
 
-        model.instantiate_solver(model.compute_loss)
+        model._instantiate_solver(model._compute_loss, true_params)
         state = model.solver_init_state(true_params, X, y)
         # asses that state is a NamedTuple by checking tuple type and the availability of some NamedTuple
         # specific namespace attributes
@@ -1652,18 +1563,19 @@ class TestGroupLasso:
 
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
 
-        # create a valid mask
+        # create a valid mask with new PyTree structure
         mask = np.zeros((2, X.shape[1]))
         mask[0, :2] = 1
         mask[1, 2:] = 1
-        mask = jnp.asarray(mask)
+        mask = GLMParams(jnp.asarray(mask), None)
 
         model.set_params(regularizer=self.cls(mask=mask), regularizer_strength=1.0)
         model.solver_name = solver_name
 
-        model.instantiate_solver(model.compute_loss)
+        init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
+        model._instantiate_solver(model._compute_loss, init_params)
 
-        state = model.solver_init_state((true_params[0] * 0.0, true_params[1]), X, y)
+        state = model.solver_init_state(init_params, X, y)
 
         # ProxSVRG needs the full gradient at the anchor point to be initialized
         # so here just set it to xs, which is not correct, but fine shape-wise
@@ -1746,29 +1658,34 @@ class TestGroupLasso:
 
     @pytest.mark.parametrize("n_dim", [0, 1, 2, 3])
     def test_mask_dimension_1(self, n_dim, poissonGLM_model_instantiation):
-        """Test that mask is composed of 0s and 1s."""
+        """Test that mask works with PyTree structure."""
 
-        raise_exception = n_dim != 2
+        # With PyTree masks, we need proper structure
+        raise_exception = n_dim in [0, 1]
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
 
-        # create a valid mask
+        # create masks with different dimensions
         if n_dim == 0:
             mask = np.array([])
+            mask = jnp.asarray(mask, dtype=jnp.float32)
         elif n_dim == 1:
             mask = np.ones((1,))
+            mask = jnp.asarray(mask, dtype=jnp.float32)
         elif n_dim == 2:
+            # Valid PyTree mask structure
             mask = np.zeros((2, X.shape[1]))
             mask[0, :2] = 1
             mask[1, 2:] = 1
+            mask = GLMParams(jnp.asarray(mask, dtype=jnp.float32), None)
         else:
+            # 3D mask needs to be wrapped in PyTree
             mask = np.zeros((2, X.shape[1]) + (1,) * (n_dim - 2))
             mask[0, :2] = 1
             mask[1, 2:] = 1
-
-        mask = jnp.asarray(mask, dtype=jnp.float32)
+            mask = jnp.asarray(mask, dtype=jnp.float32)
 
         if raise_exception:
-            with pytest.raises(ValueError, match="`mask` must be 2-dimensional"):
+            with pytest.raises(ValueError):
                 model.set_params(
                     regularizer=self.cls(mask=mask), regularizer_strength=1.0
                 )
@@ -1781,17 +1698,17 @@ class TestGroupLasso:
         raise_exception = n_groups < 1
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
 
-        # create a mask
-        mask = np.zeros((n_groups, X.shape[1]))
+        # create a mask with PyTree structure
+        mask_array = np.zeros((n_groups, X.shape[1]))
         if n_groups > 0:
             for i in range(n_groups - 1):
-                mask[i, i : i + 1] = 1
-            mask[-1, n_groups - 1 :] = 1
+                mask_array[i, i : i + 1] = 1
+            mask_array[-1, n_groups - 1 :] = 1
 
-        mask = jnp.asarray(mask, dtype=jnp.float32)
+        mask = GLMParams(jnp.asarray(mask_array, dtype=jnp.float32), None)
 
         if raise_exception:
-            with pytest.raises(ValueError, match=r"Empty mask provided! Mask has "):
+            with pytest.raises(ValueError, match=r"Empty mask provided!"):
                 model.set_params(
                     regularizer=self.cls(mask=mask), regularizer_strength=1.0
                 )
@@ -1810,19 +1727,20 @@ class TestGroupLasso:
             firing_rate,
             _,
         ) = poissonGLM_model_instantiation_group_sparse
-        zeros_true = true_params[0].flatten() == 0
-        mask = np.zeros((2, X.shape[1]))
-        mask[0, zeros_true] = 1
-        mask[1, ~zeros_true] = 1
-        mask = jnp.asarray(mask, dtype=jnp.float32)
+        zeros_true = true_params.coef.flatten() == 0
+        mask_array = np.zeros((2, X.shape[1]))
+        mask_array[0, zeros_true] = 1
+        mask_array[1, ~zeros_true] = 1
+        mask = GLMParams(jnp.asarray(mask_array, dtype=jnp.float32), None)
 
         model.set_params(regularizer=self.cls(mask=mask), regularizer_strength=1.0)
         model.solver_name = "ProximalGradient"
 
-        runner = model.instantiate_solver(model.compute_loss).solver_run
-        params, _, _ = runner((true_params[0] * 0.0, true_params[1]), X, y)
+        init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
+        runner = model._instantiate_solver(model._compute_loss, init_params).solver_run
+        params, _, _ = runner(init_params, X, y)
 
-        zeros_est = params[0] == 0
+        zeros_est = params.coef == 0
         if not np.all(zeros_est == zeros_true):
             raise ValueError("GroupLasso failed to zero-out the parameter group!")
 
@@ -1892,34 +1810,37 @@ class TestGroupLasso:
 
     @pytest.mark.parametrize("n_dim", [0, 1, 2, 3])
     def test_mask_dimension(self, n_dim, poissonGLM_model_instantiation):
-        """Test that mask is composed of 0s and 1s."""
+        """Test that mask works with PyTree structure."""
 
-        raise_exception = n_dim != 2
+        raise_exception = n_dim in [0, 1]
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
 
-        valid_mask = np.zeros((2, X.shape[1]))
-        valid_mask[0, :1] = 1
-        valid_mask[1, 1:] = 1
+        valid_mask_array = np.zeros((2, X.shape[1]))
+        valid_mask_array[0, :1] = 1
+        valid_mask_array[1, 1:] = 1
+        valid_mask = GLMParams(jnp.asarray(valid_mask_array, dtype=jnp.float32), None)
         regularizer = self.cls(mask=valid_mask)
 
-        # create a mask
+        # create masks with different dimensions
         if n_dim == 0:
             mask = np.array([])
+            mask = jnp.asarray(mask, dtype=jnp.float32)
         elif n_dim == 1:
             mask = np.ones((1,))
+            mask = jnp.asarray(mask, dtype=jnp.float32)
         elif n_dim == 2:
-            mask = np.zeros((2, X.shape[1]))
-            mask[0, :2] = 1
-            mask[1, 2:] = 1
+            mask_array = np.zeros((2, X.shape[1]))
+            mask_array[0, :2] = 1
+            mask_array[1, 2:] = 1
+            mask = GLMParams(jnp.asarray(mask_array, dtype=jnp.float32), None)
         else:
             mask = np.zeros((2, X.shape[1]) + (1,) * (n_dim - 2))
             mask[0, :2] = 1
             mask[1, 2:] = 1
-
-        mask = jnp.asarray(mask, dtype=jnp.float32)
+            mask = jnp.asarray(mask, dtype=jnp.float32)
 
         if raise_exception:
-            with pytest.raises(ValueError, match="`mask` must be 2-dimensional"):
+            with pytest.raises(ValueError):
                 regularizer.set_params(mask=mask)
         else:
             regularizer.set_params(mask=mask)
@@ -1929,22 +1850,23 @@ class TestGroupLasso:
         """Test that mask has at least 1 group."""
         raise_exception = n_groups < 1
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        valid_mask = np.zeros((2, X.shape[1]))
-        valid_mask[0, :1] = 1
-        valid_mask[1, 1:] = 1
+        valid_mask_array = np.zeros((2, X.shape[1]))
+        valid_mask_array[0, :1] = 1
+        valid_mask_array[1, 1:] = 1
+        valid_mask = GLMParams(jnp.asarray(valid_mask_array, dtype=jnp.float32), None)
         regularizer = self.cls(mask=valid_mask)
 
-        # create a mask
-        mask = np.zeros((n_groups, X.shape[1]))
+        # create a mask with PyTree structure
+        mask_array = np.zeros((n_groups, X.shape[1]))
         if n_groups > 0:
             for i in range(n_groups - 1):
-                mask[i, i : i + 1] = 1
-            mask[-1, n_groups - 1 :] = 1
+                mask_array[i, i : i + 1] = 1
+            mask_array[-1, n_groups - 1 :] = 1
 
-        mask = jnp.asarray(mask, dtype=jnp.float32)
+        mask = GLMParams(jnp.asarray(mask_array, dtype=jnp.float32), None)
 
         if raise_exception:
-            with pytest.raises(ValueError, match=r"Empty mask provided! Mask has "):
+            with pytest.raises(ValueError, match=r"Empty mask provided!"):
                 regularizer.set_params(mask=mask)
         else:
             regularizer.set_params(mask=mask)
@@ -1952,22 +1874,198 @@ class TestGroupLasso:
     def test_mask_none(self, poissonGLM_model_instantiation):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
 
-        # with pytest.warns(UserWarning):
-        model.regularizer = self.cls(mask=np.ones((1, X.shape[1])).astype(float))
+        # Test with auto-initialized mask (mask=None, initialized during fit)
+        model.regularizer = self.cls(mask=None)
         model.solver_name = "ProximalGradient"
         model.fit(X, y)
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
     def test_solver_combination(self, solver_name, poissonGLM_model_instantiation):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        mask_array = np.ones((1, X.shape[1])).astype(float)
+        mask = GLMParams(jnp.asarray(mask_array), None)
         model.set_params(
-            regularizer=self.cls(mask=np.ones((1, X.shape[1])).astype(float)),
+            regularizer=self.cls(mask=mask),
             regularizer_strength=(
                 None if self.cls == nmo.regularizer.UnRegularized else 1.0
             ),
         )
         model.solver_name = solver_name
         model.fit(X, y)
+
+    @pytest.mark.parametrize(
+        "params_factory,expected_type,check_mask_fn",
+        [
+            # GLMParams single neuron (with regularizable_subtrees)
+            (
+                lambda: GLMParams(coef=jnp.ones((10, 3)), intercept=jnp.zeros(3)),
+                GLMParams,
+                lambda mask: (
+                    mask.coef is not None
+                    and mask.intercept is None
+                    and mask.coef.ndim == 3
+                    and mask.coef.shape[1:] == (10, 3)
+                ),
+            ),
+            # Plain dict (without regularizable_subtrees)
+            (
+                lambda: {"spatial": jnp.ones((5, 2)), "temporal": jnp.ones((3, 2))},
+                dict,
+                lambda mask: (
+                    "spatial" in mask
+                    and "temporal" in mask
+                    and mask["spatial"].ndim == 3
+                    and mask["spatial"].shape[1:] == (5, 2)
+                    and mask["temporal"].ndim == 3
+                    and mask["temporal"].shape[1:] == (3, 2)
+                ),
+            ),
+            # GLMParams multi-neuron (PopulationGLM case)
+            (
+                lambda: GLMParams(coef=jnp.ones((10, 5)), intercept=jnp.zeros(5)),
+                GLMParams,
+                lambda mask: (
+                    mask.coef is not None
+                    and mask.intercept is None
+                    and mask.coef.ndim == 3
+                    and mask.coef.shape[1:] == (10, 5)
+                    and mask.coef.shape[0] == 5  # 5 groups (one per neuron)
+                ),
+            ),
+        ],
+    )
+    def test_initialize_mask_different_structures(
+        self, params_factory, expected_type, check_mask_fn
+    ):
+        """Test mask initialization for different parameter structures."""
+        params = params_factory()
+        regularizer = self.cls(mask=None)
+        mask = regularizer.initialize_mask(params)
+
+        # Check mask has expected type
+        assert isinstance(mask, expected_type)
+
+        # Check structure-specific properties
+        assert check_mask_fn(mask)
+
+    def test_apply_operator_dict_structure(self):
+        """Test apply_operator with dict-based PyTree parameters."""
+        from nemos.regularizer import apply_operator
+
+        # Define a simple operation that doubles values
+        def double_func(x):
+            return jax.tree_util.tree_map(lambda a: a * 2, x)
+
+        # Test with dict structure (no regularizable_subtrees)
+        params = {
+            "coef": jnp.ones((5,)),
+            "bias": jnp.zeros((1,)),
+        }
+
+        result = apply_operator(double_func, params)
+
+        # Check structure preserved
+        assert isinstance(result, dict)
+        assert set(result.keys()) == {"coef", "bias"}
+
+        # Check operation was applied
+        assert jnp.allclose(result["coef"], jnp.ones((5,)) * 2)
+        assert jnp.allclose(result["bias"], jnp.zeros((1,)) * 2)
+
+    def test_apply_operator_with_filter_kwargs(self):
+        """Test apply_operator with filter_kwargs for routing masks."""
+        from nemos.regularizer import apply_operator
+
+        # Create GLMParams with regularizable_subtrees
+        params = GLMParams(
+            coef=jnp.ones((5,)),
+            intercept=jnp.zeros((1,)),
+        )
+
+        # Create mask with matching structure
+        mask = GLMParams(
+            coef=jnp.array([[1, 1, 0, 0, 0], [0, 0, 1, 1, 1]], dtype=float),
+            intercept=None,
+        )
+
+        # Define a function that uses the mask to check it's passed correctly
+        def masked_operation(x, mask=None):
+            # Return a marker value to verify mask is passed/not passed
+            if mask is None:
+                return x * 0  # Return zeros if no mask
+            else:
+                return x * 2  # Return doubled if mask is present
+
+        result = apply_operator(masked_operation, params, filter_kwargs={"mask": mask})
+
+        # Check that mask was correctly routed to coef but not intercept
+        # coef should be doubled (mask was passed)
+        assert jnp.allclose(result.coef, params.coef * 2)
+        # intercept should be zeros (no mask, returned x * 0)
+        assert jnp.allclose(result.intercept, jnp.zeros((1,)))
+
+    def test_penalized_loss_dict_structure(self, poissonGLM_model_instantiation):
+        """Test penalized_loss with dict-based PyTree parameters."""
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+
+        # Create dict-based mask (simulating FeaturePytree structure)
+        # Split features into two groups
+        n_features = X.shape[1]
+        mask_dict = {
+            "group1": jnp.array([[1] * (n_features // 2)], dtype=float),
+            "group2": jnp.array([[1] * (n_features - n_features // 2)], dtype=float),
+        }
+
+        # Note: For this test we're just checking that the method can be called
+        # with dict structure, not testing actual GLM fitting
+        regularizer = self.cls(mask=mask_dict)
+
+        # Create matching dict params
+        params_dict = {
+            "group1": jnp.ones((n_features // 2,)),
+            "group2": jnp.ones((n_features - n_features // 2,)),
+        }
+
+        # Test that penalization doesn't crash with dict structure
+        filter_kwargs = regularizer._get_filter_kwargs(params_dict)
+        penalty = regularizer._penalization(
+            params_dict, strength=0.1, filter_kwargs=filter_kwargs
+        )
+
+        # Check penalty is a scalar and non-negative
+        assert isinstance(penalty, jnp.ndarray)
+        assert penalty.ndim == 0
+        assert penalty >= 0
+
+    def test_penalized_loss_glmparams_structure(self, poissonGLM_model_instantiation):
+        """Test penalized_loss with GLMParams structure."""
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+
+        # Create GLMParams mask
+        n_features = X.shape[1]
+        mask_array = np.ones((2, n_features), dtype=float)
+        mask_array[0, n_features // 2 :] = 0
+        mask_array[1, : n_features // 2] = 0
+        mask = GLMParams(jnp.asarray(mask_array), None)
+
+        regularizer = self.cls(mask=mask)
+
+        # Create matching GLMParams params
+        params = GLMParams(
+            coef=jnp.ones((n_features,)),
+            intercept=jnp.zeros((1,)),
+        )
+
+        # Test that penalization works
+        filter_kwargs = regularizer._get_filter_kwargs(params)
+        penalty = regularizer._penalization(
+            params, strength=0.1, filter_kwargs=filter_kwargs
+        )
+
+        # Check penalty is a scalar and non-negative
+        assert isinstance(penalty, jnp.ndarray)
+        assert penalty.ndim == 0
+        assert penalty >= 0
 
 
 @pytest.mark.parametrize(
@@ -1976,7 +2074,7 @@ class TestGroupLasso:
         nmo.regularizer.UnRegularized(),
         nmo.regularizer.Ridge(),
         nmo.regularizer.Lasso(),
-        nmo.regularizer.GroupLasso(mask=np.eye(5)),
+        nmo.regularizer.GroupLasso(mask=GLMParams(jnp.eye(5, dtype=jnp.float32), None)),
         nmo.regularizer.ElasticNet(),
     ],
 )
@@ -1987,17 +2085,17 @@ class TestPenalizedLossAuxiliaryVariables:
         """Test backward compatibility: loss returning single value."""
 
         def simple_loss(params, X, y):
-            return jnp.mean((y - X @ params[0] - params[1]) ** 2)
+            return jnp.mean((y - X @ params.coef - params.intercept) ** 2)
 
         # ElasticNet requires (strength, ratio) tuple
         reg_strength = (
             (0.1, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 0.1
         )
         penalized = regularizer.penalized_loss(
-            simple_loss, regularizer_strength=reg_strength
+            simple_loss, strength=reg_strength, init_params=None
         )
 
-        params = (jnp.ones(5), jnp.array(0.0))
+        params = GLMParams(jnp.ones(5), jnp.array(0.0))
         X = jnp.ones((10, 5))
         y = jnp.ones(10)
 
@@ -2012,7 +2110,7 @@ class TestPenalizedLossAuxiliaryVariables:
         """Test that loss returning (loss, aux) preserves auxiliary variable."""
 
         def loss_with_aux(params, X, y):
-            predictions = X @ params[0] + params[1]
+            predictions = X @ params.coef + params.intercept
             loss = jnp.mean((y - predictions) ** 2)
             aux = {"predictions": predictions, "mse": loss}
             return loss, aux
@@ -2022,10 +2120,10 @@ class TestPenalizedLossAuxiliaryVariables:
             (0.1, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 0.1
         )
         penalized = regularizer.penalized_loss(
-            loss_with_aux, regularizer_strength=reg_strength
+            loss_with_aux, strength=reg_strength, init_params=None
         )
 
-        params = (jnp.ones(5), jnp.array(0.0))
+        params = GLMParams(jnp.ones(5), jnp.array(0.0))
         X = jnp.ones((10, 5))
         y = jnp.ones(10)
 
@@ -2056,17 +2154,17 @@ class TestPenalizedLossAuxiliaryVariables:
         """Test that single-element tuple raises error."""
 
         def bad_loss(params, X, y):
-            return (jnp.mean((y - X @ params[0] - params[1]) ** 2),)
+            return (jnp.mean((y - X @ params.coef - params.intercept) ** 2),)
 
         # ElasticNet requires (strength, ratio) tuple
         reg_strength = (
             (0.1, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 0.1
         )
         penalized = regularizer.penalized_loss(
-            bad_loss, regularizer_strength=reg_strength
+            bad_loss, strength=reg_strength, init_params=None
         )
 
-        params = (jnp.ones(5), jnp.array(0.0))
+        params = GLMParams(jnp.ones(5), jnp.array(0.0))
         X = jnp.ones((10, 5))
         y = jnp.ones(10)
 
@@ -2080,7 +2178,7 @@ class TestPenalizedLossAuxiliaryVariables:
         """Test that 3+ element tuple raises error."""
 
         def bad_loss(params, X, y):
-            loss = jnp.mean((y - X @ params[0] - params[1]) ** 2)
+            loss = jnp.mean((y - X @ params.coef - params.intercept) ** 2)
             return loss, {"aux": 1}, {"extra": 2}
 
         # ElasticNet requires (strength, ratio) tuple
@@ -2088,10 +2186,10 @@ class TestPenalizedLossAuxiliaryVariables:
             (0.1, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 0.1
         )
         penalized = regularizer.penalized_loss(
-            bad_loss, regularizer_strength=reg_strength
+            bad_loss, strength=reg_strength, init_params=None
         )
 
-        params = (jnp.ones(5), jnp.array(0.0))
+        params = GLMParams(jnp.ones(5), jnp.array(0.0))
         X = jnp.ones((10, 5))
         y = jnp.ones(10)
 
@@ -2105,12 +2203,12 @@ class TestPenalizedLossAuxiliaryVariables:
         """Test that penalty is correctly added when aux variables are present."""
 
         def loss_with_aux(params, X, y):
-            predictions = X @ params[0] + params[1]
+            predictions = X @ params.coef + params.intercept
             loss = jnp.mean((y - predictions) ** 2)
             return loss, {"predictions": predictions}
 
         # Get unpenalized loss
-        params = (jnp.ones(5), jnp.array(0.0))
+        params = GLMParams(jnp.ones(5), jnp.array(0.0))
         X = jnp.ones((10, 5))
         y = jnp.zeros(10)
 
@@ -2123,12 +2221,14 @@ class TestPenalizedLossAuxiliaryVariables:
 
         # Get penalized loss
         penalized = regularizer.penalized_loss(
-            loss_with_aux, regularizer_strength=reg_strength
+            loss_with_aux, strength=reg_strength, init_params=params
         )
         penalized_loss_value, aux = penalized(params, X, y)
 
         # Calculate expected penalty
-        expected_penalty = regularizer._penalization(params, reg_strength)
+        expected_penalty = regularizer._penalization(
+            params, reg_strength, regularizer._get_filter_kwargs(params)
+        )
 
         # Check that penalized loss = unpenalized loss + penalty
         assert jnp.isclose(penalized_loss_value, unpenalized_loss + expected_penalty)

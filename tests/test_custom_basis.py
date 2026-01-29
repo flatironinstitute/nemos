@@ -121,6 +121,7 @@ def test_vec_function_output_shape(vectorize_func, x, expected_out_shape):
     [(1, 1), (2, 2)],
     indirect=["vectorize_func"],
 )
+@pytest.mark.requires_x64
 def test_vectorization_equivalence(x_shape, vectorize_func, ndim):
     """Test that vectorized computation equals explicit nested loops."""
     if len(x_shape) <= ndim:
@@ -444,6 +445,7 @@ def test_inconsistent_input_num():
     [(1, 1), (2, 2)],
     indirect=["vectorize_func"],
 )
+@pytest.mark.requires_x64
 def test_vectorization_equivalence_basis(x_shape, vectorize_func, ndim):
     """Test that vectorized computation equals explicit nested loops."""
     if len(x_shape) <= ndim:
@@ -503,3 +505,10 @@ def test_vectorization_equivalence_basis(x_shape, vectorize_func, ndim):
         np.prod(vec_shape) * n_basis_funcs if vec_shape else n_basis_funcs
     )
     assert vectorized_result.shape == (n_samples, expected_n_features)
+
+
+def test_custom_basis_2d():
+    x, y = np.ones((2, 10))
+    func = lambda z, w: np.c_[z, w]
+    bas = CustomBasis(func)
+    bas.compute_features(x, y)

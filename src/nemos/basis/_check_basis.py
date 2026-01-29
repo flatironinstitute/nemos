@@ -1,7 +1,8 @@
-from typing import TYPE_CHECKING, Literal, Tuple
+from typing import TYPE_CHECKING, Tuple
 
 import jax.numpy as jnp
 import numpy as np
+from jax.core import Tracer
 from numpy.typing import ArrayLike, NDArray
 
 from ..tree_utils import has_matching_axis_pytree
@@ -67,17 +68,15 @@ def _check_samples_consistency(*xi: NDArray) -> None:
 def _check_transform_input(
     bas: "BasisMixin | Basis",
     *xi: ArrayLike,
-    conv_type: Literal["numpy", "jax", "none"] = "numpy",
 ) -> Tuple[NDArray]:
+    # check dimensionality
+    _check_input_dimensionality(bas, xi)
+
     # conversion type
-    if conv_type == "numpy":
-        at_least_1d = np.atleast_1d
-    elif conv_type == "jax":
+    if isinstance(xi[0], Tracer):
         at_least_1d = jnp.atleast_1d
     else:
-
-        def at_least_1d(x):
-            return x
+        at_least_1d = np.atleast_1d
 
     # check that the input is array-like (i.e., whether we can cast it to
     # numeric arrays)
@@ -93,7 +92,6 @@ def _check_transform_input(
     _check_zero_samples(tuple(len(x) for x in xi))
 
     # checks on input and outputs
-    _check_input_dimensionality(bas, xi)
     _check_samples_consistency(*xi)
 
     return xi

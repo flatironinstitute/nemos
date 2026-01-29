@@ -1,5 +1,6 @@
 from typing import Optional, Tuple
 
+import jax.numpy as jnp
 import numpy as np
 from numpy._typing import ArrayLike
 from numpy.typing import NDArray
@@ -7,7 +8,7 @@ from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
-from ._basis import Basis, check_fraction_valid_samples, check_transform_input
+from ._basis import Basis, check_transform_input
 from ._basis_mixin import AtomicBasisMixin
 from ._check_basis import _check_input_dimensionality, _has_zero_samples
 
@@ -59,13 +60,10 @@ class IdentityBasis(AtomicBasisMixin, Basis):
             The samples with an extra axis, the n_basis_funcs axis which is = 1.
 
         """
-        vmin = np.nanmin(sample_pts, axis=0) if self.bounds is None else self.bounds[0]
-        vmax = np.nanmax(sample_pts, axis=0) if self.bounds is None else self.bounds[1]
-        sample_pts[(sample_pts < vmin) | (sample_pts > vmax)] = np.nan
-        check_fraction_valid_samples(
-            sample_pts,
-            err_msg="All the samples lie outside the [vmin, vmax] range.",
-            warn_msg="More than 90% of the samples lie outside the [vmin, vmax] range.",
+        vmin = jnp.nanmin(sample_pts, axis=0) if self.bounds is None else self.bounds[0]
+        vmax = jnp.nanmax(sample_pts, axis=0) if self.bounds is None else self.bounds[1]
+        sample_pts = jnp.where(
+            (sample_pts < vmin) | (sample_pts > vmax), jnp.nan, sample_pts
         )
         return sample_pts[..., np.newaxis]
 
@@ -146,11 +144,11 @@ class HistoryBasis(AtomicBasisMixin, Basis):
             Identity matrix of shape ``(*samples.shape, n_basis_funcs)``.
 
         """
-        sample_pts = np.squeeze(np.asarray(sample_pts))
+        sample_pts = jnp.squeeze(jnp.asarray(sample_pts))
         if sample_pts.ndim != 1:
             raise ValueError("`evaluate` for HistoryBasis allows 1D input only.")
         # this is called by set kernel.
-        return np.eye(np.asarray(sample_pts).shape[0], self.n_basis_funcs)
+        return jnp.eye(jnp.asarray(sample_pts).shape[0], self.n_basis_funcs)
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.

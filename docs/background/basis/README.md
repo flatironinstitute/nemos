@@ -89,6 +89,13 @@
      - :class:`~nemos.basis.HistoryConv`  :raw-html:`<br />`
      - 🔵 Conv
 
+   * - **Zero Basis** :raw-html:`<br />` *Model Selection*
+     - .. image:: ../../assets/Empty_set.svg
+          :height: 80px
+     - :ref:`Model selection <variable_selection>`
+     - :class:`~nemos.basis.Zero`  :raw-html:`<br />`
+     - 🟢 Eval
+
 
 .. raw:: html
 

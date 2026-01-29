@@ -20,6 +20,7 @@ from .basis import (
     RaisedCosineLinearEval,
     RaisedCosineLogConv,
     RaisedCosineLogEval,
+    Zero,
 )
 
 __all__ = __PUBLIC_BASES__

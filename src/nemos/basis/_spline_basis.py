@@ -5,6 +5,7 @@ import abc
 import copy
 from typing import Optional, Tuple
 
+import jax.numpy as jnp
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame, TsdTensor
@@ -237,7 +238,7 @@ class MSplineBasis(SplineBasis, abc.ABC):
 
         # get the original shape
         shape = sample_pts.shape
-        X = np.stack(
+        X = jnp.stack(
             [
                 mspline(
                     sample_pts.reshape(
@@ -357,7 +358,7 @@ class BSplineBasis(SplineBasis, abc.ABC):
         from SciPy to compute the basis values.
         """
         sample_pts, _ = min_max_rescale_samples(
-            sample_pts, getattr(self, "bounds", None)
+            sample_pts, getattr(self, "bounds", None), use_jax=False
         )
         # add knots
         knot_locs = self._generate_knots(is_cyclic=False)
@@ -466,7 +467,7 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
 
         """
         sample_pts, _ = min_max_rescale_samples(
-            sample_pts, getattr(self, "bounds", None)
+            sample_pts, getattr(self, "bounds", None), use_jax=False
         )
         knot_locs = self._generate_knots(is_cyclic=True)
 
@@ -564,12 +565,11 @@ def mspline(x: NDArray, k: int, i: int, T: NDArray) -> NDArray:
     """
     # Boundary conditions.
     if (T[i + k] - T[i]) < 1e-6:
-        return np.zeros_like(x)
+        return jnp.zeros_like(x)
 
     # Special base case of first-order spline basis.
     elif k == 1:
-        v = np.zeros_like(x)
-        v[(x >= T[i]) & (x < T[i + 1])] = 1 / (T[i + 1] - T[i])
+        v = jnp.where((x >= T[i]) & (x < T[i + 1]), 1 / (T[i + 1] - T[i]), 0.0)
         return v
 
     # General case, defined recursively
