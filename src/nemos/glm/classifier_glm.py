@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from numbers import Number
-from typing import Callable, Literal, Optional, Tuple, Union, Any
+from typing import Any, Callable, Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
