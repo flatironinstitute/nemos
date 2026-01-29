@@ -17,7 +17,6 @@ from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
 from ..type_casting import is_numpy_array_like, support_pynapple
 from ..typing import (
     DESIGN_INPUT_TYPE,
-    RegularizerStrength,
     SolverState,
     StepResult,
     UserProvidedParamsT,
@@ -717,7 +716,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
         n_classes: Optional[int] = 2,
         inverse_link_function: Optional[Callable] = None,
         regularizer: Optional[Union[str, Regularizer]] = None,
-        regularizer_strength: Optional[RegularizerStrength] = None,
+        regularizer_strength: Any = None,
         solver_name: str = None,
         solver_kwargs: dict = None,
     ):
@@ -925,7 +924,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         n_classes: Optional[int] = 2,
         inverse_link_function: Optional[Callable] = None,
         regularizer: Optional[Union[str, Regularizer]] = None,
-        regularizer_strength: Optional[RegularizerStrength] = None,
+        regularizer_strength: Any = None,
         solver_name: str = None,
         solver_kwargs: dict = None,
         feature_mask: Optional[jnp.ndarray] = None,
