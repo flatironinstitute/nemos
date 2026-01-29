@@ -2533,7 +2533,9 @@ class TestCompilation:
             dirichlet_prior_alphas_transition=np.ones(transition_prob.shape),
             dirichlet_prior_alphas_init_prob=np.ones(initial_prob.shape),
         )
-        assert compilation_counter["n_compilations"] == 2, "None -> array should recompile"
+        assert (
+            compilation_counter["n_compilations"] == 2
+        ), "None -> array should recompile"
 
         # 4th call with prior (different values, same shape)
         _ = tracked_run_m_step(
@@ -2704,7 +2706,9 @@ class TestCompilation:
             maxiter=5,
             tol=1e-8,
         )
-        assert compilation_counter["n_compilations"] == 1, "Second call should use cache"
+        assert (
+            compilation_counter["n_compilations"] == 1
+        ), "Second call should use cache"
 
         # Third call with DIFFERENT data (same shape) - should NOT recompile
         X_new = (X + np.random.randn(*X.shape) * 0.1).astype(X.dtype)
@@ -2725,7 +2729,9 @@ class TestCompilation:
             maxiter=5,
             tol=1e-8,
         )
-        assert compilation_counter["n_compilations"] == 1, "Different data (same shape) should use cache"
+        assert (
+            compilation_counter["n_compilations"] == 1
+        ), "Different data (same shape) should use cache"
 
     @pytest.mark.requires_x64
     def test_forward_backward_compiles_once(self, generate_data_multi_state):
@@ -2806,7 +2812,9 @@ class TestCompilation:
                 + log_conditionals[1:, None, :]
                 + log_betas[1:, None, :]
             )
-            log_xi_sum = jax.scipy.special.logsumexp(log_xi_raw, axis=(1, 2), keepdims=True)
+            log_xi_sum = jax.scipy.special.logsumexp(
+                log_xi_raw, axis=(1, 2), keepdims=True
+            )
             log_xis = log_xi_raw - log_xi_sum
 
             return (
