@@ -1,18 +1,16 @@
 from functools import partial
 from typing import Any, Callable, NamedTuple, Optional, Tuple, Union
 
+import equinox as eqx
 import jax
 import jax.flatten_util
 import jax.numpy as jnp
 from jax import grad, jit, lax, random
 
-from nemos.third_party.jaxopt.jaxopt import OptStep
-from nemos.third_party.jaxopt.jaxopt._src import loop
-from nemos.third_party.jaxopt.jaxopt.prox import prox_none
-
+from ..proximal_operator import prox_none
 from ..tree_utils import tree_add_scalar_mul, tree_l2_norm, tree_slice, tree_sub
 from ..typing import KeyArrayLike, Pytree
-from ._jaxopt_solvers import JaxoptAdapter
+from ._jaxopt_adapter import JaxoptAdapter
 
 
 class SVRGState(NamedTuple):
@@ -59,6 +57,11 @@ class SVRGState(NamedTuple):
     aux_batch: Optional[Any] = None
 
 
+class OptStep(NamedTuple):
+    params: Pytree
+    state: SVRGState
+
+
 class ProxSVRG:
     """
     Prox-SVRG solver.
@@ -75,7 +78,7 @@ class ProxSVRG:
     prox : Callable
         Proximal operator associated with the function ``non_smooth``.
         It should be of the form ``prox(params, hyperparams_prox, scale=1.0)``.
-        See ``jaxopt.prox`` for examples.
+        See ``nemos.proximal_operator`` for examples.
     maxiter : int
         Maximum number of epochs to run the optimization for.
     key : jax.random.PRNGkey
@@ -91,7 +94,7 @@ class ProxSVRG:
     Examples
     --------
     >>> import numpy as np
-    >>> from nemos.third_party.jaxopt.jaxopt.prox import prox_lasso
+    >>> from nemos.proximal_operator import prox_lasso
     >>> loss_fn = lambda params, X, y: ((X.dot(params) - y)**2).sum()
     >>> svrg = ProxSVRG(loss_fn, prox_lasso)
     >>> hyperparams_prox = 0.1
@@ -510,12 +513,12 @@ class ProxSVRG:
             aux_batch=None,
         )
 
-        final_params, final_state = loop.while_loop(
+        final_params, final_state = eqx.internal.while_loop(
             cond_fun=cond_fun,
             body_fun=body_fun,
             init_val=OptStep(params=init_params, state=init_state),
-            maxiter=self.maxiter,
-            jit=True,
+            max_steps=self.maxiter,
+            kind="lax",
         )
         return OptStep(params=final_params, state=final_state)
 

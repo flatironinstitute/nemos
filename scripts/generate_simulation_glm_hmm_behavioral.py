@@ -265,7 +265,7 @@ def fit_glm_hmm_with_em(
         regularizer=regularization,
         solver_name=solver_name,
     )
-    glm.instantiate_solver(partial_hmm_negative_log_likelihood)
+    glm._instantiate_solver(partial_hmm_negative_log_likelihood)
     solver_run = glm._solver_run
 
     (

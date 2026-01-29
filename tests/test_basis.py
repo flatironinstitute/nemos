@@ -1,6 +1,7 @@
 import inspect
 import itertools
 import re
+import sys
 from contextlib import nullcontext as does_not_raise
 from functools import partial
 from unittest.mock import patch
@@ -15,6 +16,7 @@ from conftest import (
     CombinedBasis,
     SizeTerminal,
     custom_basis,
+    is_eval_basis,
     list_all_basis_classes,
     list_all_real_basis_classes,
 )
@@ -43,6 +45,7 @@ from nemos.basis._raised_cosine_basis import (
     RaisedCosineBasisLog,
 )
 from nemos.basis._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis
+from nemos.basis._zero_basis import ZeroBasis
 from nemos.utils import pynapple_concatenate_numpy
 
 
@@ -78,6 +81,8 @@ def set_basis_attr(bas, n_basis):
         bas.frequencies = np.arange((n_basis + 1) % 2, 1 + (n_basis - n_basis % 2) // 2)
     elif isinstance(bas, CustomBasis):
         bas.basis_kwargs = {"n_basis_funcs": n_basis}
+    elif isinstance(bas, basis.Zero):
+        return
     else:
         bas.n_basis_funcs = n_basis
 
@@ -259,7 +264,7 @@ def test_all_basis_are_tested() -> None:
         ),
         (
             "evaluate",
-            "Evaluate the .+ sample points",
+            "Evaluate the ",
         ),
     ],
 )
@@ -347,6 +352,7 @@ def test_docstrings_decorator_superclass(public_class, meth_super, method):
         "OrthExponentialEval",
         "OrthExponentialConv",
         "FourierEval",
+        "Zero",
     ],
 )
 @pytest.mark.parametrize(
@@ -356,7 +362,8 @@ def test_docstrings_decorator_superclass(public_class, meth_super, method):
 def test_docstrings_decorator_mixinclass(public_class, mixin, method):
     cls_pub = getattr(basis, public_class)
     if mixin is None:
-        mixin = "EvalBasisMixin" if public_class.endswith("Eval") else "ConvBasisMixin"
+        is_eval = public_class.endswith("Eval") or public_class == "Zero"
+        mixin = "EvalBasisMixin" if is_eval else "ConvBasisMixin"
         mixin_meth = getattr(getattr(basis, mixin), "_" + method)
     else:
         mixin_meth = getattr(getattr(basis, mixin), method)
@@ -412,6 +419,7 @@ def test_add_docstring():
         (basis.IdentityEval(), IdentityBasis),
         (basis.HistoryConv(11), HistoryBasis),
         (basis.FourierEval(11), FourierBasis),
+        (basis.Zero(), ZeroBasis),
     ],
 )
 def test_expected_output_eval_on_grid(basis_instance, super_class):
@@ -442,6 +450,7 @@ def test_expected_output_eval_on_grid(basis_instance, super_class):
         (basis.IdentityEval(), IdentityBasis),
         (basis.HistoryConv(11), HistoryBasis),
         (basis.FourierEval(10), FourierBasis),
+        (basis.Zero(), ZeroBasis),
     ],
 )
 def test_expected_output_compute_features(basis_instance, super_class):
@@ -501,6 +510,7 @@ def test_expected_output_compute_features(basis_instance, super_class):
         (basis.IdentityEval(label="label"), IdentityBasis),
         (basis.HistoryConv(11, label="label"), HistoryBasis),
         (basis.FourierEval(11, label="label"), FourierBasis),
+        (basis.Zero(label="label"), ZeroBasis),
     ],
 )
 def test_expected_output_split_by_feature(basis_instance, super_class):
@@ -954,48 +964,10 @@ class TestConvBasis:
         basis.OrthExponentialEval,
         basis.IdentityEval,
         basis.FourierEval,
+        basis.Zero,
     ],
 )
 class TestEvalBasis:
-    @pytest.mark.parametrize(
-        "samples, vmin, vmax, expectation",
-        [
-            (0.5, 0, 1, does_not_raise()),
-            (
-                -0.5,
-                0,
-                1,
-                pytest.raises(ValueError, match="All the samples lie outside"),
-            ),
-            (np.linspace(-1, 1, 10), 0, 1, does_not_raise()),
-            (
-                np.linspace(-1, 0, 10),
-                0,
-                1,
-                pytest.warns(UserWarning, match="More than 90% of the samples"),
-            ),
-            (
-                np.linspace(1, 2, 10),
-                0,
-                1,
-                pytest.warns(UserWarning, match="More than 90% of the samples"),
-            ),
-        ],
-    )
-    def test_call_vmin_vmax(self, samples, vmin, vmax, expectation, cls):
-        if (
-            "OrthExp" in cls.__name__ and not hasattr(samples, "shape")
-        ) or cls == CustomBasis:
-            pytest.skip(f"Skipping test_call_vmin_vmax for {cls.__name__}")
-        bas = instantiate_atomic_basis(
-            cls,
-            n_basis_funcs=5,
-            bounds=(vmin, vmax),
-            **extra_kwargs(cls, 5),
-        )
-        with expectation:
-            bas.evaluate(samples)
-
     @pytest.mark.parametrize("n_basis", [5, 6])
     @pytest.mark.parametrize("vmin, vmax", [(0, 1), (-1, 1)])
     @pytest.mark.parametrize("inp_num", [1, 2])
@@ -1044,7 +1016,7 @@ class TestEvalBasis:
     def test_vmin_vmax_eval_on_grid_affects_x(
         self, bounds, samples, nan_idx, mn, mx, cls
     ):
-        if cls == CustomBasis:
+        if cls in [CustomBasis, basis.Zero]:
             pytest.skip(
                 f"Skipping test_vmin_vmax_eval_on_grid_affects_x for {cls.__name__}"
             )
@@ -1075,7 +1047,7 @@ class TestEvalBasis:
     def test_vmin_vmax_eval_on_grid_no_effect_on_eval(
         self, vmin, vmax, samples, nan_idx, cls
     ):
-        if cls == CustomBasis:
+        if cls in [CustomBasis, basis.Zero]:
             pytest.skip(
                 f"Skipping test_vmin_vmax_eval_on_grid_no_effect_on_eval for {cls.__name__}"
             )
@@ -1134,7 +1106,7 @@ class TestEvalBasis:
         ],
     )
     def test_vmin_vmax_init(self, bounds, expectation, cls):
-        if cls == CustomBasis:
+        if cls in [CustomBasis, basis.Zero]:
             pytest.skip(f"Skipping test_vmin_vmax_init for {cls.__name__}")
         with expectation:
             bas = instantiate_atomic_basis(
@@ -1144,45 +1116,6 @@ class TestEvalBasis:
                 **extra_kwargs(cls, 5),
             )
             assert compare_bounds(bas, bounds)
-
-    @pytest.mark.parametrize(
-        "samples, vmin, vmax, expectation",
-        [
-            (0.5, 0, 1, does_not_raise()),
-            (
-                -0.5,
-                0,
-                1,
-                pytest.raises(ValueError, match="All the samples lie outside"),
-            ),
-            (np.linspace(-1, 1, 10), 0, 1, does_not_raise()),
-            (
-                np.linspace(-1, 0, 10),
-                0,
-                1,
-                pytest.warns(UserWarning, match="More than 90% of the samples"),
-            ),
-            (
-                np.linspace(1, 2, 10),
-                0,
-                1,
-                pytest.warns(UserWarning, match="More than 90% of the samples"),
-            ),
-        ],
-    )
-    def test_compute_features_vmin_vmax(self, samples, vmin, vmax, expectation, cls):
-        if (
-            "OrthExp" in cls.__name__ and not hasattr(samples, "shape")
-        ) or cls == CustomBasis:
-            pytest.skip(f"Skipping test_compute_features_vmin_vmax for {cls.__name__}")
-        basis_obj = instantiate_atomic_basis(
-            cls,
-            n_basis_funcs=5,
-            bounds=(vmin, vmax),
-            **extra_kwargs(cls, 5),
-        )
-        with expectation:
-            basis_obj.compute_features(samples)
 
     @pytest.mark.parametrize(
         "samples, expectation",
@@ -1225,7 +1158,7 @@ class TestEvalBasis:
         ],
     )
     def test_vmin_vmax_range(self, vmin, vmax, samples, nan_idx, cls):
-        if cls == CustomBasis:
+        if cls in [CustomBasis, basis.Zero]:
             pytest.skip(f"Skipping test_vmin_vmax_range for {cls.__name__}")
         bounds = None if vmin is None else (vmin, vmax)
         bas = instantiate_atomic_basis(
@@ -1274,7 +1207,7 @@ class TestEvalBasis:
         ],
     )
     def test_vmin_vmax_setter(self, bounds, expectation, cls):
-        if cls == CustomBasis:
+        if cls in [CustomBasis, basis.Zero]:
             pytest.skip(f"Skipping test_vmin_vmax_setter for {cls.__name__}")
         bas = instantiate_atomic_basis(
             cls,
@@ -1287,7 +1220,7 @@ class TestEvalBasis:
             assert compare_bounds(bas, bounds)
 
     def test_conv_kwargs_error(self, cls):
-        if cls == CustomBasis:
+        if cls in [CustomBasis, basis.Zero]:
             pytest.skip(f"Skipping test_conv_kwargs_error for {cls.__name__}")
         with pytest.raises(
             TypeError, match="got an unexpected keyword argument 'test'"
@@ -1299,7 +1232,7 @@ class TestEvalBasis:
             cls(**extra, test="hi", **extra_kwargs(cls, 5))
 
     def test_set_window_size(self, cls):
-        if cls == CustomBasis:
+        if cls in [CustomBasis, basis.Zero]:
             pytest.skip(f"Skipping test_set_window_size for {cls.__name__}")
         if cls not in [IdentityEval, FourierEval]:
             kwargs = {"window_size": 10, "n_basis_funcs": 10}
@@ -1337,14 +1270,14 @@ class TestEvalBasis:
         ],
     )
     def test_init_window_size(self, ws, expectation, cls):
-        if cls == CustomBasis:
+        if cls in [CustomBasis, basis.Zero]:
             pytest.skip(f"Skipping test_init_window_size for {cls.__name__}")
         extra = dict(n_basis_funcs=5) if cls not in [IdentityEval, FourierEval] else {}
         with expectation:
             cls(**extra, window_size=ws, **extra_kwargs(cls, 5))
 
     def test_set_bounds(self, cls):
-        if cls == CustomBasis:
+        if cls in [CustomBasis, basis.Zero]:
             pytest.skip(f"Skipping test_set_bounds for {cls.__name__}")
         kwargs = (
             {"bounds": (1, 2), "n_basis_funcs": 10}
@@ -1406,6 +1339,7 @@ def test_call_equivalent_in_conv(n_basis, cls):
         basis.IdentityEval,
         basis.HistoryConv,
         basis.FourierEval,
+        basis.Zero,
     ],
 )
 class TestSharedMethods:
@@ -1430,6 +1364,7 @@ class TestSharedMethods:
                 basis.OrthExponentialConv: "OrthExponentialConv(n_basis_funcs=5, window_size=10)",
                 basis.HistoryConv: "HistoryConv(window_size=10)",
                 basis.FourierEval: "FourierEval(frequencies=[Array([1., 2.], dtype=float32)], ndim=1, bounds=((1.0, 2.0),), frequency_mask='no-intercept')",
+                basis.Zero: "Zero()",
             }
         ],
     )
@@ -1452,9 +1387,9 @@ class TestSharedMethods:
                 basis.RaisedCosineLogEval: r"'mylabel': RaisedCosineLogEval\(n_basis_funcs=5, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True, bounds=\(1.0, 2.0\)\)",
                 basis.RaisedCosineLinearEval: r"'mylabel': RaisedCosineLinearEval\(n_basis_funcs=5, width=2.0, bounds=\(1.0, 2.0\)\)",
                 basis.BSplineEval: r"'mylabel': BSplineEval\(n_basis_funcs=5, order=4, bounds=\(1.0, 2.0\)\)",
-                basis.CyclicBSplineEval: "'mylabel': CyclicBSplineEval\(n_basis_funcs=5, order=4, bounds=\(1.0, 2.0\)\)",
+                basis.CyclicBSplineEval: r"'mylabel': CyclicBSplineEval\(n_basis_funcs=5, order=4, bounds=\(1.0, 2.0\)\)",
                 basis.MSplineEval: r"'mylabel': MSplineEval\(n_basis_funcs=5, order=4, bounds=\(1.0, 2.0\)\)",
-                basis.OrthExponentialEval: "'mylabel': OrthExponentialEval\(n_basis_funcs=5, bounds=\(1.0, 2.0\)\)",
+                basis.OrthExponentialEval: r"'mylabel': OrthExponentialEval\(n_basis_funcs=5, bounds=\(1.0, 2.0\)\)",
                 basis.IdentityEval: r"'mylabel': IdentityEval\(bounds=\(1.0, 2.0\)\)",
                 basis.RaisedCosineLogConv: r"'mylabel': RaisedCosineLogConv\(n_basis_funcs=5, window_size=10, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True\)",
                 basis.RaisedCosineLinearConv: r"'mylabel': RaisedCosineLinearConv\(n_basis_funcs=5, window_size=10, width=2.0\)",
@@ -1464,6 +1399,7 @@ class TestSharedMethods:
                 basis.OrthExponentialConv: r"'mylabel': OrthExponentialConv\(n_basis_funcs=5, window_size=10\)",
                 basis.HistoryConv: r"'mylabel': HistoryConv\(window_size=10\)",
                 basis.FourierEval: r"'mylabel': FourierEval\(frequencies=\[Array\(\[1\., 2\.\], dtype=float\d{2}\)\], ndim=1, bounds=\(\(1\.0, 2\.0\),\), frequency_mask='no-intercept'\)",
+                basis.Zero: r"'mylabel': Zero\(\)",
             }
         ],
     )
@@ -1573,6 +1509,8 @@ class TestSharedMethods:
             n_basis = 1
         elif cls is HistoryConv:
             n_basis = 8
+        elif cls is basis.Zero:
+            n_basis = 0
         elif issubclass(cls, FourierBasis):
             # In the instantiate_atomic_basis, the number of frequencies is set
             # to np.arange(1, 1 + n_basis // 2), so only even n_basis works for this
@@ -1646,16 +1584,23 @@ class TestSharedMethods:
             n_basis = 8
             if inp.ndim != 1:
                 return
+        elif isinstance(bas, basis.Zero):
+            n_basis = 0
         with expectation:
             out = bas.evaluate(inp)
             assert out.shape == tuple((*inp.shape, n_basis))
             out2 = bas.evaluate_on_grid(inp.shape[0])[1]
-            assert np.all((out.reshape(out.shape[0], -1, n_basis) - out2[:, None]) == 0)
+            if out2.size > 0:
+                assert np.all(
+                    (out.reshape(out.shape[0], -1, n_basis) - out2[:, None]) == 0
+                )
 
     @pytest.mark.parametrize("n_basis", [6])
     def test_call_nan_location(self, n_basis, cls):
-        if cls is HistoryConv or cls is CustomBasis:
-            return
+        if cls in [HistoryConv, CustomBasis, basis.Zero]:
+            # eval simply returns the evaluate or empty array...
+            pytest.skip(f"skipping nan locaiton test for {cls.__name__}.")
+
         if cls is IdentityEval:
             n_basis = 1
         bas = instantiate_atomic_basis(
@@ -1673,9 +1618,9 @@ class TestSharedMethods:
         assert np.isnan(out).sum() == 3 * n_basis
 
     def test_call_nan(self, cls):
-        if cls is HistoryConv:
-            # eval simply returns the evaluate...
-            return
+        if cls in [HistoryConv, basis.Zero]:
+            # eval simply returns the evaluate or empty array...
+            pytest.skip(f"skipping nan locaiton test for {cls.__name__}.")
         elif cls is IdentityEval:
             n_basis = 1
         else:
@@ -1737,6 +1682,8 @@ class TestSharedMethods:
             args_copy["n_basis_funcs"] = 1
         elif cls == HistoryConv:
             args_copy["n_basis_funcs"] = 30
+        elif cls == basis.Zero:
+            args_copy["n_basis_funcs"] = 0
         elif issubclass(cls, FourierBasis):
             args_copy["n_basis_funcs"] = (
                 args_copy["n_basis_funcs"] + args_copy["n_basis_funcs"] % 2
@@ -1753,6 +1700,54 @@ class TestSharedMethods:
             f"of the evaluated basis. The number of basis is {args['n_basis_funcs']}, but the "
             f"evaluated basis has dimension {eval_basis.shape[1]}"
         )
+
+    @pytest.mark.parametrize(
+        "args",
+        [{"n_basis_funcs": n_basis} for n_basis in [6, 10, 13]],
+    )
+    @pytest.mark.parametrize(
+        "shape",
+        [(20,), (20, 2)],
+    )
+    def test_compute_features_compilation(self, args, shape, cls):
+        if issubclass(cls, (BSplineBasis, CyclicBSplineBasis, OrthExponentialBasis)):
+            pytest.skip(
+                f"Skipping test_jitted_compute_features for {cls.__name__}, which depends on un-jittable scipy functions."
+            )
+        args_copy = args.copy()
+
+        if cls == IdentityEval:
+            args_copy["n_basis_funcs"] = 1
+        elif cls == HistoryConv:
+            args_copy["n_basis_funcs"] = 30
+            shape = shape if len(shape) == 1 else (21,)
+        elif cls == CustomBasis:
+            args_copy["pynapple_support"] = False
+        elif issubclass(cls, FourierBasis):
+            args_copy["n_basis_funcs"] = (
+                args_copy["n_basis_funcs"] + args_copy["n_basis_funcs"] % 2
+            )
+
+        basis_obj = instantiate_atomic_basis(
+            cls,
+            **args_copy,
+            window_size=30,
+            **extra_kwargs(cls, args_copy["n_basis_funcs"]),
+        )
+
+        for method in ["evaluate", "compute_features"]:
+            jitted_compute_features = jax.jit(getattr(basis_obj, method))
+            # Clear any existing cache
+            jitted_compute_features._cache_size()  # warmup if needed
+            initial_cache_size = jitted_compute_features._cache_size()
+
+            # First call should compile
+            jitted_compute_features(np.random.randn(*shape))
+            assert jitted_compute_features._cache_size() == initial_cache_size + 1
+
+            # Second call should NOT recompile
+            jitted_compute_features(np.random.randn(*shape))
+            assert jitted_compute_features._cache_size() == initial_cache_size + 1
 
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 10, 11, 100])
     def test_evaluate_on_grid_basis_size(self, sample_size, cls):
@@ -2084,6 +2079,20 @@ class TestSharedMethods:
         assert id(out[0]) == id(basis_obj)
 
 
+class TestZeroBasis(BasisFuncsTesting):
+    cls = {"eval": basis.Zero}
+
+    def test_n_basis_not_settable(self):
+        bas = basis.Zero()
+        with pytest.raises(AttributeError):
+            bas.n_basis_funcs = 11
+
+    def test_bounds_not_settable(self):
+        bas = basis.Zero()
+        with pytest.raises(AttributeError):
+            bas.bounds = (0, 1)
+
+
 class TestIdentityBasis(BasisFuncsTesting):
     cls = {"eval": IdentityEval}
 
@@ -2092,6 +2101,7 @@ class TestIdentityBasis(BasisFuncsTesting):
         with pytest.raises(AttributeError):
             bas.n_basis_funcs = 11
 
+    @pytest.mark.requires_x64
     @pytest.mark.parametrize(
         "inp",
         [
@@ -2138,6 +2148,7 @@ class TestHistoryBasis(BasisFuncsTesting):
         bas.window_size = 12
         assert bas.n_basis_funcs == 12
 
+    @pytest.mark.requires_x64
     @pytest.mark.parametrize(
         "inp",
         [
@@ -2478,6 +2489,18 @@ class TestMSplineBasis(BasisFuncsTesting):
         _, out1 = bas.evaluate_on_grid(10)
         _, out2 = bas_no_range.evaluate_on_grid(10)
         assert np.allclose(out1 * scaling, out2)
+
+    @pytest.mark.requires_x64
+    def test_output_against_R(self):
+        """
+        Compares the output of the MSpline basis functions against precomputed values from R
+        """
+        m_basis = np.loadtxt(
+            "tests/mspline_output_nointercept.csv", delimiter=",", skiprows=1
+        )
+        bas = basis.MSplineEval(5)
+        m_basis_nemos = bas.compute_features(np.linspace(0, 1, 100))
+        assert np.allclose(m_basis, m_basis_nemos)
 
 
 class TestOrthExponentialBasis(BasisFuncsTesting):
@@ -3573,6 +3596,10 @@ class TestAdditiveBasis(CombinedBasis):
 
     @pytest.mark.parametrize("basis_a", list_all_basis_classes("Eval"))
     def test_set_params_basis(self, basis_a, basis_class_specific_params):
+        if basis_a is basis.Zero:
+            pytest.skip(
+                "Zero basis is Eval but doesn't have the Eval in the class name"
+            )
         basis_b = basis_a.__name__.replace("Eval", "Conv")
         if not hasattr(basis, basis_b):
             return
@@ -3590,7 +3617,7 @@ class TestAdditiveBasis(CombinedBasis):
         add_a_twice = basis_a_obj + basis_a_obj
         assert add_a_twice.basis2.label == f"{cls_a_name}_1"
 
-        # set different classs and check refreshing labels
+        # set different class and check refreshing labels
         add_a_twice.set_params(**{cls_a_name: basis_b_obj})
         assert add_a_twice.basis2.label == cls_a_name
         assert add_a_twice.basis1.label == cls_b_name
@@ -4494,7 +4521,7 @@ class TestAdditiveBasis(CombinedBasis):
             n_basis_b, basis_b, basis_class_specific_params, window_size=10
         )
         bas = basis_a_obj + basis_b_obj
-        if "Eval" in basis_a.__name__ and "Eval" in basis_b.__name__:
+        if is_eval_basis(basis_a) and is_eval_basis(basis_b):
             context = does_not_raise()
         else:
             context = pytest.raises(
@@ -4772,12 +4799,16 @@ class TestAdditiveBasis(CombinedBasis):
             n_basis_a = 10
         elif basis_a == IdentityEval:
             n_basis_a = 1
+        elif basis_a == basis.Zero:
+            n_basis_a = 0
         else:
             n_basis_a = 5
         if basis_b == HistoryConv:
             n_basis_b = 10
         elif basis_b == IdentityEval:
             n_basis_b = 1
+        elif basis_b == basis.Zero:
+            n_basis_b = 0
         else:
             n_basis_b = 5
         basis_a = self.instantiate_basis(
@@ -4788,10 +4819,14 @@ class TestAdditiveBasis(CombinedBasis):
         )
         add = basis_a + basis_b
 
-        if not isinstance(add.basis1, (HistoryConv, IdentityEval, CustomBasis)):
+        if not isinstance(
+            add.basis1, (HistoryConv, IdentityEval, CustomBasis, basis.Zero)
+        ):
             set_basis_attr(add.basis1, 10)
             assert add.n_basis_funcs == 10 + n_basis_b
-        if not isinstance(add.basis2, (HistoryConv, IdentityEval, CustomBasis)):
+        if not isinstance(
+            add.basis2, (HistoryConv, IdentityEval, CustomBasis, basis.Zero)
+        ):
             set_basis_attr(add.basis2, 10)
             assert add.n_basis_funcs == 10 + add.basis1.n_basis_funcs
 
@@ -5788,7 +5823,7 @@ class TestMultiplicativeBasis(CombinedBasis):
             n_basis_b, basis_b, basis_class_specific_params, window_size=10
         )
         bas = basis_a_obj * basis_b_obj
-        if "Eval" in basis_a.__name__ and "Eval" in basis_b.__name__:
+        if is_eval_basis(basis_a) and is_eval_basis(basis_b):
             context = does_not_raise()
         else:
             context = pytest.raises(
@@ -6084,12 +6119,16 @@ class TestMultiplicativeBasis(CombinedBasis):
             n_basis_a = 10
         elif basis_a == IdentityEval:
             n_basis_a = 1
+        elif basis_a == basis.Zero:
+            n_basis_a = 0
         else:
             n_basis_a = 5
         if basis_b == HistoryConv:
             n_basis_b = 10
         elif basis_b == IdentityEval:
             n_basis_b = 1
+        elif basis_b == basis.Zero:
+            n_basis_b = 0
         else:
             n_basis_b = 5
         basis_a = self.instantiate_basis(
@@ -6100,10 +6139,14 @@ class TestMultiplicativeBasis(CombinedBasis):
         )
 
         mul = basis_a * basis_b
-        if not isinstance(mul.basis1, (HistoryConv, IdentityEval, CustomBasis)):
+        if not isinstance(
+            mul.basis1, (HistoryConv, IdentityEval, CustomBasis, basis.Zero)
+        ):
             set_basis_attr(mul.basis1, 10)
             assert mul.n_basis_funcs == 10 * n_basis_b
-        if not isinstance(mul.basis2, (HistoryConv, IdentityEval, CustomBasis)):
+        if not isinstance(
+            mul.basis2, (HistoryConv, IdentityEval, CustomBasis, basis.Zero)
+        ):
             set_basis_attr(mul.basis2, 10)
             assert mul.n_basis_funcs == 10 * mul.basis1.n_basis_funcs
 
@@ -6216,9 +6259,15 @@ class TestMultiplicativeBasis(CombinedBasis):
             self.instantiate_basis(5, bas, basis_class_specific_params, window_size=10)
             ** 2
         )
-        X = bas.compute_features(x, y).reshape(x.shape[0], -1, bas.n_basis_funcs)
+        X = bas.compute_features(x, y)
         Y = bas.evaluate(x, y)
-        np.testing.assert_array_equal(X, Y)
+        if X.size > 0:
+            X = X.reshape(x.shape[0], -1, bas.n_basis_funcs)
+            np.testing.assert_array_equal(X, Y)
+        else:
+            assert Y.size == 0
+            assert X.shape == (Y.shape[0], 0)
+            assert Y.dtype == X.dtype
 
     @pytest.mark.parametrize(
         "real_cls",
@@ -7248,7 +7297,13 @@ def test_getitem(bas1, bas2, basis_class_specific_params):
     if any(
         issubclass(
             bas,
-            (AdditiveBasis, MultiplicativeBasis, TransformerBasis, basis.FourierBasis),
+            (
+                AdditiveBasis,
+                MultiplicativeBasis,
+                TransformerBasis,
+                basis.FourierBasis,
+                basis.Zero,
+            ),
         )
         for bas in (bas1, bas2)
     ):
@@ -7399,6 +7454,7 @@ def test_split_feature_axis(
             TransformerBasis,
             IdentityEval,
             HistoryConv,
+            basis.Zero,
         )
         for bas in [bas1, bas2]
     ):

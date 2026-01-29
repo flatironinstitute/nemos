@@ -9,14 +9,9 @@ import optimistix as optx
 from jaxtyping import Array, Bool, Float, Int, PyTree
 from optimistix._custom_types import Aux, Y
 
+from ..proximal_operator import prox_none
 from ..tree_utils import tree_add_scalar_mul, tree_sub
-from ._optimistix_solvers import OptimistixAdapter
-
-
-def prox_none(x: PyTree, hyperparams=None, scaling: float = 1.0):
-    """Identity proximal operator."""
-    del hyperparams, scaling
-    return x
+from ._optimistix_adapter import OptimistixAdapter
 
 
 def tree_nan_like(x: PyTree):
@@ -364,6 +359,7 @@ class OptimistixFISTA(OptimistixAdapter):
 
     _solver_cls = FISTA
     _proximal = True
+    DEFAULT_MAXITER = 500
 
     def adjust_solver_init_kwargs(
         self, solver_init_kwargs: dict[str, Any]
@@ -386,5 +382,6 @@ class OptimistixNAG(OptimistixAdapter):
 
     _solver_cls = GradientDescent
     _proximal = False
+    DEFAULT_MAXITER = 500
 
     adjust_solver_init_kwargs = OptimistixFISTA.adjust_solver_init_kwargs

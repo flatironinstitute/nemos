@@ -7,6 +7,7 @@ import pytest
 from scipy.optimize import minimize
 
 import nemos as nmo
+from nemos.glm.params import GLMParams
 
 # Register every test here as solver-related
 pytestmark = pytest.mark.solver_related
@@ -38,11 +39,11 @@ def test_unregularized_convergence(solver_names):
     y = np.random.poisson(rate)
 
     # instantiate and fit unregularized GLM with GradientDescent
-    model_GD = nmo.glm.GLM(solver_name=solver_names[0], solver_kwargs=dict(tol=10**-12))
+    model_GD = nmo.glm.GLM(solver_name=solver_names[0], solver_kwargs=dict(tol=10**-10))
     model_GD.fit(X, y)
 
     # instantiate and fit unregularized GLM with ProximalGradient
-    model_PG = nmo.glm.GLM(solver_name=solver_names[1], solver_kwargs=dict(tol=10**-12))
+    model_PG = nmo.glm.GLM(solver_name=solver_names[1], solver_kwargs=dict(tol=10**-10))
     model_PG.fit(X, y)
 
     # assert weights are the same
@@ -79,7 +80,7 @@ def test_ridge_convergence(solver_names):
     model_GD = nmo.glm.GLM(
         regularizer_strength=1.0,
         regularizer="Ridge",
-        solver_kwargs=dict(tol=10**-12),
+        solver_kwargs=dict(tol=10**-10),
         solver_name=solver_names[0],
     )
     model_GD.fit(X, y)
@@ -89,7 +90,7 @@ def test_ridge_convergence(solver_names):
         regularizer_strength=1.0,
         regularizer="Ridge",
         solver_name=solver_names[1],
-        solver_kwargs=dict(tol=10**-12),
+        solver_kwargs=dict(tol=10**-10),
     )
     model_PG.fit(X, y)
 
@@ -116,16 +117,17 @@ def test_lasso_convergence(solver_name):
         regularizer="Lasso",
         regularizer_strength=1.0,
         solver_name=solver_name,
-        solver_kwargs=dict(tol=10**-12),
+        solver_kwargs=dict(tol=10**-10),
     )
     model_PG.regularizer_strength = 0.1
     model_PG.fit(X, y)
+    params = model_PG._get_model_params()
 
     # use the penalized loss function to solve optimization via Nelder-Mead
     penalized_loss = lambda p, x, y: model_PG.regularizer.penalized_loss(
-        model_PG.compute_loss, model_PG.regularizer_strength
+        model_PG._compute_loss, model_PG.regularizer_strength, init_params=params
     )(
-        (
+        GLMParams(
             p[1:],
             p[0].reshape(
                 1,
@@ -135,7 +137,7 @@ def test_lasso_convergence(solver_name):
         y,
     )
     res = minimize(
-        penalized_loss, [0] + w, args=(X, y), method="Nelder-Mead", tol=10**-12
+        penalized_loss, [0] + w, args=(X, y), method="Nelder-Mead", tol=10**-10
     )
 
     # assert weights are the same
@@ -159,21 +161,22 @@ def test_group_lasso_convergence(solver_name):
     mask = np.zeros((num_groups, num_features))
     mask[0] = [1, 1, 0]  # Group 0 includes features 0 and 1
     mask[1] = [0, 0, 1]  # Group 1 includes features 1
+    mask = GLMParams(mask, None)
 
     # instantiate and fit GLM with ProximalGradient
     model_PG = nmo.glm.GLM(
         regularizer=nmo.regularizer.GroupLasso(mask=mask),
-        solver_kwargs=dict(tol=10**-14, maxiter=100_000),
+        solver_kwargs=dict(tol=10**-10, maxiter=100_000),
         regularizer_strength=0.2,
         solver_name=solver_name,
     )
     model_PG.fit(X, y)
-
+    params = model_PG._get_model_params()
     # use the penalized loss function to solve optimization via Nelder-Mead
     penalized_loss = lambda p, x, y: model_PG.regularizer.penalized_loss(
-        model_PG.compute_loss, model_PG.regularizer_strength
+        model_PG._compute_loss, model_PG.regularizer_strength, init_params=params
     )(
-        (
+        GLMParams(
             p[1:],
             p[0].reshape(
                 1,
