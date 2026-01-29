@@ -312,7 +312,10 @@ class Regularizer(Base, abc.ABC):
         def _convert_if_arraylike(x):
             if isinstance(x, (np.ndarray, list, tuple)):
                 return jnp.asarray(x)
-            return x  # leave scalars and jax arrays alone
+            elif isinstance(x, (int, float, jnp.ndarray)):
+                return x  # leave scalars and jax arrays alone
+            else:
+                raise TypeError
 
         try:
             return jax.tree_util.tree_map(
