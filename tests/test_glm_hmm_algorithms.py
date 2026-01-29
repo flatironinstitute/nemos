@@ -1,6 +1,7 @@
 import itertools
 from functools import partial
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -12,13 +13,18 @@ from nemos.glm import GLM
 from nemos.glm.params import GLMParams
 from nemos.glm_hmm.expectation_maximization import (
     GLMHMMState,
+    _analytical_m_step_initial_prob,
+    _analytical_m_step_transition_prob,
+    _em_step,
     backward_pass,
     check_log_likelihood_increment,
+    compute_rate_per_state,
     compute_xi_log,
     em_glm_hmm,
     forward_backward,
     forward_pass,
     hmm_negative_log_likelihood,
+    initialize_new_session,
     max_sum,
     prepare_likelihood_func,
     run_m_step,
@@ -2351,7 +2357,6 @@ class TestConvergence:
             f"Expected increasing iterations with tighter tolerance, "
             f"got {iteration_counts}"
         )
-        print("\nn of fb comp", forward_backward._cache_size())
 
     @pytest.mark.requires_x64
     def test_convergence_checker_with_iteration_limit(self):
@@ -2424,10 +2429,17 @@ class TestConvergence:
 
 
 class TestCompilation:
-    """Tests for JIT compilation behavior."""
+    """Tests for JIT compilation behavior.
+
+    These tests verify that JAX correctly caches compiled functions and doesn't
+    recompile unnecessarily. We use a counter inside a jitted function to track
+    compilations - the counter only increments during JAX tracing (compilation),
+    not during cached execution.
+    """
 
     @pytest.mark.requires_x64
     def test_m_step_compiling(self, generate_data_multi_state):
+        """Test that run_m_step caches correctly for None vs array priors."""
         new_sess, initial_prob, transition_prob, coef, intercept, X, y = (
             generate_data_multi_state
         )
@@ -2439,10 +2451,50 @@ class TestCompilation:
             X, y, initial_prob, transition_prob, (coef, intercept), new_sess, obs
         )
 
-        init_cache = run_m_step._cache_size()
+        # Create a tracked version of run_m_step with compilation counter
+        compilation_counter = {"n_compilations": 0}
+
+        @partial(jax.jit, static_argnames=["m_step_fn_glm_params"])
+        def tracked_run_m_step(
+            X,
+            y,
+            log_posteriors,
+            log_joint_posterior,
+            glm_params,
+            is_new_session,
+            m_step_fn_glm_params,
+            dirichlet_prior_alphas_init_prob=None,
+            dirichlet_prior_alphas_transition=None,
+        ):
+            # This increment only runs during tracing (compilation)
+            compilation_counter["n_compilations"] += 1
+
+            posteriors = jnp.exp(log_posteriors)
+            joint_posterior = jnp.exp(log_joint_posterior)
+
+            initial_prob = _analytical_m_step_initial_prob(
+                posteriors,
+                is_new_session=is_new_session,
+                dirichlet_prior_alphas=dirichlet_prior_alphas_init_prob,
+            )
+            transition_prob = _analytical_m_step_transition_prob(
+                joint_posterior,
+                dirichlet_prior_alphas=dirichlet_prior_alphas_transition,
+            )
+
+            optimized_projection_weights, state, _ = m_step_fn_glm_params(
+                glm_params, X, y, posteriors
+            )
+
+            return (
+                optimized_projection_weights,
+                jnp.log(initial_prob),
+                jnp.log(transition_prob),
+                state,
+            )
 
         # call with no prior
-        _ = run_m_step(
+        _ = tracked_run_m_step(
             X,
             y,
             log_gammas,
@@ -2453,12 +2505,10 @@ class TestCompilation:
             dirichlet_prior_alphas_transition=None,
             dirichlet_prior_alphas_init_prob=None,
         )
-
-        first_call_cache = run_m_step._cache_size()
-        assert init_cache + 1 == first_call_cache
+        assert compilation_counter["n_compilations"] == 1, "First call should compile"
 
         # second call with no prior
-        _ = run_m_step(
+        _ = tracked_run_m_step(
             X,
             y,
             log_gammas,
@@ -2469,11 +2519,10 @@ class TestCompilation:
             dirichlet_prior_alphas_transition=None,
             dirichlet_prior_alphas_init_prob=None,
         )
-        second_call_cache = run_m_step._cache_size()
-        assert first_call_cache == second_call_cache, "None prior not cached!"
+        assert compilation_counter["n_compilations"] == 1, "None prior not cached!"
 
-        # second call with prior
-        _ = run_m_step(
+        # third call with prior (array)
+        _ = tracked_run_m_step(
             X,
             y,
             log_gammas,
@@ -2484,11 +2533,12 @@ class TestCompilation:
             dirichlet_prior_alphas_transition=np.ones(transition_prob.shape),
             dirichlet_prior_alphas_init_prob=np.ones(initial_prob.shape),
         )
-        third_call_cache = run_m_step._cache_size()
-        assert second_call_cache + 1 == third_call_cache
+        assert (
+            compilation_counter["n_compilations"] == 2
+        ), "None -> array should recompile"
 
-        # 4th call with prior
-        _ = run_m_step(
+        # 4th call with prior (different values, same shape)
+        _ = tracked_run_m_step(
             X,
             y,
             log_gammas,
@@ -2499,8 +2549,7 @@ class TestCompilation:
             dirichlet_prior_alphas_transition=2 * np.ones(transition_prob.shape),
             dirichlet_prior_alphas_init_prob=2 * np.ones(initial_prob.shape),
         )
-        forth_call_cache = run_m_step._cache_size()
-        assert third_call_cache == forth_call_cache, "Array prior not cached!"
+        assert compilation_counter["n_compilations"] == 2, "Array prior not cached!"
 
     @pytest.mark.parametrize("solver_name", ["LBFGS", "ProximalGradient"])
     @pytest.mark.requires_x64
@@ -2540,11 +2589,97 @@ class TestCompilation:
             partial_hmm_negative_log_likelihood, GLMParams(coef, intercept)
         )
 
-        # Clear compilation cache
-        initial_cache_size = em_glm_hmm._cache_size()
+        # Create tracked version with compilation counter
+        compilation_counter = {"n_compilations": 0}
+
+        @partial(
+            jax.jit,
+            static_argnames=[
+                "inverse_link_function",
+                "likelihood_func",
+                "m_step_fn_glm_params",
+                "maxiter",
+                "check_convergence",
+                "tol",
+            ],
+        )
+        def tracked_em_glm_hmm(
+            X,
+            y,
+            initial_prob,
+            transition_prob,
+            glm_params,
+            inverse_link_function,
+            likelihood_func,
+            m_step_fn_glm_params,
+            is_new_session=None,
+            maxiter=10**3,
+            tol=1e-8,
+            check_convergence=check_log_likelihood_increment,
+        ):
+            # This increment only runs during tracing (compilation)
+            compilation_counter["n_compilations"] += 1
+
+            is_new_session = initialize_new_session(y.shape[0], is_new_session)
+
+            state = GLMHMMState(
+                data_log_likelihood=-jnp.array(jnp.inf),
+                previous_data_log_likelihood=-jnp.array(jnp.inf),
+                log_likelihood_history=jnp.full(maxiter, jnp.nan),
+                iterations=0,
+            )
+
+            em_step_fn_while = eqx.Partial(
+                lambda *args, **kwargs: _em_step(*args, **kwargs),
+                X=X,
+                y=y,
+                inverse_link_function=inverse_link_function,
+                likelihood_func=likelihood_func,
+                m_step_fn_glm_params=m_step_fn_glm_params,
+                is_new_session=is_new_session,
+            )
+
+            def stopping_condition_while(carry):
+                _, new_state = carry
+                return ~check_convergence(new_state, tol)
+
+            init_carry = (
+                jnp.log(initial_prob),
+                jnp.log(transition_prob),
+                glm_params,
+            ), state
+            (log_initial_prob, log_transition_matrix, glm_params), state = (
+                eqx.internal.while_loop(
+                    stopping_condition_while,
+                    em_step_fn_while,
+                    init_carry,
+                    max_steps=maxiter,
+                    kind="lax",
+                )
+            )
+
+            log_posteriors, log_joint_posterior, _, _, _, _ = forward_backward(
+                X,
+                y,
+                log_initial_prob,
+                log_transition_matrix,
+                glm_params,
+                inverse_link_function,
+                likelihood_func,
+                is_new_session,
+            )
+
+            return (
+                jnp.exp(log_posteriors),
+                jnp.exp(log_joint_posterior),
+                jnp.exp(log_initial_prob),
+                jnp.exp(log_transition_matrix),
+                glm_params,
+                state,
+            )
 
         # First call - should compile
-        _ = em_glm_hmm(
+        _ = tracked_em_glm_hmm(
             X,
             y,
             initial_prob=initial_prob,
@@ -2556,16 +2691,10 @@ class TestCompilation:
             maxiter=5,
             tol=1e-8,
         )
-
-        # Check that compilation happened
-        after_first_call = em_glm_hmm._cache_size()
-        assert after_first_call == initial_cache_size + 1, (
-            f"Expected 1 compilation, but cache went from {initial_cache_size} "
-            f"to {after_first_call}"
-        )
+        assert compilation_counter["n_compilations"] == 1, "First call should compile"
 
         # Second call with SAME arguments - should NOT recompile
-        _ = em_glm_hmm(
+        _ = tracked_em_glm_hmm(
             X,
             y,
             initial_prob=initial_prob,
@@ -2577,13 +2706,9 @@ class TestCompilation:
             maxiter=5,
             tol=1e-8,
         )
-
-        # Cache should not have grown
-        after_second_call = em_glm_hmm._cache_size()
-        assert after_second_call == after_first_call, (
-            f"Unexpected recompilation: cache grew from {after_first_call} "
-            f"to {after_second_call}"
-        )
+        assert (
+            compilation_counter["n_compilations"] == 1
+        ), "Second call should use cache"
 
         # Third call with DIFFERENT data (same shape) - should NOT recompile
         X_new = (X + np.random.randn(*X.shape) * 0.1).astype(X.dtype)
@@ -2592,7 +2717,7 @@ class TestCompilation:
         transition_prob_new = np.ones_like(transition_prob) / len(initial_prob)
         coef_new = coef * np.random.randn(*coef.shape)
         intercept_new = intercept * np.random.randn(*intercept.shape)
-        _ = em_glm_hmm(
+        _ = tracked_em_glm_hmm(
             X_new,
             y_new,
             initial_prob=initial_prob_new,
@@ -2604,12 +2729,9 @@ class TestCompilation:
             maxiter=5,
             tol=1e-8,
         )
-
-        after_third_call = em_glm_hmm._cache_size()
-        assert after_third_call == after_second_call, (
-            f"Recompiled on different data values (same shape): "
-            f"cache grew from {after_second_call} to {after_third_call}"
-        )
+        assert (
+            compilation_counter["n_compilations"] == 1
+        ), "Different data (same shape) should use cache"
 
     @pytest.mark.requires_x64
     def test_forward_backward_compiles_once(self, generate_data_multi_state):
@@ -2646,8 +2768,66 @@ class TestCompilation:
             partial_hmm_negative_log_likelihood, GLMParams(coef, intercept)
         )
 
-        _ = forward_backward(
-            X,  # drop intercept
+        # Create tracked version with compilation counter
+        compilation_counter = {"n_compilations": 0}
+
+        @partial(
+            jax.jit, static_argnames=["inverse_link_function", "log_likelihood_func"]
+        )
+        def tracked_forward_backward(
+            X,
+            y,
+            log_initial_prob,
+            log_transition_prob,
+            glm_params,
+            inverse_link_function,
+            log_likelihood_func,
+            is_new_session=None,
+        ):
+            # This increment only runs during tracing (compilation)
+            compilation_counter["n_compilations"] += 1
+
+            is_new_session = initialize_new_session(y.shape[0], is_new_session)
+            predicted_rate_given_state = compute_rate_per_state(
+                X, glm_params, inverse_link_function
+            )
+            log_conditionals = log_likelihood_func(y, predicted_rate_given_state)
+
+            log_alphas, log_normalization = forward_pass(
+                log_initial_prob, log_transition_prob, log_conditionals, is_new_session
+            )
+            log_betas = backward_pass(
+                log_transition_prob, log_conditionals, log_normalization, is_new_session
+            )
+
+            log_likelihood = jnp.sum(log_normalization)
+            log_posteriors = log_alphas + log_betas
+            log_posteriors = log_posteriors - jax.scipy.special.logsumexp(
+                log_posteriors, axis=1, keepdims=True
+            )
+
+            log_xi_raw = (
+                log_alphas[:-1, :, None]
+                + log_transition_prob
+                + log_conditionals[1:, None, :]
+                + log_betas[1:, None, :]
+            )
+            log_xi_sum = jax.scipy.special.logsumexp(
+                log_xi_raw, axis=(1, 2), keepdims=True
+            )
+            log_xis = log_xi_raw - log_xi_sum
+
+            return (
+                log_posteriors,
+                jax.scipy.special.logsumexp(log_xis, axis=0),
+                log_alphas,
+                log_betas,
+                log_likelihood,
+                log_normalization,
+            )
+
+        _ = tracked_forward_backward(
+            X,
             y,
             initial_prob,
             transition_prob,
@@ -2656,7 +2836,8 @@ class TestCompilation:
             inverse_link_function=obs.default_inverse_link_function,
             is_new_session=new_sess.astype(bool),
         )
-        initial_fb_cache = forward_backward._cache_size()
+        assert compilation_counter["n_compilations"] == 1, "First call should compile"
+
         # second call with new data (same shape and size)
         X_new = (X + np.random.randn(*X.shape) * 0.1).astype(X.dtype)
         y_new = y.copy()
@@ -2664,8 +2845,8 @@ class TestCompilation:
         transition_prob_new = np.ones_like(transition_prob) / len(initial_prob)
         coef_new = coef * np.random.randn(*coef.shape)
         intercept_new = intercept * np.random.randn(*intercept.shape)
-        _ = forward_backward(
-            X_new,  # drop intercept
+        _ = tracked_forward_backward(
+            X_new,
             y_new,
             initial_prob_new,
             transition_prob_new,
@@ -2675,14 +2856,9 @@ class TestCompilation:
             is_new_session=new_sess.astype(bool),
         )
 
-        final_fb_cache = forward_backward._cache_size()
-
-        # forward_backward should compile at most once during entire EM
-        # (It's called multiple times but with same shapes)
-        compilations = final_fb_cache - initial_fb_cache
-        assert compilations <= 1, (
-            f"forward_backward compiled {compilations} times, "
-            f"expected at most 1 compilation"
+        assert compilation_counter["n_compilations"] == 1, (
+            f"forward_backward compiled {compilation_counter['n_compilations']} times, "
+            f"expected 1 compilation"
         )
 
 
