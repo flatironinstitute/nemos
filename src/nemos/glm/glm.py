@@ -173,42 +173,64 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
 
     Examples
     --------
+    **Fit a GLM**
+
+    Basic model fitting with default Poisson observation model:
+
+    >>> import numpy as np
     >>> import nemos as nmo
-    >>> # define single neuron GLM model
-    >>> model = nmo.glm.GLM()
-    >>> model
-    GLM(
-        observation_model=PoissonObservations(),
-        inverse_link_function=exp,
-        regularizer=UnRegularized(),
-        solver_name='GradientDescent'
-    )
-    >>> print("Regularizer type: ", type(model.regularizer))
-    Regularizer type:  <class 'nemos.regularizer.UnRegularized'>
-    >>> print("Observation model: ", type(model.observation_model))
-    Observation model:  <class 'nemos.observation_models.PoissonObservations'>
-    >>> # define a Gamma GLM providing a string
-    >>> nmo.glm.GLM(observation_model="Gamma")
-    GLM(
-        observation_model=GammaObservations(),
-        inverse_link_function=one_over_x,
-        regularizer=UnRegularized(),
-        solver_name='GradientDescent'
-    )
-    >>> # or equivalently, passing the observation model object
-    >>> nmo.glm.GLM(observation_model=nmo.observation_models.GammaObservations())
-    GLM(
-        observation_model=GammaObservations(),
-        inverse_link_function=one_over_x,
-        regularizer=UnRegularized(),
-        solver_name='GradientDescent'
-    )
-    >>> # define GLM model of PoissonObservations model with soft-plus NL
-    >>> model = nmo.glm.GLM(inverse_link_function=jax.nn.softplus, solver_name="LBFGS")
-    >>> print("Regularizer type: ", type(model.regularizer))
-    Regularizer type:  <class 'nemos.regularizer.UnRegularized'>
-    >>> print("Observation model: ", type(model.observation_model))
-    Observation model:  <class 'nemos.observation_models.PoissonObservations'>
+    >>> np.random.seed(123)
+    >>> X = np.random.normal(size=(100, 5))
+    >>> y = np.random.poisson(size=100)
+    >>> model = nmo.glm.GLM().fit(X, y)
+    >>> model.coef_.shape
+    (5,)
+
+    **Customize the Observation Model**
+
+    Specify the observation model as a string:
+
+    >>> model = nmo.glm.GLM(observation_model="Gamma")
+    >>> model.observation_model
+    GammaObservations()
+
+    Or pass the observation model object directly:
+
+    >>> model = nmo.glm.GLM(observation_model=nmo.observation_models.GammaObservations())
+    >>> model.observation_model
+    GammaObservations()
+
+    **Customize the Inverse Link Function**
+
+    Use a soft-plus inverse link function instead of the default exponential:
+
+    >>> model = nmo.glm.GLM(inverse_link_function=jax.nn.softplus)
+    >>> model.inverse_link_function.__name__
+    'softplus'
+
+    **Use Regularization**
+
+    Fit with Ridge regularization:
+
+    >>> model = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.1)
+    >>> model = model.fit(X, y)
+    >>> model.regularizer
+    Ridge()
+
+    Fit with Lasso regularization for sparse coefficients:
+
+    >>> model = nmo.glm.GLM(regularizer="Lasso", regularizer_strength=0.01)
+    >>> model = model.fit(X, y)
+    >>> model.regularizer
+    Lasso()
+
+    **Select a Solver**
+
+    Use LBFGS solver for potentially faster convergence:
+
+    >>> model = nmo.glm.GLM(solver_name="LBFGS").fit(X, y)
+    >>> model.solver_name
+    'LBFGS'
     """
 
     _invalid_observation_types = (obs.CategoricalObservations,)
@@ -1241,57 +1263,79 @@ class PopulationGLM(GLM):
 
     Examples
     --------
-    >>> # Example with an array mask
+    **Fit a PopulationGLM**
+
+    Basic model fitting for a population of neurons:
+
     >>> import jax.numpy as jnp
     >>> import numpy as np
-    >>> from nemos.glm import PopulationGLM
-    >>> # Define predictors (X), weights, and neural activity (y)
+    >>> import nemos as nmo
+    >>> np.random.seed(123)
     >>> num_samples, num_features, num_neurons = 100, 3, 2
     >>> X = np.random.normal(size=(num_samples, num_features))
-    >>> weights = np.array([[ 0.5,  0. ], [-0.5, -0.5], [ 0. ,  1. ]])
+    >>> weights = np.array([[0.5, 0.0], [-0.5, -0.5], [0.0, 1.0]])
     >>> y = np.random.poisson(np.exp(X.dot(weights)))
-    >>> # Define a feature mask, shape (num_features, num_neurons)
-    >>> feature_mask = np.array([[1, 0], [1, 1], [0, 1]])
-    >>> feature_mask
-    array([[1, 0],
-           [1, 1],
-           [0, 1]])
-    >>> # Create and fit the model
-    >>> model = PopulationGLM(feature_mask=feature_mask).fit(X, y)
-    >>> model
-    PopulationGLM(
-        observation_model=PoissonObservations(),
-        inverse_link_function=exp,
-        regularizer=UnRegularized(),
-        solver_name='GradientDescent'
-    )
-    >>> # Check the fitted coefficients
-    >>> print(model.coef_.shape)
+    >>> model = nmo.glm.PopulationGLM().fit(X, y)
+    >>> model.coef_.shape
     (3, 2)
-    >>> # Example with a FeaturePytree mask
+
+    **Mask Coefficients with an Array**
+
+    Use a feature mask to specify which features predict each neuron.
+    The mask has shape ``(num_features, num_neurons)``:
+
+    >>> feature_mask = np.array([[1, 0], [1, 1], [0, 1]])
+    >>> model = nmo.glm.PopulationGLM(feature_mask=feature_mask).fit(X, y)
+    >>> model.coef_
+    Array(...)
+
+    **Mask Coefficients with a FeaturePytree**
+
+    When using a FeaturePytree as input, the mask should also be a FeaturePytree
+    with arrays of shape ``(num_neurons,)``:
+
     >>> from nemos.pytrees import FeaturePytree
-    >>> # Define two features
     >>> feature_1 = np.random.normal(size=(num_samples, 2))
     >>> feature_2 = np.random.normal(size=(num_samples, 1))
-    >>> # Define the FeaturePytree predictor, and weights
     >>> X = FeaturePytree(feature_1=feature_1, feature_2=feature_2)
-    >>> weights = dict(feature_1=jnp.array([[0., 0.5], [0., -0.5]]), feature_2=jnp.array([[1., 0.]]))
-    >>> # Compute the firing rate and counts
-    >>> rate = np.exp(X["feature_1"].dot(weights["feature_1"]) + X["feature_2"].dot(weights["feature_2"]))
+    >>> weights = dict(
+    ...     feature_1=jnp.array([[0.0, 0.5], [0.0, -0.5]]),
+    ...     feature_2=jnp.array([[1.0, 0.0]])
+    ... )
+    >>> rate = np.exp(
+    ...     X["feature_1"].dot(weights["feature_1"]) +
+    ...     X["feature_2"].dot(weights["feature_2"])
+    ... )
     >>> y = np.random.poisson(rate)
-    >>> # Define a feature mask with arrays of shape (num_neurons, )
     >>> feature_mask = FeaturePytree(
     ...     feature_1=jnp.array([0, 1], dtype=jnp.int32),
     ...     feature_2=jnp.array([1, 0], dtype=jnp.int32)
     ... )
-    >>> print(feature_mask)
-    feature_1: shape (2,), dtype int32
-    feature_2: shape (2,), dtype int32
-    >>> # Fit a PopulationGLM
-    >>> model = PopulationGLM(feature_mask=feature_mask).fit(X, y)
-    >>> # Coefficients are stored in a dictionary with keys the feature labels
-    >>> print(model.coef_.keys())
-    dict_keys(['feature_1', 'feature_2'])
+    >>> model = nmo.glm.PopulationGLM(feature_mask=feature_mask).fit(X, y)
+    >>> model.coef_
+    {...}
+
+    **Customize the Observation Model**
+
+    Use a Gamma observation model for continuous positive data:
+
+    >>> model = nmo.glm.PopulationGLM(observation_model="Gamma")
+    >>> model.observation_model
+    GammaObservations()
+
+    **Use Regularization**
+
+    Fit with Ridge regularization:
+
+    >>> X = np.random.normal(size=(num_samples, num_features))
+    >>> weights = np.array([[0.5, 0.0], [-0.5, -0.5], [0.0, 1.0]])
+    >>> y = np.random.poisson(np.exp(X.dot(weights)))
+    >>> model = nmo.glm.PopulationGLM(
+    ...     regularizer="Ridge",
+    ...     regularizer_strength=0.1
+    ... ).fit(X, y)
+    >>> model.regularizer
+    Ridge()
     """
 
     _validator_class = PopulationGLMValidator
