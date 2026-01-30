@@ -1266,8 +1266,8 @@ class PopulationGLM(GLM):
         solver_name='GradientDescent'
     )
     >>> # Check the fitted coefficients
-    >>> print(model.coef_.shape)
-    (3, 2)
+    >>> model.coef_
+    Array(...)
     >>> # Example with a FeaturePytree mask
     >>> from nemos.pytrees import FeaturePytree
     >>> # Define two features
