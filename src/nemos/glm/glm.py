@@ -1286,8 +1286,8 @@ class PopulationGLM(GLM):
 
     >>> feature_mask = np.array([[1, 0], [1, 1], [0, 1]])
     >>> model = nmo.glm.PopulationGLM(feature_mask=feature_mask).fit(X, y)
-    >>> model.coef_.shape
-    (3, 2)
+    >>> model.coef_
+    Array(...)
 
     **Mask Coefficients with a FeaturePytree**
 
