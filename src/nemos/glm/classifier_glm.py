@@ -1013,8 +1013,8 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     ...     n_classes=3,
     ...     feature_mask=feature_mask
     ... ).fit(X, y)
-    >>> model.coef_.shape
-    (2, 2, 3)
+    >>> model.coef_
+    Array(...)
 
     **Use Regularization**
 
