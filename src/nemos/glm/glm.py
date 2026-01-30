@@ -1290,8 +1290,8 @@ class PopulationGLM(GLM):
     >>> # Fit a PopulationGLM
     >>> model = PopulationGLM(feature_mask=feature_mask).fit(X, y)
     >>> # Coefficients are stored in a dictionary with keys the feature labels
-    >>> print(model.coef_.keys())
-    dict_keys(['feature_1', 'feature_2'])
+    >>> model.coef_
+    {'feature_1':...}
     """
 
     _validator_class = PopulationGLMValidator
