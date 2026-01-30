@@ -95,7 +95,10 @@ def check_length(x: Any, expected_len: int, err_message: str):
 
 
 def convert_tree_leaves_to_jax_array(
-    pytree: Any, err_message: str, data_type: Optional[DTypeLike] = None
+    pytree: Any,
+    err_message: str,
+    data_type: Optional[DTypeLike] = None,
+    is_leaf: Callable = None,
 ):
     """
     Convert the leaves of a given pytree to JAX arrays with the specified data type.
@@ -122,7 +125,7 @@ def convert_tree_leaves_to_jax_array(
     """
     try:
         pytree = jax.tree_util.tree_map(
-            lambda x: jnp.asarray(x, dtype=data_type), pytree
+            lambda x: jnp.asarray(x, dtype=data_type), pytree, is_leaf=is_leaf
         )
     except (ValueError, TypeError) as e:
         raise TypeError(err_message) from e

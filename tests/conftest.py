@@ -41,6 +41,7 @@ from nemos.basis._transformer_basis import TransformerBasis
 from nemos.glm.params import GLMParams
 from nemos.inverse_link_function_utils import log_softmax
 from nemos.pytrees import FeaturePytree
+from nemos.tree_utils import tree_full_like
 
 
 def initialize_feature_mask_for_population_glm(X, n_neurons: int, coef=None):
@@ -673,7 +674,7 @@ def example_data_prox_operator():
         jnp.ones((n_features)),
         jnp.zeros(1),
     )
-    regularizer_strength = 0.1
+    regularizer_strength = tree_full_like(params, 0.1)
     # Mask as PyTree with same structure as params, shape (n_groups, *param_shape)
     # Intercept mask is zeros (not regularized)
     mask = GLMParams(
@@ -694,7 +695,7 @@ def example_data_prox_operator_multineuron():
         jnp.ones((n_features, n_neurons)),
         jnp.zeros(n_neurons),
     )
-    regularizer_strength = 0.1
+    regularizer_strength = tree_full_like(params, 0.1)
     # Mask as PyTree with same structure as params
     # For multi-neuron: mask shape is (n_groups, n_features, n_neurons)
     # Intercept mask is zeros (not regularized)

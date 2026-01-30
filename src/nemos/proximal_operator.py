@@ -25,48 +25,12 @@ References
 """
 
 from functools import partial
-from typing import Any, Optional, Tuple
+from typing import Any
 
 import jax
 import jax.numpy as jnp
-import jax.tree_util as tree_util
 
 from nemos.tree_utils import pytree_map_and_reduce
-
-
-def prox_none(x: Any, hyperparams: Optional[Any] = None, scaling: float = 1.0) -> Any:
-    """Identity proximal operator."""
-    del hyperparams, scaling
-    return x
-
-
-def prox_ridge(x: Any, l2reg: Optional[float] = None, scaling: float = 1.0) -> Any:
-    r"""Proximal operator for the squared l2 norm. From JAXopt.
-
-    .. math::
-
-      \underset{y}{\text{argmin}} ~ \frac{1}{2} ||x - y||_2^2
-      + \text{scaling} \cdot \text{l2reg} \cdot ||y||_2^2
-
-    Parameters
-    ----------
-    x :
-        Input pytree.
-    l2reg :
-        Regularization strength. Default is None (interpreted as 1.0).
-    scaling :
-        A scaling factor.
-
-    Returns
-    -------
-    :
-        Output pytree with the same structure as ``x``.
-    """
-    if l2reg is None:
-        l2reg = 1.0
-
-    factor = 1.0 / (1.0 + scaling * l2reg)
-    return tree_util.tree_map(lambda y: factor * y, x)
 
 
 def compute_normalization(mask):
@@ -124,9 +88,35 @@ def masked_norm_2(x: Any, mask: Any, normalize: bool = True) -> Any:
     return norms
 
 
+def prox_none(x: Any, strength, scaling: float = 1.0) -> Any:
+    r"""Proximal operator for :math:`g(x) = 0`, i.e., the identity function.
+
+    Since :math:`g(x) = 0`, the output is:
+
+    $$
+      \underset{y}{\text{argmin}} ~ \frac{1}{2} ||x - y||_2^2 = x
+    $$
+
+    Parameters
+    ----------
+    x :
+        Input pytree.
+    strength :
+        ignored
+    scaling :
+        ignored
+
+    Returns
+    -------
+      output pytree, with the same structure as ``x``.
+    """
+    del strength, scaling
+    return x
+
+
 def prox_group_lasso(
     x: Any,
-    regularizer_strength: float,
+    strength: Any,
     mask: Any,
     scaling: float = 1.0,
 ) -> Any:
@@ -136,8 +126,8 @@ def prox_group_lasso(
     ----------
     x:
         PyTree of arrays;
-    regularizer_strength:
-        The regularization hyperparameter.
+    strength : jnp.ndarray, shape (n_groups,)
+        Regularization strength per group
     mask:
         PyTree of ND array of 0,1 as floats with the same struct as x. The shape of the i-th leaf is
         ``(n_groups, *x_leaf[i].shape)``, where x_leaf is the ``jax.tree_util.tree_leaves(x)[i]``.
@@ -183,23 +173,53 @@ def prox_group_lasso(
     Journal of the Royal Statistical Society Series B: Statistical Methodology 68.1 (2006): 49-67.
 
     """
-    # shape: (n_groups, )
-    l2_norm = masked_norm_2(x, mask)
-    # compute shrinkage
-    factor = 1 - regularizer_strength * scaling / l2_norm
-    factor = jax.nn.relu(factor)
+    l2_norm = masked_norm_2(x, mask)  # (n_groups,)
 
-    # the leaf dim of regularized match that of x
-    regularized = jax.tree_util.tree_map(lambda mi: mi.sum(axis=0).astype(bool), mask)
-    return jax.tree_util.tree_map(
-        lambda r, xi, mi: jnp.where(r, xi * jnp.einsum("i, i...->...", factor, mi), xi),
-        regularized,
-        x,
-        mask,
-    )
+    def prox_leaf(xi, mi, s, l2):
+        factor = jax.nn.relu(1.0 - scaling * s / l2)  # (n_groups,)
+        regularized = mi.sum(axis=0) > 0  # (n_features,)
+        return jnp.where(
+            regularized,
+            xi * jnp.einsum("i, i...->...", factor, mi),
+            xi,
+        )
+
+    l2_tree = jax.tree_util.tree_map(lambda _: l2_norm, x)
+    return jax.tree_util.tree_map(prox_leaf, x, mask, strength, l2_tree)
 
 
-def prox_lasso(x: Any, l1reg: Optional[Any] = None, scaling: float = 1.0) -> Any:
+def prox_ridge(x: Any, strength: Any, scaling: float = 1.0) -> Any:
+    r"""Proximal operator for the squared l2 norm.
+
+    Minimizes the following function:
+
+    $$
+      \underset{y}{\text{argmin}} ~ \frac{1}{2} ||x - y||_2^2
+      + \text{scaling} \cdot \text{l2reg} \cdot ||y||_2^2
+    $$
+
+    Parameters
+    ----------
+    x :
+        Input pytree.
+    strength :
+        Regularization strength, pytree with the same structure as `x`.
+    scaling :
+        A scaling factor. Default is 1.0.
+
+    Returns
+    -------
+    :
+        Output pytree with the same structure as `x`.
+    """
+
+    def fun(u, s):
+        return u * (1.0 / (1 + scaling * s))
+
+    return jax.tree_util.tree_map(fun, x, strength)
+
+
+def prox_lasso(x: Any, strength: Any, scaling: float = 1.0) -> Any:
     r"""Proximal operator for the l1 norm, i.e., soft-thresholding operator.
 
     Minimizes the following function:
@@ -209,14 +229,14 @@ def prox_lasso(x: Any, l1reg: Optional[Any] = None, scaling: float = 1.0) -> Any
       + \text{scaling} \cdot \text{l1reg} \cdot ||y||_1
     $$
 
-    When `l1reg` is a pytree, the weights are applied coordinate-wise.
+    `l1reg` is a pytree, thus the weights are applied coordinate-wise.
 
     Parameters
     ----------
     x :
         Input pytree.
-    l1reg :
-        Regularization strength, float or pytree with the same structure as `x`. Default is None.
+    strength :
+        Regularization strength, pytree with the same structure as `x`.
     scaling :
         A scaling factor. Default is 1.0.
 
@@ -225,21 +245,14 @@ def prox_lasso(x: Any, l1reg: Optional[Any] = None, scaling: float = 1.0) -> Any
     :
         Output pytree with the same structure as `x`.
     """
-    if l1reg is None:
-        l1reg = 1.0
 
-    if jnp.isscalar(l1reg):
-        l1reg = jax.tree_util.tree_map(lambda y: l1reg * jnp.ones_like(y), x)
+    def fun(u, s):
+        return jnp.sign(u) * jax.nn.relu(jnp.abs(u) - s * scaling)
 
-    def fun(u, v):
-        return jnp.sign(u) * jax.nn.relu(jnp.abs(u) - v * scaling)
-
-    return jax.tree_util.tree_map(fun, x, l1reg)
+    return jax.tree_util.tree_map(fun, x, strength)
 
 
-def prox_elastic_net(
-    x: Any, hyperparams: Optional[Tuple[Any, Any]] = None, scaling: float = 1.0
-) -> Any:
+def prox_elastic_net(x: Any, strength: Any, scaling: float = 1.0) -> Any:
     r"""Proximal operator for the elastic net.
 
     .. math::
@@ -253,9 +266,9 @@ def prox_elastic_net(
     ----------
     x :
         Input pytree.
-    hyperparams :
-        A tuple, where both ``hyperparams[0]`` and ``hyperparams[1]`` can be either floats or pytrees with the same
-        structure as ``x``.
+    strength :
+        Regularization strength, pytree with the same structure as `x`.
+        Leafs should be tuples of strengths and ratios.
     scaling :
         A scaling factor.
 
@@ -264,26 +277,16 @@ def prox_elastic_net(
     :
         Output pytree, with the same structure as ``x``.
     """
-    if hyperparams is None:
-        hyperparams = (0.5, 1.0)
-
-    # hyperparams[0] = regularizer_strength*regularizer_ratio
-    lam = (
-        tree_util.tree_map(lambda y: hyperparams[0] * jnp.ones_like(y), x)
-        if isinstance(hyperparams[0], float)
-        else hyperparams[0]
-    )
-    # hyperparams[1] = (1 - regularizer_ratio)/regularizer_ratio
-    gam = (
-        tree_util.tree_map(lambda y: hyperparams[1] * jnp.ones_like(y), x)
-        if isinstance(hyperparams[1], float)
-        else hyperparams[1]
-    )
 
     def prox_l1(u, lambd):
         return jnp.sign(u) * jax.nn.relu(jnp.abs(u) - lambd)
 
-    def fun(u, lambd, gamma):
-        return prox_l1(u, scaling * lambd) / (1.0 + scaling * lambd * gamma)
+    def fun(u, leaf_strength):
+        s, r = leaf_strength
 
-    return tree_util.tree_map(fun, x, lam, gam)
+        lam = s * r
+        gamma = (1.0 - r) / r
+
+        return prox_l1(u, scaling * lam) / (1.0 + scaling * lam * gamma)
+
+    return jax.tree_util.tree_map(fun, x, strength)

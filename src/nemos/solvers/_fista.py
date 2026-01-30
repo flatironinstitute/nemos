@@ -44,8 +44,6 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
         Norm to use in Cauchy termination.
     prox:
         Proximal operator function.
-    regularizer_strength:
-        Regularizer strength passed to the proximal operator.
     stepsize:
         If None (default), use backtracking linesearch to determine an
         appropriate stepsize on each iteration.
@@ -74,7 +72,6 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
     norm: Callable
 
     prox: Callable
-    regularizer_strength: float | None
 
     stepsize: float | None = None
     maxls: int = 15
@@ -249,7 +246,7 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
             # use the fixed stepsize
             new_stepsize = self.stepsize
             new_y = tree_add_scalar_mul(update_point, -new_stepsize, grad_at_point)
-            new_y = self.prox(new_y, self.regularizer_strength, new_stepsize)
+            new_y = self.prox(new_y, (), new_stepsize)
 
         return new_y, new_stepsize
 
@@ -290,11 +287,11 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
             stepsize = carry[1]
             new_stepsize = stepsize * self.decrease_factor
             next_x = tree_add_scalar_mul(x, -new_stepsize, grad)
-            next_x = self.prox(next_x, self.regularizer_strength, new_stepsize)
+            next_x = self.prox(next_x, (), new_stepsize)
             return next_x, new_stepsize
 
         init_x = tree_add_scalar_mul(x, -stepsize, grad)
-        init_x = self.prox(init_x, self.regularizer_strength, stepsize)
+        init_x = self.prox(init_x, (), stepsize)
         init_val = (init_x, stepsize)
 
         return eqx.internal.while_loop(
@@ -351,7 +348,6 @@ class GradientDescent(FISTA):
     """Gradient descent with Nesterov acceleration. Adapted from JAXopt."""
 
     prox: ClassVar[Callable] = staticmethod(prox_none)
-    regularizer_strength: float | None = None
 
 
 class OptimistixFISTA(OptimistixAdapter):

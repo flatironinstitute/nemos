@@ -2367,7 +2367,6 @@ class TestGLMObservationModel:
 
     @staticmethod
     def _get_expected_par_shape(X, y, model):
-
         X_flat = jax.tree_util.tree_leaves(X)
         n_features = [x.shape[1] for x in X_flat]
         is_population = is_population_model(model)

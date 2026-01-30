@@ -100,6 +100,15 @@ glm_for_classification.md
 
 plot_07_glm_pytree.md
 ```
+:::
+
+:::{grid-item-card}
+
+```{toctree}
+:maxdepth: 2
+
+finegrained_regularization.md
+```
 
 :::
 
