@@ -1488,7 +1488,6 @@ class PopulationGLM(GLM):
     def __sklearn_clone__(self) -> PopulationGLM:
         """Clone the PopulationGLM, dropping feature_mask."""
         params = self.get_params(deep=False)
-        params.pop("feature_mask")
         klass = self.__class__(**params)
         # reattach metadata
         klass._metadata = self._metadata
