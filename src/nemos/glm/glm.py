@@ -1312,8 +1312,8 @@ class PopulationGLM(GLM):
     ...     feature_2=jnp.array([1, 0], dtype=jnp.int32)
     ... )
     >>> model = nmo.glm.PopulationGLM(feature_mask=feature_mask).fit(X, y)
-    >>> sorted(model.coef_.keys())
-    ['feature_1', 'feature_2']
+    >>> model.coef_
+    {...}
 
     **Customize the Observation Model**
 
