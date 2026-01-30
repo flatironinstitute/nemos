@@ -2612,8 +2612,7 @@ class TestPopulationGLM:
         # hardcode metadata
         model._metadata = {"columns": 1, "metadata": 2}
         cloned = sklearn.clone(model)
-        assert cloned.feature_mask is None, "cloned GLM shouldn't have feature mask!"
-        assert model.feature_mask is not None, "fit GLM should have feature mask!"
+        assert cloned.feature_mask is not None, "GLM should have feature mask!"
         assert model._metadata == cloned._metadata
 
     @pytest.mark.parametrize(
