@@ -383,7 +383,7 @@ def _check_unique_shapes(inputs: List[NDArray] | List[Tuple], basis: "BasisMixin
         )
 
 
-def set_input_shape(bas, *xi, allow_inputs_of_different_shape=True):
+def set_input_shape(bas, *xi):
     """Set input shape.
 
     Set input shape logic, compatible with all bases (composite, atomic, and custom).
@@ -416,6 +416,9 @@ def set_input_shape(bas, *xi, allow_inputs_of_different_shape=True):
             f"Cannot convert inputs ``{original_xi}`` to shape tuple."
         ) from e
 
+    allow_inputs_of_different_shape = getattr(
+        bas, "_allow_inputs_of_different_shape", True
+    )
     if not allow_inputs_of_different_shape:
         _check_unique_shapes(xi, bas)
 

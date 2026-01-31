@@ -781,7 +781,7 @@ def _em_step(
 
     (log_init_prob, log_trans_matrix, glm_params), previous_state = carry
 
-    (log_posteriors, log_joint_posterior, _, new_log_like, _, _) = forward_backward(
+    log_posteriors, log_joint_posterior, _, new_log_like, _, _ = forward_backward(
         X,
         y,
         log_init_prob,
@@ -945,7 +945,7 @@ def em_glm_hmm(
     )
 
     # final posterior calculation
-    (log_posteriors, log_joint_posterior, _, _, _, _) = forward_backward(
+    log_posteriors, log_joint_posterior, _, _, _, _ = forward_backward(
         X,
         y,
         log_initial_prob,

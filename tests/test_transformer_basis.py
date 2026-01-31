@@ -5,7 +5,7 @@ from contextlib import nullcontext as does_not_raise
 from copy import deepcopy
 from unittest.mock import patch
 
-import jax
+import jax.numpy as jnp
 import numpy as np
 import pytest
 from conftest import (
@@ -545,13 +545,13 @@ def test_transformerbasis_sk_clone_kernel_noned(basis_cls, basis_class_specific_
 
     # kernel should be saved in the object after fit
     trans_bas.fit(np.random.randn(100, 1))
-    assert isinstance(trans_bas.kernel_, np.ndarray)
+    assert isinstance(trans_bas.kernel_, (np.ndarray, jnp.ndarray))
 
     # cloning should set kernel_ to None
     trans_bas_clone = sk_clone(trans_bas)
 
     # the original object should still have kernel_
-    assert isinstance(trans_bas.kernel_, np.ndarray)
+    assert isinstance(trans_bas.kernel_, (np.ndarray, jnp.ndarray))
     # but the clone should not have one
     assert trans_bas_clone.kernel_ is None
 

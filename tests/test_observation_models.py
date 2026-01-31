@@ -18,12 +18,25 @@ from nemos.glm.initialize_parameters import initialize_intercept_matching_mean_r
 
 
 @pytest.fixture
-def observation_model_rate_and_samples(observation_model_string, shape=None):
+def observation_model_rate_and_samples(request, observation_model_string):
     """
     Fixture that returns rate and samples for each observation model.
     """
-    if shape is None:
+    # Try to get shape from indirect parametrization
+    if hasattr(request, "param"):
+        shape = request.param
+    else:
+        # Check if shape is in the test's funcargs (for direct parametrization)
+        shape = request.node.funcargs.get("shape", None)
+
+    if observation_model_string == "Categorical":
+        n_classes = 3
+    if shape is None and observation_model_string != "Categorical":
         shape = (10,)
+    elif shape is None and observation_model_string == "Categorical":
+        shape = (10, n_classes)
+    elif observation_model_string == "Categorical":
+        shape = (*shape, n_classes)
     obs = instantiate_observation_model(observation_model_string)
     rate = jax.random.uniform(
         jax.random.PRNGKey(122), shape=shape, minval=0.1, maxval=10
@@ -43,6 +56,10 @@ def observation_model_rate_and_samples(observation_model_string, shape=None):
         gamma_key, poisson_key = jax.random.split(jax.random.PRNGKey(123))
         gamma_sample = jax.random.gamma(gamma_key, r, shape=rate.shape) * (rate / r)
         y = jax.random.poisson(poisson_key, gamma_sample)
+    elif observation_model_string == "Categorical":
+        rate = jax.nn.log_softmax(rate)  # log-proba
+        y = jax.random.categorical(jax.random.PRNGKey(123), rate)
+        y = jax.nn.one_hot(y, num_classes=3, dtype=float)
     else:
         raise ValueError(f"Unknown observation model {observation_model_string}.")
     return obs, y, rate
@@ -73,6 +90,11 @@ def gaussian_observations():
     return nmo.observation_models.GaussianObservations
 
 
+@pytest.fixture()
+def categorical_observations():
+    return nmo.observation_models.CategoricalObservations
+
+
 @pytest.mark.parametrize(
     "obs_model_string, expectation",
     [
@@ -81,6 +103,12 @@ def gaussian_observations():
         ("Bernoulli", does_not_raise()),
         ("NegativeBinomial", does_not_raise()),
         ("Gaussian", does_not_raise()),
+        (
+            "Categorical",
+            pytest.raises(
+                TypeError, match="The ``CategoricalObservations`` observation type is"
+            ),
+        ),
         (
             "invalid",
             pytest.raises(ValueError, match="Unknown observation model: invalid"),
@@ -102,12 +130,24 @@ def test_glm_instantiation_from_string_at_init(
         ("Gamma", does_not_raise()),
         ("Bernoulli", does_not_raise()),
         ("Gaussian", does_not_raise()),
+        (
+            "Categorical",
+            pytest.raises(
+                TypeError, match="The ``CategoricalObservations`` observation type is"
+            ),
+        ),
+        ("NegativeBinomial", does_not_raise()),
         ("nemos.observation_models.PoissonObservations", does_not_raise()),
         ("nemos.observation_models.GammaObservations", does_not_raise()),
         ("nemos.observation_models.BernoulliObservations", does_not_raise()),
         ("nemos.observation_models.GaussianObservations", does_not_raise()),
-        ("NegativeBinomial", does_not_raise()),
-        ("nemos.observation_models.NegativeBinomial", does_not_raise()),
+        (
+            "nemos.observation_models.CategoricalObservations",
+            pytest.raises(
+                TypeError, match="The ``CategoricalObservations`` observation type is"
+            ),
+        ),
+        ("nemos.observation_models.NegativeBinomialObservations", does_not_raise()),
         (
             "invalid",
             pytest.raises(ValueError, match="Unknown observation model: invalid"),
@@ -153,6 +193,10 @@ def test_glm_setter_observation_model(obs_model_string, glm_class, expectation):
         assert isinstance(
             model.observation_model, nmo.observation_models.GaussianObservations
         )
+    elif obs_model_string == "Categorical":
+        assert isinstance(
+            model.observation_model, nmo.observation_models.CategoricalObservations
+        )
 
 
 @pytest.mark.parametrize(
@@ -163,6 +207,7 @@ def test_glm_setter_observation_model(obs_model_string, glm_class, expectation):
         ("Bernoulli", does_not_raise()),
         ("NegativeBinomial", does_not_raise()),
         ("Gaussian", does_not_raise()),
+        ("Categorical", does_not_raise()),
         ("NB", pytest.raises(ValueError, match="Unknown observation model: NB")),
     ],
 )
@@ -696,6 +741,114 @@ class TestGaussianObservations:
         assert repr(obs) == f"GaussianObservations()"
 
 
+class TestCategoricalObservations:
+
+    @staticmethod
+    def log_likelihood(y, log_proba):
+        proba = jnp.exp(log_proba)
+        proba = proba.reshape(-1, proba.shape[-1])
+        y = y.reshape(-1)
+        res = np.array(
+            [
+                sts.multinomial(1, pi).logpmf(jax.nn.one_hot(yi, proba.shape[-1]))
+                for pi, yi in zip(proba, y)
+            ]
+        )
+        return res
+
+    def test_get_params(self, categorical_observations):
+        """Test get_params() returns expected values."""
+        observation_model = categorical_observations()
+
+        assert observation_model.get_params() == {}
+
+    def test_deviance_against_scipy(self, classifierGLM_model_instantiation):
+        """
+        Compare fitted parameters to statsmodels.
+        Assesses if the model estimates are close to statsmodels' results.
+        """
+        _, y, model, _, firing_rate = classifierGLM_model_instantiation
+        dev = -2 * self.log_likelihood(y, firing_rate).sum()
+        dev_model = model.observation_model.deviance(
+            jax.nn.one_hot(jnp.asarray(y, dtype=int), model.n_classes), firing_rate
+        ).sum()
+        if not np.allclose(dev, dev_model):
+            raise ValueError("Deviance doesn't match statsmodels!")
+
+    def test_loglikelihood_against_scipy(self, classifierGLM_model_instantiation):
+        """
+        Compare log-likelihood to scipy.
+        Assesses if the model estimates are close to statsmodels' results.
+        """
+        _, y, model, _, firing_rate = classifierGLM_model_instantiation
+        ll_model = model.observation_model.log_likelihood(
+            jax.nn.one_hot(jnp.asarray(y, dtype=int), model.n_classes), firing_rate
+        )
+        ll_scipy = self.log_likelihood(y, firing_rate).mean()
+        if not np.allclose(ll_model, ll_scipy):
+            raise ValueError("Log-likelihood doesn't match scipy!")
+
+    @pytest.mark.requires_x64
+    def test_loglikelihood_per_sample_against_scipy(
+        self, classifierGLM_model_instantiation
+    ):
+        """
+        Compare log-likelihood to scipy.
+        Assesses if the model estimates are close to statsmodels' results.
+        """
+        _, y, model, _, firing_rate = classifierGLM_model_instantiation
+        ll_model = model.observation_model.log_likelihood(
+            jax.nn.one_hot(jnp.asarray(y, dtype=int), model.n_classes),
+            firing_rate,
+            aggregate_sample_scores=lambda x: x,
+        )
+        ll_scipy = self.log_likelihood(y, firing_rate)
+        if not np.allclose(ll_model, ll_scipy):
+            raise ValueError("Log-likelihood doesn't match scipy!")
+
+    def test_emission_probability(self, classifierGLM_model_instantiation):
+        """
+        Test the poisson emission probability.
+
+        Check that the emission probability is set to jax.random.poisson.
+        """
+        _, _, model, _, _ = classifierGLM_model_instantiation
+        key_array = jax.random.key(123)
+        p = jax.nn.log_softmax(np.random.randn(10, 4), axis=1)
+        counts = model.observation_model.sample_generator(key_array, p)
+        expected_counts = jax.nn.one_hot(jax.random.categorical(key_array, p), 4)
+        if not jnp.all(counts == expected_counts):
+            raise ValueError(
+                "The emission probability should output the results of a call to jax.random.poisson."
+            )
+
+    def test_pseudo_r2_vs_statsmodels(self, classifierGLM_model_instantiation):
+        """
+        Compare log-likelihood to scipy.
+        Assesses if the model estimates are close to statsmodels' results.
+        """
+        X, y, model, _, firing_rate = classifierGLM_model_instantiation
+
+        # statsmodels mcfadden
+        mdl = sm.MNLogit(y, sm.add_constant(X)).fit()
+        pr2_sms = mdl.prsquared
+
+        # set params
+        log_proba = jnp.log(mdl.predict(sm.add_constant(X)))
+        pr2_model = model.observation_model.pseudo_r2(
+            jax.nn.one_hot(jnp.asarray(y, dtype=int), model.n_classes),
+            log_proba,
+            score_type="pseudo-r2-McFadden",
+        )
+
+        if not np.allclose(pr2_model, pr2_sms):
+            raise ValueError("Log-likelihood doesn't match statsmodels!")
+
+    def test_repr_out(self):
+        obs = nmo.observation_models.CategoricalObservations()
+        assert repr(obs) == f"CategoricalObservations()"
+
+
 @pytest.mark.parametrize("observation_model_string", AVAILABLE_OBSERVATION_MODELS)
 class TestCommonObservationModels:
 
@@ -760,7 +913,11 @@ class TestCommonObservationModels:
         obs, y, rate = observation_model_rate_and_samples
         sm = obs.log_likelihood(y, rate, aggregate_sample_scores=jnp.sum)
         mn = obs.log_likelihood(y, rate, aggregate_sample_scores=jnp.mean)
-        assert np.allclose(sm, mn * math.prod(y.shape))
+        if isinstance(obs, nmo.observation_models.CategoricalObservations):
+            n_samp = math.prod(y[..., 0].shape)
+        else:
+            n_samp = math.prod(y.shape)
+        assert np.allclose(sm, mn * n_samp)
 
     @pytest.mark.parametrize("shape", [(10,), (10, 5), (10, 5, 2)])
     def test_aggregation_score_neg_ll(
@@ -769,7 +926,11 @@ class TestCommonObservationModels:
         obs, y, rate = observation_model_rate_and_samples
         sm = obs._negative_log_likelihood(y, rate, jnp.sum)
         mn = obs._negative_log_likelihood(y, rate, jnp.mean)
-        assert np.allclose(sm, mn * math.prod(y.shape))
+        if isinstance(obs, nmo.observation_models.CategoricalObservations):
+            n_samp = math.prod(y[..., 0].shape)
+        else:
+            n_samp = math.prod(y.shape)
+        assert np.allclose(sm, mn * n_samp)
 
     def test_scale_getter(
         self, observation_model_string, observation_model_rate_and_samples
@@ -831,6 +992,11 @@ class TestCommonObservationModels:
         Check that the pseudo-r2 of the null model is 0.
         """
         obs, y, rate = observation_model_rate_and_samples
+        if isinstance(obs, nmo.observation_models.CategoricalObservations):
+            pytest.skip(
+                "CategoricalObservations models log-probabilities, not the mean, therefore"
+                "this property does not hold."
+            )
         pseudo_r2 = obs.pseudo_r2(y, y.mean(), score_type=score_type)
         if not np.allclose(pseudo_r2, 0, atol=10**-7, rtol=0.0):
             raise ValueError(
@@ -838,8 +1004,13 @@ class TestCommonObservationModels:
             )
 
     @pytest.mark.parametrize("score_type", ["pseudo-r2-Cohen", "pseudo-r2-McFadden"])
+    @pytest.mark.parametrize("shape", [(100,)])
     def test_pseudo_r2_range(
-        self, score_type, observation_model_string, observation_model_rate_and_samples
+        self,
+        score_type,
+        shape,
+        observation_model_string,
+        observation_model_rate_and_samples,
     ):
         """
         Compute the pseudo-r2 and check that is < 1.
@@ -955,6 +1126,12 @@ def test_valid_observation_model(valid_observation_model):
 def test_nemos_model_pass_check(observation):
     """Test that a valid observation model passes all checks."""
     obs = instantiate_observation_model(observation)
+    if isinstance(obs, nmo.observation_models.CategoricalObservations):
+        pytest.skip(
+            reason="CategoricalObservations requires a different input shape. "
+            "Revisit the ``check_observation_model`` function once the "
+            "GLM validator logic allows more flexibility."
+        )
     nmo.observation_models.check_observation_model(obs, force_checks=True)
 
 

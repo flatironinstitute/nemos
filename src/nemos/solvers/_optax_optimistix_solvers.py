@@ -8,10 +8,9 @@ import optax
 import optimistix as optx
 
 from ..regularizer import Regularizer
-from ..typing import Pytree
-from ._optimistix_solvers import (
+from ..typing import Params, Pytree
+from ._optimistix_adapter import (
     DEFAULT_ATOL,
-    DEFAULT_MAX_STEPS,
     DEFAULT_RTOL,
     OptimistixAdapter,
 )
@@ -43,11 +42,9 @@ class AbstractOptimistixOptaxSolver(OptimistixAdapter, abc.ABC):
         )
         init_doc = init_header + "\n" + init_doc
 
-        optax_header = inspect.cleandoc(
-            f"""
+        optax_header = inspect.cleandoc(f"""
             More info from Optax's {cls._optax_solver.__name__} documentation:
-            """
-        )
+            """)
         optax_header += "\n" + "-" * len(optax_header)
         optax_doc = inspect.cleandoc(
             inspect.getdoc(cls._optax_solver) or "No documentation found in Optax."
@@ -109,9 +106,10 @@ class OptimistixOptaxGradientDescent(AbstractOptimistixOptaxSolver):
         regularizer: Regularizer,
         regularizer_strength: float | None,
         has_aux: bool,
+        init_params: Params | None = None,
         tol: float = DEFAULT_ATOL,
         rtol: float = DEFAULT_RTOL,
-        maxiter: int = DEFAULT_MAX_STEPS,
+        maxiter: int = 500,
         momentum: float | None = None,
         acceleration: bool = True,
         stepsize: float | None = None,
@@ -148,6 +146,7 @@ class OptimistixOptaxGradientDescent(AbstractOptimistixOptaxSolver):
             regularizer,
             regularizer_strength,
             has_aux,
+            init_params=init_params,
             tol=tol,
             rtol=rtol,
             maxiter=maxiter,
@@ -165,12 +164,10 @@ class OptimistixOptaxGradientDescent(AbstractOptimistixOptaxSolver):
     @classmethod
     def _note_about_accepted_arguments(cls) -> str:
         note = super()._note_about_accepted_arguments()
-        accel_nesterov = inspect.cleandoc(
-            """
+        accel_nesterov = inspect.cleandoc("""
             `acceleration` is passed to `optax.sgd` as the `nesterov` parameter.
             Note that this only has an effect if `momentum` is used as well.
-            """
-        )
+            """)
         return inspect.cleandoc(note + "\n" + accel_nesterov)
 
 
@@ -195,9 +192,10 @@ class OptimistixOptaxLBFGS(AbstractOptimistixOptaxSolver):
         regularizer: Regularizer,
         regularizer_strength: float | None,
         has_aux: bool,
+        init_params: Params | None = None,
         tol: float = DEFAULT_ATOL,
         rtol: float = DEFAULT_RTOL,
-        maxiter: int = DEFAULT_MAX_STEPS,
+        maxiter: int = 500,
         stepsize: float | None = None,
         memory_size: int = 10,
         scale_init_precond: bool = True,
@@ -223,6 +221,7 @@ class OptimistixOptaxLBFGS(AbstractOptimistixOptaxSolver):
             regularizer,
             regularizer_strength,
             has_aux,
+            init_params=init_params,
             tol=tol,
             rtol=rtol,
             maxiter=maxiter,

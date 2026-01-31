@@ -39,6 +39,45 @@ from nemos.basis._basis import Basis
 from nemos.basis._basis_mixin import BasisMixin
 from nemos.basis._transformer_basis import TransformerBasis
 from nemos.glm.params import GLMParams
+from nemos.inverse_link_function_utils import log_softmax
+from nemos.pytrees import FeaturePytree
+
+
+def initialize_feature_mask_for_population_glm(X, n_neurons: int, coef=None):
+    """
+    Create a feature mask of ones for PopulationGLM testing.
+
+    This is a test utility function that creates a feature mask with all ones,
+    matching the structure of X.
+
+    Parameters
+    ----------
+    X :
+        The design matrix. Can be a FeaturePytree, dict, or array.
+    n_neurons :
+        Number of neurons (determines the second dimension of the mask).
+        Ignored if coef is provided.
+    coef :
+        Optional coefficient array/pytree. If provided, the mask shape will match
+        coef shape exactly (required for ClassifierPopulationGLM).
+
+    Returns
+    -------
+    :
+        A feature mask with all ones. If coef is provided, returns ones_like(coef).
+        Otherwise, if X is a FeaturePytree or dict, returns a dict with arrays
+        of shape (n_neurons,) for each key.
+        If X is an array, returns an array of shape (n_features, n_neurons).
+    """
+    if coef is not None:
+        return jax.tree_util.tree_map(lambda c: jnp.ones(c.shape), coef)
+    if isinstance(X, FeaturePytree):
+        return jax.tree_util.tree_map(lambda x: jnp.ones((n_neurons,)), X.data)
+    elif isinstance(X, dict):
+        return jax.tree_util.tree_map(lambda x: jnp.ones((n_neurons,)), X)
+    else:
+        return jnp.ones((X.shape[1], n_neurons))
+
 
 DEFAULT_KWARGS = {
     "n_basis_funcs": 5,
@@ -565,20 +604,6 @@ def coupled_model_simulate():
 
 
 @pytest.fixture
-def jaxopt_solvers():
-    return [
-        "GradientDescent",
-        "BFGS",
-        "LBFGS",
-        "ScipyMinimize",
-        "NonlinearCG",
-        "ScipyBoundedMinimize",
-        "LBFGSB",
-        "ProximalGradient",
-    ]
-
-
-@pytest.fixture
 def poissonGLM_model_instantiation_group_sparse():
     """Set up a Poisson GLM for testing purposes with group sparse weights.
 
@@ -969,7 +994,132 @@ def bernoulliGLM_model_instantiation_pytree(bernoulliGLM_model_instantiation):
         true_params.intercept,
     )
     model_tree = nmo.glm.GLM(model.observation_model, regularizer=model.regularizer)
-    return X_tree, np.random.binomial(1, rate), model_tree, true_params_tree, rate
+    return X_tree, spikes, model_tree, true_params_tree, rate
+
+
+@pytest.fixture
+def classifierGLM_model_instantiation():
+    """Set up a categorical GLM for testing purposes.
+
+    This fixture initializes a categorical GLM with random parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response.
+
+    Returns:
+        tuple: A tuple containing:
+            - X (numpy.ndarray): Simulated input data.
+            - jax.random.categorical(key, rate) (numpy.ndarray): Simulated spike responses.
+            - model (nmo.glm.GLM): Initialized model instance.
+            - GLMParams(w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of log-proba.
+    """
+    np.random.seed(123)
+    num_classes = 3
+    X = np.random.normal(size=(100, 5))
+    # Over-parameterized model: one set of params per class
+    b_true = np.zeros((num_classes,))
+    w_true = np.random.normal(size=(5, num_classes))
+    regularizer = nmo.regularizer.UnRegularized()
+    model = nmo.glm.ClassifierGLM(num_classes, regularizer=regularizer)
+    # Use jax.nn.log_softmax directly (no padding)
+    rate = jax.nn.log_softmax(jnp.einsum("ki,tk->ti", w_true, X) + b_true)
+    key = jax.random.PRNGKey(123)
+    y = jax.random.categorical(key, rate)
+    model.set_classes(np.arange(num_classes))
+    return X, y, model, GLMParams(w_true, b_true), rate
+
+
+@pytest.fixture
+def classifierGLM_model_instantiation_pytree(classifierGLM_model_instantiation):
+    """Set up a categorical GLM for testing purposes.
+
+    This fixture initializes a categorical GLM with random parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response.
+
+    Returns:
+        tuple: A tuple containing:
+            - X (numpy.ndarray): Simulated input data.
+            - jax.random.categorical(key, rate) (numpy.ndarray): Simulated spike responses.
+            - model (nmo.glm.GLM): Initialized model instance.
+            - GLMParams(w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of log-proba.
+    """
+    X, spikes, model, true_params, rate = classifierGLM_model_instantiation
+    X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
+    true_params_tree = GLMParams(
+        dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
+        true_params.intercept,
+    )
+    model_tree = nmo.glm.ClassifierGLM(
+        n_classes=model.n_classes, regularizer=model.regularizer
+    )
+    model_tree.set_classes(np.arange(model.n_classes))
+    return X_tree, spikes, model_tree, true_params_tree, rate
+
+
+@pytest.fixture
+def population_classifierGLM_model_instantiation():
+    """Set up a categorical GLM for testing purposes.
+
+    This fixture initializes a categorical GLM with random parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response.
+
+    Returns:
+        tuple: A tuple containing:
+            - X (numpy.ndarray): Simulated input data.
+            - jax.random.categorical(key, rate) (numpy.ndarray): Simulated spike responses.
+            - model (nmo.glm.GLM): Initialized model instance.
+            - GLMParams(w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of log-proba.
+    """
+    np.random.seed(123)
+    num_classes = 3
+    n_neurons = 3
+    X = np.random.normal(size=(100, 5))
+    # Over-parameterized model: one set of params per class
+    b_true = np.zeros((n_neurons, num_classes))
+    w_true = np.random.normal(size=(5, n_neurons, num_classes))
+    regularizer = nmo.regularizer.UnRegularized()
+    model = nmo.glm.ClassifierPopulationGLM(num_classes, regularizer=regularizer)
+    # Use jax.nn.log_softmax directly (no padding)
+    rate = jax.nn.log_softmax(jnp.einsum("kni,tk->tni", w_true, X) + b_true)
+    key = jax.random.PRNGKey(123)
+    y = jax.random.categorical(key, rate)
+    model.set_classes(np.arange(num_classes))
+    return X, y, model, GLMParams(w_true, b_true), rate
+
+
+@pytest.fixture
+def population_classifierGLM_model_instantiation_pytree(
+    population_classifierGLM_model_instantiation,
+):
+    """Set up a categorical GLM for testing purposes.
+
+    This fixture initializes a categorical GLM with random parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response.
+
+    Returns:
+        tuple: A tuple containing:
+            - X (numpy.ndarray): Simulated input data.
+            - jax.random.categorical(key, rate) (numpy.ndarray): Simulated spike responses.
+            - model (nmo.glm.GLM): Initialized model instance.
+            - GLMParams(w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of log-proba.
+    """
+    X, spikes, model, true_params, rate = population_classifierGLM_model_instantiation
+    X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
+    true_params_tree = GLMParams(
+        dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
+        true_params.intercept,
+    )
+    model_tree = nmo.glm.ClassifierPopulationGLM(
+        n_classes=model.n_classes, regularizer=model.regularizer
+    )
+    model_tree.set_classes(np.arange(model.n_classes))
+    return X_tree, spikes, model_tree, true_params_tree, rate
 
 
 @pytest.fixture
@@ -1234,8 +1384,77 @@ def instantiate_population_glm_func(
     model.coef_ = np.random.randn(n_features, n_neurons)
     model.intercept_ = np.random.randn(n_neurons)
     if simulate:
-        model._initialize_feature_mask(X, np.empty(shape=(X.shape[0], n_neurons)))
+        model._feature_mask = initialize_feature_mask_for_population_glm(X, n_neurons)
         counts, rates = model.simulate(jax.random.PRNGKey(1234), X)
+    else:
+        counts, rates = None, None
+    return ModelFixture(
+        X=X,
+        y=counts,
+        model=model,
+        params=GLMParams(model.coef_, model.intercept_),
+        rates=rates,
+        extra=None,
+    )
+
+
+def instantiate_classifier_glm_func(
+    n_neurons=3,
+    regularizer: str = "UnRegularized",
+    solver_name: str = None,
+    simulate=False,
+):
+    np.random.seed(124)
+    n_features = 2
+    n_classes = 4
+    X = np.ones((500, n_features))
+    X[:250, 0] = 0
+    X[np.arange(500) % 2 == 1, 1] = 0
+    model = nmo.glm.ClassifierGLM(
+        n_classes=n_classes,
+        regularizer=regularizer,
+        solver_name=solver_name,
+    )
+    model.coef_ = np.random.randn(n_features, n_classes)
+    model.intercept_ = np.random.randn(n_classes)
+    model.set_classes(np.arange(n_classes))
+    if simulate:
+        counts, rates = model.simulate(jax.random.PRNGKey(123), X)
+    else:
+        counts, rates = None, None
+    return ModelFixture(
+        X=X,
+        y=counts,
+        model=model,
+        params=GLMParams(model.coef_, model.intercept_),
+        rates=rates,
+        extra=None,
+    )
+
+
+def instantiate_population_classifier_glm_func(
+    n_neurons=3,
+    regularizer: str = "UnRegularized",
+    solver_name: str = None,
+    simulate=False,
+):
+    np.random.seed(124)
+    n_features = 2
+    n_classes = 4
+    X = np.ones((500, n_features))
+    X[:250, 0] = 0
+    X[np.arange(500) % 2 == 1, 1] = 0
+    model = nmo.glm.ClassifierPopulationGLM(
+        n_classes=n_classes,
+        regularizer=regularizer,
+        solver_name=solver_name,
+    )
+    model.set_classes(np.arange(n_classes))
+    model.coef_ = np.random.randn(n_features, n_neurons, n_classes)
+    model.intercept_ = np.random.randn(n_neurons, n_classes)
+    if simulate:
+        model._feature_mask = initialize_feature_mask_for_population_glm(X, n_neurons)
+        counts, rates = model.simulate(jax.random.PRNGKey(123), X)
     else:
         counts, rates = None, None
     return ModelFixture(
@@ -1257,7 +1476,15 @@ MODEL_CONFIG = {
         "is_population": False,
         "default_y_shape": (500,),
     },
+    "ClassifierGLM": {
+        "is_population": False,
+        "default_y_shape": (500,),
+    },
     "PopulationGLM": {
+        "is_population": True,
+        "default_y_shape": (500, 3),
+    },
+    "ClassifierPopulationGLM": {
         "is_population": True,
         "default_y_shape": (500, 3),
     },
@@ -1295,6 +1522,10 @@ def instantiate_base_regressor_subclass(request):
             result = instantiate_population_glm_func(
                 obs_model=obs_model, simulate=simulate
             )
+        elif model_name == "ClassifierGLM":
+            result = instantiate_classifier_glm_func(simulate=simulate)
+        elif model_name == "ClassifierPopulationGLM":
+            result = instantiate_population_classifier_glm_func(simulate=simulate)
         else:
             raise ValueError("model_name {} unknown".format(model_name))
         _MODEL_CACHE[cache_key] = result
@@ -1321,14 +1552,6 @@ _common_solvers = {
     "ProxSVRG": nmo.solvers.WrappedProxSVRG,
 }
 _solver_registry_per_backend = {
-    "jaxopt": {
-        **_common_solvers,
-        "GradientDescent": nmo.solvers.JaxoptGradientDescent,
-        "ProximalGradient": nmo.solvers.JaxoptProximalGradient,
-        "LBFGS": nmo.solvers.JaxoptLBFGS,
-        "BFGS": nmo.solvers.JaxoptBFGS,
-        "NonlinearCG": nmo.solvers.JaxoptNonlinearCG,
-    },
     "optimistix": {
         **_common_solvers,
         "GradientDescent": nmo.solvers.OptimistixNAG,
@@ -1338,6 +1561,16 @@ _solver_registry_per_backend = {
         "NonlinearCG": nmo.solvers.OptimistixNonlinearCG,
     },
 }
+
+if nmo.solvers.JAXOPT_AVAILABLE:
+    _solver_registry_per_backend["jaxopt"] = {
+        **_common_solvers,
+        "GradientDescent": nmo.solvers.JaxoptGradientDescent,
+        "ProximalGradient": nmo.solvers.JaxoptProximalGradient,
+        "LBFGS": nmo.solvers.JaxoptLBFGS,
+        "BFGS": nmo.solvers.JaxoptBFGS,
+        "NonlinearCG": nmo.solvers.JaxoptNonlinearCG,
+    }
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -1356,6 +1589,8 @@ def configure_solver_backend(request):
     if backend is None:
         _solver_registry_to_use = nmo.solvers.solver_registry.copy()
     else:
+        if backend == "jaxopt" and not nmo.solvers.JAXOPT_AVAILABLE:
+            pytest.fail("jaxopt backend requested but jaxopt is not installed.")
         try:
             _solver_registry_to_use = _solver_registry_per_backend[backend]
         except KeyError:

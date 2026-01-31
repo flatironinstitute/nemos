@@ -141,6 +141,58 @@ print(f"Model intercept shape: {population_model.intercept_.shape}")
 
 ```
 
+### **Classifier GLM**
+
+For classification tasks, such as modeling behavioral choices, NeMoS provides the `ClassifierGLM`. This model treats observations as categorical random variables.
+
+```{code-cell}
+
+import nemos as nmo
+
+# Instantiate a categorical model for 3 categories
+n_classes = 3
+model = nmo.glm.ClassifierGLM(n_classes)
+
+```
+
+The [`ClassifierGLM`](nemos.glm.ClassifierGLM) follows a similar API to the standard GLM, with a few key differences:
+
+- [`predict`](nemos.glm.ClassifierGLM.predict) returns predicted category labels (unlike the standard `GLM` model, which returns predicted firing rates).
+- [`predict_proba`](nemos.glm.ClassifierGLM.predict_proba) returns the probability of each category.
+- The `observation_model` parameter cannot be set at model initialization, since [`CategoricalObservations`](nemos.observation_models.CategoricalObservations) is the only compatible observation model.
+
+```{code-cell}
+
+import numpy as np
+num_samples, num_features = 100, 3
+
+# Generate a design matrix
+X = np.random.normal(size=(num_samples, num_features))
+# simulate categorical observations (values 0, 1, or 2)
+choices = np.random.choice(n_classes, size=num_samples)
+
+# fit the model
+model = model.fit(X, choices)
+
+# predict categories
+predicted_categories = model.predict(X)
+
+# get probability for each category
+probabilities = model.predict_proba(X)
+probabilities.shape  # expected shape: (num_samples, n_classes)
+
+```
+
+For fitting multiple subjects in parallel, use `ClassifierPopulationGLM`:
+
+```{code-cell}
+
+# fit multiple subjects simultaneously
+population_model = nmo.glm.ClassifierPopulationGLM(n_classes)
+
+```
+
+For a complete example with confusion matrix visualization, see the [GLM for Classification how-to guide](how_to_guide/glm_for_classification).
 
 ## **Basis: Feature Construction**
 
@@ -250,8 +302,8 @@ For additional information on one-dimensional convolutions, see [here](convoluti
 
 ### **Continuous Observations**
 
-By default, NeMoS' GLM uses [Poisson observations](nemos.observation_models.PoissonObservations), which are a natural choice for spike counts. However, the 
-package also supports a [Gamma](nemos.observation_models.GammaObservations) GLM and a [Gaussian](nemos.observation_models.GaussianObservations) GLM. 
+By default, NeMoS' GLM uses [Poisson observations](nemos.observation_models.PoissonObservations), which are a natural choice for spike counts. However, the
+package also supports a [Gamma](nemos.observation_models.GammaObservations) GLM and a [Gaussian](nemos.observation_models.GaussianObservations) GLM.
 
 #### Gamma Observations
 
@@ -380,6 +432,7 @@ y = nap.Tsd(t=np.arange(100), d=np.random.poisson(size=(100, )))
 
 print(type(X))  # shape (num samples, num features)
 
+model = nmo.glm.GLM()
 model = model.fit(X, y)  # the following works
 
 firing_rate = model.predict(X)  # predict the firing rate of the neuron

@@ -297,36 +297,6 @@ def check_tree_structure(pytree_1: Any, pytree_2: Any, err_message: str):
         raise TypeError(err_message)
 
 
-def check_fraction_valid_samples(*pytree: Any, err_msg: str, warn_msg: str) -> None:
-    """
-    Check the fraction of entries that are not infinite or NaN.
-
-    Parameters
-    ----------
-    *pytree :
-        Trees containing arrays with the same sample axis.
-    err_msg :
-        The exception message.
-    warn_msg :
-        The warning message.
-
-    Raises
-    ------
-    ValueError
-        If all the samples contain invalid entries (either NaN or Inf).
-
-    Warns
-    -----
-    UserWarning
-        If more than 90% of the sample points contain NaNs or Infs.
-    """
-    valid = get_valid_multitree(pytree)
-    if all(~valid):
-        raise ValueError(err_msg)
-    elif valid.mean() <= 0.1:
-        warnings.warn(warn_msg, UserWarning)
-
-
 def _warn_if_not_float64(feature_matrix: Any, message: str):
     """Warn if the feature matrix uses float32 precision."""
     all_float64 = pytree_map_and_reduce(
@@ -569,6 +539,7 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
     from_model_params: Callable[[ModelParamsT], UserProvidedParamsT] = None
     X_dimensionality: int = None
     y_dimensionality: int = None
+    extra_params: Optional[dict] = None
 
     # tuples [(meth, kwargs), (meth,), ]
     params_validation_sequence: Tuple[
@@ -666,7 +637,8 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
             self.wrap_user_params(params), self.expected_param_dims
         ):
             dim_match = pytree_map_and_reduce(lambda x: x.ndim == exp_dim, all, par)
-            if not dim_match:
+            is_empty = pytree_map_and_reduce(lambda x: x.size == 0, all, par)
+            if not dim_match or is_empty:
                 if err_msg is None:
                     provided_dims = jax.tree_util.tree_map(lambda x: x.ndim, params)
                     provided_dims_flat = tuple(jax.tree_util.tree_leaves(provided_dims))
@@ -851,3 +823,8 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
         return utils.format_repr(
             self, multiline=True, use_name_keys=["to_model_params", "from_model_params"]
         )
+
+    @abc.abstractmethod
+    def get_empty_params(self, X, y) -> ModelParamsT:
+        """Return the param shape given the input data."""
+        pass

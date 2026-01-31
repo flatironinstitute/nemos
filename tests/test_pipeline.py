@@ -57,9 +57,6 @@ def test_sklearn_cv_clone(population_poissonGLM_model_instantiation):
     bas = basis.CyclicBSplineEval(5)
     bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_input_dimensionality))
     pipe = pipeline.Pipeline([("basis", bas), ("fit", model)])
-    # if feature_mask isn't dropped by the cloning done by gridsearch cv, this will
-    # error, because the shape of feature_mask doesn't match the shape of the output of
-    # transformer basis with different number of basis funcs
     pipe.fit(X[:, : bas._n_input_dimensionality] ** 2, y)
     param_grid = dict(basis__n_basis_funcs=(4, 8))
     gridsearch = GridSearchCV(pipe, param_grid=param_grid, cv=3, error_score="raise")
@@ -154,6 +151,7 @@ def test_sklearn_transformer_pipeline_cv_illegal_combination(
         gridsearch.fit(X[:, : bas._n_input_dimensionality] ** 2, y)
 
 
+@pytest.mark.requires_x64
 @pytest.mark.parametrize(
     "bas, expected_nans",
     [
@@ -195,6 +193,7 @@ def test_sklearn_transformer_pipeline_pynapple(
     bas, poissonGLM_model_instantiation, expected_nans
 ):
     X, y, model, _, _ = poissonGLM_model_instantiation
+    X = X[:, :2]
     model.solver_kwargs.update({"maxiter": 2})
     # transform input to pynapple
     ep = nap.IntervalSet(start=[0, 20.5], end=[20, X.shape[0]])

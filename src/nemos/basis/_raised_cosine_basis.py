@@ -4,6 +4,7 @@ from __future__ import annotations
 import abc
 from typing import Optional, Tuple
 
+import jax.numpy as jnp
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame, TsdTensor
@@ -128,7 +129,7 @@ class RaisedCosineBasisLinear(AtomicBasisMixin, Basis, abc.ABC):
             # additive_basis = basis1 + basis2
             # additive_basis.evaluate(*([x] * 2)) would modify both inputs
             sample_pts, _ = min_max_rescale_samples(
-                np.copy(sample_pts), getattr(self, "bounds", None)
+                jnp.copy(sample_pts), getattr(self, "bounds", None)
             )
 
         peaks = self._compute_peaks()
@@ -144,8 +145,8 @@ class RaisedCosineBasisLinear(AtomicBasisMixin, Basis, abc.ABC):
         # over a single period, then enforce the codomain to be [0,1], by adding 1
         # and then multiply by 0.5
         basis_funcs = 0.5 * (
-            np.cos(
-                np.clip(
+            jnp.cos(
+                jnp.clip(
                     np.pi * (sample_pts[:, None] - peaks[None]) / (delta * self.width),
                     -np.pi,
                     np.pi,
@@ -301,13 +302,13 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
         # rescale to [0,1]
         # copy is necessary to avoid unwanted rescaling in additive/multiplicative basis.
         sample_pts, _ = min_max_rescale_samples(
-            np.copy(sample_pts), getattr(self, "bounds", None)
+            jnp.copy(sample_pts), getattr(self, "bounds", None)
         )
         # This log-stretching of the sample axis has the following effect:
         # - as the time_scaling tends to 0, the points will be linearly spaced across the whole domain.
         # - as the time_scaling tends to inf, basis will be small and dense around 0 and
         # progressively larger and less dense towards 1.
-        log_spaced_pts = np.log(self.time_scaling * sample_pts + 1) / np.log(
+        log_spaced_pts = jnp.log(self.time_scaling * sample_pts + 1) / jnp.log(
             self.time_scaling + 1
         )
         return log_spaced_pts

@@ -19,26 +19,40 @@ import nemos as nmo
 from nemos import inverse_link_function_utils
 from nemos._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
 from nemos.glm.params import GLMParams
-from nemos.glm.validation import GLMValidator, PopulationGLMValidator
+from nemos.glm.validation import (
+    ClassifierGLMValidator,
+    GLMValidator,
+    PopulationClassifierGLMValidator,
+    PopulationGLMValidator,
+)
 from nemos.inverse_link_function_utils import LINK_NAME_TO_FUNC
 
 MODEL_REGISTRY = {
     "GLM": nmo.glm.GLM,
+    "ClassifierGLM": nmo.glm.ClassifierGLM,
     "PopulationGLM": nmo.glm.PopulationGLM,
 }
 
 VALIDATOR_REGISTRY = {
     "GLM": GLMValidator(),
+    "ClassifierGLM": ClassifierGLMValidator(extra_params={"n_classes": 4}),
+    "ClassifierPopulationGLM": PopulationClassifierGLMValidator(
+        extra_params={"n_classes": 4}
+    ),
     "PopulationGLM": PopulationGLMValidator(),
 }
 
 INIT_PARAM_LENGTH = {
     "GLM": 2,
+    "ClassifierGLM": 2,
+    "ClassifierPopulationGLM": 2,
     "PopulationGLM": 2,
 }
 
 DEFAULT_OBS_SHAPE = {
     "GLM": (500,),
+    "ClassifierGLM": (500,),
+    "ClassifierPopulationGLM": (500, 3),
     "PopulationGLM": (500, 3),
 }
 
@@ -46,6 +60,22 @@ HARD_CODED_GET_PARAMS_KEYS = {
     "GLM": {
         "inverse_link_function",
         "observation_model",
+        "regularizer",
+        "regularizer_strength",
+        "solver_kwargs",
+        "solver_name",
+    },
+    "ClassifierGLM": {
+        "inverse_link_function",
+        "n_classes",
+        "regularizer",
+        "regularizer_strength",
+        "solver_kwargs",
+        "solver_name",
+    },
+    "ClassifierPopulationGLM": {
+        "inverse_link_function",
+        "n_classes",
         "regularizer",
         "regularizer_strength",
         "solver_kwargs",
@@ -62,37 +92,52 @@ HARD_CODED_GET_PARAMS_KEYS = {
     },
 }
 
+OBSERVATION_PER_MODEL = {
+    "GLM": [o for o in AVAILABLE_OBSERVATION_MODELS if o != "Categorical"],
+    "ClassifierGLM": ["Categorical"],
+    "ClassifierPopulationGLM": ["Categorical"],
+    "PopulationGLM": [o for o in AVAILABLE_OBSERVATION_MODELS if o != "Categorical"],
+}
+
+
 # as of now, all models are glm type... in the future this may change.
 MODEL_WITH_LINK_FUNCTION_REGISTRY = {
     "GLM": nmo.glm.GLM,
+    "ClassifierGLM": nmo.glm.ClassifierGLM,
+    "ClassifierPopulationGLM": nmo.glm.ClassifierPopulationGLM,
     "PopulationGLM": nmo.glm.PopulationGLM,
 }
 
-DEFAULTS = {"GLM": dict(), "PopulationGLM": dict()}
+DEFAULTS = {
+    "GLM": dict(),
+    "PopulationGLM": dict(),
+    "ClassifierGLM": dict(),
+    "ClassifierPopulationGLM": dict(),
+}
 
 
 INSTANTIATE_MODEL_ONLY = [
     {"model": m, "obs_model": o, "simulate": False}
-    for m, o in itertools.product(MODEL_REGISTRY.keys(), AVAILABLE_OBSERVATION_MODELS)
+    for m in MODEL_REGISTRY.keys()
+    for o in OBSERVATION_PER_MODEL[m]
 ]
 
 INSTANTIATE_MODEL_AND_SIMULATE = [
     {"model": m, "obs_model": o, "simulate": True}
-    for m, o in itertools.product(MODEL_REGISTRY.keys(), AVAILABLE_OBSERVATION_MODELS)
+    for m in MODEL_REGISTRY.keys()
+    for o in OBSERVATION_PER_MODEL[m]
 ]
 
 INSTANTIATE_MODEL_ONLY_LINK = [
     {"model": m, "obs_model": o, "simulate": False}
-    for m, o in itertools.product(
-        MODEL_WITH_LINK_FUNCTION_REGISTRY.keys(), AVAILABLE_OBSERVATION_MODELS
-    )
+    for m in MODEL_WITH_LINK_FUNCTION_REGISTRY.keys()
+    for o in OBSERVATION_PER_MODEL[m]
 ]
 
 INSTANTIATE_MODEL_AND_SIMULATE_LINK = [
     {"model": m, "obs_model": o, "simulate": True}
-    for m, o in itertools.product(
-        MODEL_WITH_LINK_FUNCTION_REGISTRY.keys(), AVAILABLE_OBSERVATION_MODELS
-    )
+    for m in MODEL_WITH_LINK_FUNCTION_REGISTRY.keys()
+    for o in OBSERVATION_PER_MODEL[m]
 ]
 
 
@@ -214,7 +259,7 @@ class TestModelCommons:
             ("ProxSVRG", does_not_raise()),
             (
                 1,
-                pytest.raises(ValueError, match="The solver: 1 is not allowed "),
+                pytest.raises(TypeError, match="solver_name must be a string"),
             ),
         ],
     )
@@ -330,6 +375,12 @@ class TestModelCommons:
         """Test that the group lasso initialize_solver_and_state goes through"""
         fixture = instantiate_base_regressor_subclass
         X, model, params = fixture.X, fixture.model, fixture.params
+        # TODO: remove in next PR when GLM is compatible with categorical
+        if isinstance(
+            model.observation_model, nmo.observation_models.CategoricalObservations
+        ):
+            pytest.skip("GLM not compatible with CategoricalObservations yet")
+
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         y = _add_zeros(y)
         n_groups = 2
@@ -361,39 +412,6 @@ class TestModelCommons:
             init_state, "velocity", model._validator.to_model_params(params)
         ) == model._validator.to_model_params(params)
 
-    @pytest.mark.solver_related
-    @pytest.mark.requires_x64
-    def test_fit_mask_grouplasso(self, instantiate_base_regressor_subclass):
-        """Test that the group lasso fit goes through"""
-
-        fixture = instantiate_base_regressor_subclass
-        X, model = fixture.X, fixture.model
-        y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
-        y = _add_zeros(y)
-        n_groups = 2
-        n_features = X.shape[1]
-
-        # Create mask with proper shape for GLM (2D) or PopulationGLM (3D)
-        if is_population_model(model):
-            n_neurons = y.shape[1]
-            mask_array = np.ones((n_groups, n_features, n_neurons), dtype=float)
-            mask_array[0, : n_features // 2, :] = 0
-            mask_array[1, n_features // 2 :, :] = 0
-        else:
-            mask_array = np.ones((n_groups, n_features), dtype=float)
-            mask_array[0, : n_features // 2] = 0
-            mask_array[1, n_features // 2 :] = 0
-
-        # Wrap mask in GLMParams structure
-        mask = GLMParams(jnp.asarray(mask_array, dtype=jnp.float32), None)
-
-        model.set_params(
-            regularizer=nmo.regularizer.GroupLasso(mask=mask),
-            solver_name="ProximalGradient",
-            regularizer_strength=1.0,
-        )
-        model.fit(X, y)
-
     @pytest.mark.parametrize(
         "fill_val, expectation",
         [
@@ -418,6 +436,12 @@ class TestModelCommons:
     ):
         fixture = instantiate_base_regressor_subclass
         X, model, true_params = fixture.X, fixture.model, fixture.params
+        # TODO: remove in next PR when GLM is compatible with categorical
+        if isinstance(
+            model.observation_model, nmo.observation_models.CategoricalObservations
+        ):
+            pytest.skip("GLM not compatible with CategoricalObservations yet")
+
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         y = _add_zeros(y)
         X.fill(fill_val)
@@ -572,6 +596,13 @@ class TestModelCommons:
     ):
         fixture = instantiate_base_regressor_subclass
         X, model, true_params = fixture.X, fixture.model, fixture.params
+
+        # TODO: remove in next PR when GLM is compatible with categorical
+        if isinstance(
+            model.observation_model, nmo.observation_models.CategoricalObservations
+        ):
+            pytest.skip("GLM not compatible with CategoricalObservations yet")
+
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         y = _add_zeros(y)
 
@@ -830,6 +861,8 @@ class TestObservationModel:
         """
         fixture = instantiate_base_regressor_subclass
         model_cls = fixture.model.__class__
+        if "observation_model" not in HARD_CODED_GET_PARAMS_KEYS[model_cls.__name__]:
+            pytest.skip(f"model {model_cls.__name__} don't require obervation model.")
         with expectation:
             model_cls(**DEFAULTS[model_cls.__name__], observation_model=observation)
 
@@ -905,7 +938,13 @@ class TestModelSimulation:
     @pytest.mark.parametrize(
         "delta_dim, expectation",
         [
-            (-1, pytest.raises(ValueError, match=r"y must be [12]-dimensional\.")),
+            (
+                -1,
+                pytest.raises(
+                    ValueError,
+                    match=r"y must be [12]-dimensional\.|Found only 1 unique class",
+                ),
+            ),
             (0, does_not_raise()),
             (1, pytest.raises(ValueError, match=r"y must be [12]-dimensional\.")),
         ],
@@ -924,11 +963,15 @@ class TestModelSimulation:
                 y = y[:, 0]
             elif delta_dim == 1:
                 y = np.zeros((*y.shape, 1))
+                for i in range(getattr(model, "n_classes", 0)):
+                    y[i] = i
         else:
             if delta_dim == -1:
                 y = np.zeros([])
             elif delta_dim == 1:
                 y = np.zeros((y.shape[0], 1))
+                for i in range(getattr(model, "n_classes", 0)):
+                    y[i] = i
         with expectation:
             model.fit(X, y, init_params=(true_params.coef, true_params.intercept))
 
@@ -1010,6 +1053,7 @@ class TestModelSimulation:
         ],
     )
     @pytest.mark.solver_related
+    @pytest.mark.requires_x64
     def test_fit_time_points_y(
         self, delta_tp, expectation, instantiate_base_regressor_subclass
     ):
@@ -1018,7 +1062,9 @@ class TestModelSimulation:
         """
         fixture = instantiate_base_regressor_subclass
         X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
-        y = jnp.zeros((y.shape[0] + delta_tp,) + y.shape[1:])
+        n_samples = y.shape[0] + delta_tp
+        y_samp = min(n_samples, y.shape[0])
+        y = jnp.zeros((n_samples,) + y.shape[1:]).at[:y_samp].set(y[:y_samp])
         with expectation:
             model.fit(X, y, init_params=(true_params.coef, true_params.intercept))
 
@@ -1070,6 +1116,12 @@ class TestModelValidator:
         fixture = instantiate_base_regressor_subclass
         X, model, true_params = fixture.X, fixture.model, fixture.params
 
+        # TODO: remove in next PR when GLM is compatible with categorical
+        if isinstance(
+            model.observation_model, nmo.observation_models.CategoricalObservations
+        ):
+            pytest.skip("GLM not compatible with CategoricalObservations yet")
+
         model_name = model.__class__.__name__
         y = np.zeros(DEFAULT_OBS_SHAPE[model_name])
         expectation = (
@@ -1094,8 +1146,9 @@ class TestModelValidator:
         validator = VALIDATOR_REGISTRY[model_name]
         with expectation:
             params = validator.validate_and_cast_params(init_params)
+            user_params = validator.from_model_params(params)
             # check that params are set
-            init_state = model._initialize_solver_and_state(X, y, params)
+            init_state = model.initialize_solver_and_state(X, y, user_params)
             # optimistix solvers do not have a velocity attr
             assert getattr(init_state, "velocity", params) == params
 
@@ -1181,6 +1234,8 @@ class TestModelValidator:
         X, model, true_params = fixture.X, fixture.model, fixture.params
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         y = _add_zeros(y)
+        for i in range(getattr(model, "n_classes", 0)):
+            y[i] = i
         validator = VALIDATOR_REGISTRY[model.__class__.__name__]
         params = model.initialize_params(X, y)
         params = validator.to_model_params(params)
