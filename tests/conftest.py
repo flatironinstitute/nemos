@@ -340,7 +340,7 @@ class MockRegressor(BaseRegressor):
     def update(self, *args, **kwargs):
         pass
 
-    def _initialize_solver_and_state(self, *args, **kwargs):
+    def _initialize_optimization_and_state(self, *args, **kwargs):
         pass
 
     def initialize_params(self, *args, **kwargs):
