@@ -1,6 +1,5 @@
 """Abstract class for regression models."""
 
-# required to get ArrayLike to render correctly
 from __future__ import annotations
 
 import abc
@@ -10,6 +9,7 @@ from copy import deepcopy
 from functools import wraps
 from pathlib import Path
 from typing import (
+    TYPE_CHECKING,
     Any,
     Generic,
     Optional,
@@ -42,6 +42,9 @@ from .typing import (
 )
 from .utils import _flatten_dict, _get_name, _unpack_params, get_env_metadata
 from .validation import RegressorValidator
+
+if TYPE_CHECKING:
+    from .batching import DataLoader
 
 _SOLVER_ARGS_CACHE = {}
 
@@ -398,6 +401,43 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         init_params: Optional[UserProvidedParamsT] = None,
     ) -> BaseRegressor[UserProvidedParamsT, ModelParamsT]:
         """Fit the model to neural activity."""
+        pass
+
+    @abc.abstractmethod
+    def stochastic_fit(
+        self,
+        data: "DataLoader",
+        *,
+        init_params: Optional[UserProvidedParamsT] = None,
+        num_epochs: int = 1,
+    ) -> BaseRegressor[UserProvidedParamsT, ModelParamsT]:
+        """
+        Fit the model using stochastic optimization with mini-batches.
+
+        This method provides an out-of-memory training interface for large datasets
+        that cannot fit in memory. Data is provided via a DataLoader that yields
+        mini-batches.
+
+        Parameters
+        ----------
+        data : DataLoader
+            Data loader yielding (X_batch, y_batch) tuples.
+            Must be re-iterable for num_epochs > 1.
+        init_params : optional
+            Initial parameters. If None, initialized from sample_batch().
+        num_epochs : int, default=1
+            Number of passes over the data. Must be >= 1.
+
+        Returns
+        -------
+        self
+            The fitted model.
+
+        Raises
+        ------
+        ValueError
+            If the solver doesn't support stochastic optimization.
+        """
         pass
 
     @abc.abstractmethod
