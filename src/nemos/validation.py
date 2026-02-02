@@ -541,6 +541,7 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
     from_model_params: Callable[[ModelParamsT], UserProvidedParamsT] = None
     X_dimensionality: int = None
     y_dimensionality: int = None
+    extra_params: Optional[dict] = None
 
     # tuples [(meth, kwargs), (meth,), ]
     params_validation_sequence: Tuple[
