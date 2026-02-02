@@ -18,10 +18,21 @@ class SolverSpec:
     Solver specification representing an entry in the solver registry.
 
     A solver is specified by:
-    - name of the algorithm it implements
+    - the name of the algorithm it implements
     - its backend (optimization library or custom)
     - the class implementing the optimization method
       (ideally compatible with the AbstractSolver and SolverProtocol interface)
+
+    Examples
+    --------
+    >>> import nemos as nmo
+    >>> spec = nmo.solvers.SolverSpec("BFGS", "optimistix", nmo.solvers._optimistix_solvers.OptimistixBFGS)
+    >>> spec.algo_name
+    'BFGS'
+    >>> spec.backend
+    'optimistix'
+    >>> spec.implementation
+    <class 'nemos.solvers._optimistix_solvers.OptimistixBFGS'>
     """
 
     algo_name: str
@@ -176,6 +187,11 @@ def register(
     test_ridge_with_aux :
         Validate solver signatures and functionality by running a small ridgeregression,
         testing that objective functions with auxiliary variables are handled.
+
+    Examples
+    --------
+    >>> import nemos as nmo
+    >>> nmo.solvers.register("FISTA", nmo.solvers._fista.OptimistixFISTA, backend="optimistix")
     """
     if not replace and backend in _registry.get(algo_name, {}):
         raise ValueError(
@@ -214,6 +230,13 @@ def set_default(algo_name: str, backend: str) -> None:
         backend to set.
     backend :
         Name of the backend to set as default.
+
+    Examples
+    --------
+    >>> import nemos as nmo
+    >>> nmo.solvers.set_default("LBFGS", "optax+optimistix")
+    >>> nmo.solvers.get_solver("LBFGS").backend
+    'optax+optimistix'
     """
     _raise_if_not_in_registry(algo_name)
 
