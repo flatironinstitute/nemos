@@ -63,9 +63,48 @@ def _parse_name(name: str) -> tuple[str, str | None]:
     """Parse an algo_name[backend] string."""
     algo_name = name
     backend = None
-    if "[" in name and name.endswith("]"):
+    if "[" in name:
+        if name.count("[") > 1:
+            raise ValueError(
+                f"Found multiple opening '[' in solver name of {name}. "
+                "Only use '[' for specifying the backend "
+                "using the algo_name[backend_name] syntax. "
+            )
+        if name.count("]") > 1:
+            raise ValueError(
+                f"Found multiple closing ']' in solver name of {name}. "
+                "Only use ']' for specifying the backend "
+                "using the algo_name[backend_name] syntax. "
+            )
+        if "]" not in name:
+            raise ValueError(
+                "Found opening '[' in solver name but it does not end with closing ']'. "
+                "Solver name can only use '[' for specifying the backend "
+                "using the algo_name[backend_name] syntax. "
+                f"Got {name}"
+            )
+        if name.index("]") != len(name) - 1:
+            raise ValueError(
+                "Found closing ']' in the middle of the solver name. "
+                "Brackets are reserved for specifying the backend "
+                "using the algo_name[backend_name] syntax. "
+                f"Got {name}"
+            )
+
         algo_name = name[: name.index("[")]
         backend = name[name.index("[") + 1 : -1]
+    elif "]" in name:
+        raise ValueError(
+            "Found closing ']' in solver name without opening '['. "
+            "Solver name can only use '[' for specifying the backend "
+            "using the algo_name[backend_name] syntax. "
+            f"Got {name}"
+        )
+
+    if algo_name == "":
+        raise ValueError("Algorithm name cannot be an empty string.")
+    if backend == "":
+        raise ValueError("Backend name cannot be an empty string.")
 
     return algo_name, backend
 
