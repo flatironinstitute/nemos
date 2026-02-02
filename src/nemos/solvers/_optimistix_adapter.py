@@ -224,7 +224,10 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
         return self.config.maxiter
 
     def get_optim_info(self, state: OptimistixSolverState) -> OptimizationInfo:
-        num_steps = self.stats["num_steps"].item()
+        try:
+            num_steps = self._extract_num_steps(state)
+        except AttributeError:
+            num_steps = self.stats["num_steps"].item()
 
         function_val = (
             state.f.item() if hasattr(state, "f") else state.f_info.f.item()
@@ -236,6 +239,19 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
             converged=state.terminate.item(),  # pyright: ignore
             reached_max_steps=(num_steps == self.maxiter),
         )
+
+    def _extract_num_steps(self, state: OptimistixSolverState) -> int:
+        """Attempt to extract number of steps from solver state."""
+        # most optimistix solver states
+        if hasattr(state, "num_steps"):
+            return state.num_steps.item()
+        # for optx.OptaxMinimiser
+        elif hasattr(state, "step"):
+            return state.step.item()
+        else:
+            raise AttributeError(
+                f"Cannot extract step count from state type {type(state).__name__}"
+            )
 
     def adjust_solver_init_kwargs(
         self, solver_init_kwargs: dict[str, Any]

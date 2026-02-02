@@ -88,19 +88,3 @@ class OptimistixStochasticSolverMixin(StochasticSolverMixin):
         num_steps = self._extract_num_steps(state)
         self.stats = {"num_steps": num_steps, "max_steps": self.maxiter}
         return result
-
-    def _extract_num_steps(self, state):
-        """Extract number of steps from solver state.
-
-        Handles different state types that store step count differently.
-        """
-        # most optimistix solver states
-        if hasattr(state, "num_steps"):
-            return state.num_steps
-        # for optx.OptaxMinimiser
-        elif hasattr(state, "step"):
-            return state.step
-        else:
-            raise AttributeError(
-                f"Cannot extract step count from state type {type(state).__name__}"
-            )
