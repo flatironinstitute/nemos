@@ -9,6 +9,37 @@ import nemos as nmo
 from nemos import solvers
 from nemos.batching import ArrayDataLoader, _PreprocessedDataLoader, is_data_loader
 
+# Build list of stochastic solvers, conditionally including JAXopt
+_stochastic_solver_classes = [
+    solvers.OptimistixNAG,
+    solvers.OptimistixFISTA,
+    solvers.OptimistixOptaxGradientDescent,
+    solvers.WrappedSVRG,
+    solvers.WrappedProxSVRG,
+]
+
+# Build list of non-stochastic solvers for testing unsupported stochastic_run
+_non_stochastic_solver_classes = [
+    solvers.OptimistixBFGS,
+    solvers.OptimistixOptaxLBFGS,
+    solvers.OptimistixNonlinearCG,
+]
+
+if solvers.JAXOPT_AVAILABLE:
+    _stochastic_solver_classes.extend(
+        [
+            solvers.JaxoptGradientDescent,
+            solvers.JaxoptProximalGradient,
+        ]
+    )
+    _non_stochastic_solver_classes.extend(
+        [
+            solvers.JaxoptBFGS,
+            solvers.JaxoptLBFGS,
+            solvers.JaxoptNonlinearCG,
+        ]
+    )
+
 
 class TestArrayDataLoader:
     """Tests for ArrayDataLoader class."""
@@ -387,16 +418,7 @@ class TestSolverStochasticRun:
 
         return loader
 
-    @pytest.mark.parametrize(
-        "solver_class",
-        [
-            solvers.OptimistixNAG,
-            solvers.OptimistixFISTA,
-            solvers.OptimistixOptaxGradientDescent,
-            solvers.WrappedSVRG,
-            solvers.WrappedProxSVRG,
-        ],
-    )
+    @pytest.mark.parametrize("solver_class", _stochastic_solver_classes)
     def test_gradient_descent_stochastic_run(self, simple_loss_and_data, solver_class):
         """Test GradientDescent solver's stochastic_run."""
         loader = simple_loss_and_data
@@ -426,14 +448,7 @@ class TestSolverStochasticRun:
         # Should have learned something close to [1, 2, 3]
         np.testing.assert_array_almost_equal(params, [1.0, 2.0, 3.0], decimal=0)
 
-    @pytest.mark.parametrize(
-        "solver_class",
-        [
-            solvers.OptimistixBFGS,
-            solvers.OptimistixOptaxLBFGS,
-            solvers.OptimistixNonlinearCG,
-        ],
-    )
+    @pytest.mark.parametrize("solver_class", _non_stochastic_solver_classes)
     def test_unsupported_solver_raises(self, simple_loss_and_data, solver_class):
         """Test that unsupported solver raises NotImplementedError."""
         loader = simple_loss_and_data
@@ -454,16 +469,7 @@ class TestSolverStochasticRun:
         with pytest.raises(NotImplementedError, match="does not support stochastic"):
             solver.stochastic_run(init_params, loader, num_epochs=1)
 
-    @pytest.mark.parametrize(
-        "solver_class",
-        [
-            solvers.OptimistixNAG,
-            solvers.OptimistixFISTA,
-            solvers.OptimistixOptaxGradientDescent,
-            solvers.WrappedSVRG,
-            solvers.WrappedProxSVRG,
-        ],
-    )
+    @pytest.mark.parametrize("solver_class", _stochastic_solver_classes)
     def test_invalid_num_epochs_raises(self, simple_loss_and_data, solver_class):
         """Test that num_epochs < 1 raises ValueError."""
         loader = simple_loss_and_data
