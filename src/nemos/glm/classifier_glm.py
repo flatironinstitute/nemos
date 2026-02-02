@@ -986,7 +986,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
 
     **Predict Class Probabilities**
 
-    Get class probabilities for each neuron:
+    Get class probabilities for each subject:
 
     >>> proba = model.predict_proba(X, return_type="proba")
     >>> proba.shape
