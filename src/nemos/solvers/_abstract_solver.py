@@ -17,8 +17,8 @@ from typing import (
 from ..typing import Params, SolverState, StepResult
 
 if TYPE_CHECKING:
-    from ..regularizer import Regularizer
     from ..batching import DataLoader
+    from ..regularizer import Regularizer
 
 
 @dataclass
