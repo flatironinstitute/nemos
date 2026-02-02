@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import abc
 import inspect
-from typing import TYPE_CHECKING, Any, Callable, ClassVar
+from typing import Any, Callable, ClassVar
 
 import optax
 import optimistix as optx
@@ -15,10 +15,11 @@ from ._optimistix_adapter import (
     OptimistixAdapter,
 )
 
+from ._stochastic_mixins import OptimistixStochasticSolverMixin
+
 if TYPE_CHECKING:
-    from ..batching import DataLoader
     from ..regularizer import Regularizer
-    from ..typing import Params, Pytree, StepResult
+    from ..typing import Params, Pytree
 
 
 class AbstractOptimistixOptaxSolver(OptimistixAdapter, abc.ABC):
@@ -94,7 +95,9 @@ def _make_rate_scaler(
         return optax.scale_by_learning_rate(stepsize, flip_sign=False)
 
 
-class OptimistixOptaxGradientDescent(AbstractOptimistixOptaxSolver):
+class OptimistixOptaxGradientDescent(
+    OptimistixStochasticSolverMixin, AbstractOptimistixOptaxSolver
+):
     """
     Gradient descent implementation combining Optax and Optimistix.
 
@@ -104,7 +107,6 @@ class OptimistixOptaxGradientDescent(AbstractOptimistixOptaxSolver):
     """
 
     _optax_solver = optax.sgd
-    _supports_stochastic = True
 
     def __init__(
         self,
@@ -175,41 +177,6 @@ class OptimistixOptaxGradientDescent(AbstractOptimistixOptaxSolver):
             Note that this only has an effect if `momentum` is used as well.
             """)
         return inspect.cleandoc(note + "\n" + accel_nesterov)
-
-    def _stochastic_run_impl(
-        self,
-        init_params: Params,
-        data_loader: "DataLoader",
-        num_epochs: int,
-    ) -> StepResult:
-        """Run gradient descent optimization over mini-batches from a data loader.
-
-        Parameters
-        ----------
-        init_params : Params
-            Initial parameter values.
-        data_loader : DataLoader
-            Data loader providing batches and metadata.
-        num_epochs : int
-            Number of passes over the data.
-
-        Returns
-        -------
-        StepResult
-            Final (params, state, aux) tuple.
-        """
-        # Initialize state with sample batch
-        sample_X, sample_y = data_loader.sample_batch()
-        state = self.init_state(init_params, sample_X, sample_y)
-        params = init_params
-        aux = None
-
-        for _ in range(num_epochs):
-            # Fresh iterator each epoch (re-iterable requirement)
-            for X_batch, y_batch in data_loader:
-                params, state, aux = self.update(params, state, X_batch, y_batch)
-
-        return (params, state, aux)
 
 
 class OptimistixOptaxLBFGS(AbstractOptimistixOptaxSolver):

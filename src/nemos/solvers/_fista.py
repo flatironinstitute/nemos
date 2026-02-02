@@ -1,6 +1,6 @@
 """Implementation of the FISTA algorithm as an Optimistix IterativeSolver. Adapted from JAXopt."""
 
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, Literal
+from typing import Any, Callable, ClassVar, Literal
 
 import equinox as eqx
 import jax
@@ -13,6 +13,7 @@ from ..proximal_operator import prox_none
 from ..tree_utils import tree_add_scalar_mul, tree_sub
 from ..typing import Params, StepResult
 from ._optimistix_adapter import _OPTX_V_010, OptimistixAdapter
+from ._stochastic_mixins import OptimistixStochasticSolverMixin
 
 if TYPE_CHECKING:
     from ..batching import DataLoader
@@ -362,13 +363,12 @@ class GradientDescent(FISTA):
     prox: ClassVar[Callable] = staticmethod(prox_none)
 
 
-class OptimistixFISTA(OptimistixAdapter):
+class OptimistixFISTA(OptimistixStochasticSolverMixin, OptimistixAdapter):
     """Port of JAXopt's ProximalGradient to the Optimistix API."""
 
     _solver_cls = FISTA
     _proximal = True
     DEFAULT_MAXITER = 500
-    _supports_stochastic = True
 
     def adjust_solver_init_kwargs(
         self, solver_init_kwargs: dict[str, Any]
@@ -385,89 +385,12 @@ class OptimistixFISTA(OptimistixAdapter):
 
         return {"while_loop_kind": kind, **solver_init_kwargs}
 
-    def _stochastic_run_impl(
-        self,
-        init_params: Params,
-        data_loader: "DataLoader",
-        num_epochs: int,
-    ) -> StepResult:
-        """Run FISTA optimization over mini-batches from a data loader.
 
-        Parameters
-        ----------
-        init_params : Params
-            Initial parameter values.
-        data_loader : DataLoader
-            Data loader providing batches and metadata.
-        num_epochs : int
-            Number of passes over the data.
-
-        Returns
-        -------
-        StepResult
-            Final (params, state, aux) tuple.
-        """
-        # Initialize state with sample batch
-        sample_X, sample_y = data_loader.sample_batch()
-        state = self.init_state(init_params, sample_X, sample_y)
-        params = init_params
-        aux = None
-
-        for _ in range(num_epochs):
-            # Fresh iterator each epoch (re-iterable requirement)
-            for X_batch, y_batch in data_loader:
-                params, state, aux = self.update(params, state, X_batch, y_batch)
-
-        # update self.stats
-        self.stats = {"num_steps": state.num_steps, "max_steps": self.maxiter}
-
-        return (params, state, aux)
-
-
-class OptimistixNAG(OptimistixAdapter):
+class OptimistixNAG(OptimistixStochasticSolverMixin, OptimistixAdapter):
     """Port of Nesterov's accelerated gradient descent from JAXopt to the Optimistix API."""
 
     _solver_cls = GradientDescent
     _proximal = False
     DEFAULT_MAXITER = 500
-    _supports_stochastic = True
 
     adjust_solver_init_kwargs = OptimistixFISTA.adjust_solver_init_kwargs
-
-    def _stochastic_run_impl(
-        self,
-        init_params: Params,
-        data_loader: "DataLoader",
-        num_epochs: int,
-    ) -> StepResult:
-        """Run NAG optimization over mini-batches from a data loader.
-
-        Parameters
-        ----------
-        init_params : Params
-            Initial parameter values.
-        data_loader : DataLoader
-            Data loader providing batches and metadata.
-        num_epochs : int
-            Number of passes over the data.
-
-        Returns
-        -------
-        StepResult
-            Final (params, state, aux) tuple.
-        """
-        # Initialize state with sample batch
-        sample_X, sample_y = data_loader.sample_batch()
-        state = self.init_state(init_params, sample_X, sample_y)
-        params = init_params
-        aux = None
-
-        for _ in range(num_epochs):
-            # Fresh iterator each epoch (re-iterable requirement)
-            for X_batch, y_batch in data_loader:
-                params, state, aux = self.update(params, state, X_batch, y_batch)
-
-        # update self.stats
-        self.stats = {"num_steps": state.num_steps, "max_steps": self.maxiter}
-
-        return (params, state, aux)
