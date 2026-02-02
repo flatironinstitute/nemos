@@ -850,6 +850,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         # Wrap data loader to preprocess each batch from now on
         preprocessed_loader = _PreprocessedDataLoader(loader, self._preprocess_inputs)
 
+        # TODO: This can be problematic for setting the right step- and batch size for SVRG
+        # Ideally that uses the full data
         # Initialize solver (using preprocessed sample batch)
         self._initialize_solver_and_state(sample_X, sample_y, init_params)
 
