@@ -1,5 +1,14 @@
 from functools import partial
-from typing import Any, Callable, NamedTuple, Optional, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Iterator,
+    NamedTuple,
+    Optional,
+    Tuple,
+    Union,
+)
 
 import equinox as eqx
 import jax
@@ -9,8 +18,11 @@ from jax import grad, jit, lax, random
 
 from ..proximal_operator import prox_none
 from ..tree_utils import tree_add_scalar_mul, tree_l2_norm, tree_slice, tree_sub
-from ..typing import KeyArrayLike, Pytree
+from ..typing import KeyArrayLike, Params, Pytree, StepResult
 from ._jaxopt_adapter import JaxoptAdapter
+
+if TYPE_CHECKING:
+    from ..batching import DataLoader
 
 
 class SVRGState(NamedTuple):
@@ -522,6 +534,91 @@ class ProxSVRG:
         )
         return OptStep(params=final_params, state=final_state)
 
+    def run_streaming(
+        self,
+        init_params: Pytree,
+        hyperparams_prox: Union[float, None],
+        iter_batches: Callable[[], Iterator[Tuple[Any, Any]]],
+        sample_batch: Callable[[], Tuple[Any, Any]],
+        num_epochs: int = 1,
+    ) -> OptStep:
+        """
+        Run Prox-SVRG over streamed mini-batches.
+
+        Parameters
+        ----------
+        init_params :
+            Initial parameters to start from.
+        hyperparams_prox :
+            Hyperparameters to `prox`, most commonly regularization strength.
+        iter_batches :
+            Callable that returns a fresh iterator over (X_batch, y_batch) on each call.
+            Iterating through it must give a full epoch of data.
+        sample_batch :
+            Callable that returns a single batch for initialization.
+        num_epochs :
+            Number of passes over the data. Must be >= 1.
+
+        Returns
+        -------
+        OptStep
+            final_params :
+                Parameters at the end of the last epoch.
+            final_state :
+                Final optimizer state.
+        """
+        if num_epochs < 1:
+            raise ValueError("num_epochs must be >= 1")
+
+        sample_X, sample_y = sample_batch()
+        state = self.init_state(init_params, sample_X, sample_y)
+        params = init_params
+
+        for _ in range(num_epochs):
+            # iter_batches gives a fresh run through the data
+            full_grad = self._compute_full_gradient_streaming(params, iter_batches)
+
+            state = state._replace(
+                reference_point=params,
+                full_grad_at_reference_point=full_grad,
+                aux_full=None,
+                aux_batch=None,
+            )
+
+            # another run through the data
+            for X_batch, y_batch in iter_batches():
+                params, state = self._update_on_batch(
+                    params, state, hyperparams_prox, X_batch, y_batch
+                )
+
+        return OptStep(params=params, state=state)
+
+    def _compute_full_gradient_streaming(
+        self,
+        params: Pytree,
+        iter_batches: Callable[[], Iterator[Tuple[Any, Any]]],
+    ) -> Pytree:
+        """Compute full gradient by iterating through all batches."""
+        total_grad = None
+        total_samples = 0
+
+        for X_batch, y_batch in iter_batches():
+            batch_grad, _ = self.loss_gradient(params, X_batch, y_batch)
+            batch_size = y_batch.shape[0]
+
+            if total_grad is None:
+                total_grad = jax.tree.map(lambda g: g * batch_size, batch_grad)
+            else:
+                total_grad = jax.tree.map(
+                    lambda t, g: t + g * batch_size, total_grad, batch_grad
+                )
+            total_samples += batch_size
+
+        if total_samples == 0:
+            raise ValueError("iter_batches yielded no batches.")
+
+        return jax.tree.map(lambda g: g / total_samples, total_grad)
+
     @partial(jit, static_argnums=(0,))
     def _update_per_random_samples(
         self,
@@ -814,14 +911,53 @@ class SVRG(ProxSVRG):
         # substitute None for hyperparams_prox
         return self._run(init_params, init_state, None, *args)
 
+    def run_streaming(
+        self,
+        init_params: Pytree,
+        iter_batches: Callable[[], Iterator[Tuple[Any, Any]]],
+        sample_batch: Callable[[], Tuple[Any, Any]],
+        num_epochs: int = 1,
+    ) -> OptStep:
+        """Run SVRG over streamed mini-batches."""
+        return super().run_streaming(
+            init_params,
+            None,
+            iter_batches,
+            sample_batch,
+            num_epochs=num_epochs,
+        )
 
-class WrappedSVRG(JaxoptAdapter):
+
+class _WrappedSVRGBase(JaxoptAdapter):
+    """Shared stochastic_run implementation for SVRG wrappers."""
+
+    _supports_stochastic = True
+
+    def _stochastic_run_impl(
+        self,
+        init_params: Params,
+        data_loader: "DataLoader",
+        num_epochs: int,
+    ) -> StepResult:
+        step = self._solver.run_streaming(
+            init_params,
+            *self.hyperparams_prox,
+            iter_batches=data_loader.__iter__,
+            sample_batch=data_loader.sample_batch,
+            num_epochs=num_epochs,
+        )
+        params, state = step
+        aux = self._extract_aux(state, fallback_name="aux_batch")
+        return (params, state, aux)
+
+
+class WrappedSVRG(_WrappedSVRGBase):
     """Adapter for NeMoS's implementation of SVRG following the AbstractSolver interface."""
 
     _solver_cls = SVRG
 
 
-class WrappedProxSVRG(JaxoptAdapter):
+class WrappedProxSVRG(_WrappedSVRGBase):
     """Adapter for NeMoS's implementation of Prox-SVRG following the AbstractSolver interface."""
 
     _solver_cls = ProxSVRG
