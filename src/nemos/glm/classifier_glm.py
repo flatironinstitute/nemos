@@ -978,7 +978,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
 
     **Predict Class Labels**
 
-    Get predicted class labels for each neuron:
+    Get predicted class labels for each subject:
 
     >>> predictions = model.predict(X)
     >>> predictions.shape
