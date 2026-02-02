@@ -2,10 +2,13 @@
 
 import abc
 from dataclasses import dataclass
-from typing import Any, Callable, Generic, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, Generic, NamedTuple
 
 from ..regularizer import Regularizer
 from ..typing import Params, SolverState, StepResult
+
+if TYPE_CHECKING:
+    from ..batching import DataLoader
 
 
 @dataclass
@@ -28,6 +31,9 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
     the other methods only take parameters, solver state, and the positional arguments of
     the objective function.
     """
+
+    # Set to True in subclasses that support stochastic optimization
+    _supports_stochastic: ClassVar[bool] = False
 
     @abc.abstractmethod
     def __init__(
@@ -112,6 +118,71 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         - whether the max number of steps were reached
         """
         pass
+
+    def stochastic_run(
+        self,
+        init_params: Params,
+        data_loader: "DataLoader",
+        num_epochs: int = 1,
+    ) -> StepResult:
+        """Run optimization over mini-batches from a data loader.
+
+        Parameters
+        ----------
+        init_params : Params
+            Initial parameter values.
+        data_loader : DataLoader
+            Data loader providing batches and metadata.
+            Must be re-iterable (each __iter__ call returns fresh iterator).
+        num_epochs : int
+            Number of passes over the data. Must be >= 1.
+
+        Returns
+        -------
+        StepResult
+            Final (params, state, aux) tuple.
+
+        Raises
+        ------
+        NotImplementedError
+            If the solver does not support stochastic optimization.
+        ValueError
+            If num_epochs < 1.
+        """
+        if not self._supports_stochastic:
+            raise NotImplementedError(
+                f"{self.__class__.__name__} does not support stochastic optimization. "
+                f"Use 'GradientDescent', 'ProximalGradient', 'SVRG', or 'ProxSVRG'."
+            )
+        if num_epochs < 1:
+            raise ValueError("num_epochs must be >= 1")
+        return self._stochastic_run_impl(init_params, data_loader, num_epochs)
+
+    def _stochastic_run_impl(
+        self,
+        init_params: Params,
+        data_loader: "DataLoader",
+        num_epochs: int,
+    ) -> StepResult:
+        """Override in stochastic-capable solvers.
+
+        Parameters
+        ----------
+        init_params : Params
+            Initial parameter values.
+        data_loader : DataLoader
+            Data loader providing batches and metadata.
+        num_epochs : int
+            Number of passes over the data.
+
+        Returns
+        -------
+        StepResult
+            Final (params, state, aux) tuple.
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} must implement _stochastic_run_impl"
+        )
 
 
 @runtime_checkable
