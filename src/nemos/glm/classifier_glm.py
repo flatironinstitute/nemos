@@ -965,7 +965,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     --------
     **Fit a ClassifierPopulationGLM**
 
-    Basic multi-class classification for a population of neurons:
+    Basic multi-class classification for multi-subjects
 
     >>> import jax.numpy as jnp
     >>> import numpy as np
