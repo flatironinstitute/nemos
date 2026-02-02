@@ -603,14 +603,14 @@ class TestModelCommons:
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         y = _add_zeros(y)
 
-        assert model.solver_init_state is None
-        assert model.solver_update is None
-        assert model.solver_run is None
+        assert model.optimization_init_state is None
+        assert model.optimization_update is None
+        assert model.optimization_run is None
         init_params = model.initialize_params(X, y)
         model.initialize_optimization_and_state(X, y, init_params)
-        assert callable(model.solver_init_state)
-        assert callable(model.solver_update)
-        assert callable(model.solver_run)
+        assert callable(model.optimization_init_state)
+        assert callable(model.optimization_update)
+        assert callable(model.optimization_run)
 
 
 @pytest.mark.parametrize(
