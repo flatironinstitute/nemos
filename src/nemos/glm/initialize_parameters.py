@@ -18,19 +18,18 @@ from ..inverse_link_function_utils import (
 from ..utils import one_over_x
 
 
-def _inverse_log_softmax(empirical_frequencies):
-    """Inverse log softmax.
+def _log_softmax_inv(x):
+    """Inverse of log_softmax with centering.
 
-    Parameters
-    ----------
-    empirical_frequencies:
-        The empirical frequencies, shape (..., n_categories).
+    For over-parameterized multinomial models, we center the log-probabilities
+    by subtracting the mean. This ensures the intercepts sum to zero, matching
+    sklearn's implicit constraint and making the parameters identifiable.
     """
-    return (
-        jnp.zeros(empirical_frequencies.shape)
-        .at[..., :-1]
-        .set(jnp.log(empirical_frequencies[..., :-1] / empirical_frequencies[..., -1:]))
-    )
+    # Clipping is needed when initializing with a batch that do not contain
+    # a category. In that case, the empirical frequency associated to the
+    # category would be zero, and log(0) will be -inf.
+    log_x = jnp.log(jnp.clip(x, jnp.finfo(float).eps, jnp.inf))
+    return log_x - jnp.mean(log_x, axis=-1, keepdims=True)
 
 
 # dictionary of known inverse link functions.
@@ -41,7 +40,7 @@ INVERSE_FUNCS = {
     norm_cdf: jax.scipy.stats.norm.ppf,
     one_over_x: one_over_x,
     identity: identity,
-    log_softmax: _inverse_log_softmax,
+    log_softmax: _log_softmax_inv,
 }
 
 # Name-based lookup (for after pickling/copying)
@@ -52,7 +51,7 @@ INVERSE_FUNCS_BY_SIMPLE_NAME = {
     "norm_cdf": jax.scipy.stats.norm.ppf,
     "one_over_x": one_over_x,
     "identity": identity,
-    "log_softmax": _inverse_log_softmax,
+    "log_softmax": _log_softmax_inv,
 }
 
 non_finite_error = ValueError(

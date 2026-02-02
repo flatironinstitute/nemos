@@ -49,13 +49,17 @@ expit = _make_wrapper(
 
 identity = _make_wrapper(lambda x: x, "identity", "Identity link function.")
 
-log_softmax = _make_wrapper(jax.nn.log_softmax, "log_softmax", "Softmax link function.")
+log_softmax = _make_wrapper(
+    jax.nn.log_softmax, "log_softmax", "Log-softmax link function."
+)
+
 
 LINK_NAME_TO_FUNC = {
     "exp": exp,
     "expit": expit,
     "jax._src.lax.lax.logistic": expit,
     "jax._src.nn.functions.softplus": softplus,
+    "jax._src.nn.functions.log_softmax": log_softmax,
     "jax._src.numpy.ufuncs.exp": exp,
     "jax._src.scipy.special.expit": expit,
     "jax._src.scipy.stats.norm.cdf": jax.scipy.stats.norm.cdf,
