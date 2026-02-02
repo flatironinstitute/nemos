@@ -8,6 +8,7 @@ import numpy as np
 from nemos.regularizer import Ridge
 
 from ._abstract_solver import AbstractSolver, OptimizationInfo
+from .._inspect_utils import get_params, implements_methods
 
 # Notes
 # We could enforce adherence to the API with type checkers
@@ -16,36 +17,6 @@ from ._abstract_solver import AbstractSolver, OptimizationInfo
 
 METHOD_NAMES = AbstractSolver.__abstractmethods__
 AUX_VAL = -1
-
-
-def _get_params(
-    fun: Callable,
-    first_n_params: int = None,
-    names_only: bool = True,
-) -> list[str] | list[inspect.Parameter]:
-    """
-    Get the (names of the) parameters of a function.
-
-    Parameters
-    ----------
-    fun :
-        Function to inspect.
-    first_n_params :
-        Number of arguments to include.
-    names_only :
-        Whether to return only the names or the inspect.Parameter
-        with extra info.
-    """
-    signature = inspect.signature(fun)
-    params = list(signature.parameters.values())
-
-    if names_only:
-        params = [p.name for p in params]
-
-    if first_n_params is not None:
-        params = params[:first_n_params]
-
-    return params
 
 
 def _validate_method_signature(
@@ -64,11 +35,11 @@ def _validate_method_signature(
     if method_name == "__init__":
         n_params_to_check = sum(
             p.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD
-            for p in _get_params(getattr(AbstractSolver, method_name), names_only=False)
+            for p in get_params(getattr(AbstractSolver, method_name), names_only=False)
         )
 
-    reference = _get_params(getattr(AbstractSolver, method_name), n_params_to_check)
-    got = _get_params(getattr(solver_class, method_name), n_params_to_check)
+    reference = get_params(getattr(AbstractSolver, method_name), n_params_to_check)
+    got = get_params(getattr(solver_class, method_name), n_params_to_check)
 
     # enforcing names, not just the number of parameters
     if got != reference:
@@ -106,13 +77,7 @@ def _check_all_signatures_match(solver_class: Type) -> None:
 def _check_required_methods_exist(solver_class: Type):
     """Check that all abstractmethods of AbstractSolver are implemented."""
     # a bit more detailed than issubclass(solver_class, SolverProtocol)
-    for method_name in METHOD_NAMES:
-        try:
-            getattr(solver_class, method_name)
-        except AttributeError as e:
-            raise AttributeError(
-                f"{solver_class.__name__}.{method_name} does not exist. Please implement it."
-            ) from e
+    return implements_methods(solver_class, METHOD_NAMES)
 
 
 def _assert_step_result(step_result: Any, method_name: str) -> tuple[Any, Any, Any]:

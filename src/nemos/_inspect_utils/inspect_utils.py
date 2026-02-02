@@ -314,3 +314,53 @@ def count_positional_and_var_args(func: Callable):
         func, {inspect.Parameter.VAR_KEYWORD, inspect.Parameter.VAR_POSITIONAL}
     )
     return num_positional_args, num_var_args
+
+
+def get_params(
+    fun: Callable,
+    first_n_params: int = None,
+    names_only: bool = True,
+) -> list[str] | list[inspect.Parameter]:
+    """
+    Get the (names of the) parameters of a function.
+
+    Parameters
+    ----------
+    fun :
+        Function to inspect.
+    first_n_params :
+        Number of arguments to include.
+    names_only :
+        Whether to return only the names or the inspect.Parameter
+        with extra info.
+    """
+    signature = inspect.signature(fun)
+    params = list(signature.parameters.values())
+
+    if names_only:
+        params = [p.name for p in params]
+
+    if first_n_params is not None:
+        params = params[:first_n_params]
+
+    return params
+
+
+def implements_methods(solver_class: type, method_names: list[str]) -> None:
+    """
+    Check that ``solver_class`` implements all required methods.
+
+    Parameters
+    ----------
+    solver_class :
+        Class to check.
+    method_names :
+        List of method names the class should have.
+    """
+    for method_name in method_names:
+        try:
+            getattr(solver_class, method_name)
+        except AttributeError as e:
+            raise AttributeError(
+                f"{solver_class.__name__}.{method_name} does not exist. Please implement it."
+            ) from e

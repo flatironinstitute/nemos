@@ -21,6 +21,8 @@ from .inspect_utils import (
     list_abstract_methods,
     reimplements_method,
     trim_kwargs,
+    get_params,
+    implements_methods,
 )
 
 __all__ = [
@@ -33,4 +35,6 @@ __all__ = [
     "get_superclass_abstract_methods",
     "check_all_abstract_methods_compliance",
     "trim_kwargs",
+    "get_params",
+    "implements_methods",
 ]
