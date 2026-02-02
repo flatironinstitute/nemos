@@ -25,6 +25,7 @@ from nemos.glm.validation import (
     PopulationClassifierGLMValidator,
     PopulationGLMValidator,
 )
+from nemos.glm_hmm.validation import GLMHMMValidator
 from nemos.inverse_link_function_utils import LINK_NAME_TO_FUNC
 
 MODEL_REGISTRY = {
@@ -116,6 +117,7 @@ OBSERVATION_PER_MODEL = {
     "ClassifierGLM": ["Categorical"],
     "ClassifierPopulationGLM": ["Categorical"],
     "PopulationGLM": [o for o in AVAILABLE_OBSERVATION_MODELS if o != "Categorical"],
+    "GLMHMM": [o for o in AVAILABLE_OBSERVATION_MODELS if o != "Categorical"],
 }
 
 

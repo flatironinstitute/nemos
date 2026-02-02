@@ -1376,7 +1376,6 @@ def run_simulation_glm_hmm(
     glm.coef_ = coef[..., initial_state].reshape(coef.shape[0], n_neurons)
     glm.intercept_ = intercept[..., initial_state].reshape((n_neurons,))
     glm.scale_ = 1.0
-    glm._initialize_feature_mask(design_matrix, rates)
 
     key = jax.random.PRNGKey(seed)
     counts[0], rates[0] = glm.simulate(key, design_matrix[:1])
