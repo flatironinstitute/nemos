@@ -781,7 +781,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         init_params: Optional[GLMUserParams] = None,
         num_epochs: int = 1,
     ):
-        """Fit GLM using stochastic optimization with mini-batches.
+        """
+        Fit GLM using stochastic optimization with mini-batches.
 
         This method provides an out-of-memory training interface for large datasets
         that cannot fit in memory. Data is provided via a DataLoader that yields
@@ -789,18 +790,18 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
 
         Parameters
         ----------
-        data : DataLoader
+        data :
             Data loader yielding (X_batch, y_batch) tuples.
-            Must be re-iterable for num_epochs > 1.
-        init_params : GLMUserParams, optional
+            Must be re-iterable for ``num_epochs > 1``.
+        init_params :
             Initial parameters (coefficients, intercept). If None, initialized
-            from sample_batch().
-        num_epochs : int, default=1
+            from ``sample_batch()``.
+        num_epochs :
             Number of passes over the data. Must be >= 1.
 
         Returns
         -------
-        self
+        self :
             The fitted model.
 
         Raises

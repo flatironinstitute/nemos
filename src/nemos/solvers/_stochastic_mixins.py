@@ -9,13 +9,14 @@ if TYPE_CHECKING:
 
 
 class StochasticSolverMixin:
-    """Mixin providing standard stochastic optimization loop.
+    """
+    Mixin providing standard stochastic optimization loop.
 
-    This mixin provides a default implementation of `_stochastic_run_impl`
+    This mixin provides a default implementation of ``_stochastic_run_impl``
     that iterates over the data loader for the specified number of epochs,
-    calling `update` on each batch.
+    calling ``update`` on each batch.
 
-    Classes using this mixin must implement `init_state` and `update` methods.
+    Classes using this mixin must implement ``init_state`` and ``update`` methods.
     """
 
     _supports_stochastic = True
@@ -26,20 +27,21 @@ class StochasticSolverMixin:
         data_loader: "DataLoader",
         num_epochs: int,
     ) -> StepResult:
-        """Run optimization over mini-batches from a data loader.
+        """
+        Run optimization over mini-batches from a data loader.
 
         Parameters
         ----------
-        init_params : Params
+        init_params :
             Initial parameter values.
-        data_loader : DataLoader
+        data_loader :
             Data loader providing batches and metadata.
-        num_epochs : int
+        num_epochs :
             Number of passes over the data.
 
         Returns
         -------
-        StepResult
+        StepResult :
             Final (params, state, aux) tuple.
         """
         sample_X, sample_y = data_loader.sample_batch()
@@ -55,9 +57,10 @@ class StochasticSolverMixin:
 
 
 class OptimistixStochasticSolverMixin(StochasticSolverMixin):
-    """Mixin for Optimistix solvers that updates stats after optimization.
+    """
+    Mixin for Optimistix solvers that updates stats after optimization.
 
-    Extends `StochasticSolverMixin` to also update `self.stats` with
+    Extends ``StochasticSolverMixin`` to also update ``self.stats`` with
     the number of steps taken after the optimization loop completes.
     """
 
@@ -67,20 +70,21 @@ class OptimistixStochasticSolverMixin(StochasticSolverMixin):
         data_loader: "DataLoader",
         num_epochs: int,
     ) -> StepResult:
-        """Run optimization and update stats.
+        """
+        Run optimization and update stats.
 
         Parameters
         ----------
-        init_params : Params
+        init_params :
             Initial parameter values.
-        data_loader : DataLoader
+        data_loader :
             Data loader providing batches and metadata.
-        num_epochs : int
+        num_epochs :
             Number of passes over the data.
 
         Returns
         -------
-        StepResult
+        StepResult :
             Final (params, state, aux) tuple.
         """
         result = super()._stochastic_run_impl(init_params, data_loader, num_epochs)

@@ -9,19 +9,23 @@ from numpy.typing import ArrayLike
 
 @runtime_checkable
 class DataLoader(Protocol):
-    """Protocol for data loaders that stream batches.
+    """
+    Protocol for data loaders that stream batches.
 
     Requirements:
-    - Must be re-iterable: calling __iter__() must return a fresh iterator each time.
-      This is required for num_epochs > 1 and for SVRG's full gradient computation.
-    - sample_batch() should be cheap and deterministic (e.g., return first batch).
+
+    - Must be re-iterable: calling ``__iter__()`` must return a fresh iterator
+      each time. This is required for ``num_epochs > 1`` and for SVRG's full
+      gradient computation.
+    - ``sample_batch()`` should be cheap and deterministic (e.g., return first batch).
     - Batches should have consistent, non-zero sizes.
     """
 
     def __iter__(self) -> Iterator[Tuple[ArrayLike, ArrayLike]]:
-        """Iterate over (X_batch, y_batch) tuples.
+        """
+        Iterate over (X_batch, y_batch) tuples.
 
-        Must return a FRESH iterator each call (re-iterable).
+        Must return a fresh iterator each call (re-iterable).
         """
         ...
 
@@ -31,7 +35,8 @@ class DataLoader(Protocol):
         ...
 
     def sample_batch(self) -> Tuple[ArrayLike, ArrayLike]:
-        """Return a single batch for initialization purposes.
+        """
+        Return a single batch for initialization purposes.
 
         Should be cheap/cached and deterministic (ignore shuffle setting).
         Typically returns the first batch of data.
@@ -40,22 +45,23 @@ class DataLoader(Protocol):
 
 
 class ArrayDataLoader:
-    """DataLoader for in-memory arrays. Easy to use for common cases.
+    """
+    DataLoader for in-memory arrays.
 
-    This loader is re-iterable: each call to __iter__() returns a fresh iterator.
+    This loader is re-iterable: each call to ``__iter__()`` returns a fresh iterator.
 
     Parameters
     ----------
-    X : ArrayLike
+    X :
         Input features, array of shape (n_samples, n_features).
-    y : ArrayLike
+    y :
         Target values, array of shape (n_samples,) or (n_samples, n_outputs).
-    batch_size : int
+    batch_size :
         Number of samples per batch.
-    shuffle : bool, optional
+    shuffle :
         Whether to shuffle data each epoch. Default is True.
-    key : jax.Array, optional
-        JAX random key for shuffling. Default is jax.random.key(0).
+    key :
+        JAX random key for shuffling. Default is ``jax.random.key(0)``.
 
     Examples
     --------
@@ -114,10 +120,11 @@ class ArrayDataLoader:
 
 
 class _PreprocessedDataLoader:
-    """Wraps a DataLoader to preprocess batches on-the-fly.
+    """
+    Wraps a DataLoader to preprocess batches on-the-fly.
 
-    Used internally by GLM.stochastic_fit to apply preprocessing
-    (e.g., nan dropping, type casting) to each batch.
+    Used internally by ``GLM.stochastic_fit`` to apply preprocessing
+    (e.g., NaN dropping, type casting) to each batch.
     """
 
     def __init__(
