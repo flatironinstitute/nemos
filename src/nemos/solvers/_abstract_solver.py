@@ -11,23 +11,36 @@ if TYPE_CHECKING:
     from ..batching import DataLoader
 
 
+# TODO: Check generated API docs after rebase
 @dataclass
 class OptimizationInfo:
-    """Basic diagnostic information about finished optimization runs."""
+    """
+    Basic diagnostic information about finished optimization runs.
 
-    # Not all JAXopt solvers store the function value.
-    # None means missing value, while NaN usually indicates a diverged optimization
-    function_val: float | None  #: Function value. Optional as not all solvers store it.
-    num_steps: int  #: Number of optimization steps taken.
-    converged: bool  #: Whether the optimization converged.
-    reached_max_steps: bool  #: Reached the maximum number of allowed steps.
+    Attributes
+    ----------
+    function_val :
+        Final objective function value. None means the solver did not store it,
+        while NaN usually indicates a diverged optimization.
+    num_steps :
+        Number of optimization steps taken.
+    converged :
+        Whether the optimization converged according to the solver's criterion.
+    reached_max_steps :
+        Whether the optimization stopped because it reached the maximum number of steps.
+    """
+
+    function_val: float | None
+    num_steps: int
+    converged: bool
+    reached_max_steps: bool
 
 
 class AbstractSolver(abc.ABC, Generic[SolverState]):
     """
     Base class defining the interface for solvers that can be used by `BaseRegressor`.
 
-    All solver parameters (e.g. tolerance, number of steps) are passed to `__init__`,
+    All solver parameters (e.g. tolerance, number of steps) are passed to ``__init__``,
     the other methods only take parameters, solver state, and the positional arguments of
     the objective function.
     """
@@ -74,7 +87,7 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         """
         Initialize the solver state.
 
-        Used by `BaseRegressor.initialize_state`
+        Used by ``BaseRegressor.initialize_state``.
         """
         pass
 
@@ -83,7 +96,7 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         """
         Perform a single step/update of the optimization process.
 
-        Used by `BaseRegressor.update`.
+        Used by ``BaseRegressor.update``.
         """
         pass
 
@@ -92,7 +105,7 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         """
         Run a full optimization process until a stopping criterion is reached.
 
-        Used by `BaseRegressor.fit`.
+        Used by ``BaseRegressor.fit``.
         """
         pass
 
@@ -100,18 +113,20 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
     @abc.abstractmethod
     def get_accepted_arguments(cls) -> set[str]:
         """
-        Set of argument names accepted by the solver.
+        Return the set of argument names accepted by the solver.
 
-        Used by `BaseRegressor` to determine what arguments
-        can be passed to the solver's __init__.
+        Used by ``BaseRegressor`` to determine what arguments
+        can be passed to the solver's ``__init__``.
         """
         pass
 
     @abc.abstractmethod
     def get_optim_info(self, state: SolverState) -> OptimizationInfo:
-        """Extract some commong info about the optimization process.
+        """
+        Extract common info about the optimization process.
 
         Currently, the following info is extracted:
+
         - final function value (where available)
         - number of steps
         - whether the optimization converged
@@ -125,16 +140,17 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         data_loader: "DataLoader",
         num_epochs: int = 1,
     ) -> StepResult:
-        """Run optimization over mini-batches from a data loader.
+        """
+        Run optimization over mini-batches from a data loader.
 
         Parameters
         ----------
-        init_params : Params
+        init_params
             Initial parameter values.
-        data_loader : DataLoader
+        data_loader
             Data loader providing batches and metadata.
-            Must be re-iterable (each __iter__ call returns fresh iterator).
-        num_epochs : int
+            Must be re-iterable (each ``__iter__`` call returns fresh iterator).
+        num_epochs
             Number of passes over the data. Must be >= 1.
 
         Returns
@@ -164,15 +180,16 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         data_loader: "DataLoader",
         num_epochs: int,
     ) -> StepResult:
-        """Override in stochastic-capable solvers.
+        """
+        Override in stochastic-capable solvers.
 
         Parameters
         ----------
-        init_params : Params
+        init_params
             Initial parameter values.
-        data_loader : DataLoader
+        data_loader
             Data loader providing batches and metadata.
-        num_epochs : int
+        num_epochs
             Number of passes over the data.
 
         Returns

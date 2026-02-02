@@ -918,7 +918,29 @@ class SVRG(ProxSVRG):
         sample_batch: Callable[[], Tuple[Any, Any]],
         num_epochs: int = 1,
     ) -> OptStep:
-        """Run SVRG over streamed mini-batches."""
+        """
+        Run SVRG over streamed mini-batches.
+
+        Parameters
+        ----------
+        init_params :
+            Initial parameters to start from.
+        iter_batches :
+            Callable that returns a fresh iterator over (X_batch, y_batch) on each call.
+            Iterating through it must give a full epoch of data.
+        sample_batch :
+            Callable that returns a single batch for initialization.
+        num_epochs :
+            Number of passes over the data. Must be >= 1.
+
+        Returns
+        -------
+        OptStep
+            final_params :
+                Parameters at the end of the last epoch.
+            final_state :
+                Final optimizer state.
+        """
         return super().run_streaming(
             init_params,
             None,

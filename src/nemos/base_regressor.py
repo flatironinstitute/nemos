@@ -420,12 +420,12 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
 
         Parameters
         ----------
-        data : DataLoader
+        data :
             Data loader yielding (X_batch, y_batch) tuples.
-            Must be re-iterable for num_epochs > 1.
-        init_params : optional
-            Initial parameters. If None, initialized from sample_batch().
-        num_epochs : int, default=1
+            Must be re-iterable for ``num_epochs > 1``.
+        init_params :
+            Initial parameters. If None, initialized from ``sample_batch()``.
+        num_epochs :
             Number of passes over the data. Must be >= 1.
 
         Returns
