@@ -53,7 +53,7 @@ import nemos as nmo
 
 ## Data Streaming
 
-The data used in this tutorial were used in this publication: Sargolini, Francesca, et al. “Conjunctive representation of position, direction, and velocity in entorhinal cortex.” Science 312.5774 (2006): 758-762. The data can be found on the DANDI Archive in [Dandiset 000582](https://dandiarchive.org/dandiset/000582).
+The data used in this tutorial were used in this publication: Sargolini, Francesca, et al. “Conjunctive representation of position, direction, and velocity in entorhinal cortex.” Science 312.5774 (2006): 758-762. The data can be found on the DANDI Archive in [Dandiset 000582](https://dandiarchive.org/dandiset/000582) with DOI https://doi.org/10.48324/dandi.000582/0.251111.2151.
 
 DANDI allows you to stream data without downloading all the files. In this case the data extracted from the NWB file are stored in the nwb-cache folder.
 
