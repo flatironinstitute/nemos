@@ -48,11 +48,11 @@ class SolverSpec:
 
     def __repr__(self) -> str:
         return (
-            f"{self.full_name!r} - "
-            f"{self.__class__.__name__}("
-            f"algo_name={self.algo_name!r}, "
-            f"backend={self.backend!r}, "
-            f"implementation={f'{self.implementation.__module__}.{self.implementation.__qualname__}'!r})"
+            f'"{self.full_name}" - '
+            f"{self.__class__.__name__}(\n"
+            f'    algo_name="{self.algo_name}",\n'
+            f'    backend="{self.backend}",\n'
+            f"    implementation={self.implementation.__module__}.{self.implementation.__qualname__}\n)"
         )
 
 
