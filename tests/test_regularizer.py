@@ -78,58 +78,6 @@ def test_regularizer_available():
 
 
 @pytest.mark.parametrize(
-    "regularizer_strength",
-    [0.001, 1.0, "bah"],
-)
-@pytest.mark.parametrize(
-    "reg_type",
-    [
-        nmo.regularizer.Ridge,
-        nmo.regularizer.Lasso,
-        nmo.regularizer.GroupLasso,
-        nmo.regularizer.ElasticNet,
-    ],
-)
-def test_regularizer(regularizer_strength, reg_type):
-    if not isinstance(regularizer_strength, float):
-        with pytest.raises(
-            TypeError,
-            match=f"Could not convert regularizer strength to floats: {regularizer_strength}",
-        ):
-            nmo.glm.GLM(
-                regularizer=reg_type(), regularizer_strength=regularizer_strength
-            )
-    else:
-        nmo.glm.GLM(regularizer=reg_type(), regularizer_strength=regularizer_strength)
-
-
-@pytest.mark.parametrize(
-    "regularizer_strength",
-    [0.001, 1.0, "bah"],
-)
-@pytest.mark.parametrize(
-    "regularizer",
-    [
-        nmo.regularizer.Ridge(),
-        nmo.regularizer.Lasso(),
-        nmo.regularizer.GroupLasso(),
-        nmo.regularizer.ElasticNet(),
-    ],
-)
-def test_regularizer_setter(regularizer_strength, regularizer):
-    if not isinstance(regularizer_strength, float):
-        with pytest.raises(
-            TypeError,
-            match=f"Could not convert regularizer strength to floats: {regularizer_strength}",
-        ):
-            nmo.glm.GLM(
-                regularizer=regularizer, regularizer_strength=regularizer_strength
-            )
-    else:
-        nmo.glm.GLM(regularizer=regularizer, regularizer_strength=regularizer_strength)
-
-
-@pytest.mark.parametrize(
     "regularizer",
     [
         nmo.regularizer.UnRegularized(),
@@ -237,6 +185,199 @@ def test_change_regularizer_reset_strength(
     assert model.regularizer_strength == regularizer_strength
 
 
+@pytest.mark.parametrize(
+    "regularizer",
+    [
+        nmo.regularizer.Ridge(),
+        nmo.regularizer.Lasso(),
+        nmo.regularizer.GroupLasso(),
+    ],
+)
+@pytest.mark.parametrize(
+    "strength, expectation",
+    [
+        (None, does_not_raise()),
+        (0.5, does_not_raise()),
+        (1.0, does_not_raise()),
+        (jnp.array(1.0), does_not_raise()),
+        (np.array(0.5), does_not_raise()),
+        (
+            "bah",
+            pytest.raises(
+                TypeError,
+                match=f"Could not convert regularizer strength to floats:",
+            ),
+        ),
+    ],
+)
+def test_validate_strength_single_input(regularizer, strength, expectation):
+    """Test that regularizer accepts scalar strength input (or None)."""
+    with expectation:
+        result = regularizer._validate_strength(strength)
+        if strength is None:
+            assert result == 1.0
+        else:
+            assert result == strength
+            assert isinstance(result, float)
+
+
+@pytest.mark.parametrize(
+    "regularizer",
+    [nmo.regularizer.Ridge(), nmo.regularizer.Lasso(), nmo.regularizer.GroupLasso()],
+)
+@pytest.mark.parametrize(
+    "strength, expectation, check_fn",
+    [
+        # Dict with scalar leaves (Python floats)
+        (
+            {"a": 0.5, "b": 0.3},
+            does_not_raise(),
+            lambda result: (
+                isinstance(result, dict)
+                and isinstance(result["a"], float)
+                and result["a"] == 0.5
+                and isinstance(result["b"], float)
+                and result["b"] == 0.3
+            ),
+        ),
+        # Dict with 0-dim arrays (should be converted to float)
+        (
+            {"a": jnp.array(0.5), "b": np.array(0.3)},
+            does_not_raise(),
+            lambda result: (
+                isinstance(result, dict)
+                and isinstance(result["a"], float)
+                and result["a"] == 0.5
+                and isinstance(result["b"], float)
+                and result["b"] == 0.3
+            ),
+        ),
+        # Dict with 1-D arrays (should be preserved as jnp.ndarray)
+        (
+            {
+                "a": jnp.array([0.1, 0.2, 0.3]),
+                "b": np.array([0.5]),
+            },
+            does_not_raise(),
+            lambda result: (
+                isinstance(result, dict)
+                and isinstance(result["a"], jnp.ndarray)
+                and result["a"].shape == (3,)
+                and jnp.allclose(result["a"], jnp.array([0.1, 0.2, 0.3]))
+                and isinstance(result["b"], jnp.ndarray)
+                and result["b"].shape == (1,)
+                and jnp.allclose(result["b"], jnp.array([0.5]))
+            ),
+        ),
+        # Dict with mixed 0-dim and arrays
+        (
+            {
+                "a": jnp.array(0.5),
+                "b": np.array([0.1, 0.2]),
+            },
+            does_not_raise(),
+            lambda result: (
+                isinstance(result, dict)
+                and isinstance(result["a"], float)
+                and result["a"] == 0.5
+                and isinstance(result["b"], jnp.ndarray)
+                and result["b"].shape == (2,)
+            ),
+        ),
+        # Nested dict (dict of dicts)
+        (
+            {
+                "a": {"x": 0.3, "y": 0.4},
+                "b": {"x": jnp.array([0.1, 0.2]), "y": 0.5},
+            },
+            does_not_raise(),
+            lambda result: (
+                isinstance(result, dict)
+                and isinstance(result["a"]["x"], float)
+                and result["a"]["x"] == 0.3
+                and isinstance(result["a"]["y"], float)
+                and result["a"]["y"] == 0.4
+                and isinstance(result["b"]["x"], jnp.ndarray)
+                and result["b"]["x"].shape == (2,)
+                and isinstance(result["b"]["y"], float)
+                and result["b"]["y"] == 0.5
+            ),
+        ),
+        # 1-D array
+        (
+            jnp.array([0.1, 0.2, 0.3]),
+            does_not_raise(),
+            lambda result: (
+                isinstance(result, jnp.ndarray)
+                and result.shape == (3,)
+                and jnp.allclose(result, jnp.array([0.1, 0.2, 0.3]))
+            ),
+        ),
+        # 2-D array
+        (
+            np.array([[0.1, 0.2], [0.3, 0.4]]),
+            does_not_raise(),
+            lambda result: (
+                isinstance(result, jnp.ndarray)
+                and result.shape == (2, 2)
+                and jnp.allclose(result, jnp.array([[0.1, 0.2], [0.3, 0.4]]))
+            ),
+        ),
+        # Dict with string leaf
+        (
+            {"a": "invalid", "b": 0.5},
+            pytest.raises(
+                TypeError, match="Could not convert regularizer strength to floats:"
+            ),
+            lambda result: True,
+        ),
+        # Nested dict with invalid leaf
+        (
+            {
+                "a": {"x": 0.3, "y": "bad"},
+            },
+            pytest.raises(
+                TypeError, match="Could not convert regularizer strength to floats:"
+            ),
+            lambda result: True,
+        ),
+    ],
+)
+def test_validate_strength_tree_input(regularizer, strength, expectation, check_fn):
+    """Test that regularizer accepts tree strength with proper type conversion.
+
+    Type conversion rules:
+    - 0-dim arrays or scalar numbers → float
+    - Arrays with shape (n,) or higher → jnp.ndarray with same shape
+    - Strings or other invalid types → TypeError
+    """
+    with expectation:
+        result = regularizer._validate_strength(strength)
+        assert check_fn(result)
+
+
+@pytest.mark.parametrize(
+    "regularizer",
+    [nmo.regularizer.Ridge(), nmo.regularizer.Lasso()],
+)
+@pytest.mark.parametrize("strength", [None, 0.3, jnp.array(1.0)])
+def test_validate_strength_structure_scalar_broadcast(regularizer, strength):
+    """Scalar and 0-d strengths broadcast over regularizable leaves; non-regularizable leaves are None."""
+    params = GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0]))
+
+    # Call structure alignment directly with raw strength; base method accepts None/scalars/0-d
+    structured = regularizer._validate_strength_structure(
+        params, regularizer._validate_strength(strength)
+    )
+
+    assert isinstance(structured, GLMParams)
+    # coef gets scalar broadcast (as a scalar per leaf), intercept is None
+    expected_scalar = 1.0 if strength is None else float(strength)
+    assert isinstance(structured.coef, float)
+    assert structured.coef == expected_scalar
+    assert structured.intercept is None
+
+
 class TestUnRegularized:
     cls = nmo.regularizer.UnRegularized
 
@@ -288,20 +429,24 @@ class TestUnRegularized:
         with expectation:
             model.set_params(solver_name=solver_name)
 
-    def test_regularizer_strength_none(self):
-        """Add test to assert that regularizer strength of UnRegularized model should be `None`"""
-        # unregularized should be None
-        regularizer = self.cls()
-        model = nmo.glm.GLM(regularizer=regularizer)
-
-        assert model.regularizer_strength is None
-
-        # changing to ridge, lasso, or grouplasso should set to 1.0
-        model.regularizer = "Lasso"
-
-        assert model.regularizer_strength == 1.0
-        model.regularizer = regularizer
-        assert model.regularizer_strength is None
+    @pytest.mark.parametrize(
+        "strength",
+        [
+            None,
+            0.0,
+            1.0,
+            jnp.array(1.0),  # 0-d array
+            jnp.array([0.1, 0.2]),  # 1-d array
+            np.array([[0.1, 0.2], [0.3, 0.4]]),  # 2-d array
+            {"a": 0.5, "b": jnp.array([0.1, 0.2])},  # mixed tree
+            GLMParams(coef=0.1, intercept=0.5),
+            "bah",  # arbitrary string
+        ],
+    )
+    def test_validate_strength(self, strength):
+        """UnRegularized ignores strength and always returns None."""
+        reg = self.cls()
+        assert reg._validate_strength(strength) is None
 
     def test_get_params(self):
         """Test get_params() returns expected values."""
@@ -1023,6 +1168,265 @@ class TestLasso:
 
 class TestElasticNet:
     cls = nmo.regularizer.ElasticNet
+
+    @pytest.mark.parametrize(
+        "strength, expectation, check_fn",
+        [
+            # None -> defaults to (1.0, 0.5)
+            (
+                None,
+                does_not_raise(),
+                lambda result: (
+                    isinstance(result, tuple)
+                    and isinstance(result[0], float)
+                    and isinstance(result[1], float)
+                    and result == (1.0, 0.5)
+                ),
+            ),
+            # Single float -> (strength, 0.5)
+            (
+                0.6,
+                does_not_raise(),
+                lambda result: (
+                    isinstance(result, tuple)
+                    and isinstance(result[0], float)
+                    and isinstance(result[1], float)
+                    and result == (0.6, 0.5)
+                ),
+            ),
+            (
+                1.0,
+                does_not_raise(),
+                lambda result: (
+                    isinstance(result, tuple)
+                    and isinstance(result[0], float)
+                    and isinstance(result[1], float)
+                    and result == (1.0, 0.5)
+                ),
+            ),
+            # 0-d arrays should become Python floats; ratio defaults to 0.5
+            (
+                jnp.array(1.0),
+                does_not_raise(),
+                lambda result: (
+                    isinstance(result, tuple)
+                    and isinstance(result[0], float)
+                    and isinstance(result[1], float)
+                    and result == (1.0, 0.5)
+                ),
+            ),
+            (
+                np.array(0.5),
+                does_not_raise(),
+                lambda result: (
+                    isinstance(result, tuple)
+                    and isinstance(result[0], float)
+                    and isinstance(result[1], float)
+                    and result == (0.5, 0.5)
+                ),
+            ),
+            # Explicit (strength, ratio) tuple
+            (
+                (1.0, 1.0),
+                does_not_raise(),
+                lambda result: (
+                    isinstance(result, tuple)
+                    and isinstance(result[0], float)
+                    and isinstance(result[1], float)
+                    and result == (1.0, 1.0)
+                ),
+            ),
+            # Invalid: strength not convertible
+            (
+                "bah",
+                pytest.raises(
+                    TypeError,
+                    match="Could not convert regularizer strength to floats: bah",
+                ),
+                lambda _: True,
+            ),
+            # Invalid: ratio not convertible
+            (
+                (1.0, "bah"),
+                pytest.raises(
+                    TypeError,
+                    match="Could not convert regularizer strength to floats: bah",
+                ),
+                lambda _: True,
+            ),
+            # Invalid: ratio outside (0, 1]
+            (
+                (1.0, 0.0),
+                pytest.raises(
+                    ValueError,
+                    match=re.escape(
+                        "ElasticNet regularization ratio must be in (0, 1], got 0.0"
+                    ),
+                ),
+                lambda _: True,
+            ),
+        ],
+    )
+    def test_strength_single_input(self, strength, expectation, check_fn):
+        """Test that ElasticNet accepts scalar/0-d inputs (or None) and returns (strength, ratio)."""
+        regularizer = self.cls()
+        with expectation:
+            result = regularizer._validate_strength(strength)
+            assert check_fn(result)
+
+    @pytest.mark.parametrize(
+        "strength, ratio, expectation, check_fn",
+        [
+            # Dicts with scalar leaves (Python floats)
+            (
+                {"a": 0.5, "b": 0.3},
+                {"a": 0.7, "b": 1.0},
+                does_not_raise(),
+                lambda res: (
+                    isinstance(res, tuple)
+                    and isinstance(res[0], dict)
+                    and isinstance(res[1], dict)
+                    and isinstance(res[0]["a"], float)
+                    and res[0]["a"] == 0.5
+                    and isinstance(res[0]["b"], float)
+                    and res[0]["b"] == 0.3
+                    and isinstance(res[1]["a"], float)
+                    and res[1]["a"] == 0.7
+                    and isinstance(res[1]["b"], float)
+                    and res[1]["b"] == 1.0
+                ),
+            ),
+            # Dicts with 0-d arrays (should be converted to float)
+            (
+                {"a": jnp.array(0.5), "b": np.array(0.3)},
+                {"a": jnp.array(1.0), "b": np.array(0.8)},
+                does_not_raise(),
+                lambda res: (
+                    isinstance(res, tuple)
+                    and isinstance(res[0]["a"], float)
+                    and res[0]["a"] == 0.5
+                    and isinstance(res[0]["b"], float)
+                    and res[0]["b"] == 0.3
+                    and isinstance(res[1]["a"], float)
+                    and res[1]["a"] == 1.0
+                    and isinstance(res[1]["b"], float)
+                    and res[1]["b"] == 0.8
+                ),
+            ),
+            # Dicts with arrays (should be preserved as jnp.ndarray)
+            (
+                {"a": jnp.array([0.1, 0.2, 0.3]), "b": np.array([0.5])},
+                {"a": jnp.array([0.9, 0.8, 0.7]), "b": np.array([1.0])},
+                does_not_raise(),
+                lambda res: (
+                    isinstance(res, tuple)
+                    and isinstance(res[0]["a"], jnp.ndarray)
+                    and res[0]["a"].shape == (3,)
+                    and jnp.allclose(res[0]["a"], jnp.array([0.1, 0.2, 0.3]))
+                    and isinstance(res[0]["b"], jnp.ndarray)
+                    and res[0]["b"].shape == (1,)
+                    and jnp.allclose(res[0]["b"], jnp.array([0.5]))
+                    and isinstance(res[1]["a"], jnp.ndarray)
+                    and res[1]["a"].shape == (3,)
+                    and jnp.allclose(res[1]["a"], jnp.array([0.9, 0.8, 0.7]))
+                    and isinstance(res[1]["b"], jnp.ndarray)
+                    and res[1]["b"].shape == (1,)
+                    and jnp.allclose(res[1]["b"], jnp.array([1.0]))
+                ),
+            ),
+            # Nested dicts with mixed leaves
+            (
+                {
+                    "a": {"x": 0.3, "y": 0.4},
+                    "b": {"x": jnp.array([0.1, 0.2]), "y": 0.5},
+                },
+                {
+                    "a": {"x": 0.9, "y": 0.8},
+                    "b": {"x": jnp.array([0.7, 0.6]), "y": 1.0},
+                },
+                does_not_raise(),
+                lambda res: (
+                    isinstance(res, tuple)
+                    and isinstance(res[0]["a"]["x"], float)
+                    and res[0]["a"]["x"] == 0.3
+                    and isinstance(res[0]["a"]["y"], float)
+                    and res[0]["a"]["y"] == 0.4
+                    and isinstance(res[0]["b"]["x"], jnp.ndarray)
+                    and res[0]["b"]["x"].shape == (2,)
+                    and isinstance(res[0]["b"]["y"], float)
+                    and res[0]["b"]["y"] == 0.5
+                    and isinstance(res[1]["a"]["x"], float)
+                    and res[1]["a"]["x"] == 0.9
+                    and isinstance(res[1]["a"]["y"], float)
+                    and res[1]["a"]["y"] == 0.8
+                    and isinstance(res[1]["b"]["x"], jnp.ndarray)
+                    and res[1]["b"]["x"].shape == (2,)
+                    and isinstance(res[1]["b"]["y"], float)
+                    and res[1]["b"]["y"] == 1.0
+                ),
+            ),
+            # Array strength with scalar ratio
+            (
+                jnp.array([0.1, 0.2, 0.3]),
+                0.7,
+                does_not_raise(),
+                lambda res: (
+                    isinstance(res, tuple)
+                    and isinstance(res[0], jnp.ndarray)
+                    and res[0].shape == (3,)
+                    and jnp.allclose(res[0], jnp.array([0.1, 0.2, 0.3]))
+                    and isinstance(res[1], float)
+                    and res[1] == 0.7
+                ),
+            ),
+            # 2-D array for both strength and ratio
+            (
+                np.array([[0.1, 0.2], [0.3, 0.4]]),
+                np.array([[0.9, 0.8], [0.7, 1.0]]),
+                does_not_raise(),
+                lambda res: (
+                    isinstance(res, tuple)
+                    and isinstance(res[0], jnp.ndarray)
+                    and res[0].shape == (2, 2)
+                    and jnp.allclose(res[0], jnp.array([[0.1, 0.2], [0.3, 0.4]]))
+                    and isinstance(res[1], jnp.ndarray)
+                    and res[1].shape == (2, 2)
+                    and jnp.allclose(res[1], jnp.array([[0.9, 0.8], [0.7, 1.0]]))
+                ),
+            ),
+            # Invalid: strength tree contains invalid leaf
+            (
+                {"a": "invalid", "b": 0.5},
+                {"a": 0.9, "b": 1.0},
+                pytest.raises(
+                    TypeError, match="Could not convert regularizer strength to floats:"
+                ),
+                lambda _: True,
+            ),
+            # Invalid: ratio out of range (includes 0)
+            (
+                {"a": 0.5, "b": 0.3},
+                {"a": 0.0, "b": 0.8},
+                pytest.raises(
+                    ValueError, match="ElasticNet regularization ratio must be in"
+                ),
+                lambda _: True,
+            ),
+        ],
+    )
+    def test_strength_tree_input(self, strength, ratio, expectation, check_fn):
+        """Test that ElasticNet accepts tree strength/ratio with proper type conversion.
+
+        Conversion rules:
+        - 0-dim arrays or scalar numbers -> float
+        - Arrays with shape (n,) or higher -> jnp.ndarray with same shape
+        - Strings or other invalid types -> TypeError
+        - Ratio must be in (0, 1] (broadcasted per leaf)
+        """
+        regularizer = self.cls()
+        with expectation:
+            result = regularizer._validate_strength((strength, ratio))
+            assert check_fn(result)
 
     @pytest.mark.parametrize(
         "solver_name, expectation",

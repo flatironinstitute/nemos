@@ -306,14 +306,16 @@ class Regularizer(Base, abc.ABC):
         """
         if strength is None:
             return 1.0
-        if _is_scalar_or_0d(strength):
-            return strength
 
         def _convert_if_arraylike(x):
-            if isinstance(x, (np.ndarray, list, tuple)):
+            if x is None:
+                return 1.0
+            elif isinstance(x, (int, float)):
+                return x
+            elif isinstance(x, (jnp.ndarray, np.ndarray)) and x.ndim == 0:
+                return float(x)  # use Python floats when possible
+            elif isinstance(x, (jnp.ndarray, np.ndarray, list, tuple)):
                 return jnp.asarray(x)
-            elif isinstance(x, (int, float, jnp.ndarray)):
-                return x  # leave scalars and jax arrays alone
             else:
                 raise TypeError
 
