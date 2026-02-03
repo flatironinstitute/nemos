@@ -9,24 +9,47 @@ import nemos as nmo
 pytestmark = pytest.mark.solver_related
 
 
+@pytest.fixture(autouse=True)
+def skip_if_override_solver(pytestconfig):
+    """Skip these tests when overriding GradientDescent or ProximalGradient implementation."""
+    override = pytestconfig.getini("override_solver")
+    if override:
+        algo, _ = override.split(":", 1)
+        if algo in ("GradientDescent", "ProximalGradient"):
+            pytest.skip(
+                "override_solver changes defaults; FISTA adjoint tests require optimistix defaults"
+            )
+
+
 @pytest.fixture
-def optimistix_solver_registry(monkeypatch):
+def optimistix_solver_registry():
     """Point GLM solver registry at the Optimistix implementations for this module."""
-    optimistix_registry = nmo.solvers._solver_registry._registry.copy()
-    nag_spec = nmo.solvers.SolverSpec(
-        "GradientDescent", "optimistix", nmo.solvers.OptimistixNAG
-    )
-    fista_spec = nmo.solvers.SolverSpec(
-        "ProximalGradient", "optimistix", nmo.solvers.OptimistixFISTA
-    )
-    optimistix_registry["GradientDescent"] = optimistix_registry["GradientDescent"] | {
-        "optimistix": nag_spec
-    }
-    optimistix_registry["ProximalGradient"] = optimistix_registry[
-        "ProximalGradient"
-    ] | {"optimistix": fista_spec}
-    monkeypatch.setattr(nmo.solvers._solver_registry, "_registry", optimistix_registry)
-    return optimistix_registry
+    registry = nmo.solvers._solver_registry
+    original_registry = registry._registry.copy()
+    original_defaults = registry._defaults.copy()
+    try:
+        registry.register(
+            "GradientDescent",
+            nmo.solvers.OptimistixNAG,
+            backend="optimistix",
+            replace=True,
+            default=True,
+            validate=False,
+        )
+        registry.register(
+            "ProximalGradient",
+            nmo.solvers.OptimistixFISTA,
+            backend="optimistix",
+            replace=True,
+            default=True,
+            validate=False,
+        )
+        yield registry._registry
+    finally:
+        registry._registry.clear()
+        registry._registry.update(original_registry)
+        registry._defaults.clear()
+        registry._defaults.update(original_defaults)
 
 
 @pytest.mark.parametrize(
