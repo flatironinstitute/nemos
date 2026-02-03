@@ -296,6 +296,8 @@ def list_algo_backends(algo_name: str) -> list[str]:
     algo_name :
         Name of the optimization algorithm.
     """
+    _raise_if_not_in_registry(algo_name)
+
     return list(_registry[algo_name].keys())
 
 
