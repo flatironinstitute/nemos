@@ -1,14 +1,14 @@
 import inspect
 import warnings
-from typing import Any, Callable, Type
+from typing import Any, Type
 
 import jax.numpy as jnp
 import numpy as np
 
 from nemos.regularizer import Ridge
 
-from ._abstract_solver import AbstractSolver, OptimizationInfo
 from .._inspect_utils import get_params, implements_methods
+from ._abstract_solver import AbstractSolver, OptimizationInfo
 
 # Notes
 # We could enforce adherence to the API with type checkers

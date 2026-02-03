@@ -1,6 +1,6 @@
-import pytest
-
 from contextlib import nullcontext as does_not_raise
+
+import pytest
 
 import nemos as nmo
 from nemos.solvers._jaxopt_solvers import JAXOPT_AVAILABLE
