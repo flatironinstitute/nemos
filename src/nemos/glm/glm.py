@@ -238,7 +238,10 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
 
     def __init__(
         self,
-        observation_model: REGRESSION_GLM_TYPES = "Poisson",
+        observation_model: (
+            REGRESSION_GLM_TYPES
+            | Literal["Poisson", "Gamma", "Gaussian", "Bernoulli", "NegativeBinomial"]
+        ) = "Poisson",
         inverse_link_function: Optional[Callable] = None,
         regularizer: Optional[Union[str, Regularizer]] = None,
         regularizer_strength: Optional[RegularizerStrength] = None,
@@ -1344,7 +1347,7 @@ class PopulationGLM(GLM):
         self,
         observation_model: (
             REGRESSION_GLM_TYPES
-            | Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial"]
+            | Literal["Poisson", "Gamma", "Gaussian", "Bernoulli", "NegativeBinomial"]
         ) = "Poisson",
         inverse_link_function: Optional[Callable] = None,
         regularizer: Union[str, Regularizer] = "UnRegularized",
