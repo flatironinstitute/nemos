@@ -127,11 +127,23 @@ def get_equi_spaced_samples(
         A generator yielding numpy arrays of linspaces from 0 (or specified min)
         to 1 (or specified max) of sizes specified by ``n_samples``.
     """
-    if not isinstance(bounds, list):
-        bounds = [bounds]
+    if bounds is None:
+        bounds = [None] * len(n_samples)
+    if isinstance(bounds, tuple) and len(bounds) != 1:
+        bounds = (bounds,)
+
+    def _fill_bounds(b):
+        if b is None:
+            return (0, 1)
+        else:
+            lo, hi = b
+            return (
+                0 if lo is None else lo,
+                1 if hi is None else hi,
+            )
+
     return (
-        np.linspace(*((0, 1) if b is None else b), s)
-        for b, s in zip(bounds, n_samples, strict=True)
+        np.linspace(*_fill_bounds(b), s) for b, s in zip(bounds, n_samples, strict=True)
     )
 
 
