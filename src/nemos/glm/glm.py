@@ -1300,7 +1300,7 @@ class PopulationGLM(GLM):
         self,
         observation_model: (
             REGRESSION_GLM_TYPES
-            | Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial"]
+            | Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial", "Gaussian"]
         ) = "Poisson",
         inverse_link_function: Optional[Callable] = None,
         regularizer: Union[str, Regularizer] = "UnRegularized",
