@@ -378,6 +378,50 @@ def test_validate_strength_structure_scalar_broadcast(regularizer, strength):
     assert structured.intercept is None
 
 
+@pytest.mark.parametrize(
+    "regularizer",
+    [nmo.regularizer.UnRegularized(), nmo.regularizer.Ridge(), nmo.regularizer.Lasso()],
+)
+@pytest.mark.parametrize(
+    "params, strength, expectation",
+    [
+        (
+            GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0])),
+            jnp.array([0.1, 0.2, 0.3]),
+            does_not_raise(),
+        ),
+        (
+            GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0])),
+            jnp.array([0.1, 0.2]),
+            pytest.raises(
+                ValueError, match=r"Strength shape .* does not match parameter shape .*"
+            ),
+        ),
+        (
+            GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0])),
+            jnp.array([0.1, 0.2, 0.3, 0.4]),
+            pytest.raises(
+                ValueError, match=r"Strength shape .* does not match parameter shape .*"
+            ),
+        ),
+        (
+            GLMParams(
+                coef={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                intercept=jnp.array([0.0]),
+            ),
+            {"a": jnp.array([0.1, 0.2, 0.3]), "b": jnp.array([0.1, 0.2])},
+            does_not_raise(),
+        ),
+    ],
+)
+def test_validate_strength_structure_shape_mismatch(
+    regularizer, strength, params, expectation
+):
+    """Non-scalar array strength must match parameter leaf shape; otherwise raises ValueError."""
+    with expectation:
+        regularizer._validate_strength_structure(params, strength)
+
+
 class TestUnRegularized:
     cls = nmo.regularizer.UnRegularized
 
