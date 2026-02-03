@@ -126,6 +126,8 @@ def remap_parameters(method):
 
 
 class BasisMixin:
+    _allow_inputs_of_different_shape = True
+
     def __init__(self, label: Optional[str] = None):
         if not hasattr(self, "_input_shape_"):
             self._input_shape_ = None
@@ -207,7 +209,6 @@ class BasisMixin:
     def set_input_shape(
         self,
         *xi: int | tuple[int, ...] | NDArray,
-        allow_inputs_of_different_shape: bool = True,
     ) -> BasisMixin:
         """Set the expected input shape for the basis object."""
         if getattr(self, "_parent", None) is not None:
@@ -216,9 +217,7 @@ class BasisMixin:
                 "For example, instead of ``self.basis1.set_input_shape(n); self.basis2.set_input_shape(m)``, "
                 "do ``self.set_input_shape(n, m)``."
             )
-        set_input_shape(
-            self, *xi, allow_inputs_of_different_shape=allow_inputs_of_different_shape
-        )
+        set_input_shape(self, *xi)
         return self
 
     @property
@@ -988,9 +987,7 @@ class CompositeBasisMixin(BasisMixin):
     def _input_shape_(self):
         return self.input_shape
 
-    def set_input_shape(
-        self, *xi: int | tuple[int, ...] | NDArray, allow_inputs_of_different_shape=True
-    ) -> BasisMixin:
+    def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> BasisMixin:
         """
         Set the expected input shape for the basis object.
 
@@ -1023,9 +1020,7 @@ class CompositeBasisMixin(BasisMixin):
         self :
             Returns the instance itself to allow method chaining.
         """
-        return super().set_input_shape(
-            *xi, allow_inputs_of_different_shape=allow_inputs_of_different_shape
-        )
+        return super().set_input_shape(*xi)
 
     @property
     @abc.abstractmethod

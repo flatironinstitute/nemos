@@ -16,7 +16,9 @@ Classes for creating Generalized Linear Models (GLMs) for both single neurons an
     :nosignatures:
 
     GLM
+    ClassifierGLM
     PopulationGLM
+    ClassifierPopulationGLM
 
 .. _nemos_io:
 
@@ -95,6 +97,7 @@ These classes are the building blocks for the concrete basis classes.
     FourierEval
     OrthExponentialEval
     IdentityEval
+    Zero
 
 **Composite Bases:**
 
@@ -147,6 +150,7 @@ Statistical models to describe the distribution of neural responses or other pre
     NegativeBinomialObservations
     GammaObservations
     BernoulliObservations
+    CategoricalObservations
 
 .. _regularizers:
 

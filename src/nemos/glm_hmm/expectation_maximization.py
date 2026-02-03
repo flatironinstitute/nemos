@@ -8,6 +8,7 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import NDArray
 
+from ..glm.params import GLMParams
 from ..tree_utils import pytree_map_and_reduce
 
 Array = NDArray | jax.numpy.ndarray
@@ -406,10 +407,10 @@ def initialize_new_session(n_samples, is_new_session):
 
 
 def compute_rate_per_state(
-    X: Any, glm_params: Any, inverse_link_function: Callable
+    X: Any, glm_params: GLMParams, inverse_link_function: Callable
 ) -> Array:
     """Compute the GLM mean per state."""
-    coef, intercept = glm_params
+    coef, intercept = glm_params.coef, glm_params.intercept
 
     # Predicted y
     if jax.tree_util.tree_leaves(coef)[0].ndim > 2:
@@ -428,7 +429,7 @@ def forward_backward(
     y: Array,
     log_initial_prob: Array,
     log_transition_prob: Array,
-    glm_params: Tuple[Array, Array],
+    glm_params: GLMParams,
     inverse_link_function: Callable,
     log_likelihood_func: Callable[[Array, Array], Array],
     is_new_session: Array | None = None,
@@ -456,8 +457,8 @@ def forward_backward(
         ``transition_prob[i, j]`` is the probability of transitioning from state ``i`` to state ``j``.
 
     glm_params :
-        Length two tuple with the GLM coefficients of shape ``(n_features, n_states)``
-        and intercept of shape ``(n_states,)``.
+        GLM coefficients of shape ``(n_features, n_states)``
+        and intercept of shape ``(n_states,)`` as GLMParams.
 
     inverse_link_function :
         Function mapping linear predictors to the mean of the observation distribution
@@ -578,7 +579,7 @@ def forward_backward(
     jax.jit, static_argnames=["inverse_link_function", "negative_log_likelihood_func"]
 )
 def hmm_negative_log_likelihood(
-    glm_params: Array,
+    glm_params: GLMParams,
     X: Array,
     y: Array,
     posteriors: Array,
@@ -634,9 +635,9 @@ def run_m_step(
     y: Array,
     log_posteriors: Array,
     log_joint_posterior: Array,
-    glm_params: Tuple[Array, Array],
+    glm_params: GLMParams,
     is_new_session: Array,
-    m_step_fn_glm_params: Callable[[Tuple[Array, Array], Array, Array, Array], Array],
+    m_step_fn_glm_params: Callable[[GLMParams, Array, Array, Array], Array],
     dirichlet_prior_alphas_init_prob: Array | None = None,
     dirichlet_prior_alphas_transition: Array | None = None,
 ) -> Tuple[Tuple[Array, Array], Array, Array, Any]:
@@ -662,7 +663,7 @@ def run_m_step(
         Boolean mask marking the first observation of each session. Shape ``(n_samples,)``.
     m_step_fn_glm_params:
         Callable that performs the M-step update for GLM parameters (coefficients and intercepts).
-        Should have signature: ``f(glm_params, X, y, posteriors) -> (updated_params, state)``.
+        Should have signature: ``f(glm_params, X, y, posteriors) -> (updated_params, state, aux)``.
         The regularizer/prior for the GLM parameters should be configured within this callable.
     dirichlet_prior_alphas_init_prob:
         Prior for the initial states, shape ``(n_states,)``.
@@ -700,7 +701,7 @@ def run_m_step(
     )
 
     # Minimize negative log-likelihood to update GLM weights
-    optimized_projection_weights, state = m_step_fn_glm_params(
+    optimized_projection_weights, state, _ = m_step_fn_glm_params(
         glm_params, X, y, posteriors
     )
 
@@ -780,7 +781,7 @@ def _em_step(
 
     (log_init_prob, log_trans_matrix, glm_params), previous_state = carry
 
-    (log_posteriors, log_joint_posterior, _, new_log_like, _, _) = forward_backward(
+    log_posteriors, log_joint_posterior, _, new_log_like, _, _ = forward_backward(
         X,
         y,
         log_init_prob,
@@ -849,7 +850,7 @@ def em_glm_hmm(
     y: Array,
     initial_prob: Array,
     transition_prob: Array,
-    glm_params: Tuple[Array, Array],
+    glm_params: GLMParams,
     inverse_link_function: Callable,
     likelihood_func: Callable,
     m_step_fn_glm_params: Callable,
@@ -944,7 +945,7 @@ def em_glm_hmm(
     )
 
     # final posterior calculation
-    (log_posteriors, log_joint_posterior, _, _, _, _) = forward_backward(
+    log_posteriors, log_joint_posterior, _, _, _, _ = forward_backward(
         X,
         y,
         log_initial_prob,
@@ -974,7 +975,7 @@ def max_sum(
     y: Array,
     initial_prob: Array,
     transition_prob: Array,
-    glm_params: Tuple[Array, Array],
+    glm_params: GLMParams,
     inverse_link_function: Callable,
     log_likelihood_func: Callable[[Array, Array], Array],
     is_new_session: Array | None = None,

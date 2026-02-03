@@ -9,6 +9,7 @@ from copy import deepcopy
 from functools import wraps
 from typing import Callable, Generator, List, Optional, Tuple, Union
 
+import jax.numpy as jnp
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame, TsdTensor
@@ -17,7 +18,6 @@ from ..base_class import Base
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
 from ..utils import row_wise_kron
-from ..validation import check_fraction_valid_samples
 from ._basis_mixin import BasisMixin, BasisTransformerMixin, CompositeBasisMixin
 from ._check_basis import (
     _check_input_dimensionality,
@@ -68,6 +68,7 @@ def check_one_dimensional(func: Callable) -> Callable:
 def min_max_rescale_samples(
     sample_pts: NDArray,
     bounds: Optional[Tuple[float, float]] = None,
+    use_jax: Optional[bool] = True,
 ) -> Tuple[NDArray, NDArray]:
     """Rescale samples to [0,1].
 
@@ -85,22 +86,21 @@ def min_max_rescale_samples(
         If more than 90% of the sample points contain NaNs or Infs.
     """
     sample_pts = sample_pts.astype(float)
+    # get function from correct library
+    if use_jax:
+        nanmin, nanmax, asarray, where = jnp.nanmin, jnp.nanmax, jnp.asarray, jnp.where
+    else:
+        nanmin, nanmax, asarray, where = np.nanmin, np.nanmax, np.asarray, np.where
+
     # if not normalize all array
-    vmin = np.nanmin(sample_pts, axis=0) if bounds is None else bounds[0]
-    vmax = np.nanmax(sample_pts, axis=0) if bounds is None else bounds[1]
-    sample_pts[(sample_pts < vmin) | (sample_pts > vmax)] = np.nan
-    sample_pts -= vmin
-
-    scaling = np.asarray(vmax - vmin)
+    vmin = nanmin(sample_pts, axis=0) if bounds is None else bounds[0]
+    vmax = nanmax(sample_pts, axis=0) if bounds is None else bounds[1]
+    scaling = asarray(vmax - vmin)
     # do not normalize if samples contain a single value (in which case vmax=vmin)
-    scaling[scaling == 0] = 1.0
-    sample_pts /= scaling
-
-    check_fraction_valid_samples(
-        sample_pts,
-        err_msg="All the samples lie outside the [vmin, vmax] range.",
-        warn_msg="More than 90% of the samples lie outside the [vmin, vmax] range.",
-    )
+    scaling = where(scaling == 0, 1.0, scaling)
+    sample_pts = (
+        where((sample_pts < vmin) | (sample_pts > vmax), np.nan, sample_pts) - vmin
+    ) / scaling
 
     return sample_pts, scaling
 
@@ -130,7 +130,8 @@ def get_equi_spaced_samples(
     if not isinstance(bounds, list):
         bounds = [bounds]
     return (
-        np.linspace(*((0, 1) if b is None else b), s) for b, s in zip(bounds, n_samples, strict=True)
+        np.linspace(*((0, 1) if b is None else b), s)
+        for b, s in zip(bounds, n_samples, strict=True)
     )
 
 
@@ -323,11 +324,11 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         input_idx = 0
         for b in self:
             # check if exact shape matching for multiplicative bases
+            n_input = infer_input_dimensionality(b)
             if isinstance(b, MultiplicativeBasis):
-                n_input = infer_input_dimensionality(b)
                 b_input = inp[input_idx : input_idx + n_input]
                 _check_unique_shapes(b_input, basis=b)
-                input_idx += n_input
+            input_idx += n_input
         return inp
 
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
@@ -933,6 +934,8 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
     )
     """
 
+    _allow_inputs_of_different_shape = False
+
     def __init__(
         self, basis1: BasisMixin, basis2: BasisMixin, label: Optional[str] = None
     ) -> None:
@@ -1018,10 +1021,14 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         shape = xi[0].shape
         x1 = self.basis1.evaluate(*xi[: self.basis1._n_input_dimensionality])
         x2 = self.basis2.evaluate(*xi[self.basis1._n_input_dimensionality :])
+        # Required in case xi.shape[-1] == 0
+        # For example, in a multiplication with Zero basis
+        x1_shape = math.prod(x1.shape[:-1])
+        x2_shape = math.prod(x2.shape[:-1])
         X = np.asarray(
             row_wise_kron(
-                x1.reshape(-1, x1.shape[-1]),
-                x2.reshape(-1, x2.shape[-1]),
+                x1.reshape(x1_shape, x1.shape[-1]),
+                x2.reshape(x2_shape, x2.shape[-1]),
                 transpose=False,
             )
         )
@@ -1228,7 +1235,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
 
         """
         # ruff: noqa: D400, D205
-        super().set_input_shape(*xi, allow_inputs_of_different_shape=False)
+        super().set_input_shape(*xi)
         return self
 
     @property

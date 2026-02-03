@@ -12,6 +12,7 @@ from copy import deepcopy
 from numbers import Number
 from typing import TYPE_CHECKING, Callable, Iterable, List, Optional, Tuple
 
+import jax.numpy as jnp
 import numpy as np
 import pynapple as nap
 from numpy.typing import ArrayLike, NDArray
@@ -119,7 +120,7 @@ def apply_f_vectorized(
         results.append(result[..., np.newaxis])
 
     # Concatenate along the last axis
-    return np.concatenate(results, axis=-1)
+    return jnp.concatenate(results, axis=-1)
 
 
 def check_valid_shape(shape):
@@ -187,6 +188,8 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
     >>> X.shape
     (50, 20)
     """
+
+    _allow_inputs_of_different_shape = False
 
     def __init__(
         self,
@@ -354,7 +357,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
                 f"Each input must have at least {self.ndim_input} dimensions, as required by this basis. "
                 f"However, some inputs have fewer dimensions: {invalid_dims}."
             )
-        _check_unique_shapes(*xi, basis=self)
+        _check_unique_shapes(xi, basis=self)
         set_input_shape(self, *xi)
         design_matrix = self.evaluate(
             *xi
@@ -405,8 +408,10 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         if self._pynapple_support:
             conv_type = "numpy" if nap.nap_config.backend == "numba" else "jax"
             apply_func = support_pynapple(conv_type)(apply_f_vectorized)
+            stack = np.stack
         else:
             apply_func = apply_f_vectorized
+            stack = jnp.stack
 
         # Get individual function results
         func_results = [
@@ -415,7 +420,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         ]
 
         # Stack functions first, then reorder
-        stacked = np.stack(
+        stacked = stack(
             func_results, axis=-1
         )  # (n_samples, *out_shape, n_vec_features, n_funcs)
         self.output_shape = stacked.shape[1:-2]
@@ -540,7 +545,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
                 [ 4., 16.]],
         ...
                [[ 5., 25.],
-                [ 6., 36.]]])
+                [ 6., 36.]]], dtype=float32)
         """
         # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
@@ -610,7 +615,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         >>> basis.n_output_features
         30
         """
-        super().set_input_shape(*xi, allow_inputs_of_different_shape=False)
+        super().set_input_shape(*xi)
         # CustomBasis acts as a multiplicative basis in n-dimension
         # i.e. multiple inputs must have the same shape and are
         # treated in a paired-way in vectorization

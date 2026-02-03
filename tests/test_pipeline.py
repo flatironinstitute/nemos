@@ -20,11 +20,12 @@ from nemos.basis._transformer_basis import TransformerBasis
         basis.RaisedCosineLinearEval(5),
     ],
 )
+@pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
 def test_sklearn_transformer_pipeline(bas, poissonGLM_model_instantiation):
     X, y, model, _, _ = poissonGLM_model_instantiation
+    model.solver_kwargs.update({"maxiter": 2})
     bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_input_dimensionality))
     pipe = pipeline.Pipeline([("eval", bas), ("fit", model)])
-
     pipe.fit(X[:, : bas.basis._n_input_dimensionality] ** 2, y)
 
 
@@ -38,8 +39,10 @@ def test_sklearn_transformer_pipeline(bas, poissonGLM_model_instantiation):
         basis.RaisedCosineLogEval(5),
     ],
 )
+@pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
 def test_sklearn_transformer_pipeline_cv(bas, poissonGLM_model_instantiation):
     X, y, model, _, _ = poissonGLM_model_instantiation
+    model.solver_kwargs.update({"maxiter": 2})
     bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_input_dimensionality))
     pipe = pipeline.Pipeline([("basis", bas), ("fit", model)])
     param_grid = dict(basis__n_basis_funcs=(4, 5, 10))
@@ -47,14 +50,13 @@ def test_sklearn_transformer_pipeline_cv(bas, poissonGLM_model_instantiation):
     gridsearch.fit(X[:, : bas._n_input_dimensionality] ** 2, y)
 
 
+@pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
 def test_sklearn_cv_clone(population_poissonGLM_model_instantiation):
     X, y, model, _, _ = population_poissonGLM_model_instantiation
+    model.solver_kwargs.update({"maxiter": 2})
     bas = basis.CyclicBSplineEval(5)
     bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_input_dimensionality))
     pipe = pipeline.Pipeline([("basis", bas), ("fit", model)])
-    # if feature_mask isn't dropped by the cloning done by gridsearch cv, this will
-    # error, because the shape of feature_mask doesn't match the shape of the output of
-    # transformer basis with different number of basis funcs
     pipe.fit(X[:, : bas._n_input_dimensionality] ** 2, y)
     param_grid = dict(basis__n_basis_funcs=(4, 8))
     gridsearch = GridSearchCV(pipe, param_grid=param_grid, cv=3, error_score="raise")
@@ -71,10 +73,12 @@ def test_sklearn_cv_clone(population_poissonGLM_model_instantiation):
         basis.RaisedCosineLogEval(5),
     ],
 )
+@pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
 def test_sklearn_transformer_pipeline_cv_multiprocess(
     bas, poissonGLM_model_instantiation
 ):
     X, y, model, _, _ = poissonGLM_model_instantiation
+    model.solver_kwargs.update({"maxiter": 2})
     bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_input_dimensionality))
     pipe = pipeline.Pipeline([("basis", bas), ("fit", model)])
     param_grid = dict(basis__n_basis_funcs=(4, 5, 10))
@@ -96,10 +100,12 @@ def test_sklearn_transformer_pipeline_cv_multiprocess(
         basis.RaisedCosineLogEval,
     ],
 )
+@pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
 def test_sklearn_transformer_pipeline_cv_directly_over_basis(
     bas_cls, poissonGLM_model_instantiation
 ):
     X, y, model, _, _ = poissonGLM_model_instantiation
+    model.solver_kwargs.update({"maxiter": 2})
     bas = TransformerBasis(bas_cls(5))
     bas.set_input_shape(*([1] * bas._n_input_dimensionality))
     pipe = pipeline.Pipeline([("transformerbasis", bas), ("fit", model)])
@@ -124,10 +130,12 @@ def test_sklearn_transformer_pipeline_cv_directly_over_basis(
         basis.RaisedCosineLogEval,
     ],
 )
+@pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
 def test_sklearn_transformer_pipeline_cv_illegal_combination(
     bas_cls, poissonGLM_model_instantiation
 ):
     X, y, model, _, _ = poissonGLM_model_instantiation
+    model.solver_kwargs.update({"maxiter": 2})
     bas = TransformerBasis(bas_cls(5))
     bas.set_input_shape(*([1] * bas._n_input_dimensionality))
     pipe = pipeline.Pipeline([("transformerbasis", bas), ("fit", model)])
@@ -143,6 +151,7 @@ def test_sklearn_transformer_pipeline_cv_illegal_combination(
         gridsearch.fit(X[:, : bas._n_input_dimensionality] ** 2, y)
 
 
+@pytest.mark.requires_x64
 @pytest.mark.parametrize(
     "bas, expected_nans",
     [
@@ -179,11 +188,13 @@ def test_sklearn_transformer_pipeline_cv_illegal_combination(
         ),
     ],
 )
+@pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
 def test_sklearn_transformer_pipeline_pynapple(
     bas, poissonGLM_model_instantiation, expected_nans
 ):
     X, y, model, _, _ = poissonGLM_model_instantiation
-
+    X = X[:, :2]
+    model.solver_kwargs.update({"maxiter": 2})
     # transform input to pynapple
     ep = nap.IntervalSet(start=[0, 20.5], end=[20, X.shape[0]])
     X_nap = nap.TsdFrame(t=np.arange(X.shape[0]), d=X, time_support=ep)
@@ -267,10 +278,12 @@ def test_pipeline_multiplicative_bases_with_labels(poissonGLM_model_instantiatio
     assert all(new_items[k] == nem_params[k] for k in new_items.keys())
 
 
+@pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
 def test_cross_validate_multiplicative_basis_in_pipe_with_label(
     poissonGLM_model_instantiation,
 ):
     X, y, model, _, _ = poissonGLM_model_instantiation
+    model.solver_kwargs.update({"maxiter": 2})
     bas = basis.RaisedCosineLinearEval(4, label="x") * basis.MSplineEval(5, label="y")
     pipe = Pipeline(
         [("bas", bas.to_transformer().set_input_shape(1, 1)), ("fit", model)]
@@ -285,10 +298,12 @@ def test_cross_validate_multiplicative_basis_in_pipe_with_label(
     assert cls.best_estimator_.get_params()["bas__y__n_basis_funcs"] == 6
 
 
+@pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
 def test_cross_validate_additive_basis_in_pipe_with_label(
     poissonGLM_model_instantiation,
 ):
     X, y, model, _, _ = poissonGLM_model_instantiation
+    model.solver_kwargs.update({"maxiter": 2})
     bas = basis.RaisedCosineLinearEval(4, label="x") + basis.MSplineEval(5, label="y")
     pipe = Pipeline(
         [("bas", bas.to_transformer().set_input_shape(1, 1)), ("fit", model)]

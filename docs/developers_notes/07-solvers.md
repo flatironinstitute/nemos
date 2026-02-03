@@ -4,6 +4,7 @@
 
 In the earlier versions, NeMoS relied on [JAXopt](https://jaxopt.github.io/stable/) as its optimization backend.
 As [JAXopt is no longer maintained](https://github.com/google/jaxopt?tab=readme-ov-file#status), we added support for alternative optimization backends.
+JAXopt remains optionally supported as an extra dependency.
 
 To support flexibility and long-term maintenance, NeMoS now has a backend-agnostic solver interface, allowing the use of solvers from different backend libraries with different interfaces.
 
@@ -23,7 +24,7 @@ The `AbstractSolver` interface requires implementing the following methods:
 
 `AbstractSolver` is a generic class parametrized by `SolverState` and `StepResult`.
 `SolverState` in concrete subclasses should be the type of the solver state.
-`StepResult` is the type of what is returned by each step of the solver. Typically this is a tuple of the parameters and the solver state.
+`StepResult` is the type of what is returned by each step of the solver. Typically this is a tuple of the parameters, the solver state, and auxiliary variables returned by the objective function.
 
 (optimization-info)=
 ### Optimization info
@@ -44,7 +45,7 @@ In our experience wrapping solver objects through adapters provides a clean way 
 
 Currently there are adapters implemented for two optimization backends:
 - `OptimistixAdapter` wraps Optimistix solvers.
-- `JaxoptAdapter` wraps JAXopt solvers. As `SVRG` and `ProxSVRG` follow the JAXopt interface, these are also wrapped with `JaxoptAdapter`.
+- `JaxoptAdapter` wraps JAXopt solvers when the optional `jaxopt` dependency is installed. As `SVRG` and `ProxSVRG` follow the JAXopt-style interface, these are also wrapped with `JaxoptAdapter` even without JAXopt installed.
 
 Both of these are subclasses of `SolverAdapter` that provides common methods for wrapping existing solvers.
 Each subclass of `SolverAdapter` defines the methods of `AbstractInterface`, as well as a `_solver_cls` class variable signaling the type of solver wrapped by it.
@@ -65,7 +66,6 @@ Abstract Class AbstractSolver
 │ ├─ Abstract Subclass OptimistixAdapter
 │ │ │
 │ │ ├─ Concrete Subclass OptimistixBFGS
-│ │ ├─ Concrete Subclass OptimistixLBFGS
 │ │ ├─ Concrete Subclass OptimistixFISTA
 │ │ ├─ Concrete Subclass OptimistixNAG
 │ │ ├─ Concrete Subclass OptimistixNonlinearCG
@@ -76,11 +76,11 @@ Abstract Class AbstractSolver
 │ │
 │ └─ Abstract Subclass JaxoptAdapter
 │   │
-│   ├─ Concrete Subclass JaxoptLBFGS
-│   ├─ Concrete Subclass JaxoptGradientDescent
-│   ├─ Concrete Subclass JaxoptProximalGradient
-│   ├─ Concrete Subclass JaxoptBFGS
-│   ├─ Concrete Subclass JaxoptNonlinearCG
+│   ├─ Concrete Subclass JaxoptLBFGS (optional)
+│   ├─ Concrete Subclass JaxoptGradientDescent (optional)
+│   ├─ Concrete Subclass JaxoptProximalGradient (optional)
+│   ├─ Concrete Subclass JaxoptBFGS (optional)
+│   ├─ Concrete Subclass JaxoptNonlinearCG (optional)
 │   │
 │   ├─ Concrete Subclass WrappedSVRG
 │   └─ Concrete Subclass WrappedProxSVRG

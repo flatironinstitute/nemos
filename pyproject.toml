@@ -17,7 +17,8 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12"
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13"
 ]
 
 # Define dependencies for the project
@@ -62,6 +63,7 @@ dev = [
     "seaborn",                      # Required by doctest for _documentation_utils module
     "myst-nb",                      # Test myst_nb utils for glue
     "hmmlearn",                     # Test algorithmic implementations of HMM
+    "tox-uv",                       # Run tox with uv for faster installs
 ]
 docs = [
     "numpydoc",
@@ -101,15 +103,8 @@ examples = [
     "patsy",
     "tqdm",
 ]
-# jaxopt 0.8.5 is included in src/nemos/third_party/jaxopt
-jaxopt_dev = [
-    "pytest",
-    "absl-py>=0.7.0",
-    "cvxpy>=1.1.11",
-    "optax>=0.0.9",
-    "pytest-xdist",
-    "scikit-learn>=0.24.1",
-    "cvxopt",
+jaxopt = [
+    "jaxopt>=0.6",
 ]
 
 
@@ -134,14 +129,14 @@ exclude = '''
     | build
     | dist
     | examples
-    | src/nemos/third_party/jaxopt))'''
+    ))'''
 
 # Configure isort
 [tool.isort]
 multi_line_output = 3             # Use three-line style for multi-line imports
 include_trailing_comma = true     # Include trailing comma in multi-line imports
 profile = "black"
-skip = ["src/nemos/third_party/jaxopt"]
+skip = []
 
 # Configure pytest
 [tool.pytest.ini_options]
@@ -176,7 +171,7 @@ exclude_lines = [
 
 
 [tool.ruff]
-exclude = ["src/nemos/_documentation_utils", "src/nemos/third_party"]
+exclude = ["src/nemos/_documentation_utils"]
 
 
 [tool.ruff.lint]

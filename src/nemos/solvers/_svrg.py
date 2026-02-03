@@ -1,18 +1,16 @@
 from functools import partial
-from typing import Any, Callable, NamedTuple, Optional, Union
+from typing import Any, Callable, NamedTuple, Optional, Tuple, Union
 
+import equinox as eqx
 import jax
 import jax.flatten_util
 import jax.numpy as jnp
 from jax import grad, jit, lax, random
 
-from nemos.third_party.jaxopt.jaxopt import OptStep
-from nemos.third_party.jaxopt.jaxopt._src import loop
-from nemos.third_party.jaxopt.jaxopt.prox import prox_none
-
+from ..proximal_operator import prox_none
 from ..tree_utils import tree_add_scalar_mul, tree_l2_norm, tree_slice, tree_sub
 from ..typing import KeyArrayLike, Pytree
-from ._jaxopt_solvers import JaxoptAdapter
+from ._jaxopt_adapter import JaxoptAdapter
 
 
 class SVRGState(NamedTuple):
@@ -35,6 +33,12 @@ class SVRGState(NamedTuple):
         Corresponds to $x_{s}$ in the pseudocode[$^{[1]}$](#references).
     full_grad_at_reference_point :
         Full gradient at the anchor/reference point.
+    aux_full :
+        Auxiliary output when evaluating the loss on the full data at the reference point.
+        Set by (Prox)SVRG.run.
+    aux_batch :
+        Auxiliary output from the last minibatch update at the current parameters.
+        Set by (Prox)SVRG.update.
 
     # References
     ------------
@@ -49,6 +53,13 @@ class SVRGState(NamedTuple):
     stepsize: float
     reference_point: Optional[Pytree] = None
     full_grad_at_reference_point: Optional[Pytree] = None
+    aux_full: Optional[Any] = None
+    aux_batch: Optional[Any] = None
+
+
+class OptStep(NamedTuple):
+    params: Pytree
+    state: SVRGState
 
 
 class ProxSVRG:
@@ -67,7 +78,7 @@ class ProxSVRG:
     prox : Callable
         Proximal operator associated with the function ``non_smooth``.
         It should be of the form ``prox(params, hyperparams_prox, scale=1.0)``.
-        See ``jaxopt.prox`` for examples.
+        See ``nemos.proximal_operator`` for examples.
     maxiter : int
         Maximum number of epochs to run the optimization for.
     key : jax.random.PRNGkey
@@ -83,7 +94,7 @@ class ProxSVRG:
     Examples
     --------
     >>> import numpy as np
-    >>> from nemos.third_party.jaxopt.jaxopt.prox import prox_lasso
+    >>> from nemos.proximal_operator import prox_lasso
     >>> loss_fn = lambda params, X, y: ((X.dot(params) - y)**2).sum()
     >>> svrg = ProxSVRG(loss_fn, prox_lasso)
     >>> hyperparams_prox = 0.1
@@ -115,13 +126,22 @@ class ProxSVRG:
         stepsize: float = 1e-3,
         tol: float = 1e-3,
         batch_size: int = 1,
+        has_aux: bool = False,
     ):
-        self.fun = fun
+        if has_aux:
+            self.fun = fun
+        else:
+            # standardize to always having aux
+            def fun_with_aux(*args, **kwargs):
+                return (fun(*args, **kwargs), None)
+
+            self.fun = fun_with_aux
+
         self.maxiter = maxiter
         self.key = key
         self.stepsize = stepsize
         self.tol = tol
-        self.loss_gradient = jit(grad(self.fun))
+        self.loss_gradient = jit(grad(self.fun, has_aux=True))
         self.batch_size = batch_size
         self.proximal_operator = prox
 
@@ -161,6 +181,8 @@ class ProxSVRG:
             stepsize=self.stepsize,
             reference_point=init_params,
             full_grad_at_reference_point=None,
+            aux_full=None,
+            aux_batch=None,
         )
         return state
 
@@ -173,7 +195,7 @@ class ProxSVRG:
         stepsize: float,
         hyperparams_prox: Union[float, None],
         *args: Any,
-    ) -> Pytree:
+    ) -> Tuple[Pytree, Any]:
         """
         Body of the inner loop of Prox-SVRG that takes a step.
 
@@ -204,13 +226,20 @@ class ProxSVRG:
         -------
         next_params :
             Parameter values after applying the update.
+        minibatch_aux_at_current_params :
+            Auxiliary values returned by the loss evaluated on the minibatch
+            at the current parameters (i.e. `params`).
         """
         # gradient on batch_{i_k} evaluated at the current parameters
         # gradient of f_{i_k} at x_{k} in the pseudocode of Gower et al. 2020
-        minibatch_grad_at_current_params = self.loss_gradient(params, *args)
+        minibatch_grad_at_current_params, minibatch_aux_at_current_params = (
+            self.loss_gradient(params, *args)
+        )
         # gradient on batch_{i_k} evaluated at the anchor point
         # gradient of f_{i_k} at x_{k} in the pseudocode of Gower et al. 2020
-        minibatch_grad_at_reference_point = self.loss_gradient(reference_point, *args)
+        minibatch_grad_at_reference_point, _ = self.loss_gradient(
+            reference_point, *args
+        )
 
         # SVRG gradient estimate
         gk = jax.tree_util.tree_map(
@@ -228,7 +257,7 @@ class ProxSVRG:
             next_params, hyperparams_prox, scaling=stepsize
         )
 
-        return next_params
+        return next_params, minibatch_aux_at_current_params
 
     @partial(jit, static_argnums=(0,))
     def update(
@@ -331,7 +360,7 @@ class ProxSVRG:
             state :
                 Updated state.
         """
-        next_params = self._inner_loop_param_update_step(
+        next_params, aux_at_current_params = self._inner_loop_param_update_step(
             params,
             state.reference_point,
             state.full_grad_at_reference_point,
@@ -342,6 +371,7 @@ class ProxSVRG:
 
         state = state._replace(
             iter_num=state.iter_num + 1,
+            aux_batch=aux_at_current_params,
         )
 
         return OptStep(params=next_params, state=state)
@@ -441,10 +471,13 @@ class ProxSVRG:
             prev_reference_point, state = step
 
             # evaluate and store the full gradient with the params from the last inner loop
+            # aux is also saved from this evaluation instead of minibatches later
+            full_grad, new_aux = self.loss_gradient(prev_reference_point, *args)
+
             state = state._replace(
-                full_grad_at_reference_point=self.loss_gradient(
-                    prev_reference_point, *args
-                )
+                full_grad_at_reference_point=full_grad,
+                aux_full=new_aux,
+                aux_batch=None,
             )
 
             # run an update over the whole data
@@ -473,16 +506,19 @@ class ProxSVRG:
 
         # initialize the full gradient at the anchor point
         # the anchor point is init_params at first
+        init_grad, init_aux = self.loss_gradient(init_params, *args)
         init_state = init_state._replace(
-            full_grad_at_reference_point=self.loss_gradient(init_params, *args)
+            full_grad_at_reference_point=init_grad,
+            aux_full=init_aux,
+            aux_batch=None,
         )
 
-        final_params, final_state = loop.while_loop(
+        final_params, final_state = eqx.internal.while_loop(
             cond_fun=cond_fun,
             body_fun=body_fun,
             init_val=OptStep(params=init_params, state=init_state),
-            maxiter=self.maxiter,
-            jit=True,
+            max_steps=self.maxiter,
+            kind="lax",
         )
         return OptStep(params=final_params, state=final_state)
 
@@ -550,7 +586,7 @@ class ProxSVRG:
             ind = random.randint(subkey, (self.batch_size,), 0, N)
 
             # perform a single update on the mini-batch or data point
-            next_params = self._inner_loop_param_update_step(
+            next_params, _ = self._inner_loop_param_update_step(
                 params,
                 state.reference_point,
                 state.full_grad_at_reference_point,
@@ -650,6 +686,7 @@ class SVRG(ProxSVRG):
         stepsize: float = 1e-3,
         tol: float = 1e-3,
         batch_size: int = 1,
+        has_aux: bool = False,
     ):
         super().__init__(
             fun,
@@ -659,6 +696,7 @@ class SVRG(ProxSVRG):
             stepsize,
             tol,
             batch_size,
+            has_aux,
         )
 
     def init_state(self, init_params: Pytree, *args: Any, **kwargs) -> SVRGState:
