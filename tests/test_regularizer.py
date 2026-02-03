@@ -358,22 +358,22 @@ def test_validate_strength_tree_input(regularizer, strength, expectation, check_
 
 @pytest.mark.parametrize(
     "regularizer",
-    [nmo.regularizer.Ridge(), nmo.regularizer.Lasso()],
+    [nmo.regularizer.UnRegularized(), nmo.regularizer.Ridge(), nmo.regularizer.Lasso()],
 )
 @pytest.mark.parametrize("strength", [None, 0.3, jnp.array(1.0)])
 def test_validate_strength_structure_scalar_broadcast(regularizer, strength):
     """Scalar and 0-d strengths broadcast over regularizable leaves; non-regularizable leaves are None."""
     params = GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0]))
 
-    # Call structure alignment directly with raw strength; base method accepts None/scalars/0-d
-    structured = regularizer._validate_strength_structure(
-        params, regularizer._validate_strength(strength)
-    )
+    # Call structure alignment directly with raw strength;
+    # base method accepts None/scalars/0-d, doesn't change the type
+    structured = regularizer._validate_strength_structure(params, strength)
 
     assert isinstance(structured, GLMParams)
     # coef gets scalar broadcast (as a scalar per leaf), intercept is None
     expected_scalar = 1.0 if strength is None else float(strength)
-    assert isinstance(structured.coef, float)
+    expected_type = float if strength is None else type(strength)
+    assert isinstance(structured.coef, expected_type)
     assert structured.coef == expected_scalar
     assert structured.intercept is None
 
