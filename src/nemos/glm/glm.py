@@ -230,7 +230,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
 
     >>> model = nmo.glm.GLM(solver_name="LBFGS").fit(X, y)
     >>> model.solver_name
-    'LBFGS'
+    'LBFGS[...]'
     """
 
     _invalid_observation_types = (obs.CategoricalObservations,)
