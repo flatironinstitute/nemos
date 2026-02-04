@@ -360,7 +360,7 @@ def test_validate_strength_tree_input(regularizer, strength, expectation, check_
     "regularizer",
     [nmo.regularizer.UnRegularized(), nmo.regularizer.Ridge(), nmo.regularizer.Lasso()],
 )
-@pytest.mark.parametrize("strength", [None, 0.3, jnp.array(1.0)])
+@pytest.mark.parametrize("strength", [None, 0.3, np.array(1.0), jnp.array(1.0)])
 def test_validate_strength_structure_scalar_broadcast(regularizer, strength):
     """Scalar and 0-d strengths broadcast over regularizable leaves; non-regularizable leaves are None."""
     params = GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0]))
@@ -378,6 +378,28 @@ def test_validate_strength_structure_scalar_broadcast(regularizer, strength):
     assert structured.intercept is None
 
 
+class TwoParams(eqx.Module):
+    """Helper module exposing two regularizable subtrees."""
+
+    one: jnp.ndarray | dict
+    two: jnp.ndarray | dict
+
+    def regularizable_subtrees(self):
+        return [lambda p: p.one, lambda p: p.two]
+
+
+@pytest.mark.parametrize(
+    "regularizer",
+    [nmo.regularizer.UnRegularized(), nmo.regularizer.Ridge(), nmo.regularizer.Lasso()],
+)
+def test_validate_strength_structure_multiple_subtrees_count_mismatch(regularizer):
+    """If the number of provided strengths != number of subtrees, raise ValueError."""
+    params = TwoParams(one=jnp.ones((3,)), two=jnp.ones((2,)))
+
+    with pytest.raises(ValueError, match=r"Expected 2 strength values, got"):
+        regularizer._validate_strength_structure(params, [0.1])  # only one provided
+
+
 @pytest.mark.parametrize(
     "regularizer",
     [nmo.regularizer.UnRegularized(), nmo.regularizer.Ridge(), nmo.regularizer.Lasso()],
@@ -385,6 +407,12 @@ def test_validate_strength_structure_scalar_broadcast(regularizer, strength):
 @pytest.mark.parametrize(
     "params, strength, expectation",
     [
+        # GLMParams: no groups
+        (
+            GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0])),
+            0.1,
+            does_not_raise(),
+        ),
         (
             GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0])),
             jnp.array([0.1, 0.2, 0.3]),
@@ -392,14 +420,57 @@ def test_validate_strength_structure_scalar_broadcast(regularizer, strength):
         ),
         (
             GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0])),
-            jnp.array([0.1, 0.2]),
+            jnp.array([0.1, 0.2]),  # not enough
             pytest.raises(
                 ValueError, match=r"Strength shape .* does not match parameter shape .*"
             ),
         ),
         (
             GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0])),
-            jnp.array([0.1, 0.2, 0.3, 0.4]),
+            jnp.array([0.1, 0.2, 0.3, 0.4]),  # too many
+            pytest.raises(
+                ValueError, match=r"Strength shape .* does not match parameter shape .*"
+            ),
+        ),
+        # GLMParams: 2 groups
+        (
+            GLMParams(
+                coef={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                intercept=jnp.array([0.0]),
+            ),
+            {"a": jnp.array([0.1, 0.2, 0.3]), "b": jnp.array([0.1, 0.2])},  # match
+            does_not_raise(),
+        ),
+        (
+            GLMParams(
+                coef={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                intercept=jnp.array([0.0]),
+            ),
+            {"a": jnp.array([0.1, 0.2, 0.3]), "b": jnp.array([0.1, 0.2])},  # match
+            does_not_raise(),
+        ),
+        (
+            GLMParams(
+                coef={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                intercept=jnp.array([0.0]),
+            ),
+            {"a": 0.1, "b": 0.1},  # scalar per group
+            does_not_raise(),
+        ),
+        (
+            GLMParams(
+                coef={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                intercept=jnp.array([0.0]),
+            ),
+            {"a": 0.1, "b": jnp.array([0.1, 0.2])},  # mix scalar and array
+            does_not_raise(),
+        ),
+        (
+            GLMParams(
+                coef={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                intercept=jnp.array([0.0]),
+            ),
+            {"a": jnp.array([0.1, 0.2, 0.3]), "b": jnp.array([0.1])},  # not enough
             pytest.raises(
                 ValueError, match=r"Strength shape .* does not match parameter shape .*"
             ),
@@ -409,8 +480,214 @@ def test_validate_strength_structure_scalar_broadcast(regularizer, strength):
                 coef={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
                 intercept=jnp.array([0.0]),
             ),
+            {"a": 0.1, "b": jnp.array([0.1])},  # mix scalar and not enough
+            pytest.raises(
+                ValueError, match=r"Strength shape .* does not match parameter shape .*"
+            ),
+        ),
+        (
+            GLMParams(
+                coef={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                intercept=jnp.array([0.0]),
+            ),
+            {
+                "a": jnp.array([0.1, 0.2, 0.3, 0.4]),
+                "b": 0.1,
+            },  # mix scalar and too many
+            pytest.raises(
+                ValueError, match=r"Strength shape .* does not match parameter shape .*"
+            ),
+        ),
+        # Dictionaries
+        (
+            {"a": jnp.ones((3,)), "b": jnp.ones((2,))},
             {"a": jnp.array([0.1, 0.2, 0.3]), "b": jnp.array([0.1, 0.2])},
             does_not_raise(),
+        ),
+        (
+            {"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+            {"a": jnp.array([0.1, 0.2, 0.3]), "b": jnp.array([0.1])},  # not enough
+            pytest.raises(
+                ValueError, match=r"Strength shape .* does not match parameter shape .*"
+            ),
+        ),
+        (
+            {"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+            {
+                "a": jnp.array([0.1, 0.2, 0.3, 0.4]),
+                "b": jnp.array([0.1, 0.2]),
+            },  # too many
+            pytest.raises(
+                ValueError, match=r"Strength shape .* does not match parameter shape .*"
+            ),
+        ),
+        (
+            {"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+            {
+                "a": 0.1,
+                "b": jnp.array([0.1]),
+            },  # mix scalar and not enough
+            pytest.raises(
+                ValueError, match=r"Strength shape .* does not match parameter shape .*"
+            ),
+        ),
+        (
+            {"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+            {
+                "a": jnp.array([0.1, 0.2, 0.3, 0.4]),
+                "b": 0.1,
+            },  # mix scalar and too many
+            pytest.raises(
+                ValueError, match=r"Strength shape .* does not match parameter shape .*"
+            ),
+        ),
+        # Arbitrary object with regularizable subtrees: no groups
+        (
+            TwoParams(one=jnp.ones((3,)), two=jnp.ones((2,))),
+            [jnp.array([0.1, 0.2, 0.3]), jnp.array([0.1, 0.2])],
+            does_not_raise(),
+        ),
+        (
+            TwoParams(one=jnp.ones((3,)), two=jnp.ones((2,))),
+            [0.1, 0.1],
+            does_not_raise(),
+        ),
+        (
+            TwoParams(one=jnp.ones((3,)), two=jnp.ones((2,))),
+            [0.1, jnp.array([0.1, 0.2])],
+            does_not_raise(),
+        ),
+        (
+            TwoParams(one=jnp.ones((3,)), two=jnp.ones((2,))),
+            [jnp.array([0.1, 0.2, 0.3]), 0.1],
+            does_not_raise(),
+        ),
+        (
+            TwoParams(one=jnp.ones((3,)), two=jnp.ones((2,))),
+            [jnp.array([0.1, 0.2, 0.3]), jnp.array([0.1, 0.2])],
+            does_not_raise(),
+        ),
+        (
+            TwoParams(one=jnp.ones((3,)), two=jnp.ones((2,))),
+            [jnp.array([0.1, 0.2]), jnp.array([0.1, 0.2])],  # not enough
+            pytest.raises(
+                ValueError, match=r"Strength shape .* does not match parameter shape .*"
+            ),
+        ),
+        (
+            TwoParams(one=jnp.ones((3,)), two=jnp.ones((2,))),
+            [jnp.array([0.1, 0.2, 0.3]), jnp.array([0.1])],  # not enough
+            pytest.raises(
+                ValueError, match=r"Strength shape .* does not match parameter shape .*"
+            ),
+        ),
+        (
+            TwoParams(
+                one=jnp.ones((3,)), two=jnp.ones((2,))
+            ),  # mix not enough and scalar
+            [jnp.array([0.1, 0.2]), 0.1],
+            pytest.raises(
+                ValueError, match=r"Strength shape .* does not match parameter shape .*"
+            ),
+        ),
+        (
+            TwoParams(
+                one=jnp.ones((3,)), two=jnp.ones((2,))
+            ),  # mix too many and scalar
+            [0.1, jnp.array([0.1, 0.2, 0.3])],
+            pytest.raises(
+                ValueError, match=r"Strength shape .* does not match parameter shape .*"
+            ),
+        ),
+        # Arbitrary object with regularizable subtrees: mixed groups
+        (
+            TwoParams(
+                one={"a": jnp.ones((3,)), "b": jnp.ones((2,))}, two=jnp.ones((2,))
+            ),
+            [{"a": 0.1, "b": 0.1}, jnp.array([0.1, 0.2])],
+            does_not_raise(),
+        ),
+        (
+            TwoParams(
+                one={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                two={"c": jnp.ones((5,))},
+            ),
+            [{"a": 0.1, "b": 0.1}, 0.1],
+            does_not_raise(),
+        ),
+        (
+            TwoParams(
+                one={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                two={"c": jnp.ones((5,))},
+            ),
+            [{"a": 0.1, "b": 0.1}, {"c": 0.1}],
+            does_not_raise(),
+        ),
+        (
+            TwoParams(
+                one={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                two={"c": jnp.ones((5,))},
+            ),
+            [{"a": 0.1, "b": 0.1}, {"c": jnp.array([0.1, 0.2, 0.3, 0.4, 0.5])}],
+            does_not_raise(),
+        ),
+        (
+            TwoParams(
+                one={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                two={"c": jnp.ones((5,))},
+            ),
+            [
+                {"a": jnp.array([0.1, 0.2, 0.3]), "b": 0.1},
+                {"c": jnp.array([0.1, 0.2, 0.3, 0.4, 0.5])},
+            ],
+            does_not_raise(),
+        ),
+        (
+            TwoParams(
+                one={"a": jnp.ones((3,)), "b": jnp.ones((2,))}, two=jnp.ones((2,))
+            ),
+            [],
+            pytest.raises(ValueError, match=r"Expected .* strength values, got "),
+        ),
+        (
+            TwoParams(
+                one={"a": jnp.ones((3,)), "b": jnp.ones((2,))}, two=jnp.ones((2,))
+            ),
+            [{"a": 0.1, "b": 0.1}],
+            pytest.raises(ValueError, match=r"Expected .* strength values, got "),
+        ),
+        (
+            TwoParams(
+                one={"a": jnp.ones((3,)), "b": jnp.ones((2,))}, two=jnp.ones((2,))
+            ),
+            [{"a": 0.1, "b": 0.1}, 0.1, 0.1],
+            pytest.raises(ValueError, match=r"Expected .* strength values, got "),
+        ),
+        (
+            TwoParams(
+                one={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                two={"c": jnp.ones((5,))},
+            ),
+            [
+                {"a": jnp.array([0.1, 0.2, 0.3, 0.4]), "b": 0.1},  # too many
+                {"c": jnp.array([0.1, 0.2, 0.3, 0.4, 0.5])},
+            ],
+            pytest.raises(
+                ValueError, match=r"Strength shape .* does not match parameter shape .*"
+            ),
+        ),
+        (
+            TwoParams(
+                one={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                two={"c": jnp.ones((5,))},
+            ),
+            [
+                {"a": jnp.array([0.1, 0.2, 0.3]), "b": 0.1},
+                {"c": jnp.array([0.1, 0.2, 0.3, 0.4])},  # not enough
+            ],
+            pytest.raises(
+                ValueError, match=r"Strength shape .* does not match parameter shape .*"
+            ),
         ),
     ],
 )
@@ -424,6 +701,22 @@ def test_validate_strength_structure_shape_mismatch(
 
 class TestUnRegularized:
     cls = nmo.regularizer.UnRegularized
+
+    def test_filter_kwargs_contains_strength(self):
+        """Test that strength is in filter kwargs."""
+        n_features = 3
+        params = GLMParams(coef=jnp.ones((n_features,)), intercept=jnp.array([0.0]))
+        regularizer = self.cls()
+
+        fk = regularizer._get_filter_kwargs(params=params, strength=None)
+        assert isinstance(fk, dict)
+        assert "strength" in fk
+
+        s = fk["strength"]
+        assert isinstance(s, GLMParams)
+        assert isinstance(s.coef, float)
+        assert s.coef == 1.0
+        assert s.intercept is None
 
     @pytest.mark.parametrize(
         "solver_name, expectation",
@@ -749,6 +1042,22 @@ class TestUnRegularized:
 class TestRidge:
     cls = nmo.regularizer.Ridge
 
+    def test_filter_kwargs_contains_strength(self):
+        """Test that strength is in filter kwargs."""
+        n_features = 3
+        params = GLMParams(coef=jnp.ones((n_features,)), intercept=jnp.array([0.0]))
+        regularizer = self.cls()
+
+        fk = regularizer._get_filter_kwargs(params=params, strength=0.7)
+        assert isinstance(fk, dict)
+        assert "strength" in fk
+
+        s = fk["strength"]
+        assert isinstance(s, GLMParams)
+        assert isinstance(s.coef, float)
+        assert s.coef == 0.7
+        assert s.intercept is None
+
     @pytest.mark.parametrize(
         "solver_name, expectation",
         [
@@ -996,6 +1305,24 @@ class TestRidge:
 class TestLasso:
     cls = nmo.regularizer.Lasso
 
+    def test_filter_kwargs_contains_strength(self):
+        """Test that strength is in filter kwargs."""
+        n_features = 3
+        params = GLMParams(coef=jnp.ones((n_features,)), intercept=jnp.array([0.0]))
+        regularizer = self.cls()
+
+        strength_vec = jnp.array([0.1, 0.2, 0.3])
+        fk = regularizer._get_filter_kwargs(params=params, strength=strength_vec)
+        assert isinstance(fk, dict)
+        assert "strength" in fk
+
+        s = fk["strength"]
+        assert isinstance(s, GLMParams)
+        assert isinstance(s.coef, jnp.ndarray)
+        assert s.coef.shape == (3,)
+        assert jnp.allclose(s.coef, strength_vec)
+        assert s.intercept is None
+
     @pytest.mark.parametrize(
         "solver_name, expectation",
         [
@@ -1212,6 +1539,24 @@ class TestLasso:
 
 class TestElasticNet:
     cls = nmo.regularizer.ElasticNet
+
+    def test_filter_kwargs_contains_strength(self):
+        """Test that strength is in filter kwargs."""
+        n_features = 3
+        params = GLMParams(coef=jnp.ones((n_features,)), intercept=jnp.array([0.0]))
+        regularizer = self.cls()
+
+        fk = regularizer._get_filter_kwargs(params=params, strength=(0.7, 0.4))
+        assert isinstance(fk, dict)
+        assert "strength" in fk
+
+        s = fk["strength"]
+        assert isinstance(s, GLMParams)
+        assert isinstance(s.coef, tuple) and len(s.coef) == 2
+        s_coef, r_coef = s.coef
+        assert isinstance(s_coef, float) and s_coef == 0.7
+        assert isinstance(r_coef, float) and r_coef == 0.4
+        assert s.intercept is None
 
     @pytest.mark.parametrize(
         "strength, expectation, check_fn",
@@ -1471,6 +1816,268 @@ class TestElasticNet:
         with expectation:
             result = regularizer._validate_strength((strength, ratio))
             assert check_fn(result)
+
+    def test_validate_strength_structure_scalar_broadcast(self):
+        """Test that ElasticNet broadcasts (strength, ratio) to parameter structure."""
+        regularizer = self.cls()
+        params = GLMParams(coef=jnp.ones((4,)), intercept=jnp.array([0.0]))
+
+        structured = regularizer._validate_strength_structure(params, (1.0, 0.5))
+
+        # coef gets a tuple (s, r), intercept remains None
+        assert isinstance(structured, GLMParams)
+        assert isinstance(structured.coef, tuple) and len(structured.coef) == 2
+        s, r = structured.coef
+        assert isinstance(s, float) and s == 1.0
+        assert isinstance(r, float) and r == 0.5
+        assert structured.intercept is None
+
+    @pytest.mark.parametrize(
+        "params, strength, ratio, expectation",
+        [
+            # GLMParams: no groups
+            (
+                GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0])),
+                0.1,  # scalar strength
+                0.5,  # scalar ratio
+                does_not_raise(),
+            ),
+            (
+                GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0])),
+                jnp.array([0.1, 0.2, 0.3]),  # array strength matches shape
+                0.5,  # scalar ratio
+                does_not_raise(),
+            ),
+            (
+                GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0])),
+                0.1,  # scalar strength
+                jnp.array([0.9, 0.8, 0.7]),  # array ratio matches shape
+                does_not_raise(),
+            ),
+            (
+                GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0])),
+                jnp.array([0.1, 0.2]),  # strength not enough
+                0.5,
+                pytest.raises(
+                    ValueError,
+                    match=r"Strength shape .* does not match parameter shape .*",
+                ),
+            ),
+            (
+                GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0])),
+                0.1,
+                jnp.array([0.9, 0.8]),  # ratio not enough
+                pytest.raises(
+                    ValueError,
+                    match=r"Strength shape .* does not match parameter shape .*",
+                ),
+            ),
+            (
+                GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0])),
+                jnp.array([0.1, 0.2, 0.3, 0.4]),  # strength too many
+                0.5,
+                pytest.raises(
+                    ValueError,
+                    match=r"Strength shape .* does not match parameter shape .*",
+                ),
+            ),
+            (
+                GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0])),
+                0.1,
+                jnp.array([0.9, 0.8, 0.7, 0.6]),  # ratio too many
+                pytest.raises(
+                    ValueError,
+                    match=r"Strength shape .* does not match parameter shape .*",
+                ),
+            ),
+            # GLMParams: 2 groups in coef (dict)
+            (
+                GLMParams(
+                    coef={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                    intercept=jnp.array([0.0]),
+                ),
+                {"a": jnp.array([0.1, 0.2, 0.3]), "b": jnp.array([0.1, 0.2])},  # match
+                {"a": jnp.array([0.9, 0.8, 0.7]), "b": jnp.array([1.0, 0.6])},  # match
+                does_not_raise(),
+            ),
+            (
+                GLMParams(
+                    coef={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                    intercept=jnp.array([0.0]),
+                ),
+                {"a": 0.1, "b": 0.1},  # scalar per group
+                {"a": 0.7, "b": 1.0},  # scalar per group
+                does_not_raise(),
+            ),
+            (
+                GLMParams(
+                    coef={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                    intercept=jnp.array([0.0]),
+                ),
+                {"a": 0.1, "b": jnp.array([0.1, 0.2])},  # mixed strength
+                {"a": 0.9, "b": jnp.array([0.8, 1.0])},  # mixed ratio
+                does_not_raise(),
+            ),
+            (
+                GLMParams(
+                    coef={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                    intercept=jnp.array([0.0]),
+                ),
+                {
+                    "a": jnp.array([0.1, 0.2, 0.3]),
+                    "b": jnp.array([0.1]),
+                },  # strength not enough in 'b'
+                {"a": jnp.array([0.9, 0.8, 0.7]), "b": 1.0},
+                pytest.raises(
+                    ValueError,
+                    match=r"Strength shape .* does not match parameter shape .*",
+                ),
+            ),
+            (
+                GLMParams(
+                    coef={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                    intercept=jnp.array([0.0]),
+                ),
+                {"a": 0.1, "b": 0.1},
+                {
+                    "a": jnp.array([0.9, 0.8, 0.7]),
+                    "b": jnp.array([1.0]),
+                },  # ratio not enough in 'b'
+                pytest.raises(
+                    ValueError,
+                    match=r"Strength shape .* does not match parameter shape .*",
+                ),
+            ),
+            (
+                GLMParams(
+                    coef={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                    intercept=jnp.array([0.0]),
+                ),
+                {
+                    "a": jnp.array([0.1, 0.2, 0.3, 0.4]),
+                    "b": 0.1,
+                },  # strength too many in 'a'
+                {"a": 0.9, "b": jnp.array([1.0, 0.6])},
+                pytest.raises(
+                    ValueError,
+                    match=r"Strength shape .* does not match parameter shape .*",
+                ),
+            ),
+            (
+                GLMParams(
+                    coef={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                    intercept=jnp.array([0.0]),
+                ),
+                {"a": 0.1, "b": 0.1},
+                {
+                    "a": jnp.array([0.9, 0.8, 0.7, 0.6]),
+                    "b": 1.0,
+                },  # ratio too many in 'a'
+                pytest.raises(
+                    ValueError,
+                    match=r"Strength shape .* does not match parameter shape .*",
+                ),
+            ),
+            # Arbitrary object with regularizable subtrees: no groups (TwoParams)
+            (
+                TwoParams(one=jnp.ones((3,)), two=jnp.ones((2,))),
+                [
+                    jnp.array([0.1, 0.2, 0.3]),
+                    jnp.array([0.1, 0.2]),
+                ],  # per-subtree strength arrays match
+                0.7,  # scalar ratio
+                does_not_raise(),
+            ),
+            (
+                TwoParams(one=jnp.ones((3,)), two=jnp.ones((2,))),
+                0.2,  # scalar strength
+                [
+                    jnp.array([0.9, 0.8, 0.7]),
+                    jnp.array([1.0, 0.6]),
+                ],  # per-subtree ratio arrays match
+                does_not_raise(),
+            ),
+            (
+                TwoParams(one=jnp.ones((3,)), two=jnp.ones((2,))),
+                [
+                    jnp.array([0.1, 0.2]),
+                    jnp.array([0.1, 0.2]),
+                ],  # strength not enough for 'one'
+                0.6,
+                pytest.raises(
+                    ValueError,
+                    match=r"Strength shape .* does not match parameter shape .*",
+                ),
+            ),
+            (
+                TwoParams(one=jnp.ones((3,)), two=jnp.ones((2,))),
+                0.2,
+                [
+                    jnp.array([0.9, 0.8]),
+                    jnp.array([1.0, 0.6]),
+                ],  # ratio not enough for 'one'
+                pytest.raises(
+                    ValueError,
+                    match=r"Strength shape .* does not match parameter shape .*",
+                ),
+            ),
+            # Count mismatch in per-subtree specification (either in strength or ratio)
+            (
+                TwoParams(one=jnp.ones((3,)), two=jnp.ones((2,))),
+                [0.1],  # only one strength provided
+                0.5,
+                pytest.raises(ValueError, match=r"Expected .* strength values, got "),
+            ),
+            (
+                TwoParams(one=jnp.ones((3,)), two=jnp.ones((2,))),
+                0.1,
+                [0.5],  # only one ratio provided
+                pytest.raises(ValueError, match=r"Expected .* strength values, got "),
+            ),
+        ],
+    )
+    def test_validate_strength_structure_shape_mismatch(
+        self, params, strength, ratio, expectation
+    ):
+        """ElasticNet: verify (strength, ratio) structure/shape against parameter structure.
+
+        - Scalars broadcast to regularizable leaves; non-regularizable leaves remain None.
+        - Non-scalar array leaves must match the corresponding parameter leaf shape.
+        - For objects exposing multiple regularizable subtrees, supply per-subtree strengths (lists/tuples);
+          a count mismatch raises ValueError.
+        """
+        reg = self.cls()
+        with expectation:
+            reg._validate_strength_structure(params, (strength, ratio))
+
+    def test_validate_strength_structure_transform(self):
+        """Test that ElasticNet  correctly transforms to parameter structure with (strength, ratio) leafs."""
+        regularizer = self.cls()
+        params = {
+            "one": jnp.ones((3,)),
+            "two": jnp.ones((2,)),
+        }
+
+        strength_tree = {
+            "one": jnp.array([0.1, 0.2, 0.3]),
+            "two": jnp.array([1.0, 2.0]),
+        }
+        ratio_tree = {
+            "one": jnp.array([0.9, 0.8, 0.7]),
+            "two": jnp.array([1.0, 0.6]),
+        }
+        structured = regularizer._validate_strength_structure(
+            params, (strength_tree, ratio_tree)
+        )
+
+        assert isinstance(structured, dict)
+        assert isinstance(structured["one"], tuple)
+        s1, r1 = structured["one"]
+        s2, r2 = structured["two"]
+        assert jnp.allclose(s1, jnp.array([0.1, 0.2, 0.3]))
+        assert jnp.allclose(r1, jnp.array([0.9, 0.8, 0.7]))
+        assert jnp.allclose(s2, jnp.array([1.0, 2.0]))
+        assert jnp.allclose(r2, jnp.array([1.0, 0.6]))
 
     @pytest.mark.parametrize(
         "solver_name, expectation",
@@ -1841,6 +2448,27 @@ class TestElasticNet:
 
 class TestGroupLasso:
     cls = nmo.regularizer.GroupLasso
+
+    def test_filter_kwargs_contains_strength(self):
+        """Test that strength is in filter kwargs."""
+        n_features = 3
+        # 2 groups x 3 features (coef), intercept leaf is None in the mask
+        mask = GLMParams(
+            coef=jnp.array([[1, 1, 0], [0, 0, 1]], dtype=float),
+            intercept=None,
+        )
+        params = GLMParams(coef=jnp.ones((n_features,)), intercept=jnp.array([0.0]))
+        regularizer = self.cls()
+
+        fk = regularizer._get_filter_kwargs(params=params, strength=0.5)
+        assert isinstance(fk, dict)
+        assert "mask" in fk
+        assert "strength" in fk
+
+        s = fk["strength"]
+        assert isinstance(s, GLMParams)
+        assert isinstance(s.coef, jnp.ndarray)
+        assert s.coef == 0.5
 
     @pytest.mark.parametrize(
         "solver_name, expectation",

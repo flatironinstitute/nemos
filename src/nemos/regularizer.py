@@ -387,7 +387,9 @@ class Regularizer(Base, abc.ABC):
         if strength is None:
             strength = 1.0
 
-        substrengths = [strength] if len(wheres) == 1 else list(strength)
+        substrengths = (
+            strength if isinstance(strength, list) else [strength] * len(wheres)
+        )
         if len(substrengths) != len(wheres):
             raise ValueError(f"Expected {len(wheres)} strength values, got {strength}")
 
