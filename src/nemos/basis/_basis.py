@@ -105,6 +105,30 @@ def min_max_rescale_samples(
     return sample_pts, scaling
 
 
+def _is_single_bound(bounds) -> bool:
+    """Check if bounds represents a single (min, max) pair vs multiple bounds."""
+    if bounds is None:
+        return True
+    if not isinstance(bounds, (list, tuple)):
+        return False
+    if len(bounds) != 2:
+        return False
+    # Single bound has numeric elements; multiple bounds have tuple/None elements
+    return all(isinstance(b, (int, float, np.number)) for b in bounds)
+
+
+def _fill_bounds(b):
+    """Fill None values in bound tuples with 0 or 1."""
+    if b is None:
+        return (0, 1)
+    else:
+        lo, hi = b
+        return (
+            0 if lo is None else lo,
+            1 if hi is None else hi,
+        )
+
+
 def get_equi_spaced_samples(
     *n_samples,
     bounds: Optional[tuple[float, float] | List[tuple[float, float] | None]] = None,
@@ -119,7 +143,10 @@ def get_equi_spaced_samples(
     n_samples[0],...,n_samples[n]
         The number of samples in each axis of the grid.
     bounds:
-        The bounds for the linspace, if provided.
+        The bounds for the linspace, if provided. Can be:
+        - None: use (0, 1) for all dimensions
+        - A single tuple (min, max): use for all dimensions
+        - A list/tuple of tuples/None: one per dimension
 
     Returns
     -------
@@ -127,21 +154,10 @@ def get_equi_spaced_samples(
         A generator yielding numpy arrays of linspaces from 0 (or specified min)
         to 1 (or specified max) of sizes specified by ``n_samples``.
     """
-    if bounds is None:
-        bounds = [None] * len(n_samples)
-    if isinstance(bounds, tuple) and len(bounds) != 1:
-        bounds = (bounds,)
 
-    def _fill_bounds(b):
-        if b is None:
-            return (0, 1)
-        else:
-            lo, hi = b
-            return (
-                0 if lo is None else lo,
-                1 if hi is None else hi,
-            )
-
+    if _is_single_bound(bounds):
+        # bounds is None or a single (min, max) tuple - expand to match n_samples length
+        bounds = [bounds] * len(n_samples)
     return (
         np.linspace(*_fill_bounds(b), s) for b, s in zip(bounds, n_samples, strict=True)
     )
