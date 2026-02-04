@@ -2470,6 +2470,98 @@ class TestGroupLasso:
         assert isinstance(s.coef, jnp.ndarray)
         assert s.coef == 0.5
 
+    def test_validate_strength_structure_scalar_broadcast(self):
+        """Scalar strength broadcasts to per-group vector with length n_groups."""
+        # 3 groups x 5 features mask on coef, intercept is not regularized (None)
+        mask = GLMParams(
+            coef=jnp.array(
+                [
+                    [1, 1, 1, 0, 0],  # group 0
+                    [0, 0, 0, 1, 0],  # group 1
+                    [0, 0, 0, 0, 1],  # group 2
+                ],
+                dtype=float,
+            ),
+            intercept=None,
+        )
+        params = GLMParams(coef=jnp.ones((5,)), intercept=jnp.array([0.0]))
+        regularizer = self.cls(mask=mask)
+
+        strength_struct = regularizer._validate_strength_structure(params, 0.7)
+        # Returns a tree aligned to mask/params; coef must be per-group vector
+        assert isinstance(strength_struct, GLMParams)
+        assert isinstance(strength_struct.coef, jnp.ndarray)
+        assert strength_struct.coef.shape == (3,)
+        assert jnp.allclose(strength_struct.coef, jnp.array([0.7, 0.7, 0.7]))
+        assert strength_struct.intercept is None
+
+    def test_validate_strength_structure_shape_match(self):
+        """Per-group vector matches n_groups length."""
+        n_groups = 2
+        mask = GLMParams(
+            coef=jnp.array([[1, 0, 1, 0], [0, 1, 0, 1]], dtype=float),  # 2 groups
+            intercept=None,
+        )
+        params = GLMParams(coef=jnp.ones((4,)), intercept=jnp.array([0.0]))
+        regularizer = self.cls(mask=mask)
+
+        per_group = jnp.array([0.1, 0.9])
+        strength_struct = regularizer._validate_strength_structure(params, per_group)
+        assert isinstance(strength_struct.coef, jnp.ndarray)
+        assert strength_struct.coef.shape == (n_groups,)
+        assert jnp.allclose(strength_struct.coef, per_group)
+        assert strength_struct.intercept is None
+
+    def test_validate_strength_structure_shape_mismatch(self):
+        """Vector length must equal n_groups; otherwise ValueError."""
+        n_groups = 3
+        mask = GLMParams(
+            coef=jnp.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=float),
+            intercept=None,
+        )
+        params = GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0]))
+        regularizer = self.cls(mask=mask)
+
+        too_short = jnp.array([0.5, 0.5])
+        too_long = jnp.array([0.5, 0.5, 0.5, 0.5])
+
+        with pytest.raises(
+            ValueError,
+            match=rf"GroupLasso strength must be a scalar or shape \({n_groups},\), got shape \({too_short.shape[0]},\)",
+        ):
+            regularizer._validate_strength_structure(params, too_short)
+
+        with pytest.raises(
+            ValueError,
+            match=rf"GroupLasso strength must be a scalar or shape \({n_groups},\), got shape \({too_long.shape[0]},\)",
+        ):
+            regularizer._validate_strength_structure(params, too_long)
+
+    def test_validate_strength_structure_dict(self):
+        """Dict/PyTree mask: scalar strength broadcasts to per-group vector for each leaf."""
+        # Mask as dict with consistent n_groups across leaves
+        mask = {
+            "a": jnp.array([[1, 1, 0], [0, 0, 1]], dtype=float),  # 2 groups, 3 features
+            "b": jnp.array([[1, 0], [0, 1]], dtype=float),  # 2 groups, 2 features
+        }
+        regularizer = self.cls(mask=mask)
+        params = {
+            "a": jnp.ones((3,)),
+            "b": jnp.ones((2,)),
+        }
+
+        strength_struct = regularizer._validate_strength_structure(params, 0.2)
+        # Should mirror mask structure with per-group vectors
+        assert isinstance(strength_struct, dict)
+        assert isinstance(strength_struct["a"], jnp.ndarray)
+        assert isinstance(strength_struct["b"], jnp.ndarray)
+        assert strength_struct["a"].shape == (2,) and jnp.allclose(
+            strength_struct["a"], jnp.array([0.2, 0.2])
+        )
+        assert strength_struct["b"].shape == (2,) and jnp.allclose(
+            strength_struct["b"], jnp.array([0.2, 0.2])
+        )
+
     @pytest.mark.parametrize(
         "solver_name, expectation",
         [
