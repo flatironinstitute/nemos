@@ -5,11 +5,11 @@ import pytest
 from nemos.glm.params import GLMParams
 from nemos.proximal_operator import (
     masked_norm_2,
+    prox_elastic_net,
     prox_group_lasso,
     prox_lasso,
     prox_none,
     prox_ridge,
-    prox_elastic_net,
 )
 from nemos.tree_utils import tree_full_like
 
