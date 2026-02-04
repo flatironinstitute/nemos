@@ -117,6 +117,18 @@ def _is_single_bound(bounds) -> bool:
     return all(isinstance(b, (int, float, np.number)) for b in bounds)
 
 
+def _fill_bounds(b):
+    """Fill None values in bound tuples with 0 or 1."""
+    if b is None:
+        return (0, 1)
+    else:
+        lo, hi = b
+        return (
+            0 if lo is None else lo,
+            1 if hi is None else hi,
+        )
+
+
 def get_equi_spaced_samples(
     *n_samples,
     bounds: Optional[tuple[float, float] | List[tuple[float, float] | None]] = None,
@@ -142,12 +154,12 @@ def get_equi_spaced_samples(
         A generator yielding numpy arrays of linspaces from 0 (or specified min)
         to 1 (or specified max) of sizes specified by ``n_samples``.
     """
+
     if _is_single_bound(bounds):
         # bounds is None or a single (min, max) tuple - expand to match n_samples length
         bounds = [bounds] * len(n_samples)
     return (
-        np.linspace(*((0, 1) if b is None else b), s)
-        for b, s in zip(bounds, n_samples, strict=True)
+        np.linspace(*_fill_bounds(b), s) for b, s in zip(bounds, n_samples, strict=True)
     )
 
 
