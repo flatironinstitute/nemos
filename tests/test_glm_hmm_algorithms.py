@@ -271,9 +271,10 @@ def prepare_partial_hmm_nll_single_neuron(obs):
     lbfgs_class = solver_registry["LBFGS"]
     solver = lbfgs_class(
         partial_hmm_negative_log_likelihood,
-        UnRegularized(),
-        0.0,
-        False,
+        regularizer=UnRegularized(),
+        regularizer_strength=None,
+        has_aux=False,
+        init_params=GLMParams(jnp.zeros((4, 2)), jnp.zeros((2, 1))),
         tol=10**-8,
     )
 
@@ -1598,9 +1599,8 @@ class TestEMAlgorithm:
         glm = GLM(
             observation_model=obs, regularizer=regularization, solver_name=solver_name
         )
-        glm._instantiate_solver(
-            partial_hmm_negative_log_likelihood, GLMParams(coef, intercept)
-        )
+        glm_params = GLMParams(coef, intercept)
+        glm._instantiate_solver(partial_hmm_negative_log_likelihood, glm_params)
         solver_run = glm._solver_run
         # End of preparatory step.
         (
@@ -1615,7 +1615,7 @@ class TestEMAlgorithm:
             y,
             initial_prob=initial_prob,
             transition_prob=transition_prob,
-            glm_params=GLMParams(coef, intercept),
+            glm_params=glm_params,
             is_new_session=(
                 new_sess.astype(bool)[: X.shape[0]] if require_new_session else None
             ),
@@ -1864,9 +1864,10 @@ def test_e_and_m_step_for_population(generate_data_multi_state_population):
     lbfgs_class = solver_registry["LBFGS"]
     solver = lbfgs_class(
         partial_hmm_negative_log_likelihood,
-        UnRegularized(),
-        0.0,
-        False,
+        regularizer=UnRegularized(),
+        regularizer_strength=None,
+        init_params=GLMParams(jnp.zeros((4, 2)), jnp.zeros((2, 1))),
+        has_aux=False,
         tol=1e-13,
     )
 
