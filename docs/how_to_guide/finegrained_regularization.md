@@ -181,7 +181,7 @@ Internally, this means it will have a set of parameters per neuron.
 All regularization strategies above work for a [`PopulationGLM`](nemos.glm.PopulationGLM) as well:
 ```{code-cell} ipython3
 # we'll create a second neuron with twice the amount of spikes
-spikes = jnp.stack([spikes, rate*2], axis=1)
+spikes = jnp.stack([spikes, spikes*2], axis=1)
 glm = nmo.glm.PopulationGLM(
     regularizer="Ridge", 
     regularizer_strength=dict(
@@ -191,4 +191,5 @@ glm = nmo.glm.PopulationGLM(
 )
 glm.fit(X, spikes)
 ```
+For every parameter of every feature group (5 for f1 and 2 for f1) we are now passing two regularization strengths, one for each neuron.
 It is a bit tedious, but: this model is fitting two neurons at the same time and regularizing the parameters for each neuron differently!
