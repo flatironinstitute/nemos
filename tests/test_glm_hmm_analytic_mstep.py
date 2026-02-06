@@ -17,13 +17,16 @@ from nemos.regularizer import UnRegularized
 from nemos.solvers import solver_registry
 
 
-def setup_solver(objective, tol=1e-12, reg=UnRegularized()):
+def setup_solver(
+    objective, init_params, tol=1e-12, reg_strength=0.0, reg=UnRegularized()
+):
     lbfgs_class = solver_registry["LBFGS"]
     solver = lbfgs_class(
         objective,
-        reg,
-        0.0,
-        False,
+        init_params=init_params,
+        regularizer=reg,
+        regularizer_strength=reg_strength,
+        has_aux=False,
         tol=tol,
     )
     return solver
@@ -135,12 +138,13 @@ class TestAnalyticMStepScale:
         def objective(scale, args):
             return expected_negative_log_likelihood_scale(scale, *args)
 
-        solver = setup_solver(objective, tol=10**-14)
+        init_scale = GLMScale(jnp.zeros_like(glm_params.intercept))
+        solver = setup_solver(objective, init_params=init_scale, tol=10**-14)
         rate_per_state = compute_rate_per_state(
             X, glm_params, inverse_link_function=inv_link_func
         )
         numerical_update, _, _ = solver.run(
-            GLMScale(jnp.zeros_like(glm_params.intercept)),
+            init_scale,
             (y, rate_per_state, jnp.exp(log_gammas_nemos)),
         )
         update = get_analytical_scale_update(obs, is_population_glm=is_population_glm)
@@ -170,11 +174,12 @@ class TestAnalyticMStepScale:
             observation_model=obs,
             inverse_link_function=inv_link_func,
         )
-
-        solver = setup_solver(nll_fcn, tol=10**-4)
+        init_scale = GLMScale(jnp.zeros_like(glm_params.intercept))
+        solver = setup_solver(nll_fcn, init_params=glm_params, tol=10**-4)
 
         solver_scale = setup_solver(
             expected_negative_log_likelihood_scale,
+            init_params=init_scale,
             tol=10**-12,
         )
         new_sess = np.zeros(y.shape[0], dtype=bool)

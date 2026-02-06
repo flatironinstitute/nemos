@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import warnings
 from pathlib import Path
-from typing import Callable, Literal, Optional, Tuple, Union
+from typing import Any, Callable, Literal, Optional, Tuple, Union
 
 import equinox as eqx
 import jax
@@ -23,12 +23,7 @@ from ..pytrees import FeaturePytree
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
 from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
 from ..type_casting import cast_to_jax, support_pynapple
-from ..typing import (
-    DESIGN_INPUT_TYPE,
-    RegularizerStrength,
-    SolverState,
-    StepResult,
-)
+from ..typing import DESIGN_INPUT_TYPE, SolverState, StepResult
 from ..utils import format_repr
 from .initialize_parameters import initialize_intercept_matching_mean_rate
 from .params import GLMParams, GLMUserParams
@@ -72,7 +67,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
     +---------------------+---------------------------------+
     | Gamma               | :math:`1/x`                     |
     +---------------------+---------------------------------+
-    | Bernoulli            | :math:`1 / (1 + e^{-x})`       |
+    | Bernoulli           | :math:`1 / (1 + e^{-x})`        |
     +---------------------+---------------------------------+
     | NegativeBinomial    | :math:`e^x`                     |
     +---------------------+---------------------------------+
@@ -137,8 +132,11 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         and related parameters.
         Default is UnRegularized regression.
     regularizer_strength :
-        Float that is default None. Sets the regularizer strength. If a user does not pass a value, and it is needed for
-        regularization, a warning will be raised and the strength will default to 1.0.
+        Typically a float. Default is None. Sets the regularizer strength.
+        If a user does not pass a value, and it is needed for regularization,
+        a warning will be raised and the strength will default to 1.0.
+        For finer control, the user can pass a pytree that matches the
+        parameter structure to regularize parameters differentially.
     solver_name :
         Solver to use for model optimization. Defines the optimization scheme and related parameters.
         The solver must be an appropriate match for the chosen regularizer.
@@ -238,10 +236,13 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
 
     def __init__(
         self,
-        observation_model: REGRESSION_GLM_TYPES = "Poisson",
+        observation_model: (
+            REGRESSION_GLM_TYPES
+            | Literal["Poisson", "Gamma", "Gaussian", "Bernoulli", "NegativeBinomial"]
+        ) = "Poisson",
         inverse_link_function: Optional[Callable] = None,
         regularizer: Optional[Union[str, Regularizer]] = None,
-        regularizer_strength: Optional[RegularizerStrength] = None,
+        regularizer_strength: Any = None,
         solver_name: str = None,
         solver_kwargs: dict = None,
     ):
@@ -962,6 +963,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         >>> opt_state = model.initialize_solver_and_state(X, y, params)
         >>> # Now ready to run optimization or update steps
         """
+
         opt_solver_kwargs = self._optimize_solver_params(X, y)
         #  set up the solver init/run/update attrs
         self._instantiate_solver(
@@ -1113,7 +1115,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         inverse_link_function: <function one_over_x at ...>
         observation_model: GammaObservations()
         regularizer: Ridge()
-        regularizer_strength: 0.1
+        regularizer_strength: 0.1...
         solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
         solver_name: BFGS
         >>> # Save the model parameters to a file
@@ -1126,7 +1128,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         inverse_link_function: <function one_over_x at ...>
         observation_model: GammaObservations()
         regularizer: Ridge()
-        regularizer_strength: 0.1
+        regularizer_strength: 0.1...
         solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
         solver_name: BFGS
 
@@ -1228,8 +1230,11 @@ class PopulationGLM(GLM):
         and related parameters.
         Default is UnRegularized regression.
     regularizer_strength :
-        Float that is default None. Sets the regularizer strength. If a user does not pass a value, and it is needed for
-        regularization, a warning will be raised and the strength will default to 1.0.
+        Typically a float. Default is None. Sets the regularizer strength.
+        If a user does not pass a value, and it is needed for regularization,
+        a warning will be raised and the strength will default to 1.0.
+        For finer control, the user can pass a pytree that matches the
+        parameter structure to regularize parameters differentially.
     solver_name :
         Solver to use for model optimization. Defines the optimization scheme and related parameters.
         The solver must be an appropriate match for the chosen regularizer.
@@ -1344,11 +1349,11 @@ class PopulationGLM(GLM):
         self,
         observation_model: (
             REGRESSION_GLM_TYPES
-            | Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial"]
+            | Literal["Poisson", "Gamma", "Gaussian", "Bernoulli", "NegativeBinomial"]
         ) = "Poisson",
         inverse_link_function: Optional[Callable] = None,
         regularizer: Union[str, Regularizer] = "UnRegularized",
-        regularizer_strength: Optional[float] = None,
+        regularizer_strength: Any = None,
         solver_name: str = None,
         solver_kwargs: dict = None,
         feature_mask: Optional[jnp.ndarray] = None,

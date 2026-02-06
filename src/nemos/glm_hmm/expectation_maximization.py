@@ -623,7 +623,7 @@ def _em_step(
 
     params, previous_state = carry
 
-    (log_posteriors, log_joint_posterior, _, new_log_like, _, _) = forward_backward(
+    log_posteriors, log_joint_posterior, _, new_log_like, _, _ = forward_backward(
         X,
         y,
         params.hmm_params.log_initial_prob,
