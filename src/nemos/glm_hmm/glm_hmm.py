@@ -2,7 +2,7 @@
 
 from numbers import Number
 from pathlib import Path
-from typing import Callable, Literal, NamedTuple, Optional, Tuple, Union
+from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -17,7 +17,6 @@ from ..observation_models import Observations
 from ..regularizer import Regularizer
 from ..typing import (
     DESIGN_INPUT_TYPE,
-    RegularizerStrength,
     SolverState,
     StepResult,
 )
@@ -46,7 +45,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         inverse_link_function: Optional[Callable[[jnp.ndarray], jnp.ndarray]] = None,
         regularizer: Optional[Union[str, Regularizer]] = None,
         regularizer_strength: Optional[
-            RegularizerStrength
+            Any
         ] = None,  # this is used to regularize GLM coef.
         # prior to regularize init prob and transition
         dirichlet_prior_alphas_init_prob: Union[
