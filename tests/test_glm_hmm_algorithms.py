@@ -1829,8 +1829,6 @@ class TestMStep:
         init_scale = GLMScale(jnp.zeros_like(intercept))
         solver = setup_solver(objective_scale, init_params=init_scale, tol=1e-8)
 
-        solver = setup_solver(objective_scale, tol=1e-8)
-
         new_scale, _, _ = solver.run(
             GLMScale(jnp.zeros_like(intercept)), y, predicted_rate, posteriors
         )
