@@ -45,6 +45,22 @@ warnings.filterwarnings(
 Here we demonstrate how to setup and run a stochastic gradient descent in `nemos`
 by batching and using the [`update`](nemos.glm.GLM.update) method of the model class.
 
+:::{admonition} Simpler alternative: `stochastic_fit`
+:class: tip
+
+For most use cases, you can use the simpler [`stochastic_fit`](nemos.glm.GLM.stochastic_fit) method with a [`DataLoader`](nemos.batching.DataLoader):
+
+```python
+from nemos.batching import ArrayDataLoader
+
+loader = ArrayDataLoader(X, y, batch_size=128, shuffle=True)
+model = nmo.glm.GLM(solver_name="GradientDescent", solver_kwargs={"stepsize": 0.1})
+model.stochastic_fit(loader, num_epochs=100)
+```
+
+The manual approach shown in this guide is useful when you need more control over the optimization loop, such as custom learning rate schedules, logging between batches, custom stopping criteria, etc.
+:::
+
 ```{code-cell} ipython3
 import matplotlib.pyplot as plt
 import numpy as np

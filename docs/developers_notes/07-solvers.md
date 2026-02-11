@@ -59,6 +59,8 @@ Default method implementations in `SolverAdapter`:
 
 ## List of available solvers
 
+The following diagram shows the solver class hierarchy. Solvers marked with `[S]` support stochastic optimization via `stochastic_run`.
+
 ```
 Abstract Class AbstractSolver
 │
@@ -67,24 +69,24 @@ Abstract Class AbstractSolver
 │ ├─ Abstract Subclass OptimistixAdapter
 │ │ │
 │ │ ├─ Concrete Subclass OptimistixBFGS
-│ │ ├─ Concrete Subclass OptimistixFISTA
-│ │ ├─ Concrete Subclass OptimistixNAG
+│ │ ├─ Concrete Subclass OptimistixFISTA [S]
+│ │ ├─ Concrete Subclass OptimistixNAG [S]
 │ │ ├─ Concrete Subclass OptimistixNonlinearCG
 │ │ └─ Abstract Subclass AbstractOptimistixOptaxSolver
 │ │   │
 │ │   ├─ Concrete Subclass OptimistixOptaxLBFGS
-│ │   └─ Concrete Subclass OptimistixOptaxGradientDescent
+│ │   └─ Concrete Subclass OptimistixOptaxGradientDescent [S]
 │ │
 │ └─ Abstract Subclass JaxoptAdapter
 │   │
 │   ├─ Concrete Subclass JaxoptLBFGS (optional)
-│   ├─ Concrete Subclass JaxoptGradientDescent (optional)
-│   ├─ Concrete Subclass JaxoptProximalGradient (optional)
+│   ├─ Concrete Subclass JaxoptGradientDescent (optional) [S]
+│   ├─ Concrete Subclass JaxoptProximalGradient (optional) [S]
 │   ├─ Concrete Subclass JaxoptBFGS (optional)
 │   ├─ Concrete Subclass JaxoptNonlinearCG (optional)
 │   │
-│   ├─ Concrete Subclass WrappedSVRG
-│   └─ Concrete Subclass WrappedProxSVRG
+│   ├─ Concrete Subclass WrappedSVRG [S]
+│   └─ Concrete Subclass WrappedProxSVRG [S]
 ```
 
 `OptaxOptimistixSolver` is an adapter for Optax solvers, relying on `optimistix.OptaxMinimiser` to run the full optimization loop. If there is a need, this can be used to wrap adaptive solvers (e.g. Adam).
@@ -122,13 +124,76 @@ To validate a solver without registering, the [`nemos.solvers.validate_solver_cl
 While it is not necessary, a way to ensure adherence to the interface is subclassing `AbstractSolver`.
 
 ## Stochastic optimization
-To run stochastic (mini-batch) optimization, JAXopt used a `run_iterator` method.
-Instead of the full input data `run_iterator` accepts a generator / iterator that provides batches of data.
 
-For information on how stochastic optimization is planned to be supported in NeMOS, see the [issue tracking the stochastic optimization interface](https://github.com/flatironinstitute/nemos/issues/376).
+NeMoS provides a high-level interface for stochastic (mini-batch) optimization through the `stochastic_fit` method on GLM models and the `stochastic_run` method on solvers.
 
-:::{admonition} Stochastic optimization interface for (Prox-)SVRG
-:class: warning
+### Using `stochastic_fit`
 
-Note that (Prox-)SVRG is especially well-suited for running stochastic optimization, however it currently requires the optimization loop to be implemented separately as it is a bit more involved than what is done by `run_iterator`.
-:::
+The simplest way to use stochastic optimization is through the `stochastic_fit` method on GLM models:
+
+```python
+import jax.numpy as jnp
+import nemos as nmo
+from nemos.batching import ArrayDataLoader
+
+# Create data loader
+X = jnp.ones((10000, 50))
+y = jnp.ones((10000,))
+loader = ArrayDataLoader(X, y, batch_size=128, shuffle=True)
+
+# Fit model using stochastic optimization
+model = nmo.glm.GLM(
+    solver_name="GradientDescent",
+    solver_kwargs={"stepsize": 0.01}
+)
+model.stochastic_fit(loader, num_epochs=10)
+```
+
+### DataLoader protocol
+
+Stochastic optimization requires data to be provided through a `DataLoader` that conforms to the `nemos.batching.DataLoader` protocol:
+
+```python
+class DataLoader(Protocol):
+    def __iter__(self) -> Iterator[Tuple[ArrayLike, ArrayLike]]:
+        """Iterate over (X_batch, y_batch) tuples. Must return a fresh iterator each call."""
+        ...
+
+    @property
+    def n_samples(self) -> int:
+        """Total number of samples in the dataset."""
+        ...
+
+    def sample_batch(self) -> Tuple[ArrayLike, ArrayLike]:
+        """Return a single batch for initialization purposes."""
+        ...
+```
+
+NeMoS provides `ArrayDataLoader` for in-memory arrays. For out-of-core data, users can implement their own data loader following the protocol.
+
+### Solver-level interface
+
+At the solver level, stochastic optimization is provided through the `stochastic_run` method:
+
+```python
+params, state, aux = solver.stochastic_run(init_params, data_loader, num_epochs=10)
+```
+
+Not all solvers support stochastic optimization. Only solvers with `_supports_stochastic = True` can be used. Currently supported solvers:
+
+- `GradientDescent` (and variants like `OptimistixNAG`, `OptimistixOptaxGradientDescent`)
+- `ProximalGradient` (and `OptimistixFISTA`)
+- `SVRG`
+- `ProxSVRG`
+
+Solvers that do not support stochastic optimization (e.g., `BFGS`, `LBFGS`, `NonlinearCG`) will raise `NotImplementedError` when `stochastic_run` is called.
+
+### Implementation details
+
+Stochastic support is implemented through the `StochasticSolverMixin` class which provides a default implementation of `_stochastic_run_impl`. This mixin iterates over the data loader for the specified number of epochs, calling `update` on each batch.
+
+For SVRG-based solvers, `stochastic_run` in the wrappers dispatches to a `run_streaming` method that handles the more complex optimization loop that requires computing full gradients at reference points.
+
+### Manual batching
+
+For more control over the optimization process, you can still use the manual batching approach with `initialize_solver_and_state` and `update` as shown in the [batching how-to guide](../how_to_guide/plot_04_batch_glm.md). This approach is useful when you need custom logic between batches or want to implement learning rate schedules.
