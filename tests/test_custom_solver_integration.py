@@ -138,6 +138,7 @@ def test_custom_solver_integration(poissonGLM_model_instantiation):
             backend="custom",
             validate=True,
             test_ridge_without_aux=True,
+            test_ridge_with_aux=True,
         )
         nmo.regularizer.UnRegularized.allow_solver("Adam")
 

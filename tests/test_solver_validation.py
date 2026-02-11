@@ -4,6 +4,7 @@ import pytest
 
 from nemos.solvers import AbstractSolver, list_available_solvers
 from nemos.solvers._validation import (
+    _assert_step_result,
     _check_all_signatures_match,
     _check_required_methods_exist,
     _validate_method_signature,
@@ -177,3 +178,26 @@ def test_all_nemos_solvers_pass_validation(test_ridge, loss_has_aux):
         validate_solver_class(
             spec.implementation, test_ridge=test_ridge, loss_has_aux=loss_has_aux
         )
+
+
+def test_assert_step_result_accepts_3_tuple():
+    step_result = ("params", "state", "aux")
+    assert _assert_step_result(step_result, "run") == step_result
+
+
+@pytest.mark.parametrize("bad_result", [None, [], {}, "abc", 1])
+def test_assert_step_result_rejects_non_tuple(bad_result):
+    with pytest.raises(TypeError, match=r"run must return a tuple"):
+        _assert_step_result(bad_result, "run")
+
+
+@pytest.mark.parametrize("bad_tuple, expected_len", [((1, 2), 2), ((1, 2, 3, 4), 4)])
+def test_assert_step_result_rejects_wrong_tuple_length(bad_tuple, expected_len):
+    with pytest.raises(TypeError, match=rf"got a tuple of length {expected_len}"):
+        _assert_step_result(bad_tuple, "update")
+
+
+def test_assert_step_result_error_mentions_method_name():
+    with pytest.raises(TypeError) as excinfo:
+        _assert_step_result([], "custom_step")
+    assert "custom_step must return a tuple" in str(excinfo.value)

@@ -175,6 +175,13 @@ def test_allow_solver(regularizer_class):
             reg1.check_solver(new_solver)
             model = nmo.glm.GLM(regularizer=reg1, solver_name=new_solver)
             assert model.algo_name == new_solver
+
+        # allowing a solver already allowed does nothing
+        _default_solver = regularizer_class._default_solver
+        regularizer_class.allow_solver(_default_solver)
+        assert regularizer_class().allowed_solvers.count(_default_solver) == 1
+        assert reg1.allowed_solvers.count(_default_solver) == 1
+        assert reg2.allowed_solvers.count(_default_solver) == 1
     finally:
         # reset to avoid leaking the extra solver into other tests
         regularizer_class._allowed_solvers = original_allowed

@@ -368,3 +368,48 @@ class TestListFunctions:
 
         nmo.solvers.register("algo_c", SolverBOne, "backend_one")
         assert nmo.solvers.list_available_algorithms() == ["algo_a", "algo_b", "algo_c"]
+
+
+class TestGetSolverDocumentation:
+    def test_contains_solver_class_path(self, isolated_registry):
+        nmo.solvers.register("MySolver", SolverAOne, backend="test")
+        result = nmo.solvers.get_solver_documentation("MySolver")
+        assert "test_solver_registry.SolverAOne" in result
+
+    def test_accepts_type_directly(self, isolated_registry):
+        type_result = nmo.solvers.get_solver_documentation(SolverAOne)
+
+        nmo.solvers.register("MySolver", SolverAOne, backend="test")
+        str_result = nmo.solvers.get_solver_documentation("MySolver")
+
+        assert "SolverAOne" in type_result
+        assert type_result == str_result
+
+    def test_appends_init_docstring(self, isolated_registry):
+        nmo.solvers.register("MySolver", SolverAOne, backend="test")
+        result = nmo.solvers.get_solver_documentation("MySolver")
+        assert "More info from SolverAOne.__init__" in result
+
+    def test_show_help_flag(self, isolated_registry):
+        nmo.solvers.register("MySolver", SolverAOne, backend="test")
+        doc = nmo.solvers.get_solver_documentation("MySolver", show_help=False)
+        help_doc = nmo.solvers.get_solver_documentation("MySolver", show_help=True)
+        assert "Help on class SolverAOne" in help_doc
+        assert doc != help_doc
+
+    def test_unknown_solver_raises(self, isolated_registry):
+        with pytest.raises(ValueError, match="No solver registered"):
+            nmo.solvers.get_solver_documentation("NonExistent")
+
+
+def test_solver_spec_repr():
+    spec = nmo.solvers.SolverSpec("algo_a", "backend_one", SolverAOne)
+
+    expected = (
+        '"algo_a[backend_one]" - SolverSpec(\n'
+        '    algo_name="algo_a",\n'
+        '    backend="backend_one",\n'
+        "    implementation=test_solver_registry.SolverAOne\n)"
+    )
+
+    assert repr(spec) == expected
