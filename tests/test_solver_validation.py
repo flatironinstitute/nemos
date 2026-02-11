@@ -10,6 +10,8 @@ from nemos.solvers._validation import (
     validate_solver_class,
 )
 
+pytestmark = pytest.mark.solver_related
+
 
 class GoodSolver:
     def __init__(

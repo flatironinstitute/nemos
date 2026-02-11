@@ -237,7 +237,7 @@ class Regularizer(Base, abc.ABC):
 
         Parameters
         ----------
-        init_params:
+        params:
             The parameters to be regularized.
 
         Returns

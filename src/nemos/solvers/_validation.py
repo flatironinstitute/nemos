@@ -179,7 +179,7 @@ def _validate_solver_class_on_ridge(
         )
 
     penalized_loss = regularizer.penalized_loss(
-        unregularized_loss, regularizer_strength, init_params=init_params
+        unregularized_loss, init_params, regularizer_strength
     )
     init_loss = penalized_loss(init_params, X, y)
     run_loss = penalized_loss(run_params, X, y)

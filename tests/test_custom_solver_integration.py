@@ -39,7 +39,7 @@ class OptaxAdam(AbstractSolver[OptaxAdamState]):
         self._optim = optax.adam(learning_rate)
 
         loss = regularizer.penalized_loss(
-            unregularized_loss, regularizer_strength, init_params=init_params
+            unregularized_loss, init_params, regularizer_strength
         )
 
         if has_aux:
