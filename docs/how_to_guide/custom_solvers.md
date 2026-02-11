@@ -86,7 +86,7 @@ class ScipySolver:
         # `regularizer.penalized_loss` returns a function which is the unregularized loss + a penalty term
         # we will pass this objective function to `scipy.optimize.minimize`
         self.fun = regularizer.penalized_loss(
-            unregularized_loss, regularizer_strength, init_params=init_params
+            unregularized_loss, params, regularizer_strength
         )
 
         # storing these to later pass to scipy
