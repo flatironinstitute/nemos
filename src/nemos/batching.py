@@ -1,10 +1,20 @@
 """Data loading utilities for stochastic optimization."""
 
-from typing import Callable, Iterator, Optional, Protocol, Tuple, runtime_checkable
+from typing import (
+    Any,
+    Callable,
+    Iterator,
+    Optional,
+    Protocol,
+    TypeAlias,
+    runtime_checkable,
+)
 
 import jax
 import jax.numpy as jnp
 from numpy.typing import ArrayLike
+
+BatchData: TypeAlias = tuple[Any, ...]
 
 
 @runtime_checkable
@@ -21,9 +31,9 @@ class DataLoader(Protocol):
     - Batches should have consistent, non-zero sizes.
     """
 
-    def __iter__(self) -> Iterator[Tuple[ArrayLike, ArrayLike]]:
+    def __iter__(self) -> Iterator[BatchData]:
         """
-        Iterate over (X_batch, y_batch) tuples.
+        Iterate over tuples containing input and output data, e.g. (X_batch, y_batch).
 
         Must return a fresh iterator each call (re-iterable).
         """
@@ -34,7 +44,7 @@ class DataLoader(Protocol):
         """Total number of samples in the dataset."""
         ...
 
-    def sample_batch(self) -> Tuple[ArrayLike, ArrayLike]:
+    def sample_batch(self) -> BatchData:
         """
         Return a single batch for initialization purposes.
 
@@ -52,10 +62,9 @@ class ArrayDataLoader:
 
     Parameters
     ----------
-    X :
-        Input features, array of shape (n_samples, n_features).
-    y :
-        Target values, array of shape (n_samples,) or (n_samples, n_outputs).
+    arrays :
+        Input and output arrays (any number), each an array of
+        shape (n_samples, n_features) or (n_samples, ).
     batch_size :
         Number of samples per batch.
     shuffle :
@@ -76,47 +85,52 @@ class ArrayDataLoader:
 
     def __init__(
         self,
-        X: ArrayLike,
-        y: ArrayLike,
+        *arrays: ArrayLike,
         batch_size: int,
         shuffle: bool = True,
         key: Optional[jax.Array] = None,
     ):
-        self.X = jnp.asarray(X)
-        self.y = jnp.asarray(y)
+        if len(arrays) == 0:
+            raise ValueError("Provide at least one array.")
+
+        self.arrays = tuple(jnp.asarray(x) for x in arrays)
         self.batch_size = batch_size
         self.shuffle = shuffle
         self._key = key if key is not None else jax.random.key(0)
 
         # Validate
-        if self.X.shape[0] != self.y.shape[0]:
-            raise ValueError("X and y must have same number of samples")
+        if len(set(arr.shape[0] for arr in self.arrays)) != 1:
+            raise ValueError("All arrays must have same number of samples")
         if batch_size <= 0:
             raise ValueError("batch_size must be positive")
 
     @property
     def n_samples(self) -> int:
         """Total number of samples in the dataset."""
-        return self.X.shape[0]
+        return self.arrays[0].shape[0]
 
-    def sample_batch(self) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    def sample_batch(self) -> tuple[jnp.ndarray, ...]:
         """Return first batch, deterministic (ignores shuffle)."""
         end = min(self.batch_size, self.n_samples)
-        return self.X[:end], self.y[:end]
+        return tuple(arr[:end] for arr in self.arrays)
 
-    def __iter__(self) -> Iterator[Tuple[jnp.ndarray, jnp.ndarray]]:
+    def __iter__(self) -> Iterator[tuple[jnp.ndarray, ...]]:
         """Return fresh iterator. Shuffles if enabled."""
         n = self.n_samples
         if self.shuffle:
             self._key, subkey = jax.random.split(self._key)
             perm = jax.random.permutation(subkey, n)
-            X, y = self.X[perm], self.y[perm]
         else:
-            X, y = self.X, self.y
+            perm = None
 
         for start in range(0, n, self.batch_size):
             end = min(start + self.batch_size, n)
-            yield X[start:end], y[start:end]
+
+            if perm is None:
+                yield tuple(arr[start:end] for arr in self.arrays)
+            else:
+                idx = perm[start:end]
+                yield tuple(arr[idx] for arr in self.arrays)
 
 
 class _PreprocessedDataLoader:
@@ -130,37 +144,28 @@ class _PreprocessedDataLoader:
     def __init__(
         self,
         loader: DataLoader,
-        preprocessing_func: Callable[
-            [ArrayLike, ArrayLike],
-            Tuple[dict[str, jnp.ndarray] | jnp.ndarray, jnp.ndarray],
-        ],
+        preprocessing_func: Callable[..., BatchData],
     ):
         self._loader = loader
         self._preprocess_fn = preprocessing_func
-        self._cached_sample: Optional[
-            Tuple[dict[str, jnp.ndarray] | jnp.ndarray, jnp.ndarray]
-        ] = None
+        self._cached_sample: Optional[BatchData] = None
 
     @property
     def n_samples(self) -> int:
         """Total number of samples in the dataset."""
         return self._loader.n_samples
 
-    def sample_batch(
-        self,
-    ) -> Tuple[dict[str, jnp.ndarray] | jnp.ndarray, jnp.ndarray]:
+    def sample_batch(self) -> BatchData:
         """Return cached preprocessed sample batch."""
         if self._cached_sample is None:
-            raw_X, raw_y = self._loader.sample_batch()
-            self._cached_sample = self._preprocess_fn(raw_X, raw_y)
+            raw_batch_data = self._loader.sample_batch()
+            self._cached_sample = self._preprocess_fn(*raw_batch_data)
         return self._cached_sample
 
-    def __iter__(
-        self,
-    ) -> Iterator[Tuple[dict[str, jnp.ndarray] | jnp.ndarray, jnp.ndarray]]:
+    def __iter__(self) -> Iterator[BatchData]:
         """Iterate with preprocessing applied to each batch."""
-        for X_batch, y_batch in self._loader:
-            yield self._preprocess_fn(X_batch, y_batch)
+        for batch_data in self._loader:
+            yield self._preprocess_fn(*batch_data)
 
 
 def is_data_loader(obj) -> bool:

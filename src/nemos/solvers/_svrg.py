@@ -22,7 +22,7 @@ from ..typing import KeyArrayLike, Params, Pytree, StepResult
 from ._jaxopt_adapter import JaxoptAdapter
 
 if TYPE_CHECKING:
-    from ..batching import DataLoader
+    from ..batching import BatchData, DataLoader
 
 
 class SVRGState(NamedTuple):
@@ -538,8 +538,8 @@ class ProxSVRG:
         self,
         init_params: Pytree,
         hyperparams_prox: Union[float, None],
-        iter_batches: Callable[[], Iterator[Tuple[Any, Any]]],
-        sample_batch: Callable[[], Tuple[Any, Any]],
+        iter_batches: Callable[[], Iterator["BatchData"]],
+        sample_batch: Callable[[], "BatchData"],
         num_epochs: int = 1,
     ) -> OptStep:
         """
@@ -570,8 +570,8 @@ class ProxSVRG:
         if num_epochs < 1:
             raise ValueError("num_epochs must be >= 1")
 
-        sample_X, sample_y = sample_batch()
-        state = self.init_state(init_params, sample_X, sample_y)
+        sample_data = sample_batch()
+        state = self.init_state(init_params, *sample_data)
         params = init_params
 
         for _ in range(num_epochs):
@@ -586,25 +586,32 @@ class ProxSVRG:
             )
 
             # another run through the data
-            for X_batch, y_batch in iter_batches():
+            for batch_data in iter_batches():
                 params, state = self._update_on_batch(
-                    params, state, hyperparams_prox, X_batch, y_batch
+                    params, state, hyperparams_prox, *batch_data
                 )
 
         return OptStep(params=params, state=state)
 
+    def _infer_number_of_samples(self, *args: Any) -> int:
+        """Infer the number of samples from a tuple of arguments."""
+        n_points_per_arg = {leaf.shape[0] for leaf in jax.tree.leaves(args)}
+        if not len(n_points_per_arg) == 1:
+            raise ValueError("All arguments must have the same sized first dimension.")
+        return n_points_per_arg.pop()
+
     def _compute_full_gradient_streaming(
         self,
         params: Pytree,
-        iter_batches: Callable[[], Iterator[Tuple[Any, Any]]],
+        iter_batches: Callable[[], Iterator["BatchData"]],
     ) -> Pytree:
         """Compute full gradient by iterating through all batches."""
         total_grad = None
         total_samples = 0
 
-        for X_batch, y_batch in iter_batches():
-            batch_grad, _ = self.loss_gradient(params, X_batch, y_batch)
-            batch_size = y_batch.shape[0]
+        for batch_data in iter_batches():
+            batch_size = self._infer_number_of_samples(*batch_data)
+            batch_grad, _ = self.loss_gradient(params, *batch_data)
 
             if total_grad is None:
                 total_grad = jax.tree.map(lambda g: g * batch_size, batch_grad)
@@ -668,11 +675,7 @@ class ProxSVRG:
         ValueError
             If not all arguments in args have the same sized first dimension.
         """
-        n_points_per_arg = {leaf.shape[0] for leaf in jax.tree.leaves(args)}
-        if not len(n_points_per_arg) == 1:
-            raise ValueError("All arguments must have the same sized first dimension.")
-        N = n_points_per_arg.pop()
-
+        N = self._infer_number_of_samples(*args)
         m = (N + self.batch_size - 1) // self.batch_size  # number of iterations
 
         def inner_loop_body(_, carry):
@@ -914,8 +917,8 @@ class SVRG(ProxSVRG):
     def run_streaming(
         self,
         init_params: Pytree,
-        iter_batches: Callable[[], Iterator[Tuple[Any, Any]]],
-        sample_batch: Callable[[], Tuple[Any, Any]],
+        iter_batches: Callable[[], Iterator["BatchData"]],
+        sample_batch: Callable[[], "BatchData"],
         num_epochs: int = 1,
     ) -> OptStep:
         """
