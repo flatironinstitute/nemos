@@ -17,7 +17,7 @@ on:
     branches:
       - main
 
-vars:
+env:
   CODECOV_OS: ubuntu-latest
   CODECOV_PY: '3.13'
 
@@ -48,7 +48,7 @@ jobs:
         run: uvx --with tox-uv tox -e skip_solver_related
 
       - name: Upload coverage reports to Codecov
-        if: matrix.os == vars.CODECOV_OS && matrix.python-version == vars.CODECOV_PY
+        if: matrix.os == env.CODECOV_OS && matrix.python-version == env.CODECOV_PY
         uses: codecov/codecov-action@v5
         with:
           fail_ci_if_error: true
@@ -79,7 +79,7 @@ jobs:
         run: uvx --with tox-uv tox -e backend-jaxopt
 
       - name: Upload coverage reports to Codecov
-        if: matrix.os == vars.CODECOV_OS && matrix.python-version == vars.CODECOV_PY
+        if: matrix.os == env.CODECOV_OS && matrix.python-version == env.CODECOV_PY
         uses: codecov/codecov-action@v5
         with:
           fail_ci_if_error: true
@@ -110,7 +110,7 @@ jobs:
         run: uvx --with tox-uv tox -e backend-optimistix
 
       - name: Upload coverage reports to Codecov
-        if: matrix.os == vars.CODECOV_OS && matrix.python-version == vars.CODECOV_PY
+        if: matrix.os == env.CODECOV_OS && matrix.python-version == env.CODECOV_PY
         uses: codecov/codecov-action@v5
         with:
           fail_ci_if_error: true
