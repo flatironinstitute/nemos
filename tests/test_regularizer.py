@@ -1,4 +1,5 @@
 import copy
+import re
 import warnings
 from contextlib import nullcontext as does_not_raise
 
@@ -98,64 +99,6 @@ def test_regularizer_available():
     for regularizer in nmo._regularizer_builder.AVAILABLE_REGULARIZERS:
         reg = nmo._regularizer_builder.instantiate_regularizer(regularizer)
         assert reg.__class__.__name__ == regularizer
-
-
-@pytest.mark.parametrize(
-    "regularizer_strength",
-    [0.001, 1.0, "bah"],
-)
-@pytest.mark.parametrize(
-    "reg_type",
-    [
-        nmo.regularizer.Ridge,
-        nmo.regularizer.Lasso,
-        nmo.regularizer.GroupLasso,
-        nmo.regularizer.ElasticNet,
-    ],
-)
-def test_regularizer(regularizer_strength, reg_type):
-    if not isinstance(regularizer_strength, float):
-        with pytest.raises(
-            ValueError,
-            match=r"Could not convert the (regularizer strength|regularizer strength and regularizer ratio): {regularizer_strength} "
-            r"to a (float|tuple of floats).".format(
-                regularizer_strength=regularizer_strength
-            ),
-        ):
-            nmo.glm.GLM(
-                regularizer=reg_type(), regularizer_strength=regularizer_strength
-            )
-    else:
-        nmo.glm.GLM(regularizer=reg_type(), regularizer_strength=regularizer_strength)
-
-
-@pytest.mark.parametrize(
-    "regularizer_strength",
-    [0.001, 1.0, "bah"],
-)
-@pytest.mark.parametrize(
-    "regularizer",
-    [
-        nmo.regularizer.Ridge(),
-        nmo.regularizer.Lasso(),
-        nmo.regularizer.GroupLasso(),
-        nmo.regularizer.ElasticNet(),
-    ],
-)
-def test_regularizer_setter(regularizer_strength, regularizer):
-    if not isinstance(regularizer_strength, float):
-        with pytest.raises(
-            ValueError,
-            match=r"Could not convert the (regularizer strength|regularizer strength and regularizer ratio): {regularizer_strength} "
-            r"to a (float|tuple of floats).".format(
-                regularizer_strength=regularizer_strength
-            ),
-        ):
-            nmo.glm.GLM(
-                regularizer=regularizer, regularizer_strength=regularizer_strength
-            )
-    else:
-        nmo.glm.GLM(regularizer=regularizer, regularizer_strength=regularizer_strength)
 
 
 @pytest.mark.parametrize(
@@ -311,8 +254,538 @@ def test_change_regularizer_reset_strength(
     assert model.regularizer_strength == regularizer_strength
 
 
+@pytest.mark.parametrize(
+    "regularizer",
+    [
+        nmo.regularizer.Ridge(),
+        nmo.regularizer.Lasso(),
+        nmo.regularizer.GroupLasso(),
+    ],
+)
+@pytest.mark.parametrize(
+    "strength, expectation",
+    [
+        (None, does_not_raise()),
+        (0.5, does_not_raise()),
+        (1.0, does_not_raise()),
+        (jnp.array(1.0), does_not_raise()),
+        (np.array(0.5), does_not_raise()),
+        (
+            "bah",
+            pytest.raises(
+                TypeError,
+                match=f"Could not convert regularizer strength to floats:",
+            ),
+        ),
+    ],
+)
+def test_validate_strength_single_input(regularizer, strength, expectation):
+    """Test that regularizer accepts scalar strength input (or None)."""
+    with expectation:
+        result = regularizer._validate_strength(strength)
+        if strength is None:
+            assert result == 1.0
+        else:
+            assert result == strength
+            assert isinstance(result, float)
+
+
+@pytest.mark.parametrize(
+    "regularizer",
+    [nmo.regularizer.Ridge(), nmo.regularizer.Lasso(), nmo.regularizer.GroupLasso()],
+)
+@pytest.mark.parametrize(
+    "strength, expectation, check_fn",
+    [
+        # Dict with scalar leaves (Python floats)
+        (
+            {"a": 0.5, "b": 0.3},
+            does_not_raise(),
+            lambda result: (
+                isinstance(result, dict)
+                and isinstance(result["a"], float)
+                and result["a"] == 0.5
+                and isinstance(result["b"], float)
+                and result["b"] == 0.3
+            ),
+        ),
+        # Dict with 0-dim arrays (should be converted to float)
+        (
+            {"a": jnp.array(0.5), "b": np.array(0.3)},
+            does_not_raise(),
+            lambda result: (
+                isinstance(result, dict)
+                and isinstance(result["a"], float)
+                and result["a"] == 0.5
+                and isinstance(result["b"], float)
+                and result["b"] == 0.3
+            ),
+        ),
+        # Dict with 1-D arrays (should be preserved as jnp.ndarray)
+        (
+            {
+                "a": jnp.array([0.1, 0.2, 0.3]),
+                "b": np.array([0.5]),
+            },
+            does_not_raise(),
+            lambda result: (
+                isinstance(result, dict)
+                and isinstance(result["a"], jnp.ndarray)
+                and result["a"].shape == (3,)
+                and jnp.allclose(result["a"], jnp.array([0.1, 0.2, 0.3]))
+                and isinstance(result["b"], jnp.ndarray)
+                and result["b"].shape == (1,)
+                and jnp.allclose(result["b"], jnp.array([0.5]))
+            ),
+        ),
+        # Dict with mixed 0-dim and arrays
+        (
+            {
+                "a": jnp.array(0.5),
+                "b": np.array([0.1, 0.2]),
+            },
+            does_not_raise(),
+            lambda result: (
+                isinstance(result, dict)
+                and isinstance(result["a"], float)
+                and result["a"] == 0.5
+                and isinstance(result["b"], jnp.ndarray)
+                and result["b"].shape == (2,)
+            ),
+        ),
+        # Nested dict (dict of dicts)
+        (
+            {
+                "a": {"x": 0.3, "y": 0.4},
+                "b": {"x": jnp.array([0.1, 0.2]), "y": 0.5},
+            },
+            does_not_raise(),
+            lambda result: (
+                isinstance(result, dict)
+                and isinstance(result["a"]["x"], float)
+                and result["a"]["x"] == 0.3
+                and isinstance(result["a"]["y"], float)
+                and result["a"]["y"] == 0.4
+                and isinstance(result["b"]["x"], jnp.ndarray)
+                and result["b"]["x"].shape == (2,)
+                and isinstance(result["b"]["y"], float)
+                and result["b"]["y"] == 0.5
+            ),
+        ),
+        # 1-D array
+        (
+            jnp.array([0.1, 0.2, 0.3]),
+            does_not_raise(),
+            lambda result: (
+                isinstance(result, jnp.ndarray)
+                and result.shape == (3,)
+                and jnp.allclose(result, jnp.array([0.1, 0.2, 0.3]))
+            ),
+        ),
+        # 2-D array
+        (
+            np.array([[0.1, 0.2], [0.3, 0.4]]),
+            does_not_raise(),
+            lambda result: (
+                isinstance(result, jnp.ndarray)
+                and result.shape == (2, 2)
+                and jnp.allclose(result, jnp.array([[0.1, 0.2], [0.3, 0.4]]))
+            ),
+        ),
+        # Dict with string leaf
+        (
+            {"a": "invalid", "b": 0.5},
+            pytest.raises(
+                TypeError, match="Could not convert regularizer strength to floats:"
+            ),
+            lambda result: True,
+        ),
+        # Nested dict with invalid leaf
+        (
+            {
+                "a": {"x": 0.3, "y": "bad"},
+            },
+            pytest.raises(
+                TypeError, match="Could not convert regularizer strength to floats:"
+            ),
+            lambda result: True,
+        ),
+    ],
+)
+def test_validate_strength_tree_input(regularizer, strength, expectation, check_fn):
+    """Test that regularizer accepts tree strength with proper type conversion.
+
+    Type conversion rules:
+    - 0-dim arrays or scalar numbers → float
+    - Arrays with shape (n,) or higher → jnp.ndarray with same shape
+    - Strings or other invalid types → TypeError
+    """
+    with expectation:
+        result = regularizer._validate_strength(strength)
+        assert check_fn(result)
+
+
+@pytest.mark.parametrize(
+    "regularizer",
+    [nmo.regularizer.UnRegularized(), nmo.regularizer.Ridge(), nmo.regularizer.Lasso()],
+)
+@pytest.mark.parametrize("strength", [None, 0.3, np.array(1.0), jnp.array(1.0)])
+def test_validate_strength_structure_scalar_broadcast(regularizer, strength):
+    """Scalar and 0-d strengths broadcast over regularizable leaves; non-regularizable leaves are None."""
+    params = GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0]))
+
+    # Call structure alignment directly with raw strength;
+    # base method accepts None/scalars/0-d, doesn't change the type
+    structured = regularizer._validate_strength_structure(params, strength)
+
+    assert isinstance(structured, GLMParams)
+    # coef gets scalar broadcast (as a scalar per leaf), intercept is None
+    expected_scalar = 1.0 if strength is None else float(strength)
+    expected_type = float if strength is None else type(strength)
+    assert isinstance(structured.coef, expected_type)
+    assert structured.coef == expected_scalar
+    assert structured.intercept is None
+
+
+class TwoParams(eqx.Module):
+    """Helper module exposing two regularizable subtrees."""
+
+    one: jnp.ndarray | dict
+    two: jnp.ndarray | dict
+
+    def regularizable_subtrees(self):
+        return [lambda p: p.one, lambda p: p.two]
+
+
+@pytest.mark.parametrize(
+    "regularizer",
+    [nmo.regularizer.UnRegularized(), nmo.regularizer.Ridge(), nmo.regularizer.Lasso()],
+)
+def test_validate_strength_structure_multiple_subtrees_count_mismatch(regularizer):
+    """If the number of provided strengths != number of subtrees, raise ValueError."""
+    params = TwoParams(one=jnp.ones((3,)), two=jnp.ones((2,)))
+
+    with pytest.raises(ValueError, match=r"Expected 2 strength values, got"):
+        regularizer._validate_strength_structure(params, [0.1])  # only one provided
+
+
+@pytest.mark.parametrize(
+    "regularizer",
+    [nmo.regularizer.UnRegularized(), nmo.regularizer.Ridge(), nmo.regularizer.Lasso()],
+)
+@pytest.mark.parametrize(
+    "params, strength, expectation",
+    [
+        # GLMParams: no groups
+        (
+            GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0])),
+            0.1,
+            does_not_raise(),
+        ),
+        (
+            GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0])),
+            jnp.array([0.1, 0.2, 0.3]),
+            does_not_raise(),
+        ),
+        (
+            GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0])),
+            jnp.array([0.1, 0.2]),  # not enough
+            pytest.raises(
+                ValueError, match=r"Strength shape .* does not match parameter shape .*"
+            ),
+        ),
+        (
+            GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0])),
+            jnp.array([0.1, 0.2, 0.3, 0.4]),  # too many
+            pytest.raises(
+                ValueError, match=r"Strength shape .* does not match parameter shape .*"
+            ),
+        ),
+        # GLMParams: 2 groups
+        (
+            GLMParams(
+                coef={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                intercept=jnp.array([0.0]),
+            ),
+            {"a": jnp.array([0.1, 0.2, 0.3]), "b": jnp.array([0.1, 0.2])},  # match
+            does_not_raise(),
+        ),
+        (
+            GLMParams(
+                coef={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                intercept=jnp.array([0.0]),
+            ),
+            {"a": jnp.array([0.1, 0.2, 0.3]), "b": jnp.array([0.1, 0.2])},  # match
+            does_not_raise(),
+        ),
+        (
+            GLMParams(
+                coef={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                intercept=jnp.array([0.0]),
+            ),
+            {"a": 0.1, "b": 0.1},  # scalar per group
+            does_not_raise(),
+        ),
+        (
+            GLMParams(
+                coef={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                intercept=jnp.array([0.0]),
+            ),
+            {"a": 0.1, "b": jnp.array([0.1, 0.2])},  # mix scalar and array
+            does_not_raise(),
+        ),
+        (
+            GLMParams(
+                coef={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                intercept=jnp.array([0.0]),
+            ),
+            {"a": jnp.array([0.1, 0.2, 0.3]), "b": jnp.array([0.1])},  # not enough
+            pytest.raises(
+                ValueError, match=r"Strength shape .* does not match parameter shape .*"
+            ),
+        ),
+        (
+            GLMParams(
+                coef={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                intercept=jnp.array([0.0]),
+            ),
+            {"a": 0.1, "b": jnp.array([0.1])},  # mix scalar and not enough
+            pytest.raises(
+                ValueError, match=r"Strength shape .* does not match parameter shape .*"
+            ),
+        ),
+        (
+            GLMParams(
+                coef={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                intercept=jnp.array([0.0]),
+            ),
+            {
+                "a": jnp.array([0.1, 0.2, 0.3, 0.4]),
+                "b": 0.1,
+            },  # mix scalar and too many
+            pytest.raises(
+                ValueError, match=r"Strength shape .* does not match parameter shape .*"
+            ),
+        ),
+        # Dictionaries
+        (
+            {"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+            {"a": jnp.array([0.1, 0.2, 0.3]), "b": jnp.array([0.1, 0.2])},
+            does_not_raise(),
+        ),
+        (
+            {"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+            {"a": jnp.array([0.1, 0.2, 0.3]), "b": jnp.array([0.1])},  # not enough
+            pytest.raises(
+                ValueError, match=r"Strength shape .* does not match parameter shape .*"
+            ),
+        ),
+        (
+            {"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+            {
+                "a": jnp.array([0.1, 0.2, 0.3, 0.4]),
+                "b": jnp.array([0.1, 0.2]),
+            },  # too many
+            pytest.raises(
+                ValueError, match=r"Strength shape .* does not match parameter shape .*"
+            ),
+        ),
+        (
+            {"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+            {
+                "a": 0.1,
+                "b": jnp.array([0.1]),
+            },  # mix scalar and not enough
+            pytest.raises(
+                ValueError, match=r"Strength shape .* does not match parameter shape .*"
+            ),
+        ),
+        (
+            {"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+            {
+                "a": jnp.array([0.1, 0.2, 0.3, 0.4]),
+                "b": 0.1,
+            },  # mix scalar and too many
+            pytest.raises(
+                ValueError, match=r"Strength shape .* does not match parameter shape .*"
+            ),
+        ),
+        # Arbitrary object with regularizable subtrees: no groups
+        (
+            TwoParams(one=jnp.ones((3,)), two=jnp.ones((2,))),
+            [jnp.array([0.1, 0.2, 0.3]), jnp.array([0.1, 0.2])],
+            does_not_raise(),
+        ),
+        (
+            TwoParams(one=jnp.ones((3,)), two=jnp.ones((2,))),
+            [0.1, 0.1],
+            does_not_raise(),
+        ),
+        (
+            TwoParams(one=jnp.ones((3,)), two=jnp.ones((2,))),
+            [0.1, jnp.array([0.1, 0.2])],
+            does_not_raise(),
+        ),
+        (
+            TwoParams(one=jnp.ones((3,)), two=jnp.ones((2,))),
+            [jnp.array([0.1, 0.2, 0.3]), 0.1],
+            does_not_raise(),
+        ),
+        (
+            TwoParams(one=jnp.ones((3,)), two=jnp.ones((2,))),
+            [jnp.array([0.1, 0.2, 0.3]), jnp.array([0.1, 0.2])],
+            does_not_raise(),
+        ),
+        (
+            TwoParams(one=jnp.ones((3,)), two=jnp.ones((2,))),
+            [jnp.array([0.1, 0.2]), jnp.array([0.1, 0.2])],  # not enough
+            pytest.raises(
+                ValueError, match=r"Strength shape .* does not match parameter shape .*"
+            ),
+        ),
+        (
+            TwoParams(one=jnp.ones((3,)), two=jnp.ones((2,))),
+            [jnp.array([0.1, 0.2, 0.3]), jnp.array([0.1])],  # not enough
+            pytest.raises(
+                ValueError, match=r"Strength shape .* does not match parameter shape .*"
+            ),
+        ),
+        (
+            TwoParams(
+                one=jnp.ones((3,)), two=jnp.ones((2,))
+            ),  # mix not enough and scalar
+            [jnp.array([0.1, 0.2]), 0.1],
+            pytest.raises(
+                ValueError, match=r"Strength shape .* does not match parameter shape .*"
+            ),
+        ),
+        (
+            TwoParams(
+                one=jnp.ones((3,)), two=jnp.ones((2,))
+            ),  # mix too many and scalar
+            [0.1, jnp.array([0.1, 0.2, 0.3])],
+            pytest.raises(
+                ValueError, match=r"Strength shape .* does not match parameter shape .*"
+            ),
+        ),
+        # Arbitrary object with regularizable subtrees: mixed groups
+        (
+            TwoParams(
+                one={"a": jnp.ones((3,)), "b": jnp.ones((2,))}, two=jnp.ones((2,))
+            ),
+            [{"a": 0.1, "b": 0.1}, jnp.array([0.1, 0.2])],
+            does_not_raise(),
+        ),
+        (
+            TwoParams(
+                one={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                two={"c": jnp.ones((5,))},
+            ),
+            [{"a": 0.1, "b": 0.1}, 0.1],
+            does_not_raise(),
+        ),
+        (
+            TwoParams(
+                one={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                two={"c": jnp.ones((5,))},
+            ),
+            [{"a": 0.1, "b": 0.1}, {"c": 0.1}],
+            does_not_raise(),
+        ),
+        (
+            TwoParams(
+                one={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                two={"c": jnp.ones((5,))},
+            ),
+            [{"a": 0.1, "b": 0.1}, {"c": jnp.array([0.1, 0.2, 0.3, 0.4, 0.5])}],
+            does_not_raise(),
+        ),
+        (
+            TwoParams(
+                one={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                two={"c": jnp.ones((5,))},
+            ),
+            [
+                {"a": jnp.array([0.1, 0.2, 0.3]), "b": 0.1},
+                {"c": jnp.array([0.1, 0.2, 0.3, 0.4, 0.5])},
+            ],
+            does_not_raise(),
+        ),
+        (
+            TwoParams(
+                one={"a": jnp.ones((3,)), "b": jnp.ones((2,))}, two=jnp.ones((2,))
+            ),
+            [],
+            pytest.raises(ValueError, match=r"Expected .* strength values, got "),
+        ),
+        (
+            TwoParams(
+                one={"a": jnp.ones((3,)), "b": jnp.ones((2,))}, two=jnp.ones((2,))
+            ),
+            [{"a": 0.1, "b": 0.1}],
+            pytest.raises(ValueError, match=r"Expected .* strength values, got "),
+        ),
+        (
+            TwoParams(
+                one={"a": jnp.ones((3,)), "b": jnp.ones((2,))}, two=jnp.ones((2,))
+            ),
+            [{"a": 0.1, "b": 0.1}, 0.1, 0.1],
+            pytest.raises(ValueError, match=r"Expected .* strength values, got "),
+        ),
+        (
+            TwoParams(
+                one={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                two={"c": jnp.ones((5,))},
+            ),
+            [
+                {"a": jnp.array([0.1, 0.2, 0.3, 0.4]), "b": 0.1},  # too many
+                {"c": jnp.array([0.1, 0.2, 0.3, 0.4, 0.5])},
+            ],
+            pytest.raises(
+                ValueError, match=r"Strength shape .* does not match parameter shape .*"
+            ),
+        ),
+        (
+            TwoParams(
+                one={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                two={"c": jnp.ones((5,))},
+            ),
+            [
+                {"a": jnp.array([0.1, 0.2, 0.3]), "b": 0.1},
+                {"c": jnp.array([0.1, 0.2, 0.3, 0.4])},  # not enough
+            ],
+            pytest.raises(
+                ValueError, match=r"Strength shape .* does not match parameter shape .*"
+            ),
+        ),
+    ],
+)
+def test_validate_strength_structure_shape_mismatch(
+    regularizer, strength, params, expectation
+):
+    """Non-scalar array strength must match parameter leaf shape; otherwise raises ValueError."""
+    with expectation:
+        regularizer._validate_strength_structure(params, strength)
+
+
 class TestUnRegularized:
     cls = nmo.regularizer.UnRegularized
+
+    def test_filter_kwargs_contains_strength(self):
+        """Test that strength is in filter kwargs."""
+        n_features = 3
+        params = GLMParams(coef=jnp.ones((n_features,)), intercept=jnp.array([0.0]))
+        regularizer = self.cls()
+
+        fk = regularizer._get_filter_kwargs(params=params, strength=None)
+        assert isinstance(fk, dict)
+        assert "strength" in fk
+
+        s = fk["strength"]
+        assert isinstance(s, GLMParams)
+        assert isinstance(s.coef, float)
+        assert s.coef == 1.0
+        assert s.intercept is None
 
     @pytest.mark.parametrize(
         "solver_name, expectation",
@@ -362,20 +835,24 @@ class TestUnRegularized:
         with expectation:
             model.set_params(solver_name=solver_name)
 
-    def test_regularizer_strength_none(self):
-        """Add test to assert that regularizer strength of UnRegularized model should be `None`"""
-        # unregularized should be None
-        regularizer = self.cls()
-        model = nmo.glm.GLM(regularizer=regularizer)
-
-        assert model.regularizer_strength is None
-
-        # changing to ridge, lasso, or grouplasso should set to 1.0
-        model.regularizer = "Lasso"
-
-        assert model.regularizer_strength == 1.0
-        model.regularizer = regularizer
-        assert model.regularizer_strength == None
+    @pytest.mark.parametrize(
+        "strength",
+        [
+            None,
+            0.0,
+            1.0,
+            jnp.array(1.0),  # 0-d array
+            jnp.array([0.1, 0.2]),  # 1-d array
+            np.array([[0.1, 0.2], [0.3, 0.4]]),  # 2-d array
+            {"a": 0.5, "b": jnp.array([0.1, 0.2])},  # mixed tree
+            GLMParams(coef=0.1, intercept=0.5),
+            "bah",  # arbitrary string
+        ],
+    )
+    def test_validate_strength(self, strength):
+        """UnRegularized ignores strength and always returns None."""
+        reg = self.cls()
+        assert reg._validate_strength(strength) is None
 
     def test_get_params(self):
         """Test get_params() returns expected values."""
@@ -634,6 +1111,22 @@ class TestUnRegularized:
 class TestRidge:
     cls = nmo.regularizer.Ridge
 
+    def test_filter_kwargs_contains_strength(self):
+        """Test that strength is in filter kwargs."""
+        n_features = 3
+        params = GLMParams(coef=jnp.ones((n_features,)), intercept=jnp.array([0.0]))
+        regularizer = self.cls()
+
+        fk = regularizer._get_filter_kwargs(params=params, strength=0.7)
+        assert isinstance(fk, dict)
+        assert "strength" in fk
+
+        s = fk["strength"]
+        assert isinstance(s, GLMParams)
+        assert isinstance(s.coef, float)
+        assert s.coef == 0.7
+        assert s.intercept is None
+
     @pytest.mark.parametrize(
         "solver_name, expectation",
         [
@@ -824,11 +1317,7 @@ class TestRidge:
             model._compute_loss, init_params
         ).solver_run
         params = runner_bfgs(init_params, X, y)[0]
-        model_skl = PoissonRegressor(
-            fit_intercept=True,
-            tol=10**-12,
-            alpha=model.regularizer_strength,
-        )
+        model_skl = PoissonRegressor(fit_intercept=True, tol=10**-12, alpha=1.0)
         model_skl.fit(X, y)
 
         match_weights = np.allclose(model_skl.coef_, params.coef)
@@ -856,7 +1345,7 @@ class TestRidge:
         model_skl = GammaRegressor(
             fit_intercept=True,
             tol=10**-12,
-            alpha=model.regularizer_strength,
+            alpha=0.1,
         )
         model_skl.fit(X, y)
 
@@ -884,6 +1373,24 @@ class TestRidge:
 
 class TestLasso:
     cls = nmo.regularizer.Lasso
+
+    def test_filter_kwargs_contains_strength(self):
+        """Test that strength is in filter kwargs."""
+        n_features = 3
+        params = GLMParams(coef=jnp.ones((n_features,)), intercept=jnp.array([0.0]))
+        regularizer = self.cls()
+
+        strength_vec = jnp.array([0.1, 0.2, 0.3])
+        fk = regularizer._get_filter_kwargs(params=params, strength=strength_vec)
+        assert isinstance(fk, dict)
+        assert "strength" in fk
+
+        s = fk["strength"]
+        assert isinstance(s, GLMParams)
+        assert isinstance(s.coef, jnp.ndarray)
+        assert s.coef.shape == (3,)
+        assert jnp.allclose(s.coef, strength_vec)
+        assert s.intercept is None
 
     @pytest.mark.parametrize(
         "solver_name, expectation",
@@ -1012,7 +1519,7 @@ class TestLasso:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation_pytree
 
         # set regularizer and solver name
-        model.set_params(regularizer=self.cls(), regularizer_strength=1)
+        model.set_params(regularizer=self.cls(), regularizer_strength=1.0)
         model.solver_name = solver_name
         params = GLMParams(
             jax.tree_util.tree_map(jnp.zeros_like, true_params.coef),
@@ -1042,7 +1549,7 @@ class TestLasso:
         glm_sm = sm.GLM(endog=y, exog=sm.add_constant(X), family=sm.families.Poisson())
 
         # regularize everything except intercept
-        alpha_sm = np.ones(X.shape[1] + 1) * model.regularizer_strength
+        alpha_sm = np.ones(X.shape[1] + 1) * 1.0
         alpha_sm[0] = 0
 
         # pure lasso = elastic net with L1 weight = 1
@@ -1101,6 +1608,545 @@ class TestLasso:
 
 class TestElasticNet:
     cls = nmo.regularizer.ElasticNet
+
+    def test_filter_kwargs_contains_strength(self):
+        """Test that strength is in filter kwargs."""
+        n_features = 3
+        params = GLMParams(coef=jnp.ones((n_features,)), intercept=jnp.array([0.0]))
+        regularizer = self.cls()
+
+        fk = regularizer._get_filter_kwargs(params=params, strength=(0.7, 0.4))
+        assert isinstance(fk, dict)
+        assert "strength" in fk
+
+        s = fk["strength"]
+        assert isinstance(s, GLMParams)
+        assert isinstance(s.coef, tuple) and len(s.coef) == 2
+        s_coef, r_coef = s.coef
+        assert isinstance(s_coef, float) and s_coef == 0.7
+        assert isinstance(r_coef, float) and r_coef == 0.4
+        assert s.intercept is None
+
+    @pytest.mark.parametrize(
+        "strength, expectation, check_fn",
+        [
+            # None -> defaults to (1.0, 0.5)
+            (
+                None,
+                does_not_raise(),
+                lambda result: (
+                    isinstance(result, tuple)
+                    and isinstance(result[0], float)
+                    and isinstance(result[1], float)
+                    and result == (1.0, 0.5)
+                ),
+            ),
+            # Single float -> (strength, 0.5)
+            (
+                0.6,
+                does_not_raise(),
+                lambda result: (
+                    isinstance(result, tuple)
+                    and isinstance(result[0], float)
+                    and isinstance(result[1], float)
+                    and result == (0.6, 0.5)
+                ),
+            ),
+            (
+                1.0,
+                does_not_raise(),
+                lambda result: (
+                    isinstance(result, tuple)
+                    and isinstance(result[0], float)
+                    and isinstance(result[1], float)
+                    and result == (1.0, 0.5)
+                ),
+            ),
+            # 0-d arrays should become Python floats; ratio defaults to 0.5
+            (
+                jnp.array(1.0),
+                does_not_raise(),
+                lambda result: (
+                    isinstance(result, tuple)
+                    and isinstance(result[0], float)
+                    and isinstance(result[1], float)
+                    and result == (1.0, 0.5)
+                ),
+            ),
+            (
+                np.array(0.5),
+                does_not_raise(),
+                lambda result: (
+                    isinstance(result, tuple)
+                    and isinstance(result[0], float)
+                    and isinstance(result[1], float)
+                    and result == (0.5, 0.5)
+                ),
+            ),
+            # Explicit (strength, ratio) tuple
+            (
+                (1.0, 1.0),
+                does_not_raise(),
+                lambda result: (
+                    isinstance(result, tuple)
+                    and isinstance(result[0], float)
+                    and isinstance(result[1], float)
+                    and result == (1.0, 1.0)
+                ),
+            ),
+            # Invalid: strength not convertible
+            (
+                "bah",
+                pytest.raises(
+                    TypeError,
+                    match="Could not convert regularizer strength to floats: bah",
+                ),
+                lambda _: True,
+            ),
+            # Invalid: ratio not convertible
+            (
+                (1.0, "bah"),
+                pytest.raises(
+                    TypeError,
+                    match="Could not convert regularizer strength to floats: bah",
+                ),
+                lambda _: True,
+            ),
+            # Invalid: ratio outside (0, 1]
+            (
+                (1.0, 0.0),
+                pytest.raises(
+                    ValueError,
+                    match=re.escape(
+                        "ElasticNet regularization ratio must be in (0, 1], got 0.0"
+                    ),
+                ),
+                lambda _: True,
+            ),
+        ],
+    )
+    def test_strength_single_input(self, strength, expectation, check_fn):
+        """Test that ElasticNet accepts scalar/0-d inputs (or None) and returns (strength, ratio)."""
+        regularizer = self.cls()
+        with expectation:
+            result = regularizer._validate_strength(strength)
+            assert check_fn(result)
+
+    @pytest.mark.parametrize(
+        "strength, ratio, expectation, check_fn",
+        [
+            # Dicts with scalar leaves (Python floats)
+            (
+                {"a": 0.5, "b": 0.3},
+                {"a": 0.7, "b": 1.0},
+                does_not_raise(),
+                lambda res: (
+                    isinstance(res, tuple)
+                    and isinstance(res[0], dict)
+                    and isinstance(res[1], dict)
+                    and isinstance(res[0]["a"], float)
+                    and res[0]["a"] == 0.5
+                    and isinstance(res[0]["b"], float)
+                    and res[0]["b"] == 0.3
+                    and isinstance(res[1]["a"], float)
+                    and res[1]["a"] == 0.7
+                    and isinstance(res[1]["b"], float)
+                    and res[1]["b"] == 1.0
+                ),
+            ),
+            # Dicts with 0-d arrays (should be converted to float)
+            (
+                {"a": jnp.array(0.5), "b": np.array(0.3)},
+                {"a": jnp.array(1.0), "b": np.array(0.8)},
+                does_not_raise(),
+                lambda res: (
+                    isinstance(res, tuple)
+                    and isinstance(res[0]["a"], float)
+                    and res[0]["a"] == 0.5
+                    and isinstance(res[0]["b"], float)
+                    and res[0]["b"] == 0.3
+                    and isinstance(res[1]["a"], float)
+                    and res[1]["a"] == 1.0
+                    and isinstance(res[1]["b"], float)
+                    and res[1]["b"] == 0.8
+                ),
+            ),
+            # Dicts with arrays (should be preserved as jnp.ndarray)
+            (
+                {"a": jnp.array([0.1, 0.2, 0.3]), "b": np.array([0.5])},
+                {"a": jnp.array([0.9, 0.8, 0.7]), "b": np.array([1.0])},
+                does_not_raise(),
+                lambda res: (
+                    isinstance(res, tuple)
+                    and isinstance(res[0]["a"], jnp.ndarray)
+                    and res[0]["a"].shape == (3,)
+                    and jnp.allclose(res[0]["a"], jnp.array([0.1, 0.2, 0.3]))
+                    and isinstance(res[0]["b"], jnp.ndarray)
+                    and res[0]["b"].shape == (1,)
+                    and jnp.allclose(res[0]["b"], jnp.array([0.5]))
+                    and isinstance(res[1]["a"], jnp.ndarray)
+                    and res[1]["a"].shape == (3,)
+                    and jnp.allclose(res[1]["a"], jnp.array([0.9, 0.8, 0.7]))
+                    and isinstance(res[1]["b"], jnp.ndarray)
+                    and res[1]["b"].shape == (1,)
+                    and jnp.allclose(res[1]["b"], jnp.array([1.0]))
+                ),
+            ),
+            # Nested dicts with mixed leaves
+            (
+                {
+                    "a": {"x": 0.3, "y": 0.4},
+                    "b": {"x": jnp.array([0.1, 0.2]), "y": 0.5},
+                },
+                {
+                    "a": {"x": 0.9, "y": 0.8},
+                    "b": {"x": jnp.array([0.7, 0.6]), "y": 1.0},
+                },
+                does_not_raise(),
+                lambda res: (
+                    isinstance(res, tuple)
+                    and isinstance(res[0]["a"]["x"], float)
+                    and res[0]["a"]["x"] == 0.3
+                    and isinstance(res[0]["a"]["y"], float)
+                    and res[0]["a"]["y"] == 0.4
+                    and isinstance(res[0]["b"]["x"], jnp.ndarray)
+                    and res[0]["b"]["x"].shape == (2,)
+                    and isinstance(res[0]["b"]["y"], float)
+                    and res[0]["b"]["y"] == 0.5
+                    and isinstance(res[1]["a"]["x"], float)
+                    and res[1]["a"]["x"] == 0.9
+                    and isinstance(res[1]["a"]["y"], float)
+                    and res[1]["a"]["y"] == 0.8
+                    and isinstance(res[1]["b"]["x"], jnp.ndarray)
+                    and res[1]["b"]["x"].shape == (2,)
+                    and isinstance(res[1]["b"]["y"], float)
+                    and res[1]["b"]["y"] == 1.0
+                ),
+            ),
+            # Array strength with scalar ratio
+            (
+                jnp.array([0.1, 0.2, 0.3]),
+                0.7,
+                does_not_raise(),
+                lambda res: (
+                    isinstance(res, tuple)
+                    and isinstance(res[0], jnp.ndarray)
+                    and res[0].shape == (3,)
+                    and jnp.allclose(res[0], jnp.array([0.1, 0.2, 0.3]))
+                    and isinstance(res[1], float)
+                    and res[1] == 0.7
+                ),
+            ),
+            # 2-D array for both strength and ratio
+            (
+                np.array([[0.1, 0.2], [0.3, 0.4]]),
+                np.array([[0.9, 0.8], [0.7, 1.0]]),
+                does_not_raise(),
+                lambda res: (
+                    isinstance(res, tuple)
+                    and isinstance(res[0], jnp.ndarray)
+                    and res[0].shape == (2, 2)
+                    and jnp.allclose(res[0], jnp.array([[0.1, 0.2], [0.3, 0.4]]))
+                    and isinstance(res[1], jnp.ndarray)
+                    and res[1].shape == (2, 2)
+                    and jnp.allclose(res[1], jnp.array([[0.9, 0.8], [0.7, 1.0]]))
+                ),
+            ),
+            # Invalid: strength tree contains invalid leaf
+            (
+                {"a": "invalid", "b": 0.5},
+                {"a": 0.9, "b": 1.0},
+                pytest.raises(
+                    TypeError, match="Could not convert regularizer strength to floats:"
+                ),
+                lambda _: True,
+            ),
+            # Invalid: ratio out of range (includes 0)
+            (
+                {"a": 0.5, "b": 0.3},
+                {"a": 0.0, "b": 0.8},
+                pytest.raises(
+                    ValueError, match="ElasticNet regularization ratio must be in"
+                ),
+                lambda _: True,
+            ),
+        ],
+    )
+    def test_strength_tree_input(self, strength, ratio, expectation, check_fn):
+        """Test that ElasticNet accepts tree strength/ratio with proper type conversion.
+
+        Conversion rules:
+        - 0-dim arrays or scalar numbers -> float
+        - Arrays with shape (n,) or higher -> jnp.ndarray with same shape
+        - Strings or other invalid types -> TypeError
+        - Ratio must be in (0, 1] (broadcasted per leaf)
+        """
+        regularizer = self.cls()
+        with expectation:
+            result = regularizer._validate_strength((strength, ratio))
+            assert check_fn(result)
+
+    def test_validate_strength_structure_scalar_broadcast(self):
+        """Test that ElasticNet broadcasts (strength, ratio) to parameter structure."""
+        regularizer = self.cls()
+        params = GLMParams(coef=jnp.ones((4,)), intercept=jnp.array([0.0]))
+
+        structured = regularizer._validate_strength_structure(params, (1.0, 0.5))
+
+        # coef gets a tuple (s, r), intercept remains None
+        assert isinstance(structured, GLMParams)
+        assert isinstance(structured.coef, tuple) and len(structured.coef) == 2
+        s, r = structured.coef
+        assert isinstance(s, float) and s == 1.0
+        assert isinstance(r, float) and r == 0.5
+        assert structured.intercept is None
+
+    @pytest.mark.parametrize(
+        "params, strength, ratio, expectation",
+        [
+            # GLMParams: no groups
+            (
+                GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0])),
+                0.1,  # scalar strength
+                0.5,  # scalar ratio
+                does_not_raise(),
+            ),
+            (
+                GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0])),
+                jnp.array([0.1, 0.2, 0.3]),  # array strength matches shape
+                0.5,  # scalar ratio
+                does_not_raise(),
+            ),
+            (
+                GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0])),
+                0.1,  # scalar strength
+                jnp.array([0.9, 0.8, 0.7]),  # array ratio matches shape
+                does_not_raise(),
+            ),
+            (
+                GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0])),
+                jnp.array([0.1, 0.2]),  # strength not enough
+                0.5,
+                pytest.raises(
+                    ValueError,
+                    match=r"Strength shape .* does not match parameter shape .*",
+                ),
+            ),
+            (
+                GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0])),
+                0.1,
+                jnp.array([0.9, 0.8]),  # ratio not enough
+                pytest.raises(
+                    ValueError,
+                    match=r"Strength shape .* does not match parameter shape .*",
+                ),
+            ),
+            (
+                GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0])),
+                jnp.array([0.1, 0.2, 0.3, 0.4]),  # strength too many
+                0.5,
+                pytest.raises(
+                    ValueError,
+                    match=r"Strength shape .* does not match parameter shape .*",
+                ),
+            ),
+            (
+                GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0])),
+                0.1,
+                jnp.array([0.9, 0.8, 0.7, 0.6]),  # ratio too many
+                pytest.raises(
+                    ValueError,
+                    match=r"Strength shape .* does not match parameter shape .*",
+                ),
+            ),
+            # GLMParams: 2 groups in coef (dict)
+            (
+                GLMParams(
+                    coef={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                    intercept=jnp.array([0.0]),
+                ),
+                {"a": jnp.array([0.1, 0.2, 0.3]), "b": jnp.array([0.1, 0.2])},  # match
+                {"a": jnp.array([0.9, 0.8, 0.7]), "b": jnp.array([1.0, 0.6])},  # match
+                does_not_raise(),
+            ),
+            (
+                GLMParams(
+                    coef={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                    intercept=jnp.array([0.0]),
+                ),
+                {"a": 0.1, "b": 0.1},  # scalar per group
+                {"a": 0.7, "b": 1.0},  # scalar per group
+                does_not_raise(),
+            ),
+            (
+                GLMParams(
+                    coef={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                    intercept=jnp.array([0.0]),
+                ),
+                {"a": 0.1, "b": jnp.array([0.1, 0.2])},  # mixed strength
+                {"a": 0.9, "b": jnp.array([0.8, 1.0])},  # mixed ratio
+                does_not_raise(),
+            ),
+            (
+                GLMParams(
+                    coef={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                    intercept=jnp.array([0.0]),
+                ),
+                {
+                    "a": jnp.array([0.1, 0.2, 0.3]),
+                    "b": jnp.array([0.1]),
+                },  # strength not enough in 'b'
+                {"a": jnp.array([0.9, 0.8, 0.7]), "b": 1.0},
+                pytest.raises(
+                    ValueError,
+                    match=r"Strength shape .* does not match parameter shape .*",
+                ),
+            ),
+            (
+                GLMParams(
+                    coef={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                    intercept=jnp.array([0.0]),
+                ),
+                {"a": 0.1, "b": 0.1},
+                {
+                    "a": jnp.array([0.9, 0.8, 0.7]),
+                    "b": jnp.array([1.0]),
+                },  # ratio not enough in 'b'
+                pytest.raises(
+                    ValueError,
+                    match=r"Strength shape .* does not match parameter shape .*",
+                ),
+            ),
+            (
+                GLMParams(
+                    coef={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                    intercept=jnp.array([0.0]),
+                ),
+                {
+                    "a": jnp.array([0.1, 0.2, 0.3, 0.4]),
+                    "b": 0.1,
+                },  # strength too many in 'a'
+                {"a": 0.9, "b": jnp.array([1.0, 0.6])},
+                pytest.raises(
+                    ValueError,
+                    match=r"Strength shape .* does not match parameter shape .*",
+                ),
+            ),
+            (
+                GLMParams(
+                    coef={"a": jnp.ones((3,)), "b": jnp.ones((2,))},
+                    intercept=jnp.array([0.0]),
+                ),
+                {"a": 0.1, "b": 0.1},
+                {
+                    "a": jnp.array([0.9, 0.8, 0.7, 0.6]),
+                    "b": 1.0,
+                },  # ratio too many in 'a'
+                pytest.raises(
+                    ValueError,
+                    match=r"Strength shape .* does not match parameter shape .*",
+                ),
+            ),
+            # Arbitrary object with regularizable subtrees: no groups (TwoParams)
+            (
+                TwoParams(one=jnp.ones((3,)), two=jnp.ones((2,))),
+                [
+                    jnp.array([0.1, 0.2, 0.3]),
+                    jnp.array([0.1, 0.2]),
+                ],  # per-subtree strength arrays match
+                0.7,  # scalar ratio
+                does_not_raise(),
+            ),
+            (
+                TwoParams(one=jnp.ones((3,)), two=jnp.ones((2,))),
+                0.2,  # scalar strength
+                [
+                    jnp.array([0.9, 0.8, 0.7]),
+                    jnp.array([1.0, 0.6]),
+                ],  # per-subtree ratio arrays match
+                does_not_raise(),
+            ),
+            (
+                TwoParams(one=jnp.ones((3,)), two=jnp.ones((2,))),
+                [
+                    jnp.array([0.1, 0.2]),
+                    jnp.array([0.1, 0.2]),
+                ],  # strength not enough for 'one'
+                0.6,
+                pytest.raises(
+                    ValueError,
+                    match=r"Strength shape .* does not match parameter shape .*",
+                ),
+            ),
+            (
+                TwoParams(one=jnp.ones((3,)), two=jnp.ones((2,))),
+                0.2,
+                [
+                    jnp.array([0.9, 0.8]),
+                    jnp.array([1.0, 0.6]),
+                ],  # ratio not enough for 'one'
+                pytest.raises(
+                    ValueError,
+                    match=r"Strength shape .* does not match parameter shape .*",
+                ),
+            ),
+            # Count mismatch in per-subtree specification (either in strength or ratio)
+            (
+                TwoParams(one=jnp.ones((3,)), two=jnp.ones((2,))),
+                [0.1],  # only one strength provided
+                0.5,
+                pytest.raises(ValueError, match=r"Expected .* strength values, got "),
+            ),
+            (
+                TwoParams(one=jnp.ones((3,)), two=jnp.ones((2,))),
+                0.1,
+                [0.5],  # only one ratio provided
+                pytest.raises(ValueError, match=r"Expected .* strength values, got "),
+            ),
+        ],
+    )
+    def test_validate_strength_structure_shape_mismatch(
+        self, params, strength, ratio, expectation
+    ):
+        """ElasticNet: verify (strength, ratio) structure/shape against parameter structure.
+
+        - Scalars broadcast to regularizable leaves; non-regularizable leaves remain None.
+        - Non-scalar array leaves must match the corresponding parameter leaf shape.
+        - For objects exposing multiple regularizable subtrees, supply per-subtree strengths (lists/tuples);
+          a count mismatch raises ValueError.
+        """
+        reg = self.cls()
+        with expectation:
+            reg._validate_strength_structure(params, (strength, ratio))
+
+    def test_validate_strength_structure_transform(self):
+        """Test that ElasticNet  correctly transforms to parameter structure with (strength, ratio) leafs."""
+        regularizer = self.cls()
+        params = {
+            "one": jnp.ones((3,)),
+            "two": jnp.ones((2,)),
+        }
+
+        strength_tree = {
+            "one": jnp.array([0.1, 0.2, 0.3]),
+            "two": jnp.array([1.0, 2.0]),
+        }
+        ratio_tree = {
+            "one": jnp.array([0.9, 0.8, 0.7]),
+            "two": jnp.array([1.0, 0.6]),
+        }
+        structured = regularizer._validate_strength_structure(
+            params, (strength_tree, ratio_tree)
+        )
+
+        assert isinstance(structured, dict)
+        assert isinstance(structured["one"], tuple)
+        s1, r1 = structured["one"]
+        s2, r2 = structured["two"]
+        assert jnp.allclose(s1, jnp.array([0.1, 0.2, 0.3]))
+        assert jnp.allclose(r1, jnp.array([0.9, 0.8, 0.7]))
+        assert jnp.allclose(s2, jnp.array([1.0, 2.0]))
+        assert jnp.allclose(r2, jnp.array([1.0, 0.6]))
 
     @pytest.mark.parametrize(
         "solver_name, expectation",
@@ -1206,35 +2252,43 @@ class TestElasticNet:
                 (1.0, 0.0),
                 pytest.raises(
                     ValueError,
-                    match="Regularization ratio of 0 is not supported. Use Ridge regularization instead.",
+                    match=re.escape(
+                        f"ElasticNet regularization ratio must be in (0, 1], got 0.0"
+                    ),
                 ),
             ),
             (
                 (1.0, 1.1),
                 pytest.raises(
                     ValueError,
-                    match="Regularization ratio must be a number between 0 and 1.",
+                    match=re.escape(
+                        f"ElasticNet regularization ratio must be in (0, 1], got 1.1"
+                    ),
                 ),
             ),
             (
                 (1.0, -0.1),
                 pytest.raises(
                     ValueError,
-                    match="Regularization ratio must be a number between 0 and 1.",
+                    match=re.escape(
+                        f"ElasticNet regularization ratio must be in (0, 1], got -0.1"
+                    ),
                 ),
             ),
             (
                 (1.0, "bah"),
                 pytest.raises(
-                    ValueError,
-                    match="Could not convert the regularizer strength and regularizer ratio",
+                    TypeError,
+                    match="Could not convert regularizer strength to floats: bah",
                 ),
             ),
             (
                 (1.0, 0.5, 0.1),
                 pytest.raises(
-                    ValueError,
-                    match="strength must be a tuple of two floats",
+                    TypeError,
+                    match=re.escape(
+                        "ElasticNet regularizer strength must be a tuple (strength, ratio)"
+                    ),
                 ),
             ),
         ],
@@ -1298,13 +2352,17 @@ class TestElasticNet:
             y,
         )
 
-    @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
-    @pytest.mark.parametrize("reg_strength", [1.0, 0.5, 0.1])
+    @pytest.mark.parametrize("solver_name", ["ProximalGradient"])
+    @pytest.mark.parametrize("regularizer_strength", [1.0, 0.5, 0.1])
     @pytest.mark.parametrize("reg_ratio", [1.0, 0.5, 0.2])
     @pytest.mark.requires_x64
     @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
     def test_solver_match_statsmodels(
-        self, solver_name, reg_strength, reg_ratio, poissonGLM_model_instantiation
+        self,
+        solver_name,
+        regularizer_strength,
+        reg_ratio,
+        poissonGLM_model_instantiation,
     ):
         """Test that different solvers converge to the same solution."""
         # with jax.disable_jit():
@@ -1312,7 +2370,8 @@ class TestElasticNet:
         # set precision to float64 for accurate matching of the results
         model.data_type = jnp.float64
         model.set_params(
-            regularizer=self.cls(), regularizer_strength=(reg_strength, reg_ratio)
+            regularizer=self.cls(),
+            regularizer_strength=(regularizer_strength, reg_ratio),
         )
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-12, "maxiter": 10000}
@@ -1326,7 +2385,7 @@ class TestElasticNet:
         glm_sm = sm.GLM(endog=y, exog=sm.add_constant(X), family=sm.families.Poisson())
 
         # regularize everything except intercept
-        alpha_sm = np.ones(X.shape[1] + 1) * reg_strength
+        alpha_sm = np.ones(X.shape[1] + 1) * regularizer_strength
         alpha_sm[0] = 0
 
         # pure lasso = elastic net with L1 weight = 1
@@ -1366,7 +2425,14 @@ class TestElasticNet:
 
         # use the penalized loss function to solve optimization via Nelder-Mead
         penalized_loss = lambda p, x, y: model_PG.regularizer.penalized_loss(
-            model_PG._compute_loss, model_PG.regularizer_strength, init_params=None
+            model_PG._compute_loss,
+            params=GLMParams(
+                p[1:],
+                p[0].reshape(
+                    1,
+                ),
+            ),
+            strength=model_PG.regularizer_strength,
         )(
             GLMParams(
                 p[1:],
@@ -1386,7 +2452,7 @@ class TestElasticNet:
             options={"maxiter": 10000},
         )
         # regularize everything except intercept
-        alpha_sm = np.ones(X.shape[1] + 1) * model_PG.regularizer_strength[0]
+        alpha_sm = np.ones(X.shape[1] + 1) * 1.0
         alpha_sm[0] = 0
 
         # elastic net with
@@ -1451,6 +2517,119 @@ class TestElasticNet:
 
 class TestGroupLasso:
     cls = nmo.regularizer.GroupLasso
+
+    def test_filter_kwargs_contains_strength(self):
+        """Test that strength is in filter kwargs."""
+        n_features = 3
+        # 2 groups x 3 features (coef), intercept leaf is None in the mask
+        mask = GLMParams(
+            coef=jnp.array([[1, 1, 0], [0, 0, 1]], dtype=float),
+            intercept=None,
+        )
+        params = GLMParams(coef=jnp.ones((n_features,)), intercept=jnp.array([0.0]))
+        regularizer = self.cls()
+
+        fk = regularizer._get_filter_kwargs(params=params, strength=0.5)
+        assert isinstance(fk, dict)
+        assert "mask" in fk
+        assert "strength" in fk
+
+        s = fk["strength"]
+        assert isinstance(s, GLMParams)
+        assert isinstance(s.coef, jnp.ndarray)
+        assert s.coef == 0.5
+
+    def test_validate_strength_structure_scalar_broadcast(self):
+        """Scalar strength broadcasts to per-group vector with length n_groups."""
+        # 3 groups x 5 features mask on coef, intercept is not regularized (None)
+        mask = GLMParams(
+            coef=jnp.array(
+                [
+                    [1, 1, 1, 0, 0],  # group 0
+                    [0, 0, 0, 1, 0],  # group 1
+                    [0, 0, 0, 0, 1],  # group 2
+                ],
+                dtype=float,
+            ),
+            intercept=None,
+        )
+        params = GLMParams(coef=jnp.ones((5,)), intercept=jnp.array([0.0]))
+        regularizer = self.cls(mask=mask)
+
+        strength_struct = regularizer._validate_strength_structure(params, 0.7)
+        # Returns a tree aligned to mask/params; coef must be per-group vector
+        assert isinstance(strength_struct, GLMParams)
+        assert isinstance(strength_struct.coef, jnp.ndarray)
+        assert strength_struct.coef.shape == (3,)
+        assert jnp.allclose(strength_struct.coef, jnp.array([0.7, 0.7, 0.7]))
+        assert strength_struct.intercept is None
+
+    def test_validate_strength_structure_shape_match(self):
+        """Per-group vector matches n_groups length."""
+        n_groups = 2
+        mask = GLMParams(
+            coef=jnp.array([[1, 0, 1, 0], [0, 1, 0, 1]], dtype=float),  # 2 groups
+            intercept=None,
+        )
+        params = GLMParams(coef=jnp.ones((4,)), intercept=jnp.array([0.0]))
+        regularizer = self.cls(mask=mask)
+
+        per_group = jnp.array([0.1, 0.9])
+        strength_struct = regularizer._validate_strength_structure(params, per_group)
+        assert isinstance(strength_struct.coef, jnp.ndarray)
+        assert strength_struct.coef.shape == (n_groups,)
+        assert jnp.allclose(strength_struct.coef, per_group)
+        assert strength_struct.intercept is None
+
+    def test_validate_strength_structure_shape_mismatch(self):
+        """Vector length must equal n_groups; otherwise ValueError."""
+        n_groups = 3
+        mask = GLMParams(
+            coef=jnp.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=float),
+            intercept=None,
+        )
+        params = GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0]))
+        regularizer = self.cls(mask=mask)
+
+        too_short = jnp.array([0.5, 0.5])
+        too_long = jnp.array([0.5, 0.5, 0.5, 0.5])
+
+        with pytest.raises(
+            ValueError,
+            match=rf"GroupLasso strength must be a scalar or shape \({n_groups},\), got shape \({too_short.shape[0]},\)",
+        ):
+            regularizer._validate_strength_structure(params, too_short)
+
+        with pytest.raises(
+            ValueError,
+            match=rf"GroupLasso strength must be a scalar or shape \({n_groups},\), got shape \({too_long.shape[0]},\)",
+        ):
+            regularizer._validate_strength_structure(params, too_long)
+
+    def test_validate_strength_structure_dict(self):
+        """Dict/PyTree mask: scalar strength broadcasts to per-group vector for each leaf."""
+        # Mask as dict with consistent n_groups across leaves
+        mask = {
+            "a": jnp.array([[1, 1, 0], [0, 0, 1]], dtype=float),  # 2 groups, 3 features
+            "b": jnp.array([[1, 0], [0, 1]], dtype=float),  # 2 groups, 2 features
+        }
+        regularizer = self.cls(mask=mask)
+        params = {
+            "a": jnp.ones((3,)),
+            "b": jnp.ones((2,)),
+        }
+
+        strength_struct = regularizer._validate_strength_structure(params, 0.2)
+        # Should mirror mask structure with per-group vectors
+        assert isinstance(strength_struct, dict)
+        assert isinstance(strength_struct["a"], jnp.ndarray)
+        assert isinstance(strength_struct["b"], jnp.ndarray)
+        assert strength_struct["a"].shape == (2,) and jnp.allclose(
+            strength_struct["a"], jnp.array([0.2, 0.2])
+        )
+        assert strength_struct["b"].shape == (2,) and jnp.allclose(
+            strength_struct["b"], jnp.array([0.2, 0.2])
+        )
 
     @pytest.mark.parametrize(
         "solver_name, expectation",
@@ -1718,7 +2897,7 @@ class TestGroupLasso:
         mask = jnp.asarray(mask, dtype=jnp.float32)
 
         if raise_exception:
-            with pytest.raises(ValueError, match="Mask elements be 0s and 1s"):
+            with pytest.raises(ValueError, match="Mask elements must be 0s and 1s"):
                 model.set_params(
                     regularizer=self.cls(mask=mask), regularizer_strength=1.0
                 )
@@ -1809,7 +2988,7 @@ class TestGroupLasso:
         runner = model._instantiate_solver(model._compute_loss, init_params).solver_run
         params, _, _ = runner(init_params, X, y)
 
-        zeros_est = params.coef == 0
+        zeros_est = params.coef == 0.0
         if not np.all(zeros_est == zeros_true):
             raise ValueError("GroupLasso failed to zero-out the parameter group!")
 
@@ -1872,7 +3051,7 @@ class TestGroupLasso:
         mask = jnp.asarray(mask, dtype=jnp.float32)
 
         if raise_exception:
-            with pytest.raises(ValueError, match="Mask elements be 0s and 1s"):
+            with pytest.raises(ValueError, match="Mask elements must be 0s and 1s"):
                 regularizer.set_params(mask=mask)
         else:
             regularizer.set_params(mask=mask)
@@ -2096,10 +3275,10 @@ class TestGroupLasso:
         }
 
         # Test that penalization doesn't crash with dict structure
-        filter_kwargs = regularizer._get_filter_kwargs(params_dict)
-        penalty = regularizer._penalization(
-            params_dict, strength=0.1, filter_kwargs=filter_kwargs
+        filter_kwargs = regularizer._get_filter_kwargs(
+            params_dict, strength=regularizer._validate_strength(0.1)
         )
+        penalty = regularizer._penalization(params_dict, filter_kwargs=filter_kwargs)
 
         # Check penalty is a scalar and non-negative
         assert isinstance(penalty, jnp.ndarray)
@@ -2126,10 +3305,10 @@ class TestGroupLasso:
         )
 
         # Test that penalization works
-        filter_kwargs = regularizer._get_filter_kwargs(params)
-        penalty = regularizer._penalization(
-            params, strength=0.1, filter_kwargs=filter_kwargs
+        filter_kwargs = regularizer._get_filter_kwargs(
+            params, strength=regularizer._validate_strength(0.1)
         )
+        penalty = regularizer._penalization(params, filter_kwargs=filter_kwargs)
 
         # Check penalty is a scalar and non-negative
         assert isinstance(penalty, jnp.ndarray)
@@ -2156,17 +3335,17 @@ class TestPenalizedLossAuxiliaryVariables:
         def simple_loss(params, X, y):
             return jnp.mean((y - X @ params.coef - params.intercept) ** 2)
 
-        # ElasticNet requires (strength, ratio) tuple
-        reg_strength = (
-            (0.1, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 0.1
-        )
-        penalized = regularizer.penalized_loss(
-            simple_loss, strength=reg_strength, init_params=None
-        )
-
         params = GLMParams(jnp.ones(5), jnp.array(0.0))
         X = jnp.ones((10, 5))
         y = jnp.ones(10)
+
+        # ElasticNet requires (strength, ratio) tuple
+        regularizer_strength = regularizer._validate_strength(
+            (0.1, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 0.1
+        )
+        penalized = regularizer.penalized_loss(
+            simple_loss, params=params, strength=regularizer_strength
+        )
 
         result = penalized(params, X, y)
 
@@ -2184,17 +3363,17 @@ class TestPenalizedLossAuxiliaryVariables:
             aux = {"predictions": predictions, "mse": loss}
             return loss, aux
 
-        # ElasticNet requires (strength, ratio) tuple
-        reg_strength = (
-            (0.1, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 0.1
-        )
-        penalized = regularizer.penalized_loss(
-            loss_with_aux, strength=reg_strength, init_params=None
-        )
-
         params = GLMParams(jnp.ones(5), jnp.array(0.0))
         X = jnp.ones((10, 5))
         y = jnp.ones(10)
+
+        # ElasticNet requires (strength, ratio) tuple
+        regularizer_strength = regularizer._validate_strength(
+            (1.0, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 1.0
+        )
+        penalized = regularizer.penalized_loss(
+            loss_with_aux, params=params, strength=regularizer_strength
+        )
 
         result = penalized(params, X, y)
 
@@ -2225,17 +3404,17 @@ class TestPenalizedLossAuxiliaryVariables:
         def bad_loss(params, X, y):
             return (jnp.mean((y - X @ params.coef - params.intercept) ** 2),)
 
-        # ElasticNet requires (strength, ratio) tuple
-        reg_strength = (
-            (0.1, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 0.1
-        )
-        penalized = regularizer.penalized_loss(
-            bad_loss, strength=reg_strength, init_params=None
-        )
-
         params = GLMParams(jnp.ones(5), jnp.array(0.0))
         X = jnp.ones((10, 5))
         y = jnp.ones(10)
+
+        # ElasticNet requires (strength, ratio) tuple
+        regularizer_strength = regularizer._validate_strength(
+            (1.0, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 1.0
+        )
+        penalized = regularizer.penalized_loss(
+            bad_loss, params=params, strength=regularizer_strength
+        )
 
         with pytest.raises(
             ValueError,
@@ -2250,17 +3429,17 @@ class TestPenalizedLossAuxiliaryVariables:
             loss = jnp.mean((y - X @ params.coef - params.intercept) ** 2)
             return loss, {"aux": 1}, {"extra": 2}
 
-        # ElasticNet requires (strength, ratio) tuple
-        reg_strength = (
-            (0.1, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 0.1
-        )
-        penalized = regularizer.penalized_loss(
-            bad_loss, strength=reg_strength, init_params=None
-        )
-
         params = GLMParams(jnp.ones(5), jnp.array(0.0))
         X = jnp.ones((10, 5))
         y = jnp.ones(10)
+
+        # ElasticNet requires (strength, ratio) tuple
+        regularizer_strength = regularizer._validate_strength(
+            (1.0, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 1.0
+        )
+        penalized = regularizer.penalized_loss(
+            bad_loss, params=params, strength=regularizer_strength
+        )
 
         with pytest.raises(
             ValueError,
@@ -2284,20 +3463,23 @@ class TestPenalizedLossAuxiliaryVariables:
         unpenalized_loss, _ = loss_with_aux(params, X, y)
 
         # ElasticNet requires (strength, ratio) tuple
-        reg_strength = (
+        regularizer_strength = regularizer._validate_strength(
             (1.0, 0.5) if isinstance(regularizer, nmo.regularizer.ElasticNet) else 1.0
         )
 
         # Get penalized loss
         penalized = regularizer.penalized_loss(
-            loss_with_aux, strength=reg_strength, init_params=params
+            loss_with_aux,
+            params=params,
+            strength=regularizer_strength,
         )
         penalized_loss_value, aux = penalized(params, X, y)
 
         # Calculate expected penalty
-        expected_penalty = regularizer._penalization(
-            params, reg_strength, regularizer._get_filter_kwargs(params)
+        filter_kwargs = regularizer._get_filter_kwargs(
+            strength=regularizer_strength, params=params
         )
+        expected_penalty = regularizer._penalization(params, filter_kwargs)
 
         # Check that penalized loss = unpenalized loss + penalty
         assert jnp.isclose(penalized_loss_value, unpenalized_loss + expected_penalty)
