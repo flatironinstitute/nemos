@@ -794,8 +794,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             Data loader yielding (X_batch, y_batch) tuples.
             Must be re-iterable for ``num_epochs > 1``.
         init_params :
-            Initial parameters (coefficients, intercept). If None, initialized
-            from ``sample_batch()``.
+            Initial parameters (coefficients, intercept).
+            If None, initialized from ``sample_batch()``.
+            To continue fitting, pass the current parameters (``(model.coef_, model.intercept_)``)
         num_epochs :
             Number of passes over the data. Must be >= 1.
 
