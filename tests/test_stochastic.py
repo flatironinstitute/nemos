@@ -52,6 +52,15 @@ class TestArrayDataLoader:
 
         assert loader.n_samples == 100
 
+    def test_basic_creation_variadic(self):
+        """Test basic DataLoader creation with >2 data arrays."""
+        X = np.random.randn(100, 5)
+        y = np.random.randn(100)
+        z = np.random.randn(100, 3)
+        loader = ArrayDataLoader(X, y, z, batch_size=32)
+
+        assert loader.n_samples == 100
+
     def test_sample_batch(self):
         """Test sample_batch returns correct shapes."""
         X = np.random.randn(100, 5)
@@ -61,6 +70,20 @@ class TestArrayDataLoader:
         X_batch, y_batch = loader.sample_batch()
         assert X_batch.shape == (32, 5)
         assert y_batch.shape == (32,)
+
+    def test_sample_batch_variadic(self):
+        """Test sample_batch returns correct shapes."""
+        X = np.random.randn(100, 5)
+        y = np.random.randn(100)
+        z = np.random.randn(100, 3)
+        loader = ArrayDataLoader(X, y, z, batch_size=32)
+
+        batch_data = loader.sample_batch()
+        assert isinstance(batch_data, tuple)
+        assert len(batch_data) == 3
+        assert batch_data[0].shape == (32, 5)
+        assert batch_data[1].shape == (32,)
+        assert batch_data[2].shape == (32, 3)
 
     # TODO: Not sure if this should be the intended behavior.
     def test_sample_batch_deterministic(self):
@@ -92,6 +115,16 @@ class TestArrayDataLoader:
 
         assert X_concat.shape[0] == 100
         assert y_concat.shape[0] == 100
+
+    def test_iteration_variadic(self):
+        """Test that iteration works with >2 data arrays."""
+        X = np.random.randn(100, 5)
+        y = np.random.randn(100)
+        z = np.random.randn(100, 3)
+        loader = ArrayDataLoader(X, y, z, batch_size=32)
+
+        for x, y, z in loader:
+            assert x.shape[0] == y.shape[0] == z.shape[0]
 
     def test_re_iterable(self):
         """Test that DataLoader is re-iterable."""
@@ -416,16 +449,16 @@ class TestSolverStochasticRun:
 
         loader = ArrayDataLoader(X, y, batch_size=32, shuffle=True)
 
-        return loader
+        def loss(params, X, y):
+            pred = X @ params
+            return jnp.mean((pred - y) ** 2)
+
+        return loss, loader
 
     @pytest.mark.parametrize("solver_class", _stochastic_solver_classes)
     def test_gradient_descent_stochastic_run(self, simple_loss_and_data, solver_class):
         """Test GradientDescent solver's stochastic_run."""
-        loader = simple_loss_and_data
-
-        def loss(params, X, y):
-            pred = X @ params
-            return jnp.mean((pred - y) ** 2)
+        loss, loader = simple_loss_and_data
 
         from nemos.regularizer import UnRegularized
 
@@ -451,10 +484,7 @@ class TestSolverStochasticRun:
     @pytest.mark.parametrize("solver_class", _non_stochastic_solver_classes)
     def test_unsupported_solver_raises(self, simple_loss_and_data, solver_class):
         """Test that unsupported solver raises NotImplementedError."""
-        loader = simple_loss_and_data
-
-        def loss(params, X, y):
-            return jnp.mean((X @ params - y) ** 2)
+        loss, loader = simple_loss_and_data
 
         from nemos.regularizer import UnRegularized
 
@@ -472,10 +502,7 @@ class TestSolverStochasticRun:
     @pytest.mark.parametrize("solver_class", _stochastic_solver_classes)
     def test_invalid_num_epochs_raises(self, simple_loss_and_data, solver_class):
         """Test that num_epochs < 1 raises ValueError."""
-        loader = simple_loss_and_data
-
-        def loss(params, X, y):
-            return jnp.mean((X @ params - y) ** 2)
+        loss, loader = simple_loss_and_data
 
         from nemos.regularizer import UnRegularized
 

@@ -44,14 +44,14 @@ class StochasticSolverMixin:
         StepResult :
             Final (params, state, aux) tuple.
         """
-        sample_X, sample_y = data_loader.sample_batch()
-        state = self.init_state(init_params, sample_X, sample_y)
+        sample_batch = data_loader.sample_batch()
+        state = self.init_state(init_params, *sample_batch)
         params = init_params
         aux = None
 
         for _ in range(num_epochs):
-            for X_batch, y_batch in data_loader:
-                params, state, aux = self.update(params, state, X_batch, y_batch)
+            for batch_data in data_loader:
+                params, state, aux = self.update(params, state, *batch_data)
 
         return (params, state, aux)
 
