@@ -9,15 +9,31 @@ pytestmark = pytest.mark.solver_related
 
 
 # Mock solver classes for testing
-class SolverAOne(nmo.solvers.SolverProtocol):
+# On Python >=3.11 _BaseSolver definition is not required,
+# but on 3.10 inheriting from a Protocol creates an __init__ with the
+# signature (self, *args, **kwargs) instead of inheriting the defined one
+class _BaseSolver(nmo.solvers.SolverProtocol):
+    def __init__(
+        self,
+        unregularized_loss,
+        regularizer,
+        regularizer_strength,
+        has_aux,
+        init_params=None,
+        **solver_init_kwargs,
+    ):
+        pass
+
+
+class SolverAOne(_BaseSolver):
     pass
 
 
-class SolverATwo(nmo.solvers.SolverProtocol):
+class SolverATwo(_BaseSolver):
     pass
 
 
-class SolverBOne(nmo.solvers.SolverProtocol):
+class SolverBOne(_BaseSolver):
     pass
 
 
