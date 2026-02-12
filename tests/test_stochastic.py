@@ -9,6 +9,18 @@ import nemos as nmo
 from nemos import solvers
 from nemos.batching import ArrayDataLoader, _PreprocessedDataLoader, is_data_loader
 
+_stochastic_solver_names = [
+    "GradientDescent",
+    "ProximalGradient",
+    "SVRG",
+    "ProxSVRG",
+]
+_non_stochastic_solver_names = [
+    "LBFGS",
+    "BFGS",
+    "NonlinearCG",
+]
+
 # Build list of stochastic solvers, conditionally including JAXopt
 _stochastic_solver_classes = [
     solvers.OptimistixNAG,
@@ -26,6 +38,19 @@ _non_stochastic_solver_classes = [
 ]
 
 if solvers.JAXOPT_AVAILABLE:
+    _stochastic_solver_names.extend(
+        [
+            "GradientDescent[jaxopt]",
+            "ProximalGradient[jaxopt]",
+        ]
+    )
+    _non_stochastic_solver_names.extend(
+        [
+            "LBFGS[jaxopt]",
+            "BFGS[jaxopt]",
+            "NonlinearCG[jaxopt]",
+        ]
+    )
     _stochastic_solver_classes.extend(
         [
             solvers.JaxoptGradientDescent,
@@ -253,40 +278,17 @@ class TestIsDataLoader:
 class TestSolverStochasticSupport:
     """Tests for solver stochastic support flags and utilities."""
 
-    def test_supports_stochastic_gradient_descent(self):
-        """Test GradientDescent supports stochastic."""
-        assert solvers.supports_stochastic("GradientDescent")
-
-    def test_supports_stochastic_proximal_gradient(self):
-        """Test ProximalGradient supports stochastic."""
-        assert solvers.supports_stochastic("ProximalGradient")
-
-    def test_supports_stochastic_svrg(self):
-        """Test SVRG supports stochastic."""
-        assert solvers.supports_stochastic("SVRG")
-
-    def test_supports_stochastic_prox_svrg(self):
-        """Test ProxSVRG supports stochastic."""
-        assert solvers.supports_stochastic("ProxSVRG")
-
-    def test_bfgs_not_stochastic(self):
-        """Test BFGS does not support stochastic."""
-        assert not solvers.supports_stochastic("BFGS")
-
-    def test_lbfgs_not_stochastic(self):
-        """Test LBFGS does not support stochastic."""
-        assert not solvers.supports_stochastic("LBFGS")
+    @pytest.mark.parametrize(
+        "solver_name", _stochastic_solver_names + _non_stochastic_solver_names
+    )
+    def test_supports_stochastic(self, solver_name):
+        """Test the right solvers have stochastic suppoer."""
+        expectation = solver_name in _stochastic_solver_names
+        assert solvers.supports_stochastic(solver_name) == expectation
 
     def test_list_stochastic_solvers(self):
         """Test list_stochastic_solvers returns expected solvers."""
-        stochastic = solvers.list_stochastic_solvers()
-
-        assert "GradientDescent" in stochastic
-        assert "ProximalGradient" in stochastic
-        assert "SVRG" in stochastic
-        assert "ProxSVRG" in stochastic
-        assert "BFGS" not in stochastic
-        assert "LBFGS" not in stochastic
+        assert set(solvers.list_stochastic_solvers()) == set(_stochastic_solver_names)
 
     def test_unknown_solver_raises(self):
         """Test unknown solver name raises ValueError."""
@@ -306,13 +308,14 @@ class TestGLMStochasticFit:
         y = np.random.poisson(np.exp(X @ np.random.randn(5) * 0.1))
         return X, y
 
-    def test_basic_stochastic_fit(self, simple_data):
+    @pytest.mark.parametrize("solver", _stochastic_solver_names)
+    def test_stochastic_fit(self, simple_data, solver):
         """Test basic stochastic_fit functionality."""
         X, y = simple_data
         loader = ArrayDataLoader(X, y, batch_size=32, shuffle=True)
 
         model = nmo.glm.GLM(
-            solver_name="GradientDescent",
+            solver_name=solver,
             solver_kwargs={"stepsize": 0.001, "maxiter": 100},
         )
         model.stochastic_fit(loader, num_epochs=5)
@@ -324,51 +327,14 @@ class TestGLMStochasticFit:
         assert model.coef_.shape == (5,)
         assert n_steps_taken == (X.shape[0] // 32 + 1) * 5
 
-    def test_stochastic_fit_with_proximal_gradient(self, simple_data):
-        """Test stochastic_fit with ProximalGradient solver."""
-        X, y = simple_data
-        loader = ArrayDataLoader(X, y, batch_size=32, shuffle=True)
-
-        model = nmo.glm.GLM(
-            regularizer="Lasso",
-            regularizer_strength=0.01,
-            solver_name="ProximalGradient",
-            solver_kwargs={"stepsize": 0.001, "maxiter": 100},
-        )
-        model.stochastic_fit(loader, num_epochs=5)
-
-        n_steps_taken = model._solver.get_optim_info(model.solver_state_).num_steps
-
-        assert model.coef_ is not None
-        assert model.intercept_ is not None
-        assert model.coef_.shape == (5,)
-        assert n_steps_taken == (X.shape[0] // 32 + 1) * 5
-
-    def test_stochastic_fit_with_svrg(self, simple_data):
-        """Test stochastic_fit with SVRG solver."""
-        X, y = simple_data
-        loader = ArrayDataLoader(X, y, batch_size=32, shuffle=True)
-
-        model = nmo.glm.GLM(
-            solver_name="SVRG",
-            solver_kwargs={"stepsize": 0.001, "maxiter": 100},
-        )
-        model.stochastic_fit(loader, num_epochs=5)
-
-        n_steps_taken = model._solver.get_optim_info(model.solver_state_).num_steps
-
-        assert model.coef_ is not None
-        assert model.intercept_ is not None
-        assert model.coef_.shape == (5,)
-        assert n_steps_taken == (X.shape[0] // 32 + 1) * 5
-
-    def test_stochastic_fit_with_init_params(self, simple_data):
+    @pytest.mark.parametrize("solver", _stochastic_solver_names)
+    def test_stochastic_fit_with_init_params(self, simple_data, solver):
         """Test stochastic_fit with provided initial parameters."""
         X, y = simple_data
         loader = ArrayDataLoader(X, y, batch_size=32)
 
         model = nmo.glm.GLM(
-            solver_name="GradientDescent",
+            solver_name=solver,
             solver_kwargs={"stepsize": 0.001, "maxiter": 100},
         )
 
@@ -380,13 +346,14 @@ class TestGLMStochasticFit:
 
         assert model.coef_ is not None
 
-    def test_unsupported_solver_raises(self, simple_data):
+    @pytest.mark.parametrize("solver", ["LBFGS", "BFGS", "NonlinearCG"])
+    def test_unsupported_solver_raises(self, simple_data, solver):
         """Test that unsupported solver raises error."""
         X, y = simple_data
         loader = ArrayDataLoader(X, y, batch_size=32)
 
         model = nmo.glm.GLM(
-            solver_name="BFGS",
+            solver_name=solver,
             solver_kwargs={"maxiter": 100},
         )
 
@@ -420,13 +387,14 @@ class TestPopulationGLMStochasticFit:
         y = np.random.poisson(np.exp(X @ np.random.randn(5, 3) * 0.1))
         return X, y
 
-    def test_basic_population_stochastic_fit(self, population_data):
+    @pytest.mark.parametrize("solver", _stochastic_solver_names)
+    def test_basic_population_stochastic_fit(self, population_data, solver):
         """Test basic stochastic_fit for PopulationGLM."""
         X, y = population_data
         loader = ArrayDataLoader(X, y, batch_size=32, shuffle=True)
 
         model = nmo.glm.PopulationGLM(
-            solver_name="GradientDescent",
+            solver_name=solver,
             solver_kwargs={"stepsize": 0.001, "maxiter": 100},
         )
         model.stochastic_fit(loader, num_epochs=5)
