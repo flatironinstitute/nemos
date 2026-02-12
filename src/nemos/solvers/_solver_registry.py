@@ -414,13 +414,13 @@ def supports_stochastic(solver_name: str) -> bool:
     return getattr(solver_cls, "_supports_stochastic", False)
 
 
-def list_stochastic_solvers() -> list:
-    """List solvers that support stochastic optimization.
+def list_stochastic_solvers() -> list[str]:
+    """
+    List solvers that support stochastic optimization.
 
     Returns
     -------
-    list
-        List of solver names that support stochastic optimization.
+    List of solver names that support stochastic optimization.
 
     Examples
     --------
