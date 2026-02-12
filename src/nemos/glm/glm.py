@@ -879,6 +879,10 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
                 " Try tuning optimization hyperparameters, specifically try decreasing the `stepsize`."
             )
 
+        # not warning about non-convergence
+
+        self.optim_info_ = self._solver.get_optim_info(state)
+
         # Store results
         self._set_model_params(params)
         self.solver_state_ = state
