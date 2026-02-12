@@ -139,6 +139,8 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         init_params: Params,
         data_loader: "DataLoader",
         num_epochs: int = 1,
+        convergence_criterion: Callable | None = None,
+        batch_callback: Callable | None = None,
     ) -> StepResult:
         """
         Run optimization over mini-batches from a data loader.
@@ -152,6 +154,15 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
             Must be re-iterable (each ``__iter__`` call returns fresh iterator).
         num_epochs
             Number of passes over the data. Must be >= 1.
+        convergence_criterion :
+            Optional criterion to monitor convergence per epoch.
+            If None, no convergence monitoring, optimization runs for ``num_epochs`` epochs.
+            If a callable, provide a function that is called.
+                Signature is convergence_criterion(params, prev_params, state, prev_state, aux, epoch).
+                Returning True stops the optimization.
+        batch_callback :
+            Optional callback for per-batch monitoring.
+            Signature is batch_callback(params, state, aux, batch_idx, epoch).
 
         Returns
         -------
@@ -172,33 +183,76 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
             )
         if num_epochs < 1:
             raise ValueError("num_epochs must be >= 1")
-        return self._stochastic_run_impl(init_params, data_loader, num_epochs)
+
+        return self._stochastic_run_impl(
+            init_params,
+            data_loader,
+            num_epochs,
+            convergence_criterion=convergence_criterion,
+            batch_callback=batch_callback,
+        )
 
     def _stochastic_run_impl(
         self,
         init_params: Params,
         data_loader: "DataLoader",
         num_epochs: int,
+        convergence_criterion: Callable | None = None,
+        batch_callback: Callable | None = None,
     ) -> StepResult:
         """
         Override in stochastic-capable solvers.
 
-        Parameters
-        ----------
-        init_params
-            Initial parameter values.
-        data_loader
-            Data loader providing batches and metadata.
-        num_epochs
-            Number of passes over the data.
-
-        Returns
-        -------
-        StepResult
-            Final (params, state, aux) tuple.
+        For details see ``stochastic_run``
         """
         raise NotImplementedError(
             f"{self.__class__.__name__} must implement _stochastic_run_impl"
+        )
+
+    def stochastic_convergence_criterion(
+        self,
+        params: Params,
+        prev_params: Params,
+        state: SolverState,
+        prev_state: SolverState,
+        aux: Any,
+        epoch: int,
+    ):
+        """
+        Default convergence criterion for stochastic optimization.
+
+        Called once per epoch. Subclasses that support stochastic optimization
+        should override this to provide a meaningful default.
+
+        Parameters
+        ----------
+        params :
+            Parameter values at end of current epoch.
+        prev_params :
+            Parameter values at end of previous epoch.
+        state :
+            Solver state at end of current epoch.
+        prev_state :
+            Solver state at end of previous epoch.
+        aux :
+            Auxiliary output from the last batch of the current epoch.
+        epoch :
+            Current epoch index (0-based).
+
+        Returns
+        -------
+        bool
+            ``True`` if optimization should stop.
+        """
+        if not self._supports_stochastic:
+            raise NotImplementedError(
+                f"{self.__class__.__name__} does not support stochastic optimization."
+            )
+
+        raise NotImplementedError(
+            f"For convergence monitoring during stochastic optimization "
+            f"{self.__class__.__name__} must implement stochastic_convergence_criterion. "
+            "Please implement it or disable convergence monitoring."
         )
 
 

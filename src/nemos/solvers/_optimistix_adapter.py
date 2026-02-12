@@ -220,6 +220,10 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
         """
 
     @property
+    def tol(self):
+        return self.atol
+
+    @property
     def maxiter(self) -> int:
         return self.config.maxiter
 
@@ -229,9 +233,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
         except AttributeError:
             num_steps = self.stats["num_steps"].item()
 
-        function_val = (
-            state.f.item() if hasattr(state, "f") else state.f_info.f.item()
-        )  # pyright: ignore
+        function_val = state.f.item() if hasattr(state, "f") else state.f_info.f.item()  # pyright: ignore
 
         return OptimizationInfo(
             function_val=function_val,

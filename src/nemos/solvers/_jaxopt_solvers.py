@@ -1,7 +1,7 @@
 """Adapters wrapping JAXopt solvers, if available."""
 
 from ._jaxopt_adapter import JaxoptAdapter
-from ._stochastic_mixins import StochasticSolverMixin
+from ._stochastic_mixins import JaxoptStochasticSolverMixin
 
 JAXOPT_AVAILABLE = False
 
@@ -14,12 +14,12 @@ else:
 
 if JAXOPT_AVAILABLE:
 
-    class JaxoptGradientDescent(StochasticSolverMixin, JaxoptAdapter):
+    class JaxoptGradientDescent(JaxoptStochasticSolverMixin, JaxoptAdapter):
         """Adapter for jaxopt.GradientDescent."""
 
         _solver_cls = GradientDescent
 
-    class JaxoptProximalGradient(StochasticSolverMixin, JaxoptAdapter):
+    class JaxoptProximalGradient(JaxoptStochasticSolverMixin, JaxoptAdapter):
         """
         Adapter for jaxopt.ProximalGradient.
 
