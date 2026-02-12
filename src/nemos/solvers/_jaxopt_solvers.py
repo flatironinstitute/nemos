@@ -3,7 +3,7 @@
 from importlib.util import find_spec as _find_spec
 from ..typing import Params, StepResult
 from ._jaxopt_adapter import JaxoptAdapter
-from ._stochastic_mixins import StochasticSolverMixin
+from ._stochastic_mixins import JaxoptStochasticSolverMixin
 
 JAXOPT_AVAILABLE = _find_spec("jaxopt") is not None
 
@@ -12,12 +12,12 @@ if JAXOPT_AVAILABLE:
 
 if JAXOPT_AVAILABLE:
 
-    class JaxoptGradientDescent(StochasticSolverMixin, JaxoptAdapter):
+    class JaxoptGradientDescent(JaxoptStochasticSolverMixin, JaxoptAdapter):
         """Adapter for jaxopt.GradientDescent."""
 
         _solver_cls = GradientDescent
 
-    class JaxoptProximalGradient(StochasticSolverMixin, JaxoptAdapter):
+    class JaxoptProximalGradient(JaxoptStochasticSolverMixin, JaxoptAdapter):
         """
         Adapter for jaxopt.ProximalGradient.
 

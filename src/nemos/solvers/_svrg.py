@@ -16,6 +16,8 @@ import jax.flatten_util
 import jax.numpy as jnp
 from jax import grad, jit, lax, random
 
+from nemos.solvers._stochastic_mixins import JaxoptStochasticSolverMixin, _as_stop_flag
+
 from ..proximal_operator import prox_none
 from ..tree_utils import tree_add_scalar_mul, tree_l2_norm, tree_slice, tree_sub
 from ..typing import KeyArrayLike, Params, Pytree, StepResult
@@ -541,6 +543,8 @@ class ProxSVRG:
         iter_batches: Callable[[], Iterator["BatchData"]],
         sample_batch: Callable[[], "BatchData"],
         num_epochs: int = 1,
+        convergence_criterion: Callable | None = None,
+        batch_callback: Callable | None = None,
     ) -> OptStep:
         """
         Run Prox-SVRG over streamed mini-batches.
@@ -557,7 +561,17 @@ class ProxSVRG:
         sample_batch :
             Callable that returns a single batch for initialization.
         num_epochs :
-            Number of passes over the data. Must be >= 1.
+            Maximum number of passes over the data. Must be >= 1.
+            Optimization may stop earlier if the convergence criterion is met.
+        convergence_criterion :
+            Per-epoch convergence criterion. ``None`` disables convergence monitoring.
+            Callable with signature
+            ``(params, prev_params, state, prev_state, aux, epoch) -> bool``.
+            Returning ``True`` stops optimization.
+        batch_callback :
+            Per-batch callback with signature
+            ``(params, state, aux, batch_idx, epoch) -> bool``.
+            Returning ``True`` stops optimization after that batch.
 
         Returns
         -------
@@ -573,8 +587,12 @@ class ProxSVRG:
         sample_data = sample_batch()
         state = self.init_state(init_params, *sample_data)
         params = init_params
+        aux = state.aux_batch
 
-        for _ in range(num_epochs):
+        for epoch in range(num_epochs):
+            prev_params = params
+            prev_state = state
+
             # iter_batches gives a fresh run through the data
             full_grad = self._compute_full_gradient_streaming(params, iter_batches)
 
@@ -586,10 +604,26 @@ class ProxSVRG:
             )
 
             # another run through the data
-            for batch_data in iter_batches():
+            for batch_idx, batch_data in enumerate(iter_batches()):
                 params, state = self._update_on_batch(
                     params, state, hyperparams_prox, *batch_data
                 )
+                aux = state.aux_batch
+                if batch_callback is not None:
+                    if _as_stop_flag(
+                        batch_callback(params, state, aux, batch_idx, epoch),
+                        "batch_callback",
+                    ):
+                        return OptStep(params=params, state=state)
+
+            if convergence_criterion is not None:
+                if _as_stop_flag(
+                    convergence_criterion(
+                        params, prev_params, state, prev_state, aux, epoch
+                    ),
+                    "convergence_criterion",
+                ):
+                    return OptStep(params=params, state=state)
 
         return OptStep(params=params, state=state)
 
@@ -920,6 +954,8 @@ class SVRG(ProxSVRG):
         iter_batches: Callable[[], Iterator["BatchData"]],
         sample_batch: Callable[[], "BatchData"],
         num_epochs: int = 1,
+        convergence_criterion: Callable | None = None,
+        batch_callback: Callable | None = None,
     ) -> OptStep:
         """
         Run SVRG over streamed mini-batches.
@@ -934,7 +970,17 @@ class SVRG(ProxSVRG):
         sample_batch :
             Callable that returns a single batch for initialization.
         num_epochs :
-            Number of passes over the data. Must be >= 1.
+            Maximum number of passes over the data. Must be >= 1.
+            Optimization may stop earlier if the convergence criterion is met.
+        convergence_criterion :
+            Per-epoch convergence criterion. ``None`` disables convergence monitoring.
+            Callable with signature
+            ``(params, prev_params, state, prev_state, aux, epoch) -> bool``.
+            Returning ``True`` stops optimization.
+        batch_callback :
+            Per-batch callback with signature
+            ``(params, state, aux, batch_idx, epoch) -> bool``.
+            Returning ``True`` stops optimization after that batch.
 
         Returns
         -------
@@ -950,6 +996,8 @@ class SVRG(ProxSVRG):
             iter_batches,
             sample_batch,
             num_epochs=num_epochs,
+            convergence_criterion=convergence_criterion,
+            batch_callback=batch_callback,
         )
 
 
@@ -963,6 +1011,8 @@ class _WrappedSVRGBase(JaxoptAdapter):
         init_params: Params,
         data_loader: "DataLoader",
         num_epochs: int,
+        convergence_criterion: Callable | None = None,
+        batch_callback: Callable | None = None,
     ) -> StepResult:
         step = self._solver.run_streaming(
             init_params,
@@ -970,10 +1020,16 @@ class _WrappedSVRGBase(JaxoptAdapter):
             iter_batches=data_loader.__iter__,
             sample_batch=data_loader.sample_batch,
             num_epochs=num_epochs,
+            convergence_criterion=convergence_criterion,
+            batch_callback=batch_callback,
         )
         params, state = step
         aux = self._extract_aux(state, fallback_name="aux_batch")
         return (params, state, aux)
+
+    stochastic_convergence_criterion = (
+        JaxoptStochasticSolverMixin.stochastic_convergence_criterion
+    )
 
 
 class WrappedSVRG(_WrappedSVRGBase):

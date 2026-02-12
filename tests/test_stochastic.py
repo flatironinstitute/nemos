@@ -424,8 +424,8 @@ class TestSolverStochasticRun:
         return loss, loader
 
     @pytest.mark.parametrize("solver_class", _stochastic_solver_classes)
-    def test_gradient_descent_stochastic_run(self, simple_loss_and_data, solver_class):
-        """Test GradientDescent solver's stochastic_run."""
+    def test_stochastic_run(self, simple_loss_and_data, solver_class):
+        """Test solvers' stochastic_run."""
         loss, loader = simple_loss_and_data
 
         from nemos.regularizer import UnRegularized
@@ -448,6 +448,141 @@ class TestSolverStochasticRun:
         assert params.shape == (3,)
         # Should have learned something close to [1, 2, 3]
         np.testing.assert_array_almost_equal(params, [1.0, 2.0, 3.0], decimal=0)
+
+    def test_convergence_criterion_accepts_jax_scalar_bool(self, simple_loss_and_data):
+        """Test convergence callback handles JAX scalar booleans like Python bool."""
+        loss, loader = simple_loss_and_data
+
+        from nemos.regularizer import UnRegularized
+
+        init_params = jnp.zeros(3)
+
+        solver_py = solvers.OptimistixOptaxGradientDescent(
+            loss,
+            UnRegularized(),
+            regularizer_strength=None,
+            has_aux=False,
+            stepsize=0.01,
+        )
+        _, state_py, _ = solver_py.stochastic_run(
+            init_params,
+            loader,
+            num_epochs=5,
+            convergence_criterion=lambda *args: True,
+        )
+        steps_py = solver_py.get_optim_info(state_py).num_steps
+
+        solver_jax = solvers.OptimistixOptaxGradientDescent(
+            loss,
+            UnRegularized(),
+            regularizer_strength=None,
+            has_aux=False,
+            stepsize=0.01,
+        )
+        _, state_jax, _ = solver_jax.stochastic_run(
+            init_params,
+            loader,
+            num_epochs=5,
+            convergence_criterion=lambda *args: jnp.array(True),
+        )
+        steps_jax = solver_jax.get_optim_info(state_jax).num_steps
+
+        assert steps_jax == steps_py
+
+    def test_batch_callback_accepts_jax_scalar_bool(self, simple_loss_and_data):
+        """Test batch callback handles JAX scalar booleans like Python bool."""
+        loss, loader = simple_loss_and_data
+
+        from nemos.regularizer import UnRegularized
+
+        init_params = jnp.zeros(3)
+
+        # TODO: Update these to use solvers.get_solver once that is available
+        solver_py = solvers.OptimistixOptaxGradientDescent(
+            loss,
+            UnRegularized(),
+            regularizer_strength=None,
+            has_aux=False,
+            stepsize=0.01,
+        )
+        _, state_py, _ = solver_py.stochastic_run(
+            init_params,
+            loader,
+            num_epochs=5,
+            batch_callback=lambda *args: True,
+        )
+        steps_py = solver_py.get_optim_info(state_py).num_steps
+
+        solver_jax = solvers.OptimistixOptaxGradientDescent(
+            loss,
+            UnRegularized(),
+            regularizer_strength=None,
+            has_aux=False,
+            stepsize=0.01,
+        )
+        _, state_jax, _ = solver_jax.stochastic_run(
+            init_params,
+            loader,
+            num_epochs=5,
+            batch_callback=lambda *args: jnp.array(True),
+        )
+        steps_jax = solver_jax.get_optim_info(state_jax).num_steps
+
+        assert steps_jax == steps_py
+
+    @pytest.mark.parametrize(
+        "bad_flag", [1, 1.0, np.array(1.0), jnp.array(1.0), np.bool_(True).astype(int)]
+    )
+    def test_convergence_criterion_non_bool_scalar_raises(
+        self, simple_loss_and_data, bad_flag
+    ):
+        """Test convergence callback rejects non-boolean scalar return values."""
+        loss, loader = simple_loss_and_data
+
+        from nemos.regularizer import UnRegularized
+
+        solver = solvers.OptimistixOptaxGradientDescent(
+            loss,
+            UnRegularized(),
+            regularizer_strength=None,
+            has_aux=False,
+            stepsize=0.01,
+        )
+
+        with pytest.raises(TypeError, match="scalar boolean"):
+            solver.stochastic_run(
+                jnp.zeros(3),
+                loader,
+                num_epochs=2,
+                convergence_criterion=lambda *args: bad_flag,
+            )
+
+    @pytest.mark.parametrize(
+        "bad_flag", [1, 1.0, np.array(1.0), jnp.array(1.0), np.bool_(True).astype(int)]
+    )
+    def test_batch_callback_non_bool_scalar_raises(
+        self, simple_loss_and_data, bad_flag
+    ):
+        """Test batch callback rejects non-boolean scalar return values."""
+        loss, loader = simple_loss_and_data
+
+        from nemos.regularizer import UnRegularized
+
+        solver = solvers.OptimistixOptaxGradientDescent(
+            loss,
+            UnRegularized(),
+            regularizer_strength=None,
+            has_aux=False,
+            stepsize=0.01,
+        )
+
+        with pytest.raises(TypeError, match="scalar boolean"):
+            solver.stochastic_run(
+                jnp.zeros(3),
+                loader,
+                num_epochs=2,
+                batch_callback=lambda *args: bad_flag,
+            )
 
     @pytest.mark.parametrize("solver_class", _non_stochastic_solver_classes)
     def test_unsupported_solver_raises(self, simple_loss_and_data, solver_class):
