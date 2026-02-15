@@ -8,6 +8,7 @@ import pytest
 import nemos as nmo
 from nemos import solvers
 from nemos.batching import ArrayDataLoader, _PreprocessedDataLoader, is_data_loader
+from nemos.regularizer import UnRegularized
 
 _stochastic_solver_names = [
     "GradientDescent",
@@ -314,10 +315,12 @@ class TestGLMStochasticFit:
         X, y = simple_data
         loader = ArrayDataLoader(X, y, batch_size=32, shuffle=True)
 
-        model = nmo.glm.GLM(
-            solver_name=solver,
-            solver_kwargs={"stepsize": 0.001, "maxiter": 100},
-        )
+        solver_kwargs = {"stepsize": 0.001, "maxiter": 100}
+        solver_class = solvers.solver_registry[solver]
+        if "acceleration" in solver_class.get_accepted_arguments():
+            solver_kwargs["acceleration"] = False
+
+        model = nmo.glm.GLM(solver_name=solver, solver_kwargs=solver_kwargs)
         model.stochastic_fit(loader, num_epochs=5)
 
         n_steps_taken = model._solver.get_optim_info(model.solver_state_).num_steps
@@ -333,10 +336,12 @@ class TestGLMStochasticFit:
         X, y = simple_data
         loader = ArrayDataLoader(X, y, batch_size=32)
 
-        model = nmo.glm.GLM(
-            solver_name=solver,
-            solver_kwargs={"stepsize": 0.001, "maxiter": 100},
-        )
+        solver_kwargs = {"stepsize": 0.001, "maxiter": 100}
+        solver_class = solvers.solver_registry[solver]
+        if "acceleration" in solver_class.get_accepted_arguments():
+            solver_kwargs["acceleration"] = False
+
+        model = nmo.glm.GLM(solver_name=solver, solver_kwargs=solver_kwargs)
 
         init_coef = jnp.zeros(5)
         init_intercept = jnp.zeros(1)
@@ -368,7 +373,7 @@ class TestGLMStochasticFit:
 
         model = nmo.glm.GLM(
             solver_name="GradientDescent",
-            solver_kwargs={"stepsize": 0.001, "maxiter": 100},
+            solver_kwargs={"stepsize": 0.001, "maxiter": 100, "acceleration": False},
         )
         model.stochastic_fit(loader, num_epochs=1)
 
@@ -393,10 +398,12 @@ class TestPopulationGLMStochasticFit:
         X, y = population_data
         loader = ArrayDataLoader(X, y, batch_size=32, shuffle=True)
 
-        model = nmo.glm.PopulationGLM(
-            solver_name=solver,
-            solver_kwargs={"stepsize": 0.001, "maxiter": 100},
-        )
+        solver_kwargs = {"stepsize": 0.001, "maxiter": 100}
+        solver_class = solvers.solver_registry[solver]
+        if "acceleration" in solver_class.get_accepted_arguments():
+            solver_kwargs["acceleration"] = False
+
+        model = nmo.glm.PopulationGLM(solver_name=solver, solver_kwargs=solver_kwargs)
         model.stochastic_fit(loader, num_epochs=5)
 
         assert model.coef_ is not None
@@ -407,6 +414,18 @@ class TestPopulationGLMStochasticFit:
 
 class TestSolverStochasticRun:
     """Tests for solver stochastic_run method directly."""
+
+    def _default_solver_kwargs(self, solver_class):
+        solver_kwargs = {
+            "stepsize": 0.01,
+            "regularizer": UnRegularized(),
+            "regularizer_strength": None,
+            "has_aux": False,
+        }
+        if "acceleration" in solver_class.get_accepted_arguments():
+            solver_kwargs["acceleration"] = False
+
+        return solver_kwargs
 
     @pytest.fixture
     def simple_loss_and_data(self):
@@ -428,19 +447,7 @@ class TestSolverStochasticRun:
         """Test solvers' stochastic_run."""
         loss, loader = simple_loss_and_data
 
-        from nemos.regularizer import UnRegularized
-
-        solver_kwargs = {"stepsize": 0.01}
-        if "acceleration" in solver_class.get_accepted_arguments():
-            solver_kwargs["acceleration"] = False
-
-        solver = solver_class(
-            loss,
-            UnRegularized(),
-            regularizer_strength=None,
-            has_aux=False,
-            **solver_kwargs,
-        )
+        solver = solver_class(loss, **self._default_solver_kwargs(solver_class))
 
         init_params = jnp.zeros(3)
         params, state, aux = solver.stochastic_run(init_params, loader, num_epochs=10)
@@ -452,18 +459,11 @@ class TestSolverStochasticRun:
     def test_convergence_criterion_accepts_jax_scalar_bool(self, simple_loss_and_data):
         """Test convergence callback handles JAX scalar booleans like Python bool."""
         loss, loader = simple_loss_and_data
-
-        from nemos.regularizer import UnRegularized
+        solver_class = solvers.OptimistixOptaxGradientDescent
 
         init_params = jnp.zeros(3)
 
-        solver_py = solvers.OptimistixOptaxGradientDescent(
-            loss,
-            UnRegularized(),
-            regularizer_strength=None,
-            has_aux=False,
-            stepsize=0.01,
-        )
+        solver_py = solver_class(loss, **self._default_solver_kwargs(solver_class))
         _, state_py, _ = solver_py.stochastic_run(
             init_params,
             loader,
@@ -472,13 +472,7 @@ class TestSolverStochasticRun:
         )
         steps_py = solver_py.get_optim_info(state_py).num_steps
 
-        solver_jax = solvers.OptimistixOptaxGradientDescent(
-            loss,
-            UnRegularized(),
-            regularizer_strength=None,
-            has_aux=False,
-            stepsize=0.01,
-        )
+        solver_jax = solver_class(loss, **self._default_solver_kwargs(solver_class))
         _, state_jax, _ = solver_jax.stochastic_run(
             init_params,
             loader,
@@ -492,19 +486,12 @@ class TestSolverStochasticRun:
     def test_batch_callback_accepts_jax_scalar_bool(self, simple_loss_and_data):
         """Test batch callback handles JAX scalar booleans like Python bool."""
         loss, loader = simple_loss_and_data
-
-        from nemos.regularizer import UnRegularized
+        solver_class = solvers.OptimistixOptaxGradientDescent
 
         init_params = jnp.zeros(3)
 
         # TODO: Update these to use solvers.get_solver once that is available
-        solver_py = solvers.OptimistixOptaxGradientDescent(
-            loss,
-            UnRegularized(),
-            regularizer_strength=None,
-            has_aux=False,
-            stepsize=0.01,
-        )
+        solver_py = solver_class(loss, **self._default_solver_kwargs(solver_class))
         _, state_py, _ = solver_py.stochastic_run(
             init_params,
             loader,
@@ -513,13 +500,7 @@ class TestSolverStochasticRun:
         )
         steps_py = solver_py.get_optim_info(state_py).num_steps
 
-        solver_jax = solvers.OptimistixOptaxGradientDescent(
-            loss,
-            UnRegularized(),
-            regularizer_strength=None,
-            has_aux=False,
-            stepsize=0.01,
-        )
+        solver_jax = solver_class(loss, **self._default_solver_kwargs(solver_class))
         _, state_jax, _ = solver_jax.stochastic_run(
             init_params,
             loader,
@@ -538,16 +519,9 @@ class TestSolverStochasticRun:
     ):
         """Test convergence callback rejects non-boolean scalar return values."""
         loss, loader = simple_loss_and_data
+        solver_class = solvers.OptimistixOptaxGradientDescent
 
-        from nemos.regularizer import UnRegularized
-
-        solver = solvers.OptimistixOptaxGradientDescent(
-            loss,
-            UnRegularized(),
-            regularizer_strength=None,
-            has_aux=False,
-            stepsize=0.01,
-        )
+        solver = solver_class(loss, **self._default_solver_kwargs(solver_class))
 
         with pytest.raises(TypeError, match="scalar boolean"):
             solver.stochastic_run(
@@ -565,16 +539,9 @@ class TestSolverStochasticRun:
     ):
         """Test batch callback rejects non-boolean scalar return values."""
         loss, loader = simple_loss_and_data
+        solver_class = solvers.OptimistixOptaxGradientDescent
 
-        from nemos.regularizer import UnRegularized
-
-        solver = solvers.OptimistixOptaxGradientDescent(
-            loss,
-            UnRegularized(),
-            regularizer_strength=None,
-            has_aux=False,
-            stepsize=0.01,
-        )
+        solver = solver_class(loss, **self._default_solver_kwargs(solver_class))
 
         with pytest.raises(TypeError, match="scalar boolean"):
             solver.stochastic_run(
@@ -589,14 +556,11 @@ class TestSolverStochasticRun:
         """Test that unsupported solver raises NotImplementedError."""
         loss, loader = simple_loss_and_data
 
-        from nemos.regularizer import UnRegularized
+        solver_kwargs = self._default_solver_kwargs(solver_class)
+        solver_kwargs.pop("stepsize", None)
+        solver_kwargs.pop("acceleration", None)
 
-        solver = solver_class(
-            loss,
-            UnRegularized(),
-            regularizer_strength=None,
-            has_aux=False,
-        )
+        solver = solver_class(loss, **solver_kwargs)
 
         init_params = jnp.zeros(3)
         with pytest.raises(NotImplementedError, match="does not support stochastic"):
@@ -607,16 +571,25 @@ class TestSolverStochasticRun:
         """Test that num_epochs < 1 raises ValueError."""
         loss, loader = simple_loss_and_data
 
-        from nemos.regularizer import UnRegularized
-
-        solver = solver_class(
-            loss,
-            UnRegularized(),
-            regularizer_strength=None,
-            has_aux=False,
-            stepsize=0.01,
-        )
+        solver = solver_class(loss, **self._default_solver_kwargs(solver_class))
 
         init_params = jnp.zeros(3)
         with pytest.raises(ValueError, match="num_epochs must be >= 1"):
             solver.stochastic_run(init_params, loader, num_epochs=0)
+
+    @pytest.mark.parametrize("solver_class", _stochastic_solver_classes)
+    def test_acceleration_not_allowed(self, simple_loss_and_data, solver_class):
+        """Test that solvers that have acceleration argument have those turned off for stochastic optimization."""
+        loss, loader = simple_loss_and_data
+
+        solver_kwargs = self._default_solver_kwargs(solver_class)
+        if "acceleration" in solver_class.get_accepted_arguments():
+            solver_kwargs["acceleration"] = True
+        else:
+            pytest.skip("Solver doesn't have acceleration argument.")
+
+        solver = solver_class(loss, **solver_kwargs)
+
+        init_params = jnp.zeros(3)
+        with pytest.raises(ValueError, match="Turn off"):
+            solver.stochastic_run(init_params, loader, num_epochs=10)
