@@ -116,6 +116,12 @@ class StochasticSolverMixin:
         StepResult :
             Final (params, state, aux) tuple.
         """
+        if "acceleration" in self.get_accepted_arguments():
+            if self.acceleration:
+                raise ValueError(
+                    "Turn off acceleration option for stochastic optimization."
+                )
+
         sample_batch = data_loader.sample_batch()
         state = self.init_state(init_params, *sample_batch)
         params = init_params
