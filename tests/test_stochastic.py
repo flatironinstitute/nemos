@@ -591,5 +591,23 @@ class TestSolverStochasticRun:
         solver = solver_class(loss, **solver_kwargs)
 
         init_params = jnp.zeros(3)
-        with pytest.raises(ValueError, match="Turn off"):
+        with pytest.raises(ValueError, match="Turn off acceleration"):
+            solver.stochastic_run(init_params, loader, num_epochs=10)
+
+    @pytest.mark.parametrize("solver_class", _stochastic_solver_classes)
+    def test_linesearch_not_allowed(self, simple_loss_and_data, solver_class):
+        """Test that linesearch is not allowed when using stochastic optimization."""
+        if "svrg" in solver_class.__name__.lower():
+            pytest.skip("SVRG doesn't have linesearch.")
+
+        loss, loader = simple_loss_and_data
+
+        # not giving stepsize uses linesearch in solvers that have it
+        solver_kwargs = self._default_solver_kwargs(solver_class)
+        solver_kwargs.pop("stepsize", None)
+
+        solver = solver_class(loss, **solver_kwargs)
+
+        init_params = jnp.zeros(3)
+        with pytest.raises(ValueError, match="Turn off linesearch"):
             solver.stochastic_run(init_params, loader, num_epochs=10)
