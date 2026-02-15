@@ -4,13 +4,14 @@ from typing import TYPE_CHECKING, Any, Callable
 
 import numpy as np
 
-from ..typing import Params, StepResult, SolverState
+from ..typing import Params, SolverState, StepResult
 
 if TYPE_CHECKING:
     from ..batching import DataLoader
 
 from optimistix._misc import cauchy_termination
-from ..tree_utils import tree_sub, tree_l2_norm
+
+from ..tree_utils import tree_l2_norm, tree_sub
 
 
 def _params_only_cauchy_criterion(
@@ -219,9 +220,7 @@ class OptimistixStochasticSolverMixin(StochasticSolverMixin):
         aux: Any,
         epoch: int,
     ):
-        """
-        Cauchy criterion on parameters using the solver's atol and rtol.
-        """
+        """Cauchy criterion on parameters using the solver's atol and rtol."""
         del state, prev_state, aux, epoch
         # solver needs to have tol and rtol
         # function evaluation on the whole data might be too expensive
@@ -244,8 +243,6 @@ class JaxoptStochasticSolverMixin(StochasticSolverMixin):
         aux: Any,
         epoch: int,
     ):
-        """
-        Step-size-normalized parameter change: ||params - prev_params|| / stepsize <= tol.
-        """
+        """Step-size-normalized parameter change: ||params - prev_params|| / stepsize <= tol."""
         stepsize = state.stepsize
         return tree_l2_norm(tree_sub(params, prev_params)) / stepsize <= self.tol
