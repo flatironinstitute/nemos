@@ -122,6 +122,12 @@ class StochasticSolverMixin:
                     "Turn off acceleration option for stochastic optimization."
                 )
 
+        if "stepsize" in self.get_accepted_arguments():
+            if self.stepsize is None or self.stepsize <= 0.0:
+                raise ValueError(
+                    "Turn off linesearch and set explicit stepsizes for stochastic optimization."
+                )
+
         sample_batch = data_loader.sample_batch()
         state = self.init_state(init_params, *sample_batch)
         params = init_params
