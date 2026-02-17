@@ -11,7 +11,7 @@ from optimistix._custom_types import Aux, Y
 
 from ..proximal_operator import prox_none
 from ..tree_utils import tree_add_scalar_mul, tree_sub
-from ._optimistix_adapter import OptimistixAdapter
+from ._optimistix_adapter import _OPTX_V_010, OptimistixAdapter
 
 
 def tree_nan_like(x: PyTree):
@@ -215,9 +215,17 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
         f_at_point, lin_fn, _ = jax.linearize(
             lambda _y: fn(_y, args), update_point, has_aux=True
         )
-        grad_at_point = optx._misc.lin_to_grad(
-            lin_fn, update_point, autodiff_mode=autodiff_mode
-        )
+        if _OPTX_V_010:
+            grad_at_point = optx._misc.lin_to_grad(
+                lin_fn,
+                update_point,
+                autodiff_mode=autodiff_mode,
+                dtype=f_at_point.dtype,
+            )
+        else:
+            grad_at_point = optx._misc.lin_to_grad(
+                lin_fn, update_point, autodiff_mode=autodiff_mode
+            )
 
         if self.stepsize is None or self.stepsize <= 0.0:
             # do linesearch to find the new stepsize
