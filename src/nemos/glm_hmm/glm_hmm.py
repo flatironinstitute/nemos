@@ -24,9 +24,9 @@ from ..utils import format_repr
 from .initialize_parameters import (
     INITIALIZATION_FN_DICT,
     _is_native_init_registry,
+    _resolve_dirichlet_priors,
     _resolve_init_funcs_registry,
     glm_hmm_initialization,
-    resolve_dirichlet_priors,
 )
 from .params import GLMHMMParams, GLMHMMUserParams, GLMParams, GLMScale, HMMParams
 from .validation import GLMHMMValidator
@@ -208,7 +208,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
 
     @dirichlet_prior_alphas_init_prob.setter
     def dirichlet_prior_alphas_init_prob(self, value: jnp.ndarray | None):
-        self._dirichlet_prior_alphas_init_prob = resolve_dirichlet_priors(
+        self._dirichlet_prior_alphas_init_prob = _resolve_dirichlet_priors(
             value, (self._n_states,)
         )
 
@@ -222,7 +222,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
 
     @dirichlet_prior_alphas_transition.setter
     def dirichlet_prior_alphas_transition(self, value: jnp.ndarray | None):
-        self._dirichlet_prior_alphas_transition = resolve_dirichlet_priors(
+        self._dirichlet_prior_alphas_transition = _resolve_dirichlet_priors(
             value, (self._n_states, self._n_states)
         )
 
