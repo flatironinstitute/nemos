@@ -456,7 +456,7 @@ def _resolve_init_func(
     )
 
 
-def resolve_dirichlet_priors(
+def _resolve_dirichlet_priors(
     alphas: Any, expected_shape: Tuple[int, ...]
 ) -> jnp.ndarray | None:
     """Validate and convert Dirichlet prior alpha parameters.
