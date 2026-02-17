@@ -8,6 +8,10 @@ import numpy as np
 import pytest
 
 from nemos.glm_hmm.initialize_parameters import (
+    _is_native_init_registry,
+    _resolve_dirichlet_priors,
+    _resolve_init_func,
+    _resolve_init_funcs_registry,
     glm_hmm_initialization,
     ones_scale_init,
     random_glm_params_init,
@@ -707,3 +711,238 @@ class TestGLMHMMInitialization:
 
         assert isinstance(result, tuple)
         assert len(result) == 5
+
+    @pytest.mark.parametrize(
+        "registry",
+        [
+            {"glm_params_init": "random"},
+            {"scale_init": "ones"},
+            {"transition_proba_init": "sticky"},
+            {"initial_proba_init": "uniform"},
+        ],
+    )
+    def test_string_lookup_in_registry(self, registry):
+        """Test that string lookups work for built-in functions."""
+        n_states = 2
+        X = jnp.ones((100, 5))
+        y = jnp.ones(100)
+        inverse_link = lambda x: x
+
+        # Should not raise
+        result = glm_hmm_initialization(
+            n_states,
+            X,
+            y,
+            inverse_link,
+            random_key=jax.random.PRNGKey(123),
+            init_registry=registry,
+        )
+
+        assert len(result) == 5
+
+
+class TestResolveDirichletPriors:
+    """Test _resolve_dirichlet_priors validation function."""
+
+    def test_none_input_returns_none(self):
+        """Test that None input returns None."""
+        result = _resolve_dirichlet_priors(None, (3,))
+        assert result is None
+
+    @pytest.mark.parametrize(
+        "alphas, expected_shape",
+        [
+            (np.array([1.0, 1.0, 1.0]), (3,)),
+            (np.array([2.0, 3.0]), (2,)),
+            (jnp.array([[1.0, 2.0], [3.0, 4.0]]), (2, 2)),
+        ],
+    )
+    def test_valid_array_input(self, alphas, expected_shape):
+        """Test that valid array inputs are converted to JAX arrays."""
+        result = _resolve_dirichlet_priors(alphas, expected_shape)
+        assert isinstance(result, jnp.ndarray)
+        assert result.shape == expected_shape
+
+    def test_shape_mismatch_raises_value_error(self):
+        """Test that shape mismatch raises ValueError."""
+        alphas = jnp.array([1.0, 2.0, 3.0])
+        expected_shape = (2,)
+
+        with pytest.raises(ValueError, match="must have shape"):
+            _resolve_dirichlet_priors(alphas, expected_shape)
+
+    def test_values_less_than_one_raises_value_error(self):
+        """Test that alpha values < 1 raise ValueError."""
+        alphas = jnp.array([1.0, 0.5, 2.0])
+        expected_shape = (3,)
+
+        with pytest.raises(ValueError, match="must be >= 1"):
+            _resolve_dirichlet_priors(alphas, expected_shape)
+
+    def test_invalid_type_raises_type_error(self):
+        """Test that invalid types raise TypeError."""
+        alphas = "invalid"
+        expected_shape = (3,)
+
+        with pytest.raises(TypeError, match="Invalid type"):
+            _resolve_dirichlet_priors(alphas, expected_shape)
+
+
+class TestResolveInitFunc:
+    """Test _resolve_init_func validation function."""
+
+    def test_none_returns_default(self):
+        """Test that None returns the default function."""
+        result = _resolve_init_func("glm_params_init", None)
+        assert result is random_glm_params_init
+
+    @pytest.mark.parametrize(
+        "func_name, string_name, expected_func",
+        [
+            ("glm_params_init", "random", random_glm_params_init),
+            ("scale_init", "ones", ones_scale_init),
+            ("transition_proba_init", "sticky", sticky_transition_proba_init),
+            ("initial_proba_init", "uniform", uniform_initial_proba_init),
+        ],
+    )
+    def test_string_lookup(self, func_name, string_name, expected_func):
+        """Test that string names resolve to correct functions."""
+        result = _resolve_init_func(func_name, string_name)
+        assert result is expected_func
+
+    def test_unknown_string_raises_value_error(self):
+        """Test that unknown string names raise ValueError."""
+        with pytest.raises(ValueError, match="Unknown initialization method"):
+            _resolve_init_func("glm_params_init", "unknown_method")
+
+    def test_callable_with_correct_signature_accepted(self):
+        """Test that callable with correct signature is accepted."""
+
+        def custom_init(n_states, X, y, random_key):
+            return jnp.ones(n_states)
+
+        result = _resolve_init_func("scale_init", custom_init)
+        assert result is custom_init
+
+    def test_callable_too_few_params_raises_value_error(self):
+        """Test that callable with too few parameters raises ValueError."""
+
+        def bad_init(n_states, X):
+            return jnp.ones(n_states)
+
+        with pytest.raises(ValueError, match="must have at least"):
+            _resolve_init_func("scale_init", bad_init)
+
+    def test_callable_extra_params_without_defaults_raises_value_error(self):
+        """Test that extra parameters without defaults raise ValueError."""
+
+        def bad_init(n_states, X, y, random_key, extra_param):
+            return jnp.ones(n_states)
+
+        with pytest.raises(ValueError, match="must have default values"):
+            _resolve_init_func("scale_init", bad_init)
+
+    def test_callable_extra_params_with_defaults_accepted(self):
+        """Test that extra parameters with defaults are accepted."""
+
+        def custom_init(n_states, X, y, random_key, extra_param=1.0):
+            return jnp.ones(n_states)
+
+        result = _resolve_init_func("scale_init", custom_init)
+        assert result is custom_init
+
+    def test_glm_params_init_requires_five_params(self):
+        """Test that glm_params_init requires 5 parameters."""
+
+        def bad_glm_init(n_states, X, y, random_key):
+            return jnp.ones(n_states), jnp.ones(n_states)
+
+        with pytest.raises(ValueError, match="must have at least 5"):
+            _resolve_init_func("glm_params_init", bad_glm_init)
+
+    def test_invalid_type_raises_type_error(self):
+        """Test that invalid types raise TypeError."""
+        with pytest.raises(TypeError, match="Invalid initialization function"):
+            _resolve_init_func("scale_init", 123)
+
+
+class TestResolveInitFuncsRegistry:
+    """Test _resolve_init_funcs_registry validation function."""
+
+    def test_none_returns_defaults(self):
+        """Test that None returns default registry."""
+        result = _resolve_init_funcs_registry(None)
+        assert result["glm_params_init"] is random_glm_params_init
+        assert result["scale_init"] is ones_scale_init
+        assert result["transition_proba_init"] is sticky_transition_proba_init
+        assert result["initial_proba_init"] is uniform_initial_proba_init
+
+    def test_invalid_key_raises_key_error(self):
+        """Test that invalid registry keys raise KeyError."""
+        invalid_registry = {"invalid_key": lambda: None}
+
+        with pytest.raises(KeyError, match="Invalid key"):
+            _resolve_init_funcs_registry(invalid_registry)
+
+    def test_valid_keys_with_one_invalid_raises_key_error(self):
+        """Test that registry with valid keys plus one invalid key raises KeyError."""
+        mixed_registry = {
+            "glm_params_init": random_glm_params_init,
+            "scale_init": ones_scale_init,
+            "transition_proba_init": sticky_transition_proba_init,
+            "initial_proba_init": uniform_initial_proba_init,
+            "invalid_key": lambda: None,
+        }
+
+        with pytest.raises(KeyError, match="Invalid key"):
+            _resolve_init_funcs_registry(mixed_registry)
+
+    def test_partial_registry_merges_with_defaults(self):
+        """Test that partial registry is merged with defaults."""
+
+        def custom_scale(n_states, X, y, random_key):
+            return jnp.full(n_states, 2.0)
+
+        partial_registry = {"scale_init": custom_scale}
+
+        result = _resolve_init_funcs_registry(partial_registry)
+
+        # Custom function used
+        assert result["scale_init"] is custom_scale
+        # Defaults for others
+        assert result["glm_params_init"] is random_glm_params_init
+        assert result["transition_proba_init"] is sticky_transition_proba_init
+        assert result["initial_proba_init"] is uniform_initial_proba_init
+
+
+class TestIsNativeInitRegistry:
+    """Test _is_native_init_registry helper function."""
+
+    def test_native_registry_returns_true(self):
+        """Test that registry with all native functions returns True."""
+        native_registry = {
+            "glm_params_init": random_glm_params_init,
+            "scale_init": ones_scale_init,
+            "transition_proba_init": sticky_transition_proba_init,
+            "initial_proba_init": uniform_initial_proba_init,
+        }
+        assert _is_native_init_registry(native_registry) is True
+
+    def test_partial_native_registry_returns_true(self):
+        """Test that partial registry with native functions returns True."""
+        partial_registry = {
+            "glm_params_init": random_glm_params_init,
+            "scale_init": ones_scale_init,
+        }
+        assert _is_native_init_registry(partial_registry) is True
+
+    def test_custom_function_returns_false(self):
+        """Test that registry with custom function returns False."""
+
+        def custom_scale(n_states, X, y, random_key):
+            return jnp.ones(n_states)
+
+        custom_registry = {
+            "scale_init": custom_scale,
+        }
+        assert _is_native_init_registry(custom_registry) is False
