@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 from nemos.glm_hmm.initialize_parameters import (
+    _is_native_init_registry,
     _resolve_dirichlet_priors,
     _resolve_init_func,
     _resolve_init_funcs_registry,
@@ -912,3 +913,36 @@ class TestResolveInitFuncsRegistry:
         assert result["glm_params_init"] is random_glm_params_init
         assert result["transition_proba_init"] is sticky_transition_proba_init
         assert result["initial_proba_init"] is uniform_initial_proba_init
+
+
+class TestIsNativeInitRegistry:
+    """Test _is_native_init_registry helper function."""
+
+    def test_native_registry_returns_true(self):
+        """Test that registry with all native functions returns True."""
+        native_registry = {
+            "glm_params_init": random_glm_params_init,
+            "scale_init": ones_scale_init,
+            "transition_proba_init": sticky_transition_proba_init,
+            "initial_proba_init": uniform_initial_proba_init,
+        }
+        assert _is_native_init_registry(native_registry) is True
+
+    def test_partial_native_registry_returns_true(self):
+        """Test that partial registry with native functions returns True."""
+        partial_registry = {
+            "glm_params_init": random_glm_params_init,
+            "scale_init": ones_scale_init,
+        }
+        assert _is_native_init_registry(partial_registry) is True
+
+    def test_custom_function_returns_false(self):
+        """Test that registry with custom function returns False."""
+
+        def custom_scale(n_states, X, y, random_key):
+            return jnp.ones(n_states)
+
+        custom_registry = {
+            "scale_init": custom_scale,
+        }
+        assert _is_native_init_registry(custom_registry) is False
