@@ -1288,6 +1288,88 @@ class TestEvalBasis:
         with does_not_raise():
             cls(**kwargs, **extra_kwargs(cls, 10))
 
+    def test_fill_value_default(self, cls):
+        """Test that fill_value defaults to NaN."""
+        if cls in [CustomBasis, basis.Zero, basis.FourierEval]:
+            pytest.skip(f"Skipping test_fill_value_default for {cls.__name__}")
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=5,
+            bounds=(1, 3),
+            **extra_kwargs(cls, 5),
+        )
+        assert np.isnan(bas.fill_value)
+
+    @pytest.mark.parametrize("fill_value", [-999.0, -123.456])
+    @pytest.mark.parametrize(
+        "samples, out_of_bounds_idx",
+        [
+            # out of bounds only at extremes
+            (np.array([0.0, 1.5, 2.0, 2.5, 4.0]), [0, 4]),
+            # out of bounds below lower bound
+            (np.array([-1.0, 0.5, 1.5, 2.0, 2.5]), [0, 1]),
+            # out of bounds above upper bound
+            (np.array([1.5, 2.0, 2.5, 3.5, 4.0]), [3, 4]),
+            # out of bounds scattered (below, in, above, in, above)
+            (np.array([0.0, 1.5, 4.0, 2.0, 5.0]), [0, 2, 4]),
+            # single out of bounds at end
+            (np.array([1.2, 1.5, 2.0, 2.5, 10.0]), [4]),
+            # no out of bounds (all samples in bounds)
+            (np.array([1.0, 1.5, 2.0, 2.5, 3.0]), []),
+            # all out of bounds
+            (np.array([-2.0, -1.0, 0.0, 4.0, 5.0]), [0, 1, 2, 3, 4]),
+        ],
+    )
+    def test_fill_value_applied_to_out_of_bounds(
+        self, fill_value, samples, out_of_bounds_idx, cls
+    ):
+        """Test that fill_value is applied to samples outside bounds."""
+        if cls in [CustomBasis, basis.Zero, basis.FourierEval]:
+            pytest.skip(
+                f"Skipping test_fill_value_applied_to_out_of_bounds for {cls.__name__}"
+            )
+        # BSplineEval fails when all samples are out of bounds (scipy limitation)
+        if cls == basis.BSplineEval and len(out_of_bounds_idx) == len(samples):
+            pytest.skip("BSplineEval cannot handle all samples out of bounds")
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=5,
+            bounds=(1, 3),
+            fill_value=fill_value,
+            **extra_kwargs(cls, 5),
+        )
+        out = np.asarray(bas.compute_features(samples))
+        in_bounds_idx = [i for i in range(len(samples)) if i not in out_of_bounds_idx]
+        # Check that all out-of-bounds samples have the fill_value
+        for idx in out_of_bounds_idx:
+            assert np.all(out[idx] == fill_value), (
+                f"Out-of-bounds sample at index {idx} (value={samples[idx]}) "
+                f"should have fill_value={fill_value}"
+            )
+        # Check that all in-bounds samples do NOT have the fill_value
+        for idx in in_bounds_idx:
+            assert not np.all(out[idx] == fill_value), (
+                f"In-bounds sample at index {idx} (value={samples[idx]}) "
+                f"should not have fill_value={fill_value}"
+            )
+
+    @pytest.mark.parametrize("fill_value", [0.0, np.nan])
+    def test_fill_value_set_params(self, fill_value, cls):
+        """Test that fill_value can be set via set_params."""
+        if cls in [CustomBasis, basis.Zero, basis.FourierEval]:
+            pytest.skip(f"Skipping test_fill_value_set_params for {cls.__name__}")
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=5,
+            bounds=(1, 3),
+            **extra_kwargs(cls, 5),
+        )
+        bas.set_params(fill_value=fill_value)
+        if np.isnan(fill_value):
+            assert np.isnan(bas.fill_value)
+        else:
+            assert bas.fill_value == fill_value
+
 
 @pytest.mark.parametrize(
     "cls",
@@ -3532,6 +3614,15 @@ class TestFourierBasis(BasisFuncsTesting):
         for i in range(ndim):
             assert out[i].shape == ((10,) * ndim)
         assert out[ndim].shape == (*(10,) * ndim, bas.n_basis_funcs)
+
+    def test_no_fill_value_applied(self):
+        """Test that FourierEval does not apply fill_value (bounds specify period, not domain)."""
+        bas = self.cls["eval"](frequencies=3, ndim=1, bounds=(0, 1))
+        # Samples outside the "bounds" (which is the period) should still be evaluated
+        samples = np.array([-1.0, 0.5, 2.0])
+        out = np.asarray(bas.compute_features(samples))
+        # No NaN values should be present since Fourier is periodic
+        assert not np.any(np.isnan(out))
 
 
 class TestAdditiveBasis(CombinedBasis):
