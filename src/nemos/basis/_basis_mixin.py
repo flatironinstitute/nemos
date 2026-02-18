@@ -541,29 +541,29 @@ class EvalBasisMixin:
         """
         out = self.evaluate(*(np.reshape(x, (x.shape[0], -1)) for x in xi))
         if self._apply_bounds_fill and self.bounds is not None:
-            # Compute mask for out-of-bounds samples using numpy (works with pynapple)
-            to_fill = np.any(
-                np.stack(
-                    [
-                        np.any(
-                            (np.asarray(x).reshape(x.shape[0], -1) < self.bounds[0])
-                            | (np.asarray(x).reshape(x.shape[0], -1) > self.bounds[1]),
-                            axis=1,
-                        )
-                        for x in xi
-                    ]
-                ),
-                axis=0,
-            )
-            out = self._apply_fill_value(out, to_fill)
-        return np.reshape(out, (out.shape[0], -1))
+            out = self._apply_fill_value(*xi, out=out)
+        return jnp.reshape(out, (out.shape[0], -1))
 
-    @support_pynapple(conv_type="numpy")
-    def _apply_fill_value(self, out: NDArray, to_fill: NDArray) -> NDArray:
+    @support_pynapple(conv_type="jax")
+    def _apply_fill_value(self, *xi: ArrayLike, out: NDArray) -> NDArray:
         """Apply fill value to out-of-bounds samples."""
-        out = np.array(out, dtype=float)
-        out[to_fill] = self.fill_value
-        return out
+        # Use jnp.where for JAX compatibility
+        to_fill = jnp.any(
+            jnp.stack(
+                [
+                    jnp.any(
+                        (jnp.reshape(x, (x.shape[0], -1)) < self.bounds[0])
+                        | (jnp.reshape(x, (x.shape[0], -1)) > self.bounds[1]),
+                        axis=1,
+                    )
+                    for x in xi
+                ]
+            ),
+            axis=0,
+        )
+        # Reshape to_fill to broadcast correctly: (n_samples,) -> (n_samples, 1, 1, ...)
+        to_fill_broadcast = to_fill.reshape(to_fill.shape[0], *([1] * (out.ndim - 1)))
+        return jnp.where(to_fill_broadcast, self.fill_value, out)
 
     def setup_basis(self, *xi: NDArray) -> Basis:
         """
