@@ -538,7 +538,11 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         return raise_basis_to_power(self, exponent)
 
     def __repr__(self, n=0):
-        rep = format_repr(self, multiline=True)
+        if self.bounds is None:
+            kwargs = dict(exclude_keys=["fill_value"])
+        else:
+            kwargs = {}
+        rep = format_repr(self, **kwargs, multiline=True)
         tab = "    "
         return rep.replace("\n", f"\n{tab * n}")
 
