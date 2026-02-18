@@ -1158,7 +1158,8 @@ class TestEvalBasis:
         ],
     )
     def test_vmin_vmax_range(self, vmin, vmax, samples, nan_idx, cls):
-        if cls in [CustomBasis, basis.Zero]:
+        if cls in [CustomBasis, basis.Zero, basis.FourierEval]:
+            # FourierEval is defined over the real line; bounds specify period, not domain
             pytest.skip(f"Skipping test_vmin_vmax_range for {cls.__name__}")
         bounds = None if vmin is None else (vmin, vmax)
         bas = instantiate_atomic_basis(
@@ -6861,7 +6862,15 @@ def test_basis_to_transformer(basis_cls, basis_class_specific_params):
             f1s, f2s = getattr(bas, k), getattr(trans_bas, k)
             assert np.all(f1 == f2 for f1, f2 in zip(f1s, f2s))
         else:
-            assert np.all(getattr(bas, k) == getattr(trans_bas, k))
+            v1, v2 = getattr(bas, k), getattr(trans_bas, k)
+            # Handle NaN comparison (NaN != NaN, so use isnan check)
+            try:
+                if np.isscalar(v1) and np.isnan(v1) and np.isscalar(v2) and np.isnan(v2):
+                    continue
+            except (TypeError, ValueError):
+                # isnan doesn't work on non-numeric types
+                pass
+            assert np.all(v1 == v2)
 
 
 @pytest.mark.parametrize(
