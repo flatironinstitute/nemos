@@ -296,7 +296,7 @@ def glm_hmm_initialization(
 
 
 def _resolve_init_funcs_registry(
-    registry: INITIALIZATION_FN_DICT,
+    registry: INITIALIZATION_FN_DICT | None,
 ) -> INITIALIZATION_FN_DICT:
     """
     Merge and validate a partial initialization registry with defaults.
@@ -306,7 +306,7 @@ def _resolve_init_funcs_registry(
 
     Parameters
     ----------
-    registry : dict
+    registry :
         Dictionary mapping parameter names to initialization functions. Must contain
         only valid keys from DEFAULT_INIT_FUNCTION.
 
@@ -332,13 +332,6 @@ def _resolve_init_funcs_registry(
     for func_name, func in registry.items():
         updated_registry[func_name] = _resolve_init_func(func_name, func)
     return updated_registry
-
-
-def _is_native_init_registry(registry: INITIALIZATION_FN_DICT) -> bool:
-    """Return true if a function is a native initialization function."""
-    return all(
-        [fn in AVAILABLE_INIT_FUNCTIONS[key].values() for key, fn in registry.items()]
-    )
 
 
 def _resolve_init_func(
