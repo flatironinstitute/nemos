@@ -3,6 +3,7 @@ from typing import Any, Callable, ClassVar, Type, TypeAlias
 
 import equinox as eqx
 import optimistix as optx
+from packaging.version import Version
 
 from ..regularizer import Regularizer
 from ..typing import Aux, Params
@@ -15,6 +16,8 @@ from ._aux_helpers import (
     wrap_aux,
 )
 from ._solver_adapter import SolverAdapter
+
+_OPTX_V_010 = Version(optx.__version__) >= Version("0.1.0")
 
 DEFAULT_ATOL = 1e-4
 DEFAULT_RTOL = 0.0
