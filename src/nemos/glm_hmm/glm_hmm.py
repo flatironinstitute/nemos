@@ -321,6 +321,14 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
     >>> ll.shape
     ()
 
+    **Decode Hidden States**
+
+    Compute the most likely state sequence using Viterbi decoding:
+
+    >>> decoded = model.decode_state(X, y, output_format="index")
+    >>> decoded.shape
+    (500,)
+
     **Customize the Observation Model**
 
     Use a Poisson observation model for count data:
