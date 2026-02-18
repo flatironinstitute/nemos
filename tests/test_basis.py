@@ -3624,6 +3624,30 @@ class TestFourierBasis(BasisFuncsTesting):
         # No NaN values should be present since Fourier is periodic
         assert not np.any(np.isnan(out))
 
+    @pytest.mark.parametrize(
+        "bounds1, bounds2, scale_factor",
+        [
+            ((0, 1), (0, 0.5), 0.5),  # half period
+            ((0, 1), (0, 2), 2.0),  # double period
+            ((0, 2), (0, 1), 0.5),  # half period (reversed)
+            ((-1, 1), (-0.5, 0.5), 0.5),  # half period, centered at 0
+        ],
+    )
+    def test_bounds_periodicity_invariance(self, bounds1, bounds2, scale_factor):
+        """Test that bounds define the period: same relative position gives same output."""
+        bas1 = self.cls["eval"](frequencies=3, ndim=1, bounds=bounds1)
+        bas2 = self.cls["eval"](frequencies=3, ndim=1, bounds=bounds2)
+
+        # Samples within bounds1
+        samples1 = np.linspace(bounds1[0], bounds1[1], 10, endpoint=False)
+        # Corresponding samples scaled to bounds2 (same relative position in period)
+        samples2 = bounds2[0] + (samples1 - bounds1[0]) * scale_factor
+
+        out1 = np.asarray(bas1.compute_features(samples1))
+        out2 = np.asarray(bas2.compute_features(samples2))
+
+        np.testing.assert_allclose(out1, out2, rtol=1e-5)
+
 
 class TestAdditiveBasis(CombinedBasis):
     cls = {"eval": AdditiveBasis, "conv": AdditiveBasis}
