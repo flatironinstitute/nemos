@@ -312,6 +312,14 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
     >>> filtered.shape
     (500, 2)
 
+    **Compute Model Score**
+
+    Compute the log-likelihood of the data under the fitted model:
+
+    >>> ll = model.score(X, y)
+    >>> ll.shape
+    ()
+
     **Customize the Observation Model**
 
     Use a Poisson observation model for count data:
