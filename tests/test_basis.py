@@ -6865,7 +6865,12 @@ def test_basis_to_transformer(basis_cls, basis_class_specific_params):
             v1, v2 = getattr(bas, k), getattr(trans_bas, k)
             # Handle NaN comparison (NaN != NaN, so use isnan check)
             try:
-                if np.isscalar(v1) and np.isnan(v1) and np.isscalar(v2) and np.isnan(v2):
+                if (
+                    np.isscalar(v1)
+                    and np.isnan(v1)
+                    and np.isscalar(v2)
+                    and np.isnan(v2)
+                ):
                     continue
             except (TypeError, ValueError):
                 # isnan doesn't work on non-numeric types

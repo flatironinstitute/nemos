@@ -19,6 +19,7 @@ from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..convolve import create_convolutional_predictor
+from ..type_casting import support_pynapple
 from ..utils import _get_terminal_size, format_repr
 from ._composition_utils import (
     _composite_basis_setter_logic,
@@ -141,7 +142,12 @@ class BasisMixin:
         self._parent: Optional["BasisMixin"] = None
 
     def __repr__(self):
-        return format_repr(self)
+        bounds = getattr(self, "bounds", None)
+        if bounds is None:
+            kwargs = dict(exclude_keys=["fill_value"])
+        else:
+            kwargs = {}
+        return format_repr(self, **kwargs)
 
     def __getitem__(self, index: str) -> Basis:
         if isinstance(index, (int, slice)):
@@ -534,14 +540,14 @@ class EvalBasisMixin:
 
         """
         out = self.evaluate(*(np.reshape(x, (x.shape[0], -1)) for x in xi))
-        out = jnp.reshape(out, (out.shape[0], -1))
         if self._apply_bounds_fill and self.bounds is not None:
-            to_fill = jnp.any(
-                jnp.stack(
+            # Compute mask for out-of-bounds samples using numpy (works with pynapple)
+            to_fill = np.any(
+                np.stack(
                     [
-                        jnp.any(
-                            (x.reshape(x.shape[0], -1) < self.bounds[0])
-                            | (x.reshape(x.shape[0], -1) > self.bounds[1]),
+                        np.any(
+                            (np.asarray(x).reshape(x.shape[0], -1) < self.bounds[0])
+                            | (np.asarray(x).reshape(x.shape[0], -1) > self.bounds[1]),
                             axis=1,
                         )
                         for x in xi
@@ -549,7 +555,14 @@ class EvalBasisMixin:
                 ),
                 axis=0,
             )
-            out = jnp.asarray(out).at[to_fill].set(self.fill_value)
+            out = self._apply_fill_value(out, to_fill)
+        return np.reshape(out, (out.shape[0], -1))
+
+    @support_pynapple(conv_type="numpy")
+    def _apply_fill_value(self, out: NDArray, to_fill: NDArray) -> NDArray:
+        """Apply fill value to out-of-bounds samples."""
+        out = np.array(out, dtype=float)
+        out[to_fill] = self.fill_value
         return out
 
     def setup_basis(self, *xi: NDArray) -> Basis:
