@@ -2643,11 +2643,14 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         Dimensionality of the basis. Default is 1.
 
     bounds :
-        Domain bounds for each dimension.
+        Period bounds for each dimension. Unlike other basis classes where bounds define
+        a valid domain (with out-of-bounds samples filled with NaN), for the Fourier basis
+        the bounds define the period of the basis functions. Samples outside these bounds
+        are still valid and will be evaluated using the periodic nature of the basis.
 
         * :class:`tuple`: ``(low, high)`` of floats: applies to all dimensions.
         * :class:`list` of :class:`tuple`: ``[(low, high), ...]``, one tuple per dimension, length must match ``ndim``.
-        * :class:`None <NoneType>`: the domain is inferred from the input data (maximum to minimum values).
+        * :class:`None <NoneType>`: the period is inferred from the input data (minimum to maximum values).
 
         In all cases, ``low`` must be strictly less than ``high``, and values must be convertible to floats.
 
