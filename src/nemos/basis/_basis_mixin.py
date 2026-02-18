@@ -545,7 +545,7 @@ class EvalBasisMixin:
         return jnp.reshape(out, (out.shape[0], -1))
 
     @support_pynapple(conv_type="jax")
-    def _apply_fill_value(self, *xi: ArrayLike, out: NDArray) -> NDArray:
+    def _apply_fill_value(self, *xi: ArrayLike, out: NDArray) -> jax.Array:
         """Apply fill value to out-of-bounds samples."""
         # Use jnp.where for JAX compatibility
         to_fill = jnp.any(

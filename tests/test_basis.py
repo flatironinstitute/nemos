@@ -1370,6 +1370,44 @@ class TestEvalBasis:
         else:
             assert bas.fill_value == fill_value
 
+    @pytest.mark.requires_x64
+    def test_jit_compilation_with_bounds(self, cls):
+        """Test that compute_features can be JIT compiled when bounds are set."""
+        # Skip bases that depend on un-jittable scipy functions
+        if cls in [basis.BSplineEval, basis.CyclicBSplineEval, basis.OrthExponentialEval]:
+            pytest.skip(
+                f"Skipping test_jit_compilation_with_bounds for {cls.__name__}, "
+                "which depends on un-jittable scipy functions."
+            )
+        # Skip Zero since it doesn't have bounds
+        if cls == basis.Zero:
+            pytest.skip("Zero basis does not have bounds")
+
+        # CustomBasis needs pynapple_support=False for JIT compatibility
+        extra_args = {}
+        if cls == CustomBasis:
+            extra_args["pynapple_support"] = False
+
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=5,
+            bounds=(1, 3),
+            fill_value=0.0,
+            **extra_args,
+            **extra_kwargs(cls, 5),
+        )
+        func = jax.jit(bas.compute_features)
+        # Samples with some out of bounds
+        samples = np.array([0.5, 1.5, 2.0, 2.5, 3.5])
+        result_jit = np.asarray(func(samples))
+        result_no_jit = np.asarray(bas.compute_features(samples))
+        # JIT and non-JIT should produce the same result
+        np.testing.assert_allclose(result_jit, result_no_jit)
+        # Out of bounds samples should have fill_value (except FourierEval where bounds = period)
+        if cls != basis.FourierEval:
+            assert np.all(result_jit[0] == 0.0)  # 0.5 < 1
+            assert np.all(result_jit[4] == 0.0)  # 3.5 > 3
+
 
 @pytest.mark.parametrize(
     "cls",
@@ -1431,7 +1469,7 @@ class TestSharedMethods:
         "expected_out",
         [
             {
-                CustomBasis: "CustomBasis(\n    funcs=[partial(power_func, 1), ..., partial(power_func, 5)],\n    ndim_input=1,\n    pynapple_support=True,\n    is_complex=False\n)",
+                CustomBasis: "CustomBasis(\n    funcs=[partial(power_func, 1), ..., partial(power_func, 5)],\n    ndim_input=1,\n    pynapple_support=True,\n    is_complex=False,\n    bounds=(1, 2),\n    fill_value=nan\n)",
                 basis.RaisedCosineLogEval: "RaisedCosineLogEval(n_basis_funcs=5, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True, bounds=(1.0, 2.0), fill_value=nan)",
                 basis.RaisedCosineLinearEval: "RaisedCosineLinearEval(n_basis_funcs=5, width=2.0, bounds=(1.0, 2.0), fill_value=nan)",
                 basis.BSplineEval: "BSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0), fill_value=nan)",
