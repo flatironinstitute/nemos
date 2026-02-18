@@ -98,9 +98,12 @@ def min_max_rescale_samples(
     scaling = asarray(vmax - vmin)
     # do not normalize if samples contain a single value (in which case vmax=vmin)
     scaling = where(scaling == 0, 1.0, scaling)
-    sample_pts = (
-        where((sample_pts < vmin) | (sample_pts > vmax), np.nan, sample_pts) - vmin
-    ) / scaling
+    if bounds is not None:
+        sample_pts = where(
+            (sample_pts < vmin) | (sample_pts > vmax), np.nan, sample_pts
+        )
+    sample_pts -= vmin
+    sample_pts /= scaling
 
     return sample_pts, scaling
 
