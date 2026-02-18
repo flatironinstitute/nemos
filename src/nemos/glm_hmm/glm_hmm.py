@@ -257,6 +257,57 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         If ``maxiter`` is not a positive integer.
     ValueError
         If ``tol`` is not a positive float.
+
+    Examples
+    --------
+    **Generate Synthetic Data**
+
+    Generate synthetic data with state-dependent responses:
+
+    >>> import jax
+    >>> import jax.numpy as jnp
+    >>> import numpy as np
+    >>> import nemos as nmo
+    >>> np.random.seed(123)
+    >>> n_samples, n_features, n_states = 500, 3, 2
+    >>> X = np.random.normal(size=(n_samples, n_features))
+    >>> # State-dependent weights
+    >>> weights = np.array([[[0.5], [-0.3], [0.2]], [[-0.5], [0.4], [-0.1]]])
+    >>> # Simulate state sequence
+    >>> states = np.random.choice(n_states, size=n_samples)
+    >>> # Generate responses based on current state
+    >>> logits = np.array([X[t] @ weights[states[t]] for t in range(n_samples)]).squeeze()
+    >>> y = np.random.binomial(1, 1 / (1 + np.exp(-logits)))
+
+    **Fit a GLM-HMM**
+
+    Fit the model to the synthetic data:
+
+    >>> model = nmo.glm.GLMHMM(n_states=2, observation_model="Bernoulli")
+    >>> model = model.fit(X, y)
+    >>> model.coef_.shape
+    (3, 2)
+
+    **Customize the Observation Model**
+
+    Use a Poisson observation model for count data:
+
+    >>> model = nmo.glm.GLMHMM(n_states=3, observation_model="Poisson")
+    >>> model.observation_model
+    PoissonObservations()
+
+    **Use Regularization**
+
+    Fit with Ridge regularization on the GLM coefficients:
+
+    >>> model = nmo.glm.GLMHMM(
+    ...     n_states=2,
+    ...     observation_model="Bernoulli",
+    ...     regularizer="Ridge",
+    ...     regularizer_strength=0.1
+    ... )
+    >>> model.regularizer
+    Ridge()
     """
 
     def __init__(
