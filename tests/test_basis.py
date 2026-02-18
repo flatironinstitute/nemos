@@ -1374,7 +1374,11 @@ class TestEvalBasis:
     def test_jit_compilation_with_bounds(self, cls):
         """Test that compute_features can be JIT compiled when bounds are set."""
         # Skip bases that depend on un-jittable scipy functions
-        if cls in [basis.BSplineEval, basis.CyclicBSplineEval, basis.OrthExponentialEval]:
+        if cls in [
+            basis.BSplineEval,
+            basis.CyclicBSplineEval,
+            basis.OrthExponentialEval,
+        ]:
             pytest.skip(
                 f"Skipping test_jit_compilation_with_bounds for {cls.__name__}, "
                 "which depends on un-jittable scipy functions."
