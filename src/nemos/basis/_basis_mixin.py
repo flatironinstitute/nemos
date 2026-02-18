@@ -530,7 +530,7 @@ class EvalBasisMixin:
 
         """
         out = self.evaluate(*(np.reshape(x, (x.shape[0], -1)) for x in xi))
-        out = np.reshape(out, (out.shape[0], -1))
+        out = jnp.reshape(out, (out.shape[0], -1))
         if self.bounds is not None:
             to_fill = jnp.any(
                 jnp.stack(
