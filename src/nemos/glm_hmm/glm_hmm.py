@@ -33,7 +33,124 @@ from .validation import GLMHMMValidator
 
 
 class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
-    """GLM-HMM model."""
+    r"""Generalized Linear Model with Hidden Markov Model (GLM-HMM).
+
+    This model combines a Generalized Linear Model (GLM) with a Hidden Markov Model (HMM) to capture
+    state-dependent relationships between predictors and neural or behavioral responses. The GLM-HMM
+    is suitable for modeling time series data where the relationship between inputs and outputs
+    varies according to an underlying latent state that evolves over time following Markovian dynamics.
+
+    The model assumes that at each time step, the system is in one of ``n_states`` discrete hidden states.
+    Each state has its own GLM parameters (coefficients and intercept), and transitions between states
+    are governed by a transition probability matrix. The model is fitted using the Expectation-Maximization
+    (EM) algorithm.
+
+    Below is a table of the default inverse link function for the available observation models.
+
+    +---------------------+---------------------------------+
+    | Observation Model   | Default Inverse Link Function   |
+    +=====================+=================================+
+    | Poisson             | :math:`e^x`                     |
+    +---------------------+---------------------------------+
+    | Gamma               | :math:`1/x`                     |
+    +---------------------+---------------------------------+
+    | Bernoulli           | :math:`1 / (1 + e^{-x})`        |
+    +---------------------+---------------------------------+
+    | NegativeBinomial    | :math:`e^x`                     |
+    +---------------------+---------------------------------+
+    | Gaussian            | :math:`x`                       |
+    +---------------------+---------------------------------+
+
+    Below is a table listing the default and available solvers for each regularizer.
+
+    +---------------+------------------+-------------------------------------------------------------+
+    | Regularizer   | Default Solver   | Available Solvers                                           |
+    +===============+==================+=============================================================+
+    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
+    +---------------+------------------+-------------------------------------------------------------+
+    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
+    +---------------+------------------+-------------------------------------------------------------+
+    | Lasso         | ProximalGradient | ProximalGradient                                            |
+    +---------------+------------------+-------------------------------------------------------------+
+    | GroupLasso    | ProximalGradient | ProximalGradient                                            |
+    +---------------+------------------+-------------------------------------------------------------+
+
+    Parameters
+    ----------
+    n_states :
+        The number of hidden states in the HMM. Must be a positive integer.
+    observation_model :
+        Observation model to use. The model describes the distribution of the response variable.
+        Default is the Bernoulli model. Alternatives are "Poisson", "Gamma", "NegativeBinomial",
+        and "Gaussian".
+    inverse_link_function :
+        A function that maps the linear combination of predictors into a rate or probability.
+        The default depends on the observation model, see the table above.
+    regularizer :
+        Regularization to use for GLM parameter optimization. Defines the regularization scheme
+        and related parameters. Default is UnRegularized regression.
+    regularizer_strength :
+        Typically a float. Default is None. Sets the regularizer strength for the GLM coefficients.
+        If a user does not pass a value, and it is needed for regularization,
+        a warning will be raised and the strength will default to 1.0.
+    dirichlet_prior_alphas_init_prob :
+        Alpha parameters for the Dirichlet prior over the initial state probabilities.
+        Shape ``(n_states,)``. If None, a flat (uninformative) prior is assumed.
+    dirichlet_prior_alphas_transition :
+        Alpha parameters for the Dirichlet prior over the transition probabilities.
+        Shape ``(n_states, n_states)``. If None, a flat (uninformative) prior is assumed.
+    solver_name :
+        Solver to use for GLM optimization within the M-step. Defines the optimization scheme
+        and related parameters. The solver must be an appropriate match for the chosen regularizer.
+        Default is None. If no solver specified, one will be chosen based on the regularizer.
+        See the table above for regularizer/optimizer pairings.
+    solver_kwargs :
+        Optional dictionary for keyword arguments that are passed to the solver when instantiated.
+        E.g., stepsize, tol, acceleration, etc.
+    initialization_funcs :
+        Dictionary of initialization functions for model parameters. If None, default
+        initialization functions are used.
+    maxiter :
+        Maximum number of EM iterations. Default is 1000.
+    tol :
+        Convergence tolerance for the EM algorithm. The algorithm stops when the absolute change
+        in log-likelihood between consecutive iterations falls below this threshold. Default is 1e-8.
+    seed :
+        JAX PRNG key for random number generation during initialization. Default is
+        ``jax.random.PRNGKey(123)``.
+
+    Attributes
+    ----------
+    transition_prob_ :
+        Transition probability matrix of shape ``(n_states, n_states)``. Entry ``[i, j]`` represents
+        the probability of transitioning from state ``i`` to state ``j``.
+    initial_prob_ :
+        Initial state probability vector of shape ``(n_states,)``. Entry ``[i]`` represents
+        the probability of starting in state ``i``.
+    coef_ :
+        GLM coefficients for each state, shape ``(n_features, n_states)``.
+    intercept_ :
+        GLM intercepts (bias terms) for each state, shape ``(n_states,)``.
+    solver_state_ :
+        State of the solver after fitting. May include details like optimization error.
+    scale_ :
+        Scale parameter for the observation model, shape ``(n_states,)``.
+    dof_resid_ :
+        Degrees of freedom for the residuals.
+
+    Raises
+    ------
+    TypeError
+        If ``n_states`` is not a positive integer.
+    TypeError
+        If provided ``regularizer`` or ``observation_model`` are not valid.
+    TypeError
+        If ``seed`` is not a valid JAX PRNG key.
+    ValueError
+        If ``maxiter`` is not a positive integer.
+    ValueError
+        If ``tol`` is not a positive float.
+    """
 
     def __init__(
         self,
