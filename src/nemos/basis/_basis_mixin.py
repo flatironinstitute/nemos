@@ -498,6 +498,10 @@ class AtomicBasisMixin(BasisMixin):
 class EvalBasisMixin:
     """Mixin class for evaluational basis."""
 
+    # Whether to fill out-of-bounds samples with fill_value.
+    # Set to False for bases defined over the entire real line (e.g., Fourier).
+    _apply_bounds_fill = True
+
     def __init__(
         self, bounds: Optional[Tuple[float, float]] = None, fill_value: float = jnp.nan
     ):
@@ -531,7 +535,7 @@ class EvalBasisMixin:
         """
         out = self.evaluate(*(np.reshape(x, (x.shape[0], -1)) for x in xi))
         out = jnp.reshape(out, (out.shape[0], -1))
-        if self.bounds is not None:
+        if self._apply_bounds_fill and self.bounds is not None:
             to_fill = jnp.any(
                 jnp.stack(
                     [

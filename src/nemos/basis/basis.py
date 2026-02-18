@@ -2675,8 +2675,6 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         Values must be 0/1 or boolean. Callables must return a single boolean or
         {0, 1} value for each frequency coordinate.
 
-    fill_value :
-        The value to fill when samples are outside the bounds. Default is NaN.
     label :
         Descriptive label for the basis (e.g., to use in plots or summaries).
 
@@ -2760,6 +2758,10 @@ class FourierEval(EvalBasisMixin, FourierBasis):
 
     """
 
+    # Fourier basis is defined over the entire real line; bounds specify the period,
+    # not a valid domain. No out-of-bounds filling should be applied.
+    _apply_bounds_fill = False
+
     def __init__(
         self,
         frequencies: (
@@ -2772,7 +2774,6 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         ),
         ndim: int = 1,
         bounds: Optional[Tuple[float, float] | Tuple[Tuple[float, float]]] = None,
-        fill_value: float = jax.numpy.nan,
         frequency_mask: (
             Literal["all", "no-intercept"] | NDArray[bool] | None
         ) = "no-intercept",
@@ -2785,7 +2786,7 @@ class FourierEval(EvalBasisMixin, FourierBasis):
             frequency_mask=frequency_mask,
             ndim=ndim,
         )
-        EvalBasisMixin.__init__(self, bounds=bounds, fill_value=fill_value)
+        EvalBasisMixin.__init__(self, bounds=bounds)
 
     @add_docstring("evaluate_on_grid", FourierBasis)
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[NDArray, NDArray]:

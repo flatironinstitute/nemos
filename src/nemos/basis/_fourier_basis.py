@@ -633,15 +633,11 @@ class FourierBasis(AtomicBasisMixin, Basis):
         # min/max rescale to [0,1]:
         # The function does so over the time axis (each extra dim is
         # normalized independently)
-        fill_value = getattr(self, "fill_value", jnp.nan)
-
         def _flat_samples_to_angles(xs):
             scaled_samples = jax.tree_util.tree_map(
                 lambda x, b: 2
                 * jnp.pi
-                * self._shift_angles(
-                    min_max_rescale_samples(x, b, fill_value=fill_value)[0].reshape(-1)
-                ),
+                * self._shift_angles(min_max_rescale_samples(x, b)[0].reshape(-1)),
                 xs,
                 bounds,
             )
