@@ -293,7 +293,8 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
 
     **Compute Smoothing Posteriors**
 
-    Compute the probability of being in each state at each time point:
+    Compute the probability of being in each state at each time point,
+    conditioned on all observations:
 
     >>> posteriors = model.smooth_proba(X, y)
     >>> posteriors.shape
@@ -301,6 +302,15 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
     >>> # Each row sums to 1
     >>> np.allclose(posteriors.sum(axis=1), 1.0)
     True
+
+    **Compute Filtering Posteriors**
+
+    Compute the probability of being in each state conditioned on past
+    observations only:
+
+    >>> filtered = model.filter_proba(X, y)
+    >>> filtered.shape
+    (500, 2)
 
     **Customize the Observation Model**
 
