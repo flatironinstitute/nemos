@@ -290,6 +290,17 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
     >>> model.coef_.shape
     (3, 2)
 
+    **Compute Smoothing Posteriors**
+
+    Compute the probability of being in each state at each time point:
+
+    >>> posteriors = model.smooth_proba(X, y)
+    >>> posteriors.shape
+    (500, 2)
+    >>> # Each row sums to 1
+    >>> np.allclose(posteriors.sum(axis=1), 1.0)
+    True
+
     **Customize the Observation Model**
 
     Use a Poisson observation model for count data:
