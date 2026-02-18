@@ -530,7 +530,23 @@ class EvalBasisMixin:
 
         """
         out = self.evaluate(*(np.reshape(x, (x.shape[0], -1)) for x in xi))
-        return np.reshape(out, (out.shape[0], -1))
+        out = np.reshape(out, (out.shape[0], -1))
+        if self.bounds is not None:
+            to_fill = np.any(
+                np.stack(
+                    [
+                        np.any(
+                            (x.reshape(x.shape[0], -1) < self.bounds[0])
+                            | (x.reshape(x.shape[0], -1) > self.bounds[1]),
+                            axis=1,
+                        )
+                        for x in xi
+                    ]
+                ),
+                axis=0,
+            )
+            out = jnp.asarray(out).at[to_fill].set(self.fill_value)
+        return out
 
     def setup_basis(self, *xi: NDArray) -> Basis:
         """

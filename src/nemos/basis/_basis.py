@@ -69,7 +69,6 @@ def min_max_rescale_samples(
     sample_pts: NDArray,
     bounds: Optional[Tuple[float, float]] = None,
     use_jax: Optional[bool] = True,
-    fill_value: float = jnp.nan,
 ) -> Tuple[NDArray, NDArray]:
     """Rescale samples to [0,1].
 
@@ -80,8 +79,6 @@ def min_max_rescale_samples(
     bounds:
         Sample bounds. `bounds[0]` and `bounds[1]` are mapped to 0 and 1, respectively.
         Default are `min(sample_pts), max(sample_pts)`.
-    fill_value:
-        Fill out of bounds with this value. Default is np.nan
 
     Warns
     -----
@@ -101,10 +98,6 @@ def min_max_rescale_samples(
     scaling = asarray(vmax - vmin)
     # do not normalize if samples contain a single value (in which case vmax=vmin)
     scaling = where(scaling == 0, 1.0, scaling)
-    if bounds is not None:
-        sample_pts = where(
-            (sample_pts < vmin) | (sample_pts > vmax), fill_value, sample_pts
-        )
     sample_pts -= vmin
     sample_pts /= scaling
 

@@ -233,7 +233,6 @@ class MSplineBasis(SplineBasis, abc.ABC):
         sample_pts, scaling = min_max_rescale_samples(
             sample_pts,
             getattr(self, "bounds", None),
-            fill_value=getattr(self, "fill_value", jnp.nan),
         )
         # add knots if not passed
         knot_locs = self._generate_knots(is_cyclic=False)
@@ -363,7 +362,6 @@ class BSplineBasis(SplineBasis, abc.ABC):
             sample_pts,
             getattr(self, "bounds", None),
             use_jax=False,
-            fill_value=getattr(self, "fill_value", jnp.nan),
         )
         # add knots
         knot_locs = self._generate_knots(is_cyclic=False)
@@ -375,7 +373,7 @@ class BSplineBasis(SplineBasis, abc.ABC):
         )
 
         basis_eval = bspline(
-            sample_pts, knot_locs, order=self.order, der=0, outer_ok=False
+            sample_pts, knot_locs, order=self.order, der=0, outer_ok=True
         )
         basis_eval = basis_eval.reshape(*shape, basis_eval.shape[1])
         return basis_eval
@@ -475,7 +473,6 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
             sample_pts,
             getattr(self, "bounds", None),
             use_jax=False,
-            fill_value=getattr(self, "fill_value", jnp.nan),
         )
         knot_locs = self._generate_knots(is_cyclic=True)
 
@@ -597,7 +594,7 @@ def bspline(
     knots: NDArray,
     order: int = 4,
     der: int = 0,
-    outer_ok: bool = False,
+    outer_ok: bool = True,
 ) -> NDArray:
     """
     Calculate and return the evaluation of B-spline basis.
@@ -618,8 +615,7 @@ def bspline(
         The derivative of the B-spline basis to be evaluated.
     outer_ok :
         If True, allows for evaluation at points outside the range of knots.
-        Default is False, in which case an assertion error is raised when
-        points outside the knots range are encountered.
+        Default is True.
 
     Returns
     -------

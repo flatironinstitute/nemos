@@ -131,7 +131,6 @@ class RaisedCosineBasisLinear(AtomicBasisMixin, Basis, abc.ABC):
             sample_pts, _ = min_max_rescale_samples(
                 jnp.copy(sample_pts),
                 getattr(self, "bounds", None),
-                fill_value=getattr(self, "fill_value", jnp.nan),
             )
 
         peaks = self._compute_peaks()
@@ -306,7 +305,6 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
         sample_pts, _ = min_max_rescale_samples(
             jnp.copy(sample_pts),
             getattr(self, "bounds", None),
-            fill_value=getattr(self, "fill_value", jnp.nan),
         )
         # This log-stretching of the sample axis has the following effect:
         # - as the time_scaling tends to 0, the points will be linearly spaced across the whole domain.
