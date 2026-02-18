@@ -334,6 +334,13 @@ def _resolve_init_funcs_registry(
     return updated_registry
 
 
+def _is_native_init_registry(registry: INITIALIZATION_FN_DICT) -> bool:
+    """Return true if a function is a native initialization function."""
+    return all(
+        [fn in AVAILABLE_INIT_FUNCTIONS[key].values() for key, fn in registry.items()]
+    )
+
+
 def _resolve_init_func(
     func_name: str, init_func: Callable | str
 ) -> INIT_FUNCTION_HMM | INIT_FUNC_GLM_SCALE | INIT_FUNC_GLM_PARAMS:
