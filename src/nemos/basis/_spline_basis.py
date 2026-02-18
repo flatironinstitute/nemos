@@ -231,7 +231,9 @@ class MSplineBasis(SplineBasis, abc.ABC):
         integrate to one over the domain defined by the sample points.
         """
         sample_pts, scaling = min_max_rescale_samples(
-            sample_pts, getattr(self, "bounds", None)
+            sample_pts,
+            getattr(self, "bounds", None),
+            fill_value=getattr(self, "fill_value", jnp.nan),
         )
         # add knots if not passed
         knot_locs = self._generate_knots(is_cyclic=False)
@@ -358,7 +360,10 @@ class BSplineBasis(SplineBasis, abc.ABC):
         from SciPy to compute the basis values.
         """
         sample_pts, _ = min_max_rescale_samples(
-            sample_pts, getattr(self, "bounds", None), use_jax=False
+            sample_pts,
+            getattr(self, "bounds", None),
+            use_jax=False,
+            fill_value=getattr(self, "fill_value", jnp.nan),
         )
         # add knots
         knot_locs = self._generate_knots(is_cyclic=False)
@@ -467,7 +472,10 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
 
         """
         sample_pts, _ = min_max_rescale_samples(
-            sample_pts, getattr(self, "bounds", None), use_jax=False
+            sample_pts,
+            getattr(self, "bounds", None),
+            use_jax=False,
+            fill_value=getattr(self, "fill_value", jnp.nan),
         )
         knot_locs = self._generate_knots(is_cyclic=True)
 

@@ -13,6 +13,7 @@ from itertools import chain
 from typing import TYPE_CHECKING, Any, Generator, Literal, Optional, Tuple, Union
 
 import jax
+import jax.numpy as jnp
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame, TsdTensor
@@ -497,8 +498,11 @@ class AtomicBasisMixin(BasisMixin):
 class EvalBasisMixin:
     """Mixin class for evaluational basis."""
 
-    def __init__(self, bounds: Optional[Tuple[float, float]] = None):
+    def __init__(
+        self, bounds: Optional[Tuple[float, float]] = None, fill_value: float = jnp.nan
+    ):
         self.bounds = bounds
+        self.fill_value = fill_value
 
     def _compute_features(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor):
         """Evaluate basis at sample points.

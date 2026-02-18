@@ -144,7 +144,10 @@ class OrthExponentialBasis(AtomicBasisMixin, Basis, abc.ABC):
         """
         self._check_sample_size(sample_pts)
         sample_pts, _ = min_max_rescale_samples(
-            sample_pts, getattr(self, "bounds", None), use_jax=False
+            sample_pts,
+            getattr(self, "bounds", None),
+            use_jax=False,
+            fill_value=getattr(self, "fill_value", np.nan),
         )
 
         # process one input at the time (orthogonalization must be done one input at the time)
