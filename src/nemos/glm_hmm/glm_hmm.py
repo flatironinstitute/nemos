@@ -407,6 +407,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
             y,
             inverse_link_function=self._inverse_link_function,
             random_key=self._seed,
+            init_registry=self._initialization_funcs,
         )
 
         # check if registry uses NeMoS init funcs
