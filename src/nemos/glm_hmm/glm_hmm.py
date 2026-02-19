@@ -17,6 +17,7 @@ from ..observation_models import Observations
 from ..regularizer import Regularizer
 from ..typing import (
     DESIGN_INPUT_TYPE,
+    ModelParamsT,
     SolverState,
     StepResult,
 )
@@ -558,3 +559,16 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         return format_repr(
             self, multiline=True, use_name_keys=["inverse_link_function"]
         )
+
+    def _initialize_solver_and_state(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        init_params: ModelParamsT,
+    ) -> SolverState:
+        """Initialize solver method."""
+        pass
+
+    def predict(self, X: DESIGN_INPUT_TYPE) -> jnp.ndarray:
+        """Predict rate."""
+        pass
