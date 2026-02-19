@@ -1970,36 +1970,64 @@ class TestFilterAndSmoothProba:
         # We don't assert they're different because with very simple data they might be same
         # but we do check that both runs produce valid results
 
-
-    @pytest.mark.parametrize(
-        "n_states", [2, 3, 5]
-    )
     @pytest.mark.parametrize("method_name", ["smooth_proba"])
-    def test_smooth_proba_different_n_states(self, instantiate_base_regressor_subclass, n_states, method_name):
-        """Test smooth_proba with different numbers of states."""
-        np.random.seed(123)
-        n_samples, n_features = 100, 2
-        X = np.random.randn(n_samples, n_features)
-        y = np.random.poisson(2, size=n_samples)
-
-        model = nmo.glm_hmm.GLMHMM(
-            n_states=n_states,
-            observation_model="Poisson",
-            solver_kwargs={"maxiter": 2},
-        )
-        model.fit(X, y)
-
+    @pytest.mark.parametrize("nan_location", [[], [0, 1, 10, 11, 12]])
+    def test_pynapple_in_pynapple_out_X(self, instantiate_base_regressor_subclass, method_name, nan_location):
+        fixture = instantiate_base_regressor_subclass
+        X = fixture.X.copy()
+        X[nan_location] = np.nan
+        ep = nap.IntervalSet([0, 10], [9, 500])
+        X = nap.TsdFrame(t=np.arange(X.shape[0]), d=X, time_support=ep)
+        y = fixture.y
+        model = fixture.model
         posteriors = getattr(model, method_name)(X, y)
+        assert isinstance(posteriors, nap.TsdFrame), f"Did not return pynapple!"
+        assert np.all(np.isnan(posteriors[nan_location])), f"Not returning NaNs in the expected location!"
 
-        # Check shape
-        assert posteriors.shape == (n_samples, n_states), \
-            f"Expected shape ({n_samples}, {n_states}), got {posteriors.shape}"
+    @pytest.mark.parametrize("method_name", ["smooth_proba"])
+    @pytest.mark.parametrize("nan_location", [[], [0, 1, 10, 11, 12]])
+    def test_pynapple_in_pynapple_out_y(self, instantiate_base_regressor_subclass, method_name, nan_location):
+        fixture = instantiate_base_regressor_subclass
+        X = fixture.X
+        y = np.array(fixture.y.copy(), dtype=float)
+        y[nan_location] = np.nan
+        ep = nap.IntervalSet([0, 10], [9, 500])
+        y = nap.Tsd(t=np.arange(y.shape[0]), d=y, time_support=ep)
+        model = fixture.model
+        posteriors = getattr(model, method_name)(X, y)
+        assert isinstance(posteriors, nap.TsdFrame), f"Did not return pynapple!"
+        assert np.all(np.isnan(posteriors[nan_location])), f"Not returning NaNs in the expected location!"
 
-        # Check probabilities are valid
-        assert jnp.all(posteriors >= 0)
-        assert jnp.all(posteriors <= 1)
-        row_sums = jnp.sum(posteriors, axis=1)
-        assert jnp.allclose(row_sums, 1.0, rtol=1e-5)
+
+@pytest.mark.parametrize(
+    "n_states", [2, 3, 5]
+)
+@pytest.mark.parametrize("method_name", ["smooth_proba"])
+def test_smooth_proba_different_n_states(n_states, method_name):
+    """Test smooth_proba with different numbers of states."""
+    np.random.seed(123)
+    n_samples, n_features = 100, 2
+    X = np.random.randn(n_samples, n_features)
+    y = np.random.poisson(2, size=n_samples)
+
+    model = nmo.glm_hmm.GLMHMM(
+        n_states=n_states,
+        observation_model="Poisson",
+        solver_kwargs={"maxiter": 2},
+    )
+    model.fit(X, y)
+
+    posteriors = getattr(model, method_name)(X, y)
+
+    # Check shape
+    assert posteriors.shape == (n_samples, n_states), \
+        f"Expected shape ({n_samples}, {n_states}), got {posteriors.shape}"
+
+    # Check probabilities are valid
+    assert jnp.all(posteriors >= 0)
+    assert jnp.all(posteriors <= 1)
+    row_sums = jnp.sum(posteriors, axis=1)
+    assert jnp.allclose(row_sums, 1.0)
 
     # -------------------------------------------------------------------------
     # Tests for _initialize_optimization_and_state internal setup
