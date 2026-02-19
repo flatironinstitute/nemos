@@ -21,7 +21,7 @@ def tree_nan_like(x: PyTree):
 class ProxGradState(eqx.Module):
     """ProximalGradient (FISTA) solver state."""
 
-    iter_num: Int[Array, ""]
+    num_steps: Int[Array, ""]
     stepsize: Float[Array, ""]
     velocity: PyTree
     t: Float[Array, ""]
@@ -103,7 +103,7 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
             t = jnp.asarray(jnp.nan)
 
         return ProxGradState(
-            iter_num=jnp.asarray(0),
+            num_steps=jnp.asarray(0),
             velocity=vel,
             t=t,
             stepsize=jnp.asarray(1.0),
@@ -187,7 +187,7 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
         )
 
         next_state = ProxGradState(
-            iter_num=state.iter_num + 1,
+            num_steps=state.num_steps + 1,
             velocity=next_vel,
             t=next_t,
             stepsize=jnp.asarray(new_stepsize),

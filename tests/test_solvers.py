@@ -852,3 +852,50 @@ def test_optimistix_solvers_default_maxiter(request, solver_class, expected_maxi
     )
 
     assert solver.maxiter == expected_maxiter
+
+
+@pytest.mark.requires_x64
+@pytest.mark.parametrize(
+    "solver_class",
+    [
+        nmo.solvers.OptimistixNAG,
+        nmo.solvers.OptimistixFISTA,
+        nmo.solvers.OptimistixOptaxGradientDescent,
+        pytest.param(
+            getattr(nmo.solvers, "JaxoptGradientDescent", None),
+            marks=pytest.mark.skipif(
+                not nmo.solvers.JAXOPT_AVAILABLE, reason="jaxopt not available"
+            ),
+        ),
+        pytest.param(
+            getattr(nmo.solvers, "JaxoptProximalGradient", None),
+            marks=pytest.mark.skipif(
+                not nmo.solvers.JAXOPT_AVAILABLE, reason="jaxopt not available"
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize("stepsize", [None, 0.01])
+def test_solvers_converge_with_and_without_stepsize(request, solver_class, stepsize):
+    """Test that solvers converge on linear regression with and without explicit stepsize."""
+    X, y, _, true_params, loss = request.getfixturevalue("linear_regression")
+
+    # all these solvers use linesearch when stepsize <= 0, but None is clearer
+    # so handle it here for jaxopt solvers instead
+    if "jaxopt" in solver_class.__name__.lower() and stepsize is None:
+        stepsize = -1.0
+
+    param_init = jax.tree_util.tree_map(np.zeros_like, true_params)
+    solver = solver_class(
+        unregularized_loss=loss,
+        regularizer=nmo.regularizer.UnRegularized(),
+        regularizer_strength=None,
+        has_aux=False,
+        tol=1e-12,
+        stepsize=stepsize,
+        maxiter=10_000,
+        acceleration=False,
+    )
+    params, state, _ = solver.run(param_init, X, y)
+
+    assert np.allclose(true_params, params, atol=1e-5)
