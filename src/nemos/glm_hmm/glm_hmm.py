@@ -729,12 +729,3 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         return format_repr(
             self, multiline=True, use_name_keys=["inverse_link_function"]
         )
-
-    def _initialize_solver_and_state(
-        self,
-        X: DESIGN_INPUT_TYPE,
-        y: jnp.ndarray,
-        init_params: GLMHMMUserParams,
-    ) -> SolverState:
-        """Initialize solver method."""
-        pass
