@@ -542,7 +542,7 @@ class EvalBasisMixin:
         out = self.evaluate(*(np.reshape(x, (x.shape[0], -1)) for x in xi))
         if self._apply_bounds_fill and self.bounds is not None:
             out = self._apply_fill_value(*xi, out=out)
-        return jnp.reshape(out, (out.shape[0], -1))
+        return np.reshape(out, (out.shape[0], -1))
 
     @support_pynapple(conv_type="jax")
     def _apply_fill_value(self, *xi: ArrayLike, out: NDArray) -> jax.Array:
