@@ -29,7 +29,7 @@ from .initialize_parameters import (
     _resolve_init_funcs_registry,
     glm_hmm_initialization,
 )
-from .params import GLMHMMParams, GLMHMMUserParams, GLMParams, GLMScale, HMMParams
+from .params import GLMHMMParams, GLMHMMUserParams
 from .validation import GLMHMMValidator
 
 
@@ -528,12 +528,9 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         return None, None, None
 
     def _get_model_params(self) -> GLMHMMParams:
-        glm_params = GLMParams(self.coef_, self.intercept_)
-        scale = GLMScale(jnp.log(self.scale_))
-        hmm_params = HMMParams(
-            jnp.log(self.initial_prob_), jnp.log(self.transition_prob_)
+        return self._validator.to_model_params(
+            (self.coef_, self.intercept_, self.initial_prob_, self.transition_prob_)
         )
-        return GLMHMMParams(glm_params, scale, hmm_params)
 
     def _set_model_params(self, params: GLMHMMParams):
         self.coef_ = params.glm_params.coef
