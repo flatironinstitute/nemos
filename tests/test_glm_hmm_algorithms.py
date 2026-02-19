@@ -49,7 +49,7 @@ from nemos.solvers import get_solver
 def setup_solver(
     objective, init_params, tol=1e-12, reg_strength=0.0, reg=UnRegularized()
 ):
-    lbfgs_class = get_solver("LBFGS")
+    lbfgs_class = get_solver("LBFGS").implementation
     solver = lbfgs_class(
         objective,
         init_params=init_params,
@@ -2177,13 +2177,9 @@ def test_e_and_m_step_for_population(generate_data_multi_state_population):
     )
     alphas_transition = np.random.uniform(1, 3, size=transition_prob.shape)
     alphas_init = np.random.uniform(1, 3, size=initial_prob.shape)
-    lbfgs_class = solver_registry["LBFGS"]
-    solver = lbfgs_class(
-        partial_hmm_negative_log_likelihood,
-        regularizer=UnRegularized(),
-        regularizer_strength=None,
-        init_params=GLMParams(jnp.zeros((4, 2)), jnp.zeros((2, 1))),
-        has_aux=False,
+    solver = setup_solver(
+        partial_posterior_weighted_glm_negative_log_likelihood,
+        init_params=init_glm_params,
         tol=1e-13,
     )
 
