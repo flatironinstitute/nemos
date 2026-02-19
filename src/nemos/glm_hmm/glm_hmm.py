@@ -261,7 +261,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
 
         # provided a non-integer number (check that has no decimals)
         int_n_states = int(n_states)
-        if int_n_states != int(n_states):
+        if int_n_states != n_states:
             raise TypeError(
                 f"n_states must be a positive integer. ``{n_states}`` provided instead."
             )
