@@ -1,7 +1,9 @@
 from contextlib import nullcontext as does_not_raise
 from numbers import Number
 from typing import Callable
+from unittest.mock import patch
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -17,6 +19,7 @@ from nemos._observation_model_builder import (
     instantiate_observation_model,
 )
 from nemos._regularizer_builder import instantiate_regularizer
+from nemos.glm_hmm.expectation_maximization import GLMHMMState, em_glm_hmm, em_step
 from nemos.glm_hmm.params import GLMHMMParams, GLMParams
 from nemos.typing import FeaturePytree
 from nemos.utils import _get_name
@@ -676,3 +679,165 @@ class TestGLMHMM:
             init_state = fixture.model.initialize_optimization_and_state(
                 fixture.X, fixture.y, params
             )
+
+    # -------------------------------------------------------------------------
+    # Tests for _initialize_optimization_and_state internal setup
+    # -------------------------------------------------------------------------
+
+    def test_initialize_solver_sets_optimization_run(
+        self,
+        instantiate_base_regressor_subclass,
+    ):
+        """Test that _optimization_run wraps em_glm_hmm with correct arguments."""
+        fixture = instantiate_base_regressor_subclass
+        params = fixture.model.initialize_params(fixture.X, fixture.y)
+        fixture.model.initialize_optimization_and_state(fixture.X, fixture.y, params)
+
+        assert hasattr(fixture.model, "_optimization_run")
+        assert isinstance(fixture.model._optimization_run, eqx.Partial)
+        # Check wrapped function
+        assert fixture.model._optimization_run.func is em_glm_hmm
+        # Check bound keywords
+        expected_keys = {
+            "inverse_link_function",
+            "log_likelihood_func",
+            "m_step_fn_glm_params",
+            "m_step_fn_glm_scale",
+            "maxiter",
+            "tol",
+        }
+        assert set(fixture.model._optimization_run.keywords.keys()) == expected_keys
+        # Check maxiter and tol values
+        assert fixture.model._optimization_run.keywords["maxiter"] == fixture.model.maxiter
+        assert fixture.model._optimization_run.keywords["tol"] == fixture.model.tol
+
+    def test_initialize_solver_sets_optimization_update(
+        self,
+        instantiate_base_regressor_subclass,
+    ):
+        """Test that _optimization_update wraps em_step with correct arguments."""
+        fixture = instantiate_base_regressor_subclass
+        params = fixture.model.initialize_params(fixture.X, fixture.y)
+        fixture.model.initialize_optimization_and_state(fixture.X, fixture.y, params)
+
+        assert hasattr(fixture.model, "_optimization_update")
+        assert isinstance(fixture.model._optimization_update, eqx.Partial)
+        # Check wrapped function
+        assert fixture.model._optimization_update.func is em_step
+        # Check bound keywords
+        expected_keys = {
+            "inverse_link_function",
+            "log_likelihood_func",
+            "m_step_fn_glm_params",
+            "m_step_fn_glm_scale",
+        }
+        assert set(fixture.model._optimization_update.keywords.keys()) == expected_keys
+
+    def test_initialize_solver_sets_optimization_init_state(
+        self,
+        instantiate_base_regressor_subclass,
+    ):
+        """Test that _optimization_init_state is set as a callable after initialize_optimization_and_state."""
+        fixture = instantiate_base_regressor_subclass
+        params = fixture.model.initialize_params(fixture.X, fixture.y)
+        fixture.model.initialize_optimization_and_state(fixture.X, fixture.y, params)
+
+        assert hasattr(fixture.model, "_optimization_init_state")
+        assert callable(fixture.model._optimization_init_state)
+
+    def test_initialize_solver_returns_glmhmm_state(
+        self,
+        instantiate_base_regressor_subclass,
+    ):
+        """Test that initialize_optimization_and_state returns a GLMHMMState."""
+        fixture = instantiate_base_regressor_subclass
+        params = fixture.model.initialize_params(fixture.X, fixture.y)
+        init_state = fixture.model.initialize_optimization_and_state(
+            fixture.X, fixture.y, params
+        )
+
+        assert isinstance(init_state, GLMHMMState)
+
+    def test_initialize_solver_state_initial_values(
+        self,
+        instantiate_base_regressor_subclass,
+    ):
+        """Test that the returned GLMHMMState has correct initial values."""
+        fixture = instantiate_base_regressor_subclass
+        params = fixture.model.initialize_params(fixture.X, fixture.y)
+        init_state = fixture.model.initialize_optimization_and_state(
+            fixture.X, fixture.y, params
+        )
+
+        # Check initial log-likelihoods are -inf
+        assert jnp.isinf(init_state.data_log_likelihood)
+        assert init_state.data_log_likelihood < 0
+        assert jnp.isinf(init_state.previous_data_log_likelihood)
+        assert init_state.previous_data_log_likelihood < 0
+
+        # Check iterations starts at 0
+        assert init_state.iterations == 0
+
+        # Check log_likelihood_history has correct shape and is filled with NaN
+        assert init_state.log_likelihood_history.shape == (fixture.model.maxiter,)
+        assert jnp.all(jnp.isnan(init_state.log_likelihood_history))
+
+    def test_initialize_solver_init_state_fn_returns_same_structure(
+        self,
+        instantiate_base_regressor_subclass,
+    ):
+        """Test that _optimization_init_state returns a state with the same structure."""
+        fixture = instantiate_base_regressor_subclass
+        params = fixture.model.initialize_params(fixture.X, fixture.y)
+        init_state = fixture.model.initialize_optimization_and_state(
+            fixture.X, fixture.y, params
+        )
+
+        # Call _optimization_init_state and verify it returns same structure
+        new_state = fixture.model._optimization_init_state()
+        assert isinstance(new_state, GLMHMMState)
+        assert new_state.log_likelihood_history.shape == init_state.log_likelihood_history.shape
+
+    @pytest.mark.parametrize("maxiter", [10, 100, 500])
+    def test_initialize_solver_respects_maxiter(
+        self,
+        maxiter,
+        instantiate_base_regressor_subclass,
+    ):
+        """Test that maxiter is correctly used in state initialization."""
+        fixture = instantiate_base_regressor_subclass
+        fixture.model.maxiter = maxiter
+        params = fixture.model.initialize_params(fixture.X, fixture.y)
+        init_state = fixture.model.initialize_optimization_and_state(
+            fixture.X, fixture.y, params
+        )
+
+        # log_likelihood_history should have shape (maxiter,)
+        assert init_state.log_likelihood_history.shape == (maxiter,)
+
+
+@pytest.mark.parametrize(
+    "obs_model, expected_solver_calls, y",
+    [
+        ("Gaussian", 1, jnp.ones(100)),
+        ("Poisson", 2, jnp.ones(100)),
+        ("Bernoulli", 2, jax.random.choice(jax.random.PRNGKey(0), jnp.array([0.0, 1.0]), shape=(100,))),
+        ("Gamma", 2, jnp.ones(100)),
+        ("NegativeBinomial", 2, jnp.ones(100)),
+    ],
+)
+def test_initialize_solver_scale_update_method(obs_model, expected_solver_calls, y):
+    """Test analytical vs numerical scale update selection.
+
+    Gaussian uses analytical scale update (_instantiate_solver called once).
+    All others use numerical scale update (_instantiate_solver called twice).
+    """
+    model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model=obs_model)
+    X = jnp.ones((100, 2))
+    params = model.initialize_params(X, y)
+
+    with patch.object(
+        model, "_instantiate_solver", wraps=model._instantiate_solver
+    ) as mock_solver:
+        model.initialize_optimization_and_state(X, y, params)
+        assert mock_solver.call_count == expected_solver_calls
