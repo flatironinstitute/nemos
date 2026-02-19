@@ -391,7 +391,6 @@ def simulate_recurrent(
         Improvements over original:
         - Direct iteration over feedforward input (no dynamic_slice)
         - Simple einsum for convolution (no nested scan)
-        - Roll + update for activity buffer (no vstack allocation)
         """
         key, ff_input = inputs
 
@@ -408,8 +407,7 @@ def simulate_recurrent(
         # Simulate activity
         new_act = jax.random.poisson(key, firing_rate)
 
-        # Update activity buffer: roll and set last row
-        activity = jnp.roll(activity, -1, axis=0).at[-1].set(new_act)
+        activity = jnp.vstack((activity[1:], new_act))
 
         return activity, (new_act, firing_rate)
 
