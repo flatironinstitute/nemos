@@ -108,7 +108,6 @@ def test_concatenate_type(arrays, dtype):
 
 
 class TestPadding:
-
     @pytest.mark.parametrize(
         "predictor_causality", ["causal", "acausal", "anti-causal", ""]
     )
@@ -140,12 +139,12 @@ class TestPadding:
                 utils.nan_pad(array, pad_size, "anti-causal")
         else:
             padded = utils.nan_pad(array, pad_size, "causal")
-            assert np.isnan(padded[:pad_size]).all(), (
-                "Missing NaNs at the " "beginning of the array!"
-            )
-            assert not np.isnan(padded[pad_size:]).all(), (
-                "Found NaNs at the " "end of the array!"
-            )
+            assert np.isnan(
+                padded[:pad_size]
+            ).all(), "Missing NaNs at the beginning of the array!"
+            assert not np.isnan(
+                padded[pad_size:]
+            ).all(), "Found NaNs at the end of the array!"
             assert (
                 padded.shape[0] == array.shape[0] + pad_size
             ), "Size after padding doesn't match expectation. Should be T + window_size - 1."
@@ -190,9 +189,9 @@ class TestPadding:
                     message="With acausal filter, pad_size should probably be even",
                 )
                 padded = utils.nan_pad(array, pad_size, "acausal")
-            assert np.isnan(padded[:init_nan]).all(), (
-                "Missing NaNs at the " "beginning of the array!"
-            )
+            assert np.isnan(
+                padded[:init_nan]
+            ).all(), "Missing NaNs at the beginning of the array!"
             assert np.isnan(
                 padded[padded.shape[0] - end_nan :]
             ).all(), "Missing NaNs at the end of the array!"
@@ -328,7 +327,6 @@ class TestPadding:
 
 
 class TestShiftTimeSeries:
-
     @pytest.mark.parametrize(
         "predictor_causality, expectation",
         [
@@ -579,7 +577,7 @@ class ComplexParam(Base):
             nmo.glm.GLM(inverse_link_function=deepcopy(jax.numpy.exp)),
             None,
             [],
-            "GLM(observation_model=PoissonObservations(), inverse_link_function=<PjitFunction>, regularizer=UnRegularized(), solver_name='GradientDescent')",
+            f"GLM(observation_model=PoissonObservations(), inverse_link_function=<PjitFunction>, regularizer=UnRegularized(), solver_name='GradientDescent[{nmo.solvers._solver_registry._resolve_backend('GradientDescent', False)}]')",
         ),
     ],
 )
@@ -671,7 +669,7 @@ def test_inspect_npz(tmp_path, model_class, monkeypatch, capsys):
         "regularizer            : {'class': 'nemos.regularizer.Ridge'}",
         "regularizer_strength   : 0.1",
         "solver_kwargs          : None",
-        "solver_name            : BFGS",
+        f"solver_name            : BFGS[{nmo.solvers._solver_registry._resolve_backend('BFGS', False)}]",
         "",
         "Model fit parameters",
         "--------------------",

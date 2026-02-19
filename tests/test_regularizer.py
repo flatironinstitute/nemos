@@ -11,13 +11,37 @@ import pytest
 import statsmodels.api as sm
 from scipy.optimize import minimize
 from sklearn.linear_model import GammaRegressor, PoissonRegressor
-from statsmodels.tools.sm_exceptions import DomainWarning
 
 import nemos as nmo
 from nemos.glm.params import GLMParams
 
 # Register every test here as solver-related
 pytestmark = pytest.mark.solver_related
+
+
+@pytest.fixture(scope="module", autouse=True)
+def register_deregister_agradientdescent():
+    """Fixture for registering and deregistering AGradientDescent."""
+    name = "AGradientDescent"
+
+    # register a random solver under this name
+    nmo.solvers.register(
+        name, nmo.solvers.get_solver("LBFGS").implementation, backend="custom"
+    )
+
+    yield
+
+    from nemos.solvers._solver_registry import _registry, _defaults
+
+    if name in _registry and "custom" in _registry[name]:
+        # remove custom dummy implementation
+        _registry[name].pop("custom", None)
+        # if there are no other implementations, remove the algo name
+        if not _registry[name]:
+            _registry.pop(name, None)
+    # if the default implementation was the custom dummy one, remove it
+    if _defaults.get(name) == "custom":
+        _defaults.pop(name, None)
 
 
 @pytest.mark.parametrize(
@@ -111,6 +135,58 @@ def test_item_assignment_allowed_solvers(regularizer):
         TypeError, match="'tuple' object does not support item assignment"
     ):
         regularizer.allowed_solvers[0] = "my-favourite-solver"
+
+
+@pytest.mark.parametrize(
+    "regularizer_class",
+    [
+        nmo.regularizer.UnRegularized,
+        nmo.regularizer.Ridge,
+        nmo.regularizer.Lasso,
+        nmo.regularizer.ElasticNet,
+        nmo.regularizer.GroupLasso,
+    ],
+)
+def test_allow_solver(regularizer_class):
+    """allow_solver should update the class-level tuple for all instances."""
+    new_solver = "MyCoolNewAlgorithm"
+    original_allowed = regularizer_class._allowed_solvers
+
+    reg1 = regularizer_class()
+    reg2 = regularizer_class()
+
+    # by default it's not allowed
+    assert new_solver not in reg1.allowed_solvers
+    assert new_solver not in reg2.allowed_solvers
+
+    try:
+        # register and allow the this solver
+        # using LBFGS just as a dummy that implements the solver interface
+        nmo.solvers.register(
+            new_solver, nmo.solvers.get_solver("LBFGS").implementation, default=True
+        )
+        regularizer_class.allow_solver(new_solver)
+
+        assert new_solver in reg1.allowed_solvers
+        assert new_solver in reg2.allowed_solvers
+        assert new_solver in regularizer_class().allowed_solvers
+
+        with does_not_raise():
+            reg1.check_solver(new_solver)
+            model = nmo.glm.GLM(regularizer=reg1, solver_name=new_solver)
+            assert model.algo_name == new_solver
+
+        # allowing a solver already allowed does nothing
+        _default_solver = regularizer_class._default_solver
+        regularizer_class.allow_solver(_default_solver)
+        assert regularizer_class().allowed_solvers.count(_default_solver) == 1
+        assert reg1.allowed_solvers.count(_default_solver) == 1
+        assert reg2.allowed_solvers.count(_default_solver) == 1
+    finally:
+        # reset to avoid leaking the extra solver into other tests
+        regularizer_class._allowed_solvers = original_allowed
+        nmo.solvers._solver_registry._registry.pop("MyCoolNewAlgorithm")
+        nmo.solvers._solver_registry._defaults.pop("MyCoolNewAlgorithm")
 
 
 @pytest.mark.parametrize(
