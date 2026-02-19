@@ -529,15 +529,24 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
 
     def _get_model_params(self) -> GLMHMMParams:
         return self._validator.to_model_params(
-            (self.coef_, self.intercept_, self.initial_prob_, self.transition_prob_)
+            (
+                self.coef_,
+                self.intercept_,
+                self.scale_,
+                self.initial_prob_,
+                self.transition_prob_,
+            )
         )
 
     def _set_model_params(self, params: GLMHMMParams):
-        self.coef_ = params.glm_params.coef
-        self.intercept_ = params.glm_params.intercept
-        self.scale_ = jnp.exp(params.glm_scale.log_scale)
-        self.initial_prob_ = jnp.exp(params.hmm_params.log_initial_prob)
-        self.transition_prob_ = jnp.exp(params.hmm_params.log_transition_prob)
+        coef, intercept, scale, initial_prob, transition_prob = (
+            self._validator.from_model_params(params)
+        )
+        self.coef_ = coef
+        self.intercept_ = intercept
+        self.scale_ = scale
+        self.initial_prob_ = initial_prob
+        self.transition_prob_ = transition_prob
 
     def update(
         self,
