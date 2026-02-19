@@ -379,12 +379,18 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
 
     @seed.setter
     def seed(self, value):
-        value = jnp.asarray(value)
+        try:
+            value = jnp.asarray(value)
+        except (TypeError, ValueError) as e:
+            raise TypeError(
+                f"seed must be a JAX PRNG key (jax.random.PRNGKey). "
+                f"Got {type(value).__name__} instead."
+            ) from e
         # Validate it's a JAX PRNG key
         if value.shape != (2,) or value.dtype != jnp.uint32:
             raise TypeError(
                 f"seed must be a JAX PRNG key (jax.random.PRNGKey). "
-                f"Got {type(value)} with shape {getattr(value, 'shape', 'N/A')}"
+                f"Got {type(value).__name__} with shape {getattr(value, 'shape', 'N/A')}"
             )
         self._seed = value
 
