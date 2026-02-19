@@ -189,17 +189,30 @@ class Regularizer(Base, abc.ABC):
 
     def check_solver(self, solver_name: str) -> None:
         """Raise an error if the given solver is not allowed."""
-        # Temporary parsing until an improved registry is implemented.
-        algo_name = solver_name.split("[", 1)[0]
-        if (
-            solver_name not in self._allowed_solvers
-            and algo_name not in self._allowed_solvers
-        ):
+        if solver_name not in self._allowed_solvers:
             raise ValueError(
                 f"The solver: {solver_name} is not allowed for "
                 f"{self.__class__.__name__} regularization. Allowed solvers are "
                 f"{self.allowed_solvers}."
+                f"If {solver_name} is your implementation and is designed to be"
+                f"compatible with {self.__class__.__name__}, register it with"
+                f"{self.__class__.__name__}.allow_solver({solver_name})"
             )
+
+    @classmethod
+    def allow_solver(cls, algo_name: str) -> None:
+        """
+        Add an algorithm to the list of compatible solvers.
+
+        Parameters
+        ----------
+        algo_name :
+            Name of the optimization algorithm to add.
+        """
+        if algo_name in cls._allowed_solvers:
+            return
+
+        cls._allowed_solvers += (algo_name,)
 
     def __repr__(self) -> str:
         return format_repr(self)
@@ -224,7 +237,7 @@ class Regularizer(Base, abc.ABC):
 
         Parameters
         ----------
-        init_params:
+        params:
             The parameters to be regularized.
 
         Returns

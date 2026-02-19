@@ -14,13 +14,13 @@ from nemos.glm_hmm.expectation_maximization import forward_backward, run_m_step
 from nemos.glm_hmm.params import GLMHMMParams, GLMScale, HMMParams
 from nemos.glm_hmm.utils import compute_rate_per_state
 from nemos.regularizer import UnRegularized
-from nemos.solvers import solver_registry
+from nemos.solvers import get_solver
 
 
 def setup_solver(
     objective, init_params, tol=1e-12, reg_strength=0.0, reg=UnRegularized()
 ):
-    lbfgs_class = solver_registry["LBFGS"]
+    lbfgs_class = get_solver("LBFGS").implementation
     solver = lbfgs_class(
         objective,
         init_params=init_params,
@@ -121,7 +121,6 @@ def generate_data_gaussian(request):
 )
 @pytest.mark.requires_x64
 class TestAnalyticMStepScale:
-
     def test_gaussian_obs_mstep(self, generate_data_gaussian):
         (
             X,

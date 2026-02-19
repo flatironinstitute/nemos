@@ -228,7 +228,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
 
     >>> model = nmo.glm.GLM(solver_name="LBFGS").fit(X, y)
     >>> model.solver_name
-    'LBFGS'
+    'LBFGS[...]'
     """
 
     _invalid_observation_types = (obs.CategoricalObservations,)
@@ -1117,7 +1117,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         regularizer: Ridge()
         regularizer_strength: 0.1...
         solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
-        solver_name: BFGS
+        solver_name: BFGS[...]
         >>> # Save the model parameters to a file
         >>> model.save_params("model_params.npz")
         >>> # Load the model from the saved file
@@ -1130,7 +1130,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         regularizer: Ridge()
         regularizer_strength: 0.1...
         solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
-        solver_name: BFGS
+        solver_name: BFGS[...]
 
         >>> # Saving and loading a custom inverse link function
         >>> model = nmo.glm.GLM(
@@ -1151,7 +1151,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         regularizer: UnRegularized()
         regularizer_strength: None
         solver_kwargs: {}
-        solver_name: GradientDescent
+        solver_name: GradientDescent[...]
         """
 
         # initialize saving dictionary
