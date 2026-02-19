@@ -19,7 +19,6 @@ from ..observation_models import Observations
 from ..regularizer import Regularizer
 from ..typing import (
     DESIGN_INPUT_TYPE,
-    ModelParamsT,
     SolverState,
     StepResult,
 )
@@ -735,7 +734,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
-        init_params: ModelParamsT,
+        init_params: GLMHMMUserParams,
     ) -> SolverState:
         """Initialize solver method."""
         pass
