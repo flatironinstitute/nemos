@@ -404,11 +404,6 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         pass
 
     @abc.abstractmethod
-    def predict(self, X: DESIGN_INPUT_TYPE) -> jnp.ndarray:
-        """Predict rates based on fit parameters."""
-        pass
-
-    @abc.abstractmethod
     def score(
         self,
         X: DESIGN_INPUT_TYPE,

@@ -568,7 +568,3 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
     ) -> SolverState:
         """Initialize solver method."""
         pass
-
-    def predict(self, X: DESIGN_INPUT_TYPE) -> jnp.ndarray:
-        """Predict rate."""
-        pass
