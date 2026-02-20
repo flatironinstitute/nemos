@@ -81,6 +81,20 @@ class StochasticSolverMixin:
 
     _supports_stochastic = True
 
+    def _validate_stochastic_options(self):
+        """Make sure acceleration and linesearches are turned off if available."""
+        if "acceleration" in self.get_accepted_arguments():
+            if self.acceleration:
+                raise ValueError(
+                    "Turn off acceleration option for stochastic optimization."
+                )
+
+        if "stepsize" in self.get_accepted_arguments():
+            if self.stepsize is None or self.stepsize <= 0.0:
+                raise ValueError(
+                    "Turn off linesearch and set explicit stepsizes for stochastic optimization."
+                )
+
     def _stochastic_run_impl(
         self,
         init_params: Params,
@@ -117,17 +131,7 @@ class StochasticSolverMixin:
         StepResult :
             Final (params, state, aux) tuple.
         """
-        if "acceleration" in self.get_accepted_arguments():
-            if self.acceleration:
-                raise ValueError(
-                    "Turn off acceleration option for stochastic optimization."
-                )
-
-        if "stepsize" in self.get_accepted_arguments():
-            if self.stepsize is None or self.stepsize <= 0.0:
-                raise ValueError(
-                    "Turn off linesearch and set explicit stepsizes for stochastic optimization."
-                )
+        self._validate_stochastic_options()
 
         sample_batch = data_loader.sample_batch()
         state = self.init_state(init_params, *sample_batch)
@@ -141,19 +145,15 @@ class StochasticSolverMixin:
             for batch_idx, batch_data in enumerate(data_loader):
                 params, state, aux = self.update(params, state, *batch_data)
                 if batch_callback is not None:
-                    if _as_stop_flag(
-                        batch_callback(params, state, aux, batch_idx, epoch),
-                        "batch_callback",
-                    ):
+                    stop_on_batch = batch_callback(params, state, aux, batch_idx, epoch)
+                    if _as_stop_flag(stop_on_batch, "batch_callback"):
                         return (params, state, aux)
 
             if convergence_criterion is not None:
-                if _as_stop_flag(
-                    convergence_criterion(
-                        params, prev_params, state, prev_state, aux, epoch
-                    ),
-                    "convergence_criterion",
-                ):
+                stop_on_epoch = convergence_criterion(
+                    params, prev_params, state, prev_state, aux, epoch
+                )
+                if _as_stop_flag(stop_on_epoch, "convergence_criterion"):
                     return (params, state, aux)
 
         return (params, state, aux)
