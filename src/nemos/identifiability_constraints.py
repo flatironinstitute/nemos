@@ -7,16 +7,13 @@ from typing import TYPE_CHECKING, Callable, Tuple
 
 import jax
 import jax.numpy as jnp
-import lazy_loader as lazy
 import numpy as np
 from jax.typing import ArrayLike as JaxArray
 from numpy.typing import NDArray
 
+from . import validation
 from .tree_utils import get_valid_multitree, tree_slice
 from .type_casting import support_pynapple
-
-# Lazy load validation to avoid importing sklearn at module level
-validation = lazy.load("nemos.validation")
 
 if TYPE_CHECKING:
     from .basis._basis import Basis
