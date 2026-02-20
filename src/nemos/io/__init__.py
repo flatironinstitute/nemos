@@ -1,9 +1,5 @@
-"""core tools for I/O OPERATIONS."""
+"""Core tools for I/O operations."""
 
-from .io import inspect_npz, load_model
+import lazy_loader as _lazy
 
-__all__ = ["load_model", "inspect_npz"]
-
-
-def __dir__() -> list[str]:
-    return __all__
+__getattr__, __dir__, __all__ = _lazy.attach_stub(__name__, __file__)

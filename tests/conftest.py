@@ -42,6 +42,7 @@ from nemos.basis._transformer_basis import TransformerBasis
 from nemos.glm.params import GLMParams
 from nemos.inverse_link_function_utils import log_softmax
 from nemos.pytrees import FeaturePytree
+from nemos.base_regressor import BaseRegressor
 from nemos.tree_utils import tree_full_like
 
 
@@ -291,7 +292,7 @@ def list_all_real_basis_classes(filter_basis="all"):
 
 
 # Sample subclass to test instantiation and methods
-class MockRegressor(nmo.base_regressor.BaseRegressor):
+class MockRegressor(BaseRegressor):
     """
     Mock implementation of the BaseRegressor abstract class for testing purposes.
     Implements all required abstract methods as empty methods.
