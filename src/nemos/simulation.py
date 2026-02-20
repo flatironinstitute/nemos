@@ -10,7 +10,7 @@ import numpy as np
 import scipy.stats as sts
 from numpy.typing import NDArray
 
-from . import convolve, validation
+from . import validation
 from .pytrees import FeaturePytree
 
 
@@ -377,59 +377,41 @@ def simulate_recurrent(
         )
 
     subkeys = jax.random.split(random_key, num=feedforward_input.shape[0])
-    # (n_samples, n_neurons)
+    # Pre-compute feedforward contribution: (n_samples, n_neurons)
     feed_forward_contrib = jnp.einsum("ik,tik->ti", feedforward_coef, feedforward_input)
 
+    # Pre-flip the basis to match convolution behavior (jnp.convolve flips the kernel)
+    coupling_basis_flipped = coupling_basis_matrix[::-1]
+
     def scan_fn(
-        data: Tuple[jnp.ndarray, int], key: jax.Array
-    ) -> Tuple[Tuple[jnp.ndarray, int], Tuple[jnp.ndarray, jnp.ndarray]]:
-        """Scan over time steps and simulate activity and rates.
+        activity: jnp.ndarray, inputs: Tuple[jax.Array, jnp.ndarray]
+    ) -> Tuple[jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]]:
+        """Optimized scan over time steps.
 
-        This function simulates the neural activity and firing rates for each time step
-        based on the previous activity, feedforward input, and model coefficients.
+        Improvements over original:
+        - Direct iteration over feedforward input (no dynamic_slice)
+        - Simple einsum for convolution (no nested scan)
         """
-        activity, t_sample = data
+        key, ff_input = inputs
 
-        # Convolve the neural activity with the coupling basis matrix
-        # Output of shape (1, n_neuron, n_basis_coupling)
-        # 1. The first dimension is time, and 1 is by construction since we are simulating 1
-        #    sample
-        # 2. Flatten to shape (n_neuron * n_basis_coupling, )
-        # Convolution in safe mode (no vectorization)
-        conv_act = convolve._tensor_convolve(
-            activity,
-            coupling_basis_matrix,
-            batch_size_samples=feedforward_input.shape[0],
-            batch_size_channels=1,
-            batch_size_basis=1,
-        ).reshape(
-            -1,
-        )
+        # Simple einsum convolution: activity (window, n_neurons) @ basis_flipped (window, n_basis)
+        # Flipping matches jnp.convolve behavior used in _tensor_convolve
+        # Result: (n_neurons, n_basis) -> flattened to (n_neurons * n_basis,)
+        conv_act = jnp.einsum("wn,wb->nb", activity, coupling_basis_flipped).reshape(-1)
 
-        # Extract the slice of the feedforward input for the current time step
-        input_slice = jax.lax.dynamic_slice(
-            feed_forward_contrib,
-            (t_sample, 0),
-            (1, feed_forward_contrib.shape[1]),
-        ).squeeze(axis=0)
-
-        # Predict the firing rate using the model coefficients
-        # Doesn't use predict because the non-linearity needs
-        # to be applied after we add the feed forward input
+        # Predict firing rate
         firing_rate = inverse_link_function(
-            coupling_coef.dot(conv_act) + input_slice + intercepts
+            coupling_coef.dot(conv_act) + ff_input + intercepts
         )
 
-        # Simulate activity based on the predicted firing rate
+        # Simulate activity
         new_act = jax.random.poisson(key, firing_rate)
 
-        # Shift of one sample the spike count window
-        # for the next iteration (i.e. remove the first counts, and
-        # stack the newly generated sample)
-        # Increase the t_sample by one
-        carry = jnp.vstack((activity[1:], new_act)), t_sample + 1
-        return carry, (new_act, firing_rate)
+        activity = jnp.vstack((activity[1:], new_act))
 
-    _, outputs = jax.lax.scan(scan_fn, (init_y, 0), subkeys)
+        return activity, (new_act, firing_rate)
+
+    # Iterate over (subkeys, feed_forward_contrib) together
+    _, outputs = jax.lax.scan(scan_fn, init_y, (subkeys, feed_forward_contrib))
     simulated_activity, firing_rates = outputs
     return simulated_activity, firing_rates

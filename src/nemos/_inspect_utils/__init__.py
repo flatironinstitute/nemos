@@ -15,8 +15,10 @@ from .inspect_utils import (
     check_all_abstract_methods_compliance,
     get_abstract_classes,
     get_non_abstract_classes,
+    get_params,
     get_subclass_methods,
     get_superclass_abstract_methods,
+    implements_methods,
     is_abstract,
     list_abstract_methods,
     reimplements_method,
@@ -33,4 +35,6 @@ __all__ = [
     "get_superclass_abstract_methods",
     "check_all_abstract_methods_compliance",
     "trim_kwargs",
+    "get_params",
+    "implements_methods",
 ]

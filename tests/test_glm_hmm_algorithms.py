@@ -43,13 +43,13 @@ from nemos.observation_models import (
     PoissonObservations,
 )
 from nemos.regularizer import UnRegularized
-from nemos.solvers import solver_registry
+from nemos.solvers import get_solver
 
 
 def setup_solver(
     objective, init_params, tol=1e-12, reg_strength=0.0, reg=UnRegularized()
 ):
-    lbfgs_class = solver_registry["LBFGS"]
+    lbfgs_class = get_solver("LBFGS").implementation
     solver = lbfgs_class(
         objective,
         init_params=init_params,
