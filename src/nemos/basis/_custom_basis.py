@@ -13,10 +13,9 @@ from numbers import Number
 from typing import TYPE_CHECKING, Callable, Iterable, List, Optional, Tuple
 
 import jax.numpy as jnp
+import lazy_loader as lazy
 import numpy as np
-import pynapple as nap
 from numpy.typing import ArrayLike, NDArray
-from pynapple import Tsd, TsdFrame, TsdTensor
 
 from nemos.typing import FeatureMatrix
 
@@ -39,7 +38,13 @@ from ._composition_utils import (
     set_input_shape,
 )
 
+# Lazy load pynapple to improve import times
+nap = lazy.load("pynapple")
+
 if TYPE_CHECKING:
+    import pynapple as nap  # noqa: F811
+    from pynapple import Tsd, TsdFrame, TsdTensor
+
     from . import TransformerBasis
 
 

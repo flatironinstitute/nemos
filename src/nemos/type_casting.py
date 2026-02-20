@@ -9,20 +9,47 @@ The key feature for this module is the `cast_jax` decorator, which automatically
 to JAX arrays and, where applicable, converts outputs back to pynapple TSD objects.
 """
 
+from __future__ import annotations
+
 from functools import wraps
 from numbers import Number
-from typing import Any, Callable, List, Literal, Optional, Tuple, Type, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    List,
+    Literal,
+    Optional,
+    Tuple,
+    Type,
+    Union,
+)
 
 import jax
 import jax.numpy as jnp
+import lazy_loader as lazy
 import numpy as np
-import pynapple as nap
 from numpy.typing import NDArray
 
 from . import tree_utils
 from .pytrees import FeaturePytree
 
-_NAP_TIME_PRECISION = 10 ** (-nap.nap_config.time_index_precision)
+# Lazy load pynapple to improve import times
+nap = lazy.load("pynapple")
+
+if TYPE_CHECKING:
+    import pynapple as nap  # noqa: F811
+
+# Lazy-computed constant to avoid triggering pynapple import at module load
+_NAP_TIME_PRECISION = None
+
+
+def _get_nap_time_precision():
+    """Get pynapple time precision, computing on first call."""
+    global _NAP_TIME_PRECISION
+    if _NAP_TIME_PRECISION is None:
+        _NAP_TIME_PRECISION = 10 ** (-nap.nap_config.time_index_precision)
+    return _NAP_TIME_PRECISION
 
 
 def _is_scalar_or_0d(x):
@@ -235,7 +262,7 @@ def _check_all_close(arrays: List[NDArray]) -> bool:
             arrays[0],
             x,
             rtol=0,
-            atol=_NAP_TIME_PRECISION,
+            atol=_get_nap_time_precision(),
         )
         for x in arrays[1:]
     )

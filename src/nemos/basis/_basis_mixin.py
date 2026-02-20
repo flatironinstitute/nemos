@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING, Any, Generator, Literal, Optional, Tuple, Unio
 import jax
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
-from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..convolve import create_convolutional_predictor
 from ..utils import _get_terminal_size, format_repr
@@ -33,6 +32,8 @@ from ._composition_utils import (
 from ._transformer_basis import TransformerBasis
 
 if TYPE_CHECKING:
+    from pynapple import Tsd, TsdFrame, TsdTensor
+
     from ._basis import Basis
 
 

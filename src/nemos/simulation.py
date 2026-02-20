@@ -6,12 +6,15 @@ from typing import Callable, Tuple, Union
 
 import jax
 import jax.numpy as jnp
+import lazy_loader as lazy
 import numpy as np
-import scipy.stats as sts
 from numpy.typing import NDArray
 
-from . import validation
 from .pytrees import FeaturePytree
+
+# Lazy load to avoid importing sklearn (via validation) and scipy.stats at module level
+sts = lazy.load("scipy.stats")
+validation = lazy.load("nemos.validation")
 
 
 def difference_of_gammas(

@@ -2,21 +2,29 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, NamedTuple, Tuple, TypeAlias, TypeVar, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    NamedTuple,
+    Tuple,
+    TypeAlias,
+    TypeVar,
+)
 
 import jax.numpy as jnp
-import pynapple as nap
 from jax.typing import ArrayLike
 from numpy.typing import NDArray
 
-from .pytrees import FeaturePytree
+if TYPE_CHECKING:
+    import pynapple as nap
 
 Pytree: TypeAlias = Any
 Params: TypeAlias = Pytree
 Aux = TypeVar("Aux")
 SolverState = TypeVar("SolverState")
 StepResult: TypeAlias = Tuple[Params, SolverState, Aux]
-DESIGN_INPUT_TYPE = Union[jnp.ndarray, FeaturePytree, nap.TsdFrame]
+DESIGN_INPUT_TYPE = "Union[jnp.ndarray, FeaturePytree, nap.TsdFrame]"
 
 # copying jax.random's annotation
 KeyArrayLike = ArrayLike
@@ -58,7 +66,7 @@ ProximalOperator = Callable[
     Tuple[jnp.ndarray, jnp.ndarray],
 ]
 
-FeatureMatrix = nap.TsdFrame | NDArray
+FeatureMatrix: TypeAlias = "nap.TsdFrame | NDArray"
 
 # User provided init_params (e.g. for GLMs Tuple[array, array])
 UserProvidedParamsT = TypeVar("UserProvidedParamsT")
