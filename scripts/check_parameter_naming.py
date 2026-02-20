@@ -123,6 +123,7 @@ VALID_PAIRS = [
     {"method_name", "method_names"},
     {"n_features", "features"},
     {"n_outputs", "output"},
+    {"callback_name", "fallback_name"},
 ]
 
 
