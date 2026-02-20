@@ -10,11 +10,11 @@ import lazy_loader as lazy
 import numpy as np
 from numpy.typing import NDArray
 
+from . import validation
 from .pytrees import FeaturePytree
 
-# Lazy load to avoid importing sklearn (via validation) and scipy.stats at module level
-sts = lazy.load("scipy.stats")
-validation = lazy.load("nemos.validation")
+# Lazy load to avoid importing scipy.stats at module level
+scipy = lazy.load("scipy")
 
 
 def difference_of_gammas(
@@ -110,7 +110,7 @@ def difference_of_gammas(
         raise ValueError(
             f"upper_percentile should lie in the [0, 1) interval. {upper_percentile} provided instead!"
         )
-
+    sts = scipy.stats
     gm_inhibition = sts.gamma(a=inhib_a, scale=1 / inhib_b)
     gm_excitation = sts.gamma(a=excit_a, scale=1 / excit_b)
 
