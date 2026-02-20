@@ -22,6 +22,7 @@ from ._solver_registry import (
     list_algo_backends,
     list_available_algorithms,
     list_available_solvers,
+    list_stochastic_solvers,
     register,
     set_default,
     supports_stochastic,

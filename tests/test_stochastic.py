@@ -316,7 +316,7 @@ class TestGLMStochasticFit:
         loader = ArrayDataLoader(X, y, batch_size=32, shuffle=True)
 
         solver_kwargs = {"stepsize": 0.001, "maxiter": 100}
-        solver_class = solvers.solver_registry[solver]
+        solver_class = solvers.get_solver(solver).implementation
         if "acceleration" in solver_class.get_accepted_arguments():
             solver_kwargs["acceleration"] = False
 
@@ -337,7 +337,7 @@ class TestGLMStochasticFit:
         loader = ArrayDataLoader(X, y, batch_size=32)
 
         solver_kwargs = {"stepsize": 0.001, "maxiter": 100}
-        solver_class = solvers.solver_registry[solver]
+        solver_class = solvers.get_solver(solver).implementation
         if "acceleration" in solver_class.get_accepted_arguments():
             solver_kwargs["acceleration"] = False
 
@@ -399,7 +399,7 @@ class TestPopulationGLMStochasticFit:
         loader = ArrayDataLoader(X, y, batch_size=32, shuffle=True)
 
         solver_kwargs = {"stepsize": 0.001, "maxiter": 100}
-        solver_class = solvers.solver_registry[solver]
+        solver_class = solvers.get_solver(solver).implementation
         if "acceleration" in solver_class.get_accepted_arguments():
             solver_kwargs["acceleration"] = False
 
