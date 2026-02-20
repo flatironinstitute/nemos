@@ -833,7 +833,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         >>> X = jnp.ones((100, 5))
         >>> y = jnp.ones((100,))
         >>> loader = ArrayDataLoader(X, y, batch_size=32, shuffle=True)
-        >>> model = nmo.glm.GLM(solver_name="GradientDescent", solver_kwargs={"stepsize": 0.01})
+        >>> model = nmo.glm.GLM(solver_name="GradientDescent", solver_kwargs={"stepsize": 0.01, "acceleration" : False})
         >>> model = model.stochastic_fit(loader, num_epochs=10)
         """
         if not is_data_loader(data):
