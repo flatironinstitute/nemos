@@ -17,7 +17,6 @@ from ._optax_optimistix_solvers import (
 from ._optimistix_solvers import OptimistixBFGS, OptimistixNonlinearCG
 from ._solver_doc_helper import get_solver_documentation
 from ._solver_registry import (
-<<<<<<< HEAD
     SolverSpec,
     get_solver,
     list_algo_backends,
@@ -25,12 +24,7 @@ from ._solver_registry import (
     list_available_solvers,
     register,
     set_default,
-=======
-    list_available_solvers,
-    list_stochastic_solvers,
-    solver_registry,
     supports_stochastic,
->>>>>>> 2e0c188e (Update registry)
 )
 from ._svrg import SVRG, ProxSVRG, WrappedProxSVRG, WrappedSVRG
 from ._svrg_defaults import (

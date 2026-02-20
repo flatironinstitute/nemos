@@ -11,12 +11,8 @@ from optimistix._custom_types import Aux, Y
 
 from ..proximal_operator import prox_none
 from ..tree_utils import tree_add_scalar_mul, tree_sub
-from ..typing import Params, StepResult
 from ._optimistix_adapter import _OPTX_V_010, OptimistixAdapter
 from ._stochastic_mixins import OptimistixStochasticSolverMixin
-
-if TYPE_CHECKING:
-    from ..batching import DataLoader
 
 
 def tree_nan_like(x: PyTree):

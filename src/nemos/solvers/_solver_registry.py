@@ -330,6 +330,53 @@ def list_available_algorithms() -> list[str]:
     return list(_registry.keys())
 
 
+def supports_stochastic(solver_name: str) -> bool:
+    """Check if a solver supports stochastic optimization.
+
+    Parameters
+    ----------
+    solver_name : str
+        Name of the solver (e.g., 'GradientDescent', 'SVRG').
+
+    Returns
+    -------
+    bool
+        True if the solver supports stochastic optimization via stochastic_run.
+
+    Raises
+    ------
+    ValueError
+        If the solver name is not found in the registry.
+
+    Examples
+    --------
+    >>> import nemos as nmo
+    >>> nmo.solvers.supports_stochastic("GradientDescent")
+    True
+    >>> nmo.solvers.supports_stochastic("BFGS")
+    False
+    """
+    return getattr(
+        get_solver(solver_name).implementation, "_supports_stochastic", False
+    )
+
+
+# TODO: Add doctest?
+def list_stochastic_solvers() -> list[SolverSpec]:
+    """
+    List solvers that support stochastic optimization.
+
+    Returns
+    -------
+    List of solver specs that support stochastic optimization.
+    """
+    return [
+        spec
+        for spec in list_available_solvers()
+        if getattr(spec.implementation, "_supports_stochastic", False)
+    ]
+
+
 register("GradientDescent", OptimistixNAG, "optimistix", default=True)
 register("ProximalGradient", OptimistixFISTA, "optimistix", default=True)
 register("LBFGS", OptimistixOptaxLBFGS, "optax+optimistix", default=True)
@@ -356,80 +403,3 @@ if JAXOPT_AVAILABLE:
     register("LBFGS", JaxoptLBFGS, "jaxopt", default=False)
     register("BFGS", JaxoptBFGS, "jaxopt", default=False)
     register("NonlinearCG", JaxoptNonlinearCG, "jaxopt", default=False)
-
-
-def list_available_solvers():
-    """
-    List the available solvers that can be used for fitting models.
-
-    To access an extended documentation about a specific solver,
-    see `get_solver_documentation`.
-
-    Example
-    -------
-    >>> import nemos as nmo
-    >>> nmo.solvers.list_available_solvers()
-    ['GradientDescent', 'ProximalGradient', 'LBFGS', 'BFGS', 'SVRG', 'ProxSVRG', 'NonlinearCG'...]
-    >>> print(nmo.solvers.get_solver_documentation("SVRG"))
-    Showing docstring of nemos.solvers._svrg.WrappedSVRG.
-    For potentially more info, use `show_help=True`.
-    <BLANKLINE>
-    Adapter for NeMoS's implementation of SVRG following the AbstractSolver interface.
-    <BLANKLINE>
-    ...
-    """
-    return list(solver_registry.keys())
-
-
-def supports_stochastic(solver_name: str) -> bool:
-    """Check if a solver supports stochastic optimization.
-
-    Parameters
-    ----------
-    solver_name : str
-        Name of the solver (e.g., 'GradientDescent', 'SVRG').
-
-    Returns
-    -------
-    bool
-        True if the solver supports stochastic optimization via stochastic_run.
-
-    Raises
-    ------
-    ValueError
-        If the solver name is not found in the registry.
-
-    Examples
-    --------
-    >>> import nemos as nmo
-    >>> nmo.solvers._solver_registry.supports_stochastic("GradientDescent")
-    True
-    >>> nmo.solvers._solver_registry.supports_stochastic("BFGS")
-    False
-    """
-    solver_cls = solver_registry.get(solver_name)
-    # TODO: Remove when registry handles this.
-    if solver_cls is None:
-        raise ValueError(f"Unknown solver: {solver_name}")
-    return getattr(solver_cls, "_supports_stochastic", False)
-
-
-def list_stochastic_solvers() -> list[str]:
-    """
-    List solvers that support stochastic optimization.
-
-    Returns
-    -------
-    List of solver names that support stochastic optimization.
-
-    Examples
-    --------
-    >>> import nemos as nmo
-    >>> nmo.solvers._solver_registry.list_stochastic_solvers()
-    ['GradientDescent', 'ProximalGradient', 'SVRG', 'ProxSVRG']
-    """
-    return [
-        name
-        for name, cls in solver_registry.items()
-        if getattr(cls, "_supports_stochastic", False)
-    ]
