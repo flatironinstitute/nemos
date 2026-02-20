@@ -28,11 +28,11 @@ from ._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularize
 from .base_class import Base
 from .base_validator import RegressorValidator
 from .glm.params import GLMParams
+from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
 from .type_casting import cast_to_jax
 from .typing import (
     DESIGN_INPUT_TYPE,
-    FeaturePytree,
     ModelParamsT,
     SolverInit,
     SolverRun,
