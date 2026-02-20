@@ -11,10 +11,11 @@ from nemos.batching import ArrayDataLoader, _PreprocessedDataLoader, is_data_loa
 from nemos.regularizer import UnRegularized
 
 _stochastic_solver_names = [
-    "GradientDescent",
-    "ProximalGradient",
-    "SVRG",
-    "ProxSVRG",
+    "GradientDescent[optimistix]",
+    "GradientDescent[optax+optimistix]",
+    "ProximalGradient[optimistix]",
+    "SVRG[nemos]",
+    "ProxSVRG[nemos]",
 ]
 _non_stochastic_solver_names = [
     "LBFGS",
@@ -289,12 +290,13 @@ class TestSolverStochasticSupport:
 
     def test_list_stochastic_solvers(self):
         """Test list_stochastic_solvers returns expected solvers."""
-        assert set(solvers.list_stochastic_solvers()) == set(_stochastic_solver_names)
+        assert set([s.full_name for s in solvers.list_stochastic_solvers()]) == set(
+            _stochastic_solver_names
+        )
 
     def test_unknown_solver_raises(self):
         """Test unknown solver name raises ValueError."""
-        # TODO: Update when registry handles this.
-        with pytest.raises(ValueError, match="Unknown solver"):
+        with pytest.raises(ValueError, match="No solver registered"):
             solvers.supports_stochastic("NonExistentSolver")
 
 

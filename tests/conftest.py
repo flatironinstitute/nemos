@@ -356,6 +356,9 @@ class MockRegressor(nmo.base_regressor.BaseRegressor):
     def _model_specific_initialization(self, *args, **kwargs):
         pass
 
+    def stochastic_fit(self, *args, **kwargs):
+        pass
+
 
 class MockRegressorNested(MockRegressor):
     def __init__(self, other_param: int, std_param: int = 0):
@@ -1598,14 +1601,9 @@ def configure_solver_backend(request):
     """
     backend = os.getenv("NEMOS_SOLVER_BACKEND")
 
-    if backend is None:
-        # use the defaults for each algorithm
-        _solvers_to_use = [
-            nmo.solvers.get_solver(algo)
-            for algo in nmo.solvers.list_available_algorithms()
-        ]
+    _solvers_to_use = nmo.solvers.list_available_solvers()
 
-    else:
+    if backend is not None:
         if backend == "jaxopt" and not nmo.solvers.JAXOPT_AVAILABLE:
             pytest.fail("jaxopt backend requested but jaxopt is not installed.")
         try:
