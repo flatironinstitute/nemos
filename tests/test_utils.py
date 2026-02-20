@@ -590,13 +590,13 @@ def test_repr_multiline():
     bas = nmo.basis.MSplineEval(10, label="mylabel")
     assert (
         utils.format_repr(bas, multiline=True)
-        == "'mylabel': MSplineEval(\n    n_basis_funcs=10,\n    order=4\n)"
+        == "'mylabel': MSplineEval(\n    n_basis_funcs=10,\n    order=4,\n    fill_value=nan\n)"
     )
     # test without label
     bas = nmo.basis.MSplineEval(10)
     assert (
         utils.format_repr(bas, multiline=True)
-        == "MSplineEval(\n    n_basis_funcs=10,\n    order=4\n)"
+        == "MSplineEval(\n    n_basis_funcs=10,\n    order=4,\n    fill_value=nan\n)"
     )
 
 
