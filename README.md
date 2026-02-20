@@ -189,14 +189,6 @@ citation for the code, or use the following:
 - Code: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17553287.svg)](https://doi.org/10.5281/zenodo.17553287)
 
 
-
-
-See the [citation
-guide](https://docs.plenoptic.org/docs/branch/main/citation.html) for more
-details, including citations for the different synthesis methods and
-computational moels included in plenoptic.
-
-
 ## Support
 
 This package is supported by:
