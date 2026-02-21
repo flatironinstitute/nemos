@@ -2844,7 +2844,7 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         160
 
         """
-        return BasisMixin.set_input_shape(self, *xi)
+        return super().set_input_shape(*xi)
 
     @add_docstring("evaluate", FourierBasis)
     def evaluate(self, *sample_pts: NDArray) -> NDArray:
