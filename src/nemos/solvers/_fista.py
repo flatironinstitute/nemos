@@ -11,7 +11,7 @@ from optimistix._custom_types import Aux, Y
 
 from ..proximal_operator import prox_none
 from ..tree_utils import tree_add_scalar_mul, tree_sub
-from ._optimistix_adapter import OptimistixAdapter
+from ._optimistix_adapter import _OPTX_V_010, OptimistixAdapter
 
 
 def tree_nan_like(x: PyTree):
@@ -21,7 +21,7 @@ def tree_nan_like(x: PyTree):
 class ProxGradState(eqx.Module):
     """ProximalGradient (FISTA) solver state."""
 
-    iter_num: Int[Array, ""]
+    num_steps: Int[Array, ""]
     stepsize: Float[Array, ""]
     velocity: PyTree
     t: Float[Array, ""]
@@ -44,8 +44,6 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
         Norm to use in Cauchy termination.
     prox:
         Proximal operator function.
-    regularizer_strength:
-        Regularizer strength passed to the proximal operator.
     stepsize:
         If None (default), use backtracking linesearch to determine an
         appropriate stepsize on each iteration.
@@ -74,7 +72,6 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
     norm: Callable
 
     prox: Callable
-    regularizer_strength: float | None
 
     stepsize: float | None = None
     maxls: int = 15
@@ -106,7 +103,7 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
             t = jnp.asarray(jnp.nan)
 
         return ProxGradState(
-            iter_num=jnp.asarray(0),
+            num_steps=jnp.asarray(0),
             velocity=vel,
             t=t,
             stepsize=jnp.asarray(1.0),
@@ -190,7 +187,7 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
         )
 
         next_state = ProxGradState(
-            iter_num=state.iter_num + 1,
+            num_steps=state.num_steps + 1,
             velocity=next_vel,
             t=next_t,
             stepsize=jnp.asarray(new_stepsize),
@@ -218,9 +215,17 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
         f_at_point, lin_fn, _ = jax.linearize(
             lambda _y: fn(_y, args), update_point, has_aux=True
         )
-        grad_at_point = optx._misc.lin_to_grad(
-            lin_fn, update_point, autodiff_mode=autodiff_mode
-        )
+        if _OPTX_V_010:
+            grad_at_point = optx._misc.lin_to_grad(
+                lin_fn,
+                update_point,
+                autodiff_mode=autodiff_mode,
+                dtype=f_at_point.dtype,
+            )
+        else:
+            grad_at_point = optx._misc.lin_to_grad(
+                lin_fn, update_point, autodiff_mode=autodiff_mode
+            )
 
         if self.stepsize is None or self.stepsize <= 0.0:
             # do linesearch to find the new stepsize
@@ -249,7 +254,7 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
             # use the fixed stepsize
             new_stepsize = self.stepsize
             new_y = tree_add_scalar_mul(update_point, -new_stepsize, grad_at_point)
-            new_y = self.prox(new_y, self.regularizer_strength, new_stepsize)
+            new_y = self.prox(new_y, (), new_stepsize)
 
         return new_y, new_stepsize
 
@@ -290,11 +295,11 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
             stepsize = carry[1]
             new_stepsize = stepsize * self.decrease_factor
             next_x = tree_add_scalar_mul(x, -new_stepsize, grad)
-            next_x = self.prox(next_x, self.regularizer_strength, new_stepsize)
+            next_x = self.prox(next_x, (), new_stepsize)
             return next_x, new_stepsize
 
         init_x = tree_add_scalar_mul(x, -stepsize, grad)
-        init_x = self.prox(init_x, self.regularizer_strength, stepsize)
+        init_x = self.prox(init_x, (), stepsize)
         init_val = (init_x, stepsize)
 
         return eqx.internal.while_loop(
@@ -351,7 +356,6 @@ class GradientDescent(FISTA):
     """Gradient descent with Nesterov acceleration. Adapted from JAXopt."""
 
     prox: ClassVar[Callable] = staticmethod(prox_none)
-    regularizer_strength: float | None = None
 
 
 class OptimistixFISTA(OptimistixAdapter):

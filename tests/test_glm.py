@@ -22,7 +22,6 @@ from sklearn.linear_model import (
 from sklearn.model_selection import GridSearchCV
 
 import nemos as nmo
-from nemos import solvers
 from nemos._observation_model_builder import instantiate_observation_model
 from nemos._regularizer_builder import instantiate_regularizer
 from nemos.inverse_link_function_utils import identity, log_softmax
@@ -1854,44 +1853,53 @@ class TestGLMObservationModel:
         """
         Fixture for test_repr_out
         """
+        default_solver_name = nmo.solvers.get_solver(
+            nmo.regularizer.UnRegularized().default_solver
+        ).full_name
+        lbfgs_solver_name = nmo.solvers.get_solver("LBFGS").full_name
         if "poisson" in model_instantiation:
-            if is_population_glm_type(glm_type):
-                return "PopulationGLM(\n    observation_model=PoissonObservations(),\n    inverse_link_function=exp,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
-            else:
-                return "GLM(\n    observation_model=PoissonObservations(),\n    inverse_link_function=exp,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
-
+            observation_model = "PoissonObservations()"
+            inverse_link_function = "exp"
+            solver_name = default_solver_name
         elif "gamma" in model_instantiation:
-            if is_population_glm_type(glm_type):
-                return "PopulationGLM(\n    observation_model=GammaObservations(),\n    inverse_link_function=one_over_x,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
-            else:
-                return "GLM(\n    observation_model=GammaObservations(),\n    inverse_link_function=one_over_x,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
-
+            observation_model = "GammaObservations()"
+            inverse_link_function = "one_over_x"
+            solver_name = default_solver_name
         elif "bernoulli" in model_instantiation:
-            if is_population_glm_type(glm_type):
-                return "PopulationGLM(\n    observation_model=BernoulliObservations(),\n    inverse_link_function=logistic,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
-            else:
-                return "GLM(\n    observation_model=BernoulliObservations(),\n    inverse_link_function=logistic,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
-
+            observation_model = "BernoulliObservations()"
+            inverse_link_function = "logistic"
+            solver_name = default_solver_name
         elif "negativeBinomial" in model_instantiation:
-            if is_population_glm_type(glm_type):
-                return "PopulationGLM(\n    observation_model=NegativeBinomialObservations(scale=1.0),\n    inverse_link_function=exp,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
-            else:
-                return "GLM(\n    observation_model=NegativeBinomialObservations(scale=1.0),\n    inverse_link_function=exp,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
-
+            observation_model = "NegativeBinomialObservations(scale=1.0)"
+            inverse_link_function = "exp"
+            solver_name = lbfgs_solver_name
         elif "gaussian" in model_instantiation:
-            if is_population_glm_type(glm_type):
-                return "PopulationGLM(\n    observation_model=GaussianObservations(),\n    inverse_link_function=identity,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
-            else:
-                return "GLM(\n    observation_model=GaussianObservations(),\n    inverse_link_function=identity,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
-
+            observation_model = "GaussianObservations()"
+            inverse_link_function = "identity"
+            solver_name = lbfgs_solver_name
         elif "classifier" in model_instantiation:
-            if is_population_glm_type(glm_type):
-                return "ClassifierPopulationGLM(\n    n_classes=3,\n    inverse_link_function=log_softmax,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
-            else:
-                return "ClassifierGLM(\n    n_classes=3,\n    inverse_link_function=log_softmax,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
-
+            observation_model = None
+            inverse_link_function = "log_softmax"
+            n_classes = 3
+            solver_name = default_solver_name
         else:
             raise ValueError("Unknown model instantiation")
+
+        class_name = "PopulationGLM" if is_population_glm_type(glm_type) else "GLM"
+        if "classifier" in model_instantiation:
+            class_name = "Classifier" + class_name
+            second_line = f"    n_classes={n_classes},\n"
+        else:
+            second_line = f"    observation_model={observation_model},\n"
+
+        return (
+            f"{class_name}(\n"
+            f"{second_line}"
+            f"    inverse_link_function={inverse_link_function},\n"
+            "    regularizer=UnRegularized(),\n"
+            f"    solver_name='{solver_name}'\n"
+            ")"
+        )
 
     #######################
     # Test initialization #
@@ -2367,7 +2375,6 @@ class TestGLMObservationModel:
 
     @staticmethod
     def _get_expected_par_shape(X, y, model):
-
         X_flat = jax.tree_util.tree_leaves(X)
         n_features = [x.shape[1] for x in X_flat]
         is_population = is_population_model(model)
@@ -2518,7 +2525,7 @@ class TestGLMObservationModel:
         # use glm static methods to check if the solver is batchable
         # if not pop the batch_size kwarg
         try:
-            slv_class = solvers.solver_registry[solver_name]
+            slv_class = nmo.solvers.get_solver(solver_name).implementation
             nmo.glm.GLM._check_solver_kwargs(slv_class, solver_kwargs)
         except NameError:
             solver_kwargs.pop("batch_size")

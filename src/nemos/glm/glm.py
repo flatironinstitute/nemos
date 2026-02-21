@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import warnings
 from pathlib import Path
-from typing import Callable, Literal, Optional, Tuple, Union
+from typing import Any, Callable, Literal, Optional, Tuple, Union
 
 import equinox as eqx
 import jax
@@ -23,12 +23,7 @@ from ..pytrees import FeaturePytree
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
 from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
 from ..type_casting import cast_to_jax, support_pynapple
-from ..typing import (
-    DESIGN_INPUT_TYPE,
-    RegularizerStrength,
-    SolverState,
-    StepResult,
-)
+from ..typing import DESIGN_INPUT_TYPE, SolverState, StepResult
 from ..utils import format_repr
 from .initialize_parameters import initialize_intercept_matching_mean_rate
 from .params import GLMParams, GLMUserParams
@@ -72,7 +67,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
     +---------------------+---------------------------------+
     | Gamma               | :math:`1/x`                     |
     +---------------------+---------------------------------+
-    | Bernoulli            | :math:`1 / (1 + e^{-x})`       |
+    | Bernoulli           | :math:`1 / (1 + e^{-x})`        |
     +---------------------+---------------------------------+
     | NegativeBinomial    | :math:`e^x`                     |
     +---------------------+---------------------------------+
@@ -137,8 +132,11 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         and related parameters.
         Default is UnRegularized regression.
     regularizer_strength :
-        Float that is default None. Sets the regularizer strength. If a user does not pass a value, and it is needed for
-        regularization, a warning will be raised and the strength will default to 1.0.
+        Typically a float. Default is None. Sets the regularizer strength.
+        If a user does not pass a value, and it is needed for regularization,
+        a warning will be raised and the strength will default to 1.0.
+        For finer control, the user can pass a pytree that matches the
+        parameter structure to regularize parameters differentially.
     solver_name :
         Solver to use for model optimization. Defines the optimization scheme and related parameters.
         The solver must be an appropriate match for the chosen regularizer.
@@ -173,42 +171,64 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
 
     Examples
     --------
+    **Fit a GLM**
+
+    Basic model fitting with default Poisson observation model:
+
+    >>> import numpy as np
     >>> import nemos as nmo
-    >>> # define single neuron GLM model
-    >>> model = nmo.glm.GLM()
-    >>> model
-    GLM(
-        observation_model=PoissonObservations(),
-        inverse_link_function=exp,
-        regularizer=UnRegularized(),
-        solver_name='GradientDescent'
-    )
-    >>> print("Regularizer type: ", type(model.regularizer))
-    Regularizer type:  <class 'nemos.regularizer.UnRegularized'>
-    >>> print("Observation model: ", type(model.observation_model))
-    Observation model:  <class 'nemos.observation_models.PoissonObservations'>
-    >>> # define a Gamma GLM providing a string
-    >>> nmo.glm.GLM(observation_model="Gamma")
-    GLM(
-        observation_model=GammaObservations(),
-        inverse_link_function=one_over_x,
-        regularizer=UnRegularized(),
-        solver_name='GradientDescent'
-    )
-    >>> # or equivalently, passing the observation model object
-    >>> nmo.glm.GLM(observation_model=nmo.observation_models.GammaObservations())
-    GLM(
-        observation_model=GammaObservations(),
-        inverse_link_function=one_over_x,
-        regularizer=UnRegularized(),
-        solver_name='GradientDescent'
-    )
-    >>> # define GLM model of PoissonObservations model with soft-plus NL
-    >>> model = nmo.glm.GLM(inverse_link_function=jax.nn.softplus, solver_name="LBFGS")
-    >>> print("Regularizer type: ", type(model.regularizer))
-    Regularizer type:  <class 'nemos.regularizer.UnRegularized'>
-    >>> print("Observation model: ", type(model.observation_model))
-    Observation model:  <class 'nemos.observation_models.PoissonObservations'>
+    >>> np.random.seed(123)
+    >>> X = np.random.normal(size=(100, 5))
+    >>> y = np.random.poisson(size=100)
+    >>> model = nmo.glm.GLM().fit(X, y)
+    >>> model.coef_.shape
+    (5,)
+
+    **Customize the Observation Model**
+
+    Specify the observation model as a string:
+
+    >>> model = nmo.glm.GLM(observation_model="Gamma")
+    >>> model.observation_model
+    GammaObservations()
+
+    Or pass the observation model object directly:
+
+    >>> model = nmo.glm.GLM(observation_model=nmo.observation_models.GammaObservations())
+    >>> model.observation_model
+    GammaObservations()
+
+    **Customize the Inverse Link Function**
+
+    Use a soft-plus inverse link function instead of the default exponential:
+
+    >>> model = nmo.glm.GLM(inverse_link_function=jax.nn.softplus)
+    >>> model.inverse_link_function.__name__
+    'softplus'
+
+    **Use Regularization**
+
+    Fit with Ridge regularization:
+
+    >>> model = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.1)
+    >>> model = model.fit(X, y)
+    >>> model.regularizer
+    Ridge()
+
+    Fit with Lasso regularization for sparse coefficients:
+
+    >>> model = nmo.glm.GLM(regularizer="Lasso", regularizer_strength=0.01)
+    >>> model = model.fit(X, y)
+    >>> model.regularizer
+    Lasso()
+
+    **Select a Solver**
+
+    Use LBFGS solver for potentially faster convergence:
+
+    >>> model = nmo.glm.GLM(solver_name="LBFGS").fit(X, y)
+    >>> model.solver_name
+    'LBFGS[...]'
     """
 
     _invalid_observation_types = (obs.CategoricalObservations,)
@@ -216,10 +236,13 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
 
     def __init__(
         self,
-        observation_model: REGRESSION_GLM_TYPES = "Poisson",
+        observation_model: (
+            REGRESSION_GLM_TYPES
+            | Literal["Poisson", "Gamma", "Gaussian", "Bernoulli", "NegativeBinomial"]
+        ) = "Poisson",
         inverse_link_function: Optional[Callable] = None,
         regularizer: Optional[Union[str, Regularizer]] = None,
-        regularizer_strength: Optional[RegularizerStrength] = None,
+        regularizer_strength: Any = None,
         solver_name: str = None,
         solver_kwargs: dict = None,
     ):
@@ -940,6 +963,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         >>> opt_state = model.initialize_solver_and_state(X, y, params)
         >>> # Now ready to run optimization or update steps
         """
+
         opt_solver_kwargs = self._optimize_solver_params(X, y)
         #  set up the solver init/run/update attrs
         self._instantiate_solver(
@@ -1091,9 +1115,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         inverse_link_function: <function one_over_x at ...>
         observation_model: GammaObservations()
         regularizer: Ridge()
-        regularizer_strength: 0.1
+        regularizer_strength: 0.1...
         solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
-        solver_name: BFGS
+        solver_name: BFGS[...]
         >>> # Save the model parameters to a file
         >>> model.save_params("model_params.npz")
         >>> # Load the model from the saved file
@@ -1104,9 +1128,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         inverse_link_function: <function one_over_x at ...>
         observation_model: GammaObservations()
         regularizer: Ridge()
-        regularizer_strength: 0.1
+        regularizer_strength: 0.1...
         solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
-        solver_name: BFGS
+        solver_name: BFGS[...]
 
         >>> # Saving and loading a custom inverse link function
         >>> model = nmo.glm.GLM(
@@ -1127,7 +1151,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         regularizer: UnRegularized()
         regularizer_strength: None
         solver_kwargs: {}
-        solver_name: GradientDescent
+        solver_name: GradientDescent[...]
         """
 
         # initialize saving dictionary
@@ -1206,8 +1230,11 @@ class PopulationGLM(GLM):
         and related parameters.
         Default is UnRegularized regression.
     regularizer_strength :
-        Float that is default None. Sets the regularizer strength. If a user does not pass a value, and it is needed for
-        regularization, a warning will be raised and the strength will default to 1.0.
+        Typically a float. Default is None. Sets the regularizer strength.
+        If a user does not pass a value, and it is needed for regularization,
+        a warning will be raised and the strength will default to 1.0.
+        For finer control, the user can pass a pytree that matches the
+        parameter structure to regularize parameters differentially.
     solver_name :
         Solver to use for model optimization. Defines the optimization scheme and related parameters.
         The solver must be an appropriate match for the chosen regularizer.
@@ -1241,57 +1268,79 @@ class PopulationGLM(GLM):
 
     Examples
     --------
-    >>> # Example with an array mask
+    **Fit a PopulationGLM**
+
+    Basic model fitting for a population of neurons:
+
     >>> import jax.numpy as jnp
     >>> import numpy as np
-    >>> from nemos.glm import PopulationGLM
-    >>> # Define predictors (X), weights, and neural activity (y)
+    >>> import nemos as nmo
+    >>> np.random.seed(123)
     >>> num_samples, num_features, num_neurons = 100, 3, 2
     >>> X = np.random.normal(size=(num_samples, num_features))
-    >>> weights = np.array([[ 0.5,  0. ], [-0.5, -0.5], [ 0. ,  1. ]])
+    >>> weights = np.array([[0.5, 0.0], [-0.5, -0.5], [0.0, 1.0]])
     >>> y = np.random.poisson(np.exp(X.dot(weights)))
-    >>> # Define a feature mask, shape (num_features, num_neurons)
-    >>> feature_mask = np.array([[1, 0], [1, 1], [0, 1]])
-    >>> feature_mask
-    array([[1, 0],
-           [1, 1],
-           [0, 1]])
-    >>> # Create and fit the model
-    >>> model = PopulationGLM(feature_mask=feature_mask).fit(X, y)
-    >>> model
-    PopulationGLM(
-        observation_model=PoissonObservations(),
-        inverse_link_function=exp,
-        regularizer=UnRegularized(),
-        solver_name='GradientDescent'
-    )
-    >>> # Check the fitted coefficients
-    >>> print(model.coef_.shape)
+    >>> model = nmo.glm.PopulationGLM().fit(X, y)
+    >>> model.coef_.shape
     (3, 2)
-    >>> # Example with a FeaturePytree mask
+
+    **Mask Coefficients with an Array**
+
+    Use a feature mask to specify which features predict each neuron.
+    The mask has shape ``(num_features, num_neurons)``:
+
+    >>> feature_mask = np.array([[1, 0], [1, 1], [0, 1]])
+    >>> model = nmo.glm.PopulationGLM(feature_mask=feature_mask).fit(X, y)
+    >>> model.coef_
+    Array(...)
+
+    **Mask Coefficients with a FeaturePytree**
+
+    When using a FeaturePytree as input, the mask should also be a FeaturePytree
+    with arrays of shape ``(num_neurons,)``:
+
     >>> from nemos.pytrees import FeaturePytree
-    >>> # Define two features
     >>> feature_1 = np.random.normal(size=(num_samples, 2))
     >>> feature_2 = np.random.normal(size=(num_samples, 1))
-    >>> # Define the FeaturePytree predictor, and weights
     >>> X = FeaturePytree(feature_1=feature_1, feature_2=feature_2)
-    >>> weights = dict(feature_1=jnp.array([[0., 0.5], [0., -0.5]]), feature_2=jnp.array([[1., 0.]]))
-    >>> # Compute the firing rate and counts
-    >>> rate = np.exp(X["feature_1"].dot(weights["feature_1"]) + X["feature_2"].dot(weights["feature_2"]))
+    >>> weights = dict(
+    ...     feature_1=jnp.array([[0.0, 0.5], [0.0, -0.5]]),
+    ...     feature_2=jnp.array([[1.0, 0.0]])
+    ... )
+    >>> rate = np.exp(
+    ...     X["feature_1"].dot(weights["feature_1"]) +
+    ...     X["feature_2"].dot(weights["feature_2"])
+    ... )
     >>> y = np.random.poisson(rate)
-    >>> # Define a feature mask with arrays of shape (num_neurons, )
     >>> feature_mask = FeaturePytree(
     ...     feature_1=jnp.array([0, 1], dtype=jnp.int32),
     ...     feature_2=jnp.array([1, 0], dtype=jnp.int32)
     ... )
-    >>> print(feature_mask)
-    feature_1: shape (2,), dtype int32
-    feature_2: shape (2,), dtype int32
-    >>> # Fit a PopulationGLM
-    >>> model = PopulationGLM(feature_mask=feature_mask).fit(X, y)
-    >>> # Coefficients are stored in a dictionary with keys the feature labels
-    >>> print(model.coef_.keys())
-    dict_keys(['feature_1', 'feature_2'])
+    >>> model = nmo.glm.PopulationGLM(feature_mask=feature_mask).fit(X, y)
+    >>> model.coef_
+    {...}
+
+    **Customize the Observation Model**
+
+    Use a Gamma observation model for continuous positive data:
+
+    >>> model = nmo.glm.PopulationGLM(observation_model="Gamma")
+    >>> model.observation_model
+    GammaObservations()
+
+    **Use Regularization**
+
+    Fit with Ridge regularization:
+
+    >>> X = np.random.normal(size=(num_samples, num_features))
+    >>> weights = np.array([[0.5, 0.0], [-0.5, -0.5], [0.0, 1.0]])
+    >>> y = np.random.poisson(np.exp(X.dot(weights)))
+    >>> model = nmo.glm.PopulationGLM(
+    ...     regularizer="Ridge",
+    ...     regularizer_strength=0.1
+    ... ).fit(X, y)
+    >>> model.regularizer
+    Ridge()
     """
 
     _validator_class = PopulationGLMValidator
@@ -1300,11 +1349,11 @@ class PopulationGLM(GLM):
         self,
         observation_model: (
             REGRESSION_GLM_TYPES
-            | Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial"]
+            | Literal["Poisson", "Gamma", "Gaussian", "Bernoulli", "NegativeBinomial"]
         ) = "Poisson",
         inverse_link_function: Optional[Callable] = None,
         regularizer: Union[str, Regularizer] = "UnRegularized",
-        regularizer_strength: Optional[float] = None,
+        regularizer_strength: Any = None,
         solver_name: str = None,
         solver_kwargs: dict = None,
         feature_mask: Optional[jnp.ndarray] = None,

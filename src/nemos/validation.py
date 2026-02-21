@@ -9,11 +9,13 @@ from typing import Any, Callable, Generic, List, Optional, Tuple, Union
 import jax
 import jax.numpy as jnp
 from numpy.typing import DTypeLike, NDArray
+from pynapple import Tsd, TsdFrame
 
 from . import utils
 from .base_class import Base
 from .pytrees import FeaturePytree
 from .tree_utils import get_valid_multitree, pytree_map_and_reduce
+from .type_casting import all_same_time_info, is_pynapple_tsd
 from .typing import DESIGN_INPUT_TYPE, ModelParamsT, UserProvidedParamsT
 
 
@@ -95,7 +97,10 @@ def check_length(x: Any, expected_len: int, err_message: str):
 
 
 def convert_tree_leaves_to_jax_array(
-    pytree: Any, err_message: str, data_type: Optional[DTypeLike] = None
+    pytree: Any,
+    err_message: str,
+    data_type: Optional[DTypeLike] = None,
+    is_leaf: Callable = None,
 ):
     """
     Convert the leaves of a given pytree to JAX arrays with the specified data type.
@@ -122,7 +127,7 @@ def convert_tree_leaves_to_jax_array(
     """
     try:
         pytree = jax.tree_util.tree_map(
-            lambda x: jnp.asarray(x, dtype=data_type), pytree
+            lambda x: jnp.asarray(x, dtype=data_type), pytree, is_leaf=is_leaf
         )
     except (ValueError, TypeError) as e:
         raise TypeError(err_message) from e
@@ -733,7 +738,9 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
         return validated_params
 
     def validate_inputs(
-        self, X: Optional[DESIGN_INPUT_TYPE] = None, y: Optional[jnp.ndarray] = None
+        self,
+        X: Optional[DESIGN_INPUT_TYPE] = None,
+        y: Optional[jnp.ndarray | Tsd | TsdFrame] = None,
     ):
         """
         Validate input data dimensions and sample consistency.
@@ -758,8 +765,16 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
         ValueError
             If all samples are invalid (contain only NaN/Inf values).
         """
+        # check same support
+        if not all_same_time_info(X, y):
+            raise ValueError(
+                "Time axis mismatch. X and y pynapple objects have mismatching time axis."
+            )
+
         check_vals = []
         if X is not None:
+            if is_pynapple_tsd(X):
+                X = X.values
             check_tree_leaves_dimensionality(
                 X,
                 expected_dim=self.X_dimensionality,
@@ -768,6 +783,8 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
             check_vals.append(X)
 
         if y is not None:
+            if is_pynapple_tsd(y):
+                y = y.values
             check_tree_leaves_dimensionality(
                 y,
                 expected_dim=self.y_dimensionality,

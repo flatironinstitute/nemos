@@ -143,7 +143,6 @@ class BasisMixin:
         return format_repr(self)
 
     def __getitem__(self, index: str) -> Basis:
-
         if isinstance(index, (int, slice)):
             string = "Slicing" if isinstance(index, slice) else "Indexing with integer"
             raise IndexError(
@@ -456,7 +455,7 @@ class AtomicBasisMixin(BasisMixin):
         klass = self.__class__(**self.get_params())
         return klass
 
-    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray) -> BasisMixin:
+    def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> BasisMixin:
         """
         Set the expected input shape for the basis object.
 
@@ -492,7 +491,7 @@ class AtomicBasisMixin(BasisMixin):
         is not set in this method, then ``compute_features`` (equivalent to ``fit_transform``) will break.
 
         """
-        return super().set_input_shape(xi)
+        return super().set_input_shape(*xi)
 
 
 class EvalBasisMixin:
@@ -927,6 +926,17 @@ class CompositeBasisMixin(BasisMixin):
         self._input_shape_update()
 
     @property
+    def bounds(self):
+        def _format(b):
+            if not isinstance(b, list):
+                b = [b]
+            return b
+
+        return _format(getattr(self.basis1, "bounds", None)) + _format(
+            getattr(self.basis2, "bounds", None)
+        )
+
+    @property
     def _has_default_label(self):
         return self._label is None
 
@@ -1120,10 +1130,13 @@ class CompositeBasisMixin(BasisMixin):
         if n < rows:
             rep = (
                 start_str + f"{self.__class__.__name__}"
-                f"(\n{n*tab}basis1={basis1},\n{n*tab}basis2={basis2},\n{(n-1)*tab})"
+                f"(\n{n * tab}basis1={basis1},\n{n * tab}basis2={basis2},\n{(n - 1) * tab})"
             )
         elif n == rows:
-            rep = start_str + f"{self.__class__.__name__}(\n{n*tab}...\n{(n-1)*tab})"
+            rep = (
+                start_str
+                + f"{self.__class__.__name__}(\n{n * tab}...\n{(n - 1) * tab})"
+            )
         else:
             rep = None
         return rep

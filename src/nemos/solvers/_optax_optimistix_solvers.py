@@ -86,7 +86,7 @@ def _make_rate_scaler(
         if linesearch_kwargs:
             raise ValueError("Only provide stepsize or linesearch_kwargs.")
 
-        return optax.scale_by_learning_rate(stepsize)
+        return optax.scale_by_learning_rate(stepsize, flip_sign=False)
 
 
 class OptimistixOptaxGradientDescent(AbstractOptimistixOptaxSolver):

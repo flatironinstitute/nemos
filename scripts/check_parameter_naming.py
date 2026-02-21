@@ -116,7 +116,11 @@ VALID_PAIRS = [
             r=2,
         )
     ),
+    {"features", "n_features"},
+    {"first_n_params", "fit_params"},
+    {"test_ridge_with_aux", "test_ridge_without_aux"},
     {"classes", "n_classes"},
+    {"method_name", "method_names"},
 ]
 
 
@@ -172,7 +176,6 @@ def handle_matches(
             "info": [(current_parameter, current_path)],
         }
     else:
-
         # if there is an invalid match, then add to existing result entry
         for k, v in results.items():
             # Otherwise, add the parameter to any existing groups where it has a match
@@ -196,7 +199,6 @@ def extract_parameters_from_ast(
     unique_param_names: set,
     similarity_cutoff: float,
 ):
-
     class ParamVisitor(ast.NodeVisitor):
         def __init__(self):
             self.class_name = None

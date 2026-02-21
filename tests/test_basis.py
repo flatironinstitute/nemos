@@ -4940,6 +4940,165 @@ class TestAdditiveBasis(CombinedBasis):
         ):
             basis_complex * basis_real * basis_complex
 
+    @pytest.mark.parametrize(
+        "basis_a, basis_b",
+        create_atomic_basis_pairs(
+            list_all_basis_classes("Eval")
+            + list_all_basis_classes("Conv")
+            + [CustomBasis]
+        ),
+    )
+    def test_bounds_property(self, basis_a, basis_b, basis_class_specific_params):
+        """Test that the bounds property correctly combines bounds from component bases."""
+        basis_a_obj = self.instantiate_basis(
+            5, basis_a, basis_class_specific_params, window_size=10
+        )
+        basis_b_obj = self.instantiate_basis(
+            6, basis_b, basis_class_specific_params, window_size=10
+        )
+        add = basis_a_obj + basis_b_obj
+
+        # Get expected bounds from individual bases
+        expected_bounds_a = getattr(basis_a_obj, "bounds", None)
+        expected_bounds_b = getattr(basis_b_obj, "bounds", None)
+
+        # Format expected bounds as the property does
+        if not isinstance(expected_bounds_a, list):
+            expected_bounds_a = [expected_bounds_a]
+        if not isinstance(expected_bounds_b, list):
+            expected_bounds_b = [expected_bounds_b]
+
+        expected = expected_bounds_a + expected_bounds_b
+        assert add.bounds == expected
+
+    def test_bounds_property_nested(self):
+        """Test that bounds property works for nested additive bases."""
+        b1 = basis.BSplineEval(5, bounds=(0, 1))
+        b2 = basis.MSplineEval(5, bounds=(1, 2))
+        b3 = basis.RaisedCosineLinearEval(5, bounds=(2, 3))
+
+        add = b1 + b2 + b3
+        assert add.bounds == [(0, 1), (1, 2), (2, 3)]
+
+    def test_bounds_property_mixed_eval_conv(self):
+        """Test bounds with mixed Eval (has bounds) and Conv (no bounds) bases."""
+        b_eval = basis.BSplineEval(5, bounds=(0, 2))
+        b_conv = basis.BSplineConv(5, window_size=10)
+
+        add = b_eval + b_conv
+        assert add.bounds == [(0, 2), None]
+
+        add = b_conv + b_eval
+        assert add.bounds == [None, (0, 2)]
+
+    @pytest.mark.parametrize("sample_size", [11, 20])
+    def test_evaluate_on_grid_respects_bounds(self, sample_size):
+        """Test that evaluate_on_grid generates samples within the specified bounds."""
+        bounds_a = (0.5, 1.5)
+        bounds_b = (-1, 1)
+
+        b1 = basis.BSplineEval(5, bounds=bounds_a)
+        b2 = basis.MSplineEval(5, bounds=bounds_b)
+        add = b1 + b2
+
+        x1, x2, y = add.evaluate_on_grid(sample_size, sample_size)
+
+        # Check that samples are within bounds
+        assert np.isclose(x1.min(), bounds_a[0])
+        assert np.isclose(x1.max(), bounds_a[1])
+        assert np.isclose(x2.min(), bounds_b[0])
+        assert np.isclose(x2.max(), bounds_b[1])
+
+    @pytest.mark.parametrize("sample_size", [11, 20])
+    def test_evaluate_on_grid_default_bounds(self, sample_size):
+        """Test that evaluate_on_grid uses (0, 1) when bounds is None."""
+        b1 = basis.BSplineEval(5)  # bounds=None by default
+        b2 = basis.MSplineEval(5)  # bounds=None by default
+        add = b1 + b2
+
+        x1, x2, y = add.evaluate_on_grid(sample_size, sample_size)
+
+        # Default bounds should be (0, 1)
+        assert np.isclose(x1.min(), 0)
+        assert np.isclose(x1.max(), 1)
+        assert np.isclose(x2.min(), 0)
+        assert np.isclose(x2.max(), 1)
+
+    @pytest.mark.parametrize("sample_size", [11, 20])
+    def test_evaluate_on_grid_mixed_bounds(self, sample_size):
+        """Test evaluate_on_grid with mixed bounds (some None, some explicit)."""
+        bounds_a = (2, 5)
+        b1 = basis.BSplineEval(5, bounds=bounds_a)
+        b2 = basis.BSplineEval(5)  # bounds=None
+
+        # b1 + b2: first has bounds, second uses default
+        add = b1 + b2
+        x1, x2, y = add.evaluate_on_grid(sample_size, sample_size)
+
+        assert np.isclose(x1.min(), bounds_a[0])
+        assert np.isclose(x1.max(), bounds_a[1])
+        assert np.isclose(x2.min(), 0)
+        assert np.isclose(x2.max(), 1)
+
+        # b2 + b1: first uses default, second has bounds
+        add = b2 + b1
+        x1, x2, y = add.evaluate_on_grid(sample_size, sample_size)
+
+        assert np.isclose(x1.min(), 0)
+        assert np.isclose(x1.max(), 1)
+        assert np.isclose(x2.min(), bounds_a[0])
+        assert np.isclose(x2.max(), bounds_a[1])
+
+    @pytest.mark.parametrize(
+        "samples_a, samples_b, nan_idx_a, nan_idx_b",
+        [
+            # All in bounds - no NaNs
+            (np.linspace(0, 1, 5), np.linspace(2, 3, 5), [], []),
+            # Some out of bounds in first input only
+            (np.linspace(-0.5, 1.5, 5), np.linspace(2, 3, 5), [0, 4], []),
+            # Some out of bounds in second input only
+            (np.linspace(0, 1, 5), np.linspace(1.5, 3.5, 5), [], [0, 4]),
+            # Out of bounds in both inputs at different indices
+            (
+                np.array([-0.5, 0.5, 0.5, 0.5, 0.5]),
+                np.array([2.5, 2.5, 2.5, 2.5, 3.5]),
+                [0],
+                [4],
+            ),
+            # One sample out of bounds in each
+            (
+                np.array([0.5, 0.5, 1.5, 0.5, 0.5]),
+                np.array([2.5, 1.5, 2.5, 2.5, 2.5]),
+                [2],
+                [1],
+            ),
+        ],
+    )
+    def test_out_of_bounds_nan(self, samples_a, samples_b, nan_idx_a, nan_idx_b):
+        """Test that out-of-bounds samples produce NaNs in the corresponding columns."""
+        b1 = basis.BSplineEval(5, bounds=(0, 1))
+        b2 = basis.MSplineEval(5, bounds=(2, 3))
+        add = b1 + b2
+
+        out = add.compute_features(samples_a, samples_b)
+        out = np.asarray(out)
+
+        n_basis_1 = b1.n_basis_funcs
+
+        # Check NaNs in basis1 columns for out-of-bounds samples_a
+        if nan_idx_a:
+            assert np.all(np.isnan(out[nan_idx_a, :n_basis_1]))
+        valid_idx_a = [i for i in range(len(samples_a)) if i not in nan_idx_a]
+        if valid_idx_a:
+            assert np.all(~np.isnan(out[valid_idx_a, :n_basis_1]))
+
+        # Check NaNs in basis2 columns for out-of-bounds samples_b
+        if nan_idx_b:
+            assert np.all(np.isnan(out[nan_idx_b, n_basis_1:]))
+        valid_idx_b = [i for i in range(len(samples_b)) if i not in nan_idx_b]
+        if valid_idx_b:
+            assert np.all(~np.isnan(out[valid_idx_b, n_basis_1:]))
+
 
 class TestMultiplicativeBasis(CombinedBasis):
     cls = {"eval": MultiplicativeBasis, "conv": MultiplicativeBasis}
@@ -6326,6 +6485,164 @@ class TestMultiplicativeBasis(CombinedBasis):
         bas = b1 + b2 + b3
         with pytest.raises(ValueError, match="MultiplicativeBasis requires all"):
             bas.set_input_shape(2, 2, 3, 3, (4, 1), (1, 4))
+
+    @pytest.mark.parametrize(
+        "basis_a, basis_b",
+        create_atomic_basis_pairs(
+            list_all_real_basis_classes("Eval")
+            + list_all_real_basis_classes("Conv")
+            + [CustomBasis]
+        ),
+    )
+    def test_bounds_property(self, basis_a, basis_b, basis_class_specific_params):
+        """Test that the bounds property correctly combines bounds from component bases."""
+        basis_a_obj = self.instantiate_basis(
+            5, basis_a, basis_class_specific_params, window_size=10
+        )
+        basis_b_obj = self.instantiate_basis(
+            6, basis_b, basis_class_specific_params, window_size=10
+        )
+        mul = basis_a_obj * basis_b_obj
+
+        # Get expected bounds from individual bases
+        expected_bounds_a = getattr(basis_a_obj, "bounds", None)
+        expected_bounds_b = getattr(basis_b_obj, "bounds", None)
+
+        # Format expected bounds as the property does
+        if not isinstance(expected_bounds_a, list):
+            expected_bounds_a = [expected_bounds_a]
+        if not isinstance(expected_bounds_b, list):
+            expected_bounds_b = [expected_bounds_b]
+
+        expected = expected_bounds_a + expected_bounds_b
+        assert mul.bounds == expected
+
+    def test_bounds_property_nested(self):
+        """Test that bounds property works for nested multiplicative bases."""
+        b1 = basis.BSplineEval(5, bounds=(0, 1))
+        b2 = basis.MSplineEval(5, bounds=(1, 2))
+        b3 = basis.RaisedCosineLinearEval(5, bounds=(2, 3))
+
+        mul = b1 * b2 * b3
+        assert mul.bounds == [(0, 1), (1, 2), (2, 3)]
+
+    def test_bounds_property_mixed_eval_conv(self):
+        """Test bounds with mixed Eval (has bounds) and Conv (no bounds) bases."""
+        b_eval = basis.BSplineEval(5, bounds=(0, 2))
+        b_conv = basis.BSplineConv(5, window_size=10)
+
+        mul = b_eval * b_conv
+        assert mul.bounds == [(0, 2), None]
+
+        mul = b_conv * b_eval
+        assert mul.bounds == [None, (0, 2)]
+
+    @pytest.mark.parametrize("sample_size", [11, 20])
+    def test_evaluate_on_grid_respects_bounds(self, sample_size):
+        """Test that evaluate_on_grid generates samples within the specified bounds."""
+        bounds_a = (0.5, 1.5)
+        bounds_b = (-1, 1)
+
+        b1 = basis.BSplineEval(5, bounds=bounds_a)
+        b2 = basis.MSplineEval(5, bounds=bounds_b)
+        mul = b1 * b2
+
+        x1, x2, y = mul.evaluate_on_grid(sample_size, sample_size)
+
+        # Check that samples are within bounds
+        assert np.isclose(x1.min(), bounds_a[0])
+        assert np.isclose(x1.max(), bounds_a[1])
+        assert np.isclose(x2.min(), bounds_b[0])
+        assert np.isclose(x2.max(), bounds_b[1])
+
+    @pytest.mark.parametrize("sample_size", [11, 20])
+    def test_evaluate_on_grid_default_bounds(self, sample_size):
+        """Test that evaluate_on_grid uses (0, 1) when bounds is None."""
+        b1 = basis.BSplineEval(5)  # bounds=None by default
+        b2 = basis.MSplineEval(5)  # bounds=None by default
+        mul = b1 * b2
+
+        x1, x2, y = mul.evaluate_on_grid(sample_size, sample_size)
+
+        # Default bounds should be (0, 1)
+        assert np.isclose(x1.min(), 0)
+        assert np.isclose(x1.max(), 1)
+        assert np.isclose(x2.min(), 0)
+        assert np.isclose(x2.max(), 1)
+
+    @pytest.mark.parametrize("sample_size", [11, 20])
+    def test_evaluate_on_grid_mixed_bounds(self, sample_size):
+        """Test evaluate_on_grid with mixed bounds (some None, some explicit)."""
+        bounds_a = (2, 5)
+        b1 = basis.BSplineEval(5, bounds=bounds_a)
+        b2 = basis.BSplineEval(5)  # bounds=None
+
+        # b1 * b2: first has bounds, second uses default
+        mul = b1 * b2
+        x1, x2, y = mul.evaluate_on_grid(sample_size, sample_size)
+
+        assert np.isclose(x1.min(), bounds_a[0])
+        assert np.isclose(x1.max(), bounds_a[1])
+        assert np.isclose(x2.min(), 0)
+        assert np.isclose(x2.max(), 1)
+
+        # b2 * b1: first uses default, second has bounds
+        mul = b2 * b1
+        x1, x2, y = mul.evaluate_on_grid(sample_size, sample_size)
+
+        assert np.isclose(x1.min(), 0)
+        assert np.isclose(x1.max(), 1)
+        assert np.isclose(x2.min(), bounds_a[0])
+        assert np.isclose(x2.max(), bounds_a[1])
+
+    @pytest.mark.parametrize(
+        "samples_a, samples_b, nan_idx",
+        [
+            # All in bounds - no NaNs
+            (np.linspace(0, 1, 5), np.linspace(2, 3, 5), []),
+            # Some out of bounds in first input
+            (np.linspace(-0.5, 1.5, 5), np.linspace(2, 3, 5), [0, 4]),
+            # Some out of bounds in second input
+            (np.linspace(0, 1, 5), np.linspace(1.5, 3.5, 5), [0, 4]),
+            # One sample out of bounds (first input)
+            (np.array([0.5, 0.5, 0.5, 1.5, 0.5]), np.linspace(2, 3, 5), [3]),
+            # One sample out of bounds (second input)
+            (np.linspace(0, 1, 5), np.array([2.5, 2.5, 3.5, 2.5, 2.5]), [2]),
+            # Out of bounds in both inputs at same index
+            (
+                np.array([-0.5, 0.5, 0.5, 0.5, 0.5]),
+                np.array([1.5, 2.5, 2.5, 2.5, 2.5]),
+                [0],
+            ),
+            # Out of bounds in both inputs at different indices
+            (
+                np.array([-0.5, 0.5, 0.5, 0.5, 0.5]),
+                np.array([2.5, 2.5, 2.5, 2.5, 3.5]),
+                [0, 4],
+            ),
+            # One sample in bounds (others out in either input)
+            (
+                np.array([-0.5, 0.5, 0.5, 1.5, 0.5]),
+                np.array([2.5, 2.5, 1.5, 2.5, 3.5]),
+                [0, 2, 3, 4],
+            ),
+        ],
+    )
+    def test_out_of_bounds_nan(self, samples_a, samples_b, nan_idx):
+        """Test that out-of-bounds samples produce NaNs in the entire row (due to multiplication)."""
+        b1 = basis.BSplineEval(5, bounds=(0, 1))
+        b2 = basis.MSplineEval(5, bounds=(2, 3))
+        mul = b1 * b2
+
+        out = mul.compute_features(samples_a, samples_b)
+        out = np.asarray(out)
+
+        # For multiplicative basis, NaN in either input propagates to entire row
+        if nan_idx:
+            assert np.all(np.isnan(out[nan_idx]))
+        valid_idx = [i for i in range(len(samples_a)) if i not in nan_idx]
+        if valid_idx:
+            assert np.all(~np.isnan(out[valid_idx]))
 
 
 @pytest.mark.parametrize(

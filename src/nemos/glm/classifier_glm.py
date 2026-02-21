@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from numbers import Number
-from typing import Callable, Literal, Optional, Tuple, Union
+from typing import Any, Callable, Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -17,7 +17,6 @@ from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
 from ..type_casting import is_numpy_array_like, support_pynapple
 from ..typing import (
     DESIGN_INPUT_TYPE,
-    RegularizerStrength,
     SolverState,
     StepResult,
     UserProvidedParamsT,
@@ -699,15 +698,70 @@ class ClassifierGLM(ClassifierMixin, GLM):
 
     Examples
     --------
+    **Fit a ClassifierGLM**
+
+    Basic binary classification:
+
     >>> import jax.numpy as jnp
+    >>> import numpy as np
     >>> import nemos as nmo
-    >>> # Binary classification with integer labels (most efficient)
     >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
     >>> y = jnp.array([0, 0, 1, 1])
-    >>> model = nmo.glm.ClassifierGLM(n_classes=2)
-    >>> model = model.fit(X, y)
-    >>> predictions = model.predict(X)  # Returns class labels
-    >>> probabilities = model.predict_proba(X, return_type="proba")
+    >>> model = nmo.glm.ClassifierGLM(n_classes=2).fit(X, y)
+    >>> model.coef_.shape
+    (2, 2)
+
+    **Predict Class Labels**
+
+    Get predicted class labels:
+
+    >>> predictions = model.predict(X)
+    >>> predictions.shape
+    (4,)
+
+    **Predict Class Probabilities**
+
+    Get class probabilities or log-probabilities:
+
+    >>> proba = model.predict_proba(X, return_type="proba")
+    >>> proba.shape
+    (4, 2)
+    >>> log_proba = model.predict_proba(X, return_type="log-proba")
+    >>> log_proba.shape
+    (4, 2)
+
+    **Use String Labels**
+
+    Class labels can be strings or any hashable type:
+
+    >>> y_str = np.array(["cat", "cat", "dog", "dog"])
+    >>> model = nmo.glm.ClassifierGLM(n_classes=2).fit(X, y_str)
+    >>> model.classes_
+    array(['cat', 'dog'], dtype='<U3')
+    >>> model.predict(X)  # doctest: +NORMALIZE_WHITESPACE
+    array(['cat', 'cat', 'dog', 'dog'], dtype='<U3')
+
+    **Multi-class Classification**
+
+    Classify into more than two classes:
+
+    >>> X = jnp.array([[1.0, 2.0], [2.0, 3.0], [3.0, 4.0], [4.0, 5.0], [5.0, 6.0], [6.0, 7.0]])
+    >>> y = jnp.array([0, 0, 1, 1, 2, 2])
+    >>> model = nmo.glm.ClassifierGLM(n_classes=3).fit(X, y)
+    >>> model.coef_.shape
+    (2, 3)
+
+    **Use Regularization**
+
+    Change regularization strength:
+
+    >>> model = nmo.glm.ClassifierGLM(
+    ...     n_classes=2,
+    ...     regularizer="Ridge",
+    ...     regularizer_strength=0.5
+    ... )
+    >>> model.regularizer
+    Ridge()
     """
 
     _validator_class = ClassifierGLMValidator
@@ -717,7 +771,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
         n_classes: Optional[int] = 2,
         inverse_link_function: Optional[Callable] = None,
         regularizer: Optional[Union[str, Regularizer]] = None,
-        regularizer_strength: Optional[RegularizerStrength] = None,
+        regularizer_strength: Any = None,
         solver_name: str = None,
         solver_kwargs: dict = None,
     ):
@@ -908,14 +962,70 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
 
     Examples
     --------
+    **Fit a ClassifierPopulationGLM**
+
+    Basic multi-class classification for multi-subjects
+
     >>> import jax.numpy as jnp
+    >>> import numpy as np
     >>> import nemos as nmo
-    >>> # Multi-class classification for 2 neurons (integer labels, most efficient)
     >>> X = jnp.array([[1., 2.], [2., 3.], [3., 4.], [4., 5.], [5., 6.], [6., 7.]])
     >>> y = jnp.array([[0, 0], [0, 1], [1, 0], [1, 2], [2, 1], [2, 2]])
-    >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3)
-    >>> model = model.fit(X, y)
-    >>> predictions = model.predict(X)  # Returns class labels, shape (n_samples, n_neurons)
+    >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3).fit(X, y)
+    >>> model.coef_.shape
+    (2, 2, 3)
+
+    **Predict Class Labels**
+
+    Get predicted class labels for each subject:
+
+    >>> predictions = model.predict(X)
+    >>> predictions.shape
+    (6, 2)
+
+    **Predict Class Probabilities**
+
+    Get class probabilities for each subject:
+
+    >>> proba = model.predict_proba(X, return_type="proba")
+    >>> proba.shape
+    (6, 2, 3)
+
+    **Use String Labels**
+
+    Class labels can be strings or any hashable type:
+
+    >>> y_str = np.array([["a", "a"], ["a", "b"], ["b", "a"], ["b", "c"], ["c", "b"], ["c", "c"]])
+    >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3).fit(X, y_str)
+    >>> model.classes_
+    array(['a', 'b', 'c'], dtype='<U1')
+    >>> model.predict(X).shape
+    (6, 2)
+
+    **Use a Feature Mask**
+
+    Specify which features predict each neuron:
+
+    >>> feature_mask = jnp.array([[[1, 1, 1], [0, 0, 0]], [[1, 1, 1], [1, 1, 1]]])
+    >>> y = jnp.array([[0, 0], [0, 1], [1, 0], [1, 2], [2, 1], [2, 2]])
+    >>> model = nmo.glm.ClassifierPopulationGLM(
+    ...     n_classes=3,
+    ...     feature_mask=feature_mask
+    ... ).fit(X, y)
+    >>> model.coef_
+    Array(...)
+
+    **Use Regularization**
+
+    Change regularization strength:
+
+    >>> model = nmo.glm.ClassifierPopulationGLM(
+    ...     n_classes=3,
+    ...     regularizer="Ridge",
+    ...     regularizer_strength=0.5
+    ... )
+    >>> model.regularizer
+    Ridge()
     """
 
     _validator_class = PopulationClassifierGLMValidator
@@ -925,7 +1035,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         n_classes: Optional[int] = 2,
         inverse_link_function: Optional[Callable] = None,
         regularizer: Optional[Union[str, Regularizer]] = None,
-        regularizer_strength: Optional[RegularizerStrength] = None,
+        regularizer_strength: Any = None,
         solver_name: str = None,
         solver_kwargs: dict = None,
         feature_mask: Optional[jnp.ndarray] = None,

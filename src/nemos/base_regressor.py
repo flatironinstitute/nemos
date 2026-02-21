@@ -33,7 +33,6 @@ from .typing import (
     DESIGN_INPUT_TYPE,
     FeaturePytree,
     ModelParamsT,
-    RegularizerStrength,
     SolverInit,
     SolverRun,
     SolverState,
@@ -120,7 +119,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
     def __init__(
         self,
         regularizer: Union[str, Regularizer] = "UnRegularized",
-        regularizer_strength: Optional[RegularizerStrength] = None,
+        regularizer_strength: Any = None,
         solver_name: Optional[str] = None,
         solver_kwargs: Optional[dict] = None,
     ):
@@ -129,14 +128,14 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
 
         # no solver name provided, use default
         if solver_name is None:
-            self._solver_name = self.regularizer.default_solver
-        else:
-            self.solver_name = solver_name
+            solver_name = self.regularizer.default_solver
+
+        self.solver_name = solver_name
 
         if solver_kwargs is None:
             solver_kwargs = dict()
 
-        solver_class = solvers.solver_registry[self.solver_name]
+        solver_class = self._solver_spec.implementation
         self._check_solver_kwargs(solver_class, solver_kwargs)
 
         self.solver_kwargs = solver_kwargs
@@ -249,20 +248,18 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             self.regularizer_strength = self._regularizer_strength
 
     @property
-    def regularizer_strength(self) -> RegularizerStrength:
+    def regularizer_strength(self) -> Any:
         """Regularizer strength getter."""
         return self._regularizer_strength
 
     @regularizer_strength.setter
-    def regularizer_strength(self, strength: Union[None, RegularizerStrength]):
-        # check regularizer strength
-        strength = self.regularizer._validate_regularizer_strength(strength)
-        self._regularizer_strength = strength
+    def regularizer_strength(self, strength: Any):
+        self._regularizer_strength = self.regularizer._validate_strength(strength)
 
     @property
     def solver_name(self) -> str:
         """Getter for the solver_name attribute."""
-        return self._solver_name
+        return self._solver_spec.full_name
 
     @solver_name.setter
     def solver_name(self, solver_name: str):
@@ -271,8 +268,14 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             raise TypeError("solver_name must be a string.")
 
         # check if solver str passed is valid for regularizer
-        self._regularizer.check_solver(solver_name)
-        self._solver_name = solver_name
+        spec = solvers.get_solver(solver_name)
+        self._regularizer.check_solver(spec.algo_name)
+        self._solver_spec = spec
+
+    @property
+    def algo_name(self) -> str:
+        """Name of the optimization algorithm the solver implements."""
+        return self._solver_spec.algo_name
 
     @property
     def solver_kwargs(self):
@@ -288,7 +291,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
     def solver_kwargs(self, solver_kwargs: dict):
         """Setter for the solver_kwargs attribute."""
         if solver_kwargs:
-            solver_cls = solvers.solver_registry[self.solver_name]
+            solver_cls = self._solver_spec.implementation
             self._check_solver_kwargs(solver_cls, solver_kwargs)
         self._solver_kwargs = solver_kwargs
 
@@ -352,14 +355,14 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             The instance itself for method chaining.
         """
         # final check that solver is valid for chosen regularizer
-        self._regularizer.check_solver(self.solver_name)
+        self._regularizer.check_solver(self._solver_spec.algo_name)
 
         if solver_kwargs is None:
             # copy dictionary of kwargs to avoid modifying user settings
             solver_kwargs = deepcopy(self.solver_kwargs)
 
         # instantiate the solver
-        solver_cls = solvers.solver_registry[self.solver_name]
+        solver_cls = solvers.get_solver(self.solver_name).implementation
 
         self._check_solver_kwargs(solver_cls, solver_kwargs)
 

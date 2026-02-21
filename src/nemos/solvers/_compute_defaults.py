@@ -58,7 +58,7 @@ def glm_compute_optimal_stepsize_configs(
     )
 
     # look-up table for selecting the optimal step and batch
-    if model.solver_name in ("SVRG", "ProxSVRG"):
+    if model.algo_name in ("SVRG", "ProxSVRG"):
         compute_optimal_params = svrg_optimal_batch_and_stepsize
 
     # get the smoothness parameter compute function

@@ -75,9 +75,9 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     inverse_link_function: <function one_over_x at ...>
     observation_model: GammaObservations()
     regularizer: Ridge()
-    regularizer_strength: 0.1
+    regularizer_strength: 0.1...
     solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
-    solver_name: BFGS
+    solver_name: BFGS[...]
     >>> # Save the model parameters to a file
     >>> model.save_params("model_params.npz")
     >>> # Load the model from the saved file
@@ -88,9 +88,9 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     inverse_link_function: <function one_over_x at ...>
     observation_model: GammaObservations()
     regularizer: Ridge()
-    regularizer_strength: 0.1
+    regularizer_strength: 0.1...
     solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
-    solver_name: BFGS
+    solver_name: BFGS[...]
 
     >>> # Loading a custom inverse link function
     >>> model = nmo.glm.GLM(inverse_link_function=lambda x: x**2)
@@ -108,7 +108,7 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     regularizer: UnRegularized()
     regularizer_strength: None
     solver_kwargs: {}
-    solver_name: GradientDescent
+    solver_name: GradientDescent[...]
     """
     # load the model from a .npz file
     filename = Path(filename)
@@ -374,7 +374,7 @@ def inspect_npz(file_path: Union[str, Path]):
         print("Metadata\n--------")
         for k, v in metadata.items():
             label = f"{k} version"
-            print(f"{label:<{pad_len}}: {v}" f" (installed: {installed_env[k]})")
+            print(f"{label:<{pad_len}}: {v} (installed: {installed_env[k]})")
 
     print("\nModel class\n-----------")
     model_class = data.pop("model_class", None)
@@ -388,6 +388,8 @@ def inspect_npz(file_path: Union[str, Path]):
         # If the value is a callable, print its name, otherwise print the value
         if hasattr(val, "__name__"):
             print(f"{key:<{pad_len}}: {_get_name(val)}")
+        elif isinstance(val, float):
+            print(f"{key:<{pad_len}}: {val:.6g}")
         else:
             print(f"{key:<{pad_len}}: {val}")
 
