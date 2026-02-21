@@ -11,7 +11,7 @@ from numpy.typing import ArrayLike, NDArray
 
 from ..type_casting import is_numpy_array_like
 from ..typing import FeatureMatrix
-from ._basis_mixin import AtomicBasisMixin, BasisMixin, ConvBasisMixin, EvalBasisMixin
+from ._basis_mixin import AtomicBasisMixin, ConvBasisMixin, EvalBasisMixin
 from ._composition_utils import add_docstring
 from ._decaying_exponential import OrthExponentialBasis
 from ._fourier_basis import FourierBasis
