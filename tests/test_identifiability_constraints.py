@@ -15,6 +15,7 @@ from nemos.identifiability_constraints import (
 )
 from nemos.validation import _warn_if_not_float64
 
+
 @pytest.mark.requires_x64
 @pytest.mark.parametrize(
     "dtype, expected_context, filter_type",

@@ -35,6 +35,7 @@ import pytest
 import nemos as nmo
 import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
+from nemos.base_regressor import BaseRegressor
 from nemos.basis import AdditiveBasis, CustomBasis, MultiplicativeBasis, Zero
 from nemos.basis._basis import Basis
 from nemos.basis._basis_mixin import BasisMixin
@@ -42,7 +43,6 @@ from nemos.basis._transformer_basis import TransformerBasis
 from nemos.glm.params import GLMParams
 from nemos.inverse_link_function_utils import log_softmax
 from nemos.pytrees import FeaturePytree
-from nemos.base_regressor import BaseRegressor
 from nemos.tree_utils import tree_full_like
 
 
