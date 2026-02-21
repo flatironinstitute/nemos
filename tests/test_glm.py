@@ -4109,3 +4109,29 @@ class TestClassifierGLM:
         # Roundtrip: encode -> decode should give original labels
         y_label_roundtrip = model._decode_labels(model._encode_labels(y_label))
         assert np.array_equal(y_label, y_label_roundtrip)
+
+
+def test_glm_public_api_matches_subclasses():
+    import nemos as nmo
+    from nemos.base_regressor import BaseRegressor
+
+    # Public contract of the module
+    public = set(nmo.glm.__all__)
+
+    # All GLM subclasses exposed through the namespace
+    glm_subclasses = {
+        name
+        for name, obj in inspect.getmembers(nmo.glm, inspect.isclass)
+        if issubclass(obj, BaseRegressor)
+    }
+
+    # Known public names that are not direct subclasses (if any)
+    exceptions = set()  # Add names here if needed
+
+    expected_public = glm_subclasses.union(exceptions)
+
+    assert public == expected_public, (
+        f"\nPublic API mismatch in nemos.glm\n"
+        f"Missing from __all__: {expected_public - public}\n"
+        f"Unexpected in __all__: {public - expected_public}"
+    )
