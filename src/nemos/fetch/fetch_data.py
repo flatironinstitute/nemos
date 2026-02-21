@@ -26,8 +26,7 @@ try:
 except ImportError:
     tqdm = None
 
-# Lazy load dandi/nwb dependencies (only needed for download_dandi_data)
-dandi = lazy.load("dandi", error_on_import=False)
+# Lazy load nwb dependencies (only needed for download_dandi_data)
 fsspec = lazy.load("fsspec", error_on_import=False)
 h5py = lazy.load("h5py", error_on_import=False)
 pynwb = lazy.load("pynwb", error_on_import=False)
@@ -109,12 +108,22 @@ def _create_retriever(path: Optional[pathlib.Path] = None) -> Pooch:
 
 
 def _check_dependencies(needs_dandi: bool = False):
-    """Check optional dependencies."""
+    """Check optional dependencies.
+
+    Returns
+    -------
+    dandiapi : module or None
+        The dandi.dandiapi module if needs_dandi is True, None otherwise.
+    """
+    dandiapi = None
     if needs_dandi:
+        # Import dandi at runtime rather than using lazy.load because:
+        # lazy.load("dandi.dandiapi") triggers a warning about subpackages
+        # causing eager loading of the parent package. Runtime import here
+        # achieves the same deferred loading without the warning.
         try:
-            # Try accessing dandi to trigger lazy load
-            _ = dandi.dandiapi
-        except (ImportError, AttributeError, ModuleNotFoundError):
+            from dandi import dandiapi
+        except ImportError:
             raise ImportError(
                 "Missing optional dependency 'dandi'."
                 " Please use pip or "
@@ -139,6 +148,8 @@ def _check_dependencies(needs_dandi: bool = False):
             " Please use pip or "
             "conda to install 'tqdm'."
         )
+
+    return dandiapi
 
 
 def fetch_data(
@@ -214,7 +225,7 @@ def download_dandi_data(
     ┕━━━━━━━━━━━━━━━━━━━━━┷━━━━━━━━━━┙
 
     """
-    _check_dependencies(needs_dandi=True)
+    dandiapi = _check_dependencies(needs_dandi=True)
 
     # Set up cache directory
     if _NEMOS_ENV in os.environ:
@@ -238,7 +249,7 @@ def download_dandi_data(
         return io
 
     # File doesn't exist, download it
-    with dandi.dandiapi.DandiAPIClient() as client:
+    with dandiapi.DandiAPIClient() as client:
         asset = client.get_dandiset(dandiset_id, "draft").get_asset_by_path(file_path)
         s3_url = asset.get_content_url(follow_redirects=1, strip_query=True)
 
