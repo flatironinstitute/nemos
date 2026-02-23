@@ -16,7 +16,10 @@ import jax.flatten_util
 import jax.numpy as jnp
 from jax import grad, jit, lax, random
 
-from nemos.solvers._stochastic_mixins import JaxoptStochasticSolverMixin, _as_stop_flag
+from nemos.solvers._stochastic_mixins import (
+    _as_stop_flag,
+    _stepsize_normalized_convergence,
+)
 
 from ..proximal_operator import prox_none
 from ..tree_utils import tree_add_scalar_mul, tree_l2_norm, tree_slice, tree_sub
@@ -1023,9 +1026,14 @@ class _WrappedSVRGBase(JaxoptAdapter):
         aux = self._extract_aux(state, fallback_name="aux_batch")
         return (params, state, aux)
 
-    stochastic_convergence_criterion = (
-        JaxoptStochasticSolverMixin.stochastic_convergence_criterion
-    )
+    def stochastic_convergence_criterion(
+        self, params, prev_params, state, prev_state, aux, epoch
+    ):
+        """Step-size-normalized parameter change: ||params - prev_params|| / stepsize <= tol."""
+        del prev_state, aux, epoch
+        return _stepsize_normalized_convergence(
+            params, prev_params, state.stepsize, self.tol
+        )
 
 
 class WrappedSVRG(_WrappedSVRGBase):
