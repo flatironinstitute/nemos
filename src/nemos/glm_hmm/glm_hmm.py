@@ -1157,11 +1157,10 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         simulated_states :
             State indices at each time point.
         """
-
-        # unpack and convert parameters (exponentiates and renormalizes probs)
-        _, _, scale, initial_prob, transition_prob = self._validator.from_model_params(
-            params
-        )
+        # unpack log probabilities directly (avoid exp then log in categorical)
+        log_initial_prob = params.hmm_params.log_initial_prob
+        log_transition_prob = params.hmm_params.log_transition_prob
+        scale = jnp.exp(params.glm_scale.log_scale)
 
         # pre-compute rates for all states: (n_time_bins, n_states) or (n_time_bins, n_neurons, n_states)
         all_rates = compute_rate_per_state(
@@ -1179,13 +1178,13 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
             prev_state_idx = carry
             rates_t, is_new_sess, state_key, obs_key = inputs
 
-            # sample state: initial_prob if new session, else transition from prev
-            state_probs = jax.lax.cond(
+            # sample state: log_initial_prob if new session, else log transition from prev
+            log_state_probs = jax.lax.cond(
                 is_new_sess,
-                lambda: initial_prob,
-                lambda: transition_prob[prev_state_idx],
+                lambda: log_initial_prob,
+                lambda: log_transition_prob[prev_state_idx],
             )
-            state_idx = jax.random.categorical(state_key, jnp.log(state_probs))
+            state_idx = jax.random.categorical(state_key, log_state_probs)
 
             # get rate and scale for sampled state
             # handles both (n_states,) and (n_neurons, n_states)
