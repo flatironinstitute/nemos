@@ -793,6 +793,130 @@ class TestGLMHMMInitialization:
 
         assert len(result) == 5
 
+    def test_init_kwargs_prob_stay(self):
+        """Test that prob_stay kwarg is passed to transition_proba_init."""
+        n_states = 3
+        X = jnp.ones((100, 5))
+        y = jnp.ones(100)
+        inverse_link = lambda x: x
+
+        # Use custom prob_stay
+        custom_prob_stay = 0.8
+        init_kwargs = {"transition_proba_init": {"prob_stay": custom_prob_stay}}
+
+        _, _, _, _, transition_prob = glm_hmm_initialization(
+            n_states,
+            X,
+            y,
+            inverse_link,
+            random_key=jax.random.PRNGKey(123),
+            init_kwargs=init_kwargs,
+        )
+
+        # Diagonal should be prob_stay
+        assert jnp.allclose(jnp.diag(transition_prob), custom_prob_stay)
+
+        # Off-diagonal should be (1 - prob_stay) / (n_states - 1)
+        expected_off_diag = (1 - custom_prob_stay) / (n_states - 1)
+        off_diag = transition_prob[~jnp.eye(n_states, dtype=bool)]
+        assert jnp.allclose(off_diag, expected_off_diag)
+
+    def test_init_kwargs_std_dev(self):
+        """Test that std_dev kwarg is passed to glm_params_init."""
+        n_states = 2
+        n_features = 5
+        X = jnp.ones((100, n_features))
+        y = jnp.ones(100)
+        inverse_link = lambda x: x
+
+        # Use large std_dev to make effect measurable
+        large_std_dev = 1.0
+        init_kwargs = {"glm_params_init": {"std_dev": large_std_dev}}
+
+        coef_large, _, _, _, _ = glm_hmm_initialization(
+            n_states,
+            X,
+            y,
+            inverse_link,
+            random_key=jax.random.PRNGKey(123),
+            init_kwargs=init_kwargs,
+        )
+
+        # Use small std_dev
+        small_std_dev = 0.001
+        init_kwargs = {"glm_params_init": {"std_dev": small_std_dev}}
+
+        coef_small, _, _, _, _ = glm_hmm_initialization(
+            n_states,
+            X,
+            y,
+            inverse_link,
+            random_key=jax.random.PRNGKey(123),
+            init_kwargs=init_kwargs,
+        )
+
+        # Large std_dev should produce larger magnitude coefficients
+        assert jnp.abs(coef_large).max() > jnp.abs(coef_small).max()
+        # Small std_dev should be close to 0
+        assert jnp.abs(coef_small).max() < 0.01
+
+    def test_init_kwargs_multiple_functions(self):
+        """Test that init_kwargs can pass kwargs to multiple init functions."""
+        n_states = 3
+        X = jnp.ones((100, 5))
+        y = jnp.ones(100)
+        inverse_link = lambda x: x
+
+        init_kwargs = {
+            "glm_params_init": {"std_dev": 0.5},
+            "transition_proba_init": {"prob_stay": 0.7},
+        }
+
+        coef, _, _, _, transition_prob = glm_hmm_initialization(
+            n_states,
+            X,
+            y,
+            inverse_link,
+            random_key=jax.random.PRNGKey(123),
+            init_kwargs=init_kwargs,
+        )
+
+        # Check std_dev effect
+        assert jnp.abs(coef).max() > 0.01  # Larger than default 0.001
+
+        # Check prob_stay effect
+        assert jnp.allclose(jnp.diag(transition_prob), 0.7)
+
+    def test_init_kwargs_empty_dict(self):
+        """Test that empty init_kwargs dict works (uses defaults)."""
+        n_states = 2
+        X = jnp.ones((100, 5))
+        y = jnp.ones(100)
+        inverse_link = lambda x: x
+
+        # Empty dict should behave like None
+        result_empty = glm_hmm_initialization(
+            n_states,
+            X,
+            y,
+            inverse_link,
+            random_key=jax.random.PRNGKey(123),
+            init_kwargs={},
+        )
+
+        result_none = glm_hmm_initialization(
+            n_states,
+            X,
+            y,
+            inverse_link,
+            random_key=jax.random.PRNGKey(123),
+            init_kwargs=None,
+        )
+
+        # Results should be identical
+        for r1, r2 in zip(result_empty, result_none):
+            assert jnp.allclose(r1, r2)
+
 
 class TestResolveDirichletPriors:
     """Test _resolve_dirichlet_priors validation function."""

@@ -356,6 +356,8 @@ def glm_hmm_initialization(
         init_registry = DEFAULT_INIT_FUNCTION
     else:
         init_registry = _resolve_init_funcs_registry(init_registry)
+    if init_kwargs is None:
+        init_kwargs = {}
     random_key, subkey = jax.random.split(random_key)
     kwargs = init_kwargs.get("glm_params_init", {})
     coef, intercept = init_registry["glm_params_init"](
