@@ -1098,6 +1098,10 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         """
         # check if the model is fit
         self._check_is_fit()
+
+        # check state format
+        _check_state_format(state_format)
+
         params = self._get_model_params()
 
         # validate inputs
