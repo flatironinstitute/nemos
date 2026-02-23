@@ -1687,7 +1687,7 @@ class TestInferenceMethods:
         if method_name in ["smooth_proba", "filter_proba"]:
             return (n_samples, n_states)
         elif method_name == "decode_state":
-            if kwargs.get("output_format") == "index":
+            if kwargs.get("state_format") == "index":
                 return (n_samples,)
             else:  # one-hot (default)
                 return (n_samples, n_states)
@@ -1704,7 +1704,9 @@ class TestInferenceMethods:
             pytest.param(("smooth_proba", {}), id="smooth_proba"),
             pytest.param(("filter_proba", {}), id="filter_proba"),
             pytest.param(("decode_state", {}), id="decode_state-onehot"),
-            pytest.param(("decode_state", {"output_format": "index"}), id="decode_state-index"),
+            pytest.param(
+                ("decode_state", {"state_format": "index"}), id="decode_state-index"
+            ),
         ],
     )
     def test_not_fitted_raises_error(
@@ -1727,7 +1729,9 @@ class TestInferenceMethods:
             pytest.param(("smooth_proba", {}), id="smooth_proba"),
             pytest.param(("filter_proba", {}), id="filter_proba"),
             pytest.param(("decode_state", {}), id="decode_state-onehot"),
-            pytest.param(("decode_state", {"output_format": "index"}), id="decode_state-index"),
+            pytest.param(
+                ("decode_state", {"state_format": "index"}), id="decode_state-index"
+            ),
         ],
     )
     def test_returns_correct_shape(
@@ -1746,8 +1750,12 @@ class TestInferenceMethods:
             ~np.isnan(np.sum(fixture.y, axis=tuple(range(1, fixture.y.ndim))))
         ).sum()
         n_states = model.n_states
-        expected_shape = self._get_expected_shape(method_name, kwargs, n_samples, n_states)
-        assert out.shape == expected_shape, f"Expected shape {expected_shape}, got {out.shape}"
+        expected_shape = self._get_expected_shape(
+            method_name, kwargs, n_samples, n_states
+        )
+        assert (
+            out.shape == expected_shape
+        ), f"Expected shape {expected_shape}, got {out.shape}"
 
     @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba"])
     def test_posterior_proba_returns_valid_probabilities(
@@ -1787,7 +1795,9 @@ class TestInferenceMethods:
             pytest.param(("smooth_proba", {}), id="smooth_proba"),
             pytest.param(("filter_proba", {}), id="filter_proba"),
             pytest.param(("decode_state", {}), id="decode_state-onehot"),
-            pytest.param(("decode_state", {"output_format": "index"}), id="decode_state-index"),
+            pytest.param(
+                ("decode_state", {"state_format": "index"}), id="decode_state-index"
+            ),
         ],
     )
     def test_with_arrays(self, instantiate_base_regressor_subclass, method_config):
@@ -1807,7 +1817,9 @@ class TestInferenceMethods:
             pytest.param(("smooth_proba", {}), id="smooth_proba"),
             pytest.param(("filter_proba", {}), id="filter_proba"),
             pytest.param(("decode_state", {}), id="decode_state-onehot"),
-            pytest.param(("decode_state", {"output_format": "index"}), id="decode_state-index"),
+            pytest.param(
+                ("decode_state", {"state_format": "index"}), id="decode_state-index"
+            ),
         ],
     )
     def test_with_pynapple_returns_tsdframe(
@@ -1834,11 +1846,13 @@ class TestInferenceMethods:
         out = getattr(model, method_name)(X_input, y_input, **kwargs)
 
         # Check return type - decode_state with index format returns Tsd, others return TsdFrame
-        if method_name == "decode_state" and kwargs.get("output_format") == "index":
+        if method_name == "decode_state" and kwargs.get("state_format") == "index":
             assert isinstance(out, nap.Tsd), f"Expected nap.Tsd, got {type(out)}"
             assert out.shape == (n_samples,)
         else:
-            assert isinstance(out, nap.TsdFrame), f"Expected nap.TsdFrame, got {type(out)}"
+            assert isinstance(
+                out, nap.TsdFrame
+            ), f"Expected nap.TsdFrame, got {type(out)}"
             assert out.shape == (n_samples, model.n_states)
         assert jnp.allclose(out.t, time)
 
@@ -1848,7 +1862,9 @@ class TestInferenceMethods:
             pytest.param(("smooth_proba", {}), id="smooth_proba"),
             pytest.param(("filter_proba", {}), id="filter_proba"),
             pytest.param(("decode_state", {}), id="decode_state-onehot"),
-            pytest.param(("decode_state", {"output_format": "index"}), id="decode_state-index"),
+            pytest.param(
+                ("decode_state", {"state_format": "index"}), id="decode_state-index"
+            ),
         ],
     )
     def test_with_multiple_sessions(
@@ -1876,7 +1892,7 @@ class TestInferenceMethods:
         out = getattr(model, method_name)(X_tsd, y_tsd, **kwargs)
 
         # Check shape and type
-        if method_name == "decode_state" and kwargs.get("output_format") == "index":
+        if method_name == "decode_state" and kwargs.get("state_format") == "index":
             assert isinstance(out, nap.Tsd)
             assert out.shape == (n_samples,)
         else:
@@ -1896,7 +1912,9 @@ class TestInferenceMethods:
             pytest.param(("smooth_proba", {}), id="smooth_proba"),
             pytest.param(("filter_proba", {}), id="filter_proba"),
             pytest.param(("decode_state", {}), id="decode_state-onehot"),
-            pytest.param(("decode_state", {"output_format": "index"}), id="decode_state-index"),
+            pytest.param(
+                ("decode_state", {"state_format": "index"}), id="decode_state-index"
+            ),
         ],
     )
     def test_consistency_across_calls(
@@ -2098,10 +2116,26 @@ class TestInferenceMethods:
         X = fixture.X
         y = fixture.y
         model = fixture.model
-        out_onehot = model.decode_state(X, y, output_format="one-hot")
-        out_index = model.decode_state(X, y, output_format="index")
-        assert jnp.all(jnp.where(out_onehot == 1)[1] == out_index), "index and one-hot do not match!"
-        assert jnp.all(out_onehot.sum(axis=1) == 1), "more than one hot value in one-hot array!"
+        out_onehot = model.decode_state(X, y, state_format="one-hot")
+        out_index = model.decode_state(X, y, state_format="index")
+        assert jnp.all(
+            jnp.where(out_onehot == 1)[1] == out_index
+        ), "index and one-hot do not match!"
+        assert jnp.all(
+            out_onehot.sum(axis=1) == 1
+        ), "more than one hot value in one-hot array!"
+
+    def test_decode_state_invalid_state_format(
+        self, instantiate_base_regressor_subclass
+    ):
+        """Test that decode_state raises ValueError for invalid state_format."""
+        fixture = instantiate_base_regressor_subclass
+        X = fixture.X
+        y = fixture.y
+        model = fixture.model
+        with pytest.raises(ValueError, match="Invalid state_format"):
+            model.decode_state(X, y, state_format="invalid")
+
 
 @pytest.mark.parametrize("n_states", [2, 3, 5])
 @pytest.mark.parametrize(
