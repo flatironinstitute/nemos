@@ -1917,6 +1917,7 @@ class TestFilterAndSmoothProba:
             row_sums, 1.0, rtol=1e-5
         ), f"Probabilities don't sum to 1 for {obs_model_name}"
 
+    @pytest.mark.convergence
     @pytest.mark.parametrize("method_name", ["smooth_proba"])
     def test_posterior_proba_maxiter_effect(
         self, instantiate_base_regressor_subclass, method_name
