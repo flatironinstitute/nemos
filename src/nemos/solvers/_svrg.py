@@ -610,19 +610,15 @@ class ProxSVRG:
                 )
                 aux = state.aux_batch
                 if batch_callback is not None:
-                    if _as_stop_flag(
-                        batch_callback(params, state, aux, batch_idx, epoch),
-                        "batch_callback",
-                    ):
+                    stop_on_batch = batch_callback(params, state, aux, batch_idx, epoch)
+                    if _as_stop_flag(stop_on_batch, "batch_callback"):
                         return OptStep(params=params, state=state)
 
             if convergence_criterion is not None:
-                if _as_stop_flag(
-                    convergence_criterion(
-                        params, prev_params, state, prev_state, aux, epoch
-                    ),
-                    "convergence_criterion",
-                ):
+                stop_on_epoch = convergence_criterion(
+                    params, prev_params, state, prev_state, aux, epoch
+                )
+                if _as_stop_flag(stop_on_epoch, "convergence_criterion"):
                     return OptStep(params=params, state=state)
 
         return OptStep(params=params, state=state)
