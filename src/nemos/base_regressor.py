@@ -416,6 +416,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         self,
         random_key: jax.Array,
         feedforward_input: DESIGN_INPUT_TYPE,
+        **kwargs,
     ):
         """Simulate neural activity in response to a feed-forward input and recurrent activity."""
         pass

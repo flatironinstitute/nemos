@@ -315,6 +315,15 @@ class GLMHMMValidator(RegressorValidator[GLMUserParams, GLMParams]):
 
         # Additional checks due to the time-series structure.
         # (the forward-backward implementation assumes no nans in the inputs)
+        # Skip NaN border check if y is None (e.g., during simulation)
+        if y is None:
+            if X is not None and not has_nans_only_at_border(X):
+                raise ValueError(
+                    "GLM-HMM requires continuous time-series data. NaN values must only "
+                    "appear at the beginning or end of the data, not in the middle."
+                )
+            return
+
         if is_pynapple_tsd(X):
             # loop over epochs and check that nans are all at the border
             epoch_slices = [
