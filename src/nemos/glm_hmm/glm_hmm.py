@@ -101,6 +101,27 @@ def compute_is_new_session(
     return is_new_session
 
 
+def _check_state_format(state_format: str) -> None:
+    """Validate state_format parameter.
+
+    Parameters
+    ----------
+    state_format :
+        Format for state output, must be "one-hot" or "index".
+
+    Raises
+    ------
+    ValueError
+        If state_format is not "one-hot" or "index".
+    """
+    valid_formats = ("one-hot", "index")
+    if state_format not in valid_formats:
+        raise ValueError(
+            f"Invalid state_format '{state_format}'. "
+            f"Must be one of {valid_formats}."
+        )
+
+
 class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
     r"""Generalized Linear Model with Hidden Markov Model (GLM-HMM).
 
@@ -325,7 +346,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
 
     Compute the most likely state sequence using Viterbi decoding:
 
-    >>> decoded = model.decode_state(X, y, output_format="index")
+    >>> decoded = model.decode_state(X, y, state_format="index")
     >>> decoded.shape
     (500,)
 
@@ -1319,7 +1340,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: ArrayLike,
-        output_format: Literal["one-hot", "index"] = "one-hot",
+        state_format: Literal["one-hot", "index"] = "one-hot",
     ) -> jnp.ndarray | nap.TsdFrame:
         """Compute the most likely hidden state sequence (Viterbi decoding).
 
@@ -1342,7 +1363,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         y
             Observed neural activity, shape ``(n_time_points,)`` for single neuron or
             ``(n_time_points, n_neurons)`` for population.
-        output_format
+        state_format
             Format of the returned states:
 
             - ``"one-hot"``: Binary matrix of shape ``(n_time_points, n_states)`` where
@@ -1355,9 +1376,9 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         decoded_states
             Most likely state sequence:
 
-            - If ``output_format="one-hot"``: shape ``(n_time_points, n_states)``.
+            - If ``state_format="one-hot"``: shape ``(n_time_points, n_states)``.
               Each row is a one-hot vector with 1 in the position of the decoded state.
-            - If ``output_format="index"``: shape ``(n_time_points,)``.
+            - If ``state_format="index"``: shape ``(n_time_points,)``.
               Integer indices of the decoded states.
 
         Raises
@@ -1399,7 +1420,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         >>> model = model.fit(X, y)
         >>>
         >>> # Decode states as one-hot encoding
-        >>> states_onehot = model.decode_state(X, y, output_format="one-hot")
+        >>> states_onehot = model.decode_state(X, y, state_format="one-hot")
         >>> print(states_onehot.shape)
         (100, 3)
         >>> # Each row has exactly one 1
@@ -1407,7 +1428,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         True
         >>>
         >>> # Decode states as integer indices
-        >>> states_idx = model.decode_state(X, y, output_format="index")
+        >>> states_idx = model.decode_state(X, y, state_format="index")
         >>> print(states_idx.shape)
         (100,)
         >>> print(states_idx[:10])  # First 10 decoded states
@@ -1424,17 +1445,19 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         >>> y_tsd = nap.Tsd(t=t, d=y)
         >>>
         >>> # Decoded states returned as TsdFrame or Tsd
-        >>> states_tsd = model.decode_state(X_tsd, y_tsd, output_format="one-hot")
+        >>> states_tsd = model.decode_state(X_tsd, y_tsd, state_format="one-hot")
         >>> print(type(states_tsd))
         <class 'pynapple.core.time_series.TsdFrame'>
         >>> # With index format, returns Tsd
-        >>> states_idx_tsd = model.decode_state(X_tsd, y_tsd, output_format="index")
+        >>> states_idx_tsd = model.decode_state(X_tsd, y_tsd, state_format="index")
         >>> print(type(states_idx_tsd))
         <class 'pynapple.core.time_series.Tsd'>
         """
         params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
+        # validate state_format
+        _check_state_format(state_format)
         # define the return type for the max-sum
-        if output_format == "one-hot":
+        if state_format == "one-hot":
             return_index = False
         else:
             return_index = True
