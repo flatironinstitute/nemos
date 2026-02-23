@@ -227,6 +227,34 @@ class OptimistixStochasticSolverMixin(StochasticSolverMixin):
         return _params_only_cauchy_criterion(params, prev_params, self.tol, self.rtol)
 
 
+def _stepsize_normalized_convergence(
+    params: Params,
+    prev_params: Params,
+    stepsize: float,
+    tol: float,
+) -> bool:
+    """
+    Step-size-normalized parameter convergence: ||params - prev_params|| / stepsize <= tol.
+
+    Parameters
+    ----------
+    params :
+        Parameter values at end of current epoch.
+    prev_params :
+        Parameter values at end of previous epoch.
+    stepsize :
+        Step size used for the gradient updates.
+    tol :
+        Convergence tolerance.
+
+    Returns
+    -------
+    bool
+        True if the criterion is met.
+    """
+    return tree_l2_norm(tree_sub(params, prev_params)) / stepsize <= tol
+
+
 class JaxoptStochasticSolverMixin(StochasticSolverMixin):
     """
     Mixin for JAXopt solvers.
@@ -244,5 +272,7 @@ class JaxoptStochasticSolverMixin(StochasticSolverMixin):
         epoch: int,
     ):
         """Step-size-normalized parameter change: ||params - prev_params|| / stepsize <= tol."""
-        stepsize = state.stepsize
-        return tree_l2_norm(tree_sub(params, prev_params)) / stepsize <= self.tol
+        del prev_state, aux, epoch
+        return _stepsize_normalized_convergence(
+            params, prev_params, state.stepsize, self.tol
+        )
