@@ -32,6 +32,7 @@ from .validation import (
     GLMValidator,
     PopulationGLMValidator,
 )
+from .solvers import list_stochastic_solvers
 
 __all__ = ["GLM", "PopulationGLM"]
 
@@ -836,6 +837,13 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         >>> model = nmo.glm.GLM(solver_name="GradientDescent", solver_kwargs={"stepsize": 0.01, "acceleration" : False})
         >>> model = model.stochastic_fit(loader, num_epochs=10)
         """
+        # Validate solver supports stochastic
+        if not getattr(self._solver_spec.implementation, "_supports_stochastic", False):
+            raise ValueError(
+                f"Solver '{self.solver_name}' does not support stochastic optimization. "
+                f"Use one of {[s.full_name for s in list_stochastic_solvers()]}."
+            )
+
         if not is_data_loader(data):
             raise TypeError(
                 "stochastic_fit requires a DataLoader (re-iterable) providing "
@@ -868,14 +876,6 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         # Ideally that uses the full data
         # Initialize solver (using preprocessed sample batch)
         self._initialize_solver_and_state(sample_X, sample_y, init_params)
-
-        # TODO: Move this before initialization once self._solver_spec is available.
-        # Validate solver supports stochastic
-        if not self._solver._supports_stochastic:
-            raise ValueError(
-                f"Solver '{self.solver_name}' does not support stochastic optimization. "
-                f"Use 'GradientDescent', 'ProximalGradient', 'SVRG', or 'ProxSVRG'."
-            )
 
         # Resolve convergence criterion:
         # True -> solver default, False -> disabled, callable -> use as-is
