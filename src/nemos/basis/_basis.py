@@ -113,7 +113,7 @@ def _is_single_bound(bounds) -> bool:
     if len(bounds) != 2:
         return False
     # Single bound has numeric elements; multiple bounds have tuple/None elements
-    return all(isinstance(b, (int, float, np.number)) for b in bounds)
+    return all(isinstance(b, (int, float, np.number)) or b is None for b in bounds)
 
 
 def _fill_bounds(b):

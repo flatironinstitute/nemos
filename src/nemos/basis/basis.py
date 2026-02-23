@@ -3,13 +3,11 @@
 # required to get ArrayLike to render correctly
 from __future__ import annotations
 
-from numbers import Number
 from typing import List, Literal, Optional, Sequence, Tuple
 
 import jax
 from numpy.typing import ArrayLike, NDArray
 
-from ..type_casting import is_numpy_array_like
 from ..typing import FeatureMatrix
 from ._basis_mixin import AtomicBasisMixin, BasisMixin, ConvBasisMixin, EvalBasisMixin
 from ._composition_utils import add_docstring
@@ -2893,49 +2891,3 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         # ruff: noqa: D205, D400
         return super().evaluate(*sample_pts)
 
-    @property
-    def bounds(self) -> Tuple[Tuple[float, float]] | None:
-        """Bounds.
-
-        Tuple of bounds, one per dimension or None if no bounds are
-        provided.
-        """
-        return self._bounds
-
-    @bounds.setter
-    def bounds(
-        self, values: Tuple[float, float] | Sequence[Tuple[float, float]] | None
-    ):
-        if values is None:
-            self._bounds = None
-            return
-
-        def _is_leaf(x):
-            return isinstance(x, Sequence) and all(
-                isinstance(xi, Number)
-                or xi is None
-                or isinstance(xi, jax.numpy.generic)  # NumPy/JAX numpy scalar types
-                or (is_numpy_array_like(xi)[1] and xi.ndim == 0)  # 0-D arrays
-                for xi in x
-            )
-
-        values = jax.tree_util.tree_leaves(values, is_leaf=_is_leaf)
-
-        if len(values) == 1:
-            values = self._format_bounds(values[0])
-            values = (values,) * self.ndim
-
-        elif len(values) != self.ndim:
-            raise TypeError(
-                f"Invalid bounds ``{values}`` provided. "
-                "When provided, the bounds should be one or multiple tuples containing pair of floats.\n"
-                "If multiple tuples are provided, one must provide a tuple per each dimension"
-                "of the basis. "
-            )
-        else:
-            values = jax.tree_util.tree_map(
-                self._format_bounds, values, is_leaf=_is_leaf
-            )
-            values = tuple(vals for vals in values)
-
-        self._bounds = values

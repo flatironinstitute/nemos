@@ -10,7 +10,19 @@ from collections import OrderedDict
 from contextlib import contextmanager
 from functools import wraps
 from itertools import chain
-from typing import TYPE_CHECKING, Any, Generator, Literal, Optional, Tuple, Union
+from numbers import Number
+from ..type_casting import is_numpy_array_like
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Generator,
+    Literal,
+    Optional,
+    Tuple,
+    Union,
+    List,
+    Sequence,
+)
 
 import jax
 import jax.numpy as jnp
@@ -604,9 +616,53 @@ class EvalBasisMixin:
         return self
 
     @property
-    def bounds(self):
-        """Range of values covered by the basis."""
+    def bounds(self) -> List[Tuple[float, float]] | Tuple[float, float] | None:
+        """Bounds.
+
+        Returns bounds, single if one-dimensional, a list with one per dimension
+        or None if no bounds are provided.
+        """
         return self._bounds
+
+    @bounds.setter
+    def bounds(
+        self, values: Tuple[float, float] | Sequence[Tuple[float, float]] | None
+    ):
+        if values is None:
+            self._bounds = None
+            return
+
+        def _is_leaf(x):
+            return isinstance(x, Sequence) and all(
+                isinstance(xi, Number)
+                or xi is None
+                or isinstance(xi, jax.numpy.generic)  # NumPy/JAX numpy scalar types
+                or (is_numpy_array_like(xi)[1] and xi.ndim == 0)  # 0-D arrays
+                for xi in x
+            )
+
+        values = jax.tree_util.tree_leaves(values, is_leaf=_is_leaf)
+
+        if len(values) == 1:
+            values = self._format_bounds(values[0])
+            values = [
+                values,
+            ] * self.ndim
+
+        elif len(values) != self.ndim:
+            raise TypeError(
+                f"Invalid bounds ``{values}`` provided. "
+                "When provided, the bounds should be one or multiple tuples containing pair of floats.\n"
+                "If multiple tuples are provided, one must provide a tuple per each dimension"
+                "of the basis. "
+            )
+        else:
+            values = jax.tree_util.tree_map(
+                self._format_bounds, values, is_leaf=_is_leaf
+            )
+            values = [vals for vals in values]
+
+        self._bounds = values
 
     @staticmethod
     def _format_bounds(values: Any) -> Tuple[Any, Exception | None]:
@@ -638,19 +694,6 @@ class EvalBasisMixin:
             )
 
         return values
-
-    @bounds.setter
-    def bounds(self, values: Union[None, Tuple[float, float]]):
-        """Setter for bounds."""
-        if values is None:
-            self._bounds = None
-            return
-        values = self._format_bounds(values)
-        if values is not None and len(values) != 2:
-            raise ValueError(
-                f"The provided `bounds` must be of length two. Length {len(values)} provided instead!"
-            )
-        self._bounds = values
 
 
 class ConvBasisMixin:

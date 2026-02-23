@@ -629,22 +629,26 @@ class FourierBasis(AtomicBasisMixin, Basis):
 
         bounds = getattr(self, "bounds", None)
         if bounds is None:
-            bounds = (None,) * self._n_input_dimensionality
+            bounds = [
+                None,
+            ] * self._n_input_dimensionality
 
         # min/max rescale to [0,1]:
         # The function does so over the time axis (each extra dim is
         # normalized independently)
         def _flat_samples_to_angles(xs):
             scaled_samples = jax.tree_util.tree_map(
-                lambda x, b: 2
-                * jnp.pi
-                * self._shift_angles(min_max_rescale_samples(x, b)[0].reshape(-1)),
+                lambda x, b: (
+                    2
+                    * jnp.pi
+                    * self._shift_angles(min_max_rescale_samples(x, b)[0].reshape(-1))
+                ),
                 xs,
                 bounds,
             )
             return jnp.stack(scaled_samples, axis=-1)
 
-        sample_pts = _flat_samples_to_angles(sample_pts)
+        sample_pts = _flat_samples_to_angles(list(sample_pts))
         angles = sample_pts @ self._freq_combinations
         out = jnp.concatenate(
             [jnp.cos(angles), jnp.sin(angles[..., self._has_zero_phase :])], axis=1
