@@ -1463,17 +1463,6 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
             return_index = True
         return self._decode_state(params, X, y, is_new_session, return_index)
 
-    def _compute_loss(
-        self,
-        params: GLMHMMParams,
-        X: DESIGN_INPUT_TYPE,
-        y: jnp.ndarray,
-        *args,
-        **kwargs,
-    ) -> jnp.ndarray:
-        """Loss function (expected HMM log-likelihood) without validation."""
-        pass
-
     def save_params(
         self,
         filename: Union[str, Path],

@@ -430,7 +430,6 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         """Unpack and store params pytree to coef_ and intercept_."""
         pass
 
-    @abc.abstractmethod
     def _compute_loss(
         self,
         params: ModelParamsT,
@@ -439,8 +438,43 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         *args,
         **kwargs,
     ):
-        """Loss function for a given model to be optimized over."""
-        pass
+        """Unpenalized loss function for optimization.
+
+        This method computes the unpenalized loss (e.g., negative log-likelihood)
+        that is passed to the solver during optimization. The solver adds
+        regularization penalties internally.
+
+        Subclasses that use gradient-based optimization (e.g., GLM) should
+        override this method. Models using other optimization approaches
+        (e.g., EM algorithm) may not need to implement this.
+
+        Parameters
+        ----------
+        params :
+            Model parameters.
+        X :
+            Predictors.
+        y :
+            Target neural activity.
+        *args :
+            Additional positional arguments.
+        **kwargs :
+            Additional keyword arguments.
+
+        Returns
+        -------
+        :
+            The unpenalized loss value.
+
+        Raises
+        ------
+        NotImplementedError
+            If the subclass does not override this method.
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not implement `_compute_loss`. "
+            "This method is only required for models using gradient-based optimization."
+        )
 
     @cast_to_jax
     def compute_loss(
