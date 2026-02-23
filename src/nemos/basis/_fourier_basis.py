@@ -628,10 +628,8 @@ class FourierBasis(AtomicBasisMixin, Basis):
         shape = sample_pts[0].shape
 
         bounds = getattr(self, "bounds", None)
-        if bounds is None:
-            bounds = [
-                None,
-            ] * self._n_input_dimensionality
+        if bounds is None or isinstance(bounds, tuple):
+            bounds = [bounds] * self._n_input_dimensionality
 
         # min/max rescale to [0,1]:
         # The function does so over the time axis (each extra dim is

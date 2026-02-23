@@ -245,13 +245,13 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
         label: Optional[str] = "BSplineConv",
         conv_kwargs: Optional[dict] = None,
     ):
-        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         BSplineBasis.__init__(
             self,
             n_basis_funcs,
             order=order,
             label=label,
         )
+        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
 
     @add_docstring("split_by_feature", BSplineBasis)
     def split_by_feature(
@@ -409,13 +409,13 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         fill_value: float = jax.numpy.nan,
         label: Optional[str] = "CyclicBSplineEval",
     ):
-        EvalBasisMixin.__init__(self, bounds=bounds, fill_value=fill_value)
         CyclicBSplineBasis.__init__(
             self,
             n_basis_funcs,
             order=order,
             label=label,
         )
+        EvalBasisMixin.__init__(self, bounds=bounds, fill_value=fill_value)
 
     @add_docstring("split_by_feature", CyclicBSplineBasis)
     def split_by_feature(
@@ -577,13 +577,13 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
         label: Optional[str] = "CyclicBSplineConv",
         conv_kwargs: Optional[dict] = None,
     ):
-        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         CyclicBSplineBasis.__init__(
             self,
             n_basis_funcs,
             order=order,
             label=label,
         )
+        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
 
     @add_docstring("split_by_feature", CyclicBSplineBasis)
     def split_by_feature(
@@ -767,13 +767,13 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         fill_value: float = jax.numpy.nan,
         label: Optional[str] = "MSplineEval",
     ):
-        EvalBasisMixin.__init__(self, bounds=bounds, fill_value=fill_value)
         MSplineBasis.__init__(
             self,
             n_basis_funcs,
             order=order,
             label=label,
         )
+        EvalBasisMixin.__init__(self, bounds=bounds, fill_value=fill_value)
 
     @add_docstring("split_by_feature", MSplineBasis)
     def split_by_feature(
@@ -959,13 +959,13 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         label: Optional[str] = "MSplineConv",
         conv_kwargs: Optional[dict] = None,
     ):
-        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         MSplineBasis.__init__(
             self,
             n_basis_funcs,
             order=order,
             label=label,
         )
+        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
 
     @add_docstring("split_by_feature", MSplineBasis)
     def split_by_feature(
@@ -1132,13 +1132,13 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
         fill_value: float = jax.numpy.nan,
         label: Optional[str] = "RaisedCosineLinearEval",
     ):
-        EvalBasisMixin.__init__(self, bounds=bounds, fill_value=fill_value)
         RaisedCosineBasisLinear.__init__(
             self,
             n_basis_funcs,
             width=width,
             label=label,
         )
+        EvalBasisMixin.__init__(self, bounds=bounds, fill_value=fill_value)
 
     @add_docstring("evaluate_on_grid", RaisedCosineBasisLinear)
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -1302,13 +1302,13 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
         label: Optional[str] = "RaisedCosineLinearConv",
         conv_kwargs: Optional[dict] = None,
     ):
-        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         RaisedCosineBasisLinear.__init__(
             self,
             n_basis_funcs,
             width=width,
             label=label,
         )
+        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
 
     @add_docstring("evaluate_on_grid", RaisedCosineBasisLinear)
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -1481,7 +1481,6 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         fill_value: float = jax.numpy.nan,
         label: Optional[str] = "RaisedCosineLogEval",
     ):
-        EvalBasisMixin.__init__(self, bounds=bounds, fill_value=fill_value)
         RaisedCosineBasisLog.__init__(
             self,
             n_basis_funcs,
@@ -1490,6 +1489,7 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
             enforce_decay_to_zero=enforce_decay_to_zero,
             label=label,
         )
+        EvalBasisMixin.__init__(self, bounds=bounds, fill_value=fill_value)
 
     @add_docstring("evaluate_on_grid", RaisedCosineBasisLog)
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -1664,7 +1664,6 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
         label: Optional[str] = "RaisedCosineLogConv",
         conv_kwargs: Optional[dict] = None,
     ):
-        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         RaisedCosineBasisLog.__init__(
             self,
             n_basis_funcs,
@@ -1673,6 +1672,7 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
             enforce_decay_to_zero=enforce_decay_to_zero,
             label=label,
         )
+        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
 
     @add_docstring("evaluate_on_grid", RaisedCosineBasisLog)
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -1829,13 +1829,13 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         fill_value: float = jax.numpy.nan,
         label: Optional[str] = "OrthExponentialEval",
     ):
-        EvalBasisMixin.__init__(self, bounds=bounds, fill_value=fill_value)
         OrthExponentialBasis.__init__(
             self,
             n_basis_funcs,
             decay_rates=decay_rates,
             label=label,
         )
+        EvalBasisMixin.__init__(self, bounds=bounds, fill_value=fill_value)
 
     @add_docstring("evaluate_on_grid", OrthExponentialBasis)
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -1997,13 +1997,13 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         label: Optional[str] = "OrthExponentialConv",
         conv_kwargs: Optional[dict] = None,
     ):
-        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         OrthExponentialBasis.__init__(
             self,
             n_basis_funcs,
             decay_rates=decay_rates,
             label=label,
         )
+        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         # re-check window size because n_basis_funcs is not set yet when the
         # property setter runs the first check.
         self._check_window_size(self.window_size)
@@ -2163,12 +2163,12 @@ class IdentityEval(EvalBasisMixin, IdentityBasis):
         fill_value: float = jax.numpy.nan,
         label: Optional[str] = "IdentityEval",
     ):
-        EvalBasisMixin.__init__(self, bounds=bounds, fill_value=fill_value)
         IdentityBasis.__init__(
             self,
             n_basis_funcs=1,
             label=label,
         )
+        EvalBasisMixin.__init__(self, bounds=bounds, fill_value=fill_value)
 
     @add_docstring("evaluate_on_grid", IdentityBasis)
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -2323,11 +2323,11 @@ class Zero(EvalBasisMixin, ZeroBasis):
         label: Optional[str] = "Zero",
     ):
         self._initialized = False
-        EvalBasisMixin.__init__(self, bounds=None)
         ZeroBasis.__init__(
             self,
             label=label,
         )
+        EvalBasisMixin.__init__(self, bounds=None)
 
     @property
     def bounds(self):
@@ -2474,12 +2474,12 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
         label: Optional[str] = "HistoryConv",
         conv_kwargs: Optional[dict] = None,
     ):
-        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         HistoryBasis.__init__(
             self,
             n_basis_funcs=window_size,
             label=label,
         )
+        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
 
     @add_docstring("evaluate_on_grid", HistoryBasis)
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -2890,4 +2890,3 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         """
         # ruff: noqa: D205, D400
         return super().evaluate(*sample_pts)
-

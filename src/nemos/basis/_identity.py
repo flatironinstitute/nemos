@@ -34,11 +34,11 @@ class IdentityBasis(AtomicBasisMixin, Basis):
         n_basis_funcs: int,
         label: Optional[str] = None,
     ) -> None:
+        self._n_input_dimensionality = 1
         AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, label=label)
         Basis.__init__(
             self,
         )
-        self._n_input_dimensionality = 1
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
@@ -117,11 +117,11 @@ class HistoryBasis(AtomicBasisMixin, Basis):
         n_basis_funcs: int,
         label: Optional[str] = None,
     ) -> None:
+        self._n_input_dimensionality = 1
         AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, label=label)
         Basis.__init__(
             self,
         )
-        self._n_input_dimensionality = 1
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input

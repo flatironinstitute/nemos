@@ -50,8 +50,8 @@ from nemos.utils import pynapple_concatenate_numpy
 
 
 def compare_bounds(bas, bounds):
-    if isinstance(bas, FourierBasis) and bas.bounds is not None:
-        return all(b == bounds for b in bas.bounds)
+    # if isinstance(bas, FourierBasis) and bas.bounds is not None:
+    #    return all(b == bounds for b in bas.bounds)
     return bounds == bas.bounds if bounds else bas.bounds is None
 
 
@@ -987,19 +987,22 @@ class TestEvalBasis:
         )
         f1, f2 = bas.__dict__.pop("_funcs", [True]), bas2.__dict__.pop("_funcs", [True])
         assert all(fi == fj for fi, fj in zip(f1, f2))
-        f1, f2 = bas.__dict__.pop("_frequencies", [True]), bas2.__dict__.pop(
-            "_frequencies", [True]
+        f1, f2 = (
+            bas.__dict__.pop("_frequencies", [True]),
+            bas2.__dict__.pop("_frequencies", [True]),
         )
         assert all(np.all(fi == fj) for fi, fj in zip(f1, f2))
-        f1, f2 = bas.__dict__.pop("_frequency_mask", [True]), bas2.__dict__.pop(
-            "_frequency_mask", [True]
+        f1, f2 = (
+            bas.__dict__.pop("_frequency_mask", [True]),
+            bas2.__dict__.pop("_frequency_mask", [True]),
         )
         if f1 is not None and f2 is not None:
             assert all(np.all(fi == fj) for fi, fj in zip(f1, f2))
         else:
             assert f1 is f2 is None
-        f1, f2 = bas.__dict__.pop("_freq_combinations", [True]), bas2.__dict__.pop(
-            "_freq_combinations", [True]
+        f1, f2 = (
+            bas.__dict__.pop("_freq_combinations", [True]),
+            bas2.__dict__.pop("_freq_combinations", [True]),
         )
         assert all(np.all(fi == fj) for fi, fj in zip(f1, f2))
         assert bas.__dict__ == bas2.__dict__
@@ -1100,7 +1103,7 @@ class TestEvalBasis:
             (
                 (1, 2, 3),
                 pytest.raises(
-                    ValueError, match="The provided `bounds` must be of length two"
+                    ValueError, match="The provided `bounds` must be of length two."
                 ),
             ),
         ],
@@ -1213,7 +1216,7 @@ class TestEvalBasis:
         bas = instantiate_atomic_basis(
             cls,
             n_basis_funcs=5,
-            bounds=(1, 3),
+            bounds=(1.0, 3.0),
             **extra_kwargs(cls, 5),
         )
         with expectation:
@@ -1468,7 +1471,6 @@ def test_call_equivalent_in_conv(n_basis, cls):
     ],
 )
 class TestSharedMethods:
-
     @pytest.mark.parametrize(
         "expected_out",
         [
@@ -1488,7 +1490,7 @@ class TestSharedMethods:
                 basis.MSplineConv: "MSplineConv(n_basis_funcs=5, window_size=10, order=4)",
                 basis.OrthExponentialConv: "OrthExponentialConv(n_basis_funcs=5, window_size=10)",
                 basis.HistoryConv: "HistoryConv(window_size=10)",
-                basis.FourierEval: "FourierEval(frequencies=[Array([1., 2.], dtype=float32)], ndim=1, bounds=((1.0, 2.0),), frequency_mask='no-intercept')",
+                basis.FourierEval: "FourierEval(frequencies=[Array([1., 2.], dtype=float32)], ndim=1, bounds=(1.0, 2.0), frequency_mask='no-intercept')",
                 basis.Zero: "Zero()",
             }
         ],
@@ -1523,7 +1525,7 @@ class TestSharedMethods:
                 basis.MSplineConv: r"'mylabel': MSplineConv\(n_basis_funcs=5, window_size=10, order=4\)",
                 basis.OrthExponentialConv: r"'mylabel': OrthExponentialConv\(n_basis_funcs=5, window_size=10\)",
                 basis.HistoryConv: r"'mylabel': HistoryConv\(window_size=10\)",
-                basis.FourierEval: r"'mylabel': FourierEval\(frequencies=\[Array\(\[1\., 2\.\], dtype=float\d{2}\)\], ndim=1, bounds=\(\(1\.0, 2\.0\),\), frequency_mask='no-intercept'\)",
+                basis.FourierEval: r"'mylabel': FourierEval\(frequencies=\[Array\(\[1\., 2\.\], dtype=float\d{2}\)\], ndim=1, bounds=\(1\.0, 2\.0\), frequency_mask='no-intercept'\)",
                 basis.Zero: r"'mylabel': Zero\(\)",
             }
         ],
@@ -2379,9 +2381,9 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             corr[idx] = (lin_ev.flatten() @ log_ev.flatten()) / (
                 np.linalg.norm(lin_ev.flatten()) * np.linalg.norm(log_ev.flatten())
             )
-        assert np.all(
-            np.diff(corr) < 0
-        ), "As time scales increases, deviation from linearity should increase!"
+        assert np.all(np.diff(corr) < 0), (
+            "As time scales increases, deviation from linearity should increase!"
+        )
 
     @pytest.mark.parametrize(
         "time_scaling, expectation",
@@ -2959,12 +2961,14 @@ class TestFourierBasis(BasisFuncsTesting):
         )
         f1, f2 = bas.__dict__.pop("_funcs", [True]), bas2.__dict__.pop("_funcs", [True])
         assert all(fi == fj for fi, fj in zip(f1, f2))
-        f1, f2 = bas.__dict__.pop("_frequencies", [True]), bas2.__dict__.pop(
-            "_frequencies", [True]
+        f1, f2 = (
+            bas.__dict__.pop("_frequencies", [True]),
+            bas2.__dict__.pop("_frequencies", [True]),
         )
         assert all(np.all(fi == fj) for fi, fj in zip(f1, f2))
-        f1, f2 = bas.__dict__.pop("_frequency_mask", [True]), bas2.__dict__.pop(
-            "_frequency_mask", [True]
+        f1, f2 = (
+            bas.__dict__.pop("_frequency_mask", [True]),
+            bas2.__dict__.pop("_frequency_mask", [True]),
         )
         if f1 is not None and f2 is not None and not callable(f1):
             assert all(np.all(fi == fj) for fi, fj in zip(f1, f2))
@@ -2972,8 +2976,9 @@ class TestFourierBasis(BasisFuncsTesting):
             assert f2 is f1
         else:
             assert f1 is f2 is None
-        f1, f2 = bas.__dict__.pop("_freq_combinations", [True]), bas2.__dict__.pop(
-            "_freq_combinations", [True]
+        f1, f2 = (
+            bas.__dict__.pop("_freq_combinations", [True]),
+            bas2.__dict__.pop("_freq_combinations", [True]),
         )
         assert all(np.all(fi == fj) for fi, fj in zip(f1, f2))
         assert bas.__dict__ == bas2.__dict__
@@ -6913,7 +6918,6 @@ def test_mul_of_basis_by_int(mul, basis_class, basis_class_specific_params):
         with pytest.raises(ValueError, match=r"Basis multiplication error"):
             basis_obj * mul
     else:
-
         for basis_mul in [basis_obj * mul, mul * basis_obj]:
             samples = np.linspace(0, 1, 10)
             eval_mul = basis_mul.compute_features(

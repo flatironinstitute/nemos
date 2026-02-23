@@ -47,9 +47,8 @@ class SplineBasis(AtomicBasisMixin, Basis, abc.ABC):
         Basis.__init__(
             self,
         )
-        AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, label=label)
-
         self._n_input_dimensionality = 1
+        AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, label=label)
 
     @property
     def order(self):
@@ -433,6 +432,7 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
         order: int = 4,
         label: Optional[str] = "CyclicBSplineBasis",
     ):
+        self._n_input_dimensionality = 1
         super().__init__(
             n_basis_funcs,
             order=order,
@@ -650,9 +650,9 @@ def bspline(
     need_outer = any(sample_pts < knots[order - 1]) or any(
         sample_pts > knots[nk - order]
     )
-    assert (
-        not need_outer
-    ) | outer_ok, 'sample points must lie within the B-spline knots range unless "outer_ok==True".'
+    assert (not need_outer) | outer_ok, (
+        'sample points must lie within the B-spline knots range unless "outer_ok==True".'
+    )
 
     # select knots that are within the knots range (this takes care of eventual NaNs)
     in_sample = (sample_pts >= knots[0]) & (sample_pts <= knots[-1])

@@ -645,11 +645,8 @@ class EvalBasisMixin:
 
         if len(values) == 1:
             values = self._format_bounds(values[0])
-            values = [
-                values,
-            ] * self.ndim
 
-        elif len(values) != self.ndim:
+        elif len(values) != self._n_input_dimensionality:
             raise TypeError(
                 f"Invalid bounds ``{values}`` provided. "
                 "When provided, the bounds should be one or multiple tuples containing pair of floats.\n"
