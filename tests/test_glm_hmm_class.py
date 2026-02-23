@@ -2343,3 +2343,278 @@ def test_initialize_solver_scale_update_method(obs_model, expected_solver_calls,
     ) as mock_solver:
         model.initialize_optimization_and_state(X, y, params)
         assert mock_solver.call_count == expected_solver_calls
+
+
+# ============================================================================
+# Tests for GLMHMM.simulate
+# ============================================================================
+
+
+@pytest.mark.parametrize(
+    "instantiate_base_regressor_subclass",
+    INSTANTIATE_MODEL_AND_SIMULATE,
+    indirect=True,
+)
+class TestGLMHMMSimulate:
+    """Tests for GLMHMM simulate method."""
+
+    def test_simulate_output_shapes_and_types(self, instantiate_base_regressor_subclass):
+        """Test that simulate returns outputs with correct shapes and types."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+        X = fixture.X
+
+        activity, rates, states = model.simulate(
+            random_key=jax.random.key(123),
+            feedforward_input=X,
+        )
+
+        # Check types
+        assert isinstance(activity, jnp.ndarray), "activity should be a JAX array"
+        assert isinstance(rates, jnp.ndarray), "rates should be a JAX array"
+        assert isinstance(states, jnp.ndarray), "states should be a JAX array"
+
+        # Check shapes match input time dimension
+        assert activity.shape[0] == X.shape[0], "activity time dimension mismatch"
+        assert rates.shape[0] == X.shape[0], "rates time dimension mismatch"
+        assert states.shape[0] == X.shape[0], "states time dimension mismatch"
+
+        # States should be 1D (indices) by default
+        assert states.ndim == 1, "states should be 1D by default (index format)"
+
+    @pytest.mark.parametrize(
+        "state_format, expectation",
+        [
+            ("index", does_not_raise()),
+            ("one-hot", does_not_raise()),
+            ("invalid", pytest.raises(ValueError, match="Invalid state_format")),
+        ],
+    )
+    def test_simulate_state_format(
+        self, state_format, expectation, instantiate_base_regressor_subclass
+    ):
+        """Test state_format parameter validation and output format."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+        X = fixture.X
+
+        with expectation:
+            _, _, states = model.simulate(
+                random_key=jax.random.key(123),
+                feedforward_input=X,
+                state_format=state_format,
+            )
+
+            if state_format == "index":
+                # States should be 1D integer indices
+                assert states.ndim == 1, "index format should be 1D"
+                assert states.shape == (X.shape[0],)
+                assert jnp.all(states >= 0), "state indices must be non-negative"
+                assert jnp.all(states < model.n_states), "state indices must be < n_states"
+            elif state_format == "one-hot":
+                # States should be 2D one-hot encoded
+                assert states.ndim == 2, "one-hot format should be 2D"
+                assert states.shape == (X.shape[0], model.n_states)
+                assert jnp.allclose(states.sum(axis=1), 1), "one-hot rows must sum to 1"
+                assert jnp.all(jnp.max(states, axis=1) == 1), "one-hot rows must have exactly one 1"
+
+    def test_simulate_deterministic(self, instantiate_base_regressor_subclass):
+        """Test that same random key produces same results."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+        X = fixture.X
+
+        key = jax.random.key(42)
+        act1, rate1, state1 = model.simulate(random_key=key, feedforward_input=X)
+        act2, rate2, state2 = model.simulate(random_key=key, feedforward_input=X)
+
+        assert jnp.allclose(state1, state2)
+        assert jnp.allclose(rate1, rate2)
+        assert jnp.allclose(act1, act2)
+
+    def test_simulate_different_keys_differ(self, instantiate_base_regressor_subclass):
+        """Test that different random keys produce different results."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+        X = fixture.X
+
+        _, _, state1 = model.simulate(
+            random_key=jax.random.key(1), feedforward_input=X
+        )
+        _, _, state2 = model.simulate(
+            random_key=jax.random.key(2), feedforward_input=X
+        )
+
+        # Very unlikely to be identical with different keys
+        assert not jnp.allclose(state1, state2)
+
+    @pytest.mark.parametrize(
+        "delta_dim, expectation",
+        [
+            (-1, pytest.raises(ValueError)),
+            (0, does_not_raise()),
+            (1, pytest.raises(ValueError)),
+        ],
+    )
+    def test_simulate_input_dimensionality(
+        self, delta_dim, expectation, instantiate_base_regressor_subclass
+    ):
+        """Test that simulate validates input dimensionality."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+        X = fixture.X
+
+        if delta_dim == -1:
+            X_test = np.zeros(X.shape[:-1])
+        elif delta_dim == 1:
+            X_test = np.zeros(X.shape + (1,))
+        else:
+            X_test = X
+
+        with expectation:
+            model.simulate(random_key=jax.random.key(123), feedforward_input=X_test)
+
+    @pytest.mark.parametrize(
+        "delta_features, expectation",
+        [
+            (-1, pytest.raises(ValueError, match="Inconsistent number of features")),
+            (0, does_not_raise()),
+            (1, pytest.raises(ValueError, match="Inconsistent number of features")),
+        ],
+    )
+    def test_simulate_feature_consistency(
+        self, delta_features, expectation, instantiate_base_regressor_subclass
+    ):
+        """Test that simulate validates feature consistency with fitted model."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+        X = fixture.X
+
+        X_test = jnp.zeros((X.shape[0], X.shape[1] + delta_features))
+
+        with expectation:
+            model.simulate(random_key=jax.random.key(123), feedforward_input=X_test)
+
+    def test_simulate_requires_fit(self, instantiate_base_regressor_subclass):
+        """Test that simulate raises error if model is not fitted."""
+        fixture = instantiate_base_regressor_subclass
+        X = fixture.X
+
+        # Create unfitted model
+        unfitted_model = nmo.glm_hmm.GLMHMM(
+            n_states=3, observation_model=fixture.model.observation_model
+        )
+
+        with pytest.raises(ValueError, match="not fitted"):
+            unfitted_model.simulate(random_key=jax.random.key(123), feedforward_input=X)
+
+    def test_simulate_pynapple_input(self, instantiate_base_regressor_subclass):
+        """Test that simulate works with pynapple TsdFrame input."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+        X = fixture.X
+
+        # Create pynapple TsdFrame
+        t = np.arange(X.shape[0]) * 0.01
+        X_nap = nap.TsdFrame(t=t, d=X)
+
+        activity, rates, states = model.simulate(
+            random_key=jax.random.key(123),
+            feedforward_input=X_nap,
+        )
+
+        # Outputs should be pynapple Tsd
+        assert isinstance(activity, nap.Tsd)
+        assert isinstance(rates, nap.Tsd)
+        assert isinstance(states, nap.Tsd)
+
+    def test_simulate_pynapple_one_hot(self, instantiate_base_regressor_subclass):
+        """Test that simulate with one-hot returns TsdFrame for states."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+        X = fixture.X
+
+        # Create pynapple TsdFrame
+        t = np.arange(X.shape[0]) * 0.01
+        X_nap = nap.TsdFrame(t=t, d=X)
+
+        activity, rates, states = model.simulate(
+            random_key=jax.random.key(123),
+            feedforward_input=X_nap,
+            state_format="one-hot",
+        )
+
+        # One-hot states should be TsdFrame
+        assert isinstance(states, nap.TsdFrame)
+        assert states.shape[1] == model.n_states
+
+    def test_simulate_pynapple_session_boundaries(
+        self, instantiate_base_regressor_subclass
+    ):
+        """Test that simulate respects session boundaries in pynapple input."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+
+        # Force extremely sticky transitions to minimize random state changes
+        stay_prob = 0.9999
+        leave_prob = (1 - stay_prob) / (model.n_states - 1)
+        model.transition_prob_ = np.full(
+            (model.n_states, model.n_states), leave_prob
+        )
+        for i in range(model.n_states):
+            model.transition_prob_[i, i] = stay_prob
+
+        # Create data with 2 sessions
+        n_per_session = 50
+        n_features = fixture.X.shape[1]
+        t1 = np.arange(n_per_session) * 0.01
+        t2 = np.arange(n_per_session) * 0.01 + 1.0  # second session starts at 1.0
+        t = np.concatenate([t1, t2])
+        X_data = np.random.randn(n_per_session * 2, n_features)
+
+        time_support = nap.IntervalSet(start=[0, 1.0], end=[0.49, 1.49])
+        X_nap = nap.TsdFrame(t=t, d=X_data, time_support=time_support)
+
+        # Run multiple simulations - session starts should sample from initial dist
+        state_at_session_starts = []
+        for seed in range(20):
+            _, _, states = model.simulate(
+                random_key=jax.random.key(seed),
+                feedforward_input=X_nap,
+                state_format="index",
+            )
+            states_arr = np.asarray(states)
+            # Get states at session starts (indices 0 and n_per_session)
+            state_at_session_starts.append([states_arr[0], states_arr[n_per_session]])
+
+        # With sticky transitions, if chains weren't reset, second session start
+        # would almost always match the end of first session.
+        # With proper reset, we should see variation at session starts.
+        session_starts = np.array(state_at_session_starts)
+        # Check that not all second-session starts are identical
+        assert len(np.unique(session_starts[:, 1])) > 1
+
+    def test_simulate_rates_match_states(self, instantiate_base_regressor_subclass):
+        """Test that rates correspond to the simulated states."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+        X = fixture.X
+
+        activity, rates, states = model.simulate(
+            random_key=jax.random.key(123),
+            feedforward_input=X,
+            state_format="index",
+        )
+
+        # Manually compute expected rates for each state and verify they match
+        from nemos.glm_hmm.utils import compute_rate_per_state
+
+        params = model._get_model_params()
+        all_rates = compute_rate_per_state(
+            X, params.glm_params, model._inverse_link_function
+        )
+
+        # Check that the returned rates match the rates for the simulated states
+        for t in range(min(10, X.shape[0])):  # Check first 10 time points
+            expected_rate = all_rates[t, states[t]]
+            assert jnp.allclose(rates[t], expected_rate, rtol=1e-5)
