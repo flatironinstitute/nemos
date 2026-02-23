@@ -269,6 +269,11 @@ class SolverProtocol(Protocol, Generic[SolverState]):
 
     Implementations can be checked at runtime via isinstance(solver_object, SolverProtocol)
     and issubclass(solver_class, SolverProtocol).
+
+    Solvers that support stochastic (mini-batch) optimization can additionally
+    implement ``stochastic_run`` and ``stochastic_convergence_criterion``, and
+    set the class variable ``_supports_stochastic = True``.
+    See ``AbstractSolver`` and ``StochasticSolverMixin`` for details.
     """
 
     def __init__(
