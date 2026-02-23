@@ -284,7 +284,7 @@ class TestSolverStochasticSupport:
         "solver_name", _stochastic_solver_names + _non_stochastic_solver_names
     )
     def test_supports_stochastic(self, solver_name):
-        """Test the right solvers have stochastic suppoer."""
+        """Test the right solvers have stochastic support."""
         expectation = solver_name in _stochastic_solver_names
         assert solvers.supports_stochastic(solver_name) == expectation
 

@@ -155,8 +155,8 @@ Stochastic optimization requires data to be provided through a `DataLoader` that
 
 ```python
 class DataLoader(Protocol):
-    def __iter__(self) -> Iterator[Tuple[ArrayLike, ArrayLike]]:
-        """Iterate over (X_batch, y_batch) tuples. Must return a fresh iterator each call."""
+    def __iter__(self) -> Iterator[tuple[Any, ...]]:
+        """Iterate over tuples containing input and output data, e.g. (X_batch, y_batch). Must return a fresh iterator each call."""
         ...
 
     @property
@@ -164,7 +164,7 @@ class DataLoader(Protocol):
         """Total number of samples in the dataset."""
         ...
 
-    def sample_batch(self) -> Tuple[ArrayLike, ArrayLike]:
+    def sample_batch(self) -> tuple[Any, ...]:
         """Return a single batch for initialization purposes."""
         ...
 ```
