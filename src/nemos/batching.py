@@ -22,6 +22,11 @@ class DataLoader(Protocol):
     """
     Protocol for data loaders that stream batches.
 
+    The protocol itself allows batches as tuples of any length,
+    but note that ``GLM.stochastic_fit`` expects ``(X, y)`` pairs.
+    The variadic batch format is used on the solver-level
+    via ``AbstractSolver.stochastic_run``.
+
     Requirements:
 
     - Must be re-iterable: calling ``__iter__()`` must return a fresh iterator
