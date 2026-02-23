@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import (
     TYPE_CHECKING,
     Any,
+    Callable,
     Generic,
     Optional,
     Tuple,
@@ -410,6 +411,8 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         *,
         init_params: Optional[UserProvidedParamsT] = None,
         num_epochs: int = 1,
+        convergence_criterion: bool | Callable = True,
+        batch_callback: Callable | None = None,
     ) -> BaseRegressor[UserProvidedParamsT, ModelParamsT]:
         """
         Fit the model using stochastic optimization with mini-batches.
@@ -426,7 +429,19 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         init_params :
             Initial parameters. If None, initialized from ``sample_batch()``.
         num_epochs :
-            Number of passes over the data. Must be >= 1.
+            Maximum number of passes over the data. Must be >= 1.
+            Optimization may stop earlier if the convergence criterion is met.
+        convergence_criterion :
+            Optional criterion to monitor convergence per epoch.
+            If True (default), use the solver's default convergence monitoring and stop on convergence.
+            If False, no convergence monitoring, optimization runs for ``num_epochs`` epochs.
+            If a callable, provide a function with signature
+                ``(params, prev_params, state, prev_state, aux, epoch) -> bool``.
+                Returning True stops the optimization.
+        batch_callback :
+            Optional callback for per-batch monitoring.
+            Signature is ``batch_callback(params, state, aux, batch_idx, epoch) -> bool``.
+            Returning True stops the optimization after that batch.
 
         Returns
         -------
