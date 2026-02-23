@@ -1,7 +1,7 @@
 """Initialization functions and related utility functions."""
 
 import inspect
-from typing import Any, Callable, Literal, Optional, Tuple
+from typing import Any, Callable, Literal, Optional, Protocol, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -14,23 +14,59 @@ from ..typing import DESIGN_INPUT_TYPE
 from .params import GLMHMMUserParams
 
 RANDOM_KEY = jax.Array
-INIT_FUNCTION_HMM = Callable[
-    [int, DESIGN_INPUT_TYPE, NDArray | jnp.ndarray, RANDOM_KEY],
-    Tuple[jnp.ndarray, jnp.ndarray],
-]
-INIT_FUNC_GLM_PARAMS = Callable[
-    [int, DESIGN_INPUT_TYPE, NDArray | jnp.ndarray, Callable, RANDOM_KEY],
-    Tuple[jnp.ndarray, jnp.ndarray],
-]
-INIT_FUNC_GLM_SCALE = Callable[
-    [int, DESIGN_INPUT_TYPE, NDArray | jnp.ndarray, RANDOM_KEY],
-    jnp.ndarray,
-]
+
+
+class InitFunctionHMM(Protocol):
+    """Protocol for HMM probability initialization functions (initial and transition)."""
+
+    def __call__(
+        self,
+        n_states: int,
+        X: DESIGN_INPUT_TYPE,
+        y: NDArray | jnp.ndarray,
+        random_key: RANDOM_KEY,
+        **kwargs: Any,
+    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        """Initialize HMM probabilities."""
+        ...
+
+
+class InitFuncGLMParams(Protocol):
+    """Protocol for GLM parameters (coef, intercept) initialization functions."""
+
+    def __call__(
+        self,
+        n_states: int,
+        X: DESIGN_INPUT_TYPE,
+        y: NDArray | jnp.ndarray,
+        inverse_link_function: Callable,
+        random_key: RANDOM_KEY,
+        **kwargs: Any,
+    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        """Initialize GLM coefficients and intercept."""
+        ...
+
+
+class InitFuncGLMScale(Protocol):
+    """Protocol for GLM scale initialization functions."""
+
+    def __call__(
+        self,
+        n_states: int,
+        X: DESIGN_INPUT_TYPE,
+        y: NDArray | jnp.ndarray,
+        random_key: RANDOM_KEY,
+        **kwargs: Any,
+    ) -> jnp.ndarray:
+        """Initialize GLM scale parameter."""
+        ...
+
+
 INITIALIZATION_FN_DICT = dict[
     Literal[
         "glm_params_init", "scale_init", "initial_proba_init", "transition_proba_init"
     ],
-    INIT_FUNCTION_HMM | INIT_FUNC_GLM_SCALE | INIT_FUNC_GLM_PARAMS,
+    InitFunctionHMM | InitFuncGLMScale | InitFuncGLMParams,
 ]
 
 
@@ -40,6 +76,7 @@ def random_glm_params_init(
     y: jnp.ndarray,
     inverse_link_function: Callable,
     random_key=jax.random.PRNGKey(123),
+    std_dev=0.001,
 ) -> GLMUserParams:
     """
     Initialize GLM coefficients and intercept with random normal values.
@@ -59,6 +96,9 @@ def random_glm_params_init(
         Inverse link function of the GLM.
     random_key : jax.random.PRNGKey
         Random key for reproducibility. Default is PRNGKey(123).
+    std_dev :
+        The standard deviation of the normal distribution that generates the coefficients.
+        Default is 0.001.
 
     Returns
     -------
@@ -72,7 +112,7 @@ def random_glm_params_init(
     n_neurons = 1 if is_one_dim else y.shape[1]
 
     # small random noisy coef
-    coef = 0.001 * jax.random.normal(random_key, (n_features, n_neurons, n_states))
+    coef = std_dev * jax.random.normal(random_key, (n_features, n_neurons, n_states))
     # mean-rate
     intercept = initialize_intercept_matching_mean_rate(inverse_link_function, y)
     intercept = jnp.tile(intercept[:, jnp.newaxis], (1, n_states))
@@ -140,6 +180,38 @@ def sticky_transition_proba_init(
     )
 
 
+def uniform_transition_proba_init(
+    n_states: int,
+    X: DESIGN_INPUT_TYPE,
+    y: NDArray | jnp.ndarray,
+    random_key: jax.numpy.ndarray = jax.random.PRNGKey(123),
+) -> jnp.ndarray:
+    """
+    Initialize transition probabilities with uniform dynamics.
+
+    Creates a transition probability matrix that assign equal probability of
+    transitioning to any of the states.
+
+    Parameters
+    ----------
+    n_states : int
+        Number of HMM states. Must be greater than 1.
+    X : DESIGN_INPUT_TYPE
+        Design matrix, unused but included for API consistency.
+    y : NDArray | jnp.ndarray
+        Observations, unused but included for API consistency.
+    random_key : jax.random.PRNGKey
+        Random key, unused for this particular initialization, but added for API consistency.
+
+    Returns
+    -------
+    transition_matrix : jnp.ndarray
+        Transition probability matrix of shape (n_states, n_states).
+    """
+    prob_transition = 1.0 / n_states
+    return jnp.full((n_states, n_states), prob_transition, dtype=float)
+
+
 def uniform_initial_proba_init(
     n_states: int,
     X: DESIGN_INPUT_TYPE,
@@ -196,6 +268,7 @@ AVAILABLE_INIT_FUNCTIONS = {
     },
     "transition_proba_init": {
         "sticky": sticky_transition_proba_init,
+        "uniform": uniform_transition_proba_init,
     },
     "initial_proba_init": {
         "uniform": uniform_initial_proba_init,
@@ -237,6 +310,7 @@ def glm_hmm_initialization(
     inverse_link_function: Callable,
     random_key=jax.random.PRNGKey(123),
     init_registry: Optional[dict] = None,
+    init_kwargs: Optional[dict] = None,
 ) -> GLMHMMUserParams:
     """
     Initialize all GLM-HMM parameters.
@@ -283,15 +357,23 @@ def glm_hmm_initialization(
     else:
         init_registry = _resolve_init_funcs_registry(init_registry)
     random_key, subkey = jax.random.split(random_key)
+    kwargs = init_kwargs.get("glm_params_init", {})
     coef, intercept = init_registry["glm_params_init"](
-        n_states, X, y, inverse_link_function, subkey
+        n_states, X, y, inverse_link_function, subkey, **kwargs
     )
     random_key, subkey = jax.random.split(random_key)
-    scale = init_registry["scale_init"](n_states, X, y, subkey)
+    kwargs = init_kwargs.get("scale_init", {})
+    scale = init_registry["scale_init"](n_states, X, y, subkey, **kwargs)
     random_key, subkey = jax.random.split(random_key)
-    initial_proba = init_registry["initial_proba_init"](n_states, X, y, subkey)
+    kwargs = init_kwargs.get("initial_proba_init", {})
+    initial_proba = init_registry["initial_proba_init"](
+        n_states, X, y, subkey, **kwargs
+    )
     _, subkey = jax.random.split(random_key)
-    transition_proba = init_registry["transition_proba_init"](n_states, X, y, subkey)
+    kwargs = init_kwargs.get("transition_proba_init", {})
+    transition_proba = init_registry["transition_proba_init"](
+        n_states, X, y, subkey, **kwargs
+    )
     return coef, intercept, scale, initial_proba, transition_proba
 
 
@@ -328,7 +410,7 @@ def _resolve_init_funcs_registry(
             f"Invalid key(s) for initialization dictionary: {invalid}.\n"
             f"Valid keys are {DEFAULT_INIT_FUNCTION.keys()}."
         )
-    updated_registry: INITIALIZATION_FN_DICT = DEFAULT_INIT_FUNCTION.copy()
+    updated_registry = DEFAULT_INIT_FUNCTION.copy()
     for func_name, func in registry.items():
         updated_registry[func_name] = _resolve_init_func(func_name, func)
     return updated_registry
@@ -343,7 +425,7 @@ def _is_native_init_registry(registry: INITIALIZATION_FN_DICT) -> bool:
 
 def _resolve_init_func(
     func_name: str, init_func: Callable | str
-) -> INIT_FUNCTION_HMM | INIT_FUNC_GLM_SCALE | INIT_FUNC_GLM_PARAMS:
+) -> InitFunctionHMM | InitFuncGLMScale | InitFuncGLMParams:
     """
     Validate and resolve an initialization function.
 

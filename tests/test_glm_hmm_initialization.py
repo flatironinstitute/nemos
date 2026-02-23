@@ -17,6 +17,7 @@ from nemos.glm_hmm.initialize_parameters import (
     random_glm_params_init,
     sticky_transition_proba_init,
     uniform_initial_proba_init,
+    uniform_transition_proba_init,
 )
 
 
@@ -49,6 +50,19 @@ class TestRandomGLMParamsInitialization:
         else:
             assert coef.shape == (n_features, n_neurons, n_states)
             assert intercept.shape == (n_neurons, n_states)
+
+    @pytest.mark.parametrize("std_dev", [0.0, 1.0, None])
+    def test_std_dev_param(self, std_dev):
+        X = jnp.ones((10, 2))
+        y = jnp.ones((10, 3))
+        inverse_link = lambda x: x  # Identity link
+
+        kwargs = {} if std_dev is None else {"std_dev": std_dev}
+        coef, intercept = random_glm_params_init(
+            4, X, y, inverse_link, random_key=jax.random.PRNGKey(123), **kwargs
+        )
+        if std_dev == 0:
+            assert np.all(coef == 0)
 
     @pytest.mark.parametrize(
         "X, y",
@@ -326,6 +340,45 @@ class TestStickyTransitionProbaInitialization:
 
         # Should be identical regardless of random key
         assert jnp.allclose(transition_prob1, transition_prob2)
+
+
+class TestUniformTransitionProbaInitialization:
+    """Test sticky initialization for transition probabilities."""
+
+    @pytest.mark.parametrize("n_states", [1, 2, 3, 5])
+    def test_expected_output_shape(self, n_states):
+        """Test that output shape is (n_states, n_states)."""
+        X = jnp.ones((100, 5))
+        y = jnp.ones(100)
+
+        transition_prob = uniform_transition_proba_init(
+            n_states, X, y, random_key=jax.random.PRNGKey(123)
+        )
+
+        assert transition_prob.shape == (n_states, n_states)
+        assert jnp.array_equal(
+            transition_prob, jnp.full((n_states, n_states), 1 / n_states)
+        )
+
+    @pytest.mark.parametrize(
+        "X, y",
+        [
+            (np.ones((100, 5)), np.ones(100)),
+            (jnp.ones((100, 5)), jnp.ones(100)),
+        ],
+    )
+    def test_expected_output_type(self, X, y):
+        """Test that output is a JAX array regardless of input type."""
+        n_states = 2
+
+        transition_prob = uniform_transition_proba_init(
+            n_states, X, y, random_key=jax.random.PRNGKey(123)
+        )
+
+        assert isinstance(transition_prob, jnp.ndarray)
+        assert jnp.array_equal(
+            transition_prob, jnp.full((n_states, n_states), 1 / n_states)
+        )
 
 
 class TestUniformInitialProbaInitialization:
