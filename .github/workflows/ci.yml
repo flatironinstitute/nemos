@@ -17,6 +17,10 @@ on:
     branches:
       - main
 
+env:
+  CODECOV_OS: ubuntu-latest
+  CODECOV_PY: '3.13'
+
 jobs:
   tox_tests_not_solver_related:
     if: ${{ !github.event.pull_request.draft }}
@@ -44,9 +48,11 @@ jobs:
         run: uvx --with tox-uv tox -e skip_solver_related
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v4.0.1
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        if: matrix.os == env.CODECOV_OS && matrix.python-version == env.CODECOV_PY
+        uses: codecov/codecov-action@v5
+        with:
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   tox_solver_related_jaxopt_backend:
     if: ${{ !github.event.pull_request.draft }}
@@ -54,6 +60,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ['3.10', '3.11', '3.12', '3.13']
+      fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
@@ -73,9 +80,11 @@ jobs:
         run: uvx --with tox-uv tox -e backend-jaxopt
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v4.0.1
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        if: matrix.os == env.CODECOV_OS && matrix.python-version == env.CODECOV_PY
+        uses: codecov/codecov-action@v5
+        with:
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   tox_solver_related_optimistix_backend:
     if: ${{ !github.event.pull_request.draft }}
@@ -83,6 +92,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ['3.10', '3.11', '3.12', '3.13']
+      fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
@@ -102,9 +112,11 @@ jobs:
         run: uvx --with tox-uv tox -e backend-optimistix
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v4.0.1
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        if: matrix.os == env.CODECOV_OS && matrix.python-version == env.CODECOV_PY
+        uses: codecov/codecov-action@v5
+        with:
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   tox_check:
     if: ${{ !github.event.pull_request.draft }}

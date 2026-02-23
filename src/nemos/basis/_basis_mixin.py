@@ -455,7 +455,7 @@ class AtomicBasisMixin(BasisMixin):
         klass = self.__class__(**self.get_params())
         return klass
 
-    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray) -> BasisMixin:
+    def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> BasisMixin:
         """
         Set the expected input shape for the basis object.
 
@@ -491,7 +491,7 @@ class AtomicBasisMixin(BasisMixin):
         is not set in this method, then ``compute_features`` (equivalent to ``fit_transform``) will break.
 
         """
-        return super().set_input_shape(xi)
+        return super().set_input_shape(*xi)
 
 
 class EvalBasisMixin:
