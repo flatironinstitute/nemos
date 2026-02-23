@@ -18,7 +18,7 @@ from typing import Literal
 
 from nemos.glm.validation import GLMValidator
 from nemos.glm_hmm.params import GLMHMMParams, GLMScale, HMMParams
-from nemos.solvers._solver_registry import SolverSpec
+import warnings
 
 # Named tuple for model fixture returns (clearer than tuple indexing)
 ModelFixture = namedtuple(
@@ -98,6 +98,30 @@ DEFAULT_KWARGS = {
 # shut-off conversion warnings
 nap.nap_config.suppress_conversion_warnings = True
 
+
+@pytest.fixture(autouse=True, scope="function")
+def suppress_em_convergence_warning(request):
+    """
+    Suppress EM convergence warnings for tests not marked with @pytest.mark.convergence.
+
+    Tests marked with @pytest.mark.convergence run without warning suppression
+    (they explicitly test convergence behavior).
+    All other tests suppress the "fit did not converge" warning.
+    """
+    if request.node.get_closest_marker("convergence"):
+        # This test needs to see convergence warnings
+        yield
+    else:
+        # Default: suppress GLM-HMM EM convergence warning only
+        # The GLM-HMM warning contains "iterations of the EM" which distinguishes it
+        # from the GLM warning about convex optimization convergence
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r"The fit did not converge.*iterations of the EM",
+                category=RuntimeWarning,
+            )
+            yield
 
 @pytest.fixture(autouse=True, scope="function")
 def set_jax_precision_per_test(request):
@@ -1412,14 +1436,21 @@ def instantiate_glm_hmm_func(
     regularizer: str = "UnRegularized",
     solver_name: str = None,
     simulate=False,
+    solver_kwargs=None,
+    maxiter: int = 2,
 ):
     np.random.seed(123)
+
+    if solver_kwargs is None:
+        solver_kwargs = {"maxiter": 1}
 
     model = nmo.glm_hmm.GLMHMM(
         n_states=n_states,
         observation_model=obs_model,
         regularizer=regularizer,
         solver_name=solver_name,
+        solver_kwargs=solver_kwargs,
+        maxiter=maxiter,
     )
     n_features = 2
 

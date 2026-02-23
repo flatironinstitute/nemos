@@ -1313,6 +1313,7 @@ def test__get_is_new_session_and_drop_nan(X, y, instantiate_base_regressor_subcl
         )
 
     @pytest.mark.parametrize("maxiter", [10, 100, 500])
+    @pytest.mark.convergence
     def test_initialize_solver_respects_maxiter(
         self,
         maxiter,
@@ -1321,6 +1322,7 @@ def test__get_is_new_session_and_drop_nan(X, y, instantiate_base_regressor_subcl
         """Test that maxiter is correctly used in state initialization."""
         fixture = instantiate_base_regressor_subclass
         fixture.model.maxiter = maxiter
+        fixture.model.solver_kwargs.update({"maxiter": 500})
         params = fixture.model.initialize_params(fixture.X, fixture.y)
         init_state = fixture.model.initialize_optimization_and_state(
             fixture.X, fixture.y, params
