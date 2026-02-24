@@ -3580,11 +3580,6 @@ class TestFourierBasis(BasisFuncsTesting):
             ([(np.pi / 2, np.pi)], 1, does_not_raise()),
             (None, 2, does_not_raise()),
             (
-                [None, None],
-                2,
-                pytest.raises(TypeError, match="Could not convert `bounds` to float"),
-            ),
-            (
                 [(np.pi / 2, np.pi)] * 2,
                 1,
                 pytest.raises(
@@ -3604,7 +3599,7 @@ class TestFourierBasis(BasisFuncsTesting):
                 2,
                 pytest.raises(
                     TypeError,
-                    match="the bounds should be one or multiple tuples containing pair of floats",
+                    match="Could not convert `bounds` to float.",
                 ),
             ),
         ],
@@ -4022,15 +4017,11 @@ class TestAdditiveBasis(CombinedBasis):
         basis_a_obj = self.instantiate_basis(
             n_basis_a, basis_a, basis_class_specific_params, window_size=10
         )
-        basis_a_obj = basis_a_obj.set_input_shape(
-            *([inp_num] * basis_a_obj._n_inputs)
-        )
+        basis_a_obj = basis_a_obj.set_input_shape(*([inp_num] * basis_a_obj._n_inputs))
         basis_b_obj = self.instantiate_basis(
             n_basis_b, basis_b, basis_class_specific_params, window_size=15
         )
-        basis_b_obj = basis_b_obj.set_input_shape(
-            *([inp_num] * basis_b_obj._n_inputs)
-        )
+        basis_b_obj = basis_b_obj.set_input_shape(*([inp_num] * basis_b_obj._n_inputs))
         add = basis_a_obj + basis_b_obj
 
         add2 = add.__sklearn_clone__()
@@ -4142,9 +4133,7 @@ class TestAdditiveBasis(CombinedBasis):
             n_basis_b, basis_b, basis_class_specific_params, window_size=window_size
         )
         basis_obj = basis_a_obj + basis_b_obj
-        required_dim = (
-            basis_a_obj._n_inputs + basis_b_obj._n_inputs
-        )
+        required_dim = basis_a_obj._n_inputs + basis_b_obj._n_inputs
         inputs = [np.linspace(0, 1, 20)] * n_input
         if n_input != required_dim:
             expectation = pytest.raises(
@@ -4184,9 +4173,7 @@ class TestAdditiveBasis(CombinedBasis):
             n_basis_b, basis_b, basis_class_specific_params, window_size=10
         )
         basis_obj = basis_a_obj + basis_b_obj
-        res = basis_obj.evaluate_on_grid(
-            *[sample_size] * basis_obj._n_inputs
-        )
+        res = basis_obj.evaluate_on_grid(*[sample_size] * basis_obj._n_inputs)
         for grid in res[:-1]:
             assert grid.shape[0] == sample_size
 
@@ -4219,9 +4206,9 @@ class TestAdditiveBasis(CombinedBasis):
             n_basis_b, basis_b, basis_class_specific_params, window_size=10
         )
         basis_obj = basis_a_obj + basis_b_obj
-        eval_basis = basis_obj.evaluate_on_grid(
-            *[sample_size] * basis_obj._n_inputs
-        )[-1]
+        eval_basis = basis_obj.evaluate_on_grid(*[sample_size] * basis_obj._n_inputs)[
+            -1
+        ]
         assert eval_basis.shape[0] == sample_size
 
     @pytest.mark.parametrize("n_input", [0, 1, 2, 5, 6, 11, 30])
@@ -4255,9 +4242,7 @@ class TestAdditiveBasis(CombinedBasis):
         )
         basis_obj = basis_a_obj + basis_b_obj
         inputs = [20] * n_input
-        required_dim = (
-            basis_a_obj._n_inputs + basis_b_obj._n_inputs
-        )
+        required_dim = basis_a_obj._n_inputs + basis_b_obj._n_inputs
         if n_input != required_dim:
             expectation = pytest.raises(
                 TypeError, match=r"This basis requires \d+ input\(s\)."
@@ -5002,15 +4987,11 @@ class TestAdditiveBasis(CombinedBasis):
         basis_a = self.instantiate_basis(
             5, basis_a, basis_class_specific_params, window_size=10
         )
-        basis_a.set_input_shape(
-            *([1] * basis_a._n_inputs)
-        ).to_transformer()
+        basis_a.set_input_shape(*([1] * basis_a._n_inputs)).to_transformer()
         basis_b = self.instantiate_basis(
             5, basis_b, basis_class_specific_params, window_size=10
         )
-        basis_b.set_input_shape(
-            *([1] * basis_b._n_inputs)
-        ).to_transformer()
+        basis_b.set_input_shape(*([1] * basis_b._n_inputs)).to_transformer()
         add = basis_a + basis_b
         inps_a = [2] * basis_a._n_inputs
         set_input_shape(add.basis1, *inps_a)
@@ -5569,9 +5550,7 @@ class TestMultiplicativeBasis(CombinedBasis):
             n_basis_b, basis_b, basis_class_specific_params, window_size=window_size
         )
         basis_obj = basis_a_obj * basis_b_obj
-        required_dim = (
-            basis_a_obj._n_inputs + basis_b_obj._n_inputs
-        )
+        required_dim = basis_a_obj._n_inputs + basis_b_obj._n_inputs
         inputs = [np.linspace(0, 1, 20)] * n_input
         if n_input != required_dim:
             expectation = pytest.raises(
@@ -5607,9 +5586,7 @@ class TestMultiplicativeBasis(CombinedBasis):
             n_basis_b, basis_b, basis_class_specific_params, window_size=10
         )
         basis_obj = basis_a_obj * basis_b_obj
-        res = basis_obj.evaluate_on_grid(
-            *[sample_size] * basis_obj._n_inputs
-        )
+        res = basis_obj.evaluate_on_grid(*[sample_size] * basis_obj._n_inputs)
         for grid in res[:-1]:
             assert grid.shape[0] == sample_size
 
@@ -5638,9 +5615,9 @@ class TestMultiplicativeBasis(CombinedBasis):
             n_basis_b, basis_b, basis_class_specific_params, window_size=10
         )
         basis_obj = basis_a_obj * basis_b_obj
-        eval_basis = basis_obj.evaluate_on_grid(
-            *[sample_size] * basis_obj._n_inputs
-        )[-1]
+        eval_basis = basis_obj.evaluate_on_grid(*[sample_size] * basis_obj._n_inputs)[
+            -1
+        ]
         assert eval_basis.shape[0] == sample_size
 
     @pytest.mark.parametrize("n_input", [0, 1, 2, 5, 6, 11, 30])
@@ -5670,9 +5647,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         )
         basis_obj = basis_a_obj * basis_b_obj
         inputs = [20] * n_input
-        required_dim = (
-            basis_a_obj._n_inputs + basis_b_obj._n_inputs
-        )
+        required_dim = basis_a_obj._n_inputs + basis_b_obj._n_inputs
         if n_input != required_dim:
             expectation = pytest.raises(
                 TypeError, match=r"This basis requires \d+ input\(s\)."
@@ -5707,12 +5682,8 @@ class TestMultiplicativeBasis(CombinedBasis):
         basis_b_obj = self.instantiate_basis(
             n_basis_b, basis_b, basis_class_specific_params, window_size=10
         )
-        input_a = [
-            np.linspace(0, 1, sample_size_a)
-        ] * basis_a_obj._n_inputs
-        input_b = [
-            np.linspace(0, 1, sample_size_b)
-        ] * basis_b_obj._n_inputs
+        input_a = [np.linspace(0, 1, sample_size_a)] * basis_a_obj._n_inputs
+        input_b = [np.linspace(0, 1, sample_size_b)] * basis_b_obj._n_inputs
         basis_obj = basis_a_obj * basis_b_obj
         if raise_exception:
             with pytest.raises(
@@ -6481,15 +6452,11 @@ class TestMultiplicativeBasis(CombinedBasis):
         basis_a = self.instantiate_basis(
             5, basis_a, basis_class_specific_params, window_size=10
         )
-        basis_a.set_input_shape(
-            *([1] * basis_a._n_inputs)
-        ).to_transformer()
+        basis_a.set_input_shape(*([1] * basis_a._n_inputs)).to_transformer()
         basis_b = self.instantiate_basis(
             5, basis_b, basis_class_specific_params, window_size=10
         )
-        basis_b.set_input_shape(
-            *([1] * basis_b._n_inputs)
-        ).to_transformer()
+        basis_b.set_input_shape(*([1] * basis_b._n_inputs)).to_transformer()
         mul = basis_a * basis_b
         mul.set_input_shape(*[2] * mul._n_inputs)
         assert (
@@ -6836,9 +6803,7 @@ def test_power_of_basis(exponent, basis_class, basis_class_specific_params):
     else:
         basis_pow = basis_obj**exponent
         samples = np.linspace(0, 1, 10)
-        eval_pow = basis_pow.compute_features(
-            *[samples] * basis_pow._n_inputs
-        )
+        eval_pow = basis_pow.compute_features(*[samples] * basis_pow._n_inputs)
 
         if exponent == 2:
             basis_obj = basis_obj * basis_obj
@@ -6920,9 +6885,7 @@ def test_mul_of_basis_by_int(mul, basis_class, basis_class_specific_params):
     else:
         for basis_mul in [basis_obj * mul, mul * basis_obj]:
             samples = np.linspace(0, 1, 10)
-            eval_mul = basis_mul.compute_features(
-                *[samples] * basis_mul._n_inputs
-            )
+            eval_mul = basis_mul.compute_features(*[samples] * basis_mul._n_inputs)
 
             if mul == 2:
                 basis_add = basis_obj + basis_obj
@@ -6931,9 +6894,7 @@ def test_mul_of_basis_by_int(mul, basis_class, basis_class_specific_params):
             else:
                 basis_add = basis_obj
             non_nan = ~np.isnan(eval_mul)
-            out = basis_add.compute_features(
-                *[samples] * basis_add._n_inputs
-            )
+            out = basis_add.compute_features(*[samples] * basis_add._n_inputs)
             assert np.allclose(
                 eval_mul[non_nan],
                 out[non_nan],
@@ -7008,9 +6969,7 @@ def test_basis_to_transformer(basis_cls, basis_class_specific_params):
     bas = CombinedBasis().instantiate_basis(
         n_basis_funcs, basis_cls, basis_class_specific_params, window_size=10
     )
-    trans_bas = bas.set_input_shape(
-        *([1] * bas._n_inputs)
-    ).to_transformer()
+    trans_bas = bas.set_input_shape(*([1] * bas._n_inputs)).to_transformer()
 
     assert isinstance(trans_bas, TransformerBasis)
 

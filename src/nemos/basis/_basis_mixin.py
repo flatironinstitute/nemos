@@ -625,41 +625,39 @@ class EvalBasisMixin:
         return self._bounds
 
     @bounds.setter
-    def bounds(
-        self, values: Tuple[float, float] | Sequence[Tuple[float, float]] | None
-    ):
+    def bounds(self, values):
         if values is None:
             self._bounds = None
             return
-
-        def _is_leaf(x):
-            return isinstance(x, Sequence) and all(
-                isinstance(xi, Number)
-                or xi is None
-                or isinstance(xi, jax.numpy.generic)  # NumPy/JAX numpy scalar types
-                or (is_numpy_array_like(xi)[1] and xi.ndim == 0)  # 0-D arrays
-                for xi in x
-            )
-
-        values = jax.tree_util.tree_leaves(values, is_leaf=_is_leaf)
-
-        if len(values) == 1:
-            values = self._format_bounds(values[0])
-
-        elif len(values) != self._n_inputs:
+        # unwrap single-element list: [(lo, hi)] -> (lo, hi)
+        if isinstance(values, list) and len(values) == 1:
+            values = values[0]
+        if self._n_inputs == 1:
+            # guard against accidentally passing a list of tuples
+            if (
+                isinstance(values, (list, tuple))
+                and len(values) == 2
+                and any(
+                    isinstance(v, (list, tuple))
+                    or (isinstance(v, np.ndarray) and v.ndim > 0)
+                    for v in values
+                )
+            ):
+                raise TypeError(
+                    "When provided, the bounds should be one (lo, hi) tuple for a "
+                    "single-input basis."
+                )
+            self._bounds = self._format_bounds(values)
+            return
+        # multi-input: must be a list/tuple of length n_inputs
+        if not isinstance(values, (list, tuple)) or len(values) != self._n_inputs:
             raise TypeError(
                 f"Invalid bounds ``{values}`` provided. "
                 "When provided, the bounds should be one or multiple tuples containing pair of floats.\n"
                 "If multiple tuples are provided, one must provide a tuple per each dimension"
                 "of the basis. "
             )
-        else:
-            values = jax.tree_util.tree_map(
-                self._format_bounds, values, is_leaf=_is_leaf
-            )
-            values = [vals for vals in values]
-
-        self._bounds = values
+        self._bounds = [self._format_bounds(v) for v in values]
 
     @staticmethod
     def _format_bounds(values: Any) -> Tuple[Any, Exception | None]:
