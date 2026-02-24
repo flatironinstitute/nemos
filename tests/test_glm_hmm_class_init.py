@@ -1,6 +1,7 @@
 """Tests for GLMHMM class __init__ and property setters."""
 
 from contextlib import nullcontext as does_not_raise
+from unittest.mock import create_autospec
 
 import jax
 import jax.numpy as jnp
@@ -8,6 +9,35 @@ import numpy as np
 import pytest
 
 import nemos as nmo
+
+
+# =============================================================================
+# Mock infrastructure for testing init kwargs (shared with test_glm_hmm_initialization.py)
+# =============================================================================
+
+def _glm_mock_template(n_states, X, y, inverse_link_function, random_key, param1=None):
+    """Template for glm_params_init mock with extra kwarg."""
+    pass
+
+
+def _other_mock_template(n_states, X, y, random_key, param1=None):
+    """Template for other init mocks with extra kwarg."""
+    pass
+
+
+FUNC_NAMES = ["glm_params_init", "scale_init", "initial_proba_init", "transition_proba_init"]
+MOCK_VALID_KWARGS = {"param1": 0.5}
+
+
+def _get_mock_func(func_name):
+    """Get a mock function with the appropriate signature and extra kwargs."""
+    template = _glm_mock_template if func_name == "glm_params_init" else _other_mock_template
+    return create_autospec(template, return_value=None)
+
+
+def _get_mock_registry():
+    """Get a mock init function registry where all funcs have param1 kwarg."""
+    return {fn: _get_mock_func(fn) for fn in FUNC_NAMES}
 
 
 class TestGLMHMMInit:
@@ -289,3 +319,219 @@ class TestGLMHMMInit:
         repr_str = repr(model)
         assert "GLMHMM" in repr_str
         assert "n_states" in repr_str
+
+    # -------------------------------------------------------------------------
+    # initialization_kwargs setter tests
+    # -------------------------------------------------------------------------
+    def test_initialization_kwargs_none_uses_defaults(self):
+        """Test that None uses empty kwargs for all functions."""
+        model = nmo.glm_hmm.GLMHMM(n_states=2, initialization_kwargs=None)
+        assert model.initialization_kwargs is not None
+        assert all(v == {} for v in model.initialization_kwargs.values())
+
+
+@pytest.mark.parametrize("func_name", FUNC_NAMES)
+class TestInitializationKwargsWithMocks:
+    """Test initialization_kwargs using mock functions so all funcs have kwargs."""
+
+    def test_valid_kwargs_accepted(self, func_name):
+        """Test that valid kwargs are accepted for each func."""
+        mock_registry = _get_mock_registry()
+        model = nmo.glm_hmm.GLMHMM(
+            n_states=2,
+            initialization_funcs=mock_registry,
+            initialization_kwargs={func_name: MOCK_VALID_KWARGS},
+        )
+        assert model.initialization_kwargs[func_name] == MOCK_VALID_KWARGS
+
+    def test_invalid_kwargs_raises(self, func_name):
+        """Test that invalid kwargs raise ValueError for each func."""
+        mock_registry = _get_mock_registry()
+        with pytest.raises(ValueError, match="Invalid keyword argument"):
+            nmo.glm_hmm.GLMHMM(
+                n_states=2,
+                initialization_funcs=mock_registry,
+                initialization_kwargs={func_name: {"invalid_param": 0.8}},
+            )
+
+    def test_kwargs_setter_valid(self, func_name):
+        """Test setting kwargs via setter for each func."""
+        mock_registry = _get_mock_registry()
+        model = nmo.glm_hmm.GLMHMM(n_states=2, initialization_funcs=mock_registry)
+
+        model.initialization_kwargs = {func_name: MOCK_VALID_KWARGS}
+        assert model.initialization_kwargs[func_name] == MOCK_VALID_KWARGS
+
+    def test_kwargs_setter_invalid_raises(self, func_name):
+        """Test that setting invalid kwargs via setter raises for each func."""
+        mock_registry = _get_mock_registry()
+        model = nmo.glm_hmm.GLMHMM(n_states=2, initialization_funcs=mock_registry)
+
+        with pytest.raises(ValueError, match="Invalid"):
+            model.initialization_kwargs = {func_name: {"invalid": 1}}
+
+    def test_single_func_kwargs_others_empty(self, func_name):
+        """Test that setting kwargs for one func leaves others empty."""
+        mock_registry = _get_mock_registry()
+        model = nmo.glm_hmm.GLMHMM(
+            n_states=2,
+            initialization_funcs=mock_registry,
+            initialization_kwargs={func_name: MOCK_VALID_KWARGS},
+        )
+
+        assert model.initialization_kwargs[func_name] == MOCK_VALID_KWARGS
+        for other_fn in FUNC_NAMES:
+            if other_fn != func_name:
+                assert model.initialization_kwargs[other_fn] == {}
+
+
+class TestInitializationKwargsMultiple:
+    """Test initialization_kwargs with multiple functions."""
+
+    def test_all_funcs_kwargs_at_once(self):
+        """Test setting kwargs for all functions at once."""
+        mock_registry = _get_mock_registry()
+        all_kwargs = {fn: MOCK_VALID_KWARGS for fn in FUNC_NAMES}
+        model = nmo.glm_hmm.GLMHMM(
+            n_states=2,
+            initialization_funcs=mock_registry,
+            initialization_kwargs=all_kwargs,
+        )
+
+        for fn in FUNC_NAMES:
+            assert model.initialization_kwargs[fn] == MOCK_VALID_KWARGS
+
+    def test_all_pairs_of_funcs_kwargs(self):
+        """Test setting kwargs for all pairs of functions."""
+        import itertools
+        mock_registry = _get_mock_registry()
+
+        for func1, func2 in itertools.combinations(FUNC_NAMES, 2):
+            pair_kwargs = {func1: MOCK_VALID_KWARGS, func2: MOCK_VALID_KWARGS}
+            model = nmo.glm_hmm.GLMHMM(
+                n_states=2,
+                initialization_funcs=mock_registry,
+                initialization_kwargs=pair_kwargs,
+            )
+
+            assert model.initialization_kwargs[func1] == MOCK_VALID_KWARGS
+            assert model.initialization_kwargs[func2] == MOCK_VALID_KWARGS
+            for other_fn in FUNC_NAMES:
+                if other_fn not in (func1, func2):
+                    assert model.initialization_kwargs[other_fn] == {}
+
+
+@pytest.mark.parametrize("func_name", FUNC_NAMES)
+class TestInitializationKwargsReset:
+    """Test that kwargs are reset when initialization functions change.
+
+    Uses mock functions so all func_names can be tested uniformly.
+    """
+
+    def test_warning_when_func_changes_with_kwargs(self, func_name):
+        """Test that warning is raised when function changes and kwargs exist."""
+        mock_registry = _get_mock_registry()
+        model = nmo.glm_hmm.GLMHMM(
+            n_states=2,
+            initialization_funcs=mock_registry,
+            initialization_kwargs={func_name: MOCK_VALID_KWARGS},
+        )
+
+        # Create a NEW mock function (different object) to trigger the change
+        new_mock = _get_mock_func(func_name)
+
+        with pytest.warns(UserWarning, match="changed"):
+            model.initialization_funcs = {func_name: new_mock}
+
+        # kwargs should be reset
+        assert model.initialization_kwargs[func_name] == {}
+
+    def test_no_warning_when_func_changes_without_kwargs(self, func_name, recwarn):
+        """Test no warning when function changes but no kwargs were set."""
+        mock_registry = _get_mock_registry()
+        model = nmo.glm_hmm.GLMHMM(n_states=2, initialization_funcs=mock_registry)
+
+        recwarn.clear()
+
+        # Create a NEW mock function to change to
+        new_mock = _get_mock_func(func_name)
+        model.initialization_funcs = {func_name: new_mock}
+
+        # Check no UserWarning was raised
+        user_warnings = [w for w in recwarn if issubclass(w.category, UserWarning)]
+        assert len(user_warnings) == 0
+
+    def test_no_warning_when_same_func_reassigned(self, func_name, recwarn):
+        """Test no warning when same function is reassigned."""
+        mock_registry = _get_mock_registry()
+        original_func = mock_registry[func_name]
+        model = nmo.glm_hmm.GLMHMM(
+            n_states=2,
+            initialization_funcs=mock_registry,
+            initialization_kwargs={func_name: MOCK_VALID_KWARGS},
+        )
+
+        recwarn.clear()
+
+        # Reassign the SAME function object
+        model.initialization_funcs = {func_name: original_func}
+
+        # Check no UserWarning was raised
+        user_warnings = [w for w in recwarn if issubclass(w.category, UserWarning)]
+        assert len(user_warnings) == 0
+
+        # kwargs should be preserved
+        assert model.initialization_kwargs[func_name] == MOCK_VALID_KWARGS
+
+    def test_kwargs_validated_against_current_funcs(self, func_name):
+        """Test that setting new initialization_kwargs validates against current funcs."""
+        mock_registry = _get_mock_registry()
+        model = nmo.glm_hmm.GLMHMM(n_states=2, initialization_funcs=mock_registry)
+
+        # Set valid kwargs
+        model.initialization_kwargs = {func_name: MOCK_VALID_KWARGS}
+        assert model.initialization_kwargs[func_name] == MOCK_VALID_KWARGS
+
+        # Invalid kwargs should raise
+        with pytest.raises(ValueError, match="Invalid"):
+            model.initialization_kwargs = {func_name: {"invalid": 1}}
+
+    def test_warning_message_explains_reason(self, func_name):
+        """Test that warning message explains why kwargs are being reset."""
+        mock_registry = _get_mock_registry()
+        model = nmo.glm_hmm.GLMHMM(
+            n_states=2,
+            initialization_funcs=mock_registry,
+            initialization_kwargs={func_name: MOCK_VALID_KWARGS},
+        )
+
+        new_mock = _get_mock_func(func_name)
+        with pytest.warns(UserWarning, match="may not be compatible"):
+            model.initialization_funcs = {func_name: new_mock}
+
+    def test_partial_funcs_update_resets_others_to_defaults(self, func_name):
+        """Test that partial initialization_funcs update resets other funcs to defaults.
+
+        When setting initialization_funcs with a partial dict, the missing funcs
+        are filled from DEFAULT_INIT_FUNCTION, not preserved from current. This
+        means their kwargs are also validated against the new (default) funcs.
+        """
+        mock_registry = _get_mock_registry()
+        # Set kwargs for all functions using mock registry
+        all_kwargs = {fn: MOCK_VALID_KWARGS for fn in FUNC_NAMES}
+        model = nmo.glm_hmm.GLMHMM(
+            n_states=2,
+            initialization_funcs=mock_registry,
+            initialization_kwargs=all_kwargs,
+        )
+
+        # Change only this func_name - others will reset to defaults
+        new_mock = _get_mock_func(func_name)
+
+        # This will warn for the changed func AND potentially reset others
+        # whose kwargs may not be valid for the default funcs
+        with pytest.warns(UserWarning):
+            model.initialization_funcs = {func_name: new_mock}
+
+        # The changed func's kwargs should be reset
+        assert model.initialization_kwargs[func_name] == {}
