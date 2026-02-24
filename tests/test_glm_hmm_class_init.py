@@ -10,10 +10,10 @@ import pytest
 
 import nemos as nmo
 
-
 # =============================================================================
 # Mock infrastructure for testing init kwargs (shared with test_glm_hmm_initialization.py)
 # =============================================================================
+
 
 def _glm_mock_template(n_states, X, y, inverse_link_function, random_key, param1=None):
     """Template for glm_params_init mock with extra kwarg."""
@@ -25,13 +25,20 @@ def _other_mock_template(n_states, X, y, random_key, param1=None):
     pass
 
 
-FUNC_NAMES = ["glm_params_init", "scale_init", "initial_proba_init", "transition_proba_init"]
+FUNC_NAMES = [
+    "glm_params_init",
+    "scale_init",
+    "initial_proba_init",
+    "transition_proba_init",
+]
 MOCK_VALID_KWARGS = {"param1": 0.5}
 
 
 def _get_mock_func(func_name):
     """Get a mock function with the appropriate signature and extra kwargs."""
-    template = _glm_mock_template if func_name == "glm_params_init" else _other_mock_template
+    template = (
+        _glm_mock_template if func_name == "glm_params_init" else _other_mock_template
+    )
     return create_autospec(template, return_value=None)
 
 
@@ -410,6 +417,7 @@ class TestInitializationKwargsMultiple:
     def test_all_pairs_of_funcs_kwargs(self):
         """Test setting kwargs for all pairs of functions."""
         import itertools
+
         mock_registry = _get_mock_registry()
 
         for func1, func2 in itertools.combinations(FUNC_NAMES, 2):
@@ -555,11 +563,15 @@ class TestInitializeParamsWithKwargs:
         custom_prob_stay = 0.999
         model = nmo.glm_hmm.GLMHMM(
             n_states=3,
-            initialization_kwargs={"transition_proba_init": {"prob_stay": custom_prob_stay}},
+            initialization_kwargs={
+                "transition_proba_init": {"prob_stay": custom_prob_stay}
+            },
         )
 
         params = model.initialize_params(X, y)
-        transition_proba = params[4]  # (coef, intercept, scale, initial_prob, transition_prob)
+        transition_proba = params[
+            4
+        ]  # (coef, intercept, scale, initial_prob, transition_prob)
 
         # Check diagonal is prob_stay
         assert jnp.allclose(jnp.diag(transition_proba), custom_prob_stay)

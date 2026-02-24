@@ -1133,25 +1133,34 @@ class TestIsNativeInitRegistry:
 # Mock infrastructure for testing init kwargs validation
 # =============================================================================
 
+
 # Template functions for creating mocks with create_autospec
 # GLM params init requires 5 mandatory params (n_states, X, y, inverse_link_function, key)
 def _glm_template_no_extra(n_states, X, y, inverse_link_function, random_key):
     pass
 
 
-def _glm_template_one_extra(n_states, X, y, inverse_link_function, random_key, param1=None):
+def _glm_template_one_extra(
+    n_states, X, y, inverse_link_function, random_key, param1=None
+):
     pass
 
 
-def _glm_template_two_extra(n_states, X, y, inverse_link_function, random_key, param1=None, param2=None):
+def _glm_template_two_extra(
+    n_states, X, y, inverse_link_function, random_key, param1=None, param2=None
+):
     pass
 
 
-def _glm_template_three_extra(n_states, X, y, inverse_link_function, random_key, alpha=None, beta=None, gamma=None):
+def _glm_template_three_extra(
+    n_states, X, y, inverse_link_function, random_key, alpha=None, beta=None, gamma=None
+):
     pass
 
 
-def _glm_template_special(n_states, X, y, inverse_link_function, random_key, my_special_param=None):
+def _glm_template_special(
+    n_states, X, y, inverse_link_function, random_key, my_special_param=None
+):
     pass
 
 
@@ -1168,7 +1177,9 @@ def _other_template_two_extra(n_states, X, y, random_key, param1=None, param2=No
     pass
 
 
-def _other_template_three_extra(n_states, X, y, random_key, alpha=None, beta=None, gamma=None):
+def _other_template_three_extra(
+    n_states, X, y, random_key, alpha=None, beta=None, gamma=None
+):
     pass
 
 
@@ -1243,7 +1254,9 @@ class TestResolveInitKwargs:
             ("three_extra", {"alpha": 0.5, "beta": 0.5, "gamma": 0.5}),
         ],
     )
-    def test_valid_kwargs_returned_unchanged(self, func_name, template_type, extra_kwargs):
+    def test_valid_kwargs_returned_unchanged(
+        self, func_name, template_type, extra_kwargs
+    ):
         """Test that valid kwargs are returned unchanged for each func type."""
         mock_func = _get_mock(func_name, template_type)
         result = _resolve_init_kwargs(func_name, mock_func, extra_kwargs)
@@ -1334,10 +1347,17 @@ class TestResolveInitKwargsRegistryPairs:
 
     @pytest.mark.parametrize(
         "func_pair",
-        list(itertools.combinations(
-            ["glm_params_init", "scale_init", "initial_proba_init", "transition_proba_init"],
-            2,
-        )),
+        list(
+            itertools.combinations(
+                [
+                    "glm_params_init",
+                    "scale_init",
+                    "initial_proba_init",
+                    "transition_proba_init",
+                ],
+                2,
+            )
+        ),
     )
     def test_pairs_of_func_kwargs(self, func_pair):
         """Test setting kwargs for pairs of functions."""
