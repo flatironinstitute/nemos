@@ -329,6 +329,12 @@ class TestGLMHMMInit:
         assert model.initialization_kwargs is not None
         assert all(v == {} for v in model.initialization_kwargs.values())
 
+    def test_initialization_kwargs_empty_dict_uses_defaults(self):
+        """Test that empty dict uses empty kwargs for all functions."""
+        model = nmo.glm_hmm.GLMHMM(n_states=2, initialization_kwargs={})
+        assert model.initialization_kwargs is not None
+        assert all(v == {} for v in model.initialization_kwargs.values())
+
 
 @pytest.mark.parametrize("func_name", FUNC_NAMES)
 class TestInitializationKwargsWithMocks:
@@ -535,3 +541,78 @@ class TestInitializationKwargsReset:
 
         # The changed func's kwargs should be reset
         assert model.initialization_kwargs[func_name] == {}
+
+
+class TestInitializeParamsWithKwargs:
+    """Integration tests verifying kwargs are passed to initialize_params."""
+
+    def test_transition_proba_kwargs_applied(self):
+        """Test that transition_proba_init kwargs are applied in initialize_params."""
+        X = np.random.randn(10, 2)
+        y = np.random.choice([0, 1], size=10)
+
+        # Create model with custom prob_stay
+        custom_prob_stay = 0.999
+        model = nmo.glm_hmm.GLMHMM(
+            n_states=3,
+            initialization_kwargs={"transition_proba_init": {"prob_stay": custom_prob_stay}},
+        )
+
+        params = model.initialize_params(X, y)
+        transition_proba = params[4]  # (coef, intercept, scale, initial_prob, transition_prob)
+
+        # Check diagonal is prob_stay
+        assert jnp.allclose(jnp.diag(transition_proba), custom_prob_stay)
+
+    def test_glm_params_kwargs_applied(self):
+        """Test that glm_params_init kwargs are applied in initialize_params."""
+        X = np.random.randn(10, 2)
+        y = np.random.choice([0, 1], size=10)
+
+        # Create model with zero std_dev (should produce zero coefficients)
+        model = nmo.glm_hmm.GLMHMM(
+            n_states=3,
+            initialization_kwargs={"glm_params_init": {"std_dev": 0.0}},
+        )
+
+        params = model.initialize_params(X, y)
+        coef = params[0]
+
+        # With std_dev=0, coefficients should be exactly zero
+        assert jnp.allclose(coef, 0.0)
+
+    def test_kwargs_setter_then_initialize_params(self):
+        """Test setting kwargs via setter then calling initialize_params."""
+        X = np.random.randn(10, 2)
+        y = np.random.choice([0, 1], size=10)
+
+        model = nmo.glm_hmm.GLMHMM(n_states=3)
+
+        # Set kwargs after init
+        model.initialization_kwargs = {"transition_proba_init": {"prob_stay": 0.999}}
+
+        params = model.initialize_params(X, y)
+        transition_proba = params[4]
+
+        assert jnp.allclose(jnp.diag(transition_proba), 0.999)
+
+    def test_multiple_kwargs_applied(self):
+        """Test multiple kwargs are all applied in initialize_params."""
+        X = np.random.randn(10, 2)
+        y = np.random.choice([0, 1], size=10)
+
+        model = nmo.glm_hmm.GLMHMM(
+            n_states=3,
+            initialization_kwargs={
+                "transition_proba_init": {"prob_stay": 0.999},
+                "glm_params_init": {"std_dev": 0.0},
+            },
+        )
+
+        params = model.initialize_params(X, y)
+        coef = params[0]
+        transition_proba = params[4]
+
+        # Both kwargs should be applied
+        assert jnp.allclose(coef, 0.0)
+        assert jnp.allclose(jnp.diag(transition_proba), 0.999)
