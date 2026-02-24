@@ -580,7 +580,7 @@ class TestGLMHMMInitialization:
             y,
             inverse_link,
             random_key=jax.random.PRNGKey(123),
-            init_registry=custom_registry,
+            initialization_funcs=custom_registry,
         )
 
         # Verify all mocks were called
@@ -629,7 +629,7 @@ class TestGLMHMMInitialization:
             y,
             inverse_link,
             random_key=jax.random.PRNGKey(123),
-            init_registry=partial_registry,
+            initialization_funcs=partial_registry,
         )
 
         # Mock was used for glm_params
@@ -683,7 +683,7 @@ class TestGLMHMMInitialization:
             y,
             inverse_link,
             random_key=jax.random.PRNGKey(123),
-            init_registry=random_registry,
+            initialization_funcs=random_registry,
         )
 
         # All outputs should differ from each other (different subkeys were used)
@@ -700,7 +700,7 @@ class TestGLMHMMInitialization:
                 y,
                 inverse_link,
                 random_key=jax.random.PRNGKey(456),
-                init_registry=random_registry,
+                initialization_funcs=random_registry,
             )
         )
 
@@ -788,7 +788,7 @@ class TestGLMHMMInitialization:
             y,
             inverse_link,
             random_key=jax.random.PRNGKey(123),
-            init_registry=registry,
+            initialization_funcs=registry,
         )
 
         assert len(result) == 5
@@ -810,7 +810,7 @@ class TestGLMHMMInitialization:
             y,
             inverse_link,
             random_key=jax.random.PRNGKey(123),
-            init_kwargs=init_kwargs,
+            initialization_kwargs=init_kwargs,
         )
 
         # Diagonal should be prob_stay
@@ -839,7 +839,7 @@ class TestGLMHMMInitialization:
             y,
             inverse_link,
             random_key=jax.random.PRNGKey(123),
-            init_kwargs=init_kwargs,
+            initialization_kwargs=init_kwargs,
         )
 
         # Use small std_dev
@@ -852,7 +852,7 @@ class TestGLMHMMInitialization:
             y,
             inverse_link,
             random_key=jax.random.PRNGKey(123),
-            init_kwargs=init_kwargs,
+            initialization_kwargs=init_kwargs,
         )
 
         # Large std_dev should produce larger magnitude coefficients
@@ -878,7 +878,7 @@ class TestGLMHMMInitialization:
             y,
             inverse_link,
             random_key=jax.random.PRNGKey(123),
-            init_kwargs=init_kwargs,
+            initialization_kwargs=init_kwargs,
         )
 
         # Check std_dev effect
@@ -901,7 +901,7 @@ class TestGLMHMMInitialization:
             y,
             inverse_link,
             random_key=jax.random.PRNGKey(123),
-            init_kwargs={},
+            initialization_kwargs={},
         )
 
         result_none = glm_hmm_initialization(
@@ -910,7 +910,7 @@ class TestGLMHMMInitialization:
             y,
             inverse_link,
             random_key=jax.random.PRNGKey(123),
-            init_kwargs=None,
+            initialization_kwargs=None,
         )
 
         # Results should be identical

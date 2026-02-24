@@ -1,5 +1,6 @@
 """API for the GLM-HMM model."""
 
+import warnings
 from numbers import Number
 from pathlib import Path
 from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
@@ -27,6 +28,7 @@ from .initialize_parameters import (
     _is_native_init_registry,
     _resolve_dirichlet_priors,
     _resolve_init_funcs_registry,
+    _resolve_init_kwargs_registry,
     glm_hmm_initialization,
 )
 from .params import GLMHMMParams, GLMHMMUserParams
@@ -113,6 +115,9 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
     initialization_funcs :
         Dictionary of initialization functions for model parameters. If None, default
         initialization functions are used.
+    initialization_kwargs :
+        Dictionary of extra kwargs that will be passed to the initialization functions.
+        The keys of this dictionary must match the keys of the `initialization_funcs`.
     maxiter :
         Maximum number of EM iterations. Default is 1000.
     tol :
@@ -177,6 +182,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         solver_name: str = None,
         solver_kwargs: Optional[dict] = None,
         initialization_funcs: Optional[INITIALIZATION_FN_DICT] = None,
+        initialization_kwargs: Optional[dict] = None,
         maxiter: int = 1000,
         tol: float = 1e-8,
         seed=jax.random.PRNGKey(123),
@@ -193,6 +199,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
 
         # assign defaults to initialization functions
         self.initialization_funcs = initialization_funcs
+        self.initialization_kwargs = initialization_kwargs
 
         # set the prior params
         self.dirichlet_prior_alphas_init_prob = dirichlet_prior_alphas_init_prob
@@ -316,7 +323,49 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
 
     @initialization_funcs.setter
     def initialization_funcs(self, initialization_funcs: INITIALIZATION_FN_DICT):
-        self._initialization_funcs = _resolve_init_funcs_registry(initialization_funcs)
+        current_initialization_funcs = getattr(self, "_initialization_funcs", None)
+        initialization_funcs = _resolve_init_funcs_registry(initialization_funcs)
+
+        # at initialization
+        if current_initialization_funcs is None:
+            self._initialization_funcs = initialization_funcs
+            return
+
+        # invalidate the kwargs if old func != new func
+        for func_name, func_new in initialization_funcs.items():
+            if func_name not in self._initialization_kwargs:
+                continue
+            # after init current_initialization_funcs should have all
+            # the functions. If this assumption is not match, the line
+            # below would fail immediately, which is what we want for
+            # maintainability.
+            func_old = current_initialization_funcs[func_name]
+            kwargs = self._initialization_kwargs.get(func_name, None)
+            if func_new != func_old and kwargs is not None:
+                warnings.warn(
+                    category=UserWarning,
+                    stacklevel=2,
+                    message=f"Resetting the initialization kwargs for ``{func_name}`` to default values.",
+                )
+                self._initialization_kwargs[func_name] = {}
+
+        self._initialization_funcs = initialization_funcs
+
+    @property
+    def initialization_kwargs(self):
+        """Dictionary of initialization kwargs for model parameters.
+
+        Dictionary of kwargs for model parameters that will be
+        passed as keyword argument to the initialization functions stored in
+         the ``self.initialization_funcs`` dictionary.
+        """
+        return self._initialization_kwargs
+
+    @initialization_kwargs.setter
+    def initialization_kwargs(self, initialization_kwargs: dict | None):
+        self._initialization_kwargs = _resolve_init_kwargs_registry(
+            initialization_kwargs, self._initialization_funcs
+        )
 
     @property
     def dirichlet_prior_alphas_init_prob(self) -> jnp.ndarray | None:
@@ -407,7 +456,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
             y,
             inverse_link_function=self._inverse_link_function,
             random_key=self._seed,
-            init_registry=self._initialization_funcs,
+            initialization_funcs=self._initialization_funcs,
         )
 
         # check if registry uses NeMoS init funcs
