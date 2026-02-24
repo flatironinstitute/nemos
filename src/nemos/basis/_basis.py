@@ -182,7 +182,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
     def __init__(
         self,
     ) -> None:
-        self._n_input_dimensionality = getattr(self, "_n_input_dimensionality", 0)
+        self._n_inputs = getattr(self, "_n_inputs", 0)
 
         # specified only after inputs/input shapes are provided
         self._input_shape_product = getattr(self, "_input_shape_product", None)
@@ -633,8 +633,8 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         """
         X = np.hstack(
             (
-                self.basis1.evaluate(*xi[: self.basis1._n_input_dimensionality]),
-                self.basis2.evaluate(*xi[self.basis1._n_input_dimensionality :]),
+                self.basis1.evaluate(*xi[: self.basis1._n_inputs]),
+                self.basis2.evaluate(*xi[self.basis1._n_inputs :]),
             )
         )
         return X
@@ -689,8 +689,8 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         )
         X = hstack_pynapple(
             (
-                comp_feature_1(*xi[: self.basis1._n_input_dimensionality]),
-                comp_feature_2(*xi[self.basis1._n_input_dimensionality :]),
+                comp_feature_1(*xi[: self.basis1._n_inputs]),
+                comp_feature_2(*xi[self.basis1._n_inputs :]),
             ),
         )
         return X
@@ -1046,8 +1046,8 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         """
         # evaluate preserves the shape of the input arrays
         shape = xi[0].shape
-        x1 = self.basis1.evaluate(*xi[: self.basis1._n_input_dimensionality])
-        x2 = self.basis2.evaluate(*xi[self.basis1._n_input_dimensionality :])
+        x1 = self.basis1.evaluate(*xi[: self.basis1._n_inputs])
+        x2 = self.basis2.evaluate(*xi[self.basis1._n_inputs :])
         # Required in case xi.shape[-1] == 0
         # For example, in a multiplication with Zero basis
         x1_shape = math.prod(x1.shape[:-1])
@@ -1096,8 +1096,8 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         comp_feature_2 = getattr(
             self.basis2, "_compute_features", self.basis2.compute_features
         )
-        x1 = comp_feature_1(*xi[: self.basis1._n_input_dimensionality])
-        x2 = comp_feature_2(*xi[self.basis1._n_input_dimensionality :])
+        x1 = comp_feature_1(*xi[: self.basis1._n_inputs])
+        x2 = comp_feature_2(*xi[self.basis1._n_inputs :])
         # multiplicative basis inputs are of the same shape, checked and
         # set just before the call to this method
         n_samples = x1.shape[0]

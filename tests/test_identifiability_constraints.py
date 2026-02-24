@@ -114,7 +114,7 @@ def test_apply_identifiability_constraints_by_basis_component(
     """Test constraints applied by basis component."""
     np.random.seed(42)
     x = basis.compute_features(
-        *([np.random.randn(*input_shape)] * basis._n_input_dimensionality)
+        *([np.random.randn(*input_shape)] * basis._n_inputs)
     )
     constrained_x, kept_columns = apply_identifiability_constraints_by_basis_component(
         basis, x

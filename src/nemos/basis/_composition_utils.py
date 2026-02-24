@@ -163,8 +163,8 @@ def _composite_basis_setter_logic(new: "BasisMixin", current: "BasisMixin"):
     # Carry-on input shape info if dimensions match
     for attr in ("_input_shape_product", "_input_shape_"):
         if getattr(new, attr, None) is None and getattr(
-            new, "_n_input_dimensionality", None
-        ) == getattr(current, "_n_input_dimensionality", None):
+            new, "_n_inputs", None
+        ) == getattr(current, "_n_inputs", None):
             setattr(new, attr, getattr(current, attr, None))
     return new
 
@@ -224,10 +224,10 @@ def _atomic_basis_label_setter_logic(
 def infer_input_dimensionality(bas: "BasisMixin") -> int:
     """Infer input dimensionality from compute_features signature.
 
-    If `_n_input_dimensionality` return the attribute, otherwise return
+    If `_n_inputs` return the attribute, otherwise return
     the number of fixed arguments in `compute_features`.
     """
-    n_input_dim = getattr(bas, "_n_input_dimensionality", None)
+    n_input_dim = getattr(bas, "_n_inputs", None)
     if n_input_dim is None:
         # infer from compute_features (facilitate custom basis compatibility).
         # assume compute_features is always implemented.
@@ -396,13 +396,13 @@ def set_input_shape(bas, *xi):
         else 1
     )
     # get the attribute if available
-    n_input_dim = getattr(bas, "_n_input_dimensionality", n_args)
+    n_input_dim = getattr(bas, "_n_inputs", n_args)
 
     if len(xi) == 1 and xi[0] is None:
         xi = (None,) * n_input_dim
 
     elif len(xi) != n_input_dim:
-        expected_inputs = getattr(bas, "_n_input_dimensionality", 1)
+        expected_inputs = getattr(bas, "_n_inputs", 1)
         raise ValueError(
             f"set_input_shape expects {expected_inputs} input"
             f"{'s' if expected_inputs > 1 else ''}, but {len(xi)} were provided."
@@ -434,7 +434,7 @@ def set_input_shape(bas, *xi):
         if hasattr(bas.basis1, "compute_features")
         else 1
     )
-    n_input_dim_1 = getattr(bas.basis1, "_n_input_dimensionality", n_args_1)
+    n_input_dim_1 = getattr(bas.basis1, "_n_inputs", n_args_1)
 
     out1 = set_input_shape(bas.basis1, *xi[:n_input_dim_1])
     out2 = set_input_shape(bas.basis2, *xi[n_input_dim_1:])

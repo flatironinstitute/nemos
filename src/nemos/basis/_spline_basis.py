@@ -47,7 +47,7 @@ class SplineBasis(AtomicBasisMixin, Basis, abc.ABC):
         Basis.__init__(
             self,
         )
-        self._n_input_dimensionality = 1
+        self._n_inputs = 1
         AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, label=label)
 
     @property
@@ -432,7 +432,7 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
         order: int = 4,
         label: Optional[str] = "CyclicBSplineBasis",
     ):
-        self._n_input_dimensionality = 1
+        self._n_inputs = 1
         super().__init__(
             n_basis_funcs,
             order=order,

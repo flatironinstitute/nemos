@@ -646,7 +646,7 @@ class EvalBasisMixin:
         if len(values) == 1:
             values = self._format_bounds(values[0])
 
-        elif len(values) != self._n_input_dimensionality:
+        elif len(values) != self._n_inputs:
             raise TypeError(
                 f"Invalid bounds ``{values}`` provided. "
                 "When provided, the bounds should be one or multiple tuples containing pair of floats.\n"
@@ -922,7 +922,7 @@ class CompositeBasisMixin(BasisMixin):
         self, basis1: BasisMixin, basis2: BasisMixin, label: Optional[str] = None
     ):
         # number of input arrays that the basis receives
-        self._n_input_dimensionality = infer_input_dimensionality(
+        self._n_inputs = infer_input_dimensionality(
             basis1
         ) + infer_input_dimensionality(basis2)
 
