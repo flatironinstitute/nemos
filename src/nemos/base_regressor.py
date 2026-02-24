@@ -46,9 +46,9 @@ from .validation import RegressorValidator
 _SOLVER_ARGS_CACHE = {}
 
 
-def strip_metadata(arg_num: Optional[int] = None, kwarg_key: Optional[str] = None):
+def strip_metadata(arg_num: Optional[int] = None, arg_name: Optional[str] = None):
     """Strip metadata from arg."""
-    if arg_num is None or kwarg_key is None:
+    if arg_num is None or arg_name is None:
         raise ValueError("Must specify either arg_num or kwarg_key.")
 
     def decorator(func):
@@ -56,8 +56,8 @@ def strip_metadata(arg_num: Optional[int] = None, kwarg_key: Optional[str] = Non
 
         @wraps(func)
         def wrapper(self, *args, **kwargs):
-            if kwarg_key in kwargs:
-                inp = kwargs[kwarg_key]
+            if arg_name in kwargs:
+                inp = kwargs[arg_name]
             else:
                 inp = args[min(arg_num, len(args) - 1)]
             self._metadata = {
