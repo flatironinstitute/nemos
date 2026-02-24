@@ -170,6 +170,13 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
     dof_resid_ :
         Degrees of freedom for the residuals.
 
+    Notes
+    -----
+    To bypass the initialization functions entirely and provide parameter arrays
+    directly, pass them to the ``fit()`` method::
+
+        model.fit(X, y, init_params=my_params)
+
     Raises
     ------
     TypeError
@@ -393,10 +400,11 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         return self._initialization_kwargs
 
     def set_params(self, **kwargs):
-        """Set model parameters.
+        """Set model parameters, ensuring initialization functions are set before their kwargs.
 
-        Reimplementation of the ``set_params`` method taking care correctly of
-        setting jointly the model parameters and initialization functions.
+        This override ensures that when both ``initialization_funcs`` and
+        ``initialization_kwargs`` are provided, the functions are set first so
+        that kwargs are validated against the new functions, not the old ones.
         """
         if "initialization_funcs" in kwargs and "initialization_kwargs" in kwargs:
             super().set_params(initialization_funcs=kwargs.pop("initialization_funcs"))
