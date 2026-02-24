@@ -341,7 +341,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
             # maintainability.
             func_old = current_initialization_funcs[func_name]
             kwargs = self._initialization_kwargs.get(func_name, None)
-            if func_new != func_old and kwargs is not None:
+            if func_new != func_old and (kwargs is not None and kwargs != {}):
                 warnings.warn(
                     category=UserWarning,
                     stacklevel=2,
