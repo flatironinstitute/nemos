@@ -597,6 +597,31 @@ def _resolve_init_kwargs(
     init_func: Callable,
     kwargs: dict | None,
 ) -> dict:
+    """
+    Validate keyword arguments for a single initialization function.
+
+    Checks that provided kwargs match optional parameters in the function's
+    signature (parameters beyond the required positional ones).
+
+    Parameters
+    ----------
+    func_name : str
+        Registry key for the initialization function (e.g., 'glm_params_init').
+    init_func : Callable
+        The initialization function to validate kwargs against.
+    kwargs : dict or None
+        Keyword arguments to validate. If None or empty, returns empty dict.
+
+    Returns
+    -------
+    dict
+        The validated kwargs (unchanged if valid).
+
+    Raises
+    ------
+    ValueError
+        If any kwargs don't match the function's optional parameters.
+    """
     if kwargs is None or kwargs == {}:
         return {}
 
@@ -613,12 +638,16 @@ def _resolve_init_kwargs(
     available = all(k in extra_params for k in kwargs)
     if not available:
         unavailable = [k for k in kwargs if k not in extra_params]
+        func_display = getattr(init_func, "__name__", str(init_func))
         err = (
-            f"Unrecognized keyword argument(s) {unavailable} "
-            f"for initialization function ``{func_name} = {init_func}``.\n"
+            f"Invalid keyword argument(s) {unavailable} in "
+            f"``initialization_kwargs['{func_name}']``.\n"
+            f"The function '{func_display}' accepts: "
         )
-        if len(extra_params):
-            err += f"Available keyword arguments are: {extra_params}"
+        if extra_params:
+            err += f"{extra_params}."
+        else:
+            err += "no extra keyword arguments."
         raise ValueError(err)
     return kwargs
 
@@ -627,6 +656,32 @@ def _resolve_init_kwargs_registry(
     init_kwargs: dict | None,
     init_func_registry: dict,
 ) -> dict:
+    """
+    Validate keyword arguments for all initialization functions in a registry.
+
+    Iterates through the initialization function registry and validates
+    corresponding kwargs for each function.
+
+    Parameters
+    ----------
+    init_kwargs : dict or None
+        Dictionary mapping function names to their kwargs. Keys must be valid
+        initialization function names (e.g., 'glm_params_init', 'scale_init').
+        If None or empty, returns dict with empty kwargs for each function.
+    init_func_registry : dict
+        Dictionary mapping function names to initialization functions.
+
+    Returns
+    -------
+    dict
+        Dictionary with validated kwargs for each function name in
+        DEFAULT_INIT_FUNCTION. Missing keys are filled with empty dicts.
+
+    Raises
+    ------
+    ValueError
+        If any kwargs are invalid for their corresponding function.
+    """
     if init_kwargs is None or init_kwargs == {}:
         return {k: {} for k in DEFAULT_INIT_FUNCTION}
 

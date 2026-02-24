@@ -343,9 +343,11 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
             kwargs = self._initialization_kwargs.get(func_name, None)
             if func_new != func_old and (kwargs is not None and kwargs != {}):
                 warnings.warn(
-                    category=UserWarning,
+                    f"The initialization function for '{func_name}' changed. "
+                    f"Resetting its kwargs to defaults since the previous kwargs "
+                    f"may not be compatible with the new function.",
+                    UserWarning,
                     stacklevel=2,
-                    message=f"Resetting the initialization kwargs for ``{func_name}`` to default values.",
                 )
                 self._initialization_kwargs[func_name] = {}
 
