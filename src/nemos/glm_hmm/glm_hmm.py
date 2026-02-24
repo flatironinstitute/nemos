@@ -355,9 +355,8 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
     def initialization_kwargs(self):
         """Dictionary of initialization kwargs for model parameters.
 
-        Dictionary of kwargs for model parameters that will be
-        passed as keyword argument to the initialization functions stored in
-         the ``self.initialization_funcs`` dictionary.
+        Dictionary of kwargs that will be provided as keyword argument to
+        the initialization functions in ``self.initialization_funcs``.
         """
         return self._initialization_kwargs
 
