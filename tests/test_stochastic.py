@@ -330,7 +330,7 @@ class TestGLMStochasticFit:
         assert model.coef_ is not None
         assert model.intercept_ is not None
         assert model.coef_.shape == (5,)
-        assert n_steps_taken == (X.shape[0] // 32 + 1) * 5
+        assert n_steps_taken == (X.shape[0] + 32 - 1) // 32 * 5
 
     @pytest.mark.parametrize("solver", _stochastic_solver_names)
     def test_stochastic_fit_with_init_params(self, simple_data, solver):
@@ -352,6 +352,50 @@ class TestGLMStochasticFit:
         model.stochastic_fit(loader, num_epochs=5, init_params=init_params)
 
         assert model.coef_ is not None
+
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize("solver", _stochastic_solver_names)
+    def test_bool_convergence_monitoring(self, simple_data, solver):
+        """Test that convergence_criterion=False disables convergence monitoring, True doesn't."""
+        X, y = simple_data
+        n_epochs = 100
+        batch_size = 100
+        loader = ArrayDataLoader(X, y, batch_size=batch_size, shuffle=True)
+
+        solver_kwargs = {"stepsize": 0.001, "maxiter": 10_000}
+        solver_class = solvers.get_solver(solver).implementation
+        if "acceleration" in solver_class.get_accepted_arguments():
+            solver_kwargs["acceleration"] = False
+
+        # get parameters that are close to the optimum
+        model_fitted = nmo.glm.GLM(solver_name="LBFGS", solver_kwargs={"tol": 1e-8})
+        model_fitted.fit(X, y)
+        final_params = (model_fitted.coef_, model_fitted.intercept_)
+
+        model_stopping = nmo.glm.GLM(solver_name=solver, solver_kwargs=solver_kwargs)
+        model_stopping.stochastic_fit(
+            loader,
+            num_epochs=n_epochs,
+            init_params=final_params,
+            convergence_criterion=True,
+        )
+
+        model_no_stopping = nmo.glm.GLM(solver_name=solver, solver_kwargs=solver_kwargs)
+        model_no_stopping.stochastic_fit(
+            loader,
+            num_epochs=n_epochs,
+            init_params=final_params,
+            convergence_criterion=False,
+        )
+
+        n_steps_taken_stopping = model_stopping.optim_info_.num_steps
+        n_steps_taken_no_stopping = model_no_stopping.optim_info_.num_steps
+
+        assert (
+            n_steps_taken_no_stopping
+            == (X.shape[0] + batch_size - 1) // batch_size * n_epochs
+        )
+        assert n_steps_taken_stopping < n_steps_taken_no_stopping
 
     @pytest.mark.parametrize("solver", ["LBFGS", "BFGS", "NonlinearCG"])
     def test_unsupported_solver_raises(self, simple_data, solver):
