@@ -458,10 +458,13 @@ class TestSolverStochasticRun:
         # Should have learned something close to [1, 2, 3]
         np.testing.assert_array_almost_equal(params, [1.0, 2.0, 3.0], decimal=0)
 
-    def test_convergence_criterion_accepts_jax_scalar_bool(self, simple_loss_and_data):
+    @pytest.mark.parametrize("solver_name", _stochastic_solver_names)
+    def test_convergence_criterion_accepts_jax_scalar_bool(
+        self, simple_loss_and_data, solver_name
+    ):
         """Test convergence callback handles JAX scalar booleans like Python bool."""
         loss, loader = simple_loss_and_data
-        solver_class = solvers.OptimistixOptaxGradientDescent
+        solver_class = solvers.get_solver(solver_name).implementation
 
         init_params = jnp.zeros(3)
 
@@ -485,14 +488,16 @@ class TestSolverStochasticRun:
 
         assert steps_jax == steps_py
 
-    def test_batch_callback_accepts_jax_scalar_bool(self, simple_loss_and_data):
+    @pytest.mark.parametrize("solver_name", _stochastic_solver_names)
+    def test_batch_callback_accepts_jax_scalar_bool(
+        self, simple_loss_and_data, solver_name
+    ):
         """Test batch callback handles JAX scalar booleans like Python bool."""
         loss, loader = simple_loss_and_data
-        solver_class = solvers.OptimistixOptaxGradientDescent
+        solver_class = solvers.get_solver(solver_name).implementation
 
         init_params = jnp.zeros(3)
 
-        # TODO: Update these to use solvers.get_solver once that is available
         solver_py = solver_class(loss, **self._default_solver_kwargs(solver_class))
         _, state_py, _ = solver_py.stochastic_run(
             init_params,
@@ -513,15 +518,16 @@ class TestSolverStochasticRun:
 
         assert steps_jax == steps_py
 
+    @pytest.mark.parametrize("solver_name", _stochastic_solver_names)
     @pytest.mark.parametrize(
         "bad_flag", [1, 1.0, np.array(1.0), jnp.array(1.0), np.bool_(True).astype(int)]
     )
     def test_convergence_criterion_non_bool_scalar_raises(
-        self, simple_loss_and_data, bad_flag
+        self, simple_loss_and_data, bad_flag, solver_name
     ):
         """Test convergence callback rejects non-boolean scalar return values."""
         loss, loader = simple_loss_and_data
-        solver_class = solvers.OptimistixOptaxGradientDescent
+        solver_class = solvers.get_solver(solver_name).implementation
 
         solver = solver_class(loss, **self._default_solver_kwargs(solver_class))
 
@@ -533,15 +539,16 @@ class TestSolverStochasticRun:
                 convergence_criterion=lambda *args: bad_flag,
             )
 
+    @pytest.mark.parametrize("solver_name", _stochastic_solver_names)
     @pytest.mark.parametrize(
         "bad_flag", [1, 1.0, np.array(1.0), jnp.array(1.0), np.bool_(True).astype(int)]
     )
     def test_batch_callback_non_bool_scalar_raises(
-        self, simple_loss_and_data, bad_flag
+        self, simple_loss_and_data, bad_flag, solver_name
     ):
         """Test batch callback rejects non-boolean scalar return values."""
         loss, loader = simple_loss_and_data
-        solver_class = solvers.OptimistixOptaxGradientDescent
+        solver_class = solvers.get_solver(solver_name).implementation
 
         solver = solver_class(loss, **self._default_solver_kwargs(solver_class))
 
