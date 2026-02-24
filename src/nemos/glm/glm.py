@@ -22,6 +22,7 @@ from ..exceptions import NotFittedError
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..pytrees import FeaturePytree
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
+from ..solvers import list_stochastic_solvers
 from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
 from ..type_casting import cast_to_jax, support_pynapple
 from ..typing import DESIGN_INPUT_TYPE, SolverState, StepResult
@@ -32,7 +33,6 @@ from .validation import (
     GLMValidator,
     PopulationGLMValidator,
 )
-from .solvers import list_stochastic_solvers
 
 __all__ = ["GLM", "PopulationGLM"]
 
