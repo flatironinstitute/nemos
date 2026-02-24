@@ -112,12 +112,36 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
     solver_kwargs :
         Optional dictionary for keyword arguments that are passed to the solver when instantiated.
         E.g., stepsize, tol, acceleration, etc.
-    initialization_funcs :
-        Dictionary of initialization functions for model parameters. If None, default
-        initialization functions are used.
-    initialization_kwargs :
-        Dictionary of extra kwargs that will be passed to the initialization functions.
-        The keys of this dictionary must match the keys of the `initialization_funcs`.
+    initialization_funcs : dict, optional
+        Dictionary specifying custom initialization functions for model components.
+        Keys must be a subset of: ``"glm_params_init"``, ``"scale_init"``,
+        ``"initial_proba_init"``, ``"transition_proba_init"``. Values can be:
+
+        - A callable with the appropriate signature (see :mod:`nemos.glm_hmm.initialize_parameters`)
+        - A string alias: ``"random"`` (GLM params), ``"constant"`` (scale),
+          ``"sticky"``/``"uniform"`` (transition), ``"uniform"`` (initial)
+
+        Missing keys use NeMoS defaults:
+
+        - ``"glm_params_init"``: ``"random"`` - small random coefficients, mean-rate intercept
+        - ``"scale_init"``: ``"constant"`` - scale initialized to 1.0
+        - ``"initial_proba_init"``: ``"uniform"`` - equal probability for all states
+        - ``"transition_proba_init"``: ``"sticky"`` - high self-transition probability (0.95)
+
+        If None, all defaults are used.
+    initialization_kwargs : dict, optional
+        Keyword arguments passed to each initialization function. Keys must match
+        those in ``initialization_funcs``. For example::
+
+            initialization_kwargs={
+                "transition_proba_init": {"prob_stay": 0.99},
+                "glm_params_init": {"std_dev": 0.01},
+            }
+
+        Each kwarg is validated against the corresponding function's signature.
+        If an initialization function is changed via ``initialization_funcs``, its
+        kwargs are reset to defaults (with a warning) since the new function may
+        have a different signature.
     maxiter :
         Maximum number of EM iterations. Default is 1000.
     tol :
@@ -154,6 +178,12 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         If provided ``regularizer`` or ``observation_model`` are not valid.
     TypeError
         If ``seed`` is not a valid JAX PRNG key.
+    KeyError
+        If ``initialization_funcs`` contains invalid keys (not one of the four
+        valid initialization function names).
+    ValueError
+        If ``initialization_kwargs`` contains keyword arguments that don't match
+        the signature of the corresponding initialization function.
     ValueError
         If ``maxiter`` is not a positive integer.
     ValueError
@@ -361,6 +391,16 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         the initialization functions in ``self.initialization_funcs``.
         """
         return self._initialization_kwargs
+
+    def set_params(self, **kwargs):
+        """Set model parameters.
+
+        Reimplementation of the ``set_params`` method taking care correctly of
+        setting jointly the model parameters and initialization functions.
+        """
+        if "initialization_funcs" in kwargs and "initialization_kwargs" in kwargs:
+            super().set_params(initialization_funcs=kwargs.pop("initialization_funcs"))
+        return super().set_params(**kwargs)
 
     @initialization_kwargs.setter
     def initialization_kwargs(self, initialization_kwargs: dict | None):

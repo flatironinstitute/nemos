@@ -628,3 +628,174 @@ class TestInitializeParamsWithKwargs:
         # Both kwargs should be applied
         assert jnp.allclose(coef, 0.0)
         assert jnp.allclose(jnp.diag(transition_proba), 0.999)
+
+
+class TestSetParamsOrderIndependence:
+    """Test that set_params handles initialization_funcs and initialization_kwargs correctly.
+
+    The order of kwargs in set_params should not matter - initialization_funcs must
+    be set before initialization_kwargs to ensure kwargs are validated against the
+    correct (new) functions.
+    """
+
+    def test_set_params_funcs_first_then_kwargs(self):
+        """Test set_params with funcs before kwargs succeeds."""
+        model = nmo.glm_hmm.GLMHMM(n_states=3)
+
+        # Create a custom func with a custom kwarg
+        def custom_scale(n_states, X, y, random_key, my_scale=2.0):
+            return jnp.full(n_states, my_scale)
+
+        # set_params with funcs first
+        model.set_params(
+            initialization_funcs={"scale_init": custom_scale},
+            initialization_kwargs={"scale_init": {"my_scale": 5.0}},
+        )
+
+        assert model.initialization_funcs["scale_init"] is custom_scale
+        assert model.initialization_kwargs["scale_init"] == {"my_scale": 5.0}
+
+    def test_set_params_kwargs_first_then_funcs(self):
+        """Test set_params with kwargs before funcs succeeds.
+
+        This is the key test: even when kwargs are listed first in the call,
+        the implementation should set funcs first so kwargs are validated
+        against the new funcs.
+        """
+        model = nmo.glm_hmm.GLMHMM(n_states=3)
+
+        # Create a custom func with a custom kwarg
+        def custom_scale(n_states, X, y, random_key, my_scale=2.0):
+            return jnp.full(n_states, my_scale)
+
+        # set_params with kwargs listed FIRST (reversed order)
+        model.set_params(
+            initialization_kwargs={"scale_init": {"my_scale": 5.0}},
+            initialization_funcs={"scale_init": custom_scale},
+        )
+
+        assert model.initialization_funcs["scale_init"] is custom_scale
+        assert model.initialization_kwargs["scale_init"] == {"my_scale": 5.0}
+
+    def test_set_params_validates_kwargs_against_new_funcs(self):
+        """Test that kwargs are validated against the NEW funcs, not old ones."""
+        model = nmo.glm_hmm.GLMHMM(n_states=3)
+
+        # Default scale_init (constant_scale_init) accepts 'scale_val'
+        # Create a custom func that accepts 'my_custom_param' instead
+        def custom_scale(n_states, X, y, random_key, my_custom_param=1.0):
+            return jnp.full(n_states, my_custom_param)
+
+        # This should work - 'my_custom_param' is valid for the NEW func
+        model.set_params(
+            initialization_funcs={"scale_init": custom_scale},
+            initialization_kwargs={"scale_init": {"my_custom_param": 3.0}},
+        )
+
+        assert model.initialization_kwargs["scale_init"] == {"my_custom_param": 3.0}
+
+    def test_set_params_rejects_invalid_kwargs_for_new_funcs(self):
+        """Test that kwargs invalid for new funcs are rejected."""
+        model = nmo.glm_hmm.GLMHMM(n_states=3)
+
+        # Create a custom func that accepts 'my_param'
+        def custom_scale(n_states, X, y, random_key, my_param=1.0):
+            return jnp.full(n_states, my_param)
+
+        # 'wrong_param' is not valid for custom_scale
+        with pytest.raises(ValueError, match="Invalid keyword argument"):
+            model.set_params(
+                initialization_funcs={"scale_init": custom_scale},
+                initialization_kwargs={"scale_init": {"wrong_param": 3.0}},
+            )
+
+    def test_set_params_rejects_kwargs_valid_in_old_but_invalid_in_new(self):
+        """Test that kwargs valid for OLD func but invalid for NEW func are rejected.
+
+        This is a more stringent test: 'scale_val' is valid for the default
+        constant_scale_init, but the new custom func doesn't accept it.
+        The fix ensures kwargs are validated against the NEW func, so this should fail.
+        """
+        model = nmo.glm_hmm.GLMHMM(n_states=3)
+
+        # Create a custom func that does NOT accept 'scale_val'
+        # (unlike the default constant_scale_init which does)
+        def custom_scale_no_scale_val(n_states, X, y, random_key, other_param=1.0):
+            return jnp.full(n_states, other_param)
+
+        # 'scale_val' IS valid for the OLD default func (constant_scale_init)
+        # but is NOT valid for the NEW custom func
+        with pytest.raises(ValueError, match="Invalid keyword argument"):
+            model.set_params(
+                initialization_funcs={"scale_init": custom_scale_no_scale_val},
+                initialization_kwargs={"scale_init": {"scale_val": 5.0}},
+            )
+
+    def test_set_params_kwargs_would_fail_against_old_funcs(self):
+        """Test scenario where kwargs are valid for new func but not old func.
+
+        This demonstrates the bug that set_params fixes: if kwargs were validated
+        against old funcs first, this would incorrectly fail.
+        """
+        model = nmo.glm_hmm.GLMHMM(n_states=3)
+
+        # Default constant_scale_init accepts 'scale_val'
+        # Create a custom func that accepts 'completely_different_param'
+        def custom_scale(n_states, X, y, random_key, completely_different_param=1.0):
+            return jnp.full(n_states, completely_different_param)
+
+        # 'completely_different_param' is NOT valid for the OLD default func
+        # But it IS valid for the NEW custom func
+        # This should succeed because funcs are set first
+        model.set_params(
+            initialization_funcs={"scale_init": custom_scale},
+            initialization_kwargs={"scale_init": {"completely_different_param": 99.0}},
+        )
+
+        # Verify both were set correctly
+        assert model.initialization_funcs["scale_init"] is custom_scale
+        assert model.initialization_kwargs["scale_init"] == {
+            "completely_different_param": 99.0
+        }
+
+    def test_set_params_applied_in_initialize_params(self):
+        """Test that set_params changes are actually used in initialize_params."""
+        X = np.random.randn(10, 2)
+        y = np.random.choice([0, 1], size=10)
+
+        model = nmo.glm_hmm.GLMHMM(n_states=3)
+
+        # Custom scale func that uses our custom param
+        def custom_scale(n_states, X, y, random_key, my_val=1.0):
+            is_one_dim = y.ndim == 1
+            n_neurons = 1 if is_one_dim else y.shape[1]
+            scale = jnp.full((n_neurons, n_states), my_val, dtype=float)
+            if is_one_dim:
+                scale = jnp.squeeze(scale, axis=0)
+            return scale
+
+        model.set_params(
+            initialization_funcs={"scale_init": custom_scale},
+            initialization_kwargs={"scale_init": {"my_val": 42.0}},
+        )
+
+        params = model.initialize_params(X, y)
+        scale = params[2]
+
+        assert jnp.allclose(scale, 42.0)
+
+    @pytest.mark.parametrize("func_name", FUNC_NAMES)
+    def test_set_params_works_for_each_func(self, func_name):
+        """Test set_params with funcs and kwargs for each init function type."""
+        model = nmo.glm_hmm.GLMHMM(n_states=3)
+
+        # Get a mock with custom kwargs
+        mock_func = _get_mock_func(func_name)
+
+        model.set_params(
+            initialization_funcs={func_name: mock_func},
+            initialization_kwargs={func_name: MOCK_VALID_KWARGS},
+        )
+
+        assert model.initialization_funcs[func_name] is mock_func
+        assert model.initialization_kwargs[func_name] == MOCK_VALID_KWARGS

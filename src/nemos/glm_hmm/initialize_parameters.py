@@ -124,16 +124,40 @@ def random_glm_params_init(
     return coef, intercept
 
 
-def ones_scale_init(
+def constant_scale_init(
     n_states: int,
     X: DESIGN_INPUT_TYPE,
     y: NDArray | jnp.ndarray,
     random_key=jax.random.PRNGKey(124),
+    scale_val: float = 1.0,
 ):
-    """Initialize scale to ones."""
+    """
+    Initialize scale to a constant value.
+
+    Creates a scale parameter array where all elements are set to the same value.
+
+    Parameters
+    ----------
+    n_states : int
+        Number of HMM states.
+    X : DESIGN_INPUT_TYPE
+        Design matrix, unused but included for API consistency.
+    y : NDArray | jnp.ndarray
+        Observations, used to determine number of neurons from shape.
+    random_key : jax.random.PRNGKey
+        Random key, unused for this initialization, but included for API consistency.
+    scale_val : float
+        The constant value to initialize all scale parameters to. Default is 1.0.
+
+    Returns
+    -------
+    scale : jnp.ndarray
+        Scale array of shape (n_states,) for single neuron or (n_neurons, n_states)
+        for multiple neurons, with all values set to `scale_val`.
+    """
     is_one_dim = y.ndim == 1
     n_neurons = 1 if is_one_dim else y.shape[1]
-    scale = jnp.ones((n_neurons, n_states), dtype=float)
+    scale = jnp.full((n_neurons, n_states), scale_val, dtype=float)
     if is_one_dim:
         scale = jnp.squeeze(scale, axis=0)
     return scale
@@ -266,7 +290,7 @@ AVAILABLE_INIT_FUNCTIONS = {
         "random": random_glm_params_init,
     },
     "scale_init": {
-        "ones": ones_scale_init,
+        "constant": constant_scale_init,
     },
     "transition_proba_init": {
         "sticky": sticky_transition_proba_init,
@@ -284,7 +308,7 @@ _IO_AVAILABLE_INIT_FUNCTIONS["glm_params_init"].update(
     }
 )
 _IO_AVAILABLE_INIT_FUNCTIONS["scale_init"].update(
-    {"nemos.glm_hmm.initialize_parameters.ones_scale_init": ones_scale_init}
+    {"nemos.glm_hmm.initialize_parameters.constant_scale_init": constant_scale_init}
 )
 _IO_AVAILABLE_INIT_FUNCTIONS["transition_proba_init"].update(
     {
@@ -299,7 +323,7 @@ _IO_AVAILABLE_INIT_FUNCTIONS["initial_proba_init"].update(
 
 DEFAULT_INIT_FUNCTION: INITIALIZATION_FN_DICT = {
     "glm_params_init": random_glm_params_init,
-    "scale_init": ones_scale_init,
+    "scale_init": constant_scale_init,
     "transition_proba_init": sticky_transition_proba_init,
     "initial_proba_init": uniform_initial_proba_init,
 }

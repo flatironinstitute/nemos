@@ -16,8 +16,8 @@ from nemos.glm_hmm.initialize_parameters import (
     _resolve_init_funcs_registry,
     _resolve_init_kwargs,
     _resolve_init_kwargs_registry,
+    constant_scale_init,
     glm_hmm_initialization,
-    ones_scale_init,
     random_glm_params_init,
     sticky_transition_proba_init,
     uniform_initial_proba_init,
@@ -175,8 +175,8 @@ class TestRandomGLMParamsInitialization:
         assert jnp.allclose(intercept, expected)
 
 
-class TestOnesScaleInitialization:
-    """Test ones initialization for scale parameters."""
+class TestConstantScaleInitialization:
+    """Test constant initialization for scale parameters."""
 
     @pytest.mark.parametrize("n_states", [1, 2, 3, 5])
     @pytest.mark.parametrize("n_samples, n_neurons", [(100, 1), (100, 3), (50, 10)])
@@ -185,7 +185,7 @@ class TestOnesScaleInitialization:
         X = jnp.ones((n_samples, 5))
         y = jnp.ones((n_samples, n_neurons)) if n_neurons > 1 else jnp.ones(n_samples)
 
-        scale = ones_scale_init(n_states, X, y, random_key=jax.random.PRNGKey(124))
+        scale = constant_scale_init(n_states, X, y, random_key=jax.random.PRNGKey(124))
 
         # Check shape
         if n_neurons == 1:
@@ -204,21 +204,36 @@ class TestOnesScaleInitialization:
         """Test that output is a JAX array regardless of input type."""
         n_states = 2
 
-        scale = ones_scale_init(n_states, X, y, random_key=jax.random.PRNGKey(124))
+        scale = constant_scale_init(n_states, X, y, random_key=jax.random.PRNGKey(124))
 
         assert isinstance(scale, jnp.ndarray)
 
     @pytest.mark.parametrize("n_states", [1, 3, 5])
     @pytest.mark.parametrize("n_neurons", [1, 3])
-    def test_all_values_are_ones(self, n_states, n_neurons):
-        """Test that all scale values are initialized to 1.0."""
+    def test_default_value_is_one(self, n_states, n_neurons):
+        """Test that default scale values are initialized to 1.0."""
         X = jnp.ones((100, 5))
         y = jnp.ones((100, n_neurons)) if n_neurons > 1 else jnp.ones(100)
 
-        scale = ones_scale_init(n_states, X, y, random_key=jax.random.PRNGKey(124))
+        scale = constant_scale_init(n_states, X, y, random_key=jax.random.PRNGKey(124))
 
-        # All values should be exactly 1.0
+        # All values should be exactly 1.0 by default
         assert jnp.all(scale == 1.0)
+
+    @pytest.mark.parametrize("scale_val", [0.5, 1.0, 2.0, 10.0])
+    @pytest.mark.parametrize("n_neurons", [1, 3])
+    def test_custom_scale_value(self, scale_val, n_neurons):
+        """Test that custom scale_val is applied correctly."""
+        n_states = 3
+        X = jnp.ones((100, 5))
+        y = jnp.ones((100, n_neurons)) if n_neurons > 1 else jnp.ones(100)
+
+        scale = constant_scale_init(
+            n_states, X, y, random_key=jax.random.PRNGKey(124), scale_val=scale_val
+        )
+
+        # All values should be exactly scale_val
+        assert jnp.all(scale == scale_val)
 
     def test_deterministic(self):
         """Test that output is deterministic (same across different calls)."""
@@ -226,11 +241,29 @@ class TestOnesScaleInitialization:
         X = jnp.ones((100, 5))
         y = jnp.ones(100)
 
-        scale1 = ones_scale_init(n_states, X, y, random_key=jax.random.PRNGKey(124))
-        scale2 = ones_scale_init(n_states, X, y, random_key=jax.random.PRNGKey(999))
+        scale1 = constant_scale_init(n_states, X, y, random_key=jax.random.PRNGKey(124))
+        scale2 = constant_scale_init(n_states, X, y, random_key=jax.random.PRNGKey(999))
 
         # Should be identical regardless of random key
         assert jnp.array_equal(scale1, scale2)
+
+    def test_deterministic_with_custom_scale(self):
+        """Test that output is deterministic with custom scale_val."""
+        n_states = 3
+        X = jnp.ones((100, 5))
+        y = jnp.ones(100)
+        scale_val = 2.5
+
+        scale1 = constant_scale_init(
+            n_states, X, y, random_key=jax.random.PRNGKey(124), scale_val=scale_val
+        )
+        scale2 = constant_scale_init(
+            n_states, X, y, random_key=jax.random.PRNGKey(999), scale_val=scale_val
+        )
+
+        # Should be identical regardless of random key
+        assert jnp.array_equal(scale1, scale2)
+        assert jnp.all(scale1 == scale_val)
 
 
 class TestStickyTransitionProbaInitialization:
@@ -641,7 +674,7 @@ class TestGLMHMMInitialization:
         assert jnp.allclose(intercept, 5.0)  # From mock
 
         # Defaults were used for others
-        assert jnp.all(scale == 1.0)  # Default ones_scale_init
+        assert jnp.all(scale == 1.0)  # Default constant_scale_init
         assert jnp.allclose(initial_prob, 0.5)  # Default uniform
         assert jnp.allclose(jnp.diag(transition_prob), 0.95)  # Default sticky
 
@@ -773,7 +806,7 @@ class TestGLMHMMInitialization:
         "registry",
         [
             {"glm_params_init": "random"},
-            {"scale_init": "ones"},
+            {"scale_init": "constant"},
             {"transition_proba_init": "sticky"},
             {"initial_proba_init": "uniform"},
         ],
@@ -863,6 +896,28 @@ class TestGLMHMMInitialization:
         assert jnp.abs(coef_large).max() > jnp.abs(coef_small).max()
         # Small std_dev should be close to 0
         assert jnp.abs(coef_small).max() < 0.01
+
+    @pytest.mark.parametrize("scale_val", [0.5, 2.0, 10.0])
+    def test_init_kwargs_scale_val(self, scale_val):
+        """Test that scale_val kwarg is passed to scale_init."""
+        n_states = 3
+        X = jnp.ones((100, 5))
+        y = jnp.ones(100)
+        inverse_link = lambda x: x
+
+        init_kwargs = {"scale_init": {"scale_val": scale_val}}
+
+        _, _, scale, _, _ = glm_hmm_initialization(
+            n_states,
+            X,
+            y,
+            inverse_link,
+            random_key=jax.random.PRNGKey(123),
+            initialization_kwargs=init_kwargs,
+        )
+
+        # All values should be exactly scale_val
+        assert jnp.all(scale == scale_val)
 
     def test_init_kwargs_multiple_functions(self):
         """Test that init_kwargs can pass kwargs to multiple init functions."""
@@ -981,7 +1036,7 @@ class TestResolveInitFunc:
         "func_name, string_name, expected_func",
         [
             ("glm_params_init", "random", random_glm_params_init),
-            ("scale_init", "ones", ones_scale_init),
+            ("scale_init", "constant", constant_scale_init),
             ("transition_proba_init", "sticky", sticky_transition_proba_init),
             ("initial_proba_init", "uniform", uniform_initial_proba_init),
         ],
@@ -1054,7 +1109,7 @@ class TestResolveInitFuncsRegistry:
         """Test that None returns default registry."""
         result = _resolve_init_funcs_registry(None)
         assert result["glm_params_init"] is random_glm_params_init
-        assert result["scale_init"] is ones_scale_init
+        assert result["scale_init"] is constant_scale_init
         assert result["transition_proba_init"] is sticky_transition_proba_init
         assert result["initial_proba_init"] is uniform_initial_proba_init
 
@@ -1069,7 +1124,7 @@ class TestResolveInitFuncsRegistry:
         """Test that registry with valid keys plus one invalid key raises KeyError."""
         mixed_registry = {
             "glm_params_init": random_glm_params_init,
-            "scale_init": ones_scale_init,
+            "scale_init": constant_scale_init,
             "transition_proba_init": sticky_transition_proba_init,
             "initial_proba_init": uniform_initial_proba_init,
             "invalid_key": lambda: None,
@@ -1103,7 +1158,7 @@ class TestIsNativeInitRegistry:
         """Test that registry with all native functions returns True."""
         native_registry = {
             "glm_params_init": random_glm_params_init,
-            "scale_init": ones_scale_init,
+            "scale_init": constant_scale_init,
             "transition_proba_init": sticky_transition_proba_init,
             "initial_proba_init": uniform_initial_proba_init,
         }
@@ -1113,7 +1168,7 @@ class TestIsNativeInitRegistry:
         """Test that partial registry with native functions returns True."""
         partial_registry = {
             "glm_params_init": random_glm_params_init,
-            "scale_init": ones_scale_init,
+            "scale_init": constant_scale_init,
         }
         assert _is_native_init_registry(partial_registry) is True
 
