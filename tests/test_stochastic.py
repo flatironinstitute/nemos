@@ -244,6 +244,16 @@ class TestPreprocessedDataLoader:
 
         assert call_count == 1  # Only called once
 
+    def test_n_samples_delegated(self):
+        """Test that n_samples is delegated to the wrapped loader."""
+        X = np.random.randn(100, 5)
+        y = np.random.randn(100)
+        loader = ArrayDataLoader(X, y, batch_size=32)
+        wrapped = _PreprocessedDataLoader(loader, lambda X, y: (X, y))
+
+        assert wrapped.n_samples == loader.n_samples
+        assert wrapped.n_samples == 100
+
 
 class TestIsDataLoader:
     """Tests for is_data_loader function."""
@@ -311,18 +321,23 @@ class TestGLMStochasticFit:
         y = np.random.poisson(np.exp(X @ np.random.randn(5) * 0.1))
         return X, y
 
+    def _default_solver_kwargs(self, solver_name, **overrides):
+        """Build solver kwargs with stochastic-safe defaults."""
+        solver_kwargs = {"stepsize": 0.001, "maxiter": 100, **overrides}
+        solver_class = solvers.get_solver(solver_name).implementation
+        if "acceleration" in solver_class.get_accepted_arguments():
+            solver_kwargs.setdefault("acceleration", False)
+        return solver_kwargs
+
     @pytest.mark.parametrize("solver", _stochastic_solver_names)
     def test_stochastic_fit(self, simple_data, solver):
         """Test basic stochastic_fit functionality."""
         X, y = simple_data
         loader = ArrayDataLoader(X, y, batch_size=32, shuffle=True)
 
-        solver_kwargs = {"stepsize": 0.001, "maxiter": 100}
-        solver_class = solvers.get_solver(solver).implementation
-        if "acceleration" in solver_class.get_accepted_arguments():
-            solver_kwargs["acceleration"] = False
-
-        model = nmo.glm.GLM(solver_name=solver, solver_kwargs=solver_kwargs)
+        model = nmo.glm.GLM(
+            solver_name=solver, solver_kwargs=self._default_solver_kwargs(solver)
+        )
         model.stochastic_fit(loader, num_epochs=5)
 
         n_steps_taken = model._solver.get_optim_info(model.solver_state_).num_steps
@@ -338,12 +353,9 @@ class TestGLMStochasticFit:
         X, y = simple_data
         loader = ArrayDataLoader(X, y, batch_size=32)
 
-        solver_kwargs = {"stepsize": 0.001, "maxiter": 100}
-        solver_class = solvers.get_solver(solver).implementation
-        if "acceleration" in solver_class.get_accepted_arguments():
-            solver_kwargs["acceleration"] = False
-
-        model = nmo.glm.GLM(solver_name=solver, solver_kwargs=solver_kwargs)
+        model = nmo.glm.GLM(
+            solver_name=solver, solver_kwargs=self._default_solver_kwargs(solver)
+        )
 
         init_coef = jnp.zeros(5)
         init_intercept = jnp.zeros(1)
@@ -362,10 +374,7 @@ class TestGLMStochasticFit:
         batch_size = 100
         loader = ArrayDataLoader(X, y, batch_size=batch_size, shuffle=True)
 
-        solver_kwargs = {"stepsize": 0.001, "maxiter": 10_000}
-        solver_class = solvers.get_solver(solver).implementation
-        if "acceleration" in solver_class.get_accepted_arguments():
-            solver_kwargs["acceleration"] = False
+        solver_kwargs = self._default_solver_kwargs(solver, maxiter=10_000)
 
         # get parameters that are close to the optimum
         model_fitted = nmo.glm.GLM(solver_name="LBFGS", solver_kwargs={"tol": 1e-8})
@@ -396,6 +405,72 @@ class TestGLMStochasticFit:
             == (X.shape[0] + batch_size - 1) // batch_size * n_epochs
         )
         assert n_steps_taken_stopping < n_steps_taken_no_stopping
+
+    @pytest.mark.parametrize("solver", _stochastic_solver_names)
+    def test_callable_convergence_criterion_stops_early(self, simple_data, solver):
+        """Test that a callable convergence_criterion stops optimization early."""
+        X, y = simple_data
+        num_epochs = 5
+        loader = ArrayDataLoader(X, y, batch_size=32, shuffle=True)
+
+        solver_kwargs = self._default_solver_kwargs(solver, maxiter=10_000)
+
+        # Baseline: no convergence monitoring
+        model_baseline = nmo.glm.GLM(solver_name=solver, solver_kwargs=solver_kwargs)
+        model_baseline.stochastic_fit(loader, num_epochs=num_epochs)
+
+        # Early stop: criterion that fires after first epoch
+        def _stop(params, prev, state, prev_state, aux, epoch):
+            return epoch >= 0
+
+        model_early = nmo.glm.GLM(solver_name=solver, solver_kwargs=solver_kwargs)
+        model_early.stochastic_fit(
+            loader, num_epochs=num_epochs, convergence_criterion=_stop
+        )
+
+        assert model_early.optim_info_.num_steps < model_baseline.optim_info_.num_steps
+
+    @pytest.mark.parametrize("solver", _stochastic_solver_names)
+    def test_batch_callback_stops_early(self, simple_data, solver):
+        """Test that a batch_callback returning True stops optimization early."""
+        X, y = simple_data
+        num_epochs = 5
+        loader = ArrayDataLoader(X, y, batch_size=32, shuffle=True)
+
+        solver_kwargs = self._default_solver_kwargs(solver, maxiter=10_000)
+
+        # Baseline: no callback
+        model_baseline = nmo.glm.GLM(solver_name=solver, solver_kwargs=solver_kwargs)
+        model_baseline.stochastic_fit(loader, num_epochs=num_epochs)
+
+        # Early stop: callback that fires on first batch
+        def _stop(params, state, aux, batch_idx, epoch):
+            return True
+
+        model_early = nmo.glm.GLM(solver_name=solver, solver_kwargs=solver_kwargs)
+        model_early.stochastic_fit(
+            loader,
+            num_epochs=num_epochs,
+            convergence_criterion=False,
+            batch_callback=_stop,
+        )
+
+        assert model_early.optim_info_.num_steps == 1
+        assert model_early.optim_info_.num_steps < model_baseline.optim_info_.num_steps
+
+    @pytest.mark.parametrize("bad_value", [0, 1, "stop", 0.5])
+    def test_invalid_convergence_criterion_raises(self, simple_data, bad_value):
+        """Test that non-bool, non-callable convergence_criterion raises ValueError."""
+        X, y = simple_data
+        loader = ArrayDataLoader(X, y, batch_size=32)
+
+        model = nmo.glm.GLM(
+            solver_name="GradientDescent",
+            solver_kwargs=self._default_solver_kwargs("GradientDescent"),
+        )
+
+        with pytest.raises(ValueError, match="convergence_criterion"):
+            model.stochastic_fit(loader, num_epochs=1, convergence_criterion=bad_value)
 
     @pytest.mark.parametrize("solver", ["LBFGS", "BFGS", "NonlinearCG"])
     def test_unsupported_solver_raises(self, simple_data, solver):
