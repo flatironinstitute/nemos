@@ -98,7 +98,7 @@ class NoRunSolver:
         return None
 
 
-@pytest.mark.parametrize("method_name", list(AbstractSolver.__abstractmethods__))
+@pytest.mark.parametrize("method_name", sorted(AbstractSolver.__abstractmethods__))
 def test_validate_method_signature_matches_all_methods(method_name):
     ok, error = _validate_method_signature(GoodSolver, method_name)
     assert ok is True

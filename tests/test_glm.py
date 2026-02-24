@@ -2605,6 +2605,21 @@ class TestPopulationGLM:
     Unit tests specific to the PopulationGLM class that are independent of the observation model.
     """
 
+    @pytest.mark.parametrize("positional", [("X",), ()])
+    def test_glm_fit_with_kwargs(self, request, model_instantiation, positional):
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            model_instantiation
+        )
+        model.solver_kwargs = {"maxiter": 5}
+        model_reference = deepcopy(model)
+        model_test = deepcopy(model)
+        kwargs = {"X": X, "y": y}
+        args = [kwargs.pop(x) for x in positional]
+        model_reference.fit(X, y)
+        model_test.fit(*args, **kwargs)
+        np.testing.assert_allclose(model_reference.coef_, model_test.coef_)
+        np.testing.assert_allclose(model_reference.intercept_, model_test.intercept_)
+
     #######################################
     # Compare with standard implementation
     #######################################

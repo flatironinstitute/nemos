@@ -121,6 +121,10 @@ VALID_PAIRS = [
     {"test_ridge_with_aux", "test_ridge_without_aux"},
     {"classes", "n_classes"},
     {"method_name", "method_names"},
+    {"arg_name", "arg_num"},
+    {"arg_name", "algo_name"},
+    {"arg_name", "attr_name"},
+    {"arg_name", "var_name"},
 ]
 
 
