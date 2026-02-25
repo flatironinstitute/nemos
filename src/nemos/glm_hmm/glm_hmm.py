@@ -17,11 +17,11 @@ from .._observation_model_builder import instantiate_observation_model
 from ..base_regressor import BaseRegressor
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..observation_models import Observations
+from ..pytrees import FeaturePytree
 from ..regularizer import GroupLasso, Lasso, Regularizer, Ridge
 from ..type_casting import cast_to_jax, is_pynapple_tsd
 from ..typing import (
     DESIGN_INPUT_TYPE,
-    FeaturePytree,
     SolverState,
     StepResult,
 )
