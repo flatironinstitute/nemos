@@ -487,6 +487,24 @@ class TestSolverStochasticRun:
             solver.stochastic_run(init_params, loader, num_epochs=0)
 
     @pytest.mark.parametrize("solver_class", _stochastic_solver_classes)
+    def test_maxiter_does_not_stop_stochastic(self, simple_loss_and_data, solver_class):
+        """Test that maxiter does not limit stochastic optimization; only num_epochs does."""
+        loss, loader = simple_loss_and_data
+
+        solver_kwargs = self._default_solver_kwargs(solver_class)
+        # Set maxiter=1, which would stop after 1 step if it were respected
+        solver = solver_class(loss, maxiter=1, **solver_kwargs)
+
+        num_epochs = 3
+        init_params = jnp.zeros(3)
+        _, state, _ = solver.stochastic_run(init_params, loader, num_epochs=num_epochs)
+
+        n_steps = solver.get_optim_info(state).num_steps
+        batches_per_epoch = int(np.ceil(loader.n_samples / loader.batch_size))
+        expected_steps = batches_per_epoch * num_epochs
+        assert n_steps == expected_steps
+
+    @pytest.mark.parametrize("solver_class", _stochastic_solver_classes)
     def test_acceleration_not_allowed(self, simple_loss_and_data, solver_class):
         """Test that solvers that have acceleration argument have those turned off for stochastic optimization."""
         loss, loader = simple_loss_and_data
