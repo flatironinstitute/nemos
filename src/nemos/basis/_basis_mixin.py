@@ -552,7 +552,7 @@ class EvalBasisMixin:
         self.set_input_shape(*xi)
         return self
 
-    def _set_input_independent_states(self) -> "EvalBasisMixin":
+    def _set_input_independent_states(self) -> EvalBasisMixin:
         """
         Compute all the basis states that do not depend on the input.
 
@@ -690,7 +690,7 @@ class ConvBasisMixin:
         """
         return self._set_kernel()
 
-    def _set_kernel(self) -> "ConvBasisMixin":
+    def _set_kernel(self) -> ConvBasisMixin:
         """
         Prepare or compute the convolutional kernel for the basis functions.
 

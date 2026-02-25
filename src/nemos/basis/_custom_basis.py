@@ -436,7 +436,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         return stacked
 
     @set_input_shape_state(states=("_input_shape_product", "_input_shape_", "_label"))
-    def __sklearn_clone__(self) -> "CustomBasis":
+    def __sklearn_clone__(self) -> CustomBasis:
         """Clone the basis while preserving attributes related to input shapes.
 
         This method ensures that input shape attributes (e.g., `_input_shape_product`,
@@ -471,7 +471,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
 
     @staticmethod
     def _reshape_concatenated_arrays(
-        array: NDArray, bas: "CustomBasis", axis: int
+        array: NDArray, bas: CustomBasis, axis: int
     ) -> NDArray:
         # reshape the arrays to match input shapes
         shape = list(array.shape)
@@ -629,7 +629,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         )
         return self
 
-    def to_transformer(self) -> "TransformerBasis":
+    def to_transformer(self) -> TransformerBasis:
         """
         Turn the Basis into a TransformerBasis for use with scikit-learn.
 
