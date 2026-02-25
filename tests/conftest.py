@@ -1600,12 +1600,7 @@ def configure_solver_backend(request):
     backend = os.getenv("NEMOS_SOLVER_BACKEND")
 
     if backend is None:
-        # use the defaults for each algorithm
-        _solvers_to_use = [
-            nmo.solvers.get_solver(algo)
-            for algo in nmo.solvers.list_available_algorithms()
-        ]
-
+        _solvers_to_use = nmo.solvers.list_available_solvers()
     else:
         if backend == "jaxopt" and not nmo.solvers.JAXOPT_AVAILABLE:
             pytest.fail("jaxopt backend requested but jaxopt is not installed.")

@@ -3,7 +3,7 @@ from contextlib import nullcontext as does_not_raise
 import pytest
 
 import nemos as nmo
-from nemos.solvers._jaxopt_solvers import JAXOPT_AVAILABLE
+from nemos.solvers._solver_registry import JAXOPT_AVAILABLE
 
 pytestmark = pytest.mark.solver_related
 
@@ -413,3 +413,20 @@ def test_solver_spec_repr():
     )
 
     assert repr(spec) == expected
+
+
+@pytest.mark.skipif(not JAXOPT_AVAILABLE, reason="jaxopt not installed")
+def test_jaxopt_solvers_in_registry():
+    """When jaxopt is installed, its solvers must appear in the registry."""
+    expected_jaxopt_algos = [
+        "GradientDescent",
+        "ProximalGradient",
+        "LBFGS",
+        "BFGS",
+        "NonlinearCG",
+    ]
+    for algo_name in expected_jaxopt_algos:
+        backends = nmo.solvers.list_algo_backends(algo_name)
+        assert (
+            "jaxopt" in backends
+        ), f"jaxopt backend missing for {algo_name}. Available backends: {backends}"
