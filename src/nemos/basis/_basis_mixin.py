@@ -651,7 +651,7 @@ class EvalBasisMixin:
             raise TypeError(
                 f"Invalid bounds ``{values}`` provided. "
                 "When provided, the bounds should be one or multiple tuples containing pair of floats.\n"
-                "If multiple tuples are provided, one must provide a tuple per each dimension"
+                "If multiple tuples are provided, one must provide a tuple per each dimension "
                 "of the basis. "
             )
         self._bounds = [self._format_bounds(v) for v in values]
