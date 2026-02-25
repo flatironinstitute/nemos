@@ -362,14 +362,19 @@ def supports_stochastic(solver_name: str) -> bool:
     )
 
 
-# TODO: Add doctest?
 def list_stochastic_solvers() -> list[SolverSpec]:
-    """
-    List solvers that support stochastic optimization.
+    """List solvers that support stochastic optimization.
 
     Returns
     -------
     List of solver specs that support stochastic optimization.
+
+    Examples
+    --------
+    >>> import nemos as nmo
+    >>> stochastic = nmo.solvers.list_stochastic_solvers()
+    >>> sorted(set(spec.algo_name for spec in stochastic))
+    ['GradientDescent', 'ProxSVRG', 'ProximalGradient', 'SVRG']
     """
     return [
         spec
