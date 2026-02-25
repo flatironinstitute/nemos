@@ -8,10 +8,10 @@ import jax.numpy as jnp
 from jax.typing import DTypeLike
 
 from .. import validation
+from ..base_validator import RegressorValidator
 from ..glm.params import GLMParams, GLMUserParams
 from ..glm.validation import GLMValidator
 from ..typing import DESIGN_INPUT_TYPE
-from ..validation import RegressorValidator
 from .params import GLMHMMParams, GLMHMMUserParams, GLMScale, HMMParams
 
 

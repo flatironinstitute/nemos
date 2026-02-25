@@ -1,7 +1,6 @@
 import warnings
 from contextlib import nullcontext as does_not_raise
 
-import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -10,11 +9,11 @@ from nemos.basis.basis import BSplineConv, BSplineEval, RaisedCosineLinearEval
 from nemos.identifiability_constraints import (
     _WARN_FLOAT32_MESSAGE,
     _find_drop_column,
-    _warn_if_not_float64,
     add_constant,
     apply_identifiability_constraints,
     apply_identifiability_constraints_by_basis_component,
 )
+from nemos.validation import _warn_if_not_float64
 
 
 @pytest.mark.requires_x64

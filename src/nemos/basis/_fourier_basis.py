@@ -1,16 +1,20 @@
 """Module for ND fourier basis class."""
 
+from __future__ import annotations
+
 import itertools
 import warnings
 from numbers import Number
-from typing import Any, Callable, List, Literal, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, List, Literal, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 from numpy._typing import NDArray
 from numpy.typing import ArrayLike
-from pynapple import Tsd, TsdFrame, TsdTensor
+
+if TYPE_CHECKING:
+    from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..type_casting import is_at_least_1d_numpy_array_like, support_pynapple
 from ..typing import FeatureMatrix

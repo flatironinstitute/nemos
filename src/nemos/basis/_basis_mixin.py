@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING, Any, Generator, Literal, Optional, Tuple, Unio
 import jax
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
-from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..convolve import create_convolutional_predictor
 from ..utils import _get_terminal_size, format_repr
@@ -33,6 +32,8 @@ from ._composition_utils import (
 from ._transformer_basis import TransformerBasis
 
 if TYPE_CHECKING:
+    from pynapple import Tsd, TsdFrame, TsdTensor
+
     from ._basis import Basis
 
 
@@ -455,7 +456,7 @@ class AtomicBasisMixin(BasisMixin):
         klass = self.__class__(**self.get_params())
         return klass
 
-    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray) -> BasisMixin:
+    def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> BasisMixin:
         """
         Set the expected input shape for the basis object.
 
@@ -491,7 +492,7 @@ class AtomicBasisMixin(BasisMixin):
         is not set in this method, then ``compute_features`` (equivalent to ``fit_transform``) will break.
 
         """
-        return super().set_input_shape(xi)
+        return super().set_input_shape(*xi)
 
 
 class EvalBasisMixin:
@@ -551,7 +552,7 @@ class EvalBasisMixin:
         self.set_input_shape(*xi)
         return self
 
-    def _set_input_independent_states(self) -> "EvalBasisMixin":
+    def _set_input_independent_states(self) -> EvalBasisMixin:
         """
         Compute all the basis states that do not depend on the input.
 
@@ -689,7 +690,7 @@ class ConvBasisMixin:
         """
         return self._set_kernel()
 
-    def _set_kernel(self) -> "ConvBasisMixin":
+    def _set_kernel(self) -> ConvBasisMixin:
         """
         Prepare or compute the convolutional kernel for the basis functions.
 

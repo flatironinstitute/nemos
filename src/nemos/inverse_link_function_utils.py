@@ -1,5 +1,7 @@
 """Validation and construction of inverse link functions."""
 
+from __future__ import annotations
+
 import functools
 from typing import TYPE_CHECKING, Any, Callable
 
@@ -171,7 +173,7 @@ def check_inverse_link_function(inverse_link_function: Callable):
 
 
 def resolve_inverse_link_function(
-    inverse_link_function: Any, observation_model: "Observations"
+    inverse_link_function: Any, observation_model: Observations
 ) -> Callable:
     """
     Validate and resolve an inverse link function specification.

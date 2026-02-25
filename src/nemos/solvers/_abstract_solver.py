@@ -1,3 +1,7 @@
+"""Base class defining the interface for solvers that can be used by `BaseRegressor`."""
+
+from __future__ import annotations
+
 import abc
 from dataclasses import dataclass
 from typing import (
@@ -10,11 +14,11 @@ from typing import (
     runtime_checkable,
 )
 
-from ..regularizer import Regularizer
 from ..typing import Params, SolverState, StepResult
 
 if TYPE_CHECKING:
     from ..batching import DataLoader
+    from ..regularizer import Regularizer
 
 
 # TODO: Check generated API docs after rebase

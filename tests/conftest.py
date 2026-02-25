@@ -35,6 +35,7 @@ import pytest
 import nemos as nmo
 import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
+from nemos.base_regressor import BaseRegressor
 from nemos.basis import AdditiveBasis, CustomBasis, MultiplicativeBasis, Zero
 from nemos.basis._basis import Basis
 from nemos.basis._basis_mixin import BasisMixin
@@ -291,7 +292,7 @@ def list_all_real_basis_classes(filter_basis="all"):
 
 
 # Sample subclass to test instantiation and methods
-class MockRegressor(nmo.base_regressor.BaseRegressor):
+class MockRegressor(BaseRegressor):
     """
     Mock implementation of the BaseRegressor abstract class for testing purposes.
     Implements all required abstract methods as empty methods.

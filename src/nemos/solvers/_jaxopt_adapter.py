@@ -1,9 +1,22 @@
 """Base class for adapters wrapping JAXopt-style solvers."""
 
-from typing import Any, Callable, ClassVar, NamedTuple, Tuple, Type, TypeAlias
+from __future__ import annotations
 
-from ..regularizer import Regularizer
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    ClassVar,
+    NamedTuple,
+    Tuple,
+    Type,
+    TypeAlias,
+)
+
 from ..typing import Aux, Params
+
+if TYPE_CHECKING:
+    from ..regularizer import Regularizer
 from ._abstract_solver import OptimizationInfo
 from ._solver_adapter import SolverAdapter
 

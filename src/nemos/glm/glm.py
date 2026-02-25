@@ -1563,7 +1563,7 @@ class PopulationGLM(GLM):
             feature_mask
         )
 
-    @strip_metadata(arg_num=1)
+    @strip_metadata(arg_num=1, arg_name="y")
     def fit(
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],

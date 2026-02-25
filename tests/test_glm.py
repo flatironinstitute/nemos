@@ -2605,6 +2605,21 @@ class TestPopulationGLM:
     Unit tests specific to the PopulationGLM class that are independent of the observation model.
     """
 
+    @pytest.mark.parametrize("positional", [("X",), ()])
+    def test_glm_fit_with_kwargs(self, request, model_instantiation, positional):
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            model_instantiation
+        )
+        model.solver_kwargs = {"maxiter": 5}
+        model_reference = deepcopy(model)
+        model_test = deepcopy(model)
+        kwargs = {"X": X, "y": y}
+        args = [kwargs.pop(x) for x in positional]
+        model_reference.fit(X, y)
+        model_test.fit(*args, **kwargs)
+        np.testing.assert_allclose(model_reference.coef_, model_test.coef_)
+        np.testing.assert_allclose(model_reference.intercept_, model_test.intercept_)
+
     #######################################
     # Compare with standard implementation
     #######################################
@@ -4109,3 +4124,29 @@ class TestClassifierGLM:
         # Roundtrip: encode -> decode should give original labels
         y_label_roundtrip = model._decode_labels(model._encode_labels(y_label))
         assert np.array_equal(y_label, y_label_roundtrip)
+
+
+def test_glm_public_api_matches_subclasses():
+    import nemos as nmo
+    from nemos.base_regressor import BaseRegressor
+
+    # Public contract of the module
+    public = set(nmo.glm.__all__)
+
+    # All GLM subclasses exposed through the namespace
+    glm_subclasses = {
+        name
+        for name, obj in inspect.getmembers(nmo.glm, inspect.isclass)
+        if issubclass(obj, BaseRegressor)
+    }
+
+    # Known public names that are not direct subclasses (if any)
+    exceptions = set()  # Add names here if needed
+
+    expected_public = glm_subclasses.union(exceptions)
+
+    assert public == expected_public, (
+        f"\nPublic API mismatch in nemos.glm\n"
+        f"Missing from __all__: {expected_public - public}\n"
+        f"Unexpected in __all__: {public - expected_public}"
+    )
