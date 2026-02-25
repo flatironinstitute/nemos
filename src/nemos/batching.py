@@ -30,8 +30,8 @@ class DataLoader(Protocol):
     Requirements:
 
     - Must be re-iterable: calling ``__iter__()`` must return a fresh iterator
-      each time. This is required for ``num_epochs > 1`` and for SVRG's full
-      gradient computation.
+      each time. This is required for ``num_epochs > 1`` and because SVRG's full
+      gradient computation iterates through the data an additional time per epoch.
     - ``sample_batch()`` should be cheap and deterministic (e.g., return first batch).
     - Batches should have consistent, non-zero sizes.
     """
@@ -65,18 +65,6 @@ class ArrayDataLoader:
 
     This loader is re-iterable: each call to ``__iter__()`` returns a fresh iterator.
 
-    Parameters
-    ----------
-    arrays :
-        Input and output arrays (any number), each an array of
-        shape (n_samples, n_features) or (n_samples, ).
-    batch_size :
-        Number of samples per batch.
-    shuffle :
-        Whether to shuffle data each epoch. Default is True.
-    key :
-        JAX random key for shuffling. Default is ``jax.random.key(0)``.
-
     Examples
     --------
     >>> import jax.numpy as jnp
@@ -95,6 +83,21 @@ class ArrayDataLoader:
         shuffle: bool = True,
         key: Optional[jax.Array] = None,
     ):
+        """
+        Initialize an in-memory array data loader.
+
+        Parameters
+        ----------
+        *arrays :
+            Input and output arrays (any number), each an array of
+            shape (n_samples, n_features) or (n_samples, ).
+        batch_size :
+            Number of samples per batch.
+        shuffle :
+            Whether to shuffle data each epoch. Default is True.
+        key :
+            JAX random key for shuffling. Default is ``jax.random.key(0)``.
+        """
         if len(arrays) == 0:
             raise ValueError("Provide at least one array.")
 
@@ -103,7 +106,6 @@ class ArrayDataLoader:
         self.shuffle = shuffle
         self._key = key if key is not None else jax.random.key(0)
 
-        # Validate
         if len(set(arr.shape[0] for arr in self.arrays)) != 1:
             raise ValueError("All arrays must have same number of samples")
         if batch_size <= 0:
@@ -151,6 +153,17 @@ class _PreprocessedDataLoader:
         loader: DataLoader,
         preprocessing_func: Callable[..., BatchData],
     ):
+        """
+        Initialize a preprocessed data loader.
+
+        Parameters
+        ----------
+        loader :
+            The underlying data loader to wrap.
+        preprocessing_func :
+            Function applied to each batch. Called as
+            ``preprocessing_func(*batch_data)``.
+        """
         self._loader = loader
         self._preprocess_fn = preprocessing_func
         self._cached_sample: Optional[BatchData] = None

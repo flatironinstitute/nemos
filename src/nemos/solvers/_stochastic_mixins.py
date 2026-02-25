@@ -1,5 +1,7 @@
 """Mixins providing standard stochastic optimization implementations."""
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Any, Callable
 
 import numpy as np
@@ -98,7 +100,7 @@ class StochasticSolverMixin:
     def _stochastic_run_impl(
         self,
         init_params: Params,
-        data_loader: "DataLoader",
+        data_loader: DataLoader,
         num_epochs: int,
         convergence_criterion: Callable | None = None,
         batch_callback: Callable | None = None,
@@ -173,7 +175,7 @@ class OptimistixStochasticSolverMixin(StochasticSolverMixin):
     def _stochastic_run_impl(
         self,
         init_params: Params,
-        data_loader: "DataLoader",
+        data_loader: DataLoader,
         num_epochs: int,
         convergence_criterion: Callable | None = None,
         batch_callback: Callable | None = None,
@@ -199,17 +201,18 @@ class OptimistixStochasticSolverMixin(StochasticSolverMixin):
         StepResult :
             Final (params, state, aux) tuple.
         """
-        result = super()._stochastic_run_impl(
+        params, state, aux = super()._stochastic_run_impl(
             init_params,
             data_loader,
             num_epochs,
             convergence_criterion=convergence_criterion,
             batch_callback=batch_callback,
         )
-        _, state, _ = result
-        num_steps = self._extract_num_steps(state)
-        self.stats = {"num_steps": num_steps, "max_steps": self.maxiter}
-        return result
+        self.stats = {
+            "num_steps": self._extract_num_steps(state),
+            "max_steps": self.maxiter,
+        }
+        return (params, state, aux)
 
     def stochastic_convergence_criterion(
         self,

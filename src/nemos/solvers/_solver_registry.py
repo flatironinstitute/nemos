@@ -341,7 +341,8 @@ def supports_stochastic(solver_name: str) -> bool:
     Returns
     -------
     bool
-        True if the solver supports stochastic optimization via stochastic_run.
+        True if the solver supports stochastic optimization via stochastic_run
+        and has the _supports_stochastic class variable set to True.
 
     Raises
     ------
