@@ -1616,6 +1616,8 @@ def configure_solver_backend(request):
         except KeyError:
             available = ", ".join(_solvers_per_backend.keys())
             pytest.fail(f"Unknown solver backend: {backend}. Available: {available}")
+    else:
+        _solvers_to_use = nmo.solvers.list_available_solvers()
 
     override_solver = request.config.getini("override_solver")
     if override_solver:
