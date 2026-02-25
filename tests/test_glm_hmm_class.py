@@ -21,7 +21,7 @@ from nemos._observation_model_builder import (
 from nemos._regularizer_builder import instantiate_regularizer
 from nemos.glm_hmm.expectation_maximization import GLMHMMState, em_glm_hmm, em_step
 from nemos.glm_hmm.params import GLMHMMParams, GLMParams
-from nemos.typing import FeaturePytree
+from nemos.pytrees import FeaturePytree
 from nemos.utils import _get_name
 
 
