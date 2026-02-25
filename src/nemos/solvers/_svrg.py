@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from functools import partial
 from typing import (
     TYPE_CHECKING,
@@ -545,8 +547,8 @@ class ProxSVRG:
         self,
         init_params: Pytree,
         hyperparams_prox: Union[float, None],
-        iter_batches: Callable[[], Iterator["BatchData"]],
-        sample_batch: Callable[[], "BatchData"],
+        iter_batches: Callable[[], Iterator[BatchData]],
+        sample_batch: Callable[[], BatchData],
         num_epochs: int = 1,
         convergence_criterion: Callable | None = None,
         batch_callback: Callable | None = None,
@@ -638,7 +640,7 @@ class ProxSVRG:
     def _compute_full_gradient_streaming(
         self,
         params: Pytree,
-        iter_batches: Callable[[], Iterator["BatchData"]],
+        iter_batches: Callable[[], Iterator[BatchData]],
     ) -> Pytree:
         """
         Compute full gradient by iterating through all batches and averaging the gradients.
@@ -959,8 +961,8 @@ class SVRG(ProxSVRG):
     def run_streaming(
         self,
         init_params: Pytree,
-        iter_batches: Callable[[], Iterator["BatchData"]],
-        sample_batch: Callable[[], "BatchData"],
+        iter_batches: Callable[[], Iterator[BatchData]],
+        sample_batch: Callable[[], BatchData],
         num_epochs: int = 1,
         convergence_criterion: Callable | None = None,
         batch_callback: Callable | None = None,
@@ -1017,7 +1019,7 @@ class _WrappedSVRGBase(JaxoptAdapter):
     def _stochastic_run_impl(
         self,
         init_params: Params,
-        data_loader: "DataLoader",
+        data_loader: DataLoader,
         num_epochs: int,
         convergence_criterion: Callable | None = None,
         batch_callback: Callable | None = None,

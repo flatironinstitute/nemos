@@ -136,7 +136,6 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         Extract common info about the optimization process.
 
         Currently, the following info is extracted:
-
         - final function value (where available)
         - number of steps
         - whether the optimization converged
@@ -147,7 +146,7 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
     def stochastic_run(
         self,
         init_params: Params,
-        data_loader: "DataLoader",
+        data_loader: DataLoader,
         num_epochs: int = 1,
         convergence_criterion: Callable | None = None,
         batch_callback: Callable | None = None,
@@ -189,7 +188,6 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         if not self._supports_stochastic:
             raise NotImplementedError(
                 f"{self.__class__.__name__} does not support stochastic optimization. "
-                f"Use 'GradientDescent', 'ProximalGradient', 'SVRG', or 'ProxSVRG'."
             )
         if num_epochs < 1:
             raise ValueError("num_epochs must be >= 1")
@@ -205,7 +203,7 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
     def _stochastic_run_impl(
         self,
         init_params: Params,
-        data_loader: "DataLoader",
+        data_loader: DataLoader,
         num_epochs: int,
         convergence_criterion: Callable | None = None,
         batch_callback: Callable | None = None,
