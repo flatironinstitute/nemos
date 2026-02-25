@@ -10,7 +10,9 @@ from copy import deepcopy
 from functools import wraps
 from pathlib import Path
 from typing import (
+    TYPE_CHECKING,
     Any,
+    Callable,
     Generic,
     Optional,
     Tuple,
@@ -42,6 +44,9 @@ from .typing import (
     UserProvidedParamsT,
 )
 from .utils import _flatten_dict, _get_name, _unpack_params, get_env_metadata
+
+if TYPE_CHECKING:
+    from .batching import DataLoader
 
 _SOLVER_ARGS_CACHE = {}
 
@@ -401,6 +406,57 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         init_params: Optional[UserProvidedParamsT] = None,
     ) -> BaseRegressor[UserProvidedParamsT, ModelParamsT]:
         """Fit the model to neural activity."""
+        pass
+
+    @abc.abstractmethod
+    def stochastic_fit(
+        self,
+        data: "DataLoader",
+        *,
+        init_params: Optional[UserProvidedParamsT] = None,
+        num_epochs: int = 1,
+        convergence_criterion: bool | Callable = True,
+        batch_callback: Callable | None = None,
+    ) -> BaseRegressor[UserProvidedParamsT, ModelParamsT]:
+        """
+        Fit the model using stochastic optimization with mini-batches.
+
+        This method provides an out-of-memory training interface for large datasets
+        that cannot fit in memory. Data is provided via a DataLoader that yields
+        mini-batches.
+
+        Parameters
+        ----------
+        data :
+            Data loader yielding (X_batch, y_batch) tuples.
+            Must be re-iterable for ``num_epochs > 1``.
+        init_params :
+            Initial parameters. If None, initialized from ``sample_batch()``.
+        num_epochs :
+            Maximum number of passes over the data. Must be >= 1.
+            Optimization may stop earlier if the convergence criterion is met.
+        convergence_criterion :
+            Optional criterion to monitor convergence per epoch.
+            If True (default), use the solver's default convergence monitoring and stop on convergence.
+            If False, no convergence monitoring, optimization runs for ``num_epochs`` epochs.
+            If a callable, provide a function with signature
+                ``(params, prev_params, state, prev_state, aux, epoch) -> bool``.
+                Returning True stops the optimization.
+        batch_callback :
+            Optional callback for per-batch monitoring.
+            Signature is ``batch_callback(params, state, aux, batch_idx, epoch) -> bool``.
+            Returning True stops the optimization after that batch.
+
+        Returns
+        -------
+        self
+            The fitted model.
+
+        Raises
+        ------
+        ValueError
+            If the solver doesn't support stochastic optimization.
+        """
         pass
 
     @abc.abstractmethod

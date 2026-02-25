@@ -330,6 +330,59 @@ def list_available_algorithms() -> list[str]:
     return list(_registry.keys())
 
 
+def supports_stochastic(solver_name: str) -> bool:
+    """Check if a solver supports stochastic optimization.
+
+    Parameters
+    ----------
+    solver_name : str
+        Name of the solver (e.g., 'GradientDescent', 'SVRG').
+
+    Returns
+    -------
+    bool
+        True if the solver supports stochastic optimization via stochastic_run
+        and has the _supports_stochastic class variable set to True.
+
+    Raises
+    ------
+    ValueError
+        If the solver name is not found in the registry.
+
+    Examples
+    --------
+    >>> import nemos as nmo
+    >>> nmo.solvers.supports_stochastic("GradientDescent")
+    True
+    >>> nmo.solvers.supports_stochastic("BFGS")
+    False
+    """
+    return getattr(
+        get_solver(solver_name).implementation, "_supports_stochastic", False
+    )
+
+
+def list_stochastic_solvers() -> list[SolverSpec]:
+    """List solvers that support stochastic optimization.
+
+    Returns
+    -------
+    List of solver specs that support stochastic optimization.
+
+    Examples
+    --------
+    >>> import nemos as nmo
+    >>> stochastic = nmo.solvers.list_stochastic_solvers()
+    >>> sorted(set(spec.algo_name for spec in stochastic))
+    ['GradientDescent', 'ProxSVRG', 'ProximalGradient', 'SVRG']
+    """
+    return [
+        spec
+        for spec in list_available_solvers()
+        if getattr(spec.implementation, "_supports_stochastic", False)
+    ]
+
+
 register("GradientDescent", OptimistixNAG, "optimistix", default=True)
 register("ProximalGradient", OptimistixFISTA, "optimistix", default=True)
 register("LBFGS", OptimistixOptaxLBFGS, "optax+optimistix", default=True)
