@@ -86,7 +86,81 @@ def compute_xi_log(
     return log_xi_sum + log_transition_prob
 
 
-def forward_pass(
+def _compute_log_likelihood(
+    glm_params: GLMParams,
+    glm_scale: GLMScale,
+    X: Array,
+    y: Array,
+    inverse_link_function: Callable[[Array], Array],
+    log_likelihood_func: Callable[[Array, Array, Array], Array],
+):
+    """
+    Compute observation log-likelihoods for each state.
+
+    Given GLM parameters and observations, computes the log-likelihood of each
+    observation under each hidden state. This is the emission probability
+    p(y_t | z_t) for all states at all time points.
+
+    Parameters
+    ----------
+    glm_params :
+        GLM coefficients and intercepts for each state.
+    glm_scale :
+        Scale parameters (e.g., variance for Gaussian) in log-space.
+    X :
+        Design matrix, shape ``(n_time_bins, n_features)``.
+    y :
+        Observations, shape ``(n_time_bins,)`` or ``(n_time_bins, n_neurons)``.
+    inverse_link_function :
+        Function mapping linear predictors to mean parameters (e.g., exp for Poisson).
+    log_likelihood_func :
+        Function computing log p(y | rate, scale) for the observation model.
+
+    Returns
+    -------
+    log_conditionals :
+        Log-likelihood of observations given each state, shape ``(n_time_bins, n_states)``.
+        Entry ``[t, k]`` is log p(y_t | z_t=k).
+    """
+    # Predict rate
+    predicted_rate_given_state = compute_rate_per_state(
+        X, glm_params, inverse_link_function
+    )
+
+    # Compute likelihood given the fixed weights
+    # Data likelihood p(y|z) from emissions model
+    # NOTE:
+    # For N neurons and S samples, we want the total likelihood
+    # across neurons for each sample and latent state.
+
+    # Example helper:
+    # def combined_likelihood(log_likelihood_func, y, rate):
+    #     # log_likelihood_func takes (y, rate) and returns log-likelihood per neuron:
+    #     #   y:    shape (S, N)
+    #     #   rate: shape (S, N, K)  # K = number of latent states
+    #
+    #     assert y.ndim == 2      # (samples, neurons)
+    #     assert rate.ndim == 3   # (samples, neurons, states)
+    #
+    #     # vmap over the state axis: apply log_likelihood_func for each state
+    #     # Result: shape (S, N, K)
+    #     log_like = jax.vmap(log_likelihood_func, in_axes=(None, 2), out_axes=2)(y, rate)
+    #
+    #     # Combine neurons assuming conditional independence:
+    #     # sum log-likelihoods over neurons (axis=1), then exponentiate for stability
+    #     # Final shape: (S, K)
+    #     return jnp.exp(jnp.sum(log_like, axis=1))
+    #
+    # Here, log_likelihood_func is the ``log_likelihood`` method from
+    # nemos.observation_models.Observations with ``aggregate_sample_scores = lambda x:x``
+
+    log_conditionals = log_likelihood_func(
+        y, predicted_rate_given_state, jnp.exp(glm_scale.log_scale)
+    )
+    return log_conditionals
+
+
+def _forward_pass(
     log_initial_prob: Array,
     log_transition_prob: Array,
     log_conditional_prob: Array,
@@ -191,7 +265,86 @@ def forward_pass(
     return log_alphas, log_normalizers
 
 
-def backward_pass(
+@partial(jax.jit, static_argnames=["inverse_link_function", "log_likelihood_func"])
+def forward_pass(
+    params: GLMHMMParams,
+    X: Array,
+    y: Array,
+    inverse_link_function: Callable[[Array], Array],
+    log_likelihood_func: Callable[[Array, Array, Array], Array],
+    is_new_session: Array | None = None,
+) -> jnp.ndarray:
+    """
+    Compute filtering probabilities (forward messages) for a GLM-HMM.
+
+    Performs the forward pass of the forward-backward algorithm, computing the
+    filtered state probabilities p(z_t | y_1:t) at each time point. These represent
+    the probability distribution over states conditioned on observations up to time t.
+
+    This is the public API for computing forward messages, useful for:
+    - Online/causal state estimation (filtering)
+    - Computing filter_proba in the GLM-HMM class
+    - One-step-ahead prediction
+
+    Parameters
+    ----------
+    params :
+        Complete GLM-HMM parameters including GLM coefficients/intercepts,
+        scale parameters, and HMM initial/transition probabilities.
+    X :
+        Design matrix, shape ``(n_time_bins, n_features)``.
+    y :
+        Observations, shape ``(n_time_bins,)`` or ``(n_time_bins, n_neurons)``.
+    inverse_link_function :
+        Function mapping linear predictors to mean parameters.
+    log_likelihood_func :
+        Function computing observation log-likelihoods.
+    is_new_session :
+        Boolean array of shape ``(n_time_bins,)`` marking session starts.
+        If None, treats all data as a single continuous session.
+
+    Returns
+    -------
+    log_alphas :
+        Normalized log forward messages, shape ``(n_time_bins, n_states)``.
+        Entry ``[t, k]`` is the log filtered probability log p(z_t=k | y_1:t).
+        Each row is normalized: ``exp(log_alphas[t]).sum() == 1``.
+
+    See Also
+    --------
+    forward_backward : Computes both forward and backward messages for smoothing.
+    _forward_pass : Internal implementation of the forward recursion.
+
+    Notes
+    -----
+    - Forward messages provide causal state estimates (no future information)
+    - Smoothing (forward + backward) provides better estimates using all data
+    - Log-space computation ensures numerical stability
+    - Session boundaries reset the recursion using initial state distribution
+
+    """
+    # unpack parameters
+    glm_params = params.glm_params
+    glm_scale = params.glm_scale
+    log_initial_prob = params.hmm_params.log_initial_prob
+    log_transition_prob = params.hmm_params.log_transition_prob
+
+    # Initialize variables
+    is_new_session = initialize_new_session(y.shape[0], is_new_session)
+
+    # Compute log-likelihoods
+    log_conditionals = _compute_log_likelihood(
+        glm_params, glm_scale, X, y, inverse_link_function, log_likelihood_func
+    )
+
+    # Compute forward pass
+    log_alphas, _ = _forward_pass(
+        log_initial_prob, log_transition_prob, log_conditionals, is_new_session
+    )  # these are equivalent to the forward pass with python loop
+    return log_alphas
+
+
+def _backward_pass(
     log_transition_prob: Array,
     log_conditional_prob: Array,
     log_normalizers: Array,
@@ -370,48 +523,19 @@ def forward_backward(
     # Initialize variables
     n_time_bins = y.shape[0]
     is_new_session = initialize_new_session(y.shape[0], is_new_session)
-    predicted_rate_given_state = compute_rate_per_state(
-        X, glm_params, inverse_link_function
-    )
 
-    # Compute likelihood given the fixed weights
-    # Data likelihood p(y|z) from emissions model
-    # NOTE:
-    # For N neurons and S samples, we want the total likelihood
-    # across neurons for each sample and latent state.
-
-    # Example helper:
-    # def combined_likelihood(log_likelihood_func, y, rate):
-    #     # log_likelihood_func takes (y, rate) and returns log-likelihood per neuron:
-    #     #   y:    shape (S, N)
-    #     #   rate: shape (S, N, K)  # K = number of latent states
-    #
-    #     assert y.ndim == 2      # (samples, neurons)
-    #     assert rate.ndim == 3   # (samples, neurons, states)
-    #
-    #     # vmap over the state axis: apply log_likelihood_func for each state
-    #     # Result: shape (S, N, K)
-    #     log_like = jax.vmap(log_likelihood_func, in_axes=(None, 2), out_axes=2)(y, rate)
-    #
-    #     # Combine neurons assuming conditional independence:
-    #     # sum log-likelihoods over neurons (axis=1), then exponentiate for stability
-    #     # Final shape: (S, K)
-    #     return jnp.exp(jnp.sum(log_like, axis=1))
-    #
-    # Here, log_likelihood_func is the ``log_likelihood`` method from
-    # nemos.observation_models.Observations with ``aggregate_sample_scores = lambda x:x``
-
-    log_conditionals = log_likelihood_func(
-        y, predicted_rate_given_state, jnp.exp(glm_scale.log_scale)
+    # Compute log-likelihoods
+    log_conditionals = _compute_log_likelihood(
+        glm_params, glm_scale, X, y, inverse_link_function, log_likelihood_func
     )
 
     # Compute forward pass
-    log_alphas, log_normalization = forward_pass(
+    log_alphas, log_normalization = _forward_pass(
         log_initial_prob, log_transition_prob, log_conditionals, is_new_session
     )  # these are equivalent to the forward pass with python loop
 
     # Compute backward pass
-    log_betas = backward_pass(
+    log_betas = _backward_pass(
         log_transition_prob, log_conditionals, log_normalization, is_new_session
     )
 
@@ -615,7 +739,7 @@ def _em_step(
 
     params, previous_state = carry
 
-    (log_posteriors, log_joint_posterior, _, new_log_like, _, _) = forward_backward(
+    log_posteriors, log_joint_posterior, _, new_log_like, _, _ = forward_backward(
         params,
         X,
         y,
