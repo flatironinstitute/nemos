@@ -739,3 +739,40 @@ class TestSolverStochasticRun:
         init_params = jnp.zeros(3)
         with pytest.raises(ValueError, match="Turn off linesearch"):
             solver.stochastic_run(init_params, loader, num_epochs=10)
+
+
+@pytest.mark.requires_x64
+def test_svrg_compute_full_gradient_streaming():
+    np.random.seed(123)
+
+    # setting N // batch_size = 0 to have a nice scaling for sum-style losses
+    N = 1000
+    batch_size = 100
+
+    X = np.random.randn(N, 3)
+    y = X @ np.array([1.0, 2.0, 3.0]) + np.random.randn(N) * 0.1
+    loader = ArrayDataLoader(X, y, batch_size=batch_size, shuffle=True)
+    params = np.random.randn(3)
+
+    def loss_mean(params, X, y):
+        pred = X @ params
+        return jnp.mean((pred - y) ** 2)
+
+    def loss_sum(params, X, y):
+        pred = X @ params
+        return jnp.sum((pred - y) ** 2)
+
+    full_grad_mean = jax.grad(loss_mean)(params, X, y)
+    streaming_grad_mean = solvers.SVRG(loss_mean)._compute_full_gradient_streaming(
+        params, loader.__iter__
+    )
+    np.testing.assert_array_almost_equal(full_grad_mean, streaming_grad_mean)
+
+    # for sum-style losses the gradients for each batch are averaged in the streaming method
+    # but added in the jax.grad
+    full_grad_sum = jax.grad(loss_sum)(params, X, y)
+    streaming_grad_sum = solvers.SVRG(loss_sum)._compute_full_gradient_streaming(
+        params, loader.__iter__
+    )
+    n_batches = N / batch_size
+    np.testing.assert_array_almost_equal(full_grad_sum, n_batches * streaming_grad_sum)
