@@ -13,10 +13,12 @@ from itertools import chain
 from typing import TYPE_CHECKING, Any, Generator, Literal, Optional, Tuple, Union
 
 import jax
+import jax.numpy as jnp
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from ..convolve import create_convolutional_predictor
+from ..type_casting import support_pynapple
 from ..utils import _get_terminal_size, format_repr
 from ._composition_utils import (
     _composite_basis_setter_logic,
@@ -141,7 +143,12 @@ class BasisMixin:
         self._parent: Optional["BasisMixin"] = None
 
     def __repr__(self):
-        return format_repr(self)
+        bounds = getattr(self, "bounds", None)
+        if bounds is None:
+            kwargs = dict(exclude_keys=["fill_value"])
+        else:
+            kwargs = {}
+        return format_repr(self, **kwargs)
 
     def __getitem__(self, index: str) -> Basis:
         if isinstance(index, (int, slice)):
@@ -498,8 +505,15 @@ class AtomicBasisMixin(BasisMixin):
 class EvalBasisMixin:
     """Mixin class for evaluational basis."""
 
-    def __init__(self, bounds: Optional[Tuple[float, float]] = None):
+    # Whether to fill out-of-bounds samples with fill_value.
+    # Set to False for bases defined over the entire real line (e.g., Fourier).
+    _apply_bounds_fill = True
+
+    def __init__(
+        self, bounds: Optional[Tuple[float, float]] = None, fill_value: float = jnp.nan
+    ):
         self.bounds = bounds
+        self.fill_value = fill_value
 
     def _compute_features(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor):
         """Evaluate basis at sample points.
@@ -527,7 +541,30 @@ class EvalBasisMixin:
 
         """
         out = self.evaluate(*(np.reshape(x, (x.shape[0], -1)) for x in xi))
+        if self._apply_bounds_fill and self.bounds is not None:
+            out = self._apply_fill_value(*xi, out=out)
         return np.reshape(out, (out.shape[0], -1))
+
+    @support_pynapple(conv_type="jax")
+    def _apply_fill_value(self, *xi: ArrayLike, out: NDArray) -> jax.Array:
+        """Apply fill value to out-of-bounds samples."""
+        # Use jnp.where for JAX compatibility
+        to_fill = jnp.any(
+            jnp.stack(
+                [
+                    jnp.any(
+                        (jnp.reshape(x, (x.shape[0], -1)) < self.bounds[0])
+                        | (jnp.reshape(x, (x.shape[0], -1)) > self.bounds[1]),
+                        axis=1,
+                    )
+                    for x in xi
+                ]
+            ),
+            axis=0,
+        )
+        # Reshape to_fill to broadcast correctly: (n_samples,) -> (n_samples, 1, 1, ...)
+        to_fill_broadcast = to_fill.reshape(to_fill.shape[0], *([1] * (out.ndim - 1)))
+        return jnp.where(to_fill_broadcast, self.fill_value, out)
 
     def setup_basis(self, *xi: NDArray) -> Basis:
         """

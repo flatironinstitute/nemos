@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 
 from ..type_casting import is_at_least_1d_numpy_array_like, support_pynapple
 from ..typing import FeatureMatrix
+from ..utils import format_repr
 from ._basis import Basis, check_transform_input, min_max_rescale_samples
 from ._basis_mixin import AtomicBasisMixin
 
@@ -712,3 +713,6 @@ class FourierBasis(AtomicBasisMixin, Basis):
                 return super().set_params(**params)
         else:
             return super().set_params(**params)
+
+    def __repr__(self):
+        return format_repr(self, exclude_keys=["fill_value"])

@@ -151,12 +151,16 @@ def custom_basis(n_basis_funcs=5, label=None, **kwargs):
     ndim_input = kwargs.get("ndim_input", 1)
     out_shape = kwargs.get("output_shape", None)
     pynapple_support = kwargs.get("pynapple_support", True)
+    bounds = kwargs.get("bounds", None)
+    fill_value = kwargs.get("fill_value", float("nan"))
     return CustomBasis(
         funcs,
         label=label,
         ndim_input=ndim_input,
         output_shape=out_shape,
         pynapple_support=pynapple_support,
+        bounds=bounds,
+        fill_value=fill_value,
     )
 
 
