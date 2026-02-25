@@ -1,11 +1,15 @@
 """Zero basis used for variable selection."""
 
-from typing import Optional, Tuple
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Optional, Tuple
 
 import numpy as np
 from numpy._typing import ArrayLike
 from numpy.typing import NDArray
-from pynapple import Tsd, TsdFrame, TsdTensor
+
+if TYPE_CHECKING:
+    from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix

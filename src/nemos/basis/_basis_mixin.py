@@ -10,25 +10,20 @@ from collections import OrderedDict
 from contextlib import contextmanager
 from functools import wraps
 from itertools import chain
-from numbers import Number
-from ..type_casting import is_numpy_array_like
 from typing import (
     TYPE_CHECKING,
     Any,
     Generator,
+    List,
     Literal,
     Optional,
     Tuple,
-    Union,
-    List,
-    Sequence,
 )
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
-from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..convolve import create_convolutional_predictor
 from ..type_casting import support_pynapple
@@ -47,6 +42,8 @@ from ._composition_utils import (
 from ._transformer_basis import TransformerBasis
 
 if TYPE_CHECKING:
+    from pynapple import Tsd, TsdFrame, TsdTensor
+
     from ._basis import Basis
 
 
@@ -600,7 +597,7 @@ class EvalBasisMixin:
         self.set_input_shape(*xi)
         return self
 
-    def _set_input_independent_states(self) -> "EvalBasisMixin":
+    def _set_input_independent_states(self) -> EvalBasisMixin:
         """
         Compute all the basis states that do not depend on the input.
 
@@ -764,7 +761,7 @@ class ConvBasisMixin:
         """
         return self._set_kernel()
 
-    def _set_kernel(self) -> "ConvBasisMixin":
+    def _set_kernel(self) -> ConvBasisMixin:
         """
         Prepare or compute the convolutional kernel for the basis functions.
 

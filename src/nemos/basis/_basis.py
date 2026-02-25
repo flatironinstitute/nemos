@@ -7,12 +7,14 @@ import math
 import warnings
 from copy import deepcopy
 from functools import wraps
-from typing import Callable, Generator, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Callable, Generator, List, Optional, Tuple, Union
 
 import jax.numpy as jnp
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
-from pynapple import Tsd, TsdFrame, TsdTensor
+
+if TYPE_CHECKING:
+    from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..base_class import Base
 from ..type_casting import support_pynapple

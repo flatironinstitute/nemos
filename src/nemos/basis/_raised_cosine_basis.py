@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import abc
-from typing import Optional, Tuple
+from typing import TYPE_CHECKING, Optional, Tuple
 
 import jax.numpy as jnp
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
-from pynapple import Tsd, TsdFrame, TsdTensor
+
+if TYPE_CHECKING:
+    from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix

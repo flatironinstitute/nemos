@@ -7,9 +7,12 @@ SHA256 hash verification. It also provides helper functions to
 calculate hashes for local files and manage file paths.
 """
 
+import hashlib
 import os
 import pathlib
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
+
+import lazy_loader as lazy
 
 try:
     import pooch
@@ -23,17 +26,13 @@ try:
 except ImportError:
     tqdm = None
 
-try:
-    import dandi
-    import fsspec
-    import h5py
-    from dandi.dandiapi import DandiAPIClient
-    from pynwb import NWBHDF5IO
-except ImportError:
-    dandi = None
-    NWBHDF5IO = None
+# Lazy load nwb dependencies (only needed for download_dandi_data)
+fsspec = lazy.load("fsspec", error_on_import=False)
+h5py = lazy.load("h5py", error_on_import=False)
+pynwb = lazy.load("pynwb", error_on_import=False)
 
-import hashlib
+if TYPE_CHECKING:
+    from pynwb import NWBHDF5IO
 
 # Registry of dataset filenames and their corresponding SHA256 hashes.
 REGISTRY_DATA = {
@@ -109,13 +108,27 @@ def _create_retriever(path: Optional[pathlib.Path] = None) -> Pooch:
 
 
 def _check_dependencies(needs_dandi: bool = False):
-    """Check optional dependencies."""
-    if needs_dandi and dandi is None:
-        raise ImportError(
-            "Missing optional dependency 'dandi'."
-            " Please use pip or "
-            "conda to install 'dandi'."
-        )
+    """Check optional dependencies.
+
+    Returns
+    -------
+    dandiapi : module or None
+        The dandi.dandiapi module if needs_dandi is True, None otherwise.
+    """
+    dandiapi = None
+    if needs_dandi:
+        # Import dandi at runtime rather than using lazy.load because:
+        # lazy.load("dandi.dandiapi") triggers a warning about subpackages
+        # causing eager loading of the parent package. Runtime import here
+        # achieves the same deferred loading without the warning.
+        try:
+            from dandi import dandiapi
+        except ImportError:
+            raise ImportError(
+                "Missing optional dependency 'dandi'."
+                " Please use pip or "
+                "conda to install 'dandi'."
+            )
 
     if pooch is None and tqdm is None:
         raise ImportError(
@@ -135,6 +148,8 @@ def _check_dependencies(needs_dandi: bool = False):
             " Please use pip or "
             "conda to install 'tqdm'."
         )
+
+    return dandiapi
 
 
 def fetch_data(
@@ -173,7 +188,7 @@ def fetch_data(
 
 def download_dandi_data(
     dandiset_id: str, file_path: str, force_download: bool = False
-) -> NWBHDF5IO:
+) -> "NWBHDF5IO":
     """Download a dataset from the [DANDI Archive](https://dandiarchive.org/).
 
     Parameters
@@ -210,7 +225,7 @@ def download_dandi_data(
     ┕━━━━━━━━━━━━━━━━━━━━━┷━━━━━━━━━━┙
 
     """
-    _check_dependencies(needs_dandi=True)
+    dandiapi = _check_dependencies(needs_dandi=True)
 
     # Set up cache directory
     if _NEMOS_ENV in os.environ:
@@ -230,11 +245,11 @@ def download_dandi_data(
     if cached_file_path.exists() and not force_download:
         # File exists, open it directly
         file = h5py.File(cached_file_path, "r")
-        io = NWBHDF5IO(file=file, load_namespaces=True)
+        io = pynwb.NWBHDF5IO(file=file, load_namespaces=True)
         return io
 
     # File doesn't exist, download it
-    with DandiAPIClient() as client:
+    with dandiapi.DandiAPIClient() as client:
         asset = client.get_dandiset(dandiset_id, "draft").get_asset_by_path(file_path)
         s3_url = asset.get_content_url(follow_redirects=1, strip_query=True)
 
@@ -280,6 +295,6 @@ def download_dandi_data(
 
     # Open the downloaded file
     file = h5py.File(cached_file_path, "r")
-    io = NWBHDF5IO(file=file, load_namespaces=True)
+    io = pynwb.NWBHDF5IO(file=file, load_namespaces=True)
 
     return io

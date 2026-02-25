@@ -3,7 +3,7 @@
 # required to get ArrayLike to render correctly
 from __future__ import annotations
 
-from typing import List, Literal, Optional, Sequence, Tuple
+from typing import List, Literal, Optional, Tuple
 
 import jax
 from numpy.typing import ArrayLike, NDArray

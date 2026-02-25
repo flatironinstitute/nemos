@@ -1,7 +1,6 @@
 import warnings
 from contextlib import nullcontext as does_not_raise
 
-import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -10,11 +9,11 @@ from nemos.basis.basis import BSplineConv, BSplineEval, RaisedCosineLinearEval
 from nemos.identifiability_constraints import (
     _WARN_FLOAT32_MESSAGE,
     _find_drop_column,
-    _warn_if_not_float64,
     add_constant,
     apply_identifiability_constraints,
     apply_identifiability_constraints_by_basis_component,
 )
+from nemos.validation import _warn_if_not_float64
 
 
 @pytest.mark.requires_x64
@@ -113,9 +112,7 @@ def test_apply_identifiability_constraints_by_basis_component(
 ):
     """Test constraints applied by basis component."""
     np.random.seed(42)
-    x = basis.compute_features(
-        *([np.random.randn(*input_shape)] * basis._n_inputs)
-    )
+    x = basis.compute_features(*([np.random.randn(*input_shape)] * basis._n_inputs))
     constrained_x, kept_columns = apply_identifiability_constraints_by_basis_component(
         basis, x
     )

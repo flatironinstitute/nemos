@@ -1,14 +1,18 @@
 """Solvers wrapping Optax solvers with Optimistix for use with NeMoS."""
 
+from __future__ import annotations
+
 import abc
 import inspect
-from typing import Any, Callable, ClassVar
+from typing import TYPE_CHECKING, Any, Callable, ClassVar
 
 import optax
 import optimistix as optx
 
-from ..regularizer import Regularizer
 from ..typing import Params, Pytree
+
+if TYPE_CHECKING:
+    from ..regularizer import Regularizer
 from ._optimistix_adapter import (
     DEFAULT_ATOL,
     DEFAULT_RTOL,

@@ -2381,9 +2381,9 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             corr[idx] = (lin_ev.flatten() @ log_ev.flatten()) / (
                 np.linalg.norm(lin_ev.flatten()) * np.linalg.norm(log_ev.flatten())
             )
-        assert np.all(np.diff(corr) < 0), (
-            "As time scales increases, deviation from linearity should increase!"
-        )
+        assert np.all(
+            np.diff(corr) < 0
+        ), "As time scales increases, deviation from linearity should increase!"
 
     @pytest.mark.parametrize(
         "time_scaling, expectation",
@@ -7967,23 +7967,26 @@ def test_composite_basis_repr_wrapping():
         assert "    ...\n" in out
 
 
-def test_all_public_importable_bases_equal():
-    import nemos.basis
+def test_basis_public_api_matches_subclasses():
+    import nemos as nmo
 
-    # this is the list of publicly available bases
-    public_bases = set(dir(nemos.basis))
-    # these are all the bases that are imported in the init file
-    # Get all classes that are explicitly defined or imported into nemos.basis
-    imported_bases = {
+    # Public contract of the module
+    public = set(nmo.basis.__all__)
+
+    # All Basis subclasses exposed through the namespace
+    basis_subclasses = {
         name
-        for name, obj in inspect.getmembers(nemos.basis, inspect.isclass)
-        if issubclass(obj, nemos.basis._basis.Basis)
+        for name, obj in inspect.getmembers(nmo.basis, inspect.isclass)
+        if issubclass(obj, nmo.basis._basis.Basis) and obj is not nmo.basis._basis.Basis
     }
 
-    if public_bases.difference(imported_bases) != {"CustomBasis"}:
-        raise ValueError(
-            "nemos/basis/__init__.py imported basis objects does not match"
-            " nemos/basis/_composition_utils.py's __PUBLIC_BASES__ list:\n"
-            f"imported but not public: {imported_bases - public_bases}\n",
-            f"public but not imported: {public_bases - imported_bases}",
-        )
+    # Known public names that are not direct subclasses
+    exceptions = {"CustomBasis", "TransformerBasis"}
+
+    expected_public = basis_subclasses.union(exceptions)
+
+    assert public == expected_public, (
+        f"\nPublic API mismatch in nemos.basis\n"
+        f"Missing from __all__: {expected_public - public}\n"
+        f"Unexpected in __all__: {public - expected_public}"
+    )

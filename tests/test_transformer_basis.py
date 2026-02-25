@@ -68,9 +68,7 @@ def test_transformer_has_the_same_public_attributes_as_basis(
     public_attrs_basis = {attr for attr in dir(bas) if not attr.startswith("_")}
     public_attrs_transformerbasis = {
         attr
-        for attr in dir(
-            bas.set_input_shape(*([1] * bas._n_inputs)).to_transformer()
-        )
+        for attr in dir(bas.set_input_shape(*([1] * bas._n_inputs)).to_transformer())
         if not attr.startswith("_")
     }
 
@@ -164,9 +162,7 @@ def test_basis_to_transformer_makes_a_copy(
     bas_a = CombinedBasis().instantiate_basis(
         5, basis_cls, basis_class_specific_params, window_size=10, ndim=ndim
     )
-    trans_bas_a = bas_a.set_input_shape(
-        *([1] * bas_a._n_inputs)
-    ).to_transformer()
+    trans_bas_a = bas_a.set_input_shape(*([1] * bas_a._n_inputs)).to_transformer()
 
     # changing an attribute in bas should not change trans_bas
     if basis_cls in [basis.AdditiveBasis, basis.MultiplicativeBasis]:
@@ -197,9 +193,7 @@ def test_basis_to_transformer_makes_a_copy(
         bas_b = CombinedBasis().instantiate_basis(
             5, basis_cls, basis_class_specific_params, window_size=10
         )
-        trans_bas_b = bas_b.set_input_shape(
-            *([1] * bas_b._n_inputs)
-        ).to_transformer()
+        trans_bas_b = bas_b.set_input_shape(*([1] * bas_b._n_inputs)).to_transformer()
         trans_bas_b.frequencies = np.arange(1, 12)
         assert len(trans_bas_b.frequencies) == len(bas_b.frequencies)
         assert all(
@@ -216,9 +210,7 @@ def test_basis_to_transformer_makes_a_copy(
         bas_b = CombinedBasis().instantiate_basis(
             5, basis_cls, basis_class_specific_params, window_size=10
         )
-        trans_bas_b = bas_b.set_input_shape(
-            *([1] * bas_b._n_inputs)
-        ).to_transformer()
+        trans_bas_b = bas_b.set_input_shape(*([1] * bas_b._n_inputs)).to_transformer()
         trans_bas_b.n_basis_funcs = 100
         assert bas_b.n_basis_funcs == 5
 
@@ -234,9 +226,7 @@ def test_transformerbasis_getattr(
     bas = CombinedBasis().instantiate_basis(
         n_basis_funcs, basis_cls, basis_class_specific_params, window_size=30
     )
-    trans_basis = basis.TransformerBasis(
-        bas.set_input_shape(*([1] * bas._n_inputs))
-    )
+    trans_basis = basis.TransformerBasis(bas.set_input_shape(*([1] * bas._n_inputs)))
     if basis_cls in [basis.AdditiveBasis, basis.MultiplicativeBasis]:
         for basi in [getattr(trans_basis.basis, attr) for attr in ("basis1", "basis2")]:
             assert basi.n_basis_funcs == bas.basis1.n_basis_funcs
@@ -259,9 +249,7 @@ def test_transformerbasis_set_params(
     bas = CombinedBasis().instantiate_basis(
         n_basis_funcs_init, basis_cls, basis_class_specific_params, window_size=10
     )
-    trans_basis = basis.TransformerBasis(
-        bas.set_input_shape(*([1] * bas._n_inputs))
-    )
+    trans_basis = basis.TransformerBasis(bas.set_input_shape(*([1] * bas._n_inputs)))
     if isinstance(bas, HistoryConv):
         trans_basis.set_params(window_size=n_basis_funcs_new)
         assert trans_basis.window_size == n_basis_funcs_new
@@ -290,9 +278,7 @@ def test_transformerbasis_setattr_basis(basis_cls, basis_class_specific_params):
     bas = CombinedBasis().instantiate_basis(
         10, basis_cls, basis_class_specific_params, window_size=30
     )
-    trans_bas = basis.TransformerBasis(
-        bas.set_input_shape(*([1] * bas._n_inputs))
-    )
+    trans_bas = basis.TransformerBasis(bas.set_input_shape(*([1] * bas._n_inputs)))
 
     bas = CombinedBasis().instantiate_basis(
         20, basis_cls, basis_class_specific_params, window_size=30
@@ -320,9 +306,7 @@ def test_transformerbasis_setattr_basis_attribute(
     bas = CombinedBasis().instantiate_basis(
         10, basis_cls, basis_class_specific_params, window_size=10
     )
-    trans_bas = basis.TransformerBasis(
-        bas.set_input_shape(*([1] * bas._n_inputs))
-    )
+    trans_bas = basis.TransformerBasis(bas.set_input_shape(*([1] * bas._n_inputs)))
     if basis_cls is nmo.basis.HistoryConv:
         trans_bas.window_size = 20
         assert trans_bas.n_basis_funcs == 20
@@ -392,9 +376,7 @@ def test_transformerbasis_setattr_illegal_attribute(
     bas = CombinedBasis().instantiate_basis(
         10, basis_cls, basis_class_specific_params, window_size=10
     )
-    trans_bas = basis.TransformerBasis(
-        bas.set_input_shape(*([1] * bas._n_inputs))
-    )
+    trans_bas = basis.TransformerBasis(bas.set_input_shape(*([1] * bas._n_inputs)))
 
     with pytest.raises(
         ValueError,
@@ -431,10 +413,7 @@ def test_transformerbasis_addition(basis_cls, basis_class_specific_params):
         trans_bas_sum.n_basis_funcs
         == trans_bas_a.n_basis_funcs + trans_bas_b.n_basis_funcs
     )
-    assert (
-        trans_bas_sum._n_inputs
-        == trans_bas_a._n_inputs + trans_bas_b._n_inputs
-    )
+    assert trans_bas_sum._n_inputs == trans_bas_a._n_inputs + trans_bas_b._n_inputs
     if basis_cls not in [basis.AdditiveBasis, basis.MultiplicativeBasis]:
         assert trans_bas_sum.basis1.n_basis_funcs == n_basis_funcs_a
         assert trans_bas_sum.basis2.n_basis_funcs == n_basis_funcs_b
@@ -451,15 +430,11 @@ def test_transformerbasis_multiplication(basis_cls, basis_class_specific_params)
     bas1 = CombinedBasis().instantiate_basis(
         n_basis_funcs_a, basis_cls, basis_class_specific_params, window_size=10
     )
-    trans_bas_a = basis.TransformerBasis(
-        bas1.set_input_shape(*([1] * bas1._n_inputs))
-    )
+    trans_bas_a = basis.TransformerBasis(bas1.set_input_shape(*([1] * bas1._n_inputs)))
     bas2 = CombinedBasis().instantiate_basis(
         n_basis_funcs_b, basis_cls, basis_class_specific_params, window_size=10
     )
-    trans_bas_b = basis.TransformerBasis(
-        bas2.set_input_shape(*([1] * bas2._n_inputs))
-    )
+    trans_bas_b = basis.TransformerBasis(bas2.set_input_shape(*([1] * bas2._n_inputs)))
     trans_bas_prod = trans_bas_a * trans_bas_b
     assert isinstance(trans_bas_prod, basis.TransformerBasis)
     assert isinstance(trans_bas_prod.basis, basis.MultiplicativeBasis)
@@ -467,10 +442,7 @@ def test_transformerbasis_multiplication(basis_cls, basis_class_specific_params)
         trans_bas_prod.n_basis_funcs
         == trans_bas_a.n_basis_funcs * trans_bas_b.n_basis_funcs
     )
-    assert (
-        trans_bas_prod._n_inputs
-        == trans_bas_a._n_inputs + trans_bas_b._n_inputs
-    )
+    assert trans_bas_prod._n_inputs == trans_bas_a._n_inputs + trans_bas_b._n_inputs
     if basis_cls not in [basis.AdditiveBasis, basis.MultiplicativeBasis]:
         assert trans_bas_prod.basis1.n_basis_funcs == bas1.n_basis_funcs
         assert trans_bas_prod.basis2.n_basis_funcs == bas2.n_basis_funcs
@@ -495,9 +467,7 @@ def test_transformerbasis_exponentiation(
     bas = CombinedBasis().instantiate_basis(
         5, basis_cls, basis_class_specific_params, window_size=10
     )
-    trans_bas = basis.TransformerBasis(
-        bas.set_input_shape(*([1] * bas._n_inputs))
-    )
+    trans_bas = basis.TransformerBasis(bas.set_input_shape(*([1] * bas._n_inputs)))
 
     if not isinstance(exponent, int):
         with pytest.raises(error_type, match=error_message):
@@ -514,9 +484,7 @@ def test_transformerbasis_dir(basis_cls, basis_class_specific_params, ndim):
     bas = CombinedBasis().instantiate_basis(
         5, basis_cls, basis_class_specific_params, window_size=10, ndim=ndim
     )
-    trans_bas = basis.TransformerBasis(
-        bas.set_input_shape(*([1] * bas._n_inputs))
-    )
+    trans_bas = basis.TransformerBasis(bas.set_input_shape(*([1] * bas._n_inputs)))
     for attr_name in (
         "fit",
         "transform",
@@ -569,9 +537,7 @@ def test_transformerbasis_pickle(
         n_basis_funcs, basis_cls, basis_class_specific_params, window_size=10, ndim=ndim
     )
     # the test that tries cross-validation with n_jobs = 2 already should test this
-    trans_bas = basis.TransformerBasis(
-        bas.set_input_shape(*([1] * bas._n_inputs))
-    )
+    trans_bas = basis.TransformerBasis(bas.set_input_shape(*([1] * bas._n_inputs)))
     filepath = tmpdir / "transformerbasis.pickle"
     with open(filepath, "wb") as f:
         pickle.dump(trans_bas, f)
@@ -612,9 +578,7 @@ def test_to_transformer_and_set_input(
     trans = bas.to_transformer()
     with expectation:
         if set_input:
-            X = np.concatenate(
-                [inp.reshape(inp.shape[0], -1)] * bas._n_inputs, axis=1
-            )
+            X = np.concatenate([inp.reshape(inp.shape[0], -1)] * bas._n_inputs, axis=1)
         else:
             X = np.concatenate(
                 [inp.reshape(inp.shape[0], -1)[:, :1]] * bas._n_inputs,
@@ -642,12 +606,8 @@ def test_transformer_fit(
     bas = CombinedBasis().instantiate_basis(
         5, basis_cls, basis_class_specific_params, window_size=10, ndim=ndim
     )
-    transformer = bas.set_input_shape(
-        *([inp] * bas._n_inputs)
-    ).to_transformer()
-    X = np.concatenate(
-        [inp.reshape(inp.shape[0], -1)] * bas._n_inputs, axis=1
-    )
+    transformer = bas.set_input_shape(*([inp] * bas._n_inputs)).to_transformer()
+    X = np.concatenate([inp.reshape(inp.shape[0], -1)] * bas._n_inputs, axis=1)
     transformer.fit(X)
     if "Conv" in basis_cls.__name__:
         assert transformer.kernel_ is not None
@@ -695,9 +655,7 @@ def test_transformer_fit_input_shape_mismatch(
     bas = CombinedBasis().instantiate_basis(
         5, basis_cls, basis_class_specific_params, window_size=10
     )
-    transformer = bas.set_input_shape(
-        *([inp] * bas._n_inputs)
-    ).to_transformer()
+    transformer = bas.set_input_shape(*([inp] * bas._n_inputs)).to_transformer()
     X = np.random.randn(10, int(sum(bas._input_shape_product) + delta_input))
     with expectation:
         transformer.fit(X)
@@ -723,12 +681,8 @@ def test_transformer_transform(basis_cls, inp, basis_class_specific_params, ndim
         5, basis_cls, basis_class_specific_params, window_size=10, ndim=ndim
     )
     assert getattr(bas, "ndim", ndim) == ndim
-    transformer = bas.set_input_shape(
-        *([inp] * bas._n_inputs)
-    ).to_transformer()
-    X = np.concatenate(
-        [inp.reshape(inp.shape[0], -1)] * bas._n_inputs, axis=1
-    )
+    transformer = bas.set_input_shape(*([inp] * bas._n_inputs)).to_transformer()
+    X = np.concatenate([inp.reshape(inp.shape[0], -1)] * bas._n_inputs, axis=1)
     transformer.fit(X)
 
     out = transformer.transform(X)
@@ -755,12 +709,8 @@ def test_transformer_fit_transform(basis_cls, inp, basis_class_specific_params):
     bas = CombinedBasis().instantiate_basis(
         5, basis_cls, basis_class_specific_params, window_size=10
     )
-    transformer = bas.set_input_shape(
-        *([inp] * bas._n_inputs)
-    ).to_transformer()
-    X = np.concatenate(
-        [inp.reshape(inp.shape[0], -1)] * bas._n_inputs, axis=1
-    )
+    transformer = bas.set_input_shape(*([inp] * bas._n_inputs)).to_transformer()
+    X = np.concatenate([inp.reshape(inp.shape[0], -1)] * bas._n_inputs, axis=1)
 
     out = transformer.fit_transform(X)
     out2 = bas.compute_features(*([inp] * bas._n_inputs))
@@ -793,9 +743,7 @@ def test_transformer_fit_transform_input_shape_mismatch(
     bas = CombinedBasis().instantiate_basis(
         5, basis_cls, basis_class_specific_params, window_size=10
     )
-    transformer = bas.set_input_shape(
-        *([inp] * bas._n_inputs)
-    ).to_transformer()
+    transformer = bas.set_input_shape(*([inp] * bas._n_inputs)).to_transformer()
     X = np.random.randn(10, int(sum(bas._input_shape_product) + delta_input))
     with expectation:
         transformer.fit_transform(X)
@@ -820,12 +768,8 @@ def test_transformer_fit_transform_input_struct(
     bas = CombinedBasis().instantiate_basis(
         5, basis_cls, basis_class_specific_params, window_size=10
     )
-    transformer = bas.set_input_shape(
-        *([inp] * bas._n_inputs)
-    ).to_transformer()
-    X = np.concatenate(
-        [inp.reshape(inp.shape[0], -1)] * bas._n_inputs, axis=1
-    )
+    transformer = bas.set_input_shape(*([inp] * bas._n_inputs)).to_transformer()
+    X = np.concatenate([inp.reshape(inp.shape[0], -1)] * bas._n_inputs, axis=1)
     transformer.fit_transform(X)
 
     if "Conv" in basis_cls.__name__:
@@ -881,9 +825,7 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
         )
     else:
         bas = basis_with_add_kwargs(basis_kwargs={"add": 0})
-    transformer = bas.set_input_shape(
-        *([inp] * bas._n_inputs)
-    ).to_transformer()
+    transformer = bas.set_input_shape(*([inp] * bas._n_inputs)).to_transformer()
     # fit outside pipeline
     X = bas.compute_features(*([inp] * bas._n_inputs))
     log_mu = X.dot(0.005 * np.ones(X.shape[1]))
@@ -909,9 +851,7 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
             ),
         ]
     )
-    x = np.concatenate(
-        [inp.reshape(inp.shape[0], -1)] * bas._n_inputs, axis=1
-    )
+    x = np.concatenate([inp.reshape(inp.shape[0], -1)] * bas._n_inputs, axis=1)
     pipe.fit(x, y)
     np.testing.assert_allclose(pipe["glm"].coef_, model.coef_)
 
@@ -1109,9 +1049,7 @@ def test_check_input(inp, expectation, basis_cls, basis_class_specific_params, m
     if hasattr(bas, "_set_input_independent_states"):
         bas._set_input_independent_states()
     # set input shape
-    transformer = bas.to_transformer().set_input_shape(
-        *([3] * bas._n_inputs)
-    )
+    transformer = bas.to_transformer().set_input_shape(*([3] * bas._n_inputs))
     if isinstance(bas, (AdditiveBasis, MultiplicativeBasis)):
         if hasattr(inp, "ndim"):
             ndim = inp.ndim
@@ -1165,9 +1103,7 @@ def test_repr_out(basis_cls, basis_class_specific_params, expected_out):
         bas = CombinedBasis().instantiate_basis(
             5, basis_cls, basis_class_specific_params, window_size=10
         )
-        bas = bas.set_input_shape(
-            *([10] * bas._n_inputs)
-        ).to_transformer()
+        bas = bas.set_input_shape(*([10] * bas._n_inputs)).to_transformer()
         out = expected_out.get(basis_cls, "")
         if out == "":
             raise ValueError(f"Missing test case for {basis_cls}!")

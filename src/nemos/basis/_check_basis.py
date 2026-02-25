@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Tuple
 
 import jax.numpy as jnp
@@ -24,7 +26,7 @@ def _check_zero_samples(
         raise ValueError(err_message)
 
 
-def _check_input_dimensionality(bas: "BasisMixin | Basis", xi: Tuple) -> None:
+def _check_input_dimensionality(bas: BasisMixin | Basis, xi: Tuple) -> None:
     """
     Check that the number of inputs provided by the user matches the number of inputs required.
 
@@ -66,7 +68,7 @@ def _check_samples_consistency(*xi: NDArray) -> None:
 
 
 def _check_transform_input(
-    bas: "BasisMixin | Basis",
+    bas: BasisMixin | Basis,
     *xi: ArrayLike,
 ) -> Tuple[NDArray]:
     # check dimensionality

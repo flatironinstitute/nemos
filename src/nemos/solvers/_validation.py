@@ -5,8 +5,6 @@ from typing import Any, Type
 import jax.numpy as jnp
 import numpy as np
 
-from nemos.regularizer import Ridge
-
 from .._inspect_utils import get_params, implements_methods
 from ._abstract_solver import AbstractSolver, OptimizationInfo
 
@@ -136,6 +134,8 @@ def _validate_solver_class_on_ridge(
 
     if solver_kwargs is None:
         solver_kwargs = {}
+    from nemos.regularizer import Ridge
+
     regularizer = Ridge()
     regularizer_strength = 1e-2
     X, y, init_params, unregularized_loss = _tiny_ridge_regression_problem(has_aux)

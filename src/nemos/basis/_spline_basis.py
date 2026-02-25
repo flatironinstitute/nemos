@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import abc
 import copy
-from typing import Optional, Tuple
+from typing import TYPE_CHECKING, Optional, Tuple
 
 import jax.numpy as jnp
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
-from pynapple import Tsd, TsdFrame, TsdTensor
+
+if TYPE_CHECKING:
+    from pynapple import Tsd, TsdFrame, TsdTensor
 from scipy.interpolate import splev
 
 from ..type_casting import support_pynapple
@@ -650,9 +652,9 @@ def bspline(
     need_outer = any(sample_pts < knots[order - 1]) or any(
         sample_pts > knots[nk - order]
     )
-    assert (not need_outer) | outer_ok, (
-        'sample points must lie within the B-spline knots range unless "outer_ok==True".'
-    )
+    assert (
+        not need_outer
+    ) | outer_ok, 'sample points must lie within the B-spline knots range unless "outer_ok==True".'
 
     # select knots that are within the knots range (this takes care of eventual NaNs)
     in_sample = (sample_pts >= knots[0]) & (sample_pts <= knots[-1])
