@@ -43,6 +43,26 @@ The Developer Notes are divided into sections, each focusing on a different modu
 - **Should**: This denotes a suggestion. Reasons should be provided if a suggestion is not followed.
 - **May**: This denotes an option that, if implemented, could enhance the user/developer experience but can be overlooked if deemed unnecessary.
 
+## Development Tips
+
+### Debugging Lazy Imports
+
+NeMoS uses lazy loading ([SPEC-0001](https://scientific-python.org/specs/spec-0001/)) to reduce import time. This means import errors in submodules only surface when the submodule is first accessed, not at `import nemos`.
+
+To catch import errors early during development or testing, set the `EAGER_IMPORT` environment variable:
+
+```bash
+EAGER_IMPORT=1 python -c "import nemos"
+```
+
+or
+
+```bash
+EAGER_IMPORT=1 pytest tests/
+```
+
+This disables lazy loading, causing all submodules to load immediately and any import errors to surface right away.
+
 ## Interact with us
 
 If you're considering contributing to the library, first of all, welcome aboard! As a first step, we recommend that you read the [`CONTRIBUTING.md`](https://github.com/flatironinstitute/nemos/blob/main/CONTRIBUTING.md) guidelines. These will help you understand how to interact with other contributors and how to submit your changes.

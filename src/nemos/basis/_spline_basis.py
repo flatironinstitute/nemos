@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import abc
 import copy
-from typing import Optional, Tuple
+from typing import TYPE_CHECKING, Optional, Tuple
 
 import jax.numpy as jnp
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
-from pynapple import Tsd, TsdFrame, TsdTensor
+
+if TYPE_CHECKING:
+    from pynapple import Tsd, TsdFrame, TsdTensor
 from scipy.interpolate import splev
 
 from ..type_casting import support_pynapple

@@ -26,12 +26,13 @@ from numpy.typing import NDArray
 from . import solvers, tree_utils, utils
 from ._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from .base_class import Base
+from .base_validator import RegressorValidator
 from .glm.params import GLMParams
+from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
 from .type_casting import cast_to_jax
 from .typing import (
     DESIGN_INPUT_TYPE,
-    FeaturePytree,
     ModelParamsT,
     SolverInit,
     SolverRun,
@@ -41,7 +42,6 @@ from .typing import (
     UserProvidedParamsT,
 )
 from .utils import _flatten_dict, _get_name, _unpack_params, get_env_metadata
-from .validation import RegressorValidator
 
 _SOLVER_ARGS_CACHE = {}
 
