@@ -92,6 +92,8 @@ class ProxSVRG:
     ----------
     fun : Callable
         Smooth function of the form ``fun(x, *args, **kwargs)``.
+        Note that this loss function has to be an average of losses across data points,
+        i.e. f(x) = 1/N * sum(f(x_i)).
     prox : Callable
         Proximal operator associated with the function ``non_smooth``.
         It should be of the form ``prox(params, hyperparams_prox, scale=1.0)``.
@@ -112,7 +114,7 @@ class ProxSVRG:
     --------
     >>> import numpy as np
     >>> from nemos.proximal_operator import prox_lasso
-    >>> loss_fn = lambda params, X, y: ((X.dot(params) - y)**2).sum()
+    >>> loss_fn = lambda params, X, y: ((X.dot(params) - y)**2).mean()
     >>> svrg = ProxSVRG(loss_fn, prox_lasso)
     >>> hyperparams_prox = 0.1
     >>> params, state = svrg.run(np.zeros(2), hyperparams_prox, np.ones((10, 2)), np.zeros(10))
@@ -638,7 +640,12 @@ class ProxSVRG:
         params: Pytree,
         iter_batches: Callable[[], Iterator["BatchData"]],
     ) -> Pytree:
-        """Compute full gradient by iterating through all batches."""
+        """
+        Compute full gradient by iterating through all batches and averaging the gradients.
+
+        Note that this is appropriate if the loss is given by a mean across data points,
+        which is assumed by SVRG as well.
+        """
         total_grad = None
         total_samples = 0
 
@@ -778,6 +785,8 @@ class SVRG(ProxSVRG):
     ----------
     fun : Callable
         smooth function of the form ``fun(x, *args, **kwargs)``.
+        Note that this loss function has to be an average of losses across data points,
+        i.e. f(x) = 1/N * sum(f(x_i)).
     maxiter : int
         Maximum number of epochs to run the optimization for.
     key : jax.random.PRNGkey
@@ -793,7 +802,7 @@ class SVRG(ProxSVRG):
     Examples
     --------
     >>> import numpy as np
-    >>> loss_fn = lambda params, X, y: ((X.dot(params) - y)**2).sum()
+    >>> loss_fn = lambda params, X, y: ((X.dot(params) - y)**2).mean()
     >>> svrg = SVRG(loss_fn)
     >>> params, state = svrg.run(np.zeros(2), np.ones((10, 2)), np.zeros(10))
 
