@@ -556,21 +556,19 @@ class EvalBasisMixin:
     @support_pynapple(conv_type="jax")
     def _apply_fill_value(self, *xi: ArrayLike, out: NDArray) -> jax.Array:
         """Apply fill value to out-of-bounds samples."""
-        # Use jnp.where for JAX compatibility
         to_fill = jnp.any(
             jnp.stack(
                 [
                     jnp.any(
-                        (jnp.reshape(x, (x.shape[0], -1)) < self.bounds[0])
-                        | (jnp.reshape(x, (x.shape[0], -1)) > self.bounds[1]),
+                        (jnp.reshape(x, (x.shape[0], -1)) < lo)
+                        | (jnp.reshape(x, (x.shape[0], -1)) > hi),
                         axis=1,
                     )
-                    for x in xi
+                    for x, (lo, hi) in zip(xi, self.bounds)
                 ]
             ),
             axis=0,
         )
-        # Reshape to_fill to broadcast correctly: (n_samples,) -> (n_samples, 1, 1, ...)
         to_fill_broadcast = to_fill.reshape(to_fill.shape[0], *([1] * (out.ndim - 1)))
         return jnp.where(to_fill_broadcast, self.fill_value, out)
 
@@ -626,33 +624,34 @@ class EvalBasisMixin:
         if values is None:
             self._bounds = None
             return
-        # unwrap single-element list: [(lo, hi)] -> (lo, hi)
-        if isinstance(values, list) and len(values) == 1:
-            values = values[0]
-        if self._n_inputs == 1:
-            # guard against accidentally passing a list of tuples
-            if (
-                isinstance(values, (list, tuple))
-                and len(values) == 2
-                and any(
-                    isinstance(v, (list, tuple))
-                    or (isinstance(v, np.ndarray) and v.ndim > 0)
-                    for v in values
-                )
-            ):
-                raise TypeError(
-                    "When provided, the bounds should be one (lo, hi) tuple for a "
-                    "single-input basis."
-                )
-            self._bounds = self._format_bounds(values)
-            return
-        # multi-input: must be a list/tuple of length n_inputs
-        if not isinstance(values, (list, tuple)) or len(values) != self._n_inputs:
+
+        # Normalize to a list for uniform handling
+        if isinstance(values, np.ndarray):
+            values = values.tolist()  # 1D -> [lo, hi], 2D -> [[lo, hi], ...]
+        elif isinstance(values, tuple):
+            values = list(values)
+
+        if not isinstance(values, list):
             raise TypeError(
                 f"Invalid bounds ``{values}`` provided. "
+                "When provided, the bounds should be one or multiple tuples of floats."
+            )
+
+        # Unwrap single-element list: [(lo, hi)] -> [lo, hi]
+        if len(values) == 1 and isinstance(values[0], (list, tuple, np.ndarray)):
+            values = list(values[0])
+
+        # Single (lo, hi) pair of scalars: broadcast to all dims
+        if len(values) == 2 and all(not isinstance(v, (list, tuple)) for v in values):
+            self._bounds = [self._format_bounds(values)] * self._n_inputs
+            return
+
+        # Otherwise: one (lo, hi) pair per dimension
+        if len(values) != self._n_inputs:
+            raise ValueError(
+                f"Invalid bounds ``{values}`` provided. "
                 "When provided, the bounds should be one or multiple tuples containing pair of floats.\n"
-                "If multiple tuples are provided, one must provide a tuple per each dimension "
-                "of the basis. "
+                "If multiple tuples are provided, one must provide a tuple per dimension of the basis."
             )
         self._bounds = [self._format_bounds(v) for v in values]
 

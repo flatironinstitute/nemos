@@ -53,6 +53,7 @@ from nemos.utils import pynapple_concatenate_numpy
 
 class EvalBasis2D(EvalBasisMixin, AtomicBasisMixin, Basis):
     """Eval basis 2D for test purposes."""
+
     def __init__(self, ndim, bounds=None, label=None):
         self._n_inputs = ndim
         Basis.__init__(self)
@@ -63,6 +64,7 @@ class EvalBasis2D(EvalBasisMixin, AtomicBasisMixin, Basis):
         # example implementation
         x_sum = sum(x)
         return np.stack([x_sum for _ in range(self.n_basis_funcs)], axis=1)
+
 
 def compare_bounds(bas, bounds):
     # if isinstance(bas, FourierBasis) and bas.bounds is not None:
@@ -2396,9 +2398,9 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             corr[idx] = (lin_ev.flatten() @ log_ev.flatten()) / (
                 np.linalg.norm(lin_ev.flatten()) * np.linalg.norm(log_ev.flatten())
             )
-        assert np.all(
-            np.diff(corr) < 0
-        ), "As time scales increases, deviation from linearity should increase!"
+        assert np.all(np.diff(corr) < 0), (
+            "As time scales increases, deviation from linearity should increase!"
+        )
 
     @pytest.mark.parametrize(
         "time_scaling, expectation",
@@ -8006,18 +8008,17 @@ def test_basis_public_api_matches_subclasses():
         f"Unexpected in __all__: {public - expected_public}"
     )
 
-class TestBoundsND:
 
+class TestBoundsND:
     @pytest.mark.parametrize(
         "bounds, expectation",
         [
             (None, does_not_raise()),
             ([(0, 2), (-1, 1)], does_not_raise()),
-            ((0, 2), does_not_raise()),  # this should be acceptable,
-                                         # and interpreted as: apply (0,2) bounds to all coordinates
-            (np.array([0.5, 1.5]), does_not_raise()),  # should we allow array?
-            ("invalid", pytest.raises(TypeError, match="Invalid bounds"))
-        ]
+            ((0, 2), does_not_raise()),
+            (np.array([0.5, 1.5]), does_not_raise()),
+            ("invalid", pytest.raises(TypeError, match="Invalid bounds")),
+        ],
     )
     def test_set_bounds(self, bounds, expectation):
         with expectation:
@@ -8031,12 +8032,12 @@ class TestBoundsND:
     def test_invalid_dim(self, ndim, delta_dim):
         if delta_dim == 0:
             expectation = does_not_raise()
-        else:  # error messages can be a bit inconsistent.
-            expectation = pytest.raises(ValueError, match="a tuple per each dimension`")
+        else:
+            expectation = pytest.raises(ValueError, match="a tuple per dimension")
         bounds = [(0, 2)] * (ndim + delta_dim)
         with expectation:
             EvalBasis2D(ndim, bounds=bounds)
-        bas = EvalBasis2D(2)
+        bas = EvalBasis2D(ndim)
         with expectation:
             bas.bounds = bounds
 
@@ -8047,10 +8048,12 @@ class TestBoundsND:
         outbound = [np.array([-1, -1, 0, 1, 2, 0])]
         xs = outbound + inbound
         bas = EvalBasis2D(ndim, bounds=bounds)
-        out = bas.compute_features(*xs) # this fails because jnp.reshape(x, (x.shape[0], -1)) < self.bounds[0] is a 2D array since self.bounds[0] is a tuple.
+        out = bas.compute_features(
+            *xs
+        )  # this fails because jnp.reshape(x, (x.shape[0], -1)) < self.bounds[0] is a 2D array since self.bounds[0] is a tuple.
         np.testing.assert_array_equal(
             np.all(np.isnan(out), axis=1),
-            np.array([True, True, False, False, True, False])
+            np.array([True, True, False, False, True, False]),
         )
 
     @pytest.mark.parametrize("ndim", [1, 2, 3])
@@ -8061,8 +8064,8 @@ class TestBoundsND:
         expected_nan_position = np.zeros(ndim, dtype=int)
         for i, x in enumerate(xis):
             # add some out of bounds not at the borders
-            x[i+2] = 100
-            expected_nan_position[i] = i+2
+            x[i + 2] = 100
+            expected_nan_position[i] = i + 2
             out_of_bonuds.append(x)
         bas = EvalBasis2D(ndim, bounds=bounds)
         res = bas.compute_features(*out_of_bonuds)
