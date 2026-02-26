@@ -1,15 +1,13 @@
 """Adapters wrapping JAXopt solvers, if available."""
 
+from importlib.util import find_spec as _find_spec
+
 from ._jaxopt_adapter import JaxoptAdapter
 
-JAXOPT_AVAILABLE = False
+JAXOPT_AVAILABLE = _find_spec("jaxopt") is not None
 
-try:
+if JAXOPT_AVAILABLE:
     from jaxopt import BFGS, LBFGS, GradientDescent, NonlinearCG, ProximalGradient
-except ModuleNotFoundError:  # pragma: no cover - exercised when jaxopt is optional
-    pass
-else:
-    JAXOPT_AVAILABLE = True
 
 if JAXOPT_AVAILABLE:
 

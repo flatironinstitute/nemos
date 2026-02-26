@@ -1,11 +1,11 @@
 """Registry of optimization algorithms and their implementations."""
 
 from dataclasses import dataclass
+from importlib.util import find_spec as _find_spec
 from typing import Type
 
 from ._abstract_solver import SolverProtocol
 from ._fista import OptimistixFISTA, OptimistixNAG
-from ._jaxopt_solvers import JAXOPT_AVAILABLE
 from ._optax_optimistix_solvers import (
     OptimistixOptaxGradientDescent,
     OptimistixOptaxLBFGS,
@@ -13,6 +13,8 @@ from ._optax_optimistix_solvers import (
 from ._optimistix_solvers import OptimistixBFGS, OptimistixNonlinearCG
 from ._svrg import WrappedProxSVRG, WrappedSVRG
 from ._validation import validate_solver_class
+
+JAXOPT_AVAILABLE = _find_spec("jaxopt") is not None
 
 
 @dataclass
