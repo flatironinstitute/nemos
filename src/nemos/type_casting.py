@@ -496,20 +496,34 @@ def support_pynapple(conv_type: Literal["jax", "numpy"] = "jax") -> Callable:
     return decorator
 
 
-def cast_to_jax(func):
-    """Cast argument to jax."""
+def cast_to_jax(_func=None, *, dtype=float) -> Callable:
+    """Cast argument to jax.
 
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            args, kwargs = jax.tree_util.tree_map(
-                lambda x: jnp_asarray_if(x, dtype=float), (args, kwargs)
-            )
-        except Exception:
-            raise TypeError(
-                "X and y should be array-like object (or trees of array like object) "
-                "with numeric data type!"
-            )
-        return func(*args, **kwargs)
+    Can be used as a plain decorator (``@cast_to_jax``) or as a decorator
+    factory (``@cast_to_jax(dtype=None)``).  The default ``dtype=float``
+    preserves the original behaviour: all array-like inputs are promoted to a
+    floating-point JAX array.  Pass ``dtype=None`` to keep each input's own
+    dtype (useful when some arguments are unsigned-integer keys).
+    """
 
-    return wrapper
+    def decorator(func):
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            try:
+                args, kwargs = jax.tree_util.tree_map(
+                    lambda x: jnp_asarray_if(x, dtype=dtype), (args, kwargs)
+                )
+            except Exception:
+                raise TypeError(
+                    "X and y should be array-like object (or trees of array like object) "
+                    "with numeric data type!"
+                )
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    if _func is not None:
+        # Used as @cast_to_jax without parentheses
+        return decorator(_func)
+    return decorator

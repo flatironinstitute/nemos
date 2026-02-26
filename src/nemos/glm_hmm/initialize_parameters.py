@@ -11,7 +11,7 @@ from numpy.typing import NDArray
 
 from ..glm.initialize_parameters import initialize_intercept_matching_mean_rate
 from ..glm.params import GLMUserParams
-from ..type_casting import is_numpy_array_like
+from ..type_casting import cast_to_jax, is_numpy_array_like
 from ..typing import DESIGN_INPUT_TYPE
 from .params import GLMHMMUserParams
 
@@ -72,6 +72,7 @@ INITIALIZATION_FN_DICT = dict[
 ]
 
 
+@cast_to_jax(dtype=None)
 def random_glm_params_init(
     n_states: int,
     X: DESIGN_INPUT_TYPE,
@@ -124,6 +125,7 @@ def random_glm_params_init(
     return coef, intercept
 
 
+@cast_to_jax(dtype=None)
 def constant_scale_init(
     n_states: int,
     X: DESIGN_INPUT_TYPE,
@@ -163,6 +165,7 @@ def constant_scale_init(
     return scale
 
 
+@cast_to_jax(dtype=None)
 def sticky_transition_proba_init(
     n_states: int,
     X: DESIGN_INPUT_TYPE,
@@ -206,6 +209,7 @@ def sticky_transition_proba_init(
     )
 
 
+@cast_to_jax(dtype=None)
 def uniform_transition_proba_init(
     n_states: int,
     X: DESIGN_INPUT_TYPE,
@@ -238,6 +242,7 @@ def uniform_transition_proba_init(
     return jnp.full((n_states, n_states), prob_transition, dtype=float)
 
 
+@cast_to_jax(dtype=None)
 def uniform_initial_proba_init(
     n_states: int,
     X: DESIGN_INPUT_TYPE,

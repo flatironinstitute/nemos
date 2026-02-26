@@ -11,6 +11,7 @@ Note:
 
 import abc
 import os
+import warnings
 from collections import namedtuple
 from copy import deepcopy
 from functools import partial
@@ -18,7 +19,6 @@ from typing import Literal
 
 from nemos.glm.validation import GLMValidator
 from nemos.glm_hmm.params import GLMHMMParams, GLMScale, HMMParams
-import warnings
 
 # Named tuple for model fixture returns (clearer than tuple indexing)
 ModelFixture = namedtuple(
@@ -122,6 +122,7 @@ def suppress_em_convergence_warning(request):
                 category=RuntimeWarning,
             )
             yield
+
 
 @pytest.fixture(autouse=True, scope="function")
 def set_jax_precision_per_test(request):

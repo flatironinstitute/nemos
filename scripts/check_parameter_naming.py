@@ -126,6 +126,8 @@ VALID_PAIRS = [
     {"arg_name", "algo_name"},
     {"arg_name", "attr_name"},
     {"arg_name", "var_name"},
+    {"_func", "func"},
+    {"_func", "funcs"},
 ]
 
 
