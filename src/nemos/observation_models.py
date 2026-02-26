@@ -530,22 +530,6 @@ class PoissonObservations(Observations):
         :
             The Poisson negative log-likehood. Shape (1,).
 
-        Examples
-        --------
-        Compute the log-likelihood of observed spike counts given predicted
-        firing rates:
-
-        >>> import jax.numpy as jnp
-        >>> from nemos.observation_models import PoissonObservations
-        >>> model = PoissonObservations()
-        >>> # observed spike counts over 5 time bins
-        >>> spike_counts = jnp.array([0, 1, 3, 2, 0])
-        >>> # predicted firing rates from the model
-        >>> predicted_rate = jnp.array([0.5, 1.2, 2.8, 1.9, 0.4])
-        >>> ll = model.log_likelihood(spike_counts, predicted_rate)
-        >>> ll.shape
-        ()
-
         Notes
         -----
         The formula for the Poisson mean log-likelihood is the following,
@@ -596,20 +580,6 @@ class PoissonObservations(Observations):
         jnp.ndarray
             Random numbers generated from the Poisson distribution based on the `predicted_rate`.
 
-        Examples
-        --------
-        Generate simulated spike counts from predicted firing rates:
-
-        >>> import jax
-        >>> import jax.numpy as jnp
-        >>> from nemos.observation_models import PoissonObservations
-        >>> model = PoissonObservations()
-        >>> key = jax.random.key(42)
-        >>> # predicted firing rates for 3 neurons in one time bin
-        >>> predicted_rate = jnp.array([0.5, 2.0, 10.0])
-        >>> simulated_spikes = model.sample_generator(key, predicted_rate)
-        >>> simulated_spikes.shape
-        (3,)
         """
         return jax.random.poisson(key, predicted_rate)
 
@@ -635,21 +605,6 @@ class PoissonObservations(Observations):
         -------
         :
             The residual deviance of the model.
-
-        Examples
-        --------
-        Evaluate how well the predicted rates fit the observed spike counts:
-
-        >>> import jax.numpy as jnp
-        >>> from nemos.observation_models import PoissonObservations
-        >>> model = PoissonObservations()
-        >>> # observed spike counts from a single neuron
-        >>> spike_counts = jnp.array([0, 1, 3, 2, 0])
-        >>> # predicted firing rates from the model
-        >>> predicted_rate = jnp.array([0.5, 1.2, 2.8, 1.9, 0.4])
-        >>> dev = model.deviance(spike_counts, predicted_rate)
-        >>> dev.shape
-        (5,)
 
         Notes
         -----
@@ -702,18 +657,6 @@ class PoissonObservations(Observations):
         dof_resid :
             The DOF of the residuals.
 
-        Examples
-        --------
-        For a Poisson model the scale is always 1 (variance equals the mean):
-
-        >>> import jax.numpy as jnp
-        >>> from nemos.observation_models import PoissonObservations
-        >>> model = PoissonObservations()
-        >>> spike_counts = jnp.array([0., 1., 3., 2., 0.])
-        >>> predicted_rate = jnp.array([0.5, 1.2, 2.8, 1.9, 0.4])
-        >>> scale = model.estimate_scale(spike_counts, predicted_rate, dof_resid=4)
-        >>> scale
-        Array([1.], dtype=float32)
         """
         return jnp.ones_like(jnp.atleast_1d(y[0]))
 
@@ -824,21 +767,6 @@ class GammaObservations(Observations):
         :
             The Gamma negative log-likelihood. Shape (1,).
 
-        Examples
-        --------
-        Compute the log-likelihood of calcium fluorescence signals given
-        predicted rates:
-
-        >>> import jax.numpy as jnp
-        >>> from nemos.observation_models import GammaObservations
-        >>> model = GammaObservations()
-        >>> # observed calcium fluorescence (always positive)
-        >>> fluorescence = jnp.array([0.5, 1.2, 0.8, 1.5, 0.3])
-        >>> # predicted mean fluorescence from the model
-        >>> predicted_rate = jnp.array([0.6, 1.0, 0.9, 1.3, 0.4])
-        >>> ll = model.log_likelihood(fluorescence, predicted_rate)
-        >>> ll.shape
-        ()
         """
         k = 1 / scale
         norm = (k - 1) * jnp.log(y) + k * jnp.log(k) - jax.scipy.special.gammaln(k)
@@ -872,20 +800,6 @@ class GammaObservations(Observations):
         jnp.ndarray
             Random numbers generated from the Gamma distribution based on the `predicted_rate` and the `scale`.
 
-        Examples
-        --------
-        Simulate calcium fluorescence signals from predicted rates:
-
-        >>> import jax
-        >>> import jax.numpy as jnp
-        >>> from nemos.observation_models import GammaObservations
-        >>> model = GammaObservations()
-        >>> key = jax.random.key(42)
-        >>> # predicted mean fluorescence for 3 neurons
-        >>> predicted_rate = jnp.array([1.0, 2.0, 3.0])
-        >>> simulated_fluorescence = model.sample_generator(key, predicted_rate, scale=0.5)
-        >>> simulated_fluorescence.shape
-        (3,)
         """
         return jax.random.gamma(key, predicted_rate / scale) * scale
 
@@ -910,20 +824,6 @@ class GammaObservations(Observations):
         -------
         :
             The residual deviance of the model.
-
-        Examples
-        --------
-        Evaluate goodness of fit for continuous neural activity:
-
-        >>> import jax.numpy as jnp
-        >>> from nemos.observation_models import GammaObservations
-        >>> model = GammaObservations()
-        >>> # observed calcium fluorescence
-        >>> fluorescence = jnp.array([0.5, 1.2, 0.8, 1.5, 0.3])
-        >>> predicted_rate = jnp.array([0.6, 1.0, 0.9, 1.3, 0.4])
-        >>> dev = model.deviance(fluorescence, predicted_rate)
-        >>> dev.shape
-        (5,)
 
         Notes
         -----
@@ -980,19 +880,6 @@ class GammaObservations(Observations):
             The scale parameter. If predicted_rate is ``(n_samples, n_neurons)``, this method will return a
             scale for each neuron.
 
-        Examples
-        --------
-        Estimate the dispersion of the neural activity:
-
-        >>> import jax.numpy as jnp
-        >>> from nemos.observation_models import GammaObservations
-        >>> model = GammaObservations()
-        >>> # observed calcium fluorescence
-        >>> fluorescence = jnp.array([0.5, 1.2, 0.8, 1.5, 0.3])
-        >>> predicted_rate = jnp.array([0.6, 1.0, 0.9, 1.3, 0.4])
-        >>> scale = model.estimate_scale(fluorescence, predicted_rate, dof_resid=4)
-        >>> scale.shape
-        ()
         """
         predicted_rate = jnp.clip(
             predicted_rate, min=jnp.finfo(predicted_rate.dtype).eps
@@ -1122,22 +1009,6 @@ class BernoulliObservations(Observations):
         :
             The Bernoulli negative log-likelihood. Shape (1,).
 
-        Examples
-        --------
-        Compute the log-likelihood of binary spike events (spike/no-spike)
-        given predicted spiking probabilities:
-
-        >>> import jax.numpy as jnp
-        >>> from nemos.observation_models import BernoulliObservations
-        >>> model = BernoulliObservations()
-        >>> # binary spike events: 1 = spike, 0 = no spike
-        >>> spike_events = jnp.array([1, 0, 1, 1, 0])
-        >>> # predicted probability of spiking from the model
-        >>> predicted_rate = jnp.array([0.8, 0.2, 0.9, 0.7, 0.1])
-        >>> ll = model.log_likelihood(spike_events, predicted_rate)
-        >>> ll.shape
-        ()
-
         Notes
         -----
         The formula for the Bernoulli mean log-likelihood is the following,
@@ -1179,20 +1050,6 @@ class BernoulliObservations(Observations):
         jnp.ndarray
             Random numbers generated from the Bernoulli distribution based on the `predicted_rate`.
 
-        Examples
-        --------
-        Simulate binary spike events from predicted spiking probabilities:
-
-        >>> import jax
-        >>> import jax.numpy as jnp
-        >>> from nemos.observation_models import BernoulliObservations
-        >>> model = BernoulliObservations()
-        >>> key = jax.random.key(42)
-        >>> # predicted spiking probability for 3 neurons
-        >>> predicted_rate = jnp.array([0.9, 0.1, 0.5])
-        >>> simulated_spikes = model.sample_generator(key, predicted_rate)
-        >>> simulated_spikes.shape
-        (3,)
         """
         return jax.random.bernoulli(key, predicted_rate)
 
@@ -1219,21 +1076,6 @@ class BernoulliObservations(Observations):
         -------
         :
             The residual deviance of the model.
-
-        Examples
-        --------
-        Evaluate fit quality for binary spike events:
-
-        >>> import jax.numpy as jnp
-        >>> from nemos.observation_models import BernoulliObservations
-        >>> model = BernoulliObservations()
-        >>> # binary spike events
-        >>> spike_events = jnp.array([1, 0, 1, 1, 0])
-        >>> # predicted probability of spiking
-        >>> predicted_rate = jnp.array([0.8, 0.2, 0.9, 0.7, 0.1])
-        >>> dev = model.deviance(spike_events, predicted_rate)
-        >>> dev.shape
-        (5,)
 
         Notes
         -----
@@ -1287,18 +1129,6 @@ class BernoulliObservations(Observations):
         dof_resid :
             The DOF of the residuals.
 
-        Examples
-        --------
-        For a Bernoulli model the scale is always 1:
-
-        >>> import jax.numpy as jnp
-        >>> from nemos.observation_models import BernoulliObservations
-        >>> model = BernoulliObservations()
-        >>> spike_events = jnp.array([1., 0., 1., 1., 0.])
-        >>> predicted_rate = jnp.array([0.8, 0.2, 0.9, 0.7, 0.1])
-        >>> scale = model.estimate_scale(spike_events, predicted_rate, dof_resid=4)
-        >>> scale
-        Array([1.], dtype=float32)
         """
         return jnp.ones_like(jnp.atleast_1d(y[0]))
 
@@ -1332,21 +1162,6 @@ class BernoulliObservations(Observations):
         :
             The likelihood. Shape (1,).
 
-        Examples
-        --------
-        Compute the likelihood of predicted spiking probabilities given
-        observed binary spike events:
-
-        >>> import jax.numpy as jnp
-        >>> from nemos.observation_models import BernoulliObservations
-        >>> model = BernoulliObservations()
-        >>> # binary spike events
-        >>> spike_events = jnp.array([1, 0, 1, 1, 0])
-        >>> # predicted spiking probabilities
-        >>> predicted_rate = jnp.array([0.8, 0.2, 0.9, 0.7, 0.1])
-        >>> lik = model.likelihood(spike_events, predicted_rate)
-        >>> lik.shape
-        ()
         """
         predicted_rate = jnp.clip(
             predicted_rate,
@@ -1557,21 +1372,6 @@ class NegativeBinomialObservations(Observations):
         :
             The log-likelihood of the Negative Binomial model. Shape ``(1,)``.
 
-        Examples
-        --------
-        Compute the log-likelihood of overdispersed spike counts (e.g.,
-        from a burst-firing neuron) given predicted firing rates:
-
-        >>> import jax.numpy as jnp
-        >>> from nemos.observation_models import NegativeBinomialObservations
-        >>> model = NegativeBinomialObservations(scale=0.5)
-        >>> # overdispersed spike counts over 5 time bins
-        >>> spike_counts = jnp.array([0, 2, 8, 1, 5])
-        >>> # predicted firing rates from the model
-        >>> predicted_rate = jnp.array([1.0, 3.0, 6.0, 2.0, 4.0])
-        >>> ll = model.log_likelihood(spike_counts, predicted_rate)
-        >>> ll.shape
-        ()
         """
         scale = self.scale if scale is None else scale
         ll_unnormalized = -self._negative_log_likelihood(
@@ -1610,21 +1410,6 @@ class NegativeBinomialObservations(Observations):
         -------
         :
             Samples drawn from the Negative Binomial distribution. Same shape as ``predicted_rate``.
-
-        Examples
-        --------
-        Simulate overdispersed spike counts from predicted firing rates:
-
-        >>> import jax
-        >>> import jax.numpy as jnp
-        >>> from nemos.observation_models import NegativeBinomialObservations
-        >>> model = NegativeBinomialObservations(scale=0.5)
-        >>> key = jax.random.key(42)
-        >>> # predicted firing rates for 3 neurons
-        >>> predicted_rate = jnp.array([3.0, 7.0, 1.5])
-        >>> simulated_spikes = model.sample_generator(key, predicted_rate)
-        >>> simulated_spikes.shape
-        (3,)
 
         Notes
         -----
@@ -1675,20 +1460,6 @@ class NegativeBinomialObservations(Observations):
         -------
         :
             The residual deviance of the model. Shape matches ``observations``.
-
-        Examples
-        --------
-        Evaluate fit quality for overdispersed spike counts:
-
-        >>> import jax.numpy as jnp
-        >>> from nemos.observation_models import NegativeBinomialObservations
-        >>> model = NegativeBinomialObservations(scale=0.5)
-        >>> # overdispersed spike counts
-        >>> spike_counts = jnp.array([0, 2, 8, 1, 5])
-        >>> predicted_rate = jnp.array([1.0, 3.0, 6.0, 2.0, 4.0])
-        >>> dev = model.deviance(spike_counts, predicted_rate)
-        >>> dev.shape
-        (5,)
 
         Notes
         -----
@@ -1748,18 +1519,6 @@ class NegativeBinomialObservations(Observations):
         `glm.nb <https://www.rdocumentation.org/packages/MASS/versions/7.3-65/topics/glm.nb>`_
         for more details.
 
-        Examples
-        --------
-        The scale is fixed at initialization and returned as-is:
-
-        >>> import jax.numpy as jnp
-        >>> from nemos.observation_models import NegativeBinomialObservations
-        >>> model = NegativeBinomialObservations(scale=0.5)
-        >>> spike_counts = jnp.array([0, 2, 8, 1, 5])
-        >>> predicted_rate = jnp.array([1.0, 3.0, 6.0, 2.0, 4.0])
-        >>> scale = model.estimate_scale(spike_counts, predicted_rate, dof_resid=4)
-        >>> float(scale)
-        0.5
         """
         return jnp.array(self.scale)
 
@@ -1874,21 +1633,6 @@ class GaussianObservations(Observations):
         :
             The Gaussian log-likelihood. Shape ``(1,)``.
 
-        Examples
-        --------
-        Compute the log-likelihood of continuous neural recordings (e.g.,
-        local field potential) given predicted mean activity:
-
-        >>> import jax.numpy as jnp
-        >>> from nemos.observation_models import GaussianObservations
-        >>> model = GaussianObservations()
-        >>> # recorded LFP signal over 5 time bins
-        >>> lfp_signal = jnp.array([-0.2, 0.5, 1.3, 0.8, -0.1])
-        >>> # predicted mean activity from the model
-        >>> predicted_rate = jnp.array([-0.1, 0.6, 1.1, 0.7, 0.0])
-        >>> ll = model.log_likelihood(lfp_signal, predicted_rate)
-        >>> ll.shape
-        ()
         """
         norm = -0.5 * jnp.log(2 * jnp.pi * scale)
         return aggregate_sample_scores(
@@ -1924,20 +1668,6 @@ class GaussianObservations(Observations):
         jnp.ndarray
             Random numbers generated from the Gaussian distribution based on the ``predicted_rate`` and the ``scale``.
 
-        Examples
-        --------
-        Simulate continuous neural signals from predicted mean activity:
-
-        >>> import jax
-        >>> import jax.numpy as jnp
-        >>> from nemos.observation_models import GaussianObservations
-        >>> model = GaussianObservations()
-        >>> key = jax.random.key(42)
-        >>> # predicted mean activity for 3 neurons
-        >>> predicted_rate = jnp.array([0.5, 1.2, -0.3])
-        >>> simulated_lfp = model.sample_generator(key, predicted_rate, scale=0.5)
-        >>> simulated_lfp.shape
-        (3,)
         """
         return (
             jax.random.normal(key, shape=predicted_rate.shape) * jnp.sqrt(scale)
@@ -1965,20 +1695,6 @@ class GaussianObservations(Observations):
         -------
         :
             The residual deviance of the model.
-
-        Examples
-        --------
-        Evaluate fit quality for continuous neural recordings:
-
-        >>> import jax.numpy as jnp
-        >>> from nemos.observation_models import GaussianObservations
-        >>> model = GaussianObservations()
-        >>> # recorded LFP signal
-        >>> lfp_signal = jnp.array([-0.2, 0.5, 1.3, 0.8, -0.1])
-        >>> predicted_rate = jnp.array([-0.1, 0.6, 1.1, 0.7, 0.0])
-        >>> dev = model.deviance(lfp_signal, predicted_rate)
-        >>> dev.shape
-        (5,)
 
         Notes
         -----
@@ -2031,19 +1747,6 @@ class GaussianObservations(Observations):
             The scale parameter. If predicted_rate is ``(n_samples, n_neurons)``, this method will return a
             scale for each neuron.
 
-        Examples
-        --------
-        Estimate the noise variance from the residuals:
-
-        >>> import jax.numpy as jnp
-        >>> from nemos.observation_models import GaussianObservations
-        >>> model = GaussianObservations()
-        >>> # recorded LFP signal
-        >>> lfp_signal = jnp.array([-0.2, 0.5, 1.3, 0.8, -0.1])
-        >>> predicted_rate = jnp.array([-0.1, 0.6, 1.1, 0.7, 0.0])
-        >>> scale = model.estimate_scale(lfp_signal, predicted_rate, dof_resid=4)
-        >>> scale.shape
-        ()
         """
         resid = jnp.power(y - predicted_rate, 2)
         return jnp.sum(resid, axis=0) / dof_resid
@@ -2313,26 +2016,6 @@ class CategoricalObservations(Observations):
         :
             The Categorical log-likelihood. Shape (1,).
 
-        Examples
-        --------
-        Compute the log-likelihood of observed behavioral states (e.g.,
-        rest, run, sleep) given predicted state probabilities:
-
-        >>> import jax.numpy as jnp
-        >>> from nemos.observation_models import CategoricalObservations
-        >>> model = CategoricalObservations()
-        >>> # observed states as one-hot: [rest, run, sleep, run]
-        >>> states = jnp.array([[1, 0, 0], [0, 1, 0], [0, 0, 1], [0, 1, 0]])
-        >>> # predicted log-probabilities for each state
-        >>> log_probs = jnp.log(jnp.array([
-        ...     [0.7, 0.2, 0.1],
-        ...     [0.1, 0.8, 0.1],
-        ...     [0.2, 0.1, 0.7],
-        ...     [0.15, 0.75, 0.1]]))
-        >>> ll = model.log_likelihood(states, log_probs)
-        >>> ll.shape
-        ()
-
         Notes
         -----
         The formula for the Categorical mean log-likelihood is the following,
@@ -2377,25 +2060,6 @@ class CategoricalObservations(Observations):
             Random category indices sampled from the Categorical distribution.
             Shape ``(n_time_bins,)`` or ``(n_time_bins, n_neurons)``.
 
-        Examples
-        --------
-        Simulate behavioral state observations from predicted state
-        probabilities:
-
-        >>> import jax
-        >>> import jax.numpy as jnp
-        >>> from nemos.observation_models import CategoricalObservations
-        >>> model = CategoricalObservations()
-        >>> key = jax.random.key(42)
-        >>> # predicted log-probabilities for 3 states over 4 time bins
-        >>> log_probs = jnp.log(jnp.array([
-        ...     [0.7, 0.2, 0.1],
-        ...     [0.1, 0.8, 0.1],
-        ...     [0.2, 0.1, 0.7],
-        ...     [0.15, 0.75, 0.1]]))
-        >>> simulated_states = model.sample_generator(key, log_probs)
-        >>> simulated_states.shape
-        (4, 3)
         """
         return jax.nn.one_hot(
             jax.random.categorical(key, predicted_rate),
@@ -2425,24 +2089,6 @@ class CategoricalObservations(Observations):
         -------
         :
             The residual deviance of the model. Shape ``(n_time_bins,)`` or ``(n_time_bins, n_neurons)``.
-
-        Examples
-        --------
-        Evaluate fit quality for behavioral state predictions:
-
-        >>> import jax.numpy as jnp
-        >>> from nemos.observation_models import CategoricalObservations
-        >>> model = CategoricalObservations()
-        >>> # observed behavioral states as one-hot
-        >>> states = jnp.array([[1, 0, 0], [0, 1, 0], [0, 0, 1], [0, 1, 0]])
-        >>> log_probs = jnp.log(jnp.array([
-        ...     [0.7, 0.2, 0.1],
-        ...     [0.1, 0.8, 0.1],
-        ...     [0.2, 0.1, 0.7],
-        ...     [0.15, 0.75, 0.1]]))
-        >>> dev = model.deviance(states, log_probs)
-        >>> dev.shape
-        (4,)
 
         Notes
         -----
@@ -2487,19 +2133,6 @@ class CategoricalObservations(Observations):
         dof_resid :
             The DOF of the residuals.
 
-        Examples
-        --------
-        For a Categorical model the scale is always 1:
-
-        >>> import jax.numpy as jnp
-        >>> from nemos.observation_models import CategoricalObservations
-        >>> model = CategoricalObservations()
-        >>> # observed behavioral states as one-hot
-        >>> states = jnp.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=float)
-        >>> log_probs = jnp.log(jnp.array([[0.7, 0.2, 0.1], [0.1, 0.8, 0.1], [0.2, 0.1, 0.7]]))
-        >>> scale = model.estimate_scale(states, log_probs, dof_resid=2)
-        >>> scale
-        Array([1.], dtype=float32)
         """
         return jnp.ones_like(jnp.atleast_1d(y[0, ..., 0]))
 
@@ -2534,24 +2167,6 @@ class CategoricalObservations(Observations):
         -------
         :
             The likelihood. Shape (1,).
-
-        Examples
-        --------
-        Compute the likelihood of predicted behavioral state probabilities:
-
-        >>> import jax.numpy as jnp
-        >>> from nemos.observation_models import CategoricalObservations
-        >>> model = CategoricalObservations()
-        >>> # observed behavioral states as one-hot
-        >>> states = jnp.array([[1, 0, 0], [0, 1, 0], [0, 0, 1], [0, 1, 0]])
-        >>> log_probs = jnp.log(jnp.array([
-        ...     [0.7, 0.2, 0.1],
-        ...     [0.1, 0.8, 0.1],
-        ...     [0.2, 0.1, 0.7],
-        ...     [0.15, 0.75, 0.1]]))
-        >>> lik = model.likelihood(states, log_probs)
-        >>> lik.shape
-        ()
 
         Notes
         -----
