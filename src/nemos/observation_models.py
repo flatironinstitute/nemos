@@ -418,6 +418,31 @@ class PoissonObservations(Observations):
     with a given rate. It provides methods for computing the negative log-likelihood, generating samples,
     and computing the residual deviance for the given spike count data.
 
+    Examples
+    --------
+    >>> import nemos as nmo
+    >>> # As a string
+    >>> nmo.glm.GLM(observation_model="Poisson")
+    GLM(
+        observation_model=PoissonObservations(),
+        inverse_link_function=exp,
+        regularizer=UnRegularized(),
+        solver_name='GradientDescent'
+    )
+    >>> # As a class instance
+    >>> nmo.glm.GLM(observation_model=nmo.observation_models.PoissonObservations())
+    GLM(
+        observation_model=PoissonObservations(),
+        inverse_link_function=exp,
+        regularizer=UnRegularized(),
+        solver_name='GradientDescent'
+    )
+
+    Notes
+    -----
+    This class is intended to be used as an argument to a model object (e.g.,
+    :class:`~nemos.glm.glm.GLM`), rather than instantiated directly.
+
     """
 
     def __init__(self):
@@ -701,6 +726,31 @@ class GammaObservations(Observations):
     with a given rate. It provides methods for computing the negative log-likelihood, generating samples,
     and computing the residual deviance for the given spike count data.
 
+    Examples
+    --------
+    >>> import nemos as nmo
+    >>> # As a string
+    >>> nmo.glm.GLM(observation_model="Gamma")
+    GLM(
+        observation_model=GammaObservations(),
+        inverse_link_function=one_over_x,
+        regularizer=UnRegularized(),
+        solver_name='GradientDescent'
+    )
+    >>> # As a class instance
+    >>> nmo.glm.GLM(observation_model=nmo.observation_models.GammaObservations())
+    GLM(
+        observation_model=GammaObservations(),
+        inverse_link_function=one_over_x,
+        regularizer=UnRegularized(),
+        solver_name='GradientDescent'
+    )
+
+    Notes
+    -----
+    This class is intended to be used as an argument to a model object (e.g.,
+    :class:`~nemos.glm.glm.GLM`), rather than instantiated directly.
+
     """
 
     def __init__(
@@ -961,6 +1011,31 @@ class BernoulliObservations(Observations):
     with a given success probability. When using a logit link function (i.e. a logistic inverse link function),
     this is equivalent to Logistic Regression. It provides methods for computing the negative log-likelihood,
     generating samples, and computing the residual deviance for the given binary observations.
+
+    Examples
+    --------
+    >>> import nemos as nmo
+    >>> # As a string
+    >>> nmo.glm.GLM(observation_model="Bernoulli")
+    GLM(
+        observation_model=BernoulliObservations(),
+        inverse_link_function=logistic,
+        regularizer=UnRegularized(),
+        solver_name='GradientDescent'
+    )
+    >>> # As a class instance
+    >>> nmo.glm.GLM(observation_model=nmo.observation_models.BernoulliObservations())
+    GLM(
+        observation_model=BernoulliObservations(),
+        inverse_link_function=logistic,
+        regularizer=UnRegularized(),
+        solver_name='GradientDescent'
+    )
+
+    Notes
+    -----
+    This class is intended to be used as an argument to a model object (e.g.,
+    :class:`~nemos.glm.glm.GLM`), rather than instantiated directly.
 
     """
 
@@ -1336,6 +1411,59 @@ class NegativeBinomialObservations(Observations):
 
     .. [6] Wei, Ganchao, et al. "Calibrating Bayesian decoders of neural spiking activity."
         Journal of Neuroscience 44.18 (2024).
+
+    Examples
+    --------
+    >>> import nemos as nmo
+    >>> # As a string
+    >>> nmo.glm.GLM(observation_model="NegativeBinomial")
+    GLM(
+        observation_model=NegativeBinomialObservations(scale=1.0),
+        inverse_link_function=exp,
+        regularizer=UnRegularized(),
+        solver_name='GradientDescent'
+    )
+    >>> # As a class instance
+    >>> nmo.glm.GLM(observation_model=nmo.observation_models.NegativeBinomialObservations())
+    GLM(
+        observation_model=NegativeBinomialObservations(scale=1.0),
+        inverse_link_function=exp,
+        regularizer=UnRegularized(),
+        solver_name='GradientDescent'
+    )
+
+    The ``scale`` parameter controls overdispersion. Larger values produce wider, more variable
+    count distributions, while values approaching zero recover Poisson-like behavior.
+    The effect can be visualized by simulating samples at two different scale settings:
+
+    >>> import numpy as np
+    >>> import jax
+    >>> import matplotlib.pyplot as plt
+    >>> obs_scale_low = nmo.observation_models.NegativeBinomialObservations(scale=0.05)
+    >>> obs_scale_high = nmo.observation_models.NegativeBinomialObservations(scale=2)
+    >>> rate = np.full(1000, fill_value=10)
+    >>> key = jax.random.PRNGKey(123)
+    >>> samples_low = obs_scale_low.sample_generator(key, rate)
+    >>> samples_high = obs_scale_high.sample_generator(key, rate)
+    >>> _ = plt.subplot(211)
+    >>> _, edges, _ = plt.hist(samples_high, bins=50)
+    >>> plt.title("scale = 2")
+    Text(0.5, 1.0, 'scale = 2')
+    >>> _ = plt.subplot(212)
+    >>> _ = plt.hist(samples_low, bins=edges)
+    >>> plt.title("scale = 0.05")
+    Text(0.5, 1.0, 'scale = 0.05')
+    >>> plt.tight_layout()
+    >>> plt.show()
+
+    Notes
+    -----
+    This class is intended to be used as an argument to a model object (e.g.,
+    :class:`~nemos.glm.glm.GLM`), rather than instantiated directly. Because the ``scale``
+    parameter is fixed at initialization and affects the likelihood landscape, it must be
+    chosen before fitting—for example, by cross-validating over candidate values using
+    :class:`sklearn.model_selection.GridSearchCV`.
+
     """
 
     def __init__(
@@ -1643,6 +1771,31 @@ class GaussianObservations(Observations):
     The GaussianObservations is designed to model data based on a Gaussian distribution
     with a given mean (predicted rate) and variance (scale). It provides methods for computing the negative
     log-likelihood, generating samples, and computing the residual deviance for the given spike count data.
+
+    Examples
+    --------
+    >>> import nemos as nmo
+    >>> # As a string
+    >>> nmo.glm.GLM(observation_model="Gaussian")
+    GLM(
+        observation_model=GaussianObservations(),
+        inverse_link_function=identity,
+        regularizer=UnRegularized(),
+        solver_name='GradientDescent'
+    )
+    >>> # As a class instance
+    >>> nmo.glm.GLM(observation_model=nmo.observation_models.GaussianObservations())
+    GLM(
+        observation_model=GaussianObservations(),
+        inverse_link_function=identity,
+        regularizer=UnRegularized(),
+        solver_name='GradientDescent'
+    )
+
+    Notes
+    -----
+    This class is intended to be used as an argument to a model object (e.g.,
+    :class:`~nemos.glm.glm.GLM`), rather than instantiated directly.
 
     """
 
@@ -2061,6 +2214,21 @@ class CategoricalObservations(Observations):
     It provides methods for computing the negative log-likelihood,
     generating samples, and computing the residual deviance for the given categorical observations.
     This distribution is equivalent to a multinomial with ``n=1``.
+
+    Examples
+    --------
+    ``CategoricalObservations`` is set automatically by classification models. For example:
+
+    >>> import nemos as nmo
+    >>> nmo.glm.ClassifierGLM().observation_model
+    CategoricalObservations()
+
+    Notes
+    -----
+    This class is the underlying observation model for classification models
+    such as :class:`~nemos.glm.classifier_glm.ClassifierGLM` and
+    :class:`~nemos.glm.classifier_glm.ClassifierPopulationGLM`, which set it automatically. Users
+    do not need to pass it directly.
 
     """
 
