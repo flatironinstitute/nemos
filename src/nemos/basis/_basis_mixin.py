@@ -564,7 +564,7 @@ class EvalBasisMixin:
                         | (jnp.reshape(x, (x.shape[0], -1)) > hi),
                         axis=1,
                     )
-                    for x, (lo, hi) in zip(xi, self.bounds)
+                    for x, (lo, hi) in zip(xi, self._get_bounds_per_dim())
                 ]
             ),
             axis=0,
@@ -612,12 +612,16 @@ class EvalBasisMixin:
 
     @property
     def bounds(self) -> List[Tuple[float, float]] | Tuple[float, float] | None:
-        """Bounds.
-
-        Returns bounds, single if one-dimensional, a list with one per dimension
-        or None if no bounds are provided.
-        """
+        """Returns bounds, as provided."""
         return self._bounds
+
+    def _get_bounds_per_dim(self) -> List[Tuple[float, float]]:
+        """Return bounds,  broadcast to one pair per input dimension."""
+        if self._bounds is None:
+            return None
+        if isinstance(self._bounds[0], (int, float)):
+            return [self._bounds] * self._n_inputs
+        return list(self._bounds)
 
     @bounds.setter
     def bounds(self, values):
@@ -625,35 +629,29 @@ class EvalBasisMixin:
             self._bounds = None
             return
 
-        # Normalize to a list for uniform handling
         if isinstance(values, np.ndarray):
-            values = values.tolist()  # 1D -> [lo, hi], 2D -> [[lo, hi], ...]
-        elif isinstance(values, tuple):
-            values = list(values)
+            values = values.tolist()
 
-        if not isinstance(values, list):
+        if not isinstance(values, (list, tuple)):
             raise TypeError(
-                f"Invalid bounds ``{values}`` provided. "
-                "When provided, the bounds should be one or multiple tuples of floats."
+                f"Invalid bounds ``{values}`` provided, "
+                "bounds should be one or multiple tuples of 2 floats, "
+                "matching the inputs of the basis.\n"
             )
 
-        # Unwrap single-element list: [(lo, hi)] -> [lo, hi]
-        if len(values) == 1 and isinstance(values[0], (list, tuple, np.ndarray)):
-            values = list(values[0])
-
-        # Single (lo, hi) pair of scalars: broadcast to all dims
+        # Validate: single (lo, hi) pair or one per dimension
         if len(values) == 2 and all(not isinstance(v, (list, tuple)) for v in values):
-            self._bounds = [self._format_bounds(values)] * self._n_inputs
-            return
-
-        # Otherwise: one (lo, hi) pair per dimension
-        if len(values) != self._n_inputs:
-            raise ValueError(
-                f"Invalid bounds ``{values}`` provided. "
-                "When provided, the bounds should be one or multiple tuples containing pair of floats.\n"
-                "If multiple tuples are provided, one must provide a tuple per dimension of the basis."
-            )
-        self._bounds = [self._format_bounds(v) for v in values]
+            # Single pair
+            self._bounds = self._format_bounds(values)
+        else:
+            # One pair per dimension
+            if len(values) != self._n_inputs:
+                raise ValueError(
+                    f"Invalid bounds ``{values}`` provided, "
+                    "bounds should be one or multiple tuples of 2 floats, "
+                    "matching the inputs of the basis.\n"
+                )
+            self._bounds = tuple(self._format_bounds(v) for v in values)
 
     @staticmethod
     def _format_bounds(values: Any) -> Tuple[Any, Exception | None]:

@@ -94,15 +94,18 @@ def min_max_rescale_samples(
     else:
         nanmin, nanmax, asarray, where = np.nanmin, np.nanmax, np.asarray, np.where
 
-    # if not normalize all array
-    vmin = nanmin(sample_pts, axis=0) if bounds is None else bounds[0]
-    vmax = nanmax(sample_pts, axis=0) if bounds is None else bounds[1]
-    scaling = asarray(vmax - vmin)
-    # do not normalize if samples contain a single value (in which case vmax=vmin)
-    scaling = where(scaling == 0, 1.0, scaling)
-    sample_pts -= vmin
-    sample_pts /= scaling
+    if bounds is None:
+        vmin = nanmin(sample_pts, axis=0)
+        vmax = nanmax(sample_pts, axis=0)
+    elif isinstance(bounds[0], (tuple, list)):
+        vmin = asarray([b[0] for b in bounds])
+        vmax = asarray([b[1] for b in bounds])
+    else:
+        vmin, vmax = bounds[0], bounds[1]
 
+    scaling = asarray(vmax - vmin)
+    scaling = where(scaling == 0, 1.0, scaling)
+    sample_pts = (sample_pts - vmin) / scaling
     return sample_pts, scaling
 
 

@@ -1120,7 +1120,8 @@ class TestEvalBasis:
             (
                 (1, 2, 3),
                 pytest.raises(
-                    ValueError, match="The provided `bounds` must be of length two."
+                    ValueError,
+                    match="bounds should be one or multiple tuples of 2 floats",
                 ),
             ),
         ],
@@ -3599,9 +3600,7 @@ class TestFourierBasis(BasisFuncsTesting):
             (
                 [(np.pi / 2, np.pi)] * 2,
                 1,
-                pytest.raises(
-                    TypeError, match="When provided, the bounds should be one"
-                ),
+                pytest.raises(ValueError, match="matching the inputs of the basis."),
             ),
             ([(np.pi / 2, np.pi)] * 2, 2, does_not_raise()),
             (
@@ -8033,7 +8032,9 @@ class TestBoundsND:
         if delta_dim == 0:
             expectation = does_not_raise()
         else:
-            expectation = pytest.raises(ValueError, match="a tuple per dimension")
+            expectation = pytest.raises(
+                ValueError, match="matching the inputs of the basis"
+            )
         bounds = [(0, 2)] * (ndim + delta_dim)
         with expectation:
             EvalBasis2D(ndim, bounds=bounds)
@@ -8060,14 +8061,14 @@ class TestBoundsND:
     def test_out_of_bounds_multicoord(self, ndim):
         bounds = [(0, 1), (0, 2), (-1, 1)][:ndim]
         xis = [np.linspace(*b, 10) for b in bounds]
-        out_of_bonuds = []
+        out_of_bounds = []
         expected_nan_position = np.zeros(ndim, dtype=int)
         for i, x in enumerate(xis):
             # add some out of bounds not at the borders
             x[i + 2] = 100
             expected_nan_position[i] = i + 2
-            out_of_bonuds.append(x)
+            out_of_bounds.append(x)
         bas = EvalBasis2D(ndim, bounds=bounds)
-        res = bas.compute_features(*out_of_bonuds)
+        res = bas.compute_features(*out_of_bounds)
         actual_nan_position = np.where(np.all(np.isnan(res), axis=1))[0]
         np.testing.assert_array_equal(actual_nan_position, expected_nan_position)
