@@ -8060,7 +8060,7 @@ class TestBoundsND:
         out_of_bonuds = []
         expected_nan_position = np.zeros(ndim, dtype=int)
         for i, x in enumerate(xis):
-            # add some out of bounds not at teh borders
+            # add some out of bounds not at the borders
             x[i+2] = 100
             expected_nan_position[i] = i+2
             out_of_bonuds.append(x)
