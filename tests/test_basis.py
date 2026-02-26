@@ -8053,19 +8053,18 @@ class TestBoundsND:
             np.array([True, True, False, False, True, False])
         )
 
-    @pytest.mark.parametrize("ndim", [3])
+    @pytest.mark.parametrize("ndim", [1, 2, 3])
     def test_out_of_bounds_multicoord(self, ndim):
         bounds = [(0, 1), (0, 2), (-1, 1)][:ndim]
         xis = [np.linspace(*b, 10) for b in bounds]
         out_of_bonuds = []
+        expected_nan_position = np.zeros(ndim, dtype=int)
         for i, x in enumerate(xis):
-            x[i] = 100
-
-        #
-        # xs = outbound + inbound
-        # bas = EvalBasis2D(ndim, bounds=bounds)
-        # out = bas.compute_features(*xs) # this fails because jnp.reshape(x, (x.shape[0], -1)) < self.bounds[0] is a 2D array since self.bounds[0] is a tuple.
-        # np.testing.assert_array_equal(
-        #     np.all(np.isnan(out), axis=1),
-        #     np.array([True, True, False, False, True, False])
-        # )
+            # add some out of bounds not at teh borders
+            x[i+2] = 100
+            expected_nan_position[i] = i+2
+            out_of_bonuds.append(x)
+        bas = EvalBasis2D(ndim, bounds=bounds)
+        res = bas.compute_features(*out_of_bonuds)
+        actual_nan_position = np.where(np.all(np.isnan(res), axis=1))[0]
+        np.testing.assert_array_equal(actual_nan_position, expected_nan_position)
