@@ -427,7 +427,7 @@ class PoissonObservations(Observations):
         observation_model=PoissonObservations(),
         inverse_link_function=exp,
         regularizer=UnRegularized(),
-        solver_name='GradientDescent'
+        solver_name='GradientDescent[optimistix]'
     )
     >>> # As a class instance
     >>> nmo.glm.GLM(observation_model=nmo.observation_models.PoissonObservations())
@@ -435,7 +435,7 @@ class PoissonObservations(Observations):
         observation_model=PoissonObservations(),
         inverse_link_function=exp,
         regularizer=UnRegularized(),
-        solver_name='GradientDescent'
+        solver_name='GradientDescent[optimistix]'
     )
 
     Notes
@@ -735,7 +735,7 @@ class GammaObservations(Observations):
         observation_model=GammaObservations(),
         inverse_link_function=one_over_x,
         regularizer=UnRegularized(),
-        solver_name='GradientDescent'
+        solver_name='GradientDescent[optimistix]'
     )
     >>> # As a class instance
     >>> nmo.glm.GLM(observation_model=nmo.observation_models.GammaObservations())
@@ -743,7 +743,7 @@ class GammaObservations(Observations):
         observation_model=GammaObservations(),
         inverse_link_function=one_over_x,
         regularizer=UnRegularized(),
-        solver_name='GradientDescent'
+        solver_name='GradientDescent[optimistix]'
     )
 
     Notes
@@ -1021,7 +1021,7 @@ class BernoulliObservations(Observations):
         observation_model=BernoulliObservations(),
         inverse_link_function=logistic,
         regularizer=UnRegularized(),
-        solver_name='GradientDescent'
+        solver_name='GradientDescent[optimistix]'
     )
     >>> # As a class instance
     >>> nmo.glm.GLM(observation_model=nmo.observation_models.BernoulliObservations())
@@ -1029,7 +1029,7 @@ class BernoulliObservations(Observations):
         observation_model=BernoulliObservations(),
         inverse_link_function=logistic,
         regularizer=UnRegularized(),
-        solver_name='GradientDescent'
+        solver_name='GradientDescent[optimistix]'
     )
 
     Notes
@@ -1421,7 +1421,7 @@ class NegativeBinomialObservations(Observations):
         observation_model=NegativeBinomialObservations(scale=1.0),
         inverse_link_function=exp,
         regularizer=UnRegularized(),
-        solver_name='GradientDescent'
+        solver_name='GradientDescent[optimistix]'
     )
     >>> # As a class instance
     >>> nmo.glm.GLM(observation_model=nmo.observation_models.NegativeBinomialObservations())
@@ -1429,7 +1429,7 @@ class NegativeBinomialObservations(Observations):
         observation_model=NegativeBinomialObservations(scale=1.0),
         inverse_link_function=exp,
         regularizer=UnRegularized(),
-        solver_name='GradientDescent'
+        solver_name='GradientDescent[optimistix]'
     )
 
     The ``scale`` parameter controls overdispersion. Larger values produce wider, more variable
@@ -1781,7 +1781,7 @@ class GaussianObservations(Observations):
         observation_model=GaussianObservations(),
         inverse_link_function=identity,
         regularizer=UnRegularized(),
-        solver_name='GradientDescent'
+        solver_name='GradientDescent[optimistix]'
     )
     >>> # As a class instance
     >>> nmo.glm.GLM(observation_model=nmo.observation_models.GaussianObservations())
@@ -1789,7 +1789,7 @@ class GaussianObservations(Observations):
         observation_model=GaussianObservations(),
         inverse_link_function=identity,
         regularizer=UnRegularized(),
-        solver_name='GradientDescent'
+        solver_name='GradientDescent[optimistix]'
     )
 
     Notes
