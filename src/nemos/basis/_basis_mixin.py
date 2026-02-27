@@ -10,7 +10,15 @@ from collections import OrderedDict
 from contextlib import contextmanager
 from functools import wraps
 from itertools import chain
-from typing import TYPE_CHECKING, Any, Generator, Literal, Optional, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Generator,
+    List,
+    Literal,
+    Optional,
+    Tuple,
+)
 
 import jax
 import jax.numpy as jnp
@@ -548,21 +556,19 @@ class EvalBasisMixin:
     @support_pynapple(conv_type="jax")
     def _apply_fill_value(self, *xi: ArrayLike, out: NDArray) -> jax.Array:
         """Apply fill value to out-of-bounds samples."""
-        # Use jnp.where for JAX compatibility
         to_fill = jnp.any(
             jnp.stack(
                 [
                     jnp.any(
-                        (jnp.reshape(x, (x.shape[0], -1)) < self.bounds[0])
-                        | (jnp.reshape(x, (x.shape[0], -1)) > self.bounds[1]),
+                        (jnp.reshape(x, (x.shape[0], -1)) < lo)
+                        | (jnp.reshape(x, (x.shape[0], -1)) > hi),
                         axis=1,
                     )
-                    for x in xi
+                    for x, (lo, hi) in zip(xi, self._get_bounds_per_dim(), strict=True)
                 ]
             ),
             axis=0,
         )
-        # Reshape to_fill to broadcast correctly: (n_samples,) -> (n_samples, 1, 1, ...)
         to_fill_broadcast = to_fill.reshape(to_fill.shape[0], *([1] * (out.ndim - 1)))
         return jnp.where(to_fill_broadcast, self.fill_value, out)
 
@@ -605,9 +611,45 @@ class EvalBasisMixin:
         return self
 
     @property
-    def bounds(self):
-        """Range of values covered by the basis."""
+    def bounds(self) -> List[Tuple[float, float]] | Tuple[float, float] | None:
+        """Returns bounds, as provided."""
         return self._bounds
+
+    def _get_bounds_per_dim(self) -> List[Tuple[float, float]]:
+        """Return bounds,  broadcast to one pair per input dimension."""
+        if self._bounds is None or isinstance(self._bounds[0], (int, float)):
+            return [self._bounds] * self._n_inputs
+        return list(self._bounds)
+
+    @bounds.setter
+    def bounds(self, values):
+        if values is None:
+            self._bounds = None
+            return
+
+        if isinstance(values, np.ndarray):
+            values = values.tolist()
+
+        if not isinstance(values, (list, tuple)):
+            raise TypeError(
+                f"Invalid bounds ``{values}`` provided, "
+                "bounds should be one or multiple tuples of 2 floats, "
+                "matching the inputs of the basis.\n"
+            )
+
+        # Validate: single (lo, hi) pair or one per dimension
+        if len(values) == 2 and all(not isinstance(v, (list, tuple)) for v in values):
+            # Single pair
+            self._bounds = self._format_bounds(values)
+        else:
+            # One pair per dimension
+            if len(values) != self._n_inputs:
+                raise ValueError(
+                    f"Invalid bounds ``{values}`` provided, "
+                    "bounds should be one or multiple tuples of 2 floats, "
+                    "matching the inputs of the basis.\n"
+                )
+            self._bounds = tuple(self._format_bounds(v) for v in values)
 
     @staticmethod
     def _format_bounds(values: Any) -> Tuple[Any, Exception | None]:
@@ -639,19 +681,6 @@ class EvalBasisMixin:
             )
 
         return values
-
-    @bounds.setter
-    def bounds(self, values: Union[None, Tuple[float, float]]):
-        """Setter for bounds."""
-        if values is None:
-            self._bounds = None
-            return
-        values = self._format_bounds(values)
-        if values is not None and len(values) != 2:
-            raise ValueError(
-                f"The provided `bounds` must be of length two. Length {len(values)} provided instead!"
-            )
-        self._bounds = values
 
 
 class ConvBasisMixin:
@@ -883,7 +912,7 @@ class CompositeBasisMixin(BasisMixin):
         self, basis1: BasisMixin, basis2: BasisMixin, label: Optional[str] = None
     ):
         # number of input arrays that the basis receives
-        self._n_input_dimensionality = infer_input_dimensionality(
+        self._n_inputs = infer_input_dimensionality(
             basis1
         ) + infer_input_dimensionality(basis2)
 
