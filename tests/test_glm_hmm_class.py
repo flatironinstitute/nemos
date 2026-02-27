@@ -1,4 +1,5 @@
 from contextlib import nullcontext as does_not_raise
+from copy import deepcopy
 from numbers import Number
 from typing import Callable
 from unittest.mock import patch
@@ -7,6 +8,7 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pynapple as nap
 import pytest
 from conftest import instantiate_base_regressor_subclass
 from test_base_regressor_subclasses import (
@@ -15,6 +17,7 @@ from test_base_regressor_subclasses import (
 )
 
 import nemos as nmo
+from nemos import tree_utils
 from nemos._observation_model_builder import (
     instantiate_observation_model,
 )
@@ -22,6 +25,7 @@ from nemos._regularizer_builder import instantiate_regularizer
 from nemos.glm_hmm.expectation_maximization import GLMHMMState, em_glm_hmm, em_step
 from nemos.glm_hmm.params import GLMHMMParams, GLMParams
 from nemos.pytrees import FeaturePytree
+from nemos.tree_utils import pytree_map_and_reduce
 from nemos.utils import _get_name
 
 # ============================================================================
@@ -341,6 +345,9 @@ def test_get_fit_attrs(instantiate_base_regressor_subclass):
     }
     assert fixture.model._get_fit_state() == expected_state
     fixture.model.solver_kwargs = {"maxiter": 1}
+    fixture.model.fit(fixture.X, fixture.y)
+    assert all(val is not None for val in fixture.model._get_fit_state().values())
+    assert fixture.model._get_fit_state().keys() == expected_state.keys()
 
 
 @pytest.mark.parametrize(
@@ -385,54 +392,82 @@ class TestGLMHMM:
                 ),
             }
 
-    @pytest.fixture
-    def initialize_solver_weights_dimensionality_expectation(
-        self, instantiate_base_regressor_subclass
-    ):
-        name = instantiate_base_regressor_subclass.model.__class__.__name__
-        if "Population" in name:
-            return {
-                0: pytest.raises(
-                    ValueError,
-                    match=r"params\[0\] must be an array or .* of shape \(n_features",
-                ),
-                1: pytest.raises(
-                    ValueError,
-                    match=r"params\[0\] must be an array or .* of shape \(n_features",
-                ),
-                2: pytest.raises(
-                    ValueError,
-                    match=r"params\[0\] must be an array or .* of shape \(n_features",
-                ),
-                3: does_not_raise(),
-            }
-        else:
-            return {
-                0: pytest.raises(
-                    ValueError,
-                    match=r"Inconsistent number of features",
-                ),
-                1: pytest.raises(
-                    ValueError,
-                    match=r"params\[0\] must be an array or .* of shape \(n_features",
-                ),
-                2: does_not_raise(),
-                3: pytest.raises(
-                    ValueError,
-                    match=r"params\[0\] must be an array or .* of shape \(n_features",
-                ),
-            }
+    def test_fit_pynapple_tsd(self, instantiate_base_regressor_subclass):
+        """Check that pynapple fit works."""
+        fixture = instantiate_base_regressor_subclass
+        model_epoch = deepcopy(fixture.model)
+        X = fixture.X
+        y = fixture.y
+        X = nap.TsdFrame(t=np.arange(y.shape[0]), d=X)
+        y = nap.Tsd(t=np.arange(y.shape[0]), d=y)
+        X = X[:20]
+        y = y[:20]
+        is_new_session = np.zeros(20)
+        is_new_session[0] = 1.0
+        # fit via model
+        model = fixture.model
+        params = model.initialize_params(X, y)
+        model.fit(X, y, init_params=params)
 
-    #
+        # run em passing the is new session directly
+        params_new, _ = model._optimization_run(
+            model._validator.to_model_params(params),
+            X=X.d,
+            y=y.d,
+            is_new_session=is_new_session,
+        )
+        assert not pytree_map_and_reduce(
+            jnp.array_equal,
+            all,
+            params_new,
+            model._validator.to_model_params(params),
+        )
+        assert pytree_map_and_reduce(
+            jnp.array_equal,
+            all,
+            params_new.glm_params,
+            GLMParams(model.coef_, model.intercept_),
+        )
+
+        # add an epoch and run fits again
+        ep = nap.IntervalSet([0, 8], [6, 20])
+        X_ep = X.restrict(ep)
+        y_ep = y.restrict(ep)
+        is_new_session = np.zeros(y_ep.shape[0])
+        is_new_session[0] = 1.0
+        is_new_session[len(y.restrict(ep[0]))] = 1
+
+        model_epoch.fit(X_ep, y_ep, init_params=params)
+        # run em passing the is new session directly
+        params_new_epoch, _ = model_epoch._optimization_run(
+            model._validator.to_model_params(params),
+            X=X_ep.d,
+            y=y_ep.d,
+            is_new_session=is_new_session,
+        )
+        assert not pytree_map_and_reduce(
+            jnp.array_equal,
+            all,
+            params_new_epoch,
+            params_new,
+        )
+        assert pytree_map_and_reduce(
+            jnp.array_equal,
+            all,
+            params_new_epoch.glm_params,
+            GLMParams(model_epoch.coef_, model_epoch.intercept_),
+        )
+
     @pytest.mark.parametrize("dim_weights", [0, 1, 2, 3])
-    def test_initialize_solver_weights_dimensionality(
+    @pytest.mark.requires_x64
+    def test_fit_weights_dimensionality(
         self,
         dim_weights,
         instantiate_base_regressor_subclass,
         fit_weights_dimensionality_expectation,
     ):
         """
-        Test the `initialize_solver` method with weight matrices of different dimensionalities.
+        Test the `fit` method with weight matrices of different dimensionalities.
         Check for correct dimensionality.
         """
         fixture = instantiate_base_regressor_subclass
@@ -444,72 +479,68 @@ class TestGLMHMM:
         elif dim_weights == 1:
             init_w = jnp.zeros((n_features,))
         elif dim_weights == 2:
-            init_w = jnp.zeros((n_features, 3))
-        elif dim_weights == 3:
-            init_w = jnp.zeros(
-                (n_features, fixture.y.shape[1] if fixture.y.ndim > 1 else 1, 3)
-            )
+            init_w = jnp.zeros(DEFAULT_GLM_COEF_SHAPE[fixture.model.__class__.__name__])
         else:
-            init_w = jnp.zeros((n_features, 3) + (1,) * (dim_weights - 2))
+            init_w = jnp.zeros(
+                DEFAULT_GLM_COEF_SHAPE[fixture.model.__class__.__name__]
+                + (1,) * (dim_weights - 2)
+            )
         with expectation:
-            params = fixture.model.initialize_params(
+            fixture.model.fit(
                 fixture.X,
                 fixture.y,
-            )
-            params = tuple([init_w, *params[1:]])
-            # check that params are set
-            init_state = fixture.model.initialize_optimization_and_state(
-                fixture.X, fixture.y, params
+                init_params=(
+                    init_w,
+                    fixture.params.glm_params.intercept,
+                    jnp.exp(fixture.params.glm_scale.log_scale),
+                    jnp.exp(fixture.params.hmm_params.log_initial_prob),
+                    jnp.exp(fixture.params.hmm_params.log_transition_prob),
+                ),
             )
 
     @pytest.mark.parametrize(
-        "dim_intercepts",
-        [0, 1, 2, 3],
+        "dim_intercepts, expectation",
+        [
+            (
+                0,
+                pytest.raises(ValueError, match=r"Invalid parameter dimensionality"),
+            ),
+            (1, does_not_raise()),
+            (
+                2,
+                pytest.raises(ValueError, match=r"Invalid parameter dimensionality"),
+            ),
+            (
+                3,
+                pytest.raises(ValueError, match=r"Invalid parameter dimensionality"),
+            ),
+        ],
     )
-    def test_initialize_solver_intercepts_dimensionality(
-        self,
-        dim_intercepts,
-        instantiate_base_regressor_subclass,
+    @pytest.mark.requires_x64
+    def test_fit_intercepts_dimensionality(
+        self, dim_intercepts, expectation, instantiate_base_regressor_subclass
     ):
         """
-        Test the `initialize_solver` method with intercepts of different dimensionalities.
-
-        Check for correct dimensionality.
+        Test the `fit` method with intercepts of different dimensionalities. Check for correct dimensionality.
         """
         fixture = instantiate_base_regressor_subclass
-        n_samples, n_features = fixture.X.shape
-        is_population = "Population" in fixture.model.__class__.__name__
-        if (dim_intercepts == 2 and is_population) or (
-            dim_intercepts == 1 and not is_population
-        ):
-            expectation = does_not_raise()
-        elif dim_intercepts == 0:
-            expectation = pytest.raises(
-                ValueError, match=r"Invalid parameter dimensionality"
+        if dim_intercepts == 1:
+            init_b = jnp.ones(
+                DEFAULT_GLM_COEF_SHAPE[fixture.model.__class__.__name__][1]
             )
         else:
-
-            expectation = pytest.raises(
-                ValueError, match=r"Invalid parameter dimensionality"
-            )
-        if is_population:
-            raise RuntimeError("Fill in the test case for population glmhmm")
-        else:
-            init_b = (
-                jnp.zeros((3,) + (1,) * (dim_intercepts - 1))
-                if dim_intercepts > 0
-                else jnp.array([])
-            )
-            init_w = jnp.zeros((n_features, 3))
+            init_b = jnp.ones((1,) * dim_intercepts)
         with expectation:
-            params = fixture.model.initialize_params(
+            fixture.model.fit(
                 fixture.X,
                 fixture.y,
-            )
-            params = tuple([init_w, init_b, *params[2:]])
-            # check that params are set
-            init_state = fixture.model.initialize_optimization_and_state(
-                fixture.X, fixture.y, params
+                init_params=(
+                    fixture.params.glm_params.coef,
+                    init_b,
+                    jnp.exp(fixture.params.glm_scale.log_scale),
+                    jnp.exp(fixture.params.hmm_params.log_initial_prob),
+                    jnp.exp(fixture.params.hmm_params.log_transition_prob),
+                ),
             )
 
     """
@@ -634,6 +665,194 @@ class TestGLMHMM:
     )
 
     @pytest.mark.parametrize(*fit_init_params_type_init_params)
+    @pytest.mark.requires_x64
+    def test_fit_init_glm_params_type(
+        self,
+        instantiate_base_regressor_subclass,
+        expectation,
+        init_params_glm,
+        init_params_population_glm,
+    ):
+        """
+        Test the `fit` method with various types of initial parameters. Ensure that the provided initial parameters
+        are array-like.
+        """
+        fixture = instantiate_base_regressor_subclass
+        if "Population" in fixture.model.__class__.__name__:
+            init_params = init_params_population_glm
+        else:
+            init_params = init_params_glm
+
+        with expectation:
+            fixture.model.fit(fixture.X, fixture.y, init_params=init_params)
+
+    @pytest.mark.parametrize(
+        "delta_n_features, expectation",
+        [
+            (-1, pytest.raises(ValueError, match="Inconsistent number of features")),
+            (0, does_not_raise()),
+            (1, pytest.raises(ValueError, match="Inconsistent number of features")),
+        ],
+    )
+    @pytest.mark.requires_x64
+    def test_fit_n_feature_consistency_weights(
+        self,
+        delta_n_features,
+        instantiate_base_regressor_subclass,
+        expectation,
+    ):
+        """
+        Test the `fit` method for inconsistencies between data features and initial weights provided.
+        Ensure the number of features align.
+        """
+        fixture = instantiate_base_regressor_subclass
+        if "Population" in fixture.model.__class__.__name__:
+            raise RuntimeError("Fill in the test case for population glmhmm")
+        else:
+            init_w = jnp.zeros((fixture.X.shape[1] + delta_n_features, 3))
+            init_b = jnp.ones(
+                3,
+            )
+        with expectation:
+            fixture.model.fit(
+                fixture.X,
+                fixture.y,
+                init_params=(
+                    init_w,
+                    init_b,
+                    jnp.exp(fixture.params.glm_scale.log_scale),
+                    jnp.exp(fixture.params.hmm_params.log_initial_prob),
+                    jnp.exp(fixture.params.hmm_params.log_transition_prob),
+                ),
+            )
+
+    @pytest.fixture
+    def initialize_solver_weights_dimensionality_expectation(
+        self, instantiate_base_regressor_subclass
+    ):
+        name = instantiate_base_regressor_subclass.model.__class__.__name__
+        if "Population" in name:
+            return {
+                0: pytest.raises(
+                    ValueError,
+                    match=r"params\[0\] must be an array or .* of shape \(n_features",
+                ),
+                1: pytest.raises(
+                    ValueError,
+                    match=r"params\[0\] must be an array or .* of shape \(n_features",
+                ),
+                2: pytest.raises(
+                    ValueError,
+                    match=r"params\[0\] must be an array or .* of shape \(n_features",
+                ),
+                3: does_not_raise(),
+            }
+        else:
+            return {
+                0: pytest.raises(
+                    ValueError,
+                    match=r"Inconsistent number of features",
+                ),
+                1: pytest.raises(
+                    ValueError,
+                    match=r"params\[0\] must be an array or .* of shape \(n_features",
+                ),
+                2: does_not_raise(),
+                3: pytest.raises(
+                    ValueError,
+                    match=r"params\[0\] must be an array or .* of shape \(n_features",
+                ),
+            }
+
+    @pytest.mark.parametrize("dim_weights", [0, 1, 2, 3])
+    def test_initialize_solver_weights_dimensionality(
+        self,
+        dim_weights,
+        instantiate_base_regressor_subclass,
+        fit_weights_dimensionality_expectation,
+    ):
+        """
+        Test the `initialize_solver` method with weight matrices of different dimensionalities.
+        Check for correct dimensionality.
+        """
+        fixture = instantiate_base_regressor_subclass
+        expectation = fit_weights_dimensionality_expectation[dim_weights]
+        n_samples, n_features = fixture.X.shape
+
+        if dim_weights == 0:
+            init_w = jnp.array([])
+        elif dim_weights == 1:
+            init_w = jnp.zeros((n_features,))
+        elif dim_weights == 2:
+            init_w = jnp.zeros((n_features, 3))
+        elif dim_weights == 3:
+            init_w = jnp.zeros(
+                (n_features, fixture.y.shape[1] if fixture.y.ndim > 1 else 1, 3)
+            )
+        else:
+            init_w = jnp.zeros((n_features, 3) + (1,) * (dim_weights - 2))
+        with expectation:
+            params = fixture.model.initialize_params(
+                fixture.X,
+                fixture.y,
+            )
+            params = tuple([init_w, *params[1:]])
+            # check that params are set
+            init_state = fixture.model.initialize_optimization_and_state(
+                fixture.X, fixture.y, params
+            )
+
+    @pytest.mark.parametrize(
+        "dim_intercepts",
+        [0, 1, 2, 3],
+    )
+    def test_initialize_solver_intercepts_dimensionality(
+        self,
+        dim_intercepts,
+        instantiate_base_regressor_subclass,
+    ):
+        """
+        Test the `initialize_solver` method with intercepts of different dimensionalities.
+
+        Check for correct dimensionality.
+        """
+        fixture = instantiate_base_regressor_subclass
+        n_samples, n_features = fixture.X.shape
+        is_population = "Population" in fixture.model.__class__.__name__
+        if (dim_intercepts == 2 and is_population) or (
+            dim_intercepts == 1 and not is_population
+        ):
+            expectation = does_not_raise()
+        elif dim_intercepts == 0:
+            expectation = pytest.raises(
+                ValueError, match=r"Invalid parameter dimensionality"
+            )
+        else:
+
+            expectation = pytest.raises(
+                ValueError, match=r"Invalid parameter dimensionality"
+            )
+        if is_population:
+            raise RuntimeError("Fill in the test case for population glmhmm")
+        else:
+            init_b = (
+                jnp.zeros((3,) + (1,) * (dim_intercepts - 1))
+                if dim_intercepts > 0
+                else jnp.array([])
+            )
+            init_w = jnp.zeros((n_features, 3))
+        with expectation:
+            params = fixture.model.initialize_params(
+                fixture.X,
+                fixture.y,
+            )
+            params = tuple([init_w, init_b, *params[2:]])
+            # check that params are set
+            init_state = fixture.model.initialize_optimization_and_state(
+                fixture.X, fixture.y, params
+            )
+
+    @pytest.mark.parametrize(*fit_init_params_type_init_params)
     def test_initialize_solver_init_glm_params_type(
         self,
         instantiate_base_regressor_subclass,
@@ -691,6 +910,352 @@ class TestGLMHMM:
             init_state = fixture.model.initialize_optimization_and_state(
                 fixture.X, fixture.y, params
             )
+
+    @pytest.mark.parametrize(
+        "X, y, expectation",
+        [
+            (np.array([[np.nan], [0]]), np.array([0, 1]), does_not_raise()),
+            (np.array([[0], [np.nan]]), np.array([0, 1]), does_not_raise()),
+            (np.array([[0], [0]]), np.array([np.nan, 1]), does_not_raise()),
+            (np.array([[0], [0]]), np.array([0, np.nan]), does_not_raise()),
+            (
+                np.array([[0], [np.nan], [0]]),
+                np.array([0, 1, 2]),
+                pytest.raises(
+                    ValueError, match="GLM-HMM requires continuous time-series data"
+                ),
+            ),
+            (
+                np.array([[0], [0], [0]]),
+                np.array([0, np.nan, 2]),
+                pytest.raises(
+                    ValueError, match="GLM-HMM requires continuous time-series data"
+                ),
+            ),
+            (
+                nap.TsdFrame(
+                    t=np.arange(5),
+                    d=np.array([[0], [np.nan], [0], [0], [0]]),
+                    time_support=nap.IntervalSet([0, 3], [2, 5]),
+                ),
+                np.array([0, 1, 2, 4, 5]),
+                pytest.raises(
+                    ValueError, match="GLM-HMM requires continuous time-series data"
+                ),
+            ),
+            (
+                nap.TsdFrame(
+                    t=np.arange(5),
+                    d=np.array([[0], [0], [np.nan], [0], [0]]),
+                    time_support=nap.IntervalSet([0, 3], [2, 5]),
+                ),
+                np.array([0, 1, 2, 4, 5]),
+                does_not_raise(),
+            ),
+            (
+                np.zeros((5, 1)),
+                nap.Tsd(
+                    t=np.arange(5),
+                    d=np.array([0, np.nan, 2, 4, 5]),
+                    time_support=nap.IntervalSet([0, 3], [2, 5]),
+                ),
+                pytest.raises(
+                    ValueError, match="GLM-HMM requires continuous time-series data"
+                ),
+            ),
+            (
+                np.zeros((5, 1)),
+                nap.Tsd(
+                    t=np.arange(5),
+                    d=np.array([0, 1, np.nan, 4, 5]),
+                    time_support=nap.IntervalSet([0, 3], [2, 5]),
+                ),
+                does_not_raise(),
+            ),
+            # Multiple consecutive NaNs in middle - should fail
+            (
+                np.array([[0], [np.nan], [np.nan], [0]]),
+                np.array([0, 1, 2, 3]),
+                pytest.raises(
+                    ValueError, match="GLM-HMM requires continuous time-series data"
+                ),
+            ),
+            # Multiple consecutive NaNs at start - should pass
+            (
+                np.array([[np.nan], [np.nan], [0]]),
+                np.array([0, 1, 2]),
+                does_not_raise(),
+            ),
+            # Multiple consecutive NaNs at end - should pass
+            (
+                np.array([[0], [np.nan], [np.nan]]),
+                np.array([0, 1, 2]),
+                does_not_raise(),
+            ),
+            # All NaNs - should fail (caught by parent validation)
+            (
+                np.array([[np.nan], [np.nan]]),
+                np.array([np.nan, np.nan]),
+                pytest.raises(ValueError),
+            ),
+            # No NaNs - should pass
+            (np.array([[0], [1]]), np.array([0, 1]), does_not_raise()),
+            # NaN at start of second epoch - should pass
+            (
+                nap.TsdFrame(
+                    t=np.arange(5),
+                    d=np.array([[0], [0], [np.nan], [0], [0]]),
+                    time_support=nap.IntervalSet([0, 2], [2, 5]),
+                ),
+                np.zeros(5),
+                does_not_raise(),
+            ),
+            # Both X and y with NaNs in middle at different positions - should fail
+            (
+                np.array([[0], [np.nan], [0], [0]]),
+                np.array([0, 1, np.nan, 3]),
+                pytest.raises(
+                    ValueError, match="GLM-HMM requires continuous time-series data"
+                ),
+            ),
+            # Both X and y with NaNs in middle at same position - should fail
+            (
+                np.array([[0], [np.nan], [0]]),
+                np.array([0, np.nan, 2]),
+                pytest.raises(
+                    ValueError, match="GLM-HMM requires continuous time-series data"
+                ),
+            ),
+        ],
+    )
+    def test_nan_between_epochs(
+        self,
+        instantiate_base_regressor_subclass,
+        X,
+        y,
+        expectation,
+    ):
+        """Test that NaN values are only allowed at epoch boundaries, not in the middle.
+
+        The GLM-HMM forward-backward algorithm requires continuous time-series data within
+        each epoch. This validation ensures data quality by rejecting datasets with NaN
+        values that would break the algorithm's recurrence relations.
+
+        Test coverage:
+        - NaNs at start/end of data → allowed (epoch boundaries)
+        - NaNs in middle of epoch → rejected (breaks continuity)
+        - Multiple consecutive NaNs at borders → allowed
+        - Multiple consecutive NaNs in middle → rejected
+        - All NaN data → rejected (caught by parent validation)
+        - No NaNs → allowed (trivial case)
+        - NaNs at epoch boundaries in multi-epoch pynapple data → allowed
+        - NaNs in both X and y → properly combined and validated
+
+        This strict validation prevents runtime errors in the forward-backward algorithm
+        and ensures users provide properly formatted time-series data.
+        """
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+        with expectation:
+            model._validator.validate_inputs(X, y)
+
+
+@pytest.mark.parametrize(
+    "X, y, expected_new_session",
+    [
+        (np.ones((3, 1)), np.ones((3,)), jnp.array([1, 0, 0])),
+        (np.ones((3, 1)), np.array([0, np.nan, 0]), jnp.array([1, 0, 1])),
+        (
+            nap.TsdFrame(
+                t=np.arange(3),
+                d=np.zeros((3, 3)),
+            ),
+            nap.Tsd(
+                t=np.arange(3),
+                d=np.zeros((3,)),
+            ),
+            jnp.array([1, 0, 0]),
+        ),
+        (
+            nap.TsdFrame(
+                t=np.arange(3),
+                d=np.zeros((3, 3)),
+                time_support=nap.IntervalSet([0, 1.5], [1.0, 2.0]),
+            ),
+            nap.Tsd(
+                t=np.arange(3),
+                d=np.zeros((3,)),
+                time_support=nap.IntervalSet([0, 1.5], [1.0, 2.0]),
+            ),
+            jnp.array([1, 0, 1]),
+        ),
+        (
+            nap.TsdFrame(
+                t=np.arange(5),
+                d=np.zeros((5, 3)),
+                time_support=nap.IntervalSet([0, 1.5], [1.0, 5.0]),
+            ),
+            nap.Tsd(
+                t=np.arange(5),
+                d=np.array([0, 0, np.nan, np.nan, 0]),
+                time_support=nap.IntervalSet([0, 1.5], [1.0, 5.0]),
+            ),
+            jnp.array([1, 0, 1, 1, 1]),
+        ),
+        (
+            nap.TsdFrame(
+                t=np.arange(6),
+                d=np.zeros((6, 3)),
+                time_support=nap.IntervalSet([0, 1.5], [1.0, 5.0]),
+            ),
+            nap.Tsd(
+                t=np.arange(6),
+                d=np.array([0, 0, np.nan, np.nan, 0, 0]),
+                time_support=nap.IntervalSet([0, 1.5], [1.0, 5.0]),
+            ),
+            jnp.array([1, 0, 1, 1, 1, 0]),
+        ),
+        (
+            nap.TsdFrame(
+                t=np.arange(6),
+                d=np.array([[0], [0], [np.nan], [np.nan], [0], [0]]),
+                time_support=nap.IntervalSet([0, 1.5], [1.0, 5.0]),
+            ),
+            nap.Tsd(
+                t=np.arange(6),
+                d=np.zeros(6),
+                time_support=nap.IntervalSet([0, 1.5], [1.0, 5.0]),
+            ),
+            jnp.array([1, 0, 1, 1, 1, 0]),
+        ),
+        # NaN at the very end of data
+        (
+            np.ones((4, 1)),
+            np.array([0, 1, 2, np.nan]),
+            jnp.array([1, 0, 0, 0]),
+        ),
+        # X and y both have NaNs at different positions
+        (
+            np.array([[0], [np.nan], [2], [3], [np.nan]]),
+            np.array([0, 1, np.nan, 3, 4]),
+            jnp.array([1, 0, 1, 1, 0]),
+        ),
+        # X and y both have NaNs at same position
+        (
+            np.array([[0], [np.nan], [2], [3]]),
+            np.array([0, np.nan, 2, 3]),
+            jnp.array([1, 0, 1, 0]),
+        ),
+        # Entire epoch is NaN (with pynapple)
+        (
+            nap.TsdFrame(
+                t=np.arange(6),
+                d=np.zeros((6, 1)),
+                time_support=nap.IntervalSet([0, 2, 4], [1, 3, 5]),
+            ),
+            nap.Tsd(
+                t=np.arange(6),
+                d=np.array([0, 0, np.nan, np.nan, 3, 4]),
+                time_support=nap.IntervalSet([0, 2, 4], [1, 3, 5]),
+            ),
+            jnp.array([1, 0, 1, 1, 1, 0]),
+        ),
+        # Multiple NaNs at the end
+        (
+            np.ones((5, 1)),
+            np.array([0, 1, 2, np.nan, np.nan]),
+            jnp.array([1, 0, 0, 0, 1]),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "instantiate_base_regressor_subclass",
+    [{"model": "GLMHMM", "obs_model": "Poisson", "simulate": False}],
+    indirect=True,
+)
+def test__get_is_new_session(
+    X, y, expected_new_session, instantiate_base_regressor_subclass
+):
+    """Test that session boundaries are correctly identified from epoch starts and NaN positions.
+
+    The GLM-HMM requires proper session segmentation to reset hidden states at discontinuities.
+    This test verifies that:
+    1. Epoch start times (from pynapple time_support) are marked as new sessions
+    2. Positions immediately following NaN values are marked as new sessions
+    3. Combined NaNs from both X and y are handled correctly
+
+    This ensures the forward-backward algorithm can properly handle gaps in time-series data
+    without incorrectly propagating state information across discontinuities.
+    """
+    fixture = instantiate_base_regressor_subclass
+    model = fixture.model
+    is_new_session = model._get_is_new_session(X, y)
+    assert jnp.all(is_new_session == expected_new_session)
+
+
+@pytest.mark.parametrize(
+    "X, y",
+    [
+        (
+            nap.TsdFrame(
+                t=np.arange(6),
+                d=np.zeros((6, 1)),
+                time_support=nap.IntervalSet([0, 1.5], [1.0, 5.0]),
+            ),
+            nap.Tsd(
+                t=np.arange(6),
+                d=np.arange(6),
+                time_support=nap.IntervalSet([0, 1.5], [1.0, 5.0]),
+            ),
+        ),
+        (
+            nap.TsdFrame(
+                t=np.arange(6),
+                d=np.zeros((6, 1)),
+                time_support=nap.IntervalSet([0, 1.5], [1.0, 5.0]),
+            ),
+            nap.Tsd(
+                t=np.arange(6),
+                d=np.array([0, 1, np.nan, np.nan, 2, 3]),
+                time_support=nap.IntervalSet([0, 1.5], [1.0, 5.0]),
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "instantiate_base_regressor_subclass",
+    [{"model": "GLMHMM", "obs_model": "Poisson", "simulate": False}],
+    indirect=True,
+)
+def test__get_is_new_session_and_drop_nan(X, y, instantiate_base_regressor_subclass):
+    """Test that session markers remain valid after NaN removal.
+
+    Critical integration test verifying that the NaN handling pipeline preserves session
+    boundaries correctly. When NaNs are dropped from the data, the new_session indicators
+    must still point to the correct first valid sample of each epoch.
+
+    This test ensures:
+    1. Number of sessions equals number of epochs after NaN removal
+    2. Session markers correctly identify the first valid value of each epoch
+
+    This is essential because the model marks positions *after* NaNs as new sessions
+    before dropping them, ensuring session boundaries survive the filtering step.
+    """
+    fixture = instantiate_base_regressor_subclass
+    model = fixture.model
+    is_new_session = model._get_is_new_session(X, y)
+
+    _, drop_y, is_new_session = tree_utils.drop_nans(X.d, y.d, is_new_session)
+    assert is_new_session.sum() == len(X.time_support)
+    first_valid_per_epoch = []
+    for ep in y.time_support:
+        yep = np.asarray(y.get(ep.start[0], ep.end[0]))
+        Xep = np.asarray(X.get(ep.start[0], ep.end[0])).reshape(yep.shape[0], -1)
+        is_nan = np.isnan(yep) | np.any(np.isnan(Xep), axis=1)
+        first_valid_per_epoch.append(yep[~is_nan][0])
+    assert np.all(
+        np.array(first_valid_per_epoch) == drop_y[is_new_session.astype(bool)]
+    )
 
     # -------------------------------------------------------------------------
     # Tests for _initialize_optimization_and_state internal setup
@@ -816,6 +1381,7 @@ class TestGLMHMM:
         )
 
     @pytest.mark.parametrize("maxiter", [10, 100, 500])
+    @pytest.mark.convergence
     def test_initialize_solver_respects_maxiter(
         self,
         maxiter,
@@ -824,6 +1390,7 @@ class TestGLMHMM:
         """Test that maxiter is correctly used in state initialization."""
         fixture = instantiate_base_regressor_subclass
         fixture.model.maxiter = maxiter
+        fixture.model.solver_kwargs.update({"maxiter": 500})
         params = fixture.model.initialize_params(fixture.X, fixture.y)
         init_state = fixture.model.initialize_optimization_and_state(
             fixture.X, fixture.y, params

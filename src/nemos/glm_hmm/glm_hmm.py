@@ -18,6 +18,7 @@ from ..base_regressor import BaseRegressor
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..observation_models import Observations
 from ..regularizer import GroupLasso, Lasso, Regularizer, Ridge
+from ..type_casting import is_pynapple_tsd
 from ..typing import (
     DESIGN_INPUT_TYPE,
     SolverState,
@@ -30,7 +31,11 @@ from .algorithm_configs import (
     prepare_mstep_nll_objective_param,
     prepare_mstep_nll_objective_scale,
 )
-from .expectation_maximization import GLMHMMState, em_glm_hmm, em_step
+from .expectation_maximization import (
+    GLMHMMState,
+    em_glm_hmm,
+    em_step,
+)
 from .initialize_parameters import (
     INITIALIZATION_FN_DICT,
     _is_native_init_registry,
@@ -41,6 +46,55 @@ from .initialize_parameters import (
 )
 from .params import GLMHMMParams, GLMHMMUserParams
 from .validation import GLMHMMValidator
+
+
+def compute_is_new_session(
+    time: NDArray | jnp.ndarray,
+    start: NDArray | jnp.ndarray,
+    is_nan: Optional[NDArray | jnp.ndarray] = None,
+) -> jnp.ndarray:
+    """Compute indicator vector marking the start of new sessions.
+
+    This function identifies session boundaries in time-series data by marking positions
+    where new epochs begin or where data resumes after NaN values. When NaN values are
+    present, the first valid sample immediately following each NaN is marked as a new
+    session start.
+
+    Parameters
+    ----------
+    time :
+        Timestamps for each sample in the time series, shape ``(n_time_points,)``.
+        Must be monotonically increasing.
+    start :
+        Start times marking the beginning of each epoch or session, shape ``(n_epochs,)``.
+        Each value should correspond to a timestamp in ``time``.
+    is_nan :
+        Boolean array indicating NaN positions, shape ``(n_time_points,)``.
+        If provided, positions immediately after NaNs will be marked as new session starts.
+
+    Returns
+    -------
+    is_new_session :
+        Binary indicator array of shape ``(n_time_points,)`` where 1 indicates the start
+        of a new session and 0 otherwise.
+
+    Notes
+    -----
+    The function marks positions as new sessions in two cases:
+    1. Positions matching epoch start times (from ``start`` parameter)
+    2. Positions immediately following NaN values (when ``is_nan`` is provided)
+
+    This ensures that after dropping NaN values, session boundaries are preserved.
+    """
+    is_new_session = (
+        jax.numpy.zeros_like(time).at[jax.numpy.searchsorted(time, start)].set(1)
+    )
+    if is_nan is not None:
+        # set the first element after nan as new session beginning
+        is_new_session = is_new_session.at[1:].set(
+            jnp.where(is_nan[:-1], 1, is_new_session[1:])
+        )
+    return is_new_session
 
 
 class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
@@ -203,6 +257,57 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         If ``maxiter`` is not a positive integer.
     ValueError
         If ``tol`` is not a positive float.
+
+    Examples
+    --------
+    **Generate Synthetic Data**
+
+    Generate synthetic data with state-dependent responses:
+
+    >>> import jax
+    >>> import jax.numpy as jnp
+    >>> import numpy as np
+    >>> import nemos as nmo
+    >>> np.random.seed(123)
+    >>> n_samples, n_features, n_states = 500, 3, 2
+    >>> X = np.random.normal(size=(n_samples, n_features))
+    >>> # State-dependent weights
+    >>> weights = np.array([[[0.5], [-0.3], [0.2]], [[-0.5], [0.4], [-0.1]]])
+    >>> # Simulate state sequence
+    >>> states = np.random.choice(n_states, size=n_samples)
+    >>> # Generate responses based on current state
+    >>> logits = np.array([X[t] @ weights[states[t]] for t in range(n_samples)]).squeeze()
+    >>> y = np.random.binomial(1, 1 / (1 + np.exp(-logits)))
+
+    **Fit a GLM-HMM**
+
+    Fit the model to the synthetic data:
+
+    >>> model = nmo.glm.GLMHMM(n_states=2, observation_model="Bernoulli")
+    >>> model = model.fit(X, y)
+    >>> model.coef_.shape
+    (3, 2)
+
+    **Customize the Observation Model**
+
+    Use a Poisson observation model for count data:
+
+    >>> model = nmo.glm.GLMHMM(n_states=3, observation_model="Poisson")
+    >>> model.observation_model
+    PoissonObservations()
+
+    **Use Regularization**
+
+    Fit with Ridge regularization on the GLM coefficients:
+
+    >>> model = nmo.glm.GLMHMM(
+    ...     n_states=2,
+    ...     observation_model="Bernoulli",
+    ...     regularizer="Ridge",
+    ...     regularizer_strength=0.1
+    ... )
+    >>> model.regularizer
+    Ridge()
     """
 
     def __init__(
@@ -301,7 +406,7 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         # quick sanity check and assignment
         if isinstance(n_states, int) and n_states > 0:
             self._n_states = n_states
-            self._validator = GLMHMMValidator(n_states=n_states)
+            self._validator: GLMHMMValidator = GLMHMMValidator(n_states=n_states)
             return
 
         # further checks for other valid numeric types (like non-negative float with no-decimals)
@@ -594,6 +699,67 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         self._optimization_init_state = init_state_fn
         return init_state_fn()
 
+    @staticmethod
+    def _get_is_new_session(
+        X: DESIGN_INPUT_TYPE, y: ArrayLike | nap.Tsd | nap.TsdFrame
+    ) -> jnp.ndarray | None:
+        """Compute session boundary indicators for GLM-HMM time-series data.
+
+        Identifies session boundaries by detecting epoch starts and gaps in the data
+        (represented by NaN values in either predictors or response). This is essential
+        for GLM-HMM models to properly segment time series data and reset the hidden
+        state between discontinuous recordings.
+
+        Parameters
+        ----------
+        X :
+            Design matrix or predictor time series. Can be a pynapple Tsd/TsdFrame or
+            array-like of shape ``(n_time_points, n_features)``.
+        y :
+            Response variable time series of shape ``(n_time_points,)`` or
+            ``(n_time_points, n_neurons)``.
+
+        Returns
+        -------
+        is_new_session :
+            Binary indicator array of shape ``(n_time_points,)`` marking session starts
+            with 1s. Returns None if unable to compute session boundaries.
+
+        Notes
+        -----
+        Session boundaries are identified from:
+        - Epoch start times (when using pynapple Tsd objects with time_support)
+        - Positions immediately following NaN values in either X or y
+
+        When both X and y are pynapple objects, y's time information takes precedence.
+
+        For non-pynapple inputs, a default session structure is initialized based on
+        the length of y.
+
+        See Also
+        --------
+        compute_is_new_session : Core function for computing session indicators.
+        """
+        # compute the nan location along the sample axis
+        nan_y = jnp.any(jnp.isnan(jnp.asarray(y)).reshape(y.shape[0], -1), axis=1)
+        nan_x = jnp.any(jnp.isnan(jnp.asarray(X)).reshape(X.shape[0], -1), axis=1)
+        combined_nans = nan_y | nan_x
+
+        # define new session array
+        if is_pynapple_tsd(y):
+            is_new_session = compute_is_new_session(
+                y.t, y.time_support.start, combined_nans
+            )
+        elif is_pynapple_tsd(X):
+            is_new_session = compute_is_new_session(
+                X.t, X.time_support.start, combined_nans
+            )
+        else:
+            is_new_session = compute_is_new_session(
+                jnp.arange(X.shape[0]), jnp.array([0.0]), combined_nans
+            )
+        return is_new_session
+
     def fit(
         self,
         X: DESIGN_INPUT_TYPE,
@@ -601,7 +767,52 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         init_params: Optional[GLMHMMUserParams] = None,
     ) -> "GLMHMM":
         """Fit the GLM-HMM model to the data."""
-        pass
+        self._validator.validate_inputs(X=X, y=y)
+        is_new_session = self._get_is_new_session(X, y)
+
+        # validate the inputs & initialize solver
+        # initialize params if no params are provided
+        if init_params is None:
+            init_params = self._model_specific_initialization(X, y)
+        else:
+            init_params = self._validator.validate_and_cast_params(init_params)
+            self._validator.validate_consistency(init_params, X=X, y=y)
+
+        self._validator.feature_mask_consistency(
+            getattr(self, "_feature_mask", None), init_params
+        )
+
+        # filter for non-nans, grab data if needed
+        data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
+
+        # make sure is_new_session starts with a 1
+        is_new_session = is_new_session.at[0].set(True)
+
+        # set up optimization
+        self._initialize_optimization_and_state(data, y, init_params)
+
+        # run EM
+        (
+            fit_params,
+            self.solver_state_,
+        ) = self._optimization_run(
+            init_params, X=data, y=y, is_new_session=is_new_session
+        )
+
+        if self.solver_state_.iterations == self.maxiter:
+            warnings.warn(
+                "The fit did not converge. "
+                "Consider the following:"
+                "\n1) Enable float64 with ``jax.config.update('jax_enable_x64', True)``"
+                "\n2) Increase the ``maxiter`` parameter (max number of iterations of the EM) "
+                "or increase the ``tol`` parameter (tolerance).",
+                RuntimeWarning,
+            )
+
+        # assign fit attributes
+        self._set_model_params(fit_params)
+        self.dof_resid_ = self._estimate_resid_degrees_of_freedom(data)
+        return self
 
     def _estimate_resid_degrees_of_freedom(
         self, X: DESIGN_INPUT_TYPE, n_samples: Optional[int] = None

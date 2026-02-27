@@ -116,6 +116,7 @@ VALID_PAIRS = [
             r=2,
         )
     ),
+    {"is_nan", "is_nap"},
     {"features", "n_features"},
     {"first_n_params", "fit_params"},
     {"test_ridge_with_aux", "test_ridge_without_aux"},
@@ -125,6 +126,8 @@ VALID_PAIRS = [
     {"arg_name", "algo_name"},
     {"arg_name", "attr_name"},
     {"arg_name", "var_name"},
+    {"_func", "func"},
+    {"_func", "funcs"},
 ]
 
 
