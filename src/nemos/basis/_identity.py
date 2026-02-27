@@ -73,7 +73,9 @@ class IdentityBasis(AtomicBasisMixin, Basis):
         else:
             vmin, vmax = self.bounds[0], self.bounds[1]
         sample_pts = jnp.where(
-            (sample_pts < vmin) | (sample_pts > vmax), jnp.nan, sample_pts
+            (sample_pts < vmin) | (sample_pts > vmax),
+            getattr(self, "fill_value", jnp.nan),
+            sample_pts,
         )
         return sample_pts[..., np.newaxis]
 
