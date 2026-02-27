@@ -30,7 +30,7 @@ from ._solver_registry import (
     list_available_algorithms,
     list_available_solvers,
     register,
-    set_default,
+    set_default_backend,
 )
 from ._svrg import SVRG, ProxSVRG, WrappedProxSVRG, WrappedSVRG
 from ._svrg_defaults import (
@@ -65,7 +65,7 @@ __all__ = [
     "list_available_algorithms",
     "list_available_solvers",
     "register",
-    "set_default",
+    "set_default_backend",
     "SVRG",
     "ProxSVRG",
     "WrappedProxSVRG",
