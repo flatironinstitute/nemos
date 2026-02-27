@@ -4,12 +4,14 @@
 from __future__ import annotations
 
 import abc
-from typing import Optional, Tuple
+from typing import TYPE_CHECKING, Optional, Tuple
 
 import numpy as np
 import scipy.linalg
 from numpy.typing import ArrayLike, NDArray
-from pynapple import Tsd, TsdFrame, TsdTensor
+
+if TYPE_CHECKING:
+    from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
@@ -144,7 +146,9 @@ class OrthExponentialBasis(AtomicBasisMixin, Basis, abc.ABC):
         """
         self._check_sample_size(sample_pts)
         sample_pts, _ = min_max_rescale_samples(
-            sample_pts, getattr(self, "bounds", None), use_jax=False
+            sample_pts,
+            getattr(self, "bounds", None),
+            use_jax=False,
         )
 
         # process one input at the time (orthogonalization must be done one input at the time)

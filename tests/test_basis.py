@@ -1158,7 +1158,8 @@ class TestEvalBasis:
         ],
     )
     def test_vmin_vmax_range(self, vmin, vmax, samples, nan_idx, cls):
-        if cls in [CustomBasis, basis.Zero]:
+        if cls in [CustomBasis, basis.Zero, basis.FourierEval]:
+            # FourierEval is defined over the real line; bounds specify period, not domain
             pytest.skip(f"Skipping test_vmin_vmax_range for {cls.__name__}")
         bounds = None if vmin is None else (vmin, vmax)
         bas = instantiate_atomic_basis(
@@ -1287,6 +1288,130 @@ class TestEvalBasis:
         with does_not_raise():
             cls(**kwargs, **extra_kwargs(cls, 10))
 
+    def test_fill_value_default(self, cls):
+        """Test that fill_value defaults to NaN."""
+        if cls in [CustomBasis, basis.Zero, basis.FourierEval]:
+            pytest.skip(f"Skipping test_fill_value_default for {cls.__name__}")
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=5,
+            bounds=(1, 3),
+            **extra_kwargs(cls, 5),
+        )
+        assert np.isnan(bas.fill_value)
+
+    @pytest.mark.parametrize("fill_value", [-999.0, -123.456])
+    @pytest.mark.parametrize(
+        "samples, out_of_bounds_idx",
+        [
+            # out of bounds only at extremes
+            (np.array([0.0, 1.5, 2.0, 2.5, 4.0]), [0, 4]),
+            # out of bounds below lower bound
+            (np.array([-1.0, 0.5, 1.5, 2.0, 2.5]), [0, 1]),
+            # out of bounds above upper bound
+            (np.array([1.5, 2.0, 2.5, 3.5, 4.0]), [3, 4]),
+            # out of bounds scattered (below, in, above, in, above)
+            (np.array([0.0, 1.5, 4.0, 2.0, 5.0]), [0, 2, 4]),
+            # single out of bounds at end
+            (np.array([1.2, 1.5, 2.0, 2.5, 10.0]), [4]),
+            # no out of bounds (all samples in bounds)
+            (np.array([1.0, 1.5, 2.0, 2.5, 3.0]), []),
+            # all out of bounds
+            (np.array([-2.0, -1.0, 0.0, 4.0, 5.0]), [0, 1, 2, 3, 4]),
+        ],
+    )
+    def test_fill_value_applied_to_out_of_bounds(
+        self, fill_value, samples, out_of_bounds_idx, cls
+    ):
+        """Test that fill_value is applied to samples outside bounds."""
+        if cls in [CustomBasis, basis.Zero, basis.FourierEval]:
+            pytest.skip(
+                f"Skipping test_fill_value_applied_to_out_of_bounds for {cls.__name__}"
+            )
+        # BSplineEval fails when all samples are out of bounds (scipy limitation)
+        if cls == basis.BSplineEval and len(out_of_bounds_idx) == len(samples):
+            pytest.skip("BSplineEval cannot handle all samples out of bounds")
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=5,
+            bounds=(1, 3),
+            fill_value=fill_value,
+            **extra_kwargs(cls, 5),
+        )
+        out = np.asarray(bas.compute_features(samples))
+        in_bounds_idx = [i for i in range(len(samples)) if i not in out_of_bounds_idx]
+        # Check that all out-of-bounds samples have the fill_value
+        for idx in out_of_bounds_idx:
+            assert np.all(out[idx] == fill_value), (
+                f"Out-of-bounds sample at index {idx} (value={samples[idx]}) "
+                f"should have fill_value={fill_value}"
+            )
+        # Check that all in-bounds samples do NOT have the fill_value
+        for idx in in_bounds_idx:
+            assert not np.all(out[idx] == fill_value), (
+                f"In-bounds sample at index {idx} (value={samples[idx]}) "
+                f"should not have fill_value={fill_value}"
+            )
+
+    @pytest.mark.parametrize("fill_value", [0.0, np.nan])
+    def test_fill_value_set_params(self, fill_value, cls):
+        """Test that fill_value can be set via set_params."""
+        if cls in [CustomBasis, basis.Zero, basis.FourierEval]:
+            pytest.skip(f"Skipping test_fill_value_set_params for {cls.__name__}")
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=5,
+            bounds=(1, 3),
+            **extra_kwargs(cls, 5),
+        )
+        bas.set_params(fill_value=fill_value)
+        if np.isnan(fill_value):
+            assert np.isnan(bas.fill_value)
+        else:
+            assert bas.fill_value == fill_value
+
+    @pytest.mark.requires_x64
+    def test_jit_compilation_with_bounds(self, cls):
+        """Test that compute_features can be JIT compiled when bounds are set."""
+        # Skip bases that depend on un-jittable scipy functions
+        if cls in [
+            basis.BSplineEval,
+            basis.CyclicBSplineEval,
+            basis.OrthExponentialEval,
+        ]:
+            pytest.skip(
+                f"Skipping test_jit_compilation_with_bounds for {cls.__name__}, "
+                "which depends on un-jittable scipy functions."
+            )
+        # Skip Zero since it doesn't have bounds
+        if cls == basis.Zero:
+            pytest.skip("Zero basis does not have bounds")
+
+        # CustomBasis needs pynapple_support=False for JIT compatibility
+        extra_args = {}
+        if cls == CustomBasis:
+            extra_args["pynapple_support"] = False
+
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=5,
+            bounds=(1, 3),
+            fill_value=0.0,
+            **extra_args,
+            **extra_kwargs(cls, 5),
+        )
+        func = jax.jit(bas.compute_features)
+        # Samples with some out of bounds
+        samples = np.array([0.5, 1.5, 2.0, 2.5, 3.5])
+        result_jit = np.asarray(func(samples))
+        result_no_jit = np.asarray(bas.compute_features(samples))
+        # JIT and non-JIT should produce the same result
+        np.testing.assert_allclose(result_jit, result_no_jit)
+        # Out of bounds samples should have fill_value (except FourierEval where bounds = period)
+        if cls != basis.FourierEval:
+            assert np.all(result_jit[0] == 0.0)  # 0.5 < 1
+            assert np.all(result_jit[4] == 0.0)  # 3.5 > 3
+
 
 @pytest.mark.parametrize(
     "cls",
@@ -1348,14 +1473,14 @@ class TestSharedMethods:
         "expected_out",
         [
             {
-                CustomBasis: "CustomBasis(\n    funcs=[partial(power_func, 1), ..., partial(power_func, 5)],\n    ndim_input=1,\n    pynapple_support=True,\n    is_complex=False\n)",
-                basis.RaisedCosineLogEval: "RaisedCosineLogEval(n_basis_funcs=5, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True, bounds=(1.0, 2.0))",
-                basis.RaisedCosineLinearEval: "RaisedCosineLinearEval(n_basis_funcs=5, width=2.0, bounds=(1.0, 2.0))",
-                basis.BSplineEval: "BSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
-                basis.CyclicBSplineEval: "CyclicBSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
-                basis.MSplineEval: "MSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
-                basis.OrthExponentialEval: "OrthExponentialEval(n_basis_funcs=5, bounds=(1.0, 2.0))",
-                basis.IdentityEval: "IdentityEval(bounds=(1.0, 2.0))",
+                CustomBasis: "CustomBasis(\n    funcs=[partial(power_func, 1), ..., partial(power_func, 5)],\n    ndim_input=1,\n    pynapple_support=True,\n    is_complex=False,\n    bounds=(1, 2),\n    fill_value=nan\n)",
+                basis.RaisedCosineLogEval: "RaisedCosineLogEval(n_basis_funcs=5, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True, bounds=(1.0, 2.0), fill_value=nan)",
+                basis.RaisedCosineLinearEval: "RaisedCosineLinearEval(n_basis_funcs=5, width=2.0, bounds=(1.0, 2.0), fill_value=nan)",
+                basis.BSplineEval: "BSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0), fill_value=nan)",
+                basis.CyclicBSplineEval: "CyclicBSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0), fill_value=nan)",
+                basis.MSplineEval: "MSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0), fill_value=nan)",
+                basis.OrthExponentialEval: "OrthExponentialEval(n_basis_funcs=5, bounds=(1.0, 2.0), fill_value=nan)",
+                basis.IdentityEval: "IdentityEval(bounds=(1.0, 2.0), fill_value=nan)",
                 basis.RaisedCosineLogConv: "RaisedCosineLogConv(n_basis_funcs=5, window_size=10, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True)",
                 basis.RaisedCosineLinearConv: "RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0)",
                 basis.BSplineConv: "BSplineConv(n_basis_funcs=5, window_size=10, order=4)",
@@ -1384,13 +1509,13 @@ class TestSharedMethods:
         [
             {
                 CustomBasis: r"'mylabel': CustomBasis\(\n    funcs=\[partial\(power_func, 1\), ..., partial\(power_func, 5\)",
-                basis.RaisedCosineLogEval: r"'mylabel': RaisedCosineLogEval\(n_basis_funcs=5, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True, bounds=\(1.0, 2.0\)\)",
-                basis.RaisedCosineLinearEval: r"'mylabel': RaisedCosineLinearEval\(n_basis_funcs=5, width=2.0, bounds=\(1.0, 2.0\)\)",
-                basis.BSplineEval: r"'mylabel': BSplineEval\(n_basis_funcs=5, order=4, bounds=\(1.0, 2.0\)\)",
-                basis.CyclicBSplineEval: r"'mylabel': CyclicBSplineEval\(n_basis_funcs=5, order=4, bounds=\(1.0, 2.0\)\)",
-                basis.MSplineEval: r"'mylabel': MSplineEval\(n_basis_funcs=5, order=4, bounds=\(1.0, 2.0\)\)",
-                basis.OrthExponentialEval: r"'mylabel': OrthExponentialEval\(n_basis_funcs=5, bounds=\(1.0, 2.0\)\)",
-                basis.IdentityEval: r"'mylabel': IdentityEval\(bounds=\(1.0, 2.0\)\)",
+                basis.RaisedCosineLogEval: r"'mylabel': RaisedCosineLogEval\(n_basis_funcs=5, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True, bounds=\(1.0, 2.0\), fill_value=nan\)",
+                basis.RaisedCosineLinearEval: r"'mylabel': RaisedCosineLinearEval\(n_basis_funcs=5, width=2.0, bounds=\(1.0, 2.0\), fill_value=nan\)",
+                basis.BSplineEval: r"'mylabel': BSplineEval\(n_basis_funcs=5, order=4, bounds=\(1.0, 2.0\), fill_value=nan\)",
+                basis.CyclicBSplineEval: r"'mylabel': CyclicBSplineEval\(n_basis_funcs=5, order=4, bounds=\(1.0, 2.0\), fill_value=nan\)",
+                basis.MSplineEval: r"'mylabel': MSplineEval\(n_basis_funcs=5, order=4, bounds=\(1.0, 2.0\), fill_value=nan\)",
+                basis.OrthExponentialEval: r"'mylabel': OrthExponentialEval\(n_basis_funcs=5, bounds=\(1.0, 2.0\), fill_value=nan\)",
+                basis.IdentityEval: r"'mylabel': IdentityEval\(bounds=\(1.0, 2.0\), fill_value=nan\)",
                 basis.RaisedCosineLogConv: r"'mylabel': RaisedCosineLogConv\(n_basis_funcs=5, window_size=10, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True\)",
                 basis.RaisedCosineLinearConv: r"'mylabel': RaisedCosineLinearConv\(n_basis_funcs=5, window_size=10, width=2.0\)",
                 basis.BSplineConv: r"'mylabel': BSplineConv\(n_basis_funcs=5, window_size=10, order=4\)",
@@ -3531,6 +3656,39 @@ class TestFourierBasis(BasisFuncsTesting):
         for i in range(ndim):
             assert out[i].shape == ((10,) * ndim)
         assert out[ndim].shape == (*(10,) * ndim, bas.n_basis_funcs)
+
+    def test_no_fill_value_applied(self):
+        """Test that FourierEval does not apply fill_value (bounds specify period, not domain)."""
+        bas = self.cls["eval"](frequencies=3, ndim=1, bounds=(0, 1))
+        # Samples outside the "bounds" (which is the period) should still be evaluated
+        samples = np.array([-1.0, 0.5, 2.0])
+        out = np.asarray(bas.compute_features(samples))
+        # No NaN values should be present since Fourier is periodic
+        assert not np.any(np.isnan(out))
+
+    @pytest.mark.parametrize(
+        "bounds1, bounds2, scale_factor",
+        [
+            ((0, 1), (0, 0.5), 0.5),  # half period
+            ((0, 1), (0, 2), 2.0),  # double period
+            ((0, 2), (0, 1), 0.5),  # half period (reversed)
+            ((-1, 1), (-0.5, 0.5), 0.5),  # half period, centered at 0
+        ],
+    )
+    def test_bounds_periodicity_invariance(self, bounds1, bounds2, scale_factor):
+        """Test that bounds define the period: same relative position gives same output."""
+        bas1 = self.cls["eval"](frequencies=3, ndim=1, bounds=bounds1)
+        bas2 = self.cls["eval"](frequencies=3, ndim=1, bounds=bounds2)
+
+        # Samples within bounds1
+        samples1 = np.linspace(bounds1[0], bounds1[1], 10, endpoint=False)
+        # Corresponding samples scaled to bounds2 (same relative position in period)
+        samples2 = bounds2[0] + (samples1 - bounds1[0]) * scale_factor
+
+        out1 = np.asarray(bas1.compute_features(samples1))
+        out2 = np.asarray(bas2.compute_features(samples2))
+
+        np.testing.assert_allclose(out1, out2, rtol=1e-5)
 
 
 class TestAdditiveBasis(CombinedBasis):
@@ -6861,7 +7019,20 @@ def test_basis_to_transformer(basis_cls, basis_class_specific_params):
             f1s, f2s = getattr(bas, k), getattr(trans_bas, k)
             assert np.all(f1 == f2 for f1, f2 in zip(f1s, f2s))
         else:
-            assert np.all(getattr(bas, k) == getattr(trans_bas, k))
+            v1, v2 = getattr(bas, k), getattr(trans_bas, k)
+            # Handle NaN comparison (NaN != NaN, so use isnan check)
+            try:
+                if (
+                    np.isscalar(v1)
+                    and np.isnan(v1)
+                    and np.isscalar(v2)
+                    and np.isnan(v2)
+                ):
+                    continue
+            except (TypeError, ValueError):
+                # isnan doesn't work on non-numeric types
+                pass
+            assert np.all(v1 == v2)
 
 
 @pytest.mark.parametrize(
@@ -7833,23 +8004,26 @@ def test_composite_basis_repr_wrapping():
         assert "    ...\n" in out
 
 
-def test_all_public_importable_bases_equal():
-    import nemos.basis
+def test_basis_public_api_matches_subclasses():
+    import nemos as nmo
 
-    # this is the list of publicly available bases
-    public_bases = set(dir(nemos.basis))
-    # these are all the bases that are imported in the init file
-    # Get all classes that are explicitly defined or imported into nemos.basis
-    imported_bases = {
+    # Public contract of the module
+    public = set(nmo.basis.__all__)
+
+    # All Basis subclasses exposed through the namespace
+    basis_subclasses = {
         name
-        for name, obj in inspect.getmembers(nemos.basis, inspect.isclass)
-        if issubclass(obj, nemos.basis._basis.Basis)
+        for name, obj in inspect.getmembers(nmo.basis, inspect.isclass)
+        if issubclass(obj, nmo.basis._basis.Basis) and obj is not nmo.basis._basis.Basis
     }
 
-    if public_bases.difference(imported_bases) != {"CustomBasis"}:
-        raise ValueError(
-            "nemos/basis/__init__.py imported basis objects does not match"
-            " nemos/basis/_composition_utils.py's __PUBLIC_BASES__ list:\n"
-            f"imported but not public: {imported_bases - public_bases}\n",
-            f"public but not imported: {public_bases - imported_bases}",
-        )
+    # Known public names that are not direct subclasses
+    exceptions = {"CustomBasis", "TransformerBasis"}
+
+    expected_public = basis_subclasses.union(exceptions)
+
+    assert public == expected_public, (
+        f"\nPublic API mismatch in nemos.basis\n"
+        f"Missing from __all__: {expected_public - public}\n"
+        f"Unexpected in __all__: {public - expected_public}"
+    )

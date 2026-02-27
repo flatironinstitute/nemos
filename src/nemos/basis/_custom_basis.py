@@ -13,10 +13,9 @@ from numbers import Number
 from typing import TYPE_CHECKING, Callable, Iterable, List, Optional, Tuple
 
 import jax.numpy as jnp
+import lazy_loader as lazy
 import numpy as np
-import pynapple as nap
 from numpy.typing import ArrayLike, NDArray
-from pynapple import Tsd, TsdFrame, TsdTensor
 
 from nemos.typing import FeatureMatrix
 
@@ -39,7 +38,13 @@ from ._composition_utils import (
     set_input_shape,
 )
 
+# Lazy load pynapple to improve import times
+nap = lazy.load("pynapple")
+
 if TYPE_CHECKING:
+    import pynapple as nap  # noqa: F811
+    from pynapple import Tsd, TsdFrame, TsdTensor
+
     from . import TransformerBasis
 
 
@@ -200,6 +205,8 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         pynapple_support: bool = True,
         label: Optional[str] = None,
         is_complex: bool = False,
+        bounds: Optional[Tuple[float, float]] = None,
+        fill_value: float = jnp.nan,
     ):
         self._pynapple_support = bool(pynapple_support)
         self.funcs = funcs
@@ -217,6 +224,8 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
 
         self.basis_kwargs = basis_kwargs
         self._is_complex = bool(is_complex)
+        self.bounds = bounds
+        self.fill_value = fill_value
         super().__init__(label=label)
 
     @property
@@ -308,6 +317,27 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
             )
         self._basis_kwargs = basis_kwargs
 
+    @support_pynapple(conv_type="jax")
+    def _apply_fill_value(self, *xi: ArrayLike, out: NDArray) -> NDArray:
+        """Apply fill value to out-of-bounds samples."""
+        # Compute mask for out-of-bounds samples
+        to_fill = jnp.any(
+            jnp.stack(
+                [
+                    jnp.any(
+                        (jnp.reshape(x, (x.shape[0], -1)) < self.bounds[0])
+                        | (jnp.reshape(x, (x.shape[0], -1)) > self.bounds[1]),
+                        axis=1,
+                    )
+                    for x in xi
+                ]
+            ),
+            axis=0,
+        )
+        # Reshape to_fill to broadcast correctly: (n_samples,) -> (n_samples, 1, 1, ...)
+        to_fill_broadcast = to_fill.reshape(to_fill.shape[0], *([1] * (out.ndim - 1)))
+        return jnp.where(to_fill_broadcast, self.fill_value, out)
+
     def compute_features(
         self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor
     ) -> FeatureMatrix:
@@ -362,6 +392,9 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         design_matrix = self.evaluate(
             *xi
         )  # (n_samples, *n_output_shape, n_vec_dim, n_basis)
+        # Apply fill_value to out-of-bounds samples
+        if self.bounds is not None:
+            design_matrix = self._apply_fill_value(*xi, out=design_matrix)
         # return a model design
         return design_matrix.reshape((xi[0].shape[0], -1))
 
@@ -431,7 +464,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         return stacked
 
     @set_input_shape_state(states=("_input_shape_product", "_input_shape_", "_label"))
-    def __sklearn_clone__(self) -> "CustomBasis":
+    def __sklearn_clone__(self) -> CustomBasis:
         """Clone the basis while preserving attributes related to input shapes.
 
         This method ensures that input shape attributes (e.g., `_input_shape_product`,
@@ -466,7 +499,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
 
     @staticmethod
     def _reshape_concatenated_arrays(
-        array: NDArray, bas: "CustomBasis", axis: int
+        array: NDArray, bas: CustomBasis, axis: int
     ) -> NDArray:
         # reshape the arrays to match input shapes
         shape = list(array.shape)
@@ -510,7 +543,11 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         return raise_basis_to_power(self, exponent)
 
     def __repr__(self, n=0):
-        rep = format_repr(self, multiline=True)
+        if self.bounds is None:
+            kwargs = dict(exclude_keys=["fill_value"])
+        else:
+            kwargs = {}
+        rep = format_repr(self, **kwargs, multiline=True)
         tab = "    "
         return rep.replace("\n", f"\n{tab * n}")
 
@@ -624,7 +661,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         )
         return self
 
-    def to_transformer(self) -> "TransformerBasis":
+    def to_transformer(self) -> TransformerBasis:
         """
         Turn the Basis into a TransformerBasis for use with scikit-learn.
 

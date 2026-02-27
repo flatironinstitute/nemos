@@ -1,20 +1,24 @@
 """Utility functions for data pre-processing."""
 
+from __future__ import annotations
+
 import inspect
 import os
 import warnings
 from importlib.metadata import version
-from typing import Any, Callable, List, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, List, Literal, Optional, Union
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 from numpy.typing import NDArray
 
-from .base_class import Base
 from .tree_utils import pytree_map_and_reduce
 from .type_casting import support_pynapple
 from .typing import Pytree
+
+if TYPE_CHECKING:
+    from .base_class import Base
 
 __all__ = [
     "check_dimensionality",

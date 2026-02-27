@@ -35,6 +35,7 @@ import pytest
 import nemos as nmo
 import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
+from nemos.base_regressor import BaseRegressor
 from nemos.basis import AdditiveBasis, CustomBasis, MultiplicativeBasis, Zero
 from nemos.basis._basis import Basis
 from nemos.basis._basis_mixin import BasisMixin
@@ -150,12 +151,16 @@ def custom_basis(n_basis_funcs=5, label=None, **kwargs):
     ndim_input = kwargs.get("ndim_input", 1)
     out_shape = kwargs.get("output_shape", None)
     pynapple_support = kwargs.get("pynapple_support", True)
+    bounds = kwargs.get("bounds", None)
+    fill_value = kwargs.get("fill_value", float("nan"))
     return CustomBasis(
         funcs,
         label=label,
         ndim_input=ndim_input,
         output_shape=out_shape,
         pynapple_support=pynapple_support,
+        bounds=bounds,
+        fill_value=fill_value,
     )
 
 
@@ -291,7 +296,7 @@ def list_all_real_basis_classes(filter_basis="all"):
 
 
 # Sample subclass to test instantiation and methods
-class MockRegressor(nmo.base_regressor.BaseRegressor):
+class MockRegressor(BaseRegressor):
     """
     Mock implementation of the BaseRegressor abstract class for testing purposes.
     Implements all required abstract methods as empty methods.
@@ -1599,12 +1604,7 @@ def configure_solver_backend(request):
     backend = os.getenv("NEMOS_SOLVER_BACKEND")
 
     if backend is None:
-        # use the defaults for each algorithm
-        _solvers_to_use = [
-            nmo.solvers.get_solver(algo)
-            for algo in nmo.solvers.list_available_algorithms()
-        ]
-
+        _solvers_to_use = nmo.solvers.list_available_solvers()
     else:
         if backend == "jaxopt" and not nmo.solvers.JAXOPT_AVAILABLE:
             pytest.fail("jaxopt backend requested but jaxopt is not installed.")

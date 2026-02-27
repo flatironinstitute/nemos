@@ -1,11 +1,15 @@
 """Base class defining the interface for solvers that can be used by `BaseRegressor`."""
 
+from __future__ import annotations
+
 import abc
 from dataclasses import dataclass
-from typing import Any, Callable, Generic, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Callable, Generic, Protocol, runtime_checkable
 
-from ..regularizer import Regularizer
 from ..typing import Params, SolverState, StepResult
+
+if TYPE_CHECKING:
+    from ..regularizer import Regularizer
 
 
 @dataclass

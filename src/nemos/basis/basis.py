@@ -39,6 +39,8 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
         The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
+    fill_value :
+        The value to fill when samples are outside the bounds. Default is NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
@@ -68,6 +70,7 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
         n_basis_funcs: int,
         order: int = 4,
         bounds: Optional[Tuple[float, float]] = None,
+        fill_value: float = jax.numpy.nan,
         label: Optional[str] = "BSplineEval",
     ):
 
@@ -77,7 +80,7 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
             order=order,
             label=label,
         )
-        EvalBasisMixin.__init__(self, bounds=bounds)
+        EvalBasisMixin.__init__(self, bounds=bounds, fill_value=fill_value)
 
     @add_docstring("split_by_feature", BSplineBasis)
     def split_by_feature(
@@ -381,6 +384,8 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
+    fill_value :
+        The value to fill when samples are outside the bounds. Default is NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
@@ -403,9 +408,10 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         n_basis_funcs: int,
         order: int = 4,
         bounds: Optional[Tuple[float, float]] = None,
+        fill_value: float = jax.numpy.nan,
         label: Optional[str] = "CyclicBSplineEval",
     ):
-        EvalBasisMixin.__init__(self, bounds=bounds)
+        EvalBasisMixin.__init__(self, bounds=bounds, fill_value=fill_value)
         CyclicBSplineBasis.__init__(
             self,
             n_basis_funcs,
@@ -723,6 +729,8 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
+    fill_value :
+        The value to fill when samples are outside the bounds. Default is NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
@@ -758,9 +766,10 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         n_basis_funcs: int,
         order: int = 4,
         bounds: Optional[Tuple[float, float]] = None,
+        fill_value: float = jax.numpy.nan,
         label: Optional[str] = "MSplineEval",
     ):
-        EvalBasisMixin.__init__(self, bounds=bounds)
+        EvalBasisMixin.__init__(self, bounds=bounds, fill_value=fill_value)
         MSplineBasis.__init__(
             self,
             n_basis_funcs,
@@ -1091,6 +1100,8 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
         The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
+    fill_value :
+        The value to fill when samples are outside the bounds. Default is NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
@@ -1120,9 +1131,10 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
         n_basis_funcs: int,
         width: float = 2.0,
         bounds: Optional[Tuple[float, float]] = None,
+        fill_value: float = jax.numpy.nan,
         label: Optional[str] = "RaisedCosineLinearEval",
     ):
-        EvalBasisMixin.__init__(self, bounds=bounds)
+        EvalBasisMixin.__init__(self, bounds=bounds, fill_value=fill_value)
         RaisedCosineBasisLinear.__init__(
             self,
             n_basis_funcs,
@@ -1431,6 +1443,12 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         If set to True, the algorithm first constructs a basis with ``n_basis_funcs + ceil(width)`` elements
         and subsequently trims off the extra basis elements. This ensures that the final basis element
         decays to 0.
+    bounds :
+        The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
+        minimum and the maximum of the samples provided when evaluating the basis.
+        If a sample is outside the bounds, the basis will return NaN.
+    fill_value :
+        The value to fill when samples are outside the bounds. Default is NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
@@ -1462,9 +1480,10 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         time_scaling: float = None,
         enforce_decay_to_zero: bool = True,
         bounds: Optional[Tuple[float, float]] = None,
+        fill_value: float = jax.numpy.nan,
         label: Optional[str] = "RaisedCosineLogEval",
     ):
-        EvalBasisMixin.__init__(self, bounds=bounds)
+        EvalBasisMixin.__init__(self, bounds=bounds, fill_value=fill_value)
         RaisedCosineBasisLog.__init__(
             self,
             n_basis_funcs,
@@ -1780,6 +1799,8 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
+    fill_value :
+        The value to fill when samples are outside the bounds. Default is NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
@@ -1807,9 +1828,10 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         n_basis_funcs: int,
         decay_rates: NDArray,
         bounds: Optional[Tuple[float, float]] = None,
+        fill_value: float = jax.numpy.nan,
         label: Optional[str] = "OrthExponentialEval",
     ):
-        EvalBasisMixin.__init__(self, bounds=bounds)
+        EvalBasisMixin.__init__(self, bounds=bounds, fill_value=fill_value)
         OrthExponentialBasis.__init__(
             self,
             n_basis_funcs,
@@ -2130,6 +2152,8 @@ class IdentityEval(EvalBasisMixin, IdentityBasis):
         The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
+    fill_value :
+        The value to fill when samples are outside the bounds. Default is NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
@@ -2138,9 +2162,10 @@ class IdentityEval(EvalBasisMixin, IdentityBasis):
     def __init__(
         self,
         bounds: Optional[Tuple[float, float]] = None,
+        fill_value: float = jax.numpy.nan,
         label: Optional[str] = "IdentityEval",
     ):
-        EvalBasisMixin.__init__(self, bounds=bounds)
+        EvalBasisMixin.__init__(self, bounds=bounds, fill_value=fill_value)
         IdentityBasis.__init__(
             self,
             n_basis_funcs=1,
@@ -2618,11 +2643,14 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         Dimensionality of the basis. Default is 1.
 
     bounds :
-        Domain bounds for each dimension.
+        Period bounds for each dimension. Unlike other basis classes where bounds define
+        a valid domain (with out-of-bounds samples filled with NaN), for the Fourier basis
+        the bounds define the period of the basis functions. Samples outside these bounds
+        are still valid and will be evaluated using the periodic nature of the basis.
 
         * :class:`tuple`: ``(low, high)`` of floats: applies to all dimensions.
         * :class:`list` of :class:`tuple`: ``[(low, high), ...]``, one tuple per dimension, length must match ``ndim``.
-        * :class:`None <NoneType>`: the domain is inferred from the input data (maximum to minimum values).
+        * :class:`None <NoneType>`: the period is inferred from the input data (minimum to maximum values).
 
         In all cases, ``low`` must be strictly less than ``high``, and values must be convertible to floats.
 
@@ -2732,6 +2760,10 @@ class FourierEval(EvalBasisMixin, FourierBasis):
     18
 
     """
+
+    # Fourier basis is defined over the entire real line; bounds specify the period,
+    # not a valid domain. No out-of-bounds filling should be applied.
+    _apply_bounds_fill = False
 
     def __init__(
         self,

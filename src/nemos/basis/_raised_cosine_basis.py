@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import abc
-from typing import Optional, Tuple
+from typing import TYPE_CHECKING, Optional, Tuple
 
 import jax.numpy as jnp
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
-from pynapple import Tsd, TsdFrame, TsdTensor
+
+if TYPE_CHECKING:
+    from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
@@ -129,7 +131,8 @@ class RaisedCosineBasisLinear(AtomicBasisMixin, Basis, abc.ABC):
             # additive_basis = basis1 + basis2
             # additive_basis.evaluate(*([x] * 2)) would modify both inputs
             sample_pts, _ = min_max_rescale_samples(
-                jnp.copy(sample_pts), getattr(self, "bounds", None)
+                jnp.copy(sample_pts),
+                getattr(self, "bounds", None),
             )
 
         peaks = self._compute_peaks()
@@ -302,7 +305,8 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
         # rescale to [0,1]
         # copy is necessary to avoid unwanted rescaling in additive/multiplicative basis.
         sample_pts, _ = min_max_rescale_samples(
-            jnp.copy(sample_pts), getattr(self, "bounds", None)
+            jnp.copy(sample_pts),
+            getattr(self, "bounds", None),
         )
         # This log-stretching of the sample axis has the following effect:
         # - as the time_scaling tends to 0, the points will be linearly spaced across the whole domain.

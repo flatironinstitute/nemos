@@ -26,12 +26,13 @@ from numpy.typing import NDArray
 from . import solvers, tree_utils, utils
 from ._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from .base_class import Base
+from .base_validator import RegressorValidator
 from .glm.params import GLMParams
+from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
 from .type_casting import cast_to_jax
 from .typing import (
     DESIGN_INPUT_TYPE,
-    FeaturePytree,
     ModelParamsT,
     SolverInit,
     SolverRun,
@@ -41,14 +42,13 @@ from .typing import (
     UserProvidedParamsT,
 )
 from .utils import _flatten_dict, _get_name, _unpack_params, get_env_metadata
-from .validation import RegressorValidator
 
 _SOLVER_ARGS_CACHE = {}
 
 
-def strip_metadata(arg_num: Optional[int] = None, kwarg_key: Optional[str] = None):
+def strip_metadata(arg_num: Optional[int] = None, arg_name: Optional[str] = None):
     """Strip metadata from arg."""
-    if arg_num is None and kwarg_key is None:
+    if arg_num is None or arg_name is None:
         raise ValueError("Must specify either arg_num or kwarg_key.")
 
     def decorator(func):
@@ -56,7 +56,10 @@ def strip_metadata(arg_num: Optional[int] = None, kwarg_key: Optional[str] = Non
 
         @wraps(func)
         def wrapper(self, *args, **kwargs):
-            inp = args[arg_num] if arg_num is not None else kwargs[kwarg_key]
+            if arg_name in kwargs:
+                inp = kwargs[arg_name]
+            else:
+                inp = args[min(arg_num, len(args) - 1)]
             self._metadata = {
                 "metadata": inp._metadata if hasattr(inp, "_metadata") else None,
                 "columns": inp.columns if hasattr(inp, "columns") else None,

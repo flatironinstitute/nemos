@@ -31,6 +31,8 @@ root_doc = "index"
 
 extensions = [
     'sphinx.ext.autodoc',
+    'nemos_autodoc_skip_member',  # skip custom members from autodoc
+                                  # Prioritize custom logic by listing just after autodoc.
     'sphinx.ext.napoleon',
     'sphinx.ext.autosummary',
     'sphinx.ext.coverage',

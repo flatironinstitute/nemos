@@ -1,12 +1,16 @@
+from __future__ import annotations
+
 import dataclasses
-from typing import Any, Callable, ClassVar, Type, TypeAlias
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, Type, TypeAlias
 
 import equinox as eqx
 import optimistix as optx
 from packaging.version import Version
 
-from ..regularizer import Regularizer
 from ..typing import Aux, Params
+
+if TYPE_CHECKING:
+    from ..regularizer import Regularizer
 from ._abstract_solver import OptimizationInfo
 from ._aux_helpers import (
     convert_fn,

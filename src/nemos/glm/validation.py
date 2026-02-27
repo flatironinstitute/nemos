@@ -9,9 +9,10 @@ from jax.typing import DTypeLike
 from numpy.typing import ArrayLike
 
 from .. import validation
+from ..base_validator import RegressorValidator
+from ..pytrees import FeaturePytree
 from ..tree_utils import pytree_map_and_reduce
-from ..typing import DESIGN_INPUT_TYPE, FeaturePytree
-from ..validation import RegressorValidator
+from ..typing import DESIGN_INPUT_TYPE
 from .params import GLMParams, GLMUserParams
 
 

@@ -7,12 +7,14 @@ import math
 import warnings
 from copy import deepcopy
 from functools import wraps
-from typing import Callable, Generator, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Callable, Generator, List, Optional, Tuple, Union
 
 import jax.numpy as jnp
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
-from pynapple import Tsd, TsdFrame, TsdTensor
+
+if TYPE_CHECKING:
+    from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..base_class import Base
 from ..type_casting import support_pynapple
@@ -98,9 +100,8 @@ def min_max_rescale_samples(
     scaling = asarray(vmax - vmin)
     # do not normalize if samples contain a single value (in which case vmax=vmin)
     scaling = where(scaling == 0, 1.0, scaling)
-    sample_pts = (
-        where((sample_pts < vmin) | (sample_pts > vmax), np.nan, sample_pts) - vmin
-    ) / scaling
+    sample_pts -= vmin
+    sample_pts /= scaling
 
     return sample_pts, scaling
 
