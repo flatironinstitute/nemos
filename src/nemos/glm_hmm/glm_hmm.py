@@ -12,11 +12,12 @@ import pynapple as nap
 from numpy.typing import ArrayLike, NDArray
 
 from .. import observation_models as obs
+from .. import tree_utils
 from .._observation_model_builder import instantiate_observation_model
 from ..base_regressor import BaseRegressor
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..observation_models import Observations
-from ..regularizer import Regularizer
+from ..regularizer import GroupLasso, Lasso, Regularizer, Ridge
 from ..typing import (
     DESIGN_INPUT_TYPE,
     SolverState,
@@ -623,7 +624,54 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         :
             An estimate of the degrees of freedom of the residuals.
         """
-        pass
+        # Convert a pytree to a design-matrix with pytrees
+        X = jnp.hstack(jax.tree_util.tree_leaves(X))
+
+        if n_samples is None:
+            n_samples = X.shape[0]
+        else:
+            if not isinstance(n_samples, int):
+                raise TypeError(
+                    "`n_samples` must either `None` or of type `int`. Type {type(n_sample)} provided "
+                    "instead!"
+                )
+
+        params = self._get_model_params()
+        coef = params.glm_params.coef
+        if coef.ndim == 3:
+            n_neurons = coef.shape[1]
+        else:
+            n_neurons = 1
+
+        dof_intercept_and_hmm = (
+            self._n_states * n_neurons  # intercept
+            + (
+                self._n_states - 1
+            )  # init prob (n values but sum to 1, so n-1 free values)
+            + (self._n_states - 1) * self._n_states
+        )  # transition n n-dim vectors that sum to 1
+
+        # if the regularizer is lasso use the non-zero
+        # coef as an estimate of the dof
+        # see https://arxiv.org/abs/0712.0881
+        if isinstance(self.regularizer, (GroupLasso, Lasso)):
+            resid_dof = sum(
+                tree_utils.pytree_map_and_reduce(
+                    lambda x: ~jnp.isclose(x, jnp.zeros_like(x)),
+                    lambda x: sum([jnp.sum(i, axis=0) for i in x]),
+                    coef,
+                )
+            )
+            return n_samples - resid_dof - dof_intercept_and_hmm
+        elif isinstance(self.regularizer, Ridge):
+            # for Ridge, use the tot parameters (X.shape[1] + intercept)
+            return (
+                n_samples - (X.shape[1] * self.n_states) - dof_intercept_and_hmm
+            ) * jnp.ones(n_neurons)
+        else:
+            # for UnRegularized, use the rank
+            rank = jnp.linalg.matrix_rank(X)
+            return (n_samples - rank - dof_intercept_and_hmm) * jnp.ones(n_neurons)
 
     def score(
         self,
