@@ -617,9 +617,7 @@ class EvalBasisMixin:
 
     def _get_bounds_per_dim(self) -> List[Tuple[float, float]]:
         """Return bounds,  broadcast to one pair per input dimension."""
-        if self._bounds is None:
-            return None
-        if isinstance(self._bounds[0], (int, float)):
+        if self._bounds is None or isinstance(self._bounds[0], (int, float)):
             return [self._bounds] * self._n_inputs
         return list(self._bounds)
 

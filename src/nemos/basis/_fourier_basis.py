@@ -628,10 +628,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
 
         """
         shape = sample_pts[0].shape
-
-        bounds = getattr(self, "bounds", None)
-        if bounds is None:
-            bounds = (bounds,) * self._n_inputs
+        bounds = self._get_bounds_per_dim()
 
         # min/max rescale to [0,1]:
         # The function does so over the time axis (each extra dim is
@@ -648,7 +645,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
             )
             return jnp.stack(scaled_samples, axis=-1)
 
-        sample_pts = _flat_samples_to_angles(sample_pts)
+        sample_pts = _flat_samples_to_angles(list(sample_pts))
         angles = sample_pts @ self._freq_combinations
         out = jnp.concatenate(
             [jnp.cos(angles), jnp.sin(angles[..., self._has_zero_phase :])], axis=1
