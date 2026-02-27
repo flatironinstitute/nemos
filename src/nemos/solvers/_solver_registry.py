@@ -222,7 +222,7 @@ def register(
         is already present in the registry, overwrite it.
     default :
         Set this implementation as the default for the algorithm.
-        Can also be done with `set_default`.
+        Can also be done with `set_default_backend`.
     validate :
         Validate all required methods exist and have correct signatures.
     test_ridge_without_aux :
@@ -260,10 +260,10 @@ def register(
     _registry[algo_name][backend] = SolverSpec(algo_name, backend, implementation)
 
     if default:
-        set_default(algo_name, backend)
+        set_default_backend(algo_name, backend)
 
 
-def set_default(algo_name: str, backend: str) -> None:
+def set_default_backend(algo_name: str, backend: str) -> None:
     """
     Set the default backend for a given algorithm.
 
@@ -278,7 +278,7 @@ def set_default(algo_name: str, backend: str) -> None:
     Examples
     --------
     >>> import nemos as nmo
-    >>> nmo.solvers.set_default("LBFGS", "optax+optimistix")
+    >>> nmo.solvers.set_default_backend("LBFGS", "optax+optimistix")
     >>> nmo.solvers.get_solver("LBFGS").backend
     'optax+optimistix'
     """

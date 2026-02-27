@@ -281,7 +281,7 @@ Additional arguments of `nmo.solvers.register` are:
 - `replace`: If an implementation for the given algorithm and backend names is already present in the registry, overwrite it.
 <br>
 Setting this to `True` can be handy when developing a solver, as changes require re-registration to take effect.
-- `default`: Set this implementation as the default for the algorithm. Can also be done with `nmo.solvers.set_default`.
+- `default`: Set this implementation as the default for the algorithm. Can also be done with `nmo.solvers.set_default_backend`.
 <br>
 Setting this to `True` would tell NeMoS that we want to use this as the default Powell implementation.
 - `validate`: Validate all required methods exist and have correct signatures. True by default.
@@ -298,7 +298,7 @@ If we have multiple implementations of a given algorithm (for example because we
 <br>
 In case we want to use a non-default implementation, we have to specify its backend, such as `LBFGS[scipy]`.
 
-To explore and set defaults, use the `nemos.solvers.set_default` and `nemos.solvers.get_default_backend` functions.
+To the default backend for an algorithm, use `nemos.solvers.set_default_backend`.
 
 +++
 
