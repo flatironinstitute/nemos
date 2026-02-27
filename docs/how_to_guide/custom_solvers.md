@@ -13,7 +13,7 @@ kernelspec:
 
 # Creating custom solvers for use with NeMoS
 
-To support flexibility and long-term maintenance, NeMoS now has a backend-agnostic solver interface, allowing the use of solvers from different backend libraries with different interfaces.  
+To support flexibility and long-term maintenance, NeMoS now has a backend-agnostic solver interface, allowing the use of solvers from different backend libraries with different interfaces.
 This also means that users can provide their own solvers, and as long as they adhere to the interface defined by `AbstractSolver`, they should be compatible with NeMoS and can be used for fitting models.
 
 In the following we will walk through how one can create a NeMoS-compatible solver that uses [`scipy.optimize.minimize` with the modified Powell method](https://docs.scipy.org/doc/scipy/reference/optimize.minimize-powell.html#optimize-minimize-powell), an algorithm not present in NeMoS by default.
@@ -290,9 +290,9 @@ Setting this to `True` would tell NeMoS that we want to use this as the default 
 
 +++
 
-### Create the model and fit 
+### Create the model and fit
 
-Passing `"Powell"` as the solver_name to `GLM`, it will now look up this class in the solver registry, and `model.fit` will call `ScipyPowell.run`. 
+Passing `"Powell"` as the solver_name to `GLM`, it will now look up this class in the solver registry, and `model.fit` will call `ScipyPowell.run`.
 
 If we have multiple implementations of a given algorithm (for example because we created and registered `ScipyLBFGS` instead), specifying only the algorithm's name will use the implementation set as the default for the given algorithm.
 <br>
@@ -326,8 +326,8 @@ Finally, we can inspect the model to show that it is using `ScipyPowell`:
 print(model.solver_name)
 # the actual solver instance that is created from the string or class
 print(model._solver)
-# GLM._solver_run (called within GLM.fit) corresponds to this instance's .run method
-print(model._solver_run)
+# GLM.optimization_run (called within GLM.fit) corresponds to this instance's .run method
+print(model.optimization_run)
 ```
 
 ### Test the update method
