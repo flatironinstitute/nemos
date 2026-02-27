@@ -1,4 +1,5 @@
 from contextlib import nullcontext as does_not_raise
+from copy import deepcopy
 from numbers import Number
 from typing import Callable
 from unittest.mock import patch
@@ -24,6 +25,7 @@ from nemos._regularizer_builder import instantiate_regularizer
 from nemos.glm_hmm.expectation_maximization import GLMHMMState, em_glm_hmm, em_step
 from nemos.glm_hmm.params import GLMHMMParams, GLMParams
 from nemos.pytrees import FeaturePytree
+from nemos.tree_utils import pytree_map_and_reduce
 from nemos.utils import _get_name
 
 # ============================================================================
@@ -389,6 +391,72 @@ class TestGLMHMM:
                     match=r"Invalid parameter dimensionality",
                 ),
             }
+
+    def test_fit_pynapple_tsd(self, instantiate_base_regressor_subclass):
+        """Check that pynapple fit works."""
+        fixture = instantiate_base_regressor_subclass
+        model_epoch = deepcopy(fixture.model)
+        X = fixture.X
+        y = fixture.y
+        X = nap.TsdFrame(t=np.arange(y.shape[0]), d=X)
+        y = nap.Tsd(t=np.arange(y.shape[0]), d=y)
+        X = X[:20]
+        y = y[:20]
+        is_new_session = np.zeros(20)
+        is_new_session[0] = 1.0
+        # fit via model
+        model = fixture.model
+        params = model.initialize_params(X, y)
+        model.fit(X, y, init_params=params)
+
+        # run em passing the is new session directly
+        params_new, _ = model._optimization_run(
+            model._validator.to_model_params(params),
+            X=X.d,
+            y=y.d,
+            is_new_session=is_new_session,
+        )
+        assert not pytree_map_and_reduce(
+            jnp.array_equal,
+            all,
+            params_new,
+            model._validator.to_model_params(params),
+        )
+        assert pytree_map_and_reduce(
+            jnp.array_equal,
+            all,
+            params_new.glm_params,
+            GLMParams(model.coef_, model.intercept_),
+        )
+
+        # add an epoch and run fits again
+        ep = nap.IntervalSet([0, 8], [6, 20])
+        X_ep = X.restrict(ep)
+        y_ep = y.restrict(ep)
+        is_new_session = np.zeros(y_ep.shape[0])
+        is_new_session[0] = 1.0
+        is_new_session[len(y.restrict(ep[0]))] = 1
+
+        model_epoch.fit(X_ep, y_ep, init_params=params)
+        # run em passing the is new session directly
+        params_new_epoch, _ = model_epoch._optimization_run(
+            model._validator.to_model_params(params),
+            X=X_ep.d,
+            y=y_ep.d,
+            is_new_session=is_new_session,
+        )
+        assert not pytree_map_and_reduce(
+            jnp.array_equal,
+            all,
+            params_new_epoch,
+            params_new,
+        )
+        assert pytree_map_and_reduce(
+            jnp.array_equal,
+            all,
+            params_new_epoch.glm_params,
+            GLMParams(model_epoch.coef_, model_epoch.intercept_),
+        )
 
     @pytest.mark.parametrize("dim_weights", [0, 1, 2, 3])
     @pytest.mark.requires_x64
