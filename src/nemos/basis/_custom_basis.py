@@ -219,7 +219,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
 
         self._input_shape_product = None
 
-        self._n_input_dimensionality = infer_input_dimensionality(self)
+        self._n_inputs = infer_input_dimensionality(self)
         self._n_basis_funcs = len(self.funcs)
 
         self.basis_kwargs = basis_kwargs
@@ -253,9 +253,9 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         if not all(isinstance(f, Callable) for f in val):
             raise ValueError("User must provide an iterable of callable.")
 
-        if hasattr(self, "_n_input_dimensionality"):
+        if hasattr(self, "_n_inputs"):
             inp_dim = sum(count_positional_and_var_args(f)[0] for f in val)
-            if inp_dim != self._n_input_dimensionality:
+            if inp_dim != self._n_inputs:
                 raise ValueError(
                     "The number of input time series required by the CustomBasis must be consistent. "
                     "Redefine a CustomBasis for a different number of inputs."
@@ -718,10 +718,10 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         """
         input_shape = self._input_shape_
         if input_shape is None:
-            if self._n_input_dimensionality == 1:
+            if self._n_inputs == 1:
                 return None
             else:
-                return [None] * self._n_input_dimensionality
-        if self._n_input_dimensionality == 1:
+                return [None] * self._n_inputs
+        if self._n_inputs == 1:
             return input_shape[0]
-        return input_shape * self._n_input_dimensionality
+        return input_shape * self._n_inputs
