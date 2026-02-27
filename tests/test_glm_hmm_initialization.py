@@ -1,6 +1,7 @@
 """Tests for glm_hmm/initialize_parameters.py"""
 
 import itertools
+from unittest.mock import create_autospec
 
 import jax
 import jax.numpy as jnp
@@ -8,12 +9,15 @@ import numpy as np
 import pytest
 
 from nemos.glm_hmm.initialize_parameters import (
+    DEFAULT_INIT_FUNCTION,
     _is_native_init_registry,
     _resolve_dirichlet_priors,
     _resolve_init_func,
     _resolve_init_funcs_registry,
+    _resolve_init_kwargs,
+    _resolve_init_kwargs_registry,
+    constant_scale_init,
     glm_hmm_initialization,
-    ones_scale_init,
     random_glm_params_init,
     sticky_transition_proba_init,
     uniform_initial_proba_init,
@@ -171,8 +175,8 @@ class TestRandomGLMParamsInitialization:
         assert jnp.allclose(intercept, expected)
 
 
-class TestOnesScaleInitialization:
-    """Test ones initialization for scale parameters."""
+class TestConstantScaleInitialization:
+    """Test constant initialization for scale parameters."""
 
     @pytest.mark.parametrize("n_states", [1, 2, 3, 5])
     @pytest.mark.parametrize("n_samples, n_neurons", [(100, 1), (100, 3), (50, 10)])
@@ -181,7 +185,7 @@ class TestOnesScaleInitialization:
         X = jnp.ones((n_samples, 5))
         y = jnp.ones((n_samples, n_neurons)) if n_neurons > 1 else jnp.ones(n_samples)
 
-        scale = ones_scale_init(n_states, X, y, random_key=jax.random.PRNGKey(124))
+        scale = constant_scale_init(n_states, X, y, random_key=jax.random.PRNGKey(124))
 
         # Check shape
         if n_neurons == 1:
@@ -200,21 +204,36 @@ class TestOnesScaleInitialization:
         """Test that output is a JAX array regardless of input type."""
         n_states = 2
 
-        scale = ones_scale_init(n_states, X, y, random_key=jax.random.PRNGKey(124))
+        scale = constant_scale_init(n_states, X, y, random_key=jax.random.PRNGKey(124))
 
         assert isinstance(scale, jnp.ndarray)
 
     @pytest.mark.parametrize("n_states", [1, 3, 5])
     @pytest.mark.parametrize("n_neurons", [1, 3])
-    def test_all_values_are_ones(self, n_states, n_neurons):
-        """Test that all scale values are initialized to 1.0."""
+    def test_default_value_is_one(self, n_states, n_neurons):
+        """Test that default scale values are initialized to 1.0."""
         X = jnp.ones((100, 5))
         y = jnp.ones((100, n_neurons)) if n_neurons > 1 else jnp.ones(100)
 
-        scale = ones_scale_init(n_states, X, y, random_key=jax.random.PRNGKey(124))
+        scale = constant_scale_init(n_states, X, y, random_key=jax.random.PRNGKey(124))
 
-        # All values should be exactly 1.0
+        # All values should be exactly 1.0 by default
         assert jnp.all(scale == 1.0)
+
+    @pytest.mark.parametrize("scale_val", [0.5, 1.0, 2.0, 10.0])
+    @pytest.mark.parametrize("n_neurons", [1, 3])
+    def test_custom_scale_value(self, scale_val, n_neurons):
+        """Test that custom scale_val is applied correctly."""
+        n_states = 3
+        X = jnp.ones((100, 5))
+        y = jnp.ones((100, n_neurons)) if n_neurons > 1 else jnp.ones(100)
+
+        scale = constant_scale_init(
+            n_states, X, y, random_key=jax.random.PRNGKey(124), scale_val=scale_val
+        )
+
+        # All values should be exactly scale_val
+        assert jnp.all(scale == scale_val)
 
     def test_deterministic(self):
         """Test that output is deterministic (same across different calls)."""
@@ -222,11 +241,29 @@ class TestOnesScaleInitialization:
         X = jnp.ones((100, 5))
         y = jnp.ones(100)
 
-        scale1 = ones_scale_init(n_states, X, y, random_key=jax.random.PRNGKey(124))
-        scale2 = ones_scale_init(n_states, X, y, random_key=jax.random.PRNGKey(999))
+        scale1 = constant_scale_init(n_states, X, y, random_key=jax.random.PRNGKey(124))
+        scale2 = constant_scale_init(n_states, X, y, random_key=jax.random.PRNGKey(999))
 
         # Should be identical regardless of random key
         assert jnp.array_equal(scale1, scale2)
+
+    def test_deterministic_with_custom_scale(self):
+        """Test that output is deterministic with custom scale_val."""
+        n_states = 3
+        X = jnp.ones((100, 5))
+        y = jnp.ones(100)
+        scale_val = 2.5
+
+        scale1 = constant_scale_init(
+            n_states, X, y, random_key=jax.random.PRNGKey(124), scale_val=scale_val
+        )
+        scale2 = constant_scale_init(
+            n_states, X, y, random_key=jax.random.PRNGKey(999), scale_val=scale_val
+        )
+
+        # Should be identical regardless of random key
+        assert jnp.array_equal(scale1, scale2)
+        assert jnp.all(scale1 == scale_val)
 
 
 class TestStickyTransitionProbaInitialization:
@@ -580,7 +617,7 @@ class TestGLMHMMInitialization:
             y,
             inverse_link,
             random_key=jax.random.PRNGKey(123),
-            init_registry=custom_registry,
+            initialization_funcs=custom_registry,
         )
 
         # Verify all mocks were called
@@ -629,7 +666,7 @@ class TestGLMHMMInitialization:
             y,
             inverse_link,
             random_key=jax.random.PRNGKey(123),
-            init_registry=partial_registry,
+            initialization_funcs=partial_registry,
         )
 
         # Mock was used for glm_params
@@ -637,7 +674,7 @@ class TestGLMHMMInitialization:
         assert jnp.allclose(intercept, 5.0)  # From mock
 
         # Defaults were used for others
-        assert jnp.all(scale == 1.0)  # Default ones_scale_init
+        assert jnp.all(scale == 1.0)  # Default constant_scale_init
         assert jnp.allclose(initial_prob, 0.5)  # Default uniform
         assert jnp.allclose(jnp.diag(transition_prob), 0.95)  # Default sticky
 
@@ -683,7 +720,7 @@ class TestGLMHMMInitialization:
             y,
             inverse_link,
             random_key=jax.random.PRNGKey(123),
-            init_registry=random_registry,
+            initialization_funcs=random_registry,
         )
 
         # All outputs should differ from each other (different subkeys were used)
@@ -700,7 +737,7 @@ class TestGLMHMMInitialization:
                 y,
                 inverse_link,
                 random_key=jax.random.PRNGKey(456),
-                init_registry=random_registry,
+                initialization_funcs=random_registry,
             )
         )
 
@@ -769,7 +806,7 @@ class TestGLMHMMInitialization:
         "registry",
         [
             {"glm_params_init": "random"},
-            {"scale_init": "ones"},
+            {"scale_init": "constant"},
             {"transition_proba_init": "sticky"},
             {"initial_proba_init": "uniform"},
         ],
@@ -788,7 +825,7 @@ class TestGLMHMMInitialization:
             y,
             inverse_link,
             random_key=jax.random.PRNGKey(123),
-            init_registry=registry,
+            initialization_funcs=registry,
         )
 
         assert len(result) == 5
@@ -810,7 +847,7 @@ class TestGLMHMMInitialization:
             y,
             inverse_link,
             random_key=jax.random.PRNGKey(123),
-            init_kwargs=init_kwargs,
+            initialization_kwargs=init_kwargs,
         )
 
         # Diagonal should be prob_stay
@@ -839,7 +876,7 @@ class TestGLMHMMInitialization:
             y,
             inverse_link,
             random_key=jax.random.PRNGKey(123),
-            init_kwargs=init_kwargs,
+            initialization_kwargs=init_kwargs,
         )
 
         # Use small std_dev
@@ -852,13 +889,35 @@ class TestGLMHMMInitialization:
             y,
             inverse_link,
             random_key=jax.random.PRNGKey(123),
-            init_kwargs=init_kwargs,
+            initialization_kwargs=init_kwargs,
         )
 
         # Large std_dev should produce larger magnitude coefficients
         assert jnp.abs(coef_large).max() > jnp.abs(coef_small).max()
         # Small std_dev should be close to 0
         assert jnp.abs(coef_small).max() < 0.01
+
+    @pytest.mark.parametrize("scale_val", [0.5, 2.0, 10.0])
+    def test_init_kwargs_scale_val(self, scale_val):
+        """Test that scale_val kwarg is passed to scale_init."""
+        n_states = 3
+        X = jnp.ones((100, 5))
+        y = jnp.ones(100)
+        inverse_link = lambda x: x
+
+        init_kwargs = {"scale_init": {"scale_val": scale_val}}
+
+        _, _, scale, _, _ = glm_hmm_initialization(
+            n_states,
+            X,
+            y,
+            inverse_link,
+            random_key=jax.random.PRNGKey(123),
+            initialization_kwargs=init_kwargs,
+        )
+
+        # All values should be exactly scale_val
+        assert jnp.all(scale == scale_val)
 
     def test_init_kwargs_multiple_functions(self):
         """Test that init_kwargs can pass kwargs to multiple init functions."""
@@ -878,7 +937,7 @@ class TestGLMHMMInitialization:
             y,
             inverse_link,
             random_key=jax.random.PRNGKey(123),
-            init_kwargs=init_kwargs,
+            initialization_kwargs=init_kwargs,
         )
 
         # Check std_dev effect
@@ -901,7 +960,7 @@ class TestGLMHMMInitialization:
             y,
             inverse_link,
             random_key=jax.random.PRNGKey(123),
-            init_kwargs={},
+            initialization_kwargs={},
         )
 
         result_none = glm_hmm_initialization(
@@ -910,7 +969,7 @@ class TestGLMHMMInitialization:
             y,
             inverse_link,
             random_key=jax.random.PRNGKey(123),
-            init_kwargs=None,
+            initialization_kwargs=None,
         )
 
         # Results should be identical
@@ -977,7 +1036,7 @@ class TestResolveInitFunc:
         "func_name, string_name, expected_func",
         [
             ("glm_params_init", "random", random_glm_params_init),
-            ("scale_init", "ones", ones_scale_init),
+            ("scale_init", "constant", constant_scale_init),
             ("transition_proba_init", "sticky", sticky_transition_proba_init),
             ("initial_proba_init", "uniform", uniform_initial_proba_init),
         ],
@@ -1050,7 +1109,7 @@ class TestResolveInitFuncsRegistry:
         """Test that None returns default registry."""
         result = _resolve_init_funcs_registry(None)
         assert result["glm_params_init"] is random_glm_params_init
-        assert result["scale_init"] is ones_scale_init
+        assert result["scale_init"] is constant_scale_init
         assert result["transition_proba_init"] is sticky_transition_proba_init
         assert result["initial_proba_init"] is uniform_initial_proba_init
 
@@ -1065,7 +1124,7 @@ class TestResolveInitFuncsRegistry:
         """Test that registry with valid keys plus one invalid key raises KeyError."""
         mixed_registry = {
             "glm_params_init": random_glm_params_init,
-            "scale_init": ones_scale_init,
+            "scale_init": constant_scale_init,
             "transition_proba_init": sticky_transition_proba_init,
             "initial_proba_init": uniform_initial_proba_init,
             "invalid_key": lambda: None,
@@ -1099,7 +1158,7 @@ class TestIsNativeInitRegistry:
         """Test that registry with all native functions returns True."""
         native_registry = {
             "glm_params_init": random_glm_params_init,
-            "scale_init": ones_scale_init,
+            "scale_init": constant_scale_init,
             "transition_proba_init": sticky_transition_proba_init,
             "initial_proba_init": uniform_initial_proba_init,
         }
@@ -1109,7 +1168,7 @@ class TestIsNativeInitRegistry:
         """Test that partial registry with native functions returns True."""
         partial_registry = {
             "glm_params_init": random_glm_params_init,
-            "scale_init": ones_scale_init,
+            "scale_init": constant_scale_init,
         }
         assert _is_native_init_registry(partial_registry) is True
 
@@ -1123,3 +1182,282 @@ class TestIsNativeInitRegistry:
             "scale_init": custom_scale,
         }
         assert _is_native_init_registry(custom_registry) is False
+
+
+# =============================================================================
+# Mock infrastructure for testing init kwargs validation
+# =============================================================================
+
+
+# Template functions for creating mocks with create_autospec
+# GLM params init requires 5 mandatory params (n_states, X, y, inverse_link_function, key)
+def _glm_template_no_extra(n_states, X, y, inverse_link_function, random_key):
+    pass
+
+
+def _glm_template_one_extra(
+    n_states, X, y, inverse_link_function, random_key, param1=None
+):
+    pass
+
+
+def _glm_template_two_extra(
+    n_states, X, y, inverse_link_function, random_key, param1=None, param2=None
+):
+    pass
+
+
+def _glm_template_three_extra(
+    n_states, X, y, inverse_link_function, random_key, alpha=None, beta=None, gamma=None
+):
+    pass
+
+
+def _glm_template_special(
+    n_states, X, y, inverse_link_function, random_key, my_special_param=None
+):
+    pass
+
+
+# Other init funcs require 4 mandatory params (n_states, X, y, key)
+def _other_template_no_extra(n_states, X, y, random_key):
+    pass
+
+
+def _other_template_one_extra(n_states, X, y, random_key, param1=None):
+    pass
+
+
+def _other_template_two_extra(n_states, X, y, random_key, param1=None, param2=None):
+    pass
+
+
+def _other_template_three_extra(
+    n_states, X, y, random_key, alpha=None, beta=None, gamma=None
+):
+    pass
+
+
+def _other_template_special(n_states, X, y, random_key, my_special_param=None):
+    pass
+
+
+# Template registry for mock creation
+_GLM_TEMPLATES = {
+    "no_extra": _glm_template_no_extra,
+    "one_extra": _glm_template_one_extra,
+    "two_extra": _glm_template_two_extra,
+    "three_extra": _glm_template_three_extra,
+    "special": _glm_template_special,
+}
+
+_OTHER_TEMPLATES = {
+    "no_extra": _other_template_no_extra,
+    "one_extra": _other_template_one_extra,
+    "two_extra": _other_template_two_extra,
+    "three_extra": _other_template_three_extra,
+    "special": _other_template_special,
+}
+
+# Valid kwargs for each template type
+MOCK_VALID_KWARGS = {
+    "one_extra": {"param1": 0.5},
+    "two_extra": {"param1": 0.5, "param2": 0.5},
+    "three_extra": {"alpha": 0.5, "beta": 0.5, "gamma": 0.5},
+    "special": {"my_special_param": 0.5},
+}
+
+
+def _get_mock(func_name, template_type):
+    """Get a mock function with the appropriate signature."""
+    templates = _GLM_TEMPLATES if func_name == "glm_params_init" else _OTHER_TEMPLATES
+    return create_autospec(templates[template_type], return_value=None)
+
+
+def _get_mock_registry(template_type="one_extra"):
+    """Get a mock init function registry where all funcs have the same template type."""
+    return {
+        func_name: _get_mock(func_name, template_type)
+        for func_name in DEFAULT_INIT_FUNCTION
+    }
+
+
+@pytest.mark.parametrize(
+    "func_name",
+    ["glm_params_init", "scale_init", "initial_proba_init", "transition_proba_init"],
+)
+class TestResolveInitKwargs:
+    """Test _resolve_init_kwargs validation function."""
+
+    def test_none_returns_empty_dict(self, func_name):
+        """Test that None kwargs returns empty dict for each func type."""
+        mock_func = _get_mock(func_name, "no_extra")
+        result = _resolve_init_kwargs(func_name, mock_func, None)
+        assert result == {}
+
+    def test_empty_dict_returns_empty_dict(self, func_name):
+        """Test that empty kwargs returns empty dict for each func type."""
+        mock_func = _get_mock(func_name, "no_extra")
+        result = _resolve_init_kwargs(func_name, mock_func, {})
+        assert result == {}
+
+    @pytest.mark.parametrize(
+        "template_type,extra_kwargs",
+        [
+            ("one_extra", {"param1": 0.5}),
+            ("two_extra", {"param1": 0.5, "param2": 0.5}),
+            ("three_extra", {"alpha": 0.5, "beta": 0.5, "gamma": 0.5}),
+        ],
+    )
+    def test_valid_kwargs_returned_unchanged(
+        self, func_name, template_type, extra_kwargs
+    ):
+        """Test that valid kwargs are returned unchanged for each func type."""
+        mock_func = _get_mock(func_name, template_type)
+        result = _resolve_init_kwargs(func_name, mock_func, extra_kwargs)
+        assert result == extra_kwargs
+
+    def test_invalid_kwarg_raises_value_error(self, func_name):
+        """Test that unrecognized kwargs raise ValueError for each func type."""
+        mock_func = _get_mock(func_name, "one_extra")
+        with pytest.raises(ValueError, match="Invalid keyword argument"):
+            _resolve_init_kwargs(func_name, mock_func, {"invalid_param": 0.5})
+
+    def test_error_message_shows_available_params(self, func_name):
+        """Test that error message lists available parameters."""
+        mock_func = _get_mock(func_name, "special")
+        with pytest.raises(ValueError, match="my_special_param"):
+            _resolve_init_kwargs(func_name, mock_func, {"invalid": 0.5})
+
+    def test_function_with_no_extra_params(self, func_name):
+        """Test kwargs validation for function with no optional params."""
+        mock_func = _get_mock(func_name, "no_extra")
+        with pytest.raises(ValueError, match="no extra keyword arguments"):
+            _resolve_init_kwargs(func_name, mock_func, {"any_param": 1.0})
+
+    def test_subset_of_kwargs_valid(self, func_name):
+        """Test that providing a subset of available kwargs is valid."""
+        mock_func = _get_mock(func_name, "three_extra")
+        # Only provide one of the three available kwargs
+        kwargs = {"beta": 0.5}
+        result = _resolve_init_kwargs(func_name, mock_func, kwargs)
+        assert result == kwargs
+
+
+@pytest.mark.parametrize(
+    "func_name",
+    ["glm_params_init", "scale_init", "initial_proba_init", "transition_proba_init"],
+)
+class TestResolveInitKwargsRegistry:
+    """Test _resolve_init_kwargs_registry validation function.
+
+    Uses mock registries so all functions have kwargs to test.
+    """
+
+    def test_none_returns_empty_kwargs_for_all(self, func_name):
+        """Test that None returns empty dict for each function."""
+        mock_registry = _get_mock_registry("one_extra")
+        result = _resolve_init_kwargs_registry(None, mock_registry)
+        assert all(v == {} for v in result.values())
+        assert set(result.keys()) == set(mock_registry.keys())
+
+    def test_empty_dict_returns_empty_kwargs_for_all(self, func_name):
+        """Test that empty dict returns empty dict for each function."""
+        mock_registry = _get_mock_registry("one_extra")
+        result = _resolve_init_kwargs_registry({}, mock_registry)
+        assert all(v == {} for v in result.values())
+
+    def test_single_func_kwargs_fills_others_empty(self, func_name):
+        """Test that setting kwargs for one func fills others with empty dicts."""
+        mock_registry = _get_mock_registry("one_extra")
+        valid_kwargs = MOCK_VALID_KWARGS["one_extra"]
+
+        result = _resolve_init_kwargs_registry({func_name: valid_kwargs}, mock_registry)
+
+        assert result[func_name] == valid_kwargs
+        for other_func in mock_registry:
+            if other_func != func_name:
+                assert result[other_func] == {}
+
+    def test_invalid_kwarg_per_func_raises(self, func_name):
+        """Test that invalid kwargs raise ValueError for each func."""
+        mock_registry = _get_mock_registry("one_extra")
+        with pytest.raises(ValueError, match="Invalid keyword argument"):
+            _resolve_init_kwargs_registry(
+                {func_name: {"totally_invalid_param": 0.5}}, mock_registry
+            )
+
+    def test_kwargs_passed_to_correct_func(self, func_name):
+        """Test that kwargs are validated against the correct function in registry."""
+        mock_registry = _get_mock_registry("one_extra")
+        valid_kwargs = MOCK_VALID_KWARGS["one_extra"]
+
+        # Should succeed - valid kwargs for this func
+        result = _resolve_init_kwargs_registry({func_name: valid_kwargs}, mock_registry)
+        assert result[func_name] == valid_kwargs
+
+
+class TestResolveInitKwargsRegistryPairs:
+    """Test _resolve_init_kwargs_registry with pairs and all functions."""
+
+    @pytest.mark.parametrize(
+        "func_pair",
+        list(
+            itertools.combinations(
+                [
+                    "glm_params_init",
+                    "scale_init",
+                    "initial_proba_init",
+                    "transition_proba_init",
+                ],
+                2,
+            )
+        ),
+    )
+    def test_pairs_of_func_kwargs(self, func_pair):
+        """Test setting kwargs for pairs of functions."""
+        mock_registry = _get_mock_registry("one_extra")
+        valid_kwargs = MOCK_VALID_KWARGS["one_extra"]
+        func1, func2 = func_pair
+
+        input_kwargs = {func1: valid_kwargs, func2: valid_kwargs}
+        result = _resolve_init_kwargs_registry(input_kwargs, mock_registry)
+
+        # Check the funcs we set
+        assert result[func1] == valid_kwargs
+        assert result[func2] == valid_kwargs
+
+        # Check others are empty
+        for fn in mock_registry:
+            if fn not in func_pair:
+                assert result[fn] == {}
+
+    def test_all_funcs_kwargs_at_once(self):
+        """Test setting kwargs for all functions."""
+        mock_registry = _get_mock_registry("one_extra")
+        valid_kwargs = MOCK_VALID_KWARGS["one_extra"]
+
+        input_kwargs = {fn: valid_kwargs for fn in mock_registry}
+        result = _resolve_init_kwargs_registry(input_kwargs, mock_registry)
+
+        for fn in mock_registry:
+            assert result[fn] == valid_kwargs
+
+    def test_all_funcs_with_mixed_valid_empty(self):
+        """Test setting all funcs, some with kwargs some empty."""
+        mock_registry = _get_mock_registry("one_extra")
+        valid_kwargs = MOCK_VALID_KWARGS["one_extra"]
+
+        input_kwargs = {
+            "glm_params_init": valid_kwargs,
+            "scale_init": {},
+            "initial_proba_init": {},
+            "transition_proba_init": valid_kwargs,
+        }
+
+        result = _resolve_init_kwargs_registry(input_kwargs, mock_registry)
+
+        assert result["glm_params_init"] == valid_kwargs
+        assert result["scale_init"] == {}
+        assert result["initial_proba_init"] == {}
+        assert result["transition_proba_init"] == valid_kwargs
