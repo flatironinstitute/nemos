@@ -219,7 +219,7 @@ Helpers to look up or register solvers.
     list_available_algorithms
     list_algo_backends
     register
-    set_default
+    set_default_backend
 
     SolverSpec
 
