@@ -1061,6 +1061,410 @@ class TestGLMHMM:
 
 
 @pytest.mark.parametrize(
+    "regularizer", ["Ridge", "UnRegularized", "Lasso", "ElasticNet"]
+)
+@pytest.mark.parametrize(
+    "obs_model",
+    [
+        "PoissonObservations",
+        "BernoulliObservations",
+        "GammaObservations",
+    ],
+)
+@pytest.mark.parametrize(
+    "solver_name",
+    [
+        "GradientDescent",
+        "BFGS",
+        "LBFGS",
+        "NonlinearCG",
+        "ProximalGradient",
+        "SVRG",
+        "ProxSVRG",
+    ],
+)
+@pytest.mark.parametrize(
+    "model_class, fit_state_attrs",
+    [
+        (
+            nmo.glm_hmm.GLMHMM,
+            {
+                "coef_": jnp.zeros((2, 3)),
+                "intercept_": jnp.array([1.0, 1.0, 1.0]),
+                "scale_": 2.0 * jnp.ones(3),
+                "solver_state_": None,
+                "transition_prob_": None,
+                "initial_prob_": None,
+                "dof_resid_": None,
+            },
+        ),
+    ],
+)
+def test_save_and_load(
+    regularizer,
+    obs_model,
+    solver_name,
+    tmp_path,
+    fit_state_attrs,
+    model_class,
+):
+    """
+    Test saving and loading a model with various observation models and regularizers.
+    Ensure all parameters are preserved.
+    """
+    if (
+        regularizer == "Lasso"
+        or regularizer == "GroupLasso"
+        or regularizer == "ElasticNet"
+        and solver_name not in ["ProximalGradient", "ProxSVRG"]
+    ):
+        pytest.skip(
+            f"Skipping {solver_name} for Lasso type regularizer; not an approximate solver."
+        )
+
+    kwargs = dict(
+        n_states=3,
+        observation_model=obs_model,
+        solver_name=solver_name,
+        regularizer=regularizer,
+        regularizer_strength=2.0,
+        solver_kwargs={"tol": 10**-6},
+    )
+
+    if regularizer == "UnRegularized":
+        kwargs.pop("regularizer_strength")
+
+    model = model_class(**kwargs)
+
+    initial_params = model.get_params()
+    # set fit states
+    for key, val in fit_state_attrs.items():
+        setattr(model, key, val)
+        initial_params[key] = val
+
+    # Save
+    save_path = tmp_path / "test_model.npz"
+    model.save_params(save_path)
+
+    # Load
+    loaded_model = nmo.load_model(save_path)
+    loaded_params = loaded_model.get_params()
+    fit_state = loaded_model._get_fit_state()
+    loaded_params.update(fit_state)
+
+    # Assert matching keys and values
+    assert set(initial_params.keys()) == set(
+        loaded_params.keys()
+    ), "Parameter keys mismatch after load."
+
+    for key in initial_params:
+        init_val = initial_params[key]
+        load_val = loaded_params[key]
+        if isinstance(init_val, (int, float, str, type(None))):
+            assert init_val == load_val, f"{key} mismatch: {init_val} != {load_val}"
+        elif isinstance(init_val, dict):
+            assert (
+                init_val == load_val
+            ), f"{key} dict mismatch: {init_val} != {load_val}"
+        elif isinstance(init_val, (np.ndarray, jnp.ndarray)):
+            assert np.allclose(
+                np.array(init_val), np.array(load_val)
+            ), f"{key} array mismatch"
+        elif isinstance(init_val, Callable):
+            assert _get_name(init_val) == _get_name(
+                load_val
+            ), f"{key} function mismatch: {_get_name(init_val)} != {_get_name(load_val)}"
+
+
+@pytest.mark.parametrize("regularizer", ["Ridge"])
+@pytest.mark.parametrize(
+    "obs_model",
+    [
+        "PoissonObservations",
+    ],
+)
+@pytest.mark.parametrize(
+    "solver_name",
+    [
+        "ProxSVRG",
+    ],
+)
+@pytest.mark.parametrize(
+    "model_class, fit_state_attrs",
+    [
+        (
+            nmo.glm_hmm.GLMHMM,
+            {
+                "coef_": jnp.zeros((2, 3)),
+                "intercept_": jnp.array([1.0, 1.0, 1.0]),
+                "scale_": 2.0,
+                "dof_resid_": None,
+                "solver_state_": None,
+                "transition_prob_": None,
+                "initial_prob_": None,
+            },
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "mapping_dict, expectation",
+    [
+        ({}, does_not_raise()),
+        (
+            {
+                "observation_model": nmo.observation_models.GammaObservations,
+                "regularizer": nmo.regularizer.Lasso,
+                "inverse_link_function": lambda x: x**2,
+            },
+            pytest.warns(UserWarning, match="The following keys have been replaced"),
+        ),
+        (
+            {
+                "observation_model": nmo.observation_models.GammaObservations(),  # fails, only class or callable
+                "regularizer": nmo.regularizer.Lasso,
+                "inverse_link_function": lambda x: x**2,
+            },
+            pytest.raises(ValueError, match="Invalid map parameter types detected"),
+        ),
+        (
+            {
+                "observation_model": "GammaObservations",  # fails, only class or callable
+                "regularizer": nmo.regularizer.Lasso,
+            },
+            pytest.raises(ValueError, match="Invalid map parameter types detected"),
+        ),
+        (
+            {
+                "regularizer": nmo.regularizer.Lasso,
+                "regularizer_strength": 3.0,  # fails, only class or callable
+            },
+            pytest.raises(ValueError, match="Invalid map parameter types detected"),
+        ),
+        (
+            {
+                "solver_kwargs": {"tol": 10**-1},
+            },
+            pytest.raises(ValueError, match="Invalid map parameter types detected"),
+        ),
+        (
+            {
+                "some__nested__dictionary": {"tol": 10**-1},
+            },
+            pytest.raises(
+                ValueError,
+                match="The following keys in your mapping do not match",
+            ),
+        ),
+        # valid mapping dtype, invalid name
+        (
+            {
+                "some__nested__dictionary": nmo.regularizer.Ridge,
+            },
+            pytest.raises(
+                ValueError,
+                match="The following keys in your mapping do not match ",
+            ),
+        ),
+    ],
+)
+def test_save_and_load_with_custom_mapping(
+    regularizer,
+    obs_model,
+    solver_name,
+    mapping_dict,
+    tmp_path,
+    fit_state_attrs,
+    model_class,
+    expectation,
+):
+    """
+    Test saving and loading a model with various observation models and regularizers.
+    Ensure all parameters are preserved.
+    """
+
+    if (
+        regularizer == "Lasso"
+        or regularizer == "GroupLasso"
+        and solver_name not in ["ProximalGradient", "SVRG", "ProxSVRG"]
+    ):
+        pytest.skip(
+            f"Skipping {solver_name} for Lasso type regularizer; not an approximate solver."
+        )
+
+    model = model_class(
+        n_states=3,
+        observation_model=obs_model,
+        solver_name=solver_name,
+        regularizer=regularizer,
+        regularizer_strength=2.0,
+    )
+
+    initial_params = model.get_params()
+    # set fit states
+    for key, val in fit_state_attrs.items():
+        setattr(model, key, val)
+        initial_params[key] = val
+
+    # Save
+    save_path = tmp_path / "test_model.npz"
+    model.save_params(save_path)
+
+    # Load
+    with expectation:
+        loaded_model = nmo.load_model(save_path, mapping_dict=mapping_dict)
+        loaded_params = loaded_model.get_params()
+        fit_state = loaded_model._get_fit_state()
+        loaded_params.update(fit_state)
+
+        # Assert matching keys and values
+        assert set(initial_params.keys()) == set(
+            loaded_params.keys()
+        ), "Parameter keys mismatch after load."
+
+        unexpected_keys = set(mapping_dict) - set(initial_params)
+        raise_exception = bool(unexpected_keys)
+        if raise_exception:
+            with pytest.raises(
+                ValueError, match="mapping_dict contains unexpected keys"
+            ):
+                raise ValueError(
+                    f"mapping_dict contains unexpected keys: {unexpected_keys}"
+                )
+
+        for key in initial_params:
+            init_val = initial_params[key]
+            load_val = loaded_params[key]
+
+            if key == "observation_model__inverse_link_function":
+                if "observation_model" in mapping_dict:
+                    continue
+            if key in mapping_dict:
+                if key == "observation_model":
+                    if isinstance(mapping_dict[key], str):
+                        mapping_obs = instantiate_observation_model(mapping_dict[key])
+                    else:
+                        mapping_obs = mapping_dict[key]
+                    assert _get_name(mapping_obs) == _get_name(
+                        load_val
+                    ), f"{key} observation model mismatch: {mapping_dict[key]} != {load_val}"
+                elif key == "regularizer":
+                    if isinstance(mapping_dict[key], str):
+                        mapping_reg = instantiate_regularizer(mapping_dict[key])
+                    else:
+                        mapping_reg = mapping_dict[key]
+                    assert _get_name(mapping_reg) == _get_name(
+                        load_val
+                    ), f"{key} regularizer mismatch: {mapping_dict[key]} != {load_val}"
+                elif key == "solver_name":
+                    assert (
+                        mapping_dict[key] == load_val
+                    ), f"{key} solver name mismatch: {mapping_dict[key]} != {load_val}"
+                elif key == "regularizer_strength":
+                    assert (
+                        mapping_dict[key] == load_val
+                    ), f"{key} regularizer strength mismatch: {mapping_dict[key]} != {load_val}"
+                continue
+
+        if isinstance(init_val, (int, float, str, type(None))):
+            assert init_val == load_val, f"{key} mismatch: {init_val} != {load_val}"
+
+        elif isinstance(init_val, dict):
+            assert (
+                init_val == load_val
+            ), f"{key} dict mismatch: {init_val} != {load_val}"
+
+        elif isinstance(init_val, (np.ndarray, jnp.ndarray)):
+            assert np.allclose(
+                np.array(init_val), np.array(load_val)
+            ), f"{key} array mismatch"
+
+        elif isinstance(init_val, Callable):
+            assert _get_name(init_val) == _get_name(
+                load_val
+            ), f"{key} function mismatch: {_get_name(init_val)} != {_get_name(load_val)}"
+
+
+def test_save_and_load_nested_class(nested_regularizer, tmp_path):
+    """Test that save and load works with nested classes."""
+    model = nmo.glm_hmm.GLMHMM(
+        n_states=3, regularizer=nested_regularizer, regularizer_strength=1.0
+    )
+    save_path = tmp_path / "test_model.npz"
+    model.save_params(save_path)
+
+    mapping_dict = {
+        "regularizer": nested_regularizer.__class__,
+        "regularizer__func": jnp.exp,
+    }
+    with pytest.warns(UserWarning, match="The following keys have been replaced"):
+        loaded_model = nmo.load_model(save_path, mapping_dict=mapping_dict)
+
+    assert isinstance(loaded_model.regularizer, nested_regularizer.__class__)
+    assert isinstance(
+        loaded_model.regularizer.sub_regularizer,
+        nested_regularizer.sub_regularizer.__class__,
+    )
+    assert loaded_model.regularizer.func == mapping_dict["regularizer__func"]
+
+    # change mapping
+    mapping_dict = {
+        "regularizer": nested_regularizer.__class__,
+        "regularizer__sub_regularizer": nmo.regularizer.Ridge,
+        "regularizer__func": lambda x: x**2,
+    }
+    with pytest.warns(UserWarning, match="The following keys have been replaced"):
+        loaded_model = nmo.load_model(save_path, mapping_dict=mapping_dict)
+    assert isinstance(loaded_model.regularizer, nested_regularizer.__class__)
+    assert isinstance(loaded_model.regularizer.sub_regularizer, nmo.regularizer.Ridge)
+    assert loaded_model.regularizer.func == mapping_dict["regularizer__func"]
+
+
+@pytest.mark.parametrize(
+    "instantiate_base_regressor_subclass",
+    [{"model": "GLMHMM", "obs_model": "Bernoulli", "simulate": True}],
+    indirect=True,
+)
+def test_save_and_load_fitted_model(instantiate_base_regressor_subclass, tmp_path):
+    """
+    Test saving and loading a fitted model with various observation models and regularizers.
+    Ensure all parameters are preserved.
+    """
+    fixture = instantiate_base_regressor_subclass
+    fixture.model.coef_ = fixture.params.glm_params.coef
+    fixture.model.intercept_ = fixture.params.glm_params.intercept
+    fixture.model.transition_prob_ = jnp.exp(
+        fixture.params.hmm_params.log_transition_prob
+    )
+    fixture.model.initial_prob_ = jnp.exp(fixture.params.hmm_params.log_initial_prob)
+    fixture.model.scale_ = jnp.zeros_like(fixture.params.glm_params.intercept) * 11.0
+    fixture.model.dof_resid_ = 1.0
+    initial_params = fixture.model.get_params()
+    fit_state = fixture.model._get_fit_state()
+    initial_params.update(fit_state)
+
+    # Save
+    save_path = tmp_path / "test_model.npz"
+    fixture.model.save_params(save_path)
+
+    # Load
+    loaded_model = nmo.load_model(save_path)
+    loaded_params = loaded_model.get_params()
+    fit_state = loaded_model._get_fit_state()
+    fit_state.pop("solver_state_")
+    initial_params.pop("solver_state_")
+    loaded_params.update(fit_state)
+
+    # Assert states are close
+    for k, v in fit_state.items():
+        print(f"CHECKING {k}")
+        msg = f"{k} mismatch after load."
+        if isinstance(v, jnp.ndarray) or isinstance(v, Number):
+            assert np.allclose(initial_params[k], v), msg
+        else:
+            assert all(np.allclose(a, b) for a, b in zip(initial_params[k], v)), msg
+
+
+@pytest.mark.parametrize(
     "X, y, expected_new_session",
     [
         (np.ones((3, 1)), np.ones((3,)), jnp.array([1, 0, 0])),

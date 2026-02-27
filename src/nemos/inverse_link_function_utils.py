@@ -80,6 +80,7 @@ LINK_NAME_TO_FUNC = {
     "nemos.inverse_link_function_utils.one_over_x": one_over_x,
     "nemos.inverse_link_function_utils.softplus": softplus,
     "nemos.inverse_link_function_utils.log_softmax": log_softmax,
+    "nemos.inverse_link_function_utils.identity": identity,
     "nemos.utils.one_over_x": one_over_x,
     "norm.cdf": norm_cdf,
     "one_over_x": one_over_x,
