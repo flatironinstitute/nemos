@@ -24,7 +24,6 @@ from nemos.glm_hmm.params import GLMHMMParams, GLMParams
 from nemos.pytrees import FeaturePytree
 from nemos.utils import _get_name
 
-
 # ============================================================================
 # Tests for GLMHMM.__init__ property setters
 # ============================================================================
@@ -74,10 +73,22 @@ class TestGLMHMMInit:
             (1000, does_not_raise()),
             (10.0, does_not_raise()),  # float with no decimals is allowed
             (0, pytest.raises(ValueError, match="must be a strictly positive integer")),
-            (-1, pytest.raises(ValueError, match="must be a strictly positive integer")),
-            (10.5, pytest.raises(ValueError, match="must be a strictly positive integer")),
-            ("100", pytest.raises(ValueError, match="must be a strictly positive integer")),
-            (None, pytest.raises(ValueError, match="must be a strictly positive integer")),
+            (
+                -1,
+                pytest.raises(ValueError, match="must be a strictly positive integer"),
+            ),
+            (
+                10.5,
+                pytest.raises(ValueError, match="must be a strictly positive integer"),
+            ),
+            (
+                "100",
+                pytest.raises(ValueError, match="must be a strictly positive integer"),
+            ),
+            (
+                None,
+                pytest.raises(ValueError, match="must be a strictly positive integer"),
+            ),
         ],
     )
     def test_maxiter_setter(self, maxiter, expectation):
@@ -97,9 +108,18 @@ class TestGLMHMMInit:
             (1.0, does_not_raise()),
             (1, does_not_raise()),  # int is allowed (converted to float)
             (0, pytest.raises(ValueError, match="must be a strictly positive float")),
-            (-1e-8, pytest.raises(ValueError, match="must be a strictly positive float")),
-            ("0.001", pytest.raises(ValueError, match="must be a strictly positive float")),
-            (None, pytest.raises(ValueError, match="must be a strictly positive float")),
+            (
+                -1e-8,
+                pytest.raises(ValueError, match="must be a strictly positive float"),
+            ),
+            (
+                "0.001",
+                pytest.raises(ValueError, match="must be a strictly positive float"),
+            ),
+            (
+                None,
+                pytest.raises(ValueError, match="must be a strictly positive float"),
+            ),
         ],
     )
     def test_tol_setter(self, tol, expectation):
@@ -168,17 +188,13 @@ class TestGLMHMMInit:
     # -------------------------------------------------------------------------
     def test_dirichlet_prior_init_prob_none(self):
         """Test that None is accepted for dirichlet prior."""
-        model = nmo.glm_hmm.GLMHMM(
-            n_states=3, dirichlet_prior_alphas_init_prob=None
-        )
+        model = nmo.glm_hmm.GLMHMM(n_states=3, dirichlet_prior_alphas_init_prob=None)
         assert model.dirichlet_prior_alphas_init_prob is None
 
     def test_dirichlet_prior_init_prob_valid(self):
         """Test valid dirichlet prior alphas."""
         alphas = jnp.array([1.0, 2.0, 3.0])
-        model = nmo.glm_hmm.GLMHMM(
-            n_states=3, dirichlet_prior_alphas_init_prob=alphas
-        )
+        model = nmo.glm_hmm.GLMHMM(n_states=3, dirichlet_prior_alphas_init_prob=alphas)
         assert jnp.array_equal(model.dirichlet_prior_alphas_init_prob, alphas)
 
     def test_dirichlet_prior_init_prob_wrong_shape(self):
@@ -198,17 +214,13 @@ class TestGLMHMMInit:
     # -------------------------------------------------------------------------
     def test_dirichlet_prior_transition_none(self):
         """Test that None is accepted for dirichlet prior."""
-        model = nmo.glm_hmm.GLMHMM(
-            n_states=3, dirichlet_prior_alphas_transition=None
-        )
+        model = nmo.glm_hmm.GLMHMM(n_states=3, dirichlet_prior_alphas_transition=None)
         assert model.dirichlet_prior_alphas_transition is None
 
     def test_dirichlet_prior_transition_valid(self):
         """Test valid dirichlet prior alphas for transitions."""
         alphas = jnp.ones((3, 3))
-        model = nmo.glm_hmm.GLMHMM(
-            n_states=3, dirichlet_prior_alphas_transition=alphas
-        )
+        model = nmo.glm_hmm.GLMHMM(n_states=3, dirichlet_prior_alphas_transition=alphas)
         assert jnp.array_equal(model.dirichlet_prior_alphas_transition, alphas)
 
     def test_dirichlet_prior_transition_wrong_shape(self):
@@ -228,6 +240,7 @@ class TestGLMHMMInit:
 
     def test_initialization_funcs_custom(self):
         """Test that custom initialization functions are accepted."""
+
         def custom_scale(n_states, X, y, random_key):
             return jnp.full(n_states, 2.0)
 
@@ -257,9 +270,7 @@ class TestGLMHMMInit:
     def test_inverse_link_function_custom(self):
         """Test that custom inverse link functions are accepted."""
         custom_link = lambda x: x**2
-        model = nmo.glm_hmm.GLMHMM(
-            n_states=2, inverse_link_function=custom_link
-        )
+        model = nmo.glm_hmm.GLMHMM(n_states=2, inverse_link_function=custom_link)
         assert model.inverse_link_function is custom_link
 
     # -------------------------------------------------------------------------
@@ -297,6 +308,7 @@ class TestGLMHMMInit:
         repr_str = repr(model)
         assert "GLMHMM" in repr_str
         assert "n_states" in repr_str
+
 
 # FILTER FOR GLM HMM
 INSTANTIATE_MODEL_ONLY = INSTANTIATE_MODEL_ONLY.copy()
@@ -708,7 +720,9 @@ class TestGLMHMM:
         }
         assert set(fixture.model._optimization_run.keywords.keys()) == expected_keys
         # Check maxiter and tol values
-        assert fixture.model._optimization_run.keywords["maxiter"] == fixture.model.maxiter
+        assert (
+            fixture.model._optimization_run.keywords["maxiter"] == fixture.model.maxiter
+        )
         assert fixture.model._optimization_run.keywords["tol"] == fixture.model.tol
 
     def test_initialize_solver_sets_optimization_update(
@@ -796,7 +810,10 @@ class TestGLMHMM:
         # Call _optimization_init_state and verify it returns same structure
         new_state = fixture.model._optimization_init_state()
         assert isinstance(new_state, GLMHMMState)
-        assert new_state.log_likelihood_history.shape == init_state.log_likelihood_history.shape
+        assert (
+            new_state.log_likelihood_history.shape
+            == init_state.log_likelihood_history.shape
+        )
 
     @pytest.mark.parametrize("maxiter", [10, 100, 500])
     def test_initialize_solver_respects_maxiter(
@@ -821,7 +838,13 @@ class TestGLMHMM:
     [
         ("Gaussian", 1, jnp.ones(100)),
         ("Poisson", 2, jnp.ones(100)),
-        ("Bernoulli", 2, jax.random.choice(jax.random.PRNGKey(0), jnp.array([0.0, 1.0]), shape=(100,))),
+        (
+            "Bernoulli",
+            2,
+            jax.random.choice(
+                jax.random.PRNGKey(0), jnp.array([0.0, 1.0]), shape=(100,)
+            ),
+        ),
         ("Gamma", 2, jnp.ones(100)),
         ("NegativeBinomial", 2, jnp.ones(100)),
     ],
