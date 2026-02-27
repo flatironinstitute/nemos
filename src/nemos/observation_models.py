@@ -418,6 +418,31 @@ class PoissonObservations(Observations):
     with a given rate. It provides methods for computing the negative log-likelihood, generating samples,
     and computing the residual deviance for the given spike count data.
 
+    Examples
+    --------
+    >>> import nemos as nmo
+    >>> # As a string
+    >>> nmo.glm.GLM(observation_model="Poisson")
+    GLM(
+        observation_model=PoissonObservations(),
+        inverse_link_function=exp,
+        regularizer=UnRegularized(),
+        solver_name='GradientDescent[optimistix]'
+    )
+    >>> # As a class instance
+    >>> nmo.glm.GLM(observation_model=nmo.observation_models.PoissonObservations())
+    GLM(
+        observation_model=PoissonObservations(),
+        inverse_link_function=exp,
+        regularizer=UnRegularized(),
+        solver_name='GradientDescent[optimistix]'
+    )
+
+    Notes
+    -----
+    This class is intended to be used as an argument to a model object (e.g.,
+    :class:`~nemos.glm.glm.GLM`), rather than instantiated directly.
+
     """
 
     def __init__(self):
@@ -554,6 +579,7 @@ class PoissonObservations(Observations):
         -------
         jnp.ndarray
             Random numbers generated from the Poisson distribution based on the `predicted_rate`.
+
         """
         return jax.random.poisson(key, predicted_rate)
 
@@ -630,6 +656,7 @@ class PoissonObservations(Observations):
             but is retained for compatibility with the abstract method signature.
         dof_resid :
             The DOF of the residuals.
+
         """
         return jnp.ones_like(jnp.atleast_1d(y[0]))
 
@@ -641,6 +668,31 @@ class GammaObservations(Observations):
     The GammaObservations is designed to model the observed spike counts based on a Gamma distribution
     with a given rate. It provides methods for computing the negative log-likelihood, generating samples,
     and computing the residual deviance for the given spike count data.
+
+    Examples
+    --------
+    >>> import nemos as nmo
+    >>> # As a string
+    >>> nmo.glm.GLM(observation_model="Gamma")
+    GLM(
+        observation_model=GammaObservations(),
+        inverse_link_function=one_over_x,
+        regularizer=UnRegularized(),
+        solver_name='GradientDescent[optimistix]'
+    )
+    >>> # As a class instance
+    >>> nmo.glm.GLM(observation_model=nmo.observation_models.GammaObservations())
+    GLM(
+        observation_model=GammaObservations(),
+        inverse_link_function=one_over_x,
+        regularizer=UnRegularized(),
+        solver_name='GradientDescent[optimistix]'
+    )
+
+    Notes
+    -----
+    This class is intended to be used as an argument to a model object (e.g.,
+    :class:`~nemos.glm.glm.GLM`), rather than instantiated directly.
 
     """
 
@@ -747,6 +799,7 @@ class GammaObservations(Observations):
         -------
         jnp.ndarray
             Random numbers generated from the Gamma distribution based on the `predicted_rate` and the `scale`.
+
         """
         return jax.random.gamma(key, predicted_rate / scale) * scale
 
@@ -826,6 +879,7 @@ class GammaObservations(Observations):
         :
             The scale parameter. If predicted_rate is ``(n_samples, n_neurons)``, this method will return a
             scale for each neuron.
+
         """
         predicted_rate = jnp.clip(
             predicted_rate, min=jnp.finfo(predicted_rate.dtype).eps
@@ -844,6 +898,31 @@ class BernoulliObservations(Observations):
     with a given success probability. When using a logit link function (i.e. a logistic inverse link function),
     this is equivalent to Logistic Regression. It provides methods for computing the negative log-likelihood,
     generating samples, and computing the residual deviance for the given binary observations.
+
+    Examples
+    --------
+    >>> import nemos as nmo
+    >>> # As a string
+    >>> nmo.glm.GLM(observation_model="Bernoulli")
+    GLM(
+        observation_model=BernoulliObservations(),
+        inverse_link_function=logistic,
+        regularizer=UnRegularized(),
+        solver_name='GradientDescent[optimistix]'
+    )
+    >>> # As a class instance
+    >>> nmo.glm.GLM(observation_model=nmo.observation_models.BernoulliObservations())
+    GLM(
+        observation_model=BernoulliObservations(),
+        inverse_link_function=logistic,
+        regularizer=UnRegularized(),
+        solver_name='GradientDescent[optimistix]'
+    )
+
+    Notes
+    -----
+    This class is intended to be used as an argument to a model object (e.g.,
+    :class:`~nemos.glm.glm.GLM`), rather than instantiated directly.
 
     """
 
@@ -970,6 +1049,7 @@ class BernoulliObservations(Observations):
         -------
         jnp.ndarray
             Random numbers generated from the Bernoulli distribution based on the `predicted_rate`.
+
         """
         return jax.random.bernoulli(key, predicted_rate)
 
@@ -1048,6 +1128,7 @@ class BernoulliObservations(Observations):
             scale, but is retained for compatibility with the abstract method signature.
         dof_resid :
             The DOF of the residuals.
+
         """
         return jnp.ones_like(jnp.atleast_1d(y[0]))
 
@@ -1080,6 +1161,7 @@ class BernoulliObservations(Observations):
         -------
         :
             The likelihood. Shape (1,).
+
         """
         predicted_rate = jnp.clip(
             predicted_rate,
@@ -1144,6 +1226,59 @@ class NegativeBinomialObservations(Observations):
 
     .. [6] Wei, Ganchao, et al. "Calibrating Bayesian decoders of neural spiking activity."
         Journal of Neuroscience 44.18 (2024).
+
+    Examples
+    --------
+    >>> import nemos as nmo
+    >>> # As a string
+    >>> nmo.glm.GLM(observation_model="NegativeBinomial")
+    GLM(
+        observation_model=NegativeBinomialObservations(scale=1.0),
+        inverse_link_function=exp,
+        regularizer=UnRegularized(),
+        solver_name='GradientDescent[optimistix]'
+    )
+    >>> # As a class instance
+    >>> nmo.glm.GLM(observation_model=nmo.observation_models.NegativeBinomialObservations())
+    GLM(
+        observation_model=NegativeBinomialObservations(scale=1.0),
+        inverse_link_function=exp,
+        regularizer=UnRegularized(),
+        solver_name='GradientDescent[optimistix]'
+    )
+
+    The ``scale`` parameter controls overdispersion. Larger values produce wider, more variable
+    count distributions, while values approaching zero recover Poisson-like behavior.
+    The effect can be visualized by simulating samples at two different scale settings:
+
+    >>> import numpy as np
+    >>> import jax
+    >>> import matplotlib.pyplot as plt
+    >>> obs_scale_low = nmo.observation_models.NegativeBinomialObservations(scale=0.05)
+    >>> obs_scale_high = nmo.observation_models.NegativeBinomialObservations(scale=2)
+    >>> rate = np.full(1000, fill_value=10)
+    >>> key = jax.random.PRNGKey(123)
+    >>> samples_low = obs_scale_low.sample_generator(key, rate)
+    >>> samples_high = obs_scale_high.sample_generator(key, rate)
+    >>> _ = plt.subplot(211)
+    >>> _, edges, _ = plt.hist(samples_high, bins=50)
+    >>> plt.title("scale = 2")
+    Text(0.5, 1.0, 'scale = 2')
+    >>> _ = plt.subplot(212)
+    >>> _ = plt.hist(samples_low, bins=edges)
+    >>> plt.title("scale = 0.05")
+    Text(0.5, 1.0, 'scale = 0.05')
+    >>> plt.tight_layout()
+    >>> plt.show()
+
+    Notes
+    -----
+    This class is intended to be used as an argument to a model object (e.g.,
+    :class:`~nemos.glm.glm.GLM`), rather than instantiated directly. Because the ``scale``
+    parameter is fixed at initialization and affects the likelihood landscape, it must be
+    chosen before fitting—for example, by cross-validating over candidate values using
+    :class:`sklearn.model_selection.GridSearchCV`.
+
     """
 
     def __init__(
@@ -1236,6 +1371,7 @@ class NegativeBinomialObservations(Observations):
         -------
         :
             The log-likelihood of the Negative Binomial model. Shape ``(1,)``.
+
         """
         scale = self.scale if scale is None else scale
         ll_unnormalized = -self._negative_log_likelihood(
@@ -1382,6 +1518,7 @@ class NegativeBinomialObservations(Observations):
         For alternatives, see the R package MASS
         `glm.nb <https://www.rdocumentation.org/packages/MASS/versions/7.3-65/topics/glm.nb>`_
         for more details.
+
         """
         return jnp.array(self.scale)
 
@@ -1393,6 +1530,31 @@ class GaussianObservations(Observations):
     The GaussianObservations is designed to model data based on a Gaussian distribution
     with a given mean (predicted rate) and variance (scale). It provides methods for computing the negative
     log-likelihood, generating samples, and computing the residual deviance for the given spike count data.
+
+    Examples
+    --------
+    >>> import nemos as nmo
+    >>> # As a string
+    >>> nmo.glm.GLM(observation_model="Gaussian")
+    GLM(
+        observation_model=GaussianObservations(),
+        inverse_link_function=identity,
+        regularizer=UnRegularized(),
+        solver_name='GradientDescent[optimistix]'
+    )
+    >>> # As a class instance
+    >>> nmo.glm.GLM(observation_model=nmo.observation_models.GaussianObservations())
+    GLM(
+        observation_model=GaussianObservations(),
+        inverse_link_function=identity,
+        regularizer=UnRegularized(),
+        solver_name='GradientDescent[optimistix]'
+    )
+
+    Notes
+    -----
+    This class is intended to be used as an argument to a model object (e.g.,
+    :class:`~nemos.glm.glm.GLM`), rather than instantiated directly.
 
     """
 
@@ -1470,6 +1632,7 @@ class GaussianObservations(Observations):
         -------
         :
             The Gaussian log-likelihood. Shape ``(1,)``.
+
         """
         norm = -0.5 * jnp.log(2 * jnp.pi * scale)
         return aggregate_sample_scores(
@@ -1504,6 +1667,7 @@ class GaussianObservations(Observations):
         -------
         jnp.ndarray
             Random numbers generated from the Gaussian distribution based on the ``predicted_rate`` and the ``scale``.
+
         """
         return (
             jax.random.normal(key, shape=predicted_rate.shape) * jnp.sqrt(scale)
@@ -1582,6 +1746,7 @@ class GaussianObservations(Observations):
         :
             The scale parameter. If predicted_rate is ``(n_samples, n_neurons)``, this method will return a
             scale for each neuron.
+
         """
         resid = jnp.power(y - predicted_rate, 2)
         return jnp.sum(resid, axis=0) / dof_resid
@@ -1753,6 +1918,21 @@ class CategoricalObservations(Observations):
     generating samples, and computing the residual deviance for the given categorical observations.
     This distribution is equivalent to a multinomial with ``n=1``.
 
+    Examples
+    --------
+    ``CategoricalObservations`` is set automatically by classification models. For example:
+
+    >>> import nemos as nmo
+    >>> nmo.glm.ClassifierGLM().observation_model
+    CategoricalObservations()
+
+    Notes
+    -----
+    This class is the underlying observation model for classification models
+    such as :class:`~nemos.glm.classifier_glm.ClassifierGLM` and
+    :class:`~nemos.glm.classifier_glm.ClassifierPopulationGLM`, which set it automatically. Users
+    do not need to pass it directly.
+
     """
 
     def __init__(self):
@@ -1879,6 +2059,7 @@ class CategoricalObservations(Observations):
         jnp.ndarray
             Random category indices sampled from the Categorical distribution.
             Shape ``(n_time_bins,)`` or ``(n_time_bins, n_neurons)``.
+
         """
         return jax.nn.one_hot(
             jax.random.categorical(key, predicted_rate),
@@ -1951,6 +2132,7 @@ class CategoricalObservations(Observations):
             scale, but is retained for compatibility with the abstract method signature.
         dof_resid :
             The DOF of the residuals.
+
         """
         return jnp.ones_like(jnp.atleast_1d(y[0, ..., 0]))
 
