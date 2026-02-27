@@ -564,7 +564,7 @@ class EvalBasisMixin:
                         | (jnp.reshape(x, (x.shape[0], -1)) > hi),
                         axis=1,
                     )
-                    for x, (lo, hi) in zip(xi, self._get_bounds_per_dim())
+                    for x, (lo, hi) in zip(xi, self._get_bounds_per_dim(), strict=True)
                 ]
             ),
             axis=0,
