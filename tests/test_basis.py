@@ -2264,6 +2264,20 @@ class TestIdentityBasis(BasisFuncsTesting):
             inp.reshape(inp.shape[0], -1),
         )
 
+    @pytest.mark.parametrize("fill_value", [-111.0, np.nan])
+    def test_fill_value(self, fill_value):
+        bas = IdentityEval()
+        bas.bounds = (0, 2)
+        bas.fill_value = fill_value
+        x = np.array([[1, 3], [3, 1], [2, 2]])
+        out = bas.compute_features(x)
+        if np.isnan(fill_value):
+            assert np.isnan(out[1, 0])
+            assert np.isnan(out[0, 1])
+        else:
+            assert out[1, 0] == fill_value
+            assert out[0, 1] == fill_value
+
 
 class TestHistoryBasis(BasisFuncsTesting):
     cls = {"conv": HistoryConv}
