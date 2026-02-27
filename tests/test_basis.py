@@ -33,9 +33,11 @@ from nemos.basis import (
 )
 from nemos.basis._basis import (
     AdditiveBasis,
+    Basis,
     MultiplicativeBasis,
     add_docstring,
 )
+from nemos.basis._basis_mixin import AtomicBasisMixin, EvalBasisMixin
 from nemos.basis._composition_utils import generate_basis_label_pair, set_input_shape
 from nemos.basis._decaying_exponential import OrthExponentialBasis
 from nemos.basis._fourier_basis import FourierBasis
@@ -44,8 +46,6 @@ from nemos.basis._raised_cosine_basis import (
     RaisedCosineBasisLinear,
     RaisedCosineBasisLog,
 )
-from nemos.basis._basis_mixin import EvalBasisMixin, AtomicBasisMixin
-from nemos.basis._basis import Basis
 from nemos.basis._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis
 from nemos.basis._zero_basis import ZeroBasis
 from nemos.utils import pynapple_concatenate_numpy
@@ -2399,9 +2399,9 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             corr[idx] = (lin_ev.flatten() @ log_ev.flatten()) / (
                 np.linalg.norm(lin_ev.flatten()) * np.linalg.norm(log_ev.flatten())
             )
-        assert np.all(np.diff(corr) < 0), (
-            "As time scales increases, deviation from linearity should increase!"
-        )
+        assert np.all(
+            np.diff(corr) < 0
+        ), "As time scales increases, deviation from linearity should increase!"
 
     @pytest.mark.parametrize(
         "time_scaling, expectation",
