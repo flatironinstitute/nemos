@@ -17,8 +17,9 @@ from .._observation_model_builder import instantiate_observation_model
 from ..base_regressor import BaseRegressor
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..observation_models import Observations
+from ..pytrees import FeaturePytree
 from ..regularizer import GroupLasso, Lasso, Regularizer, Ridge
-from ..type_casting import is_pynapple_tsd
+from ..type_casting import cast_to_jax, is_pynapple_tsd
 from ..typing import (
     DESIGN_INPUT_TYPE,
     SolverState,
@@ -981,7 +982,35 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         **kwargs,
     ) -> StepResult:
         """Run a single update step of the jaxopt solver."""
-        pass
+        is_new_session = self._get_is_new_session(X, y)
+
+        # cast to jax and find non-nans
+        X, y, is_new_session = tree_utils.drop_nans(X, y, is_new_session)
+        X, y = cast_to_jax(lambda *x: x)(X, y)
+        is_new_session = is_new_session.at[0].set(True)
+
+        # grab the data
+        data = X.data if isinstance(X, FeaturePytree) else X
+
+        # wrap into GLM params, this assumes params are well-structured,
+        # if initialization is done via `initialize_solver_and_state` it
+        # should be fine
+        params = self._validator.to_model_params(params)
+
+        # perform a one-step update
+        updated_params, updated_state = self._optimization_update(
+            params, opt_state, data, y, *args, is_new_session=is_new_session, **kwargs
+        )
+
+        # store params and state
+        self._set_model_params(updated_params)
+        self.solver_state_ = updated_state
+
+        # estimate the scale
+        self.dof_resid_ = self._estimate_resid_degrees_of_freedom(
+            X, n_samples=n_samples
+        )
+        return self._validator.from_model_params(updated_params), updated_state
 
     def __repr__(self) -> str:
         """Hierarchical repr for the GLMHMM class."""
