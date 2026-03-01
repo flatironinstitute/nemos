@@ -17,6 +17,11 @@ from numpy.typing import ArrayLike
 BatchData: TypeAlias = tuple[Any, ...]
 
 
+# TODO: Test to count the number of compilations if N // batch_size != 0
+# Should be max 2 ideally
+# There is an example in the tests
+
+
 @runtime_checkable
 class DataLoader(Protocol):
     """
@@ -59,6 +64,7 @@ class DataLoader(Protocol):
         ...
 
 
+# TODO: How can this work with pynapple's lazy laoding?
 class ArrayDataLoader:
     """
     DataLoader for in-memory arrays.
@@ -185,6 +191,8 @@ class _PreprocessedDataLoader:
         for batch_data in self._loader:
             yield self._preprocess_fn(*batch_data)
 
+
+# TODO: Is n_samples required?
 
 def is_data_loader(obj) -> bool:
     """Check if an object conforms to the DataLoader protocol."""
