@@ -1,5 +1,6 @@
 """Tests for the dataloaders used for mini-batches in stochastic optimization."""
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -565,3 +566,60 @@ class TestIsDataLoader:
 
         wrapped = _PreprocessedDataLoader(loader, preprocess)
         assert is_data_loader(wrapped)
+
+
+class TestCompilation:
+    """Tests that JIT compilation count matches the number of unique batch shapes.
+
+    The ``process`` function is compiled at most twice, meaning that the solver's
+    ``update`` is also recompiled once if the last batch is not the same size as the rest.
+
+    Uses a trace counter (Python side effect inside @jax.jit) to count
+    compilations. An alternative is the undocumented ``jitted_fn._cache_size()``
+    method, which returns the number of cached compiled variants.
+    """
+
+    @pytest.fixture(params=["ArrayDataLoader", "LazyArrayDataLoader"])
+    def loader_cls(self, request):
+        return {
+            "ArrayDataLoader": ArrayDataLoader,
+            "LazyArrayDataLoader": LazyArrayDataLoader,
+        }[request.param]
+
+    def test_even_batches_compile_once(self, loader_cls):
+        """Even split: one unique shape, one compilation."""
+        X = np.random.randn(100, 5)
+        y = np.random.randn(100)
+        loader = loader_cls(X, y, batch_size=20, shuffle=False)
+
+        trace_count = 0
+
+        @jax.jit
+        def process(x, y):
+            nonlocal trace_count
+            trace_count += 1
+            return x.sum() + y.sum()
+
+        for x_batch, y_batch in loader:
+            process(x_batch, y_batch)
+
+        assert trace_count == 1
+
+    def test_uneven_batches_compile_twice(self, loader_cls):
+        """Uneven split: two unique shapes, two compilations."""
+        X = np.random.randn(100, 5)
+        y = np.random.randn(100)
+        loader = loader_cls(X, y, batch_size=32, shuffle=False)
+
+        trace_count = 0
+
+        @jax.jit
+        def process(x, y):
+            nonlocal trace_count
+            trace_count += 1
+            return x.sum() + y.sum()
+
+        for x_batch, y_batch in loader:
+            process(x_batch, y_batch)
+
+        assert trace_count == 2
