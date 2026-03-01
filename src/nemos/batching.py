@@ -17,11 +17,6 @@ from numpy.typing import ArrayLike
 BatchData: TypeAlias = tuple[Any, ...]
 
 
-# TODO: Test to count the number of compilations if N // batch_size != 0
-# Should be max 2 ideally
-# There is an example in the tests
-
-
 @runtime_checkable
 class DataLoader(Protocol):
     """
@@ -38,7 +33,10 @@ class DataLoader(Protocol):
       each time. This is required for ``num_epochs > 1`` and because SVRG's full
       gradient computation iterates through the data an additional time per epoch.
     - ``sample_batch()`` should be cheap and deterministic (e.g., return first batch).
-    - Batches should have consistent, non-zero sizes.
+    - Batches should have consistent, non-zero sizes. Note that the solver's ``update``
+      method will be recompiled for each unique batch size. This usually means just 2
+      compilations, as the last batch is almost always of a different size unless the
+      number of samples is divisible by the batch size.
     """
 
     def __iter__(self) -> Iterator[BatchData]:
