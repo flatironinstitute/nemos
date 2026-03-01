@@ -10,8 +10,8 @@ from typing import (
     runtime_checkable,
 )
 
-import jax
 import jax.numpy as jnp
+import numpy as np
 from numpy.typing import ArrayLike
 
 BatchData: TypeAlias = tuple[Any, ...]
@@ -87,7 +87,7 @@ class ArrayDataLoader:
         *arrays: ArrayLike,
         batch_size: int,
         shuffle: bool = True,
-        key: Optional[jax.Array] = None,
+        seed: int = 0,
     ):
         """
         Initialize an in-memory array data loader.
@@ -101,8 +101,8 @@ class ArrayDataLoader:
             Number of samples per batch.
         shuffle :
             Whether to shuffle data each epoch. Default is True.
-        key :
-            JAX random key for shuffling. Default is ``jax.random.key(0)``.
+        seed :
+            Random seed for shuffling. Default is 0.
         """
         if len(arrays) == 0:
             raise ValueError("Provide at least one array.")
@@ -110,7 +110,7 @@ class ArrayDataLoader:
         self.arrays = tuple(jnp.asarray(x) for x in arrays)
         self.batch_size = batch_size
         self.shuffle = shuffle
-        self._key = key if key is not None else jax.random.key(0)
+        self._rng = np.random.default_rng(seed)
 
         if len(set(arr.shape[0] for arr in self.arrays)) != 1:
             raise ValueError("All arrays must have same number of samples")
@@ -131,8 +131,7 @@ class ArrayDataLoader:
         """Return fresh iterator. Shuffles if enabled."""
         n = self.n_samples
         if self.shuffle:
-            self._key, subkey = jax.random.split(self._key)
-            perm = jax.random.permutation(subkey, n)
+            perm = self._rng.permutation(n)
         else:
             perm = None
 
@@ -193,6 +192,101 @@ class _PreprocessedDataLoader:
 
 
 # TODO: Is n_samples required?
+
+
+class LazyArrayDataLoader:
+    """
+    DataLoader for lazy/out-of-core arrays (e.g. dask, zarr, HDF5).
+
+    Unlike ``ArrayDataLoader``, this loader does not eagerly convert arrays
+    to JAX arrays. Instead, it reads sequential slices from the source arrays
+    and converts each batch to JAX on the fly. This keeps memory usage
+    proportional to batch size rather than dataset size.
+
+    Shuffling is approximate: chunk order is randomized each epoch and
+    samples within each batch are permuted after loading. Samples within
+    the same chunk always end up in the same batch.
+
+    This loader is re-iterable: each call to ``__iter__()`` returns a fresh
+    iterator.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from nemos.batching import LazyArrayDataLoader
+    >>> X = np.ones((100, 5))
+    >>> y = np.ones((100,))
+    >>> loader = LazyArrayDataLoader(X, y, batch_size=32, shuffle=True)
+    >>> for X_batch, y_batch in loader:
+    ...     pass  # Train on batch
+    """
+
+    def __init__(
+        self,
+        *arrays: ArrayLike,
+        batch_size: int,
+        shuffle: bool = True,
+        seed: int = 0,
+    ):
+        """
+        Initialize a lazy array data loader.
+
+        Parameters
+        ----------
+        *arrays :
+            Input and output arrays (any number). Each must support
+            ``.shape`` and sequential slicing (``arr[start:end]``).
+        batch_size :
+            Number of samples per batch.
+        shuffle :
+            Whether to shuffle chunk order and within-batch sample order
+            each epoch. Default is True.
+        seed :
+            Random seed for shuffling. Default is 0.
+        """
+        if len(arrays) == 0:
+            raise ValueError("Provide at least one array.")
+
+        self.arrays = arrays
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+        self._rng = np.random.default_rng(seed)
+
+        if len(set(arr.shape[0] for arr in self.arrays)) != 1:
+            raise ValueError("All arrays must have same number of samples")
+        if batch_size <= 0:
+            raise ValueError("batch_size must be positive")
+
+    @property
+    def n_samples(self) -> int:
+        """Total number of samples in the dataset."""
+        return self.arrays[0].shape[0]
+
+    def sample_batch(self) -> tuple[jnp.ndarray, ...]:
+        """Return first batch, deterministic (ignores shuffle)."""
+        end = min(self.batch_size, self.n_samples)
+        return tuple(jnp.asarray(arr[:end]) for arr in self.arrays)
+
+    def __iter__(self) -> Iterator[tuple[jnp.ndarray, ...]]:
+        """Return fresh iterator. Shuffles chunk order and within-batch if enabled."""
+        n = self.n_samples
+        chunks = [
+            (start, min(start + self.batch_size, n))
+            for start in range(0, n, self.batch_size)
+        ]
+
+        if self.shuffle:
+            self._rng.shuffle(chunks)
+
+        for start, end in chunks:
+            batch = tuple(jnp.asarray(arr[start:end]) for arr in self.arrays)
+
+            if self.shuffle:
+                local_perm = self._rng.permutation(end - start)
+                batch = tuple(b[local_perm] for b in batch)
+
+            yield batch
+
 
 def is_data_loader(obj) -> bool:
     """Check if an object conforms to the DataLoader protocol."""
