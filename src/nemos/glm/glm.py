@@ -619,7 +619,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
 
         This method initializes the coefficients (spike basis coefficients) and intercepts (bias terms)
         required for the GLM. The coefficients are initialized to zeros with dimensions based on the input X.
-        If X is a :class:`nemos.pytrees.FeaturePytree`, the coefficients retain the pytree structure with
+        If X is a pytree of arrays, the coefficients retain the pytree structure with
         arrays of zeros shaped according to the features in X.
         If X is a simple ndarray, the coefficients are initialized as a 2D array. The intercepts are initialized
         based on the log mean of the target data y across the first axis, corresponding to the average log activity
@@ -628,7 +628,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         Parameters
         ----------
         X :
-            The input data which can be a :class:`nemos.pytrees.FeaturePytree` with n_features arrays of shape
+            The input data, either a pytree of arrays with leaves of shape
             ``(n_timebins, n_features)``, or a simple ndarray of shape ``(n_timebins, n_features)``.
         y :
             The target data array of shape ``(n_timebins, )``, representing
@@ -636,10 +636,10 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
 
         Returns
         -------
-        Tuple[Union[FeaturePytree, jnp.ndarray], jnp.ndarray]
+        Tuple[Union[pytree of arrays, jnp.ndarray], jnp.ndarray]
             A tuple containing the initialized parameters:
             - The first element is the initialized coefficients
-            (either as a FeaturePytree or ndarray, matching the structure of X) with shapes (n_features,).
+            (either as a pytree of arrays or ndarray, matching the structure of X) with shapes (n_features,).
             - The second element is the initialized intercept (bias terms) as an ndarray of shape (1,).
         """
         if isinstance(X, FeaturePytree):
@@ -1178,7 +1178,7 @@ class PopulationGLM(GLM):
     combination of exogenous inputs (like convolved currents or light intensities) and a choice of observation model.
     It is suitable for scenarios where the relationship between predictors and the response
     variable might be non-linear, and the residuals  don't follow a normal distribution. The predictors must be
-    stored in tabular format, shape (n_timebins, num_features) or as :class:`nemos.pytrees.FeaturePytree`.
+    stored in tabular format, shape (n_timebins, num_features) or as a pytree of arrays of the same shape.
     Below is a table listing the default and available solvers for each regularizer.
 
     +---------------+------------------+-------------------------------------------------------------+
