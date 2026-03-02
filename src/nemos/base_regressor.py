@@ -407,6 +407,8 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         """Fit the model to neural activity."""
         pass
 
+    # TODO: Collect callbacks into a single argument and define hooks.
+    # Add a Protocol listing the hooks / defining the interface?
     @abc.abstractmethod
     def stochastic_fit(
         self,
