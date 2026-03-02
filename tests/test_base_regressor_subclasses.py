@@ -330,6 +330,22 @@ class TestModelVsPytree:
         model.fit(pytree_x, fixture.y)
         assert model.score(pytree_x, fixture.y).ndim == 0
 
+    @pytest.mark.parametrize(
+        "instantiate_base_regressor_subclass, pytree_x",
+        _MODEL_PYTREE_X_CASES,
+        indirect=["instantiate_base_regressor_subclass"],
+    )
+    @pytest.mark.solver_related
+    def test_simulate_pytree_x(self, instantiate_base_regressor_subclass, pytree_x):
+        """simulate runs without error and returns outputs with the correct n_samples when X is an arbitrary pytree."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+        model._feature_mask = None
+        model.fit(pytree_x, fixture.y)
+        n_samples = jax.tree_util.tree_leaves(pytree_x)[0].shape[0]
+        counts, rates = model.simulate(jax.random.key(123), pytree_x)
+        assert counts.shape[0] == n_samples
+
 
 def test_all_defaults_assigned():
     PARS_WITHOUT_DEFAULTS = {}

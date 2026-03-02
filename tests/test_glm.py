@@ -1603,6 +1603,29 @@ class TestGLM:
             nmo.load_model(save_path, mapping_dict=invalid_mapping)
 
 
+class _TwoLeafModule(eqx.Module):
+    a: jnp.ndarray
+    b: jnp.ndarray
+
+
+# Factories that build a two-leaf pytree X given n_samples. Used to parametrize
+# coef-structure tests over different pytree types.
+_PYTREE_X_FACTORIES = [
+    pytest.param(
+        lambda n: {"a": jnp.ones((n, 1)), "b": jnp.ones((n, 1))},
+        id="dict",
+    ),
+    pytest.param(
+        lambda n: _TwoLeafModule(a=jnp.ones((n, 1)), b=jnp.ones((n, 1))),
+        id="eqx_module",
+    ),
+    pytest.param(
+        lambda n: {"a": [jnp.ones((n, 1))], "b": jnp.ones((n, 1))},
+        id="dict_list",
+    ),
+]
+
+
 @pytest.mark.parametrize("glm_type", ["", "population_"])
 @pytest.mark.parametrize(
     "model_instantiation",
@@ -2424,6 +2447,30 @@ class TestGLMObservationModel:
             raise ValueError("Shape mismatch coefficients")
         if intercept.shape != intercept_shape:
             raise ValueError("Shape mismatch intercepts")
+
+    @pytest.mark.parametrize("pytree_x_factory", _PYTREE_X_FACTORIES)
+    def test_coef_tree_structure_after_initialize_params_pytree_x(
+        self, pytree_x_factory, request, glm_type, model_instantiation
+    ):
+        """coef tree structure matches X structure after initialize_params with pytree X."""
+        _, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        X = pytree_x_factory(y.shape[0])
+        coef, _ = model.initialize_params(X, y)
+        assert jax.tree_util.tree_structure(coef) == jax.tree_util.tree_structure(X)
+
+    @pytest.mark.parametrize("pytree_x_factory", _PYTREE_X_FACTORIES)
+    @pytest.mark.solver_related
+    def test_coef_tree_structure_after_fit_pytree_x(
+        self, pytree_x_factory, request, glm_type, model_instantiation
+    ):
+        """model.coef_ tree structure matches X structure after fit with pytree X."""
+        _, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        X = pytree_x_factory(y.shape[0])
+        model.solver_kwargs = {"maxiter": 1}
+        model.fit(X, y)
+        assert jax.tree_util.tree_structure(model.coef_) == jax.tree_util.tree_structure(
+            X
+        )
 
     #####################
     # Test residual DOF #
