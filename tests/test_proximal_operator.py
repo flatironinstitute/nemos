@@ -13,6 +13,7 @@ from nemos.proximal_operator import (
     prox_ridge,
 )
 from nemos.tree_utils import tree_full_like
+from nemos.utils import get_flattener_unflattener
 
 
 class _TwoLeafModule(eqx.Module):
@@ -55,23 +56,6 @@ _PYTREE_DATA_CASES = [
     pytest.param(_make_eqx_module_data, id="eqx_module"),
     pytest.param(_make_dict_list_data, id="dict_list"),
 ]
-
-def _flat_and_unflat_coef(coef_tree):
-    """Utility function to flatten and unflatten coefficients."""
-    flat_coef, struct = jax.tree_util.tree_flatten(coef_tree)
-    shapes = jax.tree_util.tree_map(lambda x: x.shape, coef_tree)
-    splits = [0] + [x.size for x in flat_coef]
-    splits = jnp.cumsum(jnp.array(splits, dtype=jnp.int32))
-    def _flat(x):
-        x_flat = jax.tree_util.tree_leaves(x)
-        x_flat = jnp.hstack([x.ravel() for x in x_flat])
-        return x_flat
-    def _unflat(x):
-        flat_x = [x[start:stop] for start, stop in zip(splits[:-1], splits[1:])]
-        tree_x = jax.tree_util.tree_unflatten(struct, flat_x)
-        return jax.tree_util.tree_map(lambda x,s: jnp.reshape(x, s), tree_x, shapes)
-    return _flat, _unflat
-
 
 
 @pytest.mark.parametrize(
@@ -777,7 +761,7 @@ _ELEMENTWISE_PROX_CASES = [
 def test_prox_operator_tree_vs_array_equivalence(make_data, prox_op, tree_strength_fn, flat_strength):
     """Proximal operator on a pytree matches element-wise application to its flat array."""
     params, _, _ = make_data()
-    _flat, _unflat = _flat_and_unflat_coef(params)
+    _flat, _unflat = get_flattener_unflattener(params)
 
     scaling = 1.0
 
