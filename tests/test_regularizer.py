@@ -281,7 +281,7 @@ def test_change_regularizer_reset_strength(
             "bah",
             pytest.raises(
                 TypeError,
-                match=f"Could not convert regularizer strength to floats:",
+                match="Could not convert regularizer strength to floats:",
             ),
         ),
     ],
@@ -2260,7 +2260,7 @@ class TestElasticNet:
                 pytest.raises(
                     ValueError,
                     match=re.escape(
-                        f"ElasticNet regularization ratio must be in (0, 1], got 0.0"
+                        "ElasticNet regularization ratio must be in (0, 1], got 0.0"
                     ),
                 ),
             ),
@@ -2269,7 +2269,7 @@ class TestElasticNet:
                 pytest.raises(
                     ValueError,
                     match=re.escape(
-                        f"ElasticNet regularization ratio must be in (0, 1], got 1.1"
+                        "ElasticNet regularization ratio must be in (0, 1], got 1.1"
                     ),
                 ),
             ),
@@ -2278,7 +2278,7 @@ class TestElasticNet:
                 pytest.raises(
                     ValueError,
                     match=re.escape(
-                        f"ElasticNet regularization ratio must be in (0, 1], got -0.1"
+                        "ElasticNet regularization ratio must be in (0, 1], got -0.1"
                     ),
                 ),
             ),
@@ -2528,11 +2528,6 @@ class TestGroupLasso:
     def test_filter_kwargs_contains_strength(self):
         """Test that strength is in filter kwargs."""
         n_features = 3
-        # 2 groups x 3 features (coef), intercept leaf is None in the mask
-        mask = GLMParams(
-            coef=jnp.array([[1, 1, 0], [0, 0, 1]], dtype=float),
-            intercept=None,
-        )
         params = GLMParams(coef=jnp.ones((n_features,)), intercept=jnp.array([0.0]))
         regularizer = self.cls()
 

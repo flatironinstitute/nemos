@@ -1,7 +1,6 @@
 import inspect
 import itertools
 import re
-import sys
 from contextlib import nullcontext as does_not_raise
 from functools import partial
 from unittest.mock import patch
@@ -6386,19 +6385,6 @@ class TestMultiplicativeBasis(CombinedBasis):
     )
     def test_deep_copy_basis(self, basis_a, basis_b, basis_class_specific_params):
 
-        if basis_a == HistoryConv:
-            n_basis_a = 10
-        elif basis_a == IdentityEval:
-            n_basis_a = 1
-        else:
-            n_basis_a = 5
-        if basis_b == HistoryConv:
-            n_basis_b = 10
-        elif basis_b == IdentityEval:
-            n_basis_b = 1
-        else:
-            n_basis_b = 5
-
         basis_a = self.instantiate_basis(
             5, basis_a, basis_class_specific_params, window_size=10
         )
@@ -7893,11 +7879,11 @@ def test_getitem(bas1, bas2, basis_class_specific_params):
     assert mix_123["y"] is mix_123.basis1.basis2
     assert mix_123["z"] is mix_123.basis2
 
-    with pytest.raises(IndexError, match=f"Basis label BSplineEval not found"):
+    with pytest.raises(IndexError, match="Basis label BSplineEval not found"):
         add_123["BSplineEval"]
-    with pytest.raises(IndexError, match=f"Basis label BSplineEval not found"):
+    with pytest.raises(IndexError, match="Basis label BSplineEval not found"):
         mul_123["BSplineEval"]
-    with pytest.raises(IndexError, match=f"Basis label BSplineEval not found"):
+    with pytest.raises(IndexError, match="Basis label BSplineEval not found"):
         mix_123["BSplineEval"]
 
 
