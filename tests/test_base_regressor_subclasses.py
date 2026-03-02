@@ -26,6 +26,7 @@ from nemos.glm.validation import (
     PopulationGLMValidator,
 )
 from nemos.inverse_link_function_utils import LINK_NAME_TO_FUNC
+import equinox as eqx
 
 MODEL_REGISTRY = {
     "GLM": nmo.glm.GLM,
@@ -99,7 +100,6 @@ OBSERVATION_PER_MODEL = {
     "PopulationGLM": [o for o in AVAILABLE_OBSERVATION_MODELS if o != "Categorical"],
 }
 
-
 # as of now, all models are glm type... in the future this may change.
 MODEL_WITH_LINK_FUNCTION_REGISTRY = {
     "GLM": nmo.glm.GLM,
@@ -153,6 +153,74 @@ def _zero_init_params(X, y):
         jax.tree_util.tree_map(lambda x: jnp.zeros((*x[0].shape, *y.shape[1:])), X),
         jnp.zeros(jnp.nanmean(y, axis=0).shape),
     )
+
+class _TwoLeafModule(eqx.Module):
+    a: jnp.ndarray
+    b: jnp.ndarray
+
+def _make_predictor(param):
+    model_name: str = param["model"]
+    if model_name in ["GLM", "PopulationGLM", "ClassifierGLM", "ClassifierPopulationGLM"]:
+        n_samples = DEFAULT_OBS_SHAPE[model_name][0]
+        a, b = jnp.ones((n_samples, 2)), jnp.zeros((n_samples, 1))
+        pytree_classes = [
+            pytest.param(lambda: {"a": a, "b": b}, id="dict"),
+            pytest.param(
+                lambda: _TwoLeafModule(a=a, b=b), id="eqx_module"
+            ),
+            pytest.param(lambda: {"w": [a], "b": tuple([b])}, id="dict_list"),
+        ]
+        return pytree_classes
+    else:
+        raise NotImplementedError(f"_make_predictor function not implemented for model ``{model_name}``.")
+
+
+def pytest_generate_tests(metafunc):
+    if (
+        "instantiate_base_regressor_subclass" in metafunc.fixturenames
+        and "predictor_pytree" in metafunc.fixturenames
+    ):
+        params = []
+
+        for base_param in INSTANTIATE_MODEL_AND_SIMULATE:
+            pytree_factories = _make_predictor(base_param)
+
+            for pytree_param in pytree_factories:
+                params.append(
+                    pytest.param(
+                        base_param,
+                        pytree_param.values[0],
+                        id=f"{base_param['model']}-{pytree_param.id}",
+                    )
+                )
+
+        metafunc.parametrize(
+            "instantiate_base_regressor_subclass,predictor_pytree",
+            params,
+            indirect=["instantiate_base_regressor_subclass"],
+        )
+
+
+class TestModelVsPytree:
+    """
+    Model ↔ pytree equivalence tests.
+
+    Uses the existing instantiate_base_regressor_subclass fixture
+    without modifying it.
+    """
+
+    def test_init_params_coef_structure(
+        self,
+        instantiate_base_regressor_subclass,
+        predictor_pytree,
+    ):
+        fixture = instantiate_base_regressor_subclass
+        pytree = predictor_pytree()
+
+        model = fixture.model
+        y = fixture.y
+        params = model.initialize_params(pytree, y)
+        assert jax.tree_util.tree_structure(pytree) == jax.tree_util.tree_structure(params[0])
 
 
 def test_all_defaults_assigned():
