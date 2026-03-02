@@ -46,7 +46,9 @@ from nemos.pytrees import FeaturePytree
 from nemos.tree_utils import tree_full_like
 
 
-def initialize_feature_mask_for_population_glm(X, n_neurons: int, n_classes: int=0, coef=None):
+def initialize_feature_mask_for_population_glm(
+    X, n_neurons: int, n_classes: int = 0, coef=None
+):
     """
     Create a feature mask of ones for PopulationGLM testing.
 
@@ -78,7 +80,9 @@ def initialize_feature_mask_for_population_glm(X, n_neurons: int, n_classes: int
     if coef is not None:
         return jax.tree_util.tree_map(lambda c: jnp.ones(c.shape), coef)
     if isinstance(X, FeaturePytree):
-        return jax.tree_util.tree_map(lambda x: jnp.ones((n_neurons, *extra_shape)), X.data)
+        return jax.tree_util.tree_map(
+            lambda x: jnp.ones((n_neurons, *extra_shape)), X.data
+        )
     elif isinstance(X, dict):
         return jax.tree_util.tree_map(lambda x: jnp.ones((n_neurons, *extra_shape)), X)
     else:
@@ -1475,7 +1479,9 @@ def instantiate_population_classifier_glm_func(
     model.coef_ = np.random.randn(n_features, n_neurons, n_classes)
     model.intercept_ = np.random.randn(n_neurons, n_classes)
     if simulate:
-        model._feature_mask = initialize_feature_mask_for_population_glm(X, n_neurons, n_classes=n_classes)
+        model._feature_mask = initialize_feature_mask_for_population_glm(
+            X, n_neurons, n_classes=n_classes
+        )
         counts, rates = model.simulate(jax.random.PRNGKey(123), X)
     else:
         counts, rates = None, None

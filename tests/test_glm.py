@@ -2468,9 +2468,9 @@ class TestGLMObservationModel:
         X = pytree_x_factory(y.shape[0])
         model.solver_kwargs = {"maxiter": 1}
         model.fit(X, y)
-        assert jax.tree_util.tree_structure(model.coef_) == jax.tree_util.tree_structure(
-            X
-        )
+        assert jax.tree_util.tree_structure(
+            model.coef_
+        ) == jax.tree_util.tree_structure(X)
 
     #####################
     # Test residual DOF #
