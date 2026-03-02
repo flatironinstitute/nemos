@@ -229,6 +229,17 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
     >>> model = nmo.glm.GLM(solver_name="LBFGS").fit(X, y)
     >>> model.solver_name
     'LBFGS[...]'
+
+    **Use a Pytree of Arrays as Input**
+
+    Features can be passed as any JAX pytree of 2-D arrays; the fitted
+    ``coef_`` will share the same pytree structure:
+
+    >>> X_dict = {"input_1": X[:, :2], "input_2": X[:, 2:]}
+    >>> model = nmo.glm.GLM().fit(X_dict, y)
+    >>> # The coefficient structure will match the input.
+    >>> type(model.coef_)
+    <class 'dict'>
     """
 
     _invalid_observation_types = (obs.CategoricalObservations,)
@@ -1300,29 +1311,28 @@ class PopulationGLM(GLM):
     >>> model.coef_
     Array(...)
 
-    **Mask Coefficients with a FeaturePytree**
+    **Use a Dict of Arrays as Input**
 
-    When using a FeaturePytree as input, the mask should also be a FeaturePytree
-    with arrays of shape ``(num_neurons,)``:
+    Features can be passed as a dict (or any JAX pytree). The feature mask
+    should mirror the same structure, with one 1-D entry per leaf:
 
-    >>> from nemos.pytrees import FeaturePytree
     >>> feature_1 = np.random.normal(size=(num_samples, 2))
     >>> feature_2 = np.random.normal(size=(num_samples, 1))
-    >>> X = FeaturePytree(feature_1=feature_1, feature_2=feature_2)
+    >>> X_dict = {"feature_1": feature_1, "feature_2": feature_2}
     >>> weights = dict(
     ...     feature_1=jnp.array([[0.0, 0.5], [0.0, -0.5]]),
     ...     feature_2=jnp.array([[1.0, 0.0]])
     ... )
     >>> rate = np.exp(
-    ...     X["feature_1"].dot(weights["feature_1"]) +
-    ...     X["feature_2"].dot(weights["feature_2"])
+    ...     X_dict["feature_1"].dot(weights["feature_1"]) +
+    ...     X_dict["feature_2"].dot(weights["feature_2"])
     ... )
     >>> y = np.random.poisson(rate)
-    >>> feature_mask = FeaturePytree(
-    ...     feature_1=jnp.array([0, 1], dtype=jnp.int32),
-    ...     feature_2=jnp.array([1, 0], dtype=jnp.int32)
-    ... )
-    >>> model = nmo.glm.PopulationGLM(feature_mask=feature_mask).fit(X, y)
+    >>> feature_mask = {
+    ...     "feature_1": jnp.array([0, 1], dtype=jnp.int32),
+    ...     "feature_2": jnp.array([1, 0], dtype=jnp.int32)
+    ... }
+    >>> model = nmo.glm.PopulationGLM(feature_mask=feature_mask).fit(X_dict, y)
     >>> model.coef_
     {...}
 

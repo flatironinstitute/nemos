@@ -762,6 +762,17 @@ class ClassifierGLM(ClassifierMixin, GLM):
     ... )
     >>> model.regularizer
     Ridge()
+
+    **Use a Pytree of Arrays as Input**
+
+    Features can be passed as any JAX pytree of 2-D arrays; the fitted
+    ``coef_`` will share the same pytree structure:
+
+    >>> X_dict = {"feature_1": X[:, :1], "feature_2": X[:, 1:]}
+    >>> model = nmo.glm.ClassifierGLM(n_classes=3).fit(X_dict, y)
+    >>> # The coefficient structure matches the input
+    >>> type(model.coef_)
+    <class 'dict'>
     """
 
     _validator_class = ClassifierGLMValidator
@@ -1026,6 +1037,16 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     ... )
     >>> model.regularizer
     Ridge()
+
+    **Use a Pytree of Arrays as Input**
+
+    Features can be passed as any JAX pytree of 2-D arrays; the fitted
+    ``coef_`` will share the same pytree structure:
+
+    >>> X_dict = {"feature_1": X[:, :1], "feature_2": X[:, 1:]}
+    >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3).fit(X_dict, y)
+    >>> type(model.coef_)
+    <class 'dict'>
     """
 
     _validator_class = PopulationClassifierGLMValidator
