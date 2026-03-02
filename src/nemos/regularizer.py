@@ -247,6 +247,9 @@ class Regularizer(Base, abc.ABC):
         """
         filter_kwargs = self._get_filter_kwargs(strength=strength, params=params)
 
+        # hyperparams is unused: strength is captured in filter_kwargs at construction time.
+        # The argument is required to match the jaxopt prox interface:
+        # prox(params, hyperparams_prox, scaling=1.0).
         def prox_op(params, hyperparams, scaling=1.0, *args):
             return apply_operator(
                 self._proximal_operator,
