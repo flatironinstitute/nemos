@@ -2905,6 +2905,18 @@ class TestPopulationGLM:
         assert np.all(y._metadata == rate._metadata)
         assert np.all(y.columns == rate.columns)
 
+    def test_initialize_params_stale_feature_mask_raises(
+        self, request, model_instantiation
+    ):
+        """initialize_params raises when a stale array feature_mask is incompatible with the new X structure."""
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            model_instantiation
+        )
+        model._feature_mask = jnp.ones_like(true_params.coef)
+        X_pytree = {"a": X[:, : X.shape[1] // 2], "b": X[:, X.shape[1] // 2 :]}
+        with pytest.raises(TypeError, match="feature_mask"):
+            model.initialize_params(X_pytree, y)
+
 
 @pytest.mark.parametrize(
     "model_instantiation",
@@ -4124,6 +4136,18 @@ class TestClassifierGLM:
         # Roundtrip: encode -> decode should give original labels
         y_label_roundtrip = model._decode_labels(model._encode_labels(y_label))
         assert np.array_equal(y_label, y_label_roundtrip)
+
+    def test_initialize_params_stale_feature_mask_raises(
+        self, inv_link, glm_type, model_instantiation, request
+    ):
+        """initialize_params raises when a stale array feature_mask is incompatible with the new X structure."""
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        model._feature_mask = jnp.ones_like(true_params.coef)
+        X_pytree = {"a": X[:, : X.shape[1] // 2], "b": X[:, X.shape[1] // 2 :]}
+        with pytest.raises(TypeError, match="feature_mask"):
+            model.initialize_params(X_pytree, y)
 
 
 def test_glm_public_api_matches_subclasses():
