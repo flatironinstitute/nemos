@@ -384,7 +384,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         Parameters
         ----------
         X :
-            Predictors, array of shape ``(n_time_bins, n_features)`` or pytree of same.
+            Predictors, array of shape ``(n_time_bins, n_features)`` or pytree of the same
+            shape.
 
         Returns
         -------
@@ -502,7 +503,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         Parameters
         ----------
         X :
-            The exogenous variables. Shape ``(n_time_bins, n_features)``.
+            Predictors, array of shape ``(n_time_bins, n_features)`` or pytree of the same
+            shape.
         y :
             Neural activity. Shape ``(n_time_bins, )``.
         score_type :
@@ -805,9 +807,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         random_key :
             jax.random.key for seeding the simulation.
         feedforward_input :
-            External input matrix to the model, representing factors like convolved currents,
+            External input predictors to the model, representing factors like convolved currents,
             light intensities, etc. When not provided, the simulation is done with coupling-only.
-            Array of shape (n_time_bins, n_basis_input) or pytree of same.
+            Array of shape (n_time_bins, n_basis_input) or pytree with leaves of the same shape.
 
         Returns
         -------
@@ -1002,7 +1004,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             step sizes, and other optimizer-specific metrics.
         X
             The predictors used in the model fitting process, which may include feature matrices
-            or :class:`nemos.pytrees.FeaturePytree` objects. Shape ``(n_time_bins, n_features)``.
+            or a pytree of arrays. Shape ``(n_time_bins, n_features)``.
         y
             The response variable or output data corresponding to the predictors. Shape ``(n_time_bins,)``.
         *args
