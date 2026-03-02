@@ -1,3 +1,4 @@
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import pytest
@@ -11,7 +12,50 @@ from nemos.proximal_operator import (
     prox_none,
     prox_ridge,
 )
+from nemos.pytrees import FeaturePytree
 from nemos.tree_utils import tree_full_like
+
+
+class _TwoLeafModule(eqx.Module):
+    w: jnp.ndarray
+    b: jnp.ndarray
+
+
+def _make_dict_data():
+    params = {"w": jnp.array([1.0, -2.0, 3.0]), "b": jnp.array([0.5])}
+    strength = tree_full_like(params, 0.5)
+    mask = {
+        "w": jnp.array([[1, 1, 0], [0, 0, 1]], dtype=float),
+        "b": jnp.zeros((2, 1), dtype=float),
+    }
+    return params, strength, mask
+
+
+def _make_eqx_module_data():
+    params = _TwoLeafModule(w=jnp.array([1.0, -2.0, 3.0]), b=jnp.array([0.5]))
+    strength = tree_full_like(params, 0.5)
+    mask = _TwoLeafModule(
+        w=jnp.array([[1, 1, 0], [0, 0, 1]], dtype=float),
+        b=jnp.zeros((2, 1), dtype=float),
+    )
+    return params, strength, mask
+
+
+def _make_dict_list_data():
+    params = dict(w=[jnp.array([1.0, -2.0, 3.0])], b=jnp.array([0.5]))
+    strength = tree_full_like(params, 0.5)
+    mask = dict(
+        w=[jnp.array([[1, 1, 0], [0, 0, 1]], dtype=float)],
+        b=jnp.zeros((2, 1), dtype=float),
+    )
+    return params, strength, mask
+
+
+_PYTREE_DATA_CASES = [
+    pytest.param(_make_dict_data, id="dict"),
+    pytest.param(_make_eqx_module_data, id="eqx_module"),
+    pytest.param(_make_dict_list_data, id="dict_list"),
+]
 
 
 @pytest.mark.parametrize(
@@ -609,3 +653,64 @@ def test_prox_group_lasso_pytree_strength_broadcast_and_shape():
     # Structure preserved
     assert out_weak["w"].shape == params["w"].shape
     assert out_strong["w"].shape == params["w"].shape
+
+
+# === Tests: proximal operators work with dict, FeaturePytree, and eqx.Module ===
+
+
+@pytest.mark.parametrize("make_data", _PYTREE_DATA_CASES)
+def test_prox_none_pytree_types(make_data):
+    """prox_none returns input unchanged for dict, FeaturePytree, and eqx.Module."""
+    params, strength, _ = make_data()
+    out = prox_none(params, strength=strength, scaling=1.0)
+    assert jax.tree_util.tree_structure(out) == jax.tree_util.tree_structure(params)
+
+
+@pytest.mark.parametrize("make_data", _PYTREE_DATA_CASES)
+def test_prox_ridge_pytree_types(make_data):
+    """prox_ridge preserves structure and shape for dict, FeaturePytree, and eqx.Module."""
+    params, strength, _ = make_data()
+    out = prox_ridge(params, strength=strength, scaling=1.0)
+    assert jax.tree_util.tree_structure(out) == jax.tree_util.tree_structure(params)
+    for out_leaf, in_leaf in zip(
+        jax.tree_util.tree_leaves(out), jax.tree_util.tree_leaves(params)
+    ):
+        assert out_leaf.shape == in_leaf.shape
+
+
+@pytest.mark.parametrize("make_data", _PYTREE_DATA_CASES)
+def test_prox_lasso_pytree_types(make_data):
+    """prox_lasso preserves structure and shape for dict, FeaturePytree, and eqx.Module."""
+    params, strength, _ = make_data()
+    out = prox_lasso(params, strength=strength, scaling=1.0)
+    assert jax.tree_util.tree_structure(out) == jax.tree_util.tree_structure(params)
+    for out_leaf, in_leaf in zip(
+        jax.tree_util.tree_leaves(out), jax.tree_util.tree_leaves(params)
+    ):
+        assert out_leaf.shape == in_leaf.shape
+
+
+@pytest.mark.parametrize("make_data", _PYTREE_DATA_CASES)
+def test_prox_elastic_net_pytree_types(make_data):
+    """prox_elastic_net preserves structure and shape for dict, FeaturePytree, and eqx.Module."""
+    params, _, _ = make_data()
+    # elastic net expects per-leaf (strength, ratio) tuples
+    strength = tree_full_like(params, (0.5, 0.5))
+    out = prox_elastic_net(params, strength=strength, scaling=1.0)
+    assert jax.tree_util.tree_structure(out) == jax.tree_util.tree_structure(params)
+    for out_leaf, in_leaf in zip(
+        jax.tree_util.tree_leaves(out), jax.tree_util.tree_leaves(params)
+    ):
+        assert out_leaf.shape == in_leaf.shape
+
+
+@pytest.mark.parametrize("make_data", _PYTREE_DATA_CASES)
+def test_prox_group_lasso_pytree_types(make_data):
+    """prox_group_lasso preserves structure and shape for dict, FeaturePytree, and eqx.Module."""
+    params, strength, mask = make_data()
+    out = prox_group_lasso(params, strength=strength, mask=mask, scaling=1.0)
+    assert jax.tree_util.tree_structure(out) == jax.tree_util.tree_structure(params)
+    for out_leaf, in_leaf in zip(
+        jax.tree_util.tree_leaves(out), jax.tree_util.tree_leaves(params)
+    ):
+        assert out_leaf.shape == in_leaf.shape
