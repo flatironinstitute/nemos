@@ -8,7 +8,7 @@ def function(request):
     func = None
     if request.param == 1:
 
-        def func(x, *args, y=0, **kwargs):
+        def func(x, *args, y=0, **kwargs):  # noqa: F811
             return
 
     elif request.param == 2:
