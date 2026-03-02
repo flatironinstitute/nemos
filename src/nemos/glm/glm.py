@@ -661,6 +661,10 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             empty_params,
             (initial_coef, initial_intercept),
         )
+
+        self._validator.feature_mask_consistency(
+            getattr(self, "_feature_mask", None), init_params
+        )
         return init_params
 
     @cast_to_jax

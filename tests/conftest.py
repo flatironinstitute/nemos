@@ -1359,7 +1359,7 @@ def instantiate_glm_func(
     )
     model.coef_ = np.random.randn(n_features)
     model.intercept_ = np.random.randn(1)
-    model.scale_ = 1.
+    model.scale_ = 1.0
     if simulate:
         counts, rates = model.simulate(jax.random.PRNGKey(1234), X)
     else:
@@ -1401,7 +1401,7 @@ def instantiate_population_glm_func(
     )
     model.coef_ = np.random.randn(n_features, n_neurons)
     model.intercept_ = np.random.randn(n_neurons)
-    model.scale_ = 1.
+    model.scale_ = 1.0
     if simulate:
         model._feature_mask = initialize_feature_mask_for_population_glm(X, n_neurons)
         counts, rates = model.simulate(jax.random.PRNGKey(1234), X)

@@ -756,9 +756,13 @@ _ELEMENTWISE_PROX_CASES = [
 ]
 
 
-@pytest.mark.parametrize("prox_op, tree_strength_fn, flat_strength", _ELEMENTWISE_PROX_CASES)
+@pytest.mark.parametrize(
+    "prox_op, tree_strength_fn, flat_strength", _ELEMENTWISE_PROX_CASES
+)
 @pytest.mark.parametrize("make_data", _PYTREE_DATA_CASES)
-def test_prox_operator_tree_vs_array_equivalence(make_data, prox_op, tree_strength_fn, flat_strength):
+def test_prox_operator_tree_vs_array_equivalence(
+    make_data, prox_op, tree_strength_fn, flat_strength
+):
     """Proximal operator on a pytree matches element-wise application to its flat array."""
     params, _, _ = make_data()
     _flat, _unflat = get_flattener_unflattener(params)
@@ -770,7 +774,9 @@ def test_prox_operator_tree_vs_array_equivalence(make_data, prox_op, tree_streng
 
     # Apply to the equivalent flat 1-D array
     flat_params = jnp.array(_flat(params))
-    out_flat_unflat = _unflat(prox_op(flat_params, strength=flat_strength, scaling=scaling))
+    out_flat_unflat = _unflat(
+        prox_op(flat_params, strength=flat_strength, scaling=scaling)
+    )
 
     for tree_leaf, flat_leaf in zip(
         jax.tree_util.tree_leaves(out_tree),
