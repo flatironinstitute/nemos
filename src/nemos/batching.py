@@ -189,9 +189,6 @@ class _PreprocessedDataLoader:
             yield self._preprocess_fn(*batch_data)
 
 
-# TODO: Is n_samples required?
-
-
 class LazyArrayDataLoader:
     """
     DataLoader for lazy/out-of-core arrays (e.g. dask, zarr, HDF5).

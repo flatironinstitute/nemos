@@ -21,29 +21,17 @@ if TYPE_CHECKING:
     from ..regularizer import Regularizer
 
 
-# TODO: Check generated API docs after rebase
 @dataclass
 class OptimizationInfo:
-    """
-    Basic diagnostic information about finished optimization runs.
+    """Basic diagnostic information about finished optimization runs."""
 
-    Attributes
-    ----------
-    function_val :
-        Final objective function value. None means the solver did not store it,
-        while NaN usually indicates a diverged optimization.
-    num_steps :
-        Number of optimization steps taken.
-    converged :
-        Whether the optimization converged according to the solver's criterion.
-    reached_max_steps :
-        Whether the optimization stopped because it reached the maximum number of steps.
-    """
-
-    function_val: float | None
-    num_steps: int
-    converged: bool
-    reached_max_steps: bool
+    # None means missing value, while NaN usually indicates a diverged optimization
+    function_val: (
+        float | None
+    )  #: Objective function value. None if unavailable as not all solvers store it; NaN if optimization diverged.
+    num_steps: int  #: Number of optimization steps taken.
+    converged: bool  #: Whether the optimization converged.
+    reached_max_steps: bool  #: Reached the maximum number of allowed steps.
 
 
 class AbstractSolver(abc.ABC, Generic[SolverState]):
