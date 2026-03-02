@@ -954,7 +954,7 @@ class TestGLM:
             model.intercept_ = true_params.intercept
             if is_population_model(model):
                 model._feature_mask = initialize_feature_mask_for_population_glm(
-                    X, y.shape[1], model._validator.get_empty_params(X, y).coef
+                    X, y.shape[1], coef=model._validator.get_empty_params(X, y).coef
                 )
         with expectation:
             model.simulate(
@@ -3856,7 +3856,7 @@ class TestClassifierGLM:
             (
                 "invalid",
                 pytest.raises(
-                    AttributeError, match="'str' object has no attribute 'ndim'"
+                    AttributeError, match="'str' object has no attribute 'shape'"
                 ),
             ),
             # wrong number of features
