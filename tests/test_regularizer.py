@@ -19,6 +19,20 @@ from nemos.glm.params import GLMParams
 pytestmark = pytest.mark.solver_related
 
 
+class _TwoLeafModule(eqx.Module):
+    w: jnp.ndarray
+    b: jnp.ndarray
+
+
+_SIMPLE_PYTREE_CASES = [
+    pytest.param(lambda: {"w": jnp.ones(3), "b": jnp.zeros(1)}, id="dict"),
+    pytest.param(
+        lambda: _TwoLeafModule(w=jnp.ones(3), b=jnp.zeros(1)), id="eqx_module"
+    ),
+    pytest.param(lambda: {"w": [jnp.ones(3)], "b": jnp.zeros(1)}, id="dict_list"),
+]
+
+
 @pytest.fixture(scope="module", autouse=True)
 def register_deregister_agradientdescent():
     """Fixture for registering and deregistering AGradientDescent."""
@@ -1114,6 +1128,29 @@ class TestUnRegularized:
         model.solver_name = solver_name
         model.fit(X, y)
 
+    @pytest.mark.parametrize("make_params", _SIMPLE_PYTREE_CASES)
+    def test_get_proximal_operator_pytree(self, make_params):
+        """get_proximal_operator output preserves pytree structure for any pytree params."""
+        params = make_params()
+        regularizer = self.cls()
+        prox_op = regularizer.get_proximal_operator(params, strength=None)
+        out = prox_op(params, None)
+        assert jax.tree_util.tree_structure(out) == jax.tree_util.tree_structure(params)
+
+    @pytest.mark.parametrize("make_params", _SIMPLE_PYTREE_CASES)
+    def test_penalized_loss_pytree(self, make_params):
+        """penalized_loss can be called with any pytree params and returns a scalar."""
+        params = make_params()
+        regularizer = self.cls()
+
+        def dummy_loss(p, X, y):
+            return sum(jnp.sum(leaf) for leaf in jax.tree_util.tree_leaves(p))
+
+        penalized = regularizer.penalized_loss(dummy_loss, params=params, strength=None)
+        result = penalized(params, jnp.ones((10, 3)), jnp.ones(10))
+        assert isinstance(result, jnp.ndarray)
+        assert result.ndim == 0
+
 
 class TestRidge:
     cls = nmo.regularizer.Ridge
@@ -1377,6 +1414,29 @@ class TestRidge:
         model.solver_name = solver_name
         model.fit(X, y)
 
+    @pytest.mark.parametrize("make_params", _SIMPLE_PYTREE_CASES)
+    def test_get_proximal_operator_pytree(self, make_params):
+        """get_proximal_operator output preserves pytree structure for any pytree params."""
+        params = make_params()
+        regularizer = self.cls()
+        prox_op = regularizer.get_proximal_operator(params, strength=1.0)
+        out = prox_op(params, None)
+        assert jax.tree_util.tree_structure(out) == jax.tree_util.tree_structure(params)
+
+    @pytest.mark.parametrize("make_params", _SIMPLE_PYTREE_CASES)
+    def test_penalized_loss_pytree(self, make_params):
+        """penalized_loss can be called with any pytree params and returns a scalar."""
+        params = make_params()
+        regularizer = self.cls()
+
+        def dummy_loss(p, X, y):
+            return sum(jnp.sum(leaf) for leaf in jax.tree_util.tree_leaves(p))
+
+        penalized = regularizer.penalized_loss(dummy_loss, params=params, strength=1.0)
+        result = penalized(params, jnp.ones((10, 3)), jnp.ones(10))
+        assert isinstance(result, jnp.ndarray)
+        assert result.ndim == 0
+
 
 class TestLasso:
     cls = nmo.regularizer.Lasso
@@ -1611,6 +1671,29 @@ class TestLasso:
         model.set_params(regularizer=self.cls(), regularizer_strength=1.0)
         model.solver_name = solver_name
         model.fit(X, y)
+
+    @pytest.mark.parametrize("make_params", _SIMPLE_PYTREE_CASES)
+    def test_get_proximal_operator_pytree(self, make_params):
+        """get_proximal_operator output preserves pytree structure for any pytree params."""
+        params = make_params()
+        regularizer = self.cls()
+        prox_op = regularizer.get_proximal_operator(params, strength=1.0)
+        out = prox_op(params, None)
+        assert jax.tree_util.tree_structure(out) == jax.tree_util.tree_structure(params)
+
+    @pytest.mark.parametrize("make_params", _SIMPLE_PYTREE_CASES)
+    def test_penalized_loss_pytree(self, make_params):
+        """penalized_loss can be called with any pytree params and returns a scalar."""
+        params = make_params()
+        regularizer = self.cls()
+
+        def dummy_loss(p, X, y):
+            return sum(jnp.sum(leaf) for leaf in jax.tree_util.tree_leaves(p))
+
+        penalized = regularizer.penalized_loss(dummy_loss, params=params, strength=1.0)
+        result = penalized(params, jnp.ones((10, 3)), jnp.ones(10))
+        assert isinstance(result, jnp.ndarray)
+        assert result.ndim == 0
 
 
 class TestElasticNet:
@@ -2521,6 +2604,31 @@ class TestElasticNet:
         model.solver_name = solver_name
         model.fit(X, y)
 
+    @pytest.mark.parametrize("make_params", _SIMPLE_PYTREE_CASES)
+    def test_get_proximal_operator_pytree(self, make_params):
+        """get_proximal_operator output preserves pytree structure for any pytree params."""
+        params = make_params()
+        regularizer = self.cls()
+        prox_op = regularizer.get_proximal_operator(params, strength=(1.0, 0.5))
+        out = prox_op(params, None)
+        assert jax.tree_util.tree_structure(out) == jax.tree_util.tree_structure(params)
+
+    @pytest.mark.parametrize("make_params", _SIMPLE_PYTREE_CASES)
+    def test_penalized_loss_pytree(self, make_params):
+        """penalized_loss can be called with any pytree params and returns a scalar."""
+        params = make_params()
+        regularizer = self.cls()
+
+        def dummy_loss(p, X, y):
+            return sum(jnp.sum(leaf) for leaf in jax.tree_util.tree_leaves(p))
+
+        penalized = regularizer.penalized_loss(
+            dummy_loss, params=params, strength=(1.0, 0.5)
+        )
+        result = penalized(params, jnp.ones((10, 3)), jnp.ones(10))
+        assert isinstance(result, jnp.ndarray)
+        assert result.ndim == 0
+
 
 class TestGroupLasso:
     cls = nmo.regularizer.GroupLasso
@@ -3321,6 +3429,52 @@ class TestGroupLasso:
         assert isinstance(penalty, jnp.ndarray)
         assert penalty.ndim == 0
         assert penalty >= 0
+
+    @pytest.mark.parametrize("make_params", _SIMPLE_PYTREE_CASES)
+    def test_get_proximal_operator_pytree(self, make_params):
+        """get_proximal_operator output preserves pytree structure for any pytree params."""
+        params = make_params()
+        # mask=None: auto-initialized from params structure
+        regularizer = self.cls(mask=None)
+        prox_op = regularizer.get_proximal_operator(params, strength=1.0)
+        out = prox_op(params, None)
+        assert jax.tree_util.tree_structure(out) == jax.tree_util.tree_structure(params)
+
+    @pytest.mark.parametrize("make_params", _SIMPLE_PYTREE_CASES)
+    def test_penalized_loss_pytree(self, make_params):
+        """penalized_loss can be called with any pytree params and returns a scalar."""
+        params = make_params()
+        regularizer = self.cls(mask=None)
+
+        def dummy_loss(p, X, y):
+            return sum(jnp.sum(leaf) for leaf in jax.tree_util.tree_leaves(p))
+
+        penalized = regularizer.penalized_loss(dummy_loss, params=params, strength=1.0)
+        result = penalized(params, jnp.ones((10, 3)), jnp.ones(10))
+        assert isinstance(result, jnp.ndarray)
+        assert result.ndim == 0
+
+    @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
+    def test_run_solver_tree(self, solver_name, poissonGLM_model_instantiation_pytree):
+        """Test that the GroupLasso solver runs with pytree X (mask auto-initialized)."""
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation_pytree
+
+        # mask=None: auto-initialized from params structure during _instantiate_solver
+        model.set_params(regularizer=self.cls(mask=None), regularizer_strength=1.0)
+        model.solver_name = solver_name
+        params = GLMParams(
+            jax.tree_util.tree_map(jnp.zeros_like, true_params.coef),
+            true_params.intercept,
+        )
+        runner = model._instantiate_solver(model._compute_loss, params).solver_run
+        runner(params, X.data, y)
+
+    def test_grouplasso_pytree(self, poissonGLM_model_instantiation_pytree):
+        """Check that GroupLasso fits with a FeaturePytree X (mask auto-initialized)."""
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation_pytree
+        model.set_params(regularizer=self.cls(mask=None), regularizer_strength=0.1)
+        model.solver_name = "ProximalGradient"
+        model.fit(X, y)
 
 
 @pytest.mark.parametrize(
