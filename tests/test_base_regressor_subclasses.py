@@ -254,7 +254,9 @@ class TestModelVsPytree:
     ):
         """initialize_params runs without error when X is an arbitrary pytree."""
         fixture = instantiate_base_regressor_subclass
-        fixture.model.initialize_params(pytree_x, fixture.y)
+        model = fixture.model
+        model._feature_mask = None
+        model.initialize_params(pytree_x, fixture.y)
 
     @pytest.mark.parametrize(
         "instantiate_base_regressor_subclass, pytree_x",
@@ -296,7 +298,9 @@ class TestModelVsPytree:
     def test_fit_pytree_x(self, instantiate_base_regressor_subclass, pytree_x):
         """fit runs without error when X is an arbitrary pytree."""
         fixture = instantiate_base_regressor_subclass
-        fixture.model.fit(pytree_x, fixture.y)
+        model = fixture.model
+        model._feature_mask = None
+        model.fit(pytree_x, fixture.y)
 
     @pytest.mark.parametrize(
         "instantiate_base_regressor_subclass, pytree_x",
@@ -307,8 +311,10 @@ class TestModelVsPytree:
     def test_predict_pytree_x(self, instantiate_base_regressor_subclass, pytree_x):
         """predict output shape matches y after fitting with pytree X."""
         fixture = instantiate_base_regressor_subclass
-        fixture.model.fit(pytree_x, fixture.y)
-        assert fixture.model.predict(pytree_x).shape == fixture.y.shape
+        model = fixture.model
+        model._feature_mask = None
+        model.fit(pytree_x, fixture.y)
+        assert model.predict(pytree_x).shape == fixture.y.shape
 
     @pytest.mark.parametrize(
         "instantiate_base_regressor_subclass, pytree_x",
@@ -319,8 +325,10 @@ class TestModelVsPytree:
     def test_score_pytree_x(self, instantiate_base_regressor_subclass, pytree_x):
         """score returns a scalar after fitting with pytree X."""
         fixture = instantiate_base_regressor_subclass
-        fixture.model.fit(pytree_x, fixture.y)
-        assert fixture.model.score(pytree_x, fixture.y).ndim == 0
+        model = fixture.model
+        model._feature_mask = None
+        model.fit(pytree_x, fixture.y)
+        assert model.score(pytree_x, fixture.y).ndim == 0
 
 
 def test_all_defaults_assigned():
