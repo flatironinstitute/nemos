@@ -39,7 +39,7 @@ class LabelEncoder:
         return self._n_classes
 
     @n_classes.setter
-    def n_classes(self, n_classes: int):
+    def n_classes(self, n_classes: int | None):
         self.reset()
         self._n_classes = n_classes
 
