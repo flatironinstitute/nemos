@@ -175,8 +175,9 @@ class LabelEncoder:
             If ``True``, use dict-based lookup via ``np.fromiter``, which raises
             ``ValueError`` on any unrecognized label. The dict lookup is faster
             than ``np.searchsorted`` for typical label set sizes.
-            If ``False``, use ``np.searchsorted`` directly — faster but silently
-            maps unknown labels to nearest indices.
+            If ``False``, use ``np.searchsorted`` directly — faster but requires
+            labels to be orderable (supports ``<``), and silently maps unknown
+            labels to nearest indices.
         """
         if safe:
             # use from iter, this forces safety while being much more
