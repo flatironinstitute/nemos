@@ -6,8 +6,6 @@ categorical variables. The class is for internal use, main method will be
 `encode` and `decode`.
 """
 
-from typing import Dict
-
 import jax.numpy as jnp
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -24,12 +22,7 @@ class LabelEncoder:
 
     def __init__(self, n_classes: int):
         self.n_classes = n_classes
-        # skip encoding if classes are
-        # integers 0,...,n-1
-        self._skip_encoding = False
-        # hash-map linking
-        self._class_to_index_: Dict | None = None
-        self.classes_: np.ndarray | NDArray | None = None
+        self.reset()
 
     @property
     def n_classes(self) -> int:
@@ -91,6 +84,9 @@ class LabelEncoder:
                 f"To correctly set the ``classes_`` attribute, provide an array containing all the "
                 f"unique class labels.",
             )
+
+        # Always store the actual classes array
+        self.classes_ = classes
 
         self._skip_encoding = np.array_equal(classes, np.arange(self.n_classes))
         # Create dict lookup only when needed (non-default classes)
