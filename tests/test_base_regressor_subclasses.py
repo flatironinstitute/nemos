@@ -255,7 +255,6 @@ class TestModelVsPytree:
         """initialize_params runs without error when X is an arbitrary pytree."""
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
-        model._feature_mask = None
         model.initialize_params(pytree_x, fixture.y)
 
     @pytest.mark.parametrize(
@@ -270,7 +269,6 @@ class TestModelVsPytree:
         """initialize_solver_and_state runs without error when X is an arbitrary pytree."""
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
-        model._feature_mask = None
         params = model.initialize_params(pytree_x, fixture.y)
         model.initialize_solver_and_state(pytree_x, fixture.y, params)
 
@@ -284,7 +282,6 @@ class TestModelVsPytree:
         """update runs without error when X is an arbitrary pytree."""
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
-        model._feature_mask = None
         params = model.initialize_params(pytree_x, fixture.y)
         opt_state = model.initialize_solver_and_state(pytree_x, fixture.y, params)
         model.update(params, opt_state, pytree_x, fixture.y)
@@ -299,7 +296,6 @@ class TestModelVsPytree:
         """fit runs without error when X is an arbitrary pytree."""
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
-        model._feature_mask = None
         model.fit(pytree_x, fixture.y)
 
     @pytest.mark.parametrize(
@@ -312,7 +308,6 @@ class TestModelVsPytree:
         """predict output shape matches y after fitting with pytree X."""
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
-        model._feature_mask = None
         model.fit(pytree_x, fixture.y)
         assert model.predict(pytree_x).shape == fixture.y.shape
 
@@ -326,7 +321,6 @@ class TestModelVsPytree:
         """score returns a scalar after fitting with pytree X."""
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
-        model._feature_mask = None
         model.fit(pytree_x, fixture.y)
         assert model.score(pytree_x, fixture.y).ndim == 0
 
@@ -340,7 +334,6 @@ class TestModelVsPytree:
         """simulate runs without error and returns outputs with the correct n_samples when X is an arbitrary pytree."""
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
-        model._feature_mask = None
         model.fit(pytree_x, fixture.y)
         n_samples = jax.tree_util.tree_leaves(pytree_x)[0].shape[0]
         counts, rates = model.simulate(jax.random.key(123), pytree_x)
