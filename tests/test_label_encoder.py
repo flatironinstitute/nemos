@@ -1,3 +1,4 @@
+import jax.numpy as jnp
 import numpy as np
 import pytest
 
@@ -65,6 +66,29 @@ def test_set_classes_behavior():
 
     with pytest.raises(ValueError, match="Found only"):
         encoder.set_classes([0, 1, 2])
+
+
+@pytest.mark.parametrize(
+    "labels, skip_encoding",
+    [
+        (jnp.array([0, 1, 2]), True),
+        (jnp.array([2, 3, 4]), False),
+    ],
+)
+def test_set_classes_jax(labels, skip_encoding):
+    """Test set_classes with JAX arrays: default labels skip encoding, non-default don't."""
+    encoder = LabelEncoder(3)
+    encoder.set_classes(labels)
+    assert encoder._skip_encoding is skip_encoding
+    assert encoder.classes_ is not None
+
+
+def test_encode_decode_roundtrip_jax():
+    """Roundtrip with JAX integer arrays and non-default labels."""
+    encoder = LabelEncoder(3)
+    encoder.set_classes(jnp.array([2, 3, 4]))
+    y = jnp.array([2, 3, 4, 2])
+    assert jnp.array_equal(encoder.decode(encoder.encode(y)), y)
 
 
 def test_check_classes_behavior():

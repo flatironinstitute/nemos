@@ -101,36 +101,21 @@ class LabelEncoder:
         self._class_to_index_ = (
             None
             if self._skip_encoding
-            else {label: i for i, label in enumerate(classes)}
+            else {label.item(): i for i, label in enumerate(classes)}
         )
 
-    def encode(self, y: ArrayLike) -> NDArray[int]:
+    def encode(self, y: ArrayLike, safe=True) -> NDArray[int]:
         """Convert user-provided class labels to internal indices [0, n_classes-1]."""
         if self._skip_encoding:
             return y
-        # use dict lookup instead of `np.searchsorted`
-        # this approach will fail for label mismatches
         if isinstance(y, jnp.ndarray):
-            as_array = jnp.asarray
-            from_iter = jnp.fromiter
+            y = self._encode_jax(y, safe=safe)
         else:
-            as_array = np.array
-            from_iter = np.fromiter
-        try:
-            y = as_array(y)
-            original_shape = y.shape
-            y = from_iter(
-                (self._class_to_index_[label] for label in y.ravel()),
-                dtype=int,
-                count=y.size,
-            ).reshape(original_shape)
-        except KeyError as e:
-            unq_labels = np.unique(y)
-            valid = list(self._class_to_index_.keys())
-            invalid = [lab for lab in unq_labels if lab not in valid]
-            raise ValueError(
-                f"Unrecognized label(s) {invalid}. " f"Valid labels are {valid}."
-            ) from e
+            # use dict lookup instead of `np.searchsorted`
+            # this approach will fail for label mismatches
+            # always safe
+            y = self._encode_numpy(y)
+
         return y
 
     def decode(self, indices: NDArray[int]) -> NDArray | jnp.ndarray:
@@ -145,3 +130,47 @@ class LabelEncoder:
             raise RuntimeError(
                 f"Classes are not set. Must call ``set_classes`` before calling ``{method_name}``."
             )
+
+    def _encode_numpy(self, y: ArrayLike):
+        """
+        Encode label for numpy arrays.
+
+        This method is fast and always safe, no need for the flag.
+        """
+        try:
+            y = np.asarray(y)
+            original_shape = y.shape
+            y = np.fromiter(
+                (self._class_to_index_[label] for label in y.ravel()),
+                dtype=int,
+                count=y.size,
+            ).reshape(original_shape)
+        except KeyError as e:
+            unq_labels = np.unique(y)
+            valid = list(self._class_to_index_.keys())
+            invalid = [lab for lab in unq_labels if lab not in valid]
+            raise ValueError(
+                f"Unrecognized label(s) {invalid}. " f"Valid labels are {valid}."
+            ) from e
+        return y
+
+    def _encode_jax(self, y: ArrayLike, safe=True) -> ArrayLike:
+        """Encode label for jax arrays.
+
+        Encoding can assume that y is an array of numbers, however,
+        ``jnp.searchsorted`` is not safe, in the sense that it will allow
+        out of bounds value. A safeguard that is not jit-compilable is possible
+        but can be skipped in internal usage.
+        """
+        y_encoded = jnp.searchsorted(self.classes_, y)
+        if safe:
+            select = (y < self.classes_[0]) | (y > self.classes_[-1])
+            if jnp.any(select):
+                invalid = jnp.unique(y[select])
+                invalid = [int(lab) for lab in invalid]
+                valid = set(int(lab) for lab in jnp.unique(y)).difference(invalid)
+                raise KeyError(
+                    f"Unrecognized label(s) {invalid}. "
+                    f"Valid labels are {list(valid)}."
+                )
+        return y_encoded
