@@ -37,12 +37,6 @@ class ClassifierMixin:
     # observation model inferred
     _invalid_observation_types = ()
 
-    def _check_classes_is_set(self, method_name: str, y=None):
-        if self._label_encoder.classes_ is None:
-            raise RuntimeError(
-                f"Classes are not set. Must call ``set_classes`` before calling ``{method_name}``."
-            )
-
     def set_classes(self, y: ArrayLike) -> ClassifierMixin:
         """
         Infer unique class labels and set the ``classes_`` attribute.
@@ -150,7 +144,7 @@ class ClassifierMixin:
             If ``classes_`` has not been set, or if inputs/parameters have
             incompatible shapes or invalid values.
         """
-        self._check_classes_is_set("compute_loss")
+        self._label_encoder.check_classes_is_set("compute_loss")
         y = self._label_encoder.encode(y)
         return super().compute_loss(params, X, y, *args, **kwargs)
 
@@ -231,7 +225,7 @@ class ClassifierMixin:
         # and calls predict.
         # One could assume default labels 0,...,n-1
         # but requiring to be explicit is safer
-        self._check_classes_is_set("predict")
+        self._label_encoder.check_classes_is_set("predict")
         log_proba = super().predict(X)
         return self._label_encoder.decode(jnp.argmax(log_proba, axis=-1))
 
@@ -276,7 +270,7 @@ class ClassifierMixin:
         # but requiring to be explicit makes the mapping between
         # the class labels and the probability index less ambiguous:
         #   `log_proba[:, i]` is the log-proba of class `self.classes_[i]`
-        self._check_classes_is_set("predict_proba")
+        self._label_encoder.check_classes_is_set("predict_proba")
         # log-proba for categorical, proba for Bernoulli
         log_proba = super().predict(X)
         if return_type == "log-proba":
@@ -404,7 +398,7 @@ class ClassifierMixin:
         >>> simulated_y.shape
         (4,)
         """
-        self._check_classes_is_set("simulate")
+        self._label_encoder.check_classes_is_set("simulate")
         y, log_prob = super().simulate(random_key, feedforward_input)
         argmax = support_pynapple(conv_type="jax")(lambda x: jnp.argmax(x, axis=-1))
         y = self._label_encoder.decode(argmax(y))
@@ -441,7 +435,7 @@ class ClassifierMixin:
         ValueError
             If inputs or parameters have incompatible shapes or invalid values.
         """
-        self._check_classes_is_set("initialize_solver_and_state")
+        self._label_encoder.check_classes_is_set("initialize_solver_and_state")
         y = self._label_encoder.encode(y)
         return super().initialize_solver_and_state(X, y, init_params)
 
@@ -483,7 +477,7 @@ class ClassifierMixin:
         >>> coef.shape
         (2, 2)
         """
-        self._check_classes_is_set("initialize_params")
+        self._label_encoder.check_classes_is_set("initialize_params")
         y = self._label_encoder.encode(y)
         y = self._validator.check_and_cast_y_to_integer(y)
         y = jax.nn.one_hot(y, self.n_classes)
@@ -552,11 +546,11 @@ class ClassifierMixin:
         >>> opt_state = model.initialize_solver_and_state(X, y, params)
         >>> new_params, new_state = model.update(params, opt_state, X, y)
         """
-        self._check_classes_is_set("update")
-        y = self._label_encoder.encode(y)
+        self._label_encoder.check_classes_is_set("update")
         # note: do not check and cast here. Risky but the performance of
         # the update has priority.
-        y = jax.nn.one_hot(jnp.asarray(y, dtype=int), self._n_classes)
+        y = self._label_encoder.encode(y, safe=False)
+        y = jax.nn.one_hot(y, self.n_classes)
         return super().update(
             params, opt_state, X, y, *args, n_samples=n_samples, **kwargs
         )
@@ -828,7 +822,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
         # check if classes are not set, aka user set the coef and intercept
         # manually, raise otherwise there may be ambiguity in interpreting
         # the labels.
-        self._check_classes_is_set("score")
+        self._label_encoder.check_classes_is_set("score")
         y = self._label_encoder.encode(y)
         return super().score(X, y, score_type, aggregate_sample_scores)
 
@@ -1135,6 +1129,6 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3).fit(X, y)
         >>> score = model.score(X, y)
         """
-        self._check_classes_is_set("score")
+        self._label_encoder.check_classes_is_set("score")
         y = self._label_encoder.encode(y)
         return super().score(X, y, score_type, aggregate_sample_scores)
