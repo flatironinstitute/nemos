@@ -8,11 +8,11 @@ from typing import Any, Callable, Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from .. import observation_models as obs
 from .. import tree_utils
+from ..label_encoder import LabelEncoder
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
 from ..type_casting import is_numpy_array_like, support_pynapple
 from ..typing import (
@@ -38,7 +38,7 @@ class ClassifierMixin:
     _invalid_observation_types = ()
 
     def _check_classes_is_set(self, method_name: str, y=None):
-        if self._classes_ is None:
+        if self._label_encoder.classes_ is None:
             raise RuntimeError(
                 f"Classes are not set. Must call ``set_classes`` before calling ``{method_name}``."
             )
@@ -104,70 +104,13 @@ class ClassifierMixin:
         >>> result = model.update(init_params, state, X_batch1, y_batch1)
 
         """
-        # note that we must use NumPy, Jax does not allow non-numeric types
-        classes = np.unique(y)
-        n_unique = len(classes)
-
-        # Validation
-        if n_unique > self.n_classes:
-            raise ValueError(
-                f"Found {n_unique} unique class labels in y, but n_classes={self.n_classes}. "
-                f"Increase n_classes or check your data."
-            )
-        elif n_unique < self.n_classes:
-            raise ValueError(
-                f"Found only {n_unique} unique class labels in y, but n_classes={self.n_classes}. "
-                f"To correctly set the ``classes_`` attribute, provide an array containing all the "
-                f"unique class labels.",
-            )
-
-        # Always store the actual classes array
-        self._classes_ = classes
-
-        # Check if classes are the default [0, 1, ..., n_classes-1]
-        # If so, we can skip encoding/decoding for performance
-        is_default = np.array_equal(classes, np.arange(self.n_classes))
-        self._skip_encoding = is_default
-
-        # Create dict lookup only when needed (non-default classes)
-        self._class_to_index_ = (
-            None if is_default else {label: i for i, label in enumerate(classes)}
-        )
+        self._label_encoder.set_classes(y)
         return self
-
-    def _encode_labels(self, y: ArrayLike) -> NDArray[int]:
-        """Convert user-provided class labels to internal indices [0, n_classes-1]."""
-        if self._skip_encoding:
-            return y
-        # use dict lookup instead of `np.searchsorted`
-        # this approach will fail for label mismatches
-        try:
-            y = np.asarray(y)
-            original_shape = y.shape
-            y = np.fromiter(
-                (self._class_to_index_[label] for label in y.ravel()),
-                dtype=int,
-                count=y.size,
-            ).reshape(original_shape)
-        except KeyError as e:
-            unq_labels = np.unique(y)
-            valid = list(self._class_to_index_.keys())
-            invalid = [lab for lab in unq_labels if lab not in valid]
-            raise ValueError(
-                f"Unrecognized label(s) {invalid}. " f"Valid labels are {valid}."
-            ) from e
-        return y
-
-    def _decode_labels(self, indices: NDArray[int]) -> NDArray:
-        """Convert internal indices [0, n_classes-1] back to user-provided class labels."""
-        if self._skip_encoding:
-            return indices
-        return self._classes_[indices]
 
     @property
     def classes_(self) -> NDArray | None:
         """Class labels, or None if not set."""
-        return self._classes_
+        return self._label_encoder.classes_
 
     def compute_loss(
         self,
@@ -208,13 +151,13 @@ class ClassifierMixin:
             incompatible shapes or invalid values.
         """
         self._check_classes_is_set("compute_loss")
-        y = self._encode_labels(y)
+        y = self._label_encoder.encode(y)
         return super().compute_loss(params, X, y, *args, **kwargs)
 
     @property
     def n_classes(self):
         """Number of classes."""
-        return self._n_classes
+        return self._label_encoder.n_classes
 
     @n_classes.setter
     def n_classes(self, value: int):
@@ -226,19 +169,17 @@ class ClassifierMixin:
             raise ValueError(
                 "The number of classes must be an integer greater than or equal to 2."
             )
-        self._n_classes = int(value)
+
+        self._label_encoder = LabelEncoder(int(value))
+
         # reset validator.
         self._validator = self._validator_class(
             extra_params=self._get_validator_extra_params()
         )
-        # reset classes cache
-        self._classes_ = None
-        self._skip_encoding = False
-        self._class_to_index_ = None
 
     def _get_validator_extra_params(self) -> dict:
         """Get validator extra parameters."""
-        return {"n_classes": self._n_classes}
+        return {"n_classes": self._label_encoder.n_classes}
 
     def _preprocess_inputs(
         self,
@@ -250,7 +191,7 @@ class ClassifierMixin:
         X, y = super()._preprocess_inputs(X, y=y, drop_nans=drop_nans)
         if y is not None:
             y = self._validator.check_and_cast_y_to_integer(y)
-            y = jax.nn.one_hot(y, self._n_classes)
+            y = jax.nn.one_hot(y, self._label_encoder.n_classes)
         return X, y
 
     # Note: necessary double decorator. The super().predict is decorated as well,
@@ -292,7 +233,7 @@ class ClassifierMixin:
         # but requiring to be explicit is safer
         self._check_classes_is_set("predict")
         log_proba = super().predict(X)
-        return self._decode_labels(jnp.argmax(log_proba, axis=-1))
+        return self._label_encoder.decode(jnp.argmax(log_proba, axis=-1))
 
     def predict_proba(
         self,
@@ -383,7 +324,7 @@ class ClassifierMixin:
 
         n_features = sum(x.shape[1] for x in x_leaf)
         # Effective degrees of freedom is n_classes - 1 due to probability simplex constraint
-        n_m1_classes = self._n_classes - 1
+        n_m1_classes = self._label_encoder.n_classes - 1
         params = self._get_model_params()
 
         # Infer n_neurons from coef shape:
@@ -466,7 +407,7 @@ class ClassifierMixin:
         self._check_classes_is_set("simulate")
         y, log_prob = super().simulate(random_key, feedforward_input)
         argmax = support_pynapple(conv_type="jax")(lambda x: jnp.argmax(x, axis=-1))
-        y = self._decode_labels(argmax(y))
+        y = self._label_encoder.decode(argmax(y))
         return y, log_prob
 
     def initialize_solver_and_state(
@@ -501,7 +442,7 @@ class ClassifierMixin:
             If inputs or parameters have incompatible shapes or invalid values.
         """
         self._check_classes_is_set("initialize_solver_and_state")
-        y = self._encode_labels(y)
+        y = self._label_encoder.encode(y)
         return super().initialize_solver_and_state(X, y, init_params)
 
     def initialize_params(
@@ -543,7 +484,7 @@ class ClassifierMixin:
         (2, 2)
         """
         self._check_classes_is_set("initialize_params")
-        y = self._encode_labels(y)
+        y = self._label_encoder.encode(y)
         y = self._validator.check_and_cast_y_to_integer(y)
         y = jax.nn.one_hot(y, self.n_classes)
         return super().initialize_params(X, y)
@@ -612,7 +553,7 @@ class ClassifierMixin:
         >>> new_params, new_state = model.update(params, opt_state, X, y)
         """
         self._check_classes_is_set("update")
-        y = self._encode_labels(y)
+        y = self._label_encoder.encode(y)
         # note: do not check and cast here. Risky but the performance of
         # the update has priority.
         y = jax.nn.one_hot(jnp.asarray(y, dtype=int), self._n_classes)
@@ -841,7 +782,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
         (2, 2)
         """
         self.set_classes(y)
-        y = self._encode_labels(y)
+        y = self._label_encoder.encode(y)
         return super().fit(X, y, init_params)
 
     def score(
@@ -888,7 +829,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
         # manually, raise otherwise there may be ambiguity in interpreting
         # the labels.
         self._check_classes_is_set("score")
-        y = self._encode_labels(y)
+        y = self._label_encoder.encode(y)
         return super().score(X, y, score_type, aggregate_sample_scores)
 
 
@@ -1151,7 +1092,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         (2, 2, 3)
         """
         self.set_classes(y)
-        y = self._encode_labels(y)
+        y = self._label_encoder.encode(y)
         return super().fit(X, y, init_params)
 
     def score(
@@ -1195,5 +1136,5 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         >>> score = model.score(X, y)
         """
         self._check_classes_is_set("score")
-        y = self._encode_labels(y)
+        y = self._label_encoder.encode(y)
         return super().score(X, y, score_type, aggregate_sample_scores)
