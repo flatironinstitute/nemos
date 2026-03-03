@@ -111,15 +111,15 @@ class LabelEncoder:
         # use dict lookup instead of `np.searchsorted`
         # this approach will fail for label mismatches
         if isinstance(y, jnp.ndarray):
-            asarray = jnp.asarray
-            fromiter = jnp.fromiter
+            as_array = jnp.asarray
+            from_iter = jnp.fromiter
         else:
-            asarray = np.array
-            fromiter = np.fromiter
+            as_array = np.array
+            from_iter = np.fromiter
         try:
-            y = asarray(y)
+            y = as_array(y)
             original_shape = y.shape
-            y = fromiter(
+            y = from_iter(
                 (self._class_to_index_[label] for label in y.ravel()),
                 dtype=int,
                 count=y.size,
