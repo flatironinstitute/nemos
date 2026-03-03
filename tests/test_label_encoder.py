@@ -100,7 +100,12 @@ def test_encode_decode_roundtrip_jax():
         (jnp.array([2, 3, 99]), jnp.array([2, 3, 4]), True, pytest.raises(KeyError)),
         (np.array([2, 3, 99]), np.array([2, 3, 4]), False, does_not_raise()),
         (jnp.array([2, 3, 99]), jnp.array([2, 3, 4]), False, does_not_raise()),
-        (np.array(["a", "b", "z"]), np.array(["a", "b", "c"]), True, pytest.raises(ValueError)),
+        (
+            np.array(["a", "b", "z"]),
+            np.array(["a", "b", "c"]),
+            True,
+            pytest.raises(ValueError),
+        ),
         (np.array(["a", "b", "z"]), np.array(["a", "b", "c"]), False, does_not_raise()),
     ],
 )
