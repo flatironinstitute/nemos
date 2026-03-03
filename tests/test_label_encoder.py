@@ -1,3 +1,5 @@
+from contextlib import nullcontext as does_not_raise
+
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -89,6 +91,57 @@ def test_encode_decode_roundtrip_jax():
     encoder.set_classes(jnp.array([2, 3, 4]))
     y = jnp.array([2, 3, 4, 2])
     assert jnp.array_equal(encoder.decode(encoder.encode(y)), y)
+
+
+@pytest.mark.parametrize(
+    "y, classes, safe, expectation",
+    [
+        (np.array([2, 3, 99]), np.array([2, 3, 4]), True, pytest.raises(ValueError)),
+        (jnp.array([2, 3, 99]), jnp.array([2, 3, 4]), True, pytest.raises(KeyError)),
+        (np.array([2, 3, 99]), np.array([2, 3, 4]), False, does_not_raise()),
+        (jnp.array([2, 3, 99]), jnp.array([2, 3, 4]), False, does_not_raise()),
+        (np.array(["a", "b", "z"]), np.array(["a", "b", "c"]), True, pytest.raises(ValueError)),
+        (np.array(["a", "b", "z"]), np.array(["a", "b", "c"]), False, does_not_raise()),
+    ],
+)
+def test_encode_safe_flag_invalid_label(y, classes, safe, expectation):
+    """safe=True raises on unrecognized labels; safe=False silently accepts them."""
+    encoder = LabelEncoder(3)
+    encoder.set_classes(classes)
+    with expectation:
+        encoder.encode(y, safe=safe)
+
+
+@pytest.mark.parametrize(
+    "y, classes",
+    [
+        (np.array([2, 3, 4, 2]), np.array([2, 3, 4])),
+        (jnp.array([2, 3, 4, 2]), jnp.array([2, 3, 4])),
+        (np.array(["a", "b", "c", "a"]), np.array(["a", "b", "c"])),
+    ],
+)
+def test_encode_safe_unsafe_agree_on_valid(y, classes):
+    """safe=True and safe=False produce identical results for valid labels."""
+    encoder = LabelEncoder(3)
+    encoder.set_classes(classes)
+    assert np.array_equal(encoder.encode(y, safe=True), encoder.encode(y, safe=False))
+
+
+@pytest.mark.parametrize(
+    "y, classes_unsorted, classes_sorted",
+    [
+        (np.array([2, 3, 4, 2]), np.array([4, 2, 3]), np.array([2, 3, 4])),
+        (jnp.array([2, 3, 4, 2]), jnp.array([4, 2, 3]), jnp.array([2, 3, 4])),
+    ],
+)
+def test_set_classes_sorts(y, classes_unsorted, classes_sorted):
+    """set_classes sorts labels via unique: unsorted input gives same classes_ and encoding as sorted."""
+    encoder_unsorted = LabelEncoder(3)
+    encoder_unsorted.set_classes(classes_unsorted)
+    encoder_sorted = LabelEncoder(3)
+    encoder_sorted.set_classes(classes_sorted)
+    assert np.array_equal(encoder_unsorted.classes_, encoder_sorted.classes_)
+    assert np.array_equal(encoder_unsorted.encode(y), encoder_sorted.encode(y))
 
 
 def test_check_classes_behavior():
