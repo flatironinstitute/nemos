@@ -24,9 +24,9 @@ from nemos.basis._transformer_basis import TransformerBasis
 def test_sklearn_transformer_pipeline(bas, poissonGLM_model_instantiation):
     X, y, model, _, _ = poissonGLM_model_instantiation
     model.solver_kwargs.update({"maxiter": 2})
-    bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_input_dimensionality))
+    bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_inputs))
     pipe = pipeline.Pipeline([("eval", bas), ("fit", model)])
-    pipe.fit(X[:, : bas.basis._n_input_dimensionality] ** 2, y)
+    pipe.fit(X[:, : bas.basis._n_inputs] ** 2, y)
 
 
 @pytest.mark.parametrize(
@@ -43,11 +43,11 @@ def test_sklearn_transformer_pipeline(bas, poissonGLM_model_instantiation):
 def test_sklearn_transformer_pipeline_cv(bas, poissonGLM_model_instantiation):
     X, y, model, _, _ = poissonGLM_model_instantiation
     model.solver_kwargs.update({"maxiter": 2})
-    bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_input_dimensionality))
+    bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_inputs))
     pipe = pipeline.Pipeline([("basis", bas), ("fit", model)])
     param_grid = dict(basis__n_basis_funcs=(4, 5, 10))
     gridsearch = GridSearchCV(pipe, param_grid=param_grid, cv=3, error_score="raise")
-    gridsearch.fit(X[:, : bas._n_input_dimensionality] ** 2, y)
+    gridsearch.fit(X[:, : bas._n_inputs] ** 2, y)
 
 
 @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
@@ -55,12 +55,12 @@ def test_sklearn_cv_clone(population_poissonGLM_model_instantiation):
     X, y, model, _, _ = population_poissonGLM_model_instantiation
     model.solver_kwargs.update({"maxiter": 2})
     bas = basis.CyclicBSplineEval(5)
-    bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_input_dimensionality))
+    bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_inputs))
     pipe = pipeline.Pipeline([("basis", bas), ("fit", model)])
-    pipe.fit(X[:, : bas._n_input_dimensionality] ** 2, y)
+    pipe.fit(X[:, : bas._n_inputs] ** 2, y)
     param_grid = dict(basis__n_basis_funcs=(4, 8))
     gridsearch = GridSearchCV(pipe, param_grid=param_grid, cv=3, error_score="raise")
-    gridsearch.fit(X[:, : bas._n_input_dimensionality] ** 2, y)
+    gridsearch.fit(X[:, : bas._n_inputs] ** 2, y)
 
 
 @pytest.mark.parametrize(
@@ -79,7 +79,7 @@ def test_sklearn_transformer_pipeline_cv_multiprocess(
 ):
     X, y, model, _, _ = poissonGLM_model_instantiation
     model.solver_kwargs.update({"maxiter": 2})
-    bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_input_dimensionality))
+    bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_inputs))
     pipe = pipeline.Pipeline([("basis", bas), ("fit", model)])
     param_grid = dict(basis__n_basis_funcs=(4, 5, 10))
     gridsearch = GridSearchCV(
@@ -87,7 +87,7 @@ def test_sklearn_transformer_pipeline_cv_multiprocess(
     )
     # use threading instead of fork (this avoids conflicts with jax)
     with joblib.parallel_backend("threading"):
-        gridsearch.fit(X[:, : bas._n_input_dimensionality] ** 2, y)
+        gridsearch.fit(X[:, : bas._n_inputs] ** 2, y)
 
 
 @pytest.mark.parametrize(
@@ -107,17 +107,17 @@ def test_sklearn_transformer_pipeline_cv_directly_over_basis(
     X, y, model, _, _ = poissonGLM_model_instantiation
     model.solver_kwargs.update({"maxiter": 2})
     bas = TransformerBasis(bas_cls(5))
-    bas.set_input_shape(*([1] * bas._n_input_dimensionality))
+    bas.set_input_shape(*([1] * bas._n_inputs))
     pipe = pipeline.Pipeline([("transformerbasis", bas), ("fit", model)])
     param_grid = dict(
         transformerbasis__basis=(
-            bas_cls(5).set_input_shape(*([1] * bas._n_input_dimensionality)),
-            bas_cls(10).set_input_shape(*([1] * bas._n_input_dimensionality)),
-            bas_cls(20).set_input_shape(*([1] * bas._n_input_dimensionality)),
+            bas_cls(5).set_input_shape(*([1] * bas._n_inputs)),
+            bas_cls(10).set_input_shape(*([1] * bas._n_inputs)),
+            bas_cls(20).set_input_shape(*([1] * bas._n_inputs)),
         )
     )
     gridsearch = GridSearchCV(pipe, param_grid=param_grid, cv=3, error_score="raise")
-    gridsearch.fit(X[:, : bas._n_input_dimensionality] ** 2, y)
+    gridsearch.fit(X[:, : bas._n_inputs] ** 2, y)
 
 
 @pytest.mark.parametrize(
@@ -137,7 +137,7 @@ def test_sklearn_transformer_pipeline_cv_illegal_combination(
     X, y, model, _, _ = poissonGLM_model_instantiation
     model.solver_kwargs.update({"maxiter": 2})
     bas = TransformerBasis(bas_cls(5))
-    bas.set_input_shape(*([1] * bas._n_input_dimensionality))
+    bas.set_input_shape(*([1] * bas._n_inputs))
     pipe = pipeline.Pipeline([("transformerbasis", bas), ("fit", model)])
     param_grid = dict(
         transformerbasis__basis=(bas_cls(5), bas_cls(10), bas_cls(20)),
@@ -148,7 +148,7 @@ def test_sklearn_transformer_pipeline_cv_illegal_combination(
         ValueError,
         match="Set either new basis object or parameters for existing basis, not both.",
     ):
-        gridsearch.fit(X[:, : bas._n_input_dimensionality] ** 2, y)
+        gridsearch.fit(X[:, : bas._n_inputs] ** 2, y)
 
 
 @pytest.mark.requires_x64
@@ -199,14 +199,14 @@ def test_sklearn_transformer_pipeline_pynapple(
     ep = nap.IntervalSet(start=[0, 20.5], end=[20, X.shape[0]])
     X_nap = nap.TsdFrame(t=np.arange(X.shape[0]), d=X, time_support=ep)
     y_nap = nap.Tsd(t=np.arange(X.shape[0]), d=y, time_support=ep)
-    bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_input_dimensionality))
+    bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_inputs))
 
     # fit a pipeline & predict from pynapple
     pipe = pipeline.Pipeline([("eval", bas), ("fit", model)])
-    pipe.fit(X_nap[:, : bas.basis._n_input_dimensionality] ** 2, y_nap)
+    pipe.fit(X_nap[:, : bas.basis._n_inputs] ** 2, y_nap)
 
     # get rate
-    rate = pipe.predict(X_nap[:, : bas.basis._n_input_dimensionality] ** 2)
+    rate = pipe.predict(X_nap[:, : bas.basis._n_inputs] ** 2)
     # check rate is Tsd with same time info
     assert isinstance(rate, nap.Tsd)
     assert np.all(rate.t == X_nap.t)

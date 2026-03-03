@@ -302,7 +302,7 @@ class TestSetDefault:
 
         assert nmo.solvers.get_solver("algo_a").backend == "backend_one"
 
-        nmo.solvers.set_default("algo_a", "backend_two")
+        nmo.solvers.set_default_backend("algo_a", "backend_two")
 
         assert nmo.solvers.get_solver("algo_a").backend == "backend_two"
 
@@ -310,14 +310,14 @@ class TestSetDefault:
         registry, defaults = isolated_registry
 
         with pytest.raises(ValueError, match="No solver registered"):
-            nmo.solvers.set_default("algo_a", "backend_two")
+            nmo.solvers.set_default_backend("algo_a", "backend_two")
 
     def test_raises_if_backend_not_available(self, isolated_registry):
         registry, defaults = isolated_registry
         nmo.solvers.register("algo_a", SolverAOne, "backend_one")
 
         with pytest.raises(ValueError, match="backend not available"):
-            nmo.solvers.set_default("algo_a", "backend_two")
+            nmo.solvers.set_default_backend("algo_a", "backend_two")
 
 
 class TestListFunctions:

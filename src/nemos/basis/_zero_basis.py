@@ -37,11 +37,11 @@ class ZeroBasis(AtomicBasisMixin, Basis):
         self,
         label: Optional[str] = None,
     ) -> None:
+        self._n_inputs = 1
         AtomicBasisMixin.__init__(self, n_basis_funcs=0, label=label)
         Basis.__init__(
             self,
         )
-        self._n_input_dimensionality = 1
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input

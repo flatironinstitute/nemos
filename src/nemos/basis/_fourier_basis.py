@@ -353,7 +353,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
         ) = "no-intercept",
         label: Optional[str] = None,
     ) -> None:
-        self._n_input_dimensionality = self._check_ndim(ndim)
+        self._n_inputs = self._check_ndim(ndim)
         self.frequencies = frequencies
         self.frequency_mask = frequency_mask
         Basis.__init__(
@@ -462,8 +462,8 @@ class FourierBasis(AtomicBasisMixin, Basis):
 
             values = values.astype(bool)
 
-            if not values.ndim == self._n_input_dimensionality:
-                ndim = self._n_input_dimensionality
+            if not values.ndim == self._n_inputs:
+                ndim = self._n_inputs
                 raise ValueError(
                     f"The frequency mask for a {ndim}-dimensional Fourier basis "
                     f"must be an {ndim}-dimensional array of 0s and 1s. "
@@ -513,21 +513,19 @@ class FourierBasis(AtomicBasisMixin, Basis):
         self,
         frequencies: int | tuple[int, int] | list[int] | list[tuple[int, int]],
     ) -> None:
-        ndim = self._n_input_dimensionality
+        ndim = self._n_inputs
 
         if isinstance(frequencies, Number) and (frequencies == int(frequencies)):
             frequencies = [arange_constructor(frequencies)] * ndim
 
         elif isinstance(frequencies, tuple):
-            frequencies = _process_tuple_frequencies(
-                frequencies, self._n_input_dimensionality
-            )
+            frequencies = _process_tuple_frequencies(frequencies, self._n_inputs)
 
         elif is_at_least_1d_numpy_array_like(frequencies):
             frequencies = _check_and_sort_frequencies(*([frequencies] * ndim))
 
         elif isinstance(frequencies, list):
-            if len(frequencies) != self._n_input_dimensionality:
+            if len(frequencies) != self._n_inputs:
                 raise ValueError(
                     "Length of frequencies list must match input dimensionality."
                 )
@@ -589,7 +587,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
     @property
     def ndim(self):
         """The dimensionality of the basis."""
-        return self._n_input_dimensionality
+        return self._n_inputs
 
     @staticmethod
     def _check_ndim(ndim: int) -> int:
@@ -630,25 +628,24 @@ class FourierBasis(AtomicBasisMixin, Basis):
 
         """
         shape = sample_pts[0].shape
-
-        bounds = getattr(self, "bounds", None)
-        if bounds is None:
-            bounds = (None,) * self._n_input_dimensionality
+        bounds = self._get_bounds_per_dim()
 
         # min/max rescale to [0,1]:
         # The function does so over the time axis (each extra dim is
         # normalized independently)
         def _flat_samples_to_angles(xs):
             scaled_samples = jax.tree_util.tree_map(
-                lambda x, b: 2
-                * jnp.pi
-                * self._shift_angles(min_max_rescale_samples(x, b)[0].reshape(-1)),
+                lambda x, b: (
+                    2
+                    * jnp.pi
+                    * self._shift_angles(min_max_rescale_samples(x, b)[0].reshape(-1))
+                ),
                 xs,
                 bounds,
             )
             return jnp.stack(scaled_samples, axis=-1)
 
-        sample_pts = _flat_samples_to_angles(sample_pts)
+        sample_pts = _flat_samples_to_angles(list(sample_pts))
         angles = sample_pts @ self._freq_combinations
         out = jnp.concatenate(
             [jnp.cos(angles), jnp.sin(angles[..., self._has_zero_phase :])], axis=1
