@@ -140,9 +140,10 @@ class ClassifierMixin:
 
         Raises
         ------
+        RuntimeError
+            If ``classes_`` has not been set.
         ValueError
-            If ``classes_`` has not been set, or if inputs/parameters have
-            incompatible shapes or invalid values.
+            If inputs or parameters have incompatible shapes or invalid values.
         """
         self._label_encoder.check_classes_is_set("compute_loss")
         y = self._label_encoder.encode(y)
@@ -381,7 +382,7 @@ class ClassifierMixin:
 
         Raises
         ------
-        ValueError
+        RuntimeError
             If ``classes_`` has not been set. Call :meth:`set_classes` or :meth:`fit`
             before calling this method.
 
@@ -455,14 +456,19 @@ class ClassifierMixin:
         X :
             Input data, array of shape ``(n_time_bins, n_features)`` or pytree of same.
         y :
-            Class labels as integers, array of shape ``(n_time_bins,)`` for single neuron
-            models or ``(n_time_bins, n_neurons)`` for population models. Values should be
-            in the range ``[0, n_classes - 1]``.
+            Class labels, array of shape ``(n_time_bins,)`` for single neuron
+            models or ``(n_time_bins, n_neurons)`` for population models. Labels
+            must be a subset of ``classes_``.
 
         Returns
         -------
         :
             Initial parameter tuple of (coefficients, intercept).
+
+        Notes
+        -----
+        All labels in ``y`` must be present in ``classes_``. Passing labels not
+        in ``classes_`` will raise an error.
 
         Examples
         --------
@@ -733,9 +739,6 @@ class ClassifierGLM(ClassifierMixin, GLM):
             solver_name=solver_name,
             solver_kwargs=solver_kwargs,
         )
-        self._classes_ = None
-        self._class_to_index_ = None
-        self._skip_encoding = False
 
     def fit(
         self,
@@ -751,10 +754,9 @@ class ClassifierGLM(ClassifierMixin, GLM):
         X
             Training input samples of shape ``(n_samples, n_features)`` or a pytree of arrays of the same shape.
         y
-            Target class labels of shape ``(n_samples,)``. Values should be in
-            ``[0, n_classes - 1]``. Float arrays with integer values are
-            accepted and converted automatically, but integer arrays are
-            recommended for best performance.
+            Target class labels of shape ``(n_samples,)``. Labels can be any hashable
+            type (integers, strings, etc.). Float arrays with integer values are
+            accepted and converted automatically.
         init_params
             Initial parameter values as tuple of ``(coef, intercept)``. If None,
             parameters are initialized automatically.
@@ -763,6 +765,11 @@ class ClassifierGLM(ClassifierMixin, GLM):
         -------
         :
             The fitted model.
+
+        Notes
+        -----
+        ``fit`` calls :meth:`set_classes` internally, so ``classes_`` is always
+        consistent with the labels in ``y``.
 
         Examples
         --------
@@ -796,10 +803,8 @@ class ClassifierGLM(ClassifierMixin, GLM):
         X
             Test input samples of shape ``(n_samples, n_features)`` or a pytree of arrays of the same shape.
         y
-            True class labels of shape ``(n_samples,)``. Values should be in
-            ``[0, n_classes - 1]``. Float arrays with integer values are
-            accepted and converted automatically, but integer arrays are
-            recommended for best performance.
+            True class labels of shape ``(n_samples,)``. Labels must be a subset
+            of ``classes_``.
         score_type
             The type of score to compute.
         aggregate_sample_scores
@@ -809,6 +814,11 @@ class ClassifierGLM(ClassifierMixin, GLM):
         -------
         :
             The computed score.
+
+        Notes
+        -----
+        All labels in ``y`` must be present in ``classes_``. Passing labels not
+        in ``classes_`` will raise an error.
 
         Examples
         --------
@@ -1009,9 +1019,6 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
             solver_kwargs=solver_kwargs,
             feature_mask=feature_mask,
         )
-        self._classes_ = None
-        self._class_to_index_ = None
-        self._skip_encoding = False
 
     @property
     def feature_mask(self) -> Union[jnp.ndarray, dict[str, jnp.ndarray]]:
@@ -1061,10 +1068,9 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         X
             Training input samples of shape ``(n_samples, n_features)`` or a pytree of arrays of the same shape.
         y
-            Target class labels of shape ``(n_samples, n_neurons)``. Values should be in
-            ``[0, n_classes - 1]``. Float arrays with integer values are
-            accepted and converted automatically, but integer arrays are
-            recommended for best performance.
+            Target class labels of shape ``(n_samples, n_neurons)``. Labels can be
+            any hashable type (integers, strings, etc.). Float arrays with integer
+            values are accepted and converted automatically.
         init_params
             Initial parameter values as tuple of ``(coef, intercept)``. If None,
             parameters are initialized automatically.
@@ -1073,6 +1079,11 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         -------
         :
             The fitted model.
+
+        Notes
+        -----
+        ``fit`` calls :meth:`set_classes` internally, so ``classes_`` is always
+        consistent with the labels in ``y``.
 
         Examples
         --------
@@ -1106,10 +1117,8 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         X
             Test input samples of shape ``(n_samples, n_features)`` or a pytree of arrays of the same shape.
         y
-            True class labels of shape ``(n_samples, n_neurons)``. Values should be in
-            ``[0, n_classes - 1]``. Float arrays with integer values are
-            accepted and converted automatically, but integer arrays are
-            recommended for best performance.
+            True class labels of shape ``(n_samples, n_neurons)``. Labels must
+            be a subset of ``classes_``.
         score_type
             The type of score to compute.
         aggregate_sample_scores
@@ -1119,6 +1128,11 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         -------
         :
             The computed score.
+
+        Notes
+        -----
+        All labels in ``y`` must be present in ``classes_``. Passing labels not
+        in ``classes_`` will raise an error.
 
         Examples
         --------
