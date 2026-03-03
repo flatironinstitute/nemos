@@ -44,27 +44,26 @@ class LabelEncoder:
         """
         Infer unique class labels and set the ``classes_`` attribute.
 
-        This method infers class labels from ``y`` and sets up the internal
+        This method infers class labels from ``array`` and sets up the internal
         encoding/decoding machinery. When labels are the default ``[0, 1, ..., n_classes-1]``,
         encoding is skipped for performance.
 
         Parameters
         ----------
-        y
+        array
             An array that must contain all the class labels,
-            i.e. ``len(np.unique(y)) == n_classes``.
+            i.e. ``len(np.unique(array)) == n_classes``.
 
         Raises
         ------
         ValueError
-            If the number of unique class labels in ``y`` does not match ``n_classes``.
+            If the number of unique class labels in ``array`` does not match ``n_classes``.
 
         Notes
         -----
-        :meth:`fit` and :meth:`initialize_solver_and_state` call ``set_classes`` internally,
-        making sure that the ``classes_`` attribute matches the provided input.
-        If you are fitting in batches by calling :meth:`update`, make sure that the ``classes_``
-        are correctly set by calling ``set_classes`` before starting the :meth:`update` loop.
+        ``set_classes`` must be called before :meth:`encode` or :meth:`decode`.
+        When fitting in batches, call ``set_classes`` with an array containing all class labels
+        before starting the update loop, since individual batches may not contain every class.
 
         """
         if isinstance(array, jnp.ndarray):
@@ -76,12 +75,12 @@ class LabelEncoder:
         # Validation
         if n_unique > self.n_classes:
             raise ValueError(
-                f"Found {n_unique} unique class labels in y, but n_classes={self.n_classes}. "
+                f"Found {n_unique} unique class labels in array, but n_classes={self.n_classes}. "
                 f"Increase n_classes or check your data."
             )
         elif n_unique < self.n_classes:
             raise ValueError(
-                f"Found only {n_unique} unique class labels in y, but n_classes={self.n_classes}. "
+                f"Found only {n_unique} unique class labels in array, but n_classes={self.n_classes}. "
                 f"To correctly set the ``classes_`` attribute, provide an array containing all the "
                 f"unique class labels.",
             )
