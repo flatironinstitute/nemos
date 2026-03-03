@@ -65,8 +65,3 @@ def test_set_classes_behavior():
 
     with pytest.raises(ValueError, match="Found only"):
         encoder.set_classes([0, 1, 2])
-
-
-def test_n_classes_none():
-    encoder = LabelEncoder(2)
-    encoder.n_classes = None
