@@ -158,83 +158,29 @@ class _TwoLeafModule(eqx.Module):
     b: jnp.ndarray
 
 
-# n_samples must match what the instantiate_base_regressor_subclass fixture produces.
-# Each entry is (model_config, make_pytree_x): fully co-specified so that the pytree
-# is meaningful for the paired model. Add new entries when new model types are introduced.
-_N_SAMPLES = 500
+# Pytree factories keyed by id; each takes n_samples and returns a pytree of arrays.
+_PYTREE_X_FACTORIES = {
+    "dict": lambda n: {"a": jnp.ones((n, 1)), "b": jnp.ones((n, 1))},
+    "eqx_module": lambda n: _TwoLeafModule(a=jnp.ones((n, 1)), b=jnp.ones((n, 1))),
+    "dict_list": lambda n: {"a": [jnp.ones((n, 1))], "b": jnp.ones((n, 1))},
+}
+
+# One entry per (model, obs_model) pair; all pytree types are tested for each.
+_MODEL_CONFIGS = [
+    ("GLM", "Poisson"),
+    ("PopulationGLM", "Poisson"),
+    ("ClassifierGLM", "Categorical"),
+    ("ClassifierPopulationGLM", "Categorical"),
+]
+
 _MODEL_PYTREE_X_CASES = [
-    # GLM
     pytest.param(
-        {
-            "model": "GLM",
-            "obs_model": OBSERVATION_PER_MODEL["GLM"][0],
-            "simulate": True,
-        },
-        {"a": jnp.ones((_N_SAMPLES, 1)), "b": jnp.ones((_N_SAMPLES, 1))},
-        id="GLM-dict",
-    ),
-    pytest.param(
-        {
-            "model": "GLM",
-            "obs_model": OBSERVATION_PER_MODEL["GLM"][0],
-            "simulate": True,
-        },
-        _TwoLeafModule(a=jnp.ones((_N_SAMPLES, 1)), b=jnp.ones((_N_SAMPLES, 1))),
-        id="GLM-eqx_module",
-    ),
-    pytest.param(
-        {
-            "model": "GLM",
-            "obs_model": OBSERVATION_PER_MODEL["GLM"][0],
-            "simulate": True,
-        },
-        {"a": [jnp.ones((_N_SAMPLES, 1))], "b": jnp.ones((_N_SAMPLES, 1))},
-        id="GLM-dict_list",
-    ),
-    # PopulationGLM
-    pytest.param(
-        {
-            "model": "PopulationGLM",
-            "obs_model": OBSERVATION_PER_MODEL["PopulationGLM"][0],
-            "simulate": True,
-        },
-        {"a": jnp.ones((_N_SAMPLES, 1)), "b": jnp.ones((_N_SAMPLES, 1))},
-        id="PopulationGLM-dict",
-    ),
-    pytest.param(
-        {
-            "model": "PopulationGLM",
-            "obs_model": OBSERVATION_PER_MODEL["PopulationGLM"][0],
-            "simulate": True,
-        },
-        _TwoLeafModule(a=jnp.ones((_N_SAMPLES, 1)), b=jnp.ones((_N_SAMPLES, 1))),
-        id="PopulationGLM-eqx_module",
-    ),
-    pytest.param(
-        {
-            "model": "PopulationGLM",
-            "obs_model": OBSERVATION_PER_MODEL["PopulationGLM"][0],
-            "simulate": True,
-        },
-        {"a": [jnp.ones((_N_SAMPLES, 1))], "b": jnp.ones((_N_SAMPLES, 1))},
-        id="PopulationGLM-dict_list",
-    ),
-    # ClassifierGLM
-    pytest.param(
-        {"model": "ClassifierGLM", "obs_model": "Categorical", "simulate": True},
-        {"a": jnp.ones((_N_SAMPLES, 1)), "b": jnp.ones((_N_SAMPLES, 1))},
-        id="ClassifierGLM-dict",
-    ),
-    # ClassifierPopulationGLM
-    pytest.param(
-        {
-            "model": "ClassifierPopulationGLM",
-            "obs_model": "Categorical",
-            "simulate": True,
-        },
-        {"a": jnp.ones((_N_SAMPLES, 1)), "b": jnp.ones((_N_SAMPLES, 1))},
-        id="ClassifierPopulationGLM-dict",
-    ),
+        {"model": model, "obs_model": obs_model, "simulate": True},
+        factory(DEFAULT_OBS_SHAPE[model][0]),
+        id=f"{model}-{pytree_id}",
+    )
+    for model, obs_model in _MODEL_CONFIGS
+    for pytree_id, factory in _PYTREE_X_FACTORIES.items()
 ]
 
 
