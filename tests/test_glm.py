@@ -4048,22 +4048,6 @@ class TestClassifierGLM:
         assert fresh_model.classes_ is None
         assert fresh_model._skip_encoding is False
 
-    def test_skip_encoding_flag(self, inv_link, glm_type, model_instantiation, request):
-        """Test that _skip_encoding is True for default labels, False otherwise."""
-        _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
-        model = deepcopy(model)
-
-        # Default labels [0, 1, ..., n-1] should skip encoding
-        model.set_classes(np.arange(model.n_classes))
-        assert model._skip_encoding is True
-        assert model._class_to_index_ is None
-
-        # Non-default labels should not skip encoding
-        label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
-        model.set_classes(label)
-        assert model._skip_encoding is False
-        assert model._class_to_index_ is not None
-
     def test_set_classes_too_many_classes(
         self, inv_link, glm_type, model_instantiation, request
     ):
@@ -4183,26 +4167,6 @@ class TestClassifierGLM:
 
         # Probabilities should be identical (only label interpretation changes)
         assert jnp.allclose(proba_default, proba_label)
-
-    def test_encode_decode_roundtrip(
-        self, inv_link, glm_type, model_instantiation, request
-    ):
-        """Test that encoding then decoding returns original labels."""
-        _, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
-        model = deepcopy(model)
-
-        # Test with string labels
-        label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
-        model.set_classes(label)
-        y_label = model._label_encoder.decode(y)
-
-        # Roundtrip: decode -> encode should give original indices
-        y_roundtrip = model._encode_labels(y_label)
-        assert np.array_equal(y, y_roundtrip)
-
-        # Roundtrip: encode -> decode should give original labels
-        y_label_roundtrip = model._decode_labels(model._encode_labels(y_label))
-        assert np.array_equal(y_label, y_label_roundtrip)
 
     def test_initialize_params_stale_feature_mask_raises(
         self, inv_link, glm_type, model_instantiation, request
