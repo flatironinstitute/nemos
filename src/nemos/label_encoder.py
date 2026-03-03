@@ -21,8 +21,9 @@ class LabelEncoder:
     )
 
     def __init__(self, n_classes: int):
+        # this set the class and resets the
+        # private cached attrs to defaults
         self.n_classes = n_classes
-        self.reset()
 
     @property
     def n_classes(self) -> int:
