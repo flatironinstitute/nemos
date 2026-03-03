@@ -65,3 +65,12 @@ def test_set_classes_behavior():
 
     with pytest.raises(ValueError, match="Found only"):
         encoder.set_classes([0, 1, 2])
+
+
+def test_check_classes_behavior():
+    encoder = LabelEncoder(4)
+    with pytest.raises(RuntimeError, match=r"Classes are not set.+hello.+"):
+        encoder.check_classes_is_set("hello")
+    # set and retry
+    encoder.set_classes(["0", "1", "2", "3"])
+    encoder.check_classes_is_set("hello")

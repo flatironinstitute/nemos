@@ -138,3 +138,10 @@ class LabelEncoder:
         if self._skip_encoding:
             return indices
         return self.classes_[indices]
+
+    def check_classes_is_set(self, method_name: str):
+        """Check if the class labels are set, otherwise raise an error."""
+        if self.classes_ is None:
+            raise RuntimeError(
+                f"Classes are not set. Must call ``set_classes`` before calling ``{method_name}``."
+            )
