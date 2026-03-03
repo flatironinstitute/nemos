@@ -3937,7 +3937,7 @@ class TestClassifierGLM:
             glm_type + model_instantiation
         )
         model = deepcopy(model)
-        model._classes_ = None
+        model._label_encoder.classes_ = None
 
         # superset of all possible required inputs
         input_dict = {
@@ -3994,7 +3994,7 @@ class TestClassifierGLM:
         score_regular = model.score(X, y)
         label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
         model.set_classes(label)
-        y_label = model._decode_labels(y)
+        y_label = model._label_encoder.decode(y)
         score = model.score(X, y_label)
         assert isinstance(score, jnp.ndarray)
         assert jnp.issubdtype(score.dtype, np.floating)
@@ -4013,7 +4013,7 @@ class TestClassifierGLM:
 
         label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
         model_label.set_classes(label)
-        y_label = model._decode_labels(y)
+        y_label = model._label_encoder.decode(y)
         model_label.fit(X, y_label)
         assert jnp.array_equal(model.coef_, model_label.coef_)
         assert jnp.array_equal(model.intercept_, model_label.intercept_)
@@ -4032,7 +4032,7 @@ class TestClassifierGLM:
         label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
         model.set_classes(label)
         y_label, log_prob_label = model.simulate(jax.random.PRNGKey(1), X)
-        assert jnp.array_equal(model._encode_labels(y_label), y)
+        assert jnp.array_equal(model._label_encoder.encode(y_label), y)
         assert jnp.array_equal(log_prob_label, log_prob)
 
     def test_classes_none_initially(
@@ -4155,7 +4155,7 @@ class TestClassifierGLM:
         # Compute loss with string labels
         label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
         model.set_classes(label)
-        y_label = model._decode_labels(y)
+        y_label = model._label_encoder.decode(y)
         loss_label = model.compute_loss((model.coef_, model.intercept_), X, y_label)
 
         assert jnp.allclose(loss_default, loss_label)
@@ -4194,7 +4194,7 @@ class TestClassifierGLM:
         # Test with string labels
         label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
         model.set_classes(label)
-        y_label = model._decode_labels(y)
+        y_label = model._label_encoder.decode(y)
 
         # Roundtrip: decode -> encode should give original indices
         y_roundtrip = model._encode_labels(y_label)
