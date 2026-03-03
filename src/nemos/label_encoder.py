@@ -6,24 +6,32 @@ categorical variables. The class is for internal use, main method will be
 `encode` and `decode`.
 """
 
+from dataclasses import dataclass, fields
+
 import jax.numpy as jnp
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 
+@dataclass
+class _ResetAttrs:
+    _skip_encoding: bool = False
+    _class_to_index_: dict | None = None
+    classes_: np.ndarray | None = None
+
+
 class LabelEncoder:
     """Label encoder and decoder class."""
 
-    _reset_attrs = (
-        ("_skip_encoding", False),
-        ("_class_to_index_", None),
-        ("classes_", None),
-    )
+    _reset_attrs = _ResetAttrs()
 
     def __init__(self, n_classes: int):
-        # this set the class and resets the
-        # private cached attrs to defaults
-        self.n_classes = n_classes
+        self._n_classes = n_classes
+        # set attrs explicitly to satisfy static checkers
+        # (kept in sync with _reset_attrs via dataclass fields)
+        self._skip_encoding: bool = self._reset_attrs._skip_encoding
+        self._class_to_index_: dict | None = self._reset_attrs._class_to_index_
+        self.classes_: np.ndarray | None = self._reset_attrs.classes_
 
     @property
     def n_classes(self) -> int:
@@ -37,8 +45,8 @@ class LabelEncoder:
 
     def reset(self):
         """Reset cached attributes to default values."""
-        for attr, val in self._reset_attrs:
-            setattr(self, attr, val)
+        for f in fields(self._reset_attrs):
+            setattr(self, f.name, getattr(self._reset_attrs, f.name))
 
     def set_classes(self, array: jnp.ndarray | ArrayLike):
         """
