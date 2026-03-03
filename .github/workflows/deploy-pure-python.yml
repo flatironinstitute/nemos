@@ -1,4 +1,7 @@
 name: Build and upload to PyPI for pure python
+
+permissions: {}
+
 on:
   release:
     types: [published]
@@ -8,14 +11,14 @@ jobs:
     name: Build and test package
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         # this is necessary for setuptools_scm to work properly with github
         # actions, see https://github.com/pypa/setuptools_scm/issues/480 and
         # https://stackoverflow.com/a/68959339
         with:
           fetch-depth: 0
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 #v6.2.0
         with:
           python-version: '3.12'
       - name: Build package
@@ -53,7 +56,7 @@ jobs:
         # modify the following as necessary to e.g., run notebooks
         run: |
           pytest
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           path: dist/*
 
@@ -65,9 +68,9 @@ jobs:
     permissions:
       id-token: write # IMPORTANT: this permission is mandatory for trusted publishing
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         with:
           name: artifact
           path: dist
       - name: Publish package to pypi
-        uses: pypa/gh-action-pypi-publish@v1.12.4
+        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e # v1.13.0
