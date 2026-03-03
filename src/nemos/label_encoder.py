@@ -6,6 +6,8 @@ categorical variables. The class is for internal use, main method will be
 `encode` and `decode`.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, fields
 
 import jax.numpy as jnp
@@ -17,7 +19,7 @@ from numpy.typing import ArrayLike, NDArray
 class _ResetAttrs:
     _skip_encoding: bool = False
     _class_to_index_: dict | None = None
-    classes_: np.ndarray | None = None
+    classes_: NDArray | jnp.ndarray | None = None
 
 
 class LabelEncoder:
@@ -31,7 +33,7 @@ class LabelEncoder:
         # (kept in sync with _reset_attrs via dataclass fields)
         self._skip_encoding: bool = self._reset_attrs._skip_encoding
         self._class_to_index_: dict | None = self._reset_attrs._class_to_index_
-        self.classes_: np.ndarray | None = self._reset_attrs.classes_
+        self.classes_: np.ndarray | jnp.ndarray | None = self._reset_attrs.classes_
 
     @property
     def n_classes(self) -> int:
@@ -105,7 +107,37 @@ class LabelEncoder:
         )
 
     def encode(self, y: ArrayLike, safe=True) -> NDArray[int]:
-        """Convert user-provided class labels to internal indices [0, n_classes-1]."""
+        """
+        Convert user-provided class labels to internal indices ``[0, n_classes-1]``.
+
+        When labels are the default ``[0, 1, ..., n_classes-1]``, the input is
+        returned unchanged. Otherwise, dispatches to a numpy or JAX backend
+        depending on the type of ``y``.
+
+        Parameters
+        ----------
+        y :
+            Array of class labels to encode.
+        safe :
+            If ``True`` (default), validate that all labels in ``y`` are known and
+            raise on any mismatch. If ``False``, skip validation for performance:
+            unknown labels will silently produce incorrect indices. Set to ``False``
+            only when the caller guarantees that ``y`` contains only valid labels,
+            e.g. in JIT-compiled JAX functions or inner loops where labels have
+            already been validated upstream by :meth:`set_classes`.
+
+        Returns
+        -------
+        :
+            Integer array of indices in ``[0, n_classes-1]``.
+
+        Raises
+        ------
+        ValueError
+            If ``safe=True`` and ``y`` contains unrecognized labels (numpy path).
+        KeyError
+            If ``safe=True`` and ``y`` contains unrecognized labels (JAX path).
+        """
         if self._skip_encoding:
             return y
         if isinstance(y, jnp.ndarray):
@@ -114,7 +146,7 @@ class LabelEncoder:
             # use dict lookup instead of `np.searchsorted`
             # this approach will fail for label mismatches
             # always safe
-            y = self._encode_numpy(y)
+            y = self._encode_numpy(y, safe=safe)
 
         return y
 
@@ -131,46 +163,72 @@ class LabelEncoder:
                 f"Classes are not set. Must call ``set_classes`` before calling ``{method_name}``."
             )
 
-    def _encode_numpy(self, y: ArrayLike):
+    def _encode_numpy(self, y: ArrayLike, safe: bool = True) -> ArrayLike:
         """
-        Encode label for numpy arrays.
+        Encode labels for numpy arrays.
 
-        This method is fast and always safe, no need for the flag.
+        Parameters
+        ----------
+        y :
+            Array of class labels to encode.
+        safe :
+            If ``True``, use dict-based lookup via ``np.fromiter``, which raises
+            ``ValueError`` on any unrecognized label. The dict lookup is faster
+            than ``np.searchsorted`` for typical label set sizes.
+            If ``False``, use ``np.searchsorted`` directly — faster but silently
+            maps unknown labels to nearest indices.
         """
-        try:
-            y = np.asarray(y)
-            original_shape = y.shape
-            y = np.fromiter(
-                (self._class_to_index_[label] for label in y.ravel()),
-                dtype=int,
-                count=y.size,
-            ).reshape(original_shape)
-        except KeyError as e:
-            unq_labels = np.unique(y)
-            valid = list(self._class_to_index_.keys())
-            invalid = [lab for lab in unq_labels if lab not in valid]
-            raise ValueError(
-                f"Unrecognized label(s) {invalid}. " f"Valid labels are {valid}."
-            ) from e
-        return y
-
-    def _encode_jax(self, y: ArrayLike, safe=True) -> ArrayLike:
-        """Encode label for jax arrays.
-
-        Encoding can assume that y is an array of numbers, however,
-        ``jnp.searchsorted`` is not safe, in the sense that it will allow
-        out of bounds value. A safeguard that is not jit-compilable is possible
-        but can be skipped in internal usage.
-        """
-        y_encoded = jnp.searchsorted(self.classes_, y)
         if safe:
-            select = (y < self.classes_[0]) | (y > self.classes_[-1])
-            if jnp.any(select):
-                invalid = jnp.unique(y[select])
+            # use from iter, this forces safety while being much more
+            # efficient than a unique.
+            try:
+                y = np.asarray(y)
+                original_shape = y.shape
+                y = np.fromiter(
+                    (self._class_to_index_[label] for label in y.ravel()),
+                    dtype=int,
+                    count=y.size,
+                ).reshape(original_shape)
+            except KeyError as e:
+                unq_labels = np.unique(y)
+                valid = list(self._class_to_index_.keys())
+                invalid = [lab for lab in unq_labels if lab not in valid]
+                raise ValueError(
+                    f"Unrecognized label(s) {invalid}. " f"Valid labels are {valid}."
+                ) from e
+            return y
+        else:
+            # fastest way to return the encoded indices.
+            return np.searchsorted(self.classes_, y)
+
+    def _encode_jax(self, y: ArrayLike, safe: bool = True) -> ArrayLike:
+        """
+        Encode labels for JAX arrays.
+
+        Always uses ``jnp.searchsorted``, which is vectorized and stays on device.
+        ``jnp.searchsorted`` does not raise on unrecognized labels — it silently
+        maps them to nearest indices — so an optional safeguard is provided.
+
+        Parameters
+        ----------
+        y :
+            JAX array of class labels to encode.
+        safe :
+            If ``True``, compute unique values of ``y``, convert to a numpy array,
+            and compare against ``classes_`` to detect any unrecognized labels.
+            This check is not JIT-compilable. If ``False``, skip validation
+            entirely: the encoding is JIT-compilable, but unknown labels will
+            produce silently incorrect indices.
+        """
+        if safe:
+            # expensive safeguard: JAX dispatch overhead + numpy conversion
+            y_unq = np.asarray(jnp.unique(y))
+            valid = np.asarray(self.classes_).tolist()
+            invalid = set(y_unq).difference(valid)
+            if len(invalid):
                 invalid = [int(lab) for lab in invalid]
-                valid = set(int(lab) for lab in jnp.unique(y)).difference(invalid)
                 raise KeyError(
-                    f"Unrecognized label(s) {invalid}. "
-                    f"Valid labels are {list(valid)}."
+                    f"Unrecognized label(s) {invalid}. " f"Valid labels are {valid}."
                 )
+        y_encoded = jnp.searchsorted(self.classes_, y)
         return y_encoded
