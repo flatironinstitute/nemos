@@ -16,16 +16,6 @@ from copy import deepcopy
 from functools import partial
 from typing import Literal
 
-from nemos.glm.validation import GLMValidator
-from nemos.solvers._solver_registry import SolverSpec
-
-# Named tuple for model fixture returns (clearer than tuple indexing)
-ModelFixture = namedtuple(
-    "ModelFixture",
-    ["X", "y", "model", "params", "rates", "extra"],
-    defaults=[None, None],  # rates and extra default to None
-)
-
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -41,9 +31,16 @@ from nemos.basis._basis import Basis
 from nemos.basis._basis_mixin import BasisMixin
 from nemos.basis._transformer_basis import TransformerBasis
 from nemos.glm.params import GLMParams
-from nemos.inverse_link_function_utils import log_softmax
+from nemos.glm.validation import GLMValidator
 from nemos.pytrees import FeaturePytree
 from nemos.tree_utils import tree_full_like
+
+# Named tuple for model fixture returns (clearer than tuple indexing)
+ModelFixture = namedtuple(
+    "ModelFixture",
+    ["X", "y", "model", "params", "rates", "extra"],
+    defaults=[None, None],  # rates and extra default to None
+)
 
 
 def initialize_feature_mask_for_population_glm(

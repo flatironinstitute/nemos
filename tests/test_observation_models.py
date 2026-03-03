@@ -214,7 +214,7 @@ def test_glm_setter_observation_model(obs_model_string, glm_class, expectation):
 def test_instantiate_observation_model(obs_model_string, expectation):
     """Test instantiation of observation model with a link function."""
     with expectation:
-        obs_model = instantiate_observation_model(
+        _ = instantiate_observation_model(
             obs_model_string,
         )
 
@@ -374,7 +374,7 @@ class TestPoissonObservations:
 
     def test_repr_out(self):
         obs = nmo.observation_models.PoissonObservations()
-        assert repr(obs) == f"PoissonObservations()"
+        assert repr(obs) == "PoissonObservations()"
 
 
 class TestGammaObservations:
@@ -468,7 +468,7 @@ class TestGammaObservations:
 
     def test_repr_out(self):
         obs = nmo.observation_models.GammaObservations()
-        assert repr(obs) == f"GammaObservations()"
+        assert repr(obs) == "GammaObservations()"
 
 
 class TestBernoulliObservations:
@@ -553,7 +553,7 @@ class TestBernoulliObservations:
 
     def test_repr_out(self):
         obs = nmo.observation_models.BernoulliObservations()
-        assert repr(obs) == f"BernoulliObservations()"
+        assert repr(obs) == "BernoulliObservations()"
 
 
 class TestNegativeBinomialObservations:
@@ -639,7 +639,7 @@ class TestNegativeBinomialObservations:
 
     def test_repr_out(self):
         obs = nmo.observation_models.NegativeBinomialObservations()
-        assert repr(obs) == f"NegativeBinomialObservations(scale=1.0)"
+        assert repr(obs) == "NegativeBinomialObservations(scale=1.0)"
 
 
 class TestGaussianObservations:
@@ -742,7 +742,7 @@ class TestGaussianObservations:
 
     def test_repr_out(self):
         obs = nmo.observation_models.GaussianObservations()
-        assert repr(obs) == f"GaussianObservations()"
+        assert repr(obs) == "GaussianObservations()"
 
 
 class TestCategoricalObservations:
@@ -850,7 +850,7 @@ class TestCategoricalObservations:
 
     def test_repr_out(self):
         obs = nmo.observation_models.CategoricalObservations()
-        assert repr(obs) == f"CategoricalObservations()"
+        assert repr(obs) == "CategoricalObservations()"
 
 
 @pytest.mark.parametrize("observation_model_string", AVAILABLE_OBSERVATION_MODELS)

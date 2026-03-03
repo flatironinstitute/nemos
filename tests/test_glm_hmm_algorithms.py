@@ -1898,7 +1898,6 @@ class TestEMAlgorithm:
         new_sess = data["new_sess"]
 
         # Start of the preparatory steps that will be carried out by the GLMHMM class.
-        is_population_glm = projection_weights.ndim > 2
         obs = BernoulliObservations()
         likelihood_func = prepare_estep_log_likelihood(
             y.ndim > 1, observation_model=obs
@@ -3232,7 +3231,6 @@ class TestPytreeSupport:
             inv_link,
         ) = generate_data_multi_state
         # Split X and coef into dictionaries
-        n_features = X.shape[1]
         X_tree = {
             "feature_a": X[:, :1],
             "feature_b": X[:, 1:],
