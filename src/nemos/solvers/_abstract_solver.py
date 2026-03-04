@@ -14,6 +14,7 @@ from typing import (
     runtime_checkable,
 )
 
+from ..callbacks import Callback
 from ..typing import Params, SolverState, StepResult
 
 if TYPE_CHECKING:
@@ -136,8 +137,7 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         init_params: Params,
         data_loader: DataLoader,
         num_epochs: int = 1,
-        convergence_criterion: Callable | None = None,
-        batch_callback: Callable | None = None,
+        callback: Callback = Callback(),
     ) -> StepResult:
         """
         Run optimization over mini-batches from a data loader.
@@ -151,15 +151,9 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
             Must be re-iterable (each ``__iter__`` call returns fresh iterator).
         num_epochs
             Number of passes over the data. Must be >= 1.
-        convergence_criterion :
-            Optional criterion to monitor convergence per epoch.
-            If None, no convergence monitoring, optimization runs for ``num_epochs`` epochs.
-            If a callable, provide a function that is called.
-                Signature is convergence_criterion(params, prev_params, state, prev_state, aux, epoch).
-                Returning True stops the optimization.
-        batch_callback :
-            Optional callback for per-batch monitoring.
-            Signature is batch_callback(params, state, aux, batch_idx, epoch).
+        callback :
+            Training callback. A single ``Callback`` instance (use
+            ``CallbackList`` for multiple callbacks).
 
         Returns
         -------
@@ -184,8 +178,7 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
             init_params,
             data_loader,
             num_epochs,
-            convergence_criterion=convergence_criterion,
-            batch_callback=batch_callback,
+            callback=callback,
         )
 
     def _stochastic_run_impl(
@@ -193,8 +186,7 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         init_params: Params,
         data_loader: DataLoader,
         num_epochs: int,
-        convergence_criterion: Callable | None = None,
-        batch_callback: Callable | None = None,
+        callback: Callback,
     ) -> StepResult:
         """
         Override in stochastic-capable solvers.

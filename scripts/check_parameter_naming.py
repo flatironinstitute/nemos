@@ -127,7 +127,7 @@ VALID_PAIRS = [
     {"arg_name", "var_name"},
     {"n_features", "features"},
     {"n_outputs", "output"},
-    {"callback_name", "fallback_name"},
+    {"callback", "callbacks"},
 ]
 
 

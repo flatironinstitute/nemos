@@ -18,11 +18,9 @@ import jax.flatten_util
 import jax.numpy as jnp
 from jax import grad, jit, lax, random
 
-from nemos.solvers._stochastic_mixins import (
-    _as_stop_flag,
-    _stepsize_normalized_convergence,
-)
+from nemos.solvers._stochastic_mixins import _stepsize_normalized_convergence
 
+from ..callbacks import Callback, TrainingContext
 from ..proximal_operator import prox_none
 from ..tree_utils import tree_add_scalar_mul, tree_l2_norm, tree_slice, tree_sub
 from ..typing import KeyArrayLike, Params, Pytree, StepResult
@@ -543,93 +541,6 @@ class ProxSVRG:
         )
         return OptStep(params=final_params, state=final_state)
 
-    def run_streaming(
-        self,
-        init_params: Pytree,
-        hyperparams_prox: Union[float, None],
-        iter_batches: Callable[[], Iterator[BatchData]],
-        sample_batch: Callable[[], BatchData],
-        num_epochs: int = 1,
-        convergence_criterion: Callable | None = None,
-        batch_callback: Callable | None = None,
-    ) -> OptStep:
-        """
-        Run Prox-SVRG over streamed mini-batches.
-
-        Parameters
-        ----------
-        init_params :
-            Initial parameters to start from.
-        hyperparams_prox :
-            Hyperparameters to `prox`, most commonly regularization strength.
-        iter_batches :
-            Callable that returns a fresh iterator over (X_batch, y_batch) on each call.
-            Iterating through it must give a full epoch of data.
-        sample_batch :
-            Callable that returns a single batch for initialization.
-        num_epochs :
-            Maximum number of passes over the data. Must be >= 1.
-            Optimization may stop earlier if the convergence criterion is met.
-        convergence_criterion :
-            Per-epoch convergence criterion. ``None`` disables convergence monitoring.
-            Callable with signature
-            ``(params, prev_params, state, prev_state, aux, epoch) -> bool``.
-            Returning ``True`` stops optimization.
-        batch_callback :
-            Per-batch callback with signature
-            ``(params, state, aux, batch_idx, epoch) -> bool``.
-            Returning ``True`` stops optimization after that batch.
-
-        Returns
-        -------
-        OptStep
-            final_params :
-                Parameters at the end of the last epoch.
-            final_state :
-                Final optimizer state.
-        """
-        if num_epochs < 1:
-            raise ValueError("num_epochs must be >= 1")
-
-        sample_data = sample_batch()
-        state = self.init_state(init_params, *sample_data)
-        params = init_params
-        aux = state.aux_batch
-
-        for epoch in range(num_epochs):
-            prev_params = params
-            prev_state = state
-
-            # iter_batches gives a fresh run through the data
-            full_grad = self._compute_full_gradient_streaming(params, iter_batches)
-
-            state = state._replace(
-                reference_point=params,
-                full_grad_at_reference_point=full_grad,
-                aux_full=None,
-                aux_batch=None,
-            )
-
-            # another run through the data
-            for batch_idx, batch_data in enumerate(iter_batches()):
-                params, state = self._update_on_batch(
-                    params, state, hyperparams_prox, *batch_data
-                )
-                aux = state.aux_batch
-                if batch_callback is not None:
-                    stop_on_batch = batch_callback(params, state, aux, batch_idx, epoch)
-                    if _as_stop_flag(stop_on_batch, "batch_callback"):
-                        return OptStep(params=params, state=state)
-
-            if convergence_criterion is not None:
-                stop_on_epoch = convergence_criterion(
-                    params, prev_params, state, prev_state, aux, epoch
-                )
-                if _as_stop_flag(stop_on_epoch, "convergence_criterion"):
-                    return OptStep(params=params, state=state)
-
-        return OptStep(params=params, state=state)
-
     def _infer_number_of_samples(self, *args: Any) -> int:
         """Infer the number of samples from a tuple of arguments."""
         n_points_per_arg = {leaf.shape[0] for leaf in jax.tree.leaves(args)}
@@ -958,58 +869,6 @@ class SVRG(ProxSVRG):
         # substitute None for hyperparams_prox
         return self._run(init_params, init_state, None, *args)
 
-    def run_streaming(
-        self,
-        init_params: Pytree,
-        iter_batches: Callable[[], Iterator[BatchData]],
-        sample_batch: Callable[[], BatchData],
-        num_epochs: int = 1,
-        convergence_criterion: Callable | None = None,
-        batch_callback: Callable | None = None,
-    ) -> OptStep:
-        """
-        Run SVRG over streamed mini-batches.
-
-        Parameters
-        ----------
-        init_params :
-            Initial parameters to start from.
-        iter_batches :
-            Callable that returns a fresh iterator over (X_batch, y_batch) on each call.
-            Iterating through it must give a full epoch of data.
-        sample_batch :
-            Callable that returns a single batch for initialization.
-        num_epochs :
-            Maximum number of passes over the data. Must be >= 1.
-            Optimization may stop earlier if the convergence criterion is met.
-        convergence_criterion :
-            Per-epoch convergence criterion. ``None`` disables convergence monitoring.
-            Callable with signature
-            ``(params, prev_params, state, prev_state, aux, epoch) -> bool``.
-            Returning ``True`` stops optimization.
-        batch_callback :
-            Per-batch callback with signature
-            ``(params, state, aux, batch_idx, epoch) -> bool``.
-            Returning ``True`` stops optimization after that batch.
-
-        Returns
-        -------
-        OptStep
-            final_params :
-                Parameters at the end of the last epoch.
-            final_state :
-                Final optimizer state.
-        """
-        return super().run_streaming(
-            init_params,
-            None,
-            iter_batches,
-            sample_batch,
-            num_epochs=num_epochs,
-            convergence_criterion=convergence_criterion,
-            batch_callback=batch_callback,
-        )
-
 
 class _WrappedSVRGBase(JaxoptAdapter):
     """Shared stochastic_run implementation for SVRG wrappers."""
@@ -1021,20 +880,62 @@ class _WrappedSVRGBase(JaxoptAdapter):
         init_params: Params,
         data_loader: DataLoader,
         num_epochs: int,
-        convergence_criterion: Callable | None = None,
-        batch_callback: Callable | None = None,
+        callback: Callback,
     ) -> StepResult:
-        step = self._solver.run_streaming(
-            init_params,
-            *self.hyperparams_prox,
-            iter_batches=data_loader.__iter__,
-            sample_batch=data_loader.sample_batch,
-            num_epochs=num_epochs,
-            convergence_criterion=convergence_criterion,
-            batch_callback=batch_callback,
+        sample_data = data_loader.sample_batch()
+        state = self._solver.init_state(init_params, *sample_data)
+        params = init_params
+        aux = state.aux_batch
+        hyperparams_prox = self.regularizer_strength if self._proximal else None
+
+        ctx = TrainingContext(
+            solver=self, params=params, state=state, aux=aux, num_epochs=num_epochs
         )
-        params, state = step
-        aux = self._extract_aux(state, fallback_name="aux_batch")
+
+        callback.on_train_begin(ctx)
+
+        for epoch in range(num_epochs):
+            prev_params = params
+            prev_state = state
+            ctx.epoch, ctx.prev_params, ctx.prev_state = epoch, prev_params, prev_state
+
+            callback.on_epoch_begin(ctx)
+
+            # compute full gradient by streaming through all batches
+            full_grad = self._solver._compute_full_gradient_streaming(
+                params, data_loader.__iter__
+            )
+
+            state = state._replace(
+                reference_point=params,
+                full_grad_at_reference_point=full_grad,
+                aux_full=None,
+                aux_batch=None,
+            )
+
+            # update pass through the data
+            for batch_idx, batch_data in enumerate(data_loader):
+                ctx.batch_idx = batch_idx
+                callback.on_batch_begin(ctx)
+
+                params, state = self._solver._update_on_batch(
+                    params, state, hyperparams_prox, *batch_data
+                )
+                aux = state.aux_batch
+                ctx.params, ctx.state, ctx.aux = params, state, aux
+
+                callback.on_batch_end(ctx)
+                if ctx.should_stop:
+                    callback.on_train_end(ctx)
+                    return (params, state, aux)
+
+            callback.on_epoch_end(ctx)
+            if ctx.should_stop:
+                callback.on_train_end(ctx)
+                return (params, state, aux)
+
+        callback.on_train_end(ctx)
+
         return (params, state, aux)
 
     def stochastic_convergence_criterion(

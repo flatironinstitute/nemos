@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
     Generic,
     Optional,
     Tuple,
@@ -28,6 +27,7 @@ from . import solvers, tree_utils, utils
 from ._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from .base_class import Base
 from .base_validator import RegressorValidator
+from .callbacks import DEFAULT_CALLBACK, Callback
 from .glm.params import GLMParams
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
@@ -407,8 +407,6 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         """Fit the model to neural activity."""
         pass
 
-    # TODO: Collect callbacks into a single argument and define hooks.
-    # Add a Protocol listing the hooks / defining the interface?
     @abc.abstractmethod
     def stochastic_fit(
         self,
@@ -416,8 +414,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         *,
         init_params: Optional[UserProvidedParamsT] = None,
         num_epochs: int = 1,
-        convergence_criterion: bool | Callable = True,
-        batch_callback: Callable | None = None,
+        callbacks: "Callback | list[Callback] | None" = DEFAULT_CALLBACK,
     ) -> BaseRegressor[UserProvidedParamsT, ModelParamsT]:
         """
         Fit the model using stochastic optimization with mini-batches.
@@ -435,18 +432,13 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             Initial parameters. If None, initialized from ``sample_batch()``.
         num_epochs :
             Maximum number of passes over the data. Must be >= 1.
-            Optimization may stop earlier if the convergence criterion is met.
-        convergence_criterion :
-            Optional criterion to monitor convergence per epoch.
-            If True (default), use the solver's default convergence monitoring and stop on convergence.
-            If False, no convergence monitoring, optimization runs for ``num_epochs`` epochs.
-            If a callable, provide a function with signature
-                ``(params, prev_params, state, prev_state, aux, epoch) -> bool``.
-                Returning True stops the optimization.
-        batch_callback :
-            Optional callback for per-batch monitoring.
-            Signature is ``batch_callback(params, state, aux, batch_idx, epoch) -> bool``.
-            Returning True stops the optimization after that batch.
+            Optimization may stop earlier if a callback requests a stop.
+        callbacks :
+            Training callbacks. Accepts a single ``Callback``, a list of
+            ``Callback`` objects, or ``None``.
+            Default is ``SolverConvergenceCallback()`` which stops when
+            the solver's built-in convergence criterion is met.
+            Pass ``None`` or ``[]`` to disable all callbacks.
 
         Returns
         -------

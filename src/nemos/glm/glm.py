@@ -18,6 +18,12 @@ from .. import tree_utils, validation
 from .._observation_model_builder import instantiate_observation_model
 from ..base_regressor import BaseRegressor, strip_metadata
 from ..batching import DataLoader, _PreprocessedDataLoader, is_data_loader
+from ..callbacks import (
+    DEFAULT_CALLBACK,
+    Callback,
+    SolverConvergenceCallback,
+    _normalize_callbacks,
+)
 from ..exceptions import NotFittedError
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..pytrees import FeaturePytree
@@ -781,8 +787,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         *,
         init_params: Optional[GLMUserParams] = None,
         num_epochs: int = 1,
-        convergence_criterion: bool | Callable = True,
-        batch_callback: Callable | None = None,
+        callbacks: "Callback | list[Callback] | None" = DEFAULT_CALLBACK,
     ):
         """
         Fit GLM using stochastic optimization with mini-batches.
@@ -802,17 +807,13 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             To continue fitting, pass the current parameters (``(model.coef_, model.intercept_)``)
         num_epochs :
             Maximum number of passes over the data. Must be >= 1.
-            Optimization may stop earlier if the convergence criterion is met.
-        convergence_criterion :
-            Optional criterion to monitor convergence per epoch.
-            If True (default), use the solver's default convergence monitoring and stop on convergence.
-            If False, no convergence monitoring, optimization runs for ``num_epochs`` epochs.
-            If a callable, provide a function with signature
-                ``(params, prev_params, state, prev_state, aux, epoch) -> bool``.
-                Returning True stops the optimization.
-        batch_callback :
-            Optional callback for per-batch monitoring.
-            Signature is batch_callback(params, state, aux, batch_idx, epoch).
+            Optimization may stop earlier if a callback requests a stop.
+        callbacks :
+            Training callbacks. Accepts a single ``Callback``, a list of
+            ``Callback`` objects, or ``None``.
+            Default is ``SolverConvergenceCallback()`` which stops when
+            the solver's built-in convergence criterion is met.
+            Pass ``None`` or ``[]`` to disable all callbacks.
 
         Returns
         -------
@@ -851,6 +852,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             )
         loader = data
 
+        if callbacks is DEFAULT_CALLBACK:
+            callbacks = SolverConvergenceCallback()
+
         # Get raw sample batch for initialization
         raw_sample_X, raw_sample_y = loader.sample_batch()
         self._validator.validate_inputs(raw_sample_X, raw_sample_y)
@@ -877,26 +881,12 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         # Initialize solver (using preprocessed sample batch)
         self._initialize_solver_and_state(sample_X, sample_y, init_params)
 
-        # Resolve convergence criterion:
-        # True -> solver default, False -> disabled, callable -> use as-is
-        if convergence_criterion is True:
-            epoch_callback = self._solver.stochastic_convergence_criterion
-        elif convergence_criterion is False:
-            epoch_callback = None
-        else:
-            if not callable(convergence_criterion):
-                raise ValueError(
-                    "``convergence_criterion`` has to be True, False, or a callable."
-                )
-            epoch_callback = convergence_criterion
-
         # Run stochastic optimization
         params, state, aux = self._solver.stochastic_run(
             init_params,
             preprocessed_loader,
             num_epochs=num_epochs,
-            convergence_criterion=epoch_callback,
-            batch_callback=batch_callback,
+            callback=_normalize_callbacks(callbacks),
         )
 
         if tree_utils.pytree_map_and_reduce(

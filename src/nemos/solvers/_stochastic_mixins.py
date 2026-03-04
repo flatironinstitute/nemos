@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
-import numpy as np
-
+from ..callbacks import Callback, TrainingContext
 from ..typing import Params, SolverState, StepResult
 
 if TYPE_CHECKING:
@@ -33,40 +32,6 @@ def _params_only_cauchy_criterion(
     )
 
 
-def _as_stop_flag(value: Any, callback_name: str) -> bool:
-    """
-    Validate and convert callback return value to a stop flag.
-
-    Parameters
-    ----------
-    value :
-        Return value from ``batch_callback`` or ``convergence_criterion``.
-    callback_name :
-        Name used in error messages.
-
-    Returns
-    -------
-    bool
-        Converted stop flag.
-
-    Raises
-    ------
-    TypeError
-        If ``value`` is not a scalar boolean.
-    """
-    if isinstance(value, bool):
-        return value
-
-    arr = np.asarray(value)
-    if arr.shape == () and np.issubdtype(arr.dtype, np.bool_):
-        return bool(arr.item())
-
-    raise TypeError(
-        f"{callback_name} must return a scalar boolean; got "
-        f"type={type(value).__name__}, shape={arr.shape}, dtype={arr.dtype}."
-    )
-
-
 class StochasticSolverMixin:
     """
     Mixin providing standard stochastic optimization loop.
@@ -75,8 +40,7 @@ class StochasticSolverMixin:
     that iterates over the data loader for the specified number of epochs,
     calling ``update`` on each batch.
 
-    Supports optional per-epoch convergence monitoring and per-batch callbacks.
-    If ``convergence_criterion`` is ``None``, no convergence check is performed.
+    Supports optional callbacks for per-epoch and per-batch hooks.
 
     Classes using this mixin must implement ``init_state`` and ``update`` methods.
     """
@@ -102,8 +66,7 @@ class StochasticSolverMixin:
         init_params: Params,
         data_loader: DataLoader,
         num_epochs: int,
-        convergence_criterion: Callable | None = None,
-        batch_callback: Callable | None = None,
+        callback: Callback,
     ) -> StepResult:
         """
         Run optimization over mini-batches from a data loader.
@@ -117,16 +80,8 @@ class StochasticSolverMixin:
         num_epochs :
             Number of passes over the data (maximum if convergence monitoring
             is enabled).
-        convergence_criterion :
-            Per-epoch convergence criterion.
-            ``None`` disables convergence monitoring.
-            A callable with signature
-            ``(params, prev_params, state, prev_state, aux, epoch) -> bool``
-            stops optimization when it returns ``True``.
-        batch_callback :
-            Optional per-batch callback with signature
-            ``(params, state, aux, batch_idx, epoch) -> bool``.
-            Returning ``True`` stops optimization after that batch.
+        callback :
+            Training callback.
 
         Returns
         -------
@@ -140,23 +95,37 @@ class StochasticSolverMixin:
         params = init_params
         aux = None
 
+        ctx = TrainingContext(
+            solver=self, params=params, state=state, num_epochs=num_epochs
+        )
+
+        callback.on_train_begin(ctx)
+
         for epoch in range(num_epochs):
             prev_params = params
             prev_state = state
+            ctx.epoch, ctx.prev_params, ctx.prev_state = epoch, prev_params, prev_state
+
+            callback.on_epoch_begin(ctx)
 
             for batch_idx, batch_data in enumerate(data_loader):
-                params, state, aux = self.update(params, state, *batch_data)
-                if batch_callback is not None:
-                    stop_on_batch = batch_callback(params, state, aux, batch_idx, epoch)
-                    if _as_stop_flag(stop_on_batch, "batch_callback"):
-                        return (params, state, aux)
+                ctx.batch_idx = batch_idx
+                callback.on_batch_begin(ctx)
 
-            if convergence_criterion is not None:
-                stop_on_epoch = convergence_criterion(
-                    params, prev_params, state, prev_state, aux, epoch
-                )
-                if _as_stop_flag(stop_on_epoch, "convergence_criterion"):
+                params, state, aux = self.update(params, state, *batch_data)
+                ctx.params, ctx.state, ctx.aux = params, state, aux
+
+                callback.on_batch_end(ctx)
+                if ctx.should_stop:
+                    callback.on_train_end(ctx)
                     return (params, state, aux)
+
+            callback.on_epoch_end(ctx)
+            if ctx.should_stop:
+                callback.on_train_end(ctx)
+                return (params, state, aux)
+
+        callback.on_train_end(ctx)
 
         return (params, state, aux)
 
@@ -177,8 +146,7 @@ class OptimistixStochasticSolverMixin(StochasticSolverMixin):
         init_params: Params,
         data_loader: DataLoader,
         num_epochs: int,
-        convergence_criterion: Callable | None = None,
-        batch_callback: Callable | None = None,
+        callback: Callback,
     ) -> StepResult:
         """
         Run optimization and update stats.
@@ -191,9 +159,7 @@ class OptimistixStochasticSolverMixin(StochasticSolverMixin):
             Data loader providing batches and metadata.
         num_epochs :
             Number of passes over the data.
-        convergence_criterion :
-            See ``StochasticSolverMixin._stochastic_run_impl``.
-        batch_callback :
+        callback :
             See ``StochasticSolverMixin._stochastic_run_impl``.
 
         Returns
@@ -205,8 +171,7 @@ class OptimistixStochasticSolverMixin(StochasticSolverMixin):
             init_params,
             data_loader,
             num_epochs,
-            convergence_criterion=convergence_criterion,
-            batch_callback=batch_callback,
+            callback=callback,
         )
         self.stats = {
             "num_steps": self._extract_num_steps(state),
