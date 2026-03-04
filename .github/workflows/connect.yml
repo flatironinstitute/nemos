@@ -1,6 +1,8 @@
 # Workflow to connect to a runner
 name: connect
 
+permissions: {}
+
 # Trigger the workflow manually
 on:
   workflow_dispatch:
@@ -15,10 +17,12 @@ jobs:
     runs-on: ${{ matrix.os }}             # Operating system for the job
     steps:
       - name: Checkout                 # Step to checkout the repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Set up Python            # Step to set up Python
-        uses: actions/setup-python@v4  # Use v4 for compatibility with pyproject.toml
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 #v6.2.0
         with:
           python-version: ${{ matrix.python-version }}       # Specify the Python version
           cache: pip                   # Cache the pip packages
@@ -28,4 +32,4 @@ jobs:
           python -m pip install --upgrade pip   # Upgrade pip
 
       - name: Setup tmate session (copy paste ssh command to connect to runner)   # Step to set up tmate session
-        uses: mxschmitt/action-tmate@v3                                          # Use the action-tmate v3 action
+        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101 #v3
