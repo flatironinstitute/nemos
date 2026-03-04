@@ -179,6 +179,30 @@ def test_encode_safe_canonical(y, safe, match):
         encoder.encode(y, safe=safe)
 
 
+@pytest.mark.parametrize(
+    "y",
+    [
+        np.array([0, 1]),
+        jnp.array([0, 1, 2]),
+        jnp.array([0]),
+        np.array([0]),
+        jnp.array(0),
+        np.array(1),
+        [0, 1],
+        1,
+        0,
+        tuple([0, 1]),
+    ],
+)
+@pytest.mark.parametrize("safe", [True, False])
+def test_encode_canonical_return_same_object(y, safe):
+    """safe=True validates range and dtype when classes are the default [0, n_classes-1]."""
+    encoder = LabelEncoder(3)
+    encoder.set_classes(np.array([0, 1, 2]))
+    y_encoded = encoder.encode(y, safe=safe)
+    assert y_encoded is y
+
+
 def test_check_classes_behavior():
     encoder = LabelEncoder(4)
     with pytest.raises(RuntimeError, match=r"Classes are not set.+hello.+"):
