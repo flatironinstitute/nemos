@@ -329,8 +329,16 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
                 "Time axis mismatch. X and y pynapple objects have mismatching time axis."
             )
 
+        # initialize for static checker
+        n_samples_x: set[int] = set()
         check_vals = []
         if X is not None:
+            flat_x = jax.tree_util.tree_leaves(X)
+            n_samples_x = {x.shape[0] for x in flat_x}
+            if len(n_samples_x) > 1:
+                raise ValueError(
+                    f"X pytree contains arrays with different number of samples: {n_samples_x}."
+                )
             if is_pynapple_tsd(X):
                 X = X.values
             check_tree_leaves_dimensionality(
@@ -351,10 +359,11 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
             check_vals.append(y)
 
         if X is not None and y is not None:
-            if y.shape[0] != X.shape[0]:
+            if not n_samples_x == {y.shape[0]}:
+                n_samples_x = n_samples_x.pop()
                 raise ValueError(
                     "X and y must have the same number of samples (same length along axis 0). "
-                    f"X has {X.shape[0]} samples, "
+                    f"X has {n_samples_x} samples, "
                     f"y has {y.shape[0]} samples instead!"
                 )
         # error if all samples are invalid

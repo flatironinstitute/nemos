@@ -59,7 +59,7 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
             "check_array_dimensions",
             dict(
                 err_message_format="Invalid parameter dimensionality. coef must be an array "
-                "or nemos.pytree.FeaturePytree with array leafs of shape "
+                "or pytree with array leaves of shape "
                 "(n_features, ). intercept must be of shape (1,)."
                 "\nThe provided coef and intercept have shape ``{}`` and ``{}`` "
                 "instead."
@@ -187,8 +187,8 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
             else:
                 data = X
                 msg += (
-                    f" X was provided as an array, and coef should be an array too. "
-                    f"The provided coef is of type ``{type(params.coef)}`` instead."
+                    f" X has pytree structure ``{jax.tree_util.tree_structure(X)}``, "
+                    f"but coef has structure ``{jax.tree_util.tree_structure(params.coef)}``."
                 )
 
             validation.check_tree_structure(
@@ -338,8 +338,8 @@ class PopulationGLMValidator(GLMValidator):
             "check_array_dimensions",
             dict(
                 err_message_format="Invalid parameter dimensionality. "
-                "coef must be an array or nemos.pytree.FeaturePytree "
-                "with array leafs of shape (n_features, n_neurons). "
+                "coef must be an array or pytree "
+                "with array leaves of shape (n_features, n_neurons). "
                 "intercept must be of shape (n_neurons,)."
                 "\nThe provided coef and intercept have shape ``{}`` and ``{}`` instead."
             ),
@@ -406,8 +406,8 @@ class ClassifierGLMValidator(GLMValidator):
             "check_array_dimensions",
             dict(
                 err_message_format="Invalid parameter dimensionality. "
-                "coef must be an array or nemos.pytree.FeaturePytree "
-                "with array leafs of shape (n_features, n_classes). "
+                "coef must be an array or pytree "
+                "with array leaves of shape (n_features, n_classes). "
                 "intercept must be of shape (n_classes,)."
                 "\nThe provided coef and intercept have shape ``{}`` and ``{}`` instead."
             ),
@@ -489,8 +489,8 @@ class ClassifierGLMValidator(GLMValidator):
             else:
                 data = X
                 msg += (
-                    f" X was provided as an array, and coef should be an array too. "
-                    f"The coef are of type ``{type(params.coef)}`` instead."
+                    f" X has pytree structure ``{jax.tree_util.tree_structure(X)}``, "
+                    f"but coef has structure ``{jax.tree_util.tree_structure(params.coef)}``."
                 )
 
             validation.check_tree_structure(
@@ -597,8 +597,8 @@ class PopulationClassifierGLMValidator(ClassifierGLMValidator):
             "check_array_dimensions",
             dict(
                 err_message_format="Invalid parameter dimensionality. "
-                "coef must be an array or nemos.pytree.FeaturePytree "
-                "with array leafs of shape (n_features, n_neurons, n_classes). "
+                "coef must be an array or pytree "
+                "with array leaves of shape (n_features, n_neurons, n_classes). "
                 "intercept must be of shape (n_neurons, n_classes)."
                 "\nThe provided coef and intercept have shape ``{}`` and ``{}`` instead."
             ),

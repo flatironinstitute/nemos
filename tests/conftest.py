@@ -43,7 +43,9 @@ ModelFixture = namedtuple(
 )
 
 
-def initialize_feature_mask_for_population_glm(X, n_neurons: int, coef=None):
+def initialize_feature_mask_for_population_glm(
+    X, n_neurons: int, n_classes: int = 0, coef=None
+):
     """
     Create a feature mask of ones for PopulationGLM testing.
 
@@ -60,6 +62,8 @@ def initialize_feature_mask_for_population_glm(X, n_neurons: int, coef=None):
     coef :
         Optional coefficient array/pytree. If provided, the mask shape will match
         coef shape exactly (required for ClassifierPopulationGLM).
+    n_classes:
+        Number of classes (determines the second dimension of the mask).
 
     Returns
     -------
@@ -69,14 +73,17 @@ def initialize_feature_mask_for_population_glm(X, n_neurons: int, coef=None):
         of shape (n_neurons,) for each key.
         If X is an array, returns an array of shape (n_features, n_neurons).
     """
+    extra_shape = (n_classes,) if n_classes else ()
     if coef is not None:
         return jax.tree_util.tree_map(lambda c: jnp.ones(c.shape), coef)
     if isinstance(X, FeaturePytree):
-        return jax.tree_util.tree_map(lambda x: jnp.ones((n_neurons,)), X.data)
+        return jax.tree_util.tree_map(
+            lambda x: jnp.ones((n_neurons, *extra_shape)), X.data
+        )
     elif isinstance(X, dict):
-        return jax.tree_util.tree_map(lambda x: jnp.ones((n_neurons,)), X)
+        return jax.tree_util.tree_map(lambda x: jnp.ones((n_neurons, *extra_shape)), X)
     else:
-        return jnp.ones((X.shape[1], n_neurons))
+        return jnp.ones((X.shape[1], n_neurons, *extra_shape))
 
 
 DEFAULT_KWARGS = {
@@ -1344,13 +1351,19 @@ def instantiate_glm_func(
     X = np.ones((500, n_features))
     X[:250, 0] = 0
     X[np.arange(500) % 2 == 1, 1] = 0
+    if obs_model == "Gamma":
+        inv_link = jax.nn.softplus
+    else:
+        inv_link = None
     model = nmo.glm.GLM(
         observation_model=obs_model,
         regularizer=regularizer,
         solver_name=solver_name,
+        inverse_link_function=inv_link,
     )
     model.coef_ = np.random.randn(n_features)
     model.intercept_ = np.random.randn(1)
+    model.scale_ = 1.0
     if simulate:
         counts, rates = model.simulate(jax.random.PRNGKey(1234), X)
     else:
@@ -1380,15 +1393,20 @@ def instantiate_population_glm_func(
     X = np.ones((500, n_features))
     X[:250, 0] = 0
     X[np.arange(500) % 2 == 1, 1] = 0
+    if obs_model == "Gamma":
+        inv_link = jax.nn.softplus
+    else:
+        inv_link = None
     model = nmo.glm.PopulationGLM(
         observation_model=obs_model,
         regularizer=regularizer,
         solver_name=solver_name,
+        inverse_link_function=inv_link,
     )
     model.coef_ = np.random.randn(n_features, n_neurons)
     model.intercept_ = np.random.randn(n_neurons)
+    model.scale_ = 1.0
     if simulate:
-        model._feature_mask = initialize_feature_mask_for_population_glm(X, n_neurons)
         counts, rates = model.simulate(jax.random.PRNGKey(1234), X)
     else:
         counts, rates = None, None
@@ -1457,7 +1475,6 @@ def instantiate_population_classifier_glm_func(
     model.coef_ = np.random.randn(n_features, n_neurons, n_classes)
     model.intercept_ = np.random.randn(n_neurons, n_classes)
     if simulate:
-        model._feature_mask = initialize_feature_mask_for_population_glm(X, n_neurons)
         counts, rates = model.simulate(jax.random.PRNGKey(123), X)
     else:
         counts, rates = None, None

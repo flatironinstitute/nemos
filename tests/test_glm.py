@@ -954,7 +954,7 @@ class TestGLM:
             model.intercept_ = true_params.intercept
             if is_population_model(model):
                 model._feature_mask = initialize_feature_mask_for_population_glm(
-                    X, y.shape[1], model._validator.get_empty_params(X, y).coef
+                    X, y.shape[1], coef=model._validator.get_empty_params(X, y).coef
                 )
         with expectation:
             model.simulate(
@@ -1601,6 +1601,29 @@ class TestGLM:
 
         with pytest.raises(ValueError, match=match):
             nmo.load_model(save_path, mapping_dict=invalid_mapping)
+
+
+class _TwoLeafModule(eqx.Module):
+    a: jnp.ndarray
+    b: jnp.ndarray
+
+
+# Factories that build a two-leaf pytree X given n_samples. Used to parametrize
+# coef-structure tests over different pytree types.
+_PYTREE_X_FACTORIES = [
+    pytest.param(
+        lambda n: {"a": jnp.ones((n, 1)), "b": jnp.ones((n, 1))},
+        id="dict",
+    ),
+    pytest.param(
+        lambda n: _TwoLeafModule(a=jnp.ones((n, 1)), b=jnp.ones((n, 1))),
+        id="eqx_module",
+    ),
+    pytest.param(
+        lambda n: {"a": [jnp.ones((n, 1))], "b": jnp.ones((n, 1))},
+        id="dict_list",
+    ),
+]
 
 
 @pytest.mark.parametrize("glm_type", ["", "population_"])
@@ -2425,6 +2448,30 @@ class TestGLMObservationModel:
         if intercept.shape != intercept_shape:
             raise ValueError("Shape mismatch intercepts")
 
+    @pytest.mark.parametrize("pytree_x_factory", _PYTREE_X_FACTORIES)
+    def test_coef_tree_structure_after_initialize_params_pytree_x(
+        self, pytree_x_factory, request, glm_type, model_instantiation
+    ):
+        """coef tree structure matches X structure after initialize_params with pytree X."""
+        _, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        X = pytree_x_factory(y.shape[0])
+        coef, _ = model.initialize_params(X, y)
+        assert jax.tree_util.tree_structure(coef) == jax.tree_util.tree_structure(X)
+
+    @pytest.mark.parametrize("pytree_x_factory", _PYTREE_X_FACTORIES)
+    @pytest.mark.solver_related
+    def test_coef_tree_structure_after_fit_pytree_x(
+        self, pytree_x_factory, request, glm_type, model_instantiation
+    ):
+        """model.coef_ tree structure matches X structure after fit with pytree X."""
+        _, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        X = pytree_x_factory(y.shape[0])
+        model.solver_kwargs = {"maxiter": 1}
+        model.fit(X, y)
+        assert jax.tree_util.tree_structure(
+            model.coef_
+        ) == jax.tree_util.tree_structure(X)
+
     #####################
     # Test residual DOF #
     #####################
@@ -2904,6 +2951,18 @@ class TestPopulationGLM:
         assert hasattr(rate, "metadata") and (rate.metadata is not None)
         assert np.all(y._metadata == rate._metadata)
         assert np.all(y.columns == rate.columns)
+
+    def test_initialize_params_stale_feature_mask_raises(
+        self, request, model_instantiation
+    ):
+        """initialize_params raises when a stale array feature_mask is incompatible with the new X structure."""
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            model_instantiation
+        )
+        model._feature_mask = jnp.ones_like(true_params.coef)
+        X_pytree = {"a": X[:, : X.shape[1] // 2], "b": X[:, X.shape[1] // 2 :]}
+        with pytest.raises(TypeError, match="feature_mask"):
+            model.initialize_params(X_pytree, y)
 
 
 @pytest.mark.parametrize(
@@ -3797,7 +3856,7 @@ class TestClassifierGLM:
             (
                 "invalid",
                 pytest.raises(
-                    AttributeError, match="'str' object has no attribute 'ndim'"
+                    AttributeError, match="'str' object has no attribute 'shape'"
                 ),
             ),
             # wrong number of features
@@ -4124,6 +4183,18 @@ class TestClassifierGLM:
         # Roundtrip: encode -> decode should give original labels
         y_label_roundtrip = model._decode_labels(model._encode_labels(y_label))
         assert np.array_equal(y_label, y_label_roundtrip)
+
+    def test_initialize_params_stale_feature_mask_raises(
+        self, inv_link, glm_type, model_instantiation, request
+    ):
+        """initialize_params raises when a stale array feature_mask is incompatible with the new X structure."""
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        model._feature_mask = jnp.ones_like(true_params.coef)
+        X_pytree = {"a": X[:, : X.shape[1] // 2], "b": X[:, X.shape[1] // 2 :]}
+        with pytest.raises(TypeError, match="feature_mask"):
+            model.initialize_params(X_pytree, y)
 
 
 def test_glm_public_api_matches_subclasses():
