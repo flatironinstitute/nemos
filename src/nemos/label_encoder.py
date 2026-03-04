@@ -134,8 +134,48 @@ class LabelEncoder:
             If ``safe=True`` and ``y`` contains unrecognized labels (numpy path).
         KeyError
             If ``safe=True`` and ``y`` contains unrecognized labels (JAX path).
+
+        Notes
+        -----
+        Dispatch is based on array type (transparent to the caller) and ``safe``:
+
+        - If ``classes_`` equals ``[0, 1, ..., n_classes-1]`` and ``safe=False``,
+          ``y`` is returned unchanged. If ``safe=True``, the dtype is checked
+          (must be integer) and values are validated against ``[0, n_classes-1]``.
+        - Otherwise:
+
+          - **numpy, safe=True**: dict lookup via ``np.fromiter``; raises
+            ``ValueError`` on unrecognized labels; works for any hashable type.
+          - **numpy, safe=False**: ``np.searchsorted``; fastest numpy path; requires
+            orderable labels; silently maps unknown labels to nearest indices.
+          - **JAX, safe=True**: ``jnp.unique`` + numpy set difference; raises
+            ``KeyError`` on unrecognized labels; not JIT-compilable.
+          - **JAX, safe=False**: ``jnp.searchsorted`` on device; JIT-compilable;
+            silently maps unknown labels to nearest indices.
+
+        Use ``safe=True`` at system boundaries where labels come from user input.
+        Use ``safe=False`` in hot paths where labels are guaranteed to be a subset
+        of ``classes_`` — for example, inside an :meth:`update` loop after
+        :meth:`set_classes` has validated the full label set.
         """
         if self._skip_encoding:
+            if safe:
+                if not np.issubdtype(getattr(y, "dtype", None), np.integer):
+                    raise ValueError(
+                        f"Expected integer labels when classes are the default "
+                        f"[0, ..., n_classes-1], got {np.unique(y)}."
+                    )
+                invalid_mask = (y < 0) | (y >= self.n_classes)
+                if np.any(invalid_mask):
+                    if isinstance(y, jnp.ndarray):
+                        unique = jnp.unique
+                    else:
+                        unique = np.unique
+                    invalid = unique(y[invalid_mask]).tolist()
+                    raise ValueError(
+                        f"Unrecognized label(s) {invalid}. "
+                        f"Valid labels are {list(range(self.n_classes))}."
+                    )
             return y
         if isinstance(y, jnp.ndarray):
             y = self._encode_jax(y, safe=safe)
