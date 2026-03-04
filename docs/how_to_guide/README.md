@@ -89,21 +89,6 @@ glm_for_classification.md
 
 :::{grid-item-card}
 
-<figure>
-<a href="plot_07_glm_pytree.html">
-<img src="../_static/thumbnails/how_to_guide/plot_07_glm_pytree.svg" style="height: 100px", alt="PyTrees."/>
-</a>
-</figure>
-
-```{toctree}
-:maxdepth: 2
-
-plot_07_glm_pytree.md
-```
-:::
-
-:::{grid-item-card}
-
 ```{toctree}
 :maxdepth: 2
 
