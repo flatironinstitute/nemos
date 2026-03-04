@@ -100,11 +100,10 @@ class LabelEncoder:
 
         self._skip_encoding = np.array_equal(classes, np.arange(self.n_classes))
         # Create dict lookup only when needed (non-default classes)
-        self._class_to_index_ = (
-            None
-            if self._skip_encoding
-            else {label.item(): i for i, label in enumerate(classes)}
-        )
+        if self._skip_encoding:
+            self._class_to_index_ = {label.item(): i for i, label in enumerate(classes)}
+        else:
+            self._class_to_index_ = None
 
     def encode(self, y: ArrayLike, safe=True) -> NDArray[int]:
         """
