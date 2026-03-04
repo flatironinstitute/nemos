@@ -152,6 +152,33 @@ def test_set_classes_sorts(y, classes_unsorted, classes_sorted):
     assert np.array_equal(encoder_unsorted.encode(y), encoder_sorted.encode(y))
 
 
+@pytest.mark.parametrize(
+    "y, safe, match",
+    [
+        # out-of-range integer: safe=True raises, safe=False does not
+        (np.array([0, 1, 5]), True, "Unrecognized label"),
+        (jnp.array([0, 1, 5]), True, "Unrecognized label"),
+        (np.array([0, 1, 5]), False, None),
+        (jnp.array([0, 1, 5]), False, None),
+        # non-integer dtype: safe=True raises with dtype message
+        (np.array([0.0, 1.0, 2.0]), True, "Expected integer"),
+        (np.array(["a", "b", "c"]), True, "Expected integer"),
+        # valid default labels: safe=True does not raise
+        (np.array([0, 1, 2]), True, None),
+        (jnp.array([0, 1, 2]), True, None),
+    ],
+)
+def test_encode_safe_canonical(y, safe, match):
+    """safe=True validates range and dtype when classes are the default [0, n_classes-1]."""
+    encoder = LabelEncoder(3)
+    encoder.set_classes(np.array([0, 1, 2]))
+    if safe and match:
+        with pytest.raises(ValueError, match=match):
+            encoder.encode(y, safe=safe)
+    else:
+        encoder.encode(y, safe=safe)
+
+
 def test_check_classes_behavior():
     encoder = LabelEncoder(4)
     with pytest.raises(RuntimeError, match=r"Classes are not set.+hello.+"):

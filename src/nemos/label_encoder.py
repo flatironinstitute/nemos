@@ -159,19 +159,30 @@ class LabelEncoder:
         :meth:`set_classes` has validated the full label set.
         """
         if self._skip_encoding:
+            # always return y as provided by the user.
+            # If safe==True, check for category validity.
             if safe:
-                if not np.issubdtype(getattr(y, "dtype", None), np.integer):
+                # check that the labels are ints in [0,..., n_classes-1]
+                dtype = getattr(y, "dtype", None)
+                if dtype is None:
+                    # probably a list, tuple or number
+                    y_array = np.array(y)
+                    dtype = y_array.dtype
+                else:
+                    # already an array (either jax or numpy)
+                    y_array = y
+                if not np.issubdtype(dtype, np.integer):
                     raise ValueError(
                         f"Expected integer labels when classes are the default "
-                        f"[0, ..., n_classes-1], got {np.unique(y)}."
+                        f"[0, ..., n_classes-1], got dtype {dtype} instead."
                     )
-                invalid_mask = (y < 0) | (y >= self.n_classes)
-                if np.any(invalid_mask):
-                    if isinstance(y, jnp.ndarray):
+                invalid_mask = (y_array < 0) | (y_array >= self.n_classes)
+                if invalid_mask.any():
+                    if isinstance(y_array, jnp.ndarray):
                         unique = jnp.unique
                     else:
                         unique = np.unique
-                    invalid = unique(y[invalid_mask]).tolist()
+                    invalid = unique(y_array[invalid_mask]).tolist()
                     raise ValueError(
                         f"Unrecognized label(s) {invalid}. "
                         f"Valid labels are {list(range(self.n_classes))}."
