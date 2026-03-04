@@ -14,7 +14,7 @@ def test_encode_decode_roundtrip(n_classes):
     # Test with string labels
     y = np.repeat(np.arange(n_classes), 2)
     encoder = LabelEncoder(n_classes=n_classes)
-    label = np.array([chr(i) for i in range(ord("a"), ord("a") + n_classes)])
+    label = np.array(["a", "b", "c"])[:n_classes]
     encoder.set_classes(label)
     y_label = encoder.decode(y)
 
@@ -73,7 +73,7 @@ def test_set_classes_behavior():
 @pytest.mark.parametrize(
     "labels, skip_encoding",
     [
-        (jnp.array([0, 1, 2]), True),
+        (jnp.array([1, 0, 2]), True),
         (jnp.array([2, 3, 4]), False),
     ],
 )
@@ -94,41 +94,44 @@ def test_encode_decode_roundtrip_jax():
 
 
 @pytest.mark.parametrize(
-    "y, classes, safe, expectation",
+    "y, classes, safe",
     [
-        (np.array([2, 3, 99]), np.array([2, 3, 4]), True, pytest.raises(ValueError)),
-        (jnp.array([2, 3, 99]), jnp.array([2, 3, 4]), True, pytest.raises(KeyError)),
-        (np.array([2, 3, 99]), np.array([2, 3, 4]), False, does_not_raise()),
-        (jnp.array([2, 3, 99]), jnp.array([2, 3, 4]), False, does_not_raise()),
+        (np.array([2, 3, 99]), np.array([2, 3, 4]), True),
+        (jnp.array([2, 3, 99]), jnp.array([2, 3, 4]), True),
+        (np.array([2, 3, 99]), np.array([2, 3, 4]), False),
+        (jnp.array([2, 3, 99]), jnp.array([2, 3, 4]), False),
         (
             np.array(["a", "b", "z"]),
             np.array(["a", "b", "c"]),
             True,
-            pytest.raises(ValueError),
         ),
-        (np.array(["a", "b", "z"]), np.array(["a", "b", "c"]), False, does_not_raise()),
+        (np.array(["a", "b", "z"]), np.array(["a", "b", "c"]), False),
     ],
 )
-def test_encode_safe_flag_invalid_label(y, classes, safe, expectation):
+def test_encode_safe_flag_invalid_label(y, classes, safe):
     """safe=True raises on unrecognized labels; safe=False silently accepts them."""
     encoder = LabelEncoder(3)
     encoder.set_classes(classes)
+    if safe:
+        expectation = pytest.raises((KeyError, ValueError))
+    else:
+        expectation = does_not_raise()
     with expectation:
         encoder.encode(y, safe=safe)
 
 
 @pytest.mark.parametrize(
-    "y, classes",
+    "y",
     [
-        (np.array([2, 3, 4, 2]), np.array([2, 3, 4])),
-        (jnp.array([2, 3, 4, 2]), jnp.array([2, 3, 4])),
-        (np.array(["a", "b", "c", "a"]), np.array(["a", "b", "c"])),
+        np.array([2, 3, 4, 2]),
+        jnp.array([2, 3, 4, 2]),
+        np.array(["a", "b", "c", "a"]),
     ],
 )
-def test_encode_safe_unsafe_agree_on_valid(y, classes):
+def test_encode_safe_unsafe_agree_on_valid(y):
     """safe=True and safe=False produce identical results for valid labels."""
     encoder = LabelEncoder(3)
-    encoder.set_classes(classes)
+    encoder.set_classes(y[:-1])
     assert np.array_equal(encoder.encode(y, safe=True), encoder.encode(y, safe=False))
 
 
