@@ -230,7 +230,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
     >>> model.solver_name
     'LBFGS[...]'
 
-    **Use a Pytree of Arrays as Input**
+    **Use a Pytree of arrays as Input**
 
     Features can be passed as any JAX pytree of 2-D arrays; the fitted
     ``coef_`` will share the same pytree structure:
@@ -395,8 +395,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         Parameters
         ----------
         X :
-            Predictors, array of shape ``(n_time_bins, n_features)`` or pytree of the same
-            shape.
+            Predictors, array of shape ``(n_time_bins, n_features)`` or a pytree
+            of arrays of the same shape.
 
         Returns
         -------
@@ -514,8 +514,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         Parameters
         ----------
         X :
-            Predictors, array of shape ``(n_time_bins, n_features)`` or pytree of the same
-            shape.
+            Predictors, array of shape ``(n_time_bins, n_features)`` or a pytree
+            of arrays of the same shape.
         y :
             Neural activity. Shape ``(n_time_bins, )``.
         score_type :

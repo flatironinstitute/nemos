@@ -763,7 +763,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
     >>> model.regularizer
     Ridge()
 
-    **Use a Pytree of Arrays as Input**
+    **Use a Pytree of arrays as Input**
 
     Features can be passed as any JAX pytree of 2-D arrays; the fitted
     ``coef_`` will share the same pytree structure:
@@ -1038,7 +1038,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     >>> model.regularizer
     Ridge()
 
-    **Use a Pytree of Arrays as Input**
+    **Use a Pytree of arrays as Input**
 
     Features can be passed as any JAX pytree of 2-D arrays; the fitted
     ``coef_`` will share the same pytree structure:
