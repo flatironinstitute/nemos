@@ -25,15 +25,13 @@ class _ResetAttrs:
 class LabelEncoder:
     """Label encoder and decoder class."""
 
-    _reset_attrs = _ResetAttrs()
-
     def __init__(self, n_classes: int):
         self._n_classes = n_classes
         # set attrs explicitly to satisfy static checkers
         # (kept in sync with _reset_attrs via dataclass fields)
-        self._skip_encoding: bool = self._reset_attrs._skip_encoding
-        self._class_to_index_: dict | None = self._reset_attrs._class_to_index_
-        self.classes_: np.ndarray | jnp.ndarray | None = self._reset_attrs.classes_
+        self._skip_encoding: bool = _ResetAttrs._skip_encoding
+        self._class_to_index_: dict | None = _ResetAttrs._class_to_index_
+        self.classes_: np.ndarray | jnp.ndarray | None = _ResetAttrs.classes_
 
     @property
     def n_classes(self) -> int:
@@ -47,27 +45,27 @@ class LabelEncoder:
 
     def reset(self):
         """Reset cached attributes to default values."""
-        for f in fields(self._reset_attrs):
-            setattr(self, f.name, getattr(self._reset_attrs, f.name))
+        for f in fields(_ResetAttrs):
+            setattr(self, f.name, getattr(_ResetAttrs, f.name))
 
-    def set_classes(self, array: jnp.ndarray | ArrayLike):
+    def set_classes(self, classes_array: jnp.ndarray | ArrayLike):
         """
         Infer unique class labels and set the ``classes_`` attribute.
 
-        This method infers class labels from ``array`` and sets up the internal
+        This method infers class labels from ``classes_array`` and sets up the internal
         encoding/decoding machinery. When labels are the default ``[0, 1, ..., n_classes-1]``,
         encoding is skipped for performance.
 
         Parameters
         ----------
-        array
+        classes_array
             An array that must contain all the class labels,
-            i.e. ``len(np.unique(array)) == n_classes``.
+            i.e. ``len(np.unique(classes_array)) == n_classes``.
 
         Raises
         ------
         ValueError
-            If the number of unique class labels in ``array`` does not match ``n_classes``.
+            If the number of unique class labels in ``classes_array`` does not match ``n_classes``.
 
         Notes
         -----
@@ -76,10 +74,10 @@ class LabelEncoder:
         before starting the update loop, since individual batches may not contain every class.
 
         """
-        if isinstance(array, jnp.ndarray):
-            classes = jnp.unique(array)
+        if isinstance(classes_array, jnp.ndarray):
+            classes = jnp.unique(classes_array)
         else:
-            classes = np.unique(array)
+            classes = np.unique(classes_array)
         n_unique = len(classes)
 
         # Validation
