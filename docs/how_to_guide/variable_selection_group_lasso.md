@@ -58,7 +58,7 @@ Next, we model the neuronal response using both position and speed as candidate 
 :::{admonition} JAX PyTrees
 :class: note
 
-Features can be organized in any [JAX PyTree](https://docs.jax.dev/en/latest/pytrees.html), of which `dict` is just a possible example. See our [background note](PyTree_background) on PyTrees to learn more about the topic.
+Features can be organized in any [JAX PyTree](https://docs.jax.dev/en/latest/pytrees.html), of which `dict` is just a possible example. See our [background note](pytrees_background) on PyTrees to learn more about the topic.
 :::
 
 **Key insight**: When using `dict` or any other PyTree with Group Lasso (without specifying a custom mask), each feature in the PyTree is automatically treated as a separate group. This means the model can shrink all coefficients for a particular covariate (e.g., "speed") to zero together, effectively performing variable selection.
