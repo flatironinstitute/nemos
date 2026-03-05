@@ -30,7 +30,7 @@ from .base_validator import RegressorValidator
 from .glm.params import GLMParams
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
-from .type_casting import cast_to_jax
+from .type_casting import cast_to_jax, is_numpy_array_like
 from .typing import (
     DESIGN_INPUT_TYPE,
     ModelParamsT,
@@ -574,7 +574,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         data = X.data if isinstance(X, FeaturePytree) else X
 
         if isinstance(self.regularizer, GroupLasso):
-            if self.regularizer.mask is None and isinstance(data, dict):
+            if self.regularizer.mask is None and is_numpy_array_like(data)[1]:
                 # User is calling GroupLasso without a pytree to group variables
                 # nor providing a mask.
                 warnings.warn(
