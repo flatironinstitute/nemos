@@ -30,13 +30,10 @@ warnings.filterwarnings(
 ```
 
 (pytrees_howto)=
-# JAX Pytrees in NeMoS
+# JAX Pytrees for Structuring Multiple Predictors
 
 This page introduces JAX pytrees and explains why they are a natural way to organize
-inputs and parameters in NeMoS. We first define what a pytree is, then build intuition
-through a concrete example: a GLM with multiple behavioral predictors.
-By the end you will see how pytrees enable named, structured coefficients and simplifies
-fine-grained control over regularization.
+inputs and parameters in NeMoS. Through an example, we will demonstrate that structuring your predictors as  pytrees can improve code readability and simplify coefficient handling.
 
 ## What is a pytree?
 
@@ -56,14 +53,14 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-data = {"position": jnp.ones(5), "speed": jnp.ones(3) * 2.0}
+data = {"position": jnp.ones(5), "speed": jnp.ones(6)}
 jax.tree_util.tree_map(jnp.sum, data)
 ```
 
 The output is a `dict` with the same keys — the structure is preserved.
 The same applies to lists, tuples, or any nesting thereof.
 
-## Pytrees for neural data analysis
+## Structuring model design & coefficients
 
 When fitting a GLM with multiple predictors, the standard approach is to concatenate all
 features into a single design matrix — the only input format accepted by most Python
@@ -106,8 +103,7 @@ log_rate = _bin(pos, n_pos) @ true_pos + _bin(hd, n_hd) @ true_hd - 1.0
 counts   = np.random.poisson(np.exp(log_rate))
 ```
 
-We simulated position (`pos`), speed (`speed`), head direction (`hd`), and spike counts
-(`counts`) from a foraging animal (code hidden for brevity — expand the cell above to inspect it):
+The hidden cell above simulates four variables for a foraging animal — position (`pos`), speed (`speed`), head direction (`hd`), and spike counts (`counts`):
 
 ```{code-cell} ipython3
 fig, axes = plt.subplots(3, 1, figsize=(8, 4), sharex=True)
@@ -118,9 +114,9 @@ axes[2].set_xlabel("time step")
 fig.tight_layout()
 ```
 
-### Model design
+### Fitting GLMs with structured design matrices
 
-Here we take the usual route of binning each predictor and using the bin identity to predict the firing rate at each position, speed, or head direction. See the admonition below for more sophisticated approaches using NeMoS basis functions.
+We start by constructing a design matrix per task variable, following a common approach: bin each variable and use the bin identity to predict the firing rate at each position, speed, or head direction. See the admonition below for more sophisticated approaches using NeMoS basis functions.
 
 
 ```{code-cell} ipython3
@@ -138,18 +134,16 @@ X_hd  = bin_variable(hd,    n_hd)    # (T,  8)
 
 :::{admonition} Basis functions vs. binning
 :class: note
-Binning treats each bin independently, yielding to non-smooth estimates that require many bins
+Binning treats each bin independently, yielding non-smooth estimates that require many bins
 for adequate resolution. [Basis functions](basis-background) provide smoother estimates
 with fewer parameters and handle circularity properly
 (e.g. [`CyclicBSplineEval`](nemos.basis.CyclicBSplineEval) for head direction).
 For real analyses we recommend basis functions over binning.
 :::
 
-### Grouping predictors for interpretable coefficients
-
 The standard way to proceed from here would be to concatenate `X_pos`, `X_spd` and `X_hd` into a single design matrix of shape `(T, 24)`. The resulting fit produces a coefficient array of shape `(24,)`, and recovering the contribution of each predictor requires knowing which columns map to which variable — in our case, columns 0–9 for position, 10–15 for speed, and 16–23 for head direction.
 
-We can avoid this bookkeeping entirely by assembling the features in a `dict` and fit the GLM:
+We can avoid this bookkeeping entirely by assembling the features in a `dict` and fitting the GLM:
 
 ```{code-cell} ipython3
 X_dict = {"position": X_pos, "speed": X_spd, "head_direction": X_hd}
@@ -167,7 +161,7 @@ print(type(model.coef_))
 print({k: v.shape for k, v in model.coef_.items()})
 ```
 
-The same guarantee holds for any other container type. Passing a list, for example, yields a list of coefficient arrays:
+The same pattern holds for any other container type. Passing a list, for example, yields a list of coefficient arrays:
 
 ```{code-cell} ipython3
 model_list = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.001)
@@ -177,9 +171,9 @@ print(type(model_list.coef_))
 print("position coefs match:", jnp.allclose(model_list.coef_[0], model.coef_["position"]))
 ```
 
-### Additional benefits
+### Additional benefits: simplified group-wise regularization
 
-The pytree structure of the design matrix simplifies two additional NeMoS features:
+Beyond bookkeeping, the pytree structure simplifies two regularization strategies:
 
 - **[Fine-grained regularization](finegrained_regularization)** — regularization strength
   can itself be a pytree matching the structure of the design matrix, allowing different
