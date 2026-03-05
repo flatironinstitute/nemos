@@ -29,7 +29,7 @@ warnings.filterwarnings(
 )
 ```
 
-(pytrees_howto)=
+(pytrees_background)=
 # JAX Pytrees for Structuring Multiple Predictors
 
 This page introduces JAX pytrees and explains why they are a natural way to organize

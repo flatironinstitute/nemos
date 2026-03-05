@@ -53,7 +53,7 @@ counts = np.random.poisson(firing)
 
 ## Fitting a Group Lasso GLM
 
-Next, we model the neuronal response using both position and speed as candidate predictors. We represent each covariate with a [basis expansion](table-basis), creating multiple coefficients per covariate. We organize these features into a [FeaturePytree](pytrees_howto), which allows Group Lasso to treat each covariate's coefficients as a separate group.
+Next, we model the neuronal response using both position and speed as candidate predictors. We represent each covariate with a [basis expansion](table-basis), creating multiple coefficients per covariate. We organize these features into a [FeaturePytree](pytrees_background), which allows Group Lasso to treat each covariate's coefficients as a separate group.
 
 **Key insight**: When using `FeaturePytree` with Group Lasso (without specifying a custom mask), each feature in the PyTree is automatically treated as a separate group. This means the model can shrink all coefficients for a particular covariate (e.g., "speed") to zero together, effectively performing variable selection.
 

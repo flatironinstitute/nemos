@@ -49,7 +49,7 @@ By passing structures of regularization strengths that match the parameter struc
 ## Traditional regularization: all parameters are regularized equally
 We will first generate some synthetic data with two feature groups:
 :::{note}
-We will store the features in a [`FeaturePytrees`](nemos.pytrees.FeaturePytree), take a look at [the tutorial on pytrees](/how_to_guide/plot_07_glm_pytree.md) to find out what they are.
+We will store the features in a `dict`, take a look at [the background note on pytrees](pytrees_background) to find out what they are.
 :::
 
 
@@ -95,7 +95,7 @@ If we want different regularization strengths for the two parameter groups, we c
 
 ```{code-cell} ipython3
 glm = nmo.glm.GLM(
-    regularizer="Ridge", 
+    regularizer="Ridge",
     regularizer_strength=dict(f1=0.1, f2=0.2)
 )
 glm.fit(X, spikes)
@@ -106,9 +106,9 @@ If we want even finer control over regularization, we can pass arrays within the
 
 ```{code-cell} ipython3
 glm = nmo.glm.GLM(
-    regularizer="Ridge", 
+    regularizer="Ridge",
     regularizer_strength=dict(
-        f1=[0.1, 0.3, 0.3, 0.1, 1.0], 
+        f1=[0.1, 0.3, 0.3, 0.1, 1.0],
         f2=[0.2, 0.1]
     )
 )
@@ -118,9 +118,9 @@ glm.fit(X, spikes)
 You can also mix different approaches, such as passing a single value for one group, and a list for the other:
 ```{code-cell} ipython3
 glm = nmo.glm.GLM(
-    regularizer="Ridge", 
+    regularizer="Ridge",
     regularizer_strength=dict(
-        f1=0.1, 
+        f1=0.1,
         f2=[0.2, 0.1]
     )
 )
@@ -142,14 +142,14 @@ glm.fit(X, spikes)
 However, if you want finer control, you can again pass a dictionary matching the parameter structure: this time one for the strenghts, and one for the ratios:
 ```{code-cell} ipython3
 glm = nmo.glm.GLM(
-    regularizer="ElasticNet", 
+    regularizer="ElasticNet",
     regularizer_strength=(
         dict( # strength
-            f1=[0.1, 0.3, 0.3, 0.1, 1.0], 
+            f1=[0.1, 0.3, 0.3, 0.1, 1.0],
             f2=[0.2, 0.1]
         ),
         dict( # ratio
-            f1=[0.5, 0.3, 0.5, 0.5, 0.5], 
+            f1=[0.5, 0.3, 0.5, 0.5, 0.5],
             f2=[0.5, 0.4]
         ),
     )
@@ -167,7 +167,7 @@ Again, you pass a dictionary, but now matching the groups, instead of the parame
 
 ```{code-cell} ipython3
 glm = nmo.glm.GLM(
-    regularizer="GroupLasso", 
+    regularizer="GroupLasso",
     regularizer_strength=[0.1, 0.4],
 )
 glm.fit(X, spikes)
@@ -176,14 +176,14 @@ By default, [`GroupLasso`](nemos.regularizer.GroupLasso) generates masks that ma
 If you pass your own mask, you need to make sure the regularizer strength matches its structure.
 
 ### PopulationGLM
-A [`PopulationGLM`](nemos.glm.PopulationGLM) models many neurons simultaneously. 
+A [`PopulationGLM`](nemos.glm.PopulationGLM) models many neurons simultaneously.
 Internally, this means it will have a set of parameters per neuron.
 All regularization strategies above work for a [`PopulationGLM`](nemos.glm.PopulationGLM) as well:
 ```{code-cell} ipython3
 # we'll create a second neuron with twice the amount of spikes
 spikes = jnp.stack([spikes, spikes*2], axis=1)
 glm = nmo.glm.PopulationGLM(
-    regularizer="Ridge", 
+    regularizer="Ridge",
     regularizer_strength=dict(
         f1=[[0.1, 0.2], [0.1, 0.2], [0.1, 0.2], [0.1, 0.2], [0.1, 0.2]],
         f2=[[0.1, 0.2], [0.1, 0.2]]
