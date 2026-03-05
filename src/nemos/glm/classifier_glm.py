@@ -1089,7 +1089,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
           Each entry ``[i, j, k]`` indicates whether the weight for feature ``i``,
           neuron ``j``, and category ``k`` is used (1 = used, 0 = masked).
 
-        - **Dict/FeaturePytree input**: A dict with keys matching ``coef_``.
+        - **Pytree input**: A pytree matching the ``coef_`` structure.
           Each leaf array has the same shape as the corresponding coefficient leaf
           ``(n_features_per_key, n_neurons, n_classes)``.
 
