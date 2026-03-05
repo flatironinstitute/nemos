@@ -25,7 +25,6 @@ import nemos as nmo
 from nemos._observation_model_builder import instantiate_observation_model
 from nemos._regularizer_builder import instantiate_regularizer
 from nemos.inverse_link_function_utils import identity, log_softmax
-from nemos.pytrees import FeaturePytree
 from nemos.tree_utils import (
     pytree_map_and_reduce,
     tree_l2_norm,
@@ -372,19 +371,19 @@ class TestGLM:
                 pytest.raises(TypeError, match="X and coef have mismatched structure"),
                 {
                     "GLM": [
-                        FeaturePytree(p1=jnp.zeros((5,)), p2=jnp.zeros((5,))),
+                        {"p1": jnp.zeros((5,)), "p2": jnp.zeros((5,))},
                         jnp.zeros((1,)),
                     ],
                     "PopulationGLM": [
-                        FeaturePytree(p1=jnp.zeros((3, 3)), p2=jnp.zeros((3, 2))),
+                        {"p1": jnp.zeros((3, 3)), "p2": jnp.zeros((3, 2))},
                         jnp.zeros((3,)),
                     ],
                     "ClassifierGLM": [
-                        FeaturePytree(p1=jnp.zeros((5, 3)), p2=jnp.zeros((5, 3))),
+                        {"p1": jnp.zeros((5, 3)), "p2": jnp.zeros((5, 3))},
                         jnp.zeros((3,)),
                     ],
                     "ClassifierPopulationGLM": [
-                        FeaturePytree(p1=jnp.zeros((5, 3, 3)), p2=jnp.zeros((5, 3, 3))),
+                        {"p1": jnp.zeros((5, 3, 3)), "p2": jnp.zeros((5, 3, 3))},
                         jnp.zeros((3, 3)),
                     ],
                 },
@@ -3125,7 +3124,6 @@ class TestPopulationGLMObservationModel:
                 for key, xx in X.items():
                     if mask_bool[key][k]:
                         X_neu[key] = X[key]
-                X_neu = FeaturePytree(**X_neu)
             else:
                 X_neu = X[:, mask_bool[k]]
 
@@ -3383,11 +3381,6 @@ class TestPoissonGLM:
         # NOTE these two are not the same because for example Ridge augments the loss
         # loss_grad = jax.jit(jax.grad(glm.compute_loss))
         loss_grad = jax.jit(jax.grad(glm._solver_loss_fun))
-
-        # copied from GLM.fit
-        # grab data if needed (tree map won't function because param is never a FeaturePytree).
-        if isinstance(X, FeaturePytree):
-            X = X.data
 
         iter_num = 0
         while iter_num < maxiter:
@@ -3847,9 +3840,7 @@ class TestClassifierGLM:
         [
             (np.ones((3, 5)), does_not_raise()),
             (
-                nmo.pytrees.FeaturePytree(
-                    input_1=np.ones((3, 3)), input_2=np.ones((3, 2))
-                ),
+                {"input_1": np.ones((3, 3)), "input_2": np.ones((3, 2))},
                 does_not_raise(),
             ),
             # string type
@@ -3865,9 +3856,7 @@ class TestClassifierGLM:
                 pytest.raises(ValueError, match="Inconsistent number of features"),
             ),
             (
-                nmo.pytrees.FeaturePytree(
-                    input_1=np.ones((3, 1)), input_2=np.ones((3, 2))
-                ),
+                {"input_1": np.ones((3, 1)), "input_2": np.ones((3, 2))},
                 pytest.raises(ValueError, match="Inconsistent number of features"),
             ),
         ],
@@ -3881,7 +3870,7 @@ class TestClassifierGLM:
         model_instantiation,
         request,
     ):
-        if isinstance(X, nmo.pytrees.FeaturePytree):
+        if isinstance(X, dict):
             xtype = "_pytree"
         else:
             xtype = ""
