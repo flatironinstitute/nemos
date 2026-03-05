@@ -1,10 +1,30 @@
+import importlib.util
+
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from packaging.version import Version
 
 import nemos as nmo
 from nemos.pytrees import FeaturePytree
+
+
+def test_featurepytree_removed_at_target_version():
+    """Fail if nemos.pytrees module is still present once we reach the removal version.
+
+    pytrees.py contains only FeaturePytree, so the entire module will be deleted
+    at removal time. If this test fails, delete nemos/pytrees.py, its test class,
+    and this function.
+    """
+    REMOVAL_VERSION = "0.2.10"  # covers both 0.2.10 and 0.3.0
+
+    if Version(nmo.__version__) >= Version(REMOVAL_VERSION):
+        spec = importlib.util.find_spec("nemos.pytrees")
+        assert spec is None, (
+            f"nemos.pytrees was scheduled for removal in {REMOVAL_VERSION} "
+            "but is still present. Delete the module, its tests, and this assertion."
+        )
 
 
 @pytest.mark.filterwarnings("ignore:FeaturePytree is deprecated:FutureWarning")
