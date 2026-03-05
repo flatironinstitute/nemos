@@ -7,6 +7,7 @@ import nemos as nmo
 from nemos.pytrees import FeaturePytree
 
 
+@pytest.mark.filterwarnings("ignore:FeaturePytree is deprecated:FutureWarning")
 class TestFeaturePytree:
 
     def test_key_error_init(self):
