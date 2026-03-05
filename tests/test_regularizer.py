@@ -2649,6 +2649,18 @@ class TestGroupLasso:
         assert isinstance(s.coef, jnp.ndarray)
         assert s.coef == 0.5
 
+    def test_auto_generated_mask_not_stored(self):
+        """Auto-generated mask must not be cached on the regularizer.
+
+        Caching the mask would break re-fitting with a different pytree structure.
+        """
+        params = GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0]))
+        regularizer = self.cls()  # mask=None
+
+        regularizer._get_filter_kwargs(params=params, strength=0.5)
+
+        assert regularizer.mask is None
+
     def test_validate_strength_structure_scalar_broadcast(self):
         """Scalar strength broadcasts to per-group vector with length n_groups."""
         # 3 groups x 5 features mask on coef, intercept is not regularized (None)
