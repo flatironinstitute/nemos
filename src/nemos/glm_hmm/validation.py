@@ -72,7 +72,7 @@ class GLMHMMValidator(RegressorValidator[GLMUserParams, GLMParams]):
             "check_array_dimensions",
             dict(
                 err_message_format="Invalid parameter dimensionality.\n- coef must be an array "
-                "or nemos.pytree.FeaturePytree with array leafs of shape "
+                "or any JAX pytree with array leaves of shape "
                 "``(n_features, n_states)``.\n- intercept must be of shape ``(n_states,)``.\n"
                 "- scale must be of shape ``(n_states,)``.\n"
                 "- initial_prob must be of shape ``(n_states,)``.\n"

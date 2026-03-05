@@ -953,7 +953,7 @@ class TestUnRegularized:
         model._instantiate_solver(model._compute_loss, params)
         model.solver_run(
             params,
-            X.data,
+            X,
             y,
         )
 
@@ -2438,7 +2438,7 @@ class TestElasticNet:
         runner = model._instantiate_solver(model._compute_loss, params).solver_run
         runner(
             params,
-            X.data,
+            X,
             y,
         )
 
