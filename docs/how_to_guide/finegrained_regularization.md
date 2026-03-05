@@ -49,7 +49,7 @@ By passing structures of regularization strengths that match the parameter struc
 ## Traditional regularization: all parameters are regularized equally
 We will first generate some synthetic data with two feature groups:
 :::{note}
-We will store the features in a `dict`, take a look at [the background note on pytrees](pytrees_background) to find out what they are.
+We will store the features in a `dict`, but one can use any JAX pytree, take a look at [the background note on pytrees](pytrees_background) to find out what they are.
 :::
 
 
@@ -64,7 +64,7 @@ n_samples = 500
 n_features = 7
 
 # random design matrix, containing two feature groups: f1 and f2
-X = nmo.pytrees.FeaturePytree(
+X = dict(
     f1=0.5*np.random.normal(size=(n_samples, 5)),
     f2=0.5*np.random.normal(size=(n_samples, 2)),
 )
