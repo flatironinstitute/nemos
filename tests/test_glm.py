@@ -2640,6 +2640,26 @@ class TestGLMObservationModel:
         model.fit(X, y)
 
 
+def test_grouplasso_fit_twice_different_pytree_structure():
+    """Fitting GroupLasso twice with different pytree structures must not raise.
+
+    Regression test: the auto-generated mask was cached after the first fit,
+    causing a structure mismatch when the second fit used a different pytree type.
+    """
+    rng = np.random.default_rng(0)
+    n_samples, n_features = 100, 2
+    X = 0.5 * rng.standard_normal((n_samples, n_features))
+    y = rng.poisson(np.exp(X.dot(rng.standard_normal(n_features))))
+
+    model = nmo.glm.GLM(regularizer="GroupLasso")
+
+    X_list = [X[:, :1], X[:, 1:]]
+    model.fit(X_list, y)
+
+    X_dict = {i: x for i, x in enumerate(X_list)}
+    model.fit(X_dict, y)
+
+
 @pytest.mark.parametrize(
     "model_instantiation",
     [
