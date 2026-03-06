@@ -39,7 +39,7 @@ inputs and parameters in NeMoS. Through an example, we will demonstrate that str
 
 In JAX, a **pytree** is any nested container of arrays: a Python `dict`, `list`, `tuple`,
 `NamedTuple`, an [Equinox](https://docs.kidger.site/equinox/) module, or any combination
-thereof. The arrays at the bottom of the nesting are the *leaves*; the containers
+thereof. The arrays at the deepest level of the nesting are the *leaves*; the containers
 holding them are the *nodes*. See the [JAX pytree documentation](https://jax.readthedocs.io/en/latest/pytrees.html)
 for the full definition.
 
@@ -177,7 +177,7 @@ Beyond bookkeeping, the pytree structure simplifies two regularization strategie
 
 - **[Fine-grained regularization](finegrained_regularization)** — regularization strength
   can itself be a pytree matching the structure of the design matrix, allowing different
-  penalties per leaf or even per individual parameter. In our example the design matrix is
+  penalties per leaf or even per individual parameter. In our example, the design matrix is
   a dict, so we can pass a matching dict of strengths:
   `GLM(regularizer="Ridge", regularizer_strength={"position": 0.1, "speed": 1., "head_direction": 10.})`
   assigns a different regularization level to each task variable.
