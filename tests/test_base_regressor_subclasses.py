@@ -2,6 +2,7 @@ import inspect
 import warnings
 from contextlib import nullcontext as does_not_raise
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -97,7 +98,6 @@ OBSERVATION_PER_MODEL = {
     "PopulationGLM": [o for o in AVAILABLE_OBSERVATION_MODELS if o != "Categorical"],
 }
 
-
 # as of now, all models are glm type... in the future this may change.
 MODEL_WITH_LINK_FUNCTION_REGISTRY = {
     "GLM": nmo.glm.GLM,
@@ -151,6 +151,137 @@ def _zero_init_params(X, y):
         jax.tree_util.tree_map(lambda x: jnp.zeros((*x[0].shape, *y.shape[1:])), X),
         jnp.zeros(jnp.nanmean(y, axis=0).shape),
     )
+
+
+class _TwoLeafModule(eqx.Module):
+    a: jnp.ndarray
+    b: jnp.ndarray
+
+
+# Pytree factories keyed by id; each takes n_samples and returns a pytree of arrays.
+_PYTREE_X_FACTORIES = {
+    "dict": lambda n: {"a": jnp.ones((n, 1)), "b": jnp.ones((n, 1))},
+    "eqx_module": lambda n: _TwoLeafModule(a=jnp.ones((n, 1)), b=jnp.ones((n, 1))),
+    "dict_list": lambda n: {"a": [jnp.ones((n, 1))], "b": jnp.ones((n, 1))},
+}
+
+# One entry per (model, obs_model) pair; all pytree types are tested for each.
+_MODEL_CONFIGS = [
+    ("GLM", "Poisson"),
+    ("PopulationGLM", "Poisson"),
+    ("ClassifierGLM", "Categorical"),
+    ("ClassifierPopulationGLM", "Categorical"),
+]
+
+_MODEL_PYTREE_X_CASES = [
+    pytest.param(
+        {"model": model, "obs_model": obs_model, "simulate": True},
+        factory(DEFAULT_OBS_SHAPE[model][0]),
+        id=f"{model}-{pytree_id}",
+    )
+    for model, obs_model in _MODEL_CONFIGS
+    for pytree_id, factory in _PYTREE_X_FACTORIES.items()
+]
+
+
+class TestModelVsPytree:
+    """Test that public model API accepts arbitrary pytree X inputs."""
+
+    @pytest.mark.parametrize(
+        "instantiate_base_regressor_subclass, pytree_x",
+        _MODEL_PYTREE_X_CASES,
+        indirect=["instantiate_base_regressor_subclass"],
+    )
+    @pytest.mark.solver_related
+    def test_initialize_params_pytree_x(
+        self, instantiate_base_regressor_subclass, pytree_x
+    ):
+        """initialize_params runs without error when X is an arbitrary pytree."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+        model.initialize_params(pytree_x, fixture.y)
+
+    @pytest.mark.parametrize(
+        "instantiate_base_regressor_subclass, pytree_x",
+        _MODEL_PYTREE_X_CASES,
+        indirect=["instantiate_base_regressor_subclass"],
+    )
+    @pytest.mark.solver_related
+    def test_initialize_solver_and_state_pytree_x(
+        self, instantiate_base_regressor_subclass, pytree_x
+    ):
+        """initialize_solver_and_state runs without error when X is an arbitrary pytree."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+        params = model.initialize_params(pytree_x, fixture.y)
+        model.initialize_solver_and_state(pytree_x, fixture.y, params)
+
+    @pytest.mark.parametrize(
+        "instantiate_base_regressor_subclass, pytree_x",
+        _MODEL_PYTREE_X_CASES,
+        indirect=["instantiate_base_regressor_subclass"],
+    )
+    @pytest.mark.solver_related
+    def test_update_pytree_x(self, instantiate_base_regressor_subclass, pytree_x):
+        """update runs without error when X is an arbitrary pytree."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+        params = model.initialize_params(pytree_x, fixture.y)
+        opt_state = model.initialize_solver_and_state(pytree_x, fixture.y, params)
+        model.update(params, opt_state, pytree_x, fixture.y)
+
+    @pytest.mark.parametrize(
+        "instantiate_base_regressor_subclass, pytree_x",
+        _MODEL_PYTREE_X_CASES,
+        indirect=["instantiate_base_regressor_subclass"],
+    )
+    @pytest.mark.solver_related
+    def test_fit_pytree_x(self, instantiate_base_regressor_subclass, pytree_x):
+        """fit runs without error when X is an arbitrary pytree."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+        model.fit(pytree_x, fixture.y)
+
+    @pytest.mark.parametrize(
+        "instantiate_base_regressor_subclass, pytree_x",
+        _MODEL_PYTREE_X_CASES,
+        indirect=["instantiate_base_regressor_subclass"],
+    )
+    @pytest.mark.solver_related
+    def test_predict_pytree_x(self, instantiate_base_regressor_subclass, pytree_x):
+        """predict output shape matches y after fitting with pytree X."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+        model.fit(pytree_x, fixture.y)
+        assert model.predict(pytree_x).shape == fixture.y.shape
+
+    @pytest.mark.parametrize(
+        "instantiate_base_regressor_subclass, pytree_x",
+        _MODEL_PYTREE_X_CASES,
+        indirect=["instantiate_base_regressor_subclass"],
+    )
+    @pytest.mark.solver_related
+    def test_score_pytree_x(self, instantiate_base_regressor_subclass, pytree_x):
+        """score returns a scalar after fitting with pytree X."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+        model.fit(pytree_x, fixture.y)
+        assert model.score(pytree_x, fixture.y).ndim == 0
+
+    @pytest.mark.parametrize(
+        "instantiate_base_regressor_subclass, pytree_x",
+        _MODEL_PYTREE_X_CASES,
+        indirect=["instantiate_base_regressor_subclass"],
+    )
+    @pytest.mark.solver_related
+    def test_simulate_pytree_x(self, instantiate_base_regressor_subclass, pytree_x):
+        """simulate runs without error and returns outputs with the correct n_samples when X is an arbitrary pytree."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+        model.fit(pytree_x, fixture.y)
+        n_samples = jax.tree_util.tree_leaves(pytree_x)[0].shape[0]
+        counts, rates = model.simulate(jax.random.key(123), pytree_x)
+        assert counts.shape[0] == n_samples
 
 
 def test_all_defaults_assigned():

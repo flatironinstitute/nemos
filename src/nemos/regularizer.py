@@ -247,6 +247,9 @@ class Regularizer(Base, abc.ABC):
         """
         filter_kwargs = self._get_filter_kwargs(strength=strength, params=params)
 
+        # hyperparams is unused: strength is captured in filter_kwargs at construction time.
+        # The argument is required to match the jaxopt prox interface:
+        # prox(params, hyperparams_prox, scaling=1.0).
         def prox_op(params, hyperparams, scaling=1.0, *args):
             return apply_operator(
                 self._proximal_operator,
@@ -919,7 +922,8 @@ class GroupLasso(Regularizer):
         return jnp.sum(jnp.array(jax.tree_util.tree_leaves(penalties)))
 
     def _validate_strength_structure(self, params: Any, strength: Any):
-        flat_mask = jax.tree_util.tree_leaves(self.mask)
+        mask = self.mask if self.mask is not None else self.initialize_mask(params)
+        flat_mask = jax.tree_util.tree_leaves(mask)
         n_groups = flat_mask[0].shape[0]
 
         if isinstance(strength, (int, float)) or strength.ndim == 0:
@@ -933,9 +937,8 @@ class GroupLasso(Regularizer):
                 )
             per_group_strength = strength
 
-        return jax.tree_util.tree_map(lambda _: per_group_strength, self.mask)
+        return jax.tree_util.tree_map(lambda _: per_group_strength, mask)
 
     def _get_filter_kwargs(self, params: Any, strength: Any) -> dict:
-        if self.mask is None:
-            self.mask = self.initialize_mask(params)
-        return {"mask": self.mask, **super()._get_filter_kwargs(params, strength)}
+        mask = self.mask if self.mask is not None else self.initialize_mask(params)
+        return {"mask": mask, **super()._get_filter_kwargs(params, strength)}

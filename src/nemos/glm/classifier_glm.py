@@ -266,7 +266,7 @@ class ClassifierMixin:
         ----------
         X :
             The input samples. Can be an array of shape ``(n_samples, n_features)``
-            or a ``FeaturePytree`` with arrays as leaves.
+            or a pytree of arrays of the same shape.
 
         Returns
         -------
@@ -306,7 +306,7 @@ class ClassifierMixin:
         ----------
         X :
             The input samples. Can be an array of shape ``(n_samples, n_features)``
-            or a ``FeaturePytree`` with arrays as leaves.
+            or a pytree of arrays of the same shape.
         return_type :
             The format of the returned probabilities. If ``"log-proba"``, returns
             log-probabilities. If ``"proba"``, returns probabilities. Defaults to
@@ -432,8 +432,8 @@ class ClassifierMixin:
             A JAX random key used to generate the simulated responses.
         feedforward_input :
             The input samples used to generate the responses. Can be an array of
-            shape ``(n_samples, n_features)`` or a ``FeaturePytree`` with arrays
-            as leaves.
+            shape ``(n_samples, n_features)`` or a pytree of arrays of the same
+            shape.
 
         Returns
         -------
@@ -578,7 +578,7 @@ class ClassifierMixin:
             optimization algorithm to continue from the current state.
         X :
             The predictors used in the model fitting process. Shape ``(n_time_bins, n_features)``
-            or a ``FeaturePytree``.
+            or a pytree of arrays of the same shape.
         y :
             Class labels, array of shape ``(n_time_bins,)`` for single neuron
             models or ``(n_time_bins, n_neurons)`` for population models. Labels must
@@ -762,6 +762,17 @@ class ClassifierGLM(ClassifierMixin, GLM):
     ... )
     >>> model.regularizer
     Ridge()
+
+    **Use a Pytree of arrays as Input**
+
+    Features can be passed as any JAX pytree of 2-D arrays; the fitted
+    ``coef_`` will share the same pytree structure:
+
+    >>> X_dict = {"feature_1": X[:, :1], "feature_2": X[:, 1:]}
+    >>> model = nmo.glm.ClassifierGLM(n_classes=3).fit(X_dict, y)
+    >>> # The coefficient structure matches the input
+    >>> type(model.coef_)
+    <class 'dict'>
     """
 
     _validator_class = ClassifierGLMValidator
@@ -803,7 +814,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
         Parameters
         ----------
         X
-            Training input samples of shape ``(n_samples, n_features)`` or FeaturePytree.
+            Training input samples of shape ``(n_samples, n_features)`` or a pytree of arrays of the same shape.
         y
             Target class labels of shape ``(n_samples,)``. Values should be in
             ``[0, n_classes - 1]``. Float arrays with integer values are
@@ -848,7 +859,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
         Parameters
         ----------
         X
-            Test input samples of shape ``(n_samples, n_features)`` or FeaturePytree.
+            Test input samples of shape ``(n_samples, n_features)`` or a pytree of arrays of the same shape.
         y
             True class labels of shape ``(n_samples,)``. Values should be in
             ``[0, n_classes - 1]``. Float arrays with integer values are
@@ -1026,6 +1037,16 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     ... )
     >>> model.regularizer
     Ridge()
+
+    **Use a Pytree of arrays as Input**
+
+    Features can be passed as any JAX pytree of 2-D arrays; the fitted
+    ``coef_`` will share the same pytree structure:
+
+    >>> X_dict = {"feature_1": X[:, :1], "feature_2": X[:, 1:]}
+    >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3).fit(X_dict, y)
+    >>> type(model.coef_)
+    <class 'dict'>
     """
 
     _validator_class = PopulationClassifierGLMValidator
@@ -1103,7 +1124,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         Parameters
         ----------
         X
-            Training input samples of shape ``(n_samples, n_features)`` or FeaturePytree.
+            Training input samples of shape ``(n_samples, n_features)`` or a pytree of arrays of the same shape.
         y
             Target class labels of shape ``(n_samples, n_neurons)``. Values should be in
             ``[0, n_classes - 1]``. Float arrays with integer values are
@@ -1148,7 +1169,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         Parameters
         ----------
         X
-            Test input samples of shape ``(n_samples, n_features)`` or FeaturePytree.
+            Test input samples of shape ``(n_samples, n_features)`` or a pytree of arrays of the same shape.
         y
             True class labels of shape ``(n_samples, n_neurons)``. Values should be in
             ``[0, n_classes - 1]``. Float arrays with integer values are
