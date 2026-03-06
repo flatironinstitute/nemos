@@ -275,10 +275,9 @@ class LabelEncoder:
             produce silently incorrect indices.
         """
         if safe:
-            y_arr = np.asarray(y)
-            invalid_mask = ~np.isin(y_arr, self.classes_)
+            invalid_mask = ~jnp.isin(y, self.classes_)
             if invalid_mask.any():
-                invalid = np.unique(y_arr[invalid_mask]).tolist()
+                invalid = np.unique(y[invalid_mask]).tolist()
                 raise KeyError(
                     f"Unrecognized label(s) {invalid}. Valid labels are {self.classes_.tolist()}."
                 )
