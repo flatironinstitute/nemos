@@ -29,6 +29,7 @@ from nemos.basis import (
     HistoryConv,
     IdentityEval,
     TransformerBasis,
+    Category,
 )
 from nemos.basis._basis import (
     AdditiveBasis,
@@ -95,6 +96,8 @@ def set_basis_attr(bas, n_basis):
     if isinstance(bas, FourierBasis):
         # set frequencies to match the requested n_basis
         bas.frequencies = np.arange((n_basis + 1) % 2, 1 + (n_basis - n_basis % 2) // 2)
+    elif isinstance(bas, Category):
+        bas.categories = n_basis
     elif isinstance(bas, CustomBasis):
         bas.basis_kwargs = {"n_basis_funcs": n_basis}
     elif isinstance(bas, basis.Zero):

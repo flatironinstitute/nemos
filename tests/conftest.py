@@ -91,6 +91,7 @@ DEFAULT_KWARGS = {
     "frequencies": 4,
     "window_size": 11,
     "decay_rates": np.arange(1, 1 + 5),
+    "categories": 4,
 }
 
 # shut-off conversion warnings

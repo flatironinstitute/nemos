@@ -9,6 +9,7 @@ categorical variables. The class is for internal use, main method will be
 from __future__ import annotations
 
 from dataclasses import dataclass, fields
+from typing import Any
 
 import jax.numpy as jnp
 import numpy as np
@@ -281,3 +282,27 @@ class LabelEncoder:
                 )
         y_encoded = jnp.searchsorted(self.classes_, y)
         return y_encoded
+
+    def __eq__(self, other: Any):
+        """Check functional equivalence of two encoders.
+
+        Two ``LabelEncoder`` instances are functionally equivalent if and only
+        if they share the same ``classes_`` array. All other internal state
+        (``_skip_encoding``, ``_class_to_index_``) is derived deterministically
+        from ``classes_``, so equality of ``classes_`` is both necessary and
+        sufficient.
+
+        Parameters
+        ----------
+        other :
+            Object to compare against.
+
+        Returns
+        -------
+        bool
+            ``True`` if ``other`` is a ``LabelEncoder`` with identical
+            ``classes_``, ``False`` otherwise.
+        """
+        if not isinstance(other, LabelEncoder):
+            return False
+        return np.array_equal(self.classes_, other.classes_)

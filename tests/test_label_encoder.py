@@ -210,3 +210,51 @@ def test_check_classes_behavior():
     # set and retry
     encoder.set_classes(["0", "1", "2", "3"])
     encoder.check_classes_is_set("hello")
+
+
+@pytest.mark.parametrize(
+    "classes_a, classes_b, expected",
+    [
+        # identical default integer labels
+        (np.array([0, 1, 2]), np.array([0, 1, 2]), True),
+        # identical non-default integer labels
+        (np.array([3, 4, 5]), np.array([3, 4, 5]), True),
+        # identical string labels
+        (np.array(["a", "b", "c"]), np.array(["a", "b", "c"]), True),
+        # unsorted input: set_classes sorts, so result equals the sorted version
+        (np.array([2, 0, 1]), np.array([0, 1, 2]), True),
+        # different label values
+        (np.array([0, 1, 2]), np.array([0, 1, 3]), False),
+        # different number of classes
+        (np.array([0, 1, 2]), np.array([0, 1]), False),
+    ],
+)
+def test_eq_initialized(classes_a, classes_b, expected):
+    """__eq__ returns True iff both encoders have identical classes_ arrays."""
+    enc_a = LabelEncoder(len(np.unique(classes_a)))
+    enc_a.set_classes(classes_a)
+    enc_b = LabelEncoder(len(np.unique(classes_b)))
+    enc_b.set_classes(classes_b)
+    assert (enc_a == enc_b) is expected
+
+
+def test_eq_both_uninitialized():
+    """Two uninitialized encoders (classes_=None) are equal."""
+    assert LabelEncoder(3) == LabelEncoder(3)
+
+
+def test_eq_one_uninitialized():
+    """An initialized encoder is not equal to an uninitialized one."""
+    enc_a = LabelEncoder(3)
+    enc_a.set_classes(np.array([0, 1, 2]))
+    enc_b = LabelEncoder(3)
+    assert enc_a != enc_b
+
+
+def test_eq_non_encoder():
+    """Comparing with a non-LabelEncoder always returns False."""
+    enc = LabelEncoder(3)
+    enc.set_classes(np.array([0, 1, 2]))
+    assert enc != 42
+    assert enc != np.array([0, 1, 2])
+    assert enc != None  # noqa: E711
