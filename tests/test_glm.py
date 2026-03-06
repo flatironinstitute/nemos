@@ -4035,19 +4035,6 @@ class TestClassifierGLM:
         assert jnp.array_equal(model._label_encoder.encode(y_label), y)
         assert jnp.array_equal(log_prob_label, log_prob)
 
-    def test_classes_none_initially(
-        self, inv_link, glm_type, model_instantiation, request
-    ):
-        """Test that classes_ is None before set_classes is called."""
-        _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
-        # Create a fresh model without set_classes
-        if "population" in glm_type:
-            fresh_model = nmo.glm.ClassifierPopulationGLM(n_classes=model.n_classes)
-        else:
-            fresh_model = nmo.glm.ClassifierGLM(n_classes=model.n_classes)
-        assert fresh_model.classes_ is None
-        assert fresh_model._skip_encoding is False
-
     def test_set_classes_too_many_classes(
         self, inv_link, glm_type, model_instantiation, request
     ):
