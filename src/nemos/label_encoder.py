@@ -171,10 +171,9 @@ class LabelEncoder:
                 else:
                     # already an array (either jax or numpy)
                     y_array = y
-                is_all_int = (
-                    True
-                    if np.issubdtype(dtype, np.integer)
-                    else (y_array == y_array.astype(int)).all()
+                is_all_int = np.issubdtype(dtype, np.integer) or (
+                    np.issubdtype(dtype, np.floating)
+                    and (y_array == y_array.astype(int)).all()
                 )
                 if not is_all_int:
                     raise ValueError(
@@ -278,7 +277,7 @@ class LabelEncoder:
             # check based on type:
             # - y is a jax.ndarray -> numeric
             # - classes_ np.array but not numeric
-            if ~np.issubdtype(self.classes_.dtype, np.number):
+            if not np.issubdtype(self.classes_.dtype, np.number):
                 invalid = jnp.unique(y).tolist()
                 raise KeyError(
                     f"Unrecognized label(s) {invalid}. Valid labels are {self.classes_.tolist()}."
