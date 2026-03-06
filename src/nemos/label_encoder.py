@@ -9,12 +9,13 @@ categorical variables. The class is for internal use, main method will be
 from __future__ import annotations
 
 from dataclasses import dataclass, fields
+from functools import partial
 
 import jax.numpy as jnp
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from .type_casting import support_pynapple
+from .type_casting import cast_to_pynapple
 
 
 @dataclass
@@ -217,7 +218,6 @@ class LabelEncoder:
                 f"Classes are not set. Must call ``set_classes`` before calling ``{method_name}``."
             )
 
-    @support_pynapple(conv_type="numpy")
     def _encode_numpy(self, y: ArrayLike, safe: bool = True) -> ArrayLike:
         """
         Encode labels for numpy arrays.
@@ -235,6 +235,17 @@ class LabelEncoder:
             labels to nearest indices.
         """
         if safe:
+            if hasattr(y, "d"):
+                kwargs = {"time": y.t, "time_support": y.time_support}
+                kwargs.update({"columns": y.columns} if hasattr(y, "columns") else {})
+                kwargs.update(
+                    {"metadata": y._metadata} if hasattr(y, "_metadata") else {}
+                )
+                cast_fn = partial(cast_to_pynapple, **kwargs)
+
+            else:
+                cast_fn = lambda x: x  # noqa: E731
+
             # use from iter, this forces safety while being much more
             # efficient than a unique.
             try:
@@ -252,7 +263,7 @@ class LabelEncoder:
                 raise ValueError(
                     f"Unrecognized label(s) {invalid}. " f"Valid labels are {valid}."
                 ) from e
-            return y
+            return cast_fn(y)
         else:
             # fastest way to return the encoded indices.
             return np.searchsorted(self.classes_, y)
