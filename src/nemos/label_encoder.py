@@ -14,6 +14,8 @@ import jax.numpy as jnp
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+from .type_casting import support_pynapple
+
 
 @dataclass
 class _ResetAttrs:
@@ -169,8 +171,8 @@ class LabelEncoder:
                     y_array = np.array(y)
                     dtype = y_array.dtype
                 else:
-                    # already an array (either jax or numpy)
-                    y_array = y
+                    # already an array (either jax, numpy or pynapple)
+                    y_array = getattr(y, "d", y)
                 is_all_int = np.issubdtype(dtype, np.integer) or (
                     np.issubdtype(dtype, np.floating)
                     and (y_array == y_array.astype(int)).all()
@@ -215,6 +217,7 @@ class LabelEncoder:
                 f"Classes are not set. Must call ``set_classes`` before calling ``{method_name}``."
             )
 
+    @support_pynapple(conv_type="numpy")
     def _encode_numpy(self, y: ArrayLike, safe: bool = True) -> ArrayLike:
         """
         Encode labels for numpy arrays.
