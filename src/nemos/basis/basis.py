@@ -10,6 +10,7 @@ from numpy.typing import ArrayLike, NDArray
 
 from ..typing import FeatureMatrix
 from ._basis_mixin import AtomicBasisMixin, ConvBasisMixin, EvalBasisMixin
+from ._category import CategoryBasis
 from ._composition_utils import add_docstring
 from ._decaying_exponential import OrthExponentialBasis
 from ._fourier_basis import FourierBasis
@@ -2890,3 +2891,15 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         """
         # ruff: noqa: D205, D400
         return super().evaluate(*sample_pts)
+
+
+class Category(EvalBasisMixin, CategoryBasis):
+    """Basis for categorical data."""
+
+    def __init__(self, categories: List | NDArray | int, label: Optional[str] = None):
+        CategoryBasis.__init__(
+            self,
+            categories=categories,
+            label=label,
+        )
+        EvalBasisMixin.__init__(self, bounds=None)
