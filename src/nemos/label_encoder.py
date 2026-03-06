@@ -171,7 +171,12 @@ class LabelEncoder:
                 else:
                     # already an array (either jax or numpy)
                     y_array = y
-                if not np.issubdtype(dtype, np.integer):
+                is_all_int = (
+                    True
+                    if np.issubdtype(dtype, np.integer)
+                    else (y_array == y_array.astype(int)).all()
+                )
+                if not is_all_int:
                     raise ValueError(
                         f"Expected integer labels when classes are the default "
                         f"[0, ..., n_classes-1], got dtype {dtype} instead."
@@ -270,14 +275,29 @@ class LabelEncoder:
             produce silently incorrect indices.
         """
         if safe:
-            # expensive safeguard: JAX dispatch overhead + numpy conversion
-            y_unq = np.asarray(jnp.unique(y))
-            valid = np.asarray(self.classes_).tolist()
-            invalid = set(y_unq).difference(valid)
-            if len(invalid):
-                invalid = [int(lab) for lab in invalid]
+            y_arr = np.asarray(y)
+            invalid_mask = ~np.isin(y_arr, self.classes_)
+            if invalid_mask.any():
+                invalid = np.unique(y_arr[invalid_mask]).tolist()
                 raise KeyError(
-                    f"Unrecognized label(s) {invalid}. " f"Valid labels are {valid}."
+                    f"Unrecognized label(s) {invalid}. Valid labels are {self.classes_.tolist()}."
                 )
         y_encoded = jnp.searchsorted(self.classes_, y)
         return y_encoded
+
+    def __repr__(self):
+        """Represent encoder object.
+
+        Notes
+        -----
+        This class is for internal use only, a simple repr is sufficient.
+        Using `utils.format_repr` requires inheriting `BaseRegressor` which is an overkill.
+        """
+        cls_name = self.__class__.__name__
+        if self.classes_ is None:
+            args = f"(n_classes={self.n_classes})"
+        else:
+            args = (
+                f"(\n    n_classes={self.n_classes},\n    classes_={self.classes_}\n)"
+            )
+        return cls_name + args
