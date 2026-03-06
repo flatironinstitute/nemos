@@ -85,7 +85,7 @@ class ArrayDataLoader:
         *arrays: ArrayLike,
         batch_size: int,
         shuffle: bool = True,
-        seed: int = 0,
+        seed: int | None = None,
     ):
         """
         Initialize an in-memory array data loader.
@@ -100,7 +100,7 @@ class ArrayDataLoader:
         shuffle :
             Whether to shuffle data each epoch. Default is True.
         seed :
-            Random seed for shuffling. Default is 0.
+            Random seed for shuffling. Default is None.
         """
         if len(arrays) == 0:
             raise ValueError("Provide at least one array.")
@@ -225,7 +225,7 @@ class LazyArrayDataLoader:
         batch_size: int,
         shuffle: bool = True,
         fancy_index: bool = False,
-        seed: int = 0,
+        seed: int | None = None,
     ):
         """
         Initialize a lazy array data loader.
@@ -241,7 +241,7 @@ class LazyArrayDataLoader:
             Whether to shuffle chunk order and within-batch sample order
             each epoch. Default is True.
         seed :
-            Random seed for shuffling. Default is 0.
+            Random seed for shuffling. Default is None.
         fancy_index :
             If True and ``shuffle`` is enabled, shuffles the entire array like
             ``ArrayDataLoader`` instead of only shuffling chunk order. Note that
