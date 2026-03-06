@@ -20,6 +20,28 @@ from ._basis_mixin import AtomicBasisMixin
 
 
 class CategoryBasis(AtomicBasisMixin, Basis):
+    """
+    Base class for categorical one-hot encoding.
+
+    Encodes a categorical variable with ``n_categories`` unique labels as a
+    one-hot matrix of shape ``(n_samples, n_categories)``. Each column
+    corresponds to one category: the entry is 1 when the input equals that
+    category, and 0 everywhere else.
+
+    Parameters
+    ----------
+    categories :
+        The set of valid category labels. Accepted forms:
+
+        - ``int``: interpreted as the number of categories; labels default to
+          ``[0, 1, ..., categories-1]``.
+        - ``list`` or ``NDArray``: the explicit list of unique category labels.
+
+    label :
+        The label of the basis, intended to be descriptive of the task variable
+        being processed. For example: ``"trial_type"``, ``"stimulus_id"``.
+    """
+
     _convert_to_float = False
 
     def __init__(self, categories: List | NDArray | int, label: Optional[str] = None):
@@ -58,5 +80,28 @@ class CategoryBasis(AtomicBasisMixin, Basis):
         return getattr(categories, "__len__", lambda: categories)()
 
     def evaluate(self, xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
+        """
+        Evaluate the categorical basis at the provided samples.
+
+        Encodes each sample label as a one-hot vector of length ``n_basis_funcs``
+        (equal to the number of categories).
+
+        Parameters
+        ----------
+        xi :
+            Array of category labels. Every value must belong to the set of
+            categories defined at construction time. Shape is arbitrary; the
+            returned array appends the category axis as the last dimension.
+
+        Returns
+        -------
+        :
+            One-hot encoded array of shape ``(*xi.shape, n_basis_funcs)``.
+
+        Raises
+        ------
+        ValueError
+            If any label in ``xi`` is not in the set of known categories.
+        """
         encoded = self._label_encoder.encode(xi)
         return jax.nn.one_hot(encoded, self._label_encoder.n_classes)

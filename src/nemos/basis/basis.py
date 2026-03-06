@@ -2894,7 +2894,42 @@ class FourierEval(EvalBasisMixin, FourierBasis):
 
 
 class Category(EvalBasisMixin, CategoryBasis):
-    """Basis for categorical data."""
+    """
+    Categorical one-hot encoding basis.
+
+    Encodes a categorical variable with ``n_categories`` unique labels as a
+    one-hot feature matrix of shape ``(n_samples, n_categories)``. Each
+    column corresponds to one category: the entry is 1 when the input equals
+    that category, and 0 everywhere else.
+
+    Parameters
+    ----------
+    categories :
+        The set of valid category labels. Accepted forms:
+
+        - ``int``: interpreted as the number of categories; labels default to
+          ``[0, 1, ..., categories-1]``.
+        - ``list`` or ``NDArray``: the explicit list of unique category labels.
+
+    label :
+        The label of the basis, intended to be descriptive of the task variable
+        being processed. For example: ``"trial_type"``, ``"stimulus_id"``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from nemos.basis import Category
+    >>> # Create a categorical basis with 3 categories (labels 0, 1, 2)
+    >>> basis = Category(3)
+    >>> basis.n_basis_funcs
+    3
+    >>> # Encode some category labels
+    >>> labels = np.array([0, 1, 2, 0])
+    >>> features = basis.compute_features(labels)
+    >>> features.shape
+    (4, 3)
+
+    """
 
     def __init__(self, categories: List | NDArray | int, label: Optional[str] = None):
         CategoryBasis.__init__(
@@ -2903,3 +2938,83 @@ class Category(EvalBasisMixin, CategoryBasis):
             label=label,
         )
         EvalBasisMixin.__init__(self, bounds=None)
+
+    @add_docstring("evaluate", CategoryBasis)
+    def evaluate(self, xi: ArrayLike) -> NDArray:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import Category
+        >>> basis = Category(3)
+        >>> basis.evaluate(np.array([0, 1, 2, 0]))
+        Array([[1., 0., 0.],
+               [0., 1., 0.],
+               [0., 0., 1.],
+               [1., 0., 0.]], dtype=float...)
+        """
+        # ruff: noqa: D205, D400
+        return super().evaluate(xi)
+
+    @add_docstring("_compute_features", EvalBasisMixin)
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import Category
+
+        >>> labels = np.array([0, 0, 2, 1])
+        >>> basis = Category(3)
+        >>> basis.compute_features(labels)
+        Array([[1., 0., 0.],
+               [1., 0., 0.],
+               [0., 0., 1.],
+               [0., 1., 0.]], dtype=float...)
+
+        """
+        # ruff: noqa: D205, D400
+        return super().compute_features(xi)
+
+    @add_docstring("split_by_feature", CategoryBasis)
+    def split_by_feature(
+        self,
+        x: NDArray,
+        axis: int = 1,
+    ):
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import Category
+        >>> basis = Category(3, label="stimulus")
+        >>> X = basis.compute_features(np.array([0, 1, 2, 0, 1]))
+        >>> split_features = basis.split_by_feature(X, axis=1)
+        >>> for feature, arr in split_features.items():
+        ...     print(f"{feature}: shape {arr.shape}")
+        stimulus: shape (5, 3)
+
+        """
+        # ruff: noqa: D205, D400
+        return super().split_by_feature(x, axis=axis)
+
+    @add_docstring("set_input_shape", AtomicBasisMixin)
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
+        """
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> basis = nmo.basis.Category(3)
+        >>> # Configure with an integer input:
+        >>> _ = basis.set_input_shape(1)
+        >>> basis.n_output_features
+        3
+        >>> # Configure with a tuple:
+        >>> _ = basis.set_input_shape((4, 5))
+        >>> basis.n_output_features
+        60
+
+        """
+        # ruff: noqa: D205, D400
+        return AtomicBasisMixin.set_input_shape(self, xi)
