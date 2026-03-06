@@ -40,6 +40,7 @@ warnings.filterwarnings(
 )
 ```
 
+(finegrained_regularization)=
 # Regularizing parameters with different strengths
 
 NeMoS allows for regularizing individual parameters with different regulariation strengths.

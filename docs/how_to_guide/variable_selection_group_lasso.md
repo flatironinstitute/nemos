@@ -11,6 +11,7 @@ kernelspec:
   name: python3
 ---
 
+(variable_selection_group_lasso)=
 # Selecting Covariates via Group Lasso
 
 ## Overview

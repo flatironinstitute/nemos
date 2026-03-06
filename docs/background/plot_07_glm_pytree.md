@@ -135,7 +135,7 @@ X_hd  = bin_variable(hd,    n_hd)    # (T,  8)
 :::{admonition} Basis functions vs. binning
 :class: note
 Binning treats each bin independently, yielding non-smooth estimates that require many bins
-for adequate resolution. [Basis functions](basis-background) provide smoother estimates
+for adequate resolution. [Basis functions](table_basis) provide smoother estimates
 with fewer parameters and handle circularity properly
 (e.g. [`CyclicBSplineEval`](nemos.basis.CyclicBSplineEval) for head direction).
 For real analyses we recommend basis functions over binning.
