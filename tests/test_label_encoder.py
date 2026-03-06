@@ -160,8 +160,9 @@ def test_set_classes_sorts(y, classes_unsorted, classes_sorted):
         (jnp.array([0, 1, 5]), True, "Unrecognized label"),
         (np.array([0, 1, 5]), False, None),
         (jnp.array([0, 1, 5]), False, None),
-        # non-integer dtype: safe=True raises with dtype message
-        (np.array([0.0, 1.0, 2.0]), True, "Expected integer"),
+        # float array with integer values: accepted under relaxed check
+        (np.array([0.0, 1.0, 2.0]), True, None),
+        # non-numeric dtype: safe=True raises with dtype message
         (np.array(["a", "b", "c"]), True, "Expected integer"),
         # valid default labels: safe=True does not raise
         (np.array([0, 1, 2]), True, None),
