@@ -33,6 +33,11 @@ class TestArrayDataLoader:
 
         assert loader.n_samples == 100
 
+    def test_no_arrays_raises(self):
+        """Test that providing no arrays raises error."""
+        with pytest.raises(ValueError, match="Provide at least one array"):
+            ArrayDataLoader(batch_size=32)
+
     def test_sample_batch(self):
         """Test sample_batch returns correct shapes."""
         X = np.random.randn(100, 5)
@@ -84,8 +89,8 @@ class TestArrayDataLoader:
         X_concat = jnp.concatenate(all_X)
         y_concat = jnp.concatenate(all_y)
 
-        assert X_concat.shape[0] == 100
-        assert y_concat.shape[0] == 100
+        np.testing.assert_array_equal(X_concat, X)
+        np.testing.assert_array_equal(y_concat, y)
 
     def test_iteration_variadic(self):
         """Test that iteration works with >2 data arrays."""
@@ -117,7 +122,7 @@ class TestArrayDataLoader:
         """Test shuffling produces different order (statistically)."""
         X = np.arange(1000).reshape(1000, 1)
         y = np.arange(1000)
-        loader = ArrayDataLoader(X, y, batch_size=100, shuffle=True, seed=123)
+        loader = ArrayDataLoader(X, y, batch_size=100, shuffle=True)
 
         X_batch1, _ = next(iter(loader))
         X_batch2, _ = next(iter(loader))
@@ -263,7 +268,7 @@ class TestLazyArrayDataLoader:
         """Test that chunk order changes between epochs."""
         X = np.arange(1000).reshape(1000, 1)
         y = np.arange(1000)
-        loader = LazyArrayDataLoader(X, y, batch_size=100, shuffle=True, seed=123)
+        loader = LazyArrayDataLoader(X, y, batch_size=100, shuffle=True)
 
         X_batch1, _ = next(iter(loader))
         X_batch2, _ = next(iter(loader))
@@ -274,7 +279,7 @@ class TestLazyArrayDataLoader:
         """Test that samples within a batch are shuffled."""
         X = np.arange(100).reshape(100, 1)
         y = np.arange(100)
-        loader = LazyArrayDataLoader(X, y, batch_size=100, shuffle=True, seed=42)
+        loader = LazyArrayDataLoader(X, y, batch_size=100, shuffle=True)
 
         # With batch_size == n_samples, there's one chunk so chunk shuffle
         # is a no-op, but within-batch shuffle should still permute.
@@ -337,6 +342,85 @@ class TestLazyArrayDataLoader:
         batch_sizes = [X_b.shape[0] for X_b, _ in loader]
         assert batch_sizes == [32, 32, 32, 4]
 
+    def test_fancy_index_raises_with_slice_only_array(self):
+        X = SliceOnlyArray(np.random.randn(100, 5))
+        y = SliceOnlyArray(np.random.randn(100))
+        loader = LazyArrayDataLoader(
+            X, y, batch_size=32, shuffle=True, fancy_index=True
+        )
+
+        with pytest.raises(TypeError, match="sequential"):
+            next(iter(loader))
+
+    def test_fancy_index_requires_shuffle(self):
+        """Test that fancy_index=True without shuffle raises error."""
+        X = np.random.randn(100, 5)
+        y = np.random.randn(100)
+
+        with pytest.raises(ValueError, match="fancy_index if shuffling"):
+            LazyArrayDataLoader(X, y, batch_size=32, shuffle=False, fancy_index=True)
+
+    def test_fancy_index_yields_all_data(self):
+        """Test that fancy_index iteration covers all samples."""
+        X = np.arange(100).reshape(100, 1)
+        y = np.arange(100)
+        loader = LazyArrayDataLoader(
+            X, y, batch_size=32, shuffle=True, fancy_index=True
+        )
+
+        all_X = []
+        all_y = []
+        for X_batch, y_batch in loader:
+            all_X.append(X_batch)
+            all_y.append(y_batch)
+
+        X_concat = jnp.concatenate(all_X)
+        y_concat = jnp.concatenate(all_y)
+        sort_idx = jnp.argsort(y_concat)
+        np.testing.assert_array_equal(y_concat[sort_idx], np.arange(100))
+        np.testing.assert_array_equal(
+            X_concat[sort_idx], np.arange(100).reshape(100, 1)
+        )
+
+    def test_fancy_index_shuffles(self):
+        """Test that fancy_index mode actually shuffles the data."""
+        X = np.arange(100).reshape(100, 1)
+        y = np.arange(100)
+        loader = LazyArrayDataLoader(
+            X, y, batch_size=100, shuffle=True, fancy_index=True
+        )
+
+        X_batch, _ = next(iter(loader))
+        assert not np.array_equal(X_batch, np.arange(100).reshape(100, 1))
+
+    def test_fancy_index_re_iterable(self):
+        """Test that fancy_index loader produces different shuffles across epochs."""
+        X = np.arange(100).reshape(100, 1)
+        y = np.arange(100)
+        loader = LazyArrayDataLoader(
+            X, y, batch_size=32, shuffle=True, fancy_index=True
+        )
+
+        y1 = jnp.concatenate([y_b for _, y_b in loader])
+        y2 = jnp.concatenate([y_b for _, y_b in loader])
+
+        # both cover all samples
+        np.testing.assert_array_equal(jnp.sort(y1), np.arange(100))
+        np.testing.assert_array_equal(jnp.sort(y2), np.arange(100))
+        # but in different order
+        assert not np.array_equal(y1, y2)
+
+    def test_fancy_index_last_batch_smaller(self):
+        """Test that the last batch can be smaller with fancy_index."""
+        X = np.random.randn(100, 5)
+        y = np.random.randn(100)
+        loader = LazyArrayDataLoader(
+            X, y, batch_size=32, shuffle=True, fancy_index=True
+        )
+
+        batch_sizes = [X_b.shape[0] for X_b, _ in loader]
+        assert batch_sizes == [32, 32, 32, 4]
+
 
 zarr = pytest.importorskip("zarr")
 h5py = pytest.importorskip("h5py")
@@ -347,7 +431,7 @@ class TestLazyArrayDataLoaderIntegration:
 
     @pytest.fixture
     def data(self):
-        rng = np.random.default_rng(42)
+        rng = np.random.default_rng(123)
         X = rng.standard_normal((100, 5))
         y = rng.standard_normal(100)
         return X, y
@@ -395,7 +479,7 @@ class TestLazyArrayDataLoaderIntegration:
             "hdf5": hdf5_arrays,
         }[request.param]
 
-    def test_no_eager_conversion(self, lazy_arrays):
+    def test_no_eager_conversion_on_construction(self, lazy_arrays):
         """Test that arrays are stored as-is, not converted to JAX."""
         X_lazy, y_lazy = lazy_arrays
         loader = LazyArrayDataLoader(X_lazy, y_lazy, batch_size=32)
@@ -405,18 +489,14 @@ class TestLazyArrayDataLoaderIntegration:
         assert not isinstance(loader.arrays[0], jnp.ndarray)
         assert not isinstance(loader.arrays[1], jnp.ndarray)
 
-    def test_iteration_yields_all_data(self, data, lazy_arrays):
-        """Test that all samples are yielded."""
-        X_ref, _ = data
+    def test_batches_are_jax_arrays(self, lazy_arrays):
+        """Test that yielded batches are JAX arrays."""
         X_lazy, y_lazy = lazy_arrays
-        loader = LazyArrayDataLoader(X_lazy, y_lazy, batch_size=32, shuffle=False)
+        loader = LazyArrayDataLoader(X_lazy, y_lazy, batch_size=32)
 
-        all_y = []
-        for _, y_batch in loader:
-            all_y.append(y_batch)
-
-        y_concat = jnp.concatenate(all_y)
-        assert y_concat.shape[0] == X_ref.shape[0]
+        X_batch, y_batch = next(iter(loader))
+        assert isinstance(X_batch, jnp.ndarray)
+        assert isinstance(y_batch, jnp.ndarray)
 
     def test_data_matches_original(self, data, lazy_arrays):
         """Test that loaded data matches the original arrays."""
@@ -432,15 +512,6 @@ class TestLazyArrayDataLoaderIntegration:
         np.testing.assert_array_almost_equal(jnp.concatenate(all_X), X_ref)
         np.testing.assert_array_almost_equal(jnp.concatenate(all_y), y_ref)
 
-    def test_batches_are_jax_arrays(self, lazy_arrays):
-        """Test that yielded batches are JAX arrays."""
-        X_lazy, y_lazy = lazy_arrays
-        loader = LazyArrayDataLoader(X_lazy, y_lazy, batch_size=32)
-
-        X_batch, y_batch = next(iter(loader))
-        assert isinstance(X_batch, jnp.ndarray)
-        assert isinstance(y_batch, jnp.ndarray)
-
     def test_re_iterable(self, lazy_arrays):
         """Test that the loader can be iterated multiple times."""
         X_lazy, y_lazy = lazy_arrays
@@ -454,11 +525,9 @@ class TestLazyArrayDataLoaderIntegration:
             np.testing.assert_array_equal(X1, X2)
 
     def test_shuffle(self, lazy_arrays):
-        """Test that shuffling produces different batch order."""
+        """Test that shuffling produces different batch order on epochs."""
         X_lazy, y_lazy = lazy_arrays
-        loader = LazyArrayDataLoader(
-            X_lazy, y_lazy, batch_size=32, shuffle=True, seed=123
-        )
+        loader = LazyArrayDataLoader(X_lazy, y_lazy, batch_size=32, shuffle=True)
 
         X_batch1, _ = next(iter(loader))
         X_batch2, _ = next(iter(loader))
@@ -467,14 +536,55 @@ class TestLazyArrayDataLoaderIntegration:
 
     def test_sample_batch(self, data, lazy_arrays):
         """Test that sample_batch returns correct data."""
-        X_ref, _ = data
+        X_ref, y_ref = data
         X_lazy, y_lazy = lazy_arrays
         loader = LazyArrayDataLoader(X_lazy, y_lazy, batch_size=32)
 
         X_batch, y_batch = loader.sample_batch()
         assert X_batch.shape == (32, 5)
+        assert y_batch.shape == (32,)
         assert isinstance(X_batch, jnp.ndarray)
+        assert isinstance(y_batch, jnp.ndarray)
         np.testing.assert_array_almost_equal(X_batch, X_ref[:32])
+        np.testing.assert_array_almost_equal(y_batch, y_ref[:32])
+
+    def test_fancy_index_data_matches_original(self, data, lazy_arrays):
+        """Test that fancy_index loaded data matches the original arrays."""
+        X_ref, y_ref = data
+        X_lazy, y_lazy = lazy_arrays
+        loader = LazyArrayDataLoader(
+            X_lazy, y_lazy, batch_size=32, shuffle=True, fancy_index=True
+        )
+
+        all_X, all_y = [], []
+        for X_batch, y_batch in loader:
+            all_X.append(X_batch)
+            all_y.append(y_batch)
+
+        X_concat = jnp.concatenate(all_X)
+        y_concat = jnp.concatenate(all_y)
+        # sort by y to align rows, then compare
+        sort_idx_ref = np.argsort(y_ref)
+        sort_idx_out = jnp.argsort(y_concat)
+        np.testing.assert_array_almost_equal(
+            X_concat[sort_idx_out], X_ref[sort_idx_ref]
+        )
+        np.testing.assert_array_almost_equal(
+            y_concat[sort_idx_out], y_ref[sort_idx_ref]
+        )
+
+    def test_fancy_index_shuffles(self, lazy_arrays):
+        """Test that fancy_index mode shuffles data with on-disk backends."""
+        X_lazy, y_lazy = lazy_arrays
+        loader = LazyArrayDataLoader(
+            X_lazy, y_lazy, batch_size=32, shuffle=True, fancy_index=True
+        )
+
+        # Collect all y values in iteration order
+        all_y = jnp.concatenate([y_b for _, y_b in loader])
+        # Compare to sequential read
+        y_sequential = jnp.asarray(y_lazy[:])
+        assert not np.array_equal(all_y, y_sequential)
 
 
 class TestPreprocessedDataLoader:

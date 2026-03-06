@@ -198,9 +198,12 @@ class LazyArrayDataLoader:
     and converts each batch to JAX on the fly. This keeps memory usage
     proportional to batch size rather than dataset size.
 
-    Shuffling is approximate: chunk order is randomized each epoch and
-    samples within each batch are permuted after loading. Samples within
+    By default shuffling is approximate: chunk order is randomized each epoch
+    and samples within each batch are permuted after loading. Samples within
     the same chunk always end up in the same batch.
+    If the arrays support fancy indexing, passing ``fancy_index=True`` enables
+    the same shuffling behavior as ``ArrayDataLoader``.
+    Note that this might lead to slower reads than reading contiguous segments.
 
     This loader is re-iterable: each call to ``__iter__()`` returns a fresh
     iterator.
@@ -221,6 +224,7 @@ class LazyArrayDataLoader:
         *arrays: ArrayLike,
         batch_size: int,
         shuffle: bool = True,
+        fancy_index: bool = False,
         seed: int = 0,
     ):
         """
@@ -238,13 +242,21 @@ class LazyArrayDataLoader:
             each epoch. Default is True.
         seed :
             Random seed for shuffling. Default is 0.
+        fancy_index :
+            If True and ``shuffle`` is enabled, shuffles the entire array like
+            ``ArrayDataLoader`` instead of only shuffling chunk order. Note that
+            indices within each batch are sorted to support HDF5 arrays via h5py.
         """
         if len(arrays) == 0:
             raise ValueError("Provide at least one array.")
 
+        if fancy_index and not shuffle:
+            raise ValueError("Please only enable fancy_index if shuffling.")
+
         self.arrays = arrays
         self.batch_size = batch_size
         self.shuffle = shuffle
+        self.fancy_index = fancy_index
         self._rng = np.random.default_rng(seed)
 
         if len(set(arr.shape[0] for arr in self.arrays)) != 1:
@@ -262,25 +274,62 @@ class LazyArrayDataLoader:
         end = min(self.batch_size, self.n_samples)
         return tuple(jnp.asarray(arr[:end]) for arr in self.arrays)
 
-    def __iter__(self) -> Iterator[tuple[jnp.ndarray, ...]]:
-        """Return fresh iterator. Shuffles chunk order and within-batch if enabled."""
+    def _iter_no_shuffle(self) -> Iterator[tuple[jnp.ndarray, ...]]:
+        """Return fresh iterator. Yields batches in sequential order."""
         n = self.n_samples
         chunks = [
             (start, min(start + self.batch_size, n))
             for start in range(0, n, self.batch_size)
         ]
 
-        if self.shuffle:
-            self._rng.shuffle(chunks)
+        for start, end in chunks:
+            batch = tuple(jnp.asarray(arr[start:end]) for arr in self.arrays)
+
+            yield batch
+
+    def _iter_shuffle_chunks(self) -> Iterator[tuple[jnp.ndarray, ...]]:
+        """Return fresh iterator. Shuffles chunk order and within-batch."""
+        n = self.n_samples
+        chunks = [
+            (start, min(start + self.batch_size, n))
+            for start in range(0, n, self.batch_size)
+        ]
+        self._rng.shuffle(chunks)
 
         for start, end in chunks:
             batch = tuple(jnp.asarray(arr[start:end]) for arr in self.arrays)
 
-            if self.shuffle:
-                local_perm = self._rng.permutation(end - start)
-                batch = tuple(b[local_perm] for b in batch)
+            local_perm = self._rng.permutation(end - start)
+            batch = tuple(b[local_perm] for b in batch)
 
             yield batch
+
+    def _iter_shuffle_whole(self) -> Iterator[tuple[jnp.ndarray, ...]]:
+        """Return fresh iterator. Shuffles the entire array via fancy indexing."""
+        n = self.n_samples
+        perm = self._rng.permutation(n)
+
+        for start in range(0, n, self.batch_size):
+            end = min(start + self.batch_size, n)
+
+            idx = np.sort(perm[start:end])
+            batch = tuple(jnp.asarray(arr[idx]) for arr in self.arrays)
+            # restore shuffle order within the batch
+            # double argsort gives the rank of each element
+            # i.e. where it ended up after sorting
+            local_perm = np.argsort(np.argsort(perm[start:end]))
+            batch = tuple(b[local_perm] for b in batch)
+            yield batch
+
+    def __iter__(self) -> Iterator[tuple[jnp.ndarray, ...]]:
+        """Return a fresh iterator over batches, dispatching to the appropriate shuffling strategy."""
+        if not self.shuffle:
+            return self._iter_no_shuffle()
+
+        if self.fancy_index:
+            return self._iter_shuffle_whole()
+
+        return self._iter_shuffle_chunks()
 
 
 def is_data_loader(obj) -> bool:
