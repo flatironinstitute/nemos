@@ -65,6 +65,7 @@ class CategoryBasis(AtomicBasisMixin, Basis):
     @categories.setter
     def categories(self, categories: List | NDArray | int):
         if isinstance(categories, int):
+            self._label_encoder = LabelEncoder(categories)
             self._label_encoder.set_classes(
                 jnp.arange(self._get_n_categories(categories))
             )
