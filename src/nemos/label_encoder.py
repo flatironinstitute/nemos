@@ -255,7 +255,7 @@ class LabelEncoder:
             # fastest way to return the encoded indices.
             return np.searchsorted(self.classes_, y)
 
-    def _encode_jax(self, y: ArrayLike, safe: bool = True) -> ArrayLike:
+    def _encode_jax(self, y: jnp.ndarray, safe: bool = True) -> ArrayLike:
         """
         Encode labels for JAX arrays.
 
@@ -275,6 +275,15 @@ class LabelEncoder:
             produce silently incorrect indices.
         """
         if safe:
+            # check based on type:
+            # - y is a jax.ndarray -> numeric
+            # - classes_ np.array but not numeric
+            if ~np.issubdtype(self.classes_.dtype, np.number):
+                invalid = jnp.unique(y).tolist()
+                raise KeyError(
+                    f"Unrecognized label(s) {invalid}. Valid labels are {self.classes_.tolist()}."
+                )
+            # continue execution checking the content of numeric arrays
             invalid_mask = ~jnp.isin(y, self.classes_)
             if invalid_mask.any():
                 invalid = np.unique(y[invalid_mask]).tolist()
