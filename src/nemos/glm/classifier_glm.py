@@ -106,6 +106,13 @@ class ClassifierMixin:
         """Class labels, or None if not set."""
         return self._label_encoder.classes_
 
+    @classes_.setter
+    def classes_(self, value: NDArray | None) -> None:
+        if value is not None:
+            self._label_encoder.set_classes(value)
+        else:
+            self._label_encoder.reset()
+
     def compute_loss(
         self,
         params,
