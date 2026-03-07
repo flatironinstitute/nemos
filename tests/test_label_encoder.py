@@ -282,7 +282,9 @@ def test_encode_numpy_path_pynapple_metadata(safe, ndim):
     np.testing.assert_array_equal(np.asarray(result.d), expected)
     if ndim == 2:
         np.testing.assert_array_equal(result.columns, y_tsd.columns)
-        np.testing.assert_array_equal(result.get_info("region"), y_tsd.get_info("region"))
+        np.testing.assert_array_equal(
+            result.get_info("region"), y_tsd.get_info("region")
+        )
 
 
 @pytest.mark.parametrize("safe", [True, False])
