@@ -10,12 +10,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass, fields
 from functools import partial
+from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
+import lazy_loader as lazy
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from .type_casting import cast_to_pynapple
+
+nap = lazy.load("pynapple")
+
+if TYPE_CHECKING:
+    import pynapple as nap
 
 
 @dataclass
@@ -218,14 +225,16 @@ class LabelEncoder:
                 f"Classes are not set. Must call ``set_classes`` before calling ``{method_name}``."
             )
 
-    def _encode_numpy(self, y: ArrayLike, safe: bool = True) -> ArrayLike:
+    def _encode_numpy(
+        self, y: ArrayLike | nap.Tsd | nap.TsdFrame | nap.TsdTensor, safe: bool = True
+    ) -> ArrayLike:
         """
         Encode labels for numpy arrays.
 
         Parameters
         ----------
         y :
-            Array of class labels to encode.
+            Array-like or pynapple tsd of class labels to encode.
         safe :
             If ``True``, use dict-based lookup via ``np.fromiter``, which raises
             ``ValueError`` on any unrecognized label. The dict lookup is faster
