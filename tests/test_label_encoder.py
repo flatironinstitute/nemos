@@ -2,6 +2,7 @@ from contextlib import nullcontext as does_not_raise
 
 import jax.numpy as jnp
 import numpy as np
+import pynapple as nap
 import pytest
 
 from nemos.label_encoder import LabelEncoder
@@ -160,8 +161,9 @@ def test_set_classes_sorts(y, classes_unsorted, classes_sorted):
         (jnp.array([0, 1, 5]), True, "Unrecognized label"),
         (np.array([0, 1, 5]), False, None),
         (jnp.array([0, 1, 5]), False, None),
-        # non-integer dtype: safe=True raises with dtype message
-        (np.array([0.0, 1.0, 2.0]), True, "Expected integer"),
+        # float array with integer values: accepted under relaxed check
+        (np.array([0.0, 1.0, 2.0]), True, None),
+        # non-numeric dtype: safe=True raises with dtype message
         (np.array(["a", "b", "c"]), True, "Expected integer"),
         # valid default labels: safe=True does not raise
         (np.array([0, 1, 2]), True, None),
@@ -210,3 +212,98 @@ def test_check_classes_behavior():
     # set and retry
     encoder.set_classes(["0", "1", "2", "3"])
     encoder.check_classes_is_set("hello")
+
+
+# ---------------------------------------------------------------------------
+# Pynapple support
+# ---------------------------------------------------------------------------
+
+
+def _make_tsd(data):
+    """Wrap an array as a pynapple time series with a two-interval epoch.
+
+    Uses t=[0,1,2,3,4] split into two epochs [0,2] and [3,4] to exercise
+    non-trivial time support.
+
+    - ndim == 1 → ``nap.Tsd``
+    - ndim == 2 → ``nap.TsdFrame`` with columns ``["c0", "c1", ...]``
+      and metadata ``region=["r0", "r1", ...]``
+    - ndim  > 2 → ``nap.TsdTensor``
+    """
+    data = np.asarray(data)
+    t = np.arange(data.shape[0], dtype=float)
+    ep = nap.IntervalSet(start=[0, 3], end=[2, 4])
+    if data.ndim == 1:
+        return nap.Tsd(t=t, d=data, time_support=ep)
+    elif data.ndim == 2:
+        columns = [f"c{i}" for i in range(data.shape[1])]
+        tsd = nap.TsdFrame(t=t, d=data, time_support=ep, columns=columns)
+        tsd.set_info({"region": [f"r{i}" for i in range(data.shape[1])]})
+        return tsd
+    else:
+        return nap.TsdTensor(t=t, d=data, time_support=ep)
+
+
+_NAP_TYPES = {1: nap.Tsd, 2: nap.TsdFrame, 3: nap.TsdTensor}
+
+
+def _make_label_array(ndim, classes, n_samples=5):
+    """Return an integer array of shape ``(n_samples, 2, ..., 2)`` (ndim axes)
+    whose values cycle through ``classes``."""
+    shape = (n_samples,) + (2,) * (ndim - 1)
+    return classes[np.arange(np.prod(shape)).reshape(shape) % len(classes)]
+
+
+_NUMPY_CLASSES = np.array([3, 4, 5])  # non-default → numpy encoding path
+_SKIP_CLASSES = np.array([0, 1, 2])  # default     → skip-encoding path
+
+
+@pytest.mark.parametrize("safe", [True, False])
+@pytest.mark.parametrize("ndim", [1, 2, 3])
+def test_encode_numpy_path_pynapple_metadata(safe, ndim):
+    """Non-skip encoding path with TsdFrame input: pynapple type, columns,
+    and metadata are preserved for both safe=True and safe=False.
+
+    For safe=True, re-attachment is handled explicitly inside ``_encode_numpy``.
+    For safe=False, pynapple's ``__array_function__`` protocol preserves the
+    type through ``np.searchsorted``.
+    """
+    encoder = LabelEncoder(len(_NUMPY_CLASSES))
+    encoder.set_classes(_NUMPY_CLASSES)
+    data = _make_label_array(ndim, _NUMPY_CLASSES)
+    y_tsd = _make_tsd(data)
+    expected = encoder._encode_numpy(data, safe=safe)
+
+    result = encoder.encode(y_tsd, safe=safe)
+
+    assert isinstance(result, _NAP_TYPES[ndim])
+    np.testing.assert_array_equal(result.t, y_tsd.t)
+    np.testing.assert_array_equal(result.time_support.values, y_tsd.time_support.values)
+    np.testing.assert_array_equal(np.asarray(result.d), expected)
+    if ndim == 2:
+        np.testing.assert_array_equal(result.columns, y_tsd.columns)
+        np.testing.assert_array_equal(
+            result.get_info("region"), y_tsd.get_info("region")
+        )
+
+
+@pytest.mark.parametrize("safe", [True, False])
+@pytest.mark.parametrize("ndim", [1, 2, 3])
+def test_encode_skip_path_pynapple_returns_original(safe, ndim):
+    """Skip-encoding path: original pynapple object returned unchanged,
+    including columns and metadata for TsdFrame."""
+    encoder = LabelEncoder(len(_SKIP_CLASSES))
+    encoder.set_classes(_SKIP_CLASSES)
+    data = _make_label_array(ndim, _SKIP_CLASSES)
+    y_tsd = _make_tsd(data)
+
+    result = encoder.encode(y_tsd, safe=safe)
+
+    assert result is y_tsd
+    if ndim == 2:
+        np.testing.assert_array_equal(
+            result.columns, [f"c{i}" for i in range(data.shape[1])]
+        )
+        np.testing.assert_array_equal(
+            result.get_info("region"), [f"r{i}" for i in range(data.shape[1])]
+        )
