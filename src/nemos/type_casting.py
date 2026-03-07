@@ -467,10 +467,12 @@ def support_pynapple(conv_type: Literal["jax", "numpy"] = "jax") -> Callable:
                     )
                 time, time_support = get_time_info(*args, **kwargs)
 
-                def cast_out(pytree):
-                    # cast back to pynapple
+                def cast_out(pytree, columns=None, metadata=None):
+                    # cast back to pynapple, re-attaching stored columns/metadata
                     return jax.tree_util.tree_map(
-                        lambda x: cast_to_pynapple(x, time, time_support),
+                        lambda x: cast_to_pynapple(
+                            x, time, time_support, columns=columns, metadata=metadata
+                        ),
                         pytree,
                     )
 
@@ -489,9 +491,14 @@ def support_pynapple(conv_type: Literal["jax", "numpy"] = "jax") -> Callable:
                     f"Conversion of type '{conv_type}' not implemented!"
                 )
             # apply function/method
+            # extract the metadata from self.
+            meta = getattr(args[0], "_metadata", None) if args else None
+            col = meta.get("columns", None) if hasattr(meta, "get") else None
+            meta = meta.get("metadata", None) if hasattr(meta, "get") else None
+
             res = func(*args, **kwargs)
             # revert casting if pynapple
-            return cast_out(res)
+            return cast_out(res, columns=col, metadata=meta)
 
         return wrapper
 
