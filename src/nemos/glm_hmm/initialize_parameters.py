@@ -1,5 +1,7 @@
 """Initialization functions and related utility functions."""
 
+from __future__ import annotations
+
 import inspect
 from typing import Any, Callable, Literal, Optional, Protocol, Tuple
 
@@ -122,16 +124,40 @@ def random_glm_params_init(
     return coef, intercept
 
 
-def ones_scale_init(
+def constant_scale_init(
     n_states: int,
     X: DESIGN_INPUT_TYPE,
     y: NDArray | jnp.ndarray,
     random_key=jax.random.PRNGKey(124),
+    scale_val: float = 1.0,
 ):
-    """Initialize scale to ones."""
+    """
+    Initialize scale to a constant value.
+
+    Creates a scale parameter array where all elements are set to the same value.
+
+    Parameters
+    ----------
+    n_states : int
+        Number of HMM states.
+    X : DESIGN_INPUT_TYPE
+        Design matrix, unused but included for API consistency.
+    y : NDArray | jnp.ndarray
+        Observations, used to determine number of neurons from shape.
+    random_key : jax.random.PRNGKey
+        Random key, unused for this initialization, but included for API consistency.
+    scale_val : float
+        The constant value to initialize all scale parameters to. Default is 1.0.
+
+    Returns
+    -------
+    scale : jnp.ndarray
+        Scale array of shape (n_states,) for single neuron or (n_neurons, n_states)
+        for multiple neurons, with all values set to `scale_val`.
+    """
     is_one_dim = y.ndim == 1
     n_neurons = 1 if is_one_dim else y.shape[1]
-    scale = jnp.ones((n_neurons, n_states), dtype=float)
+    scale = jnp.full((n_neurons, n_states), scale_val, dtype=float)
     if is_one_dim:
         scale = jnp.squeeze(scale, axis=0)
     return scale
@@ -264,7 +290,7 @@ AVAILABLE_INIT_FUNCTIONS = {
         "random": random_glm_params_init,
     },
     "scale_init": {
-        "ones": ones_scale_init,
+        "constant": constant_scale_init,
     },
     "transition_proba_init": {
         "sticky": sticky_transition_proba_init,
@@ -282,7 +308,7 @@ _IO_AVAILABLE_INIT_FUNCTIONS["glm_params_init"].update(
     }
 )
 _IO_AVAILABLE_INIT_FUNCTIONS["scale_init"].update(
-    {"nemos.glm_hmm.initialize_parameters.ones_scale_init": ones_scale_init}
+    {"nemos.glm_hmm.initialize_parameters.constant_scale_init": constant_scale_init}
 )
 _IO_AVAILABLE_INIT_FUNCTIONS["transition_proba_init"].update(
     {
@@ -297,7 +323,7 @@ _IO_AVAILABLE_INIT_FUNCTIONS["initial_proba_init"].update(
 
 DEFAULT_INIT_FUNCTION: INITIALIZATION_FN_DICT = {
     "glm_params_init": random_glm_params_init,
-    "scale_init": ones_scale_init,
+    "scale_init": constant_scale_init,
     "transition_proba_init": sticky_transition_proba_init,
     "initial_proba_init": uniform_initial_proba_init,
 }
@@ -309,8 +335,8 @@ def glm_hmm_initialization(
     y: NDArray | jnp.ndarray,
     inverse_link_function: Callable,
     random_key=jax.random.PRNGKey(123),
-    init_registry: Optional[dict] = None,
-    init_kwargs: Optional[dict] = None,
+    initialization_funcs: Optional[dict] = None,
+    initialization_kwargs: Optional[dict] = None,
 ) -> GLMHMMUserParams:
     """
     Initialize all GLM-HMM parameters.
@@ -331,12 +357,15 @@ def glm_hmm_initialization(
         The inverse link function of the GLM.
     random_key : jax.random.PRNGKey
         Random key for reproducibility. Default is PRNGKey(123).
-    init_registry : dict, optional
+    initialization_funcs : dict, optional
         Dictionary mapping parameter names to initialization functions. Valid keys are:
         - 'glm_params_init': Function to initialize GLM coefficients and intercept
         - 'initial_proba_init': Function to initialize initial state probabilities
         - 'transition_proba_init': Function to initialize transition probabilities
         If None, uses DEFAULT_INIT_FUNCTION. If partial dict, missing keys use defaults.
+    initialization_kwargs : dict, optional
+        The initialization function keyword arguments. Keys must be a subset of those of
+        `initialization_funcs`.
 
     Returns
     -------
@@ -352,28 +381,28 @@ def glm_hmm_initialization(
     transition_proba : jnp.ndarray
         Transition probability matrix of shape (n_states, n_states).
     """
-    if init_registry is None:
-        init_registry = DEFAULT_INIT_FUNCTION
+    if initialization_funcs is None:
+        initialization_funcs = DEFAULT_INIT_FUNCTION
     else:
-        init_registry = _resolve_init_funcs_registry(init_registry)
-    if init_kwargs is None:
-        init_kwargs = {}
+        initialization_funcs = _resolve_init_funcs_registry(initialization_funcs)
+    if initialization_kwargs is None:
+        initialization_kwargs = {}
     random_key, subkey = jax.random.split(random_key)
-    kwargs = init_kwargs.get("glm_params_init", {})
-    coef, intercept = init_registry["glm_params_init"](
+    kwargs = initialization_kwargs.get("glm_params_init", {})
+    coef, intercept = initialization_funcs["glm_params_init"](
         n_states, X, y, inverse_link_function, subkey, **kwargs
     )
     random_key, subkey = jax.random.split(random_key)
-    kwargs = init_kwargs.get("scale_init", {})
-    scale = init_registry["scale_init"](n_states, X, y, subkey, **kwargs)
+    kwargs = initialization_kwargs.get("scale_init", {})
+    scale = initialization_funcs["scale_init"](n_states, X, y, subkey, **kwargs)
     random_key, subkey = jax.random.split(random_key)
-    kwargs = init_kwargs.get("initial_proba_init", {})
-    initial_proba = init_registry["initial_proba_init"](
+    kwargs = initialization_kwargs.get("initial_proba_init", {})
+    initial_proba = initialization_funcs["initial_proba_init"](
         n_states, X, y, subkey, **kwargs
     )
     _, subkey = jax.random.split(random_key)
-    kwargs = init_kwargs.get("transition_proba_init", {})
-    transition_proba = init_registry["transition_proba_init"](
+    kwargs = initialization_kwargs.get("transition_proba_init", {})
+    transition_proba = initialization_funcs["transition_proba_init"](
         n_states, X, y, subkey, **kwargs
     )
     return coef, intercept, scale, initial_proba, transition_proba
@@ -585,3 +614,107 @@ def _resolve_dirichlet_priors(
             f"Invalid type for Dirichlet prior alpha parameters: ``{type(alphas).__name__}``. "
             f"Must be None or an array-like object of shape ``{expected_shape}`` with strictly positive values."
         )
+
+
+def _resolve_init_kwargs(
+    func_name: str,
+    init_func: Callable,
+    kwargs: dict | None,
+) -> dict:
+    """
+    Validate keyword arguments for a single initialization function.
+
+    Checks that provided kwargs match optional parameters in the function's
+    signature (parameters beyond the required positional ones).
+
+    Parameters
+    ----------
+    func_name : str
+        Registry key for the initialization function (e.g., 'glm_params_init').
+    init_func : Callable
+        The initialization function to validate kwargs against.
+    kwargs : dict or None
+        Keyword arguments to validate. If None or empty, returns empty dict.
+
+    Returns
+    -------
+    dict
+        The validated kwargs (unchanged if valid).
+
+    Raises
+    ------
+    ValueError
+        If any kwargs don't match the function's optional parameters.
+    """
+    if kwargs is None or kwargs == {}:
+        return {}
+
+    # for checkers
+    kwargs: dict = kwargs
+    sig = inspect.signature(init_func)
+    params = list(sig.parameters.values())
+
+    # hardcoded minimum number of parameters (mandatory parameters)
+    expected_params = 5 if func_name == "glm_params_init" else 4
+
+    # list extra kwargs names
+    extra_params = [p.name for p in params[expected_params:]]
+    available = all(k in extra_params for k in kwargs)
+    if not available:
+        unavailable = [k for k in kwargs if k not in extra_params]
+        func_display = getattr(init_func, "__name__", str(init_func))
+        err = (
+            f"Invalid keyword argument(s) {unavailable} in "
+            f"``initialization_kwargs['{func_name}']``.\n"
+            f"The function '{func_display}' accepts: "
+        )
+        if extra_params:
+            err += f"{extra_params}."
+        else:
+            err += "no extra keyword arguments."
+        raise ValueError(err)
+    return kwargs
+
+
+def _resolve_init_kwargs_registry(
+    init_kwargs: dict | None,
+    init_func_registry: dict,
+) -> dict:
+    """
+    Validate keyword arguments for all initialization functions in a registry.
+
+    Iterates through the initialization function registry and validates
+    corresponding kwargs for each function.
+
+    Parameters
+    ----------
+    init_kwargs : dict or None
+        Dictionary mapping function names to their kwargs. Keys must be valid
+        initialization function names (e.g., 'glm_params_init', 'scale_init').
+        If None or empty, returns dict with empty kwargs for each function.
+    init_func_registry : dict
+        Dictionary mapping function names to initialization functions.
+
+    Returns
+    -------
+    dict
+        Dictionary with validated kwargs for each function name in
+        DEFAULT_INIT_FUNCTION. Missing keys are filled with empty dicts.
+
+    Raises
+    ------
+    ValueError
+        If any kwargs are invalid for their corresponding function.
+    """
+    if init_kwargs is None or init_kwargs == {}:
+        return {k: {} for k in DEFAULT_INIT_FUNCTION}
+
+    for func_name, init_kwargs_func in init_func_registry.items():
+        if func_name in init_kwargs:
+            init_kwargs[func_name] = _resolve_init_kwargs(
+                func_name, init_kwargs_func, init_kwargs[func_name]
+            )
+        else:
+            init_kwargs[func_name] = {}
+
+    return init_kwargs
