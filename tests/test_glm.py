@@ -3935,7 +3935,7 @@ class TestClassifierGLM:
             glm_type + model_instantiation
         )
         model = deepcopy(model)
-        model._label_encoder.classes_ = None
+        model.classes_ = None
 
         # superset of all possible required inputs
         input_dict = {
