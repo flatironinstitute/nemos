@@ -1,6 +1,7 @@
 """Tests for the dataloaders used for mini-batches in stochastic optimization."""
 
 from typing import ClassVar
+
 import jax
 import jax.numpy as jnp
 import numpy as np
