@@ -54,7 +54,7 @@ For most use cases, you can use the simpler [`stochastic_fit`](nemos.glm.GLM.sto
 from nemos.batching import ArrayDataLoader
 
 loader = ArrayDataLoader(X, y, batch_size=128, shuffle=True)
-model = nmo.glm.GLM(solver_name="GradientDescent", solver_kwargs={"stepsize": 0.1})
+model = nmo.glm.GLM(solver_name="GradientDescent", solver_kwargs={"stepsize": 0.1, "acceleration" : False})
 model.stochastic_fit(loader, num_epochs=100)
 ```
 

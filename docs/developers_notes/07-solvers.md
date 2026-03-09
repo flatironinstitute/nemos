@@ -144,7 +144,7 @@ loader = ArrayDataLoader(X, y, batch_size=128, shuffle=True)
 # Fit model using stochastic optimization
 model = nmo.glm.GLM(
     solver_name="GradientDescent",
-    solver_kwargs={"stepsize": 0.01}
+    solver_kwargs={"stepsize": 0.01, "acceleration": False}
 )
 model.stochastic_fit(loader, num_epochs=10)
 ```
