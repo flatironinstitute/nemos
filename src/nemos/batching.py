@@ -106,14 +106,26 @@ class ArrayDataLoader:
             raise ValueError("Provide at least one array.")
 
         self.arrays = tuple(jnp.asarray(x) for x in arrays)
-        self.batch_size = batch_size
         self.shuffle = shuffle
         self._rng = np.random.default_rng(seed)
+        self.batch_size = batch_size
 
         if len(set(arr.shape[0] for arr in self.arrays)) != 1:
             raise ValueError("All arrays must have same number of samples")
-        if batch_size <= 0:
-            raise ValueError("batch_size must be positive")
+
+    @property
+    def batch_size(self) -> int:
+        """Number of samples in each batch."""
+        return self._batch_size
+
+    @batch_size.setter
+    def batch_size(self, val: int):
+        if val <= 0:
+            raise ValueError("batch_size must be positive.")
+        if val > self.n_samples:
+            raise ValueError("batch_size cannot be larger than the number of samples.")
+
+        self._batch_size = val
 
     @property
     def n_samples(self) -> int:
@@ -261,13 +273,25 @@ class LazyArrayDataLoader:
 
         if len(set(arr.shape[0] for arr in self.arrays)) != 1:
             raise ValueError("All arrays must have same number of samples")
-        if batch_size <= 0:
-            raise ValueError("batch_size must be positive")
 
     @property
     def n_samples(self) -> int:
         """Total number of samples in the dataset."""
         return self.arrays[0].shape[0]
+
+    @property
+    def batch_size(self) -> int:
+        """Number of samples in each batch."""
+        return self._batch_size
+
+    @batch_size.setter
+    def batch_size(self, val: int):
+        if val <= 0:
+            raise ValueError("batch_size must be positive.")
+        if val > self.n_samples:
+            raise ValueError("batch_size cannot be larger than the number of samples.")
+
+        self._batch_size = val
 
     def sample_batch(self) -> tuple[jnp.ndarray, ...]:
         """Return first batch, deterministic (ignores shuffle)."""
