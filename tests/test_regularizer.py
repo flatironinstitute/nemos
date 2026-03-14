@@ -2768,7 +2768,7 @@ class TestGroupLasso:
                 jnp.ones((3,)),
                 pytest.raises(
                     ValueError,
-                    match=r"GroupLasso mask shape mismatch.*mask \(2, 2\).*expected \(2, 3\)",
+                    match=r"(?s)GroupLasso mask shape mismatch.*mask \(2, 2\).*expected \(2, 3\)",
                 ),
             ),
             # extra trailing dim in mask doesn't match scalar params
@@ -2777,7 +2777,7 @@ class TestGroupLasso:
                 jnp.ones((3,)),
                 pytest.raises(
                     ValueError,
-                    match=r"GroupLasso mask shape mismatch.*mask \(2, 3, 4\).*expected \(2, 3\)",
+                    match=r"(?s)GroupLasso mask shape mismatch.*mask \(2, 3, 4\).*expected \(2, 3\)",
                 ),
             ),
         ],

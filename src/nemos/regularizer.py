@@ -723,6 +723,27 @@ class GroupLasso(Regularizer):
     >>> model = GLM(regularizer=group_lasso, regularizer_strength=0.1).fit(X, y)
     >>> print(f"coeff shape: {model.coef_.shape}")
     coeff shape: (5,)
+
+    For a :class:`~nemos.glm.PopulationGLM`, where ``coef_`` has shape
+    ``(n_features, n_neurons)``, the mask must have the matching shape
+    ``(n_groups, n_features, n_neurons)``:
+
+    >>> import nemos as nmo
+    >>> num_samples, num_features, num_neurons = 1000, 4, 3
+    >>> X = np.random.normal(size=(num_samples, num_features))
+    >>> w = np.random.randn(num_features, num_neurons) * 0.1
+    >>> y = np.random.poisson(np.exp(X.dot(w)))
+    >>> # group 0: regularize all features jointly for neurons 0-1
+    >>> # group 1: regularize all features jointly for neuron 2
+    >>> mask = np.zeros((2, num_features, num_neurons))
+    >>> mask[0, :, :2] = 1
+    >>> mask[1, :, 2:] = 1
+    >>> model = nmo.glm.PopulationGLM(
+    ...     regularizer=nmo.regularizer.GroupLasso(mask=mask),
+    ...     regularizer_strength=0.1,
+    ... ).fit(X, y)
+    >>> print(f"coef shape: {model.coef_.shape}")
+    coef shape: (4, 3)
     """
 
     _allowed_solvers = (
