@@ -943,11 +943,7 @@ class GroupLasso(Regularizer):
                 )
 
     def _validate_strength_structure(self, params: Any, strength: Any):
-        if self.mask is not None:
-            mask = self.mask
-            self._check_mask_and_params_shape_match(mask, params)
-        else:
-            mask = self.initialize_mask(params)
+        mask = self.mask if self.mask is not None else self.initialize_mask(params)
         flat_mask = jax.tree_util.tree_leaves(mask)
         n_groups = flat_mask[0].shape[0]
 
@@ -965,5 +961,9 @@ class GroupLasso(Regularizer):
         return jax.tree_util.tree_map(lambda _: per_group_strength, mask)
 
     def _get_filter_kwargs(self, params: Any, strength: Any) -> dict:
-        mask = self.mask if self.mask is not None else self.initialize_mask(params)
+        if self.mask is not None:
+            mask = self.mask
+            self._check_mask_and_params_shape_match(mask, params)
+        else:
+            mask = self.initialize_mask(params)
         return {"mask": mask, **super()._get_filter_kwargs(params, strength)}
