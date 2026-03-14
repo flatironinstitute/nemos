@@ -2754,6 +2754,45 @@ class TestGroupLasso:
         )
 
     @pytest.mark.parametrize(
+        "mask_coef, params_coef, expectation",
+        [
+            # correct: mask shape (n_groups, n_features) matches params shape (n_features,)
+            (
+                jnp.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=float),
+                jnp.ones((3,)),
+                does_not_raise(),
+            ),
+            # wrong number of features in mask
+            (
+                jnp.array([[1, 0], [0, 1]], dtype=float),  # (2, 2) but params is (3,)
+                jnp.ones((3,)),
+                pytest.raises(
+                    ValueError,
+                    match=r"mask \(2, 2\) \(expected \(2, 3\)\)",
+                ),
+            ),
+            # extra trailing dim in mask doesn't match scalar params
+            (
+                jnp.ones((2, 3, 4), dtype=float),  # (2, 3, 4) but params is (3,)
+                jnp.ones((3,)),
+                pytest.raises(
+                    ValueError,
+                    match=r"mask \(2, 3, 4\) \(expected \(2, 3\)\)",
+                ),
+            ),
+        ],
+    )
+    def test_check_mask_and_params_shape_match(
+        self, mask_coef, params_coef, expectation
+    ):
+        """_check_mask_and_params_shape_match raises ValueError on shape mismatch."""
+        mask = GLMParams(coef=mask_coef, intercept=None)
+        params = GLMParams(coef=params_coef, intercept=jnp.array([0.0]))
+        regularizer = self.cls()
+        with expectation:
+            regularizer._check_mask_and_params_shape_match(mask, params)
+
+    @pytest.mark.parametrize(
         "solver_name, expectation",
         [
             ("GradientDescent", pytest.raises(ValueError, match="not allowed for")),

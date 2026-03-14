@@ -3224,7 +3224,7 @@ class TestPoissonGLM:
                 # this was not tested for pytree when the test was separate
                 return
             else:
-                reg = nmo.regularizer.GroupLasso(mask=jnp.ones((1, X.shape[1])))
+                reg = nmo.regularizer.GroupLasso()
         model = glm_class(
             solver_name=solver_name,
             inverse_link_function=jax.nn.softplus,
