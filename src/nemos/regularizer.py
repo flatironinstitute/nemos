@@ -688,11 +688,13 @@ class GroupLasso(Regularizer):
     Attributes
     ----------
     mask :
-        A 2d mask array indicating groups of features for regularization, shape ``(num_groups, num_features)``.
-        Each row represents a group of features.
-        Each column corresponds to a feature, where a value of 1 indicates that the feature belongs
-        to the group, and a value of 0 indicates it doesn't.
-        Default is ``mask = np.ones((1, num_features))``, grouping all features in a single group.
+        A mask array (or PyTree of arrays) indicating group membership for regularization.
+        Each regularizable parameter leaf with shape ``(n_features, ...)`` requires a corresponding
+        mask leaf with shape ``(n_groups, n_features, ...)``, i.e. ``(n_groups, *params.shape)``.
+        Row ``i`` of a mask leaf is 1 for features belonging to group ``i`` and 0 elsewhere;
+        each feature may belong to at most one group.
+        If ``None`` (default), a mask is auto-initialized so that each trailing dimension of each
+        parameter leaf forms its own group.
 
     Notes
     -----
@@ -895,7 +897,7 @@ class GroupLasso(Regularizer):
         self, subtree, strength: Any, mask: Any = None, **kwargs
     ) -> jnp.ndarray:
         r"""
-        Apply the Group Lasso penaly to a subtree.
+        Apply the Group Lasso penalty to a subtree.
 
         Note: the penalty is being calculated according to the following formula:
 
@@ -921,8 +923,31 @@ class GroupLasso(Regularizer):
 
         return jnp.sum(jnp.array(jax.tree_util.tree_leaves(penalties)))
 
+    def _check_mask_and_params_shape_match(self, mask, params):
+        reg_subtrees = (
+            params.regularizable_subtrees()
+            if hasattr(params, "regularizable_subtrees")
+            else [lambda z: z]
+        )
+        for where in reg_subtrees:
+            sub_mask = where(mask)
+            sub_params = where(params)
+            if sub_mask.shape[1:] != sub_params.shape:
+                expected_shape = (sub_mask.shape[0], *sub_params.shape)
+                raise ValueError(
+                    f"GroupLasso mask shape mismatch: expected mask shape "
+                    f"{expected_shape} for a parameter of shape {sub_params.shape}, "
+                    f"but got mask shape {sub_mask.shape}. "
+                    "The mask must have shape ``(n_groups, *params.shape)`` "
+                    "for every regularizable parameter."
+                )
+
     def _validate_strength_structure(self, params: Any, strength: Any):
-        mask = self.mask if self.mask is not None else self.initialize_mask(params)
+        if self.mask is not None:
+            mask = self.mask
+            self._check_mask_and_params_shape_match(mask, params)
+        else:
+            mask = self.initialize_mask(params)
         flat_mask = jax.tree_util.tree_leaves(mask)
         n_groups = flat_mask[0].shape[0]
 
