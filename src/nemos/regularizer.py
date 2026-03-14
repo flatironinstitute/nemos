@@ -932,14 +932,22 @@ class GroupLasso(Regularizer):
         for where in reg_subtrees:
             sub_mask = where(mask)
             sub_params = where(params)
-            if sub_mask.shape[1:] != sub_params.shape:
-                expected_shape = (sub_mask.shape[0], *sub_params.shape)
+            shape_mismatched = pytree_map_and_reduce(
+                lambda s, p: s.shape[1:] != p.shape, any, sub_mask, sub_params
+            )
+            if shape_mismatched:
+                flat_mask_leaves = jax.tree_util.tree_leaves(sub_mask)
+                flat_param_leaves = jax.tree_util.tree_leaves(sub_params)
+                mismatches = [
+                    f"mask {s.shape} (expected {(s.shape[0], *p.shape)})"
+                    for s, p in zip(flat_mask_leaves, flat_param_leaves)
+                    if s.shape[1:] != p.shape
+                ]
+                sep = "\n\t- "
                 raise ValueError(
-                    f"GroupLasso mask shape mismatch: expected mask shape "
-                    f"{expected_shape} for a parameter of shape {sub_params.shape}, "
-                    f"but got mask shape {sub_mask.shape}. "
-                    "The mask must have shape ``(n_groups, *params.shape)`` "
-                    "for every regularizable parameter."
+                    "GroupLasso mask shape mismatch: the mask must have shape "
+                    "``(n_groups, *params.shape)`` for every regularizable parameter leaf. "
+                    f"Mismatched leaves:\n\t- {sep.join(mismatches)}"
                 )
 
     def _validate_strength_structure(self, params: Any, strength: Any):
