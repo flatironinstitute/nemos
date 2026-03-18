@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, List, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -121,3 +121,11 @@ class CategoryBasis(AtomicBasisMixin, Basis):
     def decode(self, X: ArrayLike | TsdFrame, axis: int = -1):
         """Decode the categorical basis labels for 1-hot encoding."""
         return self._label_encoder.decode(jax.numpy.argmax(X, axis=axis))
+
+    def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
+        """Raise for categorical basis."""
+        raise NotImplementedError(
+            "``evaluate_on_grid`` is not implemented for categorical basis. The method "
+            "only makes sense for continuous bases, ``Category`` is a basis for discrete "
+            "variables. "
+        )
