@@ -2931,10 +2931,16 @@ class Category(EvalBasisMixin, CategoryBasis):
 
     """
 
-    def __init__(self, categories: List | NDArray | int, label: Optional[str] = None):
+    def __init__(
+        self,
+        categories: List | NDArray | int,
+        out_of_category: bool = True,
+        label: Optional[str] = None,
+    ):
         CategoryBasis.__init__(
             self,
             categories=categories,
+            out_of_category=out_of_category,
             label=label,
         )
         EvalBasisMixin.__init__(self, bounds=None)

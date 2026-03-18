@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, List, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
+import numpy as np
+from jax.core import Tracer
 from numpy._typing import NDArray
 from numpy.typing import ArrayLike
 
@@ -45,6 +47,9 @@ class CategoryBasis(AtomicBasisMixin, Basis):
         - ``int``: interpreted as the number of categories; labels default to
           ``[0, 1, ..., categories-1]``.
         - ``list`` or ``NDArray``: the explicit list of unique category labels.
+    out_of_category:
+        If False, raise if labels that do not belong to ``categories`` are provided,
+        else encode the out-of-category labels as all 0s.
 
     label :
         The label of the basis, intended to be descriptive of the task variable
@@ -54,9 +59,15 @@ class CategoryBasis(AtomicBasisMixin, Basis):
     _convert_to_float = False
     _is_discrete = True
 
-    def __init__(self, categories: List | NDArray | int, label: Optional[str] = None):
+    def __init__(
+        self,
+        categories: List | NDArray | int,
+        out_of_category: str | int | float | None,
+        label: Optional[str] = None,
+    ):
         n_categories = self._get_n_categories(categories)
         self._label_encoder = LabelEncoder(n_categories)
+        self._out_of_category = out_of_category
         self.categories = categories
         self._n_inputs = 1
         Basis.__init__(
@@ -67,6 +78,16 @@ class CategoryBasis(AtomicBasisMixin, Basis):
             n_basis_funcs=self.n_basis_funcs,
             label=label,
         )
+
+    @property
+    def out_of_category(self) -> int | str | float | None:
+        return self._out_of_category
+
+    @out_of_category.setter
+    def out_of_category(self, out_of_category: bool):
+        if not isinstance(out_of_category, bool):
+            raise TypeError("``out_of_category`` must be a boolean (True or False).")
+        self._out_of_category = out_of_category
 
     @property
     def categories(self):
@@ -89,6 +110,33 @@ class CategoryBasis(AtomicBasisMixin, Basis):
     @staticmethod
     def _get_n_categories(categories: int | List | NDArray) -> int:
         return getattr(categories, "__len__", lambda: categories)()
+
+    @support_pynapple(conv_type="numpy")
+    def _set_out_of_category(self, xi: NDArray | jnp.ndarray, encoded: jnp.ndarray):
+        """Set out-of-category encoding to -1.
+
+        The method assign a -1 encoding to all categories that are not in ``self.categories``.
+
+        Parameters
+        ----------
+        xi:
+            Array of category labels that may contain labels that are not in self.categories.
+        encoded:
+            Array of integer category labels, usually output of label encoding in "unsafe" mode.
+
+        Notes
+        -----
+            - ``xi`` and ``encoded`` must have the same shape.
+            - The method assigns -1 to all category labels not in ``self.categories``.
+        """
+        # encoded is always int between 0 and n-1.
+        # setting -1 will result in a 0s when 1-hot encoding
+        if jnp.issubdtype(self.categories.dtype, jnp.number):
+            encoded = jnp.where(jnp.isin(xi, self.categories), encoded, -1)
+        else:
+            # handle non-numeric via numpy isin
+            encoded = jnp.where(np.isin(xi, self.categories), encoded, -1)
+        return encoded
 
     def evaluate(self, xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
         """
@@ -115,63 +163,19 @@ class CategoryBasis(AtomicBasisMixin, Basis):
             If any label in ``xi`` is not in the set of known categories.
         """
         # Encoded could be an array or nap tsd, with integer dtype.
-        encoded = self._label_encoder.encode(xi)
+        if not self.out_of_category and not isinstance(xi, Tracer):
+            encoded = self._label_encoder.encode(xi, safe=True)
+        elif not self.out_of_category and isinstance(xi, Tracer):
+            raise ValueError(
+                "JIT compilation not available for ``out_of_category==False``. "
+                "To enable JIT compilation, please set ``out_of_category=True``."
+            )
+        else:
+            encoded = self._label_encoder.encode(xi, safe=False)
+            # set -1 to out-of category-labels
+            # one_hot_encoding will assign 0s where encoded == -1
+            encoded = self._set_out_of_category(xi, encoded)
         return one_hot_encoding(encoded, self._label_encoder.n_classes)
-
-    @support_pynapple(conv_type="jax")
-    def decode(self, X: ArrayLike | TsdFrame, axis: int = -1):
-        """Decode the labels from a 1-hot encoding representation.
-
-        Decode the label from an N-dimensional array of 1-hot encoded categories.
-        The array must have shape ``(..., n_categories, ...)``. By default, the
-        last axis (``axis=-1``) is assumed to be the category axis.
-        If categories are stored in any other axis one must specify the axis
-        by setting the axis parameter.
-
-        Parameters
-        ----------
-        X:
-            Array of one-hot encoded category labels. Shape (..., n_categories, ...),
-            and ``X.shape[axis] == n_categories``.
-        axis: int
-            The category axis in the ND array.
-
-        Examples
-        --------
-        >>> import numpy as np
-        >>> import pynapple as nap
-        >>> from nemos.basis import Category
-        >>> X = np.array(
-        ...     [[1, 0, 0],
-        ...      [1, 0 ,0],
-        ...      [0, 0, 1],
-        ...      [0, 1, 0]]
-        ... )
-
-        **Integer category indices.**
-
-        >>> bas = Category(3)
-        >>> bas.decode(X)
-        Array([0, 0, 2, 1], dtype=int32)
-
-        **String category laebels.**
-
-        >>> bas = Category(["a", "b", "c"])
-        >>> bas.decode(X)
-        array(['a', 'a', 'c', 'b'], dtype='<U1')
-
-        **Pynapple tsd.**
-
-        >>> tsdframe = nap.TsdFrame(t=np.arange(len(X)), d=X)
-        >>> bas.decode(tsdframe)
-        Time (s)
-        ----------  --
-        0.0         a
-        ...
-        3.0         b
-        dtype: <U1, shape: (4,)
-        """
-        return self._label_encoder.decode(jax.numpy.argmax(X, axis=axis))
 
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
         """Raise for categorical basis."""

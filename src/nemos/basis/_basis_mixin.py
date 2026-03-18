@@ -552,7 +552,11 @@ class EvalBasisMixin:
 
         """
         out = self.evaluate(*(np.reshape(x, (x.shape[0], -1)) for x in xi))
-        if self._apply_bounds_fill and self.bounds is not None:
+        if (
+            self._apply_bounds_fill
+            and (not self._is_discrete)
+            and self.bounds is not None
+        ):
             out = self._apply_fill_value(*xi, out=out)
         return np.reshape(out, (out.shape[0], -1))
 
