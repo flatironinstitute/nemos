@@ -120,7 +120,31 @@ class CategoryBasis(AtomicBasisMixin, Basis):
 
     @support_pynapple(conv_type="jax")
     def decode(self, X: ArrayLike | TsdFrame, axis: int = -1):
-        """Decode the categorical basis labels for 1-hot encoding."""
+        """Decode the categorical basis labels for 1-hot encoding.
+
+        Parameters
+        ----------
+        X:
+            Array of one-hot encoded category labels. Shape (..., n_categories, ...),
+            and ``X.shape[axis] == n_categories``.
+        axis: int
+            The category axis in the ND array.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import Category
+        >>> bas = Category(["a", "b", "c"])
+        >>> X = np.array(
+        ...     [[1, 0, 0],
+        ...      [1, 0 ,0],
+        ...      [0, 0, 1],
+        ...      [0, 1, 0]]
+        ... )
+        >>> bas.decode(X)
+        array(['a', 'a', 'c', 'b'], dtype='<U1')
+
+        """
         return self._label_encoder.decode(jax.numpy.argmax(X, axis=axis))
 
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
