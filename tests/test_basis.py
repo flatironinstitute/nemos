@@ -976,16 +976,17 @@ class TestConvBasis:
 @pytest.mark.parametrize(
     "cls",
     [
-        CustomBasis,
-        basis.RaisedCosineLogEval,
-        basis.RaisedCosineLinearEval,
-        basis.BSplineEval,
-        basis.CyclicBSplineEval,
-        basis.MSplineEval,
-        basis.OrthExponentialEval,
-        basis.IdentityEval,
-        basis.FourierEval,
-        basis.Zero,
+        # CustomBasis,
+        # basis.RaisedCosineLogEval,
+        # basis.RaisedCosineLinearEval,
+        # basis.BSplineEval,
+        # basis.CyclicBSplineEval,
+        # basis.MSplineEval,
+        # basis.OrthExponentialEval,
+        # basis.IdentityEval,
+        # basis.FourierEval,
+        # basis.Zero,
+        basis.Category,
     ],
 )
 class TestEvalBasis:

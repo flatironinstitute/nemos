@@ -314,3 +314,16 @@ class LabelEncoder:
                 )
         y_encoded = jnp.searchsorted(self.classes_, y)
         return y_encoded
+
+    def __eq__(self, other):
+        """Check if two encoders are equal.
+
+        Encoders are equal if they encode the same classes, or, if classes
+        are not set yet, if they have the same number of classes.
+        """
+        if not isinstance(other, self.__class__):
+            return False
+        same_classes = self.classes_ == other.classes_
+        if isinstance(same_classes, bool):
+            return same_classes and other._n_classes == self._n_classes
+        return all(same_classes)
