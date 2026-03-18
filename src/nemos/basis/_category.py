@@ -178,5 +178,5 @@ class CategoryBasis(AtomicBasisMixin, Basis):
         raise NotImplementedError(
             "``evaluate_on_grid`` is not implemented for categorical basis. The method "
             "only makes sense for continuous bases, ``Category`` process discrete "
-            "inputs only. "
+            "inputs only."
         )
