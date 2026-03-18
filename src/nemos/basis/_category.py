@@ -14,9 +14,18 @@ from ..label_encoder import LabelEncoder
 if TYPE_CHECKING:
     from pynapple import Tsd, TsdFrame, TsdTensor
 
+from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
 from ._basis import Basis
 from ._basis_mixin import AtomicBasisMixin
+
+
+@support_pynapple(conv_type="jax")
+def one_hot_encoding(
+    x: NDArray | Tsd | TsdFrame | TsdTensor, n_classes: int
+) -> ArrayLike | Tsd:
+    """One-hot encode with pynapple support."""
+    return jax.nn.one_hot(x, n_classes)
 
 
 class CategoryBasis(AtomicBasisMixin, Basis):
@@ -104,5 +113,11 @@ class CategoryBasis(AtomicBasisMixin, Basis):
         ValueError
             If any label in ``xi`` is not in the set of known categories.
         """
+        # Encoded could be an array or nap tsd, with integer dtype.
         encoded = self._label_encoder.encode(xi)
-        return jax.nn.one_hot(encoded, self._label_encoder.n_classes)
+        return one_hot_encoding(encoded, self._label_encoder.n_classes)
+
+    @support_pynapple(conv_type="jax")
+    def decode(self, X: ArrayLike | TsdFrame, axis: int = -1):
+        """Decode the categorical basis labels for 1-hot encoding."""
+        return self._label_encoder.decode(jax.numpy.argmax(X, axis=axis))

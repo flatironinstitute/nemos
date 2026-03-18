@@ -212,7 +212,7 @@ class LabelEncoder:
 
         return y
 
-    def decode(self, indices: NDArray[int]) -> NDArray | jnp.ndarray:
+    def decode(self, indices: NDArray[int] | jnp.ndarray) -> NDArray | jnp.ndarray:
         """Convert internal indices [0, n_classes-1] back to user-provided class labels."""
         if self._skip_encoding:
             return indices
