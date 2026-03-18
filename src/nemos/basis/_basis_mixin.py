@@ -522,7 +522,8 @@ class EvalBasisMixin:
     def __init__(
         self, bounds: Optional[Tuple[float, float]] = None, fill_value: float = jnp.nan
     ):
-        self.bounds = bounds
+        if not getattr(self, "_is_discrete", False):
+            self.bounds = bounds
         self.fill_value = fill_value
 
     def _compute_features(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor):

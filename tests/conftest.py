@@ -256,7 +256,9 @@ class CombinedBasis(BasisFuncsTesting):
 
 
 def is_eval_basis(basis_cls) -> bool:
-    is_eval = "Eval" in basis_cls.__name__ or issubclass(basis_cls, basis.Zero)
+    is_eval = "Eval" in basis_cls.__name__ or issubclass(
+        basis_cls, (basis.Zero, basis.CategoryBasis)
+    )
     return is_eval
 
 
