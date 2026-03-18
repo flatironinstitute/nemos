@@ -24,12 +24,12 @@ import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
 import nemos.convolve as convolve
 from nemos.basis import (
+    Category,
     CustomBasis,
     FourierEval,
     HistoryConv,
     IdentityEval,
     TransformerBasis,
-    Category,
 )
 from nemos.basis._basis import (
     AdditiveBasis,
