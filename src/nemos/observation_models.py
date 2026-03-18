@@ -5,8 +5,6 @@ from typing import Callable, Literal, Union
 
 import jax
 import jax.numpy as jnp
-import matplotlib.pyplot as plt
-import numpy as np
 from numpy.typing import NDArray
 
 import nemos as nmo
