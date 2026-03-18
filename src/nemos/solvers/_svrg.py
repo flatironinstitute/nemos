@@ -161,7 +161,7 @@ class ProxSVRG:
         args:
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
-            They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
+            They are expected to be JAX pytrees with arrays as their leaves, with all of their
             leaves having the same sized first dimension (corresponding to the number of data points).
             For GLMs these are:
                 X : DESIGN_INPUT_TYPE
@@ -214,7 +214,7 @@ class ProxSVRG:
         args:
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
-            They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
+            They are expected to be JAX pytrees with arrays as their leaves, with all of their
             leaves having the same sized first dimension (corresponding to the number of data points).
             For GLMs these are:
                 X : DESIGN_INPUT_TYPE
@@ -287,7 +287,7 @@ class ProxSVRG:
         args:
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
-            They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
+            They are expected to be JAX pytrees with arrays as their leaves, with all of their
             leaves having the same sized first dimension (corresponding to the number of data points).
             For GLMs these are:
                 X : DESIGN_INPUT_TYPE
@@ -344,7 +344,7 @@ class ProxSVRG:
         args:
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
-            They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
+            They are expected to be JAX pytrees with arrays as their leaves, with all of their
             leaves having the same sized first dimension (corresponding to the number of data points).
             For GLMs these are:
                 X : DESIGN_INPUT_TYPE
@@ -398,7 +398,7 @@ class ProxSVRG:
         args:
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
-            They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
+            They are expected to be JAX pytrees with arrays as their leaves, with all of their
             leaves having the same sized first dimension (corresponding to the number of data points).
             For GLMs these are:
                 X : DESIGN_INPUT_TYPE
@@ -449,7 +449,7 @@ class ProxSVRG:
         args:
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
-            They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
+            They are expected to be JAX pytrees with arrays as their leaves, with all of their
             leaves having the same sized first dimension (corresponding to the number of data points).
             For GLMs these are:
                 X : DESIGN_INPUT_TYPE
@@ -549,7 +549,7 @@ class ProxSVRG:
         args :
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
-            They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
+            They are expected to be JAX pytrees with arrays as their leaves, with all of their
             leaves having the same sized first dimension (corresponding to the number of data points).
             For GLMs these are:
                 X : DESIGN_INPUT_TYPE
@@ -710,7 +710,7 @@ class SVRG(ProxSVRG):
         args:
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
-            They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
+            They are expected to be JAX pytrees with arrays as their leaves, with all of their
             leaves having the same sized first dimension (corresponding to the number of data points).
             For GLMs these are:
                 X : DESIGN_INPUT_TYPE
@@ -745,7 +745,7 @@ class SVRG(ProxSVRG):
         args:
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
-            They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
+            They are expected to be JAX pytrees with arrays as their leaves, with all of their
             leaves having the same sized first dimension (corresponding to the number of data points).
             For GLMs these are:
                 X : DESIGN_INPUT_TYPE
@@ -790,7 +790,7 @@ class SVRG(ProxSVRG):
         args:
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
-            They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
+            They are expected to be JAX pytrees with arrays as their leaves, with all of their
             leaves having the same sized first dimension (corresponding to the number of data points).
             For GLMs these are:
                 X : DESIGN_INPUT_TYPE

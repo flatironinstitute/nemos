@@ -9,11 +9,20 @@ categorical variables. The class is for internal use, main method will be
 from __future__ import annotations
 
 from dataclasses import dataclass, fields
-from typing import Any
+from functools import partial
+from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
+import lazy_loader as lazy
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
+
+from .type_casting import cast_to_pynapple
+
+nap = lazy.load("pynapple")
+
+if TYPE_CHECKING:
+    import pynapple as nap
 
 
 @dataclass
@@ -170,9 +179,13 @@ class LabelEncoder:
                     y_array = np.array(y)
                     dtype = y_array.dtype
                 else:
-                    # already an array (either jax or numpy)
-                    y_array = y
-                if not np.issubdtype(dtype, np.integer):
+                    # already an array (either jax, numpy or pynapple)
+                    y_array = getattr(y, "d", y)
+                is_all_int = np.issubdtype(dtype, np.integer) or (
+                    np.issubdtype(dtype, np.floating)
+                    and (y_array == y_array.astype(int)).all()
+                )
+                if not is_all_int:
                     raise ValueError(
                         f"Expected integer labels when classes are the default "
                         f"[0, ..., n_classes-1], got dtype {dtype} instead."
@@ -212,14 +225,16 @@ class LabelEncoder:
                 f"Classes are not set. Must call ``set_classes`` before calling ``{method_name}``."
             )
 
-    def _encode_numpy(self, y: ArrayLike, safe: bool = True) -> ArrayLike:
+    def _encode_numpy(
+        self, y: ArrayLike | nap.Tsd | nap.TsdFrame | nap.TsdTensor, safe: bool = True
+    ) -> ArrayLike:
         """
         Encode labels for numpy arrays.
 
         Parameters
         ----------
         y :
-            Array of class labels to encode.
+            Array-like or pynapple tsd of class labels to encode.
         safe :
             If ``True``, use dict-based lookup via ``np.fromiter``, which raises
             ``ValueError`` on any unrecognized label. The dict lookup is faster
@@ -229,6 +244,17 @@ class LabelEncoder:
             labels to nearest indices.
         """
         if safe:
+            if hasattr(y, "d"):
+                kwargs = {"time": y.t, "time_support": y.time_support}
+                kwargs.update({"columns": y.columns} if hasattr(y, "columns") else {})
+                kwargs.update(
+                    {"metadata": y._metadata} if hasattr(y, "_metadata") else {}
+                )
+                cast_fn = partial(cast_to_pynapple, **kwargs)
+
+            else:
+                cast_fn = lambda x: x  # noqa: E731
+
             # use from iter, this forces safety while being much more
             # efficient than a unique.
             try:
@@ -246,12 +272,12 @@ class LabelEncoder:
                 raise ValueError(
                     f"Unrecognized label(s) {invalid}. " f"Valid labels are {valid}."
                 ) from e
-            return y
+            return cast_fn(y)
         else:
             # fastest way to return the encoded indices.
             return np.searchsorted(self.classes_, y)
 
-    def _encode_jax(self, y: ArrayLike, safe: bool = True) -> ArrayLike:
+    def _encode_jax(self, y: jnp.ndarray, safe: bool = True) -> ArrayLike:
         """
         Encode labels for JAX arrays.
 
@@ -271,38 +297,20 @@ class LabelEncoder:
             produce silently incorrect indices.
         """
         if safe:
-            # expensive safeguard: JAX dispatch overhead + numpy conversion
-            y_unq = np.asarray(jnp.unique(y))
-            valid = np.asarray(self.classes_).tolist()
-            invalid = set(y_unq).difference(valid)
-            if len(invalid):
-                invalid = [int(lab) for lab in invalid]
+            # check based on type:
+            # - y is a jax.ndarray -> numeric
+            # - classes_ np.array but not numeric
+            if not np.issubdtype(self.classes_.dtype, np.number):
+                invalid = jnp.unique(y).tolist()
                 raise KeyError(
-                    f"Unrecognized label(s) {invalid}. " f"Valid labels are {valid}."
+                    f"Unrecognized label(s) {invalid}. Valid labels are {self.classes_.tolist()}."
+                )
+            # continue execution checking the content of numeric arrays
+            invalid_mask = ~jnp.isin(y, self.classes_)
+            if invalid_mask.any():
+                invalid = np.unique(y[invalid_mask]).tolist()
+                raise KeyError(
+                    f"Unrecognized label(s) {invalid}. Valid labels are {self.classes_.tolist()}."
                 )
         y_encoded = jnp.searchsorted(self.classes_, y)
         return y_encoded
-
-    def __eq__(self, other: Any):
-        """Check functional equivalence of two encoders.
-
-        Two ``LabelEncoder`` instances are functionally equivalent if and only
-        if they share the same ``classes_`` array. All other internal state
-        (``_skip_encoding``, ``_class_to_index_``) is derived deterministically
-        from ``classes_``, so equality of ``classes_`` is both necessary and
-        sufficient.
-
-        Parameters
-        ----------
-        other :
-            Object to compare against.
-
-        Returns
-        -------
-        bool
-            ``True`` if ``other`` is a ``LabelEncoder`` with identical
-            ``classes_``, ``False`` otherwise.
-        """
-        if not isinstance(other, LabelEncoder):
-            return False
-        return np.array_equal(self.classes_, other.classes_)

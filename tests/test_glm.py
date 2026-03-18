@@ -25,7 +25,6 @@ import nemos as nmo
 from nemos._observation_model_builder import instantiate_observation_model
 from nemos._regularizer_builder import instantiate_regularizer
 from nemos.inverse_link_function_utils import identity, log_softmax
-from nemos.pytrees import FeaturePytree
 from nemos.tree_utils import (
     pytree_map_and_reduce,
     tree_l2_norm,
@@ -372,19 +371,19 @@ class TestGLM:
                 pytest.raises(TypeError, match="X and coef have mismatched structure"),
                 {
                     "GLM": [
-                        FeaturePytree(p1=jnp.zeros((5,)), p2=jnp.zeros((5,))),
+                        {"p1": jnp.zeros((5,)), "p2": jnp.zeros((5,))},
                         jnp.zeros((1,)),
                     ],
                     "PopulationGLM": [
-                        FeaturePytree(p1=jnp.zeros((3, 3)), p2=jnp.zeros((3, 2))),
+                        {"p1": jnp.zeros((3, 3)), "p2": jnp.zeros((3, 2))},
                         jnp.zeros((3,)),
                     ],
                     "ClassifierGLM": [
-                        FeaturePytree(p1=jnp.zeros((5, 3)), p2=jnp.zeros((5, 3))),
+                        {"p1": jnp.zeros((5, 3)), "p2": jnp.zeros((5, 3))},
                         jnp.zeros((3,)),
                     ],
                     "ClassifierPopulationGLM": [
-                        FeaturePytree(p1=jnp.zeros((5, 3, 3)), p2=jnp.zeros((5, 3, 3))),
+                        {"p1": jnp.zeros((5, 3, 3)), "p2": jnp.zeros((5, 3, 3))},
                         jnp.zeros((3, 3)),
                     ],
                 },
@@ -1076,8 +1075,7 @@ class TestGLM:
                     "scale_": 2.0,
                     "dof_resid_": 3,
                     "aux_": None,
-                    "_classes_": np.array([2, 3, 5]),
-                    "_class_to_index_": {0: 2, 1: 3, 2: 5},
+                    "classes_": np.array([2, 3]),
                 },
             ),
             (
@@ -1088,8 +1086,7 @@ class TestGLM:
                     "scale_": 2.0,
                     "dof_resid_": 3,
                     "aux_": None,
-                    "_classes_": np.array([2, 3, 5]),
-                    "_class_to_index_": {0: 2, 1: 3, 2: 5},
+                    "classes_": np.array([2, 3]),
                 },
             ),
         ],
@@ -3145,7 +3142,6 @@ class TestPopulationGLMObservationModel:
                 for key, xx in X.items():
                     if mask_bool[key][k]:
                         X_neu[key] = X[key]
-                X_neu = FeaturePytree(**X_neu)
             else:
                 X_neu = X[:, mask_bool[k]]
 
@@ -3226,7 +3222,7 @@ class TestPoissonGLM:
                 # this was not tested for pytree when the test was separate
                 return
             else:
-                reg = nmo.regularizer.GroupLasso(mask=jnp.ones((1, X.shape[1])))
+                reg = nmo.regularizer.GroupLasso()
         model = glm_class(
             solver_name=solver_name,
             inverse_link_function=jax.nn.softplus,
@@ -3403,11 +3399,6 @@ class TestPoissonGLM:
         # NOTE these two are not the same because for example Ridge augments the loss
         # loss_grad = jax.jit(jax.grad(glm.compute_loss))
         loss_grad = jax.jit(jax.grad(glm._solver_loss_fun))
-
-        # copied from GLM.fit
-        # grab data if needed (tree map won't function because param is never a FeaturePytree).
-        if isinstance(X, FeaturePytree):
-            X = X.data
 
         iter_num = 0
         while iter_num < maxiter:
@@ -3867,9 +3858,7 @@ class TestClassifierGLM:
         [
             (np.ones((3, 5)), does_not_raise()),
             (
-                nmo.pytrees.FeaturePytree(
-                    input_1=np.ones((3, 3)), input_2=np.ones((3, 2))
-                ),
+                {"input_1": np.ones((3, 3)), "input_2": np.ones((3, 2))},
                 does_not_raise(),
             ),
             # string type
@@ -3885,9 +3874,7 @@ class TestClassifierGLM:
                 pytest.raises(ValueError, match="Inconsistent number of features"),
             ),
             (
-                nmo.pytrees.FeaturePytree(
-                    input_1=np.ones((3, 1)), input_2=np.ones((3, 2))
-                ),
+                {"input_1": np.ones((3, 1)), "input_2": np.ones((3, 2))},
                 pytest.raises(ValueError, match="Inconsistent number of features"),
             ),
         ],
@@ -3901,7 +3888,7 @@ class TestClassifierGLM:
         model_instantiation,
         request,
     ):
-        if isinstance(X, nmo.pytrees.FeaturePytree):
+        if isinstance(X, dict):
             xtype = "_pytree"
         else:
             xtype = ""
@@ -3937,7 +3924,7 @@ class TestClassifierGLM:
             glm_type + model_instantiation
         )
         model = deepcopy(model)
-        model._classes_ = None
+        model.classes_ = None
 
         # superset of all possible required inputs
         input_dict = {
@@ -3994,7 +3981,7 @@ class TestClassifierGLM:
         score_regular = model.score(X, y)
         label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
         model.set_classes(label)
-        y_label = model._decode_labels(y)
+        y_label = model._label_encoder.decode(y)
         score = model.score(X, y_label)
         assert isinstance(score, jnp.ndarray)
         assert jnp.issubdtype(score.dtype, np.floating)
@@ -4013,7 +4000,7 @@ class TestClassifierGLM:
 
         label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
         model_label.set_classes(label)
-        y_label = model._decode_labels(y)
+        y_label = model._label_encoder.decode(y)
         model_label.fit(X, y_label)
         assert jnp.array_equal(model.coef_, model_label.coef_)
         assert jnp.array_equal(model.intercept_, model_label.intercept_)
@@ -4032,37 +4019,8 @@ class TestClassifierGLM:
         label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
         model.set_classes(label)
         y_label, log_prob_label = model.simulate(jax.random.PRNGKey(1), X)
-        assert jnp.array_equal(model._encode_labels(y_label), y)
+        assert jnp.array_equal(model._label_encoder.encode(y_label), y)
         assert jnp.array_equal(log_prob_label, log_prob)
-
-    def test_classes_none_initially(
-        self, inv_link, glm_type, model_instantiation, request
-    ):
-        """Test that classes_ is None before set_classes is called."""
-        _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
-        # Create a fresh model without set_classes
-        if "population" in glm_type:
-            fresh_model = nmo.glm.ClassifierPopulationGLM(n_classes=model.n_classes)
-        else:
-            fresh_model = nmo.glm.ClassifierGLM(n_classes=model.n_classes)
-        assert fresh_model.classes_ is None
-        assert fresh_model._skip_encoding is False
-
-    def test_skip_encoding_flag(self, inv_link, glm_type, model_instantiation, request):
-        """Test that _skip_encoding is True for default labels, False otherwise."""
-        _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
-        model = deepcopy(model)
-
-        # Default labels [0, 1, ..., n-1] should skip encoding
-        model.set_classes(np.arange(model.n_classes))
-        assert model._skip_encoding is True
-        assert model._class_to_index_ is None
-
-        # Non-default labels should not skip encoding
-        label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
-        model.set_classes(label)
-        assert model._skip_encoding is False
-        assert model._class_to_index_ is not None
 
     def test_set_classes_too_many_classes(
         self, inv_link, glm_type, model_instantiation, request
@@ -4155,7 +4113,7 @@ class TestClassifierGLM:
         # Compute loss with string labels
         label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
         model.set_classes(label)
-        y_label = model._decode_labels(y)
+        y_label = model._label_encoder.decode(y)
         loss_label = model.compute_loss((model.coef_, model.intercept_), X, y_label)
 
         assert jnp.allclose(loss_default, loss_label)
@@ -4183,26 +4141,6 @@ class TestClassifierGLM:
 
         # Probabilities should be identical (only label interpretation changes)
         assert jnp.allclose(proba_default, proba_label)
-
-    def test_encode_decode_roundtrip(
-        self, inv_link, glm_type, model_instantiation, request
-    ):
-        """Test that encoding then decoding returns original labels."""
-        _, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
-        model = deepcopy(model)
-
-        # Test with string labels
-        label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
-        model.set_classes(label)
-        y_label = model._decode_labels(y)
-
-        # Roundtrip: decode -> encode should give original indices
-        y_roundtrip = model._encode_labels(y_label)
-        assert np.array_equal(y, y_roundtrip)
-
-        # Roundtrip: encode -> decode should give original labels
-        y_label_roundtrip = model._decode_labels(model._encode_labels(y_label))
-        assert np.array_equal(y_label, y_label_roundtrip)
 
     def test_initialize_params_stale_feature_mask_raises(
         self, inv_link, glm_type, model_instantiation, request

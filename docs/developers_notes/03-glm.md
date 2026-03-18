@@ -96,7 +96,7 @@ The [`PopulationGLM`](nemos.glm.PopulationGLM) class is an extension of the [`GL
 
 ### `PopulationGLM` Specific Attributes
 
-- **`feature_mask`**: A mask that determines which features are used as predictors for each neuron. It can be a matrix of shape `(num_features, num_neurons)` or a [`FeaturePytree`](nemos.pytrees.FeaturePytree) of binary values, where 1 indicates that a feature is used for a particular neuron and 0 indicates it is not.
+- **`feature_mask`**: A mask that determines which features are used as predictors for each neuron. It can be a matrix of shape `(num_features, num_neurons)` or a [`PyTree`](https://docs.jax.dev/en/latest/pytrees.html) of binary values, where 1 indicates that a feature is used for a particular neuron and 0 indicates it is not.
 
 ### Overridden Methods
 

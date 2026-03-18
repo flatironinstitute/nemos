@@ -1262,8 +1262,8 @@ class PopulationGLM(GLM):
         E.g. stepsize, tol, acceleration, etc.
          For details on each solver's kwargs, see `get_accepted_arguments` and `get_solver_documentation`.
     feature_mask :
-        Either a matrix of shape (num_features, num_neurons) or a :meth:`nemos.pytrees.FeaturePytree` of 0s and 1s, with
-        ``feature_mask[feature_name]`` of shape (num_neurons, ).
+        Either a matrix of shape (num_features, num_neurons) or a PyTree of 0s and 1s, with
+        leaves of shape (num_neurons, ).
         The mask will be used to select which features are used as predictors for which neuron.
 
     Attributes
@@ -1406,7 +1406,7 @@ class PopulationGLM(GLM):
         - **Array input**: Shape ``(n_features, n_neurons)``. Each entry ``[i, j]``
           indicates whether feature ``i`` is used for neuron ``j`` (1 = used, 0 = masked).
 
-        - **Dict/FeaturePytree input**: A dict with keys matching ``coef_``.
+        - **Pytree**: A pytree with structure matching that of ``coef_``.
           Each leaf array has shape ``(n_neurons,)``, indicating whether that feature
           group is used for each neuron.
 
@@ -1480,13 +1480,14 @@ class PopulationGLM(GLM):
         Notes
         -----
         The ``feature_mask`` is used to select features for each neuron, and it is
-        an NDArray or a :class:`nemos.pytrees.FeaturePytree` of 0s and 1s. In particular,
+        an NDArray or a PyTree of 0s and 1s. In particular,
 
         - If the mask is in array format, feature ``i`` is a predictor for neuron ``j`` if
           ``feature_mask[i, j] == 1``.
 
-        - If the mask is a :class:``nemos.pytrees.FeaturePytree``, then
-          ``"feature_name"`` is a predictor of neuron ``j`` if ``feature_mask["feature_name"][j] == 1``.
+        - If the mask is a PyTree, then
+          a leaf is a predictor of neuron ``j`` if the matching leaf in ``feature_mask``
+          is equal to 1.
 
         Examples
         --------

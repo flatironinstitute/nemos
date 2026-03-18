@@ -953,7 +953,7 @@ class TestUnRegularized:
         model._instantiate_solver(model._compute_loss, params)
         model.solver_run(
             params,
-            X.data,
+            X,
             y,
         )
 
@@ -1311,7 +1311,7 @@ class TestRidge:
             true_params.intercept,
         )
         runner = model._instantiate_solver(model._compute_loss, params).solver_run
-        runner(params, X.data, y)
+        runner(params, X, y)
 
     @pytest.mark.parametrize("solver_name", ["GradientDescent", "SVRG"])
     @pytest.mark.requires_x64
@@ -1593,7 +1593,7 @@ class TestLasso:
             true_params.intercept,
         )
         runner = model._instantiate_solver(model._compute_loss, params).solver_run
-        runner(params, X.data, y)
+        runner(params, X, y)
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
     @pytest.mark.requires_x64
@@ -2438,7 +2438,7 @@ class TestElasticNet:
         runner = model._instantiate_solver(model._compute_loss, params).solver_run
         runner(
             params,
-            X.data,
+            X,
             y,
         )
 
@@ -2752,6 +2752,45 @@ class TestGroupLasso:
         assert strength_struct["b"].shape == (2,) and jnp.allclose(
             strength_struct["b"], jnp.array([0.2, 0.2])
         )
+
+    @pytest.mark.parametrize(
+        "mask_coef, params_coef, expectation",
+        [
+            # correct: mask shape (n_groups, n_features) matches params shape (n_features,)
+            (
+                jnp.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=float),
+                jnp.ones((3,)),
+                does_not_raise(),
+            ),
+            # wrong number of features in mask
+            (
+                jnp.array([[1, 0], [0, 1]], dtype=float),  # (2, 2) but params is (3,)
+                jnp.ones((3,)),
+                pytest.raises(
+                    ValueError,
+                    match=r"mask \(2, 2\) \(expected \(2, 3\)\)",
+                ),
+            ),
+            # extra trailing dim in mask doesn't match scalar params
+            (
+                jnp.ones((2, 3, 4), dtype=float),  # (2, 3, 4) but params is (3,)
+                jnp.ones((3,)),
+                pytest.raises(
+                    ValueError,
+                    match=r"mask \(2, 3, 4\) \(expected \(2, 3\)\)",
+                ),
+            ),
+        ],
+    )
+    def test_check_mask_and_params_shape_match(
+        self, mask_coef, params_coef, expectation
+    ):
+        """_check_mask_and_params_shape_match raises ValueError on shape mismatch."""
+        mask = GLMParams(coef=mask_coef, intercept=None)
+        params = GLMParams(coef=params_coef, intercept=jnp.array([0.0]))
+        regularizer = self.cls()
+        with expectation:
+            regularizer._check_mask_and_params_shape_match(mask, params)
 
     @pytest.mark.parametrize(
         "solver_name, expectation",
@@ -3378,7 +3417,7 @@ class TestGroupLasso:
         """Test penalized_loss with dict-based PyTree parameters."""
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
 
-        # Create dict-based mask (simulating FeaturePytree structure)
+        # Create dict-based mask
         # Split features into two groups
         n_features = X.shape[1]
         mask_dict = {
@@ -3474,10 +3513,10 @@ class TestGroupLasso:
             true_params.intercept,
         )
         runner = model._instantiate_solver(model._compute_loss, params).solver_run
-        runner(params, X.data, y)
+        runner(params, X, y)
 
     def test_grouplasso_pytree(self, poissonGLM_model_instantiation_pytree):
-        """Check that GroupLasso fits with a FeaturePytree X (mask auto-initialized)."""
+        """Check that GroupLasso fits with a dict X (mask auto-initialized)."""
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation_pytree
         model.set_params(regularizer=self.cls(mask=None), regularizer_strength=0.1)
         model.solver_name = "ProximalGradient"

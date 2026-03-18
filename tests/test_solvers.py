@@ -22,6 +22,15 @@ from nemos.tree_utils import (
 pytestmark = pytest.mark.solver_related
 
 
+def _get_group_lasso_mask(X, y):
+    n_features = X.shape[1]
+    n_neurons = (y.shape[1],) if y.ndim > 1 else ()
+    gl_mask = np.zeros((2, n_features, *n_neurons))
+    gl_mask[0, :1] = True
+    gl_mask[1, 1:] = True
+    return gl_mask
+
+
 @pytest.mark.parametrize(
     ("regr_setup", "stepsize"),
     [
@@ -216,7 +225,8 @@ def test_svrg_glm_initialize_state(
 
     reg_cls = getattr(nmo.regularizer, regularizer_name)
     if regularizer_name == "GroupLasso":
-        reg = reg_cls(mask=mask)
+        gl_mask = _get_group_lasso_mask(X, y)
+        reg = reg_cls(mask=gl_mask)
     else:
         reg = reg_cls()
 
@@ -279,7 +289,8 @@ def test_svrg_glm_update(
         kwargs["feature_mask"] = mask.coef if mask is not None else None
     reg_cls = getattr(nmo.regularizer, regularizer_name)
     if regularizer_name == "GroupLasso":
-        reg = reg_cls(mask=mask)
+        gl_mask = _get_group_lasso_mask(X, y)
+        reg = reg_cls(mask=gl_mask)
     else:
         reg = reg_cls()
 
@@ -415,12 +426,12 @@ def test_maxiter_is_respected(
 
 
 @pytest.mark.parametrize(
-    "regularizer_name, solver_class, mask",
+    "regularizer_name, solver_class",
     [
-        ("Lasso", ProxSVRG, None),
-        ("GroupLasso", ProxSVRG, np.array([0, 1, 0]).reshape(-1, 1).astype(float)),
-        ("Ridge", SVRG, None),
-        ("UnRegularized", SVRG, None),
+        ("Lasso", ProxSVRG),
+        ("GroupLasso", ProxSVRG),
+        ("Ridge", SVRG),
+        ("UnRegularized", SVRG),
     ],
 )
 @pytest.mark.parametrize(
@@ -428,7 +439,7 @@ def test_maxiter_is_respected(
     [nmo.glm.GLM, nmo.glm.PopulationGLM],
 )
 def test_svrg_glm_update_needs_full_grad_at_reference_point(
-    glm_class, regularizer_name, solver_class, mask, linear_regression
+    glm_class, regularizer_name, solver_class, linear_regression
 ):
     X, y, _, _, loss = linear_regression
     if glm_class.__name__ == "PopulationGLM":
@@ -437,7 +448,8 @@ def test_svrg_glm_update_needs_full_grad_at_reference_point(
     # only pass mask if it's not None
     reg_cls = getattr(nmo.regularizer, regularizer_name)
     if regularizer_name == "GroupLasso":
-        reg = reg_cls(mask=mask)
+        gl_mask = _get_group_lasso_mask(X, y)
+        reg = reg_cls(mask=gl_mask)
     else:
         reg = reg_cls()
     kwargs = dict(
@@ -448,7 +460,7 @@ def test_svrg_glm_update_needs_full_grad_at_reference_point(
         regularizer_strength=None if regularizer_name == "UnRegularized" else 0.1,
     )
 
-    if mask is not None and glm_class == nmo.glm.PopulationGLM:
+    if glm_class == nmo.glm.PopulationGLM:
         kwargs["feature_mask"] = np.array([0, 1, 0]).reshape(-1, 1).astype(float)
 
     glm = glm_class(**kwargs)
