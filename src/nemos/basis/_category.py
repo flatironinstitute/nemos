@@ -120,7 +120,13 @@ class CategoryBasis(AtomicBasisMixin, Basis):
 
     @support_pynapple(conv_type="jax")
     def decode(self, X: ArrayLike | TsdFrame, axis: int = -1):
-        """Decode the categorical basis labels for 1-hot encoding.
+        """Decode the labels from a 1-hot encoding representation.
+
+        Decode the label from an N-dimensional array of 1-hot encoded categories.
+        The array must have shape ``(..., n_categories, ...)``. By default, the
+        last axis (``axis=-1``) is assumed to be the category axis.
+        If categories are stored in any other axis one must specify the axis
+        by setting the axis parameter.
 
         Parameters
         ----------
@@ -133,17 +139,37 @@ class CategoryBasis(AtomicBasisMixin, Basis):
         Examples
         --------
         >>> import numpy as np
+        >>> import pynapple as nap
         >>> from nemos.basis import Category
-        >>> bas = Category(["a", "b", "c"])
         >>> X = np.array(
         ...     [[1, 0, 0],
         ...      [1, 0 ,0],
         ...      [0, 0, 1],
         ...      [0, 1, 0]]
         ... )
+
+        **Integer category indices.**
+
+        >>> bas = Category(3)
+        >>> bas.decode(X)
+        Array([0, 0, 2, 1], dtype=int32)
+
+        **String category laebels.**
+
+        >>> bas = Category(["a", "b", "c"])
         >>> bas.decode(X)
         array(['a', 'a', 'c', 'b'], dtype='<U1')
 
+        **Pynapple tsd.**
+
+        >>> tsdframe = nap.TsdFrame(t=np.arange(len(X)), d=X)
+        >>> bas.decode(tsdframe)
+        Time (s)
+        ----------  --
+        0.0         a
+        ...
+        3.0         b
+        dtype: <U1, shape: (4,)
         """
         return self._label_encoder.decode(jax.numpy.argmax(X, axis=axis))
 
