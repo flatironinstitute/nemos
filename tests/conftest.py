@@ -26,7 +26,7 @@ import nemos as nmo
 import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
 from nemos.base_regressor import BaseRegressor
-from nemos.basis import AdditiveBasis, CustomBasis, MultiplicativeBasis, Zero
+from nemos.basis import AdditiveBasis, Category, CustomBasis, MultiplicativeBasis, Zero
 from nemos.basis._basis import Basis
 from nemos.basis._basis_mixin import BasisMixin
 from nemos.basis._transformer_basis import TransformerBasis
@@ -125,7 +125,7 @@ def basis_class_specific_params():
     all_cls = (
         list_all_basis_classes("Conv")
         + list_all_basis_classes("Eval")
-        + [CustomBasis, Zero]
+        + [CustomBasis, Zero, Category]
     )
     return {cls.__name__: cls._get_param_names() for cls in all_cls}
 
