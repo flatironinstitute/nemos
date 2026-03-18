@@ -986,7 +986,7 @@ class TestConvBasis:
         # basis.IdentityEval,
         # basis.FourierEval,
         # basis.Zero,
-        basis.Category,
+        Category,
     ],
 )
 class TestEvalBasis:
@@ -1041,7 +1041,7 @@ class TestEvalBasis:
     def test_vmin_vmax_eval_on_grid_affects_x(
         self, bounds, samples, nan_idx, mn, mx, cls
     ):
-        if cls in [CustomBasis, basis.Zero]:
+        if cls in [CustomBasis, basis.Zero, Category]:
             pytest.skip(
                 f"Skipping test_vmin_vmax_eval_on_grid_affects_x for {cls.__name__}"
             )
@@ -1072,7 +1072,7 @@ class TestEvalBasis:
     def test_vmin_vmax_eval_on_grid_no_effect_on_eval(
         self, vmin, vmax, samples, nan_idx, cls
     ):
-        if cls in [CustomBasis, basis.Zero]:
+        if cls in [CustomBasis, basis.Zero, Category]:
             pytest.skip(
                 f"Skipping test_vmin_vmax_eval_on_grid_no_effect_on_eval for {cls.__name__}"
             )
@@ -1132,7 +1132,7 @@ class TestEvalBasis:
         ],
     )
     def test_vmin_vmax_init(self, bounds, expectation, cls):
-        if cls in [CustomBasis, basis.Zero]:
+        if cls in [CustomBasis, basis.Zero, Category]:
             pytest.skip(f"Skipping test_vmin_vmax_init for {cls.__name__}")
         with expectation:
             bas = instantiate_atomic_basis(
@@ -1160,6 +1160,8 @@ class TestEvalBasis:
             n_basis_funcs=n_basis,
             **extra_kwargs(cls, n_basis),
         )  # Only eval mode is relevant here
+        if cls == Category:
+            expectation = does_not_raise()
         with expectation:
             bas.compute_features(samples)
 
@@ -1184,7 +1186,7 @@ class TestEvalBasis:
         ],
     )
     def test_vmin_vmax_range(self, vmin, vmax, samples, nan_idx, cls):
-        if cls in [CustomBasis, basis.Zero, basis.FourierEval]:
+        if cls in [CustomBasis, basis.Zero, basis.FourierEval, Category]:
             # FourierEval is defined over the real line; bounds specify period, not domain
             pytest.skip(f"Skipping test_vmin_vmax_range for {cls.__name__}")
         bounds = None if vmin is None else (vmin, vmax)
@@ -1234,7 +1236,7 @@ class TestEvalBasis:
         ],
     )
     def test_vmin_vmax_setter(self, bounds, expectation, cls):
-        if cls in [CustomBasis, basis.Zero]:
+        if cls in [CustomBasis, basis.Zero, Category]:
             pytest.skip(f"Skipping test_vmin_vmax_setter for {cls.__name__}")
         bas = instantiate_atomic_basis(
             cls,
@@ -1252,7 +1254,7 @@ class TestEvalBasis:
         with pytest.raises(
             TypeError, match="got an unexpected keyword argument 'test'"
         ):
-            if cls in [IdentityEval, FourierEval]:
+            if cls in [IdentityEval, FourierEval, Category]:
                 extra = {}
             else:
                 extra = dict(n_basis_funcs=5)
@@ -1261,7 +1263,7 @@ class TestEvalBasis:
     def test_set_window_size(self, cls):
         if cls in [CustomBasis, basis.Zero]:
             pytest.skip(f"Skipping test_set_window_size for {cls.__name__}")
-        if cls not in [IdentityEval, FourierEval]:
+        if cls not in [IdentityEval, FourierEval, Category]:
             kwargs = {"window_size": 10, "n_basis_funcs": 10}
         else:
             kwargs = {"window_size": 10}
@@ -1299,12 +1301,16 @@ class TestEvalBasis:
     def test_init_window_size(self, ws, expectation, cls):
         if cls in [CustomBasis, basis.Zero]:
             pytest.skip(f"Skipping test_init_window_size for {cls.__name__}")
-        extra = dict(n_basis_funcs=5) if cls not in [IdentityEval, FourierEval] else {}
+        extra = (
+            dict(n_basis_funcs=5)
+            if cls not in [IdentityEval, FourierEval, Category]
+            else {}
+        )
         with expectation:
             cls(**extra, window_size=ws, **extra_kwargs(cls, 5))
 
     def test_set_bounds(self, cls):
-        if cls in [CustomBasis, basis.Zero]:
+        if cls in [CustomBasis, basis.Zero, Category]:
             pytest.skip(f"Skipping test_set_bounds for {cls.__name__}")
         kwargs = (
             {"bounds": (1, 2), "n_basis_funcs": 10}
@@ -1316,7 +1322,7 @@ class TestEvalBasis:
 
     def test_fill_value_default(self, cls):
         """Test that fill_value defaults to NaN."""
-        if cls in [CustomBasis, basis.Zero, basis.FourierEval]:
+        if cls in [CustomBasis, basis.Zero, basis.FourierEval, Category]:
             pytest.skip(f"Skipping test_fill_value_default for {cls.__name__}")
         bas = instantiate_atomic_basis(
             cls,
@@ -1350,7 +1356,7 @@ class TestEvalBasis:
         self, fill_value, samples, out_of_bounds_idx, cls
     ):
         """Test that fill_value is applied to samples outside bounds."""
-        if cls in [CustomBasis, basis.Zero, basis.FourierEval]:
+        if cls in [CustomBasis, basis.Zero, basis.FourierEval, Category]:
             pytest.skip(
                 f"Skipping test_fill_value_applied_to_out_of_bounds for {cls.__name__}"
             )
@@ -1382,7 +1388,7 @@ class TestEvalBasis:
     @pytest.mark.parametrize("fill_value", [0.0, np.nan])
     def test_fill_value_set_params(self, fill_value, cls):
         """Test that fill_value can be set via set_params."""
-        if cls in [CustomBasis, basis.Zero, basis.FourierEval]:
+        if cls in [CustomBasis, basis.Zero, basis.FourierEval, Category]:
             pytest.skip(f"Skipping test_fill_value_set_params for {cls.__name__}")
         bas = instantiate_atomic_basis(
             cls,
@@ -1410,7 +1416,7 @@ class TestEvalBasis:
                 "which depends on un-jittable scipy functions."
             )
         # Skip Zero since it doesn't have bounds
-        if cls == basis.Zero:
+        if cls in [basis.Zero, Category]:
             pytest.skip("Zero basis does not have bounds")
 
         # CustomBasis needs pynapple_support=False for JIT compatibility

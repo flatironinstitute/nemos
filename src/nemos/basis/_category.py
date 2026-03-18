@@ -131,11 +131,17 @@ class CategoryBasis(AtomicBasisMixin, Basis):
         """
         # encoded is always int between 0 and n-1.
         # setting -1 will result in a 0s when 1-hot encoding
-        if jnp.issubdtype(self.categories.dtype, jnp.number):
+        if jnp.issubdtype(self.categories.dtype, jnp.number) and jnp.issubdtype(
+            encoded.dtype, jnp.number
+        ):
             encoded = jnp.where(jnp.isin(xi, self.categories), encoded, -1)
-        else:
+        elif jnp.issubdtype(encoded.dtype, jnp.number):
             # handle non-numeric via numpy isin
             encoded = jnp.where(np.isin(xi, self.categories), encoded, -1)
+        else:
+            # handle both numpy, both string (edge case in which user passed
+            # string labels after setting the categories as integers.
+            encoded = np.full(encoded.shape, -1)
         return encoded
 
     def evaluate(self, xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
