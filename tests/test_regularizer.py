@@ -953,7 +953,7 @@ class TestUnRegularized:
         model._instantiate_solver(model._compute_loss, params)
         model.solver_run(
             params,
-            X.data,
+            X,
             y,
         )
 
@@ -1311,7 +1311,7 @@ class TestRidge:
             true_params.intercept,
         )
         runner = model._instantiate_solver(model._compute_loss, params).solver_run
-        runner(params, X.data, y)
+        runner(params, X, y)
 
     @pytest.mark.parametrize("solver_name", ["GradientDescent", "SVRG"])
     @pytest.mark.requires_x64
@@ -1593,7 +1593,7 @@ class TestLasso:
             true_params.intercept,
         )
         runner = model._instantiate_solver(model._compute_loss, params).solver_run
-        runner(params, X.data, y)
+        runner(params, X, y)
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
     @pytest.mark.requires_x64
@@ -2438,7 +2438,7 @@ class TestElasticNet:
         runner = model._instantiate_solver(model._compute_loss, params).solver_run
         runner(
             params,
-            X.data,
+            X,
             y,
         )
 
@@ -3417,7 +3417,7 @@ class TestGroupLasso:
         """Test penalized_loss with dict-based PyTree parameters."""
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
 
-        # Create dict-based mask (simulating FeaturePytree structure)
+        # Create dict-based mask
         # Split features into two groups
         n_features = X.shape[1]
         mask_dict = {
@@ -3513,10 +3513,10 @@ class TestGroupLasso:
             true_params.intercept,
         )
         runner = model._instantiate_solver(model._compute_loss, params).solver_run
-        runner(params, X.data, y)
+        runner(params, X, y)
 
     def test_grouplasso_pytree(self, poissonGLM_model_instantiation_pytree):
-        """Check that GroupLasso fits with a FeaturePytree X (mask auto-initialized)."""
+        """Check that GroupLasso fits with a dict X (mask auto-initialized)."""
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation_pytree
         model.set_params(regularizer=self.cls(mask=None), regularizer_strength=0.1)
         model.solver_name = "ProximalGradient"

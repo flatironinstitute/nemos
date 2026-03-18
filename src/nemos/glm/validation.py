@@ -216,8 +216,8 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         Validate and cast a feature mask to JAX arrays.
 
         Validates that the feature mask contains only 0s and 1s, then converts
-        it to JAX arrays with the specified data type. Handles FeaturePytree
-        inputs by extracting the underlying data. Subclasses can extend
+        it to JAX arrays with the specified data type. Handles pytree inputs
+        by extracting the underlying data. Subclasses can extend
         this to add parameter-specific validation (e.g., checking that mask
         shape matches parameter dimensions).
 
@@ -225,7 +225,7 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         ----------
         feature_mask :
             Feature mask indicating which features are used. Must contain only 0s and 1s.
-            If a FeaturePytree, the underlying data dict is extracted.
+            If a pytree, the underlying data dict is extracted.
         data_type :
             Target data type for the mask arrays. Defaults to float.
 
@@ -242,7 +242,7 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         if feature_mask is None:
             return None
 
-        # Extract data from FeaturePytree
+        # Extract data if needed
         if isinstance(feature_mask, FeaturePytree):
             feature_mask = feature_mask.data
 

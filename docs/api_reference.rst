@@ -256,7 +256,7 @@ Classes useful for creating completely custom solvers.
 
 .. seealso::
 
-    :doc:`The developer notes <developers_notes/07-solvers>` explain the solver contract and expected types in more detail. 
+    :doc:`The developer notes <developers_notes/07-solvers>` explain the solver contract and expected types in more detail.
 
 
 The ``nemos.identifiability_constraints`` module
@@ -272,16 +272,3 @@ solutions.
 
     apply_identifiability_constraints
     apply_identifiability_constraints_by_basis_component
-
-The ``nemos.pytrees.FeaturePytree`` class
------------------------------------------
-Class for storing the input arrays in a dictionary. Keys are usually variable names.
-These objects can be provided as input to nemos GLM methods.
-
-.. currentmodule:: nemos.pytrees
-
-.. autosummary::
-    :toctree: generated/pytree
-    :nosignatures:
-
-    FeaturePytree
