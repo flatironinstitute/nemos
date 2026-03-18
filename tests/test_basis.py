@@ -297,6 +297,8 @@ def test_example_docstrings_add(
         pytest.skip("History and Identity eval docstring is specific.")
     elif basis_cls.__name__ == "CustomBasis" and method_name == "evaluate_on_grid":
         pytest.skip("CustomBasis doesn't implement the evaluate_on_grid method.")
+    elif basis_cls._is_discrete and method_name == "evaluate_on_grid":
+        pytest.skip("Discrete bases do not implement the evaluate_on_grid method.")
 
     basis_instance = CombinedBasis().instantiate_basis(
         5, basis_cls, basis_class_specific_params, window_size=10

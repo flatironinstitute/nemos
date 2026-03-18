@@ -139,6 +139,7 @@ def remap_parameters(method):
 class BasisMixin:
     _allow_inputs_of_different_shape = True
     _convert_to_float = True
+    _is_discrete = False
 
     def __init__(self, label: Optional[str] = None):
         if not hasattr(self, "_input_shape_"):

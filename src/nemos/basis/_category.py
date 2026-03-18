@@ -52,6 +52,7 @@ class CategoryBasis(AtomicBasisMixin, Basis):
     """
 
     _convert_to_float = False
+    _is_discrete = True
 
     def __init__(self, categories: List | NDArray | int, label: Optional[str] = None):
         n_categories = self._get_n_categories(categories)
@@ -126,6 +127,6 @@ class CategoryBasis(AtomicBasisMixin, Basis):
         """Raise for categorical basis."""
         raise NotImplementedError(
             "``evaluate_on_grid`` is not implemented for categorical basis. The method "
-            "only makes sense for continuous bases, ``Category`` is a basis for discrete "
-            "variables. "
+            "only makes sense for continuous bases, ``Category`` process discrete "
+            "inputs only. "
         )
