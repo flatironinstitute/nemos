@@ -167,7 +167,7 @@ class CategoryBasis(AtomicBasisMixin, Basis):
             encoded = self._label_encoder.encode(xi, safe=True)
         elif not self.out_of_category and isinstance(xi, Tracer):
             raise ValueError(
-                "JIT compilation not available for ``out_of_category==False``. "
+                "JIT compilation not available for ``out_of_category=False``. "
                 "To enable JIT compilation, please set ``out_of_category=True``."
             )
         else:
