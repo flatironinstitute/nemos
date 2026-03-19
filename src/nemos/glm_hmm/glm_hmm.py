@@ -13,6 +13,7 @@ from numpy.typing import ArrayLike, NDArray
 
 from .. import observation_models as obs
 from .. import tree_utils
+from ..hmm.hmm import BaseHMM
 from .._observation_model_builder import instantiate_observation_model
 from ..base_regressor import BaseRegressor
 from ..inverse_link_function_utils import resolve_inverse_link_function
@@ -33,7 +34,7 @@ from .algorithm_configs import (
     prepare_mstep_nll_objective_param,
     prepare_mstep_nll_objective_scale,
 )
-from .expectation_maximization import (
+from ..hmm.expectation_maximization import (
     GLMHMMState,
     em_glm_hmm,
     em_step,
@@ -123,7 +124,7 @@ def _check_state_format(state_format: str) -> None:
         )
 
 
-class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
+class GLMHMM(BaseHMM, BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
     r"""Generalized Linear Model with Hidden Markov Model (GLM-HMM).
 
     This model combines a Generalized Linear Model (GLM) with a Hidden Markov Model (HMM) to capture
@@ -400,6 +401,13 @@ class GLMHMM(BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         tol: float = 1e-8,
         seed=jax.random.PRNGKey(123),
     ):
+        super().__init__(
+            n_states=n_states,
+            dirichlet_prior_alphas_init_prob=dirichlet_prior_alphas_init_prob,
+            dirichlet_prior_alphas_transition=dirichlet_prior_alphas_transition,
+            maxiter=maxiter,
+            tol=tol,
+        )
         super().__init__(
             regularizer=regularizer,
             regularizer_strength=regularizer_strength,

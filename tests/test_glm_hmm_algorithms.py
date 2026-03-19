@@ -18,7 +18,7 @@ from nemos.glm_hmm.algorithm_configs import (
     prepare_mstep_nll_objective_param,
     prepare_mstep_nll_objective_scale,
 )
-from nemos.glm_hmm.expectation_maximization import (
+from nemos.hmm.expectation_maximization import (
     GLMHMMState,
     _backward_pass,
     _forward_pass,

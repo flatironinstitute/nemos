@@ -22,7 +22,7 @@ from nemos._observation_model_builder import (
     instantiate_observation_model,
 )
 from nemos._regularizer_builder import instantiate_regularizer
-from nemos.glm_hmm.expectation_maximization import GLMHMMState, em_glm_hmm, em_step
+from nemos.hmm.expectation_maximization import GLMHMMState, em_glm_hmm, em_step
 from nemos.glm_hmm.params import GLMHMMParams, GLMParams
 from nemos.pytrees import FeaturePytree
 from nemos.tree_utils import pytree_map_and_reduce

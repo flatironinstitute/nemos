@@ -24,7 +24,7 @@ from nemos.glm_hmm.algorithm_configs import (
     prepare_estep_log_likelihood,
     prepare_mstep_nll_objective_param,
 )
-from nemos.glm_hmm.expectation_maximization import (
+from nemos.hmm.expectation_maximization import (
     em_glm_hmm,
     forward_backward,
 )

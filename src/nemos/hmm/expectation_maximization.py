@@ -9,16 +9,18 @@ import jax.numpy as jnp
 
 from ..glm.params import GLMParams
 from ..typing import Aux, SolverState
-from .m_step_analytical_updates import (
+from ..glm_hmm.m_step_analytical_updates import (
     _analytical_m_step_log_initial_prob,
     _analytical_m_step_log_transition_prob,
 )
-from .params import GLMHMMParams, GLMScale, HMMParams
-from .utils import Array, compute_rate_per_state, initialize_new_session
+from ..glm_hmm.params import GLMHMMParams, GLMScale, HMMParams
+from ..glm_hmm.utils import Array, compute_rate_per_state, initialize_new_session
+
+from ..typing import ModelParamsT
 
 
-class GLMHMMState(eqx.Module):
-    """State class for the GLMHHM EM-algorithm."""
+class HMMState(eqx.Module):
+    """State class for the HMM EM-algorithm."""
 
     data_log_likelihood: float | Array
     previous_data_log_likelihood: float | Array
@@ -26,7 +28,7 @@ class GLMHMMState(eqx.Module):
     iterations: int
 
 
-EMCarry = Tuple[GLMHMMParams, GLMHMMState]
+HMMCarry = Tuple[HMMParams, HMMState]
 
 
 def compute_xi_log(
@@ -87,11 +89,11 @@ def compute_xi_log(
 
 
 def _compute_log_likelihood(
-    glm_params: GLMParams,
-    glm_scale: GLMScale,
+    model_params: ModelParamsT,
+    # glm_scale: GLMScale,
     X: Array,
     y: Array,
-    inverse_link_function: Callable[[Array], Array],
+    # inverse_link_function: Callable[[Array], Array],
     log_likelihood_func: Callable[[Array, Array, Array], Array],
 ):
     """
@@ -123,9 +125,9 @@ def _compute_log_likelihood(
         Entry ``[t, k]`` is log p(y_t | z_t=k).
     """
     # Predict rate
-    predicted_rate_given_state = compute_rate_per_state(
-        X, glm_params, inverse_link_function
-    )
+    # predicted_rate_given_state = compute_rate_per_state(
+    #     X, glm_params, inverse_link_function
+    # )
 
     # Compute likelihood given the fixed weights
     # Data likelihood p(y|z) from emissions model
@@ -155,7 +157,8 @@ def _compute_log_likelihood(
     # nemos.observation_models.Observations with ``aggregate_sample_scores = lambda x:x``
 
     log_conditionals = log_likelihood_func(
-        y, predicted_rate_given_state, jnp.exp(glm_scale.log_scale)
+        y,
+        model_params,
     )
     return log_conditionals
 
@@ -267,7 +270,7 @@ def _forward_pass(
 
 @partial(jax.jit, static_argnames=["inverse_link_function", "log_likelihood_func"])
 def forward_pass(
-    params: GLMHMMParams,
+    params: HMMParams,
     X: Array,
     y: Array,
     inverse_link_function: Callable[[Array], Array],
