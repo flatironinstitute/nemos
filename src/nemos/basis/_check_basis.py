@@ -94,9 +94,6 @@ def _check_transform_input(
     except (TypeError, ValueError):
         raise TypeError("Input samples must be array-like of floats!")
 
-    # check for non-empty samples
-    _check_zero_samples(tuple(len(x) for x in xi))
-
     # checks on input and outputs
     _check_samples_consistency(*xi)
 
