@@ -101,6 +101,14 @@ class CategoryBasis(AtomicBasisMixin, Basis):
                 jnp.arange(self._get_n_categories(categories))
             )
         else:
+            cats = np.asarray(categories)
+            unique = np.unique(cats)
+            if len(unique) != len(cats):
+                duplicates = [c for c in unique if np.sum(cats == c) > 1]
+                raise ValueError(
+                    f"Duplicate category labels provided: {duplicates}. "
+                    "Each label must be unique."
+                )
             self._label_encoder.set_classes(categories)
 
     @property

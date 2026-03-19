@@ -1918,7 +1918,7 @@ class TestSharedMethods:
 
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 10, 11, 100])
     def test_evaluate_on_grid_basis_size(self, sample_size, cls):
-        if "OrthExp" in cls.__name__ or cls == CustomBasis:
+        if "OrthExp" in cls.__name__ or cls == CustomBasis or cls == Category:
             pytest.skip(f"Skipping test_evaluate_on_grid_basis_size for {cls.__name__}")
         basis_obj = instantiate_atomic_basis(
             cls, n_basis_funcs=5, window_size=8, **extra_kwargs(cls, 5)
@@ -1934,7 +1934,7 @@ class TestSharedMethods:
 
     @pytest.mark.parametrize("n_input", [0, 1, 2])
     def test_evaluate_on_grid_input_number(self, n_input, cls):
-        if cls == CustomBasis:
+        if cls == CustomBasis or cls == Category:
             pytest.skip(
                 f"Skipping test_evaluate_on_grid_input_number for {cls.__name__}"
             )
@@ -1960,7 +1960,7 @@ class TestSharedMethods:
 
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 10, 11, 100])
     def test_evaluate_on_grid_meshgrid_size(self, sample_size, cls):
-        if "OrthExp" in cls.__name__ or cls == CustomBasis:
+        if "OrthExp" in cls.__name__ or cls == CustomBasis or cls == Category:
             pytest.skip(
                 f"Skipping test_evaluate_on_grid_meshgrid_size for {cls.__name__}"
             )
@@ -2128,12 +2128,13 @@ class TestSharedMethods:
         )
         params_basis = bas.get_params()
         funcs_orig = params_basis.pop("funcs") if hasattr(bas, "funcs") else None
-        rates_1 = params_basis.pop("decay_rates", 1)
-        rates_2 = params_transf.pop("decay_rates", 1)
         freqs_1 = params_basis.pop("frequencies", [1])
         freqs_2 = params_transf.pop("frequencies", [1])
+        array_keys = [k for k, v in params_basis.items() if hasattr(v, "shape")]
+        for key in array_keys:
+            arr1, arr2 = params_basis.pop(key), params_transf.pop(key)
+            np.testing.assert_array_equal(arr1, arr2)
         assert params_transf == params_basis
-        assert np.all(rates_1 == rates_2)
         assert all(np.all(f1 == f2) for f1, f2 in zip(freqs_1, freqs_2))
         if funcs_orig:
             assert all(
@@ -3861,9 +3862,9 @@ class TestAdditiveBasis(CombinedBasis):
 
     @pytest.mark.parametrize("basis_a", list_all_basis_classes("Eval"))
     def test_set_params_basis(self, basis_a, basis_class_specific_params):
-        if basis_a is basis.Zero:
+        if basis_a in [basis.Zero, Category]:
             pytest.skip(
-                "Zero basis is Eval but doesn't have the Eval in the class name"
+                f"{basis_a.__class__.__name__} basis is Eval but doesn't have the Eval in the class name"
             )
         basis_b = basis_a.__name__.replace("Eval", "Conv")
         if not hasattr(basis, basis_b):
@@ -4528,9 +4529,10 @@ class TestAdditiveBasis(CombinedBasis):
         window_size,
         basis_class_specific_params,
     ):
-        if basis_a in (basis.OrthExponentialBasis, basis.HistoryConv) or basis_b in (
+        if basis_a in (basis.OrthExponentialBasis, basis.HistoryConv, Category) or basis_b in (
             basis.OrthExponentialBasis,
             basis.HistoryConv,
+            Category,
         ):
             pytest.skip(f"Skipping test_call_nan for {basis_a.__name__}")
         if basis_a == IdentityEval:
@@ -5069,10 +5071,10 @@ class TestAdditiveBasis(CombinedBasis):
         else:
             n_basis_b = 5
         basis_a = self.instantiate_basis(
-            n_basis_a, basis_a, basis_class_specific_params, window_size=10
+            n_basis_a, basis_a, basis_class_specific_params, categories=n_basis_a, window_size=10
         )
         basis_b = self.instantiate_basis(
-            n_basis_b, basis_b, basis_class_specific_params, window_size=10
+            n_basis_b, basis_b, basis_class_specific_params, categories=n_basis_b, window_size=10
         )
         add = basis_a + basis_b
 
@@ -6591,10 +6593,10 @@ class TestMultiplicativeBasis(CombinedBasis):
         else:
             n_basis_b = 5
         basis_a = self.instantiate_basis(
-            n_basis_a, basis_a, basis_class_specific_params, window_size=10
+            n_basis_a, basis_a, basis_class_specific_params, categories=n_basis_a, window_size=10
         )
         basis_b = self.instantiate_basis(
-            n_basis_b, basis_b, basis_class_specific_params, window_size=10
+            n_basis_b, basis_b, basis_class_specific_params, categories=n_basis_b, window_size=10
         )
 
         mul = basis_a * basis_b
@@ -8156,6 +8158,80 @@ def test_basis_public_api_matches_subclasses():
         f"Missing from __all__: {expected_public - public}\n"
         f"Unexpected in __all__: {public - expected_public}"
     )
+
+
+class TestCategory:
+    """Tests for Category-specific logic not covered by TestSharedMethods."""
+
+    # ------------------------------------------------------------------
+    # Priority 1 – one-hot correctness
+    # ------------------------------------------------------------------
+
+    @pytest.mark.parametrize(
+        "categories, inp, expected",
+        [
+            # default integer labels 0..n-1
+            (3, np.array([0, 1, 2]), np.eye(3)),
+            # non-contiguous integer labels: sorted order determines column
+            ([2, 5, 8], np.array([2, 5, 8]), np.eye(3)),
+            ([2, 5, 8], np.array([8, 5, 2]), np.eye(3)[::-1]),
+            # string labels: sorted lexicographically
+            (["c", "a", "b"], np.array(["a", "b", "c"]), np.eye(3)),
+            (["c", "a", "b"], np.array(["c", "a", "b"]), np.eye(3)[[2, 0, 1]]),
+        ],
+    )
+    def test_one_hot_correct_column(self, categories, inp, expected):
+        """Each label maps to the correct one-hot column."""
+        bas = Category(categories)
+        out = bas.evaluate(inp)
+        np.testing.assert_array_equal(out, expected)
+
+    @pytest.mark.parametrize(
+        "categories",
+        [
+            [2, 5, 8],
+            ["c", "a", "b"],
+        ],
+    )
+    def test_label_order_is_sorted(self, categories):
+        """Columns follow the sorted order of categories, not insertion order."""
+        bas = Category(categories)
+        expected_order = np.sort(np.asarray(categories))
+        np.testing.assert_array_equal(bas.categories, expected_order)
+
+    @pytest.mark.parametrize(
+        "shape",
+        [(10,), (4, 3), (2, 3, 4)],
+    )
+    def test_multidim_input_shape(self, shape):
+        """evaluate preserves all input axes and appends the category axis last."""
+        n_cat = 5
+        bas = Category(n_cat)
+        inp = np.zeros(shape, dtype=int)
+        out = bas.evaluate(inp)
+        assert out.shape == (*shape, n_cat)
+
+    @pytest.mark.parametrize(
+        "categories, expected_n",
+        [
+            (5, 5),
+            ([0, 1, 2], 3),
+            (["a", "b"], 2),
+        ],
+    )
+    def test_n_basis_funcs_matches_categories(self, categories, expected_n):
+        """n_basis_funcs equals the number of unique categories."""
+        bas = Category(categories)
+        assert bas.n_basis_funcs == expected_n
+
+    @pytest.mark.parametrize(
+        "categories",
+        [["a", "a", "b"], [1, 2, 2, 3]],
+    )
+    def test_duplicate_categories_raises(self, categories):
+        """Duplicate labels raise a clean ValueError before reaching LabelEncoder."""
+        with pytest.raises(ValueError, match="Duplicate category labels"):
+            Category(categories)
 
 
 class TestBoundsND:
