@@ -6,7 +6,7 @@ import copy
 import math
 import warnings
 from copy import deepcopy
-from functools import wraps
+from functools import partial, wraps
 from typing import TYPE_CHECKING, Callable, Generator, List, Optional, Tuple, Union
 
 import jax.numpy as jnp
@@ -40,28 +40,41 @@ from ._composition_utils import (
 )
 
 
-def check_transform_input(func: Callable) -> Callable:
+def check_transform_input(func: Callable | None = None, flat_output=False) -> Callable:
     """Check input before calling basis.
 
     This decorator allows to raise an exception that is more readable
     when the wrong number of input is provided to evaluate.
     """
+    if func is None:
+        return partial(check_transform_input, flat_output=flat_output)
 
     @wraps(func)
-    def wrapper(self: Basis, *xi: ArrayLike, **kwargs) -> NDArray:
+    def wrapper(self: Basis, *xi: ArrayLike, **kwargs) -> NDArray | jnp.ndarray:
         xi = self._check_transform_input(*xi)
+        if xi[0].size == 0:
+            # do not evaluate if empty
+            self.setup_basis(*xi)
+            if flat_output:
+                return jnp.zeros((xi[0].shape[0], self.n_output_features))
+            else:
+                shape = xi[0].shape
+                return jnp.zeros((*shape, self.n_basis_funcs))
         return func(self, *xi, **kwargs)  # Call the basis
 
     return wrapper
 
 
-def check_one_dimensional(func: Callable) -> Callable:
-    """Check if the input is one-dimensional."""
+def check_same_shape(func: Callable) -> Callable:
+    """Check if the input have the same shape."""
 
     @wraps(func)
     def wrapper(self: Basis, *xi: NDArray, **kwargs):
-        if any(x.ndim != 1 for x in xi):
-            raise ValueError("Input sample must be one dimensional!")
+        shape_ref = xi[0].shape
+        if any(x.shape != shape_ref for x in xi[1:]):
+            raise ValueError(
+                f"Inputs must have the same shape for basis of type ``{self.__class__.__name__}``!"
+            )
         return func(self, *xi, **kwargs)
 
     return wrapper
@@ -207,7 +220,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             self._n_basis_funcs = orig_n_basis
             raise e
 
-    @check_transform_input
+    @check_transform_input(flat_output=True)
     def compute_features(
         self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor
     ) -> FeatureMatrix:
@@ -598,7 +611,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    @check_one_dimensional
+    @check_same_shape
     def evaluate(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
         """
         Evaluate the basis at the sample points.
@@ -636,11 +649,12 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         >>> out = additive_basis.evaluate(x, y)
 
         """
-        X = np.hstack(
+        X = np.concatenate(
             (
                 self.basis1.evaluate(*xi[: self.basis1._n_inputs]),
                 self.basis2.evaluate(*xi[self.basis1._n_inputs :]),
-            )
+            ),
+            axis=-1,
         )
         return X
 
