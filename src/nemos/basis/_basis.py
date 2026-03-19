@@ -80,21 +80,6 @@ def check_transform_input(func: Callable | None = None, flat_output=False) -> Ca
     return wrapper
 
 
-def check_same_shape(func: Callable) -> Callable:
-    """Check if the input have the same shape."""
-
-    @wraps(func)
-    def wrapper(self: Basis, *xi: NDArray, **kwargs):
-        shape_ref = xi[0].shape
-        if any(x.shape != shape_ref for x in xi[1:]):
-            raise ValueError(
-                f"Inputs must have the same shape for basis of type ``{self.__class__.__name__}``!"
-            )
-        return func(self, *xi, **kwargs)
-
-    return wrapper
-
-
 def min_max_rescale_samples(
     sample_pts: NDArray,
     bounds: Optional[Tuple[float, float]] = None,
@@ -626,7 +611,6 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    @check_same_shape
     def evaluate(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
         """
         Evaluate the basis at the sample points.
@@ -664,6 +648,12 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         >>> out = additive_basis.evaluate(x, y)
 
         """
+        have_same_shape, shapes, _ = _have_unique_shapes(xi)
+        if not have_same_shape:
+            raise ValueError(
+                f"``AdditiveBasis.evaluate`` requires all inputs to have the same shape. "
+                f"Got shapes: {shapes}."
+            )
         X = np.concatenate(
             (
                 self.basis1.evaluate(*xi[: self.basis1._n_inputs]),
