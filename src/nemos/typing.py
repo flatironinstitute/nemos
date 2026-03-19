@@ -66,7 +66,7 @@ ProximalOperator = Callable[
     Tuple[jnp.ndarray, jnp.ndarray],
 ]
 
-FeatureMatrix: TypeAlias = "nap.TsdFrame | NDArray"
+FeatureMatrix: TypeAlias = "nap.TsdFrame | NDArray | jnp.ndarray"
 
 # User provided init_params (e.g. for GLMs Tuple[array, array])
 UserProvidedParamsT = TypeVar("UserProvidedParamsT")
