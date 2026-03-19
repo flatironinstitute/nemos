@@ -45,6 +45,21 @@ def check_transform_input(func: Callable | None = None, flat_output=False) -> Ca
 
     This decorator allows to raise an exception that is more readable
     when the wrong number of input is provided to evaluate.
+
+    Parameters
+    ----------
+    func :
+        The callable being decorated. ``None`` when the decorator is used
+        with arguments (e.g. ``@check_transform_input(flat_output=True)``),
+        in which case a partial is returned and applied to the function in a
+        second call.
+    flat_output :
+        Controls the shape of the zeros returned when the input is empty.
+        Set to ``True`` for ``compute_features``, which flattens all input
+        dimensions into a 2-D matrix ``(n_samples, n_output_features)``.
+        Set to ``False`` (default) for ``evaluate``, which preserves the full
+        input shape and appends the basis dimension, yielding
+        ``(*input_shape, n_basis_funcs)``.
     """
     if func is None:
         return partial(check_transform_input, flat_output=flat_output)
