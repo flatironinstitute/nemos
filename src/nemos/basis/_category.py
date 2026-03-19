@@ -139,7 +139,7 @@ class CategoryBasis(AtomicBasisMixin, Basis):
             # handle non-numeric via numpy isin
             encoded = jnp.where(np.isin(xi, self.categories), encoded, -1)
         else:
-            # handle both numpy, both string (edge case in which user passed
+            # handle both numpy, both string - edge case in which user passed
             # string labels after setting the categories as integers.
             encoded = np.full(encoded.shape, -1)
         return encoded

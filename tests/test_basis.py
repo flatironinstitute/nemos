@@ -976,16 +976,16 @@ class TestConvBasis:
 @pytest.mark.parametrize(
     "cls",
     [
-        # CustomBasis,
-        # basis.RaisedCosineLogEval,
-        # basis.RaisedCosineLinearEval,
-        # basis.BSplineEval,
-        # basis.CyclicBSplineEval,
-        # basis.MSplineEval,
-        # basis.OrthExponentialEval,
-        # basis.IdentityEval,
-        # basis.FourierEval,
-        # basis.Zero,
+        CustomBasis,
+        basis.RaisedCosineLogEval,
+        basis.RaisedCosineLinearEval,
+        basis.BSplineEval,
+        basis.CyclicBSplineEval,
+        basis.MSplineEval,
+        basis.OrthExponentialEval,
+        basis.IdentityEval,
+        basis.FourierEval,
+        basis.Zero,
         Category,
     ],
 )
@@ -1480,23 +1480,24 @@ def test_call_equivalent_in_conv(n_basis, cls):
 @pytest.mark.parametrize(
     "cls",
     [
-        CustomBasis,
-        basis.RaisedCosineLogEval,
-        basis.RaisedCosineLogConv,
-        basis.RaisedCosineLinearEval,
-        basis.RaisedCosineLinearConv,
-        basis.BSplineEval,
-        basis.BSplineConv,
-        basis.CyclicBSplineEval,
-        basis.CyclicBSplineConv,
-        basis.MSplineEval,
-        basis.MSplineConv,
-        basis.OrthExponentialEval,
-        basis.OrthExponentialConv,
-        basis.IdentityEval,
-        basis.HistoryConv,
-        basis.FourierEval,
-        basis.Zero,
+        # CustomBasis,
+        # basis.RaisedCosineLogEval,
+        # basis.RaisedCosineLogConv,
+        # basis.RaisedCosineLinearEval,
+        # basis.RaisedCosineLinearConv,
+        # basis.BSplineEval,
+        # basis.BSplineConv,
+        # basis.CyclicBSplineEval,
+        # basis.CyclicBSplineConv,
+        # basis.MSplineEval,
+        # basis.MSplineConv,
+        # basis.OrthExponentialEval,
+        # basis.OrthExponentialConv,
+        # basis.IdentityEval,
+        # basis.HistoryConv,
+        # basis.FourierEval,
+        # basis.Zero,
+        basis.Category,
     ],
 )
 class TestSharedMethods:
@@ -1521,6 +1522,7 @@ class TestSharedMethods:
                 basis.HistoryConv: "HistoryConv(window_size=10)",
                 basis.FourierEval: "FourierEval(frequencies=[Array([1., 2.], dtype=float32)], ndim=1, bounds=(1.0, 2.0), frequency_mask='no-intercept')",
                 basis.Zero: "Zero()",
+                basis.Category: "Category(out_of_category=True)"
             }
         ],
     )
@@ -1556,6 +1558,7 @@ class TestSharedMethods:
                 basis.HistoryConv: r"'mylabel': HistoryConv\(window_size=10\)",
                 basis.FourierEval: r"'mylabel': FourierEval\(frequencies=\[Array\(\[1\., 2\.\], dtype=float\d{2}\)\], ndim=1, bounds=\(1\.0, 2\.0\), frequency_mask='no-intercept'\)",
                 basis.Zero: r"'mylabel': Zero\(\)",
+                basis.Category: r"'mylabel': Category\(out_of_category=True\)",
             }
         ],
     )
@@ -1677,6 +1680,7 @@ class TestSharedMethods:
             cls,
             n_basis_funcs=n_basis,
             window_size=8,
+            categories=n_basis,
             **extra_kwargs(cls, n_basis),
         )
         x = np.linspace(0, 1, 10)
@@ -1731,6 +1735,7 @@ class TestSharedMethods:
         bas = instantiate_atomic_basis(
             cls,
             n_basis_funcs=n_basis,
+            categories=n_basis,
             window_size=8,
             **extra_kwargs(cls, n_basis),
         )
@@ -1745,6 +1750,9 @@ class TestSharedMethods:
         with expectation:
             out = bas.evaluate(inp)
             assert out.shape == tuple((*inp.shape, n_basis))
+            if getattr(bas, "_is_discrete", False):
+                # no evaluate_on_grid for discrete basis
+                return
             out2 = bas.evaluate_on_grid(inp.shape[0])[1]
             if out2.size > 0:
                 assert np.all(
@@ -1756,6 +1764,8 @@ class TestSharedMethods:
         if cls in [HistoryConv, CustomBasis, basis.Zero]:
             # eval simply returns the evaluate or empty array...
             pytest.skip(f"skipping nan locaiton test for {cls.__name__}.")
+        elif cls == Category:
+            pytest.skip("Category basis 1-hot encodes nans to 0.")
 
         if cls is IdentityEval:
             n_basis = 1
@@ -1763,6 +1773,7 @@ class TestSharedMethods:
             cls,
             n_basis_funcs=n_basis,
             window_size=8,
+            categories=n_basis,
             **extra_kwargs(cls, n_basis),
         )
         inp = np.random.randn(10, 2, 3)
@@ -1777,6 +1788,8 @@ class TestSharedMethods:
         if cls in [HistoryConv, basis.Zero]:
             # eval simply returns the evaluate or empty array...
             pytest.skip(f"skipping nan locaiton test for {cls.__name__}.")
+        elif cls == Category:
+            pytest.skip("Category basis 1-hot encodes nans to 0.")
         elif cls is IdentityEval:
             n_basis = 1
         else:
@@ -1796,6 +1809,7 @@ class TestSharedMethods:
         bas = instantiate_atomic_basis(
             cls,
             n_basis_funcs=n_basis,
+            categories=n_basis,
             window_size=8,
             **extra_kwargs(cls, n_basis),
         )
@@ -1847,6 +1861,7 @@ class TestSharedMethods:
         basis_obj = instantiate_atomic_basis(
             cls,
             **args_copy,
+            categories=args_copy["n_basis_funcs"],
             window_size=30,
             **extra_kwargs(cls, args_copy["n_basis_funcs"]),
         )
