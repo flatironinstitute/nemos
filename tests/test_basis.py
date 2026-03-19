@@ -3728,13 +3728,14 @@ class TestAdditiveBasis(CombinedBasis):
         )
         bas_b = self.instantiate_basis(
             5,
-            basis_a,
+            basis_b,
             basis_class_specific_params,
             window_size=10,
         )
         bas = bas_a + bas_b
+        n_bas = bas_a.n_basis_funcs + bas_b.n_basis_funcs
         out = bas.compute_features(*[np.zeros(shape)] * 2)
-        expected_shape = (shape[0], math.prod(shape[1:]) * 5 * 2)
+        expected_shape = (shape[0], math.prod(shape[1:]) * n_bas)
         if out.shape != expected_shape:
             raise ValueError(
                 f"Mismatched shape for:\n{bas}\nOut shape: {out.shape} - Expected: {expected_shape}",
@@ -5352,13 +5353,14 @@ class TestMultiplicativeBasis(CombinedBasis):
         )
         bas_b = self.instantiate_basis(
             5,
-            basis_a,
+            basis_b,
             basis_class_specific_params,
             window_size=10,
         )
         bas = bas_a * bas_b
+        n_bas = bas_a.n_basis_funcs * bas_b.n_basis_funcs
         out = bas.compute_features(*[np.zeros(shape)] * 2)
-        expected_shape = (shape[0], math.prod(shape[1:]) * 25)
+        expected_shape = (shape[0], math.prod(shape[1:]) * n_bas)
         if out.shape != expected_shape:
             raise ValueError(
                 f"Mismatched shape for:\n{bas}\nOut shape: {out.shape} - Expected: {expected_shape}",
