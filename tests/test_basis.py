@@ -3760,16 +3760,18 @@ class TestAdditiveBasis(CombinedBasis):
         )
         bas_b = self.instantiate_basis(
             5,
-            basis_a,
+            basis_b,
             basis_class_specific_params,
             window_size=10,
         )
         bas = bas_a + bas_b
+        n_out = bas_a.n_basis_funcs + bas_b.n_basis_funcs
         out = bas.evaluate(*[np.zeros(shape)] * 2)
-        expected_shape = (*shape, 10)
-        assert (
-            out.shape == expected_shape
-        ), f"Mismatched shape for:\n{bas}\nOut shape: {out.shape} - Expected: {expected_shape}"
+        expected_shape = (*shape, n_out)
+        if out.shape != expected_shape:
+            raise ValueError(
+                f"Mismatched shape for:\n{bas}\nOut shape: {out.shape} - Expected: {expected_shape}"
+            )
 
     @pytest.mark.parametrize(
         "bas_cls",
@@ -5386,13 +5388,15 @@ class TestMultiplicativeBasis(CombinedBasis):
         )
         bas_b = self.instantiate_basis(
             5,
-            basis_a,
+            basis_b,
             basis_class_specific_params,
             window_size=10,
         )
         bas = bas_a * bas_b
+        n_out = bas_a.n_basis_funcs * bas_b.n_basis_funcs
+
         out = bas.evaluate(*[np.zeros(shape)] * 2)
-        expected_shape = (*shape, 25)
+        expected_shape = (*shape, n_out)
         if out.shape != expected_shape:
             raise ValueError(
                 f"Mismatched shape for:\n{bas}\nOut shape: {out.shape} - Expected: {expected_shape}",
