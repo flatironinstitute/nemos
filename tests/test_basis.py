@@ -8335,6 +8335,35 @@ class TestCategory:
         assert out.shape == (len(inp), bas.n_basis_funcs)
 
     @pytest.mark.parametrize(
+        "categories, inp, expected",
+        [
+            # Branch 1: both numeric — OOC rows are zeros, known rows are one-hot
+            (
+                [2, 3, 10],
+                jax.numpy.array([2, 99, 3]),
+                np.array([[1, 0, 0], [0, 0, 0], [0, 1, 0]], dtype=float),
+            ),
+            # Branch 2: string categories, string input — OOC rows are zeros
+            (
+                ["a", "b", "c"],
+                np.array(["a", "z", "b"]),
+                np.array([[1, 0, 0], [0, 0, 0], [0, 1, 0]], dtype=float),
+            ),
+            # Branch 3: int categories, string input — all rows are zeros (full fallback)
+            (
+                3,
+                np.array(["a", "b"]),
+                np.zeros((2, 3), dtype=float),
+            ),
+        ],
+    )
+    def test_set_out_of_category_branches(self, categories, inp, expected):
+        """Each dtype-dispatch branch in out-of-category handling produces the correct rows."""
+        bas = Category(categories, out_of_category=True)
+        out = bas.evaluate(inp)
+        np.testing.assert_array_equal(out, expected)
+
+    @pytest.mark.parametrize(
         "categories, inp",
         [
             ([2, 3, 10], np.array([2, 10, 3, 2])),
