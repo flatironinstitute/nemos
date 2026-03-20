@@ -8404,6 +8404,37 @@ class TestCategory:
         np.testing.assert_array_equal(eager, jitted)
 
 
+@pytest.mark.parametrize(
+    "basis_cls",
+    [cls for cls in list_all_basis_classes() if cls._is_discrete],
+)
+class TestDiscreteBasis:
+    """Tests that apply to every discrete basis (those with _is_discrete=True)."""
+
+    def _instantiate(self, basis_cls):
+        params = {basis_cls.__name__: basis_cls._get_param_names()}
+        return basis_cls(**inspect_utils.trim_kwargs(basis_cls, DEFAULT_KWARGS, params))
+
+    def test_evaluate_on_grid_raises(self, basis_cls):
+        """evaluate_on_grid raises NotImplementedError for discrete inputs."""
+        bas = self._instantiate(basis_cls)
+        with pytest.raises(NotImplementedError, match="discrete"):
+            bas.evaluate_on_grid(3)
+
+    def test_bounds_get_raises(self, basis_cls):
+        """Getting bounds raises AttributeError naming the class."""
+        bas = self._instantiate(basis_cls)
+        with pytest.raises(AttributeError, match=basis_cls.__name__):
+            _ = bas.bounds
+
+    @pytest.mark.parametrize("value", [None, (0, 1)])
+    def test_bounds_set_raises(self, basis_cls, value):
+        """Setting bounds raises AttributeError naming the class."""
+        bas = self._instantiate(basis_cls)
+        with pytest.raises(AttributeError, match=basis_cls.__name__):
+            bas.bounds = value
+
+
 class TestBoundsND:
     @pytest.mark.parametrize(
         "bounds, expectation",
