@@ -1476,23 +1476,23 @@ def test_call_equivalent_in_conv(n_basis, cls):
 @pytest.mark.parametrize(
     "cls",
     [
-        # CustomBasis,
-        # basis.RaisedCosineLogEval,
-        # basis.RaisedCosineLogConv,
-        # basis.RaisedCosineLinearEval,
-        # basis.RaisedCosineLinearConv,
-        # basis.BSplineEval,
-        # basis.BSplineConv,
-        # basis.CyclicBSplineEval,
-        # basis.CyclicBSplineConv,
-        # basis.MSplineEval,
-        # basis.MSplineConv,
-        # basis.OrthExponentialEval,
-        # basis.OrthExponentialConv,
-        # basis.IdentityEval,
-        # basis.HistoryConv,
-        # basis.FourierEval,
-        # basis.Zero,
+        CustomBasis,
+        basis.RaisedCosineLogEval,
+        basis.RaisedCosineLogConv,
+        basis.RaisedCosineLinearEval,
+        basis.RaisedCosineLinearConv,
+        basis.BSplineEval,
+        basis.BSplineConv,
+        basis.CyclicBSplineEval,
+        basis.CyclicBSplineConv,
+        basis.MSplineEval,
+        basis.MSplineConv,
+        basis.OrthExponentialEval,
+        basis.OrthExponentialConv,
+        basis.IdentityEval,
+        basis.HistoryConv,
+        basis.FourierEval,
+        basis.Zero,
         basis.Category,
     ],
 )
@@ -8102,10 +8102,12 @@ def test_split_feature_axis(
     n_basis = [5, 6]
     combine_basis = CombinedBasis()
     bas1_instance = combine_basis.instantiate_basis(
-        n_basis[0], bas1, basis_class_specific_params, window_size=10, label="1"
+        n_basis[0], bas1, basis_class_specific_params, window_size=10, label="1",
+        categories=n_basis[0],
     )
     bas2_instance = combine_basis.instantiate_basis(
-        n_basis[1], bas2, basis_class_specific_params, window_size=10, label="2"
+        n_basis[1], bas2, basis_class_specific_params, window_size=10, label="2",
+        categories=n_basis[1],
     )
 
     bas = bas1_instance + bas2_instance
@@ -8180,8 +8182,10 @@ def test_basis_public_api_matches_subclasses():
     )
 
 
-class TestCategory:
+class TestCategory(BasisFuncsTesting):
     """Tests for Category-specific logic not covered by TestSharedMethods."""
+
+    cls = {"eval": Category}
 
     # ------------------------------------------------------------------
     # Priority 1 – one-hot correctness
