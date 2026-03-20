@@ -8292,6 +8292,48 @@ class TestCategory:
         with expectation:
             Category(3, out_of_category=value)
 
+    @pytest.mark.parametrize(
+        "out_of_category, inp, expectation",
+        [
+            (False, np.array([0, 1, 2]), does_not_raise()),
+            (True, np.array([0, 1, 2]), does_not_raise()),
+            (False, np.array([0, 99]), pytest.raises(ValueError, match="Unrecognized label")),
+            (True, np.array([0, 99]), does_not_raise()),
+        ],
+    )
+    def test_evaluate_out_of_category(self, out_of_category, inp, expectation):
+        """evaluate raises or silently zeros based on out_of_category flag."""
+        bas = Category(3, out_of_category=out_of_category)
+        with expectation:
+            out = bas.evaluate(inp)
+            if out_of_category and 99 in inp:
+                np.testing.assert_array_equal(out[1], np.zeros(3))
+
+    def test_evaluate_jit_out_of_category_false_raises(self):
+        """JIT with out_of_category=False raises ValueError with clear message."""
+        bas = Category(3, out_of_category=False)
+        with pytest.raises(ValueError, match="JIT"):
+            jax.jit(bas.evaluate)(jax.numpy.array([0, 1, 2]))
+
+    @pytest.mark.parametrize(
+        "categories, inp",
+        [
+            (3,                            np.array([0, 1, 2])),
+            (3,                            jax.numpy.array([0, 1, 2])),
+            ([2, 3, 10],                   np.array([2, 3, 10])),
+            ([2, 3, 10],                   jax.numpy.array([2, 3, 10])),
+            (np.array([2, 3, 10]),         np.array([2, 3, 10])),
+            (np.array([2, 3, 10]),         jax.numpy.array([2, 3, 10])),
+            (jax.numpy.array([2, 3, 10]),  np.array([2, 3, 10])),
+            (jax.numpy.array([2, 3, 10]),  jax.numpy.array([2, 3, 10])),
+        ],
+    )
+    def test_evaluate_jit_out_of_category_true(self, categories, inp):
+        """JIT with out_of_category=True compiles for all category forms and array input types."""
+        bas = Category(categories, out_of_category=True)
+        out = jax.jit(bas.evaluate)(inp)
+        assert out.shape == (len(inp), bas.n_basis_funcs)
+
 
 class TestBoundsND:
     @pytest.mark.parametrize(
