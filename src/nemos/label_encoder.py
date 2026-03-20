@@ -323,6 +323,8 @@ class LabelEncoder:
         """
         if not isinstance(other, self.__class__):
             return False
+        if self.n_classes != other.n_classes:
+            return False
         same_classes = self.classes_ == other.classes_
         if isinstance(same_classes, bool):
             return same_classes and other._n_classes == self._n_classes
