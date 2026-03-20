@@ -152,6 +152,16 @@ class BasisMixin:
         # a permanent property of a basis, defined at composite basis init
         self._parent: Optional["BasisMixin"] = None
 
+    def __getattr__(self, name):
+        if name == "bounds" and self._is_discrete:
+            raise AttributeError(f"{self.__class__.__name__} has no bounds.")
+        super().__getattribute__(name)
+
+    def __setattr__(self, name, value):
+        if name == "bounds" and self._is_discrete:
+            raise AttributeError(f"{self.__class__.__name__} has no bounds.")
+        super().__setattr__(name, value)
+
     def __repr__(self):
         bounds = getattr(self, "bounds", None)
         if bounds is None:

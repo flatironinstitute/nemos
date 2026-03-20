@@ -205,13 +205,3 @@ class CategoryBasis(AtomicBasisMixin, Basis):
             "only makes sense for continuous bases, ``Category`` process discrete "
             "inputs only."
         )
-
-    def __getattr__(self, name):
-        if name == "bounds":
-            raise AttributeError("Category basis has no bounds.")
-        super().__getattribute__(name)
-
-    def __setattr__(self, name, value):
-        if name == "bounds":
-            raise AttributeError("Category basis has no bounds.")
-        super().__setattr__(name, value)
