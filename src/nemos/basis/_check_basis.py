@@ -86,9 +86,18 @@ def _check_transform_input(
         # make sure array is at least 1d (so that we succeed when only
         # passed a scalar)
         xi = tuple(at_least_1d(x) for x in xi)
-        convert_to_float = getattr(bas, "_convert_to_float", True)
-        if convert_to_float:
-            xi = tuple(x.astype(float) for x in xi)
+        start = 0
+        xi_convert = []
+        for b in bas._iterate_over_components():
+            stop = start + b._n_inputs
+            convert_to_float = getattr(b, "_convert_to_float", True)
+            if convert_to_float:
+                xi_convert.extend([x.astype(float) for x in xi[start:stop]])
+            else:
+                xi_convert.extend(xi[start:stop])
+            start = stop
+
+        xi = xi_convert
 
     # ValueError here surfaces the exception with e.g., `x=np.array["a", "b"])`
     except (TypeError, ValueError):
