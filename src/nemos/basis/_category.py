@@ -71,7 +71,7 @@ class CategoryBasis(AtomicBasisMixin, Basis):
     ):
         n_categories = self._get_n_categories(categories)
         self._label_encoder = LabelEncoder(n_categories)
-        self._out_of_category = out_of_category
+        self.out_of_category = out_of_category
         self.categories = categories
         self._n_inputs = 1
         Basis.__init__(
