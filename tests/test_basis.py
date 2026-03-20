@@ -8273,13 +8273,29 @@ class TestCategory:
         np.testing.assert_array_equal(bas.categories, expected_cats)
         assert bas.n_basis_funcs == expected_n
 
-    def test_categories_resetting_updates_n_basis_funcs(self):
-        """Re-setting categories post-construction updates n_basis_funcs."""
-        bas = Category(["a", "b", "c"])
-        assert bas.n_basis_funcs == 3
-        bas.categories = ["x", "y"]
-        assert bas.n_basis_funcs == 2
-        np.testing.assert_array_equal(bas.categories, np.array(["x", "y"]))
+    @pytest.mark.parametrize(
+        "initial, new_cats, expected_n, expected_cats",
+        [
+            (["a", "b", "c"], ["x", "y"], 2, np.array(["x", "y"])),
+            (3, ["a", "b", "c", "d"], 4, np.array(["a", "b", "c", "d"])),
+            (3, 5, 5, jax.numpy.arange(5)),
+            (["a", "b", "c"], 2, 2, jax.numpy.arange(2)),
+            (
+                ["a", "b", "c"],
+                np.array([10, 20, 30, 40]),
+                4,
+                np.array([10, 20, 30, 40]),
+            ),
+        ],
+    )
+    def test_categories_resetting_updates_n_basis_funcs(
+        self, initial, new_cats, expected_n, expected_cats
+    ):
+        """Re-setting categories post-construction updates n_basis_funcs and categories."""
+        bas = Category(initial)
+        bas.categories = new_cats
+        assert bas.n_basis_funcs == expected_n
+        np.testing.assert_array_equal(bas.categories, expected_cats)
 
     @pytest.mark.parametrize(
         "value, expectation",
