@@ -8233,6 +8233,34 @@ class TestCategory:
         with pytest.raises(ValueError, match="Duplicate category labels"):
             Category(categories)
 
+    @pytest.mark.parametrize(
+        "categories, expected_cats, expected_n",
+        [
+            # int: labels become jnp.arange(n)
+            (3, jax.numpy.arange(3), 3),
+            # list of homogeneous type: stored sorted
+            ([3, 1, 2], np.array([1, 2, 3]), 3),
+            (["b", "a"], np.array(["a", "b"]), 2),
+            # list of mixed type: silently cast to common dtype
+            (["a", 1], np.array(["1", "a"]), 2),
+            # NDArray: works directly
+            (np.array([10, 20, 30]), np.array([10, 20, 30]), 3),
+        ],
+    )
+    def test_categories_setter_input_forms(self, categories, expected_cats, expected_n):
+        """categories setter accepts int, list, mixed-type list, and NDArray."""
+        bas = Category(categories)
+        np.testing.assert_array_equal(bas.categories, expected_cats)
+        assert bas.n_basis_funcs == expected_n
+
+    def test_categories_resetting_updates_n_basis_funcs(self):
+        """Re-setting categories post-construction updates n_basis_funcs."""
+        bas = Category(["a", "b", "c"])
+        assert bas.n_basis_funcs == 3
+        bas.categories = ["x", "y"]
+        assert bas.n_basis_funcs == 2
+        np.testing.assert_array_equal(bas.categories, np.array(["x", "y"]))
+
 
 class TestBoundsND:
     @pytest.mark.parametrize(

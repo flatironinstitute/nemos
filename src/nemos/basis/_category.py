@@ -107,12 +107,15 @@ class CategoryBasis(AtomicBasisMixin, Basis):
         else:
             cats = np.asarray(categories)
             unique = np.unique(cats)
-            if len(unique) != len(cats):
+            n_categories = len(unique)
+            if n_categories != len(cats):
                 duplicates = [c for c in unique if np.sum(cats == c) > 1]
                 raise ValueError(
                     f"Duplicate category labels provided: {duplicates}. "
                     "Each label must be unique."
                 )
+            if n_categories != self._label_encoder.n_classes:
+                self._label_encoder = LabelEncoder(n_categories)
             self._label_encoder.set_classes(categories)
 
     @property
