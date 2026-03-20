@@ -160,7 +160,11 @@ def test_basis_to_transformer_makes_a_copy(
         pytest.skip(f"{basis_cls} n_basis_funcs is not settable.")
 
     bas_a = CombinedBasis().instantiate_basis(
-        5, basis_cls, basis_class_specific_params, window_size=10, ndim=ndim,
+        5,
+        basis_cls,
+        basis_class_specific_params,
+        window_size=10,
+        ndim=ndim,
         categories=5,
     )
     trans_bas_a = bas_a.set_input_shape(*([1] * bas_a._n_inputs)).to_transformer()
@@ -424,12 +428,18 @@ def test_transformerbasis_addition(basis_cls, basis_class_specific_params):
     n_basis_funcs_a = 5
     n_basis_funcs_b = n_basis_funcs_a * 2
     bas_a = CombinedBasis().instantiate_basis(
-        n_basis_funcs_a, basis_cls, basis_class_specific_params, window_size=10,
+        n_basis_funcs_a,
+        basis_cls,
+        basis_class_specific_params,
+        window_size=10,
         categories=n_basis_funcs_a,
     )
     bas_a.set_input_shape(*([1] * bas_a._n_inputs))
     bas_b = CombinedBasis().instantiate_basis(
-        n_basis_funcs_b, basis_cls, basis_class_specific_params, window_size=10,
+        n_basis_funcs_b,
+        basis_cls,
+        basis_class_specific_params,
+        window_size=10,
         categories=n_basis_funcs_b,
     )
     bas_b.set_input_shape(*([1] * bas_b._n_inputs))
@@ -852,7 +862,11 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
         cv_attr = "n_basis_funcs"
     if basis_cls is not CustomBasis:
         bas = CombinedBasis().instantiate_basis(
-            5, basis_cls, basis_class_specific_params, window_size=5, categories=5,
+            5,
+            basis_cls,
+            basis_class_specific_params,
+            window_size=5,
+            categories=5,
         )
     else:
         bas = basis_with_add_kwargs(basis_kwargs={"add": 0})
