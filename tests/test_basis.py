@@ -8102,11 +8102,19 @@ def test_split_feature_axis(
     n_basis = [5, 6]
     combine_basis = CombinedBasis()
     bas1_instance = combine_basis.instantiate_basis(
-        n_basis[0], bas1, basis_class_specific_params, window_size=10, label="1",
+        n_basis[0],
+        bas1,
+        basis_class_specific_params,
+        window_size=10,
+        label="1",
         categories=n_basis[0],
     )
     bas2_instance = combine_basis.instantiate_basis(
-        n_basis[1], bas2, basis_class_specific_params, window_size=10, label="2",
+        n_basis[1],
+        bas2,
+        basis_class_specific_params,
+        window_size=10,
+        label="2",
         categories=n_basis[1],
     )
 
@@ -8422,6 +8430,28 @@ class TestCategory(BasisFuncsTesting):
         eager = bas.evaluate(inp)
         jitted = jax.jit(bas.evaluate)(inp)
         np.testing.assert_array_equal(eager, jitted)
+
+    @pytest.mark.parametrize(
+        "categories, cat_inp, continuous_inp",
+        [
+            # string labels: would raise if astype(float) is wrongly applied
+            (["a", "b", "c"], np.array(["a", "b", "c"]), np.linspace(0, 1, 3)),
+            # non-default integer labels
+            ([2, 5, 8], np.array([2, 5, 8]), np.linspace(0, 1, 3)),
+        ],
+    )
+    def test_composition_does_not_float_convert_categorical_input(
+        self, categories, cat_inp, continuous_inp
+    ):
+        """Category in additive composition must not have its input cast to float.
+
+        Regression test: before the per-component _convert_to_float dispatch in
+        _check_transform_input, all inputs in a composite basis were cast to float,
+        causing string-labelled Category inputs to raise a ValueError.
+        """
+        bas = Category(categories) + basis.BSplineEval(5)
+        out = bas.compute_features(cat_inp, continuous_inp)
+        assert out.shape[0] == len(cat_inp)
 
 
 @pytest.mark.parametrize(
