@@ -8261,6 +8261,37 @@ class TestCategory:
         assert bas.n_basis_funcs == 2
         np.testing.assert_array_equal(bas.categories, np.array(["x", "y"]))
 
+    @pytest.mark.parametrize(
+        "value, expectation",
+        [
+            (True, does_not_raise()),
+            (False, does_not_raise()),
+            (None, pytest.raises(TypeError, match="out_of_category")),
+            (1, pytest.raises(TypeError, match="out_of_category")),
+            ("True", pytest.raises(TypeError, match="out_of_category")),
+        ],
+    )
+    def test_out_of_category_setter_type_validation(self, value, expectation):
+        """Setter accepts only bool; rejects None, int, and str."""
+        bas = Category(3)
+        with expectation:
+            bas.out_of_category = value
+
+    @pytest.mark.parametrize(
+        "value, expectation",
+        [
+            (True, does_not_raise()),
+            (False, does_not_raise()),
+            (None, pytest.raises(TypeError, match="out_of_category")),
+            (1, pytest.raises(TypeError, match="out_of_category")),
+            ("True", pytest.raises(TypeError, match="out_of_category")),
+        ],
+    )
+    def test_out_of_category_init_enforces_bool(self, value, expectation):
+        """__init__ routes through the setter, so non-bool raises TypeError."""
+        with expectation:
+            Category(3, out_of_category=value)
+
 
 class TestBoundsND:
     @pytest.mark.parametrize(
