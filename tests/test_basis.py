@@ -1518,7 +1518,7 @@ class TestSharedMethods:
                 basis.HistoryConv: "HistoryConv(window_size=10)",
                 basis.FourierEval: "FourierEval(frequencies=[Array([1., 2.], dtype=float32)], ndim=1, bounds=(1.0, 2.0), frequency_mask='no-intercept')",
                 basis.Zero: "Zero()",
-                basis.Category: "Category(out_of_category=True)"
+                basis.Category: "Category(out_of_category=True)",
             }
         ],
     )
@@ -4529,7 +4529,11 @@ class TestAdditiveBasis(CombinedBasis):
         window_size,
         basis_class_specific_params,
     ):
-        if basis_a in (basis.OrthExponentialBasis, basis.HistoryConv, Category) or basis_b in (
+        if basis_a in (
+            basis.OrthExponentialBasis,
+            basis.HistoryConv,
+            Category,
+        ) or basis_b in (
             basis.OrthExponentialBasis,
             basis.HistoryConv,
             Category,
@@ -5071,10 +5075,18 @@ class TestAdditiveBasis(CombinedBasis):
         else:
             n_basis_b = 5
         basis_a = self.instantiate_basis(
-            n_basis_a, basis_a, basis_class_specific_params, categories=n_basis_a, window_size=10
+            n_basis_a,
+            basis_a,
+            basis_class_specific_params,
+            categories=n_basis_a,
+            window_size=10,
         )
         basis_b = self.instantiate_basis(
-            n_basis_b, basis_b, basis_class_specific_params, categories=n_basis_b, window_size=10
+            n_basis_b,
+            basis_b,
+            basis_class_specific_params,
+            categories=n_basis_b,
+            window_size=10,
         )
         add = basis_a + basis_b
 
@@ -6593,10 +6605,18 @@ class TestMultiplicativeBasis(CombinedBasis):
         else:
             n_basis_b = 5
         basis_a = self.instantiate_basis(
-            n_basis_a, basis_a, basis_class_specific_params, categories=n_basis_a, window_size=10
+            n_basis_a,
+            basis_a,
+            basis_class_specific_params,
+            categories=n_basis_a,
+            window_size=10,
         )
         basis_b = self.instantiate_basis(
-            n_basis_b, basis_b, basis_class_specific_params, categories=n_basis_b, window_size=10
+            n_basis_b,
+            basis_b,
+            basis_class_specific_params,
+            categories=n_basis_b,
+            window_size=10,
         )
 
         mul = basis_a * basis_b
@@ -8297,7 +8317,11 @@ class TestCategory:
         [
             (False, np.array([0, 1, 2]), does_not_raise()),
             (True, np.array([0, 1, 2]), does_not_raise()),
-            (False, np.array([0, 99]), pytest.raises(ValueError, match="Unrecognized label")),
+            (
+                False,
+                np.array([0, 99]),
+                pytest.raises(ValueError, match="Unrecognized label"),
+            ),
             (True, np.array([0, 99]), does_not_raise()),
         ],
     )
@@ -8318,14 +8342,14 @@ class TestCategory:
     @pytest.mark.parametrize(
         "categories, inp",
         [
-            (3,                            np.array([0, 1, 2])),
-            (3,                            jax.numpy.array([0, 1, 2])),
-            ([2, 3, 10],                   np.array([2, 3, 10])),
-            ([2, 3, 10],                   jax.numpy.array([2, 3, 10])),
-            (np.array([2, 3, 10]),         np.array([2, 3, 10])),
-            (np.array([2, 3, 10]),         jax.numpy.array([2, 3, 10])),
-            (jax.numpy.array([2, 3, 10]),  np.array([2, 3, 10])),
-            (jax.numpy.array([2, 3, 10]),  jax.numpy.array([2, 3, 10])),
+            (3, np.array([0, 1, 2])),
+            (3, jax.numpy.array([0, 1, 2])),
+            ([2, 3, 10], np.array([2, 3, 10])),
+            ([2, 3, 10], jax.numpy.array([2, 3, 10])),
+            (np.array([2, 3, 10]), np.array([2, 3, 10])),
+            (np.array([2, 3, 10]), jax.numpy.array([2, 3, 10])),
+            (jax.numpy.array([2, 3, 10]), np.array([2, 3, 10])),
+            (jax.numpy.array([2, 3, 10]), jax.numpy.array([2, 3, 10])),
         ],
     )
     def test_evaluate_jit_out_of_category_true(self, categories, inp):
