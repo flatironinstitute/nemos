@@ -280,3 +280,7 @@ class GLMHMMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         """Check consistency of feature_mask and params."""
         self._glm_validator.feature_mask_consistency(feature_mask, params.glm_params)
         return
+
+    def get_empty_params(self, X, y) -> GLMHMMParams:
+        """Return the param shape given the input data."""
+        pass
