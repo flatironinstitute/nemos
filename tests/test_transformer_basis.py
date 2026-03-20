@@ -160,7 +160,8 @@ def test_basis_to_transformer_makes_a_copy(
         pytest.skip(f"{basis_cls} n_basis_funcs is not settable.")
 
     bas_a = CombinedBasis().instantiate_basis(
-        5, basis_cls, basis_class_specific_params, window_size=10, ndim=ndim
+        5, basis_cls, basis_class_specific_params, window_size=10, ndim=ndim,
+        categories=5,
     )
     trans_bas_a = bas_a.set_input_shape(*([1] * bas_a._n_inputs)).to_transformer()
 
@@ -201,6 +202,18 @@ def test_basis_to_transformer_makes_a_copy(
             or np.any(f1 != f2)  # or different content
             for f1, f2 in zip(trans_bas_b.basis.frequencies, bas_b.frequencies)
         )
+
+    elif basis_cls is nmo.basis.Category:
+        bas_a.categories = 10
+        assert trans_bas_a.n_basis_funcs == 5
+
+        # changing an attribute in the transformer basis should not change the original
+        bas_b = CombinedBasis().instantiate_basis(
+            5, basis_cls, basis_class_specific_params, window_size=10, categories=5
+        )
+        trans_bas_b = bas_b.set_input_shape(*([1] * bas_b._n_inputs)).to_transformer()
+        trans_bas_b.categories = 100
+        assert bas_b.n_basis_funcs == 5
 
     else:
         bas_a.n_basis_funcs = 10
@@ -262,6 +275,10 @@ def test_transformerbasis_set_params(
     elif isinstance(bas, FourierBasis):
         trans_basis.set_params(frequencies=np.arange(1, 8))
         assert np.all(trans_basis.frequencies[0] == np.arange(1, 8))
+    elif isinstance(bas, nmo.basis.Category):
+        trans_basis.set_params(categories=n_basis_funcs_new)
+        assert trans_basis.n_basis_funcs == n_basis_funcs_new
+        assert trans_basis.basis.n_basis_funcs == n_basis_funcs_new
     else:
         trans_basis.set_params(n_basis_funcs=n_basis_funcs_new)
         assert trans_basis.n_basis_funcs == n_basis_funcs_new
@@ -319,6 +336,10 @@ def test_transformerbasis_setattr_basis_attribute(
         trans_bas.frequencies = np.arange(1, 8)
         assert np.all(trans_bas.frequencies[0] == np.arange(1, 8))
         assert np.all(trans_bas.basis.frequencies[0] == np.arange(1, 8))
+    elif basis_cls is nmo.basis.Category:
+        trans_bas.categories = 20
+        assert trans_bas.n_basis_funcs == 20
+        assert trans_bas.basis.n_basis_funcs == 20
     else:
         trans_bas.n_basis_funcs = 20
         assert trans_bas.n_basis_funcs == 20
@@ -354,6 +375,12 @@ def test_transformerbasis_copy_basis_on_construct(
         assert np.all(len(orig_bas.frequencies[0]) != len(trans_bas.frequencies[0]))
         assert np.all(trans_bas.frequencies[0] == np.arange(1, 8))
         assert np.all(trans_bas.basis.frequencies[0] == np.arange(1, 8))
+    elif isinstance(orig_bas, nmo.basis.Category):
+        setattr(trans_bas, "categories", 20)
+        assert orig_bas.n_basis_funcs == nbas
+        assert trans_bas.n_basis_funcs == 20
+        assert trans_bas.basis.n_basis_funcs == 20
+        assert isinstance(trans_bas.basis, basis_cls)
     else:
         attr_name = "window_size" if basis_cls is HistoryConv else "n_basis_funcs"
         setattr(trans_bas, attr_name, 20)
@@ -397,11 +424,13 @@ def test_transformerbasis_addition(basis_cls, basis_class_specific_params):
     n_basis_funcs_a = 5
     n_basis_funcs_b = n_basis_funcs_a * 2
     bas_a = CombinedBasis().instantiate_basis(
-        n_basis_funcs_a, basis_cls, basis_class_specific_params, window_size=10
+        n_basis_funcs_a, basis_cls, basis_class_specific_params, window_size=10,
+        categories=n_basis_funcs_a,
     )
     bas_a.set_input_shape(*([1] * bas_a._n_inputs))
     bas_b = CombinedBasis().instantiate_basis(
-        n_basis_funcs_b, basis_cls, basis_class_specific_params, window_size=10
+        n_basis_funcs_b, basis_cls, basis_class_specific_params, window_size=10,
+        categories=n_basis_funcs_b,
     )
     bas_b.set_input_shape(*([1] * bas_b._n_inputs))
     trans_bas_a = basis.TransformerBasis(bas_a)
@@ -817,11 +846,13 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
         cv_attr = "basis_kwargs"
     elif issubclass(basis_cls, FourierBasis):
         cv_attr = "frequencies"
+    elif basis_cls is nmo.basis.Category:
+        cv_attr = "categories"
     else:
         cv_attr = "n_basis_funcs"
     if basis_cls is not CustomBasis:
         bas = CombinedBasis().instantiate_basis(
-            5, basis_cls, basis_class_specific_params, window_size=5
+            5, basis_cls, basis_class_specific_params, window_size=5, categories=5,
         )
     else:
         bas = basis_with_add_kwargs(basis_kwargs={"add": 0})
@@ -878,6 +909,10 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
         X = bas.set_params(**set_param_dict_outside).compute_features(
             *([inp] * bas._n_inputs)
         )
+    elif basis_cls is nmo.basis.Category:
+        pipe.set_params(**{f"bas__{cv_attr}": 4})
+        assert bas.n_basis_funcs == 5  # make sure that the change did not affect bas
+        X = bas.set_params(categories=4).compute_features(*([inp] * bas._n_inputs))
     else:
         set_param_dict = {
             f"bas__{cv_attr}": 4 if cv_attr != "basis_kwargs" else {"add": 1}
@@ -1095,6 +1130,7 @@ def test_check_input(inp, expectation, basis_cls, basis_class_specific_params, m
             basis.MultiplicativeBasis: "Transformer('(MSplineEval * RaisedCosineLinearConv)': MultiplicativeBasis(\n    basis1=MSplineEval(n_basis_funcs=5, order=4),\n    basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n))",
             basis.FourierEval: "Transformer(FourierEval(frequencies=[Array([0., 1., 2.], dtype=float64)], ndim=1, frequency_mask='all'))",
             basis.Zero: "Transformer(Zero())",
+            basis.Category: "Transformer(Category(out_of_category=True))",
         }
     ],
 )
