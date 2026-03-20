@@ -47,6 +47,10 @@ class CategoryBasis(AtomicBasisMixin, Basis):
         - ``int``: interpreted as the number of categories; labels default to
           ``[0, 1, ..., categories-1]``.
         - ``list`` or ``NDArray``: the explicit list of unique category labels.
+          When a list is provided, it is converted to an ``NDArray`` via
+          ``np.asarray``. Mixed-type lists will be cast to a common dtype
+          (e.g., ``["a", 1]`` becomes ``array(['a', '1'], dtype='<U21')``).
+
     out_of_category:
         If False, raise if labels that do not belong to ``categories`` are provided,
         else encode the out-of-category labels as all 0s.
