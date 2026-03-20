@@ -65,6 +65,8 @@ dev = [
     "myst-nb",                      # Test myst_nb utils for glue
     "hmmlearn",                     # Test algorithmic implementations of HMM
     "tox-uv",                       # Run tox with uv for faster installs
+    "zarr",                         # For testing lazy array loading from zarr files
+    "h5py",                         # For testing lazy array loading from HDF5 files
 ]
 docs = [
     "numpydoc",

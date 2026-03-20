@@ -17,10 +17,18 @@ from .. import observation_models as obs
 from .. import tree_utils, validation
 from .._observation_model_builder import instantiate_observation_model
 from ..base_regressor import BaseRegressor, strip_metadata
+from ..batching import DataLoader, _PreprocessedDataLoader, is_data_loader
+from ..callbacks import (
+    DEFAULT_CALLBACK,
+    Callback,
+    SolverConvergenceCallback,
+    _normalize_callbacks,
+)
 from ..exceptions import NotFittedError
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..pytrees import FeaturePytree
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
+from ..solvers import list_stochastic_solvers
 from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
 from ..type_casting import cast_to_jax, support_pynapple
 from ..typing import DESIGN_INPUT_TYPE, SolverState, StepResult
@@ -788,6 +796,138 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         # solver.l2_optimality_error
         self.solver_state_ = state
         self.aux_ = aux
+        return self
+
+    def stochastic_fit(
+        self,
+        data: DataLoader,
+        *,
+        init_params: Optional[GLMUserParams] = None,
+        num_epochs: int = 1,
+        callbacks: "Callback | list[Callback] | None" = DEFAULT_CALLBACK,
+    ):
+        """
+        Fit GLM using stochastic optimization with mini-batches.
+
+        This method provides an out-of-memory training interface for large datasets
+        that cannot fit in memory. Data is provided via a DataLoader that yields
+        mini-batches.
+
+        Parameters
+        ----------
+        data :
+            Data loader yielding (X_batch, y_batch) tuples.
+            Must be re-iterable for ``num_epochs > 1``.
+        init_params :
+            Initial parameters (coefficients, intercept).
+            If None, initialized from ``sample_batch()``.
+            To continue fitting, pass the current parameters (``(model.coef_, model.intercept_)``)
+        num_epochs :
+            Maximum number of passes over the data. Must be >= 1.
+            Optimization may stop earlier if a callback requests a stop.
+        callbacks :
+            Training callbacks. Accepts a single ``Callback``, a list of
+            ``Callback`` objects, or ``None``.
+            Default is ``SolverConvergenceCallback()`` which stops when
+            the solver's built-in convergence criterion is met.
+            Pass ``None`` or ``[]`` to disable all callbacks.
+
+        Returns
+        -------
+        self :
+            The fitted model.
+
+        Raises
+        ------
+        ValueError
+            If the solver doesn't support stochastic optimization.
+        TypeError
+            If data is not a DataLoader.
+
+        Examples
+        --------
+        >>> import jax.numpy as jnp
+        >>> import nemos as nmo
+        >>> from nemos.batching import ArrayDataLoader
+        >>> X = jnp.ones((100, 5))
+        >>> y = jnp.ones((100,))
+        >>> loader = ArrayDataLoader(X, y, batch_size=32, shuffle=True)
+        >>> model = nmo.glm.GLM(solver_name="GradientDescent", solver_kwargs={"stepsize": 0.01, "acceleration" : False})
+        >>> model = model.stochastic_fit(loader, num_epochs=10)
+        """
+        # Validate solver supports stochastic
+        if not getattr(self._solver_spec.implementation, "_supports_stochastic", False):
+            raise ValueError(
+                f"Solver '{self.solver_name}' does not support stochastic optimization. "
+                f"Use one of {[s.full_name for s in list_stochastic_solvers()]}."
+            )
+
+        if not is_data_loader(data):
+            raise TypeError(
+                "stochastic_fit requires a DataLoader (re-iterable) providing "
+                "(X_batch, y_batch) tuples."
+            )
+        loader = data
+
+        if callbacks is DEFAULT_CALLBACK:
+            callbacks = SolverConvergenceCallback()
+
+        # Get raw sample batch for initialization
+        raw_sample_X, raw_sample_y = loader.sample_batch()
+        self._validator.validate_inputs(raw_sample_X, raw_sample_y)
+
+        # Preprocess sample batch (cast to jax, drop nans, etc.)
+        sample_X, sample_y = self._preprocess_inputs(raw_sample_X, raw_sample_y)
+
+        # Initialize params if not provided (using preprocessed batch)
+        if init_params is None:
+            init_params = self._model_specific_initialization(sample_X, sample_y)
+        else:
+            init_params = self._validator.validate_and_cast_params(init_params)
+            self._validator.validate_consistency(init_params, X=sample_X, y=sample_y)
+
+        self._validator.feature_mask_consistency(
+            getattr(self, "_feature_mask", None), init_params
+        )
+
+        # Wrap data loader to preprocess each batch from now on
+        preprocessed_loader = _PreprocessedDataLoader(loader, self._preprocess_inputs)
+
+        # TODO: This can be problematic for setting the right step- and batch size for SVRG
+        # Ideally that uses the full data
+        # Initialize solver (using preprocessed sample batch)
+        self._initialize_solver_and_state(sample_X, sample_y, init_params)
+
+        # Run stochastic optimization
+        params, state, aux = self._solver.stochastic_run(
+            init_params,
+            preprocessed_loader,
+            num_epochs=num_epochs,
+            callback=_normalize_callbacks(callbacks),
+        )
+
+        if tree_utils.pytree_map_and_reduce(
+            lambda x: jnp.any(jnp.isnan(x)), any, params
+        ):
+            raise ValueError(
+                "Solver returned at least one NaN parameter, so solution is invalid!"
+                " Try tuning optimization hyperparameters, specifically try decreasing the `stepsize`."
+            )
+
+        # not warning about non-convergence
+
+        self.optim_info_ = self._solver.get_optim_info(state)
+
+        # Store results
+        self._set_model_params(params)
+        self.solver_state_ = state
+        self.aux_ = aux
+
+        # TODO: Do we need to implement this?
+        # Note: scale_ and dof_resid_ require full data - skip for stochastic fit
+        self.scale_ = None
+        self.dof_resid_ = None
+
         return self
 
     def _get_model_params(self):
