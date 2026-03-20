@@ -8334,6 +8334,22 @@ class TestCategory:
         out = jax.jit(bas.evaluate)(inp)
         assert out.shape == (len(inp), bas.n_basis_funcs)
 
+    @pytest.mark.parametrize(
+        "categories, inp",
+        [
+            ([2, 3, 10], np.array([2, 10, 3, 2])),
+            ([2, 3, 10], jax.numpy.array([2, 10, 3, 2])),
+            ([2, 3, 10], np.array([2, 99, 3, 0])),
+            ([2, 3, 10], jax.numpy.array([2, 99, 3, 0])),
+        ],
+    )
+    def test_evaluate_jit_matches_eager(self, categories, inp):
+        """JIT and eager evaluate produce identical outputs, including out-of-category rows."""
+        bas = Category(categories, out_of_category=True)
+        eager = bas.evaluate(inp)
+        jitted = jax.jit(bas.evaluate)(inp)
+        np.testing.assert_array_equal(eager, jitted)
+
 
 class TestBoundsND:
     @pytest.mark.parametrize(
