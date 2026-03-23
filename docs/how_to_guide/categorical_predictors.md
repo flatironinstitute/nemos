@@ -11,6 +11,7 @@ kernelspec:
   name: python3
 ---
 
+(categorical_design_matrices)=
 # Construct Design Matrices for Categorical Features
 
 ## Design Matrix with `patsy`

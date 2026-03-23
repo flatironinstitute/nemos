@@ -2909,25 +2909,117 @@ class Category(EvalBasisMixin, CategoryBasis):
 
         - ``int``: interpreted as the number of categories; labels default to
           ``[0, 1, ..., categories-1]``.
-        - ``list`` or ``NDArray``: the explicit list of unique category labels.
+        - ``list`` or ``NDArray``: the explicit list of unique category labels. Note
+        that the category labels will be sorted internally. Column ``i`` of the one-hot
+        encoding will correspond to ``basis.categories[i]``.
 
     label :
         The label of the basis, intended to be descriptive of the task variable
         being processed. For example: ``"trial_type"``, ``"stimulus_id"``.
 
+    Notes
+    -----
+    **Design matrix identifiability.**
+
+    This basis produces a *full* encoding: one column per category. Because
+    NeMoS GLMs include an intercept, including all columns of a
+    ``Category`` basis as a standalone predictor introduces perfect
+    collinearity — the column sum equals the intercept column — making the
+    design matrix rank-deficient. How to handle this depends on the use case.
+
+    *Splitting a continuous variable by category (recommended use).*
+    Multiplying a ``Category`` basis with a continuous basis via ``*``
+    produces category-specific tuning curves. The intercept is not involved,
+    so no column needs to be dropped:
+
+    .. code-block:: python
+
+        speed_by_context = Category(["L", "R"]) * RaisedCosineLinearEval(5)
+        X = speed_by_context.compute_features(context, speed)  # shape (n_samples, 10)
+
+    *Standalone categorical predictor.*
+    To add a categorical variable as a main effect, drop one column after
+    calling :meth:`compute_features`. The retained columns are then
+    interpreted as contrasts against the dropped (reference) category:
+
+    .. code-block:: python
+
+        X = basis.compute_features(labels)
+        X = X[:, 1:]  # drop first column; first category becomes the reference
+
+    The choice of reference level is arbitrary for model fit but affects
+    coefficient interpretation. See [3]_ for a detailed discussion of
+    contrast coding schemes.
+
+    *Multiple categorical predictors or complex interactions.*
+    For designs involving multiple categorical variables, higher-order
+    interactions, or non-default contrast coding (sum-to-zero, Helmert,
+    etc.), we recommend building the design matrix with
+    `patsy <https://patsy.readthedocs.io>`_ or
+    `formulaic <https://matthewwardrop.github.io/formulaic/>`_ and passing
+    the result directly to :meth:`nemos.glm.GLM.fit`. These libraries
+    resolve redundancies automatically and support a wide range of coding
+    schemes. See the :ref:`user guide <categorical_design_matrices>` for a
+    worked example.
+
+    **Effect of regularization.**
+
+    If all columns are retained (no reference dropped), the behavior depends
+    on the regularizer:
+
+    - *Ridge (L2)*: the penalized problem has a unique solution. Because the
+      L2 penalty is symmetric across coordinates, the optimality conditions
+      force a specific linear relationship between the intercept and the
+      category coefficients, determined by the column dependencies in the
+      design matrix. The resulting parameterization is well-defined, but
+      differs from the contrast interpretation obtained by dropping a
+      reference column; care is needed when interpreting coefficients.
+    - *Lasso (L1) or no regularization*: the solution is not unique [4]_.
+      Any redistribution of the total effect across redundant columns that
+      preserves predictions is equally valid. Do not rely on the solver
+      output in this case; always drop a reference column.
+    - *Elastic net*: unique solution (the L2 component restores strict
+      convexity [4]_), but interpretation is less clean than pure Ridge.
+      Dropping a reference column is recommended when interpretability
+      matters.
+
+    References
+    ----------
+    .. [3] UCLA OARC: Coding Systems for Categorical Variables.
+       https://stats.oarc.ucla.edu/r/library/r-library-contrast-coding-systems-for-categorical-variables/
+    .. [4] Zou, H. & Hastie, T. (2005). Regularization and variable selection
+       via the elastic net. *Journal of the Royal Statistical Society: Series
+       B*, 67(2), 301–320.
+
     Examples
     --------
+    Encode a categorical variable with 3 integer labels:
+
     >>> import numpy as np
     >>> from nemos.basis import Category
-    >>> # Create a categorical basis with 3 categories (labels 0, 1, 2)
     >>> basis = Category(3)
     >>> basis.n_basis_funcs
     3
-    >>> # Encode some category labels
     >>> labels = np.array([0, 1, 2, 0])
     >>> features = basis.compute_features(labels)
     >>> features.shape
     (4, 3)
+
+    Standalone categorical predictor with reference coding (drop one column):
+
+    >>> basis = Category(["Tri", "Sq"])
+    >>> X = basis.compute_features(np.array(["Tri", "Sq", "Tri", "Sq"]))
+    >>> X = X[:, 1:]  # "Tri" is the reference; remaining column is the "Sq" contrast
+    >>> X.shape
+    (4, 1)
+
+    Category-specific tuning curves via basis product (no column dropping needed):
+
+    >>> from nemos.basis import RaisedCosineLinearEval
+    >>> speed = np.random.randn(20)
+    >>> context = np.random.choice(["L", "R"], size=20)
+    >>> bas = Category(["L", "R"]) * RaisedCosineLinearEval(5)
+    >>> X = bas.compute_features(context, speed)
 
     """
 
