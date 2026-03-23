@@ -2959,7 +2959,7 @@ class Category(EvalBasisMixin, CategoryBasis):
     `formulaic <https://matthewwardrop.github.io/formulaic/>`_ and passing
     the result directly to :meth:`nemos.glm.GLM.fit`. These libraries
     resolve redundancies automatically and support a wide range of coding
-    schemes. See the :ref:`user guide <categorical_design_matrices>` for a
+    schemes. See the :ref:`documentation <categorical_design_matrices>` for a
     worked example.
 
     **Effect of regularization.**
