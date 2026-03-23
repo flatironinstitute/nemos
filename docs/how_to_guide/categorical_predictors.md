@@ -16,7 +16,7 @@ kernelspec:
 
 ## Splitting a Continuous Variable by Category
 
-The primary use of the `Category` basis in NeMoS is to estimate category-specific
+The primary use of the [`Category`](nemos.basis.Category) basis in NeMoS is to estimate category-specific
 tuning curves by multiplying it with a continuous basis:
 ```{code-cell} ipython3
 import numpy as np
@@ -51,7 +51,7 @@ as a standalone predictor introduces perfect collinearity — the column sum
 equals the intercept column. Always drop one column per categorical variable
 when using categories as main effects.
 For a detailed discussion of identifiability and the effect of regularization,
-see the `Category` basis docstring.
+see the [`Category`](nemos.basis.Category) class documentation.
 :::
 
 ## Complex Designs
@@ -74,7 +74,7 @@ pip install "nemos[examples]"
 
 For designs involving multiple categorical variables, higher-order interactions,
 or non-default contrast coding (sum-to-zero, Helmert, etc.), use
-[`patsy`](https://patsy.readthedocs.io) or [`formulaic`](https://matthew.wardrop.casa/formulaic/latest/)
+[`patsy`](https://patsy.readthedocs.io) or [`formulaic`](https://matthewwardrop.github.io/formulaic/)
 to construct the design matrix. Those libraries resolve redundancies automatically and
 support a wide range of coding schemes.
 
@@ -92,7 +92,7 @@ formula = "stimulus + context + stimulus:context"
 design_df = dmatrix(formula, data, return_type="dataframe")
 
 # patsy adds an intercept; drop it since NeMoS GLMs include one implicitly
-design_df.drop(columns=["Intercept"], inplace=True)
+design_df = design_df.drop(columns=["Intercept"])
 design_df
 ```
 
@@ -110,35 +110,36 @@ design_df
 See the [`patsy` docs](https://patsy.readthedocs.io/en/latest/formulas.html)
 for sum-to-zero, Helmert, and other coding schemes.
 :::
+
 ```{code-cell} ipython3
 model = nmo.glm.GLM().fit(design_df, counts)
 ```
 
-:::{note}
+## NeMoS `Category` vs `patsy`
 
-NeMoS basis product of two categories is equivalent to the following `patsy` dmatrix construction:
+NeMoS [`Category`](nemos.basis.Category) basis provides a simple dummy coding of categorical variables. This is just one of the many encoding schemes that `patsy` provides.
 
+For example, the dummy code for one categorical predictor in NeMoS,
 
-```{code-block}
-
->>> import nemos as nmo
->>> import pandas as pd
->>> data = pd.DataFrame({
-...     'stimulus': ['Tri', 'Sq', 'Tri', 'Sq'],
-...     'context':  ['C',   'C',   'S',  'S'],
-...     'counts': [10, 5, 2, 0],
-... })
->>> interaction = nmo.basis.Category(["Tri","Sq"]) * nmo.basis.Category(["C","S"])
->>> interaction.compute_features(data["stimulus"], data["context"])
-Array([[0., 0., 1., 0.],
-       [1., 0., 0., 0.],
-       [0., 0., 0., 1.],
-       [0., 1., 0., 0.]], dtype=float32)
->>> dmatrix("0+context:stimulus", data, return_type="dataframe")
-   context[C]:stimulus[Sq]  context[S]:stimulus[Sq]  context[C]:stimulus[Tri]  context[S]:stimulus[Tri]
-0                      0.0                      0.0                       1.0                       0.0
-1                      1.0                      0.0                       0.0                       0.0
-2                      0.0                      0.0                       0.0                       1.0
-3                      0.0                      1.0                       0.0                       0.0
+```{code-cell} ipython3
+nmo.basis.Category(["Tri","Sq"]).compute_features(data["stimulus"])
 ```
-:::
+
+is equivalent to `patsy`'s,
+
+```{code-cell} ipython3
+dmatrix("0 + stimulus", data, return_type="dataframe")
+```
+
+Similarly, the dummy code for the interaction of two categories,
+
+```{code-cell} ipython3
+interaction = nmo.basis.Category(["Tri","Sq"]) * nmo.basis.Category(["C","S"])
+interaction.compute_features(data["stimulus"], data["context"])
+```
+
+is equivalent to `patsy`'s
+
+```{code-cell} ipython3
+dmatrix("0 + context:stimulus", data, return_type="dataframe")
+```
