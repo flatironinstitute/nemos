@@ -111,9 +111,12 @@ See the [`patsy` docs](https://patsy.readthedocs.io/en/latest/formulas.html)
 for sum-to-zero, Helmert, and other coding schemes.
 :::
 
+Full one-hot encoding of each term in the formula — the two categorical variables and their interaction — would have produced 8 columns, 4 of which would be redundant. `patsy` detects and drops all redundant columns automatically, guaranteeing that model coefficients are identifiable.
+
 ```{code-cell} ipython3
 model = nmo.glm.GLM().fit(design_df, counts)
 ```
+
 
 ## NeMoS `Category` vs `patsy`
 
