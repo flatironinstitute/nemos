@@ -1,7 +1,7 @@
 """Validation classes for GLMHMM and PopulationGLMHMM models."""
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional, Tuple, Union
+from typing import Any, Callable, Optional, Tuple
 
 import jax.numpy as jnp
 
@@ -143,7 +143,7 @@ class HMMValidator(RegressorValidator[HMMUserParams, HMMParams]):
 
     def validate_consistency(
         self,
-        params: GLMHMMParams,
+        params: HMMParams,
         X: Optional[DESIGN_INPUT_TYPE] = None,
         y: Optional[jnp.ndarray] = None,
     ):

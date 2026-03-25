@@ -14,6 +14,7 @@ from numpy.typing import ArrayLike, NDArray
 from .. import observation_models as obs
 from .. import tree_utils
 from ..hmm.hmm import BaseHMM
+from ..glm.params import GLMParams
 from .._observation_model_builder import instantiate_observation_model
 from ..base_regressor import BaseRegressor
 from ..inverse_link_function_utils import resolve_inverse_link_function
@@ -27,7 +28,6 @@ from ..typing import (
     StepResult,
 )
 from ..utils import format_repr
-from . import forward_backward
 from .algorithm_configs import (
     get_analytical_scale_update,
     prepare_estep_log_likelihood,
@@ -35,8 +35,9 @@ from .algorithm_configs import (
     prepare_mstep_nll_objective_scale,
 )
 from ..hmm.expectation_maximization import (
-    GLMHMMState,
-    em_glm_hmm,
+    forward_backward,
+    HMMState,
+    em_hmm,
     em_step,
     forward_pass,
     max_sum,
@@ -401,14 +402,16 @@ class GLMHMM(BaseHMM, BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         tol: float = 1e-8,
         seed=jax.random.PRNGKey(123),
     ):
-        super().__init__(
+        BaseHMM.__init__(
+            self,
             n_states=n_states,
             dirichlet_prior_alphas_init_prob=dirichlet_prior_alphas_init_prob,
             dirichlet_prior_alphas_transition=dirichlet_prior_alphas_transition,
             maxiter=maxiter,
             tol=tol,
         )
-        super().__init__(
+        BaseRegressor.__init__(
+            self,
             regularizer=regularizer,
             regularizer_strength=regularizer_strength,
             solver_name=solver_name,
@@ -743,6 +746,7 @@ class GLMHMM(BaseHMM, BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         log_likelihood = prepare_estep_log_likelihood(
             is_population_glm=is_population,
             observation_model=self.observation_model,
+            inverse_link_function=self.inverse_link_function,
         )
         objective = prepare_mstep_nll_objective_param(
             is_population_glm=is_population,
@@ -750,43 +754,70 @@ class GLMHMM(BaseHMM, BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
             inverse_link_function=self._inverse_link_function,
         )
         _, _, glm_params_update_fn = self._instantiate_solver(
-            objective, init_params.glm_params
+            objective, init_params.model_params
         )
 
-        scale_update_fn = get_analytical_scale_update(
-            is_population_glm=is_population, observation_model=self._observation_model
-        )
-        if scale_update_fn is None:
-            objective_scale = prepare_mstep_nll_objective_scale(
-                is_population_glm=is_population,
-                observation_model=self._observation_model,
-            )
-            _, _, scale_update_fn = self._instantiate_solver(
-                objective_scale, init_params.glm_scale
-            )
+        # scale_update_fn = get_analytical_scale_update(
+        #     is_population_glm=is_population, observation_model=self._observation_model
+        # )
+        # if scale_update_fn is None:
+        #     objective_scale = prepare_mstep_nll_objective_scale(
+        #         is_population_glm=is_population,
+        #         observation_model=self._observation_model,
+        #     )
+        #     _, _, scale_update_fn = self._instantiate_solver(
+        #         objective_scale, init_params.model_params.log_scale
+        #     )
+
+        # def glm_params_and_scale_update_fn(params, X, y, posteriors):
+        #     new_glm_params, glm_state, _ = glm_params_update_fn(
+        #         params.model_params, X, y, posteriors
+        #     )
+
+        #     if scale_update_fn is not None:
+        #         predicted_rate = compute_rate_per_state(
+        #             X, new_glm_params, inverse_link_function=self.inverse_link_function
+        #         )
+
+        #         # Gaussian, Gamma, and other have a scale.
+        #         new_glm_scale, state_scale, _ = scale_update_fn(
+        #             params.model_params.log_scale, y, predicted_rate, posteriors
+        #         )
+        #     else:
+        #         # Poisson, Bernoulli etc. do not have a scale
+        #         # just keep carrying the scale
+        #         new_glm_scale = params.model_params.log_scale
+
+        #     new_params = GLMParams(
+        #         coef=new_glm_params.coef,
+        #         intercept=new_glm_params.intercept,
+        #         scale=new_glm_scale,
+        #     )
+
+        #     return new_params, (glm_state, state_scale)
 
         # cannot wrap is_new_session, that's to be calculated at each update form the provided X and y.
         # for consistency, do not make a partial of that argument in run as well.
         self._optimization_run = eqx.Partial(
-            em_glm_hmm,
-            inverse_link_function=self.inverse_link_function,
+            em_hmm,
+            # inverse_link_function=self.inverse_link_function,
             log_likelihood_func=log_likelihood,
-            m_step_fn_glm_params=glm_params_update_fn,
-            m_step_fn_glm_scale=scale_update_fn,
+            m_step_fn_model_params=glm_params_update_fn,
+            # m_step_fn_glm_scale=scale_update_fn,
             maxiter=self.maxiter,
             tol=self.tol,
         )
 
         self._optimization_update = eqx.Partial(
             em_step,
-            inverse_link_function=self.inverse_link_function,
+            # inverse_link_function=self.inverse_link_function,
             log_likelihood_func=log_likelihood,
-            m_step_fn_glm_params=glm_params_update_fn,
-            m_step_fn_glm_scale=scale_update_fn,
+            m_step_fn_model_params=glm_params_update_fn,
+            # m_step_fn_glm_scale=scale_update_fn,
         )
 
         def init_state_fn(*args, **kwargs) -> SolverState:
-            state = GLMHMMState(
+            state = HMMState(
                 data_log_likelihood=-jnp.array(jnp.inf),
                 previous_data_log_likelihood=-jnp.array(jnp.inf),
                 log_likelihood_history=jnp.full(self.maxiter, jnp.nan),
@@ -950,7 +981,7 @@ class GLMHMM(BaseHMM, BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
                 )
 
         params = self._get_model_params()
-        coef = params.glm_params.coef
+        coef = params.model_params.coef
         if coef.ndim == 3:
             n_neurons = coef.shape[1]
         else:
@@ -1172,11 +1203,11 @@ class GLMHMM(BaseHMM, BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         # unpack log probabilities directly (avoid exp then log in categorical)
         log_initial_prob = params.hmm_params.log_initial_prob
         log_transition_prob = params.hmm_params.log_transition_prob
-        scale = jnp.exp(params.glm_scale.log_scale)
+        scale = jnp.exp(params.model_params.log_scale)
 
         # pre-compute rates for all states: (n_time_bins, n_states) or (n_time_bins, n_neurons, n_states)
         all_rates = compute_rate_per_state(
-            X, params.glm_params, self._inverse_link_function
+            X, params.model_params, self._inverse_link_function
         )
 
         # pre-generate random keys for all time steps

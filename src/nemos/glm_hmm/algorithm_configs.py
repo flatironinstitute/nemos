@@ -70,9 +70,7 @@ def _posterior_weighted_objective_impl(
     if log_scale is None:
         nll = negative_log_likelihood_func(y, predicted_rate)
     else:
-        nll = negative_log_likelihood_func(
-            y, predicted_rate, jnp.exp(log_scale.log_scale)
-        )
+        nll = negative_log_likelihood_func(y, predicted_rate, jnp.exp(log_scale))
 
     if nll.ndim > 2:
         nll = nll.sum(axis=1)  # sum over neurons
@@ -125,7 +123,11 @@ def posterior_weighted_glm_negative_log_likelihood(
     """
     predicted_rate = compute_rate_per_state(X, glm_params, inverse_link_function)
     return _posterior_weighted_objective_impl(
-        y, predicted_rate, posteriors, negative_log_likelihood_func
+        y,
+        predicted_rate,
+        posteriors,
+        negative_log_likelihood_func,
+        log_scale=glm_params.log_scale,
     )
 
 
@@ -176,6 +178,7 @@ def posterior_weighted_glm_negative_log_likelihood_scale(
 def prepare_estep_log_likelihood(
     is_population_glm: bool,
     observation_model: Observations,
+    inverse_link_function: Callable,
 ) -> Callable:
     """
     Prepare log-likelihood function for the E-step (forward-backward algorithm).
@@ -210,7 +213,9 @@ def prepare_estep_log_likelihood(
         out_axes=state_axes,
     )
 
-    def log_likelihood(y, rate, scale):
+    def log_likelihood(X, y, params):
+        rate = compute_rate_per_state(X, params, inverse_link_function)
+        scale = params.log_scale
         log_like = log_likelihood_per_sample(y, rate, scale)
         if is_population_glm:
             # Multi-neuron case: sum log-likelihoods across neurons
@@ -286,14 +291,14 @@ def prepare_mstep_nll_objective_param(
     """
     state_axes = 2 if is_population_glm else 1
 
-    def negative_log_likelihood_per_sample(x, z):
+    def negative_log_likelihood_per_sample(x, z, s):
         return observation_model._negative_log_likelihood(
-            x, z, aggregate_sample_scores=lambda v: v
+            x, z, scale=s, aggregate_sample_scores=lambda v: v
         )
 
     negative_log_likelihood = jax.vmap(
         negative_log_likelihood_per_sample,
-        in_axes=(None, state_axes),
+        in_axes=(None, state_axes, state_axes - 1),
         out_axes=state_axes,
     )
 

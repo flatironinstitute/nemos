@@ -9,12 +9,13 @@ import jax.numpy as jnp
 
 from ..glm.params import GLMParams
 from ..typing import Aux, SolverState
-from ..glm_hmm.m_step_analytical_updates import (
+from ..hmm.m_step_analytical_updates import (
     _analytical_m_step_log_initial_prob,
     _analytical_m_step_log_transition_prob,
 )
-from ..glm_hmm.params import GLMHMMParams, GLMScale, HMMParams
-from ..glm_hmm.utils import Array, compute_rate_per_state, initialize_new_session
+from ..glm_hmm.params import GLMHMMParams
+from .params import HMMParams
+from ..glm_hmm.utils import Array, initialize_new_session
 
 from ..typing import ModelParamsT
 
@@ -28,7 +29,7 @@ class HMMState(eqx.Module):
     iterations: int
 
 
-HMMCarry = Tuple[HMMParams, HMMState]
+HMMCarry = Tuple[ModelParamsT, HMMState]
 
 
 def compute_xi_log(
@@ -157,6 +158,7 @@ def _compute_log_likelihood(
     # nemos.observation_models.Observations with ``aggregate_sample_scores = lambda x:x``
 
     log_conditionals = log_likelihood_func(
+        X,
         y,
         model_params,
     )
@@ -268,12 +270,12 @@ def _forward_pass(
     return log_alphas, log_normalizers
 
 
-@partial(jax.jit, static_argnames=["inverse_link_function", "log_likelihood_func"])
+@partial(jax.jit, static_argnames=["log_likelihood_func"])
 def forward_pass(
     params: HMMParams,
     X: Array,
     y: Array,
-    inverse_link_function: Callable[[Array], Array],
+    # inverse_link_function: Callable[[Array], Array],
     log_likelihood_func: Callable[[Array, Array, Array], Array],
     is_new_session: Array | None = None,
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
@@ -340,7 +342,7 @@ def forward_pass(
 
     # Compute log-likelihoods
     log_conditionals = _compute_log_likelihood(
-        glm_params, glm_scale, X, y, inverse_link_function, log_likelihood_func
+        glm_params, glm_scale, X, y, log_likelihood_func
     )
 
     # Compute forward pass
@@ -456,12 +458,12 @@ def _backward_pass(
     return log_betas
 
 
-@partial(jax.jit, static_argnames=["inverse_link_function", "log_likelihood_func"])
+@partial(jax.jit, static_argnames=["log_likelihood_func"])
 def forward_backward(
     params: GLMHMMParams,
     X: Array,
     y: Array,
-    inverse_link_function: Callable[[Array], Array],
+    # inverse_link_function: Callable[[Array], Array],
     log_likelihood_func: Callable[[Array, Array, Array], Array],
     is_new_session: Array | None = None,
 ):
@@ -521,8 +523,8 @@ def forward_backward(
     .. [1] Bishop, C. M. (2006). *Pattern recognition and machine learning*. Springer.
     """
     # unpack parameters
-    glm_params = params.glm_params
-    glm_scale = params.glm_scale
+    glm_params = params.model_params
+    # glm_scale = params.glm_scale
     log_initial_prob = params.hmm_params.log_initial_prob
     log_transition_prob = params.hmm_params.log_transition_prob
 
@@ -531,9 +533,7 @@ def forward_backward(
     is_new_session = initialize_new_session(y.shape[0], is_new_session)
 
     # Compute log-likelihoods
-    log_conditionals = _compute_log_likelihood(
-        glm_params, glm_scale, X, y, inverse_link_function, log_likelihood_func
-    )
+    log_conditionals = _compute_log_likelihood(glm_params, X, y, log_likelihood_func)
 
     # Compute forward pass
     log_alphas, log_normalization = _forward_pass(
@@ -580,25 +580,25 @@ def forward_backward(
 @partial(
     jax.jit,
     static_argnames=[
-        "m_step_fn_glm_params",
-        "m_step_fn_glm_scale",
-        "inverse_link_function",
+        "m_step_fn_model_params",
+        # "m_step_fn_glm_scale",
+        # "inverse_link_function",
     ],
 )
 def run_m_step(
-    params: GLMHMMParams,
+    params: ModelParamsT,
     X: Array,
     y: Array,
     log_posteriors: Array,
     log_joint_posterior: Array,
     is_new_session: Array,
-    m_step_fn_glm_params: Callable[
+    m_step_fn_model_params: Callable[
         [GLMParams, Array, Array, Array], Tuple[GLMParams, SolverState, Aux]
     ],
-    m_step_fn_glm_scale: (
-        Callable[[GLMScale, Array, Array, Array], Tuple[GLMScale, SolverState]] | None
-    ),
-    inverse_link_function: Callable[[Array], Array],
+    # m_step_fn_glm_scale: (
+    #     Callable[[GLMScale, Array, Array, Array], Tuple[GLMScale, SolverState]] | None
+    # ),
+    # inverse_link_function: Callable[[Array], Array],
     dirichlet_prior_alphas_init_prob: Array | None = None,
     dirichlet_prior_alphas_transition: Array | None = None,
 ) -> Tuple[GLMHMMParams, SolverState]:
@@ -661,27 +661,27 @@ def run_m_step(
 
     with jax.disable_jit(False):
         # Minimize negative log-likelihood to update GLM weights
-        optimized_projection_weights, state, _ = m_step_fn_glm_params(
-            params.glm_params, X, y, posteriors
+        optimized_projection_weights, state, _ = m_step_fn_model_params(
+            params.model_params, X, y, posteriors
         )
-        predicted_rate = compute_rate_per_state(
-            X, optimized_projection_weights, inverse_link_function=inverse_link_function
-        )
+    #     predicted_rate = compute_rate_per_state(
+    #         X, optimized_projection_weights, inverse_link_function=inverse_link_function
+    #     )
 
-    if m_step_fn_glm_scale is not None:
-        # Gaussian, Gamma, and other have a scale.
-        glm_scale, state_scale, _ = m_step_fn_glm_scale(
-            params.glm_scale, y, predicted_rate, posteriors
-        )
-    else:
-        # Poisson, Bernoulli etc. do not have a scale
-        # just keep carrying the scale
-        glm_scale = params.glm_scale
+    # if m_step_fn_glm_scale is not None:
+    #     # Gaussian, Gamma, and other have a scale.
+    #     glm_scale, state_scale, _ = m_step_fn_glm_scale(
+    #         params.glm_scale, y, predicted_rate, posteriors
+    #     )
+    # else:
+    #     # Poisson, Bernoulli etc. do not have a scale
+    #     # just keep carrying the scale
+    #     glm_scale = params.glm_scale
 
-    params = GLMHMMParams(
+    params = params.initialize_params(
         hmm_params=HMMParams(log_initial_prob, log_transition_prob),
-        glm_params=optimized_projection_weights,
-        glm_scale=glm_scale,
+        model_params=optimized_projection_weights,
+        # glm_scale=glm_scale,
     )
     return (
         params,
@@ -690,19 +690,19 @@ def run_m_step(
 
 
 def _em_step(
-    carry: EMCarry,
+    carry: HMMCarry,
     X: Array,
     y: Array,
-    inverse_link_function: Callable[[Array], Array],
+    # inverse_link_function: Callable[[Array], Array],
     log_likelihood_func: Callable[[Array, Array, Array], Array],
-    m_step_fn_glm_params: Callable[
+    m_step_fn_model_params: Callable[
         [GLMParams, Array, Array, Array], Tuple[GLMParams, SolverState]
     ],
-    m_step_fn_glm_scale: (
-        Callable[[Array, Array, Array, Array], Tuple[Array, SolverState]] | None
-    ),
+    # m_step_fn_glm_scale: (
+    #     Callable[[Array, Array, Array, Array], Tuple[Array, SolverState]] | None
+    # ),
     is_new_session: Array,
-) -> EMCarry:
+) -> HMMCarry:
     """
     Execute a single EM iteration combining E-step and M-step.
 
@@ -749,7 +749,7 @@ def _em_step(
         params,
         X,
         y,
-        inverse_link_function,
+        # inverse_link_function,
         log_likelihood_func,
         is_new_session,
     )
@@ -761,12 +761,12 @@ def _em_step(
         log_posteriors=log_posteriors,
         log_joint_posterior=log_joint_posterior,
         is_new_session=is_new_session,
-        m_step_fn_glm_params=m_step_fn_glm_params,
-        m_step_fn_glm_scale=m_step_fn_glm_scale,
-        inverse_link_function=inverse_link_function,
+        m_step_fn_model_params=m_step_fn_model_params,
+        # m_step_fn_glm_scale=m_step_fn_glm_scale,
+        # inverse_link_function=inverse_link_function,
     )
 
-    new_state = GLMHMMState(
+    new_state = HMMState(
         iterations=previous_state.iterations + 1,
         data_log_likelihood=new_log_like,
         previous_data_log_likelihood=previous_state.data_log_likelihood,
@@ -779,16 +779,16 @@ def _em_step(
 
 
 def em_step(
-    params: GLMHMMParams,
-    state: GLMHMMState,
+    params: ModelParamsT,
+    state: HMMState,
     X: Array,
     y: Array,
-    inverse_link_function: Callable,
+    # inverse_link_function: Callable,
     log_likelihood_func: Callable,
-    m_step_fn_glm_params: Callable,
-    m_step_fn_glm_scale: Callable,
+    m_step_fn_model_params: Callable,
+    # m_step_fn_glm_scale: Callable,
     is_new_session: Array,
-) -> Tuple[GLMHMMParams, GLMHMMState]:
+) -> Tuple[ModelParamsT, HMMState]:
     """
     Perform a single EM iteration step for GLM-HMM.
 
@@ -833,17 +833,17 @@ def em_step(
         carry,
         X=X,
         y=y,
-        inverse_link_function=inverse_link_function,
+        # inverse_link_function=inverse_link_function,
         log_likelihood_func=log_likelihood_func,
-        m_step_fn_glm_params=m_step_fn_glm_params,
-        m_step_fn_glm_scale=m_step_fn_glm_scale,
+        m_step_fn_model_params=m_step_fn_model_params,
+        # m_step_fn_glm_scale=m_step_fn_glm_scale,
         is_new_session=is_new_session,
     )
 
     return params, state
 
 
-def check_log_likelihood_increment(state: GLMHMMState, tol: float) -> Array:
+def check_log_likelihood_increment(state: HMMState, tol: float) -> Array:
     """
     Check EM convergence using absolute tolerance on log-likelihood.
 
@@ -866,28 +866,28 @@ def check_log_likelihood_increment(state: GLMHMMState, tol: float) -> Array:
 @partial(
     jax.jit,
     static_argnames=[
-        "inverse_link_function",
+        # "inverse_link_function",
         "log_likelihood_func",
-        "m_step_fn_glm_params",
-        "m_step_fn_glm_scale",
+        "m_step_fn_model_params",
+        # "m_step_fn_glm_scale",
         "maxiter",
         "check_convergence",
         "tol",
     ],
 )
-def em_glm_hmm(
-    params: GLMHMMParams,
+def em_hmm(
+    params: ModelParamsT,
     X: Array,
     y: Array,
-    inverse_link_function: Callable,
+    # inverse_link_function: Callable,
     log_likelihood_func: Callable,
-    m_step_fn_glm_params: Callable,
-    m_step_fn_glm_scale: Callable | None,
+    m_step_fn_model_params: Callable,
+    # m_step_fn_glm_scale: Callable | None,
     is_new_session: Optional[Array] = None,
     maxiter: int = 10**3,
     tol: float = 1e-8,
     check_convergence: Callable = check_log_likelihood_increment,
-) -> Tuple[GLMHMMParams, GLMHMMState]:
+) -> Tuple[ModelParamsT, HMMState]:
     """
     Perform EM optimization for a GLM-HMM.
 
@@ -936,7 +936,7 @@ def em_glm_hmm(
     """
     is_new_session = initialize_new_session(y.shape[0], is_new_session)
 
-    state = GLMHMMState(
+    state = HMMState(
         data_log_likelihood=-jnp.array(jnp.inf),
         previous_data_log_likelihood=-jnp.array(jnp.inf),
         log_likelihood_history=jnp.full(maxiter, jnp.nan),
@@ -947,10 +947,10 @@ def em_glm_hmm(
         lambda *args, **kwargs: _em_step(*args, **kwargs),
         X=X,
         y=y,
-        inverse_link_function=inverse_link_function,
+        # inverse_link_function=inverse_link_function,
         log_likelihood_func=log_likelihood_func,
-        m_step_fn_glm_params=m_step_fn_glm_params,
-        m_step_fn_glm_scale=m_step_fn_glm_scale,
+        m_step_fn_model_params=m_step_fn_model_params,
+        # m_step_fn_glm_scale=m_step_fn_glm_scale,
         is_new_session=is_new_session,
     )
 
@@ -972,13 +972,13 @@ def em_glm_hmm(
 
 @partial(
     jax.jit,
-    static_argnames=["inverse_link_function", "log_likelihood_func", "return_index"],
+    static_argnames=["log_likelihood_func", "return_index"],
 )
 def max_sum(
     params: GLMHMMParams,
     X: Array,
     y: Array,
-    inverse_link_function: Callable,
+    # inverse_link_function: Callable,
     log_likelihood_func: Callable[[Array, Array, Array], Array],
     is_new_session: Array | None = None,
     return_index: bool = False,
@@ -1031,7 +1031,7 @@ def max_sum(
     is_new_session = initialize_new_session(y.shape[0], is_new_session)
 
     log_emission = _compute_log_likelihood(
-        glm_params, glm_scale, X, y, inverse_link_function, log_likelihood_func
+        glm_params, glm_scale, X, y, log_likelihood_func
     )
 
     # Forward pass: similar to forward-backward, scan over all time points

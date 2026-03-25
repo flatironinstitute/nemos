@@ -7,37 +7,23 @@ import jax.numpy as jnp
 from numpy.typing import ArrayLike
 
 from ..glm.params import GLMParams
+from ..hmm.params import HMMParams
+from ..params import ModelParams
 from ..typing import DESIGN_INPUT_TYPE
 
 
-class HMMParams(eqx.Module):
-    """Parameter container for HMM models."""
-
-    log_initial_prob: jnp.ndarray
-    log_transition_prob: jnp.ndarray
-
-    @staticmethod
-    def regularizable_subtrees() -> list[Callable[["HMMParams"], jnp.ndarray | dict]]:
-        """Filter regularizable subtrees."""
-        return []
-
-
-class GLMScale(eqx.Module):
+class GLMScale(ModelParams):
     """Scale parameter container."""
 
     log_scale: jnp.ndarray
 
-    @staticmethod
-    def regularizable_subtrees() -> list[Callable[["HMMParams"], jnp.ndarray | dict]]:
-        """Filter regularizable subtrees."""
-        return []
 
-
-class GLMHMMParams(eqx.Module):
+class GLMHMMParams(ModelParams):
     """Parameter container for GLM-HMM models."""
 
-    glm_params: GLMParams
-    glm_scale: GLMScale
+    model_params: Tuple[GLMParams, GLMScale]
+    # glm_scale: GLMScale
+    # scale: jnp.ndarray | None = None
     hmm_params: HMMParams
 
     @staticmethod
@@ -45,7 +31,7 @@ class GLMHMMParams(eqx.Module):
         list[Callable[["GLMHMMParams"], jnp.ndarray | dict]]
     ):
         """Filter regularizable subtrees."""
-        return [lambda p: p.glm_params.coef]
+        return [lambda p: p.model_params.coef]
 
 
 # Tuple[coef, intercept, scale, init_proba, transition_proba]
