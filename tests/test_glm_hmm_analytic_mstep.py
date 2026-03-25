@@ -10,7 +10,7 @@ from nemos.glm_hmm.algorithm_configs import (
     prepare_mstep_nll_objective_param,
     prepare_mstep_nll_objective_scale,
 )
-from nemos.hmm.expectation_maximization import forward_backward, run_m_step
+from nemos.glm_hmm.expectation_maximization import forward_backward, run_m_step
 from nemos.glm_hmm.params import GLMHMMParams, GLMScale, HMMParams
 from nemos.glm_hmm.utils import compute_rate_per_state
 from nemos.regularizer import UnRegularized
@@ -58,18 +58,18 @@ def generate_data_gaussian(request):
 
     is_population_glm = len(y_shape) > 0
     if is_population_glm:
-        rate = inv_link_func(
+        rate = (
             jnp.einsum("ij, jni->in", X, glm_params.coef[..., states])
             + glm_params.intercept[..., states].T
         )
     else:
-        rate = inv_link_func(
+        rate = (
             jnp.einsum("ij, ji->i", X, glm_params.coef[..., states])
             + glm_params.intercept[..., states].T
         )
 
     n_neurons = max(sum(y_shape), 1)
-    std = np.random.randn(n_states, n_neurons) * 0.1
+    std = np.random.randn(n_states, n_neurons)
     std = std[states]
     if not is_population_glm:
         std = jnp.squeeze(std)
@@ -86,11 +86,7 @@ def generate_data_gaussian(request):
         jnp.eye(n_states) * 0.94
         + (jnp.ones((n_states, n_states)) - jnp.eye(n_states)) * 0.03
     )
-    params = GLMHMMParams(
-        glm_params=glm_params,
-        glm_scale=GLMScale(jnp.zeros((*y_shape, n_states)).astype(float)),
-        hmm_params=HMMParams(jnp.log(init_proba), jnp.log(transition_probs)),
-    )
+
     (
         log_gammas,
         log_xis,
@@ -99,9 +95,12 @@ def generate_data_gaussian(request):
         _,
         _,
     ) = forward_backward(
-        params,
         X,
         y,
+        jnp.log(init_proba),
+        jnp.log(transition_probs),
+        glm_params,
+        glm_scale=GLMScale(jnp.zeros((*y_shape, n_states)).astype(float)),
         log_likelihood_func=log_likelihood_fn,
         inverse_link_function=inv_link_func,
         is_new_session=None,

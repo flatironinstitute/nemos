@@ -58,7 +58,7 @@ class ClassifierMixin:
 
         Notes
         -----
-        :meth:`fit` and :meth:`initialize_optimization_and_state` call ``set_classes`` internally,
+        :meth:`fit` and :meth:`initialize_solver_and_state` call ``set_classes`` internally,
         making sure that the ``classes_`` attribute matches the provided input.
         If you are fitting in batches by calling :meth:`update`, make sure that the ``classes_``
         are correctly set by calling ``set_classes`` before starting the :meth:`update` loop.
@@ -82,7 +82,7 @@ class ClassifierMixin:
 
         Without ``set_classes``, initialization fails if batch lacks all classes:
 
-        >>> _ = model.initialize_optimization_and_state(X_batch1, y_batch1, init_params=None)
+        >>> _ = model.initialize_solver_and_state(X_batch1, y_batch1, init_params=None)
         Traceback (most recent call last):
         RuntimeError: Classes are not set. Must call ``set_classes`` before calling...
 
@@ -91,7 +91,7 @@ class ClassifierMixin:
         >>> model.set_classes(y_all_classes)
         ClassifierGLM(...)
         >>> init_params = model.initialize_params(X_batch1, y_batch1)
-        >>> state = model.initialize_optimization_and_state(X_batch1, y_batch1, init_params)
+        >>> state = model.initialize_solver_and_state(X_batch1, y_batch1, init_params)
 
         Now batches with any subset of classes work with :meth:`update`:
 
@@ -412,7 +412,7 @@ class ClassifierMixin:
         y = self._label_encoder.decode(argmax(y))
         return y, log_prob
 
-    def initialize_optimization_and_state(
+    def initialize_solver_and_state(
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
@@ -556,7 +556,7 @@ class ClassifierMixin:
         >>> model.set_classes(y)
         ClassifierGLM(...)
         >>> params = model.initialize_params(X, y)
-        >>> opt_state = model.initialize_optimization_and_state(X, y, params)
+        >>> opt_state = model.initialize_solver_and_state(X, y, params)
         >>> new_params, new_state = model.update(params, opt_state, X, y)
         """
         self._label_encoder.check_classes_is_set("update")
@@ -634,7 +634,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
 
     **Setting Class Labels**
 
-    The :meth:`fit` and :meth:`initialize_optimization_and_state` methods automatically infer
+    The :meth:`fit` and :meth:`initialize_solver_and_state` methods automatically infer
     class labels from the provided ``y``. If you set ``coef_`` and ``intercept_`` manually,
     you must call :meth:`set_classes` before using :meth:`predict`, :meth:`predict_proba`,
     :meth:`simulate`, :meth:`score`, or :meth:`compute_loss`.
@@ -913,7 +913,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
 
     **Setting Class Labels**
 
-    The :meth:`fit` and :meth:`initialize_optimization_and_state` methods automatically infer
+    The :meth:`fit` and :meth:`initialize_solver_and_state` methods automatically infer
     class labels from the provided ``y``. If you set ``coef_`` and ``intercept_`` manually,
     you must call :meth:`set_classes` before using :meth:`predict`, :meth:`predict_proba`,
     :meth:`simulate`, :meth:`score`, or :meth:`compute_loss`.

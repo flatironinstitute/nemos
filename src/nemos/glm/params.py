@@ -14,7 +14,6 @@ class GLMParams(eqx.Module):
 
     coef: jnp.ndarray | dict
     intercept: jnp.ndarray
-    log_scale: jnp.ndarray | None = None
 
     @staticmethod
     def regularizable_subtrees() -> list[Callable[["GLMParams"], jnp.ndarray | dict]]:

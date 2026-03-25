@@ -270,7 +270,7 @@ class ProxSVRG:
         """
         Perform a single parameter update on the data (no random sampling or loops) and increment `state.iter_num`.
 
-        Please note that this gets called by `BaseRegressor.optimization_update` (e.g., as called by `GLM.update`),
+        Please note that this gets called by `BaseRegressor._solver_update` (e.g., as called by `GLM.update`),
         but repeated calls to `(Prox)SVRG.update` (so in turn e.g. to `GLM.update`) on mini-batches passed to it
         will not result in running the full (Prox-)SVRG, and parts of the algorithm will have to be implemented outside.
 

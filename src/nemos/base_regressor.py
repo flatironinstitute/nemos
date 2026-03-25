@@ -11,7 +11,6 @@ from functools import wraps
 from pathlib import Path
 from typing import (
     Any,
-    Callable,
     Generic,
     Optional,
     Tuple,
@@ -143,9 +142,9 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         self._check_solver_kwargs(solver_class, solver_kwargs)
 
         self.solver_kwargs = solver_kwargs
-        self._optimization_init_state = None
-        self._optimization_update = None
-        self._optimization_run = None
+        self._solver_init_state = None
+        self._solver_update = None
+        self._solver_run = None
 
     def __sklearn_tags__(self):
         """Return regression model specific estimator tags."""
@@ -158,26 +157,26 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         return tags
 
     @property
-    def optimization_init_state(self) -> Union[None, SolverInit]:
+    def solver_init_state(self) -> Union[None, SolverInit]:
         """
-        Provides the initialization function for the optimization state.
+        Provides the initialization function for the solver's state.
 
-        This function is responsible for initializing the optimization state, necessary for the start
+        This function is responsible for initializing the solver's state, necessary for the start
         of the optimization process. It sets up initial values for parameters like gradients and step
         sizes based on the model configuration and input data.
 
         Returns
         -------
         :
-            The function to initialize the optimization state, if available; otherwise, None if
-            the optimization has not yet been instantiated.
+            The function to initialize the state of the solver, if available; otherwise, None if
+            the solver has not yet been instantiated.
         """
-        return self._optimization_init_state
+        return self._solver_init_state
 
     @property
-    def optimization_update(self) -> Union[None, SolverUpdate]:
+    def solver_update(self) -> Union[None, SolverUpdate]:
         """
-        Provides the function for updating the state during the optimization process.
+        Provides the function for updating the solver's state during the optimization process.
 
         This function is used to perform a single update step in the optimization process. It updates
         the model's parameters based on the current state, data, and gradients. It is typically used
@@ -187,27 +186,27 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         Returns
         -------
         :
-            The function to perform a single optimization update step, if available; otherwise, None if
-            the optimization has not yet been instantiated.
+            The function to update the solver's state, if available; otherwise, None if the solver
+            has not yet been instantiated.
         """
-        return self._optimization_update
+        return self._solver_update
 
     @property
-    def optimization_run(self) -> Union[None, SolverRun]:
+    def solver_run(self) -> Union[None, SolverRun]:
         """
-        Provides the function to execute the optimization process.
+        Provides the function to execute the solver's optimization process.
 
-        This function runs the optimization using the initialized parameters and state, performing the
+        This function runs the solver using the initialized parameters and state, performing the
         optimization to fit the model to the data. It iteratively updates the model parameters until
         a stopping criterion is met, such as convergence or exceeding a maximum number of iterations.
 
         Returns
         -------
         :
-            The function to run the optimization process, if available; otherwise, None if
-            the optimization has not yet been instantiated.
+            The function to run the solver's optimization process, if available; otherwise, None if
+            the solver has not yet been instantiated.
         """
-        return self._optimization_run
+        return self._solver_run
 
     def set_params(self, **params: Any):
         """Manage warnings in case of multiple parameter settings."""
@@ -327,7 +326,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
 
     def _instantiate_solver(
         self, loss, init_params: ModelParamsT, solver_kwargs: Optional[dict] = None
-    ) -> Tuple[Callable, Callable, Callable]:
+    ) -> BaseRegressor:
         """
         Instantiate the solver with the provided loss function.
 
@@ -388,7 +387,11 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             utils.assert_is_callable(solver.fun, "solver's loss")
             self._solver_loss_fun = solver.fun
 
-        return solver.init_state, solver.update, solver.run
+        self._solver_init_state = solver.init_state
+        self._solver_update = solver.update
+        self._solver_run = solver.run
+
+        return self
 
     @abc.abstractmethod
     def fit(
@@ -398,6 +401,11 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         init_params: Optional[UserProvidedParamsT] = None,
     ) -> BaseRegressor[UserProvidedParamsT, ModelParamsT]:
         """Fit the model to neural activity."""
+        pass
+
+    @abc.abstractmethod
+    def predict(self, X: DESIGN_INPUT_TYPE) -> jnp.ndarray:
+        """Predict rates based on fit parameters."""
         pass
 
     @abc.abstractmethod
@@ -416,7 +424,6 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         self,
         random_key: jax.Array,
         feedforward_input: DESIGN_INPUT_TYPE,
-        **kwargs,
     ):
         """Simulate neural activity in response to a feed-forward input and recurrent activity."""
         pass
@@ -431,6 +438,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         """Unpack and store params pytree to coef_ and intercept_."""
         pass
 
+    @abc.abstractmethod
     def _compute_loss(
         self,
         params: ModelParamsT,
@@ -439,43 +447,8 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         *args,
         **kwargs,
     ):
-        """Unpenalized loss function for optimization.
-
-        This method computes the unpenalized loss (e.g., negative log-likelihood)
-        that is passed to the solver during optimization. The solver adds
-        regularization penalties internally.
-
-        Subclasses that use gradient-based optimization (e.g., GLM) should
-        override this method. Models using other optimization approaches
-        (e.g., EM algorithm) may not need to implement this.
-
-        Parameters
-        ----------
-        params :
-            Model parameters.
-        X :
-            Predictors.
-        y :
-            Target neural activity.
-        *args :
-            Additional positional arguments.
-        **kwargs :
-            Additional keyword arguments.
-
-        Returns
-        -------
-        :
-            The unpenalized loss value.
-
-        Raises
-        ------
-        NotImplementedError
-            If the subclass does not override this method.
-        """
-        raise NotImplementedError(
-            f"{self.__class__.__name__} does not implement `_compute_loss`. "
-            "This method is only required for models using gradient-based optimization."
-        )
+        """Loss function for a given model to be optimized over."""
+        pass
 
     @cast_to_jax
     def compute_loss(
@@ -588,15 +561,15 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         self,
         X: DESIGN_INPUT_TYPE,
         y: Optional[jnp.ndarray] = None,
-        *args: jnp.ndarray,
         drop_nans: bool = True,
-    ) -> Tuple[dict[str, jnp.ndarray] | jnp.ndarray, jnp.ndarray, ...] | None:
+    ) -> Tuple[dict[str, jnp.ndarray] | jnp.ndarray, jnp.ndarray | None]:
         """Preprocess inputs before initializing state."""
-        X, y = cast_to_jax(lambda *x: x)(X, y)
         if drop_nans:
-            res = tree_utils.drop_nans(X, y, *args)
-            X, y = res[:2]
-            args = res[2:]
+            process = cast_to_jax(tree_utils.drop_nans)
+        else:
+            process = cast_to_jax(lambda *x: x)
+
+        X, y = process(X, y)
 
         data = X.data if isinstance(X, FeaturePytree) else X
 
@@ -613,10 +586,10 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
                 # Wrap into a GLM param structure.
                 self.regularizer.mask = GLMParams(self.regularizer.mask, None)
 
-        return data, y, *args
+        return data, y
 
     @abc.abstractmethod
-    def _initialize_optimization_and_state(
+    def _initialize_solver_and_state(
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
@@ -626,7 +599,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         pass
 
     @cast_to_jax
-    def initialize_optimization_and_state(
+    def initialize_solver_and_state(
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
@@ -661,7 +634,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         init_params = self._validator.validate_and_cast_params(init_params)
         self._validator.validate_consistency(init_params, X=X, y=y)
         X, y = self._preprocess_inputs(X, y, drop_nans=True)
-        return self._initialize_optimization_and_state(X, y, init_params)
+        return self._initialize_solver_and_state(X, y, init_params)
 
     def _optimize_solver_params(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray) -> dict:
         """
@@ -721,13 +694,6 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
 
     @abstractmethod
     def save_params(
-        self,
-        filename: Union[str, Path],
-    ):
-        """Save model parameters and specified attributes to a .npz file."""
-        pass
-
-    def _save_params(
         self,
         filename: Union[str, Path],
         fit_attrs: dict,
