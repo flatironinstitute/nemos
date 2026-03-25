@@ -6,7 +6,7 @@ import copy
 import math
 import warnings
 from copy import deepcopy
-from functools import wraps
+from functools import partial, wraps
 from typing import TYPE_CHECKING, Callable, Generator, List, Optional, Tuple, Union
 
 import jax.numpy as jnp
@@ -40,29 +40,42 @@ from ._composition_utils import (
 )
 
 
-def check_transform_input(func: Callable) -> Callable:
+def check_transform_input(func: Callable | None = None, flat_output=False) -> Callable:
     """Check input before calling basis.
 
     This decorator allows to raise an exception that is more readable
     when the wrong number of input is provided to evaluate.
+
+    Parameters
+    ----------
+    func :
+        The callable being decorated. ``None`` when the decorator is used
+        with arguments (e.g. ``@check_transform_input(flat_output=True)``),
+        in which case a partial is returned and applied to the function in a
+        second call.
+    flat_output :
+        Controls the shape of the zeros returned when the input is empty.
+        Set to ``True`` for ``compute_features``, which flattens all input
+        dimensions into a 2-D matrix ``(n_samples, n_output_features)``.
+        Set to ``False`` (default) for ``evaluate``, which preserves the full
+        input shape and appends the basis dimension, yielding
+        ``(*input_shape, n_basis_funcs)``.
     """
+    if func is None:
+        return partial(check_transform_input, flat_output=flat_output)
 
     @wraps(func)
-    def wrapper(self: Basis, *xi: ArrayLike, **kwargs) -> NDArray:
+    def wrapper(self: Basis, *xi: ArrayLike, **kwargs) -> NDArray | jnp.ndarray:
         xi = self._check_transform_input(*xi)
+        if xi[0].size == 0:
+            # do not evaluate if empty
+            self.setup_basis(*xi)
+            if flat_output:
+                return jnp.zeros((xi[0].shape[0], self.n_output_features))
+            else:
+                shape = xi[0].shape
+                return jnp.zeros((*shape, self.n_basis_funcs))
         return func(self, *xi, **kwargs)  # Call the basis
-
-    return wrapper
-
-
-def check_one_dimensional(func: Callable) -> Callable:
-    """Check if the input is one-dimensional."""
-
-    @wraps(func)
-    def wrapper(self: Basis, *xi: NDArray, **kwargs):
-        if any(x.ndim != 1 for x in xi):
-            raise ValueError("Input sample must be one dimensional!")
-        return func(self, *xi, **kwargs)
 
     return wrapper
 
@@ -94,15 +107,18 @@ def min_max_rescale_samples(
     else:
         nanmin, nanmax, asarray, where = np.nanmin, np.nanmax, np.asarray, np.where
 
-    # if not normalize all array
-    vmin = nanmin(sample_pts, axis=0) if bounds is None else bounds[0]
-    vmax = nanmax(sample_pts, axis=0) if bounds is None else bounds[1]
-    scaling = asarray(vmax - vmin)
-    # do not normalize if samples contain a single value (in which case vmax=vmin)
-    scaling = where(scaling == 0, 1.0, scaling)
-    sample_pts -= vmin
-    sample_pts /= scaling
+    if bounds is None:
+        vmin = nanmin(sample_pts, axis=0)
+        vmax = nanmax(sample_pts, axis=0)
+    elif isinstance(bounds[0], (tuple, list)):
+        vmin = asarray([b[0] for b in bounds])
+        vmax = asarray([b[1] for b in bounds])
+    else:
+        vmin, vmax = bounds[0], bounds[1]
 
+    scaling = asarray(vmax - vmin)
+    scaling = where(scaling == 0, 1.0, scaling)
+    sample_pts = (sample_pts - vmin) / scaling
     return sample_pts, scaling
 
 
@@ -115,7 +131,7 @@ def _is_single_bound(bounds) -> bool:
     if len(bounds) != 2:
         return False
     # Single bound has numeric elements; multiple bounds have tuple/None elements
-    return all(isinstance(b, (int, float, np.number)) for b in bounds)
+    return all(isinstance(b, (int, float, np.number)) or b is None for b in bounds)
 
 
 def _fill_bounds(b):
@@ -184,7 +200,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
     def __init__(
         self,
     ) -> None:
-        self._n_input_dimensionality = getattr(self, "_n_input_dimensionality", 0)
+        self._n_inputs = getattr(self, "_n_inputs", 0)
 
         # specified only after inputs/input shapes are provided
         self._input_shape_product = getattr(self, "_input_shape_product", None)
@@ -204,7 +220,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             self._n_basis_funcs = orig_n_basis
             raise e
 
-    @check_transform_input
+    @check_transform_input(flat_output=True)
     def compute_features(
         self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor
     ) -> FeatureMatrix:
@@ -595,7 +611,6 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    @check_one_dimensional
     def evaluate(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
         """
         Evaluate the basis at the sample points.
@@ -633,11 +648,18 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         >>> out = additive_basis.evaluate(x, y)
 
         """
-        X = np.hstack(
-            (
-                self.basis1.evaluate(*xi[: self.basis1._n_input_dimensionality]),
-                self.basis2.evaluate(*xi[self.basis1._n_input_dimensionality :]),
+        have_same_shape, shapes, _ = _have_unique_shapes(xi)
+        if not have_same_shape:
+            raise ValueError(
+                f"``AdditiveBasis.evaluate`` requires all inputs to have the same shape. "
+                f"Got shapes: {shapes}."
             )
+        X = np.concatenate(
+            (
+                self.basis1.evaluate(*xi[: self.basis1._n_inputs]),
+                self.basis2.evaluate(*xi[self.basis1._n_inputs :]),
+            ),
+            axis=-1,
         )
         return X
 
@@ -691,8 +713,8 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         )
         X = hstack_pynapple(
             (
-                comp_feature_1(*xi[: self.basis1._n_input_dimensionality]),
-                comp_feature_2(*xi[self.basis1._n_input_dimensionality :]),
+                comp_feature_1(*xi[: self.basis1._n_inputs]),
+                comp_feature_2(*xi[self.basis1._n_inputs :]),
             ),
         )
         return X
@@ -1048,8 +1070,8 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         """
         # evaluate preserves the shape of the input arrays
         shape = xi[0].shape
-        x1 = self.basis1.evaluate(*xi[: self.basis1._n_input_dimensionality])
-        x2 = self.basis2.evaluate(*xi[self.basis1._n_input_dimensionality :])
+        x1 = self.basis1.evaluate(*xi[: self.basis1._n_inputs])
+        x2 = self.basis2.evaluate(*xi[self.basis1._n_inputs :])
         # Required in case xi.shape[-1] == 0
         # For example, in a multiplication with Zero basis
         x1_shape = math.prod(x1.shape[:-1])
@@ -1098,8 +1120,8 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         comp_feature_2 = getattr(
             self.basis2, "_compute_features", self.basis2.compute_features
         )
-        x1 = comp_feature_1(*xi[: self.basis1._n_input_dimensionality])
-        x2 = comp_feature_2(*xi[self.basis1._n_input_dimensionality :])
+        x1 = comp_feature_1(*xi[: self.basis1._n_inputs])
+        x2 = comp_feature_2(*xi[self.basis1._n_inputs :])
         # multiplicative basis inputs are of the same shape, checked and
         # set just before the call to this method
         n_samples = x1.shape[0]

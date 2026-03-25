@@ -229,6 +229,17 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
     >>> model = nmo.glm.GLM(solver_name="LBFGS").fit(X, y)
     >>> model.solver_name
     'LBFGS[...]'
+
+    **Use a Pytree of arrays as Input**
+
+    Features can be passed as any JAX pytree of 2-D arrays; the fitted
+    ``coef_`` will share the same pytree structure:
+
+    >>> X_dict = {"input_1": X[:, :2], "input_2": X[:, 2:]}
+    >>> model = nmo.glm.GLM().fit(X_dict, y)
+    >>> # The coefficient structure will match the input.
+    >>> type(model.coef_)
+    <class 'dict'>
     """
 
     _invalid_observation_types = (obs.CategoricalObservations,)
@@ -384,7 +395,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         Parameters
         ----------
         X :
-            Predictors, array of shape ``(n_time_bins, n_features)`` or pytree of same.
+            Predictors, array of shape ``(n_time_bins, n_features)`` or a pytree
+            of arrays of the same shape.
 
         Returns
         -------
@@ -502,7 +514,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         Parameters
         ----------
         X :
-            The exogenous variables. Shape ``(n_time_bins, n_features)``.
+            Predictors, array of shape ``(n_time_bins, n_features)`` or a pytree
+            of arrays of the same shape.
         y :
             Neural activity. Shape ``(n_time_bins, )``.
         score_type :
@@ -617,7 +630,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
 
         This method initializes the coefficients (spike basis coefficients) and intercepts (bias terms)
         required for the GLM. The coefficients are initialized to zeros with dimensions based on the input X.
-        If X is a :class:`nemos.pytrees.FeaturePytree`, the coefficients retain the pytree structure with
+        If X is a pytree of arrays, the coefficients retain the pytree structure with
         arrays of zeros shaped according to the features in X.
         If X is a simple ndarray, the coefficients are initialized as a 2D array. The intercepts are initialized
         based on the log mean of the target data y across the first axis, corresponding to the average log activity
@@ -626,7 +639,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         Parameters
         ----------
         X :
-            The input data which can be a :class:`nemos.pytrees.FeaturePytree` with n_features arrays of shape
+            The input data, either a pytree of arrays with leaves of shape
             ``(n_timebins, n_features)``, or a simple ndarray of shape ``(n_timebins, n_features)``.
         y :
             The target data array of shape ``(n_timebins, )``, representing
@@ -634,10 +647,10 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
 
         Returns
         -------
-        Tuple[Union[FeaturePytree, jnp.ndarray], jnp.ndarray]
+        Tuple[Union[pytree of arrays, jnp.ndarray], jnp.ndarray]
             A tuple containing the initialized parameters:
             - The first element is the initialized coefficients
-            (either as a FeaturePytree or ndarray, matching the structure of X) with shapes (n_features,).
+            (either as a pytree of arrays or ndarray, matching the structure of X) with shapes (n_features,).
             - The second element is the initialized intercept (bias terms) as an ndarray of shape (1,).
         """
         if isinstance(X, FeaturePytree):
@@ -658,6 +671,10 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             lambda p: (p.coef, p.intercept),
             empty_params,
             (initial_coef, initial_intercept),
+        )
+
+        self._validator.feature_mask_consistency(
+            getattr(self, "_feature_mask", None), init_params
         )
         return init_params
 
@@ -805,9 +822,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         random_key :
             jax.random.key for seeding the simulation.
         feedforward_input :
-            External input matrix to the model, representing factors like convolved currents,
+            External input predictors to the model, representing factors like convolved currents,
             light intensities, etc. When not provided, the simulation is done with coupling-only.
-            Array of shape (n_time_bins, n_basis_input) or pytree of same.
+            Array of shape (n_time_bins, n_basis_input) or pytree with leaves of the same shape.
 
         Returns
         -------
@@ -1005,7 +1022,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             step sizes, and other optimizer-specific metrics.
         X
             The predictors used in the model fitting process, which may include feature matrices
-            or :class:`nemos.pytrees.FeaturePytree` objects. Shape ``(n_time_bins, n_features)``.
+            or a pytree of arrays. Shape ``(n_time_bins, n_features)``.
         y
             The response variable or output data corresponding to the predictors. Shape ``(n_time_bins,)``.
         *args
@@ -1175,7 +1192,7 @@ class PopulationGLM(GLM):
     combination of exogenous inputs (like convolved currents or light intensities) and a choice of observation model.
     It is suitable for scenarios where the relationship between predictors and the response
     variable might be non-linear, and the residuals  don't follow a normal distribution. The predictors must be
-    stored in tabular format, shape (n_timebins, num_features) or as :class:`nemos.pytrees.FeaturePytree`.
+    stored in tabular format, shape (n_timebins, num_features) or as a pytree of arrays of the same shape.
     Below is a table listing the default and available solvers for each regularizer.
 
     +---------------+------------------+-------------------------------------------------------------+
@@ -1248,8 +1265,8 @@ class PopulationGLM(GLM):
         E.g. stepsize, tol, acceleration, etc.
          For details on each solver's kwargs, see `get_accepted_arguments` and `get_solver_documentation`.
     feature_mask :
-        Either a matrix of shape (num_features, num_neurons) or a :meth:`nemos.pytrees.FeaturePytree` of 0s and 1s, with
-        ``feature_mask[feature_name]`` of shape (num_neurons, ).
+        Either a matrix of shape (num_features, num_neurons) or a PyTree of 0s and 1s, with
+        leaves of shape (num_neurons, ).
         The mask will be used to select which features are used as predictors for which neuron.
 
     Attributes
@@ -1297,29 +1314,28 @@ class PopulationGLM(GLM):
     >>> model.coef_
     Array(...)
 
-    **Mask Coefficients with a FeaturePytree**
+    **Use a Dict of Arrays as Input**
 
-    When using a FeaturePytree as input, the mask should also be a FeaturePytree
-    with arrays of shape ``(num_neurons,)``:
+    Features can be passed as a dict (or any JAX pytree). The feature mask
+    should mirror the same structure, with one 1-D entry per leaf:
 
-    >>> from nemos.pytrees import FeaturePytree
     >>> feature_1 = np.random.normal(size=(num_samples, 2))
     >>> feature_2 = np.random.normal(size=(num_samples, 1))
-    >>> X = FeaturePytree(feature_1=feature_1, feature_2=feature_2)
+    >>> X_dict = {"feature_1": feature_1, "feature_2": feature_2}
     >>> weights = dict(
     ...     feature_1=jnp.array([[0.0, 0.5], [0.0, -0.5]]),
     ...     feature_2=jnp.array([[1.0, 0.0]])
     ... )
     >>> rate = np.exp(
-    ...     X["feature_1"].dot(weights["feature_1"]) +
-    ...     X["feature_2"].dot(weights["feature_2"])
+    ...     X_dict["feature_1"].dot(weights["feature_1"]) +
+    ...     X_dict["feature_2"].dot(weights["feature_2"])
     ... )
     >>> y = np.random.poisson(rate)
-    >>> feature_mask = FeaturePytree(
-    ...     feature_1=jnp.array([0, 1], dtype=jnp.int32),
-    ...     feature_2=jnp.array([1, 0], dtype=jnp.int32)
-    ... )
-    >>> model = nmo.glm.PopulationGLM(feature_mask=feature_mask).fit(X, y)
+    >>> feature_mask = {
+    ...     "feature_1": jnp.array([0, 1], dtype=jnp.int32),
+    ...     "feature_2": jnp.array([1, 0], dtype=jnp.int32)
+    ... }
+    >>> model = nmo.glm.PopulationGLM(feature_mask=feature_mask).fit(X_dict, y)
     >>> model.coef_
     {...}
 
@@ -1393,7 +1409,7 @@ class PopulationGLM(GLM):
         - **Array input**: Shape ``(n_features, n_neurons)``. Each entry ``[i, j]``
           indicates whether feature ``i`` is used for neuron ``j`` (1 = used, 0 = masked).
 
-        - **Dict/FeaturePytree input**: A dict with keys matching ``coef_``.
+        - **Pytree**: A pytree with structure matching that of ``coef_``.
           Each leaf array has shape ``(n_neurons,)``, indicating whether that feature
           group is used for each neuron.
 
@@ -1467,13 +1483,14 @@ class PopulationGLM(GLM):
         Notes
         -----
         The ``feature_mask`` is used to select features for each neuron, and it is
-        an NDArray or a :class:`nemos.pytrees.FeaturePytree` of 0s and 1s. In particular,
+        an NDArray or a PyTree of 0s and 1s. In particular,
 
         - If the mask is in array format, feature ``i`` is a predictor for neuron ``j`` if
           ``feature_mask[i, j] == 1``.
 
-        - If the mask is a :class:``nemos.pytrees.FeaturePytree``, then
-          ``"feature_name"`` is a predictor of neuron ``j`` if ``feature_mask["feature_name"][j] == 1``.
+        - If the mask is a PyTree, then
+          a leaf is a predictor of neuron ``j`` if the matching leaf in ``feature_mask``
+          is equal to 1.
 
         Examples
         --------

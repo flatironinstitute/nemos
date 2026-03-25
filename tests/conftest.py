@@ -17,16 +17,6 @@ from copy import deepcopy
 from functools import partial
 from typing import Literal
 
-from nemos.glm.validation import GLMValidator
-from nemos.glm_hmm.params import GLMHMMParams, GLMScale, HMMParams
-
-# Named tuple for model fixture returns (clearer than tuple indexing)
-ModelFixture = namedtuple(
-    "ModelFixture",
-    ["X", "y", "model", "params", "rates", "extra"],
-    defaults=[None, None],  # rates and extra default to None
-)
-
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -42,17 +32,20 @@ from nemos.basis._basis import Basis
 from nemos.basis._basis_mixin import BasisMixin
 from nemos.basis._transformer_basis import TransformerBasis
 from nemos.glm.params import GLMParams
-from nemos.glm_hmm.initialize_parameters import (
-    random_glm_params_init,
-    sticky_transition_proba_init,
-    uniform_initial_proba_init,
-)
-from nemos.inverse_link_function_utils import log_softmax
-from nemos.pytrees import FeaturePytree
+from nemos.glm.validation import GLMValidator
 from nemos.tree_utils import tree_full_like
 
+# Named tuple for model fixture returns (clearer than tuple indexing)
+ModelFixture = namedtuple(
+    "ModelFixture",
+    ["X", "y", "model", "params", "rates", "extra"],
+    defaults=[None, None],  # rates and extra default to None
+)
 
-def initialize_feature_mask_for_population_glm(X, n_neurons: int, coef=None):
+
+def initialize_feature_mask_for_population_glm(
+    X, n_neurons: int, n_classes: int = 0, coef=None
+):
     """
     Create a feature mask of ones for PopulationGLM testing.
 
@@ -62,30 +55,31 @@ def initialize_feature_mask_for_population_glm(X, n_neurons: int, coef=None):
     Parameters
     ----------
     X :
-        The design matrix. Can be a FeaturePytree, dict, or array.
+        The design matrix. Can be a dict or array.
     n_neurons :
         Number of neurons (determines the second dimension of the mask).
         Ignored if coef is provided.
     coef :
         Optional coefficient array/pytree. If provided, the mask shape will match
         coef shape exactly (required for ClassifierPopulationGLM).
+    n_classes:
+        Number of classes (determines the second dimension of the mask).
 
     Returns
     -------
     :
         A feature mask with all ones. If coef is provided, returns ones_like(coef).
-        Otherwise, if X is a FeaturePytree or dict, returns a dict with arrays
+        Otherwise, if X is a dict, returns a dict with arrays
         of shape (n_neurons,) for each key.
         If X is an array, returns an array of shape (n_features, n_neurons).
     """
+    extra_shape = (n_classes,) if n_classes else ()
     if coef is not None:
         return jax.tree_util.tree_map(lambda c: jnp.ones(c.shape), coef)
-    if isinstance(X, FeaturePytree):
-        return jax.tree_util.tree_map(lambda x: jnp.ones((n_neurons,)), X.data)
-    elif isinstance(X, dict):
-        return jax.tree_util.tree_map(lambda x: jnp.ones((n_neurons,)), X)
+    if isinstance(X, dict):
+        return jax.tree_util.tree_map(lambda x: jnp.ones((n_neurons, *extra_shape)), X)
     else:
-        return jnp.ones((X.shape[1], n_neurons))
+        return jnp.ones((X.shape[1], n_neurons, *extra_shape))
 
 
 DEFAULT_KWARGS = {
@@ -498,7 +492,7 @@ def poissonGLM_model_instantiation_pytree(poissonGLM_model_instantiation):
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
     X, spikes, model, true_params, rate = poissonGLM_model_instantiation
-    X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
+    X_tree = {"input_1": X[..., :3], "input_2": X[..., 3:]}
     true_params_tree = GLMParams(
         dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
         true_params.intercept,
@@ -563,7 +557,7 @@ def population_poissonGLM_model_instantiation_pytree(
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
     X, spikes, model, true_params, rate = population_poissonGLM_model_instantiation
-    X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
+    X_tree = {"input_1": X[..., :3], "input_2": X[..., 3:]}
     true_params_tree = GLMParams(
         dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
         true_params.intercept,
@@ -837,7 +831,7 @@ def gammaGLM_model_instantiation_pytree(gammaGLM_model_instantiation):
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
     X, spikes, model, true_params, rate = gammaGLM_model_instantiation
-    X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
+    X_tree = {"input_1": X[..., :3], "input_2": X[..., 3:]}
     true_params_tree = GLMParams(
         dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
         true_params.intercept,
@@ -869,7 +863,7 @@ def population_gammaGLM_model_instantiation_pytree(
     population_gammaGLM_model_instantiation,
 ):
     X, spikes, model, true_params, rate = population_gammaGLM_model_instantiation
-    X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
+    X_tree = {"input_1": X[..., :3], "input_2": X[..., 3:]}
     true_params_tree = GLMParams(
         dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
         true_params.intercept,
@@ -1026,7 +1020,7 @@ def bernoulliGLM_model_instantiation_pytree(bernoulliGLM_model_instantiation):
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
     X, spikes, model, true_params, rate = bernoulliGLM_model_instantiation
-    X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
+    X_tree = {"input_1": X[..., :3], "input_2": X[..., 3:]}
     true_params_tree = GLMParams(
         dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
         true_params.intercept,
@@ -1084,7 +1078,7 @@ def classifierGLM_model_instantiation_pytree(classifierGLM_model_instantiation):
             - rate (jax.numpy.ndarray): Simulated rate of log-proba.
     """
     X, spikes, model, true_params, rate = classifierGLM_model_instantiation
-    X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
+    X_tree = {"input_1": X[..., :3], "input_2": X[..., 3:]}
     true_params_tree = GLMParams(
         dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
         true_params.intercept,
@@ -1148,7 +1142,7 @@ def population_classifierGLM_model_instantiation_pytree(
             - rate (jax.numpy.ndarray): Simulated rate of log-proba.
     """
     X, spikes, model, true_params, rate = population_classifierGLM_model_instantiation
-    X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
+    X_tree = {"input_1": X[..., :3], "input_2": X[..., 3:]}
     true_params_tree = GLMParams(
         dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
         true_params.intercept,
@@ -1208,7 +1202,7 @@ def population_bernoulliGLM_model_instantiation_pytree(
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
     X, spikes, model, true_params, rate = population_bernoulliGLM_model_instantiation
-    X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
+    X_tree = {"input_1": X[..., :3], "input_2": X[..., 3:]}
     true_params_tree = GLMParams(
         dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
         true_params.intercept,
@@ -1278,14 +1272,14 @@ def negativeBinomialGLM_model_instantiation_pytree(
 
     Returns:
         tuple: A tuple containing:
-            - X (FeaturePytree): Simulated input data.
+            - X (dict): Simulated input data.
             - np.random.poisson(rate) (numpy.ndarray): Simulated spike responses.
             - model (nmo.glm.PoissonGLM): Initialized model instance.
             - GLMParams(w_true, b_true) (tuple): True weight and bias parameters.
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
     X, spikes, model, true_params, rate = negativeBinomialGLM_model_instantiation
-    X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
+    X_tree = {"input_1": X[..., :3], "input_2": X[..., 3:]}
     true_params_tree = GLMParams(
         dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
         true_params.intercept,
@@ -1351,7 +1345,7 @@ def population_negativeBinomialGLM_model_instantiation_pytree(
     X, spikes, model, true_params, rate = (
         population_negativeBinomialGLM_model_instantiation
     )
-    X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
+    X_tree = {"input_1": X[..., :3], "input_2": X[..., 3:]}
     true_params_tree = GLMParams(
         dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
         true_params.intercept,
@@ -1512,13 +1506,19 @@ def instantiate_glm_func(
     X = np.ones((500, n_features))
     X[:250, 0] = 0
     X[np.arange(500) % 2 == 1, 1] = 0
+    if obs_model == "Gamma":
+        inv_link = jax.nn.softplus
+    else:
+        inv_link = None
     model = nmo.glm.GLM(
         observation_model=obs_model,
         regularizer=regularizer,
         solver_name=solver_name,
+        inverse_link_function=inv_link,
     )
     model.coef_ = np.random.randn(n_features)
     model.intercept_ = np.random.randn(1)
+    model.scale_ = 1.0
     if simulate:
         counts, rates = model.simulate(jax.random.PRNGKey(1234), X)
     else:
@@ -1548,15 +1548,20 @@ def instantiate_population_glm_func(
     X = np.ones((500, n_features))
     X[:250, 0] = 0
     X[np.arange(500) % 2 == 1, 1] = 0
+    if obs_model == "Gamma":
+        inv_link = jax.nn.softplus
+    else:
+        inv_link = None
     model = nmo.glm.PopulationGLM(
         observation_model=obs_model,
         regularizer=regularizer,
         solver_name=solver_name,
+        inverse_link_function=inv_link,
     )
     model.coef_ = np.random.randn(n_features, n_neurons)
     model.intercept_ = np.random.randn(n_neurons)
+    model.scale_ = 1.0
     if simulate:
-        model._feature_mask = initialize_feature_mask_for_population_glm(X, n_neurons)
         counts, rates = model.simulate(jax.random.PRNGKey(1234), X)
     else:
         counts, rates = None, None
@@ -1625,7 +1630,6 @@ def instantiate_population_classifier_glm_func(
     model.coef_ = np.random.randn(n_features, n_neurons, n_classes)
     model.intercept_ = np.random.randn(n_neurons, n_classes)
     if simulate:
-        model._feature_mask = initialize_feature_mask_for_population_glm(X, n_neurons)
         counts, rates = model.simulate(jax.random.PRNGKey(123), X)
     else:
         counts, rates = None, None
@@ -1896,14 +1900,14 @@ def gaussianGLM_model_instantiation_pytree(gaussianGLM_model_instantiation):
 
     Returns:
         tuple: A tuple containing:
-            - X (FeaturePytree): Simulated input data.
+            - X (dict): Simulated input data.
             - np.random.normal(rate) (numpy.ndarray): Simulated spike responses.
             - model (nmo.glm.PoissonGLM): Initialized model instance.
             - GLMParams(w_true, b_true): True weight and bias parameters.
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
     X, spikes, model, true_params, rate = gaussianGLM_model_instantiation
-    X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
+    X_tree = {"input_1": X[..., :3], "input_2": X[..., 3:]}
     true_params_tree = GLMParams(
         dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
         true_params.intercept,
@@ -1926,14 +1930,14 @@ def population_gaussianGLM_model_instantiation_pytree(
 
     Returns:
         tuple: A tuple containing:
-            - X (FeaturePytree): Simulated input data.
+            - X (dict): Simulated input data.
             - np.random.normal(rate) (numpy.ndarray): Simulated spike responses.
             - model (nmo.glm.PoissonGLM): Initialized model instance.
             - GLMParams(w_true, b_true) : True weight and bias parameters.
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
     X, spikes, model, true_params, rate = population_gaussianGLM_model_instantiation
-    X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
+    X_tree = {"input_1": X[..., :3], "input_2": X[..., 3:]}
     true_params_tree = GLMParams(
         dict(input_1=true_params.coef[:3], input_2=true_params.coef[3:]),
         true_params.intercept,

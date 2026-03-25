@@ -56,11 +56,11 @@ class RaisedCosineBasisLinear(AtomicBasisMixin, Basis, abc.ABC):
         width: float = 2.0,
         label: Optional[str] = "RaisedCosineBasisLinear",
     ) -> None:
+        self._n_inputs = 1
         AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, label=label)
         Basis.__init__(
             self,
         )
-        self._n_input_dimensionality = 1
         self._check_width(width)
         self._width = width
         # for these linear raised-cosine basis functions,
@@ -249,6 +249,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
         enforce_decay_to_zero: bool = True,
         label: Optional[str] = "RaisedCosineBasisLog",
     ) -> None:
+        self._n_inputs = 1
         super().__init__(
             n_basis_funcs,
             width=width,

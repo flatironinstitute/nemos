@@ -24,7 +24,7 @@ Params: TypeAlias = Pytree
 Aux = TypeVar("Aux")
 SolverState = TypeVar("SolverState")
 StepResult: TypeAlias = Tuple[Params, SolverState, Aux]
-DESIGN_INPUT_TYPE = "Union[jnp.ndarray, FeaturePytree, nap.TsdFrame]"
+DESIGN_INPUT_TYPE = "Union[jnp.ndarray, Pytree, nap.TsdFrame]"
 
 # copying jax.random's annotation
 KeyArrayLike = ArrayLike
@@ -66,7 +66,7 @@ ProximalOperator = Callable[
     Tuple[jnp.ndarray, jnp.ndarray],
 ]
 
-FeatureMatrix: TypeAlias = "nap.TsdFrame | NDArray"
+FeatureMatrix: TypeAlias = "nap.TsdFrame | NDArray | jnp.ndarray"
 
 # User provided init_params (e.g. for GLMs Tuple[array, array])
 UserProvidedParamsT = TypeVar("UserProvidedParamsT")

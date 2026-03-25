@@ -39,13 +39,11 @@ class OrthExponentialBasis(AtomicBasisMixin, Basis, abc.ABC):
         decay_rates: NDArray[np.floating],
         label: Optional[str] = "OrthExponentialBasis",
     ):
+        self._n_inputs = 1
         AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, label=label)
-        Basis.__init__(
-            self,
-        )
+        Basis.__init__(self)
         self.decay_rates = decay_rates
         self._check_rates()
-        self._n_input_dimensionality = 1
 
     @property
     def decay_rates(self):

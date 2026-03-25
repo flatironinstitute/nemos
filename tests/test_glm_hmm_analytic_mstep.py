@@ -16,6 +16,15 @@ from nemos.glm_hmm.utils import compute_rate_per_state
 from nemos.regularizer import UnRegularized
 from nemos.solvers import get_solver
 
+# Fixed arrays for parametrize — generated once at import time with a seeded RNG.
+# Using a module-level RNG avoids depending on the global numpy random state,
+# which is not seeded before pytest collection and varies across runs / parallel workers.
+_rng = np.random.default_rng(42)
+_COEF_SINGLE = _rng.standard_normal((2, 3)) * 0.01
+_INTERCEPT_SINGLE = _rng.uniform(-3, -1, size=3)
+_COEF_POP = _rng.standard_normal((2, 4, 3)) * 0.01
+_INTERCEPT_POP = _rng.uniform(-3, -1, size=(4, 3))
+
 
 def setup_solver(
     objective, init_params, tol=1e-12, reg_strength=0.0, reg=UnRegularized()
@@ -113,10 +122,10 @@ def generate_data_gaussian(request):
 @pytest.mark.parametrize(
     "generate_data_gaussian",
     [
-        (GLMParams(np.random.randn(2, 3), np.random.randn(3)), (), lambda x: x),
-        (GLMParams(np.random.randn(2, 3), np.random.randn(3)), (), jnp.exp),
-        (GLMParams(np.random.randn(2, 4, 3), np.random.randn(4, 3)), (4,), lambda x: x),
-        (GLMParams(np.random.randn(2, 4, 3), np.random.randn(4, 3)), (4,), jnp.exp),
+        (GLMParams(_COEF_SINGLE, _INTERCEPT_SINGLE), (), lambda x: x),
+        (GLMParams(_COEF_SINGLE, _INTERCEPT_SINGLE), (), jnp.exp),
+        (GLMParams(_COEF_POP, _INTERCEPT_POP), (4,), lambda x: x),
+        (GLMParams(_COEF_POP, _INTERCEPT_POP), (4,), jnp.exp),
     ],
     indirect=True,
 )
