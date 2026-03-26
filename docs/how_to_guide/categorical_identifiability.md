@@ -40,7 +40,7 @@ w = np.array([1, 1])
 print(r"X @ w + c:", X @ w + c)
 
 # this is equivalent to stacking c and w in a single vector
-# and multiply this vector with X_agu = [1 | X]
+# and multiply this vector with X_aug = [1 | X]
 
 v = np.hstack([c, w])
 X_aug = np.column_stack([np.ones(len(category)), X])
