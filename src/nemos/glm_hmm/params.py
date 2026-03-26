@@ -2,7 +2,6 @@
 
 from typing import Callable, Tuple, Union
 
-import equinox as eqx
 import jax.numpy as jnp
 from numpy.typing import ArrayLike
 
@@ -12,8 +11,8 @@ from ..params import ModelParams
 from ..typing import DESIGN_INPUT_TYPE
 
 
-class GLMScale(ModelParams):
-    """Scale parameter container."""
+class GLMHMMModelParams(GLMParams):
+    """Add scale to GLMParams, which is specific for the GLM-HMM."""
 
     log_scale: jnp.ndarray
 
@@ -21,9 +20,7 @@ class GLMScale(ModelParams):
 class GLMHMMParams(ModelParams):
     """Parameter container for GLM-HMM models."""
 
-    model_params: Tuple[GLMParams, GLMScale]
-    # glm_scale: GLMScale
-    # scale: jnp.ndarray | None = None
+    model_params: GLMHMMModelParams
     hmm_params: HMMParams
 
     @staticmethod
@@ -38,5 +35,3 @@ class GLMHMMParams(ModelParams):
 GLMHMMUserParams = Tuple[
     Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike, ArrayLike, ArrayLike, ArrayLike
 ]
-# Tuple[init_proba, transition_proba]
-HMMUserParams = Tuple[ArrayLike, ArrayLike]

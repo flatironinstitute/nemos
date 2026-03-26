@@ -769,32 +769,32 @@ class GLMHMM(BaseHMM, BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         #         objective_scale, init_params.model_params.log_scale
         #     )
 
-        # def glm_params_and_scale_update_fn(params, X, y, posteriors):
-        #     new_glm_params, glm_state, _ = glm_params_update_fn(
-        #         params.model_params, X, y, posteriors
-        #     )
+        def glm_params_and_scale_update_fn(params, X, y, posteriors):
+            new_glm_params, glm_state, _ = glm_params_update_fn(
+                params.model_params, X, y, posteriors
+            )
 
-        #     if scale_update_fn is not None:
-        #         predicted_rate = compute_rate_per_state(
-        #             X, new_glm_params, inverse_link_function=self.inverse_link_function
-        #         )
+            if scale_update_fn is not None:
+                predicted_rate = compute_rate_per_state(
+                    X, new_glm_params, inverse_link_function=self.inverse_link_function
+                )
 
-        #         # Gaussian, Gamma, and other have a scale.
-        #         new_glm_scale, state_scale, _ = scale_update_fn(
-        #             params.model_params.log_scale, y, predicted_rate, posteriors
-        #         )
-        #     else:
-        #         # Poisson, Bernoulli etc. do not have a scale
-        #         # just keep carrying the scale
-        #         new_glm_scale = params.model_params.log_scale
+                # Gaussian, Gamma, and other have a scale.
+                new_glm_scale, state_scale, _ = scale_update_fn(
+                    params.model_params.log_scale, y, predicted_rate, posteriors
+                )
+            else:
+                # Poisson, Bernoulli etc. do not have a scale
+                # just keep carrying the scale
+                new_glm_scale = params.model_params.log_scale
 
-        #     new_params = GLMParams(
-        #         coef=new_glm_params.coef,
-        #         intercept=new_glm_params.intercept,
-        #         scale=new_glm_scale,
-        #     )
+            new_params = GLMParams(
+                coef=new_glm_params.coef,
+                intercept=new_glm_params.intercept,
+                scale=new_glm_scale,
+            )
 
-        #     return new_params, (glm_state, state_scale)
+            return new_params, (glm_state, state_scale), None
 
         # cannot wrap is_new_session, that's to be calculated at each update form the provided X and y.
         # for consistency, do not make a partial of that argument in run as well.

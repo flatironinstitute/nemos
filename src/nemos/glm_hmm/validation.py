@@ -14,7 +14,8 @@ from ..glm.params import GLMParams, GLMUserParams
 from ..glm.validation import GLMValidator
 from ..type_casting import is_pynapple_tsd
 from ..typing import DESIGN_INPUT_TYPE
-from .params import GLMHMMParams, GLMHMMUserParams, GLMScale, HMMParams
+from .params import GLMHMMParams, GLMHMMModelParams, GLMHMMUserParams
+from ..hmm.params import HMMParams
 
 
 def has_nans_only_at_border(arr):
@@ -46,8 +47,7 @@ def to_glm_hmm_params(user_params: GLMHMMUserParams) -> GLMHMMParams:
     to internal model parameters (log_scale and log probabilities).
     """
     return GLMHMMParams(
-        model_params=GLMParams(*user_params[:3]),
-        # glm_scale=GLMScale(jnp.log(user_params[2])),
+        model_params=GLMHMMModelParams(user_params[:3]),
         hmm_params=HMMParams(*(jnp.log(p) for p in user_params[3:])),
     )
 
@@ -255,7 +255,10 @@ class GLMHMMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         Does not validate y since it's 1D (single neuron, no neuron axis to check).
         """
         self._glm_validator.validate_consistency(params.model_params, X, y)
-        if params.model_params.log_scale.shape != params.model_params.intercept.shape:
+        if (
+            params.model_params[1].log_scale.shape
+            != params.model_params[0].intercept.shape
+        ):
             raise ValueError(
                 "The scale parameter and the intercept must be of shape ``(n_neurons,)``."
                 f"\nThe scale is of shape ``{params.model_params.log_scale.shape}`` and the intercept "

@@ -11,7 +11,10 @@ class ModelParams(eqx.Module):
 
     @staticmethod
     def regularizable_subtrees() -> list[Callable[["ModelParams"], jnp.ndarray | dict]]:
-        """Filter regularizable subtrees."""
+        """
+        Filter regularizable subtrees. Replace this function in subclasses to specify which subtrees of the
+        parameter pytree should be regularized.
+        """
         return []
 
     @classmethod
