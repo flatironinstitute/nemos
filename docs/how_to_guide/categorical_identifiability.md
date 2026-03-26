@@ -120,11 +120,11 @@ depends on the regularizer:
 | Lasso (L1) | No | The L1 penalty does not restore uniqueness along the degenerate directions. Coefficient values are solver-dependent. |
 | Elastic net | Yes | The L2 component restores strict convexity [^2]. Unique, but less interpretable than pure Ridge; dropping a reference is recommended whenever interpretation matters. |
 
-The practical rule: **always drop a reference column when using `Category` as a standalone
-predictor**, regardless of regularizer. This makes coefficients interpretable as contrasts and
+In practice, we advise to always drop a reference column when using `Category` as a standalone
+predictor, regardless of regularizer. This makes coefficients interpretable as contrasts and
 avoids solver-dependent results.
 
-[^1]: UCLA OARC: Coding Systems for Categorical Variables.
+[^1]: UCLA Othis ARC: Coding Systems for Categorical Variables.
     <https://stats.oarc.ucla.edu/r/library/r-library-contrast-coding-systems-for-categorical-variables/>
 [^2]: Zou, H. & Hastie, T. (2005). Regularization and variable selection via the elastic net.
     *Journal of the Royal Statistical Society: Series B*, 67(2), 301–320.
