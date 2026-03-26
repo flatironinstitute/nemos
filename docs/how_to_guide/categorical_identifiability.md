@@ -16,7 +16,7 @@ kernelspec:
 
 When the [`Category`](nemos.basis.Category) basis is used as a standalone main-effect predictor
 together with a NeMoS GLM (which always includes an intercept), you can find infinitely many
-coefficient vectors that produce the exact same linear combination $X \cdot w$. Let's see why:
+coefficient vectors that produce the exact same linear combination $X \cdot \mathbf{w}$. Let's see why:
 
 ```{code-cell} ipython3
 import numpy as np
@@ -30,25 +30,27 @@ print("One-hot encoding:\n", X)
 print("Sum over columns:", X.sum(axis=1))
 ```
 
-Because the one-hot columns sum to a vector of ones, we can find a set of coefficients $w$ and intercept $c$ for which $ X \cdot w + c = 0$,
+Because the one-hot columns sum to a vector of ones, we can find coefficients $\mathbf{w}$ and
+intercept $c$ for which $X \cdot \mathbf{w} + c = 0$:
 
 ```{code-cell} ipython3
-
 c = -1
 w = np.array([1, 1])
 
-print(r"X @ w + c:", X @ w + c)
-
-# this is equivalent to stacking c and w in a single vector
-# and multiply this vector with X_aug = [1 | X]
-
-v = np.hstack([c, w])
-X_aug = np.column_stack([np.ones(len(category)), X])
-
-print(r"X_aug @ v:", X_aug @ v)  # = 0  →  v is in the null space of X_aug
+print("X @ w + c:", X @ w + c)
 ```
 
-Since $X_{\text{aug}} \cdot v = 0$, adding any multiple of $v$ to the parameters leaves predictions
+Stacking $c$ and $\mathbf{w}$ into a single vector $\mathbf{v} = [c, \mathbf{w}]$ and prepending
+an all-ones column to $X$ gives the compact form $X_\text{aug} \cdot \mathbf{v} = 0$:
+
+```{code-cell} ipython3
+v = np.hstack([c, w])
+X_aug = np.column_stack([np.ones(len(category)), X])  # [1 | X]
+
+print("X_aug @ v:", X_aug @ v)  # = 0  →  v is in the null space of X_aug
+```
+
+In mathematical terms, we can say that $\mathbf{v}$ is in the null space of the augmented matrix $X_\text{aug}$. When this happens, we can add any multiple of $\mathbf{v}$ to the parameters leaving the predictions
 unchanged:
 
 ```{code-cell} ipython3
@@ -59,12 +61,12 @@ print("X_aug @ params:             ", X_aug @ params)
 print("X_aug @ (params + alpha*v): ", X_aug @ (params + alpha * v))
 ```
 
-Models with parameters $\text{coef} = [c, w]$ and $\text{coef} + \alpha \cdot v$ predict the same firing rate for any $\alpha$.
+Models with parameters $[c, \mathbf{w}]$ and $[c, \mathbf{w}] + \alpha \cdot \mathbf{v}$ predict the same firing rate for any $\alpha \in \mathbb{R}$.
 This is **non-identifiability**: the data alone cannot distinguish between them, and there is
-no unique optimal solution. Vectors like $v$ are said to be in the null space of the augmented matrix `[1 | X]`.
+no unique optimal solution.
 
-A practical way to detect this is to check whether the rank of `[1 | X]` is strictly
-less than the number of columns — if so, a non-trivial null space exists, i.e., there are non-zero vectors $v$ such that $X_\text{aug} \cdot v = 0$:
+A practical way to detect this is to check whether the rank of `X_aug = [1 | X]` is strictly
+less than the number of columns — if so, a non-trivial null space exists, i.e., there are non-zero vectors $\mathbf{v}$ such that $X_\text{aug} \cdot \mathbf{v} = 0$:
 
 ```{code-cell} ipython3
 print("Rank of [1 | X]:", np.linalg.matrix_rank(X_aug))
