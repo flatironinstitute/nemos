@@ -22,7 +22,7 @@ coefficient vectors that produce the exact same linear combination $X \cdot \mat
 import numpy as np
 import nemos as nmo
 
-category = np.array(["L", "L", "R", "R"])
+category = np.array(["L", "L", "L", "L", "R", "R", "R", "R"])
 cat_basis = nmo.basis.Category(["L", "R"])
 X = cat_basis.compute_features(category)
 
@@ -69,8 +69,8 @@ A practical way to detect this is to check whether the rank of `X_aug = [1 | X]`
 less than the number of columns — if so, a non-trivial null space exists, i.e., there are non-zero vectors $\mathbf{v}$ such that $X_\text{aug} \cdot \mathbf{v} = 0$:
 
 ```{code-cell} ipython3
-print("Rank of [1 | X]:", np.linalg.matrix_rank(X_aug))
-print("Number of columns:           ", X_aug.shape[1])
+print(f"Rank of [1 | X]:   {np.linalg.matrix_rank(X_aug)}")
+print(f"Number of columns: {X_aug.shape[1]}")
 # rank < n_cols  →  null space exists  →  model is non-identifiable
 ```
 
@@ -81,8 +81,8 @@ dropped (reference) category. All columns are now linearly independent:
 
 ```{code-cell} ipython3
 X_ref = X[:, 1:]  # drop "L"; the remaining column codes "R" vs "L"
-print("Rank of [1 | X_ref]:", np.linalg.matrix_rank(np.c_[np.ones(len(category)), X_ref]))
-print("Number of columns:      ", 1 + X_ref.shape[1])  # rank == n_cols → full rank
+print(f"Rank of [1 | X_ref]: {np.linalg.matrix_rank(np.c_[np.ones(len(category)), X_ref])}")
+print(f"Number of columns:   {1 + X_ref.shape[1]}")  # rank == n_cols → full rank
 ```
 
 The reference level is arbitrary from a model-fit perspective, but determines coefficient
@@ -96,10 +96,10 @@ The intercept is not involved — the interaction columns are already linearly i
 column needs to be dropped:
 
 ```{code-cell} ipython3
-speed = np.array([10., 3., 2., 20.])
+speed = np.array([10., 3., 2., 20., 5., 8., 15., 1.])
 speed_by_context = nmo.basis.Category(["L", "R"]) * nmo.basis.RaisedCosineLinearEval(3)
 X_interact = speed_by_context.compute_features(category, speed)
-print("X_interact.shape:", X_interact.shape)  # (4, 6): 3 basis functions × 2 categories
+print("X_interact.shape:", X_interact.shape)  # (8, 6): 3 basis functions × 2 categories
 
 # Full-rank even without dropping anything
 print("Rank:", np.linalg.matrix_rank(np.c_[np.ones(len(category)), X_interact]))
