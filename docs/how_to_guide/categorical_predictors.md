@@ -17,7 +17,10 @@ kernelspec:
 ## Splitting a Continuous Variable by Category
 
 The primary use of the [`Category`](nemos.basis.Category) basis in NeMoS is to estimate category-specific
-tuning curves by multiplying it with a continuous basis:
+tuning curves by multiplying it with a continuous basis.
+
+For example, consider an experiment where a subject performs either a leftward or rightward turn on each trial, and we want to learn separate coefficients for each motion type. You can use the `Category` basis to produce an appropriate design matrix:
+
 ```{code-cell} ipython3
 import numpy as np
 import nemos as nmo
@@ -25,7 +28,7 @@ import nemos as nmo
 # Simulate data: 4 samples, two context labels, a continuous speed variable
 context = np.array(["L", "L", "R", "R"])
 speed   = np.array([10., 3., 2., 20.])
-counts  = np.array([10, 5, 2, 0])
+counts  = np.array([10, 5, 10, 0])
 
 # Category * continuous basis: one set of basis functions per category
 bas = nmo.basis.Category(["L", "R"]) * nmo.basis.RaisedCosineLinearEval(3)
@@ -34,7 +37,7 @@ print("X.shape: ", X.shape)  # (4, 6): 3 basis functions × 2 categories
 
 ```
 
-## Standalone Categorical Predictors
+## Standalone Categorical Predictors: Why do we recommend dropping a column?
 
 To add a category as a main effect, drop one column after calling
 `compute_features`. The dropped category becomes the reference level and all
@@ -51,7 +54,7 @@ as a standalone predictor introduces perfect collinearity — the column sum
 equals the intercept column. Always drop one column per categorical variable
 when using categories as main effects.
 For a detailed discussion of identifiability and the effect of regularization,
-see the [`Category`](nemos.basis.Category) class documentation.
+see [Identifiability of Categorical Predictors](categorical_identifiability).
 :::
 
 ## Complex Designs
@@ -146,3 +149,5 @@ is equivalent to `patsy`'s
 ```{code-cell} ipython3
 dmatrix("0 + context:stimulus", data, return_type="dataframe")
 ```
+
+NeMoS `Category` covers only basic encodings; for more complex design schemes, see [`patsy`](https://patsy.readthedocs.io) and [`formulaic`](https://matthewwardrop.github.io/formulaic/).
