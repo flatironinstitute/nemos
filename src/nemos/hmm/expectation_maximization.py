@@ -13,7 +13,7 @@ from ..hmm.m_step_analytical_updates import (
     _analytical_m_step_log_transition_prob,
 )
 from .params import HMMParams
-from ..glm_hmm.utils import Array, initialize_new_session
+from ..hmm.utils import Array, initialize_new_session
 
 from ..typing import ModelParamsT
 
