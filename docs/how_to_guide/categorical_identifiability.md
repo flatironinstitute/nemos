@@ -17,7 +17,7 @@ kernelspec:
 ## Why Does Redundancy Arise?
 
 When the [`Category`](nemos.basis.Category) basis is used as a standalone main-effect predictor
-together with a NeMoS GLM (which always includes an intercept), there are infinitely many coefficient vectors that produce the same linear predictor $X \cdot \mathbf{w}$. Let's see why:
+together with a NeMoS GLM (which always includes an intercept), there are infinitely many coefficient vectors that produce the same linear predictor $X \cdot \mathbf{w} + c$. Let's see why:
 
 ```{code-cell} ipython3
 import numpy as np
