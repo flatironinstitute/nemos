@@ -137,7 +137,7 @@ html_theme_options = {
       "image_dark": "_static/NeMoS_Logo_CMYK_White.svg",
    },
     "secondary_sidebar_items": {
-        "**": ["page-toc", "sourcelink"],
+        "[!a]?[!p]?[!i]**": ["page-toc", "sourcelink"],
         "background/basis/README": [],
     },
 }
@@ -195,3 +195,46 @@ intersphinx_mapping = {
     "jax": ("https://jax.readthedocs.io/en/latest/", None),
     "scipy": ("https://docs.scipy.org/doc/scipy/", None),
 }
+
+# ---- API index generation ----
+api_order = [
+    "glm.rst",
+    "io.rst",
+    "basis.rst",
+    "observation_models.rst",
+    "regularizers.rst",
+    "simulations.rst",
+    "convolve.rst",
+    "solvers.rst",
+    "identifiability.rst",
+]
+api_dir = Path("api")
+# API index page (api/index.rst) is auto-generated. It starts with a hidden toctree
+# including all the rst pages above, and then includes their text (in order), without
+# the sphinx anchor and the toctree argument to the autosummary directive
+api_index = """.. _api:
+
+API Reference
+=============
+
+.. toctree::
+   :hidden:
+
+"""
+api_index += "   "
+api_index += "\n   ".join(mod.replace(".rst", "") for mod in api_order)
+api_index += "\n"
+
+for api_rst in api_order:
+    api_rst = api_dir / api_rst
+    contents = api_rst.read_text().split("\n")
+    # two lines we want to throw away: the sphinx anchor (e.g., ".. _synthesis-api") and
+    # the line that tells autosummary to create a toctree (e.g., ":toctree: generated")
+    contents = [
+        c
+        for c in contents
+        if not c.strip().startswith(".. _") and not c.strip().startswith(":toctree:")
+    ]
+    api_index += "\n".join(contents)
+
+(api_dir / "index.rst").write_text(api_index)
