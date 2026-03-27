@@ -14,9 +14,10 @@ kernelspec:
 (categorical_identifiability)=
 # Resolving Redundancy in Categorical Design Matrices
 
+## Why Does Redundancy Arise?
+
 When the [`Category`](nemos.basis.Category) basis is used as a standalone main-effect predictor
-together with a NeMoS GLM (which always includes an intercept), you can find infinitely many
-coefficient vectors that produce the exact same linear combination $X \cdot \mathbf{w}$. Let's see why:
+together with a NeMoS GLM (which always includes an intercept), there are infinitely many coefficient vectors that produce the same linear predictor $X \cdot \mathbf{w}$. Let's see why:
 
 ```{code-cell} ipython3
 import numpy as np
@@ -50,8 +51,7 @@ X_aug = np.column_stack([np.ones(len(category)), X])  # [1 | X]
 print("X_aug @ v:", X_aug @ v)  # = 0  →  v is in the null space of X_aug
 ```
 
-In mathematical terms, we can say that $\mathbf{v}$ is in the null space of the augmented matrix $X_\text{aug}$. When this happens, we can add any multiple of $\mathbf{v}$ to the parameters leaving the predictions
-unchanged:
+In mathematical terms, we can say that $\mathbf{v}$ is in the null space of the augmented matrix $X_\text{aug}$. This happens when at least one column of $X_\text{aug}$ can be expressed as a weighted sum of the other columns—that is, the columns are **linearly dependent**. The representation is therefore redundant, and we can add any multiple of $\mathbf{v}$ to the parameters without changing the predictions:
 
 ```{code-cell} ipython3
 params = np.array([2., 0.5, -0.3]) # arbitrary parameters [intercept, coef]
@@ -62,11 +62,10 @@ print("X_aug @ (params + alpha*v): ", X_aug @ (params + alpha * v))
 ```
 
 Models with parameters $[c, \mathbf{w}]$ and $[c, \mathbf{w}] + \alpha \cdot \mathbf{v}$ predict the same firing rate for any $\alpha \in \mathbb{R}$.
-This is **non-identifiability**: the data alone cannot distinguish between them, and there is
-no unique optimal solution.
+This is **non-identifiability**: the data alone cannot distinguish between them, and there is no unique optimal solution.
 
-A practical way to detect this is to check whether the rank of `X_aug = [1 | X]` is strictly
-less than the number of columns — if so, a non-trivial null space exists, i.e., there are non-zero vectors $\mathbf{v}$ such that $X_\text{aug} \cdot \mathbf{v} = 0$:
+A practical way to detect this redundancy is to check whether the rank of `X_aug = [1 | X]` is strictly less than number of its columns.
+**The rank is the number of linearly independent columns**, so if it is smaller than the total number of columns, some columns must be redundant. In that case, a non-trivial null space exists, i.e., there are non-zero vectors $\mathbf{v}$ such that $X_\text{aug} \cdot \mathbf{v} = 0$:
 
 ```{code-cell} ipython3
 print(f"Rank of [1 | X]:   {np.linalg.matrix_rank(X_aug)}")
@@ -81,8 +80,10 @@ dropped (reference) category. All columns are now linearly independent:
 
 ```{code-cell} ipython3
 X_ref = X[:, 1:]  # drop "L"; the remaining column codes "R" vs "L"
-print(f"Rank of [1 | X_ref]: {np.linalg.matrix_rank(np.c_[np.ones(len(category)), X_ref])}")
-print(f"Number of columns:   {1 + X_ref.shape[1]}")  # rank == n_cols → full rank
+X_ref_aug = np.column_stack([np.ones(len(category)), X_ref])
+# rank == n_cols → full rank
+print(f"Rank of [1 | X_ref]: {np.linalg.matrix_rank(X_ref_aug)}")
+print(f"Number of columns:   {1 + X_ref.shape[1]}")
 ```
 
 The reference level is arbitrary from a model-fit perspective, but determines coefficient
@@ -113,12 +114,12 @@ examples of this pattern.
 If all columns are retained (no reference dropped), whether the fitted coefficients are unique
 depends on the regularizer:
 
-| Regularizer | Unique solution? | Notes |
-|---|---|---|
-| None (unregularized) | No | Any redistribution of the total effect across redundant columns that preserves predictions is equally valid. Do not interpret individual coefficients. |
-| Ridge (L2) | Yes | The L2 penalty is symmetric; it forces a specific linear relationship between the intercept and category coefficients. The solution is well-defined but the coefficients do not have a contrast interpretation. |
-| Lasso (L1) | No | The L1 penalty does not restore uniqueness along the degenerate directions. Coefficient values are solver-dependent. |
-| Elastic net | Yes | The L2 component restores strict convexity [^2]. Unique, but less interpretable than pure Ridge; dropping a reference is recommended whenever interpretation matters. |
+| Regularizer | Unique solution? | Notes                                                                                                                                                                                                                                                                              |
+|---|---|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| None (unregularized) | No | Any redistribution of the total effect across redundant columns that preserves predictions is equally valid. Do not interpret individual coefficients.                                                                                                                             |
+| Ridge (L2) | Yes | The L2 penalty is symmetric; it selects a unique solution by shrinking coefficients, effectively imposing a specific linear relationship between the intercept and category coefficients. The solution is well-defined but the coefficients do not have a contrast interpretation. |
+| Lasso (L1) | No | The L1 penalty does not restore uniqueness along the degenerate directions. multiple solutions can achieve the same objective value. Coefficient values are solver-dependent.                                                                                                      |
+| Elastic net | Yes | The L2 component restores strict convexity [^2]. Unique, but less interpretable than pure Ridge; dropping a reference is recommended whenever interpretation matters.                                                                                                              |
 
 In practice, we advise to always drop a reference column when using `Category` as a standalone
 predictor, regardless of regularizer. This makes coefficients interpretable as contrasts and
