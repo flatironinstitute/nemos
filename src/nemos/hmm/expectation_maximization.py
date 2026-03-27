@@ -515,7 +515,7 @@ def forward_backward(
     .. [1] Bishop, C. M. (2006). *Pattern recognition and machine learning*. Springer.
     """
     # unpack parameters
-    glm_params = params.model_params
+    model_params = params.model_params
     # glm_scale = params.glm_scale
     log_initial_prob = params.hmm_params.log_initial_prob
     log_transition_prob = params.hmm_params.log_transition_prob
@@ -525,7 +525,7 @@ def forward_backward(
     is_new_session = initialize_new_session(y.shape[0], is_new_session)
 
     # Compute log-likelihoods
-    log_conditionals = log_likelihood_func(X, y, glm_params)
+    log_conditionals = log_likelihood_func(X, y, model_params)
 
     # Compute forward pass
     log_alphas, log_normalization = _forward_pass(
@@ -668,9 +668,7 @@ def run_m_step(
 
     params = params.initialize_params(
         hmm_params=HMMParams(log_initial_prob, log_transition_prob),
-        model_params=params.model_params.initialize_params(
-            optimized_projection_weights
-        ),
+        model_params=optimized_projection_weights,
     )
     return (
         params,

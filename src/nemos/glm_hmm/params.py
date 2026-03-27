@@ -14,7 +14,7 @@ from ..typing import DESIGN_INPUT_TYPE
 class GLMHMMModelParams(GLMParams):
     """Add scale to GLMParams, which is specific for the GLM-HMM."""
 
-    log_scale: jnp.ndarray
+    log_scale: jnp.ndarray | None = None
 
 
 class GLMHMMParams(ModelParams):

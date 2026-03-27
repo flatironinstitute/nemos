@@ -18,6 +18,6 @@ class ModelParams(eqx.Module):
         return []
 
     @classmethod
-    def initialize_params(cls, **kwargs) -> "ModelParams":
+    def initialize_params(cls, *args, **kwargs) -> "ModelParams":
         """Initialize parameters."""
-        return cls(**kwargs)
+        return cls(*args, **kwargs)

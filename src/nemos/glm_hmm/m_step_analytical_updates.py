@@ -6,13 +6,13 @@ from typing import Tuple
 import jax
 import jax.numpy as jnp
 
-from .params import GLMScale
+from .utils import Array
 
 
 @partial(jax.jit, static_argnames=["negative_log_likelihood_func"])
 def _m_step_scale_gaussian_observations(
-    log_scale: GLMScale, y, rate, posteriors, negative_log_likelihood_func
-) -> Tuple[GLMScale, None, None]:
+    log_scale: Array, y, rate, posteriors, negative_log_likelihood_func
+) -> Tuple[Array, None, None]:
     r"""
     Analytical M-step update for Gaussian observation model scale (variance).
 
@@ -75,4 +75,4 @@ def _m_step_scale_gaussian_observations(
             jnp.log(expected_nll) - jnp.log(sum_posteriors), axis=0
         )
 
-    return GLMScale(optimized_log_scale), None, None
+    return optimized_log_scale, None, None
