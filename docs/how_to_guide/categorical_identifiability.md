@@ -100,10 +100,12 @@ column needs to be dropped:
 speed = np.array([10., 3., 2., 20., 5., 8., 15., 1.])
 speed_by_context = nmo.basis.Category(["L", "R"]) * nmo.basis.RaisedCosineLinearEval(3)
 X_interact = speed_by_context.compute_features(category, speed)
-print("X_interact.shape:", X_interact.shape)  # (8, 6): 3 basis functions × 2 categories
+
 
 # Full-rank even without dropping anything
-print("Rank:", np.linalg.matrix_rank(np.c_[np.ones(len(category)), X_interact]))
+X_interact_aug = np.column_stack([np.ones(len(category)), X_interact])
+print("Number of columns:", X_interact_aug.shape[1])
+print("Rank:             ", np.linalg.matrix_rank(X_interact_aug))
 ```
 
 See [Construct Design Matrices for Categorical Features](categorical_design_matrices) for worked
