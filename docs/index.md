@@ -14,7 +14,7 @@ Quickstart <quickstart>
 Background <background/README>
 How-To Guide <how_to_guide/README>
 Tutorials <tutorials/README>
-API Reference <api_reference>
+API Reference <api/index>
 Getting Help <getting_help>
 Citation Guide <citation>
 For Developers <developers_notes/README>
@@ -104,7 +104,7 @@ Explore fully worked examples to learn how to analyze neural recordings from scr
 :::
 
 :::{grid-item-card} <span class="iconify" data-icon="mdi:cog"></span> &nbsp; **API Reference**
-:link: api_reference.html
+:link: api/index.html
 :link-alt: API Reference
 
 ---
