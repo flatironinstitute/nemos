@@ -102,7 +102,7 @@ def compute_xi_log(
 
 #     Parameters
 #     ----------
-#     glm_params :
+#     model_params :
 #         GLM coefficients and intercepts for each state.
 #     glm_scale :
 #         Scale parameters (e.g., variance for Gaussian) in log-space.
@@ -123,7 +123,7 @@ def compute_xi_log(
 #     """
 #     # Predict rate
 #     # predicted_rate_given_state = compute_rate_per_state(
-#     #     X, glm_params, inverse_link_function
+#     #     X, model_params, inverse_link_function
 #     # )
 
 #     # Compute likelihood given the fixed weights
@@ -327,7 +327,7 @@ def forward_pass(
 
     """
     # unpack parameters
-    glm_params = params.model_params
+    model_params = params.model_params
     # glm_scale = params.glm_scale
     log_initial_prob = params.hmm_params.log_initial_prob
     log_transition_prob = params.hmm_params.log_transition_prob
@@ -336,7 +336,7 @@ def forward_pass(
     is_new_session = initialize_new_session(y.shape[0], is_new_session)
 
     # Compute log-likelihoods
-    log_conditionals = log_likelihood_func(X, y, glm_params)
+    log_conditionals = log_likelihood_func(X, y, model_params)
 
     # Compute forward pass
     log_alphas, log_normalizers = _forward_pass(
@@ -608,13 +608,13 @@ def run_m_step(
         :math:`\sum_t P(z_{t-1}, z_t \mid X, y, \theta_{\text{old}})`.
     is_new_session:
         Boolean mask marking the first observation of each session. Shape ``(n_samples,)``.
-    m_step_fn_glm_params:
+    m_step_fn_model_params:
         Callable that performs the M-step update for GLM parameters (coefficients and intercepts).
-        Should have signature: ``f(glm_params, X, y, posteriors) -> (updated_params, state, aux)``.
+        Should have signature: ``f(model_params, X, y, posteriors) -> (updated_params, state, aux)``.
         The regularizer/prior for the GLM parameters should be configured within this callable.
     m_step_fn_glm_scale:
         Callable that performs the M-step update for GLM scales.
-        Should have signature: ``f(scale, glm_params, X, y, posteriors) -> (updated_scale, state)``.
+        Should have signature: ``f(scale, model_params, X, y, posteriors) -> (updated_scale, state)``.
     inverse_link_function:
         Inverse link function for computing the predicted rates per each state.
     dirichlet_prior_alphas_init_prob:
@@ -652,19 +652,6 @@ def run_m_step(
         optimized_projection_weights, state, _ = m_step_fn_model_params(
             params.model_params, X, y, posteriors
         )
-    #     predicted_rate = compute_rate_per_state(
-    #         X, optimized_projection_weights, inverse_link_function=inverse_link_function
-    #     )
-
-    # if m_step_fn_glm_scale is not None:
-    #     # Gaussian, Gamma, and other have a scale.
-    #     glm_scale, state_scale, _ = m_step_fn_glm_scale(
-    #         params.glm_scale, y, predicted_rate, posteriors
-    #     )
-    # else:
-    #     # Poisson, Bernoulli etc. do not have a scale
-    #     # just keep carrying the scale
-    #     glm_scale = params.glm_scale
 
     params = params.initialize_params(
         hmm_params=HMMParams(log_initial_prob, log_transition_prob),
@@ -697,7 +684,7 @@ def _em_step(
     ----------
     carry :
         Tuple of current parameters and state:
-        ``((log_init_prob, log_trans_matrix, glm_params, log_scale), previous_state)``
+        ``((log_init_prob, log_trans_matrix, model_params, log_scale), previous_state)``
     X :
         Design matrix of observations.
     y :
@@ -706,7 +693,7 @@ def _em_step(
         Function mapping linear predictors to predicted rates.
     log_likelihood_func :
         Log-likelihood function for the E-step.
-    m_step_fn_glm_params :
+    m_step_fn_model_params :
         M-step update function for GLM coefficients and intercepts.
     m_step_fn_glm_scale :
         M-step update function for scale parameters.
@@ -717,7 +704,7 @@ def _em_step(
     -------
     carry :
         Updated tuple of parameters and state with new log-likelihood values:
-        ``((log_init_prob, log_trans_matrix, glm_params, glm_scale), new_state)``
+        ``((log_init_prob, log_trans_matrix, model_params, glm_scale), new_state)``
 
     Notes
     -----
@@ -789,7 +776,7 @@ def em_step(
         Elementwise function mapping linear predictors to rates.
     log_likelihood_func : Callable
         Function computing the log-likelihood.
-    m_step_fn_glm_params : Callable
+    m_step_fn_model_params : Callable
         Callable that performs the M-step update for GLM parameters.
     m_step_fn_glm_scale : Callable
         Callable that performs the M-step update for GLM scale.
@@ -882,14 +869,14 @@ def em_hmm(
         Elementwise function mapping linear predictors to rates.
     log_likelihood_func:
         Function computing the log-likelihood.
-    m_step_fn_glm_params:
+    m_step_fn_model_params:
         Callable that performs the M-step update for GLM parameters (coefficients and intercepts).
-        Should have signature: ``f(glm_params, X, y, posteriors) -> (updated_params, state)``.
+        Should have signature: ``f(model_params, X, y, posteriors) -> (updated_params, state)``.
         Typically created by configuring a solver with the appropriate regularizer/prior.
     m_step_fn_glm_scale:
         If provided, callable that performs the M-step updated for the scale parameter of
         the distribution.
-        Must have signature ``f(scale, glm_params, X, y, posteriors) -> (updated_scale, state)``
+        Must have signature ``f(scale, model_params, X, y, posteriors) -> (updated_scale, state)``
     is_new_session:
         Boolean mask for the first observation of each session.
     maxiter:
@@ -989,7 +976,7 @@ def max_sum(
 
     """
     # unpack parameters
-    glm_params = params.glm_params
+    model_params = params.model_params
     log_transition = params.hmm_params.log_transition_prob
     log_init = params.hmm_params.log_initial_prob
     # glm_scale = params.glm_scale
@@ -999,7 +986,7 @@ def max_sum(
     # initialize new session
     is_new_session = initialize_new_session(y.shape[0], is_new_session)
 
-    log_emission = log_likelihood_func(X, y, glm_params)
+    log_emission = log_likelihood_func(X, y, model_params)
 
     # Forward pass: similar to forward-backward, scan over all time points
     def forward_max_sum(omega_prev, xs):

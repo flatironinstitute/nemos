@@ -442,12 +442,34 @@ def prepare_mstep_update_fn(
     setup_solver: Callable,
     init_params: GLMHMMModelParams,
 ) -> Callable:
-    """Prepare objective function for numerically optimizing GLM parameters (coef, intercept) and scale."""
+    """
+    Prepare update function for numerically optimizing GLM parameters (coef, intercept) and scale.
+    This function will consecutively update GLM parameters and scale (if needed) in the M-step of EM,
+    or jointly optimize them if they are not separable.
+
+    Parameters
+    ----------
+    is_population_glm:
+        True if it is a population GLM likelihood.
+    observation_model:
+        The observation model.
+    inverse_link_function:
+        Function mapping linear predictors to rates.
+    setup_solver:
+        Function that takes an objective and returns an optimization solver.
+    init_params:
+        Initial GLM-HMM model parameters, used for initializing optimization.
+
+    Returns
+    -------
+    update_fn:
+        Function that takes current parameters, data, and posteriors, and returns updated parameters.
+    """
     # get objective and update function for optimizing GLM parameters (coef, intercept)
     objective_param = prepare_mstep_nll_objective_param(
         is_population_glm, observation_model, inverse_link_function
     )
-    _, _, params_update_fn = setup_solver(objective_param, init_params=init_params)
+    params_update_fn = setup_solver(objective_param, init_params=init_params).run
 
     # if scale is separable and needs to be optimized, get update function for optimizing scale
     if observation_model._separable_scale and (
@@ -461,9 +483,9 @@ def prepare_mstep_update_fn(
             objective_scale = prepare_mstep_nll_objective_scale(
                 is_population_glm, observation_model
             )
-            _, _, scale_update_fn = setup_solver(
+            scale_update_fn = setup_solver(
                 objective_scale, init_params=init_params.log_scale
-            )
+            ).run
 
         # combine param and scale updates into a single function for use in M-step
         def update_fn(params, X, y, posteriors):
