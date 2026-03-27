@@ -18,16 +18,17 @@ from ..glm_hmm.utils import Array, initialize_new_session
 from ..typing import ModelParamsT
 
 
-class HMMState(eqx.Module):
+class EMState(eqx.Module):
     """State class for the HMM EM-algorithm."""
 
     data_log_likelihood: float | Array
     previous_data_log_likelihood: float | Array
     log_likelihood_history: Array
     iterations: int
+    converged: bool
 
 
-HMMCarry = Tuple[ModelParamsT, HMMState]
+EMCarry = Tuple[ModelParamsT, EMState]
 
 
 def compute_xi_log(
@@ -85,80 +86,6 @@ def compute_xi_log(
     )
 
     return log_xi_sum + log_transition_prob
-
-
-# def _compute_log_likelihood(
-#     model_params: ModelParamsT,
-#     X: Array,
-#     y: Array,
-#     log_likelihood_func: Callable[[Array, Array, Array], Array],
-# ):
-#     """
-#     Compute observation log-likelihoods for each state.
-
-#     Given GLM parameters and observations, computes the log-likelihood of each
-#     observation under each hidden state. This is the emission probability
-#     p(y_t | z_t) for all states at all time points.
-
-#     Parameters
-#     ----------
-#     model_params :
-#         GLM coefficients and intercepts for each state.
-#     glm_scale :
-#         Scale parameters (e.g., variance for Gaussian) in log-space.
-#     X :
-#         Design matrix, shape ``(n_time_bins, n_features)``.
-#     y :
-#         Observations, shape ``(n_time_bins,)`` or ``(n_time_bins, n_neurons)``.
-#     inverse_link_function :
-#         Function mapping linear predictors to mean parameters (e.g., exp for Poisson).
-#     log_likelihood_func :
-#         Function computing log p(y | rate, scale) for the observation model.
-
-#     Returns
-#     -------
-#     log_conditionals :
-#         Log-likelihood of observations given each state, shape ``(n_time_bins, n_states)``.
-#         Entry ``[t, k]`` is log p(y_t | z_t=k).
-#     """
-#     # Predict rate
-#     # predicted_rate_given_state = compute_rate_per_state(
-#     #     X, model_params, inverse_link_function
-#     # )
-
-#     # Compute likelihood given the fixed weights
-#     # Data likelihood p(y|z) from emissions model
-#     # NOTE:
-#     # For N neurons and S samples, we want the total likelihood
-#     # across neurons for each sample and latent state.
-
-#     # Example helper:
-#     # def combined_likelihood(log_likelihood_func, y, rate):
-#     #     # log_likelihood_func takes (y, rate) and returns log-likelihood per neuron:
-#     #     #   y:    shape (S, N)
-#     #     #   rate: shape (S, N, K)  # K = number of latent states
-#     #
-#     #     assert y.ndim == 2      # (samples, neurons)
-#     #     assert rate.ndim == 3   # (samples, neurons, states)
-#     #
-#     #     # vmap over the state axis: apply log_likelihood_func for each state
-#     #     # Result: shape (S, N, K)
-#     #     log_like = jax.vmap(log_likelihood_func, in_axes=(None, 2), out_axes=2)(y, rate)
-#     #
-#     #     # Combine neurons assuming conditional independence:
-#     #     # sum log-likelihoods over neurons (axis=1), then exponentiate for stability
-#     #     # Final shape: (S, K)
-#     #     return jnp.exp(jnp.sum(log_like, axis=1))
-#     #
-#     # Here, log_likelihood_func is the ``log_likelihood`` method from
-#     # nemos.observation_models.Observations with ``aggregate_sample_scores = lambda x:x``
-
-#     log_conditionals = log_likelihood_func(
-#         X,
-#         y,
-#         model_params,
-#     )
-#     return log_conditionals
 
 
 def _forward_pass(
@@ -268,14 +195,14 @@ def _forward_pass(
 
 @partial(jax.jit, static_argnames=["log_likelihood_func"])
 def forward_pass(
-    params: HMMParams,
+    params: ModelParamsT,
     X: Array,
     y: Array,
     log_likelihood_func: Callable[[Array, Array, Array], Array],
     is_new_session: Array | None = None,
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """
-    Compute filtering probabilities (forward messages) for a GLM-HMM.
+    Compute filtering probabilities (forward messages) for an HMM.
 
     Performs the forward pass of the forward-backward algorithm, computing the
     filtered state probabilities p(z_t | y_1:t) at each time point. These represent
@@ -289,8 +216,9 @@ def forward_pass(
     Parameters
     ----------
     params :
-        Complete GLM-HMM parameters including GLM coefficients/intercepts,
-        scale parameters, and HMM initial/transition probabilities.
+        Parameter container for an HMM model, including an `hmm_params` attribute with
+        `log_initial_prob` and `log_transition_prob`, and a `model_params` attribute
+        with parameters specific to paired model (e.g. GLM parameters for a GLM-HMM).
     X :
         Design matrix, shape ``(n_time_bins, n_features)``.
     y :
@@ -475,14 +403,10 @@ def forward_backward(
         Observations, pytree with leaves of shape ``(n_time_bins,)``.
 
     params :
-        The GLMHMM parameters.
-
-    inverse_link_function :
-        Function mapping linear predictors to the mean of the observation distribution
-        (e.g., exp for Poisson, sigmoid for Bernoulli).
+        The HMM and additional model parameters.
 
     log_likelihood_func :
-        Function computing the elementwise log-likelihood of observations given predicted mean values.
+        Function computing the elementwise log-likelihood of observations.
         Must return an array of shape ``(n_time_bins, n_states)``.
 
     is_new_session :
@@ -573,8 +497,6 @@ def forward_backward(
     jax.jit,
     static_argnames=[
         "m_step_fn_model_params",
-        # "m_step_fn_glm_scale",
-        # "inverse_link_function",
     ],
 )
 def run_m_step(
@@ -591,7 +513,7 @@ def run_m_step(
     dirichlet_prior_alphas_transition: Array | None = None,
 ) -> Tuple[ModelParamsT, SolverState]:
     r"""
-    Perform the M-step of the EM algorithm for GLM-HMM.
+    Perform the M-step of the EM algorithm for an HMM.
 
     Parameters
     ----------
@@ -609,14 +531,9 @@ def run_m_step(
     is_new_session:
         Boolean mask marking the first observation of each session. Shape ``(n_samples,)``.
     m_step_fn_model_params:
-        Callable that performs the M-step update for GLM parameters (coefficients and intercepts).
+        Callable that performs the M-step update for model parameters (e.g., coefficients and intercepts for a GLM).
         Should have signature: ``f(model_params, X, y, posteriors) -> (updated_params, state, aux)``.
-        The regularizer/prior for the GLM parameters should be configured within this callable.
-    m_step_fn_glm_scale:
-        Callable that performs the M-step update for GLM scales.
-        Should have signature: ``f(scale, model_params, X, y, posteriors) -> (updated_scale, state)``.
-    inverse_link_function:
-        Inverse link function for computing the predicted rates per each state.
+        The regularizer/prior for the parameters should be configured within this callable.
     dirichlet_prior_alphas_init_prob:
         Prior for the initial states, shape ``(n_states,)``.
     dirichlet_prior_alphas_transition:
@@ -647,11 +564,10 @@ def run_m_step(
         log_joint_posterior, dirichlet_prior_alphas=dirichlet_prior_alphas_transition
     )
 
-    with jax.disable_jit(False):
-        # Minimize negative log-likelihood to update GLM weights
-        optimized_projection_weights, state, _ = m_step_fn_model_params(
-            params.model_params, X, y, posteriors
-        )
+    # Minimize negative log-likelihood to update GLM weights
+    optimized_projection_weights, state, _ = m_step_fn_model_params(
+        params.model_params, X, y, posteriors
+    )
 
     params = params.initialize_params(
         hmm_params=HMMParams(log_initial_prob, log_transition_prob),
@@ -664,7 +580,7 @@ def run_m_step(
 
 
 def _em_step(
-    carry: HMMCarry,
+    carry: EMCarry,
     X: Array,
     y: Array,
     log_likelihood_func: Callable[[Array, Array, Array], Array],
@@ -672,7 +588,7 @@ def _em_step(
         [ModelParamsT, Array, Array, Array], Tuple[ModelParamsT, SolverState]
     ],
     is_new_session: Array,
-) -> HMMCarry:
+) -> EMCarry:
     """
     Execute a single EM iteration combining E-step and M-step.
 
@@ -704,7 +620,7 @@ def _em_step(
     -------
     carry :
         Updated tuple of parameters and state with new log-likelihood values:
-        ``((log_init_prob, log_trans_matrix, model_params, glm_scale), new_state)``
+        ``((log_init_prob, log_trans_matrix, model_params), new_state)``
 
     Notes
     -----
@@ -733,13 +649,14 @@ def _em_step(
         m_step_fn_model_params=m_step_fn_model_params,
     )
 
-    new_state = HMMState(
+    new_state = EMState(
         iterations=previous_state.iterations + 1,
         data_log_likelihood=new_log_like,
         previous_data_log_likelihood=previous_state.data_log_likelihood,
         log_likelihood_history=previous_state.log_likelihood_history.at[
             previous_state.iterations
         ].set(new_log_like),
+        converged=previous_state.converged,
     )
 
     return new_params, new_state
@@ -747,15 +664,15 @@ def _em_step(
 
 def em_step(
     params: ModelParamsT,
-    state: HMMState,
+    state: EMState,
     X: Array,
     y: Array,
     log_likelihood_func: Callable,
     m_step_fn_model_params: Callable,
     is_new_session: Array,
-) -> Tuple[ModelParamsT, HMMState]:
+) -> Tuple[ModelParamsT, EMState]:
     """
-    Perform a single EM iteration step for GLM-HMM.
+    Perform a single EM iteration step for an HMM.
 
     This function provides a clean public API for running a single EM iteration,
     compatible with the optimization API pattern used by solvers. It wraps the
@@ -764,22 +681,19 @@ def em_step(
     Parameters
     ----------
     params : ModelParamsT
-        Current GLM-HMM parameters containing GLM coefficients/intercepts and
-        HMM initial/transition probabilities.
-    state : GLMHMMState
+        Current HMM and model parameters containing initial/transition probabilities and
+        relevant parameters of the paired model (e.g. coefficient, intercept, and scale
+        for a GLM-HMM).
+    state : EMState
         Current EM algorithm state containing iteration count and log-likelihood history.
     X : Array
         Design matrix of observations.
     y : Array
         Target responses.
-    inverse_link_function : Callable
-        Elementwise function mapping linear predictors to rates.
     log_likelihood_func : Callable
-        Function computing the log-likelihood.
+        Function computing the log-likelihood or log emissions probability.
     m_step_fn_model_params : Callable
-        Callable that performs the M-step update for GLM parameters.
-    m_step_fn_glm_scale : Callable
-        Callable that performs the M-step update for GLM scale.
+        Callable that performs the M-step update for model parameters.
     is_new_session : Array
         Boolean mask for the first observation of each session.
 
@@ -787,7 +701,7 @@ def em_step(
     -------
     updated_params : ModelParamsT
         Updated parameters after one EM iteration.
-    updated_state : GLMHMMState
+    updated_state : EMState
         Updated state after one EM iteration.
     """
     # Pack params and state into EMCarry format (log-space for HMM params)
@@ -806,7 +720,7 @@ def em_step(
     return params, state
 
 
-def check_log_likelihood_increment(state: HMMState, tol: float) -> Array:
+def check_log_likelihood_increment(state: EMState, tol: float) -> Array:
     """
     Check EM convergence using absolute tolerance on log-likelihood.
 
@@ -846,7 +760,7 @@ def em_hmm(
     maxiter: int = 10**3,
     tol: float = 1e-8,
     check_convergence: Callable = check_log_likelihood_increment,
-) -> Tuple[ModelParamsT, HMMState]:
+) -> Tuple[ModelParamsT, EMState]:
     """
     Perform EM optimization for a GLM-HMM.
 
@@ -856,27 +770,22 @@ def em_hmm(
     Parameters
     ----------
     params:
-        Initial GLM-HMM parameters. This includes:
-        - the GLM coef, shape ``(n_features, n_states)`` or ``(n_features, n_neurons, n_states)`` .
-        - the GLM intercept, shape  ``(n_states, )`` or ``(n_neurons, n_states)`` .
+        Initial HMM and model parameters. This includes:
         - the HMM initial probabilities, shape ``(n_states,)``.
         - the HMM transition probabilities, shape ``(n_states, n_states)``.
+        - any parameters associated with the paired model, e.g. the GLM coef,
+          shape ``(n_features, n_states)`` or ``(n_features, n_neurons, n_states)``
+          or GLM intercept, shape  ``(n_states, )`` or ``(n_neurons, n_states)`` .
     X:
         Design matrix of observations.
     y:
         Target responses.
-    inverse_link_function:
-        Elementwise function mapping linear predictors to rates.
     log_likelihood_func:
-        Function computing the log-likelihood.
+        Function computing the log-likelihood or log emissions probabilities.
     m_step_fn_model_params:
-        Callable that performs the M-step update for GLM parameters (coefficients and intercepts).
+        Callable that performs the M-step update for the model parameters.
         Should have signature: ``f(model_params, X, y, posteriors) -> (updated_params, state)``.
         Typically created by configuring a solver with the appropriate regularizer/prior.
-    m_step_fn_glm_scale:
-        If provided, callable that performs the M-step updated for the scale parameter of
-        the distribution.
-        Must have signature ``f(scale, model_params, X, y, posteriors) -> (updated_scale, state)``
     is_new_session:
         Boolean mask for the first observation of each session.
     maxiter:
@@ -889,17 +798,18 @@ def em_hmm(
     Returns
     -------
     params:
-        The fitted GLM-HMM parameters.
+        The fitted HMM and model parameters.
     state:
-        Final GLMHMMState containing all parameters and diagnostics.
+        Final EMState containing all parameters and diagnostics.
     """
     is_new_session = initialize_new_session(y.shape[0], is_new_session)
 
-    state = HMMState(
+    state = EMState(
         data_log_likelihood=-jnp.array(jnp.inf),
         previous_data_log_likelihood=-jnp.array(jnp.inf),
         log_likelihood_history=jnp.full(maxiter, jnp.nan),
         iterations=0,
+        converged=False,
     )
 
     em_step_fn_while = eqx.Partial(
@@ -923,7 +833,14 @@ def em_hmm(
         max_steps=maxiter,
         kind="lax",
     )
-
+    # update converged parameter
+    state = EMState(
+        data_log_likelihood=state.data_log_likelihood,
+        previous_data_log_likelihood=state.previous_data_log_likelihood,
+        iterations=state.iterations,
+        log_likelihood_history=state.log_likelihood_history,
+        converged=check_convergence(state, tol),
+    )
     return params, state
 
 
@@ -942,7 +859,7 @@ def max_sum(
     """
     Find maximum a posteriori (MAP) state path via the max-sum algorithm.
 
-    This function implements the max-sum algorithm for a GLM-HMM, also known as Viterbi algorithm.
+    This function implements the max-sum algorithm for an HMM, also known as Viterbi algorithm.
 
     Parameters
     ----------
@@ -955,12 +872,8 @@ def max_sum(
     y :
         Observations, pytree with leaves of shape ``(n_time_bins,)``.
 
-    inverse_link_function :
-        Function mapping linear predictors to the mean of the observation distribution
-        (e.g., exp for Poisson, sigmoid for Bernoulli).
-
     log_likelihood_func :
-        Function computing log p(y | rate, scale) for the observation model.
+        Function computing log p(y | model_parameters) for the emissions model.
 
     is_new_session :
         Boolean array marking the start of a new session.
@@ -979,7 +892,6 @@ def max_sum(
     model_params = params.model_params
     log_transition = params.hmm_params.log_transition_prob
     log_init = params.hmm_params.log_initial_prob
-    # glm_scale = params.glm_scale
 
     n_states = log_init.shape[0]
 
