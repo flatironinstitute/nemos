@@ -214,7 +214,7 @@ class TestModelVsPytree:
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
         params = model.initialize_params(pytree_x, fixture.y)
-        model.initialize_solver_and_state(pytree_x, fixture.y, params)
+        model.initialize_optimization_and_state(params, pytree_x, fixture.y)
 
     @pytest.mark.parametrize(
         "instantiate_base_regressor_subclass, pytree_x",
@@ -227,7 +227,7 @@ class TestModelVsPytree:
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
         params = model.initialize_params(pytree_x, fixture.y)
-        opt_state = model.initialize_solver_and_state(pytree_x, fixture.y, params)
+        opt_state = model.initialize_optimization_and_state(params, pytree_x, fixture.y)
         model.update(params, opt_state, pytree_x, fixture.y)
 
     @pytest.mark.parametrize(
@@ -532,7 +532,7 @@ class TestModelCommons:
             regularizer_strength=1.0,
         )
         params = model.initialize_params(X, y)
-        init_state = model.initialize_solver_and_state(X, y, params)
+        init_state = model.initialize_optimization_and_state(params, X, y)
         # optimistix solvers do not have a velocity attr
         assert getattr(
             init_state, "velocity", model._validator.to_model_params(params)
@@ -573,7 +573,7 @@ class TestModelCommons:
         X.fill(fill_val)
         with expectation:
             params = model.initialize_params(X, y)
-            init_state = model.initialize_solver_and_state(X, y, params)
+            init_state = model.initialize_optimization_and_state(params, X, y)
             # optimistix solvers do not have a velocity attr
             assert getattr(
                 init_state, "velocity", model._validator.to_model_params(params)
@@ -732,14 +732,14 @@ class TestModelCommons:
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         y = _add_zeros(y)
 
-        assert model.solver_init_state is None
-        assert model.solver_update is None
-        assert model.solver_run is None
+        assert model.optimization_init_state is None
+        assert model.optimization_update is None
+        assert model.optimization_run is None
         init_params = model.initialize_params(X, y)
-        model.initialize_solver_and_state(X, y, init_params)
-        assert callable(model.solver_init_state)
-        assert callable(model.solver_update)
-        assert callable(model.solver_run)
+        model.initialize_optimization_and_state(init_params, X, y)
+        assert callable(model.optimization_init_state)
+        assert callable(model.optimization_update)
+        assert callable(model.optimization_run)
 
 
 @pytest.mark.parametrize(
@@ -1274,7 +1274,7 @@ class TestModelValidator:
             params = validator.validate_and_cast_params(init_params)
             user_params = validator.from_model_params(params)
             # check that params are set
-            init_state = model.initialize_solver_and_state(X, y, user_params)
+            init_state = model.initialize_optimization_and_state(user_params, X, y)
             # optimistix solvers do not have a velocity attr
             assert getattr(init_state, "velocity", params) == params
 
