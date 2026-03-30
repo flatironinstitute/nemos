@@ -1921,7 +1921,7 @@ class TestEMAlgorithm:
             partial_posterior_weighted_glm_negative_log_likelihood,
             GLMParams(coef, intercept),
         )
-        solver_run = glm._solver_run
+        solver_run = glm._optimization_run
         # End of preparatory step.
 
         # Create initial parameters
@@ -2035,7 +2035,7 @@ class TestEMAlgorithm:
             partial_posterior_weighted_glm_negative_log_likelihood,
             GLMParams(intercept, coef),
         )
-        solver_run = glm._solver_run
+        solver_run = glm._optimization_run
         # End of preparatory step.
 
         # add small noise to initial prob & projection weights
@@ -2394,7 +2394,7 @@ class TestConvergence:
             y=y,
             inverse_link_function=obs.default_inverse_link_function,
             log_likelihood_func=likelihood_func,
-            m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_params=glm._optimization_run,
             m_step_fn_glm_scale=None,
             check_convergence=always_converge,
             maxiter=100,
@@ -2463,7 +2463,7 @@ class TestConvergence:
             y=y,
             inverse_link_function=obs.default_inverse_link_function,
             log_likelihood_func=likelihood_func,
-            m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_params=glm._optimization_run,
             m_step_fn_glm_scale=None,
             check_convergence=never_converge,
             maxiter=maxiter,
@@ -2529,7 +2529,7 @@ class TestConvergence:
             y=y,
             inverse_link_function=obs.default_inverse_link_function,
             log_likelihood_func=likelihood_func,
-            m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_params=glm._optimization_run,
             m_step_fn_glm_scale=None,
             maxiter=maxiter,
             tol=tol,
@@ -2598,7 +2598,7 @@ class TestConvergence:
             y=y[:100],
             inverse_link_function=obs.default_inverse_link_function,
             log_likelihood_func=likelihood_func,
-            m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_params=glm._optimization_run,
             m_step_fn_glm_scale=None,
             maxiter=maxiter,
             tol=tol,
@@ -2682,7 +2682,7 @@ class TestConvergence:
                 y=y,
                 inverse_link_function=obs.default_inverse_link_function,
                 log_likelihood_func=likelihood_func,
-                m_step_fn_glm_params=glm._solver_run,
+                m_step_fn_glm_params=glm._optimization_run,
                 m_step_fn_glm_scale=None,
                 maxiter=10,
                 tol=tol,
@@ -2756,7 +2756,7 @@ class TestConvergence:
             y=y,
             inverse_link_function=obs.default_inverse_link_function,
             log_likelihood_func=likelihood_func,
-            m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_params=glm._optimization_run,
             m_step_fn_glm_scale=None,
             check_convergence=check_conv_5_iter,
             maxiter=100,
@@ -3037,7 +3037,7 @@ class TestCompilation:
             y,
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
-            m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_params=glm._optimization_run,
             m_step_fn_glm_scale=None,
             maxiter=5,
             tol=1e-8,
@@ -3051,7 +3051,7 @@ class TestCompilation:
             y,
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
-            m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_params=glm._optimization_run,
             m_step_fn_glm_scale=None,
             maxiter=5,
             tol=1e-8,
@@ -3081,7 +3081,7 @@ class TestCompilation:
             y_new,
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
-            m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_params=glm._optimization_run,
             m_step_fn_glm_scale=None,
             maxiter=5,
             tol=1e-8,
@@ -3415,7 +3415,7 @@ class TestPytreeSupport:
             partial_posterior_weighted_glm_negative_log_likelihood,
             GLMParams(coef_tree, intercept),
         )
-        solver_run = glm._solver_run
+        solver_run = glm._optimization_run
 
         # Create initial parameters
         params = GLMHMMParams(
