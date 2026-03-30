@@ -753,7 +753,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
 
         self._initialize_optimization_and_state(init_params, data, y)
 
-        params, state, aux = self.solver_run(init_params, data, y)
+        params, state, aux = self.optimization_run(init_params, data, y)
 
         if tree_utils.pytree_map_and_reduce(
             lambda x: jnp.any(jnp.isnan(x)), any, params
@@ -987,7 +987,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             self._compute_loss, init_params=init_params, solver_kwargs=opt_solver_kwargs
         )
 
-        opt_state = self.solver_init_state(init_params, X, y)
+        opt_state = self.optimization_init_state(init_params, X, y)
         return opt_state
 
     @cast_to_jax
@@ -1068,7 +1068,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         params = self._validator.to_model_params(params)
 
         # perform a one-step update
-        updated_params, updated_state, aux = self.solver_update(
+        updated_params, updated_state, aux = self.optimization_update(
             params, opt_state, data, y, *args, **kwargs
         )
 

@@ -157,7 +157,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         return tags
 
     @property
-    def solver_init_state(self) -> Union[None, SolverInit]:
+    def optimization_init_state(self) -> Union[None, SolverInit]:
         """
         Provides the initialization function for the solver's state.
 
@@ -174,7 +174,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         return self._optimization_init_state
 
     @property
-    def solver_update(self) -> Union[None, SolverUpdate]:
+    def optimization_update(self) -> Union[None, SolverUpdate]:
         """
         Provides the function for updating the solver's state during the optimization process.
 
@@ -192,7 +192,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         return self._optimization_update
 
     @property
-    def solver_run(self) -> Union[None, SolverRun]:
+    def optimization_run(self) -> Union[None, SolverRun]:
         """
         Provides the function to execute the solver's optimization process.
 
