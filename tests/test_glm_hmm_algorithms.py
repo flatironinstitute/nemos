@@ -21,7 +21,6 @@ from nemos.glm_hmm.algorithm_configs import (
 )
 from nemos.glm_hmm.params import GLMHMMModelParams, GLMHMMParams, HMMParams
 from nemos.glm_hmm.utils import compute_rate_per_state
-from nemos.glm_hmm.validation import to_glm_hmm_params
 from nemos.hmm.expectation_maximization import (
     HMMState,
     _backward_pass,
@@ -30,7 +29,6 @@ from nemos.hmm.expectation_maximization import (
     compute_xi_log,
     em_hmm,
     forward_backward,
-    forward_pass,
     max_sum,
     run_m_step,
 )
@@ -1664,8 +1662,6 @@ class TestMStep:
         dummy_aux = None
         X_dummy = jnp.ones((n_timesteps, n_states))
         y_dummy = jnp.ones((n_timesteps,))
-
-        obs = PoissonObservations()
 
         params = GLMHMMParams(
             hmm_params=HMMParams(None, None),
