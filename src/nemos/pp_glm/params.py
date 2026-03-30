@@ -20,3 +20,13 @@ class PPGLMParams(eqx.Module):
 
 
 PPGLMUserParams = Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike]
+
+class PPGLMParamsWithKey(eqx.Module):
+    """Wrapper around PPGLMParams that carries a PRNG key."""
+
+    params: PPGLMParams
+    random_key: jnp.ndarray
+
+    @staticmethod
+    def regularizable_subtrees() -> list[Callable[["PPGLMParamsWithKey"], jnp.ndarray | dict]]:
+        return [lambda p: p.params.coef]
