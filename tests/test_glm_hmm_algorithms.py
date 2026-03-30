@@ -22,7 +22,7 @@ from nemos.glm_hmm.algorithm_configs import (
 from nemos.glm_hmm.params import GLMHMMModelParams, GLMHMMParams, HMMParams
 from nemos.glm_hmm.utils import compute_rate_per_state
 from nemos.hmm.expectation_maximization import (
-    HMMState,
+    EMState,
     _backward_pass,
     _forward_pass,
     check_log_likelihood_increment,
@@ -2313,11 +2313,12 @@ class TestConvergence:
     def test_check_log_likelihood_increment_converged(self):
         """Test that convergence checker detects convergence with small likelihood change."""
 
-        state = HMMState(
+        state = EMState(
             data_log_likelihood=-0.0,
             previous_data_log_likelihood=-0.0001,  # Very small change
             log_likelihood_history=jnp.zeros(1),
             iterations=5,
+            converged=False,
         )
 
         # Should converge with loose tolerance
@@ -2329,11 +2330,12 @@ class TestConvergence:
     def test_check_log_likelihood_increment_not_converged(self):
         """Test that convergence checker detects non-convergence with large likelihood change."""
 
-        state = HMMState(
+        state = EMState(
             data_log_likelihood=-100.0,
             previous_data_log_likelihood=-130.0,  # Large change
             log_likelihood_history=jnp.zeros(1),
             iterations=5,
+            converged=False,
         )
 
         # Should not converge even with loose tolerance
@@ -2342,11 +2344,12 @@ class TestConvergence:
     def test_check_log_likelihood_increment_first_iteration(self):
         """Test convergence checker behavior on first iteration."""
 
-        state = HMMState(
+        state = EMState(
             data_log_likelihood=-jnp.inf,
             previous_data_log_likelihood=-jnp.inf,
             log_likelihood_history=jnp.zeros(1),
             iterations=0,
+            converged=False,
         )
 
         # First iteration with -inf should not trigger convergence
@@ -2425,6 +2428,11 @@ class TestConvergence:
             f"but ran for {final_state.iterations}"
         )
 
+        # check converged flag is True
+        assert (
+            final_state.converged == True
+        ), "EMState converged flag should be set to True"
+
     @pytest.mark.requires_x64
     def test_never_converge_checker(self):
         """Test that EM runs to maxiter when convergence is never reached."""
@@ -2494,6 +2502,11 @@ class TestConvergence:
             f"EM should run for exactly {maxiter} iterations with never_converge, "
             f"but ran for {final_state.iterations}"
         )
+
+        # check converged flag is False
+        assert (
+            final_state.converged == False
+        ), "EMState converged flag should be set to False"
 
     @pytest.mark.requires_x64
     def test_em_stops_when_converged(self):
@@ -2721,7 +2734,7 @@ class TestConvergence:
     def test_convergence_checker_with_iteration_limit(self):
         """Test custom convergence checker that combines likelihood and iteration limit."""
 
-        def converge_after_n_iterations(state: HMMState, tol: float, n: int = 5):
+        def converge_after_n_iterations(state: EMState, tol: float, n: int = 5):
             """Stop after n iterations OR when likelihood converges."""
             likelihood_converged = check_log_likelihood_increment(state, tol)
             iteration_limit_reached = state.iterations >= n
