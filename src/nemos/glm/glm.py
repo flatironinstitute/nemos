@@ -753,7 +753,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
 
         self._initialize_optimization_and_state(init_params, data, y)
 
-        params, state, aux = self.optimization_run(init_params, data, y)
+        params, state, aux = self._optimization_run(init_params, data, y)
 
         if tree_utils.pytree_map_and_reduce(
             lambda x: jnp.any(jnp.isnan(x)), any, params
@@ -983,11 +983,14 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         """
         opt_solver_kwargs = self._optimize_solver_params(X, y)
         #  set up the solver init/run/update attrs
-        self._instantiate_solver(
+        (
+            self._optimization_init_state,
+            self._optimization_update,
+            self._optimization_run,
+        ) = self._instantiate_solver(
             self._compute_loss, init_params=init_params, solver_kwargs=opt_solver_kwargs
         )
-
-        opt_state = self.optimization_init_state(init_params, X, y)
+        opt_state = self._optimization_init_state(init_params, X, y)
         return opt_state
 
     @cast_to_jax
@@ -1068,7 +1071,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         params = self._validator.to_model_params(params)
 
         # perform a one-step update
-        updated_params, updated_state, aux = self.optimization_update(
+        updated_params, updated_state, aux = self._optimization_update(
             params, opt_state, data, y, *args, **kwargs
         )
 
@@ -1177,7 +1180,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         fit_attrs.pop("optim_info_")
         string_attrs = ["inverse_link_function"]
 
-        super().save_params(filename, fit_attrs, string_attrs)
+        self._save_params(filename, fit_attrs, string_attrs)
 
 
 class PopulationGLM(GLM):
