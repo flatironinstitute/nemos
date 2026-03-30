@@ -254,7 +254,11 @@ def test_svrg_glm_initialize_state(
         GLMParams(*init_params),
     )
 
-    for f in (glm._optimization_init_state, glm._optimization_update, glm._optimization_run):
+    for f in (
+        glm._optimization_init_state,
+        glm._optimization_update,
+        glm._optimization_run,
+    ):
         assert isinstance(f.__self__._solver, solver_class)
     assert isinstance(state, SVRGState)
 
