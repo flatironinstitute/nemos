@@ -1,7 +1,5 @@
 """Initialization functions and related utility functions."""
 
-from __future__ import annotations
-
 import inspect
 from typing import Any, Callable, Literal, Optional, Protocol, Tuple
 
@@ -11,7 +9,7 @@ from numpy.typing import NDArray
 
 from ..glm.initialize_parameters import initialize_intercept_matching_mean_rate
 from ..glm.params import GLMUserParams
-from ..type_casting import cast_to_jax, is_numpy_array_like
+from ..type_casting import is_numpy_array_like
 from ..typing import DESIGN_INPUT_TYPE
 from .params import GLMHMMUserParams
 
@@ -72,7 +70,6 @@ INITIALIZATION_FN_DICT = dict[
 ]
 
 
-@cast_to_jax(dtype=None)
 def random_glm_params_init(
     n_states: int,
     X: DESIGN_INPUT_TYPE,
@@ -125,47 +122,21 @@ def random_glm_params_init(
     return coef, intercept
 
 
-@cast_to_jax(dtype=None)
-def constant_scale_init(
+def ones_scale_init(
     n_states: int,
     X: DESIGN_INPUT_TYPE,
     y: NDArray | jnp.ndarray,
     random_key=jax.random.PRNGKey(124),
-    scale_val: float = 1.0,
 ):
-    """
-    Initialize scale to a constant value.
-
-    Creates a scale parameter array where all elements are set to the same value.
-
-    Parameters
-    ----------
-    n_states : int
-        Number of HMM states.
-    X : DESIGN_INPUT_TYPE
-        Design matrix, unused but included for API consistency.
-    y : NDArray | jnp.ndarray
-        Observations, used to determine number of neurons from shape.
-    random_key : jax.random.PRNGKey
-        Random key, unused for this initialization, but included for API consistency.
-    scale_val : float
-        The constant value to initialize all scale parameters to. Default is 1.0.
-
-    Returns
-    -------
-    scale : jnp.ndarray
-        Scale array of shape (n_states,) for single neuron or (n_neurons, n_states)
-        for multiple neurons, with all values set to `scale_val`.
-    """
+    """Initialize scale to ones."""
     is_one_dim = y.ndim == 1
     n_neurons = 1 if is_one_dim else y.shape[1]
-    scale = jnp.full((n_neurons, n_states), scale_val, dtype=float)
+    scale = jnp.ones((n_neurons, n_states), dtype=float)
     if is_one_dim:
         scale = jnp.squeeze(scale, axis=0)
     return scale
 
 
-@cast_to_jax(dtype=None)
 def sticky_transition_proba_init(
     n_states: int,
     X: DESIGN_INPUT_TYPE,
@@ -209,7 +180,6 @@ def sticky_transition_proba_init(
     )
 
 
-@cast_to_jax(dtype=None)
 def uniform_transition_proba_init(
     n_states: int,
     X: DESIGN_INPUT_TYPE,
@@ -242,7 +212,6 @@ def uniform_transition_proba_init(
     return jnp.full((n_states, n_states), prob_transition, dtype=float)
 
 
-@cast_to_jax(dtype=None)
 def uniform_initial_proba_init(
     n_states: int,
     X: DESIGN_INPUT_TYPE,
@@ -295,7 +264,7 @@ AVAILABLE_INIT_FUNCTIONS = {
         "random": random_glm_params_init,
     },
     "scale_init": {
-        "constant": constant_scale_init,
+        "ones": ones_scale_init,
     },
     "transition_proba_init": {
         "sticky": sticky_transition_proba_init,
@@ -313,7 +282,7 @@ _IO_AVAILABLE_INIT_FUNCTIONS["glm_params_init"].update(
     }
 )
 _IO_AVAILABLE_INIT_FUNCTIONS["scale_init"].update(
-    {"nemos.glm_hmm.initialize_parameters.constant_scale_init": constant_scale_init}
+    {"nemos.glm_hmm.initialize_parameters.ones_scale_init": ones_scale_init}
 )
 _IO_AVAILABLE_INIT_FUNCTIONS["transition_proba_init"].update(
     {
@@ -328,7 +297,7 @@ _IO_AVAILABLE_INIT_FUNCTIONS["initial_proba_init"].update(
 
 DEFAULT_INIT_FUNCTION: INITIALIZATION_FN_DICT = {
     "glm_params_init": random_glm_params_init,
-    "scale_init": constant_scale_init,
+    "scale_init": ones_scale_init,
     "transition_proba_init": sticky_transition_proba_init,
     "initial_proba_init": uniform_initial_proba_init,
 }
@@ -340,8 +309,8 @@ def glm_hmm_initialization(
     y: NDArray | jnp.ndarray,
     inverse_link_function: Callable,
     random_key=jax.random.PRNGKey(123),
-    initialization_funcs: Optional[dict] = None,
-    initialization_kwargs: Optional[dict] = None,
+    init_registry: Optional[dict] = None,
+    init_kwargs: Optional[dict] = None,
 ) -> GLMHMMUserParams:
     """
     Initialize all GLM-HMM parameters.
@@ -362,15 +331,12 @@ def glm_hmm_initialization(
         The inverse link function of the GLM.
     random_key : jax.random.PRNGKey
         Random key for reproducibility. Default is PRNGKey(123).
-    initialization_funcs : dict, optional
+    init_registry : dict, optional
         Dictionary mapping parameter names to initialization functions. Valid keys are:
         - 'glm_params_init': Function to initialize GLM coefficients and intercept
         - 'initial_proba_init': Function to initialize initial state probabilities
         - 'transition_proba_init': Function to initialize transition probabilities
         If None, uses DEFAULT_INIT_FUNCTION. If partial dict, missing keys use defaults.
-    initialization_kwargs : dict, optional
-        The initialization function keyword arguments. Keys must be a subset of those of
-        `initialization_funcs`.
 
     Returns
     -------
@@ -386,28 +352,28 @@ def glm_hmm_initialization(
     transition_proba : jnp.ndarray
         Transition probability matrix of shape (n_states, n_states).
     """
-    if initialization_funcs is None:
-        initialization_funcs = DEFAULT_INIT_FUNCTION
+    if init_registry is None:
+        init_registry = DEFAULT_INIT_FUNCTION
     else:
-        initialization_funcs = _resolve_init_funcs_registry(initialization_funcs)
-    if initialization_kwargs is None:
-        initialization_kwargs = {}
+        init_registry = _resolve_init_funcs_registry(init_registry)
+    if init_kwargs is None:
+        init_kwargs = {}
     random_key, subkey = jax.random.split(random_key)
-    kwargs = initialization_kwargs.get("glm_params_init", {})
-    coef, intercept = initialization_funcs["glm_params_init"](
+    kwargs = init_kwargs.get("glm_params_init", {})
+    coef, intercept = init_registry["glm_params_init"](
         n_states, X, y, inverse_link_function, subkey, **kwargs
     )
     random_key, subkey = jax.random.split(random_key)
-    kwargs = initialization_kwargs.get("scale_init", {})
-    scale = initialization_funcs["scale_init"](n_states, X, y, subkey, **kwargs)
+    kwargs = init_kwargs.get("scale_init", {})
+    scale = init_registry["scale_init"](n_states, X, y, subkey, **kwargs)
     random_key, subkey = jax.random.split(random_key)
-    kwargs = initialization_kwargs.get("initial_proba_init", {})
-    initial_proba = initialization_funcs["initial_proba_init"](
+    kwargs = init_kwargs.get("initial_proba_init", {})
+    initial_proba = init_registry["initial_proba_init"](
         n_states, X, y, subkey, **kwargs
     )
     _, subkey = jax.random.split(random_key)
-    kwargs = initialization_kwargs.get("transition_proba_init", {})
-    transition_proba = initialization_funcs["transition_proba_init"](
+    kwargs = init_kwargs.get("transition_proba_init", {})
+    transition_proba = init_registry["transition_proba_init"](
         n_states, X, y, subkey, **kwargs
     )
     return coef, intercept, scale, initial_proba, transition_proba
