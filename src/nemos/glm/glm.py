@@ -751,7 +751,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             getattr(self, "_feature_mask", None), init_params
         )
 
-        self._initialize_solver_and_state(data, y, init_params)
+        self._initialize_optimization_and_state(init_params, data, y)
 
         params, state, aux = self.solver_run(init_params, data, y)
 
@@ -943,11 +943,12 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             rank = jnp.linalg.matrix_rank(X)
             return (n_samples - rank - 1) * jnp.ones_like(params.intercept)
 
-    def _initialize_solver_and_state(
+    def _initialize_optimization_and_state(
         self,
+        init_params: GLMParams,
         X: dict[str, jnp.ndarray] | jnp.ndarray,
         y: jnp.ndarray,
-        init_params: GLMParams,
+        *args,
     ) -> SolverState:
         """Initialize the solver by instantiating its init_state, update and, run methods.
 
@@ -956,14 +957,14 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
 
         Parameters
         ----------
+        init_params :
+            Initial parameters for the model.
         X :
             The predictors used in the model fitting process. This can include feature matrices or other structures
             compatible with the model's design.
         y :
             The response variables or outputs corresponding to the predictors. Used to initialize parameters when
             they are not provided.
-        init_params :
-            Initial parameters for the model.
 
         Returns
         -------
@@ -977,10 +978,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
         >>> model = nmo.glm.GLM()
         >>> params = model.initialize_params(X, y)
-        >>> opt_state = model.initialize_solver_and_state(X, y, params)
+        >>> opt_state = model.initialize_optimization_and_state(params, X, y)
         >>> # Now ready to run optimization or update steps
         """
-
         opt_solver_kwargs = self._optimize_solver_params(X, y)
         #  set up the solver init/run/update attrs
         self._instantiate_solver(
@@ -1052,7 +1052,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
         >>> glm_instance = nmo.glm.GLM()
         >>> params = glm_instance.initialize_params(X, y)
-        >>> opt_state = glm_instance.initialize_solver_and_state(X, y, params)
+        >>> opt_state = glm_instance.initialize_optimization_and_state(params, X, y)
         >>> new_params, new_opt_state = glm_instance.update(params, opt_state, X, y)
 
         """

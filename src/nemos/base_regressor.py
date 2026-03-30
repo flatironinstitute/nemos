@@ -589,21 +589,23 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         return data, y
 
     @abc.abstractmethod
-    def _initialize_solver_and_state(
+    def _initialize_optimization_and_state(
         self,
+        init_params: ModelParamsT,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
-        init_params: ModelParamsT,
+        *args,
     ) -> SolverState:
         """Initialize the solver and the state of the solver for running fit and update."""
         pass
 
     @cast_to_jax
-    def initialize_solver_and_state(
+    def initialize_optimization_and_state(
         self,
+        init_params: UserProvidedParamsT,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
-        init_params: UserProvidedParamsT,
+        *args,
     ) -> SolverState:
         """Initialize the solver and its state for running fit and update.
 
@@ -619,6 +621,9 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             ``(n_time_bins, n_neurons)`` for population models.
         init_params
             Initial parameter tuple of (coefficients, intercept).
+        *args
+            Extra arguments forwarded to the solver instantiation (e.g. additional
+            data structures required by the loss function in subclass implementations).
 
         Returns
         -------
@@ -634,7 +639,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         init_params = self._validator.validate_and_cast_params(init_params)
         self._validator.validate_consistency(init_params, X=X, y=y)
         X, y = self._preprocess_inputs(X, y, drop_nans=True)
-        return self._initialize_solver_and_state(X, y, init_params)
+        return self._initialize_optimization_and_state(init_params, X, y, *args)
 
     def _optimize_solver_params(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray) -> dict:
         """
