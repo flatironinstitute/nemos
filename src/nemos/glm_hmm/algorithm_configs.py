@@ -442,6 +442,7 @@ def prepare_mstep_update_fn(
 ) -> Callable:
     """
     Prepare update function for numerically optimizing GLM parameters (coef, intercept) and scale.
+
     This function will consecutively update GLM parameters and scale (if needed) in the M-step of EM,
     or jointly optimize them if they are not separable.
 
