@@ -1,4 +1,4 @@
-"""Validation classes for GLM and PopulationGLM models."""
+"""Validation classes for PPGLM and PopulationPPGLM models."""
 
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional, Tuple, Union
@@ -22,7 +22,7 @@ def to_pp_glm_params(user_params: PPGLMUserParams):
 
 def from_pp_glm_params(params: PPGLMParams) -> PPGLMUserParams:
     """Map from PPGLMParams to PPGLMUserParams."""
-    return params.coef, params.intercept, params.random_key
+    return params.coef, params.intercept
 
 @dataclass(frozen=True, repr=False)
 class PPGLMValidator(RegressorValidator[PPGLMUserParams, PPGLMParams]):
@@ -39,11 +39,11 @@ class PPGLMValidator(RegressorValidator[PPGLMUserParams, PPGLMParams]):
     """
 
     n_basis_funcs: int = field(kw_only=True)
+    random_key: jnp.array = field(kw_only=True)
     expected_param_dims: Tuple[int] = (
         1,
         1,
-        1,
-    )  # this should be (coef.ndim, intercept.ndim, random_key.ndim)
+    )  # this should be (coef.ndim, intercept.ndim)
     to_model_params: Callable[[PPGLMUserParams], PPGLMParams] = to_pp_glm_params
     from_model_params: Callable[[PPGLMParams], PPGLMUserParams] = from_pp_glm_params
     model_class: str = "PPGLM"
@@ -58,8 +58,7 @@ class PPGLMValidator(RegressorValidator[PPGLMUserParams, PPGLMParams]):
                 err_message_format="Invalid parameter dimensionality. coef must be an array "
                 "or nemos.pytree.FeaturePytree with array leafs of shape "
                 "(n_features, ). intercept must be of shape (1,)."
-                "random_key must be of shape (2,)."
-                "\nThe provided coef, intercept and random_key have shapes ``{}``, ``{}``, and ``{}`` "
+                "\nThe provided coef, intercept and random_key have shapes ``{}`` and ``{}`` "
                 "instead."
             ),
         ),
@@ -104,9 +103,9 @@ class PPGLMValidator(RegressorValidator[PPGLMUserParams, PPGLMParams]):
         err_msg = err_message_format.format(*shapes)
         return super().check_array_dimensions(params, err_msg=err_msg)
 
-    def validate_random_key(self, params: PPGLMParams):
+    def validate_random_key(self):
         """Validate that the provided random key is valid"""
-        if jax.random.key_data(params.random_key.astype(jnp.uint32)).shape != 2:
+        if jax.random.key_data(self.random_key.astype(jnp.uint32)).shape != 2:
             raise ValueError(
                 "random key should be a one-dimensional array with shape ``(2,)``"
             )
@@ -289,8 +288,7 @@ class PopulationPPGLMValidator(PPGLMValidator):
     expected_param_dims: Tuple[int] = (
         2,
         1,
-        1,
-    )  # this should be (coef.ndim, intercept.ndim, random_key.ndim)
+    )  # this should be (coef.ndim, intercept.ndim)
     model_class: str = "PopulationPPGLM"
     params_validation_sequence: Tuple[Tuple[str, None] | Tuple[str, dict[str, Any]]] = (
         *RegressorValidator.params_validation_sequence[:2],
@@ -301,8 +299,7 @@ class PopulationPPGLMValidator(PPGLMValidator):
                 "coef must be an array or pytree "
                 "with array leaves of shape (n_features, n_neurons). "
                 "intercept must be of shape (n_neurons,)."
-                "random_key must be of shape (2,)."
-                "\nThe provided coef, intercept and random_key have shapes ``{}``, ``{}``, and ``{}`` "
+                "\nThe provided coef, intercept and random_key have shapes ``{}`` and ``{}`` "
                 "instead."
             ),
         ),
