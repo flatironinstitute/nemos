@@ -136,7 +136,6 @@ def posterior_weighted_glm_negative_log_likelihood_scale(
     y: Array,
     predicted_rate: Array,
     posteriors: Array,
-    # inverse_link_function: Callable,
     negative_log_likelihood_func: Callable,
 ):
     """
@@ -170,7 +169,6 @@ def posterior_weighted_glm_negative_log_likelihood_scale(
         Scalar negative log-likelihood weighted by posteriors:
         sum_t sum_k posterior[t,k] * nll[t,k]
     """
-    # predicted_rate = compute_rate_per_state(X, glm_params, inverse_link_function)
     return _posterior_weighted_objective_impl(
         y, predicted_rate, posteriors, negative_log_likelihood_func, log_scale=log_scale
     )

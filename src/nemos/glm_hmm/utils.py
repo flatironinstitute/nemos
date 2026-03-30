@@ -5,8 +5,8 @@ from typing import Any, Callable
 import jax
 import jax.numpy as jnp
 
-from ..hmm.utils import Array
 from ..glm.params import GLMParams
+from ..hmm.utils import Array
 from ..tree_utils import pytree_map_and_reduce
 
 

@@ -4,6 +4,7 @@ from typing import Tuple
 
 import jax.numpy as jnp
 from numpy.typing import ArrayLike
+
 from ..params import ModelParams
 
 
