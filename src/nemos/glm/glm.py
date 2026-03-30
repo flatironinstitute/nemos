@@ -987,7 +987,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             self._compute_loss, init_params=init_params, solver_kwargs=opt_solver_kwargs
         )
 
-        opt_state = self.optimization_init_state(init_params, X, y)
+        opt_state = self.optimization_init_state(init_params, X, y, *args)
         return opt_state
 
     @cast_to_jax
