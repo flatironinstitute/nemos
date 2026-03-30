@@ -12,7 +12,6 @@ class PPGLMParams(eqx.Module):
 
     coef: jnp.ndarray | dict
     intercept: jnp.ndarray
-    random_key: jnp.ndarray
 
     @staticmethod
     def regularizable_subtrees() -> list[Callable[["PPGLMParams"], jnp.ndarray | dict]]:
@@ -20,4 +19,4 @@ class PPGLMParams(eqx.Module):
         return [lambda p: p.coef]
 
 
-PPGLMUserParams = Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike, ArrayLike]
+PPGLMUserParams = Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike]
