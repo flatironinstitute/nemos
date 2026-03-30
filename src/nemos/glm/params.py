@@ -21,4 +21,12 @@ class GLMParams(eqx.Module):
         return [lambda p: p.coef]
 
 
+class NBGLMParams(eqx.Module):
+    """Parameter container for NBGLM models."""
+
+    glm_params: GLMParams
+    log_scale: jnp.ndarray
+
+
 GLMUserParams = Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike]
+NBGLMUserParams = Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike, float]
