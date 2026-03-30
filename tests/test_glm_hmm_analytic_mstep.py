@@ -10,10 +10,10 @@ from nemos.glm_hmm.algorithm_configs import (
     prepare_mstep_nll_objective_param,
     prepare_mstep_nll_objective_scale,
 )
-from nemos.hmm.expectation_maximization import forward_backward, run_m_step
-from nemos.glm_hmm.params import GLMHMMParams, GLMHMMModelParams
-from nemos.hmm.params import HMMParams
+from nemos.glm_hmm.params import GLMHMMModelParams, GLMHMMParams
 from nemos.glm_hmm.utils import compute_rate_per_state
+from nemos.hmm.expectation_maximization import forward_backward, run_m_step
+from nemos.hmm.params import HMMParams
 from nemos.regularizer import UnRegularized
 from nemos.solvers import get_solver
 

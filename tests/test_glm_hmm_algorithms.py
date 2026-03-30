@@ -19,6 +19,9 @@ from nemos.glm_hmm.algorithm_configs import (
     prepare_mstep_nll_objective_scale,
     prepare_mstep_update_fn,
 )
+from nemos.glm_hmm.params import GLMHMMModelParams, GLMHMMParams, HMMParams
+from nemos.glm_hmm.utils import compute_rate_per_state
+from nemos.glm_hmm.validation import to_glm_hmm_params
 from nemos.hmm.expectation_maximization import (
     HMMState,
     _backward_pass,
@@ -35,9 +38,6 @@ from nemos.hmm.m_step_analytical_updates import (
     _analytical_m_step_log_initial_prob,
     _analytical_m_step_log_transition_prob,
 )
-from nemos.glm_hmm.params import GLMHMMParams, GLMHMMModelParams, HMMParams
-from nemos.glm_hmm.validation import to_glm_hmm_params
-from nemos.glm_hmm.utils import compute_rate_per_state
 from nemos.observation_models import (
     BernoulliObservations,
     GammaObservations,
