@@ -138,7 +138,7 @@ time around it. (it takes some time for info to travel through the eye/LGN to
 V1). Pynapple makes this easy:
 
 ```{code-cell} ipython3
-sta = nap.compute_event_triggered_average(spikes, stimulus, binsize=0.025,
+sta = nap.compute_event_triggered_average(stimulus, spikes, binsize=0.025,
                                         window=(-0.15, 0.0))
 ```
 
