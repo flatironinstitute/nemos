@@ -3911,7 +3911,7 @@ class TestClassifierGLM:
             "compute_loss",
             "simulate",
             "initialize_params",
-            "initialize_solver_and_state",
+            "initialize_optimizer_and_state",
         ],
     )
     def test_must_set_classes_before_calling(
