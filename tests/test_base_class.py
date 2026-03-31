@@ -121,40 +121,79 @@ class TestInstantiateSolverOverrides:
         spec.implementation = mock_solver_cls
         return MagicMock(return_value=spec)
 
-    @pytest.mark.parametrize("solver_name_override, expected", [
-        (None, None),  # None → falls back to self.solver_name, resolved at runtime
-        ("LBFGS[optax+optimistix]", "LBFGS[optax+optimistix]"),
-    ])
-    def test_solver_name_resolution(self, regressor, mock_get_solver, solver_name_override, expected):
+    @pytest.mark.parametrize(
+        "solver_name_override, expected",
+        [
+            (None, None),  # None → falls back to self.solver_name, resolved at runtime
+            ("LBFGS[optax+optimistix]", "LBFGS[optax+optimistix]"),
+        ],
+    )
+    def test_solver_name_resolution(
+        self, regressor, mock_get_solver, solver_name_override, expected
+    ):
         if expected is None:
             expected = regressor.solver_name
         with patch("nemos.base_regressor.solvers.get_solver", mock_get_solver):
-            regressor._instantiate_solver(lambda p, X, y: None, None, solver_name=solver_name_override)
+            regressor._instantiate_solver(
+                lambda p, X, y: None, None, solver_name=solver_name_override
+            )
         mock_get_solver.assert_called_once_with(expected)
 
     @pytest.mark.parametrize("regularizer_override", [None, Ridge()])
-    def test_regularizer_resolution(self, regressor, mock_solver_cls, mock_get_solver, regularizer_override):
-        expected = regularizer_override if regularizer_override is not None else regressor.regularizer
+    def test_regularizer_resolution(
+        self, regressor, mock_solver_cls, mock_get_solver, regularizer_override
+    ):
+        expected = (
+            regularizer_override
+            if regularizer_override is not None
+            else regressor.regularizer
+        )
         with patch("nemos.base_regressor.solvers.get_solver", mock_get_solver):
-            regressor._instantiate_solver(lambda p, X, y: None, None, regularizer=regularizer_override)
+            regressor._instantiate_solver(
+                lambda p, X, y: None, None, regularizer=regularizer_override
+            )
         assert mock_solver_cls.call_args.args[1] == expected
 
     @pytest.mark.parametrize("strength_override", [None, 2.0])
-    def test_regularizer_strength_resolution(self, regressor, mock_solver_cls, mock_get_solver, strength_override):
-        expected = strength_override if strength_override is not None else regressor.regularizer_strength
+    def test_regularizer_strength_resolution(
+        self, regressor, mock_solver_cls, mock_get_solver, strength_override
+    ):
+        expected = (
+            strength_override
+            if strength_override is not None
+            else regressor.regularizer_strength
+        )
         with patch("nemos.base_regressor.solvers.get_solver", mock_get_solver):
-            regressor._instantiate_solver(lambda p, X, y: None, None, regularizer_strength=strength_override)
+            regressor._instantiate_solver(
+                lambda p, X, y: None, None, regularizer_strength=strength_override
+            )
         assert mock_solver_cls.call_args.args[2] == expected
 
-    @pytest.mark.parametrize("solver_kwargs_override, extra_accepted_args", [
-        (None, []),
-        ({"tol": 1e-4}, ["tol"]),
-    ])
-    def test_solver_kwargs_resolution(self, regressor, mock_solver_cls, mock_get_solver, solver_kwargs_override, extra_accepted_args):
+    @pytest.mark.parametrize(
+        "solver_kwargs_override, extra_accepted_args",
+        [
+            (None, []),
+            ({"tol": 1e-4}, ["tol"]),
+        ],
+    )
+    def test_solver_kwargs_resolution(
+        self,
+        regressor,
+        mock_solver_cls,
+        mock_get_solver,
+        solver_kwargs_override,
+        extra_accepted_args,
+    ):
         mock_solver_cls.get_accepted_arguments.return_value = extra_accepted_args
-        expected = solver_kwargs_override if solver_kwargs_override is not None else regressor.solver_kwargs
+        expected = (
+            solver_kwargs_override
+            if solver_kwargs_override is not None
+            else regressor.solver_kwargs
+        )
         with patch("nemos.base_regressor.solvers.get_solver", mock_get_solver):
-            regressor._instantiate_solver(lambda p, X, y: None, None, solver_kwargs=solver_kwargs_override)
+            regressor._instantiate_solver(
+                lambda p, X, y: None, None, solver_kwargs=solver_kwargs_override
+            )
         actual_kwargs = mock_solver_cls.call_args.kwargs
         for k, v in expected.items():
             assert actual_kwargs[k] == v
