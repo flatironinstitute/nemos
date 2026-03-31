@@ -1,4 +1,4 @@
-"""Forward backward pass for a GLM-HMM."""
+"""Forward backward pass for a HMM."""
 
 from functools import partial
 from typing import Callable, Optional, Tuple
