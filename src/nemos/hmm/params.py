@@ -1,4 +1,4 @@
-"""GLM-HMM parameter definitions and type aliases."""
+"""HMM parameter definitions and type aliases."""
 
 from typing import Tuple
 

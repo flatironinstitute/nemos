@@ -11,7 +11,7 @@ from .m_step_analytical_updates import (
     _analytical_m_step_log_initial_prob,
     _analytical_m_step_log_transition_prob,
 )
-from ..hmm.utils import Array, initialize_new_session
+from .utils import Array, initialize_new_session
 from ..typing import Aux, ModelParamsT, SolverState
 from .params import HMMParams
 
@@ -208,7 +208,7 @@ def forward_pass(
 
     This is the public API for computing forward messages, useful for:
     - Online/causal state estimation (filtering)
-    - Computing filter_proba in the GLM-HMM class
+    - Computing filter_proba in the HMM class
     - One-step-ahead prediction
 
     Parameters
@@ -241,7 +241,7 @@ def forward_pass(
 
     See Also
     --------
-    forward_backward : Computes both forward and backward messages for smoothing.
+    :func:`~nemos.hmm.forward_backward` : Computes both forward and backward messages for smoothing.
     _forward_pass : Internal implementation of the forward recursion.
 
     Notes
@@ -254,7 +254,6 @@ def forward_pass(
     """
     # unpack parameters
     model_params = params.model_params
-    # glm_scale = params.glm_scale
     log_initial_prob = params.hmm_params.log_initial_prob
     log_transition_prob = params.hmm_params.log_transition_prob
 
@@ -438,7 +437,6 @@ def forward_backward(
     """
     # unpack parameters
     model_params = params.model_params
-    # glm_scale = params.glm_scale
     log_initial_prob = params.hmm_params.log_initial_prob
     log_transition_prob = params.hmm_params.log_transition_prob
 
@@ -562,7 +560,7 @@ def run_m_step(
         log_joint_posterior, dirichlet_prior_alphas=dirichlet_prior_alphas_transition
     )
 
-    # Minimize negative log-likelihood to update GLM weights
+    # Minimize negative log-likelihood to update model parameters
     optimized_projection_weights, state, _ = m_step_fn_model_params(
         params.model_params, X, y, posteriors
     )
@@ -583,7 +581,7 @@ def _em_step(
     y: Array,
     log_likelihood_func: Callable[[Array, Array, Array], Array],
     m_step_fn_model_params: Callable[
-        [ModelParamsT, Array, Array, Array], Tuple[ModelParamsT, SolverState]
+        [ModelParamsT, Array, Array, Array], Tuple[ModelParamsT, SolverState, Aux]
     ],
     is_new_session: Array,
 ) -> EMCarry:
@@ -760,7 +758,7 @@ def em_hmm(
     check_convergence: Callable = check_log_likelihood_increment,
 ) -> Tuple[ModelParamsT, EMState]:
     """
-    Perform EM optimization for a GLM-HMM.
+    Perform EM optimization for a HMM model (i.e. HMM or GLMHMM).
 
     Uses equinox while_loop for efficient early stopping when convergence
     criteria are met.

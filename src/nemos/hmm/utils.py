@@ -11,7 +11,7 @@ def initialize_new_session(n_samples, is_new_session):
     """
     Initialize and validate session boundary indicators for HMM inference.
 
-    Ensures the session boundary array is properly formatted for GLM-HMM algorithms.
+    Ensures the session boundary array is properly formatted for HMM algorithms.
     If no session information is provided, treats all samples as a single session.
     Always enforces that the first time bin is marked as a session start.
 
