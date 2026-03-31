@@ -414,9 +414,9 @@ class ClassifierMixin:
 
     def initialize_optimizer_and_state(
         self,
+        init_params: UserProvidedParamsT,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
-        init_params: UserProvidedParamsT,
     ) -> SolverState:
         """Initialize the solver and its state for running fit and update.
 
@@ -425,13 +425,13 @@ class ClassifierMixin:
 
         Parameters
         ----------
+        init_params
+            Initial parameter tuple of (coefficients, intercept).
         X
             Input data, array of shape ``(n_time_bins, n_features)`` or pytree of same.
         y
             Target labels, array of shape ``(n_time_bins,)`` for single neuron/subject models or
             ``(n_time_bins, n_neurons)`` for population models.
-        init_params
-            Initial parameter tuple of (coefficients, intercept).
 
         Returns
         -------
@@ -445,7 +445,7 @@ class ClassifierMixin:
         """
         self._label_encoder.check_classes_is_set("initialize_optimizer_and_state")
         y = self._label_encoder.encode(y)
-        return super().initialize_optimizer_and_state(X, y, init_params)
+        return super().initialize_optimizer_and_state(init_params, X, y)
 
     def initialize_params(
         self,

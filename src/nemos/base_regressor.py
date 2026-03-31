@@ -11,7 +11,6 @@ from functools import wraps
 from pathlib import Path
 from typing import (
     Any,
-    Callable,
     Generic,
     Optional,
     Tuple,
@@ -31,6 +30,7 @@ from .base_validator import RegressorValidator
 from .glm.params import GLMParams
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
+from .solvers import SolverProtocol
 from .type_casting import cast_to_jax
 from .typing import (
     DESIGN_INPUT_TYPE,
@@ -286,11 +286,6 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         """Getter for the solver_kwargs attribute."""
         return self._solver_kwargs
 
-    @property
-    def solver(self):
-        """Getter for the solver class."""
-        return self._solver
-
     @solver_kwargs.setter
     def solver_kwargs(self, solver_kwargs: dict):
         """Setter for the solver_kwargs attribute."""
@@ -333,7 +328,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         solver_kwargs: Optional[dict] = None,
         regularizer: Optional[Regularizer] = None,
         regularizer_strength: Optional[Any] = None,
-    ) -> Tuple[Callable, Callable, Callable]:
+    ) -> SolverProtocol:
         """
         Instantiate the solver with the provided loss function.
 
@@ -368,7 +363,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         Returns
         -------
         :
-            The instance itself for method chaining.
+            The solver instance.
         """
         # final check that solver is valid for chosen regularizer
         self._regularizer.check_solver(self._solver_spec.algo_name)
@@ -396,7 +391,6 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             init_params=init_params,
             **solver_kwargs,
         )
-        self._solver = solver
 
         # nemos's solvers store a .fun attribute, but it's not necessary for a solver to work.
         # A test relies on having _solver_loss_fun saved, so still check and save it if possible.
@@ -406,7 +400,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             utils.assert_is_callable(solver.fun, "solver's loss")
             self._solver_loss_fun = solver.fun
 
-        return solver.init_state, solver.update, solver.run
+        return solver
 
     @abc.abstractmethod
     def fit(
