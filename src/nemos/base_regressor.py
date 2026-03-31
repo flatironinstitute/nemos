@@ -326,7 +326,13 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             )
 
     def _instantiate_solver(
-        self, loss, init_params: ModelParamsT, solver_kwargs: Optional[dict] = None
+        self,
+        loss,
+        init_params: ModelParamsT,
+        solver_name: Optional[str] = None,
+        solver_kwargs: Optional[dict] = None,
+        regularizer: Optional[Regularizer] = None,
+        regularizer_strength: Optional[Any] = None,
     ) -> Tuple[Callable, Callable, Callable]:
         """
         Instantiate the solver with the provided loss function.
@@ -349,9 +355,15 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             The un-regularized loss function.
         init_params:
             The model parameters.
+        solver_name:
+            Optional solver name, default is self.solver_name.
         solver_kwargs:
             Optional dictionary with the solver kwargs.
             If nothing is provided, it defaults to self.solver_kwargs.
+        regularizer:
+            Optional regularizer, default is self.regularizer.
+        regularizer_strength:
+            Optional regularization strength, default is self.regularizer_strength.
 
         Returns
         -------
@@ -364,16 +376,22 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         if solver_kwargs is None:
             # copy dictionary of kwargs to avoid modifying user settings
             solver_kwargs = deepcopy(self.solver_kwargs)
+        if solver_name is None:
+            solver_name = self.solver_name
+        if regularizer is None:
+            regularizer = self.regularizer
+        if regularizer_strength is None:
+            regularizer_strength = self.regularizer_strength
 
         # instantiate the solver
-        solver_cls = solvers.get_solver(self.solver_name).implementation
+        solver_cls = solvers.get_solver(solver_name).implementation
 
         self._check_solver_kwargs(solver_cls, solver_kwargs)
 
         solver = solver_cls(
             loss,
-            self.regularizer,
-            self.regularizer_strength,
+            regularizer,
+            regularizer_strength,
             has_aux=self._has_aux,
             init_params=init_params,
             **solver_kwargs,
