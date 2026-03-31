@@ -473,7 +473,7 @@ def prepare_mstep_update_fn(
     objective_param = prepare_mstep_nll_objective_param(
         is_population_glm, observation_model, inverse_link_function
     )
-    params_update_fn = setup_solver(objective_param, init_params=init_params)[2]
+    params_update_fn = setup_solver(objective_param, init_params=init_params).run
 
     # if scale is separable and needs to be optimized, get update function for optimizing scale
     if observation_model._separable_scale and (
@@ -493,7 +493,7 @@ def prepare_mstep_update_fn(
                 init_params=init_params.log_scale,
                 solver_name="LBFGS",
                 regularizer=UnRegularized(),
-            )[2]
+            ).run
 
         # combine param and scale updates into a single function for use in M-step
         def update_fn(params, X, y, posteriors):
