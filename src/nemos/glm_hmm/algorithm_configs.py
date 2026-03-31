@@ -7,13 +7,14 @@ import jax
 import jax.numpy as jnp
 
 from ..glm.params import GLMParams
-from ..glm_hmm.params import GLMHMMModelParams
+from .params import GLMHMMModelParams
 from ..observation_models import (
     BernoulliObservations,
     GaussianObservations,
     Observations,
     PoissonObservations,
 )
+from ..regularizer import UnRegularized
 from .m_step_analytical_updates import _m_step_scale_gaussian_observations
 from .utils import Array, compute_rate_per_state
 
@@ -190,6 +191,8 @@ def prepare_estep_log_likelihood(
         True if it is a population GLM likelihood.
     observation_model:
         The observation model.
+    inverse_link_function:
+        Function mapping linear predictors to rates.
 
     Returns
     -------
@@ -455,7 +458,9 @@ def prepare_mstep_update_fn(
     inverse_link_function:
         Function mapping linear predictors to rates.
     setup_solver:
-        Function that takes an objective and returns an optimization solver.
+        Function that takes an objective and returns an optimization solver. In most cases, this will be
+        :meth:`~nemos.base_regressor.BaseRegressor._instantiate_solver`. Any custom function must match
+        the input/output signature of this method.
     init_params:
         Initial GLM-HMM model parameters, used for initializing optimization.
 
@@ -468,7 +473,7 @@ def prepare_mstep_update_fn(
     objective_param = prepare_mstep_nll_objective_param(
         is_population_glm, observation_model, inverse_link_function
     )
-    params_update_fn = setup_solver(objective_param, init_params=init_params).run
+    params_update_fn = setup_solver(objective_param, init_params=init_params)[2]
 
     # if scale is separable and needs to be optimized, get update function for optimizing scale
     if observation_model._separable_scale and (
@@ -482,9 +487,13 @@ def prepare_mstep_update_fn(
             objective_scale = prepare_mstep_nll_objective_scale(
                 is_population_glm, observation_model
             )
+            # force scale to be unregularized and fit with LBFGS
             scale_update_fn = setup_solver(
-                objective_scale, init_params=init_params.log_scale
-            ).run
+                objective_scale,
+                init_params=init_params.log_scale,
+                solver_name="LBFGS",
+                regularizer=UnRegularized(),
+            )[2]
 
         # combine param and scale updates into a single function for use in M-step
         def update_fn(params, X, y, posteriors):

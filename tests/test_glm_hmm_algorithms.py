@@ -59,7 +59,7 @@ def setup_solver(
         has_aux=False,
         tol=tol,
     )
-    return solver
+    return solver.init_state, solver.update, solver.run
 
 
 def _add_prior_logspace(log_val: jnp.ndarray, offset: jnp.ndarray):
@@ -910,7 +910,7 @@ class TestMStep:
             np.log(gammas),
             np.log(xis),
             is_new_session=new_sess.astype(bool),
-            m_step_fn_model_params=solver.run,
+            m_step_fn_model_params=solver[2],
         )
 
         # Convert back to probability space for comparison with reference
@@ -1042,7 +1042,7 @@ class TestMStep:
             log_alphas + log_betas,
             np.log(xis),
             is_new_session=new_sess.astype(bool),
-            m_step_fn_model_params=solver.run,
+            m_step_fn_model_params=solver[2],
         )
         glm = GLM(
             observation_model=obs, solver_name="LBFGS", solver_kwargs={"tol": 10**-8}
@@ -1124,7 +1124,7 @@ class TestMStep:
             log_gammas,
             log_xis,
             is_new_session=new_sess.astype(bool),
-            m_step_fn_model_params=solver.run,
+            m_step_fn_model_params=solver[2],
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
@@ -1223,7 +1223,7 @@ class TestMStep:
             log_gammas,
             log_xis,
             is_new_session=new_sess.astype(bool),
-            m_step_fn_model_params=solver.run,
+            m_step_fn_model_params=solver[2],
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
@@ -1287,7 +1287,7 @@ class TestMStep:
             log_gammas,
             log_xis,
             is_new_session=new_sess.astype(bool),
-            m_step_fn_model_params=solver.run,
+            m_step_fn_model_params=solver[2],
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
@@ -1347,7 +1347,7 @@ class TestMStep:
             log_gammas,
             log_xis,
             is_new_session=new_sess.astype(bool),
-            m_step_fn_model_params=solver.run,
+            m_step_fn_model_params=solver[2],
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
@@ -1361,7 +1361,7 @@ class TestMStep:
             log_gammas,
             log_xis,
             is_new_session=new_sess.astype(bool),
-            m_step_fn_model_params=solver.run,
+            m_step_fn_model_params=solver[2],
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=None,
         )
@@ -1430,7 +1430,7 @@ class TestMStep:
             log_gammas,
             log_xis,
             is_new_session=new_sess.astype(bool),
-            m_step_fn_model_params=solver.run,
+            m_step_fn_model_params=solver[2],
             dirichlet_prior_alphas_transition=alphas_transition,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
@@ -1444,7 +1444,7 @@ class TestMStep:
             log_gammas,
             log_xis,
             is_new_session=new_sess.astype(bool),
-            m_step_fn_model_params=solver.run,
+            m_step_fn_model_params=solver[2],
             dirichlet_prior_alphas_transition=None,
             dirichlet_prior_alphas_init_prob=alphas_init,
         )
@@ -1536,7 +1536,7 @@ class TestMStep:
             np.log(gammas),
             np.log(xis),
             is_new_session=new_sess.astype(bool),
-            m_step_fn_model_params=solver.run,
+            m_step_fn_model_params=solver[2],
             dirichlet_prior_alphas_init_prob=dirichlet_prior_initial_prob,
             dirichlet_prior_alphas_transition=dirichlet_prior_transition_prob,
         )
@@ -1799,7 +1799,7 @@ class TestMStep:
 
         solver = setup_solver(objective, init_params=init_model_params, tol=1e-8)
 
-        new_glm_params, state, _ = solver.run(init_model_params, X, y, posteriors)
+        new_glm_params, state, _ = solver[2](init_model_params, X, y, posteriors)
         _, _, _, updated_log_like, _, _ = forward_backward(
             GLMHMMParams(
                 hmm_params=HMMParams(new_log_initial_prob, new_log_transition_prob),
@@ -1823,7 +1823,7 @@ class TestMStep:
         init_scale = jnp.zeros_like(intercept)
         solver = setup_solver(objective_scale, init_params=init_scale, tol=1e-8)
 
-        new_scale, _, _ = solver.run(init_scale, y, predicted_rate, posteriors)
+        new_scale, _, _ = solver[2](init_scale, y, predicted_rate, posteriors)
         if not isinstance(obs, (PoissonObservations, BernoulliObservations)):
             _, _, _, updated_log_like, _, _ = forward_backward(
                 GLMHMMParams(
@@ -2896,7 +2896,7 @@ class TestCompilation:
             log_gammas,
             log_xis,
             is_new_session=new_sess.astype(bool),
-            m_step_fn_model_params=solver.run,
+            m_step_fn_model_params=solver[2],
             dirichlet_prior_alphas_transition=None,
             dirichlet_prior_alphas_init_prob=None,
         )
@@ -2910,7 +2910,7 @@ class TestCompilation:
             log_gammas,
             log_xis,
             is_new_session=new_sess.astype(bool),
-            m_step_fn_model_params=solver.run,
+            m_step_fn_model_params=solver[2],
             dirichlet_prior_alphas_transition=None,
             dirichlet_prior_alphas_init_prob=None,
         )
@@ -2924,7 +2924,7 @@ class TestCompilation:
             log_gammas,
             log_xis,
             is_new_session=new_sess.astype(bool),
-            m_step_fn_model_params=solver.run,
+            m_step_fn_model_params=solver[2],
             dirichlet_prior_alphas_transition=np.ones(transition_prob.shape),
             dirichlet_prior_alphas_init_prob=np.ones(initial_prob.shape),
         )
@@ -2940,7 +2940,7 @@ class TestCompilation:
             log_gammas,
             log_xis,
             is_new_session=new_sess.astype(bool),
-            m_step_fn_model_params=solver.run,
+            m_step_fn_model_params=solver[2],
             dirichlet_prior_alphas_transition=2 * np.ones(transition_prob.shape),
             dirichlet_prior_alphas_init_prob=2 * np.ones(initial_prob.shape),
         )
@@ -3662,7 +3662,7 @@ class TestEMScaleOptimization:
 
         def update_fn(params, X, y, posteriors):
             # Update model parameters using solver
-            new_model_params, _, _ = solver.run(params, X, y, posteriors)
+            new_model_params, _, _ = solver[2](params, X, y, posteriors)
             predicted_rate = compute_rate_per_state(
                 X, new_model_params, obs.default_inverse_link_function
             )
@@ -3765,7 +3765,7 @@ class TestEMScaleOptimization:
             X=data["X"],
             y=data["y"],
             log_likelihood_func=likelihood_func,
-            m_step_fn_model_params=solver.run,
+            m_step_fn_model_params=solver[2],
             maxiter=50,
             tol=1e-5,
         )
@@ -3783,7 +3783,7 @@ class TestEMScaleOptimization:
         # update fn for both model params and scale
         def update_fn(params, X, y, posteriors):
             # Update model parameters using solver
-            new_model_params, _, _ = solver.run(params, X, y, posteriors)
+            new_model_params, _, _ = solver[2](params, X, y, posteriors)
             predicted_rate = compute_rate_per_state(
                 X, new_model_params, obs.default_inverse_link_function
             )
@@ -3877,12 +3877,12 @@ class TestEMScaleOptimization:
         # update fn for both model params and scale
         def update_fn(params, X, y, posteriors):
             # Update model parameters using solver
-            new_model_params, _, _ = solver_params.run(params, X, y, posteriors)
+            new_model_params, _, _ = solver_params[2](params, X, y, posteriors)
             predicted_rate = compute_rate_per_state(
                 X, new_model_params, obs.default_inverse_link_function
             )
             # Update scale parameters using separate solver
-            new_log_scale, _, _ = solver_scale.run(
+            new_log_scale, _, _ = solver_scale[2](
                 params.log_scale,
                 y,
                 predicted_rate,
@@ -3952,7 +3952,7 @@ class TestEMScaleOptimization:
         # update fn for both model params and scale
         def update_fn(params, X, y, posteriors):
             # Update model parameters using solver
-            new_model_params, _, _ = solver.run(params, X, y, posteriors)
+            new_model_params, _, _ = solver[2](params, X, y, posteriors)
             predicted_rate = compute_rate_per_state(
                 X, new_model_params, obs.default_inverse_link_function
             )

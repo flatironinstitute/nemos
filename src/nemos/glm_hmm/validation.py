@@ -255,10 +255,7 @@ class GLMHMMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         Does not validate y since it's 1D (single neuron, no neuron axis to check).
         """
         self._glm_validator.validate_consistency(params.model_params, X, y)
-        if (
-            params.model_params[1].log_scale.shape
-            != params.model_params[0].intercept.shape
-        ):
+        if params.model_params.log_scale.shape != params.model_params.intercept.shape:
             raise ValueError(
                 "The scale parameter and the intercept must be of shape ``(n_neurons,)``."
                 f"\nThe scale is of shape ``{params.model_params.log_scale.shape}`` and the intercept "

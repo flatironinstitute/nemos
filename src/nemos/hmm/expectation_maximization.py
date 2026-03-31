@@ -221,10 +221,9 @@ def forward_pass(
         Design matrix, shape ``(n_time_bins, n_features)``.
     y :
         Observations, shape ``(n_time_bins,)`` or ``(n_time_bins, n_neurons)``.
-    inverse_link_function :
-        Function mapping linear predictors to mean parameters.
     log_likelihood_func :
-        Function computing observation log-likelihoods.
+        Function computing observation log-likelihoods per sample, i.e. no aggregation
+        should be performed across samples.
     is_new_session :
         Boolean array of shape ``(n_time_bins,)`` marking session starts.
         If None, treats all data as a single continuous session.
@@ -242,7 +241,6 @@ def forward_pass(
     See Also
     --------
     :func:`~nemos.hmm.forward_backward` : Computes both forward and backward messages for smoothing.
-    _forward_pass : Internal implementation of the forward recursion.
 
     Notes
     -----
@@ -401,6 +399,9 @@ def forward_backward(
 
     params :
         The HMM and additional model parameters.
+        It must include the attribute `hmm_params`, which is a `ModelParams` subclass with attributes
+        `log_initial_prob` and `log_transition_prob`, as well as the attribute `model_params`, also a
+        `ModelParams` subclass whose structure is model dependent.
 
     log_likelihood_func :
         Function computing the elementwise log-likelihood of observations.
@@ -561,13 +562,13 @@ def run_m_step(
     )
 
     # Minimize negative log-likelihood to update model parameters
-    optimized_projection_weights, state, _ = m_step_fn_model_params(
+    optimized_model_params, state, _ = m_step_fn_model_params(
         params.model_params, X, y, posteriors
     )
 
     params = params.initialize_params(
         hmm_params=HMMParams(log_initial_prob, log_transition_prob),
-        model_params=optimized_projection_weights,
+        model_params=optimized_model_params,
     )
     return (
         params,
@@ -596,19 +597,15 @@ def _em_step(
     ----------
     carry :
         Tuple of current parameters and state:
-        ``((log_init_prob, log_trans_matrix, model_params, log_scale), previous_state)``
+        ``((log_init_prob, log_trans_matrix, model_params), previous_state)``
     X :
         Design matrix of observations.
     y :
         Target responses.
-    inverse_link_function :
-        Function mapping linear predictors to predicted rates.
     log_likelihood_func :
         Log-likelihood function for the E-step.
     m_step_fn_model_params :
         M-step update function for GLM coefficients and intercepts.
-    m_step_fn_glm_scale :
-        M-step update function for scale parameters.
     is_new_session :
         Boolean array marking session boundaries.
 
