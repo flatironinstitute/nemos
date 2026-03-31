@@ -214,9 +214,10 @@ def forward_pass(
     Parameters
     ----------
     params :
-        Parameter container for an HMM model, including an `hmm_params` attribute with
-        `log_initial_prob` and `log_transition_prob`, and a `model_params` attribute
-        with parameters specific to paired model (e.g. GLM parameters for a GLM-HMM).
+        Parameter container for an HMM model.
+        It must include the attribute `hmm_params`, which is a `ModelParams` subclass with attributes
+        `log_initial_prob` and `log_transition_prob`, as well as the attribute `model_params`, also a
+        `ModelParams` subclass containing model-dependent parameters used in the log-likelihood function.
     X :
         Design matrix, shape ``(n_time_bins, n_features)``.
     y :
@@ -401,7 +402,7 @@ def forward_backward(
         The HMM and additional model parameters.
         It must include the attribute `hmm_params`, which is a `ModelParams` subclass with attributes
         `log_initial_prob` and `log_transition_prob`, as well as the attribute `model_params`, also a
-        `ModelParams` subclass whose structure is model dependent.
+        `ModelParams` subclass containing model-dependent parameters used in the log-likelihood function.
 
     log_likelihood_func :
         Function computing the elementwise log-likelihood of observations.
@@ -514,33 +515,36 @@ def run_m_step(
 
     Parameters
     ----------
-    params:
+    params :
         The current model parameters.
-    X:
+        It must include the attribute `hmm_params`, which is a `ModelParams` subclass with attributes
+        `log_initial_prob` and `log_transition_prob`, as well as the attribute `model_params`, also a
+        `ModelParams` subclass containing model-dependent parameters used in the log-likelihood function.
+    X :
         Design matrix of observations, shape (n_samples, n_features).
-    y:
+    y :
         Target responses, shape ``(n_samples,)`` or ``(n_samples, n_neurons)``.
-    log_posteriors:
+    log_posteriors :
         Log-posterior probabilities over states, shape ``(n_samples, n_states)``.
-    log_joint_posterior:
+    log_joint_posterior :
         Log joint posterior probabilities over pairs of states summed over samples. Shape ``(n_states, n_states)``.
         :math:`\sum_t P(z_{t-1}, z_t \mid X, y, \theta_{\text{old}})`.
-    is_new_session:
+    is_new_session :
         Boolean mask marking the first observation of each session. Shape ``(n_samples,)``.
-    m_step_fn_model_params:
+    m_step_fn_model_params :
         Callable that performs the M-step update for model parameters (e.g., coefficients and intercepts for a GLM).
         Should have signature: ``f(model_params, X, y, posteriors) -> (updated_params, state, aux)``.
         The regularizer/prior for the parameters should be configured within this callable.
-    dirichlet_prior_alphas_init_prob:
+    dirichlet_prior_alphas_init_prob :
         Prior for the initial states, shape ``(n_states,)``.
-    dirichlet_prior_alphas_transition:
+    dirichlet_prior_alphas_transition :
         Prior for the transition probabilities, shape ``(n_states, n_states)``.
 
     Returns
     -------
-    params:
+    params :
         The updated model parameters.
-    state:
+    state :
         State returned by the solver.
 
     Notes
@@ -673,28 +677,29 @@ def em_step(
 
     Parameters
     ----------
-    params : ModelParamsT
-        Current HMM and model parameters containing initial/transition probabilities and
-        relevant parameters of the paired model (e.g. coefficient, intercept, and scale
-        for a GLM-HMM).
-    state : EMState
+    params :
+        Current HMM and model parameters.
+        It must include the attribute `hmm_params`, which is a `ModelParams` subclass with attributes
+        `log_initial_prob` and `log_transition_prob`, as well as the attribute `model_params`, also a
+        `ModelParams` subclass containing model-dependent parameters used in the log-likelihood function.
+    state :
         Current EM algorithm state containing iteration count and log-likelihood history.
-    X : Array
+    X :
         Design matrix of observations.
-    y : Array
+    y :
         Target responses.
-    log_likelihood_func : Callable
+    log_likelihood_func :
         Function computing the log-likelihood or log emissions probability.
-    m_step_fn_model_params : Callable
+    m_step_fn_model_params :
         Callable that performs the M-step update for model parameters.
-    is_new_session : Array
+    is_new_session :
         Boolean mask for the first observation of each session.
 
     Returns
     -------
-    updated_params : ModelParamsT
+    updated_params :
         Updated parameters after one EM iteration.
-    updated_state : EMState
+    updated_state :
         Updated state after one EM iteration.
     """
     # Pack params and state into EMCarry format (log-space for HMM params)
@@ -762,37 +767,37 @@ def em_hmm(
 
     Parameters
     ----------
-    params:
+    params :
         Initial HMM and model parameters. This includes:
         - the HMM initial probabilities, shape ``(n_states,)``.
         - the HMM transition probabilities, shape ``(n_states, n_states)``.
         - any parameters associated with the paired model, e.g. the GLM coef,
           shape ``(n_features, n_states)`` or ``(n_features, n_neurons, n_states)``
           or GLM intercept, shape  ``(n_states, )`` or ``(n_neurons, n_states)`` .
-    X:
+    X :
         Design matrix of observations.
-    y:
+    y :
         Target responses.
-    log_likelihood_func:
+    log_likelihood_func :
         Function computing the log-likelihood or log emissions probabilities.
-    m_step_fn_model_params:
+    m_step_fn_model_params :
         Callable that performs the M-step update for the model parameters.
         Should have signature: ``f(model_params, X, y, posteriors) -> (updated_params, state)``.
         Typically created by configuring a solver with the appropriate regularizer/prior.
-    is_new_session:
+    is_new_session :
         Boolean mask for the first observation of each session.
-    maxiter:
+    maxiter :
         Maximum number of EM iterations.
-    tol:
+    tol :
         The tolerance for the convergence criterion.
-    check_convergence:
+    check_convergence :
         Callable receiving the state and computing the convergence.
 
     Returns
     -------
-    params:
+    params :
         The fitted HMM and model parameters.
-    state:
+    state :
         Final EMState containing all parameters and diagnostics.
     """
     is_new_session = initialize_new_session(y.shape[0], is_new_session)
@@ -857,7 +862,10 @@ def max_sum(
     Parameters
     ----------
     params :
-        The GLMHMM parameters.
+        Current HMM and model parameters.
+        It must include the attribute `hmm_params`, which is a `ModelParams` subclass with attributes
+        `log_initial_prob` and `log_transition_prob`, as well as the attribute `model_params`, also a
+        `ModelParams` subclass containing model-dependent parameters used in the log-likelihood function.
 
     X :
         Design matrix, pytree with leaves of shape ``(n_time_bins, n_features)``.
