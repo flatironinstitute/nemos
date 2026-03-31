@@ -1917,11 +1917,10 @@ class TestEMAlgorithm:
         glm = GLM(
             observation_model=obs, regularizer=regularization, solver_name=solver_name
         )
-        glm._instantiate_solver(
+        solver_run = glm._instantiate_solver(
             partial_posterior_weighted_glm_negative_log_likelihood,
             GLMParams(coef, intercept),
-        )
-        solver_run = glm._solver_run
+        ).run
         # End of preparatory step.
 
         # Create initial parameters
@@ -2031,11 +2030,10 @@ class TestEMAlgorithm:
 
         # use the BaseRegressor initialize_solver (this will be avaialble also in the GLMHHM class)
         glm = GLM(observation_model=obs, solver_name="LBFGS")
-        glm._instantiate_solver(
+        solver_run = glm._instantiate_solver(
             partial_posterior_weighted_glm_negative_log_likelihood,
             GLMParams(intercept, coef),
-        )
-        solver_run = glm._solver_run
+        ).run
         # End of preparatory step.
 
         # add small noise to initial prob & projection weights
@@ -2375,10 +2373,10 @@ class TestConvergence:
             )
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
-        glm._instantiate_solver(
+        solver_run = glm._instantiate_solver(
             partial_posterior_weighted_glm_negative_log_likelihood,
             GLMParams(coef, intercept),
-        )
+        ).run
 
         # Create initial parameters
         params = GLMHMMParams(
@@ -2394,7 +2392,7 @@ class TestConvergence:
             y=y,
             inverse_link_function=obs.default_inverse_link_function,
             log_likelihood_func=likelihood_func,
-            m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_params=solver_run,
             m_step_fn_glm_scale=None,
             check_convergence=always_converge,
             maxiter=100,
@@ -2444,10 +2442,10 @@ class TestConvergence:
             )
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
-        glm._instantiate_solver(
+        solver_run = glm._instantiate_solver(
             partial_posterior_weighted_glm_negative_log_likelihood,
             GLMParams(coef, intercept),
-        )
+        ).run
 
         # Create initial parameters
         params = GLMHMMParams(
@@ -2463,7 +2461,7 @@ class TestConvergence:
             y=y,
             inverse_link_function=obs.default_inverse_link_function,
             log_likelihood_func=likelihood_func,
-            m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_params=solver_run,
             m_step_fn_glm_scale=None,
             check_convergence=never_converge,
             maxiter=maxiter,
@@ -2508,10 +2506,10 @@ class TestConvergence:
             )
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
-        glm._instantiate_solver(
+        solver_run = glm._instantiate_solver(
             partial_posterior_weighted_glm_negative_log_likelihood,
             GLMParams(coef, intercept),
-        )
+        ).run
 
         # Create initial parameters
         params = GLMHMMParams(
@@ -2529,7 +2527,7 @@ class TestConvergence:
             y=y,
             inverse_link_function=obs.default_inverse_link_function,
             log_likelihood_func=likelihood_func,
-            m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_params=solver_run,
             m_step_fn_glm_scale=None,
             maxiter=maxiter,
             tol=tol,
@@ -2578,10 +2576,10 @@ class TestConvergence:
             )
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
-        glm._instantiate_solver(
+        solver_run = glm._instantiate_solver(
             partial_posterior_weighted_glm_negative_log_likelihood,
             GLMParams(coef, intercept),
-        )
+        ).run
 
         # Create initial parameters
         params = GLMHMMParams(
@@ -2598,7 +2596,7 @@ class TestConvergence:
             y=y[:100],
             inverse_link_function=obs.default_inverse_link_function,
             log_likelihood_func=likelihood_func,
-            m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_params=solver_run,
             m_step_fn_glm_scale=None,
             maxiter=maxiter,
             tol=tol,
@@ -2660,10 +2658,10 @@ class TestConvergence:
             )
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
-        glm._instantiate_solver(
+        solver_run = glm._instantiate_solver(
             partial_posterior_weighted_glm_negative_log_likelihood,
             GLMParams(coef, intercept),
-        )
+        ).run
 
         # Create initial parameters
         params = GLMHMMParams(
@@ -2682,7 +2680,7 @@ class TestConvergence:
                 y=y,
                 inverse_link_function=obs.default_inverse_link_function,
                 log_likelihood_func=likelihood_func,
-                m_step_fn_glm_params=glm._solver_run,
+                m_step_fn_glm_params=solver_run,
                 m_step_fn_glm_scale=None,
                 maxiter=10,
                 tol=tol,
@@ -2738,10 +2736,10 @@ class TestConvergence:
             )
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
-        glm._instantiate_solver(
+        solver_run = glm._instantiate_solver(
             partial_posterior_weighted_glm_negative_log_likelihood,
             GLMParams(coef, intercept),
-        )
+        ).run
 
         # Create initial parameters
         params = GLMHMMParams(
@@ -2756,7 +2754,7 @@ class TestConvergence:
             y=y,
             inverse_link_function=obs.default_inverse_link_function,
             log_likelihood_func=likelihood_func,
-            m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_params=solver_run,
             m_step_fn_glm_scale=None,
             check_convergence=check_conv_5_iter,
             maxiter=100,
@@ -2972,10 +2970,10 @@ class TestCompilation:
             )
 
         glm = GLM(observation_model=obs, solver_name=solver_name)
-        glm._instantiate_solver(
+        solver_run = glm._instantiate_solver(
             partial_posterior_weighted_glm_negative_log_likelihood,
             GLMParams(coef, intercept),
-        )
+        ).run
 
         # Create tracked version with compilation counter
         compilation_counter = {"n_compilations": 0}
@@ -3037,7 +3035,7 @@ class TestCompilation:
             y,
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
-            m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_params=solver_run,
             m_step_fn_glm_scale=None,
             maxiter=5,
             tol=1e-8,
@@ -3051,7 +3049,7 @@ class TestCompilation:
             y,
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
-            m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_params=solver_run,
             m_step_fn_glm_scale=None,
             maxiter=5,
             tol=1e-8,
@@ -3081,7 +3079,7 @@ class TestCompilation:
             y_new,
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
-            m_step_fn_glm_params=glm._solver_run,
+            m_step_fn_glm_params=solver_run,
             m_step_fn_glm_scale=None,
             maxiter=5,
             tol=1e-8,
@@ -3411,11 +3409,10 @@ class TestPytreeSupport:
             )
 
         glm = GLM(observation_model=obs, solver_name="LBFGS")
-        glm._instantiate_solver(
+        solver_run = glm._instantiate_solver(
             partial_posterior_weighted_glm_negative_log_likelihood,
             GLMParams(coef_tree, intercept),
-        )
-        solver_run = glm._solver_run
+        ).run
 
         # Create initial parameters
         params = GLMHMMParams(
