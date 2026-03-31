@@ -2956,9 +2956,7 @@ class TestGroupLasso:
         model.set_params(regularizer=self.cls(mask=mask), regularizer_strength=1.0)
         model.solver_name = solver_name
 
-        solver = model._instantiate_solver(
-            model._compute_loss, true_params
-        )
+        solver = model._instantiate_solver(model._compute_loss, true_params)
         state = solver.init_state(true_params, X, y)
         # asses that state is a NamedTuple by checking tuple type and the availability of some NamedTuple
         # specific namespace attributes
@@ -2980,9 +2978,7 @@ class TestGroupLasso:
         model.solver_name = solver_name
 
         init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
-        solver = model._instantiate_solver(
-            model._compute_loss, init_params
-        )
+        solver = model._instantiate_solver(model._compute_loss, init_params)
 
         state = solver.init_state(init_params, X, y)
 
