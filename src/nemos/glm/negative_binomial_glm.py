@@ -9,7 +9,7 @@ from numpy._typing import ArrayLike
 from ..glm import GLM
 from ..observation_models import NegativeBinomialObservations
 from ..regularizer import Regularizer, UnRegularized
-from ..solvers import AbstractSolver, SolverState
+from ..solvers import SolverState
 from ..typing import DESIGN_INPUT_TYPE
 from .params import GLMParams, NBGLMUserParams
 
@@ -220,7 +220,9 @@ class NBGLM(GLM):
         self._set_model_params(params)
         self.aux_ = aux
         self.solver_state_ = state
-        # self.optim_info_ = (self._solver.get_optim_info(state.state_params), self._solver.get_optim_info(state.state_scale))
+        # self.optim_info_ = (
+        # self._solver.get_optim_info(state.state_params),
+        # self._solver.get_optim_info(state.state_scale))
 
     def _compute_loss(
         self,
