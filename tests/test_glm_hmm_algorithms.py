@@ -2429,9 +2429,7 @@ class TestConvergence:
         )
 
         # check converged flag is True
-        assert (
-            final_state.converged == True
-        ), "EMState converged flag should be set to True"
+        assert final_state.converged, "EMState converged flag should be set to True"
 
     @pytest.mark.requires_x64
     def test_never_converge_checker(self):
@@ -2505,7 +2503,7 @@ class TestConvergence:
 
         # check converged flag is False
         assert (
-            final_state.converged == False
+            not final_state.converged
         ), "EMState converged flag should be set to False"
 
     @pytest.mark.requires_x64
