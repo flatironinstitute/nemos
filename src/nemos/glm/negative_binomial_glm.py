@@ -8,7 +8,7 @@ from numpy._typing import ArrayLike
 
 from ..glm import GLM
 from ..observation_models import NegativeBinomialObservations
-from ..regularizer import Regularizer
+from ..regularizer import Regularizer, UnRegularized
 from ..solvers import AbstractSolver, SolverState
 from ..typing import DESIGN_INPUT_TYPE
 from .params import GLMParams, NBGLMUserParams
@@ -255,6 +255,12 @@ class NBGLM(GLM):
         init_state_scale, update_scale, run_scale = self._instantiate_solver(
             _scale_loss,
             init_params[1],
+            regularizer=UnRegularized(),
+            regularizer_strength=None,
+            solver_name="LBFGS",
+            solver_kwargs={
+                "tol": 1e-6 if init_params[1].dtype is jnp.float32 else 1e-12
+            },
         )
 
         def optimization_update(params, state, X, y):
