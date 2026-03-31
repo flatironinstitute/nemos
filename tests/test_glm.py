@@ -3396,7 +3396,7 @@ class TestPoissonGLM:
 
         params = glm.initialize_params(X, y)
         state = glm.initialize_optimizer_and_state(params, X, y)
-        # glm.instantiate_solver(glm.compute_loss)
+        # glm._instantiate_solver(glm.compute_loss)
 
         # NOTE these two are not the same because for example Ridge augments the loss
         # loss_grad = jax.jit(jax.grad(glm.compute_loss))
@@ -3911,7 +3911,7 @@ class TestClassifierGLM:
             "compute_loss",
             "simulate",
             "initialize_params",
-            "initialize_solver_and_state",
+            "initialize_optimizer_and_state",
         ],
     )
     def test_must_set_classes_before_calling(

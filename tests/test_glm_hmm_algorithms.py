@@ -1920,7 +1920,7 @@ class TestEMAlgorithm:
         solver_run = glm._instantiate_solver(
             partial_posterior_weighted_glm_negative_log_likelihood,
             GLMParams(coef, intercept),
-        )[-1]
+        ).run
         # End of preparatory step.
 
         # Create initial parameters
@@ -2033,7 +2033,7 @@ class TestEMAlgorithm:
         solver_run = glm._instantiate_solver(
             partial_posterior_weighted_glm_negative_log_likelihood,
             GLMParams(intercept, coef),
-        )[-1]
+        ).run
         # End of preparatory step.
 
         # add small noise to initial prob & projection weights
@@ -2376,7 +2376,7 @@ class TestConvergence:
         solver_run = glm._instantiate_solver(
             partial_posterior_weighted_glm_negative_log_likelihood,
             GLMParams(coef, intercept),
-        )[-1]
+        ).run
 
         # Create initial parameters
         params = GLMHMMParams(
@@ -2445,7 +2445,7 @@ class TestConvergence:
         solver_run = glm._instantiate_solver(
             partial_posterior_weighted_glm_negative_log_likelihood,
             GLMParams(coef, intercept),
-        )[-1]
+        ).run
 
         # Create initial parameters
         params = GLMHMMParams(
@@ -2509,7 +2509,7 @@ class TestConvergence:
         solver_run = glm._instantiate_solver(
             partial_posterior_weighted_glm_negative_log_likelihood,
             GLMParams(coef, intercept),
-        )[-1]
+        ).run
 
         # Create initial parameters
         params = GLMHMMParams(
@@ -2579,7 +2579,7 @@ class TestConvergence:
         solver_run = glm._instantiate_solver(
             partial_posterior_weighted_glm_negative_log_likelihood,
             GLMParams(coef, intercept),
-        )[-1]
+        ).run
 
         # Create initial parameters
         params = GLMHMMParams(
@@ -2661,7 +2661,7 @@ class TestConvergence:
         solver_run = glm._instantiate_solver(
             partial_posterior_weighted_glm_negative_log_likelihood,
             GLMParams(coef, intercept),
-        )[-1]
+        ).run
 
         # Create initial parameters
         params = GLMHMMParams(
@@ -2739,7 +2739,7 @@ class TestConvergence:
         solver_run = glm._instantiate_solver(
             partial_posterior_weighted_glm_negative_log_likelihood,
             GLMParams(coef, intercept),
-        )[-1]
+        ).run
 
         # Create initial parameters
         params = GLMHMMParams(
@@ -2973,7 +2973,7 @@ class TestCompilation:
         solver_run = glm._instantiate_solver(
             partial_posterior_weighted_glm_negative_log_likelihood,
             GLMParams(coef, intercept),
-        )[-1]
+        ).run
 
         # Create tracked version with compilation counter
         compilation_counter = {"n_compilations": 0}
@@ -3412,7 +3412,7 @@ class TestPytreeSupport:
         solver_run = glm._instantiate_solver(
             partial_posterior_weighted_glm_negative_log_likelihood,
             GLMParams(coef_tree, intercept),
-        )[-1]
+        ).run
 
         # Create initial parameters
         params = GLMHMMParams(

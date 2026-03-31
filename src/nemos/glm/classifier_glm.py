@@ -58,7 +58,7 @@ class ClassifierMixin:
 
         Notes
         -----
-        :meth:`fit` and :meth:`initialize_solver_and_state` call ``set_classes`` internally,
+        :meth:`fit` and :meth:`initialize_optimizer_and_state` call ``set_classes`` internally,
         making sure that the ``classes_`` attribute matches the provided input.
         If you are fitting in batches by calling :meth:`update`, make sure that the ``classes_``
         are correctly set by calling ``set_classes`` before starting the :meth:`update` loop.
@@ -412,11 +412,11 @@ class ClassifierMixin:
         y = self._label_encoder.decode(argmax(y))
         return y, log_prob
 
-    def initialize_solver_and_state(
+    def initialize_optimizer_and_state(
         self,
+        init_params: UserProvidedParamsT,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
-        init_params: UserProvidedParamsT,
     ) -> SolverState:
         """Initialize the solver and its state for running fit and update.
 
@@ -425,13 +425,13 @@ class ClassifierMixin:
 
         Parameters
         ----------
+        init_params
+            Initial parameter tuple of (coefficients, intercept).
         X
             Input data, array of shape ``(n_time_bins, n_features)`` or pytree of same.
         y
             Target labels, array of shape ``(n_time_bins,)`` for single neuron/subject models or
             ``(n_time_bins, n_neurons)`` for population models.
-        init_params
-            Initial parameter tuple of (coefficients, intercept).
 
         Returns
         -------
@@ -443,9 +443,9 @@ class ClassifierMixin:
         ValueError
             If inputs or parameters have incompatible shapes or invalid values.
         """
-        self._label_encoder.check_classes_is_set("initialize_solver_and_state")
+        self._label_encoder.check_classes_is_set("initialize_optimizer_and_state")
         y = self._label_encoder.encode(y)
-        return super().initialize_solver_and_state(X, y, init_params)
+        return super().initialize_optimizer_and_state(init_params, X, y)
 
     def initialize_params(
         self,
@@ -634,7 +634,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
 
     **Setting Class Labels**
 
-    The :meth:`fit` and :meth:`initialize_solver_and_state` methods automatically infer
+    The :meth:`fit` and :meth:`initialize_optimizer_and_state` methods automatically infer
     class labels from the provided ``y``. If you set ``coef_`` and ``intercept_`` manually,
     you must call :meth:`set_classes` before using :meth:`predict`, :meth:`predict_proba`,
     :meth:`simulate`, :meth:`score`, or :meth:`compute_loss`.
@@ -913,7 +913,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
 
     **Setting Class Labels**
 
-    The :meth:`fit` and :meth:`initialize_solver_and_state` methods automatically infer
+    The :meth:`fit` and :meth:`initialize_optimizer_and_state` methods automatically infer
     class labels from the provided ``y``. If you set ``coef_`` and ``intercept_`` manually,
     you must call :meth:`set_classes` before using :meth:`predict`, :meth:`predict_proba`,
     :meth:`simulate`, :meth:`score`, or :meth:`compute_loss`.

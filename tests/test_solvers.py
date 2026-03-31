@@ -153,12 +153,11 @@ def test_svrg_glm_instantiate_solver(regularizer_name, solver_class, mask):
         solver_name=solver_name,
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
     )
-    glm._instantiate_solver(glm._compute_loss, np.zeros(1))
+    solver = glm._instantiate_solver(glm._compute_loss, np.zeros(1))
 
     # currently glm._solver is a Wrapped(Prox)SVRG
-    solver = glm._solver._solver
     assert glm.algo_name == solver_name
-    assert isinstance(solver, solver_class)
+    assert isinstance(solver._solver, solver_class)
 
 
 @pytest.mark.parametrize(
@@ -189,10 +188,9 @@ def test_svrg_glm_passes_solver_kwargs(regularizer_name, solver_name, mask, glm_
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
         **kwargs,
     )
-    glm._instantiate_solver(glm._compute_loss, np.zeros(1))
+    solver = glm._instantiate_solver(glm._compute_loss, np.zeros(1))
 
     # currently glm._solver is a Wrapped(Prox)SVRG
-    solver = glm._solver._solver
     assert solver.stepsize == solver_kwargs["stepsize"]
     assert solver.maxiter == solver_kwargs["maxiter"]
 

@@ -279,6 +279,12 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         self.dof_resid_ = None
         self.aux_ = None
         self.optim_info_ = None
+        self._solver = None
+
+    @property
+    def solver(self):
+        """Getter for the solver class."""
+        return self._solver
 
     @classmethod
     def _validate_observation_class(cls, observation: obs.Observations):
@@ -982,13 +988,12 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         """
         opt_solver_kwargs = self._optimize_solver_params(X, y)
         #  set up the solver init/run/update attrs
-        (
-            self._optimizer_init_state,
-            self._optimizer_update,
-            self._optimizer_run,
-        ) = self._instantiate_solver(
+        self._solver = self._instantiate_solver(
             self._compute_loss, init_params=init_params, solver_kwargs=opt_solver_kwargs
         )
+        self._optimizer_init_state = self._solver.init_state
+        self._optimizer_update = self._solver.update
+        self._optimizer_run = self._solver.run
         opt_state = self._optimizer_init_state(init_params, X, y)
         return opt_state
 
