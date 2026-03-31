@@ -1247,7 +1247,10 @@ class NegativeBinomialObservations(Observations):
         """
         scale = self.scale if scale is None else scale
         ll_unnormalized = -self._negative_log_likelihood(
-            y, predicted_rate, aggregate_sample_scores
+            y,
+            predicted_rate,
+            aggregate_sample_scores,
+            scale=scale,
         )
         norm = aggregate_sample_scores(
             jax.scipy.special.gammaln(y + 1 / scale)

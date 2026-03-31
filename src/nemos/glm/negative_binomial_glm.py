@@ -22,6 +22,17 @@ class NBState(eqx.Module):
     iterations: int
 
 
+def _extract_fun_value(state: SolverState) -> float | None:
+    if hasattr(state, "value"):
+        return state.value
+    elif hasattr(state, "f"):
+        return state.f
+    elif hasattr(state, "f_info"):
+        return state.f_info.f
+    else:
+        return None
+
+
 def check_log_likelihood_increment(state: NBState, tol: float) -> jnp.ndarray:
     """
     Check EM convergence using absolute tolerance on log-likelihood.
@@ -42,30 +53,60 @@ def check_log_likelihood_increment(state: NBState, tol: float) -> jnp.ndarray:
     return delta < tol
 
 
-@partial(jax.jit, static_argnames=["solver_params"])
+@partial(jax.jit, static_argnames=["solver_run_params"])
 def _param_update_step(
     init_params: GLMParams,
     X: DESIGN_INPUT_TYPE,
     y: jnp.ndarray,
     log_scale: float,
-    solver_params,
+    solver_run_params,
 ):
-    params, state, aux = solver_params(init_params, X, y, jnp.exp(log_scale))
+    params, state, aux = solver_run_params(init_params, X, y, jnp.exp(log_scale))
     return params, state, aux
 
 
-@partial(jax.jit, static_argnames=["solver_scale"])
-def _scale_update_step(log_scale, X, y, init_params, solver_scale):
-    log_scale, state, aux = _param_update_step(init_params, X, y, log_scale)
+@partial(jax.jit, static_argnames=["solver_run_scale"])
+def _scale_update_step(log_scale, X, y, init_params, solver_run_scale):
+    log_scale, state, aux = solver_run_scale(log_scale, X, y, init_params)
     return log_scale, state, aux
 
 
-def _joint_fit(
+def _joint_update(
+    init_params: Tuple[GLMParams, float],
+    init_state: NBState,
+    X: DESIGN_INPUT_TYPE,
+    y: jnp.ndarray,
+    solver_run_params: Callable,
+    solver_run_scale: Callable,
+):
+    init_glm_params, init_log_scale = init_params[0], init_params[1]
+    new_params, new_state_params, new_aux_params = _param_update_step(
+        init_glm_params, X, y, init_log_scale, solver_run_params
+    )
+    new_scale, new_state_scale, new_aux_scale = _scale_update_step(
+        init_log_scale, X, y, new_params, solver_run_scale
+    )
+    new_iterations = init_state.iterations + 1
+    func_val = _extract_fun_value(new_state_scale)
+    if func_val is None:
+        raise ValueError("Solver state must store the value function.")
+    new_state = NBState(
+        data_log_likelihood=func_val,
+        previous_data_log_likelihood=init_state.data_log_likelihood,
+        state_params=new_state_params,
+        state_scale=new_state_scale,
+        iterations=new_iterations,
+    )
+    return (new_params, new_scale), new_state, (new_aux_params, new_aux_scale)
+
+
+def _joint_run(
     init_params: Tuple[GLMParams, float],
     X: DESIGN_INPUT_TYPE,
     y: jnp.ndarray,
-    solver_params: AbstractSolver,
-    solver_scale: AbstractSolver,
+    solver_run_params: Callable,
+    solver_run_scale: Callable,
+    init_state_fn: Callable,
     tol: float,
     maxiter: int,
 ):
@@ -75,33 +116,31 @@ def _joint_fit(
         _param_update_step,
         X=X,
         y=y,
-        solver_params=solver_params,
+        solver_run_params=solver_run_params,
     )
 
     _step_scale = eqx.Partial(
         _scale_update_step,
         X=X,
         y=y,
-        solver_scale=solver_scale,
+        solver_run_scale=solver_run_scale,
     )
 
-    init_state = NBState(
-        data_log_likelihood=-jnp.array(jnp.inf),
-        previous_data_log_likelihood=-jnp.array(jnp.inf),
-        state_params=None,
-        state_scale=None,
-        iterations=0,
-    )
+    init_state = init_state_fn(init_params, X, y)
 
     def stopping_condition_while(carry):
-        _, new_state = carry
+        _, _, new_state = carry
         return ~check_log_likelihood_increment(new_state, tol)
 
     def body_fn(carry):
         params, log_scale, state = carry
-        new_params, state_params, _ = _step_params(params, log_scale)
-        new_log_scale, state_scale, _ = _step_scale(params, log_scale)
-        func_val = solver_scale.get_optim_info(state_scale).function_val
+        new_params, state_params, aux_scale = _step_params(
+            init_params=params, log_scale=log_scale
+        )
+        new_log_scale, state_scale, aux_params = _step_scale(
+            log_scale=log_scale, init_params=new_params
+        )
+        func_val = _extract_fun_value(state_scale)
         if func_val is None:
             raise ValueError("Solver state must store the value function.")
         new_state = NBState(
@@ -113,7 +152,7 @@ def _joint_fit(
         )
         return new_params, new_log_scale, new_state
 
-    init_carry = init_glm_params, jnp.log(init_scale), init_state
+    init_carry = init_glm_params, init_scale, init_state
     params, log_scale, state = eqx.internal.while_loop(
         stopping_condition_while,
         body_fn,
@@ -121,7 +160,7 @@ def _joint_fit(
         max_steps=maxiter,
         kind="lax",
     )
-    return (params, jnp.exp(log_scale)), state, None
+    return (params, log_scale), state, None
 
 
 class NBGLM(GLM):
@@ -132,6 +171,8 @@ class NBGLM(GLM):
         regularizer_strength: Any = None,
         solver_name: str = None,
         solver_kwargs: dict = None,
+        tol: float = 1e-5,
+        maxiter: int = 500,
     ):
         observation_model = NegativeBinomialObservations()
         super().__init__(
@@ -142,6 +183,8 @@ class NBGLM(GLM):
             solver_name=solver_name,
             solver_kwargs=solver_kwargs,
         )
+        self.tol = tol
+        self.maxiter = maxiter
 
     def fit(
         self,
@@ -163,13 +206,21 @@ class NBGLM(GLM):
         self._validator.feature_mask_consistency(
             getattr(self, "_feature_mask", None), init_params
         )
-
+        init_log_scale = jnp.log(self.observation_model.scale)
         self._initialize_optimization_and_state(
-            init_params, data, y, self.observation_model.scale
+            (init_params, init_log_scale),
+            data,
+            y,
         )
         params, state, aux = self._optimization_run(
-            init_params, data, y, self.observation_model.scale
+            (init_params, init_log_scale),
+            data,
+            y,
         )
+        self._set_model_params(params)
+        self.aux_ = aux
+        self.solver_state_ = state
+        # self.optim_info_ = (self._solver.get_optim_info(state.state_params), self._solver.get_optim_info(state.state_scale))
 
     def _compute_loss(
         self,
@@ -186,12 +237,62 @@ class NBGLM(GLM):
 
     def _initialize_optimization_and_state(
         self,
-        init_params: Tuple[GLMParams, float],
+        init_params: Tuple[GLMParams, jnp.ndarray],
         X: dict[str, jnp.ndarray] | jnp.ndarray,
         y: jnp.ndarray,
         *args,
     ) -> SolverState:
-        self._instantiate_solver(
-            self.compute_loss,
+        init_state_params, update_params, run_params = self._instantiate_solver(
+            self._compute_loss,
             init_params[0],
         )
+
+        def _scale_loss(log_scale, X, y, params):
+            return -self.observation_model.log_likelihood(
+                y, self._predict(params, X), scale=jnp.exp(log_scale)
+            )
+
+        init_state_scale, update_scale, run_scale = self._instantiate_solver(
+            _scale_loss,
+            init_params[1],
+        )
+
+        def optimization_update(params, state, X, y):
+            return _joint_update(params, state, X, y, run_params, run_scale)
+
+        def optimization_init_state(params, X, y):
+            state_glm_params = init_state_params(params[0], X, y, jnp.exp(params[1]))
+            state_scale = init_state_scale(params[1], X, y, params[0])
+            return NBState(
+                data_log_likelihood=-jnp.array(jnp.inf),
+                previous_data_log_likelihood=-jnp.array(jnp.inf),
+                state_params=state_glm_params,
+                state_scale=state_scale,
+                iterations=0,
+            )
+
+        def optimization_run(params, X, y):
+            return _joint_run(
+                params,
+                X,
+                y,
+                run_params,
+                run_scale,
+                tol=self.tol,
+                maxiter=self.maxiter,
+                init_state_fn=optimization_init_state,
+            )
+
+        self._optimization_run = optimization_run
+        self._optimization_update = optimization_update
+        self._optimization_init_state = optimization_init_state
+        return self._optimization_init_state(init_params, X, y)
+
+    def _set_model_params(self, params: Tuple[GLMParams, jnp.ndarray]):
+        self.coef_, self.intercept_ = self._validator.from_model_params(params[0])
+        self.scale_ = jnp.exp(params[1])
+
+    def _get_model_params(self):
+        glm_params = self._validator.to_model_params(self.coef_, self.intercept_)
+        log_scale = jnp.log(self.scale_)
+        return glm_params, log_scale
