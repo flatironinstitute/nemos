@@ -77,7 +77,7 @@ def test_glm_passes_adjoint_to_optimistix_config(
 
     assert isinstance(solver_adapter.config.adjoint, type(adjoint))
 
-    # not true because GLM.instantiate_solver does a deepcopy
+    # not true because GLM._instantiate_solver does a deepcopy
     # assert solver_adapter.config.adjoint is adjoint
 
 

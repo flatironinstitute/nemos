@@ -1,6 +1,7 @@
 import inspect
 import itertools
 import math
+from pathlib import Path
 import re
 from contextlib import nullcontext as does_not_raise
 from functools import partial
@@ -2638,8 +2639,9 @@ class TestMSplineBasis(BasisFuncsTesting):
         """
         Compares the output of the MSpline basis functions against precomputed values from R
         """
+        path = Path(__file__).parent / "mspline_output_nointercept.csv"
         m_basis = np.loadtxt(
-            "tests/mspline_output_nointercept.csv", delimiter=",", skiprows=1
+            path, delimiter=",", skiprows=1
         )
         bas = basis.MSplineEval(5)
         m_basis_nemos = bas.compute_features(np.linspace(0, 1, 100))

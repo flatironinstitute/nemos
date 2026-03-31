@@ -157,7 +157,7 @@ def test_svrg_glm_instantiate_solver(regularizer_name, solver_class, mask):
 
     # currently glm._solver is a Wrapped(Prox)SVRG
     assert glm.algo_name == solver_name
-    assert isinstance(solver, solver_class)
+    assert isinstance(solver._solver, solver_class)
 
 
 @pytest.mark.parametrize(

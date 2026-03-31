@@ -3412,7 +3412,7 @@ class TestPytreeSupport:
         solver_run = glm._instantiate_solver(
             partial_posterior_weighted_glm_negative_log_likelihood,
             GLMParams(coef_tree, intercept),
-        )[-2]
+        ).run
 
         # Create initial parameters
         params = GLMHMMParams(
