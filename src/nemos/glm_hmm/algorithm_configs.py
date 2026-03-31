@@ -200,25 +200,29 @@ def prepare_estep_log_likelihood(
         Log-likelihood function vmapped over states for E-step.
         Signature: (y, rate, scale) -> log_likelihood per state
     """
-
-    def log_likelihood_per_sample(x, z, s):
-        if s is None:
-            return observation_model.log_likelihood(
-                x, z, aggregate_sample_scores=lambda v: v
-            )
-        else:
-            return observation_model.log_likelihood(
-                x, z, scale=s, aggregate_sample_scores=lambda v: v
-            )
-
     # Vectorize over the states axis
     state_axes = 2 if is_population_glm else 1
 
-    log_likelihood_per_sample = jax.vmap(
-        log_likelihood_per_sample,
-        in_axes=(None, state_axes, state_axes - 1),
-        out_axes=state_axes,
-    )
+    def log_likelihood_per_sample(x, z, s):
+        return observation_model.log_likelihood(
+            x, z, scale=s, aggregate_sample_scores=lambda v: v
+        )
+
+    if type(observation_model) in _NO_SCALE:
+
+        log_likelihood_per_sample = jax.vmap(
+            log_likelihood_per_sample,
+            in_axes=(None, state_axes, None),
+            out_axes=state_axes,
+        )
+
+    else:
+
+        log_likelihood_per_sample = jax.vmap(
+            log_likelihood_per_sample,
+            in_axes=(None, state_axes, state_axes - 1),
+            out_axes=state_axes,
+        )
 
     def log_likelihood(X, y, params):
         rate = compute_rate_per_state(X, params, inverse_link_function)

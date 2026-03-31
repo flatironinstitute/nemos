@@ -48,14 +48,19 @@ from nemos.solvers import get_solver
 
 
 def setup_solver(
-    objective, init_params, tol=1e-12, reg_strength=0.0, reg=UnRegularized()
+    objective,
+    init_params,
+    tol=1e-12,
+    solver_name="LBFGS",
+    regularizer_strength=0.0,
+    regularizer=UnRegularized(),
 ):
-    lbfgs_class = get_solver("LBFGS").implementation
+    lbfgs_class = get_solver(solver_name).implementation
     solver = lbfgs_class(
         objective,
         init_params=init_params,
-        regularizer=reg,
-        regularizer_strength=reg_strength,
+        regularizer=regularizer,
+        regularizer_strength=regularizer_strength,
         has_aux=False,
         tol=tol,
     )
