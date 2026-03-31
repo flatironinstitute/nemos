@@ -207,10 +207,10 @@ class TestModelVsPytree:
         indirect=["instantiate_base_regressor_subclass"],
     )
     @pytest.mark.solver_related
-    def test_initialize_solver_and_state_pytree_x(
+    def test_initialize_optimizer_and_state_pytree_x(
         self, instantiate_base_regressor_subclass, pytree_x
     ):
-        """initialize_solver_and_state runs without error when X is an arbitrary pytree."""
+        """initialize_optimizer_and_state runs without error when X is an arbitrary pytree."""
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
         params = model.initialize_params(pytree_x, fixture.y)
@@ -495,10 +495,10 @@ class TestModelCommons:
         assert all(np.all(actual_values[k] == v) for k, v in expected_values.items())
 
     @pytest.mark.solver_related
-    def test_initialize_solver_mask_grouplasso(
+    def test_initialize_optimizer_mask_grouplasso(
         self, instantiate_base_regressor_subclass
     ):
-        """Test that the group lasso initialize_solver_and_state goes through"""
+        """Test that the group lasso initialize_optimizer_and_state goes through"""
         fixture = instantiate_base_regressor_subclass
         X, model, params = fixture.X, fixture.model, fixture.params
         # TODO: remove in next PR when GLM is compatible with categorical
@@ -557,7 +557,7 @@ class TestModelCommons:
         ],
     )
     @pytest.mark.solver_related
-    def test_initialize_solver_all_invalid_X(
+    def test_initialize_optimizer_all_invalid_X(
         self, fill_val, expectation, instantiate_base_regressor_subclass
     ):
         fixture = instantiate_base_regressor_subclass
@@ -714,10 +714,10 @@ class TestModelCommons:
         assert model.regularizer_strength == (1.0, 0.5)
 
     ##########################################
-    # Test model.initialize_solver_and_state #
+    # Test model.initialize_optimizer_and_state #
     ##########################################
     @pytest.mark.solver_related
-    def test_initializer_solver_set_solver_callable(
+    def test_initialize_optimizer_set_solver_callable(
         self, instantiate_base_regressor_subclass
     ):
         fixture = instantiate_base_regressor_subclass
@@ -1236,7 +1236,7 @@ class TestModelValidator:
     @pytest.mark.solver_related
     def test_validate_param_length(self, n_params, instantiate_base_regressor_subclass):
         """
-        Test the `_initialize_solver_and_state` method with different numbers of initial parameters.
+        Test the `_initialize_optimizer_and_state` method with different numbers of initial parameters.
         Check for correct number of parameters.
         """
         fixture = instantiate_base_regressor_subclass

@@ -305,7 +305,7 @@ class TestGLM:
             model.fit(X, y, init_params=(init_w, init_b))
 
     """
-    Parameterization used by test_fit_init_params_type and test_initialize_solver_init_params_type.
+    Parameterization used by test_fit_init_params_type and test_initialize_optimizer_init_params_type.
     Uses a dict keyed by model class name for model-specific params, or a single value for
     model-independent test cases. Easy to extend by adding new model keys to the dicts.
     """
@@ -740,7 +740,7 @@ class TestGLM:
             model.predict(X)
 
     @pytest.fixture
-    def initialize_solver_weights_dimensionality_expectation(self, glm_class_type):
+    def initialize_optimizer_weights_dimensionality_expectation(self, glm_class_type):
         class_name = GLM_CLASS_TYPE_TO_NAME[glm_class_type]
         expected_coef_dim = DIMENSIONALITY_PARAMS[class_name]["coef"]
         # Build expectation dict: correct dim passes, others fail
@@ -758,22 +758,24 @@ class TestGLM:
 
     @pytest.mark.parametrize("dim_weights", [0, 1, 2, 3])
     @pytest.mark.solver_related
-    def test_initialize_solver_weights_dimensionality(
+    def test_initialize_optimizer_weights_dimensionality(
         self,
         dim_weights,
         request,
         glm_class_type,
         model_instantiation_type,
-        initialize_solver_weights_dimensionality_expectation,
+        initialize_optimizer_weights_dimensionality_expectation,
     ):
         """
-        Test the `initialize_solver` method with weight matrices of different dimensionalities.
+        Test the `initialize_optimizer` method with weight matrices of different dimensionalities.
         Check for correct dimensionality.
         """
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation_type
         )
-        expectation = initialize_solver_weights_dimensionality_expectation[dim_weights]
+        expectation = initialize_optimizer_weights_dimensionality_expectation[
+            dim_weights
+        ]
         par_shape = get_param_shape(model, X, y)
         n_samples, n_features = X.shape
         # Build init_w of the requested dimensionality
@@ -795,7 +797,7 @@ class TestGLM:
 
     @pytest.mark.parametrize("dim_intercepts", [0, 1, 2, 3])
     @pytest.mark.solver_related
-    def test_initialize_solver_intercepts_dimensionality(
+    def test_initialize_optimizer_intercepts_dimensionality(
         self,
         dim_intercepts,
         request,
@@ -803,7 +805,7 @@ class TestGLM:
         model_instantiation_type,
     ):
         """
-        Test the `initialize_solver` method with intercepts of different dimensionalities.
+        Test the `initialize_optimizer` method with intercepts of different dimensionalities.
         Check for correct dimensionality.
         """
         X, y, model, true_params, firing_rate = request.getfixturevalue(
@@ -841,7 +843,7 @@ class TestGLM:
 
     @pytest.mark.parametrize(*fit_init_params_type_init_params)
     @pytest.mark.solver_related
-    def test_initialize_solver_init_params_type(
+    def test_initialize_optimizer_init_params_type(
         self,
         request,
         glm_class_type,
@@ -850,7 +852,7 @@ class TestGLM:
         init_params_by_model,
     ):
         """
-        Test the `initialize_solver` method with various types of initial parameters.
+        Test the `initialize_optimizer` method with various types of initial parameters.
         Ensure that the provided initial parameters are array-like.
         """
         X, y, model, true_params, firing_rate = request.getfixturevalue(
@@ -869,7 +871,7 @@ class TestGLM:
         ],
     )
     @pytest.mark.solver_related
-    def test_initialize_solver_n_feature_consistency_weights(
+    def test_initialize_optimizer_n_feature_consistency_weights(
         self,
         delta_n_features,
         expectation,
@@ -878,7 +880,7 @@ class TestGLM:
         model_instantiation_type,
     ):
         """
-        Test the `initialize_solver` method for inconsistencies between data features and initial weights provided.
+        Test the `initialize_optimizer` method for inconsistencies between data features and initial weights provided.
         Ensure the number of features align.
         """
         X, y, model, true_params, firing_rate = request.getfixturevalue(

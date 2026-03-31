@@ -160,17 +160,17 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
     @property
     def optimizer_init_state(self) -> Union[None, SolverInit]:
         """
-        Provides the initialization function for the optimization state.
+        Provides the initialization function for the optimizer state.
 
-        This function is responsible for initializing the optimization state, necessary for the start
-        of the optimization process. It sets up initial values for parameters like gradients and step
+        This function is responsible for initializing the optimizer state, necessary for the start
+        of the optimizer process. It sets up initial values for parameters like gradients and step
         sizes based on the model configuration and input data.
 
         Returns
         -------
         :
-            The function to initialize the optimization state, if available; otherwise, None if
-            the optimization has not yet been instantiated.
+            The function to initialize the optimizer state, if available; otherwise, None if
+            the optimizer has not yet been instantiated.
         """
         return self._optimizer_init_state
 
@@ -181,14 +181,14 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
 
         This function is used to perform a single update step in the optimization process. It updates
         the model's parameters based on the current state, data, and gradients. It is typically used
-        in scenarios where fine-grained control over each optimization step is necessary, such as in
+        in scenarios where fine-grained control over each optimizer step is necessary, such as in
         online learning or complex optimization scenarios.
 
         Returns
         -------
         :
             The function to perform a single optimization update step, if available; otherwise, None if
-            the optimization has not yet been instantiated.
+            the optimizer has not yet been instantiated.
         """
         return self._optimizer_update
 
@@ -197,7 +197,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         """
         Provides the function to execute the optimization process.
 
-        This function runs the optimization using the initialized parameters and state, performing the
+        This function runs the optimizer using the initialized parameters and state, performing the
         optimization to fit the model to the data. It iteratively updates the model parameters until
         a stopping criterion is met, such as convergence or exceeding a maximum number of iterations.
 
@@ -205,7 +205,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         -------
         :
             The function to run the optimization process, if available; otherwise, None if
-            the optimization has not yet been instantiated.
+            the optimizer has not yet been instantiated.
         """
         return self._optimizer_run
 
@@ -645,7 +645,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
     ) -> SolverState:
-        """Initialize the solver and the state of the solver for running fit and update."""
+        """Initialize the optimizer and the state of the optimizer for running fit and update."""
         pass
 
     @cast_to_jax

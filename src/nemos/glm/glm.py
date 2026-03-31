@@ -1065,7 +1065,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         data = X.data if isinstance(X, FeaturePytree) else X
 
         # wrap into GLM params, this assumes params are well structured,
-        # if initializaiton is done via `initialize_solver_and_state` it
+        # if initializaiton is done via `initialize_optimizer_and_state` it
         # should be fine
         params = self._validator.to_model_params(params)
 
