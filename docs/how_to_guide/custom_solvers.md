@@ -326,8 +326,8 @@ Finally, we can inspect the model to show that it is using `ScipyPowell`:
 print(model.solver_name)
 # the actual solver instance that is created from the string or class
 print(model._solver)
-# GLM._optimization_run (called within GLM.fit) corresponds to this instance's .run method
-print(model._optimization_run)
+# GLM.optimizer_run (called within GLM.fit) corresponds to this instance's .run method
+print(model.optimizer_run)
 ```
 
 ### Test the update method
@@ -340,7 +340,7 @@ Repeatedly calling a `model.update` calls `ScipyPowell.update` to perform a sing
 import matplotlib.pyplot as plt
 
 params = model.initialize_params(X, y)
-state = model.initialize_solver_and_state(X, y, params)
+state = model.initialize_optimizer_and_state(params, X, y)
 
 fig, ax = plt.subplots()
 scores = []

@@ -305,7 +305,7 @@ class TestGLM:
             model.fit(X, y, init_params=(init_w, init_b))
 
     """
-    Parameterization used by test_fit_init_params_type and test_initialize_solver_init_params_type.
+    Parameterization used by test_fit_init_params_type and test_initialize_optimizer_init_params_type.
     Uses a dict keyed by model class name for model-specific params, or a single value for
     model-independent test cases. Easy to extend by adding new model keys to the dicts.
     """
@@ -740,7 +740,7 @@ class TestGLM:
             model.predict(X)
 
     @pytest.fixture
-    def initialize_solver_weights_dimensionality_expectation(self, glm_class_type):
+    def initialize_optimizer_weights_dimensionality_expectation(self, glm_class_type):
         class_name = GLM_CLASS_TYPE_TO_NAME[glm_class_type]
         expected_coef_dim = DIMENSIONALITY_PARAMS[class_name]["coef"]
         # Build expectation dict: correct dim passes, others fail
@@ -758,22 +758,24 @@ class TestGLM:
 
     @pytest.mark.parametrize("dim_weights", [0, 1, 2, 3])
     @pytest.mark.solver_related
-    def test_initialize_solver_weights_dimensionality(
+    def test_initialize_optimizer_weights_dimensionality(
         self,
         dim_weights,
         request,
         glm_class_type,
         model_instantiation_type,
-        initialize_solver_weights_dimensionality_expectation,
+        initialize_optimizer_weights_dimensionality_expectation,
     ):
         """
-        Test the `initialize_solver` method with weight matrices of different dimensionalities.
+        Test the `initialize_optimizer` method with weight matrices of different dimensionalities.
         Check for correct dimensionality.
         """
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation_type
         )
-        expectation = initialize_solver_weights_dimensionality_expectation[dim_weights]
+        expectation = initialize_optimizer_weights_dimensionality_expectation[
+            dim_weights
+        ]
         par_shape = get_param_shape(model, X, y)
         n_samples, n_features = X.shape
         # Build init_w of the requested dimensionality
@@ -791,13 +793,11 @@ class TestGLM:
                 par_shape.coef + (1,) * (dim_weights - len(par_shape.coef))
             )
         with expectation:
-            model.initialize_optimization_and_state(
-                (init_w, true_params.intercept), X, y
-            )
+            model.initialize_optimizer_and_state((init_w, true_params.intercept), X, y)
 
     @pytest.mark.parametrize("dim_intercepts", [0, 1, 2, 3])
     @pytest.mark.solver_related
-    def test_initialize_solver_intercepts_dimensionality(
+    def test_initialize_optimizer_intercepts_dimensionality(
         self,
         dim_intercepts,
         request,
@@ -805,7 +805,7 @@ class TestGLM:
         model_instantiation_type,
     ):
         """
-        Test the `initialize_solver` method with intercepts of different dimensionalities.
+        Test the `initialize_optimizer` method with intercepts of different dimensionalities.
         Check for correct dimensionality.
         """
         X, y, model, true_params, firing_rate = request.getfixturevalue(
@@ -839,11 +839,11 @@ class TestGLM:
 
         init_w = jnp.zeros(par_shape.coef)
         with expectation:
-            model.initialize_optimization_and_state((init_w, init_b), X, y)
+            model.initialize_optimizer_and_state((init_w, init_b), X, y)
 
     @pytest.mark.parametrize(*fit_init_params_type_init_params)
     @pytest.mark.solver_related
-    def test_initialize_solver_init_params_type(
+    def test_initialize_optimizer_init_params_type(
         self,
         request,
         glm_class_type,
@@ -852,7 +852,7 @@ class TestGLM:
         init_params_by_model,
     ):
         """
-        Test the `initialize_solver` method with various types of initial parameters.
+        Test the `initialize_optimizer` method with various types of initial parameters.
         Ensure that the provided initial parameters are array-like.
         """
         X, y, model, true_params, firing_rate = request.getfixturevalue(
@@ -860,7 +860,7 @@ class TestGLM:
         )
         init_params = self.get_init_params_for_model(init_params_by_model, model)
         with expectation:
-            model.initialize_optimization_and_state(init_params, X, y)
+            model.initialize_optimizer_and_state(init_params, X, y)
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -871,7 +871,7 @@ class TestGLM:
         ],
     )
     @pytest.mark.solver_related
-    def test_initialize_solver_n_feature_consistency_weights(
+    def test_initialize_optimizer_n_feature_consistency_weights(
         self,
         delta_n_features,
         expectation,
@@ -880,7 +880,7 @@ class TestGLM:
         model_instantiation_type,
     ):
         """
-        Test the `initialize_solver` method for inconsistencies between data features and initial weights provided.
+        Test the `initialize_optimizer` method for inconsistencies between data features and initial weights provided.
         Ensure the number of features align.
         """
         X, y, model, true_params, firing_rate = request.getfixturevalue(
@@ -892,7 +892,7 @@ class TestGLM:
         init_w = jnp.zeros(wrong_coef_shape)
         init_b = jnp.zeros(par_shape.intercept)
         with expectation:
-            model.initialize_optimization_and_state((init_w, init_b), X, y)
+            model.initialize_optimizer_and_state((init_w, init_b), X, y)
 
     #######################
     # Test model.simulate
@@ -2082,7 +2082,7 @@ class TestGLMObservationModel:
             glm_type + model_instantiation
         )
         params = model.initialize_params(X, y)
-        state = model.initialize_optimization_and_state(params, X, y)
+        state = model.initialize_optimizer_and_state(params, X, y)
         with expectation:
             model.update(
                 params,
@@ -2101,7 +2101,7 @@ class TestGLMObservationModel:
             glm_type + model_instantiation
         )
         params = model.initialize_params(X, y)
-        state = model.initialize_optimization_and_state(params, X, y)
+        state = model.initialize_optimizer_and_state(params, X, y)
         assert model.coef_ is None
         assert model.intercept_ is None
         if "gamma" not in model_instantiation and "gaussian" not in model_instantiation:
@@ -2136,7 +2136,7 @@ class TestGLMObservationModel:
             X[: X.shape[0] // 2, :] = np.nan
 
         params = model.initialize_params(X, y)
-        state = model.initialize_optimization_and_state(params, X, y)
+        state = model.initialize_optimizer_and_state(params, X, y)
         assert model.coef_ is None
         assert model.intercept_ is None
         if "gamma" not in model_instantiation and "gaussian" not in model_instantiation:
@@ -2167,7 +2167,7 @@ class TestGLMObservationModel:
         )
         model.solver_kwargs.update({"stepsize": 0.01})
         params = model.initialize_params(X, y)
-        state = model.initialize_optimization_and_state(params, X, y)
+        state = model.initialize_optimizer_and_state(params, X, y)
         # extract batch and add nans
         Xnan = X[:batch_size]
         Xnan[: batch_size // 2] = np.nan
@@ -3233,7 +3233,7 @@ class TestPoissonGLM:
             regularizer=reg,
             regularizer_strength=None if reg == "UnRegularized" else 1.0,
         )
-        opt_state = model._initialize_optimization_and_state(true_params, X, y)
+        opt_state = model._initialize_optimizer_and_state(true_params, X, y)
         solver = model._solver
 
         if stepsize is not None:
@@ -3395,7 +3395,7 @@ class TestPoissonGLM:
         glm2.fit(X, y)
 
         params = glm.initialize_params(X, y)
-        state = glm.initialize_optimization_and_state(params, X, y)
+        state = glm.initialize_optimizer_and_state(params, X, y)
         # glm.instantiate_solver(glm.compute_loss)
 
         # NOTE these two are not the same because for example Ridge augments the loss

@@ -143,9 +143,9 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         self._check_solver_kwargs(solver_class, solver_kwargs)
 
         self.solver_kwargs = solver_kwargs
-        self._optimization_init_state = None
-        self._optimization_update = None
-        self._optimization_run = None
+        self._optimizer_init_state = None
+        self._optimizer_update = None
+        self._optimizer_run = None
 
     def __sklearn_tags__(self):
         """Return regression model specific estimator tags."""
@@ -158,46 +158,46 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         return tags
 
     @property
-    def optimization_init_state(self) -> Union[None, SolverInit]:
+    def optimizer_init_state(self) -> Union[None, SolverInit]:
         """
-        Provides the initialization function for the optimization state.
+        Provides the initialization function for the optimizer state.
 
-        This function is responsible for initializing the optimization state, necessary for the start
-        of the optimization process. It sets up initial values for parameters like gradients and step
+        This function is responsible for initializing the optimizer state, necessary for the start
+        of the optimizer process. It sets up initial values for parameters like gradients and step
         sizes based on the model configuration and input data.
 
         Returns
         -------
         :
-            The function to initialize the optimization state, if available; otherwise, None if
-            the optimization has not yet been instantiated.
+            The function to initialize the optimizer state, if available; otherwise, None if
+            the optimizer has not yet been instantiated.
         """
-        return self._optimization_init_state
+        return self._optimizer_init_state
 
     @property
-    def optimization_update(self) -> Union[None, SolverUpdate]:
+    def optimizer_update(self) -> Union[None, SolverUpdate]:
         """
         Provides the function for updating the state during the optimization process.
 
         This function is used to perform a single update step in the optimization process. It updates
         the model's parameters based on the current state, data, and gradients. It is typically used
-        in scenarios where fine-grained control over each optimization step is necessary, such as in
+        in scenarios where fine-grained control over each optimizer step is necessary, such as in
         online learning or complex optimization scenarios.
 
         Returns
         -------
         :
             The function to perform a single optimization update step, if available; otherwise, None if
-            the optimization has not yet been instantiated.
+            the optimizer has not yet been instantiated.
         """
-        return self._optimization_update
+        return self._optimizer_update
 
     @property
-    def optimization_run(self) -> Union[None, SolverRun]:
+    def optimizer_run(self) -> Union[None, SolverRun]:
         """
         Provides the function to execute the optimization process.
 
-        This function runs the optimization using the initialized parameters and state, performing the
+        This function runs the optimizer using the initialized parameters and state, performing the
         optimization to fit the model to the data. It iteratively updates the model parameters until
         a stopping criterion is met, such as convergence or exceeding a maximum number of iterations.
 
@@ -205,9 +205,9 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         -------
         :
             The function to run the optimization process, if available; otherwise, None if
-            the optimization has not yet been instantiated.
+            the optimizer has not yet been instantiated.
         """
-        return self._optimization_run
+        return self._optimizer_run
 
     def set_params(self, **params: Any):
         """Manage warnings in case of multiple parameter settings."""
@@ -326,7 +326,13 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             )
 
     def _instantiate_solver(
-        self, loss, init_params: ModelParamsT, solver_kwargs: Optional[dict] = None
+        self,
+        loss,
+        init_params: ModelParamsT,
+        solver_name: Optional[str] = None,
+        solver_kwargs: Optional[dict] = None,
+        regularizer: Optional[Regularizer] = None,
+        regularizer_strength: Optional[Any] = None,
     ) -> Tuple[Callable, Callable, Callable]:
         """
         Instantiate the solver with the provided loss function.
@@ -349,9 +355,15 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             The un-regularized loss function.
         init_params:
             The model parameters.
+        solver_name:
+            Optional solver name, default is self.solver_name.
         solver_kwargs:
             Optional dictionary with the solver kwargs.
             If nothing is provided, it defaults to self.solver_kwargs.
+        regularizer:
+            Optional regularizer, default is self.regularizer.
+        regularizer_strength:
+            Optional regularization strength, default is self.regularizer_strength.
 
         Returns
         -------
@@ -364,16 +376,22 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         if solver_kwargs is None:
             # copy dictionary of kwargs to avoid modifying user settings
             solver_kwargs = deepcopy(self.solver_kwargs)
+        if solver_name is None:
+            solver_name = self.solver_name
+        if regularizer is None:
+            regularizer = self.regularizer
+        if regularizer_strength is None:
+            regularizer_strength = self.regularizer_strength
 
         # instantiate the solver
-        solver_cls = solvers.get_solver(self.solver_name).implementation
+        solver_cls = solvers.get_solver(solver_name).implementation
 
         self._check_solver_kwargs(solver_cls, solver_kwargs)
 
         solver = solver_cls(
             loss,
-            self.regularizer,
-            self.regularizer_strength,
+            regularizer,
+            regularizer_strength,
             has_aux=self._has_aux,
             init_params=init_params,
             **solver_kwargs,
@@ -621,23 +639,23 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         return data, y, *args
 
     @abc.abstractmethod
-    def _initialize_optimization_and_state(
+    def _initialize_optimizer_and_state(
         self,
         init_params: ModelParamsT,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
     ) -> SolverState:
-        """Initialize the solver and the state of the solver for running fit and update."""
+        """Initialize the optimizer and the state of the optimizer for running fit and update."""
         pass
 
     @cast_to_jax
-    def initialize_optimization_and_state(
+    def initialize_optimizer_and_state(
         self,
         init_params: UserProvidedParamsT,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
     ) -> SolverState:
-        """Initialize the solver and its state for running fit and update.
+        """Initialize the optimization routine and its state for running fit and update.
 
         This method must be called before using :meth:`update` for iterative optimization.
         It sets up the solver with the provided initial parameters and data.
@@ -666,7 +684,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         init_params = self._validator.validate_and_cast_params(init_params)
         self._validator.validate_consistency(init_params, X=X, y=y)
         X, y = self._preprocess_inputs(X, y, drop_nans=True)
-        return self._initialize_optimization_and_state(init_params, X, y)
+        return self._initialize_optimizer_and_state(init_params, X, y)
 
     def _optimize_solver_params(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray) -> dict:
         """

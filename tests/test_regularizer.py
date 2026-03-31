@@ -931,8 +931,8 @@ class TestUnRegularized:
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
         params = GLMParams(true_params.coef * 0.0, true_params.intercept)
-        optimization_run = model._instantiate_solver(model._compute_loss, params)[2]
-        optimization_run(params, X, y)
+        runner = model._instantiate_solver(model._compute_loss, params)[2]
+        runner(params, X, y)
 
     @pytest.mark.parametrize(
         "solver_name",
@@ -2938,10 +2938,8 @@ class TestGroupLasso:
         model.solver_name = solver_name
 
         init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
-        optimization_run = model._instantiate_solver(model._compute_loss, init_params)[
-            2
-        ]
-        optimization_run(init_params, X, y)
+        runner = model._instantiate_solver(model._compute_loss, init_params)[2]
+        runner(init_params, X, y)
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
     def test_init_solver(self, solver_name, poissonGLM_model_instantiation):
@@ -2958,10 +2956,10 @@ class TestGroupLasso:
         model.set_params(regularizer=self.cls(mask=mask), regularizer_strength=1.0)
         model.solver_name = solver_name
 
-        optimization_init_state, _, _ = model._instantiate_solver(
+        solver_init_state, _, _ = model._instantiate_solver(
             model._compute_loss, true_params
         )
-        state = optimization_init_state(true_params, X, y)
+        state = solver_init_state(true_params, X, y)
         # asses that state is a NamedTuple by checking tuple type and the availability of some NamedTuple
         # specific namespace attributes
         assert isinstance(state, tuple | eqx.Module)
@@ -2982,18 +2980,18 @@ class TestGroupLasso:
         model.solver_name = solver_name
 
         init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
-        optimization_init_state, optimization_update = model._instantiate_solver(
+        solver_init_state, solver_update = model._instantiate_solver(
             model._compute_loss, init_params
         )[:2]
 
-        state = optimization_init_state(init_params, X, y)
+        state = solver_init_state(init_params, X, y)
 
         # ProxSVRG needs the full gradient at the anchor point to be initialized
         # so here just set it to xs, which is not correct, but fine shape-wise
         if solver_name == "ProxSVRG":
             state = state._replace(full_grad_at_reference_point=state.reference_point)
 
-        params, state, _ = optimization_update(true_params, state, X, y)
+        params, state, _ = solver_update(true_params, state, X, y)
         # asses that state is a NamedTuple by checking tuple type and the availability of some NamedTuple
         # specific namespace attributes
         assert isinstance(state, tuple | eqx.Module)
