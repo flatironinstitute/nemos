@@ -751,9 +751,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             getattr(self, "_feature_mask", None), init_params
         )
 
-        self._initialize_optimization_and_state(init_params, data, y)
+        self._initialize_optimizer_and_state(init_params, data, y)
 
-        params, state, aux = self._optimization_run(init_params, data, y)
+        params, state, aux = self._optimizer_run(init_params, data, y)
 
         if tree_utils.pytree_map_and_reduce(
             lambda x: jnp.any(jnp.isnan(x)), any, params
@@ -943,7 +943,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             rank = jnp.linalg.matrix_rank(X)
             return (n_samples - rank - 1) * jnp.ones_like(params.intercept)
 
-    def _initialize_optimization_and_state(
+    def _initialize_optimizer_and_state(
         self,
         init_params: GLMParams,
         X: dict[str, jnp.ndarray] | jnp.ndarray,
@@ -977,19 +977,19 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
         >>> model = nmo.glm.GLM()
         >>> params = model.initialize_params(X, y)
-        >>> opt_state = model.initialize_optimization_and_state(params, X, y)
+        >>> opt_state = model.initialize_optimizer_and_state(params, X, y)
         >>> # Now ready to run optimization or update steps
         """
         opt_solver_kwargs = self._optimize_solver_params(X, y)
         #  set up the solver init/run/update attrs
         (
-            self._optimization_init_state,
-            self._optimization_update,
-            self._optimization_run,
+            self._optimizer_init_state,
+            self._optimizer_update,
+            self._optimizer_run,
         ) = self._instantiate_solver(
             self._compute_loss, init_params=init_params, solver_kwargs=opt_solver_kwargs
         )
-        opt_state = self._optimization_init_state(init_params, X, y)
+        opt_state = self._optimizer_init_state(init_params, X, y)
         return opt_state
 
     @cast_to_jax
@@ -1054,7 +1054,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
         >>> glm_instance = nmo.glm.GLM()
         >>> params = glm_instance.initialize_params(X, y)
-        >>> opt_state = glm_instance.initialize_optimization_and_state(params, X, y)
+        >>> opt_state = glm_instance.initialize_optimizer_and_state(params, X, y)
         >>> new_params, new_opt_state = glm_instance.update(params, opt_state, X, y)
 
         """
@@ -1070,7 +1070,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         params = self._validator.to_model_params(params)
 
         # perform a one-step update
-        updated_params, updated_state, aux = self._optimization_update(
+        updated_params, updated_state, aux = self._optimizer_update(
             params, opt_state, data, y, *args, **kwargs
         )
 

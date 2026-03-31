@@ -143,9 +143,9 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         self._check_solver_kwargs(solver_class, solver_kwargs)
 
         self.solver_kwargs = solver_kwargs
-        self._optimization_init_state = None
-        self._optimization_update = None
-        self._optimization_run = None
+        self._optimizer_init_state = None
+        self._optimizer_update = None
+        self._optimizer_run = None
 
     def __sklearn_tags__(self):
         """Return regression model specific estimator tags."""
@@ -158,7 +158,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         return tags
 
     @property
-    def optimization_init_state(self) -> Union[None, SolverInit]:
+    def optimizer_init_state(self) -> Union[None, SolverInit]:
         """
         Provides the initialization function for the optimization state.
 
@@ -172,10 +172,10 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             The function to initialize the optimization state, if available; otherwise, None if
             the optimization has not yet been instantiated.
         """
-        return self._optimization_init_state
+        return self._optimizer_init_state
 
     @property
-    def optimization_update(self) -> Union[None, SolverUpdate]:
+    def optimizer_update(self) -> Union[None, SolverUpdate]:
         """
         Provides the function for updating the state during the optimization process.
 
@@ -190,10 +190,10 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             The function to perform a single optimization update step, if available; otherwise, None if
             the optimization has not yet been instantiated.
         """
-        return self._optimization_update
+        return self._optimizer_update
 
     @property
-    def optimization_run(self) -> Union[None, SolverRun]:
+    def optimizer_run(self) -> Union[None, SolverRun]:
         """
         Provides the function to execute the optimization process.
 
@@ -207,7 +207,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             The function to run the optimization process, if available; otherwise, None if
             the optimization has not yet been instantiated.
         """
-        return self._optimization_run
+        return self._optimizer_run
 
     def set_params(self, **params: Any):
         """Manage warnings in case of multiple parameter settings."""
@@ -639,7 +639,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         return data, y, *args
 
     @abc.abstractmethod
-    def _initialize_optimization_and_state(
+    def _initialize_optimizer_and_state(
         self,
         init_params: ModelParamsT,
         X: DESIGN_INPUT_TYPE,
@@ -649,13 +649,13 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         pass
 
     @cast_to_jax
-    def initialize_optimization_and_state(
+    def initialize_optimizer_and_state(
         self,
         init_params: UserProvidedParamsT,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
     ) -> SolverState:
-        """Initialize the solver and its state for running fit and update.
+        """Initialize the optimization routine and its state for running fit and update.
 
         This method must be called before using :meth:`update` for iterative optimization.
         It sets up the solver with the provided initial parameters and data.
@@ -684,7 +684,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         init_params = self._validator.validate_and_cast_params(init_params)
         self._validator.validate_consistency(init_params, X=X, y=y)
         X, y = self._preprocess_inputs(X, y, drop_nans=True)
-        return self._initialize_optimization_and_state(init_params, X, y)
+        return self._initialize_optimizer_and_state(init_params, X, y)
 
     def _optimize_solver_params(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray) -> dict:
         """

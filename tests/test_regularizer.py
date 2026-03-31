@@ -2982,11 +2982,11 @@ class TestGroupLasso:
         model.solver_name = solver_name
 
         init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
-        optimization_init_state, optimization_update = model._instantiate_solver(
+        optimizer_init_state, optimization_update = model._instantiate_solver(
             model._compute_loss, init_params
         )[:2]
 
-        state = optimization_init_state(init_params, X, y)
+        state = optimizer_init_state(init_params, X, y)
 
         # ProxSVRG needs the full gradient at the anchor point to be initialized
         # so here just set it to xs, which is not correct, but fine shape-wise
