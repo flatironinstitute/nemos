@@ -7,13 +7,13 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 
+from ..typing import Aux, ModelParamsT, SolverState
 from .m_step_analytical_updates import (
     _analytical_m_step_log_initial_prob,
     _analytical_m_step_log_transition_prob,
 )
-from .utils import Array, initialize_new_session
-from ..typing import Aux, ModelParamsT, SolverState
 from .params import HMMParams
+from .utils import Array, initialize_new_session
 
 
 class EMState(eqx.Module):

@@ -7,7 +7,6 @@ import jax
 import jax.numpy as jnp
 
 from ..glm.params import GLMParams
-from .params import GLMHMMModelParams
 from ..observation_models import (
     BernoulliObservations,
     GaussianObservations,
@@ -16,6 +15,7 @@ from ..observation_models import (
 )
 from ..regularizer import UnRegularized
 from .m_step_analytical_updates import _m_step_scale_gaussian_observations
+from .params import GLMHMMModelParams
 from .utils import Array, compute_rate_per_state
 
 _NO_SCALE = (PoissonObservations, BernoulliObservations)
