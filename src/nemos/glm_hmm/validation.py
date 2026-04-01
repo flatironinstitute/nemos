@@ -6,13 +6,38 @@ from typing import Any, Callable, Optional, Tuple, Union
 import jax
 import jax.numpy as jnp
 from jax.typing import DTypeLike
+from pynapple import Tsd, TsdFrame
 
 from .. import validation
 from ..base_validator import RegressorValidator
 from ..glm.params import GLMParams, GLMUserParams
 from ..glm.validation import GLMValidator
+from ..hmm.params import HMMParams
+from ..type_casting import is_pynapple_tsd
 from ..typing import DESIGN_INPUT_TYPE
-from .params import GLMHMMParams, GLMHMMUserParams, GLMScale, HMMParams
+from .params import GLMHMMModelParams, GLMHMMParams, GLMHMMUserParams
+
+
+def has_nans_only_at_border(arr):
+    """Check if NaNs appear only at the start and end along axis=0."""
+    # Check which rows have any NaN values
+    is_nan = jnp.any(jnp.isnan(arr.reshape(arr.shape[0], -1)), axis=1)
+
+    # If no NaNs, it's valid
+    if not jnp.any(is_nan):
+        return True
+
+    # If all NaNs, it's valid
+    if jnp.all(is_nan):
+        return True
+
+    # Find first and last non-NaN positions
+    non_nan_indices = jnp.where(~is_nan)[0]
+    first_valid = non_nan_indices[0]
+    last_valid = non_nan_indices[-1]
+
+    # Check if there are any NaNs between first and last valid values
+    return not jnp.any(is_nan[first_valid : last_valid + 1])
 
 
 def to_glm_hmm_params(user_params: GLMHMMUserParams) -> GLMHMMParams:
@@ -22,8 +47,7 @@ def to_glm_hmm_params(user_params: GLMHMMUserParams) -> GLMHMMParams:
     to internal model parameters (log_scale and log probabilities).
     """
     return GLMHMMParams(
-        glm_params=GLMParams(*user_params[:2]),
-        glm_scale=GLMScale(jnp.log(user_params[2])),
+        model_params=GLMHMMModelParams(user_params[:3]),
         hmm_params=HMMParams(*(jnp.log(p) for p in user_params[3:])),
     )
 
@@ -40,9 +64,9 @@ def from_glm_hmm_params(params: GLMHMMParams) -> GLMHMMUserParams:
     transition_prob = jnp.exp(params.hmm_params.log_transition_prob)
     transition_prob /= transition_prob.sum(axis=1, keepdims=True)
     return (
-        params.glm_params.coef,
-        params.glm_params.intercept,
-        jnp.exp(params.glm_scale.log_scale),
+        params.model_params.coef,
+        params.model_params.intercept,
+        jnp.exp(params.model_params.log_scale),
         initial_prob,
         transition_prob,
     )
@@ -84,7 +108,7 @@ class GLMHMMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         ),
         ("check_init_and_transition_prob_shape", None),
         ("check_init_and_transition_prob_sum_to_1", None),
-        ("check_glm_params_shape", None),
+        ("check_model_params_shape", None),
         *RegressorValidator.params_validation_sequence[3:],
     )
 
@@ -142,7 +166,7 @@ class GLMHMMValidator(RegressorValidator[GLMUserParams, GLMParams]):
             )
         return params
 
-    def check_glm_params_shape(self, params: GLMHMMUserParams) -> GLMHMMUserParams:
+    def check_model_params_shape(self, params: GLMHMMUserParams) -> GLMHMMUserParams:
         """Check the length of the glm parameters state axis."""
         wrapped = self.wrap_user_params(params)
         coef, intercept = wrapped[:2]
@@ -230,12 +254,12 @@ class GLMHMMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         For single-neuron GLMHMM, only validates feature consistency with X.
         Does not validate y since it's 1D (single neuron, no neuron axis to check).
         """
-        self._glm_validator.validate_consistency(params.glm_params, X, y)
-        if params.glm_scale.log_scale.shape != params.glm_params.intercept.shape:
+        self._glm_validator.validate_consistency(params.model_params, X, y)
+        if params.model_params.log_scale.shape != params.model_params.intercept.shape:
             raise ValueError(
                 "The scale parameter and the intercept must be of shape ``(n_neurons,)``."
-                f"\nThe scale is of shape ``{params.glm_scale.log_scale.shape}`` and the intercept "
-                f"is of shape ``{params.glm_params.intercept.shape}`` instead."
+                f"\nThe scale is of shape ``{params.model_params.log_scale.shape}`` and the intercept "
+                f"is of shape ``{params.model_params.intercept.shape}`` instead."
             )
 
     def validate_and_cast_feature_mask(
@@ -278,5 +302,59 @@ class GLMHMMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         params: GLMHMMParams,
     ):
         """Check consistency of feature_mask and params."""
-        self._glm_validator.feature_mask_consistency(feature_mask, params.glm_params)
+        self._glm_validator.feature_mask_consistency(feature_mask, params.model_params)
         return
+
+    def validate_inputs(
+        self,
+        X: Optional[DESIGN_INPUT_TYPE] = None,
+        y: Optional[jnp.ndarray | Tsd | TsdFrame] = None,
+    ):
+        """Validate inputs for GLM-HMM model."""
+        super().validate_inputs(X, y)
+
+        # Additional checks due to the time-series structure.
+        # (the forward-backward implementation assumes no nans in the inputs)
+        # Skip NaN border check if y is None (e.g., during simulation)
+        if y is None:
+            if X is not None and not has_nans_only_at_border(X):
+                raise ValueError(
+                    "GLM-HMM requires continuous time-series data. NaN values must only "
+                    "appear at the beginning or end of the data, not in the middle."
+                )
+            return
+
+        if is_pynapple_tsd(X):
+            # loop over epochs and check that nans are all at the border
+            epoch_slices = [
+                X.get_slice(ep.start[0], ep.end[0]) for ep in X.time_support
+            ]
+            y_array = jnp.asarray(y)
+            is_continuous = all(
+                has_nans_only_at_border(X.d[s]) and has_nans_only_at_border(y_array[s])
+                for s in epoch_slices
+            )
+        elif is_pynapple_tsd(y):
+            # loop over epochs and check that nans are all at the border
+            epoch_slices = [
+                y.get_slice(ep.start[0], ep.end[0]) for ep in y.time_support
+            ]
+            is_continuous = all(
+                has_nans_only_at_border(X[s]) and has_nans_only_at_border(y.d[s])
+                for s in epoch_slices
+            )
+        else:
+            # check nans at the border
+            is_continuous = has_nans_only_at_border(X) and has_nans_only_at_border(y)
+        if not is_continuous:
+            raise ValueError(
+                "GLM-HMM requires continuous time-series data. NaN values must only "
+                "appear at the beginning or end of the data, not in the middle. "
+                "Found NaN values within the time series, which would break the "
+                "forward-backward algorithm. Please ensure your data is continuous "
+                "or split it into separate epochs at the gaps."
+            )
+
+    def get_empty_params(self, X, y) -> GLMHMMParams:
+        """Return the param shape given the input data."""
+        pass
