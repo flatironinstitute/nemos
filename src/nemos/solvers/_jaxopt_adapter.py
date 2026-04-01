@@ -129,7 +129,7 @@ class JaxoptAdapter(SolverAdapter[JaxoptAdapterState]):
             function_val=function_val,  # pyright: ignore
             num_steps=num_steps,
             converged=state.error.item() <= self.tol,  # pyright: ignore
-            reached_max_steps=(num_steps == self.maxiter),
+            reached_max_steps=(num_steps >= self.maxiter),
         )
 
     @property

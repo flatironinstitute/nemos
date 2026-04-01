@@ -253,7 +253,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixAdapterState]):
             function_val=function_val,
             num_steps=num_steps,
             converged=state.terminate,  # pyright: ignore
-            reached_max_steps=(num_steps == self.maxiter),
+            reached_max_steps=(num_steps >= self.maxiter),
         )
 
     def adjust_solver_init_kwargs(
