@@ -1,7 +1,7 @@
 """Negative Binomial GLM with joint parameter and scale learning."""
 
 from functools import partial
-from typing import Any, Callable, Dict, Literal, Optional, Tuple, Union
+from typing import Any, Callable, Optional, Tuple, Union
 
 import equinox as eqx
 import jax
@@ -16,12 +16,19 @@ from ..typing import DESIGN_INPUT_TYPE
 from .params import GLMParams, NBGLMUserParams
 
 
+class SolverState(eqx.Module):
+    """Store scale and glm parameters solver states."""
+
+    glm_params: SolverAdapterState
+    scale: SolverAdapterState
+
+
 class NBState(eqx.Module):
     """Negative Binomial optimization state."""
 
     data_log_likelihood: float | jnp.ndarray
     previous_data_log_likelihood: float | jnp.ndarray
-    solver_state: Dict[Literal["glm_params", "scale"], SolverAdapterState]
+    solver_state: SolverState
     iterations: int
 
 
@@ -110,7 +117,7 @@ def _joint_update(
     new_state = NBState(
         data_log_likelihood=func_val,
         previous_data_log_likelihood=init_state.data_log_likelihood,
-        solver_state={"glm_params": new_state_params, "scale": new_state_scale},
+        solver_state=SolverState(glm_params=new_state_params, scale=new_state_scale),
         iterations=new_iterations,
     )
     return (new_params, new_scale), new_state, (new_aux_params, new_aux_scale)
@@ -166,7 +173,7 @@ def _joint_run(
             data_log_likelihood=func_val,
             previous_data_log_likelihood=state.data_log_likelihood,
             iterations=state.iterations + 1,
-            solver_state={"glm_params": state_params, "scale": state_scale},
+            solver_state=SolverState(glm_params=state_params, scale=state_scale),
         )
         return new_params, new_log_scale, new_state
 
@@ -261,7 +268,7 @@ class NBGLM(GLM):
         X: dict[str, jnp.ndarray] | jnp.ndarray,
         y: jnp.ndarray,
         *args,
-    ) -> SolverAdapterState:
+    ) -> NBState:
         solver_params = self._instantiate_solver(
             self._compute_loss,
             init_params[0],
@@ -294,7 +301,7 @@ class NBGLM(GLM):
             return NBState(
                 data_log_likelihood=-jnp.array(jnp.inf),
                 previous_data_log_likelihood=-jnp.array(jnp.inf),
-                solver_state={"glm_params": state_params, "scale": state_scale},
+                solver_state=SolverState(glm_params=state_params, scale=state_scale),
                 iterations=0,
             )
 
