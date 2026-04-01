@@ -486,7 +486,22 @@ class GLM(BaseGLM[GLMUserParams, GLMParams]):
                 "and/or setting `acceleration=False`."
             )
 
-        if not self._solver.get_optim_info(state).converged:
+        if hasattr(state, "stats") and hasattr(state.stats, "converged"):
+            converged = state.stats.converged
+        elif hasattr(state, "converged"):
+            # try if the custom defined solver has a convergence flag directly
+            converged = state.converged
+        else:
+            # custom solver with potentially undefined convergence state
+            converged = True
+            warnings.warn(
+                f"Solver state {state} does not have a ``.converged`` nor a ``.stats.converged`` "
+                f"attribute. Convergence state is unknown; assuming converged. "
+                f"To assess the optimization manually, "
+                f"inspect the ``solver_state_`` attribute of the model.",
+                UserWarning,
+            )
+        if not converged:
             warnings.warn(
                 "The fit did not converge. "
                 "Consider the following:"
@@ -496,7 +511,6 @@ class GLM(BaseGLM[GLMUserParams, GLMParams]):
                 "For the available options see the ``self.solver.__init__`` docstrings.",
                 RuntimeWarning,
             )
-        self.optim_info_ = self._solver.get_optim_info(state)
 
         self._set_model_params(params)
 
@@ -800,7 +814,6 @@ class GLM(BaseGLM[GLMUserParams, GLMParams]):
         # initialize saving dictionary
         fit_attrs = self._get_fit_state()
         fit_attrs.pop("solver_state_")
-        fit_attrs.pop("optim_info_")
         string_attrs = ["inverse_link_function"]
 
         self._save_params(filename, fit_attrs, string_attrs)

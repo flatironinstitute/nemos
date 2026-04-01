@@ -10,6 +10,12 @@ from ..typing import Params, SolverState, StepResult
 
 if TYPE_CHECKING:
     from ..regularizer import Regularizer
+import equinox as eqx
+
+
+class AbstractSolverState(eqx.Module, Generic[SolverState]):
+    solver_state: SolverState  # backend-specific internal state
+    stats: OptimizationInfo  # num_steps, converged, etc. — computed during run, valid JAX pytree
 
 
 @dataclass
@@ -106,7 +112,7 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         pass
 
     @abc.abstractmethod
-    def get_optim_info(self, state: SolverState) -> OptimizationInfo:
+    def _get_optim_info(self, state: SolverState, **kwargs) -> OptimizationInfo:
         """Extract some commong info about the optimization process.
 
         Currently, the following info is extracted:
@@ -145,5 +151,3 @@ class SolverProtocol(Protocol, Generic[SolverState]):
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]: ...
-
-    def get_optim_info(self, state: SolverState) -> OptimizationInfo: ...

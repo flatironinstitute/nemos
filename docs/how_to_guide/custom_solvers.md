@@ -28,7 +28,6 @@ In order to adhere to the `AbstractSolver` interface, we have to define the foll
 - `update`: Take one step of the optimization algorithm.
 - `run`: Run a full optimization.
 - `get_accepted_arguments`: Set of argument names that can be passed to `__init__`.
-- `get_optim_info`: Collect diagnostic information about the optimization run into an `OptimizationInfo` namedtuple.
 
 ```{code-cell} ipython3
 import jax
@@ -51,6 +50,8 @@ class ScipySolverState(NamedTuple):
     iter_num: int
     # res is for storing the results of the optimization run.
     res: dict
+    # for notifying nemos if the optimization was succesful
+    converged: bool
 
 
 # NOTE: Omitting most types here for simplicity.
@@ -113,7 +114,7 @@ class ScipySolver:
 
         Has to accept `init_params` and `*args` even if it doesn't use them.
         """
-        return ScipySolverState(0, {})
+        return ScipySolverState(0, {}, False)
 
     def run(self, init_params, *args):
         """
@@ -128,7 +129,7 @@ class ScipySolver:
         # unpack res, which has a custom type defined in scipy into a regular dict
         return (
             unstacked_final_params,
-            ScipySolverState(res.nit, {**res}),
+            ScipySolverState(res.nit, {**res}, res.success),
             None,
         )
 
@@ -142,7 +143,7 @@ class ScipySolver:
         assert res.nit <= 1
         return (
             unstacked_final_params,
-            ScipySolverState(state.iter_num + res.nit, {**res}),
+            ScipySolverState(state.iter_num + res.nit, {**res}, False),
             None,
         )
 
@@ -179,18 +180,6 @@ class ScipySolver:
         )
 
         return unflattener_fun(res.x), res
-
-    def get_optim_info(self, state):
-        """
-        Read out the relevant optimization info from the results
-        we stored in the state.
-        """
-        return OptimizationInfo(
-            state.res["fun"],
-            state.res["nit"],
-            state.res["success"],
-            state.res["nit"] >= self.max_steps,
-        )
 
 
 class ScipyPowell(ScipySolver):

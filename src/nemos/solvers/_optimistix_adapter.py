@@ -4,6 +4,7 @@ import dataclasses
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, Type, TypeAlias
 
 import equinox as eqx
+import lazy_loader as lazy
 import optimistix as optx
 from packaging.version import Version
 
@@ -11,7 +12,8 @@ from ..typing import Aux, Params
 
 if TYPE_CHECKING:
     from ..regularizer import Regularizer
-from ._abstract_solver import OptimizationInfo
+
+from ._abstract_solver import AbstractSolverState, OptimizationInfo
 from ._aux_helpers import (
     convert_fn,
     drop_aux,
@@ -21,6 +23,8 @@ from ._aux_helpers import (
 )
 from ._solver_adapter import SolverAdapter
 
+jax = lazy.load("jax")
+
 _OPTX_V_010 = Version(optx.__version__) >= Version("0.1.0")
 
 DEFAULT_ATOL = 1e-4
@@ -28,7 +32,13 @@ DEFAULT_RTOL = 0.0
 DEFAULT_MAX_STEPS = 10_000
 
 OptimistixSolverState: TypeAlias = eqx.Module
-OptimistixStepResult: TypeAlias = tuple[Params, OptimistixSolverState, Aux]
+
+
+class OptimistixAdapterState(AbstractSolverState[OptimistixSolverState]):
+    """Solver state for Optimistix-based adapters."""
+
+
+OptimistixStepResult: TypeAlias = tuple[Params, OptimistixAdapterState, Aux]
 
 
 @dataclasses.dataclass
@@ -55,12 +65,12 @@ class OptimistixConfig:
     adjoint: optx.AbstractAdjoint = optx.ImplicitAdjoint()
 
 
-class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
+class OptimistixAdapter(SolverAdapter[OptimistixAdapterState]):
     """
     Base class for adapters wrapping Optimistix minimizers.
 
     Subclasses must define the `_solver_cls` class attribute.
-    The `_solver` and `stats` attributes are assumed to exist after construction,
+    The `_solver` attribute is assumed to exist after construction,
     so if a subclass is overwriting `__init__`, these must be created.
 
     Note that for backward compatibility the `atol` parameter used in Optimistix
@@ -73,10 +83,6 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
     _solver_cls: ClassVar[Type]
     _solver: optx.AbstractMinimiser
     DEFAULT_MAXITER: ClassVar[int] = DEFAULT_MAX_STEPS
-
-    # used for storing info after an optimization run
-    # updated with the dict from an optimistix._solution.Solution.stats
-    stats: dict[str, Any]
 
     _proximal: ClassVar[bool] = False
 
@@ -137,14 +143,12 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
             **solver_init_kwargs,
         )
 
-        self.stats = {}
-
-    def init_state(self, init_params: Params, *args: Any) -> OptimistixSolverState:
+    def init_state(self, init_params: Params, *args: Any) -> OptimistixAdapterState:
         init_params = tree_map_inexact_asarray(init_params)
         fn = convert_fn(self.fun_with_aux, True, init_params, args)
         f_struct, aux_struct = fn.out_struct
 
-        return self._solver.init(
+        solver_state = self._solver.init(
             fn,
             init_params,
             args,
@@ -153,26 +157,35 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
             aux_struct,
             self.config.tags,
         )
+        stats = OptimizationInfo(
+            function_val=jax.numpy.nan,  # pyright: ignore
+            num_steps=jax.numpy.array(0),
+            converged=jax.numpy.array(False),  # pyright: ignore
+            reached_max_steps=jax.numpy.array(False),
+        )
+        return OptimistixAdapterState(solver_state=solver_state, stats=stats)
 
     def update(
         self,
         params: Params,
-        state: OptimistixSolverState,
+        state: OptimistixAdapterState,
         *args: Any,
     ) -> OptimistixStepResult:
         params = tree_map_inexact_asarray(params)
 
         fn = convert_fn(self.fun_with_aux, True, params, args)
 
-        new_params, state, aux = self._solver.step(
+        new_params, solver_state, aux = self._solver.step(
             fn=fn,
             y=params,
             args=args,
-            state=state,
+            state=state.solver_state,
             options=self.config.options,
             tags=self.config.tags,
         )
-
+        num_steps = state.stats.num_steps + 1
+        stats = self._get_optim_info(solver_state, num_steps=num_steps)
+        state = OptimistixAdapterState(solver_state=solver_state, stats=stats)
         return new_params, state, aux
 
     def run(
@@ -192,10 +205,11 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
             throw=self.config.throw,
             tags=self.config.tags,
         )
-
-        self.stats.update(solution.stats)
-
-        return solution.value, solution.state, solution.aux
+        stats = self._get_optim_info(
+            solution.state, num_steps=solution.stats["num_steps"]
+        )
+        state = OptimistixAdapterState(solver_state=solution.state, stats=stats)
+        return solution.value, state, solution.aux
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:
@@ -227,18 +241,19 @@ class OptimistixAdapter(SolverAdapter[OptimistixSolverState]):
     def maxiter(self) -> int:
         return self.config.maxiter
 
-    def get_optim_info(self, state: OptimistixSolverState) -> OptimizationInfo:
-        num_steps = self.stats["num_steps"].item()
+    def _get_optim_info(
+        self, state: OptimistixSolverState, num_steps=0
+    ) -> OptimizationInfo:
 
         function_val = (
-            state.f.item() if hasattr(state, "f") else state.f_info.f.item()
+            state.f if hasattr(state, "f") else state.f_info.f
         )  # pyright: ignore
 
         return OptimizationInfo(
             function_val=function_val,
             num_steps=num_steps,
-            converged=state.terminate.item(),  # pyright: ignore
-            reached_max_steps=(num_steps == self.maxiter),
+            converged=state.terminate,  # pyright: ignore
+            reached_max_steps=(num_steps >= self.maxiter),
         )
 
     def adjust_solver_init_kwargs(

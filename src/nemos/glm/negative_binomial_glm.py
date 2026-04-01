@@ -226,11 +226,6 @@ class NBGLM(GLM):
         self._set_model_params(params)
         self.aux_ = aux
         self.solver_state_ = state
-        # self.optim_info_ = jax.tree_util.tree_map(
-        #     lambda solv, s: solv.get_optim_info(s),
-        #     self._solver,
-        #     state.solver_state
-        # )
 
     def _compute_loss(
         self,

@@ -83,7 +83,6 @@ class BaseGLM(BaseRegressor[UserProvidedParamsT, ModelParamsT]):
         self.solver_state_ = None
         self.dof_resid_ = None
         self.aux_ = None
-        self.optim_info_ = None
         self._solver = None
 
     @property

@@ -39,7 +39,7 @@ class GoodSolver:
     def get_accepted_arguments(cls):
         return set()
 
-    def get_optim_info(self, state):
+    def _get_optim_info(self, state):
         return None
 
 
@@ -94,7 +94,7 @@ class NoRunSolver:
     def get_accepted_arguments(cls):
         return set()
 
-    def get_optim_info(self, state):
+    def _get_optim_info(self, state):
         return None
 
 
