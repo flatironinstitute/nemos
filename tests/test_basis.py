@@ -4,6 +4,7 @@ import math
 import re
 from contextlib import nullcontext as does_not_raise
 from functools import partial
+from pathlib import Path
 from unittest.mock import patch
 
 import jax.numpy
@@ -2638,9 +2639,8 @@ class TestMSplineBasis(BasisFuncsTesting):
         """
         Compares the output of the MSpline basis functions against precomputed values from R
         """
-        m_basis = np.loadtxt(
-            "tests/mspline_output_nointercept.csv", delimiter=",", skiprows=1
-        )
+        path = Path(__file__).parent / "mspline_output_nointercept.csv"
+        m_basis = np.loadtxt(path, delimiter=",", skiprows=1)
         bas = basis.MSplineEval(5)
         m_basis_nemos = bas.compute_features(np.linspace(0, 1, 100))
         assert np.allclose(m_basis, m_basis_nemos)
