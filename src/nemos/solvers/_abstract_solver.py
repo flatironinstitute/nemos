@@ -10,6 +10,7 @@ from ..typing import Params, SolverState, StepResult
 if TYPE_CHECKING:
     from ..regularizer import Regularizer
 import equinox as eqx
+import jax
 
 
 class SolverAdapterState(eqx.Module, Generic[SolverState]):
@@ -22,10 +23,14 @@ class OptimizationInfo(eqx.Module):
 
     # Not all JAXopt solvers store the function value.
     # None means missing value, while NaN usually indicates a diverged optimization
-    function_val: float | None  #: Function value. Optional as not all solvers store it.
-    num_steps: int  #: Number of optimization steps taken.
-    converged: bool  #: Whether the optimization converged.
-    reached_max_steps: bool  #: Reached the maximum number of allowed steps.
+    function_val: (
+        jax.numpy.ndarray | None
+    )  #: Function value. Optional as not all solvers store it.
+    num_steps: jax.numpy.ndarray  #: Number of optimization steps taken, array of int.
+    converged: jax.numpy.ndarray  #: Whether the optimization converged, array of bool.
+    reached_max_steps: (
+        jax.numpy.ndarray
+    )  #: Reached the maximum number of allowed steps.
 
 
 class AbstractSolver(abc.ABC, Generic[SolverState]):

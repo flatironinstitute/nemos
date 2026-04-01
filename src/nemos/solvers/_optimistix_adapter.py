@@ -242,7 +242,9 @@ class OptimistixAdapter(SolverAdapter[OptimistixAdapterState]):
         return self.config.maxiter
 
     def _get_optim_info(
-        self, state: OptimistixSolverState, num_steps=0
+        self,
+        state: OptimistixSolverState,
+        num_steps: jax.numpy.ndarray = jax.numpy.array(0),
     ) -> OptimizationInfo:
 
         function_val = (
@@ -253,7 +255,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixAdapterState]):
             function_val=function_val,
             num_steps=num_steps,
             converged=state.terminate,  # pyright: ignore
-            reached_max_steps=(num_steps >= self.maxiter),
+            reached_max_steps=jax.numpy.asarray(num_steps >= self.maxiter),
         )
 
     def adjust_solver_init_kwargs(

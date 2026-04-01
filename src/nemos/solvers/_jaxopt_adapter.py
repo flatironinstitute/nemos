@@ -120,7 +120,7 @@ class JaxoptAdapter(SolverAdapter[JaxoptAdapterState]):
         return arguments
 
     def _get_optim_info(self, state: JaxoptSolverState, **kwargs) -> OptimizationInfo:
-        num_steps = state.iter_num.item()  # pyright: ignore
+        num_steps = state.iter_num  # pyright: ignore
         function_val = (
             state.value if hasattr(state, "value") else None
         )  # pyright: ignore
@@ -128,8 +128,8 @@ class JaxoptAdapter(SolverAdapter[JaxoptAdapterState]):
         return OptimizationInfo(
             function_val=function_val,  # pyright: ignore
             num_steps=num_steps,
-            converged=state.error.item() <= self.tol,  # pyright: ignore
-            reached_max_steps=(num_steps >= self.maxiter),
+            converged=jax.numpy.array(state.error <= self.tol),  # pyright: ignore
+            reached_max_steps=jax.numpy.array(num_steps >= self.maxiter),
         )
 
     @property
