@@ -470,75 +470,75 @@ class GLMHMM(BaseHMM, BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         self.scale_: jnp.ndarray | None = None
         self.dof_resid_: int | None = None
 
-    @property
-    def n_states(self) -> int:
-        """Number of hidden states of the HMM."""
-        return self._n_states
+    # @property
+    # def n_states(self) -> int:
+    #     """Number of hidden states of the HMM."""
+    #     return self._n_states
 
-    @n_states.setter
-    def n_states(self, n_states: int):
-        # quick sanity check and assignment
-        if isinstance(n_states, int) and n_states > 0:
-            self._n_states = n_states
-            self._validator: GLMHMMValidator = GLMHMMValidator(n_states=n_states)
-            return
+    # @n_states.setter
+    # def n_states(self, n_states: int):
+    #     # quick sanity check and assignment
+    #     if isinstance(n_states, int) and n_states > 0:
+    #         self._n_states = n_states
+    #         self._validator: GLMHMMValidator = GLMHMMValidator(n_states=n_states)
+    #         return
 
-        # further checks for other valid numeric types (like non-negative float with no-decimals)
-        if not isinstance(n_states, Number):
-            raise TypeError(
-                f"n_states must be a positive integer. "
-                f"n_states is of type ``{type(n_states)}`` instead."
-            )
+    #     # further checks for other valid numeric types (like non-negative float with no-decimals)
+    #     if not isinstance(n_states, Number):
+    #         raise TypeError(
+    #             f"n_states must be a positive integer. "
+    #             f"n_states is of type ``{type(n_states)}`` instead."
+    #         )
 
-        # provided a non-integer number (check that has no decimals)
-        int_n_states = int(n_states)
-        if int_n_states != n_states:
-            raise TypeError(
-                f"n_states must be a positive integer. ``{n_states}`` provided instead."
-            )
-        elif int_n_states < 1:
-            raise ValueError(
-                f"n_states must be a positive integer. ``{n_states}`` provided instead."
-            )
-        self._n_states = int_n_states
-        self._validator = GLMHMMValidator(n_states=n_states)
+    #     # provided a non-integer number (check that has no decimals)
+    #     int_n_states = int(n_states)
+    #     if int_n_states != n_states:
+    #         raise TypeError(
+    #             f"n_states must be a positive integer. ``{n_states}`` provided instead."
+    #         )
+    #     elif int_n_states < 1:
+    #         raise ValueError(
+    #             f"n_states must be a positive integer. ``{n_states}`` provided instead."
+    #         )
+    #     self._n_states = int_n_states
+    #     self._validator = GLMHMMValidator(n_states=n_states)
 
-    @property
-    def maxiter(self):
-        """EM maximum number of iterations."""
-        return self._maxiter
+    # @property
+    # def maxiter(self):
+    #     """EM maximum number of iterations."""
+    #     return self._maxiter
 
-    @maxiter.setter
-    def maxiter(self, maxiter: int):
+    # @maxiter.setter
+    # def maxiter(self, maxiter: int):
 
-        if not isinstance(maxiter, Number) or maxiter != int(maxiter) or maxiter <= 0:
-            raise ValueError(
-                f"``maxiter`` must be a strictly positive integer. {maxiter} provided."
-            )
-        self._maxiter = int(maxiter)
+    #     if not isinstance(maxiter, Number) or maxiter != int(maxiter) or maxiter <= 0:
+    #         raise ValueError(
+    #             f"``maxiter`` must be a strictly positive integer. {maxiter} provided."
+    #         )
+    #     self._maxiter = int(maxiter)
 
-    @property
-    def tol(self):
-        """Tolerance for the EM algorithm convergence criterion.
+    # @property
+    # def tol(self):
+    #     """Tolerance for the EM algorithm convergence criterion.
 
-        The algorithm stops when the absolute change in log-likelihood between
-        consecutive iterations falls below this threshold:
-        |log_likelihood_current - log_likelihood_previous| < tol
+    #     The algorithm stops when the absolute change in log-likelihood between
+    #     consecutive iterations falls below this threshold:
+    #     |log_likelihood_current - log_likelihood_previous| < tol
 
-        Returns
-        -------
-            float: Convergence tolerance value.
-        """
-        return self._tol
+    #     Returns
+    #     -------
+    #         float: Convergence tolerance value.
+    #     """
+    #     return self._tol
 
-    @tol.setter
-    def tol(self, tol: float):
+    # @tol.setter
+    # def tol(self, tol: float):
 
-        if not isinstance(tol, Number) or tol <= 0:
-            raise ValueError(
-                f"``tol`` must be a strictly positive float. {tol} provided."
-            )
-        self._tol = float(tol)
+    #     if not isinstance(tol, Number) or tol <= 0:
+    #         raise ValueError(
+    #             f"``tol`` must be a strictly positive float. {tol} provided."
+    #         )
+    #     self._tol = float(tol)
 
     @property
     def initialization_funcs(self):
@@ -603,33 +603,33 @@ class GLMHMM(BaseHMM, BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
             initialization_kwargs, self._initialization_funcs
         )
 
-    @property
-    def dirichlet_prior_alphas_init_prob(self) -> jnp.ndarray | None:
-        """Alpha parameters of the Dirichlet prior over the initial probabilities of HMM states.
+    # @property
+    # def dirichlet_prior_alphas_init_prob(self) -> jnp.ndarray | None:
+    #     """Alpha parameters of the Dirichlet prior over the initial probabilities of HMM states.
 
-        If ``None``, a flat prior is assumed.
-        """
-        return self._dirichlet_prior_alphas_init_prob
+    #     If ``None``, a flat prior is assumed.
+    #     """
+    #     return self._dirichlet_prior_alphas_init_prob
 
-    @dirichlet_prior_alphas_init_prob.setter
-    def dirichlet_prior_alphas_init_prob(self, value: jnp.ndarray | None):
-        self._dirichlet_prior_alphas_init_prob = _resolve_dirichlet_priors(
-            value, (self._n_states,)
-        )
+    # @dirichlet_prior_alphas_init_prob.setter
+    # def dirichlet_prior_alphas_init_prob(self, value: jnp.ndarray | None):
+    #     self._dirichlet_prior_alphas_init_prob = _resolve_dirichlet_priors(
+    #         value, (self._n_states,)
+    #     )
 
-    @property
-    def dirichlet_prior_alphas_transition(self) -> jnp.ndarray | None:
-        """Alpha parameters of the Dirichlet prior over the initial probabilities of HMM states.
+    # @property
+    # def dirichlet_prior_alphas_transition(self) -> jnp.ndarray | None:
+    #     """Alpha parameters of the Dirichlet prior over the initial probabilities of HMM states.
 
-        If ``None``, a flat prior is assumed.
-        """
-        return self._dirichlet_prior_alphas_transition
+    #     If ``None``, a flat prior is assumed.
+    #     """
+    #     return self._dirichlet_prior_alphas_transition
 
-    @dirichlet_prior_alphas_transition.setter
-    def dirichlet_prior_alphas_transition(self, value: jnp.ndarray | None):
-        self._dirichlet_prior_alphas_transition = _resolve_dirichlet_priors(
-            value, (self._n_states, self._n_states)
-        )
+    # @dirichlet_prior_alphas_transition.setter
+    # def dirichlet_prior_alphas_transition(self, value: jnp.ndarray | None):
+    #     self._dirichlet_prior_alphas_transition = _resolve_dirichlet_priors(
+    #         value, (self._n_states, self._n_states)
+    # )
 
     @property
     def observation_model(self) -> obs.Observations:
@@ -658,36 +658,35 @@ class GLMHMM(BaseHMM, BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
             inverse_link_function, self._observation_model
         )
 
-    @property
-    def seed(self):
-        """Random seed as a jax PRNG key."""
-        return self._seed
+    # @property
+    # def seed(self):
+    #     """Random seed as a jax PRNG key."""
+    #     return self._seed
 
-    @seed.setter
-    def seed(self, value):
-        try:
-            value = jnp.asarray(value)
-        except (TypeError, ValueError) as e:
-            raise TypeError(
-                f"seed must be a JAX PRNG key (jax.random.PRNGKey). "
-                f"Got {type(value).__name__} instead."
-            ) from e
-        # Validate it's a JAX PRNG key
-        if value.shape != (2,) or value.dtype != jnp.uint32:
-            raise TypeError(
-                f"seed must be a JAX PRNG key (jax.random.PRNGKey). "
-                f"Got {type(value).__name__} with shape {getattr(value, 'shape', 'N/A')}"
-            )
-        self._seed = value
+    # @seed.setter
+    # def seed(self, value):
+    #     try:
+    #         value = jnp.asarray(value)
+    #     except (TypeError, ValueError) as e:
+    #         raise TypeError(
+    #             f"seed must be a JAX PRNG key (jax.random.PRNGKey). "
+    #             f"Got {type(value).__name__} instead."
+    #         ) from e
+    #     # Validate it's a JAX PRNG key
+    #     if value.shape != (2,) or value.dtype != jnp.uint32:
+    #         raise TypeError(
+    #             f"seed must be a JAX PRNG key (jax.random.PRNGKey). "
+    #             f"Got {type(value).__name__} with shape {getattr(value, 'shape', 'N/A')}"
+    #         )
+    #     self._seed = value
 
     def _check_is_fit(self):
         """Ensure the instance has been fitted."""
+        BaseHMM._check_is_fit(self)
         flat_params = [
             self.coef_,
             self.intercept_,
             self.scale_,
-            self.initial_prob_,
-            self.transition_prob_,
         ]
         is_missing = [x is None for x in flat_params]
         if any(is_missing):
@@ -695,8 +694,6 @@ class GLMHMM(BaseHMM, BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
                 "coef_",
                 "intercept_",
                 "scale_",
-                "initial_prob_",
-                "transition_prob_",
             ]
             missing_params = [
                 p for p, missing in zip(param_labels, is_missing) if missing
@@ -768,33 +765,6 @@ class GLMHMM(BaseHMM, BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
         #     _, _, scale_update_fn = self._instantiate_solver(
         #         objective_scale, init_params.model_params.log_scale
         #     )
-
-        def glm_params_and_scale_update_fn(params, X, y, posteriors):
-            new_glm_params, glm_state, _ = glm_params_update_fn(
-                params.model_params, X, y, posteriors
-            )
-
-            if scale_update_fn is not None:
-                predicted_rate = compute_rate_per_state(
-                    X, new_glm_params, inverse_link_function=self.inverse_link_function
-                )
-
-                # Gaussian, Gamma, and other have a scale.
-                new_glm_scale, state_scale, _ = scale_update_fn(
-                    params.model_params.log_scale, y, predicted_rate, posteriors
-                )
-            else:
-                # Poisson, Bernoulli etc. do not have a scale
-                # just keep carrying the scale
-                new_glm_scale = params.model_params.log_scale
-
-            new_params = GLMParams(
-                coef=new_glm_params.coef,
-                intercept=new_glm_params.intercept,
-                scale=new_glm_scale,
-            )
-
-            return new_params, (glm_state, state_scale), None
 
         # cannot wrap is_new_session, that's to be calculated at each update form the provided X and y.
         # for consistency, do not make a partial of that argument in run as well.
@@ -1017,669 +987,669 @@ class GLMHMM(BaseHMM, BaseRegressor[GLMHMMUserParams, GLMHMMParams]):
             rank = jnp.linalg.matrix_rank(X)
             return (n_samples - rank - dof_intercept_and_hmm) * jnp.ones(n_neurons)
 
-    def _score(
-        self,
-        params: GLMHMMParams,
-        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
-        y: Union[NDArray, jnp.ndarray, nap.Tsd],
-        is_new_session: jnp.ndarray,
-    ) -> jnp.ndarray:
-        """Private score compute."""
-        # filter for non-nans, grab data if needed
-        data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
-        # safe conversion to jax arrays of float
-        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
-
-        # make sure is_new_session starts with a 1
-        is_new_session = is_new_session.at[0].set(True)
-
-        # smooth with forward backward
-        _, log_norm = forward_pass(
-            params=params,
-            X=data,
-            y=y,
-            is_new_session=is_new_session,
-            log_likelihood_func=prepare_estep_log_likelihood(
-                y.ndim > 1, self.observation_model
-            ),
-            inverse_link_function=self._inverse_link_function,
-        )
-        return jnp.sum(log_norm)
-
-    def score(
-        self,
-        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
-        y: ArrayLike,
-        score_type: Literal[
-            "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"
-        ] = "log-likelihood",
-        null_model: Optional[Literal["constant", "glm"]] = None,
-    ) -> jnp.ndarray:
-        """Compute the model score."""
-        if score_type == "log-likelihood" and null_model is not None:
-            warnings.warn(
-                "The null model is not used for the log-likelihood computation.",
-                UserWarning,
-                stacklevel=2,
-            )
-        if score_type != "log-likelihood":
-            raise NotImplementedError(
-                f"score of type {score_type} not implemented yet!"
-            )
-        params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
-        return self._score(params, X, y, is_new_session)
-
-    @support_pynapple(conv_type="jax")
-    def simulate(
-        self,
-        random_key: jax.Array,
-        feedforward_input: DESIGN_INPUT_TYPE,
-        state_format: Literal["one-hot", "index"] = "index",
-    ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-        """Simulate neural activity and hidden states from the model.
-
-        Simulates a trajectory through the hidden state space according to the
-        HMM dynamics, then generates observations from the GLM emission model
-        conditioned on each state.
-
-        Parameters
-        ----------
-        random_key :
-            JAX random key for reproducible simulation.
-        feedforward_input :
-            Design matrix of shape ``(n_time_bins, n_features)``. If a pynapple
-            Tsd/TsdFrame is provided, session boundaries are detected from
-            ``time_support`` and the hidden state chain is reset at each session start.
-        state_format :
-            Format for the returned states:
-
-            - ``"index"``: Integer array of shape ``(n_time_bins,)`` with state indices.
-            - ``"one-hot"``: Binary array of shape ``(n_time_bins, n_states)``.
-
-        Returns
-        -------
-        simulated_activity :
-            Simulated observations from the emission model. Shape ``(n_time_bins,)``
-            for single neuron or ``(n_time_bins, n_neurons)`` for population models.
-        firing_rates :
-            Predicted firing rates conditioned on the simulated states.
-            Shape ``(n_time_bins,)`` or ``(n_time_bins, n_neurons)``.
-        simulated_states :
-            Simulated hidden state trajectory. Shape depends on ``state_format``.
-
-        Raises
-        ------
-        ValueError
-            If the model has not been fit.
-
-        Examples
-        --------
-        >>> import jax
-        >>> import numpy as np
-        >>> import nemos as nmo
-        >>> np.random.seed(123)
-        >>> X = np.random.randn(100, 3)
-        >>> y = np.random.binomial(1, 0.5, 100)
-        >>> model = nmo.glm.GLMHMM(n_states=2, observation_model="Bernoulli")
-        >>> model = model.fit(X, y)
-        >>> key = jax.random.key(0)
-        >>> X_new = np.random.randn(50, 3)
-        >>> activity, rates, states = model.simulate(key, X_new)
-        >>> activity.shape
-        (50,)
-        >>> states.shape
-        (50,)
-
-        See Also
-        --------
-        decode_state : Infer most likely state sequence from observations.
-        smooth_proba : Compute posterior state probabilities.
-        """
-        # check if the model is fit
-        self._check_is_fit()
-
-        # check state format
-        _check_state_format(state_format)
-
-        params = self._get_model_params()
-
-        # validate inputs
-        self._validator.validate_inputs(X=feedforward_input)
-        self._validator.validate_consistency(params, X=feedforward_input)
-
-        # get session boundaries (y=None for simulation)
-        is_new_session = self._get_is_new_session(feedforward_input, y=None)
-
-        # preprocess inputs (drop nans, extract data)
-        data, _, is_new_session = self._preprocess_inputs(
-            feedforward_input, jnp.zeros(feedforward_input.shape[0]), is_new_session
-        )
-
-        # ensure first time point is a session start
-        is_new_session = is_new_session.at[0].set(True)
-
-        # run simulation
-        simulated_activity, firing_rates, simulated_states = self._simulate(
-            random_key, params, data, is_new_session
-        )
-
-        # format state output
-        if state_format == "one-hot":
-            simulated_states = jax.nn.one_hot(
-                simulated_states, self._n_states, dtype=jnp.int32
-            )
-
-        return simulated_activity, firing_rates, simulated_states
-
-    def _simulate(
-        self,
-        random_key: jax.Array,
-        params: GLMHMMParams,
-        X: jnp.ndarray,
-        is_new_session: jnp.ndarray,
-    ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-        """Simulate activity vis jax.lax.scan.
-
-        Parameters
-        ----------
-        random_key :
-            JAX random key.
-        params :
-            Model parameters.
-        X :
-            Design matrix of shape ``(n_time_bins, n_features)``.
-        is_new_session :
-            Boolean array marking session starts.
-
-        Returns
-        -------
-        simulated_activity :
-            Simulated observations.
-        firing_rates :
-            Predicted rates conditioned on simulated states.
-        simulated_states :
-            State indices at each time point.
-        """
-        # unpack log probabilities directly (avoid exp then log in categorical)
-        log_initial_prob = params.hmm_params.log_initial_prob
-        log_transition_prob = params.hmm_params.log_transition_prob
-        scale = jnp.exp(params.model_params.log_scale)
-
-        # pre-compute rates for all states: (n_time_bins, n_states) or (n_time_bins, n_neurons, n_states)
-        all_rates = compute_rate_per_state(
-            X, params.model_params, self._inverse_link_function
-        )
-
-        # pre-generate random keys for all time steps
-        n_time_bins = X.shape[0]
-        all_keys = jax.random.split(random_key, n_time_bins * 2)
-        state_keys = all_keys[:n_time_bins]
-        obs_keys = all_keys[n_time_bins:]
-
-        def simulate_step(carry, inputs):
-            """Single simulation step."""
-            prev_state_idx = carry
-            rates_t, is_new_sess, state_key, obs_key = inputs
-
-            # sample state: log_initial_prob if new session, else log transition from prev
-            log_state_probs = jax.lax.cond(
-                is_new_sess,
-                lambda: log_initial_prob,
-                lambda: log_transition_prob[prev_state_idx],
-            )
-            state_idx = jax.random.categorical(state_key, log_state_probs)
-
-            # get rate and scale for sampled state
-            # handles both (n_states,) and (n_neurons, n_states)
-            rate = rates_t[..., state_idx]
-            state_scale = scale[..., state_idx]
-
-            # sample observation
-            y_t = self._observation_model.sample_generator(
-                key=obs_key, predicted_rate=rate, scale=state_scale
-            )
-
-            return state_idx, (y_t, rate, state_idx)
-
-        # initialize carry (state will be overwritten at first step since is_new_session[0]=True)
-        init_carry = jnp.array(0)
-
-        # run scan
-        _, (simulated_activity, firing_rates, simulated_states) = jax.lax.scan(
-            simulate_step, init_carry, (all_rates, is_new_session, state_keys, obs_keys)
-        )
-
-        return simulated_activity, firing_rates, simulated_states
-
-    @support_pynapple(conv_type="jax")
-    def _smooth_proba(
-        self,
-        params: GLMHMMParams,
-        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
-        y: Union[NDArray, jnp.ndarray, nap.Tsd],
-        is_new_session: jnp.ndarray,
-    ) -> jnp.ndarray:
-        # filter for non-nans, grab data if needed
-        valid = tree_utils.get_valid_multitree(X, y)
-        data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
-
-        # safe conversion to jax arrays of float
-        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
-
-        # make sure is_new_session starts with a 1
-        is_new_session = is_new_session.at[0].set(True)
-
-        # smooth with forward backward
-        log_posteriors, _, _, _, _, _ = forward_backward(
-            params=params,
-            X=data,
-            y=y,
-            is_new_session=is_new_session,
-            log_likelihood_func=prepare_estep_log_likelihood(
-                y.ndim > 1, self.observation_model
-            ),
-            inverse_link_function=self._inverse_link_function,
-        )
-        proba = jnp.exp(log_posteriors)
-        # renormalize (numerical precision due to exponentiation)
-        proba /= proba.sum(axis=1, keepdims=True)
-        # re-attach nans
-        proba = jnp.full((valid.shape[0], proba.shape[1]), jnp.nan).at[valid].set(proba)
-        return proba
-
-    def _validate_and_prepare_inputs(self, X, y):
-        """Validate and prepare inputs."""
-        # check if the model was fit
-        self._check_is_fit()
-        params = self._get_model_params()
-
-        # validate inputs
-        self._validator.validate_inputs(X=X, y=y)
-        self._validator.validate_consistency(params, X=X, y=y)
-
-        # compute new session indicator
-        is_new_session = self._get_is_new_session(X, y)
-        return params, X, y, is_new_session
-
-    def smooth_proba(
-        self,
-        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
-        y: Union[NDArray, jnp.ndarray, nap.Tsd],
-    ) -> jnp.ndarray | nap.TsdFrame:
-        """Compute smoothing posterior probabilities over hidden states.
-
-        Computes the probability of being in each hidden state at each time point,
-        conditioned on the entire observed sequence. This method uses the forward-backward
-        algorithm to incorporate information from both past and future observations,
-        providing optimal state estimates given all available data.
-
-        The smoothing posteriors answer: "Given all observations, what is the probability
-        that the system was in state k at time t?"
-
-        Parameters
-        ----------
-        X
-            Predictors, shape ``(n_time_points, n_features)``.
-        y
-            Observed neural activity, shape ``(n_time_points,)`` for single neuron or
-            ``(n_time_points, n_neurons)`` for population.
-
-        Returns
-        -------
-        posteriors
-            Smoothing posterior probabilities, shape ``(n_time_points, n_states)``.
-            Each row sums to 1 and represents the probability distribution over states
-            at that time point.
-
-        Raises
-        ------
-        ValueError
-            If the model has not been fit (``fit()`` must be called first).
-        ValueError
-            If inputs contain NaN values in the middle of epochs (only boundary NaNs allowed).
-        ValueError
-            If X and y have inconsistent shapes or features.
-
-        See Also
-        --------
-        filter_proba : Compute filtering posteriors (conditioned on past observations only).
-        decode_state : Compute most likely state sequence (Viterbi decoding).
-
-        Notes
-        -----
-        - Smoothing provides better state estimates than filtering because it uses all data
-        - The algorithm properly handles session boundaries and NaN values at epoch borders
-
-        Examples
-        --------
-        Fit a GLM-HMM and compute smoothing posteriors:
-
-        >>> import numpy as np
-        >>> import nemos as nmo
-        >>> # Generate example data
-        >>> np.random.seed(123)
-        >>> X = np.random.randn(100, 5)  # 100 time points, 5 features
-        >>> y = np.random.poisson(2, size=100)  # Poisson spike counts
-        >>>
-        >>> # Fit model with 3 hidden states
-        >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson")
-        >>> model = model.fit(X, y)
-        >>> # Compute smoothing posteriors
-        >>> posteriors = model.smooth_proba(X, y)
-        >>> print(posteriors.shape)
-        (100, 3)
-        >>> # Each row sums to 1
-        >>> print(np.allclose(posteriors.sum(axis=1), 1.0))
-        True
-
-        Using with pynapple for time-series analysis:
-
-        >>> import pynapple as nap
-        >>> # Create time-indexed data
-        >>> t = np.arange(100) * 0.01  # 10ms bins
-        >>> X_tsd = nap.TsdFrame(t=t, d=X)
-        >>> y_tsd = nap.Tsd(t=t, d=y)
-        >>>
-        >>> # Posteriors returned as TsdFrame
-        >>> posteriors_tsd = model.smooth_proba(X_tsd, y_tsd)
-        >>> print(type(posteriors_tsd))
-        <class 'pynapple.core.time_series.TsdFrame'>
-        """
-        params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
-        return self._smooth_proba(params, X, y, is_new_session)
-
-    @support_pynapple(conv_type="jax")
-    def _filter_proba(
-        self,
-        params: GLMHMMParams,
-        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
-        y: Union[NDArray, jnp.ndarray, nap.Tsd],
-        is_new_session: jnp.ndarray,
-    ) -> jnp.ndarray:
-        """Compute filtering probabilities without validation (internal method)."""
-        # filter for non-nans, grab data if needed
-        valid = tree_utils.get_valid_multitree(X, y)
-        data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
-
-        # safe conversion to jax arrays of float
-        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
-
-        # make sure is_new_session starts with a 1
-        is_new_session = is_new_session.at[0].set(True)
-        log_proba, _ = forward_pass(
-            params,
-            data,
-            y,
-            inverse_link_function=self._inverse_link_function,
-            is_new_session=is_new_session,
-            log_likelihood_func=prepare_estep_log_likelihood(
-                y.ndim > 1, self.observation_model
-            ),
-        )
-        proba = jnp.exp(log_proba)
-        # renormalize (numerical errors due to exponentiating)
-        proba /= proba.sum(axis=1, keepdims=True)
-        # re-attach nans
-        proba = jnp.full((valid.shape[0], proba.shape[1]), jnp.nan).at[valid].set(proba)
-        return proba
-
-    def filter_proba(
-        self,
-        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
-        y: Union[NDArray, jnp.ndarray, nap.Tsd],
-    ) -> jnp.ndarray | nap.TsdFrame:
-        """Compute filtering posterior probabilities over hidden states.
-
-        Computes the probability of being in each hidden state at each time point,
-        conditioned only on observations up to that time point. This method uses the
-        forward pass of the forward-backward algorithm, providing causal (online) state
-        estimates that only use past and current observations.
-
-        The filtering posteriors answer: "Given observations up to time t, what is the
-        probability that the system is in state k at time t?"
-
-        Parameters
-        ----------
-        X
-            Predictors, shape ``(n_time_points, n_features)``.
-        y
-            Observed neural activity, shape ``(n_time_points,)`` for single neuron or
-            ``(n_time_points, n_neurons)`` for population.
-
-        Returns
-        -------
-        posteriors
-            Filtering posterior probabilities, shape ``(n_time_points, n_states)``.
-            Each row sums to 1 and represents the probability distribution over states
-            at that time point conditioned on past observations.
-
-        Raises
-        ------
-        ValueError
-            If the model has not been fit (``fit()`` must be called first).
-        ValueError
-            If inputs contain NaN values in the middle of epochs (only boundary NaNs allowed).
-        ValueError
-            If X and y have inconsistent shapes or features.
-
-        See Also
-        --------
-        smooth_proba : Compute smoothing posteriors (conditioned on all observations).
-        decode_state : Compute most likely state sequence (Viterbi decoding).
-
-        Notes
-        -----
-        - Filtering provides causal state estimates suitable for online/real-time applications
-        - Smoothing provides better estimates but requires all data (non-causal)
-        - The algorithm properly handles session boundaries and NaN values at epoch borders
-        - NaN values are removed before inference, but session markers are preserved
-        - For pynapple inputs, the output TsdFrame has columns named "state_0", "state_1", etc.
-
-        Examples
-        --------
-        Fit a GLM-HMM and compute filtering posteriors:
-
-        >>> import numpy as np
-        >>> import nemos as nmo
-        >>> # Generate example data
-        >>> np.random.seed(123)
-        >>> X = np.random.randn(100, 5)  # 100 time points, 5 features
-        >>> y = np.random.poisson(2, size=100)  # Poisson spike counts
-        >>>
-        >>> # Fit model with 3 hidden states
-        >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson")
-        >>> model = model.fit(X, y)
-        >>>
-        >>> # Compute filtering posteriors (causal/online)
-        >>> filter_posteriors = model.filter_proba(X, y)
-        >>> print(filter_posteriors.shape)
-        (100, 3)
-        >>> # Each row sums to 1
-        >>> print(np.allclose(filter_posteriors.sum(axis=1), 1.0))
-        True
-
-        Using with pynapple for real-time state estimation:
-
-        >>> import pynapple as nap
-        >>> # Create time-indexed data
-        >>> t = np.arange(100) * 0.01  # 10ms bins
-        >>> X_tsd = nap.TsdFrame(t=t, d=X)
-        >>> y_tsd = nap.Tsd(t=t, d=y)
-        >>>
-        >>> # Filtering posteriors returned as TsdFrame
-        >>> filter_tsd = model.filter_proba(X_tsd, y_tsd)
-        >>> print(type(filter_tsd))
-        <class 'pynapple.core.time_series.TsdFrame'>
-        """
-        params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
-        return self._filter_proba(params, X, y, is_new_session)
-
-    @support_pynapple(conv_type="jax")
-    def _decode_state(
-        self,
-        params: GLMHMMParams,
-        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
-        y: Union[NDArray, jnp.ndarray, nap.Tsd],
-        is_new_session: jnp.ndarray,
-        return_index: bool,
-    ) -> jnp.ndarray:
-        """Decode most likely state sequence without validation (internal method)."""
-        # filter for non-nans, grab data if needed
-        valid = tree_utils.get_valid_multitree(X, y)
-        data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
-
-        # safe conversion to jax arrays of float
-        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
-
-        # make sure is_new_session starts with a 1
-        is_new_session = is_new_session.at[0].set(True)
-
-        decoded_states = max_sum(
-            params,
-            data,
-            y,
-            inverse_link_function=self._inverse_link_function,
-            is_new_session=is_new_session,
-            log_likelihood_func=prepare_estep_log_likelihood(
-                y.ndim > 1, self.observation_model
-            ),
-            return_index=return_index,
-        )
-
-        # reattach nans
-        decoded_states = (
-            jnp.full((valid.shape[0], *decoded_states.shape[1:]), jnp.nan)
-            .at[valid]
-            .set(decoded_states)
-        )
-        return decoded_states
-
-    def decode_state(
-        self,
-        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
-        y: ArrayLike,
-        state_format: Literal["one-hot", "index"] = "one-hot",
-    ) -> jnp.ndarray | nap.TsdFrame:
-        """Compute the most likely hidden state sequence (Viterbi decoding).
-
-        Finds the single most likely sequence of hidden states that best explains
-        the observed data. This method uses the Viterbi (max-sum) algorithm to
-        compute the state sequence that maximizes the joint probability of states
-        and observations.
-
-        Unlike ``smooth_proba()`` and ``filter_proba()`` which return probability
-        distributions over states at each time point, this method makes a deterministic
-        choice of the single best state sequence.
-
-        The decoded states answer: "What is the most likely sequence of states that
-        generated the observed data?"
-
-        Parameters
-        ----------
-        X
-            Predictors, shape ``(n_time_points, n_features)``.
-        y
-            Observed neural activity, shape ``(n_time_points,)`` for single neuron or
-            ``(n_time_points, n_neurons)`` for population.
-        state_format
-            Format of the returned states:
-
-            - ``"one-hot"``: Binary matrix of shape ``(n_time_points, n_states)`` where
-              each row has a single 1 indicating the decoded state.
-            - ``"index"``: Integer array of shape ``(n_time_points,)`` with values
-              in ``[0, n_states-1]`` indicating the decoded state.
-
-        Returns
-        -------
-        decoded_states
-            Most likely state sequence:
-
-            - If ``state_format="one-hot"``: shape ``(n_time_points, n_states)``.
-              Each row is a one-hot vector with 1 in the position of the decoded state.
-            - If ``state_format="index"``: shape ``(n_time_points,)``.
-              Integer indices of the decoded states.
-
-        Raises
-        ------
-        ValueError
-            If the model has not been fit (``fit()`` must be called first).
-        ValueError
-            If inputs contain NaN values in the middle of epochs (only boundary NaNs allowed).
-        ValueError
-            If X and y have inconsistent shapes or features.
-
-        See Also
-        --------
-        smooth_proba : Compute smoothing posteriors (conditioned on all observations).
-        filter_proba : Compute filtering posteriors (conditioned on past observations only).
-
-        Notes
-        -----
-        - Viterbi decoding finds the globally optimal state sequence, not the sequence
-          of individually most likely states from ``smooth_proba()``
-        - This is a hard assignment (single best path) unlike probabilistic posteriors
-        - The algorithm properly handles session boundaries and NaN values at epoch borders
-        - Decoding is useful for segmenting continuous data into discrete behavioral states
-        - For uncertainty estimates about states, use ``smooth_proba()`` instead
-
-        Examples
-        --------
-        Fit a GLM-HMM and decode the most likely state sequence:
-
-        >>> import numpy as np
-        >>> import nemos as nmo
-        >>> # Generate example data
-        >>> np.random.seed(123)
-        >>> X = np.random.randn(100, 5)  # 100 time points, 5 features
-        >>> y = np.random.poisson(2, size=100)  # Poisson spike counts
-        >>>
-        >>> # Fit model with 3 hidden states
-        >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson")
-        >>> model = model.fit(X, y)
-        >>>
-        >>> # Decode states as one-hot encoding
-        >>> states_onehot = model.decode_state(X, y, state_format="one-hot")
-        >>> print(states_onehot.shape)
-        (100, 3)
-        >>> # Each row has exactly one 1
-        >>> print(np.all(states_onehot.sum(axis=1) == 1))
-        True
-        >>>
-        >>> # Decode states as integer indices
-        >>> states_idx = model.decode_state(X, y, state_format="index")
-        >>> print(states_idx.shape)
-        (100,)
-        >>> print(states_idx[:10])  # First 10 decoded states
-        [...]
-
-        Using with pynapple for time-series state decoding:
-
-        >>> import pynapple as nap
-        >>> # suppress jax to numpy conversion warning
-        >>> nap.nap_config.suppress_conversion_warnings = True
-        >>> # Create time-indexed data
-        >>> t = np.arange(100) * 0.01  # 10ms bins
-        >>> X_tsd = nap.TsdFrame(t=t, d=X)
-        >>> y_tsd = nap.Tsd(t=t, d=y)
-        >>>
-        >>> # Decoded states returned as TsdFrame or Tsd
-        >>> states_tsd = model.decode_state(X_tsd, y_tsd, state_format="one-hot")
-        >>> print(type(states_tsd))
-        <class 'pynapple.core.time_series.TsdFrame'>
-        >>> # With index format, returns Tsd
-        >>> states_idx_tsd = model.decode_state(X_tsd, y_tsd, state_format="index")
-        >>> print(type(states_idx_tsd))
-        <class 'pynapple.core.time_series.Tsd'>
-        """
-        params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
-        # validate state_format
-        _check_state_format(state_format)
-        # define the return type for the max-sum
-        if state_format == "one-hot":
-            return_index = False
-        else:
-            return_index = True
-        return self._decode_state(params, X, y, is_new_session, return_index)
+    # def _score(
+    #     self,
+    #     params: GLMHMMParams,
+    #     X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+    #     y: Union[NDArray, jnp.ndarray, nap.Tsd],
+    #     is_new_session: jnp.ndarray,
+    # ) -> jnp.ndarray:
+    #     """Private score compute."""
+    #     # filter for non-nans, grab data if needed
+    #     data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
+    #     # safe conversion to jax arrays of float
+    #     params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+
+    #     # make sure is_new_session starts with a 1
+    #     is_new_session = is_new_session.at[0].set(True)
+
+    #     # smooth with forward backward
+    #     _, log_norm = forward_pass(
+    #         params=params,
+    #         X=data,
+    #         y=y,
+    #         is_new_session=is_new_session,
+    #         log_likelihood_func=prepare_estep_log_likelihood(
+    #             y.ndim > 1, self.observation_model
+    #         ),
+    #         inverse_link_function=self._inverse_link_function,
+    #     )
+    #     return jnp.sum(log_norm)
+
+    # def score(
+    #     self,
+    #     X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+    #     y: ArrayLike,
+    #     score_type: Literal[
+    #         "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"
+    #     ] = "log-likelihood",
+    #     null_model: Optional[Literal["constant", "glm"]] = None,
+    # ) -> jnp.ndarray:
+    #     """Compute the model score."""
+    #     if score_type == "log-likelihood" and null_model is not None:
+    #         warnings.warn(
+    #             "The null model is not used for the log-likelihood computation.",
+    #             UserWarning,
+    #             stacklevel=2,
+    #         )
+    #     if score_type != "log-likelihood":
+    #         raise NotImplementedError(
+    #             f"score of type {score_type} not implemented yet!"
+    #         )
+    #     params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
+    #     return self._score(params, X, y, is_new_session)
+
+    # @support_pynapple(conv_type="jax")
+    # def simulate(
+    #     self,
+    #     random_key: jax.Array,
+    #     feedforward_input: DESIGN_INPUT_TYPE,
+    #     state_format: Literal["one-hot", "index"] = "index",
+    # ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    #     """Simulate neural activity and hidden states from the model.
+
+    #     Simulates a trajectory through the hidden state space according to the
+    #     HMM dynamics, then generates observations from the GLM emission model
+    #     conditioned on each state.
+
+    #     Parameters
+    #     ----------
+    #     random_key :
+    #         JAX random key for reproducible simulation.
+    #     feedforward_input :
+    #         Design matrix of shape ``(n_time_bins, n_features)``. If a pynapple
+    #         Tsd/TsdFrame is provided, session boundaries are detected from
+    #         ``time_support`` and the hidden state chain is reset at each session start.
+    #     state_format :
+    #         Format for the returned states:
+
+    #         - ``"index"``: Integer array of shape ``(n_time_bins,)`` with state indices.
+    #         - ``"one-hot"``: Binary array of shape ``(n_time_bins, n_states)``.
+
+    #     Returns
+    #     -------
+    #     simulated_activity :
+    #         Simulated observations from the emission model. Shape ``(n_time_bins,)``
+    #         for single neuron or ``(n_time_bins, n_neurons)`` for population models.
+    #     firing_rates :
+    #         Predicted firing rates conditioned on the simulated states.
+    #         Shape ``(n_time_bins,)`` or ``(n_time_bins, n_neurons)``.
+    #     simulated_states :
+    #         Simulated hidden state trajectory. Shape depends on ``state_format``.
+
+    #     Raises
+    #     ------
+    #     ValueError
+    #         If the model has not been fit.
+
+    #     Examples
+    #     --------
+    #     >>> import jax
+    #     >>> import numpy as np
+    #     >>> import nemos as nmo
+    #     >>> np.random.seed(123)
+    #     >>> X = np.random.randn(100, 3)
+    #     >>> y = np.random.binomial(1, 0.5, 100)
+    #     >>> model = nmo.glm.GLMHMM(n_states=2, observation_model="Bernoulli")
+    #     >>> model = model.fit(X, y)
+    #     >>> key = jax.random.key(0)
+    #     >>> X_new = np.random.randn(50, 3)
+    #     >>> activity, rates, states = model.simulate(key, X_new)
+    #     >>> activity.shape
+    #     (50,)
+    #     >>> states.shape
+    #     (50,)
+
+    #     See Also
+    #     --------
+    #     decode_state : Infer most likely state sequence from observations.
+    #     smooth_proba : Compute posterior state probabilities.
+    #     """
+    #     # check if the model is fit
+    #     self._check_is_fit()
+
+    #     # check state format
+    #     _check_state_format(state_format)
+
+    #     params = self._get_model_params()
+
+    #     # validate inputs
+    #     self._validator.validate_inputs(X=feedforward_input)
+    #     self._validator.validate_consistency(params, X=feedforward_input)
+
+    #     # get session boundaries (y=None for simulation)
+    #     is_new_session = self._get_is_new_session(feedforward_input, y=None)
+
+    #     # preprocess inputs (drop nans, extract data)
+    #     data, _, is_new_session = self._preprocess_inputs(
+    #         feedforward_input, jnp.zeros(feedforward_input.shape[0]), is_new_session
+    #     )
+
+    #     # ensure first time point is a session start
+    #     is_new_session = is_new_session.at[0].set(True)
+
+    #     # run simulation
+    #     simulated_activity, firing_rates, simulated_states = self._simulate(
+    #         random_key, params, data, is_new_session
+    #     )
+
+    #     # format state output
+    #     if state_format == "one-hot":
+    #         simulated_states = jax.nn.one_hot(
+    #             simulated_states, self._n_states, dtype=jnp.int32
+    #         )
+
+    #     return simulated_activity, firing_rates, simulated_states
+
+    # def _simulate(
+    #     self,
+    #     random_key: jax.Array,
+    #     params: GLMHMMParams,
+    #     X: jnp.ndarray,
+    #     is_new_session: jnp.ndarray,
+    # ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    #     """Simulate activity vis jax.lax.scan.
+
+    #     Parameters
+    #     ----------
+    #     random_key :
+    #         JAX random key.
+    #     params :
+    #         Model parameters.
+    #     X :
+    #         Design matrix of shape ``(n_time_bins, n_features)``.
+    #     is_new_session :
+    #         Boolean array marking session starts.
+
+    #     Returns
+    #     -------
+    #     simulated_activity :
+    #         Simulated observations.
+    #     firing_rates :
+    #         Predicted rates conditioned on simulated states.
+    #     simulated_states :
+    #         State indices at each time point.
+    #     """
+    #     # unpack log probabilities directly (avoid exp then log in categorical)
+    #     log_initial_prob = params.hmm_params.log_initial_prob
+    #     log_transition_prob = params.hmm_params.log_transition_prob
+    #     scale = jnp.exp(params.model_params.log_scale)
+
+    #     # pre-compute rates for all states: (n_time_bins, n_states) or (n_time_bins, n_neurons, n_states)
+    #     all_rates = compute_rate_per_state(
+    #         X, params.model_params, self._inverse_link_function
+    #     )
+
+    #     # pre-generate random keys for all time steps
+    #     n_time_bins = X.shape[0]
+    #     all_keys = jax.random.split(random_key, n_time_bins * 2)
+    #     state_keys = all_keys[:n_time_bins]
+    #     obs_keys = all_keys[n_time_bins:]
+
+    #     def simulate_step(carry, inputs):
+    #         """Single simulation step."""
+    #         prev_state_idx = carry
+    #         rates_t, is_new_sess, state_key, obs_key = inputs
+
+    #         # sample state: log_initial_prob if new session, else log transition from prev
+    #         log_state_probs = jax.lax.cond(
+    #             is_new_sess,
+    #             lambda: log_initial_prob,
+    #             lambda: log_transition_prob[prev_state_idx],
+    #         )
+    #         state_idx = jax.random.categorical(state_key, log_state_probs)
+
+    #         # get rate and scale for sampled state
+    #         # handles both (n_states,) and (n_neurons, n_states)
+    #         rate = rates_t[..., state_idx]
+    #         state_scale = scale[..., state_idx]
+
+    #         # sample observation
+    #         y_t = self._observation_model.sample_generator(
+    #             key=obs_key, predicted_rate=rate, scale=state_scale
+    #         )
+
+    #         return state_idx, (y_t, rate, state_idx)
+
+    #     # initialize carry (state will be overwritten at first step since is_new_session[0]=True)
+    #     init_carry = jnp.array(0)
+
+    #     # run scan
+    #     _, (simulated_activity, firing_rates, simulated_states) = jax.lax.scan(
+    #         simulate_step, init_carry, (all_rates, is_new_session, state_keys, obs_keys)
+    #     )
+
+    #     return simulated_activity, firing_rates, simulated_states
+
+    # @support_pynapple(conv_type="jax")
+    # def _smooth_proba(
+    #     self,
+    #     params: GLMHMMParams,
+    #     X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+    #     y: Union[NDArray, jnp.ndarray, nap.Tsd],
+    #     is_new_session: jnp.ndarray,
+    # ) -> jnp.ndarray:
+    #     # filter for non-nans, grab data if needed
+    #     valid = tree_utils.get_valid_multitree(X, y)
+    #     data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
+
+    #     # safe conversion to jax arrays of float
+    #     params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+
+    #     # make sure is_new_session starts with a 1
+    #     is_new_session = is_new_session.at[0].set(True)
+
+    #     # smooth with forward backward
+    #     log_posteriors, _, _, _, _, _ = forward_backward(
+    #         params=params,
+    #         X=data,
+    #         y=y,
+    #         is_new_session=is_new_session,
+    #         log_likelihood_func=prepare_estep_log_likelihood(
+    #             y.ndim > 1, self.observation_model
+    #         ),
+    #         inverse_link_function=self._inverse_link_function,
+    #     )
+    #     proba = jnp.exp(log_posteriors)
+    #     # renormalize (numerical precision due to exponentiation)
+    #     proba /= proba.sum(axis=1, keepdims=True)
+    #     # re-attach nans
+    #     proba = jnp.full((valid.shape[0], proba.shape[1]), jnp.nan).at[valid].set(proba)
+    #     return proba
+
+    # def _validate_and_prepare_inputs(self, X, y):
+    #     """Validate and prepare inputs."""
+    #     # check if the model was fit
+    #     self._check_is_fit()
+    #     params = self._get_model_params()
+
+    #     # validate inputs
+    #     self._validator.validate_inputs(X=X, y=y)
+    #     self._validator.validate_consistency(params, X=X, y=y)
+
+    #     # compute new session indicator
+    #     is_new_session = self._get_is_new_session(X, y)
+    #     return params, X, y, is_new_session
+
+    # def smooth_proba(
+    #     self,
+    #     X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+    #     y: Union[NDArray, jnp.ndarray, nap.Tsd],
+    # ) -> jnp.ndarray | nap.TsdFrame:
+    #     """Compute smoothing posterior probabilities over hidden states.
+
+    #     Computes the probability of being in each hidden state at each time point,
+    #     conditioned on the entire observed sequence. This method uses the forward-backward
+    #     algorithm to incorporate information from both past and future observations,
+    #     providing optimal state estimates given all available data.
+
+    #     The smoothing posteriors answer: "Given all observations, what is the probability
+    #     that the system was in state k at time t?"
+
+    #     Parameters
+    #     ----------
+    #     X
+    #         Predictors, shape ``(n_time_points, n_features)``.
+    #     y
+    #         Observed neural activity, shape ``(n_time_points,)`` for single neuron or
+    #         ``(n_time_points, n_neurons)`` for population.
+
+    #     Returns
+    #     -------
+    #     posteriors
+    #         Smoothing posterior probabilities, shape ``(n_time_points, n_states)``.
+    #         Each row sums to 1 and represents the probability distribution over states
+    #         at that time point.
+
+    #     Raises
+    #     ------
+    #     ValueError
+    #         If the model has not been fit (``fit()`` must be called first).
+    #     ValueError
+    #         If inputs contain NaN values in the middle of epochs (only boundary NaNs allowed).
+    #     ValueError
+    #         If X and y have inconsistent shapes or features.
+
+    #     See Also
+    #     --------
+    #     filter_proba : Compute filtering posteriors (conditioned on past observations only).
+    #     decode_state : Compute most likely state sequence (Viterbi decoding).
+
+    #     Notes
+    #     -----
+    #     - Smoothing provides better state estimates than filtering because it uses all data
+    #     - The algorithm properly handles session boundaries and NaN values at epoch borders
+
+    #     Examples
+    #     --------
+    #     Fit a GLM-HMM and compute smoothing posteriors:
+
+    #     >>> import numpy as np
+    #     >>> import nemos as nmo
+    #     >>> # Generate example data
+    #     >>> np.random.seed(123)
+    #     >>> X = np.random.randn(100, 5)  # 100 time points, 5 features
+    #     >>> y = np.random.poisson(2, size=100)  # Poisson spike counts
+    #     >>>
+    #     >>> # Fit model with 3 hidden states
+    #     >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson")
+    #     >>> model = model.fit(X, y)
+    #     >>> # Compute smoothing posteriors
+    #     >>> posteriors = model.smooth_proba(X, y)
+    #     >>> print(posteriors.shape)
+    #     (100, 3)
+    #     >>> # Each row sums to 1
+    #     >>> print(np.allclose(posteriors.sum(axis=1), 1.0))
+    #     True
+
+    #     Using with pynapple for time-series analysis:
+
+    #     >>> import pynapple as nap
+    #     >>> # Create time-indexed data
+    #     >>> t = np.arange(100) * 0.01  # 10ms bins
+    #     >>> X_tsd = nap.TsdFrame(t=t, d=X)
+    #     >>> y_tsd = nap.Tsd(t=t, d=y)
+    #     >>>
+    #     >>> # Posteriors returned as TsdFrame
+    #     >>> posteriors_tsd = model.smooth_proba(X_tsd, y_tsd)
+    #     >>> print(type(posteriors_tsd))
+    #     <class 'pynapple.core.time_series.TsdFrame'>
+    #     """
+    #     params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
+    #     return self._smooth_proba(params, X, y, is_new_session)
+
+    # @support_pynapple(conv_type="jax")
+    # def _filter_proba(
+    #     self,
+    #     params: GLMHMMParams,
+    #     X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+    #     y: Union[NDArray, jnp.ndarray, nap.Tsd],
+    #     is_new_session: jnp.ndarray,
+    # ) -> jnp.ndarray:
+    #     """Compute filtering probabilities without validation (internal method)."""
+    #     # filter for non-nans, grab data if needed
+    #     valid = tree_utils.get_valid_multitree(X, y)
+    #     data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
+
+    #     # safe conversion to jax arrays of float
+    #     params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+
+    #     # make sure is_new_session starts with a 1
+    #     is_new_session = is_new_session.at[0].set(True)
+    #     log_proba, _ = forward_pass(
+    #         params,
+    #         data,
+    #         y,
+    #         inverse_link_function=self._inverse_link_function,
+    #         is_new_session=is_new_session,
+    #         log_likelihood_func=prepare_estep_log_likelihood(
+    #             y.ndim > 1, self.observation_model
+    #         ),
+    #     )
+    #     proba = jnp.exp(log_proba)
+    #     # renormalize (numerical errors due to exponentiating)
+    #     proba /= proba.sum(axis=1, keepdims=True)
+    #     # re-attach nans
+    #     proba = jnp.full((valid.shape[0], proba.shape[1]), jnp.nan).at[valid].set(proba)
+    #     return proba
+
+    # def filter_proba(
+    #     self,
+    #     X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+    #     y: Union[NDArray, jnp.ndarray, nap.Tsd],
+    # ) -> jnp.ndarray | nap.TsdFrame:
+    #     """Compute filtering posterior probabilities over hidden states.
+
+    #     Computes the probability of being in each hidden state at each time point,
+    #     conditioned only on observations up to that time point. This method uses the
+    #     forward pass of the forward-backward algorithm, providing causal (online) state
+    #     estimates that only use past and current observations.
+
+    #     The filtering posteriors answer: "Given observations up to time t, what is the
+    #     probability that the system is in state k at time t?"
+
+    #     Parameters
+    #     ----------
+    #     X
+    #         Predictors, shape ``(n_time_points, n_features)``.
+    #     y
+    #         Observed neural activity, shape ``(n_time_points,)`` for single neuron or
+    #         ``(n_time_points, n_neurons)`` for population.
+
+    #     Returns
+    #     -------
+    #     posteriors
+    #         Filtering posterior probabilities, shape ``(n_time_points, n_states)``.
+    #         Each row sums to 1 and represents the probability distribution over states
+    #         at that time point conditioned on past observations.
+
+    #     Raises
+    #     ------
+    #     ValueError
+    #         If the model has not been fit (``fit()`` must be called first).
+    #     ValueError
+    #         If inputs contain NaN values in the middle of epochs (only boundary NaNs allowed).
+    #     ValueError
+    #         If X and y have inconsistent shapes or features.
+
+    #     See Also
+    #     --------
+    #     smooth_proba : Compute smoothing posteriors (conditioned on all observations).
+    #     decode_state : Compute most likely state sequence (Viterbi decoding).
+
+    #     Notes
+    #     -----
+    #     - Filtering provides causal state estimates suitable for online/real-time applications
+    #     - Smoothing provides better estimates but requires all data (non-causal)
+    #     - The algorithm properly handles session boundaries and NaN values at epoch borders
+    #     - NaN values are removed before inference, but session markers are preserved
+    #     - For pynapple inputs, the output TsdFrame has columns named "state_0", "state_1", etc.
+
+    #     Examples
+    #     --------
+    #     Fit a GLM-HMM and compute filtering posteriors:
+
+    #     >>> import numpy as np
+    #     >>> import nemos as nmo
+    #     >>> # Generate example data
+    #     >>> np.random.seed(123)
+    #     >>> X = np.random.randn(100, 5)  # 100 time points, 5 features
+    #     >>> y = np.random.poisson(2, size=100)  # Poisson spike counts
+    #     >>>
+    #     >>> # Fit model with 3 hidden states
+    #     >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson")
+    #     >>> model = model.fit(X, y)
+    #     >>>
+    #     >>> # Compute filtering posteriors (causal/online)
+    #     >>> filter_posteriors = model.filter_proba(X, y)
+    #     >>> print(filter_posteriors.shape)
+    #     (100, 3)
+    #     >>> # Each row sums to 1
+    #     >>> print(np.allclose(filter_posteriors.sum(axis=1), 1.0))
+    #     True
+
+    #     Using with pynapple for real-time state estimation:
+
+    #     >>> import pynapple as nap
+    #     >>> # Create time-indexed data
+    #     >>> t = np.arange(100) * 0.01  # 10ms bins
+    #     >>> X_tsd = nap.TsdFrame(t=t, d=X)
+    #     >>> y_tsd = nap.Tsd(t=t, d=y)
+    #     >>>
+    #     >>> # Filtering posteriors returned as TsdFrame
+    #     >>> filter_tsd = model.filter_proba(X_tsd, y_tsd)
+    #     >>> print(type(filter_tsd))
+    #     <class 'pynapple.core.time_series.TsdFrame'>
+    #     """
+    #     params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
+    #     return self._filter_proba(params, X, y, is_new_session)
+
+    # @support_pynapple(conv_type="jax")
+    # def _decode_state(
+    #     self,
+    #     params: GLMHMMParams,
+    #     X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+    #     y: Union[NDArray, jnp.ndarray, nap.Tsd],
+    #     is_new_session: jnp.ndarray,
+    #     return_index: bool,
+    # ) -> jnp.ndarray:
+    #     """Decode most likely state sequence without validation (internal method)."""
+    #     # filter for non-nans, grab data if needed
+    #     valid = tree_utils.get_valid_multitree(X, y)
+    #     data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
+
+    #     # safe conversion to jax arrays of float
+    #     params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+
+    #     # make sure is_new_session starts with a 1
+    #     is_new_session = is_new_session.at[0].set(True)
+
+    #     decoded_states = max_sum(
+    #         params,
+    #         data,
+    #         y,
+    #         inverse_link_function=self._inverse_link_function,
+    #         is_new_session=is_new_session,
+    #         log_likelihood_func=prepare_estep_log_likelihood(
+    #             y.ndim > 1, self.observation_model
+    #         ),
+    #         return_index=return_index,
+    #     )
+
+    #     # reattach nans
+    #     decoded_states = (
+    #         jnp.full((valid.shape[0], *decoded_states.shape[1:]), jnp.nan)
+    #         .at[valid]
+    #         .set(decoded_states)
+    #     )
+    #     return decoded_states
+
+    # def decode_state(
+    #     self,
+    #     X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+    #     y: ArrayLike,
+    #     state_format: Literal["one-hot", "index"] = "one-hot",
+    # ) -> jnp.ndarray | nap.TsdFrame:
+    #     """Compute the most likely hidden state sequence (Viterbi decoding).
+
+    #     Finds the single most likely sequence of hidden states that best explains
+    #     the observed data. This method uses the Viterbi (max-sum) algorithm to
+    #     compute the state sequence that maximizes the joint probability of states
+    #     and observations.
+
+    #     Unlike ``smooth_proba()`` and ``filter_proba()`` which return probability
+    #     distributions over states at each time point, this method makes a deterministic
+    #     choice of the single best state sequence.
+
+    #     The decoded states answer: "What is the most likely sequence of states that
+    #     generated the observed data?"
+
+    #     Parameters
+    #     ----------
+    #     X
+    #         Predictors, shape ``(n_time_points, n_features)``.
+    #     y
+    #         Observed neural activity, shape ``(n_time_points,)`` for single neuron or
+    #         ``(n_time_points, n_neurons)`` for population.
+    #     state_format
+    #         Format of the returned states:
+
+    #         - ``"one-hot"``: Binary matrix of shape ``(n_time_points, n_states)`` where
+    #           each row has a single 1 indicating the decoded state.
+    #         - ``"index"``: Integer array of shape ``(n_time_points,)`` with values
+    #           in ``[0, n_states-1]`` indicating the decoded state.
+
+    #     Returns
+    #     -------
+    #     decoded_states
+    #         Most likely state sequence:
+
+    #         - If ``state_format="one-hot"``: shape ``(n_time_points, n_states)``.
+    #           Each row is a one-hot vector with 1 in the position of the decoded state.
+    #         - If ``state_format="index"``: shape ``(n_time_points,)``.
+    #           Integer indices of the decoded states.
+
+    #     Raises
+    #     ------
+    #     ValueError
+    #         If the model has not been fit (``fit()`` must be called first).
+    #     ValueError
+    #         If inputs contain NaN values in the middle of epochs (only boundary NaNs allowed).
+    #     ValueError
+    #         If X and y have inconsistent shapes or features.
+
+    #     See Also
+    #     --------
+    #     smooth_proba : Compute smoothing posteriors (conditioned on all observations).
+    #     filter_proba : Compute filtering posteriors (conditioned on past observations only).
+
+    #     Notes
+    #     -----
+    #     - Viterbi decoding finds the globally optimal state sequence, not the sequence
+    #       of individually most likely states from ``smooth_proba()``
+    #     - This is a hard assignment (single best path) unlike probabilistic posteriors
+    #     - The algorithm properly handles session boundaries and NaN values at epoch borders
+    #     - Decoding is useful for segmenting continuous data into discrete behavioral states
+    #     - For uncertainty estimates about states, use ``smooth_proba()`` instead
+
+    #     Examples
+    #     --------
+    #     Fit a GLM-HMM and decode the most likely state sequence:
+
+    #     >>> import numpy as np
+    #     >>> import nemos as nmo
+    #     >>> # Generate example data
+    #     >>> np.random.seed(123)
+    #     >>> X = np.random.randn(100, 5)  # 100 time points, 5 features
+    #     >>> y = np.random.poisson(2, size=100)  # Poisson spike counts
+    #     >>>
+    #     >>> # Fit model with 3 hidden states
+    #     >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson")
+    #     >>> model = model.fit(X, y)
+    #     >>>
+    #     >>> # Decode states as one-hot encoding
+    #     >>> states_onehot = model.decode_state(X, y, state_format="one-hot")
+    #     >>> print(states_onehot.shape)
+    #     (100, 3)
+    #     >>> # Each row has exactly one 1
+    #     >>> print(np.all(states_onehot.sum(axis=1) == 1))
+    #     True
+    #     >>>
+    #     >>> # Decode states as integer indices
+    #     >>> states_idx = model.decode_state(X, y, state_format="index")
+    #     >>> print(states_idx.shape)
+    #     (100,)
+    #     >>> print(states_idx[:10])  # First 10 decoded states
+    #     [...]
+
+    #     Using with pynapple for time-series state decoding:
+
+    #     >>> import pynapple as nap
+    #     >>> # suppress jax to numpy conversion warning
+    #     >>> nap.nap_config.suppress_conversion_warnings = True
+    #     >>> # Create time-indexed data
+    #     >>> t = np.arange(100) * 0.01  # 10ms bins
+    #     >>> X_tsd = nap.TsdFrame(t=t, d=X)
+    #     >>> y_tsd = nap.Tsd(t=t, d=y)
+    #     >>>
+    #     >>> # Decoded states returned as TsdFrame or Tsd
+    #     >>> states_tsd = model.decode_state(X_tsd, y_tsd, state_format="one-hot")
+    #     >>> print(type(states_tsd))
+    #     <class 'pynapple.core.time_series.TsdFrame'>
+    #     >>> # With index format, returns Tsd
+    #     >>> states_idx_tsd = model.decode_state(X_tsd, y_tsd, state_format="index")
+    #     >>> print(type(states_idx_tsd))
+    #     <class 'pynapple.core.time_series.Tsd'>
+    #     """
+    #     params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
+    #     # validate state_format
+    #     _check_state_format(state_format)
+    #     # define the return type for the max-sum
+    #     if state_format == "one-hot":
+    #         return_index = False
+    #     else:
+    #         return_index = True
+    #     return self._decode_state(params, X, y, is_new_session, return_index)
 
     def save_params(
         self,
