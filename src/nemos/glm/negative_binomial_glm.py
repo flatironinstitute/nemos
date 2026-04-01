@@ -1,3 +1,5 @@
+"""Negative Binomial GLM with joint parameter and scale learning."""
+
 from functools import partial
 from typing import Any, Callable, Optional, Tuple, Union
 
@@ -15,6 +17,8 @@ from .params import GLMParams, NBGLMUserParams
 
 
 class NBState(eqx.Module):
+    """Negative Binomial optimization state."""
+
     data_log_likelihood: float | jnp.ndarray
     previous_data_log_likelihood: float | jnp.ndarray
     state_params: SolverState | None
@@ -27,10 +31,9 @@ def _extract_fun_value(state: SolverState) -> float | None:
     if hasattr(state, "value"):
         fval = state.value
     elif hasattr(state, "f"):
-        fval = state.f.item() if hasattr(state.f, "item") else state.f
+        fval = state.f
     elif hasattr(state, "f_info"):
         fval = state.f_info.f
-        fval = fval.item() if hasattr(fval, "item") else fval
     else:
         fval = None
     return fval
@@ -109,7 +112,7 @@ def _joint_run(
     y: jnp.ndarray,
     solver_run_params: Callable,
     solver_run_scale: Callable,
-    init_state_fn: Callable,
+    initialize_state: Callable,
     tol: float,
     maxiter: int,
 ):
@@ -129,7 +132,7 @@ def _joint_run(
         solver_run_scale=solver_run_scale,
     )
 
-    init_state = init_state_fn(init_params, X, y)
+    init_state = initialize_state(init_params, X, y)
 
     def stopping_condition_while(carry):
         _, _, new_state = carry
@@ -167,6 +170,8 @@ def _joint_run(
 
 
 class NBGLM(GLM):
+    """Negative Binomial GLM model."""
+
     def __init__(
         self,
         inverse_link_function: Optional[Callable] = None,
@@ -195,6 +200,7 @@ class NBGLM(GLM):
         y: ArrayLike,
         init_params: Optional[NBGLMUserParams] = None,
     ):
+        """Fit the NB-GLM model."""
         self._validator.validate_inputs(X, y)
 
         # filter for non-nans, grab data if needed
@@ -210,7 +216,7 @@ class NBGLM(GLM):
             getattr(self, "_feature_mask", None), init_params
         )
         init_log_scale = jnp.log(self.observation_model.scale)
-        self._initialize_optimization_and_state(
+        self._solver = self._initialize_optimizer_and_state(
             (init_params, init_log_scale),
             data,
             y,
@@ -240,14 +246,14 @@ class NBGLM(GLM):
             y, predicted_rate, lambda x: jnp.sum(jnp.mean(x, axis=0)), *args, **kwargs
         )
 
-    def _initialize_optimization_and_state(
+    def _initialize_optimizer_and_state(
         self,
         init_params: Tuple[GLMParams, jnp.ndarray],
         X: dict[str, jnp.ndarray] | jnp.ndarray,
         y: jnp.ndarray,
         *args,
     ) -> SolverState:
-        init_state_params, update_params, run_params = self._instantiate_solver(
+        solver_params = self._instantiate_solver(
             self._compute_loss,
             init_params[0],
         )
@@ -257,7 +263,7 @@ class NBGLM(GLM):
                 y, self._predict(params, X), scale=jnp.exp(log_scale)
             )
 
-        init_state_scale, update_scale, run_scale = self._instantiate_solver(
+        solver_scale = self._instantiate_solver(
             _scale_loss,
             init_params[1],
             regularizer=UnRegularized(),
@@ -269,11 +275,15 @@ class NBGLM(GLM):
         )
 
         def optimization_update(params, state, X, y):
-            return _joint_update(params, state, X, y, run_params, run_scale)
+            return _joint_update(
+                params, state, X, y, solver_params.run, solver_scale.run
+            )
 
         def optimization_init_state(params, X, y):
-            state_glm_params = init_state_params(params[0], X, y, jnp.exp(params[1]))
-            state_scale = init_state_scale(params[1], X, y, params[0])
+            state_glm_params = solver_params.init_state(
+                params[0], X, y, jnp.exp(params[1])
+            )
+            state_scale = solver_scale.init_state(params[1], X, y, params[0])
             return NBState(
                 data_log_likelihood=-jnp.array(jnp.inf),
                 previous_data_log_likelihood=-jnp.array(jnp.inf),
@@ -287,11 +297,11 @@ class NBGLM(GLM):
                 params,
                 X,
                 y,
-                run_params,
-                run_scale,
+                solver_params.run,
+                solver_scale.run,
                 tol=self.tol,
                 maxiter=self.maxiter,
-                init_state_fn=optimization_init_state,
+                initialize_state=optimization_init_state,
             )
 
         self._optimization_run = optimization_run
