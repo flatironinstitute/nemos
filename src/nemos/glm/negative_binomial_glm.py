@@ -1,7 +1,7 @@
 """Negative Binomial GLM with joint parameter and scale learning."""
 
 from functools import partial
-from typing import Any, Callable, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Literal, Optional, Tuple, Union
 
 import equinox as eqx
 import jax
@@ -21,8 +21,7 @@ class NBState(eqx.Module):
 
     data_log_likelihood: float | jnp.ndarray
     previous_data_log_likelihood: float | jnp.ndarray
-    state_params: SolverState | None
-    state_scale: SolverState | None
+    solver_state: Dict[Literal["glm_params", "scale"], SolverState | None]
     iterations: int
 
 
@@ -99,8 +98,7 @@ def _joint_update(
     new_state = NBState(
         data_log_likelihood=func_val,
         previous_data_log_likelihood=init_state.data_log_likelihood,
-        state_params=new_state_params,
-        state_scale=new_state_scale,
+        solver_state={"glm_params": new_state_params, "scale": new_state_scale},
         iterations=new_iterations,
     )
     return (new_params, new_scale), new_state, (new_aux_params, new_aux_scale)
@@ -153,8 +151,7 @@ def _joint_run(
             data_log_likelihood=func_val,
             previous_data_log_likelihood=state.data_log_likelihood,
             iterations=state.iterations + 1,
-            state_scale=state_scale,
-            state_params=state_params,
+            solver_state={"glm_params": state_params, "scale": state_scale},
         )
         return new_params, new_log_scale, new_state
 
@@ -216,7 +213,7 @@ class NBGLM(GLM):
             getattr(self, "_feature_mask", None), init_params
         )
         init_log_scale = jnp.log(self.observation_model.scale)
-        self._solver = self._initialize_optimizer_and_state(
+        self._initialize_optimizer_and_state(
             (init_params, init_log_scale),
             data,
             y,
@@ -229,9 +226,11 @@ class NBGLM(GLM):
         self._set_model_params(params)
         self.aux_ = aux
         self.solver_state_ = state
-        # self.optim_info_ = (
-        # self._solver.get_optim_info(state.state_params),
-        # self._solver.get_optim_info(state.state_scale))
+        # self.optim_info_ = jax.tree_util.tree_map(
+        #     lambda solv, s: solv.get_optim_info(s),
+        #     self._solver,
+        #     state.solver_state
+        # )
 
     def _compute_loss(
         self,
@@ -280,17 +279,16 @@ class NBGLM(GLM):
             )
 
         def optimization_init_state(params, X, y):
-            state_glm_params = solver_params.init_state(
-                params[0], X, y, jnp.exp(params[1])
-            )
+            state_params = solver_params.init_state(params[0], X, y, jnp.exp(params[1]))
             state_scale = solver_scale.init_state(params[1], X, y, params[0])
             return NBState(
                 data_log_likelihood=-jnp.array(jnp.inf),
                 previous_data_log_likelihood=-jnp.array(jnp.inf),
-                state_params=state_glm_params,
-                state_scale=state_scale,
+                solver_state={"glm_params": state_params, "scale": state_scale},
                 iterations=0,
             )
+
+        self._solver = {"glm_params": solver_params, "scale": solver_scale}
 
         def optimization_run(params, X, y):
             return _joint_run(
