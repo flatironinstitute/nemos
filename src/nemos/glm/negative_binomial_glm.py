@@ -21,21 +21,32 @@ class NBState(eqx.Module):
 
     data_log_likelihood: float | jnp.ndarray
     previous_data_log_likelihood: float | jnp.ndarray
-    solver_state: Dict[Literal["glm_params", "scale"], SolverAdapterState | None]
+    solver_state: Dict[Literal["glm_params", "scale"], SolverAdapterState]
     iterations: int
 
 
 def _extract_fun_value(state: SolverAdapterState) -> float | None:
     """Extract the function value from the solver state."""
+    if not isinstance(state, SolverAdapterState):
+        # force recompute loss if the solver state is custom
+        # this prevents unexpected behavior at the cost of an
+        # extra loss computation.
+        return None
     state = state.solver_state
+    # jaxopt convention
     if hasattr(state, "value"):
         fval = state.value
+    # optimistix convention
     elif hasattr(state, "f"):
         fval = state.f
     elif hasattr(state, "f_info"):
         fval = state.f_info.f
     else:
-        fval = None
+        # should not hit here, this error is for developers
+        raise ValueError(
+            "SolverAdapterState must store the value function following "
+            "one of the convention above."
+        )
     return fval
 
 
@@ -112,6 +123,7 @@ def _joint_run(
     solver_run_params: Callable,
     solver_run_scale: Callable,
     initialize_state: Callable,
+    scale_loss: Callable,
     tol: float,
     maxiter: int,
 ):
@@ -147,7 +159,9 @@ def _joint_run(
         )
         func_val = _extract_fun_value(state_scale)
         if func_val is None:
-            raise ValueError("Solver state must store the value function.")
+            # extra compute might be needed for custom solvers
+            # not storing the func value in standard attrs.
+            func_val = scale_loss(new_log_scale, X, y, new_params)
         new_state = NBState(
             data_log_likelihood=func_val,
             previous_data_log_likelihood=state.data_log_likelihood,
@@ -293,6 +307,7 @@ class NBGLM(GLM):
                 y,
                 solver_params.run,
                 solver_scale.run,
+                scale_loss=_scale_loss,
                 tol=self.tol,
                 maxiter=self.maxiter,
                 initialize_state=optimization_init_state,
