@@ -258,7 +258,7 @@ def test_svrg_glm_initialize_state(
         glm._optimizer_run,
     ):
         assert isinstance(f.__self__._solver, solver_class)
-    assert isinstance(state, SVRGState)
+    assert isinstance(state.solver_state, SVRGState)
 
 
 @pytest.mark.parametrize(

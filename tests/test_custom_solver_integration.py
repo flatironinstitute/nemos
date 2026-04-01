@@ -144,7 +144,8 @@ def test_custom_solver_integration(poissonGLM_model_instantiation):
 
         model.solver_name = "Adam[custom]"
         model.solver_kwargs = {"learning_rate": 5e-3, "tol": 1e-10, "maxiter": 2000}
-        model.fit(X, y)
+        with pytest.warns(UserWarning, match="does not have a ``.converged``"):
+            model.fit(X, y)
 
         assert isinstance(model._solver, OptaxAdam)
 
