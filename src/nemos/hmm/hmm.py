@@ -8,6 +8,9 @@ from ..glm_hmm.initialize_parameters import (
     _resolve_dirichlet_priors,
 )
 from .validation import HMMValidator
+from .initialize_parameters import setup_hmm_initialization
+
+# from .params import HMMParams
 
 
 class BaseHMM:
@@ -23,6 +26,7 @@ class BaseHMM:
         maxiter: int = 1000,
         tol: float = 1e-8,
         seed=jax.random.PRNGKey(123),
+        hmm_initialization_funcs: dict | None = None,
     ):
         self._validator_class = None  # to be set by inherited class
         self.n_states = n_states
@@ -37,6 +41,24 @@ class BaseHMM:
         # fit attributes
         self.transition_prob_: jnp.ndarray | None = None
         self.initial_prob_: jnp.ndarray | None = None
+
+        self.hmm_initialization_funcs = hmm_initialization_funcs
+        # self.setup()
+
+    def setup(
+        self,
+        initial_proba_init: Optional[str | Callable] = None,
+        initial_proba_init_kwargs: Optional[dict] = None,
+        transition_proba_init: Optional[str | Callable] = None,
+        transition_proba_init_kwargs: Optional[dict] = None,
+    ):
+        self._hmm_initialization_funcs = setup_hmm_initialization(
+            initial_proba_init=initial_proba_init,
+            initial_proba_init_kwargs=initial_proba_init_kwargs,
+            transition_proba_init=transition_proba_init,
+            transition_proba_init_kwargs=transition_proba_init_kwargs,
+            init_funcs=self._hmm_initialization_funcs,
+        )
 
     @property
     def n_states(self) -> int:
