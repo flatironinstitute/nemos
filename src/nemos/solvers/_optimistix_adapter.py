@@ -13,7 +13,7 @@ from ..typing import Aux, Params
 if TYPE_CHECKING:
     from ..regularizer import Regularizer
 
-from ._abstract_solver import AbstractSolverState, OptimizationInfo
+from ._abstract_solver import OptimizationInfo, SolverAdapterState
 from ._aux_helpers import (
     convert_fn,
     drop_aux,
@@ -34,7 +34,7 @@ DEFAULT_MAX_STEPS = 10_000
 OptimistixSolverState: TypeAlias = eqx.Module
 
 
-class OptimistixAdapterState(AbstractSolverState[OptimistixSolverState]):
+class OptimistixAdapterState(SolverAdapterState[OptimistixSolverState]):
     """Solver state for Optimistix-based adapters."""
 
 

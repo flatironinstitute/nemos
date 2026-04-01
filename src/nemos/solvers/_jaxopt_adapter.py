@@ -20,7 +20,7 @@ from ..typing import Aux, Params
 if TYPE_CHECKING:
     from ..regularizer import Regularizer
 
-from ._abstract_solver import AbstractSolverState, OptimizationInfo
+from ._abstract_solver import OptimizationInfo, SolverAdapterState
 from ._solver_adapter import SolverAdapter
 
 jax = lazy.load("jax")
@@ -28,7 +28,7 @@ jax = lazy.load("jax")
 JaxoptSolverState: TypeAlias = NamedTuple
 
 
-class JaxoptAdapterState(AbstractSolverState[JaxoptSolverState]):
+class JaxoptAdapterState(SolverAdapterState[JaxoptSolverState]):
     """Solver state for JAXopt-based adapters."""
 
 
