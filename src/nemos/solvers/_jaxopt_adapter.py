@@ -13,18 +13,29 @@ from typing import (
     TypeAlias,
 )
 
+import lazy_loader as lazy
+
 from ..typing import Aux, Params
 
 if TYPE_CHECKING:
     from ..regularizer import Regularizer
-from ._abstract_solver import OptimizationInfo
+
+from ._abstract_solver import AbstractSolverState, OptimizationInfo
 from ._solver_adapter import SolverAdapter
 
+jax = lazy.load("jax")
+
 JaxoptSolverState: TypeAlias = NamedTuple
-JaxoptStepResult: TypeAlias = Tuple[Params, JaxoptSolverState, Aux]
 
 
-class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
+class JaxoptAdapterState(AbstractSolverState[JaxoptSolverState]):
+    """Solver state for JAXopt-based adapters."""
+
+
+JaxoptStepResult: TypeAlias = Tuple[Params, JaxoptAdapterState, Aux]
+
+
+class JaxoptAdapter(SolverAdapter[JaxoptAdapterState]):
     """
     Base class for adapters wrapping JAXopt-style solvers.
 
@@ -67,21 +78,37 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
             **solver_init_kwargs,
         )
 
-    def init_state(self, init_params: Params, *args: Any) -> JaxoptSolverState:
-        return self._solver.init_state(init_params, *self.hyperparams_prox, *args)
+    def init_state(self, init_params: Params, *args: Any) -> JaxoptAdapterState:
+        return JaxoptAdapterState(
+            solver_state=self._solver.init_state(
+                init_params, *self.hyperparams_prox, *args
+            ),
+            stats=OptimizationInfo(
+                function_val=jax.numpy.nan,  # pyright: ignore
+                num_steps=jax.numpy.array(0),
+                converged=jax.numpy.array(False),  # pyright: ignore
+                reached_max_steps=jax.numpy.array(False),
+            ),
+        )
 
     def update(
-        self, params: Params, state: JaxoptSolverState, *args: Any
+        self, params: Params, state: JaxoptAdapterState, *args: Any
     ) -> JaxoptStepResult:
-        params, state = self._solver.update(
-            params, state, *self.hyperparams_prox, *args
+        params, solver_state = self._solver.update(
+            params, state.solver_state, *self.hyperparams_prox, *args
         )
-        aux = self._extract_aux(state, fallback_name="aux_batch")
+        aux = self._extract_aux(solver_state, fallback_name="aux_batch")
+        stats = self._get_optim_info(solver_state)
+        state = JaxoptAdapterState(solver_state=solver_state, stats=stats)
         return (params, state, aux)
 
     def run(self, init_params: Params, *args: Any) -> JaxoptStepResult:
-        params, state = self._solver.run(init_params, *self.hyperparams_prox, *args)
-        aux = self._extract_aux(state, fallback_name="aux_full")
+        params, solver_state = self._solver.run(
+            init_params, *self.hyperparams_prox, *args
+        )
+        aux = self._extract_aux(solver_state, fallback_name="aux_full")
+        stats = self._get_optim_info(solver_state)
+        state = JaxoptAdapterState(solver_state=solver_state, stats=stats)
         return (params, state, aux)
 
     @classmethod
@@ -92,7 +119,7 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
             arguments.remove("prox")
         return arguments
 
-    def get_optim_info(self, state: JaxoptSolverState) -> OptimizationInfo:
+    def _get_optim_info(self, state: JaxoptSolverState, **kwargs) -> OptimizationInfo:
         num_steps = state.iter_num.item()  # pyright: ignore
         function_val = (
             state.value if hasattr(state, "value") else None
@@ -109,7 +136,7 @@ class JaxoptAdapter(SolverAdapter[JaxoptSolverState]):
     def maxiter(self):
         return self._solver.maxiter
 
-    def _extract_aux(self, state: JaxoptSolverState, fallback_name: str):
+    def _extract_aux(self, state: JaxoptAdapterState, fallback_name: str):
         """
         Return auxiliary output from a solver state.
 
