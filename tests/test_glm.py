@@ -3232,11 +3232,11 @@ class TestPoissonGLM:
         solver = model._solver
 
         if stepsize is not None:
-            assert opt_state.stepsize == stepsize
+            assert opt_state.solver_state.stepsize == stepsize
             assert solver.stepsize == stepsize
         else:
-            assert opt_state.stepsize > 0
-            assert isinstance(opt_state.stepsize, float)
+            assert opt_state.solver_state.stepsize > 0
+            assert isinstance(opt_state.solver_state.stepsize, float)
 
         if batch_size is not None:
             assert solver.batch_size == batch_size

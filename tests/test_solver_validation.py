@@ -39,7 +39,7 @@ class GoodSolver:
     def get_accepted_arguments(cls):
         return set()
 
-    def _get_optim_info(self, state):
+    def _get_optim_info(self, state, **kwargs):
         return None
 
 
