@@ -2,14 +2,14 @@
 
 from typing import Callable, Tuple, Union
 
-import equinox as eqx
 import jax.numpy as jnp
 from numpy.typing import ArrayLike
 
+from ..params import ModelParams
 from ..typing import DESIGN_INPUT_TYPE
 
 
-class GLMParams(eqx.Module):
+class GLMParams(ModelParams):
     """Parameter container for GLM models."""
 
     coef: jnp.ndarray | dict
