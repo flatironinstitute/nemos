@@ -184,7 +184,6 @@ def test_get_fit_attrs(request, glm_class_type, model_instantiation_type):
         "solver_state_": None,
         "dof_resid_": None,
         "aux_": None,
-        "optim_info_": None,
     }
     assert model._get_fit_state() == expected_state
     model.solver_kwargs = {"maxiter": 1}
@@ -1148,7 +1147,6 @@ class TestGLM:
         loaded_params = loaded_model.get_params()
         fit_state = loaded_model._get_fit_state()
         fit_state.pop("solver_state_")
-        fit_state.pop("optim_info_")
         loaded_params.update(fit_state)
 
         # Assert matching keys and values
@@ -1328,7 +1326,6 @@ class TestGLM:
             loaded_params = loaded_model.get_params()
             fit_state = loaded_model._get_fit_state()
             fit_state.pop("solver_state_")
-            fit_state.pop("optim_info_")
             loaded_params.update(fit_state)
 
             # Assert matching keys and values
@@ -1455,7 +1452,6 @@ class TestGLM:
         initial_params = fitted_model.get_params()
         fit_state = fitted_model._get_fit_state()
         fit_state.pop("solver_state_")
-        fit_state.pop("optim_info_")
         initial_params.update(fit_state)
 
         # Save
@@ -1467,7 +1463,6 @@ class TestGLM:
         loaded_params = loaded_model.get_params()
         fit_state = loaded_model._get_fit_state()
         fit_state.pop("solver_state_")
-        fit_state.pop("optim_info_")
         loaded_params.update(fit_state)
 
         # Assert states are close

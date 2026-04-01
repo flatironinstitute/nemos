@@ -113,7 +113,7 @@ class OptaxAdam(AbstractSolver[OptaxAdamState]):
     def get_accepted_arguments(cls) -> set[str]:
         return {"learning_rate", "tol", "maxiter"}
 
-    def get_optim_info(self, state: OptaxAdamState) -> OptimizationInfo:
+    def _get_optim_info(self, state: OptaxAdamState) -> OptimizationInfo:
         num_steps = state.iter_num.item()
         return OptimizationInfo(
             function_val=state.value.item(),

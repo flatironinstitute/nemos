@@ -424,7 +424,7 @@ def test_maxiter_is_respected(
     solver = glm._solver
     assert solver.maxiter == maxiter
 
-    assert solver.get_optim_info(glm.solver_state_).num_steps == maxiter
+    assert solver._get_optim_info(glm.solver_state_).num_steps == maxiter
 
 
 @pytest.mark.parametrize(
