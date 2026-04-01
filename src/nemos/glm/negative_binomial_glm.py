@@ -4,7 +4,7 @@ from typing import Any, Callable, Optional, Tuple, Union
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from numpy._typing import ArrayLike
+from numpy.typing import ArrayLike
 
 from ..glm import GLM
 from ..observation_models import NegativeBinomialObservations
@@ -23,14 +23,17 @@ class NBState(eqx.Module):
 
 
 def _extract_fun_value(state: SolverState) -> float | None:
+    """Extract the function value from the solver state."""
     if hasattr(state, "value"):
-        return state.value
+        fval = state.value
     elif hasattr(state, "f"):
-        return state.f
+        fval = state.f.item() if hasattr(state.f, "item") else state.f
     elif hasattr(state, "f_info"):
-        return state.f_info.f
+        fval = state.f_info.f
+        fval = fval.item() if hasattr(fval, "item") else fval
     else:
-        return None
+        fval = None
+    return fval
 
 
 def check_log_likelihood_increment(state: NBState, tol: float) -> jnp.ndarray:
