@@ -3399,10 +3399,13 @@ class TestPoissonGLM:
 
         iter_num = 0
         while iter_num < maxiter:
-            state = state._replace(
-                full_grad_at_reference_point=loss_grad(
-                    nmo.glm.params.GLMParams(*params), X, y
+            state = type(state)(
+                solver_state=state.solver_state._replace(
+                    full_grad_at_reference_point=loss_grad(
+                        nmo.glm.params.GLMParams(*params), X, y
+                    )
                 ),
+                stats=state.stats,
             )
 
             prev_params = params
@@ -3412,8 +3415,11 @@ class TestPoissonGLM:
                 xi, yi = tree_slice(X, ind), tree_slice(y, ind)
                 params, state = glm.update(params, state, xi, yi)
 
-            state = state._replace(
-                reference_point=nmo.glm.params.GLMParams(*params),
+            state = type(state)(
+                solver_state=state.solver_state._replace(
+                    reference_point=nmo.glm.params.GLMParams(*params)
+                ),
+                stats=state.stats,
             )
 
             iter_num += 1
@@ -3424,7 +3430,7 @@ class TestPoissonGLM:
             if _error < tol:
                 break
 
-        assert iter_num == glm2.solver_state_.iter_num
+        assert iter_num == glm2.solver_state_.stats.num_steps
 
         assert pytree_map_and_reduce(
             lambda a, b: np.allclose(a, b, atol=10**-5, rtol=0.0),
