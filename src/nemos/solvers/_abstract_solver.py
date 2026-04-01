@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import abc
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Generic, Protocol, runtime_checkable
 
 from ..typing import Params, SolverState, StepResult
@@ -13,13 +12,12 @@ if TYPE_CHECKING:
 import equinox as eqx
 
 
-class AbstractSolverState(eqx.Module, Generic[SolverState]):
+class SolverAdapterState(eqx.Module, Generic[SolverState]):
     solver_state: SolverState  # backend-specific internal state
     stats: OptimizationInfo  # num_steps, converged, etc. — computed during run, valid JAX pytree
 
 
-@dataclass
-class OptimizationInfo:
+class OptimizationInfo(eqx.Module):
     """Basic diagnostic information about finished optimization runs."""
 
     # Not all JAXopt solvers store the function value.

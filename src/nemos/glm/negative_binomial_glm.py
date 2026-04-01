@@ -11,7 +11,7 @@ from numpy.typing import ArrayLike
 from ..glm import GLM
 from ..observation_models import NegativeBinomialObservations
 from ..regularizer import Regularizer, UnRegularized
-from ..solvers import SolverState
+from ..solvers import SolverAdapterState
 from ..typing import DESIGN_INPUT_TYPE
 from .params import GLMParams, NBGLMUserParams
 
@@ -21,12 +21,13 @@ class NBState(eqx.Module):
 
     data_log_likelihood: float | jnp.ndarray
     previous_data_log_likelihood: float | jnp.ndarray
-    solver_state: Dict[Literal["glm_params", "scale"], SolverState | None]
+    solver_state: Dict[Literal["glm_params", "scale"], SolverAdapterState | None]
     iterations: int
 
 
-def _extract_fun_value(state: SolverState) -> float | None:
+def _extract_fun_value(state: SolverAdapterState) -> float | None:
     """Extract the function value from the solver state."""
+    state = state.solver_state
     if hasattr(state, "value"):
         fval = state.value
     elif hasattr(state, "f"):
@@ -246,7 +247,7 @@ class NBGLM(GLM):
         X: dict[str, jnp.ndarray] | jnp.ndarray,
         y: jnp.ndarray,
         *args,
-    ) -> SolverState:
+    ) -> SolverAdapterState:
         solver_params = self._instantiate_solver(
             self._compute_loss,
             init_params[0],
