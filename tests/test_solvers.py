@@ -70,10 +70,10 @@ def test_svrg_init_state_default(request, regr_setup):
     svrg = SVRG(loss)
     state = svrg.init_state(param_init, X, y)
 
-    assert state.solver_state.iter_num == 0
-    assert state.solver_state.key == jax.random.key(123)
-    assert state.solver_state.full_grad_at_reference_point is None
-    assert state.solver_state.reference_point is not None
+    assert state.iter_num == 0
+    assert state.key == jax.random.key(123)
+    assert state.full_grad_at_reference_point is None
+    assert state.reference_point is not None
 
 
 @pytest.mark.parametrize(
@@ -507,12 +507,7 @@ def test_svrg_update_converges(request, regr_setup, stepsize):
     state = solver.init_state(params, X, y)
 
     for _ in range(maxiter):
-        state = type(state)(
-            solver_state=state.solver_state._replace(
-                full_grad_at_reference_point=loss_grad(params, X, y)
-            ),
-            stats=state.stats,
-        )
+        state = state._replace(full_grad_at_reference_point=loss_grad(params, X, y))
 
         prev_params = params
         for _ in range(m):
@@ -521,10 +516,7 @@ def test_svrg_update_converges(request, regr_setup, stepsize):
             xi, yi = tree_slice(X, ind), y[ind]
             params, state = solver.update(params, state, xi, yi)
 
-        state = type(state)(
-            solver_state=state.solver_state._replace(reference_point=params),
-            stats=state.stats,
-        )
+        state = state._replace(reference_point=params)
 
         _error = tree_l2_norm(tree_sub(params, prev_params)) / tree_l2_norm(prev_params)
         if _error < tol:
