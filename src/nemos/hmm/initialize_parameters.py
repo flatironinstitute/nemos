@@ -2,7 +2,7 @@ import inspect
 import jax
 import jax.numpy as jnp
 from numpy.typing import NDArray
-from typing import Any, Callable, Optional, Tuple
+from typing import Any, Callable, Optional, Tuple, Protocol
 
 from ..typing import DESIGN_INPUT_TYPE
 
@@ -35,20 +35,16 @@ def sticky_transition_proba_init(
 
     Parameters
     ----------
-    n_states : int
+    n_states :
         Number of HMM states. Must be greater than 1.
-    X : DESIGN_INPUT_TYPE
-        Design matrix, unused but included for API consistency.
-    y : NDArray | jnp.ndarray
-        Observations, unused but included for API consistency.
-    random_key : jax.random.PRNGKey
-        Random key, unused for this particular initialization, but added for API consistency.
-    prob_stay : float
+    seed :
+        Seed for random key, unused for this particular initialization, but added for API consistency.
+    prob_stay :
         Probability of staying in the current state. Default is 0.95.
 
     Returns
     -------
-    transition_matrix : jnp.ndarray
+    transition_matrix :
         Transition probability matrix of shape (n_states, n_states).
     """
     # assume n_state is > 1
@@ -63,9 +59,7 @@ def sticky_transition_proba_init(
 
 def uniform_transition_proba_init(
     n_states: int,
-    X: DESIGN_INPUT_TYPE,
-    y: NDArray | jnp.ndarray,
-    random_key: jax.numpy.ndarray = jax.random.PRNGKey(123),
+    seed: int = 123,
 ) -> jnp.ndarray:
     """
     Initialize transition probabilities with uniform dynamics.
@@ -75,50 +69,68 @@ def uniform_transition_proba_init(
 
     Parameters
     ----------
-    n_states : int
+    n_states :
         Number of HMM states. Must be greater than 1.
-    X : DESIGN_INPUT_TYPE
-        Design matrix, unused but included for API consistency.
-    y : NDArray | jnp.ndarray
-        Observations, unused but included for API consistency.
-    random_key : jax.random.PRNGKey
-        Random key, unused for this particular initialization, but added for API consistency.
+    seed :
+        Seed for random key, unused for this particular initialization, but added for API consistency.
 
     Returns
     -------
-    transition_matrix : jnp.ndarray
+    transition_matrix :
         Transition probability matrix of shape (n_states, n_states).
     """
     prob_transition = 1.0 / n_states
     return jnp.full((n_states, n_states), prob_transition, dtype=float)
 
 
-def uniform_initial_proba_init(
+def random_transition_proba_init(
     n_states: int,
-    X: DESIGN_INPUT_TYPE,
-    y: NDArray | jnp.ndarray,
-    random_key=jax.random.PRNGKey(124),
+    seed: int = 123,
 ) -> jnp.ndarray:
     """
-    Initialize initial state probabilities from a uniform distribution.
+    Initialize transition probabilities randomly.
 
-    Generates random initial state probabilities by sampling from a uniform
-    distribution and normalizing to ensure they sum to 1.
+    Creates a random transition probability matrix by sampling from a normal
+    distribution and normalizing to ensure rows sum to 1.
 
     Parameters
     ----------
-    n_states : int
-        Number of HMM states.
-    X : DESIGN_INPUT_TYPE
-        Design matrix, unused but included for API consistency.
-    y : NDArray | jnp.ndarray
-        Observations, unused but included for API consistency.
-    random_key : jax.random.PRNGKey
-        Random key for reproducibility. Default is PRNGKey(124).
+    n_states :
+        Number of HMM states. Must be greater than 1.
+    seed :
+        Seed for random key.
 
     Returns
     -------
-    initial_probs : jnp.ndarray
+    transition_matrix :
+        Transition probability matrix of shape (n_states, n_states).
+    """
+    prob_transition = jax.random.normal(
+        jax.random.PRNGKey(seed), (n_states, n_states), dtype=float
+    )
+    return prob_transition / prob_transition.sum(axis=1, keepdims=True)
+
+
+def uniform_initial_proba_init(
+    n_states: int,
+    seed=123,
+) -> jnp.ndarray:
+    """
+    Initialize initial state probabilities as a uniform distribution.
+
+    Creates an initial probability matrix that assigns equal probability of
+    starting in any state.
+
+    Parameters
+    ----------
+    n_states :
+        Number of HMM states.
+    seed :
+        Seed for random key, unused for this particular initialization, but added for API consistency.
+
+    Returns
+    -------
+    initial_probs :
         Initial state probability vector of shape (n_states,) that sums to 1.
 
     Examples
@@ -140,13 +152,56 @@ def uniform_initial_proba_init(
     return prob / jnp.sum(prob)
 
 
+def random_initial_proba_init(
+    n_states: int,
+    seed=123,
+) -> jnp.ndarray:
+    """
+    Randomly initialize initial state probabilities.
+
+    Generates random initial state probabilities by sampling from a normal
+    distribution and normalizing to ensure they sum to 1.
+
+    Parameters
+    ----------
+    n_states :
+        Number of HMM states.
+    seed :
+        Seed for random key.
+
+    Returns
+    -------
+    initial_probs :
+        Initial state probability vector of shape (n_states,) that sums to 1.
+
+    Examples
+    --------
+    >>> import jax
+    >>> import jax.numpy as jnp
+    >>> from nemos.glm_hmm.initialize_parameters import uniform_initial_proba_init
+    >>>
+    >>> # Generate initial probabilities for 3 states
+    >>> n_states = 3
+    >>> X_dummy, y_dummy = jnp.ones((3, 2)), jnp.ones(3)
+    >>> init_probs = uniform_initial_proba_init(n_states, X_dummy, y_dummy)
+    >>> init_probs.shape
+    (3,)
+    >>> jnp.isclose(jnp.sum(init_probs), 1.0)
+    Array(True, dtype=bool)
+    """
+    prob = jax.random.normal(seed, (n_states,), dtype=float)
+    return prob / jnp.sum(prob)
+
+
 AVAILABLE_INIT_FUNCTIONS = {
     "transition_proba_init": {
         "sticky": sticky_transition_proba_init,
         "uniform": uniform_transition_proba_init,
+        "random": random_transition_proba_init,
     },
     "initial_proba_init": {
         "uniform": uniform_initial_proba_init,
+        "random": random_initial_proba_init,
     },
 }
 
