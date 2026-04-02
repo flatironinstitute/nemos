@@ -15,6 +15,7 @@ import re
 from collections import defaultdict, namedtuple
 from copy import deepcopy
 from functools import partial
+from types import SimpleNamespace
 from typing import Literal
 
 import jax
@@ -67,6 +68,67 @@ def pytest_terminal_summary(terminalreporter):
         terminalreporter.write_line(
             f"{total:6.2f}s total  {avg:.4f}s/param  {n:>5} params  {name}"
         )
+
+
+@pytest.fixture
+def mock_glm_fit(monkeypatch):
+    """Replace GLM.fit with a pure-Python no-op that sets coef_/intercept_ from X/y shapes.
+
+    Use in tests that only care about sklearn routing (cloning, parameter
+    setting, pipeline plumbing) and do not need any fit validation logic.
+    For tests that need validation but not solver iterations, use mock_optimizer_run.
+    """
+
+    def _fit(self, X, y, init_params=None, **kwargs):
+        n_features = X.shape[1]
+        y_arr = y.d if hasattr(y, "d") else np.asarray(y)
+        if y_arr.ndim == 1:
+            self.coef_ = jnp.zeros(n_features)
+            self.intercept_ = jnp.zeros(1)
+        else:
+            self.coef_ = jnp.zeros((n_features, y_arr.shape[1]))
+            self.intercept_ = jnp.zeros(y_arr.shape[1])
+        return self
+
+    monkeypatch.setattr(nmo.glm.GLM, "fit", _fit)
+    monkeypatch.setattr(nmo.glm.PopulationGLM, "fit", _fit)
+
+
+@pytest.fixture
+def mock_optimizer_run(monkeypatch):
+    """Bypass the JAX solver in fit() while keeping all validation logic.
+
+    Patches _initialize_optimizer_and_state to inject a no-op _optimizer_run
+    that returns init_params unchanged with a converged state. Use in tests
+    that only care about pipeline routing or fit side-effects (coef_/intercept_
+    shape, validation errors) and do not check solution quality.
+    """
+    _real_init = nmo.glm.GLM._initialize_optimizer_and_state
+
+    def _patched_init(self, init_params, data, y):
+        result = _real_init(self, init_params, data, y)
+        self._optimizer_run = lambda p, d, t: (p, SimpleNamespace(converged=True), None)
+        return result
+
+    monkeypatch.setattr(nmo.glm.GLM, "_initialize_optimizer_and_state", _patched_init)
+
+
+@pytest.fixture
+def mock_optimizer_update(monkeypatch):
+    """Bypass the JAX solver step in update() while keeping all validation logic.
+
+    Patches _initialize_optimizer_and_state to inject a no-op _optimizer_update
+    that returns the current params and state unchanged. Do NOT use in tests
+    that assert parameters actually changed after calling update().
+    """
+    _real_init = nmo.glm.GLM._initialize_optimizer_and_state
+
+    def _patched_init(self, init_params, data, y):
+        result = _real_init(self, init_params, data, y)
+        self._optimizer_update = lambda p, s, d, t, *a, **kw: (p, s, None)
+        return result
+
+    monkeypatch.setattr(nmo.glm.GLM, "_initialize_optimizer_and_state", _patched_init)
 
 
 # Named tuple for model fixture returns (clearer than tuple indexing)

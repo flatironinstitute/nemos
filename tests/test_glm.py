@@ -175,7 +175,9 @@ def model_instantiation_type(glm_class_type):
 @pytest.mark.parametrize("glm_class_type", ["glm_class", "population_glm_class"])
 @pytest.mark.solver_related
 @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
-def test_get_fit_attrs(request, glm_class_type, model_instantiation_type):
+def test_get_fit_attrs(
+    request, glm_class_type, model_instantiation_type, mock_optimizer_run
+):
     X, y, model = request.getfixturevalue(model_instantiation_type)[:3]
     expected_state = {
         "coef_": None,
@@ -186,7 +188,6 @@ def test_get_fit_attrs(request, glm_class_type, model_instantiation_type):
         "aux_": None,
     }
     assert model._get_fit_state() == expected_state
-    model.solver_kwargs = {"maxiter": 1}
     model.fit(X, y)
     assert not model._has_aux
     assert all(
@@ -242,6 +243,7 @@ class TestGLM:
         request,
         glm_class_type,
         model_instantiation_type,
+        mock_optimizer_run,
     ):
         """
         Test the `fit` method with weight matrices of different dimensionalities.
@@ -276,6 +278,7 @@ class TestGLM:
         request,
         glm_class_type,
         model_instantiation_type,
+        mock_optimizer_run,
     ):
         """
         Test the `fit` method with intercepts of different dimensionalities. Check for correct dimensionality.
@@ -431,6 +434,7 @@ class TestGLM:
         model_instantiation_type,
         expectation,
         init_params_by_model,
+        mock_optimizer_run,
     ):
         """
         Test the `fit` method with various types of initial parameters. Ensure that the provided initial parameters
@@ -459,6 +463,7 @@ class TestGLM:
         request,
         glm_class_type,
         model_instantiation_type,
+        mock_optimizer_run,
     ):
         """
         Test the `fit` method for inconsistencies between data features and initial weights provided.
@@ -657,7 +662,13 @@ class TestGLM:
         ],
     )
     def test_predict_is_fit(
-        self, is_fit, expectation, request, glm_class_type, model_instantiation_type
+        self,
+        is_fit,
+        expectation,
+        request,
+        glm_class_type,
+        model_instantiation_type,
+        mock_glm_fit,
     ):
         """
         Test the `score` method on models based on their fit status.
@@ -2228,12 +2239,16 @@ class TestGLMObservationModel:
     @pytest.mark.parametrize("pytree_x_factory", _PYTREE_X_FACTORIES)
     @pytest.mark.solver_related
     def test_coef_tree_structure_after_fit_pytree_x(
-        self, pytree_x_factory, request, glm_type, model_instantiation
+        self,
+        pytree_x_factory,
+        request,
+        glm_type,
+        model_instantiation,
+        mock_optimizer_run,
     ):
         """model.coef_ tree structure matches X structure after fit with pytree X."""
         _, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
         X = pytree_x_factory(y.shape[0])
-        model.solver_kwargs = {"maxiter": 1}
         model.fit(X, y)
         assert jax.tree_util.tree_structure(
             model.coef_
@@ -2339,7 +2354,9 @@ class TestGLMObservationModel:
 
     @pytest.mark.solver_related
     @pytest.mark.requires_x64
-    def test_fit_mask_grouplasso(self, glm_type, model_instantiation, request):
+    def test_fit_mask_grouplasso(
+        self, glm_type, model_instantiation, request, mock_optimizer_run
+    ):
         """Test that the group lasso fit goes through"""
         X, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
 
@@ -2619,8 +2636,9 @@ class TestPopulationGLM:
             "_pytree",
         ],
     )
-    @pytest.mark.solver_related
-    def test_metadata_pynapple_fit(self, model_suffix, request, model_instantiation):
+    def test_metadata_pynapple_fit(
+        self, model_suffix, request, model_instantiation, mock_optimizer_run
+    ):
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation + model_suffix
         )
@@ -2639,9 +2657,8 @@ class TestPopulationGLM:
             "_pytree",
         ],
     )
-    @pytest.mark.solver_related
     def test_metadata_pynapple_is_deepcopied(
-        self, model_suffix, model_instantiation, request
+        self, model_suffix, model_instantiation, request, mock_optimizer_run
     ):
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation + model_suffix
@@ -2664,9 +2681,8 @@ class TestPopulationGLM:
             "_pytree",
         ],
     )
-    @pytest.mark.solver_related
     def test_metadata_pynapple_predict(
-        self, model_suffix, model_instantiation, request
+        self, model_suffix, model_instantiation, request, mock_optimizer_run
     ):
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation + model_suffix
@@ -2827,7 +2843,13 @@ _UPDATE_MODEL_INSTANTIATIONS = [
 @pytest.mark.parametrize("batch_size", [1, 10])
 @pytest.mark.solver_related
 def test_update_n_samples(
-    n_samples, expectation, batch_size, request, glm_type, model_instantiation
+    n_samples,
+    expectation,
+    batch_size,
+    request,
+    glm_type,
+    model_instantiation,
+    mock_optimizer_update,
 ):
     X, y, model, true_params, firing_rate = request.getfixturevalue(
         glm_type + model_instantiation
@@ -2852,7 +2874,12 @@ def test_update_n_samples(
 )
 @pytest.mark.solver_related
 def test_update_params_are_finite(
-    nan_inputs, solver_name, request, glm_type, model_instantiation
+    nan_inputs,
+    solver_name,
+    request,
+    glm_type,
+    model_instantiation,
+    mock_optimizer_update,
 ):
     """
     Fitting a GLM to data containing NaNs with the jaxopt.LBFGS solver worked when using GLM.fit,
@@ -2940,12 +2967,13 @@ def test_update_nan_drop_at_jit_comp(
 @pytest.mark.parametrize("model_instantiation", _UPDATE_MODEL_INSTANTIATIONS)
 @pytest.mark.solver_related
 @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
-def test_compatibility_with_sklearn_cv(request, glm_type, model_instantiation):
+def test_compatibility_with_sklearn_cv(
+    request, glm_type, model_instantiation, mock_glm_fit
+):
     X, y, model, true_params, firing_rate = request.getfixturevalue(
         glm_type + model_instantiation
     )
     param_grid = {"solver_name": ["BFGS", "GradientDescent"]}
-    model.solver_kwargs.update(dict(maxiter=2))
     cls = GridSearchCV(model, param_grid).fit(X, y)
     # check that the repr works after cloning
     repr(cls)
