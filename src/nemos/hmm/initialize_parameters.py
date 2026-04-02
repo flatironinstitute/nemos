@@ -46,6 +46,18 @@ def sticky_transition_proba_init(
     -------
     transition_matrix :
         Transition probability matrix of shape (n_states, n_states).
+
+    Examples
+    --------
+    >>> from nemos.glm_hmm.initialize_parameters import sticky_transition_proba_init
+    >>>
+    >>> # Generate transition probabilities for 3 states with sticky dynamics
+    >>> n_states = 3
+    >>> transition_matrix = sticky_transition_proba_init(n_states, prob_stay=0.95)
+    >>> print(transition_matrix)
+    [[0.95  0.025 0.025]
+     [0.025 0.95  0.025]
+     [0.025 0.025 0.95 ]]
     """
     # assume n_state is > 1
     if n_states == 1:
@@ -78,6 +90,18 @@ def uniform_transition_proba_init(
     -------
     transition_matrix :
         Transition probability matrix of shape (n_states, n_states).
+
+    Examples
+    --------
+    >>> from nemos.glm_hmm.initialize_parameters import uniform_transition_proba_init
+    >>>
+    >>> # Generate transition probabilities for 3 states with uniform dynamics
+    >>> n_states = 3
+    >>> transition_matrix = uniform_transition_proba_init(n_states)
+    >>> print(transition_matrix)
+    [[0.33333333 0.33333333 0.33333333]
+     [0.33333333 0.33333333 0.33333333]
+     [0.33333333 0.33333333 0.33333333]]
     """
     prob_transition = 1.0 / n_states
     return jnp.full((n_states, n_states), prob_transition, dtype=float)
@@ -104,6 +128,19 @@ def random_transition_proba_init(
     -------
     transition_matrix :
         Transition probability matrix of shape (n_states, n_states).
+
+    Examples
+    --------
+    >>> import jax.numpy as jnp
+    >>> from nemos.glm_hmm.initialize_parameters import random_transition_proba_init
+    >>>
+    >>> # Generate random transition probabilities for 3 states
+    >>> n_states = 3
+    >>> transition_matrix = random_transition_proba_init(n_states)
+    >>> transition_matrix.shape
+    (3, 3)
+    >>> jnp.allclose(transition_matrix.sum(axis=1), 1.0)
+    Array(True, dtype=bool)
     """
     prob_transition = jax.random.normal(
         jax.random.PRNGKey(seed), (n_states, n_states), dtype=float
@@ -135,18 +172,13 @@ def uniform_initial_proba_init(
 
     Examples
     --------
-    >>> import jax
-    >>> import jax.numpy as jnp
     >>> from nemos.glm_hmm.initialize_parameters import uniform_initial_proba_init
     >>>
     >>> # Generate initial probabilities for 3 states
     >>> n_states = 3
-    >>> X_dummy, y_dummy = jnp.ones((3, 2)), jnp.ones(3)
-    >>> init_probs = uniform_initial_proba_init(n_states, X_dummy, y_dummy)
-    >>> init_probs.shape
-    (3,)
-    >>> jnp.isclose(jnp.sum(init_probs), 1.0)
-    Array(True, dtype=bool)
+    >>> init_probs = uniform_initial_proba_init(n_states)
+    >>> print(init_probs)
+    [0.33333333 0.33333333 0.33333333]
     """
     prob = jnp.ones((n_states,), dtype=float)
     return prob / jnp.sum(prob)
@@ -176,14 +208,12 @@ def random_initial_proba_init(
 
     Examples
     --------
-    >>> import jax
     >>> import jax.numpy as jnp
-    >>> from nemos.glm_hmm.initialize_parameters import uniform_initial_proba_init
+    >>> from nemos.glm_hmm.initialize_parameters import random_initial_proba_init
     >>>
     >>> # Generate initial probabilities for 3 states
     >>> n_states = 3
-    >>> X_dummy, y_dummy = jnp.ones((3, 2)), jnp.ones(3)
-    >>> init_probs = uniform_initial_proba_init(n_states, X_dummy, y_dummy)
+    >>> init_probs = random_initial_proba_init(n_states)
     >>> init_probs.shape
     (3,)
     >>> jnp.isclose(jnp.sum(init_probs), 1.0)
@@ -400,3 +430,68 @@ def _validate_custom_init_func(
         )
 
     return func, kwargs
+
+
+def generate_hmm_initial_params(
+    n_states: int, init_funcs: dict = {}, seed: Optional[int] = None
+) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    """
+    Generate initial HMM parameters using the provided initialization functions.
+
+    This function calls the specified initialization functions for initial state probabilities
+    stored in the `init_funcs` dictionary passing `n_states` and any additional stored kwargs.
+
+    Parameters
+    ----------
+    n_states :
+        Number of HMM states.
+    init_funcs :
+        Dictionary containing the initialization functions and their kwargs for both initial state probabilities
+        and transition probabilities. This dictionary can be set up using the `setup_hmm_initialization` function.
+        If not provided, or if specific functions are not included, defaults will be used for any missing functions.
+    seed :
+        Optional seed for random number generation, if needed by the initialization functions. This is used globally,
+        but is overwritten by function-specific seeds if they are provided in the `init_funcs` kwargs.
+
+    Returns
+    -------
+    initial_probs :
+        Initial state probability vector of shape (n_states,) that sums to 1.
+    transition_matrix :
+        Transition probability matrix of shape (n_states, n_states) where each row sums to 1.
+
+    See Also
+    --------
+    :func:`nemos.hmm.setup_hmm_initialization`
+        Function to set up the initialization functions and their kwargs based on user input.
+    """
+    # grab initial probability initialization function and kwargs, with fallback to defaults
+    initial_proba_init = (
+        init_funcs.get(
+            "initial_proba_init", DEFAULT_INIT_FUNCTIONS["initial_proba_init"]
+        )
+        or DEFAULT_INIT_FUNCTIONS["initial_proba_init"]
+    )
+    initial_proba_init_kwargs = init_funcs.get("initial_proba_init_kwargs", {}) or {}
+
+    # grab transition probability initialization function and kwargs, with fallback to defaults
+    transition_proba_init = (
+        init_funcs.get(
+            "transition_proba_init", DEFAULT_INIT_FUNCTIONS["transition_proba_init"]
+        )
+        or DEFAULT_INIT_FUNCTIONS["transition_proba_init"]
+    )
+    transition_proba_init_kwargs = (
+        init_funcs.get("transition_proba_init_kwargs", {}) or {}
+    )
+
+    if seed is not None:
+        if "seed" not in initial_proba_init_kwargs:
+            initial_proba_init_kwargs["seed"] = seed
+        if "seed" not in transition_proba_init_kwargs:
+            transition_proba_init_kwargs["seed"] = seed
+
+    initial_probs = initial_proba_init(n_states, **initial_proba_init_kwargs)
+    transition_matrix = transition_proba_init(n_states, **transition_proba_init_kwargs)
+
+    return initial_probs, transition_matrix
