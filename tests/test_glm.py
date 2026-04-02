@@ -184,7 +184,6 @@ def test_get_fit_attrs(request, glm_class_type, model_instantiation_type):
         "solver_state_": None,
         "dof_resid_": None,
         "aux_": None,
-        "optim_info_": None,
     }
     assert model._get_fit_state() == expected_state
     model.solver_kwargs = {"maxiter": 1}
@@ -1148,7 +1147,6 @@ class TestGLM:
         loaded_params = loaded_model.get_params()
         fit_state = loaded_model._get_fit_state()
         fit_state.pop("solver_state_")
-        fit_state.pop("optim_info_")
         loaded_params.update(fit_state)
 
         # Assert matching keys and values
@@ -1328,7 +1326,6 @@ class TestGLM:
             loaded_params = loaded_model.get_params()
             fit_state = loaded_model._get_fit_state()
             fit_state.pop("solver_state_")
-            fit_state.pop("optim_info_")
             loaded_params.update(fit_state)
 
             # Assert matching keys and values
@@ -1455,7 +1452,6 @@ class TestGLM:
         initial_params = fitted_model.get_params()
         fit_state = fitted_model._get_fit_state()
         fit_state.pop("solver_state_")
-        fit_state.pop("optim_info_")
         initial_params.update(fit_state)
 
         # Save
@@ -1467,7 +1463,6 @@ class TestGLM:
         loaded_params = loaded_model.get_params()
         fit_state = loaded_model._get_fit_state()
         fit_state.pop("solver_state_")
-        fit_state.pop("optim_info_")
         loaded_params.update(fit_state)
 
         # Assert states are close
@@ -3237,11 +3232,11 @@ class TestPoissonGLM:
         solver = model._solver
 
         if stepsize is not None:
-            assert opt_state.stepsize == stepsize
+            assert opt_state.solver_state.stepsize == stepsize
             assert solver.stepsize == stepsize
         else:
-            assert opt_state.stepsize > 0
-            assert isinstance(opt_state.stepsize, float)
+            assert opt_state.solver_state.stepsize > 0
+            assert isinstance(opt_state.solver_state.stepsize, float)
 
         if batch_size is not None:
             assert solver.batch_size == batch_size
@@ -3404,10 +3399,13 @@ class TestPoissonGLM:
 
         iter_num = 0
         while iter_num < maxiter:
-            state = state._replace(
-                full_grad_at_reference_point=loss_grad(
-                    nmo.glm.params.GLMParams(*params), X, y
+            state = type(state)(
+                solver_state=state.solver_state._replace(
+                    full_grad_at_reference_point=loss_grad(
+                        nmo.glm.params.GLMParams(*params), X, y
+                    )
                 ),
+                stats=state.stats,
             )
 
             prev_params = params
@@ -3417,8 +3415,11 @@ class TestPoissonGLM:
                 xi, yi = tree_slice(X, ind), tree_slice(y, ind)
                 params, state = glm.update(params, state, xi, yi)
 
-            state = state._replace(
-                reference_point=nmo.glm.params.GLMParams(*params),
+            state = type(state)(
+                solver_state=state.solver_state._replace(
+                    reference_point=nmo.glm.params.GLMParams(*params)
+                ),
+                stats=state.stats,
             )
 
             iter_num += 1
@@ -3429,7 +3430,7 @@ class TestPoissonGLM:
             if _error < tol:
                 break
 
-        assert iter_num == glm2.solver_state_.iter_num
+        assert iter_num == glm2.solver_state_.stats.num_steps
 
         assert pytree_map_and_reduce(
             lambda a, b: np.allclose(a, b, atol=10**-5, rtol=0.0),
