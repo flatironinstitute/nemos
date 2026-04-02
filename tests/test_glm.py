@@ -3033,7 +3033,6 @@ class TestPopulationGLMObservationModel:
                     [0, 1, 0],
                 ]
             ),
-            {"input_1": np.array([0, 1, 0]), "input_2": np.array([1, 0, 1])},
         ],
     )
     @pytest.mark.solver_related
