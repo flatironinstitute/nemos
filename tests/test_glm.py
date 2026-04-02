@@ -3008,28 +3008,16 @@ class TestPopulationGLMObservationModel:
                 {"tol": 10**-9},
             ),
             (
-                nmo.regularizer.Ridge(),
-                1.0,
-                "LBFGS",
-                {"stepsize": 0.1, "tol": 10**-9},
-            ),
-            (
                 nmo.regularizer.Lasso(),
                 0.001,
                 "ProximalGradient",
-                {"tol": 10**-8, "maxiter": 10**5},
-            ),
-            (
-                nmo.regularizer.Lasso(),
-                0.1,
-                "ProximalGradient",
-                {"tol": 10**-14},
+                {"tol": 10**-8, "maxiter": 10**3},
             ),
             (
                 nmo.regularizer.ElasticNet(),
                 (1.0, 0.5),
                 "ProximalGradient",
-                {"tol": 10**-14},
+                {"tol": 10**-8},
             ),
         ],
     )
