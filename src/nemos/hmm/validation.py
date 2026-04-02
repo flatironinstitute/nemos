@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any, Tuple
 
 import jax.numpy as jnp
+
 from .params import HMMParams, HMMUserParams
 
 

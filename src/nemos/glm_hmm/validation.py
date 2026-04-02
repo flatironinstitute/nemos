@@ -12,10 +12,10 @@ from .. import validation
 from ..base_validator import RegressorValidator
 from ..glm.params import GLMParams, GLMUserParams
 from ..glm.validation import GLMValidator
+from ..hmm.validation import HMMValidatorMixin, from_hmm_params, to_hmm_params
 from ..type_casting import is_pynapple_tsd
 from ..typing import DESIGN_INPUT_TYPE
 from .params import GLMHMMModelParams, GLMHMMParams, GLMHMMUserParams
-from ..hmm.validation import HMMValidatorMixin, to_hmm_params, from_hmm_params
 
 
 def has_nans_only_at_border(arr):
