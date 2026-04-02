@@ -11,7 +11,6 @@ import pytest
 import scipy.stats as sts
 import sklearn
 import statsmodels.api as sm
-from conftest import initialize_feature_mask_for_population_glm
 from pynapple import Tsd, TsdFrame
 from sklearn.linear_model import (
     GammaRegressor,
@@ -22,6 +21,7 @@ from sklearn.linear_model import (
 from sklearn.model_selection import GridSearchCV
 
 import nemos as nmo
+from conftest import initialize_feature_mask_for_population_glm
 from nemos._observation_model_builder import instantiate_observation_model
 from nemos._regularizer_builder import instantiate_regularizer
 from nemos.inverse_link_function_utils import identity, log_softmax

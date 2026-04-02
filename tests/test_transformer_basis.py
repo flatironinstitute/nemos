@@ -8,16 +8,16 @@ from unittest.mock import patch
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from sklearn.base import clone as sk_clone
+from sklearn.pipeline import Pipeline
+
+import nemos as nmo
 from conftest import (
     CombinedBasis,
     basis_with_add_kwargs,
     list_all_basis_classes,
     list_all_real_basis_classes,
 )
-from sklearn.base import clone as sk_clone
-from sklearn.pipeline import Pipeline
-
-import nemos as nmo
 from nemos import basis
 from nemos._inspect_utils import get_subclass_methods, list_abstract_methods
 from nemos.basis import (

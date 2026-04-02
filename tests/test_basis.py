@@ -11,6 +11,10 @@ import jax.numpy
 import numpy as np
 import pynapple as nap
 import pytest
+
+import nemos._inspect_utils as inspect_utils
+import nemos.basis.basis as basis
+import nemos.convolve as convolve
 from conftest import (
     DEFAULT_KWARGS,
     BasisFuncsTesting,
@@ -21,10 +25,6 @@ from conftest import (
     list_all_basis_classes,
     list_all_real_basis_classes,
 )
-
-import nemos._inspect_utils as inspect_utils
-import nemos.basis.basis as basis
-import nemos.convolve as convolve
 from nemos.basis import (
     CustomBasis,
     FourierEval,

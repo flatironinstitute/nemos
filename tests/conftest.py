@@ -38,8 +38,17 @@ from nemos.tree_utils import tree_full_like
 _totals = defaultdict(float)
 _counts = defaultdict(int)
 
+_TIMEIT_ENABLED = False
+
+
+def pytest_configure(config):
+    global _TIMEIT_ENABLED
+    _TIMEIT_ENABLED = config.getoption("timeit")
+
 
 def pytest_runtest_logreport(report):
+    if not _TIMEIT_ENABLED:
+        return
     if report.when == "call":
         # strip [param] suffix to group by base test name
         base = re.sub(r"\[.*\]$", "", report.nodeid)
@@ -48,6 +57,8 @@ def pytest_runtest_logreport(report):
 
 
 def pytest_terminal_summary(terminalreporter):
+    if not _TIMEIT_ENABLED:
+        return
     terminalreporter.write_sep("=", "aggregated param durations")
     rows = sorted(_totals.items(), key=lambda x: -x[1])
     for name, total in rows:
