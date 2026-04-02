@@ -1,4 +1,4 @@
-"""Validation classes for GLMHMM and PopulationGLMHMM models."""
+"""Validation mixin class for HMM-based models."""
 
 from dataclasses import dataclass, field
 from typing import Any, Tuple
