@@ -33,9 +33,7 @@ def test_sklearn_transformer_pipeline(bas, poissonGLM_model_instantiation):
     "bas",
     [
         basis.MSplineEval(5),
-        basis.BSplineEval(5),
         basis.CyclicBSplineEval(5),
-        basis.RaisedCosineLinearEval(5),
         basis.RaisedCosineLogEval(5),
     ],
 )

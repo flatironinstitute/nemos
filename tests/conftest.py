@@ -11,7 +11,8 @@ Note:
 
 import abc
 import os
-from collections import namedtuple
+import re
+from collections import defaultdict, namedtuple
 from copy import deepcopy
 from functools import partial
 from typing import Literal
@@ -33,6 +34,29 @@ from nemos.basis._transformer_basis import TransformerBasis
 from nemos.glm.params import GLMParams
 from nemos.glm.validation import GLMValidator
 from nemos.tree_utils import tree_full_like
+
+_totals = defaultdict(float)
+_counts = defaultdict(int)
+
+
+def pytest_runtest_logreport(report):
+    if report.when == "call":
+        # strip [param] suffix to group by base test name
+        base = re.sub(r"\[.*\]$", "", report.nodeid)
+        _totals[base] += report.duration
+        _counts[base] += 1
+
+
+def pytest_terminal_summary(terminalreporter):
+    terminalreporter.write_sep("=", "aggregated param durations")
+    rows = sorted(_totals.items(), key=lambda x: -x[1])
+    for name, total in rows:
+        n = _counts[name]
+        avg = total / n
+        terminalreporter.write_line(
+            f"{total:6.2f}s total  {avg:.4f}s/param  {n:>5} params  {name}"
+        )
+
 
 # Named tuple for model fixture returns (clearer than tuple indexing)
 ModelFixture = namedtuple(

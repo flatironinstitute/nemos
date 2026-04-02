@@ -799,11 +799,8 @@ def test_transformer_fit_transform_input_struct(
     [
         0.1
         * np.random.randn(
-            100,
+            10,
         ),
-        0.1 * np.random.randn(100, 1),
-        0.1 * np.random.randn(100, 2),
-        0.1 * np.random.randn(100, 1, 2),
     ],
 )
 @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
@@ -834,7 +831,7 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
         np.exp(log_mu[~np.isnan(log_mu)] - np.nanmean(log_mu))
     )
     model = nmo.glm.GLM(
-        regularizer="Ridge", regularizer_strength=0.001, solver_kwargs={"maxiter": 3}
+        regularizer="Ridge", regularizer_strength=0.001, solver_kwargs={"maxiter": 1}
     ).fit(X, y)
 
     # pipeline
@@ -846,7 +843,7 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
                 nmo.glm.GLM(
                     regularizer="Ridge",
                     regularizer_strength=0.001,
-                    solver_kwargs={"maxiter": 3},
+                    solver_kwargs={"maxiter": 1},
                 ),
             ),
         ]

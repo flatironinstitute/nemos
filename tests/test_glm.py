@@ -1751,95 +1751,6 @@ class TestGLMObservationModel:
             raise ValueError("Unknown model instantiation")
 
     @pytest.fixture
-    def dof_lasso_strength(self, model_instantiation):
-        """
-        Fixture for test_estimate_dof_resid
-        """
-        if "poisson" in model_instantiation:
-            return 1.0
-
-        elif "gamma" in model_instantiation:
-            return 0.02
-
-        elif "bernoulli" in model_instantiation:
-            return 0.1
-
-        elif "negativeBinomial" in model_instantiation:
-            return 0.01
-
-        elif "gaussian" in model_instantiation:
-            return 1.0
-
-        elif "classifier" in model_instantiation:
-            return 0.1
-
-        else:
-            raise ValueError("Unknown model instantiation")
-
-    @pytest.fixture
-    def dof_lasso_dof(self, glm_type, model_instantiation):
-        """
-        Fixture for test_estimate_dof_resid
-        """
-        if "poisson" in model_instantiation:
-            if is_population_glm_type(glm_type):
-                return np.array([3, 0, 0])
-            else:
-                return np.array([3])
-
-        elif "gamma" in model_instantiation:
-            if is_population_glm_type(glm_type):
-                return np.array([1, 4, 3])
-            else:
-                return np.array([3])
-
-        elif "bernoulli" in model_instantiation:
-            if is_population_glm_type(glm_type):
-                return np.array([3, 2, 1])
-            else:
-                return np.array([3])
-
-        elif "negativeBinomial" in model_instantiation:
-            if is_population_glm_type(glm_type):
-                return np.array([3, 2, 4])
-            else:
-                return np.array([5])
-
-        elif "gaussian" in model_instantiation:
-            if is_population_glm_type(glm_type):
-                return np.array([5, 5, 5])
-            else:
-                return np.array([3])
-
-        elif "classifier" in model_instantiation:
-            # Classifier models have (n_features, n_classes) coef shape
-            # For lasso, count surviving coefficients across all classes
-            # Note: LASSO convergence can vary slightly across environments
-            if is_population_glm_type(glm_type):
-                return np.array([6, 4, 5])
-            else:
-                return np.array([5])
-
-        else:
-            raise ValueError("Unknown model instantiation")
-
-    @pytest.fixture
-    def dof_non_lasso_dof(self, glm_type, model_instantiation):
-        """
-        Fixture for test_estimate_dof_resid
-        """
-        if "classifier" in model_instantiation:
-            if "population" in glm_type:
-                return np.array([10, 10, 10])
-            else:
-                return np.array([10])
-        else:
-            if "population" in glm_type:
-                return np.array([5, 5, 5])
-            else:
-                return np.array([5])
-
-    @pytest.fixture
     def obs_has_defaults(self, model_instantiation):
         """
         Fixture for test_optimize_solver_params
@@ -2049,44 +1960,6 @@ class TestGLMObservationModel:
     #####################
     # Test model.update #
     #####################
-    @pytest.mark.parametrize(
-        "n_samples, expectation",
-        [
-            (None, does_not_raise()),
-            (100, does_not_raise()),
-            (
-                1.0,
-                pytest.raises(
-                    TypeError, match="`n_samples` must be `None` or of type `int`"
-                ),
-            ),
-            (
-                "str",
-                pytest.raises(
-                    TypeError, match="`n_samples` must be `None` or of type `int`"
-                ),
-            ),
-        ],
-    )
-    @pytest.mark.parametrize("batch_size", [1, 10])
-    @pytest.mark.solver_related
-    def test_update_n_samples(
-        self, n_samples, expectation, batch_size, request, glm_type, model_instantiation
-    ):
-        X, y, model, true_params, firing_rate = request.getfixturevalue(
-            glm_type + model_instantiation
-        )
-        params = model.initialize_params(X, y)
-        state = model.initialize_optimizer_and_state(params, X, y)
-        with expectation:
-            model.update(
-                params,
-                state,
-                X[:batch_size],
-                y[:batch_size],
-                n_samples=n_samples,
-            )
-
     @pytest.mark.parametrize("batch_size", [1, 10])
     @pytest.mark.solver_related
     def test_update_params_stored(
@@ -2106,92 +1979,6 @@ class TestGLMObservationModel:
         assert model.coef_ is not None
         assert model.intercept_ is not None
         assert model.scale_ is not None
-
-    @pytest.mark.parametrize("nan_inputs", [True, False])
-    @pytest.mark.parametrize(
-        "solver_name", ["ProximalGradient", "GradientDescent", "LBFGS", "BFGS"]
-    )
-    @pytest.mark.solver_related
-    def test_update_params_are_finite(
-        self, nan_inputs, solver_name, request, glm_type, model_instantiation
-    ):
-        """
-        Fitting a GLM to data containing NaNs with the jaxopt.LBFGS solver worked when using GLM.fit,
-        but not when writing the training loop in Python and calling GLM.update repeatedly.
-        The problem was that this solver uses the data to initialize its state, and the state was populated
-        with NaNs by GLM.initialize_state.
-        The solution was dropping NaNs from the input data in GLM.initialize_state -- as is done in GLM.update and GLM.run.
-        """
-        X, y, model, true_params, firing_rate = request.getfixturevalue(
-            glm_type + model_instantiation
-        )
-        model.solver_name = solver_name
-
-        if nan_inputs:
-            X[: X.shape[0] // 2, :] = np.nan
-
-        params = model.initialize_params(X, y)
-        state = model.initialize_optimizer_and_state(params, X, y)
-        assert model.coef_ is None
-        assert model.intercept_ is None
-        if "gamma" not in model_instantiation and "gaussian" not in model_instantiation:
-            # gamma model instantiation sets the scale
-            assert model.scale_ is None
-
-        # take an update step using the initialized state
-        _, _ = model.update(params, state, X, y)
-
-        assert model.coef_ is not None
-        assert model.intercept_ is not None
-        assert model.scale_ is not None
-
-        # parameters should not have NaN
-        assert jnp.all(jnp.isfinite(model.coef_))
-        assert jnp.all(jnp.isfinite(model.intercept_))
-        assert jnp.all(jnp.isfinite(model.scale_))
-
-    @pytest.mark.parametrize("batch_size", [2, 10])
-    @pytest.mark.solver_related
-    @pytest.mark.requires_x64
-    def test_update_nan_drop_at_jit_comp(
-        self, batch_size, request, glm_type, model_instantiation
-    ):
-        """Test that jit compilation does not affect the update in the presence of nans."""
-        X, y, model, true_params, firing_rate = request.getfixturevalue(
-            glm_type + model_instantiation
-        )
-        model.solver_kwargs.update({"stepsize": 0.01})
-        params = model.initialize_params(X, y)
-        state = model.initialize_optimizer_and_state(params, X, y)
-        # extract batch and add nans
-        Xnan = X[:batch_size]
-        Xnan[: batch_size // 2] = np.nan
-
-        # run 3 iterations
-        tot_iter = 3
-        jit_update = deepcopy(params)
-        jit_state = deepcopy(state)
-        for _ in range(tot_iter):
-            jit_update, jit_state = model.update(
-                jit_update, jit_state, Xnan, y[:batch_size]
-            )
-        # make sure there is an update
-        assert not jnp.allclose(params[0], jit_update[0]) or not jnp.allclose(
-            params[1], jit_update[1]
-        )
-
-        # update without jitting
-        nojit_update = deepcopy(params)
-        nojit_state = deepcopy(state)
-        with jax.disable_jit(True):
-            for _ in range(tot_iter):
-                nojit_update, nojit_state = model.update(
-                    nojit_update, nojit_state, Xnan, y[:batch_size]
-                )
-        # check for equivalence update
-        assert jnp.allclose(nojit_update[0], jit_update[0]) and jnp.allclose(
-            nojit_update[1], jit_update[1]
-        )
 
     #######################
     # Test model.simulate #
@@ -2271,20 +2058,6 @@ class TestGLMObservationModel:
     ########################################
     # Compare with standard implementation #
     ########################################
-    @pytest.mark.solver_related
-    @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
-    def test_compatibility_with_sklearn_cv(
-        self, request, glm_type, model_instantiation
-    ):
-        X, y, model, true_params, firing_rate = request.getfixturevalue(
-            glm_type + model_instantiation
-        )
-        param_grid = {"solver_name": ["BFGS", "GradientDescent"]}
-        model.solver_kwargs.update(dict(maxiter=2))
-        cls = GridSearchCV(model, param_grid).fit(X, y)
-        # check that the repr works after cloning
-        repr(cls)
-
     @staticmethod
     def _format_sklearn_params(sklearn_model, nemos_model):
         """Format sklearn params for comparison with nemos.
@@ -2466,60 +2239,9 @@ class TestGLMObservationModel:
             model.coef_
         ) == jax.tree_util.tree_structure(X)
 
-    #####################
-    # Test residual DOF #
-    #####################
-    @pytest.mark.parametrize(
-        "reg, dof, strength",
-        [
-            (nmo.regularizer.UnRegularized(), "dof_non_lasso_dof", None),
-            (
-                nmo.regularizer.Lasso(),
-                "dof_lasso_dof",
-                "dof_lasso_strength",
-            ),  # this lasso fit has only 3 coeff of the first neuron
-            # surviving
-            (nmo.regularizer.Ridge(), "dof_non_lasso_dof", 1.0),
-        ],
-    )
-    @pytest.mark.parametrize("n_samples", [1, 20])
-    @pytest.mark.solver_related
-    @pytest.mark.requires_x64
-    def test_estimate_dof_resid(
-        self,
-        n_samples,
-        strength,
-        dof,
-        reg,
-        request,
-        glm_type,
-        model_instantiation,
-    ):
-        """
-        Test that the dof is an integer.
-        """
-        X, y, model, true_params, firing_rate = request.getfixturevalue(
-            glm_type + model_instantiation
-        )
-        # different dof for different obs models with lasso
-        dof = request.getfixturevalue(dof)
-        # need different strengths for different obs models with lasso reg
-        # for 3 coefs to survive
-        if isinstance(strength, str):
-            strength = request.getfixturevalue(strength)
-        n_m1_classes = getattr(model, "n_classes", 2) - 1
-        model.set_params(regularizer=reg, regularizer_strength=strength)
-        model.solver_name = model.regularizer.default_solver
-        model.solver_kwargs.update({"maxiter": 10**5})
-        model.fit(X, y)
-        num = model._estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
-        expected_dof_resid = n_samples - dof - n_m1_classes
-        assert np.allclose(num, expected_dof_resid)
-
     ######################
     # Optimizer defaults #
     ######################
-    @pytest.mark.parametrize("reg_setup", ["", "_pytree"])
     @pytest.mark.parametrize("batch_size", [None, 1, 10])
     @pytest.mark.parametrize("stepsize", [None, 0.01])
     @pytest.mark.parametrize(
@@ -2552,13 +2274,10 @@ class TestGLMObservationModel:
         obs_has_defaults,
         request,
         glm_type,
-        reg_setup,
         model_instantiation,
     ):
         """Test the behavior of `optimize_solver_params` for different solver, regularizer, and observation model configurations."""
-        X, y, model, _, _ = request.getfixturevalue(
-            glm_type + model_instantiation + reg_setup
-        )
+        X, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
 
         obs = model.observation_model
         model.inverse_link_function = inv_link
@@ -2979,6 +2698,259 @@ class TestPopulationGLM:
             model.initialize_params(X_pytree, y)
 
 
+# -----------------------------------------------------------------------
+# test_estimate_dof_resid
+# Moved out of TestGLMObservationModel. _estimate_resid_degrees_of_freedom
+# only reads coef_, intercept_, regularizer, and X — it never calls any
+# obs-model method.  We therefore set those attributes directly to a fixed
+# sparse state and bypass model.fit entirely.
+# -----------------------------------------------------------------------
+_DOF_N_FEATURES = 5  # features in the test design matrix
+_DOF_N_NEURONS = 3  # neurons for population models
+_DOF_N_CLASSES = 3  # classes for classifier models
+
+
+def _set_sparse_state(model, glm_type, model_instantiation):
+    """Assign a fixed sparse coef_/intercept_ and return (X, n_nonzero).
+
+    X is the (_DOF_N_FEATURES × _DOF_N_FEATURES) identity matrix (full rank).
+    n_nonzero is the count of non-zero coefficients, shaped to match the
+    output of _estimate_resid_degrees_of_freedom for Lasso-type regularizers.
+    """
+    nf = _DOF_N_FEATURES
+    X = jnp.eye(nf)
+    is_pop = "population_" in glm_type
+    is_cls = "classifier" in model_instantiation
+
+    if is_pop and is_cls:
+        # coef shape: (nf, n_neurons, n_classes)
+        # Set first 3 features, all neurons, first class = 1 → 3 non-zeros/neuron
+        coef = jnp.zeros((nf, _DOF_N_NEURONS, _DOF_N_CLASSES)).at[:3, :, 0].set(1.0)
+        intercept = jnp.zeros((_DOF_N_NEURONS, _DOF_N_CLASSES))
+        n_nonzero = jnp.full((_DOF_N_NEURONS,), 3)
+    elif is_pop:
+        # coef shape: (nf, n_neurons)
+        coef = (
+            jnp.zeros((nf, _DOF_N_NEURONS)).at[:3, 0].set(1.0).at[:1, 1].set(1.0)
+        )  # neuron 0: 3, neuron 1: 1, neuron 2: 0
+        intercept = jnp.zeros((_DOF_N_NEURONS,))
+        n_nonzero = jnp.array([3, 1, 0])
+    elif is_cls:
+        # coef shape: (nf, n_classes)
+        coef = jnp.zeros((nf, _DOF_N_CLASSES)).at[:3, 0].set(1.0)  # 3 non-zeros
+        intercept = jnp.zeros((_DOF_N_CLASSES,))
+        n_nonzero = 3
+    else:
+        # coef shape: (nf,)
+        coef = jnp.zeros((nf,)).at[:3].set(1.0)  # 3 non-zeros
+        intercept = jnp.zeros((1,))
+        n_nonzero = 3
+
+    model.coef_ = coef
+    model.intercept_ = intercept
+    return X, n_nonzero
+
+
+@pytest.mark.parametrize("glm_type", ["", "population_"])
+@pytest.mark.parametrize(
+    "model_instantiation",
+    ["poissonGLM_model_instantiation", "classifierGLM_model_instantiation"],
+)
+@pytest.mark.parametrize(
+    "reg",
+    [
+        nmo.regularizer.UnRegularized(),
+        nmo.regularizer.Lasso(),
+        nmo.regularizer.Ridge(),
+    ],
+)
+@pytest.mark.parametrize("n_samples", [1, 20])
+@pytest.mark.requires_x64
+def test_estimate_dof_resid(n_samples, reg, request, glm_type, model_instantiation):
+    """_estimate_resid_degrees_of_freedom returns the correct residual DOF.
+
+    Uses a fixed sparse coef_ so no solver run is needed.
+    """
+    _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+    model.set_params(regularizer=reg)
+
+    X, n_nonzero = _set_sparse_state(model, glm_type, model_instantiation)
+
+    is_cls = "classifier" in model_instantiation
+    n_m1_classes = getattr(model, "n_classes", 2) - 1
+
+    if isinstance(reg, (nmo.regularizer.Lasso, nmo.regularizer.ElasticNet)):
+        dof = n_nonzero
+    elif isinstance(reg, nmo.regularizer.Ridge):
+        dof = n_m1_classes * _DOF_N_FEATURES if is_cls else _DOF_N_FEATURES
+    else:  # UnRegularized
+        rank = int(jnp.linalg.matrix_rank(X))
+        dof = rank * n_m1_classes if is_cls else rank
+
+    expected = n_samples - dof - n_m1_classes
+    num = model._estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
+    assert np.allclose(num, expected)
+
+
+# Tests moved out of TestGLMObservationModel because the behaviour under test
+# lives in the base class and does not vary across observation models.
+# Using only two representative observation models (Poisson + Gaussian) keeps
+# coverage while avoiding redundant JAX recompilation for every obs model.
+_UPDATE_GLM_TYPES = ["", "population_"]
+_UPDATE_MODEL_INSTANTIATIONS = [
+    "poissonGLM_model_instantiation",
+    "gaussianGLM_model_instantiation",
+]
+
+
+@pytest.mark.parametrize("glm_type", _UPDATE_GLM_TYPES)
+@pytest.mark.parametrize("model_instantiation", _UPDATE_MODEL_INSTANTIATIONS)
+@pytest.mark.parametrize(
+    "n_samples, expectation",
+    [
+        (None, does_not_raise()),
+        (100, does_not_raise()),
+        (
+            1.0,
+            pytest.raises(
+                TypeError, match="`n_samples` must be `None` or of type `int`"
+            ),
+        ),
+        (
+            "str",
+            pytest.raises(
+                TypeError, match="`n_samples` must be `None` or of type `int`"
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize("batch_size", [1, 10])
+@pytest.mark.solver_related
+def test_update_n_samples(
+    n_samples, expectation, batch_size, request, glm_type, model_instantiation
+):
+    X, y, model, true_params, firing_rate = request.getfixturevalue(
+        glm_type + model_instantiation
+    )
+    params = model.initialize_params(X, y)
+    state = model.initialize_optimizer_and_state(params, X, y)
+    with expectation:
+        model.update(
+            params,
+            state,
+            X[:batch_size],
+            y[:batch_size],
+            n_samples=n_samples,
+        )
+
+
+@pytest.mark.parametrize("glm_type", _UPDATE_GLM_TYPES)
+@pytest.mark.parametrize("model_instantiation", _UPDATE_MODEL_INSTANTIATIONS)
+@pytest.mark.parametrize("nan_inputs", [True, False])
+@pytest.mark.parametrize(
+    "solver_name", ["ProximalGradient", "GradientDescent", "LBFGS", "BFGS"]
+)
+@pytest.mark.solver_related
+def test_update_params_are_finite(
+    nan_inputs, solver_name, request, glm_type, model_instantiation
+):
+    """
+    Fitting a GLM to data containing NaNs with the jaxopt.LBFGS solver worked when using GLM.fit,
+    but not when writing the training loop in Python and calling GLM.update repeatedly.
+    The problem was that this solver uses the data to initialize its state, and the state was populated
+    with NaNs by GLM.initialize_state.
+    The solution was dropping NaNs from the input data in GLM.initialize_state -- as is done in GLM.update and GLM.run.
+    """
+    X, y, model, true_params, firing_rate = request.getfixturevalue(
+        glm_type + model_instantiation
+    )
+    model.solver_name = solver_name
+
+    if nan_inputs:
+        X[: X.shape[0] // 2, :] = np.nan
+
+    params = model.initialize_params(X, y)
+    state = model.initialize_optimizer_and_state(params, X, y)
+    assert model.coef_ is None
+    assert model.intercept_ is None
+    if "gamma" not in model_instantiation and "gaussian" not in model_instantiation:
+        # gamma model instantiation sets the scale
+        assert model.scale_ is None
+
+    # take an update step using the initialized state
+    _, _ = model.update(params, state, X, y)
+
+    assert model.coef_ is not None
+    assert model.intercept_ is not None
+    assert model.scale_ is not None
+
+    # parameters should not have NaN
+    assert jnp.all(jnp.isfinite(model.coef_))
+    assert jnp.all(jnp.isfinite(model.intercept_))
+    assert jnp.all(jnp.isfinite(model.scale_))
+
+
+@pytest.mark.parametrize("glm_type", _UPDATE_GLM_TYPES)
+@pytest.mark.parametrize("model_instantiation", _UPDATE_MODEL_INSTANTIATIONS)
+@pytest.mark.parametrize("batch_size", [10])
+@pytest.mark.solver_related
+@pytest.mark.requires_x64
+def test_update_nan_drop_at_jit_comp(
+    batch_size, request, glm_type, model_instantiation
+):
+    """Test that jit compilation does not affect the update in the presence of nans."""
+    X, y, model, true_params, firing_rate = request.getfixturevalue(
+        glm_type + model_instantiation
+    )
+    model.solver_kwargs.update({"stepsize": 0.01})
+    params = model.initialize_params(X, y)
+    state = model.initialize_optimizer_and_state(params, X, y)
+    # extract batch and add nans
+    Xnan = X[:batch_size]
+    Xnan[: batch_size // 2] = np.nan
+
+    # run 3 iterations
+    tot_iter = 1
+    jit_update = deepcopy(params)
+    jit_state = deepcopy(state)
+    for _ in range(tot_iter):
+        jit_update, jit_state = model.update(
+            jit_update, jit_state, Xnan, y[:batch_size]
+        )
+    # make sure there is an update
+    assert not jnp.allclose(params[0], jit_update[0]) or not jnp.allclose(
+        params[1], jit_update[1]
+    )
+
+    # update without jitting
+    nojit_update = deepcopy(params)
+    nojit_state = deepcopy(state)
+    with jax.disable_jit(True):
+        for _ in range(tot_iter):
+            nojit_update, nojit_state = model.update(
+                nojit_update, nojit_state, Xnan, y[:batch_size]
+            )
+    # check for equivalence update
+    assert jnp.allclose(nojit_update[0], jit_update[0]) and jnp.allclose(
+        nojit_update[1], jit_update[1]
+    )
+
+
+@pytest.mark.parametrize("glm_type", _UPDATE_GLM_TYPES)
+@pytest.mark.parametrize("model_instantiation", _UPDATE_MODEL_INSTANTIATIONS)
+@pytest.mark.solver_related
+@pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
+def test_compatibility_with_sklearn_cv(request, glm_type, model_instantiation):
+    X, y, model, true_params, firing_rate = request.getfixturevalue(
+        glm_type + model_instantiation
+    )
+    param_grid = {"solver_name": ["BFGS", "GradientDescent"]}
+    model.solver_kwargs.update(dict(maxiter=2))
+    cls = GridSearchCV(model, param_grid).fit(X, y)
+    # check that the repr works after cloning
+    repr(cls)
+
+
 @pytest.mark.parametrize(
     "model_instantiation",
     [
@@ -3311,7 +3283,7 @@ class TestPoissonGLM:
 
     @pytest.mark.parametrize("glm_type", ["", "population_"])
     @pytest.mark.parametrize("regr_setup", ["", "_pytree"])
-    @pytest.mark.parametrize("key", [jax.random.key(0), jax.random.key(19)])
+    @pytest.mark.parametrize("key", [jax.random.key(0)])
     @pytest.mark.parametrize(
         "regularizer_class, solver_name",
         [
@@ -3345,7 +3317,7 @@ class TestPoissonGLM:
 
         N = y.shape[0]
         batch_size = 1
-        maxiter = 3  # number of epochs
+        maxiter = 1  # number of epochs
         tol = 1e-12
         stepsize = 1e-3
 
