@@ -1872,8 +1872,8 @@ class TestGLMObservationModel:
         """
         default_solver_name = nmo.solvers.get_solver(
             nmo.regularizer.UnRegularized().default_solver
-        ).full_name
-        lbfgs_solver_name = nmo.solvers.get_solver("LBFGS").full_name
+        ).algo_name
+        lbfgs_solver_name = nmo.solvers.get_solver("LBFGS").algo_name
         if "poisson" in model_instantiation:
             observation_model = "PoissonObservations()"
             inverse_link_function = "exp"

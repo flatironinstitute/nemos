@@ -127,6 +127,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         solver_name: Optional[str] = None,
         solver_kwargs: Optional[dict] = None,
     ):
+        self._solver_spec = None
         self.regularizer = "UnRegularized" if regularizer is None else regularizer
         self.regularizer_strength = regularizer_strength
 
@@ -246,6 +247,18 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         # need to use hasattr to avoid class instantiation issues
         if hasattr(self, "_regularizer_strength"):
             self.regularizer_strength = self._regularizer_strength
+
+        # check if solver is not allowed, if it isn't revert to default.
+        # note that, if self._solver_spec is None (default) -> solver always
+        # allowed, so no warning.
+        if self.solver_name not in self.regularizer.allowed_solvers:
+            warnings.warn(
+                f"Solver ``{self.solver_name}`` is not allowed for regularizer {self._regularizer}. "
+                f"Overriding solver with the default allowed solver {self._regularizer.default_solver}.",
+                UserWarning,
+                stacklevel=2,
+            )
+            self.solver_name = None
 
     @property
     def regularizer_strength(self) -> Any:

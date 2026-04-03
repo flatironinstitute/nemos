@@ -669,7 +669,7 @@ def test_inspect_npz(tmp_path, model_class, monkeypatch, capsys):
         "regularizer            : {'class': 'nemos.regularizer.Ridge'}",
         "regularizer_strength   : 0.1",
         "solver_kwargs          : None",
-        f"solver_name            : BFGS[{nmo.solvers._solver_registry._resolve_backend('BFGS', False)}]",
+        "solver_name            : BFGS",
         "",
         "Model fit parameters",
         "--------------------",

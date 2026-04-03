@@ -118,6 +118,7 @@ class TestInstantiateSolverOverrides:
     @pytest.fixture
     def mock_get_solver(self, mock_solver_cls):
         spec = MagicMock()
+        spec.algo_name = "GradientDescent"
         spec.implementation = mock_solver_cls
         return MagicMock(return_value=spec)
 
@@ -137,7 +138,7 @@ class TestInstantiateSolverOverrides:
             regressor._instantiate_solver(
                 lambda p, X, y: None, None, solver_name=solver_name_override
             )
-        mock_get_solver.assert_called_once_with(expected)
+        mock_get_solver.assert_called_with(expected)
 
     @pytest.mark.parametrize("regularizer_override", [None, Ridge()])
     def test_regularizer_resolution(
