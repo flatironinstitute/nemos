@@ -1,7 +1,6 @@
 """Negative Binomial GLM with joint parameter and scale learning."""
 
-from functools import partial
-from typing import Any, Callable, Optional, Tuple, Union
+from typing import Any, Callable, Literal, Optional, Tuple, Union
 
 import equinox as eqx
 import jax
@@ -78,7 +77,6 @@ def check_log_likelihood_increment(state: NBState, tol: float) -> jnp.ndarray:
     return delta < tol
 
 
-@partial(jax.jit, static_argnames=["solver_run_params"])
 def _param_update_step(
     init_params: GLMParams,
     X: DESIGN_INPUT_TYPE,
@@ -90,7 +88,6 @@ def _param_update_step(
     return params, state, aux
 
 
-@partial(jax.jit, static_argnames=["solver_run_scale"])
 def _scale_update_step(log_scale, X, y, init_params, solver_run_scale):
     log_scale, state, aux = solver_run_scale(log_scale, X, y, init_params)
     return log_scale, state, aux
@@ -190,6 +187,7 @@ class NBGLM(BaseGLM[GLMScaleUserParams, GLMScaleParams]):
         solver_kwargs: dict = None,
         tol: float = 1e-5,
         maxiter: int = 500,
+        method: Literal["two-step", "joint"] = "two-step",
     ):
         observation_model = NegativeBinomialObservations()
         super().__init__(
@@ -202,6 +200,7 @@ class NBGLM(BaseGLM[GLMScaleUserParams, GLMScaleParams]):
         )
         self.tol = tol
         self.maxiter = maxiter
+        self.method = method
 
     def fit(
         self,
@@ -257,13 +256,20 @@ class NBGLM(BaseGLM[GLMScaleUserParams, GLMScaleParams]):
         X: dict[str, jnp.ndarray] | jnp.ndarray,
         y: jnp.ndarray,
         *args,
-    ) -> NBState:
+    ) -> NBState | SolverAdapterState:
 
-        def _glm_params_loss(params: GLMParams, X, y, log_scale: jnp.ndarray):
+        if self.method == "joint":
+            solver = self._instantiate_solver(self._compute_loss, init_params)
+            self._solver = solver
+            self._optimization_run = solver.run
+            self._optimization_update = solver.update
+            self._optimization_init_state = solver.init_state
+            return solver.init_state(init_params, X, y)
+
+        # two-step: alternate GLM params (fixed scale) and scale (fixed params)
+        def _glm_params_loss(params: GLMParams, X, y, scale: jnp.ndarray):
             rate = self._predict(params, X)
-            return self.observation_model._negative_log_likelihood(
-                y, rate, scale=jnp.exp(log_scale)
-            )
+            return self.observation_model._negative_log_likelihood(y, rate, scale=scale)
 
         solver_params = self._instantiate_solver(
             _glm_params_loss,
@@ -360,7 +366,7 @@ class NBGLM(BaseGLM[GLMScaleUserParams, GLMScaleParams]):
         )
         init_params = eqx.tree_at(
             lambda p: p.log_scale,
-            empty_params,
+            init_params,
             log_scale,
         )
 
@@ -395,23 +401,26 @@ class NBGLM(BaseGLM[GLMScaleUserParams, GLMScaleParams]):
     def update(
         self,
         params: GLMScaleUserParams,
-        opt_state: NBState,
+        opt_state: NBState | SolverAdapterState,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         *args,
         **kwargs,
-    ) -> Tuple[GLMScaleUserParams, NBState]:
-        """Update the model parameters and solver state by one EM step.
+    ) -> Tuple[GLMScaleUserParams, NBState | SolverAdapterState]:
+        """Update the model parameters and solver state by one step.
 
-        Performs one alternating update: GLM params with fixed scale, then scale
-        with fixed GLM params.
+        For ``method="two-step"``, performs one alternating EM step: GLM params
+        with fixed scale, then scale with fixed GLM params. The state is an
+        ``NBState``. For ``method="joint"``, performs one L-BFGS step over all
+        parameters jointly; the state is a ``SolverAdapterState``.
 
         Parameters
         ----------
         params :
             Current user-facing parameters ``(coef, intercept, scale)``.
         opt_state :
-            Current NBState from a previous ``update`` or ``initialize_optimizer_and_state``.
+            Current solver state from a previous ``update`` or
+            ``initialize_optimizer_and_state``.
         X :
             Predictors, shape ``(n_time_bins, n_features)``.
         y :
@@ -422,7 +431,7 @@ class NBGLM(BaseGLM[GLMScaleUserParams, GLMScaleParams]):
         params :
             Updated user-facing parameters ``(coef, intercept, scale)``.
         state :
-            Updated NBState.
+            Updated solver state.
         """
         X, y = tree_utils.drop_nans(X, y)
         data = X.data if isinstance(X, FeaturePytree) else X
