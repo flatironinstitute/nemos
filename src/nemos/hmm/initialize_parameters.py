@@ -1,3 +1,5 @@
+"""Initialization functions and related utility functions for HMMs."""
+
 import inspect
 from typing import Any, Callable, Optional, Protocol, Tuple
 
