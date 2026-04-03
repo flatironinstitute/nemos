@@ -24,9 +24,7 @@ def to_hmm_params(user_params: HMMUserParams) -> HMMParams:
     Converts user-provided parameters (scale and probabilities in regular space)
     to internal model parameters (log_scale and log probabilities).
     """
-    return HMMParams(
-        hmm_params=HMMParams(*(jnp.log(p) for p in user_params)),
-    )
+    return HMMParams(*(jnp.log(p) for p in user_params))
 
 
 def from_hmm_params(params: HMMParams) -> HMMUserParams:
