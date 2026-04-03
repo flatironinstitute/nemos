@@ -328,8 +328,8 @@ def _validate_init_funcs_keys(init_funcs: dict) -> None:
             "Unexpected or unknown keys found in 'init_funcs' dictionary. \n"
             + "\n".join(error_msg)
         )
-    if DEFAULT_INIT_FUNCTIONS.keys() - init_funcs.keys():
-        init_funcs = DEFAULT_INIT_FUNCTIONS | init_funcs
+    # resolve with defaults and make copy
+    init_funcs = DEFAULT_INIT_FUNCTIONS | init_funcs
     return init_funcs
 
 

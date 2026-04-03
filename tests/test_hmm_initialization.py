@@ -16,6 +16,7 @@ from nemos.hmm.initialize_parameters import (
     random_initial_proba_init,
     setup_hmm_initialization,
     DEFAULT_INIT_FUNCTIONS,
+    generate_hmm_initial_params,
 )
 
 
@@ -206,53 +207,6 @@ class TestTransitionProbaInitialization:
         assert not jnp.allclose(transition_prob1, transition_prob2)
 
 
-class TestResolveDirichletPriors:
-    """Test _resolve_dirichlet_priors validation function."""
-
-    def test_none_input_returns_none(self):
-        """Test that None input returns None."""
-        result = _resolve_dirichlet_priors(None, (3,))
-        assert result is None
-
-    @pytest.mark.parametrize(
-        "alphas, expected_shape",
-        [
-            (np.array([1.0, 1.0, 1.0]), (3,)),
-            (np.array([2.0, 3.0]), (2,)),
-            (jnp.array([[1.0, 2.0], [3.0, 4.0]]), (2, 2)),
-        ],
-    )
-    def test_valid_array_input(self, alphas, expected_shape):
-        """Test that valid array inputs are converted to JAX arrays."""
-        result = _resolve_dirichlet_priors(alphas, expected_shape)
-        assert isinstance(result, jnp.ndarray)
-        assert result.shape == expected_shape
-
-    def test_shape_mismatch_raises_value_error(self):
-        """Test that shape mismatch raises ValueError."""
-        alphas = jnp.array([1.0, 2.0, 3.0])
-        expected_shape = (2,)
-
-        with pytest.raises(ValueError, match="must have shape"):
-            _resolve_dirichlet_priors(alphas, expected_shape)
-
-    def test_values_less_than_one_raises_value_error(self):
-        """Test that alpha values < 1 raise ValueError."""
-        alphas = jnp.array([1.0, 0.5, 2.0])
-        expected_shape = (3,)
-
-        with pytest.raises(ValueError, match="must be >= 1"):
-            _resolve_dirichlet_priors(alphas, expected_shape)
-
-    def test_invalid_type_raises_type_error(self):
-        """Test that invalid types raise TypeError."""
-        alphas = "invalid"
-        expected_shape = (3,)
-
-        with pytest.raises(TypeError, match="Invalid type"):
-            _resolve_dirichlet_priors(alphas, expected_shape)
-
-
 class TestSetupHMMInitialization:
     """Test setup_hmm_initialization function for validating initialization protocols"""
 
@@ -414,7 +368,178 @@ class TestSetupHMMInitialization:
             # check that the kwargs are set
             assert init_funcs[key] == init_kwargs
 
+    @pytest.mark.parametrize(
+        "key1, value1, key2, value2",
+        [
+            (
+                "initial_proba_init",
+                "random",
+                "initial_proba_init_kwargs",
+                {"random_key": jax.random.PRNGKey(0)},
+            ),
+            (
+                "transition_proba_init",
+                "random",
+                "transition_proba_init_kwargs",
+                {"random_key": jax.random.PRNGKey(0)},
+            ),
+            (
+                "initial_proba_init",
+                lambda n_states, random_key=0: jnp.ones((n_states,)) / n_states,
+                "initial_proba_init_kwargs",
+                {"random_key": jax.random.PRNGKey(1)},
+            ),
+            (
+                "transition_proba_init",
+                lambda n_states, random_key=0: jnp.ones((n_states, n_states))
+                / n_states,
+                "transition_proba_init_kwargs",
+                {"random_key": jax.random.PRNGKey(1)},
+            ),
+            (
+                "transition_proba_init",
+                "random",
+                "initial_proba_init",
+                "random",
+            ),
+        ],
+    )
+    def test_update_init_funcs(self, key1, value1, key2, value2):
+        first_dict = setup_hmm_initialization(**{key1: value1})
+        second_dict = setup_hmm_initialization(**{key2: value2}, init_funcs=first_dict)
+        assert first_dict[key1] == second_dict[key1]
+        assert first_dict[key2] != second_dict[key2]
+
+    @pytest.mark.parametrize(
+        "key1, value1, key2, value2",
+        [
+            (
+                "initial_proba_init_kwargs",
+                {"random_key": jax.random.PRNGKey(0)},
+                "initial_proba_init",
+                "random",
+            ),
+            (
+                "transition_proba_init_kwargs",
+                {"random_key": jax.random.PRNGKey(0)},
+                "transition_proba_init",
+                "random",
+            ),
+            (
+                "initial_proba_init_kwargs",
+                {"random_key": jax.random.PRNGKey(1)},
+                "initial_proba_init",
+                lambda n_states, random_key=0: jnp.ones((n_states,)) / n_states,
+            ),
+            (
+                "transition_proba_init_kwargs",
+                {"random_key": jax.random.PRNGKey(1)},
+                "transition_proba_init",
+                lambda n_states, random_key=0: jnp.ones((n_states, n_states))
+                / n_states,
+            ),
+        ],
+    )
+    def test_reset_init_kwargs(self, key1, value1, key2, value2):
+        first_dict = setup_hmm_initialization(**{key1: value1})
+        second_dict = setup_hmm_initialization(**{key2: value2}, init_funcs=first_dict)
+        assert first_dict[key1] == value1
+        assert second_dict[key1] == {}
+
     def test_default_initialization(self):
         """Test that default initialization functions are set correctly."""
+        # I'm putting this at the end to make sure that the default dictionary is not modified by other tests
         init_funcs = setup_hmm_initialization()
         assert init_funcs == DEFAULT_INIT_FUNCTIONS
+
+
+class TestGenerateHMMInitParams:
+    """Test generate_hmm_initial_params function"""
+
+    @pytest.mark.parametrize(
+        "init_funcs, expectation",
+        [
+            ({}, does_not_raise()),
+            ({"initial_proba_init": random_initial_proba_init}, does_not_raise()),
+            (
+                {"invalid_key": None},
+                pytest.raises(ValueError, match="Unexpected or unknown keys"),
+            ),
+            (
+                {"initial_prob_init": random_initial_proba_init},
+                pytest.raises(ValueError, match="Did you mean"),
+            ),
+        ],
+    )
+    def test_init_funcs_keys(self, init_funcs, expectation):
+        with expectation:
+            generate_hmm_initial_params(n_states=3, init_funcs=init_funcs)
+
+    def test_init_funcs_none_values(self):
+        """Test that None values in init_funcs are replaced by defaults."""
+        init_funcs = {
+            "initial_proba_init": None,
+            "initial_proba_init_kwargs": None,
+            "transition_proba_init": None,
+            "transition_proba_init_kwargs": None,
+        }
+        result1 = generate_hmm_initial_params(n_states=3, init_funcs=init_funcs)
+        result2 = generate_hmm_initial_params(n_states=3)
+        assert jnp.allclose(jnp.vstack(result1), jnp.vstack(result2))
+
+    @pytest.mark.parametrize("n_states", [1, 2, 3, 5])
+    def test_output_shapes_and_types(self, n_states):
+        """Test that output shapes and types are correct."""
+        initial_prob, transition_prob = generate_hmm_initial_params(n_states=n_states)
+
+        assert initial_prob.shape == (n_states,)
+        assert transition_prob.shape == (n_states, n_states)
+        assert isinstance(initial_prob, jnp.ndarray)
+        assert isinstance(transition_prob, jnp.ndarray)
+
+
+class TestResolveDirichletPriors:
+    """Test _resolve_dirichlet_priors validation function."""
+
+    def test_none_input_returns_none(self):
+        """Test that None input returns None."""
+        result = _resolve_dirichlet_priors(None, (3,))
+        assert result is None
+
+    @pytest.mark.parametrize(
+        "alphas, expected_shape",
+        [
+            (np.array([1.0, 1.0, 1.0]), (3,)),
+            (np.array([2.0, 3.0]), (2,)),
+            (jnp.array([[1.0, 2.0], [3.0, 4.0]]), (2, 2)),
+        ],
+    )
+    def test_valid_array_input(self, alphas, expected_shape):
+        """Test that valid array inputs are converted to JAX arrays."""
+        result = _resolve_dirichlet_priors(alphas, expected_shape)
+        assert isinstance(result, jnp.ndarray)
+        assert result.shape == expected_shape
+
+    def test_shape_mismatch_raises_value_error(self):
+        """Test that shape mismatch raises ValueError."""
+        alphas = jnp.array([1.0, 2.0, 3.0])
+        expected_shape = (2,)
+
+        with pytest.raises(ValueError, match="must have shape"):
+            _resolve_dirichlet_priors(alphas, expected_shape)
+
+    def test_values_less_than_one_raises_value_error(self):
+        """Test that alpha values < 1 raise ValueError."""
+        alphas = jnp.array([1.0, 0.5, 2.0])
+        expected_shape = (3,)
+
+        with pytest.raises(ValueError, match="must be >= 1"):
+            _resolve_dirichlet_priors(alphas, expected_shape)
+
+    def test_invalid_type_raises_type_error(self):
+        """Test that invalid types raise TypeError."""
+        alphas = "invalid"
+        expected_shape = (3,)
+
+        with pytest.raises(TypeError, match="Invalid type"):
+            _resolve_dirichlet_priors(alphas, expected_shape)
