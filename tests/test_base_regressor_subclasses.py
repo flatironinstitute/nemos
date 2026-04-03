@@ -10,12 +10,12 @@ import pytest
 import scipy as sp
 import scipy.stats as sts
 import statsmodels.api as sm
-
-# Import helpers from conftest
-from conftest import is_population_model
 from numba import njit
 
 import nemos as nmo
+
+# Import helpers from conftest
+from conftest import is_population_model
 from nemos._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
 from nemos.glm.params import GLMParams
 from nemos.glm.validation import (
