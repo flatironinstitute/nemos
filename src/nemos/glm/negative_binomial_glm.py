@@ -8,12 +8,12 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import ArrayLike
 
-from ..glm import GLM
 from ..observation_models import NegativeBinomialObservations
 from ..regularizer import Regularizer, UnRegularized
 from ..solvers import SolverAdapterState
 from ..typing import DESIGN_INPUT_TYPE
-from .params import GLMParams, NBGLMUserParams
+from .base_glm import BaseGLM
+from .params import GLMParams, GLMUserParams, NBGLMUserParams
 
 
 class SolverState(eqx.Module):
@@ -188,7 +188,7 @@ def _joint_run(
     return (params, log_scale), state, None
 
 
-class NBGLM(GLM):
+class NBGLM(BaseGLM[GLMUserParams, GLMParams]):
     """Negative Binomial GLM model."""
 
     def __init__(
