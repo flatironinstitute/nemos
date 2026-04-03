@@ -348,7 +348,7 @@ class BaseGLM(BaseRegressor[UserProvidedParamsT, ModelParamsT]):
         regularizer: Ridge()
         regularizer_strength: 0.1...
         solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
-        solver_name: BFGS[...]
+        solver_name: BFGS
         >>> # Save the model parameters to a file
         >>> model.save_params("model_params.npz")
         >>> # Load the model from the saved file
@@ -361,7 +361,7 @@ class BaseGLM(BaseRegressor[UserProvidedParamsT, ModelParamsT]):
         regularizer: Ridge()
         regularizer_strength: 0.1...
         solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
-        solver_name: BFGS[...]
+        solver_name: BFGS
 
         >>> # Saving and loading a custom inverse link function
         >>> model = nmo.glm.GLM(

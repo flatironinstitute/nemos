@@ -223,7 +223,7 @@ class GLM(BaseGLM[GLMUserParams, GLMParams]):
 
     >>> model = nmo.glm.GLM(solver_name="LBFGS").fit(X, y)
     >>> model.solver_name
-    'LBFGS[...]'
+    'LBFGS'
 
     **Use a Pytree of arrays as Input**
 
