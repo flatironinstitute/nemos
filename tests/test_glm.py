@@ -2808,6 +2808,18 @@ def test_estimate_dof_resid(n_samples, reg, request, glm_type, model_instantiati
     assert np.allclose(num, expected)
 
 
+@pytest.mark.parametrize("glm_type", ["", "population_"])
+@pytest.mark.requires_x64
+def test_estimate_dof_resid_classifier_invalid_n_samples(glm_type, request):
+    """ClassifierGLM._estimate_resid_degrees_of_freedom raises TypeError for non-int n_samples."""
+    _, _, model, _, _ = request.getfixturevalue(
+        glm_type + "classifierGLM_model_instantiation"
+    )
+    X, _ = _set_sparse_state(model, glm_type, "classifierGLM_model_instantiation")
+    with pytest.raises(TypeError, match="`n_samples` must be `None` or of type `int`"):
+        model._estimate_resid_degrees_of_freedom(X, n_samples=1.0)
+
+
 # Tests moved out of TestGLMObservationModel because the behaviour under test
 # lives in the base class and does not vary across observation models.
 # Using only two representative observation models (Poisson + Gaussian) keeps
@@ -2879,7 +2891,6 @@ def test_update_params_are_finite(
     request,
     glm_type,
     model_instantiation,
-    mock_optimizer_update,
 ):
     """
     Fitting a GLM to data containing NaNs with the jaxopt.LBFGS solver worked when using GLM.fit,
