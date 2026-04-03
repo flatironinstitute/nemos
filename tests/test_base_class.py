@@ -1,3 +1,4 @@
+from contextlib import nullcontext as does_not_raise
 from typing import Union
 from unittest.mock import MagicMock, patch
 
@@ -7,7 +8,7 @@ from numpy.typing import NDArray
 
 from nemos.base_class import Base
 from nemos.base_regressor import BaseRegressor
-from nemos.regularizer import Ridge
+from nemos.regularizer import Lasso, Ridge
 
 
 class MockBaseRegressorInvalid(BaseRegressor):
@@ -89,6 +90,63 @@ def test_empty_set(mock_regressor):
     assert mock_regressor.set_params() is mock_regressor
 
 
+class TestRegularizerSetter:
+    """Test solver_spec and warning behavior when switching regularizers."""
+
+    @pytest.mark.parametrize(
+        "new_regularizer, solver_name, expectation, solver_spec_is_none",
+        [
+            (
+                Ridge(),
+                "LBFGS",
+                does_not_raise(),
+                False,
+            ),  # LBFGS compat with Ridge: spec preserved
+            (
+                Lasso(),
+                "LBFGS",
+                pytest.warns(UserWarning, match="not allowed"),
+                True,
+            ),  # incompatible: reset + warn
+            (
+                Lasso(),
+                None,
+                does_not_raise(),
+                True,
+            ),  # no explicit solver: stays None, no warning
+        ],
+    )
+    def test_solver_spec_on_regularizer_switch(
+        self,
+        mock_regressor,
+        new_regularizer,
+        solver_name,
+        expectation,
+        solver_spec_is_none,
+    ):
+        if solver_name is not None:
+            mock_regressor.solver_name = solver_name
+        with expectation:
+            mock_regressor.regularizer = new_regularizer
+        assert (mock_regressor._solver_spec is None) == solver_spec_is_none
+
+    @pytest.mark.parametrize(
+        "new_regularizer, solver_name",
+        [
+            (Ridge(), "LBFGS"),  # LBFGS compat with Ridge
+            (Lasso(), None),  # no explicit solver: no warning regardless of regularizer
+        ],
+    )
+    def test_no_warning_on_compatible_switch(
+        self, mock_regressor, new_regularizer, solver_name, recwarn
+    ):
+        if solver_name is not None:
+            mock_regressor.solver_name = solver_name
+        mock_regressor.regularizer = new_regularizer
+        user_warnings = [w for w in recwarn if issubclass(w.category, UserWarning)]
+        assert len(user_warnings) == 0
+
+
 def test_glm_varargs_error():
     """Test that variable number of argument in __init__ is not allowed."""
     bad_estimator = BadEstimator(1)
@@ -118,6 +176,7 @@ class TestInstantiateSolverOverrides:
     @pytest.fixture
     def mock_get_solver(self, mock_solver_cls):
         spec = MagicMock()
+        spec.algo_name = "GradientDescent"
         spec.implementation = mock_solver_cls
         return MagicMock(return_value=spec)
 
@@ -137,7 +196,7 @@ class TestInstantiateSolverOverrides:
             regressor._instantiate_solver(
                 lambda p, X, y: None, None, solver_name=solver_name_override
             )
-        mock_get_solver.assert_called_once_with(expected)
+        mock_get_solver.assert_called_with(expected)
 
     @pytest.mark.parametrize("regularizer_override", [None, Ridge()])
     def test_regularizer_resolution(
