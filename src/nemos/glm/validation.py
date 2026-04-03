@@ -13,7 +13,7 @@ from ..base_validator import RegressorValidator
 from ..pytrees import FeaturePytree
 from ..tree_utils import pytree_map_and_reduce
 from ..typing import DESIGN_INPUT_TYPE
-from .params import GLMParams, GLMUserParams
+from .params import GLMParams, GLMScaleModelParams, GLMScaleUserParams, GLMUserParams
 
 
 def to_glm_params(user_params: GLMUserParams) -> GLMParams:
@@ -24,6 +24,17 @@ def to_glm_params(user_params: GLMUserParams) -> GLMParams:
 def from_glm_params(params: GLMParams) -> GLMUserParams:
     """Map from GLMParams to GLMUserParams."""
     return params.coef, params.intercept
+
+
+def to_glm_scale_params(user_params: GLMScaleUserParams) -> GLMScaleModelParams:
+    """Map from GLMUserParams to GLMParams."""
+    log_scale = jnp.log(user_params[-1])
+    return GLMScaleModelParams(*user_params[:-1], log_scale=log_scale)
+
+
+def from_glm_scale_params(params: GLMScaleModelParams) -> GLMScaleUserParams:
+    """Map from GLMParams to GLMUserParams."""
+    return params.coef, params.intercept, jnp.exp(params.log_scale)
 
 
 @dataclass(frozen=True, repr=False)

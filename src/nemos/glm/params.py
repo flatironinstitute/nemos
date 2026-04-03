@@ -2,7 +2,6 @@
 
 from typing import Callable, Tuple, Union
 
-import equinox as eqx
 import jax.numpy as jnp
 from numpy.typing import ArrayLike
 
@@ -22,12 +21,11 @@ class GLMParams(ModelParams):
         return [lambda p: p.coef]
 
 
-class NBGLMParams(eqx.Module):
-    """Parameter container for NBGLM models."""
+class GLMScaleModelParams(GLMParams):
+    """Add scale to GLMParams, specific for the GLM-HMM and NBGLM models."""
 
-    glm_params: GLMParams
-    log_scale: jnp.ndarray
+    log_scale: jnp.ndarray | None = None
 
 
 GLMUserParams = Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike]
-NBGLMUserParams = Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike, float]
+GLMScaleUserParams = Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike, ArrayLike]

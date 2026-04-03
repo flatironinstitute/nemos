@@ -11,11 +11,11 @@ from pynapple import Tsd, TsdFrame
 from .. import validation
 from ..base_validator import RegressorValidator
 from ..glm.params import GLMParams, GLMUserParams
-from ..glm.validation import GLMValidator
+from ..glm.validation import GLMValidator, from_glm_scale_params
 from ..hmm.params import HMMParams
 from ..type_casting import is_pynapple_tsd
 from ..typing import DESIGN_INPUT_TYPE
-from .params import GLMHMMModelParams, GLMHMMParams, GLMHMMUserParams
+from .params import GLMHMMParams, GLMHMMUserParams, GLMScaleModelParams
 
 
 def has_nans_only_at_border(arr):
@@ -47,7 +47,7 @@ def to_glm_hmm_params(user_params: GLMHMMUserParams) -> GLMHMMParams:
     to internal model parameters (log_scale and log probabilities).
     """
     return GLMHMMParams(
-        model_params=GLMHMMModelParams(user_params[:3]),
+        model_params=GLMScaleModelParams(*user_params[:3]),
         hmm_params=HMMParams(*(jnp.log(p) for p in user_params[3:])),
     )
 
@@ -63,13 +63,8 @@ def from_glm_hmm_params(params: GLMHMMParams) -> GLMHMMUserParams:
     initial_prob /= initial_prob.sum()
     transition_prob = jnp.exp(params.hmm_params.log_transition_prob)
     transition_prob /= transition_prob.sum(axis=1, keepdims=True)
-    return (
-        params.model_params.coef,
-        params.model_params.intercept,
-        jnp.exp(params.model_params.log_scale),
-        initial_prob,
-        transition_prob,
-    )
+    coef, intercept, scale = from_glm_scale_params(params.model_params)
+    return coef, intercept, scale, initial_prob, transition_prob
 
 
 @dataclass(frozen=True, repr=False)
