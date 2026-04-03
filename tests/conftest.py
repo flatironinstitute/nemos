@@ -306,6 +306,7 @@ class MockRegressor(BaseRegressor):
     def __init__(self, std_param: int = 0):
         """Initialize a MockBaseRegressor instance with optional standard parameters."""
         self.std_param = std_param
+        self._solver_spec = None
         super().__init__()
 
     def fit(self, X, y):
