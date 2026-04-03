@@ -296,11 +296,6 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         return self._solver_spec
 
     @property
-    def algo_name(self) -> str:
-        """Name of the optimization algorithm the solver implements."""
-        return self.solver_spec.algo_name
-
-    @property
     def solver_kwargs(self):
         """Getter for the solver_kwargs attribute."""
         return self._solver_kwargs
