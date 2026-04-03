@@ -96,13 +96,33 @@ class TestRegularizerSetter:
     @pytest.mark.parametrize(
         "new_regularizer, solver_name, expectation, solver_spec_is_none",
         [
-            (Ridge(), "LBFGS", does_not_raise(), False),  # LBFGS compat with Ridge: spec preserved
-            (Lasso(), "LBFGS", pytest.warns(UserWarning, match="not allowed"), True),  # incompatible: reset + warn
-            (Lasso(), None, does_not_raise(), True),  # no explicit solver: stays None, no warning
+            (
+                Ridge(),
+                "LBFGS",
+                does_not_raise(),
+                False,
+            ),  # LBFGS compat with Ridge: spec preserved
+            (
+                Lasso(),
+                "LBFGS",
+                pytest.warns(UserWarning, match="not allowed"),
+                True,
+            ),  # incompatible: reset + warn
+            (
+                Lasso(),
+                None,
+                does_not_raise(),
+                True,
+            ),  # no explicit solver: stays None, no warning
         ],
     )
     def test_solver_spec_on_regularizer_switch(
-        self, mock_regressor, new_regularizer, solver_name, expectation, solver_spec_is_none
+        self,
+        mock_regressor,
+        new_regularizer,
+        solver_name,
+        expectation,
+        solver_spec_is_none,
     ):
         if solver_name is not None:
             mock_regressor.solver_name = solver_name
@@ -114,7 +134,7 @@ class TestRegularizerSetter:
         "new_regularizer, solver_name",
         [
             (Ridge(), "LBFGS"),  # LBFGS compat with Ridge
-            (Lasso(), None),     # no explicit solver: no warning regardless of regularizer
+            (Lasso(), None),  # no explicit solver: no warning regardless of regularizer
         ],
     )
     def test_no_warning_on_compatible_switch(
