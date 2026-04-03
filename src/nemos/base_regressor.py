@@ -30,7 +30,7 @@ from .base_validator import RegressorValidator
 from .glm.params import GLMParams
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
-from .solvers import SolverProtocol
+from .solvers import SolverProtocol, SolverSpec
 from .type_casting import cast_to_jax
 from .typing import (
     DESIGN_INPUT_TYPE,
@@ -130,16 +130,12 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         self.regularizer = "UnRegularized" if regularizer is None else regularizer
         self.regularizer_strength = regularizer_strength
 
-        # no solver name provided, use default
-        if solver_name is None:
-            solver_name = self.regularizer.default_solver
-
         self.solver_name = solver_name
 
         if solver_kwargs is None:
             solver_kwargs = dict()
 
-        solver_class = self._solver_spec.implementation
+        solver_class = self.solver_spec.implementation
         self._check_solver_kwargs(solver_class, solver_kwargs)
 
         self.solver_kwargs = solver_kwargs
@@ -263,23 +259,34 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
     @property
     def solver_name(self) -> str:
         """Getter for the solver_name attribute."""
-        return self._solver_spec.full_name
+        return self.solver_spec.algo_name
 
     @solver_name.setter
-    def solver_name(self, solver_name: str):
+    def solver_name(self, solver_name: str | None):
         """Setter for the solver_name attribute."""
-        if not isinstance(solver_name, str):
+        if not isinstance(solver_name, str) and solver_name is not None:
             raise TypeError("solver_name must be a string.")
+        elif solver_name is None:
+            self._solver_spec = None
+        else:
+            # check if solver str passed is valid for regularizer
+            spec = solvers.get_solver(solver_name)
+            self._regularizer.check_solver(spec.algo_name)
+            self._solver_spec = spec
 
-        # check if solver str passed is valid for regularizer
-        spec = solvers.get_solver(solver_name)
-        self._regularizer.check_solver(spec.algo_name)
-        self._solver_spec = spec
+    @property
+    def solver_spec(self) -> SolverSpec:
+        """Getter for the solver specification."""
+        if self._solver_spec is None:
+            spec = solvers.get_solver(self.regularizer.default_solver)
+            self._regularizer.check_solver(spec.algo_name)
+            return spec
+        return self._solver_spec
 
     @property
     def algo_name(self) -> str:
         """Name of the optimization algorithm the solver implements."""
-        return self._solver_spec.algo_name
+        return self.solver_spec.algo_name
 
     @property
     def solver_kwargs(self):
@@ -290,7 +297,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
     def solver_kwargs(self, solver_kwargs: dict):
         """Setter for the solver_kwargs attribute."""
         if solver_kwargs:
-            solver_cls = self._solver_spec.implementation
+            solver_cls = self.solver_spec.implementation
             self._check_solver_kwargs(solver_cls, solver_kwargs)
         self._solver_kwargs = solver_kwargs
 
@@ -366,7 +373,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             The solver instance.
         """
         # final check that solver is valid for chosen regularizer
-        self._regularizer.check_solver(self._solver_spec.algo_name)
+        self._regularizer.check_solver(self.solver_spec.algo_name)
 
         if solver_kwargs is None:
             # copy dictionary of kwargs to avoid modifying user settings
