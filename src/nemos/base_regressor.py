@@ -279,7 +279,6 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         """Getter for the solver specification."""
         if self._solver_spec is None:
             spec = solvers.get_solver(self.regularizer.default_solver)
-            self._regularizer.check_solver(spec.algo_name)
             return spec
         return self._solver_spec
 
