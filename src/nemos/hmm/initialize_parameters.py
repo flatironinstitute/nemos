@@ -1,9 +1,11 @@
 import inspect
+from typing import Any, Callable, Optional, Protocol, Tuple
+
 import jax
 import jax.numpy as jnp
-from typing import Any, Callable, Optional, Tuple, Protocol
-from ..validation import _suggest_keys
+
 from ..type_casting import is_numpy_array_like
+from ..validation import _suggest_keys
 
 
 class InitFunctionHMM(Protocol):
