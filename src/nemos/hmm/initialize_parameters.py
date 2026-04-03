@@ -99,13 +99,12 @@ def uniform_transition_proba_init(
     --------
     >>> from nemos.hmm.initialize_parameters import uniform_transition_proba_init
     >>>
-    >>> # Generate transition probabilities for 3 states with uniform dynamics
-    >>> n_states = 3
+    >>> # Generate transition probabilities for 2 states with uniform dynamics
+    >>> n_states = 2
     >>> transition_matrix = uniform_transition_proba_init(n_states)
     >>> print(transition_matrix)
-    [[0.33333333 0.33333333 0.33333333]
-     [0.33333333 0.33333333 0.33333333]
-     [0.33333333 0.33333333 0.33333333]]
+    [[0.5 0.5]
+     [0.5 0.5]]
     """
     prob_transition = 1.0 / n_states
     return jnp.full((n_states, n_states), prob_transition, dtype=float)
@@ -177,10 +176,10 @@ def uniform_initial_proba_init(
     >>> from nemos.hmm.initialize_parameters import uniform_initial_proba_init
     >>>
     >>> # Generate initial probabilities for 3 states
-    >>> n_states = 3
+    >>> n_states = 2
     >>> init_probs = uniform_initial_proba_init(n_states)
     >>> print(init_probs)
-    [0.33333333 0.33333333 0.33333333]
+    [0.5 0.5]
     """
     prob = jnp.ones((n_states,), dtype=float)
     return prob / jnp.sum(prob)
