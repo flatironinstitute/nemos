@@ -1,22 +1,22 @@
 """Tests for hmm/initialize_parameters.py"""
 
+from contextlib import nullcontext as does_not_raise
+
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from contextlib import nullcontext as does_not_raise
-
 from nemos.hmm.initialize_parameters import (
-    _resolve_dirichlet_priors,
-    sticky_transition_proba_init,
-    uniform_transition_proba_init,
-    uniform_initial_proba_init,
-    random_transition_proba_init,
-    random_initial_proba_init,
-    setup_hmm_initialization,
     DEFAULT_INIT_FUNCTIONS,
+    _resolve_dirichlet_priors,
     generate_hmm_initial_params,
+    random_initial_proba_init,
+    random_transition_proba_init,
+    setup_hmm_initialization,
+    sticky_transition_proba_init,
+    uniform_initial_proba_init,
+    uniform_transition_proba_init,
 )
 
 

@@ -125,6 +125,10 @@ VALID_PAIRS = [
     {"arg_name", "algo_name"},
     {"arg_name", "attr_name"},
     {"arg_name", "var_name"},
+    {"initial_proba_init", "initial_proba_init_kwargs"},
+    {"transition_proba_init", "transition_proba_init_kwargs"},
+    {"initial_proba_init_kwargs", "transition_proba_init_kwargs"},
+    {"init_func", "init_funcs"},
 ]
 
 
