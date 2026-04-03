@@ -8,9 +8,7 @@ import jax.numpy as jnp
 from jax.typing import DTypeLike
 from pynapple import Tsd, TsdFrame
 
-from .. import validation
 from ..base_validator import RegressorValidator
-from ..glm.params import GLMParams, GLMUserParams
 from ..glm.validation import GLMValidator
 from ..hmm.validation import HMMValidator, from_hmm_params, to_hmm_params
 from ..type_casting import is_pynapple_tsd

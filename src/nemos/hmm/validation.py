@@ -1,15 +1,14 @@
 """Validation mixin class for HMM-based models."""
 
 from dataclasses import dataclass, field
-from typing import Any, Tuple, Optional
+from typing import Any, Optional, Tuple, TypeVar
 
-import jax.numpy as jnp
 import jax
+import jax.numpy as jnp
 
 from .. import validation
-from .params import HMMParams, HMMUserParams
 from ..base_validator import RegressorValidator
-from typing import TypeVar
+from .params import HMMParams, HMMUserParams
 
 # from .typing import ModelParamsT, UserProvidedParamsT
 
@@ -131,12 +130,12 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
             params,
             len(self.expected_param_dims),
             f"Params must have length {len(self.expected_param_dims)}: "
-            f"({", ".join(self.model_param_names)}).",
+            f"({', '.join(self.model_param_names)}).",
         )
         if not isinstance(params, (tuple, list)):
             raise TypeError(
                 f"{self.model_class} params must be a tuple/list of length {len(self.expected_param_dims)}, "
-                f"({", ".join(self.model_param_names)})."
+                f"({', '.join(self.model_param_names)})."
             )
         return params
 
