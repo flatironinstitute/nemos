@@ -53,9 +53,10 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
         1,
         2,
     )  # (init_prob.ndim, transition_prob.ndim)
-    # indices of user-provided parameters that correspond to HMM parameters
-    # in order (initial_prob, transition_prob)
-    hmm_param_inds: Tuple[int] = None
+    initial_prob_ind: int = None  # index of initial probability in user params tuple
+    transition_prob_ind: int = (
+        None  # index of transition probability in user params tuple
+    )
     model_param_names: Tuple[str] = ("initial_prob", "transition_prob")
     model_class: str = "HMM"
     params_validation_sequence: Tuple[Tuple[str, None] | Tuple[str, dict[str, Any]]] = (
@@ -141,9 +142,11 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
         self, params: HMMUserProvidedParamsT
     ) -> HMMUserProvidedParamsT:
         """Check initial and transition probabilities shape."""
-        initial_prob, transition_prob = self.wrap_user_params(params)[
-            self.hmm_param_inds
-        ]
+        wrapped = self.wrap_user_params(params)
+        initial_prob, transition_prob = (
+            wrapped[self.initial_prob_ind],
+            wrapped[self.transition_prob_ind],
+        )
         if initial_prob.shape != (self.n_states,):
             raise ValueError(
                 f"initial_prob must be a 1-dimensional array of shape ``({self.n_states},)``. "
@@ -160,9 +163,11 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
         self, params: HMMUserProvidedParamsT
     ) -> HMMUserProvidedParamsT:
         """Check that initial and transition probability sum to 1."""
-        initial_prob, transition_prob = self.wrap_user_params(params)[
-            self.hmm_param_inds
-        ]
+        wrapped = self.wrap_user_params(params)
+        initial_prob, transition_prob = (
+            wrapped[self.initial_prob_ind],
+            wrapped[self.transition_prob_ind],
+        )
         if not jnp.allclose(initial_prob.sum(), 1):
             raise ValueError(
                 f"initial_prob must sum to 1, but got sum = {initial_prob.sum()}. "
