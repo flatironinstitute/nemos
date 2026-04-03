@@ -12,7 +12,7 @@ from .. import tree_utils
 from ..observation_models import NegativeBinomialObservations
 from ..pytrees import FeaturePytree
 from ..regularizer import Regularizer, UnRegularized
-from ..solvers import SolverAdapterState, SolverState, get_solver
+from ..solvers import SolverAdapterState, get_solver
 from ..type_casting import cast_to_jax
 from ..typing import DESIGN_INPUT_TYPE
 from .base_glm import BaseGLM
@@ -28,8 +28,8 @@ class NBState(eqx.Module):
 
     data_log_likelihood: float | jnp.ndarray
     previous_data_log_likelihood: float | jnp.ndarray
-    glm_params_state: SolverState
-    scale_state: SolverState
+    glm_params_state: SolverAdapterState
+    scale_state: SolverAdapterState
     iterations: int
 
 
