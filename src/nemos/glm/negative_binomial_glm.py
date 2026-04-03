@@ -12,7 +12,7 @@ from .. import tree_utils
 from ..observation_models import NegativeBinomialObservations
 from ..pytrees import FeaturePytree
 from ..regularizer import Regularizer, UnRegularized
-from ..solvers import SolverAdapterState, get_solver
+from ..solvers import SolverAdapterState, SolverState, get_solver
 from ..type_casting import cast_to_jax
 from ..typing import DESIGN_INPUT_TYPE
 from .base_glm import BaseGLM
@@ -21,13 +21,6 @@ from .params import GLMParams, GLMScaleParams, GLMScaleUserParams
 from .validation import GLMScaleValidator
 
 LBFGS = get_solver("LBFGS").implementation
-
-
-class SolverState(eqx.Module):
-    """Store scale and glm parameters solver states."""
-
-    glm_params: SolverAdapterState
-    scale: SolverAdapterState
 
 
 class NBState(eqx.Module):
