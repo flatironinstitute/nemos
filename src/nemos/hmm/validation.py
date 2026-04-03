@@ -10,8 +10,6 @@ from .. import validation
 from ..base_validator import RegressorValidator
 from .params import HMMParams, HMMUserParams
 
-# from .typing import ModelParamsT, UserProvidedParamsT
-
 # HMM-type User provided init_params (e.g. for GLM-HMM Tuple[array, array, array, array, array]])
 HMMUserProvidedParamsT = TypeVar("HMMUserProvidedParamsT")
 # HMM-type Model internal representation (e.g. for GLM-s nemos.glm_hmm.glm_hmm.GLMHMMParams)
