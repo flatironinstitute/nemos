@@ -271,40 +271,6 @@ class GLM(BaseGLM[GLMUserParams, GLMParams]):
                 )
             raise TypeError(error_msg)
 
-    def _predict(
-        self, params: GLMParams, X: Union[dict[str, jnp.ndarray], jnp.ndarray]
-    ) -> jnp.ndarray:
-        """
-        Predicts firing rates based on given parameters and design matrix.
-
-        This function computes the predicted firing rates using the provided parameters
-        and model design matrix ``X``. It is a streamlined version used internally within
-        optimization routines, where it serves as the loss function. Unlike the ``GLM.predict``
-        method, it does not perform any input validation, assuming that the inputs are pre-validated.
-
-
-        Parameters
-        ----------
-        params :
-            GLMParams containing the spike basis coefficients and bias terms.
-        X :
-            Predictors.
-
-        Returns
-        -------
-        :
-            The predicted rates. Shape (n_time_bins, ).
-        """
-        return self._inverse_link_function(
-            # First, multiply each feature by its corresponding coefficient,
-            # then sum across all features and add the intercept, before
-            # passing to the inverse link function
-            tree_utils.pytree_map_and_reduce(
-                lambda x, w: jnp.einsum("tj, j...->t...", x, w), sum, X, params.coef
-            )
-            + params.intercept
-        )
-
     def _compute_loss(
         self,
         params: GLMParams,

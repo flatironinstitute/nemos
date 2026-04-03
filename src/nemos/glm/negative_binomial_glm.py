@@ -9,11 +9,17 @@ import jax.numpy as jnp
 from numpy.typing import ArrayLike
 
 from ..observation_models import NegativeBinomialObservations
+from ..pytrees import FeaturePytree
 from ..regularizer import Regularizer, UnRegularized
-from ..solvers import SolverAdapterState
+from ..solvers import SolverAdapterState, StepResult, get_solver
+from ..type_casting import cast_to_jax
 from ..typing import DESIGN_INPUT_TYPE
 from .base_glm import BaseGLM
-from .params import GLMParams, GLMUserParams, NBGLMUserParams
+from .initialize_parameters import initialize_intercept_matching_mean_rate
+from .params import GLMParams, GLMScaleParams, GLMScaleUserParams
+from .validation import GLMScaleValidator
+
+LBFGS = get_solver("LBFGS").implementation
 
 
 class SolverState(eqx.Module):
@@ -82,7 +88,7 @@ def _param_update_step(
     init_params: GLMParams,
     X: DESIGN_INPUT_TYPE,
     y: jnp.ndarray,
-    log_scale: float,
+    log_scale: jnp.ndarray,
     solver_run_params,
 ):
     params, state, aux = solver_run_params(init_params, X, y, jnp.exp(log_scale))
@@ -96,21 +102,25 @@ def _scale_update_step(log_scale, X, y, init_params, solver_run_scale):
 
 
 def _joint_update(
-    init_params: Tuple[GLMParams, float],
+    init_params: GLMScaleParams,
     init_state: NBState,
     X: DESIGN_INPUT_TYPE,
     y: jnp.ndarray,
     solver_run_params: Callable,
     solver_run_scale: Callable,
 ):
-    init_glm_params, init_log_scale = init_params[0], init_params[1]
+    init_glm_params = GLMParams(init_params.coef, init_params.intercept)
+    init_log_scale = init_params.log_scale
+
     new_params, new_state_params, new_aux_params = _param_update_step(
         init_glm_params, X, y, init_log_scale, solver_run_params
     )
     new_scale, new_state_scale, new_aux_scale = _scale_update_step(
         init_log_scale, X, y, new_params, solver_run_scale
     )
+
     new_iterations = init_state.iterations + 1
+
     func_val = _extract_fun_value(new_state_scale)
     if func_val is None:
         raise ValueError("Solver state must store the value function.")
@@ -120,11 +130,12 @@ def _joint_update(
         solver_state=SolverState(glm_params=new_state_params, scale=new_state_scale),
         iterations=new_iterations,
     )
-    return (new_params, new_scale), new_state, (new_aux_params, new_aux_scale)
+    new_params = GLMScaleUserParams(new_params.coef, new_params.intercept, new_scale)
+    return new_params, new_state, (new_aux_params, new_aux_scale)
 
 
 def _joint_run(
-    init_params: Tuple[GLMParams, float],
+    init_params: GLMScaleParams,
     X: DESIGN_INPUT_TYPE,
     y: jnp.ndarray,
     solver_run_params: Callable,
@@ -133,8 +144,7 @@ def _joint_run(
     scale_loss: Callable,
     tol: float,
     maxiter: int,
-):
-    init_glm_params, init_scale = init_params[0], init_params[1]
+) -> Tuple[GLMScaleParams, NBState, None]:
 
     _step_params = eqx.Partial(
         _param_update_step,
@@ -153,43 +163,51 @@ def _joint_run(
     init_state = initialize_state(init_params, X, y)
 
     def stopping_condition_while(carry):
-        _, _, new_state = carry
+        _, new_state = carry
         return ~check_log_likelihood_increment(new_state, tol)
 
     def body_fn(carry):
-        params, log_scale, state = carry
-        new_params, state_params, aux_scale = _step_params(
-            init_params=params, log_scale=log_scale
+        params, state = carry
+        log_scale = params.log_scale
+        glm_params = GLMParams(params.coef, params.intercept)
+
+        new_glm_params, state_params, aux_scale = _step_params(
+            init_params=glm_params, log_scale=log_scale
         )
         new_log_scale, state_scale, aux_params = _step_scale(
-            log_scale=log_scale, init_params=new_params
+            log_scale=log_scale, init_params=new_glm_params
         )
         func_val = _extract_fun_value(state_scale)
         if func_val is None:
             # extra compute might be needed for custom solvers
             # not storing the func value in standard attrs.
-            func_val = scale_loss(new_log_scale, X, y, new_params)
+            func_val = scale_loss(new_log_scale, X, y, new_glm_params)
         new_state = NBState(
             data_log_likelihood=func_val,
             previous_data_log_likelihood=state.data_log_likelihood,
             iterations=state.iterations + 1,
             solver_state=SolverState(glm_params=state_params, scale=state_scale),
         )
-        return new_params, new_log_scale, new_state
+        new_params = GLMScaleParams(
+            new_glm_params.coef, new_glm_params.intercept, new_log_scale
+        )
+        return new_params, new_state
 
-    init_carry = init_glm_params, init_scale, init_state
-    params, log_scale, state = eqx.internal.while_loop(
+    init_carry = init_params, init_state
+    params, state = eqx.internal.while_loop(
         stopping_condition_while,
         body_fn,
         init_carry,
         max_steps=maxiter,
         kind="lax",
     )
-    return (params, log_scale), state, None
+    return params, state, None
 
 
-class NBGLM(BaseGLM[GLMUserParams, GLMParams]):
+class NBGLM(BaseGLM[GLMScaleUserParams, GLMScaleParams]):
     """Negative Binomial GLM model."""
+
+    _validator_class = GLMScaleValidator
 
     def __init__(
         self,
@@ -217,7 +235,7 @@ class NBGLM(BaseGLM[GLMUserParams, GLMParams]):
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: ArrayLike,
-        init_params: Optional[NBGLMUserParams] = None,
+        init_params: Optional[GLMScaleUserParams] = None,
     ):
         """Fit the NB-GLM model."""
         self._validator.validate_inputs(X, y)
@@ -234,14 +252,13 @@ class NBGLM(BaseGLM[GLMUserParams, GLMParams]):
         self._validator.feature_mask_consistency(
             getattr(self, "_feature_mask", None), init_params
         )
-        init_log_scale = jnp.log(self.observation_model.scale)
         self._initialize_optimizer_and_state(
-            (init_params, init_log_scale),
+            init_params,
             data,
             y,
         )
         params, state, aux = self._optimization_run(
-            (init_params, init_log_scale),
+            init_params,
             data,
             y,
         )
@@ -251,53 +268,48 @@ class NBGLM(BaseGLM[GLMUserParams, GLMParams]):
 
     def _compute_loss(
         self,
-        params: GLMParams,
+        params: GLMScaleParams,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         *args,
         **kwargs,
     ) -> jnp.ndarray:
         predicted_rate = self._predict(params, X)
-        return self._observation_model._negative_log_likelihood(
-            y, predicted_rate, lambda x: jnp.sum(jnp.mean(x, axis=0)), *args, **kwargs
+        return -1 * self._observation_model.log_likelihood(
+            y, predicted_rate, scale=jnp.exp(params.log_scale)
         )
 
     def _initialize_optimizer_and_state(
         self,
-        init_params: Tuple[GLMParams, jnp.ndarray],
+        init_params: GLMScaleParams,
         X: dict[str, jnp.ndarray] | jnp.ndarray,
         y: jnp.ndarray,
         *args,
     ) -> NBState:
-        solver_params = self._instantiate_solver(
-            self._compute_loss,
-            init_params[0],
-        )
 
-        def _scale_loss(log_scale, X, y, params):
-            return -self.observation_model.log_likelihood(
-                y, self._predict(params, X), scale=jnp.exp(log_scale)
+        def _glm_params_loss(params: GLMParams, X, y, log_scale: jnp.ndarray):
+            rate = self._predict(params, X)
+            return self.observation_model._negative_log_likelihood(
+                y, rate, scale=jnp.exp(log_scale)
             )
 
-        solver_scale = self._instantiate_solver(
-            _scale_loss,
-            init_params[1],
-            regularizer=UnRegularized(),
-            regularizer_strength=None,
-            solver_name="LBFGS",
-            solver_kwargs={
-                "tol": 1e-6 if init_params[1].dtype is jnp.float32 else 1e-12
-            },
+        solver_params = self._instantiate_solver(
+            _glm_params_loss,
+            init_params,
         )
 
-        def optimization_update(params, state, X, y):
+        solver_scale, _scale_loss = self._get_scale_solver(init_params)
+
+        def optimization_update(params: GLMScaleParams, state, X, y):
             return _joint_update(
                 params, state, X, y, solver_params.run, solver_scale.run
             )
 
-        def optimization_init_state(params, X, y):
-            state_params = solver_params.init_state(params[0], X, y, jnp.exp(params[1]))
-            state_scale = solver_scale.init_state(params[1], X, y, params[0])
+        def optimization_init_state(params: GLMScaleParams, X, y):
+            glm_params = GLMParams(params.coef, params.intercept)
+            scale = jnp.exp(params.log_scale)
+            state_params = solver_params.init_state(glm_params, X, y, scale)
+            state_scale = solver_scale.init_state(params.log_scale, X, y, glm_params)
             return NBState(
                 data_log_likelihood=-jnp.array(jnp.inf),
                 previous_data_log_likelihood=-jnp.array(jnp.inf),
@@ -307,7 +319,7 @@ class NBGLM(BaseGLM[GLMUserParams, GLMParams]):
 
         self._solver = {"glm_params": solver_params, "scale": solver_scale}
 
-        def optimization_run(params, X, y):
+        def optimization_run(params: GLMScaleParams, X, y):
             return _joint_run(
                 params,
                 X,
@@ -325,11 +337,91 @@ class NBGLM(BaseGLM[GLMUserParams, GLMParams]):
         self._optimization_init_state = optimization_init_state
         return self._optimization_init_state(init_params, X, y)
 
-    def _set_model_params(self, params: Tuple[GLMParams, jnp.ndarray]):
-        self.coef_, self.intercept_ = self._validator.from_model_params(params[0])
-        self.scale_ = jnp.exp(params[1])
+    def _set_model_params(self, params: GLMScaleParams):
+        self.coef_, self.intercept_, self.scale_ = self._validator.from_model_params(
+            params
+        )
 
     def _get_model_params(self):
-        glm_params = self._validator.to_model_params(self.coef_, self.intercept_)
-        log_scale = jnp.log(self.scale_)
-        return glm_params, log_scale
+        glm_scale_params = self._validator.to_model_params(
+            self.coef_, self.intercept_, self.scale_
+        )
+        return glm_scale_params
+
+    def _model_specific_initialization(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+    ) -> GLMScaleParams:
+        """Initialize GLMScaleParams."""
+        if isinstance(X, FeaturePytree):
+            data = X.data
+        else:
+            data = X
+
+        empty_params = self._validator.get_empty_params(data, y)
+
+        initial_intercept = initialize_intercept_matching_mean_rate(
+            self._inverse_link_function, y
+        )
+        initial_coef = jax.tree_util.tree_map(
+            lambda x: jnp.zeros(x.shape), empty_params.coef
+        )
+
+        init_params = eqx.tree_at(
+            lambda p: (p.coef, p.intercept),
+            empty_params,
+            (initial_coef, initial_intercept),
+        )
+
+        solver_scale, _ = self._get_scale_solver(init_params)
+        glm_params = GLMParams(init_params.coef, init_params.intercept)
+        log_scale, _, _ = solver_scale.run(
+            jnp.zeros_like(init_params.log_scale), X, y, glm_params
+        )
+        init_params = eqx.tree_at(
+            lambda p: p.log_scale,
+            empty_params,
+            log_scale,
+        )
+
+        self._validator.feature_mask_consistency(
+            getattr(self, "_feature_mask", None), init_params
+        )
+        return init_params
+
+    def _get_scale_solver(
+        self,
+        init_params: GLMScaleParams,
+    ) -> Tuple[LBFGS, Callable]:
+        def _scale_loss(log_scale: jnp.ndarray, X, y, params: GLMParams):
+            rate = self._predict(params, X)
+            return -self.observation_model.log_likelihood(
+                y, rate, scale=jnp.exp(log_scale)
+            )
+
+        solver_scale = self._instantiate_solver(
+            _scale_loss,
+            init_params.log_scale,
+            regularizer=UnRegularized(),
+            regularizer_strength=None,
+            solver_name="LBFGS",
+            solver_kwargs={
+                "tol": 1e-6 if init_params.log_scale.dtype is jnp.float32 else 1e-12
+            },
+        )
+        return solver_scale, _scale_loss
+
+    @cast_to_jax
+    def update(
+        self,
+        params: GLMScaleUserParams,
+        opt_state: SolverState,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        *args,
+        n_samples: Optional[int] = None,
+        **kwargs,
+    ) -> StepResult:
+        """Update override."""
+        pass

@@ -5,7 +5,7 @@ from typing import Callable, Tuple, Union
 import jax.numpy as jnp
 from numpy.typing import ArrayLike
 
-from ..glm.params import GLMScaleModelParams
+from ..glm.params import GLMScaleParams
 from ..hmm.params import HMMParams
 from ..params import ModelParams
 from ..typing import DESIGN_INPUT_TYPE
@@ -14,7 +14,7 @@ from ..typing import DESIGN_INPUT_TYPE
 class GLMHMMParams(ModelParams):
     """Parameter container for GLM-HMM models."""
 
-    model_params: GLMScaleModelParams
+    model_params: GLMScaleParams
     hmm_params: HMMParams
 
     @staticmethod

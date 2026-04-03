@@ -21,7 +21,7 @@ class GLMParams(ModelParams):
         return [lambda p: p.coef]
 
 
-class GLMScaleModelParams(GLMParams):
+class GLMScaleParams(GLMParams):
     """Add scale to GLMParams, specific for the GLM-HMM and NBGLM models."""
 
     log_scale: jnp.ndarray | None = None

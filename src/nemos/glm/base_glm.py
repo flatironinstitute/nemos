@@ -12,15 +12,17 @@ from numpy.typing import ArrayLike
 from sklearn.utils import InputTags, TargetTags
 
 from .. import observation_models as obs
-from .. import validation
+from .. import tree_utils, validation
 from .._observation_model_builder import instantiate_observation_model
 from ..base_regressor import BaseRegressor
+from ..base_validator import RegressorValidator
 from ..exceptions import NotFittedError
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
 from ..type_casting import cast_to_jax, support_pynapple
 from ..typing import DESIGN_INPUT_TYPE, ModelParamsT, UserProvidedParamsT
 from ..utils import format_repr
+from .params import GLMParams, GLMScaleParams
 
 __all__ = ["BaseGLM"]
 
@@ -52,7 +54,7 @@ class BaseGLM(BaseRegressor[UserProvidedParamsT, ModelParamsT]):
     """
 
     _invalid_observation_types: tuple = ()
-    _validator_class: type  # must be set by each concrete subclass
+    _validator_class: RegressorValidator  # must be set by each concrete subclass
 
     def __init__(
         self,
@@ -389,3 +391,39 @@ class BaseGLM(BaseRegressor[UserProvidedParamsT, ModelParamsT]):
         string_attrs = ["inverse_link_function"]
 
         self._save_params(filename, fit_attrs, string_attrs)
+
+    def _predict(
+        self,
+        params: GLMParams | GLMScaleParams,
+        X: Union[dict[str, jnp.ndarray], jnp.ndarray],
+    ) -> jnp.ndarray:
+        """
+        Predicts firing rates based on given parameters and design matrix.
+
+        This function computes the predicted firing rates using the provided parameters
+        and model design matrix ``X``. It is a streamlined version used internally within
+        optimization routines, where it serves as the loss function. Unlike the ``GLM.predict``
+        method, it does not perform any input validation, assuming that the inputs are pre-validated.
+
+
+        Parameters
+        ----------
+        params :
+            GLMParams containing the spike basis coefficients and bias terms.
+        X :
+            Predictors.
+
+        Returns
+        -------
+        :
+            The predicted rates. Shape (n_time_bins, ).
+        """
+        return self._inverse_link_function(
+            # First, multiply each feature by its corresponding coefficient,
+            # then sum across all features and add the intercept, before
+            # passing to the inverse link function
+            tree_utils.pytree_map_and_reduce(
+                lambda x, w: jnp.einsum("tj, j...->t...", x, w), sum, X, params.coef
+            )
+            + params.intercept
+        )

@@ -9,11 +9,11 @@ from jax.typing import DTypeLike
 from numpy.typing import ArrayLike
 
 from .. import validation
-from ..base_validator import RegressorValidator
+from ..base_validator import ModelParamsT, RegressorValidator, UserProvidedParamsT
 from ..pytrees import FeaturePytree
 from ..tree_utils import pytree_map_and_reduce
 from ..typing import DESIGN_INPUT_TYPE
-from .params import GLMParams, GLMScaleModelParams, GLMScaleUserParams, GLMUserParams
+from .params import GLMParams, GLMScaleParams, GLMScaleUserParams, GLMUserParams
 
 
 def to_glm_params(user_params: GLMUserParams) -> GLMParams:
@@ -26,42 +26,21 @@ def from_glm_params(params: GLMParams) -> GLMUserParams:
     return params.coef, params.intercept
 
 
-def to_glm_scale_params(user_params: GLMScaleUserParams) -> GLMScaleModelParams:
+def to_glm_scale_params(user_params: GLMScaleUserParams) -> GLMScaleParams:
     """Map from GLMUserParams to GLMParams."""
     log_scale = jnp.log(user_params[-1])
-    return GLMScaleModelParams(*user_params[:-1], log_scale=log_scale)
+    return GLMScaleParams(*user_params[:-1], log_scale=log_scale)
 
 
-def from_glm_scale_params(params: GLMScaleModelParams) -> GLMScaleUserParams:
+def from_glm_scale_params(params: GLMScaleParams) -> GLMScaleUserParams:
     """Map from GLMParams to GLMUserParams."""
     return params.coef, params.intercept, jnp.exp(params.log_scale)
 
 
 @dataclass(frozen=True, repr=False)
-class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
-    """
-    Validator for single-neuron GLM models.
+class BaseGLMValidator(RegressorValidator[UserProvidedParamsT, ModelParamsT]):
+    """GLM validator base class."""
 
-    Validates and transforms user-provided parameters, inputs, and checks consistency
-    between parameters and data for single-neuron GLMs. Single-neuron GLMs have:
-    - 1D coefficients: shape (n_features,) or dict of (n_features,) arrays
-    - 1D intercept: shape (1,)
-    - 2D input X: shape (n_samples, n_features) or pytree of same
-    - 1D output y: shape (n_samples,)
-
-    This validator extends RegressorValidator with GLM-specific validation logic,
-    including custom error messages and consistency checks between model parameters
-    and input data.
-    """
-
-    extra_params: dict = None
-    expected_param_dims: Tuple[int] = (
-        1,
-        1,
-    )  # this should be (coef.ndim, intercept.ndim)
-    to_model_params: Callable[[GLMUserParams], GLMParams] = to_glm_params
-    from_model_params: Callable[[GLMParams], GLMUserParams] = from_glm_params
-    model_class: str = "GLM"
     X_dimensionality: int = 2
     y_dimensionality: int = 1
     params_validation_sequence: Tuple[Tuple[str, None] | Tuple[str, dict[str, Any]]] = (
@@ -80,42 +59,12 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         ("validate_intercept_shape", None),
     )
 
-    def validate_intercept_shape(self, params: GLMParams, **kwargs):
-        """
-        Perform GLM-specific parameter validation.
-
-        Validates that the intercept has the correct shape for a single-neuron GLM.
-
-        Parameters
-        ----------
-        params : GLMParams
-            GLM parameters with coef and intercept attributes.
-        **kwargs
-            Additional keyword arguments (unused).
-
-        Returns
-        -------
-        GLMParams
-            The validated parameters.
-
-        Raises
-        ------
-        ValueError
-            If intercept does not have shape (1,).
-        """
-        # check intercept shape
-        if params.intercept.shape != (1,):
-            raise ValueError(
-                "Intercept term should be a one-dimensional array with shape ``(1,)``."
-            )
-        return params
-
     def check_array_dimensions(
         self,
-        params: GLMUserParams,
+        params: UserProvidedParamsT,
         err_msg: Optional[str] = None,
         err_message_format: str = None,
-    ) -> GLMUserParams:
+    ) -> ModelParamsT:
         """
         Check array dimensions with custom error formatting for GLM parameters.
 
@@ -146,37 +95,39 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         err_msg = err_message_format.format(*shapes)
         return super().check_array_dimensions(params, err_msg=err_msg)
 
-    def check_user_params_structure(
-        self, params: GLMUserParams, **kwargs
-    ) -> GLMUserParams:
+    def validate_intercept_shape(self, params: ModelParamsT, **kwargs):
         """
-        Validate that user parameters are a two-element structure.
+        Perform GLM-specific parameter validation.
+
+        Validates that the intercept has the correct shape for a single-neuron GLM.
 
         Parameters
         ----------
-        params : GLMUserParams
-            User-provided parameters (should be a tuple/list of length 2).
+        params : GLMParams | GLMScaleParams
+            GLM parameters with coef and intercept attributes.
         **kwargs
             Additional keyword arguments (unused).
 
         Returns
         -------
-        GLMUserParams
+        GLMParams
             The validated parameters.
 
         Raises
         ------
         ValueError
-            If parameters do not have length two.
+            If intercept does not have shape (1,).
         """
-        validation.check_length(params, 2, "Params must have length two.")
-        if not isinstance(params, (tuple, list)):
-            raise TypeError("GLM params must be a tuple/list of length two.")
+        # check intercept shape
+        if params.intercept.shape != (1,):
+            raise ValueError(
+                "Intercept term should be a one-dimensional array with shape ``(1,)``."
+            )
         return params
 
     def validate_consistency(
         self,
-        params: GLMParams,
+        params: ModelParamsT,
         X: Optional[DESIGN_INPUT_TYPE] = None,
         y: Optional[jnp.ndarray] = None,
     ):
@@ -272,7 +223,7 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
     def feature_mask_consistency(
         self,
         feature_mask: Union[dict[str, jnp.ndarray], jnp.ndarray] | None,
-        params: GLMParams,
+        params: ModelParamsT,
     ):
         """Check consistency of feature_mask and params."""
         if feature_mask is None:
@@ -312,13 +263,70 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
                     f"The shape of the ``coef`` is ``{params.coef.shape}``, "
                     f"that of the ``feature_mask`` is ``{feature_mask.shape}`` instead!"
                 )
-        return
+
+    def check_user_params_structure(
+        self, params: GLMUserParams, **kwargs
+    ) -> GLMUserParams:
+        """
+        Validate that user parameters are a two-element structure.
+
+        Parameters
+        ----------
+        params : GLMUserParams
+            User-provided parameters (should be a tuple/list of length 2).
+        **kwargs
+            Additional keyword arguments (unused).
+
+        Returns
+        -------
+        GLMUserParams
+            The validated parameters.
+
+        Raises
+        ------
+        ValueError
+            If parameters do not have length two.
+        """
+        n_params = len(self.expected_param_dims)
+        validation.check_length(
+            params, n_params, f"Params must have length {n_params}."
+        )
+        if not isinstance(params, (tuple, list)):
+            raise TypeError(f"GLM params must be a tuple/list of length {n_params}.")
+        return params
+
+
+@dataclass(frozen=True, repr=False)
+class GLMValidator(BaseGLMValidator[GLMUserParams, GLMParams]):
+    """
+    Validator for single-neuron GLM models.
+
+    Validates and transforms user-provided parameters, inputs, and checks consistency
+    between parameters and data for single-neuron GLMs. Single-neuron GLMs have:
+    - 1D coefficients: shape (n_features,) or dict of (n_features,) arrays
+    - 1D intercept: shape (1,)
+    - 2D input X: shape (n_samples, n_features) or pytree of same
+    - 1D output y: shape (n_samples,)
+
+    This validator extends RegressorValidator with GLM-specific validation logic,
+    including custom error messages and consistency checks between model parameters
+    and input data.
+    """
+
+    extra_params: dict = None
+    expected_param_dims: Tuple[int] = (
+        1,
+        1,
+    )  # this should be (coef.ndim, intercept.ndim)
+    to_model_params: Callable[[GLMUserParams], GLMParams] = to_glm_params
+    from_model_params: Callable[[GLMParams], GLMUserParams] = from_glm_params
+    model_class: str = "GLM"
 
     def get_empty_params(self, X, y) -> GLMParams:
         """Return the param shape given the input data."""
         empty_coef = jax.tree_util.tree_map(lambda x: jnp.empty((x.shape[1],)), X)
         empty_intercept = jnp.empty((1,))
-        return to_glm_params((empty_coef, empty_intercept))
+        return self.to_model_params((empty_coef, empty_intercept))
 
 
 @dataclass(frozen=True, repr=False)
@@ -392,7 +400,7 @@ class PopulationGLMValidator(GLMValidator):
             lambda x: jnp.empty((x.shape[1], n_neurons)), X
         )
         empty_intercept = jnp.empty((n_neurons,))
-        return to_glm_params((empty_coef, empty_intercept))
+        return self.to_model_params((empty_coef, empty_intercept))
 
 
 @dataclass(frozen=True, repr=False)
@@ -583,7 +591,7 @@ class ClassifierGLMValidator(GLMValidator):
             lambda x: jnp.empty((x.shape[1], n_classes)), X
         )
         empty_intercept = jnp.empty((n_classes,))
-        return to_glm_params((empty_coef, empty_intercept))
+        return self.to_model_params((empty_coef, empty_intercept))
 
 
 @dataclass(frozen=True, repr=False)
@@ -661,4 +669,54 @@ class PopulationClassifierGLMValidator(ClassifierGLMValidator):
         )
         empty_intercept = jnp.empty((n_neurons, n_classes))
 
-        return to_glm_params((empty_coef, empty_intercept))
+        return self.to_model_params((empty_coef, empty_intercept))
+
+
+@dataclass(frozen=True, repr=False)
+class GLMScaleValidator(BaseGLMValidator[GLMScaleUserParams, GLMScaleParams]):
+    """
+    Validator for single-neuron GLM models.
+
+    Validates and transforms user-provided parameters, inputs, and checks consistency
+    between parameters and data for single-neuron GLMs. Single-neuron GLMs have:
+    - 1D coefficients: shape (n_features,) or dict of (n_features,) arrays
+    - 1D intercept: shape (1,)
+    - 2D input X: shape (n_samples, n_features) or pytree of same
+    - 1D output y: shape (n_samples,)
+
+    This validator extends RegressorValidator with GLM-specific validation logic,
+    including custom error messages and consistency checks between model parameters
+    and input data.
+    """
+
+    extra_params: dict = None
+    expected_param_dims: Tuple[int] = (
+        1,
+        1,
+        1,
+    )  # this should be (coef.ndim, intercept.ndim)
+    to_model_params: Callable[[GLMUserParams], GLMParams] = to_glm_scale_params
+    from_model_params: Callable[[GLMParams], GLMUserParams] = from_glm_scale_params
+    model_class: str = "NBGLM"
+    params_validation_sequence: Tuple[Tuple[str, None] | Tuple[str, dict[str, Any]]] = (
+        *RegressorValidator.params_validation_sequence[:2],
+        (
+            "check_array_dimensions",
+            dict(
+                err_message_format="Invalid parameter dimensionality. coef must be an array "
+                "or pytree with array leaves of shape "
+                "(n_features, ). intercept and scale must be of shape (1,). "
+                "\nThe provided coef, intercept and scale have shape ``{}``, ``{}`` and ``{}`` "
+                "instead."
+            ),
+        ),
+        *RegressorValidator.params_validation_sequence[3:],
+        ("validate_intercept_shape", None),
+    )
+
+    def get_empty_params(self, X, y) -> GLMScaleParams:
+        """Return the param shape given the input data."""
+        empty_coef = jax.tree_util.tree_map(lambda x: jnp.empty((x.shape[1],)), X)
+        empty_intercept = jnp.empty((1,))
+        empty_scale = jnp.empty((1,))
+        return self.to_model_params((empty_coef, empty_intercept, empty_scale))

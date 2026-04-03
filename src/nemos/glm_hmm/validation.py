@@ -15,7 +15,7 @@ from ..glm.validation import GLMValidator, from_glm_scale_params
 from ..hmm.params import HMMParams
 from ..type_casting import is_pynapple_tsd
 from ..typing import DESIGN_INPUT_TYPE
-from .params import GLMHMMParams, GLMHMMUserParams, GLMScaleModelParams
+from .params import GLMHMMParams, GLMHMMUserParams, GLMScaleParams
 
 
 def has_nans_only_at_border(arr):
@@ -47,7 +47,7 @@ def to_glm_hmm_params(user_params: GLMHMMUserParams) -> GLMHMMParams:
     to internal model parameters (log_scale and log probabilities).
     """
     return GLMHMMParams(
-        model_params=GLMScaleModelParams(*user_params[:3]),
+        model_params=GLMScaleParams(*user_params[:3]),
         hmm_params=HMMParams(*(jnp.log(p) for p in user_params[3:])),
     )
 
