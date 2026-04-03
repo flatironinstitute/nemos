@@ -696,7 +696,7 @@ class GLMScaleValidator(BaseGLMValidator[GLMScaleUserParams, GLMScaleParams]):
         1,
     )  # this should be (coef.ndim, intercept.ndim)
     to_model_params: Callable[[GLMUserParams], GLMParams] = to_glm_scale_params
-    from_model_params: Callable[[GLMParams], GLMUserParams] = from_glm_scale_params
+    from_model_params: Callable[[GLMScaleParams], GLMUserParams] = from_glm_scale_params
     model_class: str = "NBGLM"
     params_validation_sequence: Tuple[Tuple[str, None] | Tuple[str, dict[str, Any]]] = (
         *RegressorValidator.params_validation_sequence[:2],
