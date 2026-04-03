@@ -52,7 +52,7 @@ def sticky_transition_proba_init(
 
     Examples
     --------
-    >>> from nemos.glm_hmm.initialize_parameters import sticky_transition_proba_init
+    >>> from nemos.hmm.initialize_parameters import sticky_transition_proba_init
     >>>
     >>> # Generate transition probabilities for 3 states with sticky dynamics
     >>> n_states = 3
@@ -97,7 +97,7 @@ def uniform_transition_proba_init(
 
     Examples
     --------
-    >>> from nemos.glm_hmm.initialize_parameters import uniform_transition_proba_init
+    >>> from nemos.hmm.initialize_parameters import uniform_transition_proba_init
     >>>
     >>> # Generate transition probabilities for 3 states with uniform dynamics
     >>> n_states = 3
@@ -136,7 +136,7 @@ def random_transition_proba_init(
     Examples
     --------
     >>> import jax.numpy as jnp
-    >>> from nemos.glm_hmm.initialize_parameters import random_transition_proba_init
+    >>> from nemos.hmm.initialize_parameters import random_transition_proba_init
     >>>
     >>> # Generate random transition probabilities for 3 states
     >>> n_states = 3
@@ -174,7 +174,7 @@ def uniform_initial_proba_init(
 
     Examples
     --------
-    >>> from nemos.glm_hmm.initialize_parameters import uniform_initial_proba_init
+    >>> from nemos.hmm.initialize_parameters import uniform_initial_proba_init
     >>>
     >>> # Generate initial probabilities for 3 states
     >>> n_states = 3
@@ -211,7 +211,7 @@ def random_initial_proba_init(
     Examples
     --------
     >>> import jax.numpy as jnp
-    >>> from nemos.glm_hmm.initialize_parameters import random_initial_proba_init
+    >>> from nemos.hmm.initialize_parameters import random_initial_proba_init
     >>>
     >>> # Generate initial probabilities for 3 states
     >>> n_states = 3
