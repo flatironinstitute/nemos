@@ -54,7 +54,7 @@ Additionally, the [`GLM`](nemos.glm.GLM) class inherits the attributes of `BaseR
 - [`simulate`](nemos.glm.GLM.simulate): Simulates spike trains using the GLM as a feedforward network, invoking the `observation_models.sample_generator` method for emission probability.
 - [`compute_loss`](nemos.glm.GLM.compute_loss): Computes the loss function for given user-provided parameters, `X`, and `y`. This method validates inputs and parameters, converts user parameters to the internal representation, and delegates to `_compute_loss`.
 - [`initialize_params`](nemos.glm.GLM.initialize_params): Initialize model parameters, setting to zero the coefficients, and setting the intercept by matching the firing rate.
-- [`initialize_solver_and_state`](nemos.glm.GLM.initialize_solver_and_state): Initialize the solver and its state. Takes initial parameters and returns the solver state.
+- [`initialize_optimizer_and_state`](nemos.glm.GLM.initialize_optimizer_and_state): Initialize the solver and its state. Takes initial parameters and returns the solver state.
 - [`update`](nemos.glm.GLM.update): Run a step of optimization and update the parameter and solver step.
 
 ### Private Methods
@@ -96,7 +96,7 @@ The [`PopulationGLM`](nemos.glm.PopulationGLM) class is an extension of the [`GL
 
 ### `PopulationGLM` Specific Attributes
 
-- **`feature_mask`**: A mask that determines which features are used as predictors for each neuron. It can be a matrix of shape `(num_features, num_neurons)` or a [`FeaturePytree`](nemos.pytrees.FeaturePytree) of binary values, where 1 indicates that a feature is used for a particular neuron and 0 indicates it is not.
+- **`feature_mask`**: A mask that determines which features are used as predictors for each neuron. It can be a matrix of shape `(num_features, num_neurons)` or a [`PyTree`](https://docs.jax.dev/en/latest/pytrees.html) of binary values, where 1 indicates that a feature is used for a particular neuron and 0 indicates it is not.
 
 ### Overridden Methods
 

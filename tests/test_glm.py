@@ -25,7 +25,6 @@ import nemos as nmo
 from nemos._observation_model_builder import instantiate_observation_model
 from nemos._regularizer_builder import instantiate_regularizer
 from nemos.inverse_link_function_utils import identity, log_softmax
-from nemos.pytrees import FeaturePytree
 from nemos.tree_utils import (
     pytree_map_and_reduce,
     tree_l2_norm,
@@ -185,7 +184,6 @@ def test_get_fit_attrs(request, glm_class_type, model_instantiation_type):
         "solver_state_": None,
         "dof_resid_": None,
         "aux_": None,
-        "optim_info_": None,
     }
     assert model._get_fit_state() == expected_state
     model.solver_kwargs = {"maxiter": 1}
@@ -306,7 +304,7 @@ class TestGLM:
             model.fit(X, y, init_params=(init_w, init_b))
 
     """
-    Parameterization used by test_fit_init_params_type and test_initialize_solver_init_params_type.
+    Parameterization used by test_fit_init_params_type and test_initialize_optimizer_init_params_type.
     Uses a dict keyed by model class name for model-specific params, or a single value for
     model-independent test cases. Easy to extend by adding new model keys to the dicts.
     """
@@ -372,19 +370,19 @@ class TestGLM:
                 pytest.raises(TypeError, match="X and coef have mismatched structure"),
                 {
                     "GLM": [
-                        FeaturePytree(p1=jnp.zeros((5,)), p2=jnp.zeros((5,))),
+                        {"p1": jnp.zeros((5,)), "p2": jnp.zeros((5,))},
                         jnp.zeros((1,)),
                     ],
                     "PopulationGLM": [
-                        FeaturePytree(p1=jnp.zeros((3, 3)), p2=jnp.zeros((3, 2))),
+                        {"p1": jnp.zeros((3, 3)), "p2": jnp.zeros((3, 2))},
                         jnp.zeros((3,)),
                     ],
                     "ClassifierGLM": [
-                        FeaturePytree(p1=jnp.zeros((5, 3)), p2=jnp.zeros((5, 3))),
+                        {"p1": jnp.zeros((5, 3)), "p2": jnp.zeros((5, 3))},
                         jnp.zeros((3,)),
                     ],
                     "ClassifierPopulationGLM": [
-                        FeaturePytree(p1=jnp.zeros((5, 3, 3)), p2=jnp.zeros((5, 3, 3))),
+                        {"p1": jnp.zeros((5, 3, 3)), "p2": jnp.zeros((5, 3, 3))},
                         jnp.zeros((3, 3)),
                     ],
                 },
@@ -741,7 +739,7 @@ class TestGLM:
             model.predict(X)
 
     @pytest.fixture
-    def initialize_solver_weights_dimensionality_expectation(self, glm_class_type):
+    def initialize_optimizer_weights_dimensionality_expectation(self, glm_class_type):
         class_name = GLM_CLASS_TYPE_TO_NAME[glm_class_type]
         expected_coef_dim = DIMENSIONALITY_PARAMS[class_name]["coef"]
         # Build expectation dict: correct dim passes, others fail
@@ -759,22 +757,24 @@ class TestGLM:
 
     @pytest.mark.parametrize("dim_weights", [0, 1, 2, 3])
     @pytest.mark.solver_related
-    def test_initialize_solver_weights_dimensionality(
+    def test_initialize_optimizer_weights_dimensionality(
         self,
         dim_weights,
         request,
         glm_class_type,
         model_instantiation_type,
-        initialize_solver_weights_dimensionality_expectation,
+        initialize_optimizer_weights_dimensionality_expectation,
     ):
         """
-        Test the `initialize_solver` method with weight matrices of different dimensionalities.
+        Test the `initialize_optimizer` method with weight matrices of different dimensionalities.
         Check for correct dimensionality.
         """
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation_type
         )
-        expectation = initialize_solver_weights_dimensionality_expectation[dim_weights]
+        expectation = initialize_optimizer_weights_dimensionality_expectation[
+            dim_weights
+        ]
         par_shape = get_param_shape(model, X, y)
         n_samples, n_features = X.shape
         # Build init_w of the requested dimensionality
@@ -792,11 +792,11 @@ class TestGLM:
                 par_shape.coef + (1,) * (dim_weights - len(par_shape.coef))
             )
         with expectation:
-            model.initialize_solver_and_state(X, y, (init_w, true_params.intercept))
+            model.initialize_optimizer_and_state((init_w, true_params.intercept), X, y)
 
     @pytest.mark.parametrize("dim_intercepts", [0, 1, 2, 3])
     @pytest.mark.solver_related
-    def test_initialize_solver_intercepts_dimensionality(
+    def test_initialize_optimizer_intercepts_dimensionality(
         self,
         dim_intercepts,
         request,
@@ -804,7 +804,7 @@ class TestGLM:
         model_instantiation_type,
     ):
         """
-        Test the `initialize_solver` method with intercepts of different dimensionalities.
+        Test the `initialize_optimizer` method with intercepts of different dimensionalities.
         Check for correct dimensionality.
         """
         X, y, model, true_params, firing_rate = request.getfixturevalue(
@@ -838,11 +838,11 @@ class TestGLM:
 
         init_w = jnp.zeros(par_shape.coef)
         with expectation:
-            model.initialize_solver_and_state(X, y, (init_w, init_b))
+            model.initialize_optimizer_and_state((init_w, init_b), X, y)
 
     @pytest.mark.parametrize(*fit_init_params_type_init_params)
     @pytest.mark.solver_related
-    def test_initialize_solver_init_params_type(
+    def test_initialize_optimizer_init_params_type(
         self,
         request,
         glm_class_type,
@@ -851,7 +851,7 @@ class TestGLM:
         init_params_by_model,
     ):
         """
-        Test the `initialize_solver` method with various types of initial parameters.
+        Test the `initialize_optimizer` method with various types of initial parameters.
         Ensure that the provided initial parameters are array-like.
         """
         X, y, model, true_params, firing_rate = request.getfixturevalue(
@@ -859,7 +859,7 @@ class TestGLM:
         )
         init_params = self.get_init_params_for_model(init_params_by_model, model)
         with expectation:
-            model.initialize_solver_and_state(X, y, init_params)
+            model.initialize_optimizer_and_state(init_params, X, y)
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -870,7 +870,7 @@ class TestGLM:
         ],
     )
     @pytest.mark.solver_related
-    def test_initialize_solver_n_feature_consistency_weights(
+    def test_initialize_optimizer_n_feature_consistency_weights(
         self,
         delta_n_features,
         expectation,
@@ -879,7 +879,7 @@ class TestGLM:
         model_instantiation_type,
     ):
         """
-        Test the `initialize_solver` method for inconsistencies between data features and initial weights provided.
+        Test the `initialize_optimizer` method for inconsistencies between data features and initial weights provided.
         Ensure the number of features align.
         """
         X, y, model, true_params, firing_rate = request.getfixturevalue(
@@ -891,7 +891,7 @@ class TestGLM:
         init_w = jnp.zeros(wrong_coef_shape)
         init_b = jnp.zeros(par_shape.intercept)
         with expectation:
-            model.initialize_solver_and_state(X, y, (init_w, init_b))
+            model.initialize_optimizer_and_state((init_w, init_b), X, y)
 
     #######################
     # Test model.simulate
@@ -954,7 +954,7 @@ class TestGLM:
             model.intercept_ = true_params.intercept
             if is_population_model(model):
                 model._feature_mask = initialize_feature_mask_for_population_glm(
-                    X, y.shape[1], model._validator.get_empty_params(X, y).coef
+                    X, y.shape[1], coef=model._validator.get_empty_params(X, y).coef
                 )
         with expectation:
             model.simulate(
@@ -1076,8 +1076,7 @@ class TestGLM:
                     "scale_": 2.0,
                     "dof_resid_": 3,
                     "aux_": None,
-                    "_classes_": np.array([2, 3, 5]),
-                    "_class_to_index_": {0: 2, 1: 3, 2: 5},
+                    "classes_": np.array([2, 3]),
                 },
             ),
             (
@@ -1088,8 +1087,7 @@ class TestGLM:
                     "scale_": 2.0,
                     "dof_resid_": 3,
                     "aux_": None,
-                    "_classes_": np.array([2, 3, 5]),
-                    "_class_to_index_": {0: 2, 1: 3, 2: 5},
+                    "classes_": np.array([2, 3]),
                 },
             ),
         ],
@@ -1149,7 +1147,6 @@ class TestGLM:
         loaded_params = loaded_model.get_params()
         fit_state = loaded_model._get_fit_state()
         fit_state.pop("solver_state_")
-        fit_state.pop("optim_info_")
         loaded_params.update(fit_state)
 
         # Assert matching keys and values
@@ -1329,7 +1326,6 @@ class TestGLM:
             loaded_params = loaded_model.get_params()
             fit_state = loaded_model._get_fit_state()
             fit_state.pop("solver_state_")
-            fit_state.pop("optim_info_")
             loaded_params.update(fit_state)
 
             # Assert matching keys and values
@@ -1456,7 +1452,6 @@ class TestGLM:
         initial_params = fitted_model.get_params()
         fit_state = fitted_model._get_fit_state()
         fit_state.pop("solver_state_")
-        fit_state.pop("optim_info_")
         initial_params.update(fit_state)
 
         # Save
@@ -1468,7 +1463,6 @@ class TestGLM:
         loaded_params = loaded_model.get_params()
         fit_state = loaded_model._get_fit_state()
         fit_state.pop("solver_state_")
-        fit_state.pop("optim_info_")
         loaded_params.update(fit_state)
 
         # Assert states are close
@@ -1601,6 +1595,29 @@ class TestGLM:
 
         with pytest.raises(ValueError, match=match):
             nmo.load_model(save_path, mapping_dict=invalid_mapping)
+
+
+class _TwoLeafModule(eqx.Module):
+    a: jnp.ndarray
+    b: jnp.ndarray
+
+
+# Factories that build a two-leaf pytree X given n_samples. Used to parametrize
+# coef-structure tests over different pytree types.
+_PYTREE_X_FACTORIES = [
+    pytest.param(
+        lambda n: {"a": jnp.ones((n, 1)), "b": jnp.ones((n, 1))},
+        id="dict",
+    ),
+    pytest.param(
+        lambda n: _TwoLeafModule(a=jnp.ones((n, 1)), b=jnp.ones((n, 1))),
+        id="eqx_module",
+    ),
+    pytest.param(
+        lambda n: {"a": [jnp.ones((n, 1))], "b": jnp.ones((n, 1))},
+        id="dict_list",
+    ),
+]
 
 
 @pytest.mark.parametrize("glm_type", ["", "population_"])
@@ -1855,8 +1872,8 @@ class TestGLMObservationModel:
         """
         default_solver_name = nmo.solvers.get_solver(
             nmo.regularizer.UnRegularized().default_solver
-        ).full_name
-        lbfgs_solver_name = nmo.solvers.get_solver("LBFGS").full_name
+        ).algo_name
+        lbfgs_solver_name = nmo.solvers.get_solver("LBFGS").algo_name
         if "poisson" in model_instantiation:
             observation_model = "PoissonObservations()"
             inverse_link_function = "exp"
@@ -2060,7 +2077,7 @@ class TestGLMObservationModel:
             glm_type + model_instantiation
         )
         params = model.initialize_params(X, y)
-        state = model.initialize_solver_and_state(X, y, params)
+        state = model.initialize_optimizer_and_state(params, X, y)
         with expectation:
             model.update(
                 params,
@@ -2079,7 +2096,7 @@ class TestGLMObservationModel:
             glm_type + model_instantiation
         )
         params = model.initialize_params(X, y)
-        state = model.initialize_solver_and_state(X, y, params)
+        state = model.initialize_optimizer_and_state(params, X, y)
         assert model.coef_ is None
         assert model.intercept_ is None
         if "gamma" not in model_instantiation and "gaussian" not in model_instantiation:
@@ -2114,7 +2131,7 @@ class TestGLMObservationModel:
             X[: X.shape[0] // 2, :] = np.nan
 
         params = model.initialize_params(X, y)
-        state = model.initialize_solver_and_state(X, y, params)
+        state = model.initialize_optimizer_and_state(params, X, y)
         assert model.coef_ is None
         assert model.intercept_ is None
         if "gamma" not in model_instantiation and "gaussian" not in model_instantiation:
@@ -2145,7 +2162,7 @@ class TestGLMObservationModel:
         )
         model.solver_kwargs.update({"stepsize": 0.01})
         params = model.initialize_params(X, y)
-        state = model.initialize_solver_and_state(X, y, params)
+        state = model.initialize_optimizer_and_state(params, X, y)
         # extract batch and add nans
         Xnan = X[:batch_size]
         Xnan[: batch_size // 2] = np.nan
@@ -2425,6 +2442,30 @@ class TestGLMObservationModel:
         if intercept.shape != intercept_shape:
             raise ValueError("Shape mismatch intercepts")
 
+    @pytest.mark.parametrize("pytree_x_factory", _PYTREE_X_FACTORIES)
+    def test_coef_tree_structure_after_initialize_params_pytree_x(
+        self, pytree_x_factory, request, glm_type, model_instantiation
+    ):
+        """coef tree structure matches X structure after initialize_params with pytree X."""
+        _, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        X = pytree_x_factory(y.shape[0])
+        coef, _ = model.initialize_params(X, y)
+        assert jax.tree_util.tree_structure(coef) == jax.tree_util.tree_structure(X)
+
+    @pytest.mark.parametrize("pytree_x_factory", _PYTREE_X_FACTORIES)
+    @pytest.mark.solver_related
+    def test_coef_tree_structure_after_fit_pytree_x(
+        self, pytree_x_factory, request, glm_type, model_instantiation
+    ):
+        """model.coef_ tree structure matches X structure after fit with pytree X."""
+        _, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        X = pytree_x_factory(y.shape[0])
+        model.solver_kwargs = {"maxiter": 1}
+        model.fit(X, y)
+        assert jax.tree_util.tree_structure(
+            model.coef_
+        ) == jax.tree_util.tree_structure(X)
+
     #####################
     # Test residual DOF #
     #####################
@@ -2591,6 +2632,26 @@ class TestGLMObservationModel:
             regularizer_strength=1.0,
         )
         model.fit(X, y)
+
+
+def test_grouplasso_fit_twice_different_pytree_structure():
+    """Fitting GroupLasso twice with different pytree structures must not raise.
+
+    Regression test: the auto-generated mask was cached after the first fit,
+    causing a structure mismatch when the second fit used a different pytree type.
+    """
+    rng = np.random.default_rng(0)
+    n_samples, n_features = 100, 2
+    X = 0.5 * rng.standard_normal((n_samples, n_features))
+    y = rng.poisson(np.exp(X.dot(rng.standard_normal(n_features))))
+
+    model = nmo.glm.GLM(regularizer="GroupLasso")
+
+    X_list = [X[:, :1], X[:, 1:]]
+    model.fit(X_list, y)
+
+    X_dict = {i: x for i, x in enumerate(X_list)}
+    model.fit(X_dict, y)
 
 
 @pytest.mark.parametrize(
@@ -2905,6 +2966,18 @@ class TestPopulationGLM:
         assert np.all(y._metadata == rate._metadata)
         assert np.all(y.columns == rate.columns)
 
+    def test_initialize_params_stale_feature_mask_raises(
+        self, request, model_instantiation
+    ):
+        """initialize_params raises when a stale array feature_mask is incompatible with the new X structure."""
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            model_instantiation
+        )
+        model._feature_mask = jnp.ones_like(true_params.coef)
+        X_pytree = {"a": X[:, : X.shape[1] // 2], "b": X[:, X.shape[1] // 2 :]}
+        with pytest.raises(TypeError, match="feature_mask"):
+            model.initialize_params(X_pytree, y)
+
 
 @pytest.mark.parametrize(
     "model_instantiation",
@@ -3066,7 +3139,6 @@ class TestPopulationGLMObservationModel:
                 for key, xx in X.items():
                     if mask_bool[key][k]:
                         X_neu[key] = X[key]
-                X_neu = FeaturePytree(**X_neu)
             else:
                 X_neu = X[:, mask_bool[k]]
 
@@ -3147,7 +3219,7 @@ class TestPoissonGLM:
                 # this was not tested for pytree when the test was separate
                 return
             else:
-                reg = nmo.regularizer.GroupLasso(mask=jnp.ones((1, X.shape[1])))
+                reg = nmo.regularizer.GroupLasso()
         model = glm_class(
             solver_name=solver_name,
             inverse_link_function=jax.nn.softplus,
@@ -3156,15 +3228,15 @@ class TestPoissonGLM:
             regularizer=reg,
             regularizer_strength=None if reg == "UnRegularized" else 1.0,
         )
-        opt_state = model._initialize_solver_and_state(X, y, true_params)
+        opt_state = model._initialize_optimizer_and_state(true_params, X, y)
         solver = model._solver
 
         if stepsize is not None:
-            assert opt_state.stepsize == stepsize
+            assert opt_state.solver_state.stepsize == stepsize
             assert solver.stepsize == stepsize
         else:
-            assert opt_state.stepsize > 0
-            assert isinstance(opt_state.stepsize, float)
+            assert opt_state.solver_state.stepsize > 0
+            assert isinstance(opt_state.solver_state.stepsize, float)
 
         if batch_size is not None:
             assert solver.batch_size == batch_size
@@ -3318,24 +3390,22 @@ class TestPoissonGLM:
         glm2.fit(X, y)
 
         params = glm.initialize_params(X, y)
-        state = glm.initialize_solver_and_state(X, y, params)
-        # glm.instantiate_solver(glm.compute_loss)
+        state = glm.initialize_optimizer_and_state(params, X, y)
+        # glm._instantiate_solver(glm.compute_loss)
 
         # NOTE these two are not the same because for example Ridge augments the loss
         # loss_grad = jax.jit(jax.grad(glm.compute_loss))
         loss_grad = jax.jit(jax.grad(glm._solver_loss_fun))
 
-        # copied from GLM.fit
-        # grab data if needed (tree map won't function because param is never a FeaturePytree).
-        if isinstance(X, FeaturePytree):
-            X = X.data
-
         iter_num = 0
         while iter_num < maxiter:
-            state = state._replace(
-                full_grad_at_reference_point=loss_grad(
-                    nmo.glm.params.GLMParams(*params), X, y
+            state = type(state)(
+                solver_state=state.solver_state._replace(
+                    full_grad_at_reference_point=loss_grad(
+                        nmo.glm.params.GLMParams(*params), X, y
+                    )
                 ),
+                stats=state.stats,
             )
 
             prev_params = params
@@ -3345,8 +3415,11 @@ class TestPoissonGLM:
                 xi, yi = tree_slice(X, ind), tree_slice(y, ind)
                 params, state = glm.update(params, state, xi, yi)
 
-            state = state._replace(
-                reference_point=nmo.glm.params.GLMParams(*params),
+            state = type(state)(
+                solver_state=state.solver_state._replace(
+                    reference_point=nmo.glm.params.GLMParams(*params)
+                ),
+                stats=state.stats,
             )
 
             iter_num += 1
@@ -3357,7 +3430,7 @@ class TestPoissonGLM:
             if _error < tol:
                 break
 
-        assert iter_num == glm2.solver_state_.iter_num
+        assert iter_num == glm2.solver_state_.stats.num_steps
 
         assert pytree_map_and_reduce(
             lambda a, b: np.allclose(a, b, atol=10**-5, rtol=0.0),
@@ -3788,16 +3861,14 @@ class TestClassifierGLM:
         [
             (np.ones((3, 5)), does_not_raise()),
             (
-                nmo.pytrees.FeaturePytree(
-                    input_1=np.ones((3, 3)), input_2=np.ones((3, 2))
-                ),
+                {"input_1": np.ones((3, 3)), "input_2": np.ones((3, 2))},
                 does_not_raise(),
             ),
             # string type
             (
                 "invalid",
                 pytest.raises(
-                    AttributeError, match="'str' object has no attribute 'ndim'"
+                    AttributeError, match="'str' object has no attribute 'shape'"
                 ),
             ),
             # wrong number of features
@@ -3806,9 +3877,7 @@ class TestClassifierGLM:
                 pytest.raises(ValueError, match="Inconsistent number of features"),
             ),
             (
-                nmo.pytrees.FeaturePytree(
-                    input_1=np.ones((3, 1)), input_2=np.ones((3, 2))
-                ),
+                {"input_1": np.ones((3, 1)), "input_2": np.ones((3, 2))},
                 pytest.raises(ValueError, match="Inconsistent number of features"),
             ),
         ],
@@ -3822,7 +3891,7 @@ class TestClassifierGLM:
         model_instantiation,
         request,
     ):
-        if isinstance(X, nmo.pytrees.FeaturePytree):
+        if isinstance(X, dict):
             xtype = "_pytree"
         else:
             xtype = ""
@@ -3843,7 +3912,7 @@ class TestClassifierGLM:
             "compute_loss",
             "simulate",
             "initialize_params",
-            "initialize_solver_and_state",
+            "initialize_optimizer_and_state",
         ],
     )
     def test_must_set_classes_before_calling(
@@ -3858,7 +3927,7 @@ class TestClassifierGLM:
             glm_type + model_instantiation
         )
         model = deepcopy(model)
-        model._classes_ = None
+        model.classes_ = None
 
         # superset of all possible required inputs
         input_dict = {
@@ -3915,7 +3984,7 @@ class TestClassifierGLM:
         score_regular = model.score(X, y)
         label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
         model.set_classes(label)
-        y_label = model._decode_labels(y)
+        y_label = model._label_encoder.decode(y)
         score = model.score(X, y_label)
         assert isinstance(score, jnp.ndarray)
         assert jnp.issubdtype(score.dtype, np.floating)
@@ -3934,7 +4003,7 @@ class TestClassifierGLM:
 
         label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
         model_label.set_classes(label)
-        y_label = model._decode_labels(y)
+        y_label = model._label_encoder.decode(y)
         model_label.fit(X, y_label)
         assert jnp.array_equal(model.coef_, model_label.coef_)
         assert jnp.array_equal(model.intercept_, model_label.intercept_)
@@ -3953,37 +4022,8 @@ class TestClassifierGLM:
         label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
         model.set_classes(label)
         y_label, log_prob_label = model.simulate(jax.random.PRNGKey(1), X)
-        assert jnp.array_equal(model._encode_labels(y_label), y)
+        assert jnp.array_equal(model._label_encoder.encode(y_label), y)
         assert jnp.array_equal(log_prob_label, log_prob)
-
-    def test_classes_none_initially(
-        self, inv_link, glm_type, model_instantiation, request
-    ):
-        """Test that classes_ is None before set_classes is called."""
-        _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
-        # Create a fresh model without set_classes
-        if "population" in glm_type:
-            fresh_model = nmo.glm.ClassifierPopulationGLM(n_classes=model.n_classes)
-        else:
-            fresh_model = nmo.glm.ClassifierGLM(n_classes=model.n_classes)
-        assert fresh_model.classes_ is None
-        assert fresh_model._skip_encoding is False
-
-    def test_skip_encoding_flag(self, inv_link, glm_type, model_instantiation, request):
-        """Test that _skip_encoding is True for default labels, False otherwise."""
-        _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
-        model = deepcopy(model)
-
-        # Default labels [0, 1, ..., n-1] should skip encoding
-        model.set_classes(np.arange(model.n_classes))
-        assert model._skip_encoding is True
-        assert model._class_to_index_ is None
-
-        # Non-default labels should not skip encoding
-        label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
-        model.set_classes(label)
-        assert model._skip_encoding is False
-        assert model._class_to_index_ is not None
 
     def test_set_classes_too_many_classes(
         self, inv_link, glm_type, model_instantiation, request
@@ -4076,7 +4116,7 @@ class TestClassifierGLM:
         # Compute loss with string labels
         label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
         model.set_classes(label)
-        y_label = model._decode_labels(y)
+        y_label = model._label_encoder.decode(y)
         loss_label = model.compute_loss((model.coef_, model.intercept_), X, y_label)
 
         assert jnp.allclose(loss_default, loss_label)
@@ -4105,25 +4145,17 @@ class TestClassifierGLM:
         # Probabilities should be identical (only label interpretation changes)
         assert jnp.allclose(proba_default, proba_label)
 
-    def test_encode_decode_roundtrip(
+    def test_initialize_params_stale_feature_mask_raises(
         self, inv_link, glm_type, model_instantiation, request
     ):
-        """Test that encoding then decoding returns original labels."""
-        _, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
-        model = deepcopy(model)
-
-        # Test with string labels
-        label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
-        model.set_classes(label)
-        y_label = model._decode_labels(y)
-
-        # Roundtrip: decode -> encode should give original indices
-        y_roundtrip = model._encode_labels(y_label)
-        assert np.array_equal(y, y_roundtrip)
-
-        # Roundtrip: encode -> decode should give original labels
-        y_label_roundtrip = model._decode_labels(model._encode_labels(y_label))
-        assert np.array_equal(y_label, y_label_roundtrip)
+        """initialize_params raises when a stale array feature_mask is incompatible with the new X structure."""
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        model._feature_mask = jnp.ones_like(true_params.coef)
+        X_pytree = {"a": X[:, : X.shape[1] // 2], "b": X[:, X.shape[1] // 2 :]}
+        with pytest.raises(TypeError, match="feature_mask"):
+            model.initialize_params(X_pytree, y)
 
 
 def test_glm_public_api_matches_subclasses():
