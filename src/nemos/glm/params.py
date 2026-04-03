@@ -21,4 +21,11 @@ class GLMParams(ModelParams):
         return [lambda p: p.coef]
 
 
+class GLMScaleParams(GLMParams):
+    """Add scale to GLMParams, specific for the GLM-HMM and NBGLM models."""
+
+    log_scale: jnp.ndarray | None = None
+
+
 GLMUserParams = Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike]
+GLMScaleUserParams = Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike, ArrayLike]

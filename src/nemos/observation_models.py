@@ -83,6 +83,7 @@ class Observations(Base, abc.ABC):
         y,
         predicted_rate,
         aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
+        **kwargs,
     ):
         r"""Compute the observation model negative log-likelihood.
 
@@ -435,6 +436,7 @@ class PoissonObservations(Observations):
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
+        **kwargs,
     ) -> jnp.ndarray:
         r"""Compute the Poisson negative log-likelihood.
 
@@ -662,6 +664,7 @@ class GammaObservations(Observations):
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
+        **kwargs,
     ) -> jnp.ndarray:
         r"""Compute the Gamma negative log-likelihood.
 
@@ -864,6 +867,7 @@ class BernoulliObservations(Observations):
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
+        **kwargs,
     ) -> jnp.ndarray:
         r"""Compute the Bernoulli negative log-likelihood.
 
@@ -1167,6 +1171,8 @@ class NegativeBinomialObservations(Observations):
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
+        scale: None | float = None,
+        **kwargs,
     ) -> jnp.ndarray:
         r"""Compute the Negative Binomial negative log-likelihood.
 
@@ -1202,14 +1208,16 @@ class NegativeBinomialObservations(Observations):
             + y \log\left(\frac{\mu}{r + \mu}\right)
 
         """
-        if self.scale is None:
+        if self.scale is None and scale is None:
             self.estimate_scale(y, predicted_rate, 1.0)
+        elif scale is None:
+            scale = self.scale
         predicted_rate = jnp.clip(
             predicted_rate, min=jnp.finfo(predicted_rate.dtype).eps
         )
-        factor = 1 / (self.scale * predicted_rate + 1)
+        factor = 1 / (scale * predicted_rate + 1)
         return -aggregate_sample_scores(
-            y * jnp.log(1 - factor) + jnp.log(factor) / self.scale
+            y * jnp.log(1 - factor) + jnp.log(factor) / scale
         )
 
     def log_likelihood(
@@ -1244,7 +1252,10 @@ class NegativeBinomialObservations(Observations):
         """
         scale = self.scale if scale is None else scale
         ll_unnormalized = -self._negative_log_likelihood(
-            y, predicted_rate, aggregate_sample_scores
+            y,
+            predicted_rate,
+            aggregate_sample_scores,
+            scale=scale,
         )
         norm = aggregate_sample_scores(
             jax.scipy.special.gammaln(y + 1 / scale)
