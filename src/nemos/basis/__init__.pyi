@@ -6,6 +6,7 @@ from ._transformer_basis import TransformerBasis
 from .basis import (
     BSplineConv,
     BSplineEval,
+    Category,
     CyclicBSplineConv,
     CyclicBSplineEval,
     FourierEval,
@@ -25,6 +26,7 @@ from .basis import (
 __all__ = [
     "AdditiveBasis",
     "MultiplicativeBasis",
+    "Category",
     "CustomBasis",
     "TransformerBasis",
     "BSplineConv",
