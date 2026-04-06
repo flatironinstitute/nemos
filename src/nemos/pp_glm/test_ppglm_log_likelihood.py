@@ -2,39 +2,53 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-
 from pynapple import IntervalSet
 
+from nemos.basis import RaisedCosineLogEval
 from nemos.pp_glm import log_likelihood, utils
 from nemos.pp_glm.validation import to_pp_glm_params, to_pp_glm_params_with_key
-from nemos.basis import RaisedCosineLogEval
 
-jax.config.update("jax_enable_x64", True)
 
 def create_basis(n_basis_funcs=4, history_window=0.01):
     """Use nemos RC Eval basis and return the evaluate method"""
     basis = RaisedCosineLogEval(n_basis_funcs, bounds=(0, history_window), fill_value=0)
     return lambda pts: basis.evaluate(pts)
 
+
 def create_params(n_neurons, n_basis_funcs, seed=0, all_to_one=False):
     """Use PP-GLM params structures"""
     if all_to_one:
-        params = to_pp_glm_params((
-            jnp.ones(n_neurons * n_basis_funcs),
-            jnp.atleast_1d(jnp.zeros(1)),
-        ))
+        params = to_pp_glm_params(
+            (
+                jnp.ones(n_neurons * n_basis_funcs),
+                jnp.atleast_1d(jnp.zeros(1)),
+            )
+        )
     else:
-        params = to_pp_glm_params((
-            jnp.ones((n_neurons * n_basis_funcs, n_neurons)),
-            jnp.atleast_1d(jnp.zeros(n_neurons)),
-        ))
+        params = to_pp_glm_params(
+            (
+                jnp.ones((n_neurons * n_basis_funcs, n_neurons)),
+                jnp.atleast_1d(jnp.zeros(n_neurons)),
+            )
+        )
     random_key = jax.random.PRNGKey(seed).astype(jnp.float64)
     return to_pp_glm_params_with_key(params, random_key)
 
-def create_dataset(n_neurons=5, n_spikes=400, sim_time=5.0, M_samples=100,
-                 n_basis_funcs=4, history_window=0.01, scan_size=3, seed=0, all_to_one=False):
+
+def create_dataset(
+    n_neurons=5,
+    n_spikes=400,
+    sim_time=5.0,
+    M_samples=100,
+    n_basis_funcs=4,
+    history_window=0.01,
+    scan_size=3,
+    seed=0,
+    all_to_one=False,
+):
     """Create a fake dataset (without running an actual simulation) for fitting an all-to-all or
-    all-to-one coupled model. Returns preprocessed inputs, model hyperparams and arbitrary PP-GLM params"""
+    all-to-one coupled model. Returns preprocessed inputs, model hyperparams and arbitrary PP-GLM params
+    """
     recording_time = IntervalSet(0, sim_time)
     M_grid = utils.build_mc_sampling_grid(recording_time, M_samples)
     eval_function = create_basis(n_basis_funcs, history_window)
@@ -50,16 +64,17 @@ def create_dataset(n_neurons=5, n_spikes=400, sim_time=5.0, M_samples=100,
         n_target = 0
         y = y[:, y[1] == n_target]
 
-    max_window = int(utils.compute_max_window_size(
-        jnp.array([-history_window, 0]), X[0], X[0]
-    ))
+    max_window = int(
+        utils.compute_max_window_size(jnp.array([-history_window, 0]), X[0], X[0])
+    )
     X, y = utils.adjust_indices_and_spike_times(X, history_window, max_window, y)
 
     params_with_key = create_params(n_neurons, n_basis_funcs, seed, all_to_one)
 
     return dict(
         params_with_key=params_with_key,
-        X=X, y=y,
+        X=X,
+        y=y,
         recording_time=recording_time,
         M_samples=M_samples,
         M_grid=M_grid,
@@ -72,7 +87,10 @@ def create_dataset(n_neurons=5, n_spikes=400, sim_time=5.0, M_samples=100,
         n_neurons=n_neurons,
     )
 
-def create_dataset_single_spike(spike_time, history_window=0.01, n_basis_funcs=4, M_samples=100, seed=0):
+
+def create_dataset_single_spike(
+    spike_time, history_window=0.01, n_basis_funcs=4, M_samples=100, seed=0
+):
     """
     Create the minimal dataset for a single-neuron, single-spike scenario.
     """
@@ -85,24 +103,27 @@ def create_dataset_single_spike(spike_time, history_window=0.01, n_basis_funcs=4
     spike_times = jnp.array([spike_time])
     spike_ids = jnp.array([0])
 
-    X = jnp.vstack((spike_times, spike_ids)) # shape (2, 1)
+    X = jnp.vstack((spike_times, spike_ids))  # shape (2, 1)
     y = jnp.vstack((X, jnp.arange(1)))  # shape (3, 1)
 
-    max_window = int(utils.compute_max_window_size(
-        jnp.array([-history_window, 0.0]), X[0], X[0]
-    ))
+    max_window = int(
+        utils.compute_max_window_size(jnp.array([-history_window, 0.0]), X[0], X[0])
+    )
     X, y = utils.adjust_indices_and_spike_times(X, history_window, max_window, y)
 
-    params = to_pp_glm_params((
-        jnp.ones((n_neurons * n_basis_funcs, n_neurons)),
-        jnp.atleast_1d(0.),
-    ))
+    params = to_pp_glm_params(
+        (
+            jnp.ones((n_neurons * n_basis_funcs, n_neurons)),
+            jnp.atleast_1d(0.0),
+        )
+    )
     random_key = jax.random.PRNGKey(seed).astype(jnp.float64)
     params_with_key = to_pp_glm_params_with_key(params, random_key)
 
     return dict(
         params_with_key=params_with_key,
-        X=X, y=y,
+        X=X,
+        y=y,
         recording_time=recording_time,
         M_samples=M_samples,
         M_grid=M_grid,
@@ -138,24 +159,26 @@ class TestUtils:
         # when divisible, padding length is 0
         times = jnp.ones((3, 8))
         out, pad_val, pad_len = utils.reshape_input_for_scan(times, scan_size=2)
-        assert out.shape == (4, 2, 3) # (n_scans, scan_size, n_channels)
+        assert out.shape == (4, 2, 3)  # (n_scans, scan_size, n_channels)
         assert pad_len == 0
 
         # when not divisible, padding fills to next multiple
         times = jnp.ones((3, 9))
         out, pad_val, pad_len = utils.reshape_input_for_scan(times, scan_size=2)
-        assert out.shape == (5, 2, 3) # (n_scans, scan_size, n_channels)
+        assert out.shape == (5, 2, 3)  # (n_scans, scan_size, n_channels)
         assert pad_len == 1
 
-        #test that padding is the last spike and that it's all the same
-        times = jnp.stack([jnp.arange(5, dtype=jnp.float64),
-                           jnp.arange(5, dtype=jnp.float64)])
+        # test that padding is the last spike and that it's all the same
+        times = jnp.stack(
+            [jnp.arange(5, dtype=jnp.float64), jnp.arange(5, dtype=jnp.float64)]
+        )
         out, pad_val, pad_len = utils.reshape_input_for_scan(times, scan_size=3)
         padding = out[:, -pad_len:]
 
         assert np.all(padding == padding[:, [0]])
         np.testing.assert_array_equal(pad_val, times[:, -1])
 
+    @pytest.mark.requires_x64
     def test_build_mc_sampling_grid(self):
         """test that the grid is built correctly with multiple epochs"""
         recording_time = IntervalSet(start=[0.0, 6.0], end=[4.0, 10.0])
@@ -166,7 +189,11 @@ class TestUtils:
 
         # assert that all grid points are within epochs
         in_epoch = np.any(
-            [(grid >= s) & (grid <= e) for s, e in zip(recording_time.start, recording_time.end)], axis=0
+            [
+                (grid >= s) & (grid <= e)
+                for s, e in zip(recording_time.start, recording_time.end)
+            ],
+            axis=0,
         )
 
         assert np.all(in_epoch)
@@ -180,6 +207,7 @@ class TestUtils:
         with pytest.raises(ValueError):
             utils.build_mc_sampling_grid(recording_time, M_samples=3)
 
+    @pytest.mark.requires_x64
     def test_adjust_indices_and_spike_times(self):
         """Test that shapes and indices are shifted correctly and that padding
         is outside the history window"""
@@ -188,15 +216,15 @@ class TestUtils:
         dataset = create_dataset()
 
         # test X shape increase by history window
-        n_spk_original = dataset["y"].shape[1] # unchanged
+        n_spk_original = dataset["y"].shape[1]  # unchanged
         assert dataset["X"].shape[1] == n_spk_original + dataset["max_window"]
 
         # test y index is shifted by max_window
-        assert dataset["y"][-1,0] == dataset["max_window"]
+        assert dataset["y"][-1, 0] == dataset["max_window"]
 
         # test padding values are out of bound and basis evals to 0
         bound = dataset["recording_time"].start[0] - dataset["history_window"]
-        padding = dataset["X"][:, :dataset["max_window"]]
+        padding = dataset["X"][:, : dataset["max_window"]]
         assert np.all(padding[0] < bound)
 
         first_spike = dataset["y"][:, 0]
@@ -211,33 +239,45 @@ class TestUtils:
         # test the edge case with a single spike dataset
         dataset = create_dataset_single_spike(1.0)
 
-        max_window = int(utils.compute_max_window_size(
-            jnp.array([-dataset["history_window"], 0]), dataset["X"][0], dataset["X"][0]
-        ))
+        max_window = int(
+            utils.compute_max_window_size(
+                jnp.array([-dataset["history_window"], 0]),
+                dataset["X"][0],
+                dataset["X"][0],
+            )
+        )
 
         assert max_window == 0
 
         # one reference spike, multiple events
         ref = jnp.array([1.0])
-        events = jnp.array([0.1, 0.5, 0.990, 0.993, 0.995]) # the last 3 fall within 0.01 s
-        max_window = int(utils.compute_max_window_size(
-            jnp.array([-dataset["history_window"], 0]), ref, events
-        ))
+        events = jnp.array(
+            [0.1, 0.5, 0.990, 0.993, 0.995]
+        )  # the last 3 fall within 0.01 s
+        max_window = int(
+            utils.compute_max_window_size(
+                jnp.array([-dataset["history_window"], 0]), ref, events
+            )
+        )
 
         assert max_window == 3
 
         # multiple spikes, multiple events
         ref = jnp.array([1.0, 3.0])
-        events = jnp.array([0.990, 0.993, 0.995,            # 3 events within ref 1
-                            2.990, 2.993, 2.995, 2.999])    # 4 events within ref 2
+        events = jnp.array(
+            [0.990, 0.993, 0.995, 2.990, 2.993, 2.995, 2.999]  # 3 events within ref 1
+        )  # 4 events within ref 2
 
-        max_window = int(utils.compute_max_window_size(
-            jnp.array([-dataset["history_window"], 0]), ref, events
-        ))
+        max_window = int(
+            utils.compute_max_window_size(
+                jnp.array([-dataset["history_window"], 0]), ref, events
+            )
+        )
 
         assert max_window == 4
 
 
+@pytest.mark.requires_x64
 class TestLogLikelihood:
     def test_single_spike_dataset(self):
         """
@@ -289,7 +329,7 @@ class TestLogLikelihood:
             max_window,
             scan_size,
             eval_function,
-            log=True
+            log=True,
         )
 
         np.testing.assert_almost_equal(log_lam_y, bias_contrib)
@@ -328,7 +368,7 @@ class TestLogLikelihood:
             max_window,
             scan_size,
             eval_function,
-            log=True
+            log=True,
         )
 
         # numpy loop
@@ -350,7 +390,6 @@ class TestLogLikelihood:
             lam_tilde = np.sum(basis_at_dts * selected_w) + bias[i[1].astype(int)]
             log_lam_y_loop += np.log(inverse_link_function(lam_tilde))
 
-
         np.testing.assert_almost_equal(log_lam_y_scan, log_lam_y_loop)
 
         ## second ll term
@@ -360,7 +399,7 @@ class TestLogLikelihood:
             params_with_key.random_key.astype(jnp.uint32),
             M_samples,
             recording_time,
-            M_grid
+            M_grid,
         )
 
         # jax lax scan + vmap for all postsynaptic neurons
@@ -374,7 +413,7 @@ class TestLogLikelihood:
             max_window,
             scan_size,
             eval_function,
-            log=False
+            log=False,
         )
 
         # numpy loop
@@ -387,7 +426,9 @@ class TestLogLikelihood:
             dts = i[0] - spk_in_window[0]
             basis_at_dts = eval_function(dts)
             selected_w = weights[spk_in_window[1].astype(int)]
-            lam_tilde = np.sum(basis_at_dts[:,:,None] * selected_w, axis=(0,1)) + bias
+            lam_tilde = (
+                np.sum(basis_at_dts[:, :, None] * selected_w, axis=(0, 1)) + bias
+            )
             mc_est_loop += inverse_link_function(lam_tilde).sum()
 
         np.testing.assert_almost_equal(mc_est_scan, mc_est_loop)
@@ -409,7 +450,9 @@ class TestLogLikelihood:
         )
 
         # nll from loop results
-        loss_loop = ((recording_time.tot_length() / M_samples) * mc_est_loop) - log_lam_y_loop
+        loss_loop = (
+            (recording_time.tot_length() / M_samples) * mc_est_loop
+        ) - log_lam_y_loop
 
         np.testing.assert_almost_equal(loss_loop, loss_scan)
 
