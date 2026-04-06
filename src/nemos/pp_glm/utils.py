@@ -1,5 +1,7 @@
-from typing import Optional
+from typing import Optional, Union, List, Tuple
 from numpy.typing import ArrayLike
+from pynapple import IntervalSet
+from ..typing import DESIGN_INPUT_TYPE
 
 from functools import partial
 
@@ -8,7 +10,7 @@ import jax.numpy as jnp
 
 ### SCAN UTILS
 @partial(jax.jit, static_argnums=2)
-def slice_array(array, i, window_size):
+def slice_array(array: jnp.ndarray, i: int, window_size: int):
     """
          Select events within the history window.
 
@@ -29,7 +31,7 @@ def slice_array(array, i, window_size):
     n_channels = array.shape[0]
     return jax.lax.dynamic_slice(array, (0, i - window_size), (n_channels, window_size,))
 
-def reshape_coef_for_scan(weights, n_basis_funcs):
+def reshape_coef_for_scan(weights: jnp.ndarray, n_basis_funcs: int):
     """
         Reshape weight array into (n_predictors, n_basis_funcs, n_neurons)
         format expected by the scan loop.
@@ -58,7 +60,7 @@ def reshape_coef_for_scan(weights, n_basis_funcs):
         )
 
 @partial(jax.jit, static_argnums=1)
-def reshape_input_for_scan(times, scan_size):
+def reshape_input_for_scan(times: jnp.ndarray, scan_size: int):
     """
         Reshape time series into scan inputs of equal size. Pad the last input with copies of
         the last time point if needed.
@@ -86,11 +88,11 @@ def reshape_input_for_scan(times, scan_size):
     padded_spikes = jnp.hstack(
         (times, padding)
     )
-    padded_times_reshaped = padded_spikes.reshape(times.shape[0], scan_size,-1).transpose(2,1,0)
+    padded_times_reshaped = padded_spikes.reshape(n_channels, scan_size,-1).transpose(2,1,0)
 
     return padded_times_reshaped, padding_value, padding_len
 
-def build_mc_sampling_grid(recording_time, M_samples):
+def build_mc_sampling_grid(recording_time: IntervalSet, M_samples: int):
     """
         Build a stratified sampling grid of bin midpoints for Monte Carlo integration
         of the conditional intensity function over the recording.
@@ -110,6 +112,11 @@ def build_mc_sampling_grid(recording_time, M_samples):
         :
             Concatenated grid of bin midpoints across all epochs. Shape (M_samples,).
     """
+    if M_samples < len(recording_time.start):
+        raise ValueError(
+            f"The number of MC samples ({M_samples}) must be equal or greater than the number of recording "
+            f"epochs {len(recording_time.start)})."
+        )
     dt = recording_time.tot_length() / M_samples
     starts, ends = recording_time.start, recording_time.end
     M_sub = jnp.floor((ends - starts) / dt).astype(int)
@@ -119,7 +126,11 @@ def build_mc_sampling_grid(recording_time, M_samples):
 
 ### DATA PREPROCESSING UTILS
 @jax.jit
-def compute_max_window_size(bounds, ref_spike_times, event_times):
+def compute_max_window_size(
+        bounds: Union[ArrayLike, List, Tuple],
+        ref_spike_times: jnp.ndarray,
+        event_times: jnp.ndarray
+):
     """
         Pre-compute the maximum number of events that fall within the history window
         across all reference spike times.
@@ -146,10 +157,10 @@ def compute_max_window_size(bounds, ref_spike_times, event_times):
 
 @partial(jax.jit, static_argnums=(1,2))
 def adjust_indices_and_spike_times(
-        X: ArrayLike,
+        X: DESIGN_INPUT_TYPE,
         history_window: float,
         max_window: int,
-        y: Optional=None,
+        y: Optional[jnp.ndarray]=None,
 ):
     """
         Add padding to the events array so that history window selection near

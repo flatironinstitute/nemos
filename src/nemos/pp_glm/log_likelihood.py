@@ -1,13 +1,23 @@
 import jax
 import jax.numpy as jnp
 
+from typing import Callable, Union, Dict
 from ..typing import DESIGN_INPUT_TYPE
 
 from . import utils
 from .params import PPGLMParamsWithKey, PPGLMParams
 
+jax.config.update("jax_enable_x64", True)
 
-def compute_lam_tilde_single(dts, i, event_ids, weights, bias, eval_function):
+
+def _compute_lam_tilde_single(
+        dts: jnp.ndarray,
+        i: int,
+        event_ids: jnp.ndarray,
+        weights: Union[jnp.ndarray, Dict],
+        bias: jnp.ndarray,
+        eval_function
+):
     """
         Evaluate the non-rectified firing rate (lambda tilde) for a single
         target neurons at a single time point.
@@ -22,7 +32,7 @@ def compute_lam_tilde_single(dts, i, event_ids, weights, bias, eval_function):
             Lag times between the reference time point and each event in the history
             window. Shape (max_window,).
         i :
-            Target neuron id. Scalar int.
+            Target neuron index. Scalar int.
         event_ids :
             An array of predictor ids corresponding to all events in the history window.
         weights :
@@ -33,14 +43,21 @@ def compute_lam_tilde_single(dts, i, event_ids, weights, bias, eval_function):
         Returns
         -------
         :
-            Non-rectified firing rate for all target neurons. Shape (1,).
+            Scalar non-rectified firing rate for the target neuron.
     """
     w = weights[event_ids, :, i]       # shape (max_window, n_basis_funcs)
     fx = eval_function(dts)            # shape (max_window, n_basis_funcs)
 
-    return jnp.sum(fx * w, axis=(0, 1)) + bias[i]
+    return jnp.sum(fx * w) + bias[i]
 
-def compute_lam_tilde_all(dts, i, event_ids, weights, bias, eval_function):
+def _compute_lam_tilde_all(
+        dts: jnp.ndarray,
+        i: int,
+        event_ids: jnp.ndarray,
+        weights: Union[jnp.ndarray, Dict],
+        bias: jnp.ndarray,
+        eval_function
+):
     """
         Evaluate the non-rectified firing rate (lambda tilde) for all target neurons
         at a single time point.
@@ -54,7 +71,7 @@ def compute_lam_tilde_all(dts, i, event_ids, weights, bias, eval_function):
             Lag times between the reference time point and each event in the history
             window. Shape (max_window,).
         i :
-            Target neuron id (unused in this function; retained for a consistent signature
+            Target neuron index (unused in this function; retained for a consistent signature
             with compute_lam_tilde_single).
         event_ids :
             An array of event ids corresponding to all events in the history window.
@@ -74,10 +91,10 @@ def compute_lam_tilde_all(dts, i, event_ids, weights, bias, eval_function):
 
     return jnp.sum(fx[:, :, None] * w, axis=(0, 1)) + bias
 
-def draw_mc_sample(
+def _draw_mc_sample(
         X: DESIGN_INPUT_TYPE,
+        random_key: jnp.ndarray,
         M_samples,
-        random_key,
         recording_time,
         M_grid,
 ):
@@ -109,16 +126,16 @@ def draw_mc_sample(
 
     return mc_spikes
 
-def log_likelihood_scan(
-        X,
-        eval_pts,
-        params,
+def _log_likelihood_scan(
+        X: DESIGN_INPUT_TYPE,
+        eval_pts: jnp.ndarray,
+        params: PPGLMParams,
+        lam_tilde_function: Callable,
         inverse_link_function,
         n_basis_funcs,
         max_window,
         scan_size,
         eval_function,
-        lam_tilde_function,
         log=False,
 ):
     """
@@ -156,7 +173,7 @@ def log_likelihood_scan(
     weights = utils.reshape_coef_for_scan(weights, n_basis_funcs)
 
     # body of the scan function
-    def scan_fn(lam_s, i):
+    def scan_fn(lam_sum, i):
         spk_in_window = utils.slice_array(
             X, i[-1].astype(int), max_window
         )
@@ -169,25 +186,25 @@ def log_likelihood_scan(
             bias,
             eval_function
         )
-        lam_s += optional_log(inverse_link_function(lam_tilde)).sum()
-        return lam_s, None
+        lam_sum += optional_log(inverse_link_function(lam_tilde)).sum()
+        return lam_sum, None
 
-    scan_vmap = jax.vmap(lambda idxs: jax.lax.scan(scan_fn, jnp.array(0), idxs), in_axes=0)
+    scan_vmap = jax.vmap(lambda pts: jax.lax.scan(scan_fn, jnp.array(0), pts), in_axes=0)
 
     reshaped_spikes_array, padding_val, padding_len = utils.reshape_input_for_scan(eval_pts, scan_size)
-    out, _ = scan_vmap(reshaped_spikes_array)
+    out, _ = scan_vmap(reshaped_spikes_array)       # shape (n_scans,)
 
     # compute padding contribution separately to subtract it
-    padding_lam = scan_fn(jnp.array(0.), padding_val)[0] * padding_len
+    padding_contrib = scan_fn(jnp.array(0.), padding_val)[0] * padding_len
 
-    return jnp.sum(out) - padding_lam
+    return jnp.sum(out) - padding_contrib
 
 
 def _negative_log_likelihood(
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         params: PPGLMParams,
-        random_key,
+        random_key: jnp.ndarray,
         inverse_link_function,
         M_samples,
         M_grid,
@@ -244,36 +261,37 @@ def _negative_log_likelihood(
             Scalar negative log-likelihood.
     """
 
-    log_lambda_y = log_likelihood_scan(
+    log_lambda_y = _log_likelihood_scan(
         X,
         y,
         params,
+        _compute_lam_tilde_single,
         inverse_link_function,
         n_basis_funcs,
         max_window,
         scan_size,
         eval_function,
-        compute_lam_tilde_single,
         log=True,
     )
 
-    mc_samples = draw_mc_sample(
+    mc_samples = _draw_mc_sample(
         X,
-        M_samples,
         random_key,
+        M_samples,
         recording_time,
         M_grid,
     )
-    mc_estimate = log_likelihood_scan(
+
+    mc_estimate = _log_likelihood_scan(
         X,
         mc_samples,
         params,
+        _compute_lam_tilde_all,
         inverse_link_function,
         n_basis_funcs,
         max_window,
         scan_size,
         eval_function,
-        compute_lam_tilde_all,
         log=False,
     )
 

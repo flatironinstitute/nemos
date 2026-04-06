@@ -8,7 +8,7 @@ from ..typing import DESIGN_INPUT_TYPE
 
 
 class PPGLMParams(eqx.Module):
-    """Paramter container for PP GLM models."""
+    """Paramter container for PP-GLM models."""
 
     coef: jnp.ndarray | dict
     intercept: jnp.ndarray
@@ -22,7 +22,7 @@ class PPGLMParams(eqx.Module):
 PPGLMUserParams = Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike]
 
 class PPGLMParamsWithKey(eqx.Module):
-    """Wrapper around PPGLMParams that carries a PRNG key."""
+    """Wrapper around PPGLMParams that contains a PRNG key."""
 
     params: PPGLMParams
     random_key: jnp.ndarray
