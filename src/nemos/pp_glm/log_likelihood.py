@@ -3,6 +3,8 @@ from typing import Callable, Dict, Union
 import jax
 import jax.numpy as jnp
 
+from pynapple import IntervalSet
+
 from ..typing import DESIGN_INPUT_TYPE
 from . import utils
 from .params import PPGLMParams, PPGLMParamsWithKey
@@ -17,7 +19,7 @@ def _compute_lam_tilde_single(
     weights: Union[jnp.ndarray, Dict],
     bias: jnp.ndarray,
     eval_function,
-):
+) -> jnp.ndarray:
     """
     Evaluate the non-rectified firing rate (lambda tilde) for a single
     target neurons at a single time point.
@@ -58,7 +60,7 @@ def _compute_lam_tilde_all(
     weights: Union[jnp.ndarray, Dict],
     bias: jnp.ndarray,
     eval_function,
-):
+) -> jnp.ndarray:
     """
     Evaluate the non-rectified firing rate (lambda tilde) for all target neurons
     at a single time point.
@@ -99,7 +101,7 @@ def _draw_mc_sample(
     M_samples,
     recording_time,
     M_grid,
-):
+) -> jnp.ndarray:
     """
     Draw stratified sample time points for Monte Carlo estimate
     of the conditional intensity function.
@@ -142,7 +144,7 @@ def _log_likelihood_scan(
     scan_size,
     eval_function,
     log=False,
-):
+) -> jnp.ndarray:
     """
     Compute the sum of log-firing rates (or firing rates) at a set of time points
     using parallelized JAX scans over batches of events.
@@ -208,19 +210,19 @@ def _log_likelihood_scan(
 
 
 def _negative_log_likelihood(
+    params: PPGLMParams,
     X: DESIGN_INPUT_TYPE,
     y: jnp.ndarray,
-    params: PPGLMParams,
     random_key: jnp.ndarray,
-    inverse_link_function,
-    M_samples,
-    M_grid,
-    recording_time,
-    n_basis_funcs,
-    scan_size,
-    max_window,
-    eval_function,
-):
+    inverse_link_function: Callable,
+    M_samples: int,
+    M_grid: jnp.ndarray,
+    recording_time: IntervalSet,
+    n_basis_funcs: int,
+    scan_size: int,
+    max_window: int,
+    eval_function: Callable,
+) -> jnp.ndarray:
     r"""
     Compute the Poisson point process negative log-likelihood with a Monte Carlo
     estimate of the conditional intensity function (CIF).
@@ -341,7 +343,7 @@ def _compute_loss(
     new_key, _ = jax.random.split(key)
 
     neg_ll = _negative_log_likelihood(
-        X, y, params_with_key.params, new_key, *args, **kwargs
+        params_with_key.params, X, y, new_key, *args, **kwargs
     )
 
     return neg_ll

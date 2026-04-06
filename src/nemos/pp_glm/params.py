@@ -4,10 +4,11 @@ import equinox as eqx
 import jax.numpy as jnp
 from numpy.typing import ArrayLike
 
+from ..params import ModelParams
 from ..typing import DESIGN_INPUT_TYPE
 
 
-class PPGLMParams(eqx.Module):
+class PPGLMParams(ModelParams):
     """Paramter container for PP-GLM models."""
 
     coef: jnp.ndarray | dict
@@ -22,7 +23,7 @@ class PPGLMParams(eqx.Module):
 PPGLMUserParams = Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike]
 
 
-class PPGLMParamsWithKey(eqx.Module):
+class PPGLMParamsWithKey(ModelParams):
     """Wrapper around PPGLMParams that contains a PRNG key."""
 
     params: PPGLMParams
