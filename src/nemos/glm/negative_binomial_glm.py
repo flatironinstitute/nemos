@@ -246,10 +246,28 @@ class NBGLM(BaseGLM[GLMScaleUserParams, GLMScaleParams]):
         *args,
         **kwargs,
     ) -> jnp.ndarray:
+        """Compute the negative log-likelihood up to a normalization.
+
+        This loss function compute the negative log-likelihood of the NB
+        distribution except for a term depending only on the observation.
+        The term does not impact the optimal parameter (since it is a constant),
+        and can be therefore omitted.
+        """
         predicted_rate = self._predict(params, X)
-        return -1 * self._observation_model.log_likelihood(
-            y, predicted_rate, scale=jnp.exp(params.log_scale)
+        scale = jnp.exp(params.log_scale)
+        r = 1.0 / scale
+        # _negative_log_likelihood gives -sum(y*log(1-f) + log(f)/scale)
+        # equivalent to -log_likelihood minus the gammaln normalization
+        nll = self._observation_model._negative_log_likelihood(
+            y, predicted_rate, scale=scale
         )
+        # add scale-dependent terms; gammaln(y+1) is constant w.r.t. all params and
+        # therefore skipped
+        norm_per_sample = jax.scipy.special.gammaln(y + r) - jax.scipy.special.gammaln(
+            r
+        )
+        nll -= jnp.sum(jnp.mean(norm_per_sample, axis=0))
+        return nll
 
     def _initialize_optimizer_and_state(
         self,
@@ -380,11 +398,10 @@ class NBGLM(BaseGLM[GLMScaleUserParams, GLMScaleParams]):
         self,
         init_params: GLMScaleParams,
     ) -> Tuple[LBFGS, Callable]:
+
         def _scale_loss(log_scale: jnp.ndarray, X, y, params: GLMParams):
-            rate = self._predict(params, X)
-            return -self.observation_model.log_likelihood(
-                y, rate, scale=jnp.exp(log_scale)
-            )
+            model_params = GLMScaleParams(params.coef, params.intercept, log_scale)
+            return self._compute_loss(model_params, X, y)
 
         solver_scale = self._instantiate_solver(
             _scale_loss,
