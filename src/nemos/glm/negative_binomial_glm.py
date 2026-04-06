@@ -202,6 +202,7 @@ class NBGLM(BaseGLM[GLMScaleUserParams, GLMScaleParams]):
         self.maxiter = maxiter
         self.method = method
 
+    @cast_to_jax
     def fit(
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
