@@ -202,6 +202,20 @@ class NBGLM(BaseGLM[GLMScaleUserParams, GLMScaleParams]):
         self.maxiter = maxiter
         self.method = method
 
+    @property
+    def method(self):
+        """The fit method to use."""
+        return self._method
+
+    @method.setter
+    def method(self, value: Literal["two-step", "joint"]):
+        if value not in ["two-step", "joint"]:
+            raise ValueError(
+                "``method`` should be either 'two-step' or 'joint'. "
+                f"Unknown method {value} provided instead."
+            )
+        self._method = value
+
     @cast_to_jax
     def fit(
         self,
