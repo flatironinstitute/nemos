@@ -689,15 +689,14 @@ def generate_hmm_initial_params(
     )
     transition_proba_init_kwargs = init_funcs["transition_proba_init_kwargs"] or {}
 
-    # split seed into two random keys, overwritten by user-provided random keys
+    # split seed into two random keys
     keys = jax.random.split(random_key, 2)
-    if "random_key" not in initial_proba_init_kwargs:
-        initial_proba_init_kwargs["random_key"] = keys[0]
-    if "random_key" not in transition_proba_init_kwargs:
-        transition_proba_init_kwargs["random_key"] = keys[1]
-
-    initial_probs = initial_proba_init(n_states, **initial_proba_init_kwargs)
-    transition_matrix = transition_proba_init(n_states, **transition_proba_init_kwargs)
+    initial_probs = initial_proba_init(
+        n_states=n_states, X=X, y=y, random_key=keys[0], **initial_proba_init_kwargs
+    )
+    transition_matrix = transition_proba_init(
+        n_states=n_states, X=X, y=y, random_key=keys[1], **transition_proba_init_kwargs
+    )
 
     return initial_probs, transition_matrix
 
