@@ -180,7 +180,7 @@ class ProxSVRG:
         args:
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
-            They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
+            They are expected to be JAX pytrees with arrays as their leaves, with all of their
             leaves having the same sized first dimension (corresponding to the number of data points).
             For GLMs these are:
                 X : DESIGN_INPUT_TYPE
@@ -233,7 +233,7 @@ class ProxSVRG:
         args:
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
-            They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
+            They are expected to be JAX pytrees with arrays as their leaves, with all of their
             leaves having the same sized first dimension (corresponding to the number of data points).
             For GLMs these are:
                 X : DESIGN_INPUT_TYPE
@@ -289,7 +289,7 @@ class ProxSVRG:
         """
         Perform a single parameter update on the data (no random sampling or loops) and increment `state.iter_num`.
 
-        Please note that this gets called by `BaseRegressor._solver_update` (e.g., as called by `GLM.update`),
+        Please note that this gets called by `BaseRegressor._optimizer_update` (e.g., as called by `GLM.update`),
         but repeated calls to `(Prox)SVRG.update` (so in turn e.g. to `GLM.update`) on mini-batches passed to it
         will not result in running the full (Prox-)SVRG, and parts of the algorithm will have to be implemented outside.
 
@@ -306,7 +306,7 @@ class ProxSVRG:
         args:
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
-            They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
+            They are expected to be JAX pytrees with arrays as their leaves, with all of their
             leaves having the same sized first dimension (corresponding to the number of data points).
             For GLMs these are:
                 X : DESIGN_INPUT_TYPE
@@ -363,7 +363,7 @@ class ProxSVRG:
         args:
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
-            They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
+            They are expected to be JAX pytrees with arrays as their leaves, with all of their
             leaves having the same sized first dimension (corresponding to the number of data points).
             For GLMs these are:
                 X : DESIGN_INPUT_TYPE
@@ -405,7 +405,7 @@ class ProxSVRG:
         """
         Run a whole optimization until convergence or until `maxiter` epochs are reached.
 
-        Called by `BaseRegressor._solver_run` (e.g. as called by `GLM.fit`) and assumes
+        Called by `BaseRegressor._optimizer_run` (e.g. as called by `GLM.fit`) and assumes
         that X and y are the full data set.
 
         Parameters
@@ -417,7 +417,7 @@ class ProxSVRG:
         args:
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
-            They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
+            They are expected to be JAX pytrees with arrays as their leaves, with all of their
             leaves having the same sized first dimension (corresponding to the number of data points).
             For GLMs these are:
                 X : DESIGN_INPUT_TYPE
@@ -453,7 +453,7 @@ class ProxSVRG:
         """
         Run a whole optimization until convergence or until `maxiter` epochs are reached.
 
-        Called by `BaseRegressor._solver_run` (e.g. as called by `GLM.fit`) and assumes that
+        Called by `BaseRegressor._optimizer_run` (e.g. as called by `GLM.fit`) and assumes that
         X and y are the full data set.
         Assumes the state has been initialized, which works a bit differently for SVRG and ProxSVRG.
 
@@ -468,7 +468,7 @@ class ProxSVRG:
         args:
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
-            They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
+            They are expected to be JAX pytrees with arrays as their leaves, with all of their
             leaves having the same sized first dimension (corresponding to the number of data points).
             For GLMs these are:
                 X : DESIGN_INPUT_TYPE
@@ -606,7 +606,7 @@ class ProxSVRG:
         args :
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
-            They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
+            They are expected to be JAX pytrees with arrays as their leaves, with all of their
             leaves having the same sized first dimension (corresponding to the number of data points).
             For GLMs these are:
                 X : DESIGN_INPUT_TYPE
@@ -765,7 +765,7 @@ class SVRG(ProxSVRG):
         args:
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
-            They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
+            They are expected to be JAX pytrees with arrays as their leaves, with all of their
             leaves having the same sized first dimension (corresponding to the number of data points).
             For GLMs these are:
                 X : DESIGN_INPUT_TYPE
@@ -785,7 +785,7 @@ class SVRG(ProxSVRG):
         """
         Perform a single parameter update on the data (no random sampling or loops) and increment `state.iter_num`.
 
-        Please note that this gets called by `BaseRegressor._solver_update` (e.g., as called by `GLM.update`),
+        Please note that this gets called by `BaseRegressor._optimizer_update` (e.g., as called by `GLM.update`),
         but repeated calls to `(Prox)SVRG.update` (so in turn e.g. to `GLM.update`) on mini-batches passed to it
         will not result in running the full (Prox-)SVRG, and parts of the algorithm will have to be implemented outside.
 
@@ -800,7 +800,7 @@ class SVRG(ProxSVRG):
         args:
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
-            They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
+            They are expected to be JAX pytrees with arrays as their leaves, with all of their
             leaves having the same sized first dimension (corresponding to the number of data points).
             For GLMs these are:
                 X : DESIGN_INPUT_TYPE
@@ -835,7 +835,7 @@ class SVRG(ProxSVRG):
         """
         Run a whole optimization until convergence or until `maxiter` epochs are reached.
 
-        Called by `BaseRegressor._solver_run` (e.g. as called by `GLM.fit`) and assumes that
+        Called by `BaseRegressor._optimizer_run` (e.g. as called by `GLM.fit`) and assumes that
         X and y are the full data set.
 
         Parameters
@@ -845,7 +845,7 @@ class SVRG(ProxSVRG):
         args:
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
-            They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
+            They are expected to be JAX pytrees with arrays as their leaves, with all of their
             leaves having the same sized first dimension (corresponding to the number of data points).
             For GLMs these are:
                 X : DESIGN_INPUT_TYPE

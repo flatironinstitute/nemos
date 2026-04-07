@@ -21,7 +21,7 @@ The `AbstractSolver` interface requires implementing the following methods:
 - `update`: Take one step of the optimization algorithm.
 - `run`: Run a full optimization.
 - `get_accepted_arguments`: Set of argument names that can be passed to `__init__`. These will be the parameters users can change by passing `solver_kwargs` to NeMoS models (e.g., `GLM`).
-- `get_optim_info`: Collect diagnostic information about the optimization run into an `OptimizationInfo` namedtuple, [described in the next section](#optimization-info).
+- `_get_optim_info`: Collect diagnostic information about the optimization run into an `OptimizationInfo` namedtuple, [described in the next section](#optimization-info).
 
 `AbstractSolver` is a generic class parametrized by `SolverState` and `StepResult`.
 `SolverState` in concrete subclasses should be the type of the solver state.
@@ -30,7 +30,7 @@ The `AbstractSolver` interface requires implementing the following methods:
 (optimization-info)=
 ### Optimization info
 Because different libraries store info about the optimization run in different places, we decided to standardize some common diagnostics.
-These are accessed using the `get_optim_info` method which takes the solver state and returns an `OptimizationInfo`.
+These are accessed using the `_get_optim_info` method which takes the solver state and returns an `OptimizationInfo`.
 
 `OptimizationInfo` holds the following fields:
 - `function_val`: The final value of the objective function. As not all solvers store this by default, and as it's potentially expensive to evaluate, this field is optional.
@@ -118,7 +118,7 @@ Please note that not a solver instance but a class/type has to be passed.
 3. Referring to the algorithm by name when creating a `GLM` (or any `BaseRegressor`): \
 `GLM(solver_name="Fancy-Algorithm[custom]")`
 
-When registering a solver, NeMoS does basic checks validating the custom solver's compatibility by checking if the required methods are implemented, i.e. if the class implements the  and that their signatures match [`AbstractSolver`](nemos.solvers.AbstractSolver) (and [`SolverProtocol`](nemos.solvers.SolverProtocol)).
+When registering a solver, NeMoS does basic checks validating the custom solver's compatibility by checking if the required methods are implemented, i.e. if the class implements the  and that their signatures match [`SolverProtocol`](nemos.solvers.SolverProtocol) (which needs all [`AbstractSolver`](nemos.solvers.AbstractSolver)  public abstract methods).
 There are also options in [`nemos.solvers.register`](nemos.solvers.register) to run a small ridge regression problem, testing that the solver's methods can be used as intended.
 To validate a solver without registering, the [`nemos.solvers.validate_solver_class`](nemos.solvers.validate_solver_class) can be used.
 While it is not necessary, a way to ensure adherence to the interface is subclassing `AbstractSolver`.

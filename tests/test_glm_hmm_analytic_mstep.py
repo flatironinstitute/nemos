@@ -10,11 +10,21 @@ from nemos.glm_hmm.algorithm_configs import (
     prepare_mstep_nll_objective_param,
     prepare_mstep_nll_objective_scale,
 )
-from nemos.glm_hmm.expectation_maximization import forward_backward, run_m_step
-from nemos.glm_hmm.params import GLMHMMParams, GLMScale, HMMParams
+from nemos.glm_hmm.params import GLMHMMModelParams, GLMHMMParams
 from nemos.glm_hmm.utils import compute_rate_per_state
+from nemos.hmm.expectation_maximization import forward_backward, run_m_step
+from nemos.hmm.params import HMMParams
 from nemos.regularizer import UnRegularized
 from nemos.solvers import get_solver
+
+# Fixed arrays for parametrize — generated once at import time with a seeded RNG.
+# Using a module-level RNG avoids depending on the global numpy random state,
+# which is not seeded before pytest collection and varies across runs / parallel workers.
+_rng = np.random.default_rng(42)
+_COEF_SINGLE = _rng.standard_normal((2, 3)) * 0.01
+_INTERCEPT_SINGLE = _rng.uniform(-3, -1, size=3)
+_COEF_POP = _rng.standard_normal((2, 4, 3)) * 0.01
+_INTERCEPT_POP = _rng.uniform(-3, -1, size=(4, 3))
 
 
 def setup_solver(
@@ -67,7 +77,9 @@ def generate_data_gaussian(request):
     y = rate + np.random.randn(X.shape[0], *y_shape) * std
     obs = nmo.observation_models.GaussianObservations()
 
-    log_likelihood_fn = prepare_estep_log_likelihood(is_population_glm, obs)
+    log_likelihood_fn = prepare_estep_log_likelihood(
+        is_population_glm, obs, inv_link_func
+    )
     expected_negative_log_likelihood_scale = prepare_mstep_nll_objective_scale(
         is_population_glm=is_population_glm,
         observation_model=obs,
@@ -86,14 +98,17 @@ def generate_data_gaussian(request):
         _,
         _,
     ) = forward_backward(
+        GLMHMMParams(
+            hmm_params=HMMParams(jnp.log(init_proba), jnp.log(transition_probs)),
+            model_params=GLMHMMModelParams(
+                glm_params.coef,
+                glm_params.intercept,
+                jnp.zeros((*y_shape, n_states)).astype(float),
+            ),
+        ),
         X,
         y,
-        jnp.log(init_proba),
-        jnp.log(transition_probs),
-        glm_params,
-        glm_scale=GLMScale(jnp.zeros((*y_shape, n_states)).astype(float)),
         log_likelihood_func=log_likelihood_fn,
-        inverse_link_function=inv_link_func,
         is_new_session=None,
     )
     return (
@@ -112,10 +127,10 @@ def generate_data_gaussian(request):
 @pytest.mark.parametrize(
     "generate_data_gaussian",
     [
-        (GLMParams(np.random.randn(2, 3), np.random.randn(3)), (), lambda x: x),
-        (GLMParams(np.random.randn(2, 3), np.random.randn(3)), (), jnp.exp),
-        (GLMParams(np.random.randn(2, 4, 3), np.random.randn(4, 3)), (4,), lambda x: x),
-        (GLMParams(np.random.randn(2, 4, 3), np.random.randn(4, 3)), (4,), jnp.exp),
+        (GLMParams(_COEF_SINGLE, _INTERCEPT_SINGLE), (), lambda x: x),
+        (GLMParams(_COEF_SINGLE, _INTERCEPT_SINGLE), (), jnp.exp),
+        (GLMParams(_COEF_POP, _INTERCEPT_POP), (4,), lambda x: x),
+        (GLMParams(_COEF_POP, _INTERCEPT_POP), (4,), jnp.exp),
     ],
     indirect=True,
 )
@@ -137,7 +152,7 @@ class TestAnalyticMStepScale:
         def objective(scale, args):
             return expected_negative_log_likelihood_scale(scale, *args)
 
-        init_scale = GLMScale(jnp.zeros_like(glm_params.intercept))
+        init_scale = jnp.zeros_like(glm_params.intercept)
         solver = setup_solver(objective, init_params=init_scale, tol=10**-14)
         rate_per_state = compute_rate_per_state(
             X, glm_params, inverse_link_function=inv_link_func
@@ -150,9 +165,7 @@ class TestAnalyticMStepScale:
         analytical_update, _, _ = update(
             None, y, rate_per_state, jnp.exp(log_gammas_nemos)
         )
-        np.testing.assert_allclose(
-            numerical_update.log_scale, analytical_update.log_scale, atol=1e-7
-        )
+        np.testing.assert_allclose(numerical_update, analytical_update, atol=1e-7)
 
     def test_gaussian_obs_mstep_via_run_m_step(self, generate_data_gaussian):
         np.random.seed(111)
@@ -173,7 +186,7 @@ class TestAnalyticMStepScale:
             observation_model=obs,
             inverse_link_function=inv_link_func,
         )
-        init_scale = GLMScale(jnp.zeros_like(glm_params.intercept))
+        init_scale = jnp.zeros_like(glm_params.intercept)
         solver = setup_solver(nll_fcn, init_params=glm_params, tol=10**-4)
 
         solver_scale = setup_solver(
@@ -186,9 +199,36 @@ class TestAnalyticMStepScale:
 
         params = GLMHMMParams(
             hmm_params=HMMParams(None, None),
-            glm_params=glm_params,
-            glm_scale=GLMScale(jnp.zeros_like(glm_params.intercept)),
+            model_params=GLMHMMModelParams(
+                glm_params.coef,
+                glm_params.intercept,
+                jnp.zeros_like(glm_params.intercept),
+            ),
         )
+
+        def analytical_update_fn(params, X, y, posteriors):
+            # Update model parameters using solver
+            new_model_params, _, _ = solver.run(params, X, y, posteriors)
+            predicted_rate = compute_rate_per_state(
+                X, new_model_params, obs.default_inverse_link_function
+            )
+            # Update scale parameters using analytical update
+            new_log_scale, _, _ = update(
+                params.log_scale,
+                y,
+                predicted_rate,
+                posteriors,
+            )
+            return (
+                GLMHMMModelParams(
+                    coef=new_model_params.coef,
+                    intercept=new_model_params.intercept,
+                    log_scale=new_log_scale,
+                ),
+                None,
+                None,
+            )
+
         analytical_update, _ = run_m_step(
             params,
             X,
@@ -196,12 +236,34 @@ class TestAnalyticMStepScale:
             log_gammas,
             log_xis,
             is_new_session=new_sess,
-            m_step_fn_glm_params=solver.run,
-            m_step_fn_glm_scale=update,
-            inverse_link_function=inv_link_func,
+            m_step_fn_model_params=analytical_update_fn,
             dirichlet_prior_alphas_transition=None,
             dirichlet_prior_alphas_init_prob=None,
         )
+
+        def numerical_update_fn(params, X, y, posteriors):
+            # Update model parameters using solver
+            new_model_params, _, _ = solver.run(params, X, y, posteriors)
+            predicted_rate = compute_rate_per_state(
+                X, new_model_params, obs.default_inverse_link_function
+            )
+            # Update scale parameters using separate solver
+            new_log_scale, _, _ = solver_scale.run(
+                params.log_scale,
+                y,
+                predicted_rate,
+                posteriors,
+            )
+            return (
+                GLMHMMModelParams(
+                    coef=new_model_params.coef,
+                    intercept=new_model_params.intercept,
+                    log_scale=new_log_scale,
+                ),
+                None,
+                None,
+            )
+
         numerical_update, _ = run_m_step(
             params,
             X,
@@ -209,14 +271,12 @@ class TestAnalyticMStepScale:
             log_gammas,
             log_xis,
             is_new_session=new_sess,
-            m_step_fn_glm_params=solver.run,
-            m_step_fn_glm_scale=solver_scale.run,
-            inverse_link_function=inv_link_func,
+            m_step_fn_model_params=numerical_update_fn,
             dirichlet_prior_alphas_transition=None,
             dirichlet_prior_alphas_init_prob=None,
         )
         np.testing.assert_allclose(
-            numerical_update.glm_scale.log_scale,
-            analytical_update.glm_scale.log_scale,
+            numerical_update.model_params.log_scale,
+            analytical_update.model_params.log_scale,
             atol=1e-7,
         )

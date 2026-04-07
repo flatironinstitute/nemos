@@ -1,9 +1,7 @@
-import inspect
 import os
 from contextlib import nullcontext as does_not_raise
 
 import jax
-import jax.numpy as jnp
 import numpy as np
 import optimistix as optx
 import pytest
@@ -22,6 +20,15 @@ from nemos.tree_utils import (
 
 # Register every test here as solver-related
 pytestmark = pytest.mark.solver_related
+
+
+def _get_group_lasso_mask(X, y):
+    n_features = X.shape[1]
+    n_neurons = (y.shape[1],) if y.ndim > 1 else ()
+    gl_mask = np.zeros((2, n_features, *n_neurons))
+    gl_mask[0, :1] = True
+    gl_mask[1, 1:] = True
+    return gl_mask
 
 
 @pytest.mark.parametrize(
@@ -146,12 +153,11 @@ def test_svrg_glm_instantiate_solver(regularizer_name, solver_class, mask):
         solver_name=solver_name,
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
     )
-    glm._instantiate_solver(glm._compute_loss, np.zeros(1))
+    solver = glm._instantiate_solver(glm._compute_loss, np.zeros(1))
 
     # currently glm._solver is a Wrapped(Prox)SVRG
-    solver = glm._solver._solver
-    assert glm.algo_name == solver_name
-    assert isinstance(solver, solver_class)
+    assert glm.solver_name == solver_name
+    assert isinstance(solver._solver, solver_class)
 
 
 @pytest.mark.parametrize(
@@ -182,10 +188,9 @@ def test_svrg_glm_passes_solver_kwargs(regularizer_name, solver_name, mask, glm_
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
         **kwargs,
     )
-    glm._instantiate_solver(glm._compute_loss, np.zeros(1))
+    solver = glm._instantiate_solver(glm._compute_loss, np.zeros(1))
 
     # currently glm._solver is a Wrapped(Prox)SVRG
-    solver = glm._solver._solver
     assert solver.stepsize == solver_kwargs["stepsize"]
     assert solver.maxiter == solver_kwargs["maxiter"]
 
@@ -218,7 +223,8 @@ def test_svrg_glm_initialize_state(
 
     reg_cls = getattr(nmo.regularizer, regularizer_name)
     if regularizer_name == "GroupLasso":
-        reg = reg_cls(mask=mask)
+        gl_mask = _get_group_lasso_mask(X, y)
+        reg = reg_cls(mask=gl_mask)
     else:
         reg = reg_cls()
 
@@ -237,18 +243,22 @@ def test_svrg_glm_initialize_state(
     )
 
     init_params = glm.initialize_params(X, y)
-    state = glm.initialize_solver_and_state(X, y, init_params)
+    state = glm.initialize_optimizer_and_state(init_params, X, y)
 
     assert pytree_map_and_reduce(
         lambda a, b: np.array_equal(a, b),
         all,
-        state.reference_point,
+        state.solver_state.reference_point,
         GLMParams(*init_params),
     )
 
-    for f in (glm._solver_init_state, glm._solver_update, glm._solver_run):
+    for f in (
+        glm._optimizer_init_state,
+        glm._optimizer_update,
+        glm._optimizer_run,
+    ):
         assert isinstance(f.__self__._solver, solver_class)
-    assert isinstance(state, SVRGState)
+    assert isinstance(state.solver_state, SVRGState)
 
 
 @pytest.mark.parametrize(
@@ -281,7 +291,8 @@ def test_svrg_glm_update(
         kwargs["feature_mask"] = mask.coef if mask is not None else None
     reg_cls = getattr(nmo.regularizer, regularizer_name)
     if regularizer_name == "GroupLasso":
-        reg = reg_cls(mask=mask)
+        gl_mask = _get_group_lasso_mask(X, y)
+        reg = reg_cls(mask=gl_mask)
     else:
         reg = reg_cls()
 
@@ -295,20 +306,23 @@ def test_svrg_glm_update(
     )
 
     init_params = glm.initialize_params(X, y)
-    state = glm.initialize_solver_and_state(X, y, init_params)
+    state = glm.initialize_optimizer_and_state(init_params, X, y)
 
     loss_gradient = jax.jit(jax.grad(glm._solver_loss_fun))
 
     # initialize full gradient at the anchor point
-    state = state._replace(
-        full_grad_at_reference_point=loss_gradient(
-            glm._validator.to_model_params(init_params), X, y
+    state = type(state)(
+        solver_state=state.solver_state._replace(
+            full_grad_at_reference_point=loss_gradient(
+                glm._validator.to_model_params(init_params), X, y
+            )
         ),
+        stats=state.stats,
     )
 
     params, state = glm.update(init_params, state, X, y)
 
-    assert state.iter_num == 1
+    assert state.solver_state.iter_num == 1
 
 
 @pytest.mark.parametrize(
@@ -413,16 +427,16 @@ def test_maxiter_is_respected(
     solver = glm._solver
     assert solver.maxiter == maxiter
 
-    assert solver.get_optim_info(glm.solver_state_).num_steps == maxiter
+    assert glm.solver_state_.stats.num_steps == maxiter
 
 
 @pytest.mark.parametrize(
-    "regularizer_name, solver_class, mask",
+    "regularizer_name, solver_class",
     [
-        ("Lasso", ProxSVRG, None),
-        ("GroupLasso", ProxSVRG, np.array([0, 1, 0]).reshape(-1, 1).astype(float)),
-        ("Ridge", SVRG, None),
-        ("UnRegularized", SVRG, None),
+        ("Lasso", ProxSVRG),
+        ("GroupLasso", ProxSVRG),
+        ("Ridge", SVRG),
+        ("UnRegularized", SVRG),
     ],
 )
 @pytest.mark.parametrize(
@@ -430,7 +444,7 @@ def test_maxiter_is_respected(
     [nmo.glm.GLM, nmo.glm.PopulationGLM],
 )
 def test_svrg_glm_update_needs_full_grad_at_reference_point(
-    glm_class, regularizer_name, solver_class, mask, linear_regression
+    glm_class, regularizer_name, solver_class, linear_regression
 ):
     X, y, _, _, loss = linear_regression
     if glm_class.__name__ == "PopulationGLM":
@@ -439,7 +453,8 @@ def test_svrg_glm_update_needs_full_grad_at_reference_point(
     # only pass mask if it's not None
     reg_cls = getattr(nmo.regularizer, regularizer_name)
     if regularizer_name == "GroupLasso":
-        reg = reg_cls(mask=mask)
+        gl_mask = _get_group_lasso_mask(X, y)
+        reg = reg_cls(mask=gl_mask)
     else:
         reg = reg_cls()
     kwargs = dict(
@@ -450,7 +465,7 @@ def test_svrg_glm_update_needs_full_grad_at_reference_point(
         regularizer_strength=None if regularizer_name == "UnRegularized" else 0.1,
     )
 
-    if mask is not None and glm_class == nmo.glm.PopulationGLM:
+    if glm_class == nmo.glm.PopulationGLM:
         kwargs["feature_mask"] = np.array([0, 1, 0]).reshape(-1, 1).astype(float)
 
     glm = glm_class(**kwargs)
@@ -460,7 +475,7 @@ def test_svrg_glm_update_needs_full_grad_at_reference_point(
         match=r"Full gradient at the anchor point \(state\.full_grad_at_reference_point\) has to be set",
     ):
         params = glm.initialize_params(X, y)
-        state = glm.initialize_solver_and_state(X, y, params)
+        state = glm.initialize_optimizer_and_state(params, X, y)
         glm.update(params, state, X, y)
 
 
@@ -492,9 +507,7 @@ def test_svrg_update_converges(request, regr_setup, stepsize):
     state = solver.init_state(params, X, y)
 
     for _ in range(maxiter):
-        state = state._replace(
-            full_grad_at_reference_point=loss_grad(params, X, y),
-        )
+        state = state._replace(full_grad_at_reference_point=loss_grad(params, X, y))
 
         prev_params = params
         for _ in range(m):
@@ -503,9 +516,7 @@ def test_svrg_update_converges(request, regr_setup, stepsize):
             xi, yi = tree_slice(X, ind), y[ind]
             params, state = solver.update(params, state, xi, yi)
 
-        state = state._replace(
-            reference_point=params,
-        )
+        state = state._replace(reference_point=params)
 
         _error = tree_l2_norm(tree_sub(params, prev_params)) / tree_l2_norm(prev_params)
         if _error < tol:
@@ -767,8 +778,11 @@ def test_all_solvers_use_aux_in_update(request, aux_gen_fn):
 
         if "svrg" in spec.algo_name.lower():
             full_grad, full_aux = jax.grad(update_loss, has_aux=True)(param_init, X, y)
-            init_state = init_state._replace(
-                full_grad_at_reference_point=full_grad,
+            init_state = type(init_state)(
+                solver_state=init_state.solver_state._replace(
+                    full_grad_at_reference_point=full_grad
+                ),
+                stats=init_state.stats,
             )
 
         update_params, update_state, update_aux = solver.update(

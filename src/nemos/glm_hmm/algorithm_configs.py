@@ -13,8 +13,9 @@ from ..observation_models import (
     Observations,
     PoissonObservations,
 )
+from ..regularizer import UnRegularized
 from .m_step_analytical_updates import _m_step_scale_gaussian_observations
-from .params import GLMScale
+from .params import GLMHMMModelParams
 from .utils import Array, compute_rate_per_state
 
 _NO_SCALE = (PoissonObservations, BernoulliObservations)
@@ -28,7 +29,7 @@ def _posterior_weighted_objective_impl(
     predicted_rate: Array,
     posteriors: Array,
     negative_log_likelihood_func: Callable,
-    log_scale: GLMScale | None = None,
+    log_scale: Array | None = None,
 ):
     """
     Core implementation of posterior-weighted negative log-likelihood computation.
@@ -70,9 +71,7 @@ def _posterior_weighted_objective_impl(
     if log_scale is None:
         nll = negative_log_likelihood_func(y, predicted_rate)
     else:
-        nll = negative_log_likelihood_func(
-            y, predicted_rate, jnp.exp(log_scale.log_scale)
-        )
+        nll = negative_log_likelihood_func(y, predicted_rate, jnp.exp(log_scale))
 
     if nll.ndim > 2:
         nll = nll.sum(axis=1)  # sum over neurons
@@ -125,13 +124,16 @@ def posterior_weighted_glm_negative_log_likelihood(
     """
     predicted_rate = compute_rate_per_state(X, glm_params, inverse_link_function)
     return _posterior_weighted_objective_impl(
-        y, predicted_rate, posteriors, negative_log_likelihood_func
+        y,
+        predicted_rate,
+        posteriors,
+        negative_log_likelihood_func,
     )
 
 
 @partial(jax.jit, static_argnames=["negative_log_likelihood_func"])
 def posterior_weighted_glm_negative_log_likelihood_scale(
-    log_scale: GLMScale,
+    log_scale: Array,
     y: Array,
     predicted_rate: Array,
     posteriors: Array,
@@ -176,6 +178,7 @@ def posterior_weighted_glm_negative_log_likelihood_scale(
 def prepare_estep_log_likelihood(
     is_population_glm: bool,
     observation_model: Observations,
+    inverse_link_function: Callable,
 ) -> Callable:
     """
     Prepare log-likelihood function for the E-step (forward-backward algorithm).
@@ -188,6 +191,8 @@ def prepare_estep_log_likelihood(
         True if it is a population GLM likelihood.
     observation_model:
         The observation model.
+    inverse_link_function:
+        Function mapping linear predictors to rates.
 
     Returns
     -------
@@ -195,22 +200,33 @@ def prepare_estep_log_likelihood(
         Log-likelihood function vmapped over states for E-step.
         Signature: (y, rate, scale) -> log_likelihood per state
     """
+    # Vectorize over the states axis
+    state_axes = 2 if is_population_glm else 1
 
     def log_likelihood_per_sample(x, z, s):
         return observation_model.log_likelihood(
             x, z, scale=s, aggregate_sample_scores=lambda v: v
         )
 
-    # Vectorize over the states axis
-    state_axes = 2 if is_population_glm else 1
+    if type(observation_model) in _NO_SCALE:
 
-    log_likelihood_per_sample = jax.vmap(
-        log_likelihood_per_sample,
-        in_axes=(None, state_axes, state_axes - 1),
-        out_axes=state_axes,
-    )
+        log_likelihood_per_sample = jax.vmap(
+            log_likelihood_per_sample,
+            in_axes=(None, state_axes, None),
+            out_axes=state_axes,
+        )
 
-    def log_likelihood(y, rate, scale):
+    else:
+
+        log_likelihood_per_sample = jax.vmap(
+            log_likelihood_per_sample,
+            in_axes=(None, state_axes, state_axes - 1),
+            out_axes=state_axes,
+        )
+
+    def log_likelihood(X, y, params):
+        rate = compute_rate_per_state(X, params, inverse_link_function)
+        scale = jnp.exp(params.log_scale) if params.log_scale is not None else None
         log_like = log_likelihood_per_sample(y, rate, scale)
         if is_population_glm:
             # Multi-neuron case: sum log-likelihoods across neurons
@@ -286,16 +302,31 @@ def prepare_mstep_nll_objective_param(
     """
     state_axes = 2 if is_population_glm else 1
 
-    def negative_log_likelihood_per_sample(x, z):
-        return observation_model._negative_log_likelihood(
-            x, z, aggregate_sample_scores=lambda v: v
+    if observation_model._separable_scale:
+
+        def negative_log_likelihood_per_sample(x, z):
+            return observation_model._negative_log_likelihood(
+                x, z, aggregate_sample_scores=lambda v: v
+            )
+
+        negative_log_likelihood = jax.vmap(
+            negative_log_likelihood_per_sample,
+            in_axes=(None, state_axes),
+            out_axes=state_axes,
         )
 
-    negative_log_likelihood = jax.vmap(
-        negative_log_likelihood_per_sample,
-        in_axes=(None, state_axes),
-        out_axes=state_axes,
-    )
+    else:
+
+        def negative_log_likelihood_per_sample(x, z, s):
+            return -1 * observation_model.log_likelihood(
+                x, z, scale=s, aggregate_sample_scores=lambda v: v
+            )
+
+        negative_log_likelihood = jax.vmap(
+            negative_log_likelihood_per_sample,
+            in_axes=(None, state_axes, state_axes - 1),
+            out_axes=state_axes,
+        )
 
     def objective(glm_params, design_matrix, observations, posteriors):
         return posterior_weighted_glm_negative_log_likelihood(
@@ -346,7 +377,7 @@ def prepare_mstep_nll_objective_scale(
         out_axes=state_axes,
     )
 
-    def objective(log_scale: GLMScale, observations, predicted_rate, posteriors):
+    def objective(log_scale: Array, observations, predicted_rate, posteriors):
         return posterior_weighted_glm_negative_log_likelihood_scale(
             log_scale,
             observations,
@@ -407,3 +438,89 @@ def get_analytical_scale_update(
 
         return scale_update_fn
     return None
+
+
+def prepare_mstep_update_fn(
+    is_population_glm: bool,
+    observation_model: Observations,
+    inverse_link_function: Callable,
+    setup_solver: Callable,
+    init_params: GLMHMMModelParams,
+) -> Callable:
+    """
+    Prepare update function for numerically optimizing GLM parameters (coef, intercept) and scale.
+
+    This function will consecutively update GLM parameters and scale (if needed) in the M-step of EM,
+    or jointly optimize them if they are not separable.
+
+    Parameters
+    ----------
+    is_population_glm:
+        True if it is a population GLM likelihood.
+    observation_model:
+        The observation model.
+    inverse_link_function:
+        Function mapping linear predictors to rates.
+    setup_solver:
+        Function that takes an objective and returns an optimization solver. In most cases, this will be
+        :meth:`~nemos.base_regressor.BaseRegressor._instantiate_solver`. Any custom function must match
+        the input/output signature of this method.
+    init_params:
+        Initial GLM-HMM model parameters, used for initializing optimization.
+
+    Returns
+    -------
+    update_fn:
+        Function that takes current parameters, data, and posteriors, and returns updated parameters.
+    """
+    # get objective and update function for optimizing GLM parameters (coef, intercept)
+    objective_param = prepare_mstep_nll_objective_param(
+        is_population_glm, observation_model, inverse_link_function
+    )
+    params_update_fn = setup_solver(objective_param, init_params=init_params).run
+
+    # if scale is separable and needs to be optimized, get update function for optimizing scale
+    if observation_model._separable_scale and (
+        type(observation_model) not in _NO_SCALE
+    ):
+        scale_update_fn = get_analytical_scale_update(
+            observation_model, is_population_glm
+        )
+        # if no analytical update exists, prepare numerical optimization objective and update function
+        if scale_update_fn is None:
+            objective_scale = prepare_mstep_nll_objective_scale(
+                is_population_glm, observation_model
+            )
+            # force scale to be unregularized and fit with LBFGS
+            scale_update_fn = setup_solver(
+                objective_scale,
+                init_params=init_params.log_scale,
+                solver_name="LBFGS",
+                regularizer=UnRegularized(),
+            ).run
+
+        # combine param and scale updates into a single function for use in M-step
+        def update_fn(params, X, y, posteriors):
+            new_model_params, state_params, aux_params = params_update_fn(
+                params, X, y, posteriors
+            )
+            predicted_rate = compute_rate_per_state(
+                X, new_model_params, inverse_link_function=inverse_link_function
+            )
+            new_scale, state_scale, aux_scale = scale_update_fn(
+                params.log_scale, y, predicted_rate, posteriors
+            )
+            return (
+                GLMHMMModelParams(
+                    new_model_params.coef,
+                    new_model_params.intercept,
+                    new_scale,
+                ),
+                (state_params, state_scale),
+                (aux_params, aux_scale),
+            )
+
+        return update_fn
+
+    else:
+        return params_update_fn
