@@ -915,7 +915,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         # TODO: This can be problematic for setting the right step- and batch size for SVRG
         # Ideally that uses the full data
         # Initialize solver (using preprocessed sample batch)
-        self._initialize_solver_and_state(sample_X, sample_y, init_params)
+        self._initialize_optimizer_and_state(init_params, sample_X, sample_y)
 
         # Run stochastic optimization
         params, state, aux = self._solver.stochastic_run(
@@ -934,8 +934,6 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             )
 
         # not warning about non-convergence
-
-        self.optim_info_ = self._solver.get_optim_info(state)
 
         # Store results
         self._set_model_params(params)

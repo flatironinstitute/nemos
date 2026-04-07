@@ -134,50 +134,9 @@ class OptimistixStochasticSolverMixin(StochasticSolverMixin):
     """
     Mixin for Optimistix solvers that updates stats after optimization.
 
-    Extends ``StochasticSolverMixin`` to also update ``self.stats`` with
-    the number of steps taken after the optimization loop completes.
-
     Defines per-epoch convergence criterion as the Cauchy criterion
     on the parameters only (i.e. ignoring function value).
     """
-
-    def _stochastic_run_impl(
-        self,
-        init_params: Params,
-        data_loader: DataLoader,
-        num_epochs: int,
-        callback: Callback,
-    ) -> StepResult:
-        """
-        Run optimization and update stats.
-
-        Parameters
-        ----------
-        init_params :
-            Initial parameter values.
-        data_loader :
-            Data loader providing batches and metadata.
-        num_epochs :
-            Number of passes over the data.
-        callback :
-            See ``StochasticSolverMixin._stochastic_run_impl``.
-
-        Returns
-        -------
-        StepResult :
-            Final (params, state, aux) tuple.
-        """
-        params, state, aux = super()._stochastic_run_impl(
-            init_params,
-            data_loader,
-            num_epochs,
-            callback=callback,
-        )
-        self.stats = {
-            "num_steps": self._extract_num_steps(state),
-            "max_steps": self.maxiter,
-        }
-        return (params, state, aux)
 
     def stochastic_convergence_criterion(
         self,
@@ -242,5 +201,5 @@ class JaxoptStochasticSolverMixin(StochasticSolverMixin):
         """Step-size-normalized parameter change: ||params - prev_params|| / stepsize <= tol."""
         del prev_state, aux, epoch
         return _stepsize_normalized_convergence(
-            params, prev_params, state.stepsize, self.tol
+            params, prev_params, state.solver_state.stepsize, self.tol
         )

@@ -24,7 +24,7 @@ from ..callbacks import Callback, TrainingContext
 from ..proximal_operator import prox_none
 from ..tree_utils import tree_add_scalar_mul, tree_l2_norm, tree_slice, tree_sub
 from ..typing import KeyArrayLike, Params, Pytree, StepResult
-from ._jaxopt_adapter import JaxoptAdapter
+from ._jaxopt_adapter import JaxoptAdapter, JaxoptAdapterState
 
 if TYPE_CHECKING:
     from ..batching import BatchData, DataLoader
@@ -927,16 +927,29 @@ class _WrappedSVRGBase(JaxoptAdapter):
                 callback.on_batch_end(ctx)
                 if ctx.should_stop:
                     callback.on_train_end(ctx)
-                    return (params, state, aux)
+                    full_state = JaxoptAdapterState(
+                        solver_state=state,
+                        stats=self._get_optim_info(state),
+                    )
+                    return (params, full_state, aux)
 
             callback.on_epoch_end(ctx)
             if ctx.should_stop:
                 callback.on_train_end(ctx)
-                return (params, state, aux)
+                full_state = JaxoptAdapterState(
+                    solver_state=state,
+                    stats=self._get_optim_info(state),
+                )
+                return (params, full_state, aux)
 
         callback.on_train_end(ctx)
 
-        return (params, state, aux)
+        full_state = JaxoptAdapterState(
+            solver_state=state,
+            stats=self._get_optim_info(state),
+        )
+
+        return (params, full_state, aux)
 
     def stochastic_convergence_criterion(
         self, params, prev_params, state, prev_state, aux, epoch

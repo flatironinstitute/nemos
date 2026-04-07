@@ -7,7 +7,7 @@ import pytest
 
 import nemos as nmo
 from nemos import solvers
-from nemos.batching import ArrayDataLoader, _PreprocessedDataLoader, is_data_loader
+from nemos.batching import ArrayDataLoader
 from nemos.callbacks import (
     Callback,
     CallbackList,
@@ -254,8 +254,8 @@ class TestGLMStochasticFit:
             callbacks=None,
         )
 
-        n_steps_taken_stopping = model_stopping.optim_info_.num_steps
-        n_steps_taken_no_stopping = model_no_stopping.optim_info_.num_steps
+        n_steps_taken_stopping = model_stopping.solver_state_.stats.num_steps
+        n_steps_taken_no_stopping = model_no_stopping.solver_state_.stats.num_steps
 
         batches_per_epoch = int(np.ceil(X.shape[0] / batch_size))
         assert n_steps_taken_no_stopping == batches_per_epoch * n_epochs
@@ -286,8 +286,11 @@ class TestGLMStochasticFit:
         )
 
         batches_per_epoch = int(np.ceil(loader.n_samples / loader.batch_size))
-        assert model_early.optim_info_.num_steps == batches_per_epoch
-        assert model_early.optim_info_.num_steps < model_baseline.optim_info_.num_steps
+        assert model_early.solver_state_.stats.num_steps == batches_per_epoch
+        assert (
+            model_early.solver_state_.stats.num_steps
+            < model_baseline.solver_state_.stats.num_steps
+        )
 
     @pytest.mark.parametrize("solver", _stochastic_solver_names)
     def test_batch_callback_stops_early(self, simple_data, solver):
@@ -314,8 +317,11 @@ class TestGLMStochasticFit:
             callbacks=StopOnFirstBatch(),
         )
 
-        assert model_early.optim_info_.num_steps == 1
-        assert model_early.optim_info_.num_steps < model_baseline.optim_info_.num_steps
+        assert model_early.solver_state_.stats.num_steps == 1
+        assert (
+            model_early.solver_state_.stats.num_steps
+            < model_baseline.solver_state_.stats.num_steps
+        )
 
     @pytest.mark.parametrize("solver", ["LBFGS", "BFGS", "NonlinearCG"])
     def test_unsupported_solver_raises(self, simple_data, solver):
@@ -439,7 +445,7 @@ class TestSolverStochasticRun:
 
         # Should have stopped after 1 epoch
         batches_per_epoch = int(np.ceil(loader.n_samples / loader.batch_size))
-        assert solver.get_optim_info(state).num_steps == batches_per_epoch
+        assert state.stats.num_steps == batches_per_epoch
 
     @pytest.mark.parametrize("solver_class", _stochastic_solver_classes)
     def test_batch_callback_stops_early(self, simple_loss_and_data, solver_class):
@@ -455,7 +461,7 @@ class TestSolverStochasticRun:
         _, state, _ = solver.stochastic_run(
             init_params, loader, num_epochs=5, callback=StopOnFirstBatch()
         )
-        assert solver.get_optim_info(state).num_steps == 1
+        assert state.stats.num_steps == 1
 
     @pytest.mark.parametrize("solver_class", _non_stochastic_solver_classes)
     def test_unsupported_solver_raises(self, simple_loss_and_data, solver_class):
@@ -496,7 +502,7 @@ class TestSolverStochasticRun:
         init_params = jnp.zeros(3)
         _, state, _ = solver.stochastic_run(init_params, loader, num_epochs=num_epochs)
 
-        n_steps = solver.get_optim_info(state).num_steps
+        n_steps = state.stats.num_steps
         batches_per_epoch = int(np.ceil(loader.n_samples / loader.batch_size))
         expected_steps = batches_per_epoch * num_epochs
         assert n_steps == expected_steps
@@ -574,7 +580,7 @@ class TestSolverStochasticRun:
 
         _, state, _ = solver.stochastic_run(init_params, loader, num_epochs=num_epochs)
 
-        n_steps = solver.get_optim_info(state).num_steps
+        n_steps = state.stats.num_steps
         batches_per_epoch = int(np.ceil(loader.n_samples / loader.batch_size))
         expected_steps = batches_per_epoch * num_epochs
         assert n_steps == expected_steps
