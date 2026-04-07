@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import warnings
+from functools import reduce
 from typing import Any, Callable, Literal, Optional, Union
 
 import equinox as eqx
@@ -1067,7 +1068,7 @@ class PopulationGLM(GLM):
             # passing to the inverse link function
             tree_utils.pytree_map_and_reduce(
                 lambda x, w, m: jnp.einsum("ti, i...->t...", x, w * m),
-                sum,
+                lambda leaves: reduce(jnp.add, leaves),
                 X,
                 params.coef,
                 self._feature_mask,

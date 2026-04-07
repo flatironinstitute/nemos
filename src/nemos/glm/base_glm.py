@@ -3,6 +3,7 @@
 # required to get ArrayLike to render correctly
 from __future__ import annotations
 
+from functools import reduce
 from pathlib import Path
 from typing import Any, Callable, Literal, Optional, Tuple, Union
 
@@ -423,7 +424,10 @@ class BaseGLM(BaseRegressor[UserProvidedParamsT, ModelParamsT]):
             # then sum across all features and add the intercept, before
             # passing to the inverse link function
             tree_utils.pytree_map_and_reduce(
-                lambda x, w: jnp.einsum("tj, j...->t...", x, w), sum, X, params.coef
+                lambda x, w: jnp.einsum("tj, j...->t...", x, w),
+                lambda leaves: reduce(jnp.add, leaves),
+                X,
+                params.coef,
             )
             + params.intercept
         )

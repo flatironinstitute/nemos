@@ -8,6 +8,7 @@ with various optimization methods, and they can be applied depending on the mode
 
 import abc
 import math
+from functools import reduce
 from typing import Any, Callable, Tuple, Union
 
 import equinox as eqx
@@ -278,16 +279,17 @@ class Regularizer(Base, abc.ABC):
         return _penalized_loss
 
     def _penalization(self, params: Any, filter_kwargs: dict) -> jnp.ndarray:
-        penalty = jnp.array(0.0)
-
         if hasattr(params, "regularizable_subtrees"):
-            for where in params.regularizable_subtrees():
-                subtree = where(params)
-                subtree_kwargs = {key: where(val) for key, val in filter_kwargs.items()}
-                penalty = penalty + self._penalty_on_subtree(subtree, **subtree_kwargs)
+            penalties = [
+                self._penalty_on_subtree(
+                    where(params),
+                    **{key: where(val) for key, val in filter_kwargs.items()},
+                )
+                for where in params.regularizable_subtrees()
+            ]
         else:
-            penalty = penalty + self._penalty_on_subtree(params, **filter_kwargs)
-        return penalty
+            penalties = [self._penalty_on_subtree(params, **filter_kwargs)]
+        return reduce(jnp.add, penalties)
 
     @abc.abstractmethod
     def _penalty_on_subtree(self, subtree, **kwargs) -> jnp.ndarray:
@@ -509,7 +511,7 @@ class Ridge(Regularizer):
 
         return tree_utils.pytree_map_and_reduce(
             l2_penalty,
-            sum,
+            lambda leaf: reduce(jnp.add, leaf),
             subtree,
             strength,
         )
@@ -554,7 +556,7 @@ class Lasso(Regularizer):
 
         return tree_utils.pytree_map_and_reduce(
             l1_penalty,
-            sum,
+            lambda leaf: reduce(jnp.add, leaf),
             subtree,
             strength,
         )
@@ -633,7 +635,7 @@ class ElasticNet(Regularizer):
 
         return tree_utils.pytree_map_and_reduce(
             net_penalty,
-            sum,
+            lambda leaf: reduce(jnp.add, leaf),
             subtree,
             strength,
         )
