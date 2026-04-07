@@ -254,6 +254,28 @@ def random_initial_proba_init(
 
 
 class KMeansInitializer:
+    """
+    Initializer class that uses KMeans clustering to initialize HMM parameters.
+
+    This class fits a KMeans model to the combined predictors and output data to assign states, then computes
+    initial state probabilities and transition probabilities based on the assigned states. It can be used to provide
+    a more informed initialization for HMM parameters based on the structure of the data.
+
+    Parameters
+    ----------
+    n_states :
+        Number of HMM states.
+    X :
+        Predictor data (e.g., model design for GLM) of shape (n_samples, n_features).
+    y :
+        Output data (e.g., neural activity) of shape (n_samples,).
+    is_new_session :
+        Optional boolean array of shape (n_samples,) indicating the start of new sessions. If None
+        (default), it is assumed that all data belongs to a single session.
+    random_key :
+        Random key for reproducibility of KMeans initialization.
+    """
+
     def __init__(
         self,
         n_states: int,
@@ -272,10 +294,22 @@ class KMeansInitializer:
         self.states = jax.nn.one_hot(self.model.labels_, num_classes=n_states)
 
     def initial_probability(self):
+        """
+        Compute initial state probabilities based on KMeans assigned states.
+
+        This takes the average occurrence of each state at the start of sessions to estimate the initial state
+        probabilities.
+        """
         initial_probability = self.states[self.is_new_session].sum(axis=0)
         return initial_probability / initial_probability.sum()
 
     def transition_probability(self):
+        """
+        Compute transition probabilities based on KMeans assigned states.
+
+        This computes the transition probabilities by counting the transitions between states across time points,
+        excluding transitions that occur at the start of new sessions.
+        """
         transition_matrix = (
             self.states[:-1][~self.is_new_session[1:]].T
             @ self.states[1:][~self.is_new_session[1:]]
@@ -291,6 +325,33 @@ def kmeans_initial_proba_init(
     random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
     initializer: Optional[KMeansInitializer] = None,
 ):
+    """
+    Initialize initial state probabilities using KMeans clustering.
+
+    This function creates an instance of the KMeansInitializer class (if not provided) and uses it to compute the
+    initial state probabilities based on the assigned states from KMeans clustering.
+
+    Parameters
+    ----------
+    n_states :
+        Number of HMM states.
+    X :
+        Predictor data (e.g., model design for GLM) of shape (n_samples, n_features).
+    y :
+        Output data (e.g., neural activity) of shape (n_samples,).
+    is_new_session :
+        Optional boolean array of shape (n_samples,) indicating the start of new sessions. If None
+        (default), it is assumed that all data belongs to a single session.
+    random_key :
+        Random key for reproducibility of KMeans initialization.
+    initializer :
+        Optional instance of KMeansInitializer to use for computing initial probabilities.
+
+    Returns
+    -------
+    initial_probs :
+        Initial state probability vector of shape (n_states,) that sums to 1.
+    """
     if initializer is None:
         initializer = KMeansInitializer(n_states, X, y, is_new_session, random_key)
     return initializer.initial_probability()
@@ -304,6 +365,33 @@ def kmeans_transition_proba_init(
     random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
     initializer: Optional[KMeansInitializer] = None,
 ):
+    """
+    Initialize transition probabilities using KMeans clustering.
+
+    This function creates an instance of the KMeansInitializer class (if not provided) and uses it to compute the
+    transition probabilities based on the assigned states from KMeans clustering.
+
+    Parameters
+    ----------
+    n_states :
+        Number of HMM states.
+    X :
+        Predictor data (e.g., model design for GLM) of shape (n_samples, n_features).
+    y :
+        Output data (e.g., neural activity) of shape (n_samples,).
+    is_new_session :
+        Optional boolean array of shape (n_samples,) indicating the start of new sessions. If None
+        (default), it is assumed that all data belongs to a single session.
+    random_key :
+        Random key for reproducibility of KMeans initialization.
+    initializer :
+        Optional instance of KMeansInitializer to use for computing initial probabilities.
+
+    Returns
+    -------
+    transition_matrix :
+        Transition probability matrix of shape (n_states, n_states) computed from KMeans assigned states.
+    """
     if initializer is None:
         initializer = KMeansInitializer(n_states, X, y, is_new_session, random_key)
     return initializer.transition_probability()
