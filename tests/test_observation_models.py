@@ -312,10 +312,10 @@ class TestPoissonObservations:
             ),
         ],
     )
-    def test_scale_setter(self, scale, expectation, poissonGLM_model_instantiation):
-        _, _, model, _, firing_rate = poissonGLM_model_instantiation
+    def test_scale_setter(self, scale, expectation):
+        obs_model = nmo.observation_models.PoissonObservations()
         with expectation:
-            model.observation_model.scale = scale
+            obs_model.scale = scale
 
     def test_scale_getter(self, poissonGLM_model_instantiation):
         _, _, model, _, firing_rate = poissonGLM_model_instantiation
@@ -339,15 +339,11 @@ class TestPoissonObservations:
         """
         Test that custom inverse link function can be inverted and works correctly.
         """
-        # Initialize model
-        _, _, model, _, _ = poissonGLM_model_instantiation
-        model.observation_model.inverse_link_function = lambda x: jnp.power(x, 2)
+        inv_link = lambda x: jnp.power(x, 2)
 
         # Validate custom link function
         expected_output = jnp.sqrt(test_value)
-        result = initialize_intercept_matching_mean_rate(
-            model.observation_model.inverse_link_function, test_value
-        )
+        result = initialize_intercept_matching_mean_rate(inv_link, test_value)
 
         assert np.allclose(
             result, expected_output

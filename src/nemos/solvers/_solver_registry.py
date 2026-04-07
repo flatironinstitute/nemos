@@ -17,7 +17,7 @@ from ._validation import validate_solver_class
 JAXOPT_AVAILABLE = _find_spec("jaxopt") is not None
 
 
-@dataclass
+@dataclass(frozen=True)
 class SolverSpec:
     """
     Solver specification representing an entry in the solver registry.

@@ -1236,7 +1236,7 @@ class TestModelValidator:
     @pytest.mark.solver_related
     def test_validate_param_length(self, n_params, instantiate_base_regressor_subclass):
         """
-        Test the `_initialize_optimizer_and_state` method with different numbers of initial parameters.
+        Test the ``initialize_optimizer_and_state`` method with different numbers of initial parameters.
         Check for correct number of parameters.
         """
         fixture = instantiate_base_regressor_subclass

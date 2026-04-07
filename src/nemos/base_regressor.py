@@ -9,6 +9,7 @@ from abc import abstractmethod
 from copy import deepcopy
 from functools import wraps
 from pathlib import Path
+from types import MappingProxyType
 from typing import (
     Any,
     Generic,
@@ -18,6 +19,7 @@ from typing import (
     Union,
 )
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -143,6 +145,18 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         self._optimizer_init_state = None
         self._optimizer_update = None
         self._optimizer_run = None
+        self._cached_input_sig = None
+
+    def __setattr__(self, name, value):
+        """Invalidate solver cache at every setattr except fitattrs."""
+        object.__setattr__(self, name, value)
+        # sklearn convention: fitted attrs end with "_", private start with "_"
+        # only hyperparameter changes need to invalidate the solver cache
+        if not name.startswith("_") and not name.endswith("_"):
+            object.__setattr__(self, "_optimizer_init_state", None)
+            object.__setattr__(self, "_optimizer_update", None)
+            object.__setattr__(self, "_optimizer_run", None)
+            object.__setattr__(self, "_cached_input_sig", None)
 
     def __sklearn_tags__(self):
         """Return regression model specific estimator tags."""
@@ -260,6 +274,8 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             )
             self.solver_name = None
 
+        self._regularizer._freeze()
+
     @property
     def regularizer_strength(self) -> Any:
         """Regularizer strength getter."""
@@ -298,7 +314,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
     @property
     def solver_kwargs(self):
         """Getter for the solver_kwargs attribute."""
-        return self._solver_kwargs
+        return MappingProxyType(self._solver_kwargs)
 
     @solver_kwargs.setter
     def solver_kwargs(self, solver_kwargs: dict):
@@ -306,7 +322,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         if solver_kwargs:
             solver_cls = self.solver_spec.implementation
             self._check_solver_kwargs(solver_cls, solver_kwargs)
-        self._solver_kwargs = solver_kwargs
+        self._solver_kwargs = dict(solver_kwargs) if solver_kwargs else {}
 
     @staticmethod
     def _check_solver_kwargs(solver_class: Type, solver_kwargs: dict[str, Any]) -> None:
@@ -384,7 +400,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
 
         if solver_kwargs is None:
             # copy dictionary of kwargs to avoid modifying user settings
-            solver_kwargs = deepcopy(self.solver_kwargs)
+            solver_kwargs = deepcopy(dict(self.solver_kwargs))
         if solver_name is None:
             solver_name = self.solver_name
         if regularizer is None:
@@ -642,19 +658,48 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
 
             if isinstance(self.regularizer.mask, jnp.ndarray):
                 # Wrap into a GLM param structure.
-                self.regularizer.mask = GLMParams(self.regularizer.mask, None)
+                # Use object.__setattr__ on the private backing field to bypass
+                # the freeze on the regularizer (legitimate internal mutation).
+                object.__setattr__(
+                    self.regularizer, "_mask", GLMParams(self.regularizer.mask, None)
+                )
 
         return data, y, *args
 
     @abc.abstractmethod
+    def _build_optimizer_and_state(
+        self,
+        init_params: ModelParamsT,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+    ) -> SolverState:
+        """Build solver closures and store them on self.
+
+        Subclasses implement this. Called by ``_initialize_optimizer_and_state``
+        only when the solver cache is invalid (first call or after a hyperparameter
+        change).
+        """
+        pass
+
     def _initialize_optimizer_and_state(
         self,
         init_params: ModelParamsT,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
     ) -> SolverState:
-        """Initialize the optimizer and the state of the optimizer for running fit and update."""
-        pass
+        """Return initial solver state, rebuilding closures only when the cache is invalid.
+
+        The cache is invalidated by ``__setattr__`` whenever a public hyperparameter
+        changes, and also when the abstract input signature (pytree structure, shapes,
+        or dtypes of X or y) changes between calls.
+        """
+        sig = jax.eval_shape(lambda x, yi: (x, yi), X, y)
+        if self._optimizer_init_state is None or not eqx.tree_equal(
+            sig, self._cached_input_sig
+        ):
+            self._build_optimizer_and_state(init_params, X, y)
+            self._cached_input_sig = sig
+        return self._optimizer_init_state(init_params, X, y)
 
     @cast_to_jax
     def initialize_optimizer_and_state(
@@ -782,6 +827,10 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
 
         # extract model parameters
         model_params = self.get_params(deep=False)
+        # get_params() returns solver_kwargs as MappingProxyType via the property
+        # getter — convert to plain dict so np.savez can serialize it.
+        if isinstance(model_params.get("solver_kwargs"), MappingProxyType):
+            model_params["solver_kwargs"] = dict(model_params["solver_kwargs"])
         model_params = _unpack_params(model_params, string_attrs)
 
         # append the fit attributes to the model parameters

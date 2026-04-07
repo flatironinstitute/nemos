@@ -1086,7 +1086,7 @@ class TestUnRegularized:
         )  # needed since solver.run is called directly, nemos converts.
         # set precision to float64 for accurate matching of the results
         model.data_type = jnp.float64
-        model.observation_model.inverse_link_function = inv_link_jax
+        model.inverse_link_function = inv_link_jax
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-13}

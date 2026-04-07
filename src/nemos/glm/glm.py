@@ -345,12 +345,14 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         if isinstance(observation, str):
             self._observation_model = instantiate_observation_model(observation)
             self._validate_observation_class(self.observation_model)
+            self._observation_model._freeze()
             return
         # check that the model has the required attributes
         # and that the attribute can be called
         obs.check_observation_model(observation)
         self._observation_model = observation
         self._validate_observation_class(self.observation_model)
+        self._observation_model._freeze()
 
     def _check_is_fit(self):
         """Ensure the instance has been fitted."""
@@ -962,7 +964,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             rank = jnp.linalg.matrix_rank(X)
             return (n_samples - rank - 1) * jnp.ones_like(params.intercept)
 
-    def _initialize_optimizer_and_state(
+    def _build_optimizer_and_state(
         self,
         init_params: GLMParams,
         X: dict[str, jnp.ndarray] | jnp.ndarray,

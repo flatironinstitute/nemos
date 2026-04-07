@@ -26,6 +26,34 @@ class Base(BaseEstimator):
     Additionally, it has methods for selecting target devices and sending arrays to them.
     """
 
+    def __setattr__(self, name: str, value) -> None:
+        """Block public-attribute mutation on frozen instances.
+
+        A ``Base`` instance is frozen when it is attached to a model as a
+        hyperparameter (e.g. ``model.regularizer = GroupLasso()``).  Freezing
+        prevents silent cache-invalidation bypasses such as
+        ``model.regularizer.mask = x``, which would mutate the regularizer
+        without the model's ``__setattr__`` knowing about it.
+
+        Private attributes (names starting with ``_``) are always settable so
+        that internal code can still update backing fields.
+        """
+        if not name.startswith("_") and getattr(self, "_is_frozen", False):
+            raise AttributeError(
+                f"'{type(self).__name__}' is frozen: cannot set '{name}' directly. "
+                f"Assign a new {type(self).__name__}(...) instance to the model "
+                f"attribute instead — this will update the solver cache correctly."
+            )
+        object.__setattr__(self, name, value)
+
+    def _freeze(self) -> None:
+        """Freeze this instance, blocking further public-attribute mutation."""
+        object.__setattr__(self, "_is_frozen", True)
+
+    def _unfreeze(self) -> None:
+        """Unfreeze this instance, re-allowing public-attribute mutation."""
+        object.__setattr__(self, "_is_frozen", False)
+
     def get_params(self, deep=True) -> dict:
         """
         From scikit-learn, get parameters by inspecting init.

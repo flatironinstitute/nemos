@@ -1884,8 +1884,10 @@ class TestGLMObservationModel:
             glm_type + model_instantiation + "_pytree"
         )
         # fit both models
-        model.solver_kwargs.update(dict(tol=1e-12, maxiter=10**5))
-        model_tree.solver_kwargs.update(dict(tol=1e-12, maxiter=10**5))
+        model.solver_kwargs = dict(model.solver_kwargs, tol=1e-12, maxiter=10**5)
+        model_tree.solver_kwargs = dict(
+            model_tree.solver_kwargs, tol=1e-12, maxiter=10**5
+        )
         model.fit(X, y, init_params=(true_params.coef, true_params.intercept))
         model_tree.fit(
             X_tree, y, init_params=(true_params_tree.coef, true_params_tree.intercept)
@@ -2940,7 +2942,7 @@ def test_update_nan_drop_at_jit_comp(
     X, y, model, true_params, firing_rate = request.getfixturevalue(
         glm_type + model_instantiation
     )
-    model.solver_kwargs.update({"stepsize": 0.01})
+    model.solver_kwargs = dict(model.solver_kwargs, stepsize=0.01)
     params = model.initialize_params(X, y)
     state = model.initialize_optimizer_and_state(params, X, y)
     # extract batch and add nans
@@ -3454,7 +3456,7 @@ class TestGammaGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
-        model.observation_model.inverse_link_function = inv_link
+        model.inverse_link_function = inv_link
         model.fit(X, y)
         if is_population_glm_type(glm_type):
             assert np.all(model.scale_ != 1)
@@ -3468,7 +3470,7 @@ class TestGammaGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
-        model.observation_model.inverse_link_function = inv_link
+        model.inverse_link_function = inv_link
         model.coef_ = true_params.coef
         model.intercept_ = true_params.intercept
         model.score(X, y)
@@ -3480,7 +3482,7 @@ class TestGammaGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
-        model.observation_model.inverse_link_function = inv_link
+        model.inverse_link_function = inv_link
         if is_population_glm_type(glm_type):
             model.feature_mask = jnp.ones((X.shape[1], y.shape[1]))
             model.scale_ = jnp.ones((y.shape[1]))
@@ -3494,8 +3496,9 @@ class TestGammaGLM:
 
 
 @pytest.mark.parametrize(
-    "inv_link", [identity, jnp.exp]
-)  # identity from inverse_link_function_utils
+    "inv_link", [identity, lambda x: x**3]
+)  # identity from inverse_link_function_utils; x**3 replaces jnp.exp — Gaussian targets
+# can have negative mean so the inverse link must be defined on all reals.
 @pytest.mark.parametrize("glm_type", ["", "population_"])
 @pytest.mark.parametrize("model_instantiation", ["gaussianGLM_model_instantiation"])
 class TestGaussianGLM:
@@ -3511,7 +3514,7 @@ class TestGaussianGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
-        model.observation_model.inverse_link_function = inv_link
+        model.inverse_link_function = inv_link
         model.fit(X, y)
         if is_population_glm_type(glm_type):
             assert np.all(model.scale_ != 1)
@@ -3525,7 +3528,7 @@ class TestGaussianGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
-        model.observation_model.inverse_link_function = inv_link
+        model.inverse_link_function = inv_link
         model.coef_ = true_params.coef
         model.intercept_ = true_params.intercept
         model.score(X, y)
