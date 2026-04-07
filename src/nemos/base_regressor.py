@@ -26,7 +26,6 @@ from numpy.typing import NDArray
 from . import solvers, tree_utils, utils
 from ._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from .base_class import Base
-from .base_validator import RegressorValidator
 from .glm.params import GLMParams
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
@@ -114,8 +113,6 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
     - [`GLM`](../glm/#nemos.glm.GLM): A feed-forward GLM implementation.
     - [`PopulationGLM`](../glm/#nemos.glm.PopulationGLM): A population GLM implementation.
     """
-
-    _validator: RegressorValidator = None
 
     # overwrite this in subclasses if their objective functions return aux
     _has_aux: bool = False

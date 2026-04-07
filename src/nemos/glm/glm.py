@@ -4,27 +4,23 @@
 from __future__ import annotations
 
 import warnings
-from pathlib import Path
-from typing import Any, Callable, Literal, Optional, Tuple, Union
+from functools import reduce
+from typing import Any, Callable, Literal, Optional, Union
 
 import equinox as eqx
 import jax
 import jax.numpy as jnp
 from numpy.typing import ArrayLike
-from sklearn.utils import InputTags, TargetTags
+from sklearn.utils import TargetTags
 
 from .. import observation_models as obs
-from .. import tree_utils, validation
-from .._observation_model_builder import instantiate_observation_model
-from ..base_regressor import BaseRegressor, strip_metadata
-from ..exceptions import NotFittedError
-from ..inverse_link_function_utils import resolve_inverse_link_function
+from .. import tree_utils
+from ..base_regressor import strip_metadata
 from ..pytrees import FeaturePytree
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
-from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
-from ..type_casting import cast_to_jax, support_pynapple
+from ..type_casting import cast_to_jax
 from ..typing import DESIGN_INPUT_TYPE, SolverState, StepResult
-from ..utils import format_repr
+from .base_glm import BaseGLM
 from .initialize_parameters import initialize_intercept_matching_mean_rate
 from .params import GLMParams, GLMUserParams
 from .validation import (
@@ -50,7 +46,7 @@ REGRESSION_GLM_TYPES = Union[
 ]
 
 
-class GLM(BaseRegressor[GLMUserParams, GLMParams]):
+class GLM(BaseGLM[GLMUserParams, GLMParams]):
     r"""Generalized Linear Model (GLM) for neural activity data.
 
     This GLM implementation allows users to model neural activity based on a combination of exogenous inputs
@@ -245,52 +241,16 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
     _invalid_observation_types = (obs.CategoricalObservations,)
     _validator_class = GLMValidator
 
-    def __init__(
-        self,
-        observation_model: (
-            REGRESSION_GLM_TYPES
-            | Literal["Poisson", "Gamma", "Gaussian", "Bernoulli", "NegativeBinomial"]
-        ) = "Poisson",
-        inverse_link_function: Optional[Callable] = None,
-        regularizer: Optional[Union[str, Regularizer]] = None,
-        regularizer_strength: Any = None,
-        solver_name: str = None,
-        solver_kwargs: dict = None,
-    ):
-        super().__init__(
-            regularizer=regularizer,
-            regularizer_strength=regularizer_strength,
-            solver_name=solver_name,
-            solver_kwargs=solver_kwargs,
-        )
-
-        self.observation_model = observation_model
-        self.inverse_link_function = inverse_link_function
-
-        self._validator = self._validator_class(
-            extra_params=self._get_validator_extra_params()
-        )
-
-        # initialize to None fit output
-        self.intercept_ = None
-        self.coef_ = None
-        self.solver_state_ = None
-        self.scale_ = None
-        self.dof_resid_ = None
-        self.aux_ = None
-        self._solver = None
-
-    @property
-    def solver(self):
-        """Getter for the solver class."""
-        return self._solver
-
     @classmethod
     def _validate_observation_class(cls, observation: obs.Observations):
+        """Raise TypeError with model-specific suggestions if observation type is invalid."""
         if observation.__class__ in cls._invalid_observation_types:
             model_name = cls.__name__
             obs_name = observation.__class__.__name__
-            error_msg = f"The ``{obs_name}`` observation type is not supported for ``{model_name}`` models."
+            error_msg = (
+                f"The ``{obs_name}`` observation type is not supported for "
+                f"``{model_name}`` models."
+            )
             is_categorical = isinstance(observation, obs.CategoricalObservations)
             if is_categorical:
                 correct_model = (
@@ -299,170 +259,18 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
                     else "ClassifierGLM"
                 )
                 error_msg += (
-                    f" To use a GLM for classification instantiate a ``{correct_model}`` "
-                    f"object."
+                    f" To use a GLM for classification instantiate a "
+                    f"``{correct_model}`` object."
                 )
             else:
                 correct_model = (
                     "PopulationGLM" if issubclass(cls, PopulationGLM) else "GLM"
                 )
                 error_msg += (
-                    f" To use a GLM for regression with ``{obs_name}`` instantiate a ``{correct_model}`` "
-                    f"object."
+                    f" To use a GLM for regression with ``{obs_name}`` instantiate a "
+                    f"``{correct_model}`` object."
                 )
             raise TypeError(error_msg)
-
-    def __sklearn_tags__(self):
-        """Return GLM specific estimator tags."""
-        tags = super().__sklearn_tags__()
-        # Tags for X
-        tags.input_tags = InputTags(allow_nan=True, two_d_array=True)
-        # Tags for y
-        tags.target_tags = TargetTags(
-            required=True, one_d_labels=True, two_d_labels=False
-        )
-        return tags
-
-    @property
-    def inverse_link_function(self):
-        """Getter for the inverse link function for the model."""
-        return self._inverse_link_function
-
-    @inverse_link_function.setter
-    def inverse_link_function(self, inverse_link_function: Callable):
-        """Setter for the inverse link function for the model."""
-        self._inverse_link_function = resolve_inverse_link_function(
-            inverse_link_function, self._observation_model
-        )
-
-    @property
-    def observation_model(self) -> Union[None, obs.Observations]:
-        """Getter for the ``observation_model`` attribute."""
-        return self._observation_model
-
-    @observation_model.setter
-    def observation_model(self, observation: obs.Observations):
-        if isinstance(observation, str):
-            self._observation_model = instantiate_observation_model(observation)
-            self._validate_observation_class(self.observation_model)
-            return
-        # check that the model has the required attributes
-        # and that the attribute can be called
-        obs.check_observation_model(observation)
-        self._observation_model = observation
-        self._validate_observation_class(self.observation_model)
-
-    def _check_is_fit(self):
-        """Ensure the instance has been fitted."""
-        if (self.coef_ is None) or (self.intercept_ is None):
-            raise NotFittedError(
-                "This GLM instance is not fitted yet. Call 'fit' with appropriate arguments."
-            )
-
-    def _predict(
-        self, params: GLMParams, X: Union[dict[str, jnp.ndarray], jnp.ndarray]
-    ) -> jnp.ndarray:
-        """
-        Predicts firing rates based on given parameters and design matrix.
-
-        This function computes the predicted firing rates using the provided parameters
-        and model design matrix ``X``. It is a streamlined version used internally within
-        optimization routines, where it serves as the loss function. Unlike the ``GLM.predict``
-        method, it does not perform any input validation, assuming that the inputs are pre-validated.
-
-
-        Parameters
-        ----------
-        params :
-            GLMParams containing the spike basis coefficients and bias terms.
-        X :
-            Predictors.
-
-        Returns
-        -------
-        :
-            The predicted rates. Shape (n_time_bins, ).
-        """
-        return self._inverse_link_function(
-            # First, multiply each feature by its corresponding coefficient,
-            # then sum across all features and add the intercept, before
-            # passing to the inverse link function
-            tree_utils.pytree_map_and_reduce(
-                lambda x, w: jnp.einsum("tj, j...->t...", x, w), sum, X, params.coef
-            )
-            + params.intercept
-        )
-
-    @support_pynapple(conv_type="jax")
-    def predict(self, X: DESIGN_INPUT_TYPE) -> jnp.ndarray:
-        """Predict rates based on fit parameters.
-
-        Parameters
-        ----------
-        X :
-            Predictors, array of shape ``(n_time_bins, n_features)`` or a pytree
-            of arrays of the same shape.
-
-        Returns
-        -------
-        :
-            The predicted rates with shape ``(n_time_bins, )``.
-
-        Raises
-        ------
-        NotFittedError
-            If ``fit`` has not been called first with this instance.
-        ValueError
-            If ``params`` is not a JAX pytree of size two.
-        ValueError
-            If weights and bias terms in ``params`` don't have the expected dimensions.
-        ValueError
-            If ``X`` is not three-dimensional.
-        ValueError
-            If there's an inconsistent number of features between spike basis coefficients and ``X``.
-
-        Examples
-        --------
-        >>> # example input
-        >>> import numpy as np
-        >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
-        >>> # define and fit a GLM
-        >>> import nemos as nmo
-        >>> model = nmo.glm.GLM()
-        >>> model = model.fit(X, y)
-        >>> # predict new spike data
-        >>> Xnew = np.random.normal(size=(20, X.shape[1]))
-        >>> predicted_spikes = model.predict(Xnew)
-
-        See Also
-        --------
-        :meth:`nemos.glm.GLM.score`
-            Score predicted rates against target spike counts.
-
-        :meth:`nemos.glm.GLM.simulate`
-            Simulate neural activity in response to a feed-forward input (feed-forward only).
-
-        :func:`nemos.simulation.simulate_recurrent`
-            Simulate neural activity in response to a feed-forward input
-            using the GLM as a recurrent network (feed-forward + coupling).
-        """
-        # check that the model is fitted
-        self._check_is_fit()
-        # extract model params
-        params = self._get_model_params()
-
-        # filter for non-nans, grab data if needed
-        data, _ = self._preprocess_inputs(X, drop_nans=False)
-
-        self._validator.validate_inputs(data)
-
-        # check consistency between X and params
-        self._validator.validate_consistency(params, X=data)
-        self._validator.feature_mask_consistency(
-            getattr(self, "_feature_mask", None), params
-        )
-
-        return self._predict(params, data)
 
     def _compute_loss(
         self,
@@ -495,136 +303,6 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         """
         predicted_rate = self._predict(params, X)
         return self._observation_model._negative_log_likelihood(y, predicted_rate)
-
-    @cast_to_jax
-    def score(
-        self,
-        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
-        y: ArrayLike,
-        score_type: Literal[
-            "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"
-        ] = "log-likelihood",
-        aggregate_sample_scores: Callable = jnp.mean,
-    ) -> jnp.ndarray:
-        r"""Evaluate the goodness-of-fit of the model to the observed neural data.
-
-        This method computes the goodness-of-fit score, which can either be the mean
-        log-likelihood or of two versions of the pseudo-:math:`R^2`.
-        The scoring process includes validation of input compatibility with the model's
-        parameters, ensuring that the model has been previously fitted and the input data
-        are appropriate for scoring. A higher score indicates a better fit of the model
-        to the observed data.
-
-
-        Parameters
-        ----------
-        X :
-            Predictors, array of shape ``(n_time_bins, n_features)`` or a pytree
-            of arrays of the same shape.
-        y :
-            Neural activity. Shape ``(n_time_bins, )``.
-        score_type :
-            Type of scoring: either log-likelihood or pseudo-:math:`R^2`.
-        aggregate_sample_scores :
-            Function that aggregates the score of all samples.
-
-        Returns
-        -------
-        score :
-            The log-likelihood or the pseudo-:math:`R^2` of the current model.
-
-        Raises
-        ------
-        NotFittedError
-
-            If ``fit`` has not been called first with this instance.
-        ValueError
-
-            If X structure doesn't match the params, and if X and y have different
-            number of samples.
-
-        Examples
-        --------
-        >>> # example input
-        >>> import numpy as np
-        >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
-        >>> import nemos as nmo
-        >>> model = nmo.glm.GLM()
-        >>> model = model.fit(X, y)
-        >>> # get model score
-        >>> log_likelihood_score = model.score(X, y)
-        >>> # get a pseudo-R2 score
-        >>> pseudo_r2_score = model.score(X, y, score_type='pseudo-r2-McFadden')
-
-        Notes
-        -----
-        The log-likelihood is not on a standard scale, its value is influenced by many factors,
-        among which the number of model parameters. The log-likelihood can assume both positive
-        and negative values.
-
-        The Pseudo-:math:`R^2` is not equivalent to the :math:`R^2` value in linear regression. While both
-        provide a measure of model fit, and assume values in the [0,1] range, the methods and
-        interpretations can differ. The Pseudo-:math:`R^2` is particularly useful for generalized linear
-        models when the interpretation of the :math:`R^2` as explained variance does not apply
-        (i.e., when the observations are not Gaussian distributed).
-
-        Why does the traditional :math:`R^2` is usually a poor measure of performance in GLMs?
-
-        1.  In the context of GLMs the variance and the mean of the observations are related.
-            Ignoring the relation between them can result in underestimating the model
-            performance; for instance, when we model a Poisson variable with large mean we expect an
-            equally large variance. In this scenario, even if our model perfectly captures the mean,
-            the high-variance  will result in large residuals and low :math:`R^2`.
-            Additionally, when the mean of the observations varies, the variance will vary too. This
-            violates the "homoschedasticity" assumption, necessary  for interpreting the :math:`R^2` as
-            variance explained.
-
-        2.  The :math:`R^2` capture the variance explained when the relationship between the observations and
-            the predictors is linear. In GLMs, the link function sets a non-linear mapping between the predictors
-            and the mean of the observations, compromising the interpretation of the :math:`R^2`.
-
-        Note that it is possible to re-normalized the residuals by a mean-dependent quantity proportional
-        to the model standard deviation (i.e. Pearson residuals). This "rescaled" residual distribution however
-        deviates substantially from normality for counting data with low mean (common for spike counts).
-        Therefore, even the Pearson residuals performs poorly as a measure of fit quality, especially
-        for GLM modeling counting data.
-
-        Refer to the ``nmo.observation_models.Observations`` concrete subclasses for the likelihood and
-        pseudo-:math:`R^2` equations.
-
-        """
-        self._check_is_fit()
-        params = self._get_model_params()
-
-        self._validator.validate_inputs(X, y)
-        X, y = self._preprocess_inputs(X, y, drop_nans=True)
-        self._validator.validate_consistency(params, X, y)
-        self._validator.feature_mask_consistency(
-            getattr(self, "_feature_mask", None), params
-        )
-
-        if score_type == "log-likelihood":
-            score = self._observation_model.log_likelihood(
-                y,
-                self._predict(params, X),
-                self.scale_,
-                aggregate_sample_scores=aggregate_sample_scores,
-            )
-        elif score_type.startswith("pseudo-r2"):
-            score = self._observation_model.pseudo_r2(
-                y,
-                self._predict(params, X),
-                score_type=score_type,
-                scale=self.scale_,
-                aggregate_sample_scores=aggregate_sample_scores,
-            )
-        else:
-            raise NotImplementedError(
-                f"Scoring method {score_type} not implemented! "
-                "`score_type` must be either 'log-likelihood', 'pseudo-r2-McFadden', "
-                "or 'pseudo-r2-Cohen'."
-            )
-        return score
 
     def _model_specific_initialization(
         self,
@@ -828,87 +506,6 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         self.coef_: DESIGN_INPUT_TYPE = params.coef
         self.intercept_: jnp.ndarray = params.intercept
 
-    @support_pynapple(conv_type="jax")
-    def simulate(
-        self,
-        random_key: jax.Array,
-        feedforward_input: DESIGN_INPUT_TYPE,
-    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        """Simulate neural activity in response to a feed-forward input.
-
-        Parameters
-        ----------
-        random_key :
-            jax.random.key for seeding the simulation.
-        feedforward_input :
-            External input predictors to the model, representing factors like convolved currents,
-            light intensities, etc. When not provided, the simulation is done with coupling-only.
-            Array of shape (n_time_bins, n_basis_input) or pytree with leaves of the same shape.
-
-        Returns
-        -------
-        simulated_activity :
-            Simulated activity (spike counts for Poisson GLMs) for the neuron over time.
-            Shape: ``(n_time_bins, )``.
-        firing_rates :
-            Simulated rates for the neuron over time. Shape, ``(n_time_bins, )``.
-
-        Raises
-        ------
-        NotFittedError
-            - If the model hasn't been fitted prior to calling this method.
-        ValueError
-            - If the instance has not been previously fitted.
-
-        Examples
-        --------
-        >>> # example input
-        >>> import numpy as np
-        >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
-        >>> # define and fit model
-        >>> import nemos as nmo
-        >>> model = nmo.glm.GLM()
-        >>> model = model.fit(X, y)
-        >>> # generate spikes and rates
-        >>> random_key = jax.random.key(123)
-        >>> Xnew = np.random.normal(size=(20, X.shape[1]))
-        >>> spikes, rates = model.simulate(random_key, Xnew)
-
-        See Also
-        --------
-        :meth:`nemos.glm.GLM.predict`
-            Method to predict rates based on the model's parameters.
-        """
-        # check if the model is fit
-        self._check_is_fit()
-
-        params = self._get_model_params()
-
-        # if all invalid, raise error
-        validation.error_all_invalid(feedforward_input)
-
-        # check input dimensionality
-        self._validator.validate_inputs(X=feedforward_input)
-
-        # validate input and params consistency
-        self._validator.validate_consistency(params, X=feedforward_input)
-        self._validator.feature_mask_consistency(
-            getattr(self, "_feature_mask", None), params
-        )
-
-        # pre-process
-        feedforward_input, _ = self._preprocess_inputs(
-            X=feedforward_input, drop_nans=False
-        )
-
-        predicted_rate = self._predict(params, feedforward_input)
-        return (
-            self._observation_model.sample_generator(
-                key=random_key, predicted_rate=predicted_rate, scale=self.scale_
-            ),
-            predicted_rate,
-        )
-
     def _estimate_resid_degrees_of_freedom(
         self, X: DESIGN_INPUT_TYPE, n_samples: Optional[int] = None
     ) -> jnp.ndarray:
@@ -1106,97 +703,6 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         )
 
         return self._validator.from_model_params(updated_params), updated_state
-
-    def _get_optimal_solver_params_config(self):
-        """Return the functions for computing default step and batch size for the solver."""
-        return glm_compute_optimal_stepsize_configs(self)
-
-    def __repr__(self):
-        """Representation of the GLM class."""
-        return format_repr(
-            self, multiline=True, use_name_keys=["inverse_link_function"]
-        )
-
-    def __sklearn_clone__(self) -> GLM:
-        """Clone the GLM."""
-        params = self.get_params(deep=False)
-        klass = self.__class__(**params)
-        return klass
-
-    def save_params(self, filename: Union[str, Path]):
-        """
-        Save GLM model parameters to a .npz file.
-
-        This method allows to reuse the model parameters. The saved parameters can be loaded back
-        into a GLM instance using the `load_params` function.
-
-        Parameters
-        ----------
-        filename :
-            The name of the file where the model parameters will be saved. The file will be saved in `.npz` format.
-
-        Examples
-        --------
-        >>> import nemos as nmo
-        >>> # Create a GLM model with specified parameters
-        >>> solver_args = {"stepsize": 0.1, "maxiter": 1000, "tol": 1e-6}
-        >>> model = nmo.glm.GLM(
-        ...     regularizer="Ridge",
-        ...     regularizer_strength=0.1,
-        ...     observation_model="Gamma",
-        ...     solver_name="BFGS",
-        ...     solver_kwargs=solver_args,
-        ... )
-        >>> for key, value in model.get_params().items():
-        ...     print(f"{key}: {value}")
-        inverse_link_function: <function one_over_x at ...>
-        observation_model: GammaObservations()
-        regularizer: Ridge()
-        regularizer_strength: 0.1...
-        solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
-        solver_name: BFGS
-        >>> # Save the model parameters to a file
-        >>> model.save_params("model_params.npz")
-        >>> # Load the model from the saved file
-        >>> model = nmo.load_model("model_params.npz")
-        >>> # Model has the same parameters before and after load
-        >>> for key, value in model.get_params().items():
-        ...     print(f"{key}: {value}")
-        inverse_link_function: <function one_over_x at ...>
-        observation_model: GammaObservations()
-        regularizer: Ridge()
-        regularizer_strength: 0.1...
-        solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
-        solver_name: BFGS
-
-        >>> # Saving and loading a custom inverse link function
-        >>> model = nmo.glm.GLM(
-        ...     observation_model="Poisson",
-        ...     inverse_link_function=lambda x: x**2
-        ... )
-        >>> model.save_params("model_params.npz")
-        >>> # Provide a mapping for the custom link function when loading.
-        >>> mapping_dict = {
-        ...     "inverse_link_function": lambda x: x**2,
-        ... }
-        >>> loaded_model = nmo.load_model("model_params.npz", mapping_dict=mapping_dict)
-        >>> # Now the loaded model will have the updated solver_name and solver_kwargs
-        >>> for key, value in loaded_model.get_params().items():
-        ...     print(f"{key}: {value}")
-        inverse_link_function: <function <lambda> at ...>
-        observation_model: PoissonObservations()
-        regularizer: UnRegularized()
-        regularizer_strength: None
-        solver_kwargs: {}
-        solver_name: GradientDescent
-        """
-
-        # initialize saving dictionary
-        fit_attrs = self._get_fit_state()
-        fit_attrs.pop("solver_state_")
-        string_attrs = ["inverse_link_function"]
-
-        self._save_params(filename, fit_attrs, string_attrs)
 
 
 class PopulationGLM(GLM):
@@ -1562,7 +1068,7 @@ class PopulationGLM(GLM):
             # passing to the inverse link function
             tree_utils.pytree_map_and_reduce(
                 lambda x, w, m: jnp.einsum("ti, i...->t...", x, w * m),
-                sum,
+                lambda leaves: reduce(jnp.add, leaves),
                 X,
                 params.coef,
                 self._feature_mask,

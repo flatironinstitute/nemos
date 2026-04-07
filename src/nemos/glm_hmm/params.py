@@ -5,22 +5,16 @@ from typing import Callable, Tuple, Union
 import jax.numpy as jnp
 from numpy.typing import ArrayLike
 
-from ..glm.params import GLMParams
+from ..glm.params import GLMScaleParams
 from ..hmm.params import HMMParams
 from ..params import ModelParams
 from ..typing import DESIGN_INPUT_TYPE
 
 
-class GLMHMMModelParams(GLMParams):
-    """Add scale to GLMParams, which is specific for the GLM-HMM."""
-
-    log_scale: jnp.ndarray | None = None
-
-
 class GLMHMMParams(ModelParams):
     """Parameter container for GLM-HMM models."""
 
-    model_params: GLMHMMModelParams
+    model_params: GLMScaleParams
     hmm_params: HMMParams
 
     @staticmethod
