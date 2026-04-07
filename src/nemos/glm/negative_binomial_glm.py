@@ -93,7 +93,7 @@ def _scale_update_step(log_scale, X, y, init_params, solver_run_scale):
     return log_scale, state, aux
 
 
-def _joint_update(
+def _two_step_update(
     init_params: GLMScaleParams,
     init_state: NBState,
     X: DESIGN_INPUT_TYPE,
@@ -131,7 +131,7 @@ def _joint_update(
     return new_params, new_state, (new_aux_params, new_aux_scale)
 
 
-def _joint_run(
+def _two_step_run(
     init_params: GLMScaleParams,
     X: DESIGN_INPUT_TYPE,
     y: jnp.ndarray,
@@ -146,7 +146,7 @@ def _joint_run(
     init_state = initialize_state(init_params, X, y)
 
     _update = eqx.Partial(
-        _joint_update,
+        _two_step_update,
         X=X,
         y=y,
         solver_run_params=solver_run_params,
@@ -312,7 +312,7 @@ class NBGLM(BaseGLM[GLMScaleUserParams, GLMScaleParams]):
         solver_scale, _scale_loss = self._get_scale_solver(init_params)
 
         def optimization_update(params: GLMScaleParams, state, X, y):
-            return _joint_update(
+            return _two_step_update(
                 params,
                 state,
                 X,
@@ -338,7 +338,7 @@ class NBGLM(BaseGLM[GLMScaleUserParams, GLMScaleParams]):
         self._solver = {"glm_params": solver_params, "scale": solver_scale}
 
         def optimization_run(params: GLMScaleParams, X, y):
-            return _joint_run(
+            return _two_step_run(
                 params,
                 X,
                 y,
