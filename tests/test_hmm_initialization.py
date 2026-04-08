@@ -225,6 +225,7 @@ def generate_kmeans_data(n_states=3):
     )
     y2 = y + np.repeat(np.arange(0, n_states * int(n_samples / 100), n_states), 100)
     y = y[np.argsort(y2)]
+    y_pop = np.concatenate([y[:, None], np.ones_like(y[:, None])], axis=-1)
     X = X[np.argsort(y2), :]
     X_tree = {"feature1": X[:, :2], "feature2": X[:, 2:]}
 
@@ -238,7 +239,15 @@ def generate_kmeans_data(n_states=3):
     transition_probability = transition_probability / transition_probability.sum(
         axis=1, keepdims=True
     )
-    return X, X_tree, y, is_new_session, initial_probability, transition_probability
+    return (
+        X,
+        X_tree,
+        y,
+        y_pop,
+        is_new_session,
+        initial_probability,
+        transition_probability,
+    )
 
 
 class TestKMeansInitialization:
@@ -246,18 +255,20 @@ class TestKMeansInitialization:
 
     @pytest.mark.parametrize("n_states", [2, 3, 5])
     @pytest.mark.parametrize("pytree", [0, 1])
-    def test_kmeans_initializer(self, n_states, pytree):
-        X = [[], []]
+    @pytest.mark.parametrize("population", [0, 1])
+    def test_kmeans_initializer(self, n_states, pytree, population):
+        X, y = [[], []], [[], []]
         (
             X[0],
             X[1],
-            y,
+            y[0],
+            y[1],
             is_new_session,
             expected_initial_prob,
             expected_transition_prob,
         ) = generate_kmeans_data(n_states)
         initializer = KMeansInitializer(
-            n_states, X[pytree], y, is_new_session, jax.random.PRNGKey(123)
+            n_states, X[pytree], y[population], is_new_session, jax.random.PRNGKey(123)
         )
         initial_prob, transition_prob = (
             initializer.initial_probability(),
@@ -271,12 +282,15 @@ class TestKMeansInitialization:
 
     @pytest.mark.parametrize("n_states", [2, 3, 5])
     @pytest.mark.parametrize("pytree", [0, 1])
-    def test_output_shape_and_type(self, n_states, pytree):
-        X = [[], []]
-        X[0], X[1], y, is_new_session, _, _ = generate_kmeans_data(n_states)
-        initial_prob = kmeans_initial_proba_init(n_states, X[pytree], y, is_new_session)
+    @pytest.mark.parametrize("population", [0, 1])
+    def test_output_shape_and_type(self, n_states, pytree, population):
+        X, y = [[], []], [[], []]
+        X[0], X[1], y[0], y[1], is_new_session, _, _ = generate_kmeans_data(n_states)
+        initial_prob = kmeans_initial_proba_init(
+            n_states, X[pytree], y[population], is_new_session
+        )
         transition_prob = kmeans_transition_proba_init(
-            n_states, X[pytree], y, is_new_session
+            n_states, X[pytree], y[population], is_new_session
         )
 
         assert initial_prob.shape == (n_states,)
@@ -288,7 +302,7 @@ class TestKMeansInitialization:
         """Test that k-means initialization is non-deterministic across different random keys."""
         # the sorted values will be the same, but the state identities will differ
         n_states = 5
-        X, _, y, is_new_session, _, _ = generate_kmeans_data(n_states)
+        X, _, y, _, is_new_session, _, _ = generate_kmeans_data(n_states)
 
         initial_prob1 = kmeans_initial_proba_init(
             n_states, X, y, is_new_session, random_key=jax.random.PRNGKey(1)
@@ -310,7 +324,7 @@ class TestKMeansInitialization:
     def test_shared_initializer(self):
         """Test that k-means initializer is used when specified in setup_hmm_initialization."""
         n_states = 5
-        X, _, y, is_new_session, _, _ = generate_kmeans_data(n_states)
+        X, _, y, _, is_new_session, _, _ = generate_kmeans_data(n_states)
         default_initializer = KMeansInitializer(n_states, X, y, is_new_session)
         used_initializer = KMeansInitializer(
             n_states, X, y, is_new_session, jax.random.PRNGKey(2)

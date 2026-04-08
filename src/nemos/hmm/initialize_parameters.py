@@ -310,9 +310,11 @@ class KMeansInitializer:
         self.random_key = random_key
         self.is_new_session = initialize_new_session(y.shape[0], is_new_session)
         self.model = KMeans(n_clusters=n_states, random_state=random_key)
-        # for pytree support
-        data = jnp.concatenate(jax.tree_util.tree_leaves(X), axis=-1)
-        self.model.fit(jnp.concatenate([data, y[:, None]], axis=-1))
+        # concatenate pytree leaves if applicable and append y
+        data = jnp.concatenate(
+            jax.tree_util.tree_leaves(X) + [y if y.ndim > 1 else y[:, None]], axis=-1
+        )
+        self.model.fit(data)
         self.states = jax.nn.one_hot(self.model.labels_, num_classes=n_states)
 
     def initial_probability(self):
