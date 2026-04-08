@@ -1,4 +1,5 @@
 """Benchmark GLM fitting for different solvers."""
+
 import argparse
 import datetime
 import hashlib
@@ -12,16 +13,25 @@ from typing import List, Tuple
 
 import jax
 import jax.numpy as jnp
+from scipy_adapter import ScipyLBFGS
+
 import nemos as nmo
 
+# register solver
+nmo.solvers.register("LBFGS", ScipyLBFGS, "scipy")
+
 # --- grid defaults ---
-DEFAULT_SAMPLE_SIZES = [1000, 10000]
-DEFAULT_FEATURE_DIMS = [10, 100]
-DEFAULT_POP_SIZES = [1, 10]
+DEFAULT_SAMPLE_SIZES = [100, 1_000, 10_000, 100_000]
+DEFAULT_FEATURE_DIMS = [1, 10, 100]
+DEFAULT_POP_SIZES = [1, 10, 20]
 DEFAULT_REGULARIZERS = ["UnRegularized", "Ridge"]
-DEFAULT_SOLVER_NAMES = ["LBFGS[jax]", "GradientDescent[jax]"]
+DEFAULT_SOLVER_NAMES = [
+    "LBFGS[optax+optimistix]",
+    "LBFGS[scipy]",
+    "GradientDescent[jaxopt]",
+]
 DEFAULT_DEVICES = ["cpu"]
-DEFAULT_N_REPS = 5
+DEFAULT_N_REPS = 10
 
 
 def dict_to_filename(config: dict, length: int = 16) -> str:
@@ -30,12 +40,12 @@ def dict_to_filename(config: dict, length: int = 16) -> str:
 
 
 def generate_glm_configs(
-        sample_sizes: List[int],
-        feature_dims: List[int],
-        population_sizes: List[int],
-        regularizers: List[str],
-        solver_names: List[str],
-        devices: List[str],
+    sample_sizes: List[int],
+    feature_dims: List[int],
+    population_sizes: List[int],
+    regularizers: List[str],
+    solver_names: List[str],
+    devices: List[str],
 ) -> List[dict]:
     """
     Generate GLM configurations to benchmark.
@@ -66,11 +76,17 @@ def generate_glm_configs(
     allowed_reg = {
         name: getattr(nmo.regularizer, name)._allowed_solvers
         for name in dir(nmo.regularizer)
-        if not name.startswith("_") and hasattr(getattr(nmo.regularizer, name), "_allowed_solvers")
+        if not name.startswith("_")
+        and hasattr(getattr(nmo.regularizer, name), "_allowed_solvers")
     }
     configs = []
     for samp, feat, pop_size, reg, solv, dev in product(
-        sample_sizes, feature_dims, population_sizes, regularizers, solver_names, devices
+        sample_sizes,
+        feature_dims,
+        population_sizes,
+        regularizers,
+        solver_names,
+        devices,
     ):
         base_name = solv.split("[")[0]
         if reg not in allowed_reg or base_name not in allowed_reg[reg]:
@@ -140,9 +156,13 @@ def get_data(
 
 def _get_git_commit() -> str:
     try:
-        return subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL
-        ).decode().strip()
+        return (
+            subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL
+            )
+            .decode()
+            .strip()
+        )
     except subprocess.CalledProcessError:
         return "unknown"
 
@@ -194,7 +214,9 @@ def benchmark_fit(
         solver_init_s.append(t1 - t0)
 
         # compile on the same instance so _optimizer_run is valid
-        compiled = jax.jit(model._optimizer_run).trace(model_pars, X, y).lower().compile()
+        compiled = (
+            jax.jit(model._optimizer_run).trace(model_pars, X, y).lower().compile()
+        )
         t2 = perf_counter()
         compilation_s.append(t2 - t1)
 
@@ -292,16 +314,18 @@ def aggregate_results(results_dir: str, csv_path: str) -> None:
         cfg, res, meta = d["config"], d["results"], d["meta"]
         n_reps = len(res["fit_s"])
         for i in range(n_reps):
-            rows.append({
-                **cfg,
-                **meta,
-                "rep": i,
-                "solver_init_s": res["solver_init_s"][i],
-                "compilation_s": res["compilation_s"][i],
-                "fit_s": res["fit_s"][i],
-                "end_to_end_s": res["end_to_end_s"][i],
-                "converged": res["converged"][i],
-            })
+            rows.append(
+                {
+                    **cfg,
+                    **meta,
+                    "rep": i,
+                    "solver_init_s": res["solver_init_s"][i],
+                    "compilation_s": res["compilation_s"][i],
+                    "fit_s": res["fit_s"][i],
+                    "end_to_end_s": res["end_to_end_s"][i],
+                    "converged": res["converged"][i],
+                }
+            )
 
     if not rows:
         print(f"No result files found in {results_dir}.")
@@ -324,38 +348,71 @@ def _parse_args() -> argparse.Namespace:
     # mutually exclusive top-level actions
     actions = parser.add_mutually_exclusive_group()
     actions.add_argument(
-        "--generate_configs", action="store_true",
+        "--generate_configs",
+        action="store_true",
         help="Generate config list from grid parameters and save to --config_path.",
     )
     actions.add_argument(
-        "--aggregate", action="store_true",
+        "--aggregate",
+        action="store_true",
         help="Aggregate JSON results in --output_path into --csv_path.",
     )
 
     # paths
-    parser.add_argument("--config_path", type=str, default="glm_benchmark_configs.json",
-                        help="Path to load/save the config list JSON.")
-    parser.add_argument("--output_path", type=str, default="benchmark_results",
-                        help="Directory for per-config JSON result files.")
-    parser.add_argument("--data_path", type=str, default="benchmark_data",
-                        help="Directory for cached synthetic data files.")
-    parser.add_argument("--csv_path", type=str, default="benchmark_results.csv",
-                        help="Output CSV path (used with --aggregate).")
+    parser.add_argument(
+        "--config_path",
+        type=str,
+        default="glm_benchmark_configs.json",
+        help="Path to load/save the config list JSON.",
+    )
+    parser.add_argument(
+        "--output_path",
+        type=str,
+        default="benchmark_results",
+        help="Directory for per-config JSON result files.",
+    )
+    parser.add_argument(
+        "--data_path",
+        type=str,
+        default="benchmark_data",
+        help="Directory for cached synthetic data files.",
+    )
+    parser.add_argument(
+        "--csv_path",
+        type=str,
+        default="benchmark_results.csv",
+        help="Output CSV path (used with --aggregate).",
+    )
 
     # job selection
     parser.add_argument(
-        "--fit_ids", type=int, nargs="+", default=None,
+        "--fit_ids",
+        type=int,
+        nargs="+",
+        default=None,
         help="Indices into the config list to benchmark. Defaults to all configs.",
     )
-    parser.add_argument("--n_reps", type=int, default=DEFAULT_N_REPS,
-                        help="Number of independent repetitions per config.")
+    parser.add_argument(
+        "--n_reps",
+        type=int,
+        default=DEFAULT_N_REPS,
+        help="Number of independent repetitions per config.",
+    )
 
     # grid parameters (used with --generate_configs)
-    parser.add_argument("--sample_sizes", type=int, nargs="+", default=DEFAULT_SAMPLE_SIZES)
-    parser.add_argument("--feature_dims", type=int, nargs="+", default=DEFAULT_FEATURE_DIMS)
+    parser.add_argument(
+        "--sample_sizes", type=int, nargs="+", default=DEFAULT_SAMPLE_SIZES
+    )
+    parser.add_argument(
+        "--feature_dims", type=int, nargs="+", default=DEFAULT_FEATURE_DIMS
+    )
     parser.add_argument("--pop_sizes", type=int, nargs="+", default=DEFAULT_POP_SIZES)
-    parser.add_argument("--regularizers", type=str, nargs="+", default=DEFAULT_REGULARIZERS)
-    parser.add_argument("--solver_names", type=str, nargs="+", default=DEFAULT_SOLVER_NAMES)
+    parser.add_argument(
+        "--regularizers", type=str, nargs="+", default=DEFAULT_REGULARIZERS
+    )
+    parser.add_argument(
+        "--solver_names", type=str, nargs="+", default=DEFAULT_SOLVER_NAMES
+    )
     parser.add_argument("--devices", type=str, nargs="+", default=DEFAULT_DEVICES)
 
     return parser.parse_args()
@@ -381,5 +438,9 @@ if __name__ == "__main__":
 
     else:
         configs = json.loads(Path(args.config_path).read_text())
-        fit_ids = args.fit_ids if args.fit_ids is not None else list(range(len(configs)))
-        run_benchmarks(configs, fit_ids, args.output_path, args.data_path, n_reps=args.n_reps)
+        fit_ids = (
+            args.fit_ids if args.fit_ids is not None else list(range(len(configs)))
+        )
+        run_benchmarks(
+            configs, fit_ids, args.output_path, args.data_path, n_reps=args.n_reps
+        )
