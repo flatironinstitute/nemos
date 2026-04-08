@@ -142,8 +142,8 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         self,
         init_params: Params,
         data_loader: DataLoader,
-        num_epochs: int = 1,
-        callback: Callback = Callback(),
+        num_epochs: int,
+        callback: Callback | None = None,
     ) -> StepResult:
         """
         Run optimization over mini-batches from a data loader.
@@ -160,6 +160,7 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         callback :
             Training callback. A single ``Callback`` instance (use
             ``CallbackList`` for multiple callbacks).
+            If None, use the no-op base callback.
 
         Returns
         -------
@@ -179,6 +180,8 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
             )
         if num_epochs < 1:
             raise ValueError("num_epochs must be >= 1")
+        if callback is None:
+            callback = Callback()
 
         return self._stochastic_run_impl(
             init_params,
