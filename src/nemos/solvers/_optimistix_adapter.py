@@ -261,19 +261,6 @@ class OptimistixAdapter(SolverAdapter[OptimistixAdapterState]):
             reached_max_steps=jax.numpy.asarray(num_steps >= self.maxiter),
         )
 
-    def _extract_num_steps(self, state: OptimistixSolverState) -> int:
-        """Attempt to extract number of steps from solver state."""
-        # most optimistix solver states
-        if hasattr(state, "num_steps"):
-            return state.num_steps.item()
-        # for optx.OptaxMinimiser
-        elif hasattr(state, "step"):
-            return state.step.item()
-        else:
-            raise AttributeError(
-                f"Cannot extract step count from state type {type(state).__name__}"
-            )
-
     def adjust_solver_init_kwargs(
         self, solver_init_kwargs: dict[str, Any]
     ) -> dict[str, Any]:

@@ -588,6 +588,7 @@ class TestSolverStochasticRun:
 
 @pytest.mark.requires_x64
 def test_svrg_compute_full_gradient_streaming():
+    """Test that SVRG._compute_full_gradient_streaming gives the same as grad on the full data."""
     np.random.seed(123)
 
     # setting N // batch_size = 0 to have a nice scaling for sum-style losses
