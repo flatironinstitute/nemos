@@ -14,17 +14,15 @@ from typing import (
 
 import equinox as eqx
 import jax
-import jax.flatten_util
 import jax.numpy as jnp
 from jax import grad, jit, lax, random
-
-from nemos.solvers._stochastic_mixins import _stepsize_normalized_convergence
 
 from ..callbacks import Callback, TrainingContext
 from ..proximal_operator import prox_none
 from ..tree_utils import tree_add_scalar_mul, tree_l2_norm, tree_slice, tree_sub
 from ..typing import KeyArrayLike, Params, Pytree, StepResult
 from ._jaxopt_adapter import JaxoptAdapter, JaxoptAdapterState
+from ._stochastic_mixins import _stepsize_normalized_convergence
 
 if TYPE_CHECKING:
     from ..batching import BatchData, DataLoader
@@ -883,9 +881,9 @@ class _WrappedSVRGBase(JaxoptAdapter):
         callback: Callback,
     ) -> StepResult:
         sample_data = data_loader.sample_batch()
-        state = self._solver.init_state(init_params, *sample_data)
+        state = self.init_state(init_params, *sample_data)
         params = init_params
-        aux = state.aux_batch
+        aux = state.solver_state.aux_batch
         hyperparams_prox = self.regularizer_strength if self._proximal else None
 
         ctx = TrainingContext(
@@ -906,11 +904,14 @@ class _WrappedSVRGBase(JaxoptAdapter):
                 params, data_loader.__iter__
             )
 
-            state = state._replace(
-                reference_point=params,
-                full_grad_at_reference_point=full_grad,
-                aux_full=None,
-                aux_batch=None,
+            state = JaxoptAdapterState(
+                solver_state=state.solver_state._replace(
+                    reference_point=params,
+                    full_grad_at_reference_point=full_grad,
+                    aux_full=None,
+                    aux_batch=None,
+                ),
+                stats=state.stats,
             )
 
             # update pass through the data
@@ -918,38 +919,29 @@ class _WrappedSVRGBase(JaxoptAdapter):
                 ctx.batch_idx = batch_idx
                 callback.on_batch_begin(ctx)
 
-                params, state = self._solver._update_on_batch(
-                    params, state, hyperparams_prox, *batch_data
+                params, solver_state = self._solver._update_on_batch(
+                    params, state.solver_state, hyperparams_prox, *batch_data
                 )
-                aux = state.aux_batch
+                aux = solver_state.aux_batch
+                state = JaxoptAdapterState(
+                    solver_state=solver_state,
+                    stats=self._get_optim_info(solver_state),
+                )
                 ctx.params, ctx.state, ctx.aux = params, state, aux
 
                 callback.on_batch_end(ctx)
                 if ctx.should_stop:
                     callback.on_train_end(ctx)
-                    full_state = JaxoptAdapterState(
-                        solver_state=state,
-                        stats=self._get_optim_info(state),
-                    )
-                    return (params, full_state, aux)
+                    return (params, state, aux)
 
             callback.on_epoch_end(ctx)
             if ctx.should_stop:
                 callback.on_train_end(ctx)
-                full_state = JaxoptAdapterState(
-                    solver_state=state,
-                    stats=self._get_optim_info(state),
-                )
-                return (params, full_state, aux)
+                return (params, state, aux)
 
         callback.on_train_end(ctx)
 
-        full_state = JaxoptAdapterState(
-            solver_state=state,
-            stats=self._get_optim_info(state),
-        )
-
-        return (params, full_state, aux)
+        return (params, state, aux)
 
     def stochastic_convergence_criterion(
         self, params, prev_params, state, prev_state, aux, epoch
@@ -957,7 +949,7 @@ class _WrappedSVRGBase(JaxoptAdapter):
         """Step-size-normalized parameter change: ||params - prev_params|| / stepsize <= tol."""
         del prev_state, aux, epoch
         return _stepsize_normalized_convergence(
-            params, prev_params, state.stepsize, self.tol
+            params, prev_params, state.solver_state.stepsize, self.tol
         )
 
 
