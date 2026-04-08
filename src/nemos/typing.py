@@ -10,6 +10,7 @@ from typing import (
     Tuple,
     TypeAlias,
     TypeVar,
+    Union,
 )
 
 import jax.numpy as jnp
@@ -24,7 +25,7 @@ Params: TypeAlias = Pytree
 Aux = TypeVar("Aux")
 SolverState = TypeVar("SolverState")
 StepResult: TypeAlias = Tuple[Params, SolverState, Aux]
-DESIGN_INPUT_TYPE = "Union[jnp.ndarray, Pytree, nap.TsdFrame]"
+DESIGN_INPUT_TYPE: TypeAlias = "Union[jnp.ndarray, Pytree, nap.TsdFrame]"
 
 # copying jax.random's annotation
 KeyArrayLike = ArrayLike

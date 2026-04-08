@@ -76,6 +76,10 @@ def sticky_transition_proba_init(
     ----------
     n_states :
         Number of HMM states. Must be greater than 1.
+    X :
+        Optional predictor data. Unused for this particular initialization, but added for API consistency.
+    y :
+        Optional output data. Unused for this particular initialization, but added for API consistency.
     random_key :
         Random key, unused for this particular initialization, but added for API consistency.
     prob_stay :
@@ -301,12 +305,14 @@ class KMeansInitializer:
     ):
         if isinstance(random_key, jax.Array):
             random_key = int(random_key[-1])
+
         self.n_states = n_states
         self.random_key = random_key
         self.is_new_session = initialize_new_session(y.shape[0], is_new_session)
         self.model = KMeans(n_clusters=n_states, random_state=random_key)
-        # add pytree support here
-        self.model.fit(jnp.concatenate([X, y[:, None]], axis=-1))
+        # for pytree support
+        data = jnp.concatenate(jax.tree_util.tree_leaves(X), axis=-1)
+        self.model.fit(jnp.concatenate([data, y[:, None]], axis=-1))
         self.states = jax.nn.one_hot(self.model.labels_, num_classes=n_states)
 
     def initial_probability(self):
@@ -683,8 +689,8 @@ def _validate_custom_init_output(proba: jnp.ndarray, n_states: int, key: str):
 
 def generate_hmm_initial_params(
     n_states: int,
-    X: jnp.ndarray,
-    y: jnp.ndarray,
+    X: DESIGN_INPUT_TYPE,
+    y: NDArray | jnp.ndarray,
     random_key: int | jax.Array = 123,
     init_funcs: dict = {},
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
