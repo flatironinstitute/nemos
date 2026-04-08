@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from nemos.solvers._abstract_solver import SolverAdapterState
+
 from ..callbacks import Callback, TrainingContext
 from ..typing import Params, SolverState, StepResult
 
@@ -61,6 +63,19 @@ class StochasticSolverMixin:
                     "Turn off linesearch and set explicit stepsizes for stochastic optimization."
                 )
 
+    def _pre_epoch(
+        self,
+        params: Params,
+        state: SolverAdapterState,
+        data_loader: DataLoader,
+    ) -> tuple[Params, SolverAdapterState]:
+        """
+        Pass through params and state by default.
+
+        SVRG overwrites to compute the full gradient before each epoch.
+        """
+        return params, state
+
     def _stochastic_run_impl(
         self,
         init_params: Params,
@@ -107,6 +122,9 @@ class StochasticSolverMixin:
             ctx.epoch, ctx.prev_params, ctx.prev_state = epoch, prev_params, prev_state
 
             callback.on_epoch_begin(ctx)
+
+            # SVRG has to run through the data to update the full gradient at the anchor point
+            params, state = self._pre_epoch(params, state, data_loader)
 
             for batch_idx, batch_data in enumerate(data_loader):
                 ctx.batch_idx = batch_idx

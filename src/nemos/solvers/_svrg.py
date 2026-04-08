@@ -17,12 +17,11 @@ import jax
 import jax.numpy as jnp
 from jax import grad, jit, lax, random
 
-from ..callbacks import Callback, TrainingContext
 from ..proximal_operator import prox_none
 from ..tree_utils import tree_add_scalar_mul, tree_l2_norm, tree_slice, tree_sub
-from ..typing import KeyArrayLike, Params, Pytree, StepResult
+from ..typing import KeyArrayLike, Params, Pytree
 from ._jaxopt_adapter import JaxoptAdapter, JaxoptAdapterState
-from ._stochastic_mixins import _stepsize_normalized_convergence
+from ._stochastic_mixins import JaxoptStochasticSolverMixin
 
 if TYPE_CHECKING:
     from ..batching import BatchData, DataLoader
@@ -868,89 +867,34 @@ class SVRG(ProxSVRG):
         return self._run(init_params, init_state, None, *args)
 
 
-class _WrappedSVRGBase(JaxoptAdapter):
+class _WrappedSVRGBase(JaxoptStochasticSolverMixin, JaxoptAdapter):
     """Shared stochastic_run implementation for SVRG wrappers."""
 
     _supports_stochastic = True
 
-    def _stochastic_run_impl(
+    def _pre_epoch(
         self,
-        init_params: Params,
+        params: Params,
+        state: JaxoptAdapterState,
         data_loader: DataLoader,
-        num_epochs: int,
-        callback: Callback,
-    ) -> StepResult:
-        sample_data = data_loader.sample_batch()
-        state = self.init_state(init_params, *sample_data)
-        params = init_params
-        aux = state.solver_state.aux_batch
-        hyperparams_prox = self.regularizer_strength if self._proximal else None
-
-        ctx = TrainingContext(
-            solver=self, params=params, state=state, aux=aux, num_epochs=num_epochs
+    ) -> tuple[Params, JaxoptAdapterState]:
+        """Set the full gradient at the reference point in the state before each epoch."""
+        # compute full gradient by streaming through all batches
+        full_grad = self._solver._compute_full_gradient_streaming(
+            params, data_loader.__iter__
         )
 
-        callback.on_train_begin(ctx)
-
-        for epoch in range(num_epochs):
-            prev_params = params
-            prev_state = state
-            ctx.epoch, ctx.prev_params, ctx.prev_state = epoch, prev_params, prev_state
-
-            callback.on_epoch_begin(ctx)
-
-            # compute full gradient by streaming through all batches
-            full_grad = self._solver._compute_full_gradient_streaming(
-                params, data_loader.__iter__
-            )
-
-            state = JaxoptAdapterState(
-                solver_state=state.solver_state._replace(
-                    reference_point=params,
-                    full_grad_at_reference_point=full_grad,
-                    aux_full=None,
-                    aux_batch=None,
-                ),
-                stats=state.stats,
-            )
-
-            # update pass through the data
-            for batch_idx, batch_data in enumerate(data_loader):
-                ctx.batch_idx = batch_idx
-                callback.on_batch_begin(ctx)
-
-                params, solver_state = self._solver._update_on_batch(
-                    params, state.solver_state, hyperparams_prox, *batch_data
-                )
-                aux = solver_state.aux_batch
-                state = JaxoptAdapterState(
-                    solver_state=solver_state,
-                    stats=self._get_optim_info(solver_state),
-                )
-                ctx.params, ctx.state, ctx.aux = params, state, aux
-
-                callback.on_batch_end(ctx)
-                if ctx.should_stop:
-                    callback.on_train_end(ctx)
-                    return (params, state, aux)
-
-            callback.on_epoch_end(ctx)
-            if ctx.should_stop:
-                callback.on_train_end(ctx)
-                return (params, state, aux)
-
-        callback.on_train_end(ctx)
-
-        return (params, state, aux)
-
-    def stochastic_convergence_criterion(
-        self, params, prev_params, state, prev_state, aux, epoch
-    ):
-        """Step-size-normalized parameter change: ||params - prev_params|| / stepsize <= tol."""
-        del prev_state, aux, epoch
-        return _stepsize_normalized_convergence(
-            params, prev_params, state.solver_state.stepsize, self.tol
+        state = JaxoptAdapterState(
+            solver_state=state.solver_state._replace(
+                reference_point=params,
+                full_grad_at_reference_point=full_grad,
+                aux_full=None,
+                aux_batch=None,
+            ),
+            stats=state.stats,
         )
+
+        return params, state
 
 
 class WrappedSVRG(_WrappedSVRGBase):

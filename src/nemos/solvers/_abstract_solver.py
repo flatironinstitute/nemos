@@ -211,9 +211,9 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         prev_state: SolverState,
         aux: Any,
         epoch: int,
-    ):
+    ) -> bool:
         """
-        Default convergence criterion for stochastic optimization.
+        Evaluate convergence criterion for stochastic optimization.
 
         Called once per epoch. Subclasses that support stochastic optimization
         should override this to provide a meaningful default.
