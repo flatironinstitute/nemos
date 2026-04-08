@@ -200,7 +200,8 @@ def benchmark_fit(
 
         # execution only — no compilation overhead
         t3 = perf_counter()
-        _, state, _ = compiled(model_pars, X, y)
+        pars, state, _ = compiled(model_pars, X, y)
+        pars.coef.block_until_ready()
         t4 = perf_counter()
         fit_s.append(t4 - t3)
 
