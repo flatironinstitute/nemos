@@ -260,6 +260,8 @@ class TestKMeansInitialization:
             np.sort(transition_prob.ravel()), np.sort(expected_transition_prob.ravel())
         )
 
+    # test for pytree
+
     @pytest.mark.parametrize("n_states", [2, 3, 5])
     def test_output_shape_and_type(self, n_states):
         X, y, is_new_session, _, _ = generate_kmeans_data(n_states)
@@ -294,7 +296,7 @@ class TestKMeansInitialization:
         assert not jnp.allclose(initial_prob1, initial_prob2)
         assert not jnp.allclose(transition_prob1, transition_prob2)
 
-    def test_passed_initializer(self):
+    def test_shared_initializer(self):
         """Test that k-means initializer is used when specified in setup_hmm_initialization."""
         n_states = 5
         X, y, is_new_session, _, _ = generate_kmeans_data(n_states)
