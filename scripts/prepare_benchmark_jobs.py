@@ -19,6 +19,8 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import Tuple
+
 
 # Import grid defaults from the benchmarking script
 _HERE = Path(__file__).parent
@@ -61,7 +63,7 @@ def generate_configs(args) -> list:
     return json.loads((base_dir / "configs.json").read_text())
 
 
-def write_disbatch_script(args, device: str, indices: list[int]) -> Path:
+def write_disbatch_script(args, device: str, indices: list[int]) -> Tuple[Path, int]:
     """Write one disBatch task file for a single device."""
     base_dir = Path(args.base_dir)
     log_dir = base_dir / "logs" / device
@@ -99,19 +101,20 @@ def write_disbatch_script(args, device: str, indices: list[int]) -> Path:
     print(
         f"  {dsb_path}  ({len(indices)} configs, {n_tasks} tasks, {args.fits_per_worker} fits/task)"
     )
-    return dsb_path
+    return dsb_path, n_tasks
 
 
-def print_commands(args, dsb_paths: dict[str, Path]) -> None:
+def print_commands(args, dsb_paths: dict[str, Path], n_tasks: dict[str, int]) -> None:
     base_dir = Path(args.base_dir)
     partition_for = {"cpu": args.cpu_partition, "gpu": args.gpu_partition}
 
     print("\nTo launch (one sbatch per device):")
     for device, dsb_path in dsb_paths.items():
+        n_workers = min(n_tasks[device], args.max_workers)
         disbatch_logs = base_dir / "logs" / device / "disbatch"
         partition = partition_for[device]
         sbatch_flags = (
-            f"-n {args.n_workers}"
+            f"-n {n_workers}"
             f" -p {partition}"
             f" -t {args.time}"
             f" --mem-per-cpu={args.mem_per_cpu}"
@@ -159,19 +162,12 @@ def _parse_args() -> argparse.Namespace:
         default=1,
         help="Number of configs processed sequentially per disBatch task.",
     )
-
-    # Slurm settings
-    parser.add_argument(
-        "--n_workers",
-        type=int,
-        default=10,
-        help="Number of disBatch workers (sbatch -n).",
-    )
-    parser.add_argument("--cpu_partition", type=str, default="cpu")
+    parser.add_argument("--cpu_partition", type=str, default="gen")
     parser.add_argument("--gpu_partition", type=str, default="gpu")
-    parser.add_argument("--time", type=str, default="0-04:00")
-    parser.add_argument("--mem_per_cpu", type=str, default="16GB")
-    parser.add_argument("--cpus_per_task", type=int, default=4)
+    parser.add_argument("--time", type=str, default="0-20:00")
+    parser.add_argument("--mem_per_cpu", type=str, default="8GB")
+    parser.add_argument("--cpus_per_task", type=int, default=1)
+    parser.add_argument("--max_workers", type=int, default=5)
     parser.add_argument(
         "--gpus_per_task", type=int, default=1, help="GPUs per task for GPU jobs."
     )
@@ -206,8 +202,13 @@ if __name__ == "__main__":
         indices_by_device.setdefault(cfg["device"], []).append(idx)
 
     print(f"\nWriting disBatch scripts ({len(configs)} configs total):")
+    dsbatch_out = [write_disbatch_script(args, device, indices) for device, indices in indices_by_device.items()]
     dsb_paths = {
-        device: write_disbatch_script(args, device, indices)
-        for device, indices in indices_by_device.items()
+        device: path
+        for device, (path, _)  in zip(indices_by_device, dsbatch_out, strict=True)
     }
-    print_commands(args, dsb_paths)
+    n_tasks = {
+        device: n_task
+        for device, (_, n_task)  in zip(indices_by_device, dsbatch_out, strict=True)
+    }
+    print_commands(args, dsb_paths, n_tasks, max_workers=args.max_workers)
