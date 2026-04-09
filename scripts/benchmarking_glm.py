@@ -1,4 +1,24 @@
-"""Benchmark GLM fitting for different solvers."""
+"""Benchmark GLM fitting for different solvers.
+
+
+Examples
+--------
+# generate config
+python scripts/benchmarking_glm.py \                                                                                                                                     
+    --generate_configs \                                                                                                                                                 
+    --config_path gpu_configs.json \                                                                                                                                     
+    --devices gpu \                                                                                                                                                      
+    --feature_dims 1 \                                                                                                                                                   
+    --pop_sizes 1
+
+# fit one
+python scripts/benchmarking_glm.py \
+    --config_path gpu_configs.json \                                                                                                                                     
+    --output_path gpu_results \
+    --data_path gpu_data \
+    --fit_ids 0 \
+    --n_reps 1   
+"""
 
 import argparse
 import datetime
