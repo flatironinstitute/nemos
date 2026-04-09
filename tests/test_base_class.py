@@ -183,7 +183,7 @@ class TestInstantiateSolverOverrides:
     @pytest.mark.parametrize(
         "solver_name_override, expected",
         [
-            (None, None),  # None → falls back to self.solver_name, resolved at runtime
+            (None, None),  # None → falls back to self.solver_spec.full_name, resolved at runtime
             ("LBFGS[optax+optimistix]", "LBFGS[optax+optimistix]"),
         ],
     )
@@ -191,7 +191,7 @@ class TestInstantiateSolverOverrides:
         self, regressor, mock_get_solver, solver_name_override, expected
     ):
         if expected is None:
-            expected = regressor.solver_name
+            expected = regressor.solver_spec.full_name
         with patch("nemos.base_regressor.solvers.get_solver", mock_get_solver):
             regressor._instantiate_solver(
                 lambda p, X, y: None, None, solver_name=solver_name_override

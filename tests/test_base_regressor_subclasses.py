@@ -10,12 +10,14 @@ import pytest
 import scipy as sp
 import scipy.stats as sts
 import statsmodels.api as sm
-
-# Import helpers from conftest
-from conftest import is_population_model
 from numba import njit
 
 import nemos as nmo
+
+# Import helpers from conftest
+from conftest import MockRegressor, is_population_model
+from nemos.solvers._fista import OptimistixNAG
+from nemos.solvers._optax_optimistix_solvers import OptimistixOptaxGradientDescent
 from nemos._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
 from nemos.glm.params import GLMParams
 from nemos.glm.validation import (
@@ -360,6 +362,23 @@ def test_validate_higher_dimensional_data_X(instantiate_base_regressor_subclass)
         y = y[None]
     with pytest.raises(ValueError, match="X must be 2-dimensional"):
         model._validate(X, y, _zero_init_params(X, y))
+
+
+@pytest.mark.parametrize(
+    "solver_name, expected_class",
+    [
+        ("GradientDescent[optimistix]", OptimistixNAG),
+        ("GradientDescent[optax+optimistix]", OptimistixOptaxGradientDescent),
+    ],
+)
+def test_instantiate_solver_backend_selection(solver_name, expected_class):
+    """Specifying a non-default backend via the full name should instantiate the correct solver class."""
+    mock = MockRegressor()
+    mock.solver_name = solver_name
+    solver = mock._instantiate_solver(
+        lambda params, X, y: jnp.sum(params), init_params=None
+    )
+    assert isinstance(solver, expected_class)
 
 
 @pytest.mark.parametrize(
