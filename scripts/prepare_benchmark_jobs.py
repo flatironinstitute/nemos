@@ -104,31 +104,34 @@ def write_disbatch_script(args, device: str, indices: list[int]) -> Tuple[Path, 
     return dsb_path, n_tasks
 
 
-def print_commands(args, dsb_paths: dict[str, Path], n_tasks: dict[str, int]) -> None:
+def _build_sbatch_command(args, device: str, dsb_path: Path, n_tasks: int) -> str:
+    """Return the full shell command to submit one device's disBatch job."""
     base_dir = Path(args.base_dir)
     partition_for = {"cpu": args.cpu_partition, "gpu": args.gpu_partition}
+    disbatch_logs = base_dir / "logs" / device / "disbatch"
+    n_workers = min(n_tasks, args.max_workers)
+    sbatch_flags = (
+        f"-n {n_workers}"
+        f" -p {partition_for[device]}"
+        f" -t {args.time}"
+        f" --mem-per-cpu={args.mem_per_cpu}"
+        f" -c {args.cpus_per_task}"
+    )
+    if device == "gpu":
+        sbatch_flags += f" --gpus-per-task={args.gpus_per_task}"
+    return (
+        f"module load disBatch && "
+        f"mkdir -p {disbatch_logs} && "
+        f"sbatch {sbatch_flags} disBatch -p {disbatch_logs}/ {dsb_path}"
+    )
 
+
+def print_commands(args, dsb_paths: dict[str, Path], n_tasks: dict[str, int]) -> None:
+    base_dir = Path(args.base_dir)
     print("\nTo launch (one sbatch per device):")
     for device, dsb_path in dsb_paths.items():
-        n_workers = min(n_tasks[device], args.max_workers)
-        disbatch_logs = base_dir / "logs" / device / "disbatch"
-        partition = partition_for[device]
-        sbatch_flags = (
-            f"-n {n_workers}"
-            f" -p {partition}"
-            f" -t {args.time}"
-            f" --mem-per-cpu={args.mem_per_cpu}"
-            f" -c {args.cpus_per_task}"
-        )
-        if device == "gpu":
-            sbatch_flags += f" --gpus-per-task={args.gpus_per_task}"
-        print(
-            f"\n  # {device.upper()}\n"
-            f"  module load disBatch; "
-            f"mkdir -p {disbatch_logs}; "
-            f"sbatch {sbatch_flags} disBatch -p {disbatch_logs}/ {dsb_path}"
-        )
-
+        cmd = _build_sbatch_command(args, device, dsb_path, n_tasks[device])
+        print(f"\n  # {device.upper()}\n  {cmd}")
     print("\nAfter ALL device jobs finish, aggregate:")
     print(
         f"  source {args.venv} && "
@@ -137,6 +140,14 @@ def print_commands(args, dsb_paths: dict[str, Path], n_tasks: dict[str, int]) ->
         f" --output_path {base_dir / 'results'}"
         f" --csv_path {base_dir / 'benchmark_results.csv'}"
     )
+
+
+def submit_jobs(args, dsb_paths: dict[str, Path], n_tasks: dict[str, int]) -> None:
+    """Submit one sbatch job per device. Always prints the command before running it."""
+    for device, dsb_path in dsb_paths.items():
+        cmd = _build_sbatch_command(args, device, dsb_path, n_tasks[device])
+        print(f"\nSubmitting {device.upper()} jobs:\n  {cmd}")
+        subprocess.run(cmd, shell=True, check=True)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -153,6 +164,12 @@ def _parse_args() -> argparse.Namespace:
         "--base_dir",
         required=True,
         help="Root directory for configs, results, data, and logs.",
+    )
+
+    parser.add_argument(
+        "--submit", action="store_true",
+        help="Submit jobs via sbatch after writing the disBatch scripts. "
+             "Without this flag, only prints the commands (dry-run).",
     )
 
     # job batching
@@ -211,4 +228,6 @@ if __name__ == "__main__":
         device: n_task
         for device, (_, n_task)  in zip(indices_by_device, dsbatch_out, strict=True)
     }
-    print_commands(args, dsb_paths, n_tasks, max_workers=args.max_workers)
+    print_commands(args, dsb_paths, n_tasks)
+    if args.submit:
+        submit_jobs(args, dsb_paths, n_tasks)
