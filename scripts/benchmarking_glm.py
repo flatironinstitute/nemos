@@ -158,7 +158,8 @@ def _get_git_commit() -> str:
     try:
         return (
             subprocess.check_output(
-                ["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL
+                ["git", "-C", str(Path(__file__).parent), "rev-parse", "--short", "HEAD"],
+                stderr=subprocess.DEVNULL,
             )
             .decode()
             .strip()
