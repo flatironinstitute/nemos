@@ -266,6 +266,7 @@ def benchmark_fit(
         "solver_name": model_conf["solver_name"],
         "regularizer": model_conf["regularizer"],
         "maxiter": model_conf["solver_kwargs"]["maxiter"],
+        "tol": model_conf["solver_kwargs"]["tol"],
         "device": config["device"],
         # ground truth solver used
         "solver_class": model._solver.__class__.__name__,
