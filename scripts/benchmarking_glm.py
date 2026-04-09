@@ -126,9 +126,8 @@ def generate_data(
     y_shape = config["input_shapes"]["y"]
     n_neurons = y_shape[1] if len(y_shape) > 1 else 1
     X = jax.random.normal(keys[0], shape=(samp, feat)) / feat
-    weights = jnp.squeeze(
-        0.1 * jax.random.normal(keys[1], shape=(feat, n_neurons)),
-    )
+    w = 0.1 * jax.random.normal(keys[1], shape=(feat, n_neurons))
+    weights = w[:, 0] if n_neurons == 1 else w
     intercept = -0.1 * jnp.ones(n_neurons)
     model.coef_ = weights
     model.intercept_ = intercept
