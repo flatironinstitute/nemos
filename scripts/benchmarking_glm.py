@@ -34,7 +34,7 @@ nmo.solvers.register("LBFGS", ScipyLBFGS, "scipy")
 DEFAULT_SAMPLE_SIZES = [100, 1_000, 10_000, 100_000]
 DEFAULT_FEATURE_DIMS = [1, 10, 100]
 DEFAULT_POP_SIZES = [1, 10, 20]
-DEFAULT_REGULARIZERS = ["UnRegularized", "Ridge"]
+DEFAULT_REGULARIZERS = ["Ridge"]
 DEFAULT_SOLVER_NAMES = [
     "LBFGS[optax+optimistix]",
     "LBFGS[scipy]",
