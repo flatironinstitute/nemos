@@ -9,9 +9,10 @@ Usage
 
 # 2. Copy-paste the printed sbatch command to launch.
 
-# After all jobs finish, aggregate:
+# After all jobs finish, aggregation runs automatically inside each .dsb script.
+# To re-run manually:
 #    python scripts/benchmarking_glm.py --aggregate \\
-#        --output_path <base_dir>/results --csv_path <base_dir>/benchmark_results.csv
+#        --output_path <base_dir>/results --csv_path <web_output_dir>/<run>.csv
 """
 
 import argparse
@@ -96,6 +97,15 @@ def write_disbatch_script(args, device: str, indices: list[int]) -> Tuple[Path, 
 
         # barrier within this device's job — no cross-device aggregation here
         f.write("#DISBATCH BARRIER\n")
+        agg_log = log_dir / "aggregate.log"
+        agg_cmd = (
+            f"source {args.venv} && "
+            f"python -u {BENCHMARKING_SCRIPT}"
+            f" --aggregate"
+            f" --output_path {base_dir / 'results'}"
+            f" --csv_path {args.csv_path}"
+        )
+        f.write(f"( {agg_cmd} ) &> {agg_log}\n")
 
     n_tasks = len(batches)
     print(
@@ -138,7 +148,7 @@ def print_commands(args, dsb_paths: dict[str, Path], n_tasks: dict[str, int]) ->
         f"python {BENCHMARKING_SCRIPT}"
         f" --aggregate"
         f" --output_path {base_dir / 'results'}"
-        f" --csv_path {base_dir / 'benchmark_results.csv'}"
+        f" --csv_path {args.csv_path}"
     )
 
 
@@ -164,6 +174,11 @@ def _parse_args() -> argparse.Namespace:
         "--base_dir",
         required=True,
         help="Root directory for configs, results, data, and logs.",
+    )
+    parser.add_argument(
+        "--csv_path",
+        required=True,
+        help="Path for the aggregated CSV output (web-accessible location).",
     )
 
     parser.add_argument(
