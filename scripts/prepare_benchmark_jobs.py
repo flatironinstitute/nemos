@@ -41,6 +41,7 @@ BENCHMARKING_SCRIPT = _HERE / "benchmarking_glm.py"
 
 def generate_configs(args) -> list:
     base_dir = Path(args.base_dir)
+    base_dir.mkdir(parents=True, exist_ok=True)
     cmd = [
         sys.executable,
         str(BENCHMARKING_SCRIPT),
