@@ -83,6 +83,7 @@ def write_disbatch_script(args, device: str, indices: list[int]) -> Tuple[Path, 
             fit_ids_str = " ".join(str(i) for i in batch)
             log = log_dir / f"benchmark_{batch[0]:04d}-{batch[-1]:04d}.log"
             lines = [
+                f"source {args.cuda_env}" if device == "gpu" else "true",
                 f"source {args.venv}",
                 f"export JAX_PLATFORMS={device}",
                 (
@@ -170,6 +171,11 @@ def _parse_args() -> argparse.Namespace:
     # required cluster paths
     parser.add_argument(
         "--venv", required=True, help="Path to the venv activate script."
+    )
+    parser.add_argument(
+        "--cuda_env",
+        default=str(Path.home() / "cudaenv.sh"),
+        help="Path to shell script that loads CUDA/cuDNN modules (sourced on GPU workers).",
     )
     parser.add_argument(
         "--base_dir",
