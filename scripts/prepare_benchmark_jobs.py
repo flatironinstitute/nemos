@@ -22,7 +22,6 @@ import sys
 from pathlib import Path
 from typing import Tuple
 
-
 # Import grid defaults from the benchmarking script
 _HERE = Path(__file__).parent
 sys.path.insert(0, str(_HERE))
@@ -183,9 +182,10 @@ def _parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
-        "--submit", action="store_true",
+        "--submit",
+        action="store_true",
         help="Submit jobs via sbatch after writing the disBatch scripts. "
-             "Without this flag, only prints the commands (dry-run).",
+        "Without this flag, only prints the commands (dry-run).",
     )
 
     # job batching
@@ -235,14 +235,17 @@ if __name__ == "__main__":
         indices_by_device.setdefault(cfg["device"], []).append(idx)
 
     print(f"\nWriting disBatch scripts ({len(configs)} configs total):")
-    dsbatch_out = [write_disbatch_script(args, device, indices) for device, indices in indices_by_device.items()]
+    dsbatch_out = [
+        write_disbatch_script(args, device, indices)
+        for device, indices in indices_by_device.items()
+    ]
     dsb_paths = {
         device: path
-        for device, (path, _)  in zip(indices_by_device, dsbatch_out, strict=True)
+        for device, (path, _) in zip(indices_by_device, dsbatch_out, strict=True)
     }
     n_tasks = {
         device: n_task
-        for device, (_, n_task)  in zip(indices_by_device, dsbatch_out, strict=True)
+        for device, (_, n_task) in zip(indices_by_device, dsbatch_out, strict=True)
     }
     print_commands(args, dsb_paths, n_tasks)
     if args.submit:
