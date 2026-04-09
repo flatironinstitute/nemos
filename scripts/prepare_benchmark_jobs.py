@@ -84,6 +84,7 @@ def write_disbatch_script(args, device: str, indices: list[int]) -> Tuple[Path, 
             log = log_dir / f"benchmark_{batch[0]:04d}-{batch[-1]:04d}.log"
             lines = [
                 f"source {args.venv}",
+                f"export JAX_PLATFORMS={device}",
                 (
                     f"python -u {BENCHMARKING_SCRIPT}"
                     f" --config_path {base_dir / 'configs.json'}"
