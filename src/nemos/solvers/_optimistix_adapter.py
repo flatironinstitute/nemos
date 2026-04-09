@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
+from functools import partial
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, Type, TypeAlias
 
 import equinox as eqx
@@ -165,6 +166,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixAdapterState]):
         )
         return OptimistixAdapterState(solver_state=solver_state, stats=stats)
 
+    @partial(jax.jit, static_argnums=(0,))
     def update(
         self,
         params: Params,
