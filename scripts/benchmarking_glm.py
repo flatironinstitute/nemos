@@ -454,8 +454,37 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _print_env_info() -> None:
+    """Print environment diagnostics for debugging worker configuration."""
+    import os
+    import sys
+
+    print("=" * 60)
+    print("WORKER ENV DIAGNOSTICS")
+    print("=" * 60)
+    print(f"  hostname       : {socket.gethostname()}")
+    print(f"  python         : {sys.executable}")
+    print(f"  python version : {sys.version.split()[0]}")
+    print(f"  nemos version  : {nmo.__version__}")
+    print(f"  jax version    : {jax.__version__}")
+    print(f"  JAX_PLATFORMS  : {os.environ.get('JAX_PLATFORMS', '(not set)')}")
+    try:
+        devices = jax.devices()
+        print(f"  jax devices    : {devices}")
+    except Exception as e:
+        print(f"  jax devices    : ERROR — {e}")
+    # check for CUDA libs in LD_LIBRARY_PATH
+    ld = os.environ.get("LD_LIBRARY_PATH", "")
+    cuda_in_path = any("cuda" in p.lower() or "cudnn" in p.lower() for p in ld.split(":"))
+    print(f"  CUDA in LD_LIBRARY_PATH: {cuda_in_path}")
+    if not cuda_in_path:
+        print(f"  LD_LIBRARY_PATH: {ld or '(not set)'}")
+    print("=" * 60)
+
+
 if __name__ == "__main__":
     args = _parse_args()
+    _print_env_info()
 
     if args.generate_configs:
         configs = generate_glm_configs(
