@@ -162,6 +162,12 @@ class TestInstantiateSolverOverrides:
 
     @pytest.fixture
     def regressor(self, mock_regressor):
+        # Pre-set _solver_spec so solver_spec never calls the real get_solver.
+        # algo_name must be in UnRegularized._allowed_solvers to pass check_solver.
+        solver_spec = MagicMock()
+        solver_spec.algo_name = "GradientDescent"
+        solver_spec.full_name = "GradientDescent[optax+optimistix]"
+        mock_regressor._solver_spec = solver_spec
         return mock_regressor
 
     @pytest.fixture
@@ -183,15 +189,13 @@ class TestInstantiateSolverOverrides:
     @pytest.mark.parametrize(
         "solver_name_override, expected",
         [
-            (None, None),  # None → falls back to self.solver_spec.full_name, resolved at runtime
+            (None, "GradientDescent[optax+optimistix]"),  # None → falls back to self.solver_spec.full_name
             ("LBFGS[optax+optimistix]", "LBFGS[optax+optimistix]"),
         ],
     )
     def test_solver_name_resolution(
         self, regressor, mock_get_solver, solver_name_override, expected
     ):
-        if expected is None:
-            expected = regressor.solver_spec.full_name
         with patch("nemos.base_regressor.solvers.get_solver", mock_get_solver):
             regressor._instantiate_solver(
                 lambda p, X, y: None, None, solver_name=solver_name_override
