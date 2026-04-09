@@ -188,7 +188,7 @@ def test_allow_solver(regularizer_class):
         with does_not_raise():
             reg1.check_solver(new_solver)
             model = nmo.glm.GLM(regularizer=reg1, solver_name=new_solver)
-            assert model.algo_name == new_solver
+            assert model.solver_name == new_solver
 
         # allowing a solver already allowed does nothing
         _default_solver = regularizer_class._default_solver
