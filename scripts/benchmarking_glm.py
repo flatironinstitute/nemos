@@ -99,7 +99,7 @@ def generate_glm_configs(
             },
             "model_conf": {
                 "solver_name": solv,
-                "solver_kwargs": {"maxiter": 10000, "tol":1e-8},
+                "solver_kwargs": {"maxiter": 10000, "tol": 1e-8},
                 "regularizer": reg,
             },
             "device": dev,
