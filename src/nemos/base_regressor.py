@@ -390,7 +390,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             # copy dictionary of kwargs to avoid modifying user settings
             solver_kwargs = deepcopy(self.solver_kwargs)
         if solver_name is None:
-            solver_name = self.solver_name
+            solver_name = self.solver_spec.full_name
         if regularizer is None:
             regularizer = self.regularizer
         if regularizer_strength is None:
