@@ -174,8 +174,8 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--cuda_env",
-        default=str(Path.home() / "cudaenv.sh"),
-        help="Path to shell script that loads CUDA/cuDNN modules (sourced on GPU workers).",
+        default=None,
+        help="Path to shell script that loads CUDA/cuDNN modules (sourced on GPU workers). Required when devices includes 'gpu'.",
     )
     parser.add_argument(
         "--base_dir",
@@ -234,6 +234,8 @@ def _parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = _parse_args()
+    if "gpu" in args.devices and args.cuda_env is None:
+        raise SystemExit("--cuda_env is required when devices includes 'gpu'")
     configs = generate_configs(args)
 
     # group config indices by device — one dsb file per device
