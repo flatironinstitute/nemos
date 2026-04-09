@@ -131,7 +131,7 @@ class ScipySolver:
 
         def _flat_grad(flat_params, *args):
             params_in_their_orig_shape = unflattener_fun(flat_params)
-            return unflattener_fun(self.grad(params_in_their_orig_shape, *args))
+            return flattener_fun(self.grad(params_in_their_orig_shape, *args))
 
         # pass the flat parameters and the objective function taking them
         # also the custom parameters we saved in __init__

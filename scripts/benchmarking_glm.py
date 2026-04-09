@@ -99,7 +99,7 @@ def generate_glm_configs(
             },
             "model_conf": {
                 "solver_name": solv,
-                "solver_kwargs": {"maxiter": 10000},
+                "solver_kwargs": {"maxiter": 10000, "tol":1e-8},
                 "regularizer": reg,
             },
             "device": dev,
@@ -202,8 +202,13 @@ def benchmark_fit(
 
     def _get_iter_num(model):
         if is_scipy:
-            return model.solver_state_.iter_num
-        return model.solver_state_.stats.iterations
+            return int(model.solver_state_.iter_num)
+        return int(model.solver_state_.stats.num_steps.item())
+
+    def _get_converged(state):
+        if is_scipy:
+            return bool(state.converged)
+        return bool(state.stats.converged.item())
 
     solver_init_s = []
     compilation_s = []
@@ -239,11 +244,7 @@ def benchmark_fit(
         t5 = perf_counter()
         fit_s.append(t5 - t4)
 
-        has_converged = (
-            state.stats.converged.item()
-            if hasattr(state, "stats") and hasattr(state.stats, "converged")
-            else None
-        )
+        has_converged = _get_converged(state)
         converged.append(has_converged)
 
         # end-to-end fit: includes all preprocessing, validation, param init,
@@ -266,6 +267,8 @@ def benchmark_fit(
         "regularizer": model_conf["regularizer"],
         "maxiter": model_conf["solver_kwargs"]["maxiter"],
         "device": config["device"],
+        # ground truth solver used
+        "solver_class": model._solver.__class__.__name__,
     }
 
     return {
@@ -276,6 +279,7 @@ def benchmark_fit(
             "fit_s": fit_s,
             "end_to_end_s": end_to_end_s,
             "converged": converged,
+            "iter_num": num_solver_iter,
         },
         "meta": {
             "nemos_version": nmo.__version__,
