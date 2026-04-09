@@ -28,7 +28,7 @@ DEFAULT_REGULARIZERS = ["UnRegularized", "Ridge"]
 DEFAULT_SOLVER_NAMES = [
     "LBFGS[optax+optimistix]",
     "LBFGS[scipy]",
-    "GradientDescent[jaxopt]",
+    "GradientDescent[optimistix]",
 ]
 DEFAULT_DEVICES = ["cpu"]
 DEFAULT_N_REPS = 10
@@ -127,7 +127,7 @@ def generate_data(
     n_neurons = y_shape[1] if len(y_shape) > 1 else 1
     X = jax.random.normal(keys[0], shape=(samp, feat)) / feat
     weights = jnp.squeeze(
-        0.1 * jax.random.normal(keys[1], shape=(feat, n_neurons)), axis=1
+        0.1 * jax.random.normal(keys[1], shape=(feat, n_neurons)),
     )
     intercept = -0.1 * jnp.ones(n_neurons)
     model.coef_ = weights
