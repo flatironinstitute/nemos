@@ -27,7 +27,7 @@ class ScipySolver:
         has_aux,
         init_params,
         method: str,
-        max_steps: int = 100,
+        maxiter: int = 100,
         tol: float = 1e-8,
     ) -> None:
         """
@@ -42,16 +42,19 @@ class ScipySolver:
 
         An alternative would be accept `**solver_kwargs`, store it, and pass anything in it to scipy.
         """
+        import jax
+
         # `regularizer.penalized_loss` returns a function which is the unregularized loss + a penalty term
         # we will pass this objective function to `scipy.optimize.minimize`
         self.fun = regularizer.penalized_loss(
             unregularized_loss, init_params, regularizer_strength
         )
+        self.grad = jax.grad(self.fun)
 
         # storing these to later pass to scipy
         self.method = method
         self.tol = tol
-        self.max_steps = max_steps
+        self.maxiter = maxiter
 
         assert not has_aux, "Not implementing aux support now."
 
@@ -62,7 +65,7 @@ class ScipySolver:
         For alternative, more flexible implementations see the solvers
         implemented in `nemos.solvers`.
         """
-        return {"method", "max_steps", "tol"}
+        return {"method", "maxiter", "tol"}
 
     def init_state(self, init_params, *args):
         """
@@ -82,7 +85,7 @@ class ScipySolver:
         Returns a tuple of the final parameters and the final solver state.
         """
         unstacked_final_params, res = self._run_for_n_steps(
-            init_params, self.max_steps, *args
+            init_params, self.maxiter, *args
         )
         # unpack res, which has a custom type defined in scipy into a regular dict
         return (
@@ -126,10 +129,15 @@ class ScipySolver:
             params_in_their_orig_shape = unflattener_fun(flat_params)
             return self.fun(params_in_their_orig_shape, *args)
 
+        def _flat_grad(flat_params, *args):
+            params_in_their_orig_shape = unflattener_fun(flat_params)
+            return unflattener_fun(self.grad(params_in_their_orig_shape, *args))
+
         # pass the flat parameters and the objective function taking them
         # also the custom parameters we saved in __init__
         res = scipy.optimize.minimize(
             fun=_flat_obj,
+            jac=_flat_grad,
             x0=_flat_params,
             args=args,
             method=self.method,
@@ -150,7 +158,7 @@ class ScipyLBFGS(ScipySolver):
         regularizer_strength,
         has_aux,
         init_params,
-        max_steps: int = 100,
+        maxiter: int = 100,
         tol: float = 1e-8,
     ):
         return super().__init__(
@@ -160,6 +168,6 @@ class ScipyLBFGS(ScipySolver):
             has_aux,
             init_params,
             "L-BFGS-B",
-            max_steps,
+            maxiter,
             tol,
         )

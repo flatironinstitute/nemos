@@ -198,11 +198,19 @@ def benchmark_fit(
     pars = model.initialize_params(X, y)
     model_pars = model._validator.to_model_params(pars)
 
+    is_scipy = model.solver_spec.backend == "scipy"
+
+    def _get_iter_num(model):
+        if is_scipy:
+            return model.solver_state_.iter_num
+        return model.solver_state_.stats.iterations
+
     solver_init_s = []
     compilation_s = []
     fit_s = []
     end_to_end_s = []
     converged = []
+    num_solver_iter = []
 
     for _ in range(n_reps):
         # fresh model each rep for independent measurements
@@ -214,18 +222,22 @@ def benchmark_fit(
         solver_init_s.append(t1 - t0)
 
         # compile on the same instance so _optimizer_run is valid
-        compiled = (
-            jax.jit(model._optimizer_run).trace(model_pars, X, y).lower().compile()
-        )
-        t2 = perf_counter()
-        compilation_s.append(t2 - t1)
-
+        if not is_scipy:
+            t2 = perf_counter()
+            compiled = (
+                jax.jit(model._optimizer_run).trace(model_pars, X, y).lower().compile()
+            )
+            t3 = perf_counter()
+            compilation_s.append(t3 - t2)
+        else:
+            compiled = model._optimizer_run
+            compilation_s.append(jnp.nan)
         # execution only — no compilation overhead
-        t3 = perf_counter()
+        t4 = perf_counter()
         pars, state, _ = compiled(model_pars, X, y)
         pars.coef.block_until_ready()
-        t4 = perf_counter()
-        fit_s.append(t4 - t3)
+        t5 = perf_counter()
+        fit_s.append(t5 - t4)
 
         has_converged = (
             state.stats.converged.item()
@@ -238,10 +250,11 @@ def benchmark_fit(
         # solver init, compilation, and execution. Subtracting (solver_init +
         # compilation + fit) from this gives an estimate of preprocessing overhead.
         model = model_from_config(config)
-        t5 = perf_counter()
-        model.fit(X, y)
         t6 = perf_counter()
-        end_to_end_s.append(t6 - t5)
+        model.fit(X, y)
+        t7 = perf_counter()
+        end_to_end_s.append(t7 - t6)
+        num_solver_iter.append(_get_iter_num(model))
 
     input_shapes = config["input_shapes"]
     model_conf = config["model_conf"]
