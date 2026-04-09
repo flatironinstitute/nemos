@@ -343,6 +343,7 @@ def aggregate_results(results_dir: str, csv_path: str) -> None:
                     "fit_s": res["fit_s"][i],
                     "end_to_end_s": res["end_to_end_s"][i],
                     "converged": res["converged"][i],
+                    "iter_num": res["iter_num"][i],
                 }
             )
 
