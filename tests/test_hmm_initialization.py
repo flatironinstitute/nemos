@@ -360,6 +360,11 @@ class TestSetupHMMInitialization:
                 pytest.raises(ValueError, match="Invalid initialization"),
                 None,
             ),
+            (
+                ["invalid"],
+                pytest.raises(TypeError, match="either a string or a callable"),
+                None,
+            ),
         ],
     )
     def test_initial_proba_init_str(self, init_str, expectation, method):
@@ -625,6 +630,53 @@ class TestGenerateHMMInitParams:
         assert transition_prob.shape == (n_states, n_states)
         assert isinstance(initial_prob, jnp.ndarray)
         assert isinstance(transition_prob, jnp.ndarray)
+
+    @pytest.mark.parametrize(
+        "key, value, expectation",
+        [
+            (
+                "initial_proba_init",
+                lambda n_states, X, y, random_key: jnp.ones((n_states,)) / n_states,
+                does_not_raise(),
+            ),
+            (
+                "transition_proba_init",
+                lambda n_states, X, y, random_key: jnp.ones((n_states, n_states))
+                / n_states,
+                does_not_raise(),
+            ),
+            (
+                "initial_proba_init",
+                lambda n_states, X, y, random_key: jnp.ones((n_states - 1,)),
+                pytest.raises(ValueError, match="must return an array of shape"),
+            ),
+            (
+                "transition_proba_init",
+                lambda n_states, X, y, random_key: jnp.ones(
+                    (n_states - 1, n_states - 1)
+                ),
+                pytest.raises(ValueError, match="must return an array of shape"),
+            ),
+            (
+                "initial_proba_init",
+                lambda n_states, X, y, random_key: jnp.ones((n_states,)),
+                pytest.raises(ValueError, match="must sum to 1"),
+            ),
+            (
+                "transition_proba_init",
+                lambda n_states, X, y, random_key: jnp.ones((n_states, n_states)),
+                pytest.raises(ValueError, match="rows that sum to 1"),
+            ),
+        ],
+    )
+    def test_validate_custom_func_output(self, key, value, expectation):
+        with expectation:
+            generate_hmm_initial_params(
+                n_states=3,
+                X=None,
+                y=None,
+                init_funcs={key: value, key + "_custom": True},
+            )
 
 
 class TestResolveDirichletPriors:

@@ -706,13 +706,17 @@ def generate_hmm_initial_params(
     ----------
     n_states :
         Number of HMM states.
+    X :
+        Predictor data (e.g., model design for GLM) of shape (n_samples, n_features).
+    y :
+        Output data (e.g., neural activity) of shape (n_samples,).
+    random_key :
+        Optional key for random number generation, if needed by the initialization functions. The key is split to
+        ensure different random states for initial probabilities and transition probabilities.
     init_funcs :
         Dictionary containing the initialization functions and their kwargs for both initial state probabilities
         and transition probabilities. This dictionary can be set up using the `setup_hmm_initialization` function.
         If not provided, or if specific functions are missing, defaults will be used.
-    seed :
-        Optional seed for random number generation, if needed by the initialization functions. This is used globally,
-        but is overwritten by function-specific random_keys if they are provided in the `init_funcs` kwargs.
 
     Returns
     -------
