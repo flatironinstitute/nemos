@@ -117,9 +117,7 @@ class StochasticSolverMixin:
         callback.on_train_begin(ctx)
 
         for epoch in range(num_epochs):
-            prev_params = params
-            prev_state = state
-            ctx.epoch, ctx.prev_params, ctx.prev_state = epoch, prev_params, prev_state
+            ctx.epoch = epoch
 
             callback.on_epoch_begin(ctx)
 

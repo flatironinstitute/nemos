@@ -23,12 +23,8 @@ class TrainingContext:
         The solver instance running the optimization.
     params :
         Current model parameters.
-    prev_params :
-        Parameters at end of previous epoch.
     state :
         Current solver state.
-    prev_state :
-        Solver state at end of previous epoch.
     aux :
         Auxiliary output from the last batch.
     epoch :
@@ -41,9 +37,7 @@ class TrainingContext:
 
     solver: Any
     params: Any = None
-    prev_params: Any = None
     state: Any = None
-    prev_state: Any = None
     aux: Any = None
     epoch: int | None = None
     batch_idx: int | None = None
@@ -160,21 +154,30 @@ class SolverConvergenceCallback(Callback):
     Calls ``ctx.solver.stochastic_convergence_criterion(...)`` at the end of
     each epoch and requests a stop if it returns ``True``.
 
-    This callback is stateless — it reads everything from the context.
+    Tracks previous params and state internally so the context doesn't have to.
     """
+
+    def __init__(self):
+        self._prev_params = None
+        self._prev_state = None
+
+    def on_epoch_begin(self, ctx: TrainingContext) -> None:
+        """Save current params and state before the epoch runs."""
+        self._prev_params = ctx.params
+        self._prev_state = ctx.state
 
     def on_epoch_end(self, ctx: TrainingContext) -> None:
         """Check solver convergence criterion and request stop if met."""
         converged = ctx.solver.stochastic_convergence_criterion(
             ctx.params,
-            ctx.prev_params,
+            self._prev_params,
             ctx.state,
-            ctx.prev_state,
+            self._prev_state,
             ctx.aux,
             ctx.epoch,
         )
         if converged:
-            ctx.request_stop("solver convergence criterion")
+            ctx.request_stop("Satisfied the solver's convergence criterion.")
 
 
 def _normalize_callbacks(
