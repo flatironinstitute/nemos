@@ -189,7 +189,10 @@ class TestInstantiateSolverOverrides:
     @pytest.mark.parametrize(
         "solver_name_override, expected",
         [
-            (None, "GradientDescent[optax+optimistix]"),  # None → falls back to self.solver_spec.full_name
+            (
+                None,
+                "GradientDescent[optax+optimistix]",
+            ),  # None → falls back to self.solver_spec.full_name
             ("LBFGS[optax+optimistix]", "LBFGS[optax+optimistix]"),
         ],
     )
