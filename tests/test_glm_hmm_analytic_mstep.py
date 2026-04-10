@@ -1,3 +1,4 @@
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -130,7 +131,7 @@ def generate_data_gaussian(request):
         (GLMParams(_COEF_SINGLE, _INTERCEPT_SINGLE), (), lambda x: x),
         (GLMParams(_COEF_SINGLE, _INTERCEPT_SINGLE), (), jnp.exp),
         (GLMParams(_COEF_POP, _INTERCEPT_POP), (4,), lambda x: x),
-        (GLMParams(_COEF_POP, _INTERCEPT_POP), (4,), jnp.exp),
+        (GLMParams(_COEF_POP, _INTERCEPT_POP), (4,), jax.nn.softplus),
     ],
     indirect=True,
 )
