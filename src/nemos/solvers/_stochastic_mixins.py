@@ -82,6 +82,7 @@ class StochasticSolverMixin:
         data_loader: DataLoader,
         num_epochs: int,
         callback: Callback,
+        ctx: TrainingContext,
     ) -> StepResult:
         """
         Run optimization over mini-batches from a data loader.
@@ -97,6 +98,8 @@ class StochasticSolverMixin:
             is enabled).
         callback :
             Training callback.
+        ctx :
+            Training context for callback communication.
 
         Returns
         -------
@@ -110,9 +113,7 @@ class StochasticSolverMixin:
         params = init_params
         aux = None
 
-        ctx = TrainingContext(
-            solver=self, params=params, state=state, num_epochs=num_epochs
-        )
+        ctx.state = state
 
         callback.on_train_begin(ctx)
 

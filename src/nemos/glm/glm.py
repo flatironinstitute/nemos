@@ -22,6 +22,7 @@ from ..callbacks import (
     DEFAULT_CALLBACK,
     Callback,
     SolverConvergenceCallback,
+    TrainingContext,
     _normalize_callbacks,
 )
 from ..exceptions import NotFittedError
@@ -918,11 +919,13 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         self._initialize_optimizer_and_state(init_params, sample_X, sample_y)
 
         # Run stochastic optimization
+        ctx = TrainingContext(model=self, solver=self._solver)
         params, state, aux = self._solver.stochastic_run(
             init_params,
             preprocessed_loader,
             num_epochs=num_epochs,
             callback=_normalize_callbacks(callbacks),
+            ctx=ctx,
         )
 
         if tree_utils.pytree_map_and_reduce(

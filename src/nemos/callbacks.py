@@ -19,6 +19,8 @@ class TrainingContext:
 
     Parameters
     ----------
+    model :
+        The model being trained (e.g. GLM instance). Set by ``stochastic_fit``.
     solver :
         The solver instance running the optimization.
     params :
@@ -35,7 +37,8 @@ class TrainingContext:
         Total number of epochs requested.
     """
 
-    solver: Any
+    model: Any = None
+    solver: Any = None
     params: Any = None
     state: Any = None
     aux: Any = None

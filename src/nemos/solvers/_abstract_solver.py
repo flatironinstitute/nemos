@@ -13,7 +13,7 @@ from typing import (
     runtime_checkable,
 )
 
-from ..callbacks import Callback
+from ..callbacks import Callback, TrainingContext
 from ..typing import Params, SolverState, StepResult
 
 if TYPE_CHECKING:
@@ -144,6 +144,7 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         data_loader: DataLoader,
         num_epochs: int,
         callback: Callback | None = None,
+        ctx: TrainingContext | None = None,
     ) -> StepResult:
         """
         Run optimization over mini-batches from a data loader.
@@ -161,6 +162,9 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
             Training callback. A single ``Callback`` instance (use
             ``CallbackList`` for multiple callbacks).
             If None, use the no-op base callback.
+        ctx :
+            Training context for callback communication.
+            If None, a default context is created.
 
         Returns
         -------
@@ -182,12 +186,19 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
             raise ValueError("num_epochs must be >= 1")
         if callback is None:
             callback = Callback()
+        if ctx is None:
+            ctx = TrainingContext()
+
+        ctx.solver = self
+        ctx.params = init_params
+        ctx.num_epochs = num_epochs
 
         return self._stochastic_run_impl(
             init_params,
             data_loader,
             num_epochs,
             callback=callback,
+            ctx=ctx,
         )
 
     def _stochastic_run_impl(
@@ -196,6 +207,7 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         data_loader: DataLoader,
         num_epochs: int,
         callback: Callback,
+        ctx: TrainingContext | None = None,
     ) -> StepResult:
         """
         Override in stochastic-capable solvers.
