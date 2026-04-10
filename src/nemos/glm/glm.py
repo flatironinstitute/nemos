@@ -875,9 +875,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         >>> model = model.stochastic_fit(loader, num_epochs=10)
         """
         # Validate solver supports stochastic
-        if not getattr(self._solver_spec.implementation, "_supports_stochastic", False):
+        if not getattr(self.solver_spec.implementation, "_supports_stochastic", False):
             raise ValueError(
-                f"Solver '{self.solver_name}' does not support stochastic optimization. "
+                f"Solver '{self.solver_spec.full_name}' does not support stochastic optimization. "
                 f"Use one of {[s.full_name for s in list_stochastic_solvers()]}."
             )
 
