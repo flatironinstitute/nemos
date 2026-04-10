@@ -42,6 +42,10 @@ class StochasticSolverMixin:
     that iterates over the data loader for the specified number of epochs,
     calling ``update`` on each batch.
 
+    Solver-specific epoch preparation can be implemented through
+    ``_epoch_prep(...)``. This is mainly intended for algorithms with
+    epoch-level outer-loop work, such as SVRG-like methods.
+
     Supports optional callbacks for per-epoch and per-batch hooks.
 
     Classes using this mixin must implement ``init_state`` and ``update`` methods.
@@ -63,16 +67,26 @@ class StochasticSolverMixin:
                     "Turn off linesearch and set explicit stepsizes for stochastic optimization."
                 )
 
-    def _pre_epoch(
+    def _epoch_prep(
         self,
         params: Params,
         state: SolverAdapterState,
         data_loader: DataLoader,
     ) -> tuple[Params, SolverAdapterState]:
         """
-        Pass through params and state by default.
+        Perform solver-specific preparation for the upcoming epoch.
 
-        SVRG overwrites to compute the full gradient before each epoch.
+        This hook is called once per epoch after the epoch counter is advanced
+        and before the first batch update of that epoch. It is intended for
+        algorithms that require epoch-level setup, such as SVRG.
+
+        Implementations may return updated ``params`` and ``state``. The returned
+        values define the initial optimization state used for the batch updates
+        of the current epoch.
+
+        This hook is internal to the solver loop. It is not a callback hook and
+        should be used for algorithmic preparation rather than user-facing logging
+        or control flow.
         """
         return params, state
 
@@ -123,7 +137,8 @@ class StochasticSolverMixin:
             callback.on_epoch_begin(ctx)
 
             # SVRG has to run through the data to update the full gradient at the anchor point
-            params, state = self._pre_epoch(params, state, data_loader)
+            params, state = self._epoch_prep(params, state, data_loader)
+            ctx.params, ctx.state = params, state
 
             for batch_idx, batch_data in enumerate(data_loader):
                 ctx.batch_idx = batch_idx

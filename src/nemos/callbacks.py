@@ -90,7 +90,18 @@ class Callback:
         pass
 
     def on_epoch_begin(self, ctx: TrainingContext) -> None:
-        """Run at the start of each epoch."""
+        """
+        Run at the start of an epoch.
+
+        This hook is called after the training loop advances ``ctx.epoch`` and
+        before the first batch of that epoch is processed. It marks the start
+        of epoch-level work from the callback perspective.
+
+        Solver-specific epoch preparation may still occur after this hook and
+        before the first batch update. Callbacks should therefore treat this
+        hook as notification that a new epoch is starting, not as a guarantee
+        that all solver-internal epoch setup has already completed.
+        """
         pass
 
     def on_epoch_end(self, ctx: TrainingContext) -> None:

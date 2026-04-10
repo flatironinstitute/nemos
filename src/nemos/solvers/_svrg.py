@@ -872,7 +872,7 @@ class _WrappedSVRGBase(JaxoptStochasticSolverMixin, JaxoptAdapter):
 
     _supports_stochastic = True
 
-    def _pre_epoch(
+    def _epoch_prep(
         self,
         params: Params,
         state: JaxoptAdapterState,
