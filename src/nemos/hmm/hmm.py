@@ -1,19 +1,36 @@
+"""Base class for HMM models."""
+
+import abc
+import warnings
 from numbers import Number
-from typing import Union
+from typing import Callable, Literal, Optional, Union
 
-import jax.numpy as jnp
 import jax
+import jax.numpy as jnp
+import pynapple as nap
+from numpy.typing import ArrayLike, NDArray
 
-from ..glm_hmm.initialize_parameters import (
-    _resolve_dirichlet_priors,
+from .. import tree_utils
+from ..type_casting import support_pynapple
+from ..typing import (
+    DESIGN_INPUT_TYPE,
 )
-from .validation import HMMValidator
-from .initialize_parameters import setup_hmm_initialization
+from ..hmm.expectation_maximization import (
+    forward_backward,
+    forward_pass,
+    max_sum,
+)
+from .initialize_parameters import (
+    INITIALIZATION_FN_DICT,
+    _resolve_dirichlet_priors,
+    setup_hmm_initialization,
+    _validate_init_funcs_keys,
+)
+from .params import HMMModelParamsT
+from .utils import _check_state_format, _get_is_new_session
 
-# from .params import HMMParams
 
-
-class BaseHMM:
+class BaseHMM(abc.ABC):
     def __init__(
         self,
         n_states: int,
@@ -26,7 +43,7 @@ class BaseHMM:
         maxiter: int = 1000,
         tol: float = 1e-8,
         seed=jax.random.PRNGKey(123),
-        hmm_initialization_funcs: dict | None = None,
+        hmm_initialization_funcs: INITIALIZATION_FN_DICT = {},
     ):
         self._validator_class = None  # to be set by inherited class
         self.n_states = n_states
@@ -60,6 +77,10 @@ class BaseHMM:
             init_funcs=self._hmm_initialization_funcs,
         )
 
+    @abs.abstractmethod
+    def _log_likelihood(self, params: HMMModelParamsT, X, y):
+        pass
+
     @property
     def n_states(self) -> int:
         """Number of hidden states of the HMM."""
@@ -91,7 +112,7 @@ class BaseHMM:
                 f"n_states must be a positive integer. ``{n_states}`` provided instead."
             )
         self._n_states = int_n_states
-        self._validator = HMMValidator(n_states=n_states)
+        self._validator = self._validator_class(n_states=n_states)
 
     @property
     def maxiter(self):
@@ -180,6 +201,17 @@ class BaseHMM:
             )
         self._seed = value
 
+    @property
+    def hmm_initialization_funcs(self):
+        """Dictionary of initialization functions for HMM parameters."""
+        return self._hmm_initialization_funcs
+
+    # don't include setter so that this can't be modified outside of setup()?
+    @hmm_initialization_funcs.setter
+    def hmm_initialization_funcs(self, value: INITIALIZATION_FN_DICT | dict):
+        # add type checking?
+        self._hmm_initialization_funcs = _validate_init_funcs_keys(value)
+
     def _check_is_fit(self):
         """Ensure the instance has been fitted."""
         flat_params = [
@@ -201,74 +233,23 @@ class BaseHMM:
                 "set the missing attributes."
             )
 
-    @staticmethod
-    def _get_is_new_session(
-        X: DESIGN_INPUT_TYPE, y: ArrayLike | nap.Tsd | nap.TsdFrame | None = None
-    ) -> jnp.ndarray | None:
-        """Compute session boundary indicators for HMM time-series data.
+    def _validate_and_prepare_inputs(self, X, y):
+        """Validate and prepare inputs."""
+        # check if the model was fit
+        self._check_is_fit()
+        params = self._get_model_params()
 
-        Identifies session boundaries by detecting epoch starts and gaps in the data
-        (represented by NaN values in either predictors or response). This is essential
-        for HMM models to properly segment time series data and reset the hidden
-        state between discontinuous recordings.
+        # validate inputs
+        self._validator.validate_inputs(X=X, y=y)
+        self._validator.validate_consistency(params, X=X, y=y)
 
-        Parameters
-        ----------
-        X :
-            Design matrix or predictor time series. Can be a pynapple Tsd/TsdFrame or
-            array-like of shape ``(n_time_points, n_features)``.
-        y :
-            Response variable time series of shape ``(n_time_points,)`` or
-            ``(n_time_points, n_neurons)``. If None, NaN detection is based on X only
-            (useful for simulation where y is not available).
-
-        Returns
-        -------
-        is_new_session :
-            Binary indicator array of shape ``(n_time_points,)`` marking session starts
-            with 1s. Returns None if unable to compute session boundaries.
-
-        Notes
-        -----
-        Session boundaries are identified from:
-        - Epoch start times (when using pynapple Tsd objects with time_support)
-        - Positions immediately following NaN values in either X or y
-
-        When both X and y are pynapple objects, y's time information takes precedence.
-
-        For non-pynapple inputs, a default session structure is initialized based on
-        the length of X (or y if provided).
-
-        See Also
-        --------
-        compute_is_new_session : Core function for computing session indicators.
-        """
-        # compute the nan location along the sample axis
-        nan_x = jnp.any(jnp.isnan(jnp.asarray(X)).reshape(X.shape[0], -1), axis=1)
-        if y is not None:
-            nan_y = jnp.any(jnp.isnan(jnp.asarray(y)).reshape(y.shape[0], -1), axis=1)
-            combined_nans = nan_y | nan_x
-        else:
-            combined_nans = nan_x
-
-        # define new session array
-        if y is not None and is_pynapple_tsd(y):
-            is_new_session = compute_is_new_session(
-                y.t, y.time_support.start, combined_nans
-            )
-        elif is_pynapple_tsd(X):
-            is_new_session = compute_is_new_session(
-                X.t, X.time_support.start, combined_nans
-            )
-        else:
-            is_new_session = compute_is_new_session(
-                jnp.arange(X.shape[0]), jnp.array([0.0]), combined_nans
-            )
-        return is_new_session
+        # compute new session indicator
+        is_new_session = _get_is_new_session(X, y)
+        return params, X, y, is_new_session
 
     def _score(
         self,
-        params: GLMHMMParams,
+        params: HMMModelParamsT,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: Union[NDArray, jnp.ndarray, nap.Tsd],
         is_new_session: jnp.ndarray,
@@ -288,10 +269,8 @@ class BaseHMM:
             X=data,
             y=y,
             is_new_session=is_new_session,
-            log_likelihood_func=prepare_estep_log_likelihood(
-                y.ndim > 1, self.observation_model
-            ),
-            inverse_link_function=self._inverse_link_function,
+            # do we store this in the model during initialization?
+            log_likelihood_func=self._log_likelihood,
         )
         return jnp.sum(log_norm)
 
@@ -321,7 +300,7 @@ class BaseHMM:
     @support_pynapple(conv_type="jax")
     def _smooth_proba(
         self,
-        params: GLMHMMParams,
+        params: HMMModelParamsT,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: Union[NDArray, jnp.ndarray, nap.Tsd],
         is_new_session: jnp.ndarray,
@@ -342,10 +321,7 @@ class BaseHMM:
             X=data,
             y=y,
             is_new_session=is_new_session,
-            log_likelihood_func=prepare_estep_log_likelihood(
-                y.ndim > 1, self.observation_model
-            ),
-            inverse_link_function=self._inverse_link_function,
+            log_likelihood_func=self._log_likelihood,
         )
         proba = jnp.exp(log_posteriors)
         # renormalize (numerical precision due to exponentiation)
@@ -353,20 +329,6 @@ class BaseHMM:
         # re-attach nans
         proba = jnp.full((valid.shape[0], proba.shape[1]), jnp.nan).at[valid].set(proba)
         return proba
-
-    def _validate_and_prepare_inputs(self, X, y):
-        """Validate and prepare inputs."""
-        # check if the model was fit
-        self._check_is_fit()
-        params = self._get_model_params()
-
-        # validate inputs
-        self._validator.validate_inputs(X=X, y=y)
-        self._validator.validate_consistency(params, X=X, y=y)
-
-        # compute new session indicator
-        is_new_session = self._get_is_new_session(X, y)
-        return params, X, y, is_new_session
 
     def smooth_proba(
         self,
@@ -458,7 +420,7 @@ class BaseHMM:
     @support_pynapple(conv_type="jax")
     def _filter_proba(
         self,
-        params: GLMHMMParams,
+        params: HMMModelParamsT,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: Union[NDArray, jnp.ndarray, nap.Tsd],
         is_new_session: jnp.ndarray,
@@ -479,9 +441,7 @@ class BaseHMM:
             y,
             inverse_link_function=self._inverse_link_function,
             is_new_session=is_new_session,
-            log_likelihood_func=prepare_estep_log_likelihood(
-                y.ndim > 1, self.observation_model
-            ),
+            log_likelihood_func=self._log_likelihood,
         )
         proba = jnp.exp(log_proba)
         # renormalize (numerical errors due to exponentiating)
@@ -584,7 +544,7 @@ class BaseHMM:
     @support_pynapple(conv_type="jax")
     def _decode_state(
         self,
-        params: GLMHMMParams,
+        params: HMMModelParamsT,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: Union[NDArray, jnp.ndarray, nap.Tsd],
         is_new_session: jnp.ndarray,
@@ -605,11 +565,8 @@ class BaseHMM:
             params,
             data,
             y,
-            inverse_link_function=self._inverse_link_function,
             is_new_session=is_new_session,
-            log_likelihood_func=prepare_estep_log_likelihood(
-                y.ndim > 1, self.observation_model
-            ),
+            log_likelihood_func=self._log_likelihood,
             return_index=return_index,
         )
 
@@ -742,8 +699,5 @@ class BaseHMM:
         # validate state_format
         _check_state_format(state_format)
         # define the return type for the max-sum
-        if state_format == "one-hot":
-            return_index = False
-        else:
-            return_index = True
+        return_index = False if state_format == "one-hot" else True
         return self._decode_state(params, X, y, is_new_session, return_index)
