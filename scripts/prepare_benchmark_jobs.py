@@ -85,7 +85,7 @@ def write_disbatch_script(args, device: str, indices: list[int]) -> Tuple[Path, 
             lines = [
                 f"source {args.cuda_env}" if device == "gpu" else "true",
                 f"source {args.venv}",
-                f"export JAX_PLATFORMS={device}",
+                f"export JAX_PLATFORMS={'cuda' if device == 'gpu' else device}",
                 (
                     f"python -u {BENCHMARKING_SCRIPT}"
                     f" --config_path {base_dir / 'configs.json'}"
