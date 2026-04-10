@@ -27,6 +27,9 @@ from scipy_adapter import ScipyLBFGS
 
 import nemos as nmo
 
+# use 64 precision
+jax.config.update("jax_enable_x64", True)
+
 # register solver
 nmo.solvers.register("LBFGS", ScipyLBFGS, "scipy")
 
