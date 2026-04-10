@@ -210,9 +210,7 @@ class TestAnalyticMStepScale:
         def analytical_update_fn(params, X, y, posteriors):
             # Update model parameters using solver
             new_model_params, _, _ = solver.run(params, X, y, posteriors)
-            predicted_rate = compute_rate_per_state(
-                X, new_model_params, obs.default_inverse_link_function
-            )
+            predicted_rate = compute_rate_per_state(X, new_model_params, inv_link_func)
             # Update scale parameters using analytical update
             new_log_scale, _, _ = update(
                 params.log_scale,
@@ -245,9 +243,7 @@ class TestAnalyticMStepScale:
         def numerical_update_fn(params, X, y, posteriors):
             # Update model parameters using solver
             new_model_params, _, _ = solver.run(params, X, y, posteriors)
-            predicted_rate = compute_rate_per_state(
-                X, new_model_params, obs.default_inverse_link_function
-            )
+            predicted_rate = compute_rate_per_state(X, new_model_params, inv_link_func)
             # Update scale parameters using separate solver
             new_log_scale, _, _ = solver_scale.run(
                 params.log_scale,
