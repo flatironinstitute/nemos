@@ -85,6 +85,9 @@ def write_disbatch_script(args, device: str, indices: list[int]) -> Tuple[Path, 
             lines = [
                 f"source {args.cuda_env}" if device == "gpu" else "true",
                 f"source {args.venv}",
+                # If you set platform to 'gpu' JAX to try all GPU backends
+                # and it tries ROCm first, fails with GpuAllocatorConfig.
+                # If you set cuda explicitly, then it works fine.
                 f"export JAX_PLATFORMS={'cuda' if device == 'gpu' else device}",
                 (
                     f"python -u {BENCHMARKING_SCRIPT}"
