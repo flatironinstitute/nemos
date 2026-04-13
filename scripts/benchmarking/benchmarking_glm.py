@@ -192,30 +192,40 @@ def get_hd_data(path, rate_threshold=1., bin_size=0.01, n_basis_funcs=5, window_
     return X[keep], y[keep]
 
 
-def get_data(
-    config: dict, regenerate: bool = False, save: bool = True, path: str = "."
-) -> Tuple[jnp.ndarray, jnp.ndarray]:
-    root = Path(path)
+def generate_all_data(configs: list, data_path: str) -> None:
+    """Pre-generate all unique synthetic datasets and save to data_path.
+
+    Called once before workers are submitted so that fitting workers only read,
+    avoiding parallel write races. Real-data (NWB) configs are skipped.
+    """
+    root = Path(data_path)
     root.mkdir(exist_ok=True, parents=True)
-
-    is_hd_data = config["file_name"].endswith("nwb")
-    if is_hd_data:
-        return get_hd_data(config["file_name"], **config["get_hd_data_kwargs"])
-
-    file_path = root / (dict_to_filename(config["input_shapes"]) + ".npz")
-    if file_path.exists() and not regenerate:
-        try:
-            npz = jnp.load(str(file_path))
-            return jnp.asarray(npz["X"]), jnp.asarray(npz["y"])
-        except Exception as e:
-            print(f"  WARNING: cached data file corrupt ({e}), regenerating in memory ...")
-            model = model_from_config(config)
-            return generate_data(model, config)
-    model = model_from_config(config)
-    X, y = generate_data(model, config)
-    if save:
+    seen = set()
+    for config in configs:
+        if config["file_name"].endswith("nwb"):
+            continue
+        key = dict_to_filename(config["input_shapes"])
+        if key in seen:
+            continue
+        seen.add(key)
+        file_path = root / (key + ".npz")
+        if file_path.exists():
+            print(f"  exists: {file_path.name}")
+            continue
+        model = model_from_config(config)
+        X, y = generate_data(model, config)
         jnp.savez(str(file_path), X=X, y=y)
-    return X, y
+        print(f"  saved:  {file_path.name}  X={X.shape} y={y.shape}")
+    print(f"Data generation complete ({len(seen)} unique shapes).")
+
+
+def get_data(config: dict, path: str = ".") -> Tuple[jnp.ndarray, jnp.ndarray]:
+    """Load data for a config. Synthetic data is read from pre-generated npz files."""
+    if config["file_name"].endswith("nwb"):
+        return get_hd_data(config["file_name"], **config["get_hd_data_kwargs"])
+    file_path = Path(path) / (dict_to_filename(config["input_shapes"]) + ".npz")
+    npz = jnp.load(str(file_path))
+    return jnp.asarray(npz["X"]), jnp.asarray(npz["y"])
 
 
 def _get_git_commit() -> str:
@@ -462,6 +472,11 @@ def _parse_args() -> argparse.Namespace:
         help="Generate config list from grid parameters and save to --config_path.",
     )
     actions.add_argument(
+        "--generate_data",
+        action="store_true",
+        help="Pre-generate all unique synthetic datasets from --config_path and save to --data_path.",
+    )
+    actions.add_argument(
         "--aggregate",
         action="store_true",
         help="Aggregate JSON results in --output_path into --csv_path.",
@@ -570,6 +585,11 @@ if __name__ == "__main__":
         )
         Path(args.config_path).write_text(json.dumps(configs, indent=2))
         print(f"Generated {len(configs)} configs -> {args.config_path}")
+
+    elif args.generate_data:
+        configs = json.loads(Path(args.config_path).read_text())
+        print(f"Pre-generating synthetic data for {len(configs)} configs ...")
+        generate_all_data(configs, args.data_path)
 
     elif args.aggregate:
         aggregate_results(args.output_path, args.csv_path)
