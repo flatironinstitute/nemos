@@ -347,7 +347,7 @@ def benchmark_fit(
             "end_to_end_s": end_to_end_s,
             "converged": converged,
             "iter_num": num_solver_iter,
-            "param_norm": float(param_norm),
+            "param_norm": param_norm,
         },
         "meta": {
             "nemos_version": nmo.__version__,
