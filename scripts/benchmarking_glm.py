@@ -388,7 +388,12 @@ def run_benchmarks(
             )
         X, y = get_data(config, path=data_path)
         result = benchmark_fit(config, X, y, n_reps=n_reps)
-        out_file = out_dir / Path(config["file_name"]).with_suffix(".json").name
+        if is_real_data:
+            json_name = Path(config["file_name"]).with_suffix(".json").name
+            _hash = dict_to_filename(config)
+            out_file = out_dir / f"{_hash}_{json_name}"
+        else:
+            out_file = out_dir / config["file_name"]
         out_file.write_text(json.dumps(result, indent=2))
         print(f"  -> {out_file}")
 
