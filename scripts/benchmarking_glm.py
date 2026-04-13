@@ -130,6 +130,7 @@ def generate_glm_configs(
         "location": "adn",
         "n_basis_funcs": 5,
         "bin_size": 0.01,
+        "window_size": 80,
     }
     X, y = get_hd_data(path, **kwargs)
     for reg, solv, dev in product(regularizers, solver_names, devices):
@@ -174,7 +175,7 @@ def generate_data(
     model.intercept_ = None
     return X, y
 
-def get_hd_data(path, rate_threshold=1., bin_size=0.01, n_basis_funcs=5, epoch_tag="wake", location="adn") -> Tuple[jnp.ndarray, jnp.ndarray]:
+def get_hd_data(path, rate_threshold=1., bin_size=0.01, n_basis_funcs=5, window_size=80, epoch_tag="wake", location="adn") -> Tuple[jnp.ndarray, jnp.ndarray]:
     path = Path(path)
     if not path.exists():
         path = nmo.fetch.fetch_data(path.name)
@@ -185,7 +186,7 @@ def get_hd_data(path, rate_threshold=1., bin_size=0.01, n_basis_funcs=5, epoch_t
     spikes = spikes.getby_category("location")[location]
     spikes = spikes.restrict(wake_ep).getby_threshold("rate", rate_threshold)
     y = spikes.count(bin_size, ep=wake_ep)
-    X = nmo.basis.RaisedCosineLogEval(n_basis_funcs).compute_features(y)
+    X = nmo.basis.RaisedCosineLogConv(n_basis_funcs, window_size=window_size).compute_features(y)
     return jnp.asarray(X.d), jnp.asarray(y.d)
 
 
