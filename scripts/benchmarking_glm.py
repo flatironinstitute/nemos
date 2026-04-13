@@ -26,6 +26,7 @@ import jax.numpy as jnp
 from scipy_adapter import ScipyLBFGS
 
 import nemos as nmo
+import pynapple as nap
 
 # use 64 precision
 jax.config.update("jax_enable_x64", True)
@@ -120,6 +121,30 @@ def generate_glm_configs(
         # file_name ties each result file back to a unique config
         fit_config["file_name"] = f"{dev}_{dict_to_filename(fit_config)}.json"
         configs.append(fit_config)
+
+    # add HD dataset
+    path = nmo.fetch.fetch_data("Mouse32-140822.nwb")
+    kwargs = {
+        "rate_threshold": 1,
+        "epoch_tag": "wake",
+        "location": "adn",
+        "n_basis_funcs": 5,
+        "bin_size": 0.01,
+    }
+    X, y = get_hd_data(path, **kwargs)
+    for reg, solv, dev in product(regularizers, solver_names, devices):
+        fit_configs = {
+            "input_shapes": {"X": [*X.shape], "y": [*y.shape]},
+            "model_conf": {
+                "regularizer": reg,
+                "solver_name": solv,
+                "solver_kwargs": {"maxiter": 10000, "tol": 1e-8}
+            },
+            "device": dev,
+            "get_hd_data_kwargs": kwargs,
+            "file_name": path,
+        }
+        configs.append(fit_configs)
     return configs
 
 
@@ -149,12 +174,31 @@ def generate_data(
     model.intercept_ = None
     return X, y
 
+def get_hd_data(path, rate_threshold=1., bin_size=0.01, n_basis_funcs=5, epoch_tag="wake", location="adn") -> Tuple[jnp.ndarray, jnp.ndarray]:
+    path = Path(path)
+    if not path.exists():
+        path = nmo.fetch.fetch_data(path.name)
+    data = nap.load_file(path)
+    spikes = data["units"]
+    epochs = data["epochs"]
+    wake_ep = epochs[epochs.tags == epoch_tag]
+    spikes = spikes.getby_category("location")[location]
+    spikes = spikes.restrict(wake_ep).getby_threshold("rate", rate_threshold)
+    y = spikes.count(bin_size, ep=wake_ep)
+    X = nmo.basis.RaisedCosineLogEval(n_basis_funcs).compute_features(y)
+    return jnp.asarray(X.d), jnp.asarray(y.d)
+
 
 def get_data(
     config: dict, regenerate: bool = False, save: bool = True, path: str = "."
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     root = Path(path)
     root.mkdir(exist_ok=True, parents=True)
+
+    is_hd_data = config["file_name"].endswith(".nwb")
+    if is_hd_data:
+        return get_hd_data(config["file_name"], **config["get_hd_data_kwargs"])
+
     file_path = root / (dict_to_filename(config["input_shapes"]) + ".npz")
     if file_path.exists() and not regenerate:
         npz = jnp.load(str(file_path))
@@ -236,6 +280,7 @@ def benchmark_fit(
     end_to_end_s = []
     converged = []
     num_solver_iter = []
+    param_norm = []
 
     for _ in range(n_reps):
         # fresh model each rep for independent measurements
@@ -276,6 +321,7 @@ def benchmark_fit(
         t7 = perf_counter()
         end_to_end_s.append(t7 - t6)
         num_solver_iter.append(_get_iter_num(model))
+        param_norm.append(jnp.linalg.norm(model.coef_))
 
     input_shapes = config["input_shapes"]
     model_conf = config["model_conf"]
@@ -301,6 +347,7 @@ def benchmark_fit(
             "end_to_end_s": end_to_end_s,
             "converged": converged,
             "iter_num": num_solver_iter,
+            "param_norm": param_norm,
         },
         "meta": {
             "nemos_version": nmo.__version__,
@@ -325,15 +372,23 @@ def run_benchmarks(
 
     for idx in fit_ids:
         config = configs[idx]
+        is_real_data = config["file_name"].endswith("nwb")
         mc = config["model_conf"]
         shapes = config["input_shapes"]
-        print(
-            f"[{idx}] {mc['solver_name']} | {mc['regularizer']} | "
-            f"X={shapes['X']} | y={shapes['y']} | device={config['device']}"
-        )
+        if is_real_data:
+            data_name = Path(config["file_name"]).name
+            print(
+                f"{data_name}: [{idx}] {mc['solver_name']} | {mc['regularizer']} | "
+                f"X={shapes['X']} | y={shapes['y']} | device={config['device']}"
+            )
+        else:
+            print(
+                f"Simulation: [{idx}] {mc['solver_name']} | {mc['regularizer']} | "
+                f"X={shapes['X']} | y={shapes['y']} | device={config['device']}"
+            )
         X, y = get_data(config, path=data_path)
         result = benchmark_fit(config, X, y, n_reps=n_reps)
-        out_file = out_dir / config["file_name"]
+        out_file = out_dir / config["file_name"].replace("nwb", "json")
         out_file.write_text(json.dumps(result, indent=2))
         print(f"  -> {out_file}")
 
