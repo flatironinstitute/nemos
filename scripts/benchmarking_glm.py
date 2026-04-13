@@ -187,7 +187,9 @@ def get_hd_data(path, rate_threshold=1., bin_size=0.01, n_basis_funcs=5, window_
     spikes = spikes.restrict(wake_ep).getby_threshold("rate", rate_threshold)
     y = spikes.count(bin_size, ep=wake_ep)
     X = nmo.basis.RaisedCosineLogConv(n_basis_funcs, window_size=window_size).compute_features(y)
-    return jnp.asarray(X.d), jnp.asarray(y.d)
+    X, y = jnp.asarray(X.d), jnp.asarray(y.d)
+    keep = jnp.all(~jnp.isnan(X), axis=1)
+    return X[keep], y[keep]
 
 
 def get_data(
