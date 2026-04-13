@@ -204,8 +204,13 @@ def get_data(
 
     file_path = root / (dict_to_filename(config["input_shapes"]) + ".npz")
     if file_path.exists() and not regenerate:
-        npz = jnp.load(str(file_path))
-        return jnp.asarray(npz["X"]), jnp.asarray(npz["y"])
+        try:
+            npz = jnp.load(str(file_path))
+            return jnp.asarray(npz["X"]), jnp.asarray(npz["y"])
+        except Exception as e:
+            print(f"  WARNING: cached data file corrupt ({e}), regenerating in memory ...")
+            model = model_from_config(config)
+            return generate_data(model, config)
     model = model_from_config(config)
     X, y = generate_data(model, config)
     if save:
