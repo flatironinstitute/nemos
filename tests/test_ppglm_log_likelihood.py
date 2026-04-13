@@ -301,9 +301,9 @@ class TestLogLikelihood:
 
         # test that nll returns a finite number
         loss = log_likelihood._negative_log_likelihood(
+            params_with_key.params,
             X,
             y,
-            params_with_key.params,
             params_with_key.random_key.astype(jnp.uint32),
             inverse_link_function=inverse_link_function,
             M_samples=M_samples,
@@ -435,9 +435,9 @@ class TestLogLikelihood:
 
         ## full nll computation
         loss_scan = log_likelihood._negative_log_likelihood(
+            params_with_key.params,
             X,
             y,
-            params_with_key.params,
             params_with_key.random_key.astype(jnp.uint32),
             inverse_link_function=inverse_link_function,
             M_samples=M_samples,
