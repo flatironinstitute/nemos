@@ -339,6 +339,7 @@ def benchmark_fit(
         "device": config["device"],
         # ground truth solver used
         "solver_class": model._solver.__class__.__name__,
+        "data_source": Path(config["file_name"]).name if config["file_name"].endswith("nwb") else "synthetic",
     }
 
     return {
