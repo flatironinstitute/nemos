@@ -321,7 +321,7 @@ def benchmark_fit(
         t7 = perf_counter()
         end_to_end_s.append(t7 - t6)
         num_solver_iter.append(_get_iter_num(model))
-        param_norm.append(jnp.linalg.norm(model.coef_))
+        param_norm.append(float(jnp.linalg.norm(model.coef_)))
 
     input_shapes = config["input_shapes"]
     model_conf = config["model_conf"]
@@ -347,7 +347,7 @@ def benchmark_fit(
             "end_to_end_s": end_to_end_s,
             "converged": converged,
             "iter_num": num_solver_iter,
-            "param_norm": param_norm,
+            "param_norm": float(param_norm),
         },
         "meta": {
             "nemos_version": nmo.__version__,
@@ -388,7 +388,7 @@ def run_benchmarks(
             )
         X, y = get_data(config, path=data_path)
         result = benchmark_fit(config, X, y, n_reps=n_reps)
-        out_file = out_dir / Path(config["file_name"]).with_suffix("json").name
+        out_file = out_dir / Path(config["file_name"]).with_suffix(".json").name
         out_file.write_text(json.dumps(result, indent=2))
         print(f"  -> {out_file}")
 
