@@ -253,11 +253,27 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def generate_data(args) -> None:
+    """Pre-generate all unique synthetic datasets so workers only read."""
+    base_dir = Path(args.base_dir)
+    cmd = [
+        sys.executable,
+        str(BENCHMARKING_SCRIPT),
+        "--generate_data",
+        "--config_path", str(base_dir / "configs.json"),
+        "--data_path", str(base_dir / "data"),
+    ]
+    subprocess.run(cmd, check=True)
+
+
 if __name__ == "__main__":
     args = _parse_args()
     if "gpu" in args.devices and args.cuda_env is None:
         raise SystemExit("--cuda_env is required when devices includes 'gpu'")
     configs = generate_configs(args)
+
+    print("\nPre-generating synthetic datasets ...")
+    generate_data(args)
 
     # group config indices by device — one dsb file per device
     indices_by_device: dict[str, list[int]] = {}
