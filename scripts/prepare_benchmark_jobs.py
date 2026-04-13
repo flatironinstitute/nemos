@@ -85,6 +85,10 @@ def write_disbatch_script(args, device: str, indices: list[int]) -> Tuple[Path, 
             lines = [
                 f"source {args.cuda_env}" if device == "gpu" else "true",
                 f"source {args.venv}",
+                # Expose pip-installed nvidia-* .so files to the dynamic linker.
+                # Required for jax-cuda12-plugin to find cuSPARSE, cuDNN, etc.
+                # Only needed on GPU workers; harmless (empty path) on CPU.
+                "export LD_LIBRARY_PATH=$(python -c \"import os,site; d=site.getsitepackages()[0]+'/nvidia'; print(':'.join(os.path.join(d,p,'lib') for p in os.listdir(d) if os.path.isdir(os.path.join(d,p,'lib'))))\" 2>/dev/null):${LD_LIBRARY_PATH:-}",
                 # If you set platform to 'gpu' JAX to try all GPU backends
                 # and it tries ROCm first, fails with GpuAllocatorConfig.
                 # If you set cuda explicitly, then it works fine.
