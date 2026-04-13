@@ -195,7 +195,7 @@ def get_data(
     root = Path(path)
     root.mkdir(exist_ok=True, parents=True)
 
-    is_hd_data = config["file_name"].endswith(".nwb")
+    is_hd_data = config["file_name"].endswith("nwb")
     if is_hd_data:
         return get_hd_data(config["file_name"], **config["get_hd_data_kwargs"])
 
@@ -388,7 +388,7 @@ def run_benchmarks(
             )
         X, y = get_data(config, path=data_path)
         result = benchmark_fit(config, X, y, n_reps=n_reps)
-        out_file = out_dir / config["file_name"].replace("nwb", "json")
+        out_file = out_dir / Path(config["file_name"]).with_suffix("json").name
         out_file.write_text(json.dumps(result, indent=2))
         print(f"  -> {out_file}")
 
@@ -418,6 +418,7 @@ def aggregate_results(results_dir: str, csv_path: str) -> None:
                     "end_to_end_s": res["end_to_end_s"][i],
                     "converged": res["converged"][i],
                     "iter_num": res["iter_num"][i],
+                    "param_norm": res["param_norm"][i],
                 }
             )
 
