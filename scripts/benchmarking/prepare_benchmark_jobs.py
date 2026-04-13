@@ -88,11 +88,19 @@ def write_disbatch_script(args, device: str, indices: list[int]) -> Tuple[Path, 
                 # Expose pip-installed nvidia-* .so files to the dynamic linker.
                 # Required for jax-cuda12-plugin to find cuSPARSE, cuDNN, etc.
                 # Only needed on GPU workers; harmless (empty path) on CPU.
-                "export LD_LIBRARY_PATH=$(python -c \"import os,site; d=site.getsitepackages()[0]+'/nvidia'; print(':'.join(os.path.join(d,p,'lib') for p in os.listdir(d) if os.path.isdir(os.path.join(d,p,'lib'))))\" 2>/dev/null):${LD_LIBRARY_PATH:-}",
+                "export LD_LIBRARY_PATH=$(python -c \"import os,site; d=site.getsitepackages()[0]+'/nvidia'; print(':'.join(os.path.join(d,p,'lib') for p in os.listdir(d) if os.path.isdir(os.path.join(d,p,'lib')))) if os.path.isdir(d) else ''\" 2>/dev/null):${LD_LIBRARY_PATH:-}",
                 # If you set platform to 'gpu' JAX to try all GPU backends
                 # and it tries ROCm first, fails with GpuAllocatorConfig.
                 # If you set cuda explicitly, then it works fine.
                 f"export JAX_PLATFORMS={'cuda' if device == 'gpu' else device}",
+                # NEMOS_DATA_DIR: tells fetch_data() where to find cached NWB files.
+                # XDG_CACHE_HOME: pynwb tries to create ~/.cache at import time;
+                # worker nodes may not have /home/<user>, only /mnt/home/<user>.
+                *(
+                    [f"export NEMOS_DATA_DIR={args.nemos_data_dir}"]
+                    if args.nemos_data_dir else []
+                ),
+                f"export XDG_CACHE_HOME={Path(args.base_dir) / 'pynwb_cache'}",
                 (
                     f"python -u {BENCHMARKING_SCRIPT}"
                     f" --config_path {base_dir / 'configs.json'}"
@@ -193,6 +201,12 @@ def _parse_args() -> argparse.Namespace:
         "--csv_path",
         required=True,
         help="Path for the aggregated CSV output (web-accessible location).",
+    )
+    parser.add_argument(
+        "--nemos_data_dir",
+        default=None,
+        help="Directory where NWB files are cached (sets NEMOS_DATA_DIR on workers). "
+             "Required when benchmarking real data.",
     )
 
     parser.add_argument(
