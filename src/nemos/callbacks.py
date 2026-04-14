@@ -29,7 +29,7 @@ class TrainingContext:
         Current solver state.
     aux :
         Auxiliary output from the last batch.
-    epoch :
+    epoch_idx :
         Current epoch index (0-based).
     batch_idx :
         Current batch index within the epoch.
@@ -42,7 +42,7 @@ class TrainingContext:
     params: Any = None
     state: Any = None
     aux: Any = None
-    epoch: int | None = None
+    epoch_idx: int | None = None
     batch_idx: int | None = None
     num_epochs: int = 0
 
