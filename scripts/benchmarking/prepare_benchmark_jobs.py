@@ -98,7 +98,8 @@ def write_disbatch_script(args, device: str, indices: list[int]) -> Tuple[Path, 
                 # worker nodes may not have /home/<user>, only /mnt/home/<user>.
                 *(
                     [f"export NEMOS_DATA_DIR={args.nemos_data_dir}"]
-                    if args.nemos_data_dir else []
+                    if args.nemos_data_dir
+                    else []
                 ),
                 f"export XDG_CACHE_HOME={Path(args.base_dir) / 'pynwb_cache'}",
                 (
@@ -206,7 +207,7 @@ def _parse_args() -> argparse.Namespace:
         "--nemos_data_dir",
         default=None,
         help="Directory where NWB files are cached (sets NEMOS_DATA_DIR on workers). "
-             "Required when benchmarking real data.",
+        "Required when benchmarking real data.",
     )
 
     parser.add_argument(
@@ -260,8 +261,10 @@ def generate_data(args) -> None:
         sys.executable,
         str(BENCHMARKING_SCRIPT),
         "--generate_data",
-        "--config_path", str(base_dir / "configs.json"),
-        "--data_path", str(base_dir / "data"),
+        "--config_path",
+        str(base_dir / "configs.json"),
+        "--data_path",
+        str(base_dir / "data"),
     ]
     subprocess.run(cmd, check=True)
 

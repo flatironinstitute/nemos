@@ -23,10 +23,10 @@ from typing import List, Tuple
 
 import jax
 import jax.numpy as jnp
+import pynapple as nap
 from scipy_adapter import ScipyLBFGS
 
 import nemos as nmo
-import pynapple as nap
 
 # use 64 precision
 jax.config.update("jax_enable_x64", True)
@@ -157,7 +157,7 @@ def generate_glm_configs(
             "model_conf": {
                 "regularizer": reg,
                 "solver_name": solv,
-                "solver_kwargs": {"maxiter": 1000, "tol": 1e-6}
+                "solver_kwargs": {"maxiter": 1000, "tol": 1e-6},
             },
             "device": dev,
             "get_hd_data_kwargs": kwargs,
@@ -193,7 +193,16 @@ def generate_data(
     model.intercept_ = None
     return X, y
 
-def get_hd_data(path, rate_threshold=1., bin_size=0.01, n_basis_funcs=5, window_size=80, epoch_tag="wake", location="adn") -> Tuple[jnp.ndarray, jnp.ndarray]:
+
+def get_hd_data(
+    path,
+    rate_threshold=1.0,
+    bin_size=0.01,
+    n_basis_funcs=5,
+    window_size=80,
+    epoch_tag="wake",
+    location="adn",
+) -> Tuple[jnp.ndarray, jnp.ndarray]:
     path = Path(path)
     if not path.exists():
         path = nmo.fetch.fetch_data(path.name)
@@ -204,7 +213,9 @@ def get_hd_data(path, rate_threshold=1., bin_size=0.01, n_basis_funcs=5, window_
     spikes = spikes.getby_category("location")[location]
     spikes = spikes.restrict(wake_ep).getby_threshold("rate", rate_threshold)
     y = spikes.count(bin_size, ep=wake_ep)
-    X = nmo.basis.RaisedCosineLogConv(n_basis_funcs, window_size=window_size).compute_features(y)
+    X = nmo.basis.RaisedCosineLogConv(
+        n_basis_funcs, window_size=window_size
+    ).compute_features(y)
     X, y = jnp.asarray(X.d), jnp.asarray(y.d)
     keep = jnp.all(~jnp.isnan(X), axis=1)
     return X[keep], y[keep]
@@ -372,7 +383,11 @@ def benchmark_fit(
         "device": config["device"],
         # ground truth solver used
         "solver_class": model._solver.__class__.__name__,
-        "data_source": Path(config["file_name"]).name if config["file_name"].endswith("nwb") else "synthetic",
+        "data_source": (
+            Path(config["file_name"]).name
+            if config["file_name"].endswith("nwb")
+            else "synthetic"
+        ),
     }
 
     return {
@@ -581,7 +596,9 @@ def _print_env_info() -> None:
         print(f"  jax devices    : ERROR — {e}")
     # check for CUDA libs in LD_LIBRARY_PATH
     ld = os.environ.get("LD_LIBRARY_PATH", "")
-    cuda_in_path = any("cuda" in p.lower() or "cudnn" in p.lower() for p in ld.split(":"))
+    cuda_in_path = any(
+        "cuda" in p.lower() or "cudnn" in p.lower() for p in ld.split(":")
+    )
     print(f"  CUDA in LD_LIBRARY_PATH: {cuda_in_path}")
     if not cuda_in_path:
         print(f"  LD_LIBRARY_PATH: {ld or '(not set)'}")
