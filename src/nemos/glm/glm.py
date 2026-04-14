@@ -917,6 +917,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         # Ideally that uses the full data
         # Initialize solver (using preprocessed sample batch)
         self._initialize_optimizer_and_state(init_params, sample_X, sample_y)
+        # TODO: If continuing a fit with init_params, should this be turned off so that the solver is not reinstantiated?
+        # Or at least add a keyword arg that can disable it? reset_solver: bool = True
 
         # Run stochastic optimization
         ctx = TrainingContext(model=self, solver=self._solver)
