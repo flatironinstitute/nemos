@@ -38,11 +38,17 @@ nmo.solvers.register("LBFGS", ScipyLBFGS, "scipy")
 DEFAULT_SAMPLE_SIZES = [100, 1_000, 10_000, 100_000]
 DEFAULT_FEATURE_DIMS = [1, 10, 100]
 DEFAULT_POP_SIZES = [1, 10, 20]
-DEFAULT_REGULARIZERS = ["Ridge"]
+DEFAULT_REGULARIZERS = ["Ridge", "Lasso"]
 DEFAULT_SOLVER_NAMES = [
+    # smooth — benchmarked against Ridge; filtered out for Lasso via allowed_reg
     "LBFGS[optax+optimistix]",
     "LBFGS[scipy]",
+    "BFGS[optimistix]",
     "GradientDescent[optimistix]",
+    "SVRG[nemos]",
+    # non-smooth — benchmarked against Lasso only (filtered below)
+    "ProximalGradient[optimistix]",
+    "ProxSVRG[nemos]",
 ]
 DEFAULT_DEVICES = ["cpu"]
 DEFAULT_N_REPS = 10
@@ -93,6 +99,11 @@ def generate_glm_configs(
         if not name.startswith("_")
         and hasattr(getattr(nmo.regularizer, name), "_allowed_solvers")
     }
+    # Proximal solvers are restricted to non-smooth regularizers. Although NeMoS
+    # technically allows ProximalGradient/ProxSVRG.
+    _prox_solvers = frozenset({"ProximalGradient", "ProxSVRG"})
+    _smooth_regs = frozenset({"Ridge", "UnRegularized"})
+
     configs = []
     for samp, feat, pop_size, reg, solv, dev in product(
         sample_sizes,
@@ -105,6 +116,8 @@ def generate_glm_configs(
         base_name = solv.split("[")[0]
         if reg not in allowed_reg or base_name not in allowed_reg[reg]:
             continue
+        if base_name in _prox_solvers and reg in _smooth_regs:
+            continue
 
         fit_config = {
             "input_shapes": {
@@ -113,7 +126,7 @@ def generate_glm_configs(
             },
             "model_conf": {
                 "solver_name": solv,
-                "solver_kwargs": {"maxiter": 10000, "tol": 1e-8},
+                "solver_kwargs": {"maxiter": 1000, "tol": 1e-6},
                 "regularizer": reg,
             },
             "device": dev,
@@ -134,12 +147,17 @@ def generate_glm_configs(
     }
     X, y = get_hd_data(path, **kwargs)
     for reg, solv, dev in product(regularizers, solver_names, devices):
+        base_name = solv.split("[")[0]
+        if reg not in allowed_reg or base_name not in allowed_reg[reg]:
+            continue
+        if base_name in _prox_solvers and reg in _smooth_regs:
+            continue
         fit_configs = {
             "input_shapes": {"X": [*X.shape], "y": [*y.shape]},
             "model_conf": {
                 "regularizer": reg,
                 "solver_name": solv,
-                "solver_kwargs": {"maxiter": 10000, "tol": 1e-8}
+                "solver_kwargs": {"maxiter": 1000, "tol": 1e-6}
             },
             "device": dev,
             "get_hd_data_kwargs": kwargs,
