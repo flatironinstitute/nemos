@@ -21,10 +21,10 @@ In nemos, you can save a model by calling the {py:meth}`~nemos.glm.GLM.save_para
 ```{code-cell}
 import nemos as nmo
 
-# define a ridge regularized glm, with a Gradient descent solver
+# define a ridge regularized glm, with LBFGS solver
 model = nmo.glm.GLM(
     regularizer="Ridge",
-    solver_name="GradientDescent"
+    solver_name="LBFGS"
 )
 
 # save
