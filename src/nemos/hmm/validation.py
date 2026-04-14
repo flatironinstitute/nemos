@@ -5,10 +5,39 @@ from typing import Any, Optional, Tuple, TypeVar
 
 import jax
 import jax.numpy as jnp
+import pynapple as nap
+from pynapple import Tsd, TsdFrame
+from ..type_casting import is_pynapple_tsd
+from ..typing import DESIGN_INPUT_TYPE
 
 from .. import validation
 from ..base_validator import RegressorValidator
+from ..typing import ArrayLike
 from .params import HMMParams, HMMUserParams
+from .utils import initialize_is_new_session
+
+
+def has_nans_only_at_border(arr):
+    """Check if NaNs appear only at the start and end along axis=0."""
+    # Check which rows have any NaN values
+    is_nan = jnp.any(jnp.isnan(arr.reshape(arr.shape[0], -1)), axis=1)
+
+    # If no NaNs, it's valid
+    if not jnp.any(is_nan):
+        return True
+
+    # If all NaNs, it's valid
+    if jnp.all(is_nan):
+        return True
+
+    # Find first and last non-NaN positions
+    non_nan_indices = jnp.where(~is_nan)[0]
+    first_valid = non_nan_indices[0]
+    last_valid = non_nan_indices[-1]
+
+    # Check if there are any NaNs between first and last valid values
+    return not jnp.any(is_nan[first_valid : last_valid + 1])
+
 
 # HMM-type User provided init_params (e.g. for GLM-HMM Tuple[array, array, array, array, array]])
 HMMUserProvidedParamsT = TypeVar("HMMUserProvidedParamsT")
@@ -178,3 +207,91 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
                 f"and must sum to 1. "
             )
         return params
+
+    def validate_inputs(
+        self,
+        X: Optional[DESIGN_INPUT_TYPE] = None,
+        y: Optional[jnp.ndarray | Tsd | TsdFrame] = None,
+    ):
+        """Validate inputs for GLM-HMM model."""
+        super().validate_inputs(X, y)
+
+        # Additional checks due to the time-series structure.
+        # (the forward-backward implementation assumes no nans in the inputs)
+        # Skip NaN border check if y is None (e.g., during simulation)
+        if y is None:
+            if X is not None and not has_nans_only_at_border(X):
+                raise ValueError(
+                    "GLM-HMM requires continuous time-series data. NaN values must only "
+                    "appear at the beginning or end of the data, not in the middle."
+                )
+            return
+
+        if is_pynapple_tsd(X):
+            # loop over epochs and check that nans are all at the border
+            epoch_slices = [
+                X.get_slice(ep.start[0], ep.end[0]) for ep in X.time_support
+            ]
+            y_array = jnp.asarray(y)
+            is_continuous = all(
+                has_nans_only_at_border(X.d[s]) and has_nans_only_at_border(y_array[s])
+                for s in epoch_slices
+            )
+        elif is_pynapple_tsd(y):
+            # loop over epochs and check that nans are all at the border
+            epoch_slices = [
+                y.get_slice(ep.start[0], ep.end[0]) for ep in y.time_support
+            ]
+            is_continuous = all(
+                has_nans_only_at_border(X[s]) and has_nans_only_at_border(y.d[s])
+                for s in epoch_slices
+            )
+        else:
+            # check nans at the border
+            is_continuous = has_nans_only_at_border(X) and has_nans_only_at_border(y)
+        if not is_continuous:
+            raise ValueError(
+                "GLM-HMM requires continuous time-series data. NaN values must only "
+                "appear at the beginning or end of the data, not in the middle. "
+                "Found NaN values within the time series, which would break the "
+                "forward-backward algorithm. Please ensure your data is continuous "
+                "or split it into separate epochs at the gaps."
+            )
+
+    def validate_and_cast_is_new_session(
+        self, X, y, is_new_session: Optional[ArrayLike | nap.IntervalSet] = None
+    ) -> jnp.ndarray:
+        """Validate and cast is_new_session to a binary array of shape (n_samples,)."""
+        n_samples = X.shape[0]
+        if is_new_session is None:
+            return initialize_is_new_session(n_samples, is_new_session)
+        if hasattr(is_new_session, "dtype"):
+            if jnp.issubdtype(is_new_session.dtype, jnp.bool_):
+                # consistency check with n_samples
+                if is_new_session.shape != (n_samples,):
+                    raise ValueError(
+                        f"is_new_session must have shape (n_samples,), but got shape {is_new_session.shape}."
+                    )
+            elif jnp.issubdtype(is_new_session.dtype, jnp.integer):
+                if (jnp.max(is_new_session) > n_samples) or (
+                    jnp.min(is_new_session) < 0
+                ):
+                    raise ValueError(
+                        "Integer is_new_session values must be between 0 and n_samples-1, "
+                        f"but got min {jnp.min(is_new_session)} and max {jnp.max(is_new_session)}."
+                    )
+            else:
+                raise TypeError(
+                    "is_new_session must be a boolean or integer array, but got dtype "
+                    f"{is_new_session.dtype}."
+                )
+            return initialize_is_new_session(n_samples, is_new_session)
+        else:
+            raise TypeError(
+                "is_new_session must be a boolean or integer array, but got type "
+                f"{type(is_new_session)}."
+            )
+
+    def get_empty_params(self, X, y) -> HMMModelParamsT:
+        """Return the param shape given the input data."""
+        pass

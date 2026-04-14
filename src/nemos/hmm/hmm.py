@@ -1,5 +1,7 @@
 """Base class for HMM models."""
 
+from __future__ import annotations
+
 import abc
 import warnings
 from numbers import Number
@@ -26,11 +28,12 @@ from .initialize_parameters import (
     setup_hmm_initialization,
     _validate_init_funcs_keys,
 )
-from .params import HMMModelParamsT
+from .params import HMMModelParamsT, HMMUserProvidedParamsT
+from ..base_regressor import BaseRegressor
 from .utils import _check_state_format, _get_is_new_session
 
 
-class BaseHMM(abc.ABC):
+class BaseHMM(abc.ABC, BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
     def __init__(
         self,
         n_states: int,
@@ -76,10 +79,6 @@ class BaseHMM(abc.ABC):
             transition_proba_init_kwargs=transition_proba_init_kwargs,
             init_funcs=self._hmm_initialization_funcs,
         )
-
-    @abs.abstractmethod
-    def _log_likelihood(self, params: HMMModelParamsT, X, y):
-        pass
 
     @property
     def n_states(self) -> int:
@@ -233,7 +232,7 @@ class BaseHMM(abc.ABC):
                 "set the missing attributes."
             )
 
-    def _validate_and_prepare_inputs(self, X, y):
+    def _validate_and_prepare_inputs(self, X, y, is_new_session=None):
         """Validate and prepare inputs."""
         # check if the model was fit
         self._check_is_fit()
@@ -242,6 +241,9 @@ class BaseHMM(abc.ABC):
         # validate inputs
         self._validator.validate_inputs(X=X, y=y)
         self._validator.validate_consistency(params, X=X, y=y)
+        is_new_session = self._validator.validate_and_cast_is_new_session(
+            X=X, y=y, is_new_session=is_new_session
+        )
 
         # compute new session indicator
         is_new_session = _get_is_new_session(X, y)
@@ -278,6 +280,7 @@ class BaseHMM(abc.ABC):
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: ArrayLike,
+        is_new_session: Optional[ArrayLike] = None,
         score_type: Literal[
             "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"
         ] = "log-likelihood",
@@ -334,6 +337,7 @@ class BaseHMM(abc.ABC):
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: Union[NDArray, jnp.ndarray, nap.Tsd],
+        is_new_session: Optional[ArrayLike] = None,
     ) -> jnp.ndarray | nap.TsdFrame:
         """Compute smoothing posterior probabilities over hidden states.
 
@@ -439,7 +443,6 @@ class BaseHMM(abc.ABC):
             params,
             data,
             y,
-            inverse_link_function=self._inverse_link_function,
             is_new_session=is_new_session,
             log_likelihood_func=self._log_likelihood,
         )
@@ -454,6 +457,7 @@ class BaseHMM(abc.ABC):
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: Union[NDArray, jnp.ndarray, nap.Tsd],
+        is_new_session: Optional[ArrayLike] = None,
     ) -> jnp.ndarray | nap.TsdFrame:
         """Compute filtering posterior probabilities over hidden states.
 
@@ -582,6 +586,7 @@ class BaseHMM(abc.ABC):
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: ArrayLike,
+        is_new_session: Optional[ArrayLike] = None,
         state_format: Literal["one-hot", "index"] = "one-hot",
     ) -> jnp.ndarray | nap.TsdFrame:
         """Compute the most likely hidden state sequence (Viterbi decoding).
@@ -701,3 +706,13 @@ class BaseHMM(abc.ABC):
         # define the return type for the max-sum
         return_index = False if state_format == "one-hot" else True
         return self._decode_state(params, X, y, is_new_session, return_index)
+
+    @abc.abstractmethod
+    def _log_likelihood(self, params: HMMModelParamsT, X, y):
+        pass
+
+    @abc.abstractmethod
+    def fit(
+        self, X: Union[DESIGN_INPUT_TYPE, ArrayLike], y: ArrayLike
+    ) -> BaseHMM[HMMUserProvidedParamsT, HMMModelParamsT]:
+        pass

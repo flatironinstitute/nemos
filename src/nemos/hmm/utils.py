@@ -104,27 +104,6 @@ def compute_is_new_session(
     return is_new_session
 
 
-def _check_state_format(state_format: str) -> None:
-    """Validate state_format parameter.
-
-    Parameters
-    ----------
-    state_format :
-        Format for state output, must be "one-hot" or "index".
-
-    Raises
-    ------
-    ValueError
-        If state_format is not "one-hot" or "index".
-    """
-    valid_formats = ("one-hot", "index")
-    if state_format not in valid_formats:
-        raise ValueError(
-            f"Invalid state_format '{state_format}'. "
-            f"Must be one of {valid_formats}."
-        )
-
-
 def _get_is_new_session(
     X: DESIGN_INPUT_TYPE, y: ArrayLike | nap.Tsd | nap.TsdFrame | None = None
 ) -> jnp.ndarray | None:
@@ -188,3 +167,24 @@ def _get_is_new_session(
             jnp.arange(X.shape[0]), jnp.array([0.0]), combined_nans
         )
     return is_new_session
+
+
+def _check_state_format(state_format: str) -> None:
+    """Validate state_format parameter.
+
+    Parameters
+    ----------
+    state_format :
+        Format for state output, must be "one-hot" or "index".
+
+    Raises
+    ------
+    ValueError
+        If state_format is not "one-hot" or "index".
+    """
+    valid_formats = ("one-hot", "index")
+    if state_format not in valid_formats:
+        raise ValueError(
+            f"Invalid state_format '{state_format}'. "
+            f"Must be one of {valid_formats}."
+        )
