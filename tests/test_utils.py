@@ -131,10 +131,10 @@ class TestPadding:
     @pytest.mark.parametrize("array", [np.zeros([2, 4, 5])])
     @pytest.mark.parametrize("pad_size", [0.1, -1, 0, 1, 2, 3, 5, 6])
     def test_padding_nan_causal(self, pad_size, array):
-        raise_exception = (not isinstance(pad_size, int)) or (pad_size <= 0)
+        raise_exception = (not isinstance(pad_size, int)) or (pad_size < 0)
         if raise_exception:
             with pytest.raises(
-                ValueError, match="pad_size must be a positive integer!"
+                ValueError, match="pad_size must be a non-negative integer!"
             ):
                 utils.nan_pad(array, pad_size, "anti-causal")
         else:
@@ -152,10 +152,10 @@ class TestPadding:
     @pytest.mark.parametrize("array", [np.zeros([2, 5, 4])])
     @pytest.mark.parametrize("pad_size", [0, 1, 2, 3, 5, 6])
     def test_padding_nan_anti_causal(self, pad_size, array):
-        raise_exception = (not isinstance(pad_size, int)) or (pad_size <= 0)
+        raise_exception = (not isinstance(pad_size, int)) or (pad_size < 0)
         if raise_exception:
             with pytest.raises(
-                ValueError, match="pad_size must be a positive integer!"
+                ValueError, match="pad_size must be a non-negative integer!"
             ):
                 utils.nan_pad(array, pad_size, "anti-causal")
         else:
@@ -173,10 +173,10 @@ class TestPadding:
     @pytest.mark.parametrize("array", [np.zeros([2, 5, 4])])
     @pytest.mark.parametrize("pad_size", [-1, 0.2, 0, 1, 3, 5])
     def test_padding_nan_acausal(self, pad_size, array):
-        raise_exception = (not isinstance(pad_size, int)) or (pad_size <= 0)
+        raise_exception = (not isinstance(pad_size, int)) or (pad_size < 0)
         if raise_exception:
             with pytest.raises(
-                ValueError, match="pad_size must be a positive integer!"
+                ValueError, match="pad_size must be a non-negative integer!"
             ):
                 utils.nan_pad(array, pad_size, "acausal")
 
@@ -281,11 +281,15 @@ class TestPadding:
         [
             (
                 -1,
-                pytest.raises(ValueError, match="pad_size must be a positive integer"),
+                pytest.raises(
+                    ValueError, match="pad_size must be a non-negative integer"
+                ),
             ),
             (
                 1.0,
-                pytest.raises(ValueError, match="pad_size must be a positive integer"),
+                pytest.raises(
+                    ValueError, match="pad_size must be a non-negative integer"
+                ),
             ),
             (1, does_not_raise()),
             (2, does_not_raise()),
