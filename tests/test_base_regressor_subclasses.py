@@ -16,8 +16,6 @@ import nemos as nmo
 
 # Import helpers from conftest
 from conftest import MockRegressor, is_population_model
-from nemos.solvers._fista import OptimistixNAG
-from nemos.solvers._optax_optimistix_solvers import OptimistixOptaxGradientDescent
 from nemos._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
 from nemos.glm.params import GLMParams
 from nemos.glm.validation import (
@@ -27,6 +25,8 @@ from nemos.glm.validation import (
     PopulationGLMValidator,
 )
 from nemos.inverse_link_function_utils import LINK_NAME_TO_FUNC
+from nemos.solvers._fista import OptimistixNAG
+from nemos.solvers._optax_optimistix_solvers import OptimistixOptaxGradientDescent
 
 MODEL_REGISTRY = {
     "GLM": nmo.glm.GLM,

@@ -87,8 +87,8 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
 
     | Regularizer   | Default Solver   | Available Solvers                                           |
     | ------------- | ---------------- | ----------------------------------------------------------- |
-    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
-    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
+    | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
+    | Ridge         | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
     | Lasso         | ProximalGradient | ProximalGradient                                            |
     | GroupLasso    | ProximalGradient | ProximalGradient                                            |
 

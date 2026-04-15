@@ -87,9 +87,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
     +---------------+------------------+-------------------------------------------------------------+
     | Regularizer   | Default Solver   | Available Solvers                                           |
     +===============+==================+=============================================================+
-    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
+    | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
     +---------------+------------------+-------------------------------------------------------------+
-    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
+    | Ridge         | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
     +---------------+------------------+-------------------------------------------------------------+
     | Lasso         | ProximalGradient | ProximalGradient                                            |
     +---------------+------------------+-------------------------------------------------------------+
@@ -233,9 +233,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
 
     Use LBFGS solver for potentially faster convergence:
 
-    >>> model = nmo.glm.GLM(solver_name="LBFGS").fit(X, y)
+    >>> model = nmo.glm.GLM(solver_name="BFGS").fit(X, y)
     >>> model.solver_name
-    'LBFGS'
+    'BFGS'
 
     **Use a Pytree of arrays as Input**
 
@@ -1337,7 +1337,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         regularizer: UnRegularized()
         regularizer_strength: None
         solver_kwargs: {}
-        solver_name: GradientDescent
+        solver_name: LBFGS
         """
 
         # initialize saving dictionary
@@ -1363,9 +1363,9 @@ class PopulationGLM(GLM):
     +---------------+------------------+-------------------------------------------------------------+
     | Regularizer   | Default Solver   | Available Solvers                                           |
     +===============+==================+=============================================================+
-    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
+    | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
     +---------------+------------------+-------------------------------------------------------------+
-    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
+    | Ridge         | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
     +---------------+------------------+-------------------------------------------------------------+
     | Lasso         | ProximalGradient | ProximalGradient                                            |
     +---------------+------------------+-------------------------------------------------------------+
