@@ -1,16 +1,30 @@
+from __future__ import annotations
+
 from functools import partial
-from typing import Any, Callable, NamedTuple, Optional, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Iterator,
+    NamedTuple,
+    Optional,
+    Tuple,
+    Union,
+)
 
 import equinox as eqx
 import jax
-import jax.flatten_util
 import jax.numpy as jnp
 from jax import grad, jit, lax, random
 
 from ..proximal_operator import prox_none
 from ..tree_utils import tree_add_scalar_mul, tree_l2_norm, tree_slice, tree_sub
-from ..typing import KeyArrayLike, Pytree
-from ._jaxopt_adapter import JaxoptAdapter
+from ..typing import KeyArrayLike, Params, Pytree
+from ._jaxopt_adapter import JaxoptAdapter, JaxoptAdapterState
+from ._stochastic_mixins import JaxoptStochasticSolverMixin
+
+if TYPE_CHECKING:
+    from ..batching import BatchData, DataLoader
 
 
 class SVRGState(NamedTuple):
@@ -75,6 +89,8 @@ class ProxSVRG:
     ----------
     fun : Callable
         Smooth function of the form ``fun(x, *args, **kwargs)``.
+        Note that this loss function has to be an average of losses across data points,
+        i.e. f(x) = 1/N * sum(f(x_i)).
     prox : Callable
         Proximal operator associated with the function ``non_smooth``.
         It should be of the form ``prox(params, hyperparams_prox, scale=1.0)``.
@@ -95,7 +111,7 @@ class ProxSVRG:
     --------
     >>> import numpy as np
     >>> from nemos.proximal_operator import prox_lasso
-    >>> loss_fn = lambda params, X, y: ((X.dot(params) - y)**2).sum()
+    >>> loss_fn = lambda params, X, y: ((X.dot(params) - y)**2).mean()
     >>> svrg = ProxSVRG(loss_fn, prox_lasso)
     >>> hyperparams_prox = 0.1
     >>> params, state = svrg.run(np.zeros(2), hyperparams_prox, np.ones((10, 2)), np.zeros(10))
@@ -522,6 +538,44 @@ class ProxSVRG:
         )
         return OptStep(params=final_params, state=final_state)
 
+    def _infer_number_of_samples(self, *args: Any) -> int:
+        """Infer the number of samples from a tuple of arguments."""
+        n_points_per_arg = {leaf.shape[0] for leaf in jax.tree.leaves(args)}
+        if not len(n_points_per_arg) == 1:
+            raise ValueError("All arguments must have the same sized first dimension.")
+        return n_points_per_arg.pop()
+
+    def _compute_full_gradient_streaming(
+        self,
+        params: Pytree,
+        iter_batches: Callable[[], Iterator[BatchData]],
+    ) -> Pytree:
+        """
+        Compute full gradient by iterating through all batches and averaging the gradients.
+
+        Note that this is appropriate if the loss is given by a mean across data points,
+        which is assumed by SVRG as well.
+        """
+        total_grad = None
+        total_samples = 0
+
+        for batch_data in iter_batches():
+            batch_size = self._infer_number_of_samples(*batch_data)
+            batch_grad, _ = self.loss_gradient(params, *batch_data)
+
+            if total_grad is None:
+                total_grad = jax.tree.map(lambda g: g * batch_size, batch_grad)
+            else:
+                total_grad = jax.tree.map(
+                    lambda t, g: t + g * batch_size, total_grad, batch_grad
+                )
+            total_samples += batch_size
+
+        if total_samples == 0:
+            raise ValueError("iter_batches yielded no batches.")
+
+        return jax.tree.map(lambda g: g / total_samples, total_grad)
+
     @partial(jit, static_argnums=(0,))
     def _update_per_random_samples(
         self,
@@ -571,11 +625,7 @@ class ProxSVRG:
         ValueError
             If not all arguments in args have the same sized first dimension.
         """
-        n_points_per_arg = {leaf.shape[0] for leaf in jax.tree.leaves(args)}
-        if not len(n_points_per_arg) == 1:
-            raise ValueError("All arguments must have the same sized first dimension.")
-        N = n_points_per_arg.pop()
-
+        N = self._infer_number_of_samples(*args)
         m = (N + self.batch_size - 1) // self.batch_size  # number of iterations
 
         def inner_loop_body(_, carry):
@@ -645,6 +695,8 @@ class SVRG(ProxSVRG):
     ----------
     fun : Callable
         smooth function of the form ``fun(x, *args, **kwargs)``.
+        Note that this loss function has to be an average of losses across data points,
+        i.e. f(x) = 1/N * sum(f(x_i)).
     maxiter : int
         Maximum number of epochs to run the optimization for.
     key : jax.random.PRNGkey
@@ -660,7 +712,7 @@ class SVRG(ProxSVRG):
     Examples
     --------
     >>> import numpy as np
-    >>> loss_fn = lambda params, X, y: ((X.dot(params) - y)**2).sum()
+    >>> loss_fn = lambda params, X, y: ((X.dot(params) - y)**2).mean()
     >>> svrg = SVRG(loss_fn)
     >>> params, state = svrg.run(np.zeros(2), np.ones((10, 2)), np.zeros(10))
 
@@ -815,13 +867,43 @@ class SVRG(ProxSVRG):
         return self._run(init_params, init_state, None, *args)
 
 
-class WrappedSVRG(JaxoptAdapter):
+class _WrappedSVRGBase(JaxoptStochasticSolverMixin, JaxoptAdapter):
+    """Shared stochastic_run implementation for SVRG wrappers."""
+
+    _supports_stochastic = True
+
+    def _epoch_prep(
+        self,
+        params: Params,
+        state: JaxoptAdapterState,
+        data_loader: DataLoader,
+    ) -> tuple[Params, JaxoptAdapterState]:
+        """Set the full gradient at the reference point in the state before each epoch."""
+        # compute full gradient by streaming through all batches
+        full_grad = self._solver._compute_full_gradient_streaming(
+            params, data_loader.__iter__
+        )
+
+        state = JaxoptAdapterState(
+            solver_state=state.solver_state._replace(
+                reference_point=params,
+                full_grad_at_reference_point=full_grad,
+                aux_full=None,
+                aux_batch=None,
+            ),
+            stats=state.stats,
+        )
+
+        return params, state
+
+
+class WrappedSVRG(_WrappedSVRGBase):
     """Adapter for NeMoS's implementation of SVRG following the AbstractSolver interface."""
 
     _solver_cls = SVRG
 
 
-class WrappedProxSVRG(JaxoptAdapter):
+class WrappedProxSVRG(_WrappedSVRGBase):
     """Adapter for NeMoS's implementation of Prox-SVRG following the AbstractSolver interface."""
 
     _solver_cls = ProxSVRG

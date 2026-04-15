@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
+from functools import partial
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, Type, TypeAlias
 
 import equinox as eqx
@@ -165,6 +166,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixAdapterState]):
         )
         return OptimistixAdapterState(solver_state=solver_state, stats=stats)
 
+    @partial(jax.jit, static_argnums=(0,))
     def update(
         self,
         params: Params,
@@ -238,6 +240,10 @@ class OptimistixAdapter(SolverAdapter[OptimistixAdapterState]):
         """
 
     @property
+    def tol(self):
+        return self.atol
+
+    @property
     def maxiter(self) -> int:
         return self.config.maxiter
 
@@ -246,7 +252,6 @@ class OptimistixAdapter(SolverAdapter[OptimistixAdapterState]):
         state: OptimistixSolverState,
         num_steps: jax.numpy.ndarray = jax.numpy.array(0),
     ) -> OptimizationInfo:
-
         function_val = (
             state.f if hasattr(state, "f") else state.f_info.f
         )  # pyright: ignore

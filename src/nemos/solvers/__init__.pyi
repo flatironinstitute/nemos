@@ -30,8 +30,10 @@ from ._solver_registry import (
     list_algo_backends,
     list_available_algorithms,
     list_available_solvers,
+    list_stochastic_solvers,
     register,
     set_default_backend,
+    supports_stochastic,
 )
 from ._svrg import SVRG, ProxSVRG, WrappedProxSVRG, WrappedSVRG
 from ._svrg_defaults import (
@@ -66,8 +68,10 @@ __all__ = [
     "list_algo_backends",
     "list_available_algorithms",
     "list_available_solvers",
+    "list_stochastic_solvers",
     "register",
     "set_default_backend",
+    "supports_stochastic",
     "SVRG",
     "ProxSVRG",
     "WrappedProxSVRG",

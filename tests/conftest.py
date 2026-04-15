@@ -458,6 +458,9 @@ class MockRegressor(BaseRegressor):
     def _model_specific_initialization(self, *args, **kwargs):
         pass
 
+    def stochastic_fit(self, *args, **kwargs):
+        pass
+
 
 class MockRegressorNested(MockRegressor):
     def __init__(self, other_param: int, std_param: int = 0):

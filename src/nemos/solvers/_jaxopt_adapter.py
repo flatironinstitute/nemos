@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import partial
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -91,6 +92,7 @@ class JaxoptAdapter(SolverAdapter[JaxoptAdapterState]):
             ),
         )
 
+    @partial(jax.jit, static_argnums=(0,))
     def update(
         self, params: Params, state: JaxoptAdapterState, *args: Any
     ) -> JaxoptStepResult:

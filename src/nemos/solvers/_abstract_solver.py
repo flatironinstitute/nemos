@@ -3,11 +3,21 @@
 from __future__ import annotations
 
 import abc
-from typing import TYPE_CHECKING, Any, Callable, Generic, Protocol, runtime_checkable
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    ClassVar,
+    Generic,
+    Protocol,
+    runtime_checkable,
+)
 
+from ..callbacks import Callback, TrainingContext
 from ..typing import Params, SolverState, StepResult
 
 if TYPE_CHECKING:
+    from ..batching import DataLoader
     from ..regularizer import Regularizer
 import equinox as eqx
 import jax
@@ -21,7 +31,6 @@ class SolverAdapterState(eqx.Module, Generic[SolverState]):
 class OptimizationInfo(eqx.Module):
     """Basic diagnostic information about finished optimization runs."""
 
-    # Not all JAXopt solvers store the function value.
     # None means missing value, while NaN usually indicates a diverged optimization
     function_val: (
         jax.numpy.ndarray | None
@@ -37,10 +46,13 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
     """
     Base class defining the interface for solvers that can be used by `BaseRegressor`.
 
-    All solver parameters (e.g. tolerance, number of steps) are passed to `__init__`,
+    All solver parameters (e.g. tolerance, number of steps) are passed to ``__init__``,
     the other methods only take parameters, solver state, and the positional arguments of
     the objective function.
     """
+
+    # Set to True in subclasses that support stochastic optimization
+    _supports_stochastic: ClassVar[bool] = False
 
     @abc.abstractmethod
     def __init__(
@@ -81,7 +93,7 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         """
         Initialize the solver state.
 
-        Used by `BaseRegressor.initialize_state`
+        Used by ``BaseRegressor.initialize_state``.
         """
         pass
 
@@ -90,7 +102,7 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         """
         Perform a single step/update of the optimization process.
 
-        Used by `BaseRegressor.update`.
+        Used by ``BaseRegressor.update``.
         """
         pass
 
@@ -99,7 +111,7 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         """
         Run a full optimization process until a stopping criterion is reached.
 
-        Used by `BaseRegressor.fit`.
+        Used by ``BaseRegressor.fit``.
         """
         pass
 
@@ -107,10 +119,10 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
     @abc.abstractmethod
     def get_accepted_arguments(cls) -> set[str]:
         """
-        Set of argument names accepted by the solver.
+        Return the set of argument names accepted by the solver.
 
-        Used by `BaseRegressor` to determine what arguments
-        can be passed to the solver's __init__.
+        Used by ``BaseRegressor`` to determine what arguments
+        can be passed to the solver's ``__init__``.
         """
         pass
 
@@ -126,6 +138,132 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         """
         pass
 
+    def stochastic_run(
+        self,
+        init_params: Params,
+        data_loader: DataLoader,
+        num_epochs: int,
+        callback: Callback | None = None,
+        ctx: TrainingContext | None = None,
+    ) -> StepResult:
+        """
+        Run optimization over mini-batches from a data loader.
+
+        Parameters
+        ----------
+        init_params
+            Initial parameter values.
+        data_loader
+            Data loader providing batches and metadata.
+            Must be re-iterable (each ``__iter__`` call returns fresh iterator).
+        num_epochs
+            Number of passes over the data. Must be >= 1.
+        callback :
+            Training callback. A single ``Callback`` instance (use
+            ``CallbackList`` for multiple callbacks).
+            If None, use the no-op base callback.
+        ctx :
+            Training context for callback communication.
+            If None, a default context is created.
+
+        Returns
+        -------
+        StepResult
+            Final (params, state, aux) tuple.
+
+        Raises
+        ------
+        NotImplementedError
+            If the solver does not support stochastic optimization.
+        ValueError
+            If num_epochs < 1.
+        """
+        if not self._supports_stochastic:
+            raise NotImplementedError(
+                f"{self.__class__.__name__} does not support stochastic optimization. "
+            )
+        if num_epochs < 1:
+            raise ValueError("num_epochs must be >= 1")
+        if callback is None:
+            callback = Callback()
+        if ctx is None:
+            ctx = TrainingContext()
+
+        ctx.solver = self
+        ctx.params = init_params
+        ctx.num_epochs = num_epochs
+
+        return self._stochastic_run_impl(
+            init_params,
+            data_loader,
+            num_epochs,
+            callback=callback,
+            ctx=ctx,
+        )
+
+    def _stochastic_run_impl(
+        self,
+        init_params: Params,
+        data_loader: DataLoader,
+        num_epochs: int,
+        callback: Callback,
+        ctx: TrainingContext | None = None,
+    ) -> StepResult:
+        """
+        Override in stochastic-capable solvers.
+
+        For details see ``stochastic_run``
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} must implement _stochastic_run_impl"
+        )
+
+    def stochastic_convergence_criterion(
+        self,
+        params: Params,
+        prev_params: Params,
+        state: SolverState,
+        prev_state: SolverState,
+        aux: Any,
+        epoch: int,
+    ) -> bool:
+        """
+        Evaluate convergence criterion for stochastic optimization.
+
+        Called once per epoch. Subclasses that support stochastic optimization
+        should override this to provide a meaningful default.
+
+        Parameters
+        ----------
+        params :
+            Parameter values at end of current epoch.
+        prev_params :
+            Parameter values at end of previous epoch.
+        state :
+            Solver state at end of current epoch.
+        prev_state :
+            Solver state at end of previous epoch.
+        aux :
+            Auxiliary output from the last batch of the current epoch.
+        epoch :
+            Current epoch index (0-based).
+
+        Returns
+        -------
+        bool
+            ``True`` if optimization should stop.
+        """
+        if not self._supports_stochastic:
+            raise NotImplementedError(
+                f"{self.__class__.__name__} does not support stochastic optimization."
+            )
+
+        raise NotImplementedError(
+            f"For convergence monitoring during stochastic optimization "
+            f"{self.__class__.__name__} must implement stochastic_convergence_criterion. "
+            "Please implement it or disable convergence monitoring."
+        )
+
 
 @runtime_checkable
 class SolverProtocol(Protocol, Generic[SolverState]):
@@ -134,6 +272,11 @@ class SolverProtocol(Protocol, Generic[SolverState]):
 
     Implementations can be checked at runtime via isinstance(solver_object, SolverProtocol)
     and issubclass(solver_class, SolverProtocol).
+
+    Solvers that support stochastic (mini-batch) optimization can additionally
+    implement ``stochastic_run`` and ``stochastic_convergence_criterion``, and
+    set the class variable ``_supports_stochastic = True``.
+    See ``AbstractSolver`` and ``StochasticSolverMixin`` for details.
     """
 
     def __init__(

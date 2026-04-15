@@ -20,6 +20,8 @@ Helpers to look up or register solvers.
     list_algo_backends
     register
     set_default_backend
+    list_stochastic_solvers
+    supports_stochastic
 
     SolverSpec
 
@@ -57,3 +59,17 @@ Classes useful for creating completely custom solvers.
 .. seealso::
 
     :doc:`The developer notes <developers_notes/07-solvers>` explain the solver contract and expected types in more detail.
+
+Stochastic optimization
+^^^^^^^^^^^^^^^^^^^^^^^
+Helper classes for running stochastic optimization.
+
+.. currentmodule:: nemos.batching
+
+.. autosummary::
+    :toctree: generated/solvers
+    :nosignatures:
+
+    DataLoader
+    ArrayDataLoader
+
