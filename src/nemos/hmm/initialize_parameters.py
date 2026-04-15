@@ -11,7 +11,7 @@ from sklearn.cluster import KMeans
 from ..type_casting import is_numpy_array_like
 from ..typing import DESIGN_INPUT_TYPE
 from ..validation import _suggest_keys
-from .utils import initialize_new_session
+from .utils import initialize_is_new_session
 
 
 class InitFunctionHMM(Protocol):
@@ -308,7 +308,7 @@ class KMeansInitializer:
 
         self.n_states = n_states
         self.random_key = random_key
-        self.is_new_session = initialize_new_session(y.shape[0], is_new_session)
+        self.is_new_session = initialize_is_new_session(y.shape[0], is_new_session)
         self.model = KMeans(n_clusters=n_states, random_state=random_key)
         # concatenate pytree leaves if applicable and append y
         data = jnp.concatenate(
@@ -534,7 +534,7 @@ def _validate_init_funcs_keys(
             )
             for key, suggestion in suggested_keys
         )
-        raise ValueError(
+        raise KeyError(
             "Unexpected or unknown keys found in 'init_funcs' dictionary. \n"
             + "\n".join(error_msg)
         )

@@ -1,7 +1,7 @@
 """Validation mixin class for HMM-based models."""
 
 from dataclasses import dataclass, field
-from typing import Any, Optional, Tuple, TypeVar
+from typing import Any, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -14,7 +14,13 @@ from .. import validation
 from ..base_validator import RegressorValidator
 from ..typing import ArrayLike
 from .params import HMMParams, HMMUserParams
-from .utils import initialize_is_new_session
+from .utils import (
+    initialize_is_new_session,
+    compute_is_new_session,
+    shift_nan_is_new_session,
+)
+
+from .params import HMMModelParamsT, HMMUserProvidedParamsT
 
 
 def has_nans_only_at_border(arr):
@@ -37,12 +43,6 @@ def has_nans_only_at_border(arr):
 
     # Check if there are any NaNs between first and last valid values
     return not jnp.any(is_nan[first_valid : last_valid + 1])
-
-
-# HMM-type User provided init_params (e.g. for GLM-HMM Tuple[array, array, array, array, array]])
-HMMUserProvidedParamsT = TypeVar("HMMUserProvidedParamsT")
-# HMM-type Model internal representation (e.g. for GLM-s nemos.glm_hmm.glm_hmm.GLMHMMParams)
-HMMModelParamsT = TypeVar("HMMModelParamsT")
 
 
 def to_hmm_params(user_params: HMMUserParams) -> HMMParams:
@@ -262,35 +262,22 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
         self, X, y, is_new_session: Optional[ArrayLike | nap.IntervalSet] = None
     ) -> jnp.ndarray:
         """Validate and cast is_new_session to a binary array of shape (n_samples,)."""
-        n_samples = X.shape[0]
         if is_new_session is None:
-            return initialize_is_new_session(n_samples, is_new_session)
-        if hasattr(is_new_session, "dtype"):
-            if jnp.issubdtype(is_new_session.dtype, jnp.bool_):
-                # consistency check with n_samples
-                if is_new_session.shape != (n_samples,):
-                    raise ValueError(
-                        f"is_new_session must have shape (n_samples,), but got shape {is_new_session.shape}."
-                    )
-            elif jnp.issubdtype(is_new_session.dtype, jnp.integer):
-                if (jnp.max(is_new_session) > n_samples) or (
-                    jnp.min(is_new_session) < 0
-                ):
-                    raise ValueError(
-                        "Integer is_new_session values must be between 0 and n_samples-1, "
-                        f"but got min {jnp.min(is_new_session)} and max {jnp.max(is_new_session)}."
-                    )
-            else:
-                raise TypeError(
-                    "is_new_session must be a boolean or integer array, but got dtype "
-                    f"{is_new_session.dtype}."
-                )
-            return initialize_is_new_session(n_samples, is_new_session)
+            if is_pynapple_tsd(y):
+                is_new_session = y.time_support
+            elif is_pynapple_tsd(X):
+                is_new_session = X.time_support
+            # return initialize_new_session(n_samples, is_new_session)
+        if isinstance(is_new_session, nap.IntervalSet):
+            is_new_session = compute_is_new_session(X, y, is_new_session)
         else:
-            raise TypeError(
-                "is_new_session must be a boolean or integer array, but got type "
-                f"{type(is_new_session)}."
-            )
+            n_samples = X.shape[0]
+            is_new_session = initialize_is_new_session(n_samples, is_new_session)
+
+        # shift any True values that fall on NaN samples to the next valid sample
+        nan_x = jnp.any(jnp.isnan(jnp.asarray(X)).reshape(X.shape[0], -1), axis=1)
+        nan_y = jnp.any(jnp.isnan(jnp.asarray(y)).reshape(y.shape[0], -1), axis=1)
+        return shift_nan_is_new_session(is_new_session, nan_x | nan_y)
 
     def get_empty_params(self, X, y) -> HMMModelParamsT:
         """Return the param shape given the input data."""

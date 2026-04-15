@@ -3,15 +3,13 @@
 import jax
 import jax.numpy as jnp
 from numpy.typing import NDArray
-from typing import Optional
-from ..typing import DESIGN_INPUT_TYPE, ArrayLike
 from ..type_casting import is_pynapple_tsd
 import pynapple as nap
 
 Array = NDArray | jax.numpy.ndarray
 
 
-def initialize_new_session(n_samples, is_new_session):
+def initialize_is_new_session(n_samples, is_new_session):
     """
     Initialize and validate session boundary indicators for HMM inference.
 
@@ -46,19 +44,45 @@ def initialize_new_session(n_samples, is_new_session):
         is_new_session = jax.lax.dynamic_update_index_in_dim(
             jnp.zeros(n_samples, dtype=bool), True, 0, axis=0
         )
+    elif hasattr(is_new_session, "dtype"):
+        if jnp.issubdtype(is_new_session.dtype, jnp.bool_):
+            if is_new_session.shape != (n_samples,):
+                raise ValueError(
+                    f"is_new_session must have shape (n_samples,), but got shape {is_new_session.shape}."
+                )
+            # use the user-provided tree, but force the first time bin to be True
+            is_new_session = jax.lax.dynamic_update_index_in_dim(
+                jnp.asarray(is_new_session, dtype=bool), True, 0, axis=0
+            )
+        elif jnp.issubdtype(is_new_session.dtype, jnp.integer):
+            if (jnp.max(is_new_session) > n_samples) or (jnp.min(is_new_session) < 0):
+                raise ValueError(
+                    "Integer is_new_session values must be between 0 and n_samples-1, "
+                    f"but got min {jnp.min(is_new_session)} and max {jnp.max(is_new_session)}."
+                )
+            is_new_session = (
+                jnp.zeros(n_samples, dtype=bool)
+                .at[jnp.asarray(is_new_session, dtype=int)]
+                .set(True)
+            )
+        else:
+            raise TypeError(
+                "is_new_session must be a boolean or integer array, but got dtype "
+                f"{is_new_session.dtype}."
+            )
     else:
-        # use the user-provided tree, but force the first time bin to be True
-        is_new_session = jax.lax.dynamic_update_index_in_dim(
-            jnp.asarray(is_new_session, dtype=bool), True, 0, axis=0
+        raise TypeError(
+            "is_new_session must be a boolean or integer array, but got type "
+            f"{type(is_new_session)}."
         )
 
     return is_new_session
 
 
 def compute_is_new_session(
-    time: NDArray | jnp.ndarray,
-    start: NDArray | jnp.ndarray,
-    is_nan: Optional[NDArray | jnp.ndarray] = None,
+    X: nap.Tsd | nap.TsdFrame,
+    y: nap.Tsd | nap.TsdFrame,
+    is_new_session: nap.IntervalSet,
 ) -> jnp.ndarray:
     """Compute indicator vector marking the start of new sessions.
 
@@ -93,80 +117,56 @@ def compute_is_new_session(
 
     This ensures that after dropping NaN values, session boundaries are preserved.
     """
-    is_new_session = (
-        jax.numpy.zeros_like(time).at[jax.numpy.searchsorted(time, start)].set(1)
-    )
-    if is_nan is not None:
-        # set the first element after nan as new session beginning
-        is_new_session = is_new_session.at[1:].set(
-            jnp.where(is_nan[:-1], 1, is_new_session[1:])
+    if not (is_pynapple_tsd(X) or is_pynapple_tsd(y)):
+        raise TypeError(
+            "Either X or y must be a pynapple Tsd or TsdFrame to compute session boundaries from "
+            "a pynapple.IntervalSet object."
         )
+    time = y.t if is_pynapple_tsd(y) else X.t
+    start = is_new_session.start
+    is_new_session = (
+        jax.numpy.zeros_like(time, dtype=bool)
+        .at[jax.numpy.searchsorted(time, start)]
+        .set(True)
+    )
     return is_new_session
 
 
-def _get_is_new_session(
-    X: DESIGN_INPUT_TYPE, y: ArrayLike | nap.Tsd | nap.TsdFrame | None = None
-) -> jnp.ndarray | None:
-    """Compute session boundary indicators for HMM time-series data.
+def shift_nan_is_new_session(
+    is_new_session: jnp.ndarray, is_nan: jnp.ndarray
+) -> jnp.ndarray:
+    """
+    Shift session-start markers off NaN samples to the next valid sample.
 
-    Identifies session boundaries by detecting epoch starts and gaps in the data
-    (represented by NaN values in either predictors or response). This is essential
-    for HMM models to properly segment time series data and reset the hidden
-    state between discontinuous recordings.
+    Any ``True`` in ``is_new_session`` that falls on an index marked by ``is_nan``
+    is moved forward to the first subsequent index where ``is_nan`` is ``False``.
+    Markers already on valid samples are preserved. If no valid sample follows a
+    misplaced marker, it is dropped.
 
     Parameters
     ----------
-    X :
-        Design matrix or predictor time series. Can be a pynapple Tsd/TsdFrame or
-        array-like of shape ``(n_time_points, n_features)``.
-    y :
-        Response variable time series of shape ``(n_time_points,)`` or
-        ``(n_time_points, n_neurons)``. If None, NaN detection is based on X only
-        (useful for simulation where y is not available).
+    is_new_session :
+        Boolean array of session-start indicators, shape ``(n_samples,)``.
+    is_nan :
+        Boolean mask of NaN samples, shape ``(n_samples,)``.
 
     Returns
     -------
-    is_new_session :
-        Binary indicator array of shape ``(n_time_points,)`` marking session starts
-        with 1s. Returns None if unable to compute session boundaries.
-
-    Notes
-    -----
-    Session boundaries are identified from:
-    - Epoch start times (when using pynapple Tsd objects with time_support)
-    - Positions immediately following NaN values in either X or y
-
-    When both X and y are pynapple objects, y's time information takes precedence.
-
-    For non-pynapple inputs, a default session structure is initialized based on
-    the length of X (or y if provided).
-
-    See Also
-    --------
-    compute_is_new_session : Core function for computing session indicators.
+    :
+        Updated boolean session-start indicators, shape ``(n_samples,)``.
     """
-    # compute the nan location along the sample axis
-    nan_x = jnp.any(jnp.isnan(jnp.asarray(X)).reshape(X.shape[0], -1), axis=1)
-    if y is not None:
-        nan_y = jnp.any(jnp.isnan(jnp.asarray(y)).reshape(y.shape[0], -1), axis=1)
-        combined_nans = nan_y | nan_x
-    else:
-        combined_nans = nan_x
+    n_samples = is_new_session.shape[0]
+    indices = jnp.arange(n_samples)
 
-    # define new session array
-    if y is not None and is_pynapple_tsd(y):
-        is_new_session = compute_is_new_session(
-            y.t, y.time_support.start, combined_nans
-        )
-    elif is_pynapple_tsd(X):
-        is_new_session = compute_is_new_session(
-            X.t, X.time_support.start, combined_nans
-        )
-    else:
-        is_new_session = compute_is_new_session(
-            jnp.arange(X.shape[0]), jnp.array([0.0]), combined_nans
-        )
-    return is_new_session
+    def body(carry, x):
+        is_nan_i, idx = x
+        next_valid = jnp.where(is_nan_i, carry, idx)
+        return next_valid, next_valid
+
+    # next_valid will contain the index of the next valid sample for each position, or the position itself if it's valid
+    _, next_valid = jax.lax.scan(body, n_samples, (is_nan, indices), reverse=True)
+    new_idx = next_valid[is_new_session]
+    return jnp.zeros(n_samples, dtype=bool).at[new_idx].set(True, mode="drop")
 
 
 def _check_state_format(state_format: str) -> None:
