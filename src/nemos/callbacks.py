@@ -5,9 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Union
 
-# default sentinel to use solver's convergence criterion
-DEFAULT_CALLBACK = object()
-
 
 @dataclass
 class TrainingContext:

@@ -19,9 +19,7 @@ from .._observation_model_builder import instantiate_observation_model
 from ..base_regressor import BaseRegressor, strip_metadata
 from ..batching import DataLoader, _PreprocessedDataLoader, is_data_loader
 from ..callbacks import (
-    DEFAULT_CALLBACK,
     Callback,
-    SolverConvergenceCallback,
     TrainingContext,
     _normalize_callbacks,
 )
@@ -824,7 +822,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         *,
         init_params: Optional[GLMUserParams] = None,
         num_epochs: int = 1,
-        callbacks: "Callback | list[Callback] | None" = DEFAULT_CALLBACK,
+        callbacks: "Callback | list[Callback] | None" = None,
     ):
         """
         Fit GLM using stochastic optimization with mini-batches.
@@ -845,12 +843,19 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         num_epochs :
             Maximum number of passes over the data. Must be >= 1.
             Optimization may stop earlier if a callback requests a stop.
+
+            There is no convergence-based stopping by default. To stop
+            automatically when the solver's convergence criterion is met,
+            pass ``callbacks=SolverConvergenceCallback()``. Otherwise the
+            fit will run for the full ``num_epochs``.
         callbacks :
             Training callbacks. Accepts a single ``Callback``, a list of
-            ``Callback`` objects, or ``None``.
-            Default is ``SolverConvergenceCallback()`` which stops when
-            the solver's built-in convergence criterion is met.
-            Pass ``None`` or ``[]`` to disable all callbacks.
+            ``Callback`` objects, or ``None`` (default, no callbacks).
+
+            To stop optimization when the solver's built-in convergence
+            criterion is met pass ``nmo.callbacks.SolverConvergenceCallback()``.
+            This is the recommended way to avoid running for the full
+            ``num_epochs`` when the model has already converged.
 
         Returns
         -------
@@ -869,11 +874,15 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         >>> import jax.numpy as jnp
         >>> import nemos as nmo
         >>> from nemos.batching import ArrayDataLoader
+        >>> from nemos.callbacks import SolverConvergenceCallback
         >>> X = jnp.ones((100, 5))
         >>> y = jnp.ones((100,))
         >>> loader = ArrayDataLoader(X, y, batch_size=32, shuffle=True)
         >>> model = nmo.glm.GLM(solver_name="GradientDescent", solver_kwargs={"stepsize": 0.01, "acceleration" : False})
-        >>> model = model.stochastic_fit(loader, num_epochs=10)
+        >>> # Stop early when the solver's convergence criterion is met.
+        >>> model = model.stochastic_fit(
+        ...     loader, num_epochs=10, callbacks=SolverConvergenceCallback()
+        ... )
         """
         # Validate solver supports stochastic
         if not getattr(self.solver_spec.implementation, "_supports_stochastic", False):
@@ -888,9 +897,6 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
                 "(X_batch, y_batch) tuples."
             )
         loader = data
-
-        if callbacks is DEFAULT_CALLBACK:
-            callbacks = SolverConvergenceCallback()
 
         # Get raw sample batch for initialization
         raw_sample_X, raw_sample_y = loader.sample_batch()

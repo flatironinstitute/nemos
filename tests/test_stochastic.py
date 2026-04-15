@@ -223,8 +223,8 @@ class TestGLMStochasticFit:
 
     @pytest.mark.requires_x64
     @pytest.mark.parametrize("solver", _stochastic_solver_names)
-    def test_default_convergence_monitoring(self, simple_data, solver):
-        """Test that default callbacks (SolverConvergenceCallback) enables convergence monitoring, None disables."""
+    def test_solver_convergence_callback_stops_early(self, simple_data, solver):
+        """``SolverConvergenceCallback`` enables convergence-based stopping; default (None) runs all epochs."""
         X, y = simple_data
         n_epochs = 100
         batch_size = 100
@@ -237,21 +237,21 @@ class TestGLMStochasticFit:
         model_fitted.fit(X, y)
         final_params = (model_fitted.coef_, model_fitted.intercept_)
 
-        # Default: SolverConvergenceCallback (should stop early)
+        # Explicit SolverConvergenceCallback: should stop early
         model_stopping = nmo.glm.GLM(solver_name=solver, solver_kwargs=solver_kwargs)
         model_stopping.stochastic_fit(
             loader,
             num_epochs=n_epochs,
             init_params=final_params,
+            callbacks=SolverConvergenceCallback(),
         )
 
-        # No callbacks: runs for all epochs
+        # Default (no callbacks): runs for all epochs
         model_no_stopping = nmo.glm.GLM(solver_name=solver, solver_kwargs=solver_kwargs)
         model_no_stopping.stochastic_fit(
             loader,
             num_epochs=n_epochs,
             init_params=final_params,
-            callbacks=None,
         )
 
         n_steps_taken_stopping = model_stopping.solver_state_.stats.num_steps

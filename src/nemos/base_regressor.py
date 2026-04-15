@@ -27,7 +27,7 @@ from . import solvers, tree_utils, utils
 from ._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from .base_class import Base
 from .base_validator import RegressorValidator
-from .callbacks import DEFAULT_CALLBACK, Callback
+from .callbacks import Callback
 from .glm.params import GLMParams
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
@@ -438,7 +438,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         *,
         init_params: Optional[UserProvidedParamsT] = None,
         num_epochs: int = 1,
-        callbacks: "Callback | list[Callback] | None" = DEFAULT_CALLBACK,
+        callbacks: "Callback | list[Callback] | None" = None,
     ) -> BaseRegressor[UserProvidedParamsT, ModelParamsT]:
         """
         Fit the model using stochastic optimization with mini-batches.
@@ -457,12 +457,19 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         num_epochs :
             Maximum number of passes over the data. Must be >= 1.
             Optimization may stop earlier if a callback requests a stop.
+
+            There is no convergence-based stopping by default. To stop
+            automatically when the solver's convergence criterion is met,
+            pass ``callbacks=SolverConvergenceCallback()``. Otherwise the
+            fit will run for the full ``num_epochs``.
         callbacks :
             Training callbacks. Accepts a single ``Callback``, a list of
-            ``Callback`` objects, or ``None``.
-            Default is ``SolverConvergenceCallback()`` which stops when
-            the solver's built-in convergence criterion is met.
-            Pass ``None`` or ``[]`` to disable all callbacks.
+            ``Callback`` objects, or ``None`` (default, no callbacks).
+
+            To stop optimization when the solver's built-in convergence
+            criterion is met pass ``nmo.callbacks.SolverConvergenceCallback()``.
+            This is the recommended way to avoid running for the full
+            ``num_epochs`` when the model has already converged.
 
         Returns
         -------
