@@ -6,13 +6,14 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.19.1
 kernelspec:
+  name: python3
   display_name: Python 3 (ipykernel)
   language: python
-  name: python3
 ---
 
 ```{code-cell} ipython3
 :tags: [hide-input]
+
 %matplotlib inline
 import warnings
 
@@ -42,8 +43,8 @@ warnings.filterwarnings(
 Here we demonstrate how to set up and run stochastic gradient descent in `nemos` -- the standard approach when your dataset does not fit in memory and you need to train the GLM one mini-batch at a time, using each batch to update the model parameters.
 
 Data will be batched using `pynapple`, fed to the GLM's [`stochastic_fit`](nemos.glm.PopulationGLM.stochastic_fit) method with a [`DataLoader`](nemos.batching.DataLoader), and the loss will be logged by a custom callback.
-
-Then we show how callbacks can be used to stop iteration and how multiple callbacks can be used at the same time.
+\
+Then we show how callbacks can be used to stop iteration on convergence.
 
 ```{code-cell} ipython3
 import jax
@@ -58,71 +59,74 @@ import nemos as nmo
 
 nap.nap_config.suppress_conversion_warnings = True
 
-# set random seed
 np.random.seed(123)
 ```
 
 ## Simulate data
 
-Let's generate some data artificially
-
 ```{code-cell} ipython3
 n_neurons = 10
-T = 50
+T = 50  # seconds
+bin_size = 0.005  # seconds
 
 times = np.linspace(0, T, 5000).reshape(-1, 1)
 rate = np.exp(np.sin(times + np.linspace(0, np.pi * 2, n_neurons).reshape(1, n_neurons)))
 ```
 
-Get the spike times from the rate and generate a `TsGroup` object
+Draw Poisson counts in each bin from this rate, convert them to spike times, and wrap the result in a `TsGroup`.
 
 ```{code-cell} ipython3
 spike_t, spike_id = np.where(np.random.poisson(rate))
 units = nap.Tsd(spike_t / T, spike_id).to_tsgroup()
 ```
 
-## Building the data loader
+## Define the features
 
-We will model the population's response as a function of its own recent spike history. The batches contain each neuron's recent spike history as features, built with a NeMoS [convolutional basis](../background/basis/plot_01_1D_basis_function.md) -- see the [1D convolution background](../background/plot_03_1D_convolution.md) for what `compute_features` does under the hood, and the [head-direction tutorial](../tutorials/plot_02_head_direction.md) for a full worked example of fitting a population GLM on spike history.
-
-Here, `window_size` is 40 time bins, corresponding to a 200 ms window:
+Each neuron's firing rate will be predicted from the recent spike history of the whole population. We build those history features with a NeMoS convolutional basis.
 
 ```{code-cell} ipython3
 basis = nmo.basis.RaisedCosineLogConv(5, window_size=40)
 ```
 
-We then define a data loader that samples a random 5 s interval, bins spikes into spike counts, and generates a design matrix by passing the counts through the basis.
+Each batch is the population activity in a `batch_size` long window, binned at `bin_size`, and passed through this basis. With `window_size=40` bins and `bin_size=0.005` s, the basis's kernel covers 200 ms.
 
 ```{code-cell} ipython3
 batch_size = 5  # seconds
-bin_size = 0.005
 ```
 
-Note that the batch size needs to be larger than the window size of the convolution kernel defined above.
+:::{note}
+See also: the [convolutional basis](../background/basis/plot_01_1D_basis_function.md) and [1D convolution](../background/plot_03_1D_convolution.md) background pages, and the [head-direction tutorial](../tutorials/plot_02_head_direction.md) for a full worked example of fitting a population GLM on spike history.
+:::
 
-Data loaders included in NeMoS already cover the most common use-cases:
+## Building the data loader
+
+NeMoS ships two built-in loaders that cover most cases:
 
 - [`ArrayDataLoader`](nemos.batching.ArrayDataLoader): use with in-memory arrays. Input and output are converted to jax arrays before use. Useful if data fits into memory, but calculations run out of memory, as well as for quick prototyping.
 - [`LazyArrayDataLoader`](nemos.batching.LazyArrayDataLoader): use with lazy/out-of-memory arrays, such as dask, zarr, HDF5.
 
-
-Here, for illustration, we will define a data loader that uses `pynapple` to create batches of data of a given length.
+Here, for illustration, we show how to create a custom data loader.
+We will use `pynapple` to create batches of data: it samples a random 5 s interval, bins spikes into counts, and passes the counts through the basis to build a design matrix.
 
 To create a data loader, we have to define 3 things:
-- `__iter__`: Iterate over tuples containing input and output data, e.g. (X_batch, y_batch). Must return a fresh iterator each call (re-iterable). Please note the use of `yield` in the code.
-- `n_samples` property: Total number of samples in the dataset.
-- `sample_batch`: Single batch for initialization purposes. Should be cheap to evaluate and deterministic.
+- `__iter__`: called every epoch; yields `(X_batch, y_batch)` tuples. Must return a fresh iterator each call (re-iterable). Note the use of `yield` in the code.
+- `n_samples` property: total number of samples in the dataset.
+- `sample_batch`: called at initialization. Should be cheap to evaluate and deterministic.
 
-Note that for best performance (i.e. avoid unnecessary function recompilations) it is advised to generate batches that all have the same or at least a limited number of distinct sizes.
+:::{note}
+For best performance (i.e. to avoid unnecessary function recompilations), generate batches that all have the same, or at least a limited number of distinct, sizes.
+:::
 
 ```{code-cell} ipython3
 class PynappleDataLoader(nmo.batching.DataLoader):
-    def __init__(self, batch_size: float, random_seed: int = 123):
+    def __init__(self, spike_times, basis, batch_size, bin_size):
+        self.spike_times = spike_times
+        self.basis = basis
         self.batch_size = batch_size
-        self.n_batches_per_epoch = int(units.time_support.tot_length() // self.batch_size)
-        self.rng = np.random.default_rng(seed=random_seed)
+        self.bin_size = bin_size
+        self.n_batches_per_epoch = int(spike_times.time_support.tot_length() // self.batch_size)
+        self.rng = np.random.default_rng(seed=123)
 
-        # initialize the cached sample batch
         self._sample_batch = None
 
     def __iter__(self):
@@ -132,31 +136,28 @@ class PynappleDataLoader(nmo.batching.DataLoader):
     @property
     def n_samples(self):
         """Number of samples in the full dataset"""
-        return int(np.round(units.time_support.tot_length() / bin_size))
+        return int(np.round(self.spike_times.time_support.tot_length() / self.bin_size))
 
     def sample_batch(self):
         """Generate a sample batch at the start of the time support."""
         if self._sample_batch is None:
-            self._sample_batch = self._batch_at_t(units.time_support[0, 0])
+            self._sample_batch = self._batch_at_t(self.spike_times.time_support[0, 0])
 
         return self._sample_batch
 
     def _batch_at_t(self, t: float):
         """Generate a batch starting at time t."""
-        # create epoch
         ep = nap.IntervalSet(t, t + self.batch_size)
-        # bin the spike train -> this is our output
-        counts = units.restrict(ep).count(bin_size)
-        # convolve to get history -> this is our input
-        X = basis.compute_features(counts)
+        counts = self.spike_times.restrict(ep).count(self.bin_size)
+        X = self.basis.compute_features(counts)
 
         return X, counts
 
     def _random_batch(self):
         """Generate a batch at a random time within the time support."""
         t = self.rng.uniform(
-            units.time_support[0, 0],
-            units.time_support[0, 1] - self.batch_size,
+            self.spike_times.time_support[0, 0],
+            self.spike_times.time_support[0, 1] - self.batch_size,
         )
         return self._batch_at_t(t)
 ```
@@ -164,30 +165,39 @@ class PynappleDataLoader(nmo.batching.DataLoader):
 Create the data loader:
 
 ```{code-cell} ipython3
-loader = PynappleDataLoader(batch_size)
+loader = PynappleDataLoader(units, basis, batch_size, bin_size)
 ```
 
 ## Callback for logging
 
 
-To monitor training progress and the optimization's state during the fitting run, NeMoS has a callback system.
-
-Callbacks can run defined functionality on the following events:
-- on training beginning and end
+To monitor training progress and the optimization's state during the fitting run, NeMoS has a callback system, allowing to execute custom code on the following events:
+- beginning and end of training
 - before and after each epoch
 - before and after each batch
 
 Information is passed to callbacks through a [`TrainingContext`](nemos.callbacks.TrainingContext) object, which carries information about the state of the training such as the solver state, the current parameters, and the current epoch and batch indices.
+For convenience, the model being fit is also added to the context.
 
-For convenience, the model being fit is also added to the context, so if we want to log the score through training, we have access to it.
-
-Custom callbacks should inherit from [`nmo.callbacks.Callback`](nemos.callbacks.Callback) and overwrite the appropriate methods. In the current example we will implement `on_batch_end` to log the test score after parameters were updated on each batch of data.
+Custom callbacks should inherit from [`nmo.callbacks.Callback`](nemos.callbacks.Callback) and overwrite the required methods. In the current example we will implement `on_train_begin` and `on_batch_end` to log the test score after parameters were updated on each batch of data.
 
 Since the dataset is small, we will use all of it for loss logging and evaluate at every batch. In practice this would be expensive, and you would evaluate on a held-out test set every N-th batch or at the end of each epoch.
 
 ```{code-cell} ipython3
 class TestScoreLoggingCallback(nmo.callbacks.Callback):
-    """Callback logging the loss function evaluated on a constant test set."""
+    """
+    Log the loss evaluated on a fixed test set at every batch.
+
+    Appends ``model.compute_loss(params, X_test, y_test)`` to ``loss_history``
+    once before training starts and again at the end of every batch.
+
+    Parameters
+    ----------
+    X_test :
+        Test input (design matrix).
+    y_test :
+        Test target (e.g. spike counts).
+    """
 
     def __init__(self, X_test, y_test):
         self.loss_history = []
@@ -203,45 +213,20 @@ class TestScoreLoggingCallback(nmo.callbacks.Callback):
         self.loss_history.append(test_score)
 
     def on_train_begin(self, ctx):
-        # log the loss right after initialization, before any training
+        """Log the loss right after initialization, before any training."""
         self._log_test_score(ctx)
 
     def on_batch_end(self, ctx):
-        # log the loss at the end of each batch
+        """Log the loss at the end of each batch."""
         self._log_test_score(ctx)
-
-    def plot_loss(self, ax=None):
-        if ax is None:
-            fig, ax = plt.subplots()
-
-        batch_indices = np.arange(len(self.loss_history))
-        ax.plot(
-            batch_indices,
-            self.loss_history,
-            label="Loss per batch",
-        )
-        ax.scatter(
-            batch_indices[:: loader.n_batches_per_epoch],
-            self.loss_history[:: loader.n_batches_per_epoch],
-            color="tab:orange",
-            label="Loss at epoch boundaries",
-        )
-
-        ax.set_xlabel("Batch index")
-        ax.set_ylabel("Loss value")
-
-        ax.legend()
-        sns.despine(ax=ax)
-
-        return ax
 ```
 
-:::{note}
+:::{tip}
 Some solvers evaluate and save the loss on each batch's data. This can be
 accessed via `ctx.state.stats.function_val`.
 :::
 
-:::{note}
+:::{caution}
 Using `model.score` would require setting the model parameters and, for
 some observation models, estimating the scale. Without these you would get
 inaccurate scores, and for large data this is a lot of computation, so it
@@ -249,7 +234,36 @@ is not recommended -- just use `compute_loss` instead.
 :::
 
 ```{code-cell} ipython3
-# as in this example it fits into memory, use full data for loss logging
+def plot_loss_history(loss_history, n_batches_per_epoch, ax=None):
+    """Plot ``loss_history`` per batch, marking epoch boundaries."""
+    if ax is None:
+        fig, ax = plt.subplots()
+
+    batch_indices = np.arange(len(loss_history))
+    ax.plot(
+        batch_indices,
+        loss_history,
+        label="Loss per batch",
+    )
+    ax.scatter(
+        batch_indices[::n_batches_per_epoch],
+        loss_history[::n_batches_per_epoch],
+        color="tab:orange",
+        label="Loss at epoch boundaries",
+    )
+
+    ax.set_xlabel("Batch index")
+    ax.set_ylabel("Loss value")
+
+    ax.legend()
+    sns.despine(ax=ax)
+
+    return ax
+```
+
+Since the dataset fits in memory, we reuse the full dataset as the "test set" for brevity; in practice you would pass a held-out split instead.
+
+```{code-cell} ipython3
 full_counts = units.count(bin_size)
 X = basis.compute_features(full_counts)
 
@@ -258,23 +272,10 @@ batch_logger = TestScoreLoggingCallback(X, full_counts)
 
 ## Model configuration
 
-The default algorithm for [`PopulationGLM`](nemos.glm.PopulationGLM) is L-BFGS.
-For batching we suggest using gradient descent instead.
+The default algorithm for [`PopulationGLM`](nemos.glm.PopulationGLM) is L-BFGS, whose line search and Hessian estimation are incompatible with stochastic batches. For batching we use plain gradient descent with a fixed stepsize instead.
 
-Alternatively, you can try using SVRG (or Prox-SVRG for Lasso regularization).
-SVRG requires more computation per epoch than gradient descent, but converges to an optimum with a fixed stepsize.
-Please note that setting the optimal stepsize and batch size for SVRG is not yet automated for large data.
-
-:::{tip}
-Other solvers that can be used for stochastic optimization can be listed
-using [`nmo.solvers.list_stochastic_solvers()`](nemos.solvers.list_stochastic_solvers).
-:::
-
-:::{note}
-You must disable adaptive step-size updates when fitting with stochastic gradient descent.
-For the `GradientDescent` solver, this can be done by setting `acceleration` to False and providing an explicit `stepsize`.
-`stochastic_fit` will throw an error if acceleration and linesearches are not turned off.
-:::
+Accordingly, `stochastic_fit` will error unless acceleration and line searches are turned off.
+For the `GradientDescent` solver, set `acceleration=False` and provide an explicit `stepsize`:
 
 ```{code-cell} ipython3
 glm = nmo.glm.PopulationGLM(
@@ -283,69 +284,58 @@ glm = nmo.glm.PopulationGLM(
 )
 ```
 
+:::{tip}
+Other solvers that can be used for stochastic optimization can be listed with [`nmo.solvers.list_stochastic_solvers()`](nemos.solvers.list_stochastic_solvers).
+:::
+
++++
+
 ## Running the optimization
+
+We are ready to start the optimization using the GLM's `stochastic_fit` method.
+
+`stochastic_fit` uses `num_epochs` to control the training duration and does not stop on convergence by default. Unless a callback requests a stop, it will run for the full number of epochs.
+We come back to convergence-based stopping in [Stopping the optimization](#stopping-the-optimization) below.
+
+Note that the `max_steps` solver kwarg is also ignored.
 
 ```{code-cell} ipython3
 glm.stochastic_fit(loader, num_epochs=10, callbacks=batch_logger)
 ```
 
-:::{note}
-`stochastic_fit` ignores the `max_steps` solver kwarg; `num_epochs` and the
-callbacks control when optimization stops.
-:::
-
-:::{tip}
-`stochastic_fit` does not stop on convergence by default -- it will run for
-the full `num_epochs` unless a callback requests a stop.
-
-We will come back to convergence-based stopping in the
-"Multiple callbacks and stopping the optimization" section below.
-:::
-
 ```{code-cell} ipython3
-batch_logger.plot_loss()
+plot_loss_history(batch_logger.loss_history, loader.n_batches_per_epoch)
 ```
+
+The loss is still dropping at the end of the run, so the model hasn't converged yet.
 
 ## Continuing fitting
 
-The model has not converged yet. To continue from where we left off, pass the current parameters as `init_params`:
+To continue from where we left off, pass the current parameters as `init_params`:
 
 ```{code-cell} ipython3
 glm.stochastic_fit(
     loader,
     num_epochs=10,
     init_params=(glm.coef_, glm.intercept_),
+    # using the same callback so the new loss values are appended to the existing history
     callbacks=batch_logger,
 )
 ```
 
 ```{code-cell} ipython3
-batch_logger.plot_loss()
+plot_loss_history(batch_logger.loss_history, loader.n_batches_per_epoch)
 ```
 
-## Multiple callbacks and stopping the optimization
-
-
 We're getting closer, but still need some training.
+
++++
+
+## Stopping the optimization
+
 Instead of guessing how many epochs we need, undershooting and restarting, or overshooting and waiting too long, we can use callbacks to stop optimization on convergence.
 
-Callbacks can trigger stopping the optimization by calling `ctx.request_stop()`.
-
-Here, we will demonstrate this by defining a callback that stops based on the loss evaluated on a test set if it hasn't improved much for a given number of epochs.
-
-Also note that multiple callbacks serving different functions can be used simultaneously by passing them as a list to [`stochastic_fit`](nemos.glm.PopulationGLM.stochastic_fit).
-
-Alternatively, a [`CallbackList`](nemos.callbacks.CallbackList) can be constructed beforehand and passed as a single callback.
-
-:::{tip}
-NeMoS provides a [`SolverConvergenceCallback`](nemos.callbacks.SolverConvergenceCallback)
-which evaluates the solver's own convergence criterion defined as its
-`stochastic_convergence_criterion`. For built-in solvers this means
-examining the change in parameter values at the end of each epoch.
-`stochastic_fit` does not add this callback for you -- pass it explicitly
-(alone or together with other callbacks) whenever you want
-convergence-based stopping, similar to `fit`.
-:::
+Callbacks can stop a fit with `ctx.request_stop()`. We demonstrate this by defining a callback that stops based on the loss evaluated on a test set if it hasn't improved much for a given number of epochs.
 
 ```{code-cell} ipython3
 class EarlyStoppingCallback(nmo.callbacks.Callback):
@@ -365,26 +355,16 @@ class EarlyStoppingCallback(nmo.callbacks.Callback):
         Number of epochs with no improvement before stopping.
     min_delta :
         Minimum decrease in loss to count as an improvement.
-    reset :
-        Reset loss tracking when starting a fit. Default True.
-        Setting to False can be useful when continuing a fit.
     """
 
-    def __init__(self, X_test, y_test, patience=5, min_delta=0.0, reset: bool = True):
+    def __init__(self, X_test, y_test, patience=5, min_delta=0.0):
         self.X_test = X_test
         self.y_test = y_test
         self.patience = patience
         self.min_delta = min_delta
-        self.reset = reset
 
         self._ref_loss = np.inf
         self._wait = 0
-
-    def on_train_begin(self, ctx: nmo.callbacks.TrainingContext) -> None:
-        """(Optionally) reset state at the start of training."""
-        if self.reset:
-            self._ref_loss = np.inf
-            self._wait = 0
 
     def on_epoch_end(self, ctx: nmo.callbacks.TrainingContext) -> None:
         """Check whether test loss has improved; request stop if patience exceeded."""
@@ -401,43 +381,58 @@ class EarlyStoppingCallback(nmo.callbacks.Callback):
             self._wait += 1
             if self._wait >= self.patience:
                 ctx.request_stop(
-                    f"Less than {self.min_delta} improvement for {self.patience} epochs.\n"
+                    f"Loss improved by less than {self.min_delta} for {self.patience} consecutive epochs.\n"
                     f"last loss: {current_loss:.6f}\n"
-                    f"loss{self.patience} epochs ago: {self._ref_loss:.6f}\n"
+                    f"reference loss: {self._ref_loss:.6f}\n"
                 )
 ```
 
-Let's set the number of epochs to a very high number, so we don't stop too soon and stopping is triggered by the early stopping callback.
+:::{tip}
+NeMoS provides a [`SolverConvergenceCallback`](nemos.callbacks.SolverConvergenceCallback)
+which evaluates the solver's own convergence criterion defined as its
+`stochastic_convergence_criterion`. For built-in solvers this means
+examining the change in parameter values at the end of each epoch.
+:::
+
++++
 
 To avoid running for too long in this demo, we set `min_delta` relatively high. In practice you want to set this to a level that represents no true improvement.
 
 ```{code-cell} ipython3
-early_stopping = EarlyStoppingCallback(X, full_counts, patience=5, min_delta=0.2)
+early_stopping = EarlyStoppingCallback(X, full_counts, patience=5, min_delta=0.02)
+```
 
+Multiple callbacks serving different functions can be used simultaneously by passing them as a list or [`CallbackList`](nemos.callbacks.CallbackList) to [`stochastic_fit`](nemos.glm.PopulationGLM.stochastic_fit).
+Here, we continue logging the loss and add the early stopping callback:
+
+```{code-cell} ipython3
 glm.stochastic_fit(
     loader,
+    # set num_epochs very high, so stopping has to be triggered by the callback
     num_epochs=10_000,
     init_params=(glm.coef_, glm.intercept_),
     callbacks=[batch_logger, early_stopping],
 )
 ```
 
+Plotting the loss shows how the loss is starting to slightly plateau:
+
 ```{code-cell} ipython3
-ax = batch_logger.plot_loss()
+ax = plot_loss_history(batch_logger.loss_history, loader.n_batches_per_epoch)
 ax.axhline(
     early_stopping._ref_loss,
     color="black",
-    label=f"Loss level after which less than {early_stopping.min_delta} improvement was made",
+    label="Early-stopping reference loss",
 )
 ax.legend()
-fig = ax.get_figure()
 ```
 
 ```{code-cell} ipython3
 :tags: [hide-input]
+
 # save image for thumbnail
-from pathlib import Path
 import os
+from pathlib import Path
 
 root = os.environ.get("READTHEDOCS_OUTPUT")
 if root:
@@ -451,10 +446,11 @@ if root or Path("../assets/stylesheets").exists():
     path.mkdir(parents=True, exist_ok=True)
 
 if path.exists():
+    fig = ax.get_figure()
     fig.savefig(path / "plot_04_batch_glm.svg")
 ```
 
-We can take a look at the coefficients.
+We can also take a look at the coefficients.
 Here we extract the weight matrix of shape `(n_neurons*n_basis, n_neurons)`
 and reshape it to `(n_neurons, n_basis, n_neurons)`.
 We then average along basis to get a weight matrix of shape `(n_neurons, n_neurons)`.
@@ -463,26 +459,21 @@ We then average along basis to get a weight matrix of shape `(n_neurons, n_neuro
 W = glm.coef_.reshape(len(units), basis.n_basis_funcs, len(units))
 Wm = np.mean(np.abs(W), 1)
 
-# Let's plot it.
-
-plt.figure()
-plt.imshow(Wm)
-plt.xlabel("Neurons")
-plt.ylabel("Neurons")
-plt.show()
+fig, ax = plt.subplots()
+ax.imshow(Wm)
+ax.set_xlabel("Neurons")
+ax.set_ylabel("Neurons")
 ```
 
 ## Model comparison
 
 Since this example is small enough, we can fit the full model until convergence and compare the scores.
-Here we generate the design matrix and spike counts for the whole dataset.
 
 ```{code-cell} ipython3
-full_model = nmo.glm.PopulationGLM(solver_name="LBFGS", solver_kwargs={"maxiter": 10_000}).fit(X, full_counts)
+full_model = nmo.glm.PopulationGLM(solver_kwargs={"maxiter": 10_000}).fit(X, full_counts)
 ```
 
-Now that the full model is fitted, we are scoring the full model and the batch model against the full datasets to compare the scores.
-The score is pseudo-R2
+Now that the full model is fitted, we score the full model and the batch model against the full dataset using pseudo-R2:
 
 ```{code-cell} ipython3
 full_scores = full_model.score(
@@ -493,27 +484,31 @@ batch_scores = glm.score(
 )
 ```
 
-Let's compare scores for each neurons as well as the coefficients.
+Let's compare scores for each neurons as well as the coefficients:
 
 ```{code-cell} ipython3
-plt.figure(figsize=(10, 8))
-gs = plt.GridSpec(3, 2)
-plt.subplot(gs[0, :])
-plt.bar(np.arange(0, n_neurons), full_scores, 0.4, label="Full model")
-plt.bar(np.arange(0, n_neurons) + 0.5, batch_scores, 0.4, label="Batch model")
-plt.ylabel("Pseudo R2")
-plt.xlabel("Neurons")
-plt.ylim(0, 1)
-plt.legend()
-plt.subplot(gs[1:, 0])
-plt.imshow(Wm)
-plt.title("Batch model")
-plt.subplot(gs[1:, 1])
 Wm2 = np.mean(np.abs(full_model.coef_.reshape(len(units), basis.n_basis_funcs, len(units))), 1)
-plt.imshow(Wm2)
-plt.title("Full model")
-plt.tight_layout()
-plt.show()
+
+fig = plt.figure(figsize=(10, 8))
+gs = fig.add_gridspec(3, 2)
+
+ax_scores = fig.add_subplot(gs[0, :])
+ax_scores.bar(np.arange(n_neurons), full_scores, 0.4, label="Full model")
+ax_scores.bar(np.arange(n_neurons) + 0.5, batch_scores, 0.4, label="Batch model")
+ax_scores.set_ylabel("Pseudo R2")
+ax_scores.set_xlabel("Neurons")
+ax_scores.set_ylim(0, 1)
+ax_scores.legend()
+
+ax_batch = fig.add_subplot(gs[1:, 0])
+ax_batch.imshow(Wm)
+ax_batch.set_title("Batch model")
+
+ax_full = fig.add_subplot(gs[1:, 1])
+ax_full.imshow(Wm2)
+ax_full.set_title("Full model")
+
+fig.tight_layout()
 ```
 
-As we can see, with a few iterations, the batch model managed to recover a similar coefficient matrix.
+As we can see, the batch model managed to recover a similar coefficient matrix.
