@@ -278,6 +278,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         """Getter for the solver_name attribute."""
         return self.solver_spec.algo_name
 
+    # TODO: Should self.solver be deleted if solver_name or solver_spec changes?
     @solver_name.setter
     def solver_name(self, solver_name: str | None):
         """Setter for the solver_name attribute."""
