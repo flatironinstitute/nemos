@@ -299,6 +299,35 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         """Validate and set the dictionary of initialization functions for HMM parameters."""
         self._hmm_initialization_funcs = _validate_init_funcs_keys(value)
 
+    @abc.abstractmethod
+    def _model_params_initialization(self, X, y, is_new_session):
+        """Model-specific parameter initialization. Should return a tuple of (model_params, validate_model) where
+        model_params is the initialized model parameters and validate_model is a boolean indicating whether the
+        initialized parameters need to be validated."""
+        pass
+
+    def _model_specific_initialization(self, X, y, is_new_session):
+        """Model-specific initialization."""
+        hmm_params, validate_hmm = self._hmm_params_initialization(
+            X,
+            y,
+            is_new_session,
+        )
+        model_params, validate_model = self._model_params_initialization(
+            X,
+            y,
+            is_new_session,
+        )
+        user_params = self._validator.wrap_user_params(
+            model_params
+        ) + self._validator.wrap_user_params(hmm_params)
+        if validate_hmm or validate_model:
+            model_params = self._validator.validate_and_cast_params(user_params)
+            self._validator.validate_consistency(model_params, X=X, y=y)
+            return model_params
+        else:
+            return self._validator.to_model_params(user_params)
+
     def _check_hmm_is_fit(self):
         """Ensure the HMM parameters have been fitted."""
         flat_params = [
@@ -348,35 +377,6 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
             "initial_proba_init_custom", True
         ) or self._hmm_initialization_funcs.get("transition_proba_init_custom", True)
         return hmm_params, validate_params
-
-    @abc.abstractmethod
-    def _model_params_initialization(self, X, y, is_new_session):
-        """Model-specific parameter initialization. Should return a tuple of (model_params, validate_model) where
-        model_params is the initialized model parameters and validate_model is a boolean indicating whether the
-        initialized parameters need to be validated."""
-        pass
-
-    def _model_specific_initialization(self, X, y, is_new_session):
-        """Model-specific initialization."""
-        hmm_params, validate_hmm = self._hmm_params_initialization(
-            X,
-            y,
-            is_new_session,
-        )
-        model_params, validate_model = self._model_params_initialization(
-            X,
-            y,
-            is_new_session,
-        )
-        user_params = self._validator.wrap_user_params(
-            model_params
-        ) + self._validator.wrap_user_params(hmm_params)
-        if validate_hmm or validate_model:
-            model_params = self._validator.validate_and_cast_params(user_params)
-            self._validator.validate_consistency(model_params, X=X, y=y)
-            return model_params
-        else:
-            return self._validator.to_model_params(user_params)
 
     def _validate_and_prepare_inputs(self, X, y, is_new_session=None):
         """Validate and prepare inputs."""

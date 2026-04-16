@@ -1,31 +1,29 @@
-from nemos.hmm.hmm import BaseHMM
-from typing import Union, Optional, Callable, Tuple
+from contextlib import nullcontext as does_not_raise
+from dataclasses import dataclass
+from typing import Any, Callable, Optional, Tuple, Union
+
 import jax
 import jax.numpy as jnp
-from nemos.hmm.initialize_parameters import (
-    INITIALIZATION_FN_DICT,
-    DEFAULT_INIT_FUNCTIONS,
-    uniform_initial_proba_init,
-    random_initial_proba_init,
-    kmeans_initial_proba_init,
-    uniform_transition_proba_init,
-    random_transition_proba_init,
-    sticky_transition_proba_init,
-    kmeans_transition_proba_init,
-)
-from nemos.params import ModelParams
-from nemos.hmm.params import HMMParams
-from nemos.hmm.validation import HMMValidator
-from nemos.base_validator import RegressorValidator
-from nemos.hmm.validation import to_hmm_params, from_hmm_params
-import nemos as nmo
-import pytest
-from contextlib import nullcontext as does_not_raise
-from typing import Any, Callable, Tuple, Union
 import numpy as np
 import pynapple as nap
-from nemos import tree_utils
-from dataclasses import dataclass
+import pytest
+
+from nemos.base_validator import RegressorValidator
+from nemos.hmm.hmm import BaseHMM
+from nemos.hmm.initialize_parameters import (
+    DEFAULT_INIT_FUNCTIONS,
+    INITIALIZATION_FN_DICT,
+    kmeans_initial_proba_init,
+    kmeans_transition_proba_init,
+    random_initial_proba_init,
+    random_transition_proba_init,
+    sticky_transition_proba_init,
+    uniform_initial_proba_init,
+    uniform_transition_proba_init,
+)
+from nemos.hmm.params import HMMParams
+from nemos.hmm.validation import HMMValidator, from_hmm_params, to_hmm_params
+from nemos.params import ModelParams
 
 
 class MockHMMModelParams(ModelParams):
@@ -172,6 +170,9 @@ class MockHMM(BaseHMM[MockHMMParams, MockHMMUserParams]):
         pass
 
     def update(self, *args, **kwargs):
+        pass
+
+    def score(self, *args, **kwargs):
         pass
 
 
@@ -715,7 +716,7 @@ class TestHMMNewSession:
     @pytest.mark.parametrize(
         "X, y, is_new_session, expected_new_session",
         [
-            ### No is_new_session provided
+            # No is_new_session provided
             (np.ones((3, 1)), np.ones((3,)), None, jnp.array([1, 0, 0])),
             # NaN at start in y
             (np.ones((3, 1)), np.array([np.nan, 0, 0]), None, jnp.array([0, 1, 0])),
@@ -754,8 +755,8 @@ class TestHMMNewSession:
                 None,
                 jnp.array([0, 1, 0, 0, 0]),
             ),
-            ### Explicit is_new_session provided by user
-            ## boolean array or integer array with 1s and 0s
+            # Explicit is_new_session provided by user
+            # boolean array or integer array with 1s and 0s
             (
                 np.ones((3, 1)),
                 np.ones((3,)),
@@ -801,7 +802,7 @@ class TestHMMNewSession:
                 jnp.array([1, 0, 1, 0, 0]),
                 jnp.array([1, 0, 0, 0, 1]),
             ),
-            ## integer array with indices of new sessions
+            # integer array with indices of new sessions
             (
                 np.ones((5, 1)),
                 np.array([0, 1, 2, 3, 4]),
@@ -834,7 +835,7 @@ class TestHMMNewSession:
     @pytest.mark.parametrize(
         "X, y, is_new_session, expected_new_session",
         [
-            ## no is_new_session provided
+            # no is_new_session provided
             # inferred time support should only find one new session at start
             (
                 nap.TsdFrame(
@@ -929,7 +930,7 @@ class TestHMMNewSession:
                 None,
                 jnp.array([1, 0, 0, 0, 1, 0]),
             ),
-            ## intervalset passed as is_new_session
+            # intervalset passed as is_new_session
             (
                 nap.TsdFrame(
                     t=np.arange(3),

@@ -14,6 +14,7 @@ from .m_step_analytical_updates import (
 )
 from .params import HMMParams
 from .utils import Array, initialize_is_new_session
+from .utils import Array, initialize_is_new_session
 
 
 class EMState(eqx.Module):
@@ -257,7 +258,7 @@ def forward_pass(
     log_transition_prob = params.hmm_params.log_transition_prob
 
     # Initialize variables
-    is_new_session = initialize_is_new_session(y.shape[0], is_new_session)
+    is_new_session = initialize_is_new_session(X, y, is_new_session)
 
     # Compute log-likelihoods
     log_conditionals = log_likelihood_func(X, y, model_params)
@@ -444,7 +445,7 @@ def forward_backward(
 
     # Initialize variables
     n_time_bins = y.shape[0]
-    is_new_session = initialize_is_new_session(y.shape[0], is_new_session)
+    is_new_session = initialize_is_new_session(X, y, is_new_session)
 
     # Compute log-likelihoods
     log_conditionals = log_likelihood_func(X, y, model_params)
@@ -800,7 +801,7 @@ def em_hmm(
     state :
         Final EMState containing all parameters and diagnostics.
     """
-    is_new_session = initialize_is_new_session(y.shape[0], is_new_session)
+    is_new_session = initialize_is_new_session(X, y, is_new_session)
 
     state = EMState(
         data_log_likelihood=-jnp.array(jnp.inf),
@@ -897,7 +898,7 @@ def max_sum(
     n_states = log_init.shape[0]
 
     # initialize new session
-    is_new_session = initialize_is_new_session(y.shape[0], is_new_session)
+    is_new_session = initialize_is_new_session(X, y, is_new_session)
 
     log_emission = log_likelihood_func(X, y, model_params)
 

@@ -108,7 +108,7 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     regularizer: UnRegularized()
     regularizer_strength: None
     solver_kwargs: {}
-    solver_name: GradientDescent
+    solver_name: LBFGS
     """
     # load the model from a .npz file
     filename = Path(filename)

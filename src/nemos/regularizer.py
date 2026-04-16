@@ -455,7 +455,7 @@ class UnRegularized(Regularizer):
         "ProxSVRG",
     )
 
-    _default_solver = "GradientDescent"
+    _default_solver = "LBFGS"
     _proximal_operator = staticmethod(prox_none)
 
     def _penalty_on_subtree(self, subtree, **kwargs) -> jnp.ndarray:
@@ -483,7 +483,7 @@ class Ridge(Regularizer):
         "ProxSVRG",
     )
 
-    _default_solver = "GradientDescent"
+    _default_solver = "LBFGS"
 
     _proximal_operator = staticmethod(prox_ridge)
 

@@ -2,10 +2,11 @@
 
 import jax
 import jax.numpy as jnp
-from numpy.typing import NDArray, ArrayLike
+import pynapple as nap
+from numpy.typing import ArrayLike, NDArray
+
 from ..type_casting import is_pynapple_tsd
 from ..typing import DESIGN_INPUT_TYPE
-import pynapple as nap
 
 Array = NDArray | jax.numpy.ndarray
 

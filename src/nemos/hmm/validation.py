@@ -6,19 +6,16 @@ from typing import Any, Optional, Tuple
 import jax.numpy as jnp
 import pynapple as nap
 from pynapple import Tsd, TsdFrame
-from ..type_casting import is_pynapple_tsd
-from ..typing import DESIGN_INPUT_TYPE
 
 from .. import validation
 from ..base_validator import RegressorValidator
-from ..typing import ArrayLike
-from .params import HMMParams, HMMUserParams
+from ..type_casting import is_pynapple_tsd
+from ..typing import DESIGN_INPUT_TYPE, ArrayLike
+from .params import HMMModelParamsT, HMMParams, HMMUserParams, HMMUserProvidedParamsT
 from .utils import (
     initialize_is_new_session,
     shift_nan_is_new_session,
 )
-
-from .params import HMMModelParamsT, HMMUserProvidedParamsT
 
 
 def has_nans_only_at_border(arr):
