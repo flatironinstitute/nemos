@@ -211,7 +211,7 @@ class TestTransitionProbaInitialization:
         assert not jnp.allclose(transition_prob1, transition_prob2)
 
 
-def generate_kmeans_data(n_states=3):
+def generate_kmeans_data(n_states=3, min_prob=0.02):
     n_samples = n_states * 5000
     is_new_session = np.zeros((n_samples,), dtype=bool)
     is_new_session[0::340] = True
@@ -231,11 +231,15 @@ def generate_kmeans_data(n_states=3):
 
     state = jax.nn.one_hot(y, n_states)
     initial_probability = state[is_new_session].sum(axis=0)
+    initial_probability = (initial_probability / initial_probability.sum()) + min_prob
     initial_probability = initial_probability / initial_probability.sum()
 
     transition_probability = (
         state[:-1][~is_new_session[1:]].T @ state[1:][~is_new_session[1:]]
     )
+    transition_probability = (
+        transition_probability / transition_probability.sum(axis=1, keepdims=True)
+    ) + min_prob
     transition_probability = transition_probability / transition_probability.sum(
         axis=1, keepdims=True
     )
@@ -268,7 +272,11 @@ class TestKMeansInitialization:
             expected_transition_prob,
         ) = generate_kmeans_data(n_states)
         initializer = KMeansInitializer(
-            n_states, X[pytree], y[population], is_new_session, jax.random.PRNGKey(123)
+            n_states,
+            X[pytree],
+            y[population],
+            is_new_session,
+            random_key=jax.random.PRNGKey(123),
         )
         initial_prob, transition_prob = (
             initializer.initial_probability(),
@@ -327,7 +335,7 @@ class TestKMeansInitialization:
         X, _, y, _, is_new_session, _, _ = generate_kmeans_data(n_states)
         default_initializer = KMeansInitializer(n_states, X, y, is_new_session)
         used_initializer = KMeansInitializer(
-            n_states, X, y, is_new_session, jax.random.PRNGKey(2)
+            n_states, X, y, is_new_session, random_key=jax.random.PRNGKey(2)
         )
         # initial probability
         init_prob = kmeans_initial_proba_init(
