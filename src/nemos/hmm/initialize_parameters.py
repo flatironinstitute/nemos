@@ -307,6 +307,10 @@ class KMeansInitializer:
     is_new_session :
         Optional boolean array of shape (n_samples,) indicating the start of new sessions. If None
         (default), it is assumed that all data belongs to a single session.
+    minimum_prob :
+        Minimum probability added to each state to avoid zero probabilities.
+        Note that probabilities will be renormalized after adding this minimum value, so the final
+        probabilities will not be exactly this value.
     random_key :
         Random key for reproducibility of KMeans initialization.
     """
@@ -317,12 +321,14 @@ class KMeansInitializer:
         X: DESIGN_INPUT_TYPE,
         y: NDArray | jnp.ndarray,
         is_new_session: Optional[jnp.ndarray] = None,
+        minimum_prob: float = 0.02,
         random_key: int | jax.Array = 0,
     ):
         if isinstance(random_key, jax.Array):
             random_key = int(random_key[-1])
 
         self.n_states = n_states
+        self.minimum_prob = minimum_prob
         self.random_key = random_key
         self.is_new_session = initialize_new_session(y.shape[0], is_new_session)
         self.model = KMeans(n_clusters=n_states, random_state=random_key)
@@ -341,6 +347,10 @@ class KMeansInitializer:
         probabilities.
         """
         initial_probability = self.states[self.is_new_session].sum(axis=0)
+        # normalize and add minimum_prob to avoid zero probabilities, then renormalize
+        initial_probability = (
+            initial_probability / initial_probability.sum()
+        ) + self.minimum_prob
         return initial_probability / initial_probability.sum()
 
     def transition_probability(self):
@@ -354,6 +364,10 @@ class KMeansInitializer:
             self.states[:-1][~self.is_new_session[1:]].T
             @ self.states[1:][~self.is_new_session[1:]]
         )
+        # normalize and add minimum_prob to avoid zero probabilities, then renormalize
+        transition_matrix = (
+            transition_matrix / transition_matrix.sum(axis=1, keepdims=True)
+        ) + self.minimum_prob
         return transition_matrix / transition_matrix.sum(axis=1, keepdims=True)
 
 
@@ -362,6 +376,7 @@ def kmeans_initial_proba_init(
     X: DESIGN_INPUT_TYPE,
     y: NDArray | jnp.ndarray,
     is_new_session: Optional[jnp.ndarray] = None,
+    minimum_prob: float = 0.02,
     random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
     initializer: Optional[KMeansInitializer] = None,
 ):
@@ -382,6 +397,10 @@ def kmeans_initial_proba_init(
     is_new_session :
         Optional boolean array of shape (n_samples,) indicating the start of new sessions. If None
         (default), it is assumed that all data belongs to a single session.
+    minimum_prob :
+        Minimum probability added to each state to avoid zero probabilities.
+        Note that probabilities will be renormalized after adding this minimum value, so the final
+        probabilities will not be exactly this value.
     random_key :
         Random key for reproducibility of KMeans initialization.
     initializer :
@@ -393,7 +412,9 @@ def kmeans_initial_proba_init(
         Initial state probability vector of shape (n_states,) that sums to 1.
     """
     if initializer is None:
-        initializer = KMeansInitializer(n_states, X, y, is_new_session, random_key)
+        initializer = KMeansInitializer(
+            n_states, X, y, is_new_session, minimum_prob, random_key
+        )
     return initializer.initial_probability()
 
 
@@ -402,6 +423,7 @@ def kmeans_transition_proba_init(
     X: DESIGN_INPUT_TYPE,
     y: NDArray | jnp.ndarray,
     is_new_session: Optional[jnp.ndarray] = None,
+    minimum_prob: float = 0.02,
     random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
     initializer: Optional[KMeansInitializer] = None,
 ):
@@ -422,6 +444,10 @@ def kmeans_transition_proba_init(
     is_new_session :
         Optional boolean array of shape (n_samples,) indicating the start of new sessions. If None
         (default), it is assumed that all data belongs to a single session.
+    minimum_prob :
+        Minimum probability added to each state to avoid zero probabilities.
+        Note that probabilities will be renormalized after adding this minimum value, so the final
+        probabilities will not be exactly this value.
     random_key :
         Random key for reproducibility of KMeans initialization.
     initializer :
@@ -433,7 +459,9 @@ def kmeans_transition_proba_init(
         Transition probability matrix of shape (n_states, n_states) computed from KMeans assigned states.
     """
     if initializer is None:
-        initializer = KMeansInitializer(n_states, X, y, is_new_session, random_key)
+        initializer = KMeansInitializer(
+            n_states, X, y, is_new_session, minimum_prob, random_key
+        )
     return initializer.transition_probability()
 
 
