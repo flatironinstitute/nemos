@@ -102,6 +102,7 @@ def generate_glm_configs(
     # Proximal solvers are restricted to non-smooth regularizers. Although NeMoS
     # technically allows ProximalGradient/ProxSVRG.
     _prox_solvers = frozenset({"ProximalGradient", "ProxSVRG"})
+    _svrg_solvers = frozenset({"SVRG", "ProxSVRG"})
     _smooth_regs = frozenset({"Ridge", "UnRegularized"})
 
     configs = []
@@ -119,6 +120,10 @@ def generate_glm_configs(
         if base_name in _prox_solvers and reg in _smooth_regs:
             continue
 
+        solver_kw = {"maxiter": 1000, "tol": 1e-6}
+        if base_name in _svrg_solvers:
+            solver_kw["batch_size"] = max(1, samp // 10)
+
         fit_config = {
             "input_shapes": {
                 "X": [samp, feat],
@@ -126,7 +131,7 @@ def generate_glm_configs(
             },
             "model_conf": {
                 "solver_name": solv,
-                "solver_kwargs": {"maxiter": 1000, "tol": 1e-6},
+                "solver_kwargs": solver_kw,
                 "regularizer": reg,
             },
             "device": dev,
@@ -152,12 +157,15 @@ def generate_glm_configs(
             continue
         if base_name in _prox_solvers and reg in _smooth_regs:
             continue
+        solver_kw = {"maxiter": 1000, "tol": 1e-6}
+        if base_name in _svrg_solvers:
+            solver_kw["batch_size"] = max(1, X.shape[0] // 10)
         fit_configs = {
             "input_shapes": {"X": [*X.shape], "y": [*y.shape]},
             "model_conf": {
                 "regularizer": reg,
                 "solver_name": solv,
-                "solver_kwargs": {"maxiter": 1000, "tol": 1e-6},
+                "solver_kwargs": solver_kw,
             },
             "device": dev,
             "get_hd_data_kwargs": kwargs,
@@ -370,6 +378,11 @@ def benchmark_fit(
         num_solver_iter.append(_get_iter_num(model))
         param_norm.append(float(jnp.linalg.norm(model.coef_)))
 
+    step_time = [
+        f / n if n > 0 else float("nan")
+        for f, n in zip(fit_s, num_solver_iter)
+    ]
+
     input_shapes = config["input_shapes"]
     model_conf = config["model_conf"]
     flat_config = {
@@ -380,6 +393,7 @@ def benchmark_fit(
         "regularizer": model_conf["regularizer"],
         "maxiter": model_conf["solver_kwargs"]["maxiter"],
         "tol": model_conf["solver_kwargs"]["tol"],
+        "batch_size": model_conf["solver_kwargs"].get("batch_size"),
         "device": config["device"],
         # ground truth solver used
         "solver_class": model._solver.__class__.__name__,
@@ -396,6 +410,7 @@ def benchmark_fit(
             "solver_init_s": solver_init_s,
             "compilation_s": compilation_s,
             "fit_s": fit_s,
+            "step_time": step_time,
             "end_to_end_s": end_to_end_s,
             "converged": converged,
             "iter_num": num_solver_iter,
@@ -472,6 +487,7 @@ def aggregate_results(results_dir: str, csv_path: str) -> None:
                     "solver_init_s": res["solver_init_s"][i],
                     "compilation_s": res["compilation_s"][i],
                     "fit_s": res["fit_s"][i],
+                    "step_time": res["step_time"][i],
                     "end_to_end_s": res["end_to_end_s"][i],
                     "converged": res["converged"][i],
                     "iter_num": res["iter_num"][i],
