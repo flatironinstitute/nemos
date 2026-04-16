@@ -14,7 +14,6 @@ from .m_step_analytical_updates import (
 )
 from .params import HMMParams
 from .utils import Array, initialize_is_new_session
-from .utils import Array, initialize_is_new_session
 
 
 class EMState(eqx.Module):

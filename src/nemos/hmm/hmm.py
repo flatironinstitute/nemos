@@ -299,6 +299,25 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         """Validate and set the dictionary of initialization functions for HMM parameters."""
         self._hmm_initialization_funcs = _validate_init_funcs_keys(value)
 
+    def _hmm_params_initialization(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        is_new_session: jnp.ndarray,
+    ) -> Tuple[HMMUserParams, bool]:
+        """HMM parameter initialization."""
+        hmm_params = generate_hmm_initial_params(
+            self._n_states,
+            X,
+            y,
+            random_key=self._seed,
+            init_funcs=self._hmm_initialization_funcs,
+        )
+        validate_params = self._hmm_initialization_funcs.get(
+            "initial_proba_init_custom", True
+        ) or self._hmm_initialization_funcs.get("transition_proba_init_custom", True)
+        return hmm_params, validate_params
+
     @abc.abstractmethod
     def _model_params_initialization(self, X, y, is_new_session):
         """Model-specific parameter initialization. Should return a tuple of (model_params, validate_model) where
@@ -358,25 +377,6 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         """Ensure the model has been fitted."""
         self._check_hmm_is_fit()
         self._check_model_is_fit()
-
-    def _hmm_params_initialization(
-        self,
-        X: DESIGN_INPUT_TYPE,
-        y: jnp.ndarray,
-        is_new_session: jnp.ndarray,
-    ) -> Tuple[HMMUserParams, bool]:
-        """HMM parameter initialization."""
-        hmm_params = generate_hmm_initial_params(
-            self._n_states,
-            X,
-            y,
-            random_key=self._seed,
-            init_funcs=self._hmm_initialization_funcs,
-        )
-        validate_params = self._hmm_initialization_funcs.get(
-            "initial_proba_init_custom", True
-        ) or self._hmm_initialization_funcs.get("transition_proba_init_custom", True)
-        return hmm_params, validate_params
 
     def _validate_and_prepare_inputs(self, X, y, is_new_session=None):
         """Validate and prepare inputs."""
