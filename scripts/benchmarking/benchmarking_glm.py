@@ -133,6 +133,7 @@ def generate_glm_configs(
                 "solver_name": solv,
                 "solver_kwargs": solver_kw,
                 "regularizer": reg,
+                "regularizer_strength": 0.001 if reg != "UnRegularized" else None,
             },
             "device": dev,
         }
