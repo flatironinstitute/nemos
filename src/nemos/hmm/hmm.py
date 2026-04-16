@@ -288,37 +288,6 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         """Validate and set the dictionary of initialization functions for HMM parameters."""
         self._hmm_initialization_funcs = _validate_init_funcs_keys(value)
 
-    def _check_hmm_is_fit(self):
-        """Ensure the HMM parameters have been fitted."""
-        flat_params = [
-            self.initial_prob_,
-            self.transition_prob_,
-        ]
-        is_missing = [x is None for x in flat_params]
-        if any(is_missing):
-            param_labels = [
-                "initial_prob_",
-                "transition_prob_",
-            ]
-            missing_params = [
-                p for p, missing in zip(param_labels, is_missing) if missing
-            ]
-            raise ValueError(
-                f"This {self._validator.model_class} instance is not fitted yet. The following attributes are not set:"
-                f" {missing_params}.\nPlease fit the HMM model first or "
-                "set the missing attributes."
-            )
-
-    @abc.abstractmethod
-    def _check_model_is_fit(self):
-        """Ensure the model-specific parameters have been fitted."""
-        pass
-
-    def _check_is_fit(self):
-        """Ensure the model has been fitted."""
-        self._check_hmm_is_fit()
-        self._check_model_is_fit()
-
     def _hmm_params_initialization(
         self,
         X: DESIGN_INPUT_TYPE,
@@ -371,6 +340,37 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         else:
             return self._validator.to_model_params(user_params)
 
+    def _check_hmm_is_fit(self):
+        """Ensure the HMM parameters have been fitted."""
+        flat_params = [
+            self.initial_prob_,
+            self.transition_prob_,
+        ]
+        is_missing = [x is None for x in flat_params]
+        if any(is_missing):
+            param_labels = [
+                "initial_prob_",
+                "transition_prob_",
+            ]
+            missing_params = [
+                p for p, missing in zip(param_labels, is_missing) if missing
+            ]
+            raise ValueError(
+                f"This {self._validator.model_class} instance is not fitted yet. The following attributes are not set:"
+                f" {missing_params}.\nPlease fit the HMM model first or "
+                "set the missing attributes."
+            )
+
+    @abc.abstractmethod
+    def _check_model_is_fit(self):
+        """Ensure the model-specific parameters have been fitted."""
+        pass
+
+    def _check_is_fit(self):
+        """Ensure the model has been fitted."""
+        self._check_hmm_is_fit()
+        self._check_model_is_fit()
+
     def _validate_and_prepare_inputs(self, X, y, is_new_session=None):
         """Validate and prepare inputs."""
         # check if the model was fit
@@ -384,8 +384,3 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
             X=X, y=y, is_new_session=is_new_session
         )
         return params, X, y, is_new_session
-
-    @abc.abstractmethod
-    def _log_likelihood(self, params: HMMModelParamsT, X, y):
-        """Compute the log-likelihood of the data given the model parameters."""
-        pass
