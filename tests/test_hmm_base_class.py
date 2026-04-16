@@ -942,6 +942,19 @@ class TestHMMNewSession:
                 nap.IntervalSet([0, 3]),
                 jnp.array([1, 0, 0]),
             ),
+            # forces first time point to be new session
+            (
+                nap.TsdFrame(
+                    t=np.arange(3),
+                    d=np.zeros((3, 3)),
+                ),
+                nap.Tsd(
+                    t=np.arange(3),
+                    d=np.zeros((3,)),
+                ),
+                nap.IntervalSet([2, 3]),
+                jnp.array([1, 0, 1]),
+            ),
             # time support finds 2 new sessions
             (
                 nap.TsdFrame(
@@ -1062,7 +1075,9 @@ class TestHMMNewSession:
             ),
         ],
     )
-    def test_initialize_new_session_errors(self, X, y, is_new_session, expectation):
+    def test_initialize_and_compute_new_session_errors(
+        self, X, y, is_new_session, expectation
+    ):
         """Test that session boundaries are correctly initialized and moved when there are NaN values."""
         model = MockHMM(n_states=3)
         with expectation:

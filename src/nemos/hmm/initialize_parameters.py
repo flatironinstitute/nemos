@@ -11,7 +11,7 @@ from numpy.typing import NDArray
 from ..type_casting import is_numpy_array_like
 from ..typing import DESIGN_INPUT_TYPE
 from ..validation import _suggest_keys
-from .utils import initialize_new_session
+from .utils import initialize_is_new_session
 
 sklearn = lazy.load("sklearn")
 
@@ -332,7 +332,7 @@ class KMeansInitializer:
         self.n_states = n_states
         self.minimum_prob = minimum_prob
         self.random_key = random_key
-        self.is_new_session = initialize_new_session(y.shape[0], is_new_session)
+        self.is_new_session = initialize_is_new_session(y.shape[0], is_new_session)
         self.model = sklearn.cluster.KMeans(
             n_clusters=n_states, random_state=random_key
         )

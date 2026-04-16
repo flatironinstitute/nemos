@@ -146,6 +146,9 @@ def compute_is_new_session(
         .at[jax.numpy.searchsorted(time, start)]
         .set(True)
     )
+    is_new_session = jax.lax.dynamic_update_index_in_dim(
+        is_new_session, True, 0, axis=0
+    )
     return is_new_session
 
 
