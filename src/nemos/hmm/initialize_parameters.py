@@ -5,13 +5,15 @@ from typing import Any, Callable, Literal, Optional, Protocol, Tuple
 
 import jax
 import jax.numpy as jnp
+import lazy_loader as lazy
 from numpy.typing import NDArray
-from sklearn.cluster import KMeans
 
 from ..type_casting import is_numpy_array_like
 from ..typing import DESIGN_INPUT_TYPE
 from ..validation import _suggest_keys
-from .utils import initialize_is_new_session
+from .utils import initialize_new_session
+
+sklearn = lazy.load("sklearn")
 
 
 class InitFunctionHMM(Protocol):
@@ -53,7 +55,7 @@ INITIALIZATION_FN_DICT = dict[
         "transition_proba_init_kwargs",
         "transition_proba_init_custom",
     ],
-    InitFunctionHMM | dict[str, Any] | bool | InitFunctionHMM | dict[str, Any] | bool,
+    InitFunctionHMM | dict[str, Any] | bool,
 ]
 
 
@@ -129,6 +131,10 @@ def uniform_transition_proba_init(
     ----------
     n_states :
         Number of HMM states. Must be greater than 1.
+    X :
+        Optional predictor data. Unused for this particular initialization, but added for API consistency.
+    y :
+        Optional output data. Unused for this particular initialization, but added for API consistency.
     random_key :
         Random key, unused for this particular initialization, but added for API consistency.
 
@@ -168,6 +174,10 @@ def random_transition_proba_init(
     ----------
     n_states :
         Number of HMM states. Must be greater than 1.
+    X :
+        Optional predictor data. Unused for this particular initialization, but added for API consistency.
+    y :
+        Optional output data. Unused for this particular initialization, but added for API consistency.
     random_key :
         Random key for reproducibility of random initialization.
 
@@ -209,6 +219,10 @@ def uniform_initial_proba_init(
     ----------
     n_states :
         Number of HMM states.
+    X :
+        Optional predictor data. Unused for this particular initialization, but added for API consistency.
+    y :
+        Optional output data. Unused for this particular initialization, but added for API consistency.
     random_key :
         Random key, unused for this particular initialization, but added for API consistency.
 
@@ -247,6 +261,10 @@ def random_initial_proba_init(
     ----------
     n_states :
         Number of HMM states.
+    X :
+        Optional predictor data. Unused for this particular initialization, but added for API consistency.
+    y :
+        Optional output data. Unused for this particular initialization, but added for API consistency.
     random_key :
         Random key for reproducibility of random initialization.
 
@@ -291,6 +309,10 @@ class KMeansInitializer:
     is_new_session :
         Optional boolean array of shape (n_samples,) indicating the start of new sessions. If None
         (default), it is assumed that all data belongs to a single session.
+    minimum_prob :
+        Minimum probability added to each state to avoid zero probabilities.
+        Note that probabilities will be renormalized after adding this minimum value, so the final
+        probabilities will not be exactly this value.
     random_key :
         Random key for reproducibility of KMeans initialization.
     """
@@ -301,15 +323,19 @@ class KMeansInitializer:
         X: DESIGN_INPUT_TYPE,
         y: NDArray | jnp.ndarray,
         is_new_session: Optional[jnp.ndarray] = None,
+        minimum_prob: float = 0.02,
         random_key: int | jax.Array = 0,
     ):
         if isinstance(random_key, jax.Array):
-            random_key = int(random_key[-1])
+            random_key = int(jax.random.randint(random_key, (), 0, 2**31 - 1))
 
         self.n_states = n_states
+        self.minimum_prob = minimum_prob
         self.random_key = random_key
-        self.is_new_session = initialize_is_new_session(y.shape[0], is_new_session)
-        self.model = KMeans(n_clusters=n_states, random_state=random_key)
+        self.is_new_session = initialize_new_session(y.shape[0], is_new_session)
+        self.model = sklearn.cluster.KMeans(
+            n_clusters=n_states, random_state=random_key
+        )
         # concatenate pytree leaves if applicable and append y
         data = jnp.concatenate(
             jax.tree_util.tree_leaves(X) + [y if y.ndim > 1 else y[:, None]], axis=-1
@@ -325,6 +351,10 @@ class KMeansInitializer:
         probabilities.
         """
         initial_probability = self.states[self.is_new_session].sum(axis=0)
+        # normalize and add minimum_prob to avoid zero probabilities, then renormalize
+        initial_probability = (
+            initial_probability / initial_probability.sum()
+        ) + self.minimum_prob
         return initial_probability / initial_probability.sum()
 
     def transition_probability(self):
@@ -338,6 +368,10 @@ class KMeansInitializer:
             self.states[:-1][~self.is_new_session[1:]].T
             @ self.states[1:][~self.is_new_session[1:]]
         )
+        # normalize and add minimum_prob to avoid zero probabilities, then renormalize
+        transition_matrix = (
+            transition_matrix / transition_matrix.sum(axis=1, keepdims=True)
+        ) + self.minimum_prob
         return transition_matrix / transition_matrix.sum(axis=1, keepdims=True)
 
 
@@ -346,6 +380,7 @@ def kmeans_initial_proba_init(
     X: DESIGN_INPUT_TYPE,
     y: NDArray | jnp.ndarray,
     is_new_session: Optional[jnp.ndarray] = None,
+    minimum_prob: float = 0.02,
     random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
     initializer: Optional[KMeansInitializer] = None,
 ):
@@ -366,6 +401,10 @@ def kmeans_initial_proba_init(
     is_new_session :
         Optional boolean array of shape (n_samples,) indicating the start of new sessions. If None
         (default), it is assumed that all data belongs to a single session.
+    minimum_prob :
+        Minimum probability added to each state to avoid zero probabilities.
+        Note that probabilities will be renormalized after adding this minimum value, so the final
+        probabilities will not be exactly this value.
     random_key :
         Random key for reproducibility of KMeans initialization.
     initializer :
@@ -377,7 +416,9 @@ def kmeans_initial_proba_init(
         Initial state probability vector of shape (n_states,) that sums to 1.
     """
     if initializer is None:
-        initializer = KMeansInitializer(n_states, X, y, is_new_session, random_key)
+        initializer = KMeansInitializer(
+            n_states, X, y, is_new_session, minimum_prob, random_key
+        )
     return initializer.initial_probability()
 
 
@@ -386,6 +427,7 @@ def kmeans_transition_proba_init(
     X: DESIGN_INPUT_TYPE,
     y: NDArray | jnp.ndarray,
     is_new_session: Optional[jnp.ndarray] = None,
+    minimum_prob: float = 0.02,
     random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
     initializer: Optional[KMeansInitializer] = None,
 ):
@@ -406,6 +448,10 @@ def kmeans_transition_proba_init(
     is_new_session :
         Optional boolean array of shape (n_samples,) indicating the start of new sessions. If None
         (default), it is assumed that all data belongs to a single session.
+    minimum_prob :
+        Minimum probability added to each state to avoid zero probabilities.
+        Note that probabilities will be renormalized after adding this minimum value, so the final
+        probabilities will not be exactly this value.
     random_key :
         Random key for reproducibility of KMeans initialization.
     initializer :
@@ -417,7 +463,9 @@ def kmeans_transition_proba_init(
         Transition probability matrix of shape (n_states, n_states) computed from KMeans assigned states.
     """
     if initializer is None:
-        initializer = KMeansInitializer(n_states, X, y, is_new_session, random_key)
+        initializer = KMeansInitializer(
+            n_states, X, y, is_new_session, minimum_prob, random_key
+        )
     return initializer.transition_probability()
 
 
@@ -694,7 +742,7 @@ def generate_hmm_initial_params(
     X: DESIGN_INPUT_TYPE,
     y: NDArray | jnp.ndarray,
     random_key: int | jax.Array = 123,
-    init_funcs: dict = {},
+    init_funcs: Optional[dict] = None,
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """
     Generate initial HMM parameters using the provided initialization functions.
@@ -731,6 +779,7 @@ def generate_hmm_initial_params(
         Function to set up the initialization functions and their kwargs based on user input.
     """
     # check for unexpected/unknown keys in init_funcs if user provided dictionary not made by setup_hmm_initialization
+    init_funcs = {} if init_funcs is None else init_funcs
     init_funcs = _validate_init_funcs_keys(init_funcs)
 
     if isinstance(random_key, int):
