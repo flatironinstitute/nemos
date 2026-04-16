@@ -85,7 +85,15 @@ def _check_transform_input(
     try:
         # make sure array is at least 1d (so that we succeed when only
         # passed a scalar)
-        xi = tuple(at_least_1d(x).astype(float) for x in xi)
+        xi = tuple(at_least_1d(x) for x in xi)
+        components = (
+            b for b in bas._iterate_over_components() for _ in range(b._n_inputs)
+        )
+        xi = [
+            x.astype(float) if getattr(b, "_convert_to_float", True) else x
+            for b, x in zip(components, xi)
+        ]
+
     # ValueError here surfaces the exception with e.g., `x=np.array["a", "b"])`
     except (TypeError, ValueError):
         raise TypeError("Input samples must be array-like of floats!")

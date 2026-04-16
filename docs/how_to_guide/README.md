@@ -151,6 +151,16 @@ categorical_predictors.md
 
 :::{grid-item-card}
 
+```{toctree}
+:maxdepth: 2
+
+categorical_identifiability.md
+```
+
+:::
+
+:::{grid-item-card}
+
 ```{eval-rst}
 
 .. plot:: scripts/glm_predictors.py plot_custom_features

@@ -26,6 +26,7 @@ from conftest import (
     list_all_real_basis_classes,
 )
 from nemos.basis import (
+    Category,
     CustomBasis,
     FourierEval,
     HistoryConv,
@@ -97,6 +98,8 @@ def set_basis_attr(bas, n_basis):
     if isinstance(bas, FourierBasis):
         # set frequencies to match the requested n_basis
         bas.frequencies = np.arange((n_basis + 1) % 2, 1 + (n_basis - n_basis % 2) // 2)
+    elif isinstance(bas, Category):
+        bas.categories = n_basis
     elif isinstance(bas, CustomBasis):
         bas.basis_kwargs = {"n_basis_funcs": n_basis}
     elif isinstance(bas, basis.Zero):
@@ -296,6 +299,8 @@ def test_example_docstrings_add(
         pytest.skip("History and Identity eval docstring is specific.")
     elif basis_cls.__name__ == "CustomBasis" and method_name == "evaluate_on_grid":
         pytest.skip("CustomBasis doesn't implement the evaluate_on_grid method.")
+    elif basis_cls._is_discrete and method_name == "evaluate_on_grid":
+        pytest.skip("Discrete bases do not implement the evaluate_on_grid method.")
 
     basis_instance = CombinedBasis().instantiate_basis(
         5, basis_cls, basis_class_specific_params, window_size=10
@@ -978,6 +983,7 @@ class TestConvBasis:
         basis.IdentityEval,
         basis.FourierEval,
         basis.Zero,
+        Category,
     ],
 )
 class TestEvalBasis:
@@ -1032,7 +1038,7 @@ class TestEvalBasis:
     def test_vmin_vmax_eval_on_grid_affects_x(
         self, bounds, samples, nan_idx, mn, mx, cls
     ):
-        if cls in [CustomBasis, basis.Zero]:
+        if cls in [CustomBasis, basis.Zero, Category]:
             pytest.skip(
                 f"Skipping test_vmin_vmax_eval_on_grid_affects_x for {cls.__name__}"
             )
@@ -1063,7 +1069,7 @@ class TestEvalBasis:
     def test_vmin_vmax_eval_on_grid_no_effect_on_eval(
         self, vmin, vmax, samples, nan_idx, cls
     ):
-        if cls in [CustomBasis, basis.Zero]:
+        if cls in [CustomBasis, basis.Zero, Category]:
             pytest.skip(
                 f"Skipping test_vmin_vmax_eval_on_grid_no_effect_on_eval for {cls.__name__}"
             )
@@ -1123,7 +1129,7 @@ class TestEvalBasis:
         ],
     )
     def test_vmin_vmax_init(self, bounds, expectation, cls):
-        if cls in [CustomBasis, basis.Zero]:
+        if cls in [CustomBasis, basis.Zero, Category]:
             pytest.skip(f"Skipping test_vmin_vmax_init for {cls.__name__}")
         with expectation:
             bas = instantiate_atomic_basis(
@@ -1151,6 +1157,8 @@ class TestEvalBasis:
             n_basis_funcs=n_basis,
             **extra_kwargs(cls, n_basis),
         )  # Only eval mode is relevant here
+        if cls == Category:
+            expectation = does_not_raise()
         with expectation:
             bas.compute_features(samples)
 
@@ -1175,7 +1183,7 @@ class TestEvalBasis:
         ],
     )
     def test_vmin_vmax_range(self, vmin, vmax, samples, nan_idx, cls):
-        if cls in [CustomBasis, basis.Zero, basis.FourierEval]:
+        if cls in [CustomBasis, basis.Zero, basis.FourierEval, Category]:
             # FourierEval is defined over the real line; bounds specify period, not domain
             pytest.skip(f"Skipping test_vmin_vmax_range for {cls.__name__}")
         bounds = None if vmin is None else (vmin, vmax)
@@ -1225,7 +1233,7 @@ class TestEvalBasis:
         ],
     )
     def test_vmin_vmax_setter(self, bounds, expectation, cls):
-        if cls in [CustomBasis, basis.Zero]:
+        if cls in [CustomBasis, basis.Zero, Category]:
             pytest.skip(f"Skipping test_vmin_vmax_setter for {cls.__name__}")
         bas = instantiate_atomic_basis(
             cls,
@@ -1243,7 +1251,7 @@ class TestEvalBasis:
         with pytest.raises(
             TypeError, match="got an unexpected keyword argument 'test'"
         ):
-            if cls in [IdentityEval, FourierEval]:
+            if cls in [IdentityEval, FourierEval, Category]:
                 extra = {}
             else:
                 extra = dict(n_basis_funcs=5)
@@ -1252,7 +1260,7 @@ class TestEvalBasis:
     def test_set_window_size(self, cls):
         if cls in [CustomBasis, basis.Zero]:
             pytest.skip(f"Skipping test_set_window_size for {cls.__name__}")
-        if cls not in [IdentityEval, FourierEval]:
+        if cls not in [IdentityEval, FourierEval, Category]:
             kwargs = {"window_size": 10, "n_basis_funcs": 10}
         else:
             kwargs = {"window_size": 10}
@@ -1290,12 +1298,16 @@ class TestEvalBasis:
     def test_init_window_size(self, ws, expectation, cls):
         if cls in [CustomBasis, basis.Zero]:
             pytest.skip(f"Skipping test_init_window_size for {cls.__name__}")
-        extra = dict(n_basis_funcs=5) if cls not in [IdentityEval, FourierEval] else {}
+        extra = (
+            dict(n_basis_funcs=5)
+            if cls not in [IdentityEval, FourierEval, Category]
+            else {}
+        )
         with expectation:
             cls(**extra, window_size=ws, **extra_kwargs(cls, 5))
 
     def test_set_bounds(self, cls):
-        if cls in [CustomBasis, basis.Zero]:
+        if cls in [CustomBasis, basis.Zero, Category]:
             pytest.skip(f"Skipping test_set_bounds for {cls.__name__}")
         kwargs = (
             {"bounds": (1, 2), "n_basis_funcs": 10}
@@ -1307,7 +1319,7 @@ class TestEvalBasis:
 
     def test_fill_value_default(self, cls):
         """Test that fill_value defaults to NaN."""
-        if cls in [CustomBasis, basis.Zero, basis.FourierEval]:
+        if cls in [CustomBasis, basis.Zero, basis.FourierEval, Category]:
             pytest.skip(f"Skipping test_fill_value_default for {cls.__name__}")
         bas = instantiate_atomic_basis(
             cls,
@@ -1341,7 +1353,7 @@ class TestEvalBasis:
         self, fill_value, samples, out_of_bounds_idx, cls
     ):
         """Test that fill_value is applied to samples outside bounds."""
-        if cls in [CustomBasis, basis.Zero, basis.FourierEval]:
+        if cls in [CustomBasis, basis.Zero, basis.FourierEval, Category]:
             pytest.skip(
                 f"Skipping test_fill_value_applied_to_out_of_bounds for {cls.__name__}"
             )
@@ -1373,7 +1385,7 @@ class TestEvalBasis:
     @pytest.mark.parametrize("fill_value", [0.0, np.nan])
     def test_fill_value_set_params(self, fill_value, cls):
         """Test that fill_value can be set via set_params."""
-        if cls in [CustomBasis, basis.Zero, basis.FourierEval]:
+        if cls in [CustomBasis, basis.Zero, basis.FourierEval, Category]:
             pytest.skip(f"Skipping test_fill_value_set_params for {cls.__name__}")
         bas = instantiate_atomic_basis(
             cls,
@@ -1401,7 +1413,7 @@ class TestEvalBasis:
                 "which depends on un-jittable scipy functions."
             )
         # Skip Zero since it doesn't have bounds
-        if cls == basis.Zero:
+        if cls in [basis.Zero, Category]:
             pytest.skip("Zero basis does not have bounds")
 
         # CustomBasis needs pynapple_support=False for JIT compatibility
@@ -1482,6 +1494,7 @@ def test_call_equivalent_in_conv(n_basis, cls):
         basis.HistoryConv,
         basis.FourierEval,
         basis.Zero,
+        basis.Category,
     ],
 )
 class TestSharedMethods:
@@ -1506,6 +1519,7 @@ class TestSharedMethods:
                 basis.HistoryConv: "HistoryConv(window_size=10)",
                 basis.FourierEval: "FourierEval(frequencies=[Array([1., 2.], dtype=float32)], ndim=1, bounds=(1.0, 2.0), frequency_mask='no-intercept')",
                 basis.Zero: "Zero()",
+                basis.Category: "Category(out_of_category=True)",
             }
         ],
     )
@@ -1541,6 +1555,7 @@ class TestSharedMethods:
                 basis.HistoryConv: r"'mylabel': HistoryConv\(window_size=10\)",
                 basis.FourierEval: r"'mylabel': FourierEval\(frequencies=\[Array\(\[1\., 2\.\], dtype=float\d{2}\)\], ndim=1, bounds=\(1\.0, 2\.0\), frequency_mask='no-intercept'\)",
                 basis.Zero: r"'mylabel': Zero\(\)",
+                basis.Category: r"'mylabel': Category\(out_of_category=True\)",
             }
         ],
     )
@@ -1662,6 +1677,7 @@ class TestSharedMethods:
             cls,
             n_basis_funcs=n_basis,
             window_size=8,
+            categories=n_basis,
             **extra_kwargs(cls, n_basis),
         )
         x = np.linspace(0, 1, 10)
@@ -1716,6 +1732,7 @@ class TestSharedMethods:
         bas = instantiate_atomic_basis(
             cls,
             n_basis_funcs=n_basis,
+            categories=n_basis,
             window_size=8,
             **extra_kwargs(cls, n_basis),
         )
@@ -1730,6 +1747,9 @@ class TestSharedMethods:
         with expectation:
             out = bas.evaluate(inp)
             assert out.shape == tuple((*inp.shape, n_basis))
+            if getattr(bas, "_is_discrete", False):
+                # no evaluate_on_grid for discrete basis
+                return
             out2 = bas.evaluate_on_grid(inp.shape[0])[1]
             if out2.size > 0:
                 assert np.all(
@@ -1741,6 +1761,8 @@ class TestSharedMethods:
         if cls in [HistoryConv, CustomBasis, basis.Zero]:
             # eval simply returns the evaluate or empty array...
             pytest.skip(f"skipping nan locaiton test for {cls.__name__}.")
+        elif cls == Category:
+            pytest.skip("Category basis 1-hot encodes nans to 0.")
 
         if cls is IdentityEval:
             n_basis = 1
@@ -1748,6 +1770,7 @@ class TestSharedMethods:
             cls,
             n_basis_funcs=n_basis,
             window_size=8,
+            categories=n_basis,
             **extra_kwargs(cls, n_basis),
         )
         inp = np.random.randn(10, 2, 3)
@@ -1762,6 +1785,8 @@ class TestSharedMethods:
         if cls in [HistoryConv, basis.Zero]:
             # eval simply returns the evaluate or empty array...
             pytest.skip(f"skipping nan locaiton test for {cls.__name__}.")
+        elif cls == Category:
+            pytest.skip("Category basis 1-hot encodes nans to 0.")
         elif cls is IdentityEval:
             n_basis = 1
         else:
@@ -1781,6 +1806,7 @@ class TestSharedMethods:
         bas = instantiate_atomic_basis(
             cls,
             n_basis_funcs=n_basis,
+            categories=n_basis,
             window_size=8,
             **extra_kwargs(cls, n_basis),
         )
@@ -1832,6 +1858,7 @@ class TestSharedMethods:
         basis_obj = instantiate_atomic_basis(
             cls,
             **args_copy,
+            categories=args_copy["n_basis_funcs"],
             window_size=30,
             **extra_kwargs(cls, args_copy["n_basis_funcs"]),
         )
@@ -1892,7 +1919,7 @@ class TestSharedMethods:
 
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 10, 11, 100])
     def test_evaluate_on_grid_basis_size(self, sample_size, cls):
-        if "OrthExp" in cls.__name__ or cls == CustomBasis:
+        if "OrthExp" in cls.__name__ or cls == CustomBasis or cls == Category:
             pytest.skip(f"Skipping test_evaluate_on_grid_basis_size for {cls.__name__}")
         basis_obj = instantiate_atomic_basis(
             cls, n_basis_funcs=5, window_size=8, **extra_kwargs(cls, 5)
@@ -1908,7 +1935,7 @@ class TestSharedMethods:
 
     @pytest.mark.parametrize("n_input", [0, 1, 2])
     def test_evaluate_on_grid_input_number(self, n_input, cls):
-        if cls == CustomBasis:
+        if cls == CustomBasis or cls == Category:
             pytest.skip(
                 f"Skipping test_evaluate_on_grid_input_number for {cls.__name__}"
             )
@@ -1934,7 +1961,7 @@ class TestSharedMethods:
 
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 10, 11, 100])
     def test_evaluate_on_grid_meshgrid_size(self, sample_size, cls):
-        if "OrthExp" in cls.__name__ or cls == CustomBasis:
+        if "OrthExp" in cls.__name__ or cls == CustomBasis or cls == Category:
             pytest.skip(
                 f"Skipping test_evaluate_on_grid_meshgrid_size for {cls.__name__}"
             )
@@ -2102,12 +2129,13 @@ class TestSharedMethods:
         )
         params_basis = bas.get_params()
         funcs_orig = params_basis.pop("funcs") if hasattr(bas, "funcs") else None
-        rates_1 = params_basis.pop("decay_rates", 1)
-        rates_2 = params_transf.pop("decay_rates", 1)
         freqs_1 = params_basis.pop("frequencies", [1])
         freqs_2 = params_transf.pop("frequencies", [1])
+        array_keys = [k for k, v in params_basis.items() if hasattr(v, "shape")]
+        for key in array_keys:
+            arr1, arr2 = params_basis.pop(key), params_transf.pop(key)
+            np.testing.assert_array_equal(arr1, arr2)
         assert params_transf == params_basis
-        assert np.all(rates_1 == rates_2)
         assert all(np.all(f1 == f2) for f1, f2 in zip(freqs_1, freqs_2))
         if funcs_orig:
             assert all(
@@ -3845,9 +3873,9 @@ class TestAdditiveBasis(CombinedBasis):
 
     @pytest.mark.parametrize("basis_a", list_all_basis_classes("Eval"))
     def test_set_params_basis(self, basis_a, basis_class_specific_params):
-        if basis_a is basis.Zero:
+        if basis_a in [basis.Zero, Category]:
             pytest.skip(
-                "Zero basis is Eval but doesn't have the Eval in the class name"
+                f"{basis_a.__class__.__name__} basis is Eval but doesn't have the Eval in the class name"
             )
         basis_b = basis_a.__name__.replace("Eval", "Conv")
         if not hasattr(basis, basis_b):
@@ -4512,9 +4540,14 @@ class TestAdditiveBasis(CombinedBasis):
         window_size,
         basis_class_specific_params,
     ):
-        if basis_a in (basis.OrthExponentialBasis, basis.HistoryConv) or basis_b in (
+        if basis_a in (
             basis.OrthExponentialBasis,
             basis.HistoryConv,
+            Category,
+        ) or basis_b in (
+            basis.OrthExponentialBasis,
+            basis.HistoryConv,
+            Category,
         ):
             pytest.skip(f"Skipping test_call_nan for {basis_a.__name__}")
         if basis_a == IdentityEval:
@@ -5053,10 +5086,18 @@ class TestAdditiveBasis(CombinedBasis):
         else:
             n_basis_b = 5
         basis_a = self.instantiate_basis(
-            n_basis_a, basis_a, basis_class_specific_params, window_size=10
+            n_basis_a,
+            basis_a,
+            basis_class_specific_params,
+            categories=n_basis_a,
+            window_size=10,
         )
         basis_b = self.instantiate_basis(
-            n_basis_b, basis_b, basis_class_specific_params, window_size=10
+            n_basis_b,
+            basis_b,
+            basis_class_specific_params,
+            categories=n_basis_b,
+            window_size=10,
         )
         add = basis_a + basis_b
 
@@ -6575,10 +6616,18 @@ class TestMultiplicativeBasis(CombinedBasis):
         else:
             n_basis_b = 5
         basis_a = self.instantiate_basis(
-            n_basis_a, basis_a, basis_class_specific_params, window_size=10
+            n_basis_a,
+            basis_a,
+            basis_class_specific_params,
+            categories=n_basis_a,
+            window_size=10,
         )
         basis_b = self.instantiate_basis(
-            n_basis_b, basis_b, basis_class_specific_params, window_size=10
+            n_basis_b,
+            basis_b,
+            basis_class_specific_params,
+            categories=n_basis_b,
+            window_size=10,
         )
 
         mul = basis_a * basis_b
@@ -8064,10 +8113,20 @@ def test_split_feature_axis(
     n_basis = [5, 6]
     combine_basis = CombinedBasis()
     bas1_instance = combine_basis.instantiate_basis(
-        n_basis[0], bas1, basis_class_specific_params, window_size=10, label="1"
+        n_basis[0],
+        bas1,
+        basis_class_specific_params,
+        window_size=10,
+        label="1",
+        categories=n_basis[0],
     )
     bas2_instance = combine_basis.instantiate_basis(
-        n_basis[1], bas2, basis_class_specific_params, window_size=10, label="2"
+        n_basis[1],
+        bas2,
+        basis_class_specific_params,
+        window_size=10,
+        label="2",
+        categories=n_basis[1],
     )
 
     bas = bas1_instance + bas2_instance
@@ -8140,6 +8199,301 @@ def test_basis_public_api_matches_subclasses():
         f"Missing from __all__: {expected_public - public}\n"
         f"Unexpected in __all__: {public - expected_public}"
     )
+
+
+class TestCategory(BasisFuncsTesting):
+    """Tests for Category-specific logic not covered by TestSharedMethods."""
+
+    cls = {"eval": Category}
+
+    # ------------------------------------------------------------------
+    # Priority 1 – one-hot correctness
+    # ------------------------------------------------------------------
+
+    @pytest.mark.parametrize(
+        "categories, inp, expected",
+        [
+            # default integer labels 0..n-1
+            (3, np.array([0, 1, 2]), np.eye(3)),
+            # non-contiguous integer labels: sorted order determines column
+            ([2, 5, 8], np.array([2, 5, 8]), np.eye(3)),
+            ([2, 5, 8], np.array([8, 5, 2]), np.eye(3)[::-1]),
+            # string labels: sorted lexicographically
+            (["c", "a", "b"], np.array(["a", "b", "c"]), np.eye(3)),
+            (["c", "a", "b"], np.array(["c", "a", "b"]), np.eye(3)[[2, 0, 1]]),
+        ],
+    )
+    def test_one_hot_correct_column(self, categories, inp, expected):
+        """Each label maps to the correct one-hot column."""
+        bas = Category(categories)
+        out = bas.evaluate(inp)
+        np.testing.assert_array_equal(out, expected)
+
+    @pytest.mark.parametrize(
+        "categories",
+        [
+            [2, 5, 8],
+            ["c", "a", "b"],
+        ],
+    )
+    def test_label_order_is_sorted(self, categories):
+        """Columns follow the sorted order of categories, not insertion order."""
+        bas = Category(categories)
+        expected_order = np.sort(np.asarray(categories))
+        np.testing.assert_array_equal(bas.categories, expected_order)
+
+    @pytest.mark.parametrize(
+        "shape",
+        [(10,), (4, 3), (2, 3, 4)],
+    )
+    def test_multidim_input_shape(self, shape):
+        """evaluate preserves all input axes and appends the category axis last."""
+        n_cat = 5
+        bas = Category(n_cat)
+        inp = np.zeros(shape, dtype=int)
+        out = bas.evaluate(inp)
+        assert out.shape == (*shape, n_cat)
+
+    @pytest.mark.parametrize(
+        "categories, expected_n",
+        [
+            (5, 5),
+            ([0, 1, 2], 3),
+            (["a", "b"], 2),
+        ],
+    )
+    def test_n_basis_funcs_matches_categories(self, categories, expected_n):
+        """n_basis_funcs equals the number of unique categories."""
+        bas = Category(categories)
+        assert bas.n_basis_funcs == expected_n
+
+    @pytest.mark.parametrize(
+        "categories",
+        [["a", "a", "b"], [1, 2, 2, 3]],
+    )
+    def test_duplicate_categories_raises(self, categories):
+        """Duplicate labels raise a clean ValueError before reaching LabelEncoder."""
+        with pytest.raises(ValueError, match="Duplicate category labels"):
+            Category(categories)
+
+    @pytest.mark.parametrize(
+        "categories, expected_cats, expected_n",
+        [
+            # int: labels become jnp.arange(n)
+            (3, jax.numpy.arange(3), 3),
+            # list of homogeneous type: stored sorted
+            ([3, 1, 2], np.array([1, 2, 3]), 3),
+            (["b", "a"], np.array(["a", "b"]), 2),
+            # list of mixed type: silently cast to common dtype
+            (["a", 1], np.array(["1", "a"]), 2),
+            # NDArray: works directly
+            (np.array([10, 20, 30]), np.array([10, 20, 30]), 3),
+        ],
+    )
+    def test_categories_setter_input_forms(self, categories, expected_cats, expected_n):
+        """categories setter accepts int, list, mixed-type list, and NDArray."""
+        bas = Category(categories)
+        np.testing.assert_array_equal(bas.categories, expected_cats)
+        assert bas.n_basis_funcs == expected_n
+
+    @pytest.mark.parametrize(
+        "initial, new_cats, expected_n, expected_cats",
+        [
+            (["a", "b", "c"], ["x", "y"], 2, np.array(["x", "y"])),
+            (3, ["a", "b", "c", "d"], 4, np.array(["a", "b", "c", "d"])),
+            (3, 5, 5, jax.numpy.arange(5)),
+            (["a", "b", "c"], 2, 2, jax.numpy.arange(2)),
+            (
+                ["a", "b", "c"],
+                np.array([10, 20, 30, 40]),
+                4,
+                np.array([10, 20, 30, 40]),
+            ),
+        ],
+    )
+    def test_categories_resetting_updates_n_basis_funcs(
+        self, initial, new_cats, expected_n, expected_cats
+    ):
+        """Re-setting categories post-construction updates n_basis_funcs and categories."""
+        bas = Category(initial)
+        bas.categories = new_cats
+        assert bas.n_basis_funcs == expected_n
+        np.testing.assert_array_equal(bas.categories, expected_cats)
+
+    @pytest.mark.parametrize(
+        "value, expectation",
+        [
+            (True, does_not_raise()),
+            (False, does_not_raise()),
+            (None, pytest.raises(TypeError, match="out_of_category")),
+            (1, pytest.raises(TypeError, match="out_of_category")),
+            ("True", pytest.raises(TypeError, match="out_of_category")),
+        ],
+    )
+    def test_out_of_category_setter_type_validation(self, value, expectation):
+        """Setter accepts only bool; rejects None, int, and str."""
+        bas = Category(3)
+        with expectation:
+            bas.out_of_category = value
+
+    @pytest.mark.parametrize(
+        "value, expectation",
+        [
+            (True, does_not_raise()),
+            (False, does_not_raise()),
+            (None, pytest.raises(TypeError, match="out_of_category")),
+            (1, pytest.raises(TypeError, match="out_of_category")),
+            ("True", pytest.raises(TypeError, match="out_of_category")),
+        ],
+    )
+    def test_out_of_category_init_enforces_bool(self, value, expectation):
+        """__init__ routes through the setter, so non-bool raises TypeError."""
+        with expectation:
+            Category(3, out_of_category=value)
+
+    @pytest.mark.parametrize(
+        "out_of_category, inp, expectation",
+        [
+            (False, np.array([0, 1, 2]), does_not_raise()),
+            (True, np.array([0, 1, 2]), does_not_raise()),
+            (
+                False,
+                np.array([0, 99]),
+                pytest.raises(ValueError, match="Unrecognized label"),
+            ),
+            (True, np.array([0, 99]), does_not_raise()),
+        ],
+    )
+    def test_evaluate_out_of_category(self, out_of_category, inp, expectation):
+        """evaluate raises or silently zeros based on out_of_category flag."""
+        bas = Category(3, out_of_category=out_of_category)
+        with expectation:
+            out = bas.evaluate(inp)
+            if out_of_category and 99 in inp:
+                np.testing.assert_array_equal(out[1], np.zeros(3))
+
+    def test_evaluate_jit_out_of_category_false_raises(self):
+        """JIT with out_of_category=False raises ValueError with clear message."""
+        bas = Category(3, out_of_category=False)
+        with pytest.raises(ValueError, match="JIT"):
+            jax.jit(bas.evaluate)(jax.numpy.array([0, 1, 2]))
+
+    @pytest.mark.parametrize(
+        "categories, inp",
+        [
+            (3, np.array([0, 1, 2])),
+            (3, jax.numpy.array([0, 1, 2])),
+            ([2, 3, 10], np.array([2, 3, 10])),
+            ([2, 3, 10], jax.numpy.array([2, 3, 10])),
+            (np.array([2, 3, 10]), np.array([2, 3, 10])),
+            (np.array([2, 3, 10]), jax.numpy.array([2, 3, 10])),
+            (jax.numpy.array([2, 3, 10]), np.array([2, 3, 10])),
+            (jax.numpy.array([2, 3, 10]), jax.numpy.array([2, 3, 10])),
+        ],
+    )
+    def test_evaluate_jit_out_of_category_true(self, categories, inp):
+        """JIT with out_of_category=True compiles for all category forms and array input types."""
+        bas = Category(categories, out_of_category=True)
+        out = jax.jit(bas.evaluate)(inp)
+        assert out.shape == (len(inp), bas.n_basis_funcs)
+
+    @pytest.mark.parametrize(
+        "categories, inp, expected",
+        [
+            # Branch 1: both numeric — OOC rows are zeros, known rows are one-hot
+            (
+                [2, 3, 10],
+                jax.numpy.array([2, 99, 3]),
+                np.array([[1, 0, 0], [0, 0, 0], [0, 1, 0]], dtype=float),
+            ),
+            # Branch 2: string categories, string input — OOC rows are zeros
+            (
+                ["a", "b", "c"],
+                np.array(["a", "z", "b"]),
+                np.array([[1, 0, 0], [0, 0, 0], [0, 1, 0]], dtype=float),
+            ),
+            # Branch 3: int categories, string input — all rows are zeros (full fallback)
+            (
+                3,
+                np.array(["a", "b"]),
+                np.zeros((2, 3), dtype=float),
+            ),
+        ],
+    )
+    def test_set_out_of_category_branches(self, categories, inp, expected):
+        """Each dtype-dispatch branch in out-of-category handling produces the correct rows."""
+        bas = Category(categories, out_of_category=True)
+        out = bas.evaluate(inp)
+        np.testing.assert_array_equal(out, expected)
+
+    @pytest.mark.parametrize(
+        "categories, inp",
+        [
+            ([2, 3, 10], np.array([2, 10, 3, 2])),
+            ([2, 3, 10], jax.numpy.array([2, 10, 3, 2])),
+            ([2, 3, 10], np.array([2, 99, 3, 0])),
+            ([2, 3, 10], jax.numpy.array([2, 99, 3, 0])),
+        ],
+    )
+    def test_evaluate_jit_matches_eager(self, categories, inp):
+        """JIT and eager evaluate produce identical outputs, including out-of-category rows."""
+        bas = Category(categories, out_of_category=True)
+        eager = bas.evaluate(inp)
+        jitted = jax.jit(bas.evaluate)(inp)
+        np.testing.assert_array_equal(eager, jitted)
+
+    @pytest.mark.parametrize(
+        "categories, cat_inp, continuous_inp",
+        [
+            # string labels: would raise if astype(float) is wrongly applied
+            (["a", "b", "c"], np.array(["a", "b", "c"]), np.linspace(0, 1, 3)),
+            # non-default integer labels
+            ([2, 5, 8], np.array([2, 5, 8]), np.linspace(0, 1, 3)),
+        ],
+    )
+    def test_composition_does_not_float_convert_categorical_input(
+        self, categories, cat_inp, continuous_inp
+    ):
+        """Category in additive composition must not have its input cast to float.
+
+        Regression test: before the per-component _convert_to_float dispatch in
+        _check_transform_input, all inputs in a composite basis were cast to float,
+        causing string-labelled Category inputs to raise a ValueError.
+        """
+        bas = Category(categories) + basis.BSplineEval(5)
+        out = bas.compute_features(cat_inp, continuous_inp)
+        assert out.shape[0] == len(cat_inp)
+
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    [cls for cls in list_all_basis_classes() if cls._is_discrete],
+)
+class TestDiscreteBasis:
+    """Tests that apply to every discrete basis (those with _is_discrete=True)."""
+
+    def _instantiate(self, basis_cls):
+        params = {basis_cls.__name__: basis_cls._get_param_names()}
+        return basis_cls(**inspect_utils.trim_kwargs(basis_cls, DEFAULT_KWARGS, params))
+
+    def test_evaluate_on_grid_raises(self, basis_cls):
+        """evaluate_on_grid raises NotImplementedError for discrete inputs."""
+        bas = self._instantiate(basis_cls)
+        with pytest.raises(NotImplementedError, match="discrete"):
+            bas.evaluate_on_grid(3)
+
+    def test_bounds_get_raises(self, basis_cls):
+        """Getting bounds raises AttributeError naming the class."""
+        bas = self._instantiate(basis_cls)
+        with pytest.raises(AttributeError, match=basis_cls.__name__):
+            _ = bas.bounds
+
+    @pytest.mark.parametrize("value", [None, (0, 1)])
+    def test_bounds_set_raises(self, basis_cls, value):
+        """Setting bounds raises AttributeError naming the class."""
+        bas = self._instantiate(basis_cls)
+        with pytest.raises(AttributeError, match=basis_cls.__name__):
+            bas.bounds = value
 
 
 class TestBoundsND:

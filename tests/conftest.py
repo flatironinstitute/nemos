@@ -28,7 +28,7 @@ import nemos as nmo
 import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
 from nemos.base_regressor import BaseRegressor
-from nemos.basis import AdditiveBasis, CustomBasis, MultiplicativeBasis, Zero
+from nemos.basis import AdditiveBasis, Category, CustomBasis, MultiplicativeBasis, Zero
 from nemos.basis._basis import Basis
 from nemos.basis._basis_mixin import BasisMixin
 from nemos.basis._transformer_basis import TransformerBasis
@@ -183,6 +183,7 @@ DEFAULT_KWARGS = {
     "frequencies": 4,
     "window_size": 11,
     "decay_rates": np.arange(1, 1 + 5),
+    "categories": 4,
 }
 
 # shut-off conversion warnings
@@ -221,7 +222,7 @@ def basis_class_specific_params():
     all_cls = (
         list_all_basis_classes("Conv")
         + list_all_basis_classes("Eval")
-        + [CustomBasis, Zero]
+        + [CustomBasis, Zero, Category]
     )
     return {cls.__name__: cls._get_param_names() for cls in all_cls}
 
@@ -352,7 +353,9 @@ class CombinedBasis(BasisFuncsTesting):
 
 
 def is_eval_basis(basis_cls) -> bool:
-    is_eval = "Eval" in basis_cls.__name__ or issubclass(basis_cls, basis.Zero)
+    is_eval = "Eval" in basis_cls.__name__ or issubclass(
+        basis_cls, (basis.Zero, basis.CategoryBasis)
+    )
     return is_eval
 
 
