@@ -1,0 +1,386 @@
+"""Base class for HMM models."""
+
+from __future__ import annotations
+
+import abc
+from numbers import Number
+from typing import Any, Callable, Optional, Tuple, Union
+
+import jax
+import jax.numpy as jnp
+
+from ..base_regressor import BaseRegressor
+from ..regularizer import Regularizer
+from ..typing import (
+    DESIGN_INPUT_TYPE,
+)
+from .initialize_parameters import (
+    INITIALIZATION_FN_DICT,
+    _resolve_dirichlet_priors,
+    _validate_init_funcs_keys,
+    generate_hmm_initial_params,
+    setup_hmm_initialization,
+)
+from .params import HMMModelParamsT, HMMUserParams, HMMUserProvidedParamsT
+from .validation import HMMValidator
+
+
+class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
+    """Base class for HMM models.
+
+    This class implements the core functionality for HMMs, handling tasks related to HMM parameters that are common
+    across HMM-based models. Model-specific parameters and methods should be implemented in subclasses, where required
+    abstract methods are defined.
+
+    Parameters
+    ----------
+    n_states :
+        The number of hidden states in the HMM. Must be a positive integer.
+    dirichlet_prior_alphas_init_prob :
+        Alpha parameters for the Dirichlet prior over the initial state probabilities.
+        Shape ``(n_states,)``. If None, a flat (uninformative) prior is assumed.
+    dirichlet_prior_alphas_transition :
+        Alpha parameters for the Dirichlet prior over the transition probabilities.
+        Shape ``(n_states, n_states)``. If None, a flat (uninformative) prior is assumed.
+    regularizer :
+        Regularization to use for model parameter optimization. Defines the regularization scheme
+        and related parameters. Default is UnRegularized.
+    regularizer_strength :
+        Typically a float. Default is None. Sets the regularizer strength for the model parameters.
+        If a user does not pass a value, and it is needed for regularization,
+        a warning will be raised and the strength will default to 1.0.
+    solver_name :
+        Solver to use for GLM optimization within the M-step. Defines the optimization scheme
+        and related parameters. The solver must be an appropriate match for the chosen regularizer.
+        Default is None. If no solver specified, one will be chosen based on the regularizer.
+        See the table above for regularizer/optimizer pairings.
+    solver_kwargs :
+        Optional dictionary for keyword arguments that are passed to the solver when instantiated.
+        E.g., stepsize, tol, acceleration, etc.
+    maxiter :
+        Maximum number of EM iterations. Default is 1000.
+    tol :
+        Convergence tolerance for the EM algorithm. The algorithm stops when the absolute change
+        in log-likelihood between consecutive iterations falls below this threshold. Default is 1e-8.
+    seed :
+        JAX PRNG key for random number generation during initialization. Default is
+        ``jax.random.PRNGKey(123)``.
+    hmm_initialization_funcs :
+        Dictionary specifying the initialization functions for the HMM parameters. This parameter is
+        included at initialization for scikit-learn compatibility; however, users should set up the
+        initialization functions using the :meth:`~nemos.hmm.hmm.BaseHMM.setup` method after model
+        instantiation.
+    """
+
+    _validator_class: type[HMMValidator[HMMUserProvidedParamsT, HMMModelParamsT]]
+
+    def __init__(
+        self,
+        n_states: int,
+        dirichlet_prior_alphas_init_prob: Union[
+            jnp.ndarray, None
+        ] = None,  # (n_state, )
+        dirichlet_prior_alphas_transition: Union[
+            jnp.ndarray | None
+        ] = None,  # (n_state, n_state):
+        regularizer: Optional[Union[str, Regularizer]] = None,
+        regularizer_strength: Optional[
+            Any
+        ] = None,  # this is used to regularize model params
+        solver_name: str = None,
+        solver_kwargs: Optional[dict] = None,
+        maxiter: int = 1000,
+        tol: float = 1e-8,
+        seed=jax.random.PRNGKey(123),
+        hmm_initialization_funcs: INITIALIZATION_FN_DICT = {},
+    ):
+        super().__init__(
+            regularizer=regularizer,
+            regularizer_strength=regularizer_strength,
+            solver_name=solver_name,
+            solver_kwargs=solver_kwargs,
+        )
+        self.n_states = n_states
+        # set the prior params
+        self.dirichlet_prior_alphas_init_prob = dirichlet_prior_alphas_init_prob
+        self.dirichlet_prior_alphas_transition = dirichlet_prior_alphas_transition
+
+        self.seed = seed
+        self.maxiter = maxiter
+        self.tol = tol
+
+        # fit attributes
+        self.transition_prob_: jnp.ndarray | None = None
+        self.initial_prob_: jnp.ndarray | None = None
+
+        self.hmm_initialization_funcs = hmm_initialization_funcs
+
+    def setup(
+        self,
+        initial_proba_init: Optional[str | Callable] = None,
+        initial_proba_init_kwargs: Optional[dict] = None,
+        transition_proba_init: Optional[str | Callable] = None,
+        transition_proba_init_kwargs: Optional[dict] = None,
+    ):
+        """
+        Set up the HMM model with specified initialization functions for the initial and transition probabilities.
+
+        An optional initialization step that allows for users to specify initialization functions other than the
+        defaulst for initial and transition probabilities. The user can specify other built-in initialization functions
+        or provide custom ones. If no initialization functions are provided, default initialization will be used.
+
+        Available built-in initialization functions include:
+        - For initial probabilities: "uniform" (default), "random", "kmeans"
+        - For transition probabilities: "sticky" (default), "uniform", "random", "kmeans"
+
+        Parameters
+        ----------
+        initial_proba_init :
+            A string identifier for a built-in initialization function or a custom callable for initializing the
+            initial probabilities of the HMM states.
+        initial_proba_init_kwargs :
+            A dictionary of keyword arguments to pass to the initial probability initialization function.
+        transition_proba_init :
+            A string identifier for a built-in initialization function or a custom callable for initializing the
+            transition probabilities between HMM states.
+        transition_proba_init_kwargs :
+            A dictionary of keyword arguments to pass to the transition probability initialization function.
+        """
+        self._hmm_initialization_funcs = setup_hmm_initialization(
+            initial_proba_init=initial_proba_init,
+            initial_proba_init_kwargs=initial_proba_init_kwargs,
+            transition_proba_init=transition_proba_init,
+            transition_proba_init_kwargs=transition_proba_init_kwargs,
+            init_funcs=self._hmm_initialization_funcs,
+        )
+
+    @property
+    def n_states(self) -> int:
+        """Number of hidden states of the HMM."""
+        return self._n_states
+
+    @n_states.setter
+    def n_states(self, n_states: int):
+        """Set the number of hidden states and validator."""
+        # quick sanity check and assignment
+        if isinstance(n_states, int) and n_states > 0:
+            self._n_states = n_states
+            self._validator = self._validator_class(n_states=n_states)
+            return
+
+        # further checks for other valid numeric types (like non-negative float with no-decimals)
+        if not isinstance(n_states, Number):
+            raise TypeError(
+                f"n_states must be a positive integer. "
+                f"n_states is of type ``{type(n_states)}`` instead."
+            )
+
+        # provided a non-integer number (check that has no decimals)
+        int_n_states = int(n_states)
+        if int_n_states != n_states:
+            raise TypeError(
+                f"n_states must be a positive integer. ``{n_states}`` provided instead."
+            )
+        elif int_n_states < 1:
+            raise ValueError(
+                f"n_states must be a positive integer. ``{n_states}`` provided instead."
+            )
+        self._n_states = int_n_states
+        self._validator = self._validator_class(n_states=n_states)
+
+    @property
+    def maxiter(self):
+        """EM maximum number of iterations."""
+        return self._maxiter
+
+    @maxiter.setter
+    def maxiter(self, maxiter: int):
+        """Validate and set the maximum number of iterations for the EM algorithm."""
+        if not isinstance(maxiter, Number) or maxiter != int(maxiter) or maxiter <= 0:
+            raise ValueError(
+                f"``maxiter`` must be a strictly positive integer. {maxiter} provided."
+            )
+        self._maxiter = int(maxiter)
+
+    @property
+    def tol(self):
+        """Tolerance for the EM algorithm convergence criterion.
+
+        The algorithm stops when the absolute change in log-likelihood between
+        consecutive iterations falls below this threshold:
+        |log_likelihood_current - log_likelihood_previous| < tol
+
+        Returns
+        -------
+            float: Convergence tolerance value.
+        """
+        return self._tol
+
+    @tol.setter
+    def tol(self, tol: float):
+        """Validate and set the tolerance for the EM algorithm convergence criterion."""
+        if not isinstance(tol, Number) or tol <= 0:
+            raise ValueError(
+                f"``tol`` must be a strictly positive float. {tol} provided."
+            )
+        self._tol = float(tol)
+
+    @property
+    def dirichlet_prior_alphas_init_prob(self) -> jnp.ndarray | None:
+        """Alpha parameters of the Dirichlet prior over the initial probabilities of HMM states.
+
+        If ``None``, a flat prior is assumed.
+        """
+        return self._dirichlet_prior_alphas_init_prob
+
+    @dirichlet_prior_alphas_init_prob.setter
+    def dirichlet_prior_alphas_init_prob(self, value: jnp.ndarray | None):
+        """Validate and set the alpha parameters of the Dirichlet prior over the initial probabilities."""
+        self._dirichlet_prior_alphas_init_prob = _resolve_dirichlet_priors(
+            value, (self._n_states,)
+        )
+
+    @property
+    def dirichlet_prior_alphas_transition(self) -> jnp.ndarray | None:
+        """Alpha parameters of the Dirichlet prior over the initial probabilities of HMM states.
+
+        If ``None``, a flat prior is assumed.
+        """
+        return self._dirichlet_prior_alphas_transition
+
+    @dirichlet_prior_alphas_transition.setter
+    def dirichlet_prior_alphas_transition(self, value: jnp.ndarray | None):
+        """Validate and set the alpha parameters of the Dirichlet prior over the transition probabilities."""
+        self._dirichlet_prior_alphas_transition = _resolve_dirichlet_priors(
+            value, (self._n_states, self._n_states)
+        )
+
+    @property
+    def seed(self):
+        """Random seed as a jax PRNG key."""
+        return self._seed
+
+    @seed.setter
+    def seed(self, value):
+        """Validate and set the random seed as a JAX PRNG key."""
+        try:
+            value = jnp.asarray(value)
+        except (TypeError, ValueError) as e:
+            raise TypeError(
+                f"seed must be a JAX PRNG key (jax.random.PRNGKey). "
+                f"Got {type(value).__name__} instead."
+            ) from e
+        # Validate it's a JAX PRNG key
+        if value.shape != (2,) or value.dtype != jnp.uint32:
+            raise TypeError(
+                f"seed must be a JAX PRNG key (jax.random.PRNGKey). "
+                f"Got {type(value).__name__} with shape {getattr(value, 'shape', 'N/A')}"
+            )
+        self._seed = value
+
+    @property
+    def hmm_initialization_funcs(self):
+        """Dictionary of initialization functions for HMM parameters."""
+        return self._hmm_initialization_funcs
+
+    @hmm_initialization_funcs.setter
+    def hmm_initialization_funcs(self, value: INITIALIZATION_FN_DICT | dict):
+        """Validate and set the dictionary of initialization functions for HMM parameters."""
+        self._hmm_initialization_funcs = _validate_init_funcs_keys(value)
+
+    def _hmm_params_initialization(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        is_new_session: jnp.ndarray,
+    ) -> Tuple[HMMUserParams, bool]:
+        """HMM parameter initialization."""
+        hmm_params = generate_hmm_initial_params(
+            self._n_states,
+            X,
+            y,
+            random_key=self._seed,
+            init_funcs=self._hmm_initialization_funcs,
+        )
+        validate_params = self._hmm_initialization_funcs.get(
+            "initial_proba_init_custom", True
+        ) or self._hmm_initialization_funcs.get("transition_proba_init_custom", True)
+        return hmm_params, validate_params
+
+    @abc.abstractmethod
+    def _model_params_initialization(self, X, y, is_new_session):
+        """
+        Model-specific parameter initialization.
+
+        Should return a tuple of (model_params, validate_model) where model_params is the
+        initialized model parameters and validate_model is a boolean indicating whether the
+        initialized parameters need to be validated.
+        """
+        pass
+
+    def _model_specific_initialization(self, X, y, is_new_session):
+        """Model-specific initialization."""
+        hmm_params, validate_hmm = self._hmm_params_initialization(
+            X,
+            y,
+            is_new_session,
+        )
+        model_params, validate_model = self._model_params_initialization(
+            X,
+            y,
+            is_new_session,
+        )
+        user_params = self._validator.wrap_user_params(
+            model_params
+        ) + self._validator.wrap_user_params(hmm_params)
+        if validate_hmm or validate_model:
+            model_params = self._validator.validate_and_cast_params(user_params)
+            self._validator.validate_consistency(model_params, X=X, y=y)
+            return model_params
+        else:
+            return self._validator.to_model_params(user_params)
+
+    def _check_hmm_is_fit(self):
+        """Ensure the HMM parameters have been fitted."""
+        flat_params = [
+            self.initial_prob_,
+            self.transition_prob_,
+        ]
+        is_missing = [x is None for x in flat_params]
+        if any(is_missing):
+            param_labels = [
+                "initial_prob_",
+                "transition_prob_",
+            ]
+            missing_params = [
+                p for p, missing in zip(param_labels, is_missing) if missing
+            ]
+            raise ValueError(
+                f"This {self._validator.model_class} instance is not fitted yet. The following attributes are not set:"
+                f" {missing_params}.\nPlease fit the HMM model first or "
+                "set the missing attributes."
+            )
+
+    @abc.abstractmethod
+    def _check_model_is_fit(self):
+        """Ensure the model-specific parameters have been fitted."""
+        pass
+
+    def _check_is_fit(self):
+        """Ensure the model has been fitted."""
+        self._check_hmm_is_fit()
+        self._check_model_is_fit()
+
+    def _validate_and_prepare_inputs(self, X, y, is_new_session=None):
+        """Validate and prepare inputs."""
+        # check if the model was fit
+        self._check_is_fit()
+        params = self._get_model_params()
+
+        # validate inputs
+        self._validator.validate_inputs(X=X, y=y)
+        self._validator.validate_consistency(params, X=X, y=y)
+        is_new_session = self._validator.validate_and_cast_is_new_session(
+            X=X, y=y, is_new_session=is_new_session
+        )
+        return params, X, y, is_new_session

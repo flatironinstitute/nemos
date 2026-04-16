@@ -74,10 +74,9 @@ class GLMHMMValidator(HMMValidator[GLMHMMUserParams, GLMHMMParams]):
         2,
         1,
         1,
-        *HMMValidator.expected_param_dims,
+        1,
+        2,
     )  # (coef.ndim, intercept.ndim, scale.ndim, init_prob.ndim, transition_prob.ndim)
-    initial_prob_ind: int = 3
-    transition_prob_ind: int = 4
     model_param_names: Tuple[str] = (
         "coef",
         "intercept",
