@@ -76,14 +76,6 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
     """Validate HMM parameters. Meant to be used as a mixin class for models that use HMMs."""
 
     n_states: int = field(kw_only=True)  # keyword only and required.
-    expected_param_dims: Tuple[int] = (
-        1,
-        2,
-    )  # (init_prob.ndim, transition_prob.ndim)
-    initial_prob_ind: int = None  # index of initial probability in user params tuple
-    transition_prob_ind: int = (
-        None  # index of transition probability in user params tuple
-    )
     model_param_names: Tuple[str] = ("initial_prob", "transition_prob")
     model_class: str = "HMM"
     params_validation_sequence: Tuple[Tuple[str, None] | Tuple[str, dict[str, Any]]] = (
@@ -154,13 +146,13 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
         """
         validation.check_length(
             params,
-            len(self.expected_param_dims),
-            f"Params must have length {len(self.expected_param_dims)}: "
+            len(self.model_param_names),
+            f"Params must have length {len(self.model_param_names)}: "
             f"({', '.join(self.model_param_names)}).",
         )
         if not isinstance(params, (tuple, list)):
             raise TypeError(
-                f"{self.model_class} params must be a tuple/list of length {len(self.expected_param_dims)}, "
+                f"{self.model_class} params must be a tuple/list of length {len(self.model_param_names)}, "
                 f"({', '.join(self.model_param_names)})."
             )
         return params
@@ -169,11 +161,7 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
         self, params: HMMUserProvidedParamsT
     ) -> HMMUserProvidedParamsT:
         """Check initial and transition probabilities shape."""
-        wrapped = self.wrap_user_params(params)
-        initial_prob, transition_prob = (
-            wrapped[self.initial_prob_ind],
-            wrapped[self.transition_prob_ind],
-        )
+        initial_prob, transition_prob = self.wrap_user_params(params)[-2:]
         if initial_prob.shape != (self.n_states,):
             raise ValueError(
                 f"initial_prob must be a 1-dimensional array of shape ``({self.n_states},)``. "
@@ -190,11 +178,8 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
         self, params: HMMUserProvidedParamsT
     ) -> HMMUserProvidedParamsT:
         """Check that initial and transition probability sum to 1."""
-        wrapped = self.wrap_user_params(params)
-        initial_prob, transition_prob = (
-            wrapped[self.initial_prob_ind],
-            wrapped[self.transition_prob_ind],
-        )
+        initial_prob, transition_prob = self.wrap_user_params(params)[-2:]
+
         if not jnp.allclose(initial_prob.sum(), 1):
             raise ValueError(
                 f"initial_prob must sum to 1, but got sum = {initial_prob.sum()}. "
@@ -213,7 +198,7 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
         X: Optional[DESIGN_INPUT_TYPE] = None,
         y: Optional[jnp.ndarray | Tsd | TsdFrame] = None,
     ):
-        """Validate inputs for GLM-HMM model."""
+        """Validate inputs for HMM model."""
         super().validate_inputs(X, y)
 
         # Additional checks due to the time-series structure.
@@ -222,7 +207,7 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
         if y is None:
             if X is not None and not has_nans_only_at_border(X):
                 raise ValueError(
-                    "GLM-HMM requires continuous time-series data. NaN values must only "
+                    "HMM requires continuous time-series data. NaN values must only "
                     "appear at the beginning or end of the data, not in the middle."
                 )
             return
@@ -251,7 +236,7 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
             is_continuous = has_nans_only_at_border(X) and has_nans_only_at_border(y)
         if not is_continuous:
             raise ValueError(
-                "GLM-HMM requires continuous time-series data. NaN values must only "
+                "HMM requires continuous time-series data. NaN values must only "
                 "appear at the beginning or end of the data, not in the middle. "
                 "Found NaN values within the time series, which would break the "
                 "forward-backward algorithm. Please ensure your data is continuous "

@@ -48,23 +48,40 @@ def initialize_is_new_session(n_samples, is_new_session):
         if jnp.issubdtype(is_new_session.dtype, jnp.bool_):
             if is_new_session.shape != (n_samples,):
                 raise ValueError(
-                    f"is_new_session must have shape (n_samples,), but got shape {is_new_session.shape}."
+                    f"Boolean is_new_session must have shape (n_samples,), but got shape {is_new_session.shape}."
                 )
             # use the user-provided tree, but force the first time bin to be True
             is_new_session = jax.lax.dynamic_update_index_in_dim(
                 jnp.asarray(is_new_session, dtype=bool), True, 0, axis=0
             )
         elif jnp.issubdtype(is_new_session.dtype, jnp.integer):
-            if (jnp.max(is_new_session) > n_samples) or (jnp.min(is_new_session) < 0):
+            if (jnp.max(is_new_session) >= n_samples) or (jnp.min(is_new_session) < 0):
                 raise ValueError(
                     "Integer is_new_session values must be between 0 and n_samples-1, "
                     f"but got min {jnp.min(is_new_session)} and max {jnp.max(is_new_session)}."
                 )
-            is_new_session = (
-                jnp.zeros(n_samples, dtype=bool)
-                .at[jnp.asarray(is_new_session, dtype=int)]
-                .set(True)
-            )
+            elif len(is_new_session) > n_samples:
+                raise ValueError(
+                    f"Integer is_new_session array must have length <= n_samples, but got length {len(is_new_session)} "
+                    f"and n_samples {n_samples}."
+                )
+
+            if (
+                (is_new_session == 0) | (is_new_session == 1)
+            ).all() and is_new_session.shape == (n_samples,):
+                # should be treated as a boolean array
+                is_new_session = jax.lax.dynamic_update_index_in_dim(
+                    jnp.asarray(is_new_session, dtype=bool), True, 0, axis=0
+                )
+            else:
+                is_new_session = (
+                    jnp.zeros(n_samples, dtype=bool)
+                    .at[jnp.asarray(is_new_session, dtype=int)]
+                    .set(True)
+                )
+                is_new_session = jax.lax.dynamic_update_index_in_dim(
+                    is_new_session, True, 0, axis=0
+                )
         else:
             raise TypeError(
                 "is_new_session must be a boolean or integer array, but got dtype "

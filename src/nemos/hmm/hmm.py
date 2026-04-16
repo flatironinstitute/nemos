@@ -5,7 +5,7 @@ from __future__ import annotations
 import abc
 import warnings
 from numbers import Number
-from typing import Callable, Literal, Optional, Union, Any
+from typing import Callable, Literal, Optional, Union, Any, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -27,8 +27,9 @@ from .initialize_parameters import (
     _resolve_dirichlet_priors,
     setup_hmm_initialization,
     _validate_init_funcs_keys,
+    generate_hmm_initial_params,
 )
-from .params import HMMModelParamsT, HMMUserProvidedParamsT
+from .params import HMMModelParamsT, HMMUserProvidedParamsT, HMMUserParams
 from ..base_regressor import BaseRegressor
 from .utils import _check_state_format
 from .validation import HMMValidator
@@ -245,6 +246,51 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
                 f" {missing_params}.\nPlease fit the GLM-HMM model first or "
                 "set the missing attributes."
             )
+
+    def _hmm_params_initialization(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        is_new_session: jnp.ndarray,
+    ) -> Tuple[HMMUserParams, bool]:
+        """HMM initialization."""
+        hmm_params = generate_hmm_initial_params(
+            self._n_states,
+            X,
+            y,
+            random_key=self._seed,
+            init_funcs=self._hmm_initialization_funcs,
+        )
+        validate_params = self._hmm_initialization_funcs.get(
+            "initial_proba_init_custom", True
+        ) or self._hmm_initialization_funcs.get("transition_proba_init_custom", True)
+        return hmm_params, validate_params
+
+    @abc.abstractmethod
+    def _model_params_initialization(self, X, y, is_new_session):
+        pass
+
+    def _model_specific_initialization(self, X, y, is_new_session):
+        """Model-specific initialization. Returns initialized model params and whether they need to be validated."""
+        hmm_params, validate_hmm = self._hmm_params_initialization(
+            X,
+            y,
+            is_new_session,
+        )
+        model_params, validate_model = self._model_params_initialization(
+            X,
+            y,
+            is_new_session,
+        )
+        user_params = self._validator.wrap_user_params(
+            model_params
+        ) + self._validator.wrap_user_params(hmm_params)
+        if validate_hmm or validate_model:
+            model_params = self._validator.validate_and_cast_params(user_params)
+            self._validator.validate_consistency(model_params, X=X, y=y)
+            return model_params
+        else:
+            return self._validator.to_model_params(user_params)
 
     def _validate_and_prepare_inputs(self, X, y, is_new_session=None):
         """Validate and prepare inputs."""
