@@ -3,7 +3,6 @@
 from dataclasses import dataclass, field
 from typing import Any, Optional, Tuple
 
-import jax
 import jax.numpy as jnp
 import pynapple as nap
 from pynapple import Tsd, TsdFrame
@@ -16,7 +15,6 @@ from ..typing import ArrayLike
 from .params import HMMParams, HMMUserParams
 from .utils import (
     initialize_is_new_session,
-    compute_is_new_session,
     shift_nan_is_new_session,
 )
 
@@ -82,44 +80,6 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
         ("check_init_and_transition_prob_shape", None),
         ("check_init_and_transition_prob_sum_to_1", None),
     )
-
-    def check_array_dimensions(
-        self,
-        params: HMMUserProvidedParamsT,
-        err_msg: Optional[str] = None,
-        err_message_format: str = None,
-    ) -> HMMUserProvidedParamsT:
-        """
-        Check array dimensions with custom error formatting for HMM-based model parameters.
-
-        Overrides the base implementation to provide model-specific error messages
-        that include the actual shapes of the provided parameters. The expected shapes of
-        additional model parameters and error message should be set in the child class (e.g
-        see GLMHMMValidator for an example).
-
-        Parameters
-        ----------
-        params :
-            User-provided parameters as a tuple.
-        err_msg :
-            Custom error message (unused, overridden by err_message_format).
-        err_message_format :
-            Format string for error message that takes two shape arguments.
-
-        Returns
-        -------
-        :
-            The validated parameters.
-
-        Raises
-        ------
-        ValueError
-            If arrays have incorrect dimensionality.
-        """
-        wrapped = self.wrap_user_params(params)
-        shapes = tuple(jax.tree_util.tree_map(lambda x: x.shape, p) for p in wrapped)
-        err_msg = err_message_format.format(*shapes)
-        return super().check_array_dimensions(params, err_msg=err_msg)
 
     def check_user_params_structure(
         self, params: HMMUserProvidedParamsT, **kwargs
@@ -252,12 +212,8 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
                 is_new_session = y.time_support
             elif is_pynapple_tsd(X):
                 is_new_session = X.time_support
-            # return initialize_new_session(n_samples, is_new_session)
-        if isinstance(is_new_session, nap.IntervalSet):
-            is_new_session = compute_is_new_session(X, y, is_new_session)
-        else:
-            n_samples = X.shape[0]
-            is_new_session = initialize_is_new_session(n_samples, is_new_session)
+
+        is_new_session = initialize_is_new_session(X, y, is_new_session)
 
         # shift any True values that fall on NaN samples to the next valid sample
         nan_x = jnp.any(jnp.isnan(jnp.asarray(X)).reshape(X.shape[0], -1), axis=1)

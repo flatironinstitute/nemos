@@ -89,6 +89,44 @@ class GLMHMMValidator(HMMValidator[GLMHMMUserParams, GLMHMMParams]):
         *RegressorValidator.params_validation_sequence[3:],
     )
 
+    def check_array_dimensions(
+        self,
+        params: GLMHMMUserParams,
+        err_msg: Optional[str] = None,
+        err_message_format: str = None,
+    ) -> GLMHMMUserParams:
+        """
+        Check array dimensions with custom error formatting for HMM-based model parameters.
+
+        Overrides the base implementation to provide model-specific error messages
+        that include the actual shapes of the provided parameters. The expected shapes of
+        additional model parameters and error message should be set in the child class (e.g
+        see GLMHMMValidator for an example).
+
+        Parameters
+        ----------
+        params :
+            User-provided parameters as a tuple.
+        err_msg :
+            Custom error message (unused, overridden by err_message_format).
+        err_message_format :
+            Format string for error message that takes two shape arguments.
+
+        Returns
+        -------
+        :
+            The validated parameters.
+
+        Raises
+        ------
+        ValueError
+            If arrays have incorrect dimensionality.
+        """
+        wrapped = self.wrap_user_params(params)
+        shapes = tuple(jax.tree_util.tree_map(lambda x: x.shape, p) for p in wrapped)
+        err_msg = err_message_format.format(*shapes)
+        return super().check_array_dimensions(params, err_msg=err_msg)
+
     def check_model_params_shape(self, params: GLMHMMUserParams) -> GLMHMMUserParams:
         """Check the length of the glm parameters state axis."""
         wrapped = self.wrap_user_params(params)
