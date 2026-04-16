@@ -129,6 +129,10 @@ def uniform_transition_proba_init(
     ----------
     n_states :
         Number of HMM states. Must be greater than 1.
+    X :
+        Optional predictor data. Unused for this particular initialization, but added for API consistency.
+    y :
+        Optional output data. Unused for this particular initialization, but added for API consistency.
     random_key :
         Random key, unused for this particular initialization, but added for API consistency.
 
@@ -168,6 +172,10 @@ def random_transition_proba_init(
     ----------
     n_states :
         Number of HMM states. Must be greater than 1.
+    X :
+        Optional predictor data. Unused for this particular initialization, but added for API consistency.
+    y :
+        Optional output data. Unused for this particular initialization, but added for API consistency.
     random_key :
         Random key for reproducibility of random initialization.
 
@@ -209,6 +217,10 @@ def uniform_initial_proba_init(
     ----------
     n_states :
         Number of HMM states.
+    X :
+        Optional predictor data. Unused for this particular initialization, but added for API consistency.
+    y :
+        Optional output data. Unused for this particular initialization, but added for API consistency.
     random_key :
         Random key, unused for this particular initialization, but added for API consistency.
 
@@ -247,6 +259,10 @@ def random_initial_proba_init(
     ----------
     n_states :
         Number of HMM states.
+    X :
+        Optional predictor data. Unused for this particular initialization, but added for API consistency.
+    y :
+        Optional output data. Unused for this particular initialization, but added for API consistency.
     random_key :
         Random key for reproducibility of random initialization.
 
