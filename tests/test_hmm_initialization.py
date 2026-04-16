@@ -599,11 +599,11 @@ class TestGenerateHMMInitParams:
             ({"initial_proba_init": random_initial_proba_init}, does_not_raise()),
             (
                 {"invalid_key": None},
-                pytest.raises(ValueError, match="Unexpected or unknown keys"),
+                pytest.raises(KeyError, match="Unexpected or unknown keys"),
             ),
             (
                 {"initial_prob_init": random_initial_proba_init},
-                pytest.raises(ValueError, match="Did you mean"),
+                pytest.raises(KeyError, match="Did you mean"),
             ),
         ],
     )
