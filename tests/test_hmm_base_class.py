@@ -123,7 +123,7 @@ class MockHMM(BaseHMM[MockHMMParams, MockHMMUserParams]):
             transition_proba_init_kwargs=transition_proba_init_kwargs,
         )
 
-    def _check_is_fit(self):
+    def _check_model_is_fit(self):
         BaseHMM._check_is_fit(self)
         if self.param_ is None:
             raise ValueError("Model is not fitted yet.")
@@ -832,69 +832,6 @@ class TestHMMNewSession:
         assert jnp.all(is_new_session == expected_new_session)
 
     @pytest.mark.parametrize(
-        "X, y, is_new_session, expectation",
-        [
-            # wrong shape for boolean array
-            (
-                np.ones((3, 1)),
-                np.ones((3,)),
-                jnp.array([True, False, False, False]),
-                pytest.raises(ValueError, match="is_new_session must have shape"),
-            ),
-            # wrong length for integer array
-            (
-                np.ones((3, 1)),
-                np.ones((3,)),
-                jnp.array([1, 0, 0, 0]),
-                pytest.raises(
-                    ValueError, match="is_new_session array must have length"
-                ),
-            ),
-            # integer out of bounds
-            (
-                np.ones((3, 1)),
-                np.ones((3,)),
-                jnp.array([0, 3]),
-                pytest.raises(ValueError, match="is_new_session values must be"),
-            ),
-            # negative integer
-            (
-                np.ones((3, 1)),
-                np.ones((3,)),
-                jnp.array([-1]),
-                pytest.raises(ValueError, match="is_new_session values must be"),
-            ),
-            # wrong dtype
-            (
-                np.ones((3, 1)),
-                np.ones((3,)),
-                jnp.array([0.0, 3.0]),
-                pytest.raises(
-                    TypeError,
-                    match="is_new_session must be a boolean or integer array",
-                ),
-            ),
-            # wrong dtype
-            (
-                np.ones((3, 1)),
-                np.ones((3,)),
-                "is_new_session",
-                pytest.raises(
-                    TypeError,
-                    match="is_new_session must be a boolean or integer array",
-                ),
-            ),
-        ],
-    )
-    def test_initialize_new_session_errors(self, X, y, is_new_session, expectation):
-        """Test that session boundaries are correctly initialized and moved when there are NaN values."""
-        model = MockHMM(n_states=3)
-        with expectation:
-            is_new_session = model._validator.validate_and_cast_is_new_session(
-                X, y, is_new_session
-            )
-
-    @pytest.mark.parametrize(
         "X, y, is_new_session, expected_new_session",
         [
             ## no is_new_session provided
@@ -1059,3 +996,76 @@ class TestHMMNewSession:
             X, y, is_new_session
         )
         assert jnp.all(is_new_session == expected_new_session)
+
+    @pytest.mark.parametrize(
+        "X, y, is_new_session, expectation",
+        [
+            # wrong shape for boolean array
+            (
+                np.ones((3, 1)),
+                np.ones((3,)),
+                jnp.array([True, False, False, False]),
+                pytest.raises(ValueError, match="is_new_session must have shape"),
+            ),
+            # wrong length for integer array
+            (
+                np.ones((3, 1)),
+                np.ones((3,)),
+                jnp.array([1, 0, 0, 0]),
+                pytest.raises(
+                    ValueError, match="is_new_session array must have length"
+                ),
+            ),
+            # integer out of bounds
+            (
+                np.ones((3, 1)),
+                np.ones((3,)),
+                jnp.array([0, 3]),
+                pytest.raises(ValueError, match="is_new_session values must be"),
+            ),
+            # negative integer
+            (
+                np.ones((3, 1)),
+                np.ones((3,)),
+                jnp.array([-1]),
+                pytest.raises(ValueError, match="is_new_session values must be"),
+            ),
+            # wrong dtype
+            (
+                np.ones((3, 1)),
+                np.ones((3,)),
+                jnp.array([0.0, 3.0]),
+                pytest.raises(
+                    TypeError,
+                    match="is_new_session must be a boolean or integer array",
+                ),
+            ),
+            # wrong dtype
+            (
+                np.ones((3, 1)),
+                np.ones((3,)),
+                "is_new_session",
+                pytest.raises(
+                    TypeError,
+                    match="is_new_session must be a boolean or integer array",
+                ),
+            ),
+            # interval set when no pynapple objects are used
+            (
+                np.ones((3, 1)),
+                np.ones((3,)),
+                nap.IntervalSet([0, 3]),
+                pytest.raises(
+                    TypeError,
+                    match="X or y must be a pynapple",
+                ),
+            ),
+        ],
+    )
+    def test_initialize_new_session_errors(self, X, y, is_new_session, expectation):
+        """Test that session boundaries are correctly initialized and moved when there are NaN values."""
+        model = MockHMM(n_states=3)
+        with expectation:
+            is_new_session = model._validator.validate_and_cast_is_new_session(
+                X, y, is_new_session
+            )

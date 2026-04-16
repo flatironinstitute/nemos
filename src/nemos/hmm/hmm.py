@@ -37,6 +37,52 @@ from ..regularizer import Regularizer
 
 
 class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
+    """Base class for HMM models.
+
+    This class implements the core functionality for HMMs, handling tasks related to HMM parameters that are common
+    across HMM-based models. Model-specific parameters and methods should be implemented in subclasses, where required
+    abstract methods are defined.
+
+    Parameters
+    ----------
+    n_states :
+        The number of hidden states in the HMM. Must be a positive integer.
+    dirichlet_prior_alphas_init_prob :
+        Alpha parameters for the Dirichlet prior over the initial state probabilities.
+        Shape ``(n_states,)``. If None, a flat (uninformative) prior is assumed.
+    dirichlet_prior_alphas_transition :
+        Alpha parameters for the Dirichlet prior over the transition probabilities.
+        Shape ``(n_states, n_states)``. If None, a flat (uninformative) prior is assumed.
+    regularizer :
+        Regularization to use for model parameter optimization. Defines the regularization scheme
+        and related parameters. Default is UnRegularized.
+    regularizer_strength :
+        Typically a float. Default is None. Sets the regularizer strength for the model parameters.
+        If a user does not pass a value, and it is needed for regularization,
+        a warning will be raised and the strength will default to 1.0.
+    solver_name :
+        Solver to use for GLM optimization within the M-step. Defines the optimization scheme
+        and related parameters. The solver must be an appropriate match for the chosen regularizer.
+        Default is None. If no solver specified, one will be chosen based on the regularizer.
+        See the table above for regularizer/optimizer pairings.
+    solver_kwargs :
+        Optional dictionary for keyword arguments that are passed to the solver when instantiated.
+        E.g., stepsize, tol, acceleration, etc.
+    maxiter :
+        Maximum number of EM iterations. Default is 1000.
+    tol :
+        Convergence tolerance for the EM algorithm. The algorithm stops when the absolute change
+        in log-likelihood between consecutive iterations falls below this threshold. Default is 1e-8.
+    seed :
+        JAX PRNG key for random number generation during initialization. Default is
+        ``jax.random.PRNGKey(123)``.
+    hmm_initialization_funcs :
+        Dictionary specifying the initialization functions for the HMM parameters. This parameter is
+        included at initialization for scikit-learn compatibility; however, users should set up the
+        initialization functions using the :meth:`~nemos.hmm.hmm.BaseHMM.setup` method after model
+        instantiation.
+    """
+
     _validator_class: type[HMMValidator[HMMUserProvidedParamsT, HMMModelParamsT]]
 
     def __init__(
@@ -87,6 +133,30 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         transition_proba_init: Optional[str | Callable] = None,
         transition_proba_init_kwargs: Optional[dict] = None,
     ):
+        """
+        Set up the HMM model with specified initialization functions for the initial and transition probabilities.
+
+        An optional initialization step that allows for users to specify initialization functions other than the
+        defaulst for initial and transition probabilities. The user can specify other built-in initialization functions
+        or provide custom ones. If no initialization functions are provided, default initialization will be used.
+
+        Available built-in initialization functions include:
+        - For initial probabilities: "uniform" (default), "random", "kmeans"
+        - For transition probabilities: "sticky" (default), "uniform", "random", "kmeans"
+
+        Parameters
+        ----------
+        initial_proba_init :
+            A string identifier for a built-in initialization function or a custom callable for initializing the
+            initial probabilities of the HMM states.
+        initial_proba_init_kwargs :
+            A dictionary of keyword arguments to pass to the initial probability initialization function.
+        transition_proba_init :
+            A string identifier for a built-in initialization function or a custom callable for initializing the
+            transition probabilities between HMM states.
+        transition_proba_init_kwargs :
+            A dictionary of keyword arguments to pass to the transition probability initialization function.
+        """
         self._hmm_initialization_funcs = setup_hmm_initialization(
             initial_proba_init=initial_proba_init,
             initial_proba_init_kwargs=initial_proba_init_kwargs,
@@ -102,6 +172,7 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
 
     @n_states.setter
     def n_states(self, n_states: int):
+        """Set the number of hidden states and validator."""
         # quick sanity check and assignment
         if isinstance(n_states, int) and n_states > 0:
             self._n_states = n_states
@@ -135,7 +206,7 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
 
     @maxiter.setter
     def maxiter(self, maxiter: int):
-
+        """Validate and set the maximum number of iterations for the EM algorithm."""
         if not isinstance(maxiter, Number) or maxiter != int(maxiter) or maxiter <= 0:
             raise ValueError(
                 f"``maxiter`` must be a strictly positive integer. {maxiter} provided."
@@ -158,7 +229,7 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
 
     @tol.setter
     def tol(self, tol: float):
-
+        """Validate and set the tolerance for the EM algorithm convergence criterion."""
         if not isinstance(tol, Number) or tol <= 0:
             raise ValueError(
                 f"``tol`` must be a strictly positive float. {tol} provided."
@@ -175,6 +246,7 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
 
     @dirichlet_prior_alphas_init_prob.setter
     def dirichlet_prior_alphas_init_prob(self, value: jnp.ndarray | None):
+        """Validate and set the alpha parameters of the Dirichlet prior over the initial probabilities."""
         self._dirichlet_prior_alphas_init_prob = _resolve_dirichlet_priors(
             value, (self._n_states,)
         )
@@ -189,6 +261,7 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
 
     @dirichlet_prior_alphas_transition.setter
     def dirichlet_prior_alphas_transition(self, value: jnp.ndarray | None):
+        """Validate and set the alpha parameters of the Dirichlet prior over the transition probabilities."""
         self._dirichlet_prior_alphas_transition = _resolve_dirichlet_priors(
             value, (self._n_states, self._n_states)
         )
@@ -200,6 +273,7 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
 
     @seed.setter
     def seed(self, value):
+        """Validate and set the random seed as a JAX PRNG key."""
         try:
             value = jnp.asarray(value)
         except (TypeError, ValueError) as e:
@@ -220,14 +294,13 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         """Dictionary of initialization functions for HMM parameters."""
         return self._hmm_initialization_funcs
 
-    # don't include setter so that this can't be modified outside of setup()?
     @hmm_initialization_funcs.setter
     def hmm_initialization_funcs(self, value: INITIALIZATION_FN_DICT | dict):
-        # add type checking?
+        """Validate and set the dictionary of initialization functions for HMM parameters."""
         self._hmm_initialization_funcs = _validate_init_funcs_keys(value)
 
-    def _check_is_fit(self):
-        """Ensure the instance has been fitted."""
+    def _check_hmm_is_fit(self):
+        """Ensure the HMM parameters have been fitted."""
         flat_params = [
             self.initial_prob_,
             self.transition_prob_,
@@ -243,9 +316,19 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
             ]
             raise ValueError(
                 f"This {self._validator.model_class} instance is not fitted yet. The following attributes are not set:"
-                f" {missing_params}.\nPlease fit the GLM-HMM model first or "
+                f" {missing_params}.\nPlease fit the HMM model first or "
                 "set the missing attributes."
             )
+
+    @abc.abstractmethod
+    def _check_model_is_fit(self):
+        """Ensure the model-specific parameters have been fitted."""
+        pass
+
+    def _check_is_fit(self):
+        """Ensure the model has been fitted."""
+        self._check_hmm_is_fit()
+        self._check_model_is_fit()
 
     def _hmm_params_initialization(
         self,
@@ -253,7 +336,7 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         y: jnp.ndarray,
         is_new_session: jnp.ndarray,
     ) -> Tuple[HMMUserParams, bool]:
-        """HMM initialization."""
+        """HMM parameter initialization."""
         hmm_params = generate_hmm_initial_params(
             self._n_states,
             X,
@@ -268,10 +351,13 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
 
     @abc.abstractmethod
     def _model_params_initialization(self, X, y, is_new_session):
+        """Model-specific parameter initialization. Should return a tuple of (model_params, validate_model) where
+        model_params is the initialized model parameters and validate_model is a boolean indicating whether the
+        initialized parameters need to be validated."""
         pass
 
     def _model_specific_initialization(self, X, y, is_new_session):
-        """Model-specific initialization. Returns initialized model params and whether they need to be validated."""
+        """Model-specific initialization."""
         hmm_params, validate_hmm = self._hmm_params_initialization(
             X,
             y,
@@ -306,470 +392,465 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         )
         return params, X, y, is_new_session
 
-    def _score(
-        self,
-        params: HMMModelParamsT,
-        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
-        y: Union[NDArray, jnp.ndarray, nap.Tsd],
-        is_new_session: jnp.ndarray,
-    ) -> jnp.ndarray:
-        """Private score compute."""
-        # filter for non-nans, grab data if needed
-        data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
-        # safe conversion to jax arrays of float
-        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
-
-        # make sure is_new_session starts with a 1
-        is_new_session = is_new_session.at[0].set(True)
-
-        # smooth with forward backward
-        _, log_norm = forward_pass(
-            params=params,
-            X=data,
-            y=y,
-            is_new_session=is_new_session,
-            # do we store this in the model during initialization?
-            log_likelihood_func=self._log_likelihood,
-        )
-        return jnp.sum(log_norm)
-
-    def score(
-        self,
-        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
-        y: ArrayLike,
-        is_new_session: Optional[ArrayLike] = None,
-        score_type: Literal[
-            "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"
-        ] = "log-likelihood",
-        null_model: Optional[Literal["constant", "glm"]] = None,
-    ) -> jnp.ndarray:
-        """Compute the model score."""
-        if score_type == "log-likelihood" and null_model is not None:
-            warnings.warn(
-                "The null model is not used for the log-likelihood computation.",
-                UserWarning,
-                stacklevel=2,
-            )
-        if score_type != "log-likelihood":
-            raise NotImplementedError(
-                f"score of type {score_type} not implemented yet!"
-            )
-        params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
-        return self._score(params, X, y, is_new_session)
-
-    @support_pynapple(conv_type="jax")
-    def _smooth_proba(
-        self,
-        params: HMMModelParamsT,
-        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
-        y: Union[NDArray, jnp.ndarray, nap.Tsd],
-        is_new_session: jnp.ndarray,
-    ) -> jnp.ndarray:
-        # filter for non-nans, grab data if needed
-        valid = tree_utils.get_valid_multitree(X, y)
-        data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
-
-        # safe conversion to jax arrays of float
-        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
-
-        # make sure is_new_session starts with a 1
-        is_new_session = is_new_session.at[0].set(True)
-
-        # smooth with forward backward
-        log_posteriors, _, _, _, _, _ = forward_backward(
-            params=params,
-            X=data,
-            y=y,
-            is_new_session=is_new_session,
-            log_likelihood_func=self._log_likelihood,
-        )
-        proba = jnp.exp(log_posteriors)
-        # renormalize (numerical precision due to exponentiation)
-        proba /= proba.sum(axis=1, keepdims=True)
-        # re-attach nans
-        proba = jnp.full((valid.shape[0], proba.shape[1]), jnp.nan).at[valid].set(proba)
-        return proba
-
-    def smooth_proba(
-        self,
-        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
-        y: Union[NDArray, jnp.ndarray, nap.Tsd],
-        is_new_session: Optional[ArrayLike] = None,
-    ) -> jnp.ndarray | nap.TsdFrame:
-        """Compute smoothing posterior probabilities over hidden states.
-
-        Computes the probability of being in each hidden state at each time point,
-        conditioned on the entire observed sequence. This method uses the forward-backward
-        algorithm to incorporate information from both past and future observations,
-        providing optimal state estimates given all available data.
-
-        The smoothing posteriors answer: "Given all observations, what is the probability
-        that the system was in state k at time t?"
-
-        Parameters
-        ----------
-        X
-            Predictors, shape ``(n_time_points, n_features)``.
-        y
-            Observed neural activity, shape ``(n_time_points,)`` for single neuron or
-            ``(n_time_points, n_neurons)`` for population.
-
-        Returns
-        -------
-        posteriors
-            Smoothing posterior probabilities, shape ``(n_time_points, n_states)``.
-            Each row sums to 1 and represents the probability distribution over states
-            at that time point.
-
-        Raises
-        ------
-        ValueError
-            If the model has not been fit (``fit()`` must be called first).
-        ValueError
-            If inputs contain NaN values in the middle of epochs (only boundary NaNs allowed).
-        ValueError
-            If X and y have inconsistent shapes or features.
-
-        See Also
-        --------
-        filter_proba : Compute filtering posteriors (conditioned on past observations only).
-        decode_state : Compute most likely state sequence (Viterbi decoding).
-
-        Notes
-        -----
-        - Smoothing provides better state estimates than filtering because it uses all data
-        - The algorithm properly handles session boundaries and NaN values at epoch borders
-
-        Examples
-        --------
-        Fit a GLM-HMM and compute smoothing posteriors:
-
-        >>> import numpy as np
-        >>> import nemos as nmo
-        >>> # Generate example data
-        >>> np.random.seed(123)
-        >>> X = np.random.randn(100, 5)  # 100 time points, 5 features
-        >>> y = np.random.poisson(2, size=100)  # Poisson spike counts
-        >>>
-        >>> # Fit model with 3 hidden states
-        >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson")
-        >>> model = model.fit(X, y)
-        >>> # Compute smoothing posteriors
-        >>> posteriors = model.smooth_proba(X, y)
-        >>> print(posteriors.shape)
-        (100, 3)
-        >>> # Each row sums to 1
-        >>> print(np.allclose(posteriors.sum(axis=1), 1.0))
-        True
-
-        Using with pynapple for time-series analysis:
-
-        >>> import pynapple as nap
-        >>> # Create time-indexed data
-        >>> t = np.arange(100) * 0.01  # 10ms bins
-        >>> X_tsd = nap.TsdFrame(t=t, d=X)
-        >>> y_tsd = nap.Tsd(t=t, d=y)
-        >>>
-        >>> # Posteriors returned as TsdFrame
-        >>> posteriors_tsd = model.smooth_proba(X_tsd, y_tsd)
-        >>> print(type(posteriors_tsd))
-        <class 'pynapple.core.time_series.TsdFrame'>
-        """
-        params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
-        return self._smooth_proba(params, X, y, is_new_session)
-
-    @support_pynapple(conv_type="jax")
-    def _filter_proba(
-        self,
-        params: HMMModelParamsT,
-        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
-        y: Union[NDArray, jnp.ndarray, nap.Tsd],
-        is_new_session: jnp.ndarray,
-    ) -> jnp.ndarray:
-        """Compute filtering probabilities without validation (internal method)."""
-        # filter for non-nans, grab data if needed
-        valid = tree_utils.get_valid_multitree(X, y)
-        data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
-
-        # safe conversion to jax arrays of float
-        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
-
-        # make sure is_new_session starts with a 1
-        is_new_session = is_new_session.at[0].set(True)
-        log_proba, _ = forward_pass(
-            params,
-            data,
-            y,
-            is_new_session=is_new_session,
-            log_likelihood_func=self._log_likelihood,
-        )
-        proba = jnp.exp(log_proba)
-        # renormalize (numerical errors due to exponentiating)
-        proba /= proba.sum(axis=1, keepdims=True)
-        # re-attach nans
-        proba = jnp.full((valid.shape[0], proba.shape[1]), jnp.nan).at[valid].set(proba)
-        return proba
-
-    def filter_proba(
-        self,
-        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
-        y: Union[NDArray, jnp.ndarray, nap.Tsd],
-        is_new_session: Optional[ArrayLike] = None,
-    ) -> jnp.ndarray | nap.TsdFrame:
-        """Compute filtering posterior probabilities over hidden states.
-
-        Computes the probability of being in each hidden state at each time point,
-        conditioned only on observations up to that time point. This method uses the
-        forward pass of the forward-backward algorithm, providing causal (online) state
-        estimates that only use past and current observations.
-
-        The filtering posteriors answer: "Given observations up to time t, what is the
-        probability that the system is in state k at time t?"
-
-        Parameters
-        ----------
-        X
-            Predictors, shape ``(n_time_points, n_features)``.
-        y
-            Observed neural activity, shape ``(n_time_points,)`` for single neuron or
-            ``(n_time_points, n_neurons)`` for population.
-
-        Returns
-        -------
-        posteriors
-            Filtering posterior probabilities, shape ``(n_time_points, n_states)``.
-            Each row sums to 1 and represents the probability distribution over states
-            at that time point conditioned on past observations.
-
-        Raises
-        ------
-        ValueError
-            If the model has not been fit (``fit()`` must be called first).
-        ValueError
-            If inputs contain NaN values in the middle of epochs (only boundary NaNs allowed).
-        ValueError
-            If X and y have inconsistent shapes or features.
-
-        See Also
-        --------
-        smooth_proba : Compute smoothing posteriors (conditioned on all observations).
-        decode_state : Compute most likely state sequence (Viterbi decoding).
-
-        Notes
-        -----
-        - Filtering provides causal state estimates suitable for online/real-time applications
-        - Smoothing provides better estimates but requires all data (non-causal)
-        - The algorithm properly handles session boundaries and NaN values at epoch borders
-        - NaN values are removed before inference, but session markers are preserved
-        - For pynapple inputs, the output TsdFrame has columns named "state_0", "state_1", etc.
-
-        Examples
-        --------
-        Fit a GLM-HMM and compute filtering posteriors:
-
-        >>> import numpy as np
-        >>> import nemos as nmo
-        >>> # Generate example data
-        >>> np.random.seed(123)
-        >>> X = np.random.randn(100, 5)  # 100 time points, 5 features
-        >>> y = np.random.poisson(2, size=100)  # Poisson spike counts
-        >>>
-        >>> # Fit model with 3 hidden states
-        >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson")
-        >>> model = model.fit(X, y)
-        >>>
-        >>> # Compute filtering posteriors (causal/online)
-        >>> filter_posteriors = model.filter_proba(X, y)
-        >>> print(filter_posteriors.shape)
-        (100, 3)
-        >>> # Each row sums to 1
-        >>> print(np.allclose(filter_posteriors.sum(axis=1), 1.0))
-        True
-
-        Using with pynapple for real-time state estimation:
-
-        >>> import pynapple as nap
-        >>> # Create time-indexed data
-        >>> t = np.arange(100) * 0.01  # 10ms bins
-        >>> X_tsd = nap.TsdFrame(t=t, d=X)
-        >>> y_tsd = nap.Tsd(t=t, d=y)
-        >>>
-        >>> # Filtering posteriors returned as TsdFrame
-        >>> filter_tsd = model.filter_proba(X_tsd, y_tsd)
-        >>> print(type(filter_tsd))
-        <class 'pynapple.core.time_series.TsdFrame'>
-        """
-        params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
-        return self._filter_proba(params, X, y, is_new_session)
-
-    @support_pynapple(conv_type="jax")
-    def _decode_state(
-        self,
-        params: HMMModelParamsT,
-        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
-        y: Union[NDArray, jnp.ndarray, nap.Tsd],
-        is_new_session: jnp.ndarray,
-        return_index: bool,
-    ) -> jnp.ndarray:
-        """Decode most likely state sequence without validation (internal method)."""
-        # filter for non-nans, grab data if needed
-        valid = tree_utils.get_valid_multitree(X, y)
-        data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
-
-        # safe conversion to jax arrays of float
-        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
-
-        # make sure is_new_session starts with a 1
-        is_new_session = is_new_session.at[0].set(True)
-
-        decoded_states = max_sum(
-            params,
-            data,
-            y,
-            is_new_session=is_new_session,
-            log_likelihood_func=self._log_likelihood,
-            return_index=return_index,
-        )
-
-        # reattach nans
-        decoded_states = (
-            jnp.full((valid.shape[0], *decoded_states.shape[1:]), jnp.nan)
-            .at[valid]
-            .set(decoded_states)
-        )
-        return decoded_states
-
-    def decode_state(
-        self,
-        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
-        y: ArrayLike,
-        is_new_session: Optional[ArrayLike] = None,
-        state_format: Literal["one-hot", "index"] = "one-hot",
-    ) -> jnp.ndarray | nap.TsdFrame:
-        """Compute the most likely hidden state sequence (Viterbi decoding).
-
-        Finds the single most likely sequence of hidden states that best explains
-        the observed data. This method uses the Viterbi (max-sum) algorithm to
-        compute the state sequence that maximizes the joint probability of states
-        and observations.
-
-        Unlike ``smooth_proba()`` and ``filter_proba()`` which return probability
-        distributions over states at each time point, this method makes a deterministic
-        choice of the single best state sequence.
-
-        The decoded states answer: "What is the most likely sequence of states that
-        generated the observed data?"
-
-        Parameters
-        ----------
-        X
-            Predictors, shape ``(n_time_points, n_features)``.
-        y
-            Observed neural activity, shape ``(n_time_points,)`` for single neuron or
-            ``(n_time_points, n_neurons)`` for population.
-        state_format
-            Format of the returned states:
-
-            - ``"one-hot"``: Binary matrix of shape ``(n_time_points, n_states)`` where
-              each row has a single 1 indicating the decoded state.
-            - ``"index"``: Integer array of shape ``(n_time_points,)`` with values
-              in ``[0, n_states-1]`` indicating the decoded state.
-
-        Returns
-        -------
-        decoded_states
-            Most likely state sequence:
-
-            - If ``state_format="one-hot"``: shape ``(n_time_points, n_states)``.
-              Each row is a one-hot vector with 1 in the position of the decoded state.
-            - If ``state_format="index"``: shape ``(n_time_points,)``.
-              Integer indices of the decoded states.
-
-        Raises
-        ------
-        ValueError
-            If the model has not been fit (``fit()`` must be called first).
-        ValueError
-            If inputs contain NaN values in the middle of epochs (only boundary NaNs allowed).
-        ValueError
-            If X and y have inconsistent shapes or features.
-
-        See Also
-        --------
-        smooth_proba : Compute smoothing posteriors (conditioned on all observations).
-        filter_proba : Compute filtering posteriors (conditioned on past observations only).
-
-        Notes
-        -----
-        - Viterbi decoding finds the globally optimal state sequence, not the sequence
-          of individually most likely states from ``smooth_proba()``
-        - This is a hard assignment (single best path) unlike probabilistic posteriors
-        - The algorithm properly handles session boundaries and NaN values at epoch borders
-        - Decoding is useful for segmenting continuous data into discrete behavioral states
-        - For uncertainty estimates about states, use ``smooth_proba()`` instead
-
-        Examples
-        --------
-        Fit a GLM-HMM and decode the most likely state sequence:
-
-        >>> import numpy as np
-        >>> import nemos as nmo
-        >>> # Generate example data
-        >>> np.random.seed(123)
-        >>> X = np.random.randn(100, 5)  # 100 time points, 5 features
-        >>> y = np.random.poisson(2, size=100)  # Poisson spike counts
-        >>>
-        >>> # Fit model with 3 hidden states
-        >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson")
-        >>> model = model.fit(X, y)
-        >>>
-        >>> # Decode states as one-hot encoding
-        >>> states_onehot = model.decode_state(X, y, state_format="one-hot")
-        >>> print(states_onehot.shape)
-        (100, 3)
-        >>> # Each row has exactly one 1
-        >>> print(np.all(states_onehot.sum(axis=1) == 1))
-        True
-        >>>
-        >>> # Decode states as integer indices
-        >>> states_idx = model.decode_state(X, y, state_format="index")
-        >>> print(states_idx.shape)
-        (100,)
-        >>> print(states_idx[:10])  # First 10 decoded states
-        [...]
-
-        Using with pynapple for time-series state decoding:
-
-        >>> import pynapple as nap
-        >>> # suppress jax to numpy conversion warning
-        >>> nap.nap_config.suppress_conversion_warnings = True
-        >>> # Create time-indexed data
-        >>> t = np.arange(100) * 0.01  # 10ms bins
-        >>> X_tsd = nap.TsdFrame(t=t, d=X)
-        >>> y_tsd = nap.Tsd(t=t, d=y)
-        >>>
-        >>> # Decoded states returned as TsdFrame or Tsd
-        >>> states_tsd = model.decode_state(X_tsd, y_tsd, state_format="one-hot")
-        >>> print(type(states_tsd))
-        <class 'pynapple.core.time_series.TsdFrame'>
-        >>> # With index format, returns Tsd
-        >>> states_idx_tsd = model.decode_state(X_tsd, y_tsd, state_format="index")
-        >>> print(type(states_idx_tsd))
-        <class 'pynapple.core.time_series.Tsd'>
-        """
-        params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
-        # validate state_format
-        _check_state_format(state_format)
-        # define the return type for the max-sum
-        return_index = False if state_format == "one-hot" else True
-        return self._decode_state(params, X, y, is_new_session, return_index)
-
     @abc.abstractmethod
     def _log_likelihood(self, params: HMMModelParamsT, X, y):
+        """Compute the log-likelihood of the data given the model parameters."""
         pass
 
-    @abc.abstractmethod
-    def fit(
-        self, X: Union[DESIGN_INPUT_TYPE, ArrayLike], y: ArrayLike
-    ) -> BaseHMM[HMMUserProvidedParamsT, HMMModelParamsT]:
-        pass
+    # def _score(
+    #     self,
+    #     params: HMMModelParamsT,
+    #     X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+    #     y: Union[NDArray, jnp.ndarray, nap.Tsd],
+    #     is_new_session: jnp.ndarray,
+    # ) -> jnp.ndarray:
+    #     """Private score compute."""
+    #     # filter for non-nans, grab data if needed
+    #     data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
+    #     # safe conversion to jax arrays of float
+    #     params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+
+    #     # make sure is_new_session starts with a 1
+    #     is_new_session = is_new_session.at[0].set(True)
+
+    #     # smooth with forward backward
+    #     _, log_norm = forward_pass(
+    #         params=params,
+    #         X=data,
+    #         y=y,
+    #         is_new_session=is_new_session,
+    #         # do we store this in the model during initialization?
+    #         log_likelihood_func=self._log_likelihood,
+    #     )
+    #     return jnp.sum(log_norm)
+
+    # def score(
+    #     self,
+    #     X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+    #     y: ArrayLike,
+    #     is_new_session: Optional[ArrayLike] = None,
+    #     score_type: Literal[
+    #         "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"
+    #     ] = "log-likelihood",
+    #     null_model: Optional[Literal["constant", "glm"]] = None,
+    # ) -> jnp.ndarray:
+    #     """Compute the model score."""
+    #     if score_type == "log-likelihood" and null_model is not None:
+    #         warnings.warn(
+    #             "The null model is not used for the log-likelihood computation.",
+    #             UserWarning,
+    #             stacklevel=2,
+    #         )
+    #     if score_type != "log-likelihood":
+    #         raise NotImplementedError(
+    #             f"score of type {score_type} not implemented yet!"
+    #         )
+    #     params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
+    #     return self._score(params, X, y, is_new_session)
+
+    # @support_pynapple(conv_type="jax")
+    # def _smooth_proba(
+    #     self,
+    #     params: HMMModelParamsT,
+    #     X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+    #     y: Union[NDArray, jnp.ndarray, nap.Tsd],
+    #     is_new_session: jnp.ndarray,
+    # ) -> jnp.ndarray:
+    #     # filter for non-nans, grab data if needed
+    #     valid = tree_utils.get_valid_multitree(X, y)
+    #     data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
+
+    #     # safe conversion to jax arrays of float
+    #     params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+
+    #     # make sure is_new_session starts with a 1
+    #     is_new_session = is_new_session.at[0].set(True)
+
+    #     # smooth with forward backward
+    #     log_posteriors, _, _, _, _, _ = forward_backward(
+    #         params=params,
+    #         X=data,
+    #         y=y,
+    #         is_new_session=is_new_session,
+    #         log_likelihood_func=self._log_likelihood,
+    #     )
+    #     proba = jnp.exp(log_posteriors)
+    #     # renormalize (numerical precision due to exponentiation)
+    #     proba /= proba.sum(axis=1, keepdims=True)
+    #     # re-attach nans
+    #     proba = jnp.full((valid.shape[0], proba.shape[1]), jnp.nan).at[valid].set(proba)
+    #     return proba
+
+    # def smooth_proba(
+    #     self,
+    #     X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+    #     y: Union[NDArray, jnp.ndarray, nap.Tsd],
+    #     is_new_session: Optional[ArrayLike] = None,
+    # ) -> jnp.ndarray | nap.TsdFrame:
+    #     """Compute smoothing posterior probabilities over hidden states.
+
+    #     Computes the probability of being in each hidden state at each time point,
+    #     conditioned on the entire observed sequence. This method uses the forward-backward
+    #     algorithm to incorporate information from both past and future observations,
+    #     providing optimal state estimates given all available data.
+
+    #     The smoothing posteriors answer: "Given all observations, what is the probability
+    #     that the system was in state k at time t?"
+
+    #     Parameters
+    #     ----------
+    #     X
+    #         Predictors, shape ``(n_time_points, n_features)``.
+    #     y
+    #         Observed neural activity, shape ``(n_time_points,)`` for single neuron or
+    #         ``(n_time_points, n_neurons)`` for population.
+
+    #     Returns
+    #     -------
+    #     posteriors
+    #         Smoothing posterior probabilities, shape ``(n_time_points, n_states)``.
+    #         Each row sums to 1 and represents the probability distribution over states
+    #         at that time point.
+
+    #     Raises
+    #     ------
+    #     ValueError
+    #         If the model has not been fit (``fit()`` must be called first).
+    #     ValueError
+    #         If inputs contain NaN values in the middle of epochs (only boundary NaNs allowed).
+    #     ValueError
+    #         If X and y have inconsistent shapes or features.
+
+    #     See Also
+    #     --------
+    #     filter_proba : Compute filtering posteriors (conditioned on past observations only).
+    #     decode_state : Compute most likely state sequence (Viterbi decoding).
+
+    #     Notes
+    #     -----
+    #     - Smoothing provides better state estimates than filtering because it uses all data
+    #     - The algorithm properly handles session boundaries and NaN values at epoch borders
+
+    #     Examples
+    #     --------
+    #     Fit a GLM-HMM and compute smoothing posteriors:
+
+    #     >>> import numpy as np
+    #     >>> import nemos as nmo
+    #     >>> # Generate example data
+    #     >>> np.random.seed(123)
+    #     >>> X = np.random.randn(100, 5)  # 100 time points, 5 features
+    #     >>> y = np.random.poisson(2, size=100)  # Poisson spike counts
+    #     >>>
+    #     >>> # Fit model with 3 hidden states
+    #     >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson")
+    #     >>> model = model.fit(X, y)
+    #     >>> # Compute smoothing posteriors
+    #     >>> posteriors = model.smooth_proba(X, y)
+    #     >>> print(posteriors.shape)
+    #     (100, 3)
+    #     >>> # Each row sums to 1
+    #     >>> print(np.allclose(posteriors.sum(axis=1), 1.0))
+    #     True
+
+    #     Using with pynapple for time-series analysis:
+
+    #     >>> import pynapple as nap
+    #     >>> # Create time-indexed data
+    #     >>> t = np.arange(100) * 0.01  # 10ms bins
+    #     >>> X_tsd = nap.TsdFrame(t=t, d=X)
+    #     >>> y_tsd = nap.Tsd(t=t, d=y)
+    #     >>>
+    #     >>> # Posteriors returned as TsdFrame
+    #     >>> posteriors_tsd = model.smooth_proba(X_tsd, y_tsd)
+    #     >>> print(type(posteriors_tsd))
+    #     <class 'pynapple.core.time_series.TsdFrame'>
+    #     """
+    #     params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
+    #     return self._smooth_proba(params, X, y, is_new_session)
+
+    # @support_pynapple(conv_type="jax")
+    # def _filter_proba(
+    #     self,
+    #     params: HMMModelParamsT,
+    #     X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+    #     y: Union[NDArray, jnp.ndarray, nap.Tsd],
+    #     is_new_session: jnp.ndarray,
+    # ) -> jnp.ndarray:
+    #     """Compute filtering probabilities without validation (internal method)."""
+    #     # filter for non-nans, grab data if needed
+    #     valid = tree_utils.get_valid_multitree(X, y)
+    #     data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
+
+    #     # safe conversion to jax arrays of float
+    #     params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+
+    #     # make sure is_new_session starts with a 1
+    #     is_new_session = is_new_session.at[0].set(True)
+    #     log_proba, _ = forward_pass(
+    #         params,
+    #         data,
+    #         y,
+    #         is_new_session=is_new_session,
+    #         log_likelihood_func=self._log_likelihood,
+    #     )
+    #     proba = jnp.exp(log_proba)
+    #     # renormalize (numerical errors due to exponentiating)
+    #     proba /= proba.sum(axis=1, keepdims=True)
+    #     # re-attach nans
+    #     proba = jnp.full((valid.shape[0], proba.shape[1]), jnp.nan).at[valid].set(proba)
+    #     return proba
+
+    # def filter_proba(
+    #     self,
+    #     X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+    #     y: Union[NDArray, jnp.ndarray, nap.Tsd],
+    #     is_new_session: Optional[ArrayLike] = None,
+    # ) -> jnp.ndarray | nap.TsdFrame:
+    #     """Compute filtering posterior probabilities over hidden states.
+
+    #     Computes the probability of being in each hidden state at each time point,
+    #     conditioned only on observations up to that time point. This method uses the
+    #     forward pass of the forward-backward algorithm, providing causal (online) state
+    #     estimates that only use past and current observations.
+
+    #     The filtering posteriors answer: "Given observations up to time t, what is the
+    #     probability that the system is in state k at time t?"
+
+    #     Parameters
+    #     ----------
+    #     X
+    #         Predictors, shape ``(n_time_points, n_features)``.
+    #     y
+    #         Observed neural activity, shape ``(n_time_points,)`` for single neuron or
+    #         ``(n_time_points, n_neurons)`` for population.
+
+    #     Returns
+    #     -------
+    #     posteriors
+    #         Filtering posterior probabilities, shape ``(n_time_points, n_states)``.
+    #         Each row sums to 1 and represents the probability distribution over states
+    #         at that time point conditioned on past observations.
+
+    #     Raises
+    #     ------
+    #     ValueError
+    #         If the model has not been fit (``fit()`` must be called first).
+    #     ValueError
+    #         If inputs contain NaN values in the middle of epochs (only boundary NaNs allowed).
+    #     ValueError
+    #         If X and y have inconsistent shapes or features.
+
+    #     See Also
+    #     --------
+    #     smooth_proba : Compute smoothing posteriors (conditioned on all observations).
+    #     decode_state : Compute most likely state sequence (Viterbi decoding).
+
+    #     Notes
+    #     -----
+    #     - Filtering provides causal state estimates suitable for online/real-time applications
+    #     - Smoothing provides better estimates but requires all data (non-causal)
+    #     - The algorithm properly handles session boundaries and NaN values at epoch borders
+    #     - NaN values are removed before inference, but session markers are preserved
+    #     - For pynapple inputs, the output TsdFrame has columns named "state_0", "state_1", etc.
+
+    #     Examples
+    #     --------
+    #     Fit a GLM-HMM and compute filtering posteriors:
+
+    #     >>> import numpy as np
+    #     >>> import nemos as nmo
+    #     >>> # Generate example data
+    #     >>> np.random.seed(123)
+    #     >>> X = np.random.randn(100, 5)  # 100 time points, 5 features
+    #     >>> y = np.random.poisson(2, size=100)  # Poisson spike counts
+    #     >>>
+    #     >>> # Fit model with 3 hidden states
+    #     >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson")
+    #     >>> model = model.fit(X, y)
+    #     >>>
+    #     >>> # Compute filtering posteriors (causal/online)
+    #     >>> filter_posteriors = model.filter_proba(X, y)
+    #     >>> print(filter_posteriors.shape)
+    #     (100, 3)
+    #     >>> # Each row sums to 1
+    #     >>> print(np.allclose(filter_posteriors.sum(axis=1), 1.0))
+    #     True
+
+    #     Using with pynapple for real-time state estimation:
+
+    #     >>> import pynapple as nap
+    #     >>> # Create time-indexed data
+    #     >>> t = np.arange(100) * 0.01  # 10ms bins
+    #     >>> X_tsd = nap.TsdFrame(t=t, d=X)
+    #     >>> y_tsd = nap.Tsd(t=t, d=y)
+    #     >>>
+    #     >>> # Filtering posteriors returned as TsdFrame
+    #     >>> filter_tsd = model.filter_proba(X_tsd, y_tsd)
+    #     >>> print(type(filter_tsd))
+    #     <class 'pynapple.core.time_series.TsdFrame'>
+    #     """
+    #     params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
+    #     return self._filter_proba(params, X, y, is_new_session)
+
+    # @support_pynapple(conv_type="jax")
+    # def _decode_state(
+    #     self,
+    #     params: HMMModelParamsT,
+    #     X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+    #     y: Union[NDArray, jnp.ndarray, nap.Tsd],
+    #     is_new_session: jnp.ndarray,
+    #     return_index: bool,
+    # ) -> jnp.ndarray:
+    #     """Decode most likely state sequence without validation (internal method)."""
+    #     # filter for non-nans, grab data if needed
+    #     valid = tree_utils.get_valid_multitree(X, y)
+    #     data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
+
+    #     # safe conversion to jax arrays of float
+    #     params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+
+    #     # make sure is_new_session starts with a 1
+    #     is_new_session = is_new_session.at[0].set(True)
+
+    #     decoded_states = max_sum(
+    #         params,
+    #         data,
+    #         y,
+    #         is_new_session=is_new_session,
+    #         log_likelihood_func=self._log_likelihood,
+    #         return_index=return_index,
+    #     )
+
+    #     # reattach nans
+    #     decoded_states = (
+    #         jnp.full((valid.shape[0], *decoded_states.shape[1:]), jnp.nan)
+    #         .at[valid]
+    #         .set(decoded_states)
+    #     )
+    #     return decoded_states
+
+    # def decode_state(
+    #     self,
+    #     X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+    #     y: ArrayLike,
+    #     is_new_session: Optional[ArrayLike] = None,
+    #     state_format: Literal["one-hot", "index"] = "one-hot",
+    # ) -> jnp.ndarray | nap.TsdFrame:
+    #     """Compute the most likely hidden state sequence (Viterbi decoding).
+
+    #     Finds the single most likely sequence of hidden states that best explains
+    #     the observed data. This method uses the Viterbi (max-sum) algorithm to
+    #     compute the state sequence that maximizes the joint probability of states
+    #     and observations.
+
+    #     Unlike ``smooth_proba()`` and ``filter_proba()`` which return probability
+    #     distributions over states at each time point, this method makes a deterministic
+    #     choice of the single best state sequence.
+
+    #     The decoded states answer: "What is the most likely sequence of states that
+    #     generated the observed data?"
+
+    #     Parameters
+    #     ----------
+    #     X
+    #         Predictors, shape ``(n_time_points, n_features)``.
+    #     y
+    #         Observed neural activity, shape ``(n_time_points,)`` for single neuron or
+    #         ``(n_time_points, n_neurons)`` for population.
+    #     state_format
+    #         Format of the returned states:
+
+    #         - ``"one-hot"``: Binary matrix of shape ``(n_time_points, n_states)`` where
+    #           each row has a single 1 indicating the decoded state.
+    #         - ``"index"``: Integer array of shape ``(n_time_points,)`` with values
+    #           in ``[0, n_states-1]`` indicating the decoded state.
+
+    #     Returns
+    #     -------
+    #     decoded_states
+    #         Most likely state sequence:
+
+    #         - If ``state_format="one-hot"``: shape ``(n_time_points, n_states)``.
+    #           Each row is a one-hot vector with 1 in the position of the decoded state.
+    #         - If ``state_format="index"``: shape ``(n_time_points,)``.
+    #           Integer indices of the decoded states.
+
+    #     Raises
+    #     ------
+    #     ValueError
+    #         If the model has not been fit (``fit()`` must be called first).
+    #     ValueError
+    #         If inputs contain NaN values in the middle of epochs (only boundary NaNs allowed).
+    #     ValueError
+    #         If X and y have inconsistent shapes or features.
+
+    #     See Also
+    #     --------
+    #     smooth_proba : Compute smoothing posteriors (conditioned on all observations).
+    #     filter_proba : Compute filtering posteriors (conditioned on past observations only).
+
+    #     Notes
+    #     -----
+    #     - Viterbi decoding finds the globally optimal state sequence, not the sequence
+    #       of individually most likely states from ``smooth_proba()``
+    #     - This is a hard assignment (single best path) unlike probabilistic posteriors
+    #     - The algorithm properly handles session boundaries and NaN values at epoch borders
+    #     - Decoding is useful for segmenting continuous data into discrete behavioral states
+    #     - For uncertainty estimates about states, use ``smooth_proba()`` instead
+
+    #     Examples
+    #     --------
+    #     Fit a GLM-HMM and decode the most likely state sequence:
+
+    #     >>> import numpy as np
+    #     >>> import nemos as nmo
+    #     >>> # Generate example data
+    #     >>> np.random.seed(123)
+    #     >>> X = np.random.randn(100, 5)  # 100 time points, 5 features
+    #     >>> y = np.random.poisson(2, size=100)  # Poisson spike counts
+    #     >>>
+    #     >>> # Fit model with 3 hidden states
+    #     >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson")
+    #     >>> model = model.fit(X, y)
+    #     >>>
+    #     >>> # Decode states as one-hot encoding
+    #     >>> states_onehot = model.decode_state(X, y, state_format="one-hot")
+    #     >>> print(states_onehot.shape)
+    #     (100, 3)
+    #     >>> # Each row has exactly one 1
+    #     >>> print(np.all(states_onehot.sum(axis=1) == 1))
+    #     True
+    #     >>>
+    #     >>> # Decode states as integer indices
+    #     >>> states_idx = model.decode_state(X, y, state_format="index")
+    #     >>> print(states_idx.shape)
+    #     (100,)
+    #     >>> print(states_idx[:10])  # First 10 decoded states
+    #     [...]
+
+    #     Using with pynapple for time-series state decoding:
+
+    #     >>> import pynapple as nap
+    #     >>> # suppress jax to numpy conversion warning
+    #     >>> nap.nap_config.suppress_conversion_warnings = True
+    #     >>> # Create time-indexed data
+    #     >>> t = np.arange(100) * 0.01  # 10ms bins
+    #     >>> X_tsd = nap.TsdFrame(t=t, d=X)
+    #     >>> y_tsd = nap.Tsd(t=t, d=y)
+    #     >>>
+    #     >>> # Decoded states returned as TsdFrame or Tsd
+    #     >>> states_tsd = model.decode_state(X_tsd, y_tsd, state_format="one-hot")
+    #     >>> print(type(states_tsd))
+    #     <class 'pynapple.core.time_series.TsdFrame'>
+    #     >>> # With index format, returns Tsd
+    #     >>> states_idx_tsd = model.decode_state(X_tsd, y_tsd, state_format="index")
+    #     >>> print(type(states_idx_tsd))
+    #     <class 'pynapple.core.time_series.Tsd'>
+    #     """
+    #     params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
+    #     # validate state_format
+    #     _check_state_format(state_format)
+    #     # define the return type for the max-sum
+    #     return_index = False if state_format == "one-hot" else True
+    #     return self._decode_state(params, X, y, is_new_session, return_index)
