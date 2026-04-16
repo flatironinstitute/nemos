@@ -6,13 +6,14 @@ from typing import Any, Callable, Literal, Optional, Protocol, Tuple
 import jax
 import jax.numpy as jnp
 from numpy.typing import NDArray
-from sklearn.cluster import KMeans
+import lazy_loader as lazy
 
 from ..type_casting import is_numpy_array_like
 from ..typing import DESIGN_INPUT_TYPE
 from ..validation import _suggest_keys
 from .utils import initialize_new_session
 
+sklearn = lazy.load("sklearn")
 
 class InitFunctionHMM(Protocol):
     """Protocol for HMM probability initialization functions (initial and transition)."""
@@ -53,7 +54,7 @@ INITIALIZATION_FN_DICT = dict[
         "transition_proba_init_kwargs",
         "transition_proba_init_custom",
     ],
-    InitFunctionHMM | dict[str, Any] | bool | InitFunctionHMM | dict[str, Any] | bool,
+    InitFunctionHMM | dict[str, Any] | bool,
 ]
 
 
@@ -325,13 +326,13 @@ class KMeansInitializer:
         random_key: int | jax.Array = 0,
     ):
         if isinstance(random_key, jax.Array):
-            random_key = int(random_key[-1])
+            random_key = int(jax.random.randint(random_key, (), 0, 2**31 - 1))                                                                  
 
         self.n_states = n_states
         self.minimum_prob = minimum_prob
         self.random_key = random_key
         self.is_new_session = initialize_new_session(y.shape[0], is_new_session)
-        self.model = KMeans(n_clusters=n_states, random_state=random_key)
+        self.model = sklearn.cluster.KMeans(n_clusters=n_states, random_state=random_key)
         # concatenate pytree leaves if applicable and append y
         data = jnp.concatenate(
             jax.tree_util.tree_leaves(X) + [y if y.ndim > 1 else y[:, None]], axis=-1
@@ -738,7 +739,7 @@ def generate_hmm_initial_params(
     X: DESIGN_INPUT_TYPE,
     y: NDArray | jnp.ndarray,
     random_key: int | jax.Array = 123,
-    init_funcs: dict = {},
+    init_funcs: Optional[dict] = None,
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """
     Generate initial HMM parameters using the provided initialization functions.
@@ -775,6 +776,7 @@ def generate_hmm_initial_params(
         Function to set up the initialization functions and their kwargs based on user input.
     """
     # check for unexpected/unknown keys in init_funcs if user provided dictionary not made by setup_hmm_initialization
+    init_funcs = {} if init_funcs is None else init_funcs
     init_funcs = _validate_init_funcs_keys(init_funcs)
 
     if isinstance(random_key, int):

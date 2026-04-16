@@ -91,7 +91,7 @@ class TestInitialProbaInitialization:
 
     @pytest.mark.parametrize("method_subset", [[random_initial_proba_init]])
     def test_non_deterministic(self, method, method_subset, use_method_for_test):
-        """Test that output is deterministic (same across different calls)."""
+        """Test that output is non-deterministic (different across different calls)."""
         n_states = 3
 
         initial_prob1 = method(n_states, random_key=jax.random.PRNGKey(124))
