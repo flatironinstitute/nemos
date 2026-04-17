@@ -22,6 +22,7 @@ from nemos.hmm.initialize_parameters import (
     uniform_transition_proba_init,
 )
 from nemos.hmm.params import HMMParams
+from nemos.hmm.utils import initialize_is_new_session
 from nemos.hmm.validation import HMMValidator, from_hmm_params, to_hmm_params
 from nemos.params import ModelParams
 
@@ -63,13 +64,15 @@ class MockHMMValidator(HMMValidator[MockHMMUserParams, MockHMMParams]):
     to_model_params: Callable[[MockHMMUserParams], MockHMMParams] = to_mock_params
     from_model_params: Callable[[MockHMMParams], MockHMMUserParams] = from_mock_params
     model_class: str = "MockHMM"
+    X_dimensionality: int = 2
+    y_dimensionality: int = 1
     params_validation_sequence: Tuple[Tuple[str, None] | Tuple[str, dict[str, Any]]] = (
         *RegressorValidator.params_validation_sequence[:2],
         *HMMValidator.params_validation_sequence,
         *RegressorValidator.params_validation_sequence[3:],
     )
 
-    def validate_consistency(self, params: MockHMMParams) -> None:
+    def validate_consistency(self, *args, **kwargs) -> None:
         return True
 
 
@@ -122,15 +125,16 @@ class MockHMM(BaseHMM[MockHMMParams, MockHMMUserParams]):
         )
 
     def _check_model_is_fit(self):
-        BaseHMM._check_is_fit(self)
         if self.param_ is None:
             raise ValueError("Model is not fitted yet.")
 
     def _get_model_params(self) -> MockHMMParams:
         return self._validator.to_model_params(
-            self.param_,
-            self.log_initial_prob_,
-            self.log_transition_prob_,
+            (
+                self.param_,
+                self.initial_prob_,
+                self.transition_prob_,
+            )
         )
 
     def _set_model_params(self, params):
@@ -139,17 +143,19 @@ class MockHMM(BaseHMM[MockHMMParams, MockHMMUserParams]):
         self.initial_prob_ = initial_prob
         self.transition_prob_ = transition_prob
 
-    def _log_likelihood(self, params, X, y):
-        pass
+    def _log_likelihood(self, X, y, params):
+        return jnp.zeros((y.shape[0], self.n_states))
 
     def _model_params_initialization(self, X, y, is_new_session):
         return (
-            jnp.zeros(self._n_states),
+            jnp.arange(self._n_states),
             False,
         )
 
     def fit(self, X, y, is_new_session=None, init_params=None):
-        pass
+        is_new_session = initialize_is_new_session(X, y, is_new_session)
+        fit_params = self._model_specific_initialization(X, y, is_new_session)
+        self._set_model_params(fit_params)
 
     def _initialize_optimizer_and_state(self, *args, **kwargs):
         pass
@@ -1085,3 +1091,408 @@ class TestHMMNewSession:
             is_new_session = model._validator.validate_and_cast_is_new_session(
                 X, y, is_new_session
             )
+
+
+class TestHMMInference:
+    """Test suite for inference methods (smooth_proba, filter_proba, decode_state)."""
+
+    @staticmethod
+    def _get_expected_shape(method_name, kwargs, n_samples, n_states):
+        """Helper to compute expected output shape based on method and kwargs."""
+        if method_name in ["smooth_proba", "filter_proba"]:
+            return (n_samples, n_states)
+        elif method_name == "decode_state":
+            if kwargs.get("state_format") == "index":
+                return (n_samples,)
+            else:  # one-hot (default)
+                return (n_samples, n_states)
+        else:
+            raise ValueError(f"Unknown method: {method_name}")
+
+    @pytest.mark.parametrize(
+        "drop_attr",
+        ["initial_prob_", "transition_prob_"],
+    )
+    @pytest.mark.parametrize(
+        "method_config",
+        [
+            pytest.param(("smooth_proba", {}), id="smooth_proba"),
+            pytest.param(("filter_proba", {}), id="filter_proba"),
+            pytest.param(("decode_state", {}), id="decode_state-onehot"),
+            pytest.param(
+                ("decode_state", {"state_format": "index"}), id="decode_state-index"
+            ),
+        ],
+    )
+    def test_not_fitted_raises_error(self, drop_attr, method_config):
+        """Test that inference methods raise an error when model is not fitted."""
+        method_name, kwargs = method_config
+        model = MockHMM(n_states=3)
+        model.fit(np.random.rand(10, 2), np.random.rand(10))
+        setattr(model, drop_attr, None)
+        with pytest.raises(
+            ValueError,
+            match=rf"This MockHMM instance is not fitted yet. .+ \['{drop_attr}'\]",
+        ):
+            getattr(model, method_name)(None, None, **kwargs)
+
+    @pytest.mark.parametrize(
+        "method_config",
+        [
+            pytest.param(("smooth_proba", {}), id="smooth_proba"),
+            pytest.param(("filter_proba", {}), id="filter_proba"),
+            pytest.param(("decode_state", {}), id="decode_state-onehot"),
+            pytest.param(
+                ("decode_state", {"state_format": "index"}), id="decode_state-index"
+            ),
+        ],
+    )
+    def test_returns_correct_shape(self, method_config):
+        """Test that inference methods return arrays with correct shapes."""
+        method_name, kwargs = method_config
+        model = MockHMM(n_states=3)
+
+        # Get output
+        X = np.random.rand(10, 2)
+        y = np.random.rand(10)
+        model.fit(X, y)
+        out = getattr(model, method_name)(X, y, **kwargs)
+
+        # Check shape
+        n_samples = (~np.isnan(np.sum(y, axis=tuple(range(1, y.ndim))))).sum()
+        n_states = model.n_states
+        expected_shape = self._get_expected_shape(
+            method_name, kwargs, n_samples, n_states
+        )
+        assert (
+            out.shape == expected_shape
+        ), f"Expected shape {expected_shape}, got {out.shape}"
+
+    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba"])
+    def test_posterior_proba_returns_valid_probabilities(self, method_name):
+        """Test that smooth_proba returns valid probabilities (between 0 and 1, summing to 1)."""
+        model = MockHMM(n_states=3)
+        X = np.random.rand(10, 2)
+        y = np.random.rand(10)
+        model.fit(X, y)
+
+        # Get posteriors
+        posteriors = getattr(model, method_name)(X, y)
+
+        # Check all values are between 0 and 1
+        assert jnp.all(posteriors >= 0), "Some posteriors are negative"
+        assert jnp.all(posteriors <= 1), "Some posteriors are greater than 1"
+
+        # Check sum across states
+        row_sums = jnp.sum(posteriors, axis=1)
+        assert jnp.allclose(
+            row_sums, 1.0, rtol=1e-5
+        ), f"Probabilities don't sum to 1. Min: {row_sums.min()}, Max: {row_sums.max()}"
+
+    @pytest.mark.parametrize(
+        "method_config",
+        [
+            pytest.param(("smooth_proba", {}), id="smooth_proba"),
+            pytest.param(("filter_proba", {}), id="filter_proba"),
+            pytest.param(("decode_state", {}), id="decode_state-onehot"),
+            pytest.param(
+                ("decode_state", {"state_format": "index"}), id="decode_state-index"
+            ),
+        ],
+    )
+    def test_with_arrays(self, method_config):
+        """Test inference methods with numpy/jax arrays return jax array."""
+        method_name, kwargs = method_config
+        model = MockHMM(n_states=3)
+        X = np.random.rand(10, 2)
+        y = np.random.rand(10)
+        model.fit(X, y)
+
+        # Test with numpy array
+        out = getattr(model, method_name)(X, y, **kwargs)
+        assert isinstance(out, jnp.ndarray), f"Expected jnp.ndarray, got {type(out)}"
+
+    @pytest.mark.parametrize("input_type", ["X", "y", "both"])
+    @pytest.mark.parametrize(
+        "method_config",
+        [
+            pytest.param(("smooth_proba", {}), id="smooth_proba"),
+            pytest.param(("filter_proba", {}), id="filter_proba"),
+            pytest.param(("decode_state", {}), id="decode_state-onehot"),
+            pytest.param(
+                ("decode_state", {"state_format": "index"}), id="decode_state-index"
+            ),
+        ],
+    )
+    def test_with_pynapple_returns_tsdframe(self, input_type, method_config):
+        """Test that inference methods return TsdFrame/Tsd when input is pynapple."""
+        method_name, kwargs = method_config
+        model = MockHMM(n_states=3)
+        X = np.random.rand(10, 2)
+        y = np.random.rand(10)
+        model.fit(X, y)
+
+        # Convert to pynapple
+        n_samples = X.shape[0]
+        time = np.linspace(0, n_samples / 100, n_samples)
+
+        if input_type in ["X", "both"]:
+            X = nap.TsdFrame(t=time, d=X)
+        if input_type in ["y", "both"]:
+            y = nap.Tsd(t=time, d=y)
+
+        # Get output
+        out = getattr(model, method_name)(X, y, **kwargs)
+
+        # Check return type - decode_state with index format returns Tsd, others return TsdFrame
+        if method_name == "decode_state" and kwargs.get("state_format") == "index":
+            assert isinstance(out, nap.Tsd), f"Expected nap.Tsd, got {type(out)}"
+            assert out.shape == (n_samples,)
+        else:
+            assert isinstance(
+                out, nap.TsdFrame
+            ), f"Expected nap.TsdFrame, got {type(out)}"
+            assert out.shape == (n_samples, model.n_states)
+        assert jnp.allclose(out.t, time)
+
+    @pytest.mark.parametrize(
+        "method_config",
+        [
+            pytest.param(("smooth_proba", {}), id="smooth_proba"),
+            pytest.param(("filter_proba", {}), id="filter_proba"),
+            pytest.param(("decode_state", {}), id="decode_state-onehot"),
+            pytest.param(
+                ("decode_state", {"state_format": "index"}), id="decode_state-index"
+            ),
+        ],
+    )
+    def test_with_multiple_sessions(self, method_config):
+        """Test inference methods with multiple sessions (pynapple epochs)."""
+        method_name, kwargs = method_config
+        model = MockHMM(n_states=3)
+        X = np.random.rand(10, 2)
+        y = np.random.rand(10)
+        model.fit(X, y)
+
+        # Create multi-session data
+        n_samples = X.shape[0]
+        session_1_end = n_samples // 2
+
+        time = np.linspace(0, n_samples / 100, n_samples)
+        epochs = nap.IntervalSet(
+            start=[time[0], time[session_1_end]],
+            end=[time[session_1_end - 1], time[-1]],
+        )
+
+        X_tsd = nap.TsdFrame(t=time, d=X, time_support=epochs)
+        y_tsd = nap.Tsd(t=time, d=y, time_support=epochs)
+
+        # Get output
+        out = getattr(model, method_name)(X_tsd, y_tsd, **kwargs)
+
+        # Check shape and type
+        if method_name == "decode_state" and kwargs.get("state_format") == "index":
+            assert isinstance(out, nap.Tsd)
+            assert out.shape == (n_samples,)
+        else:
+            assert isinstance(out, nap.TsdFrame)
+            assert out.shape == (n_samples, model.n_states)
+
+        # Check probabilities are valid for proba methods
+        if method_name in ["smooth_proba", "filter_proba"]:
+            assert jnp.all(out.values >= 0)
+            assert jnp.all(out.values <= 1)
+            row_sums = jnp.sum(out.values, axis=1)
+            assert jnp.allclose(row_sums, 1.0, rtol=1e-5)
+
+    @pytest.mark.parametrize(
+        "method_config",
+        [
+            pytest.param(("smooth_proba", {}), id="smooth_proba"),
+            pytest.param(("filter_proba", {}), id="filter_proba"),
+            pytest.param(("decode_state", {}), id="decode_state-onehot"),
+            pytest.param(
+                ("decode_state", {"state_format": "index"}), id="decode_state-index"
+            ),
+        ],
+    )
+    def test_consistency_across_calls(self, method_config):
+        """Test that inference methods return consistent results across multiple calls."""
+        method_name, kwargs = method_config
+        model = MockHMM(n_states=3)
+        X = np.random.rand(10, 2)
+        y = np.random.rand(10)
+        model.fit(X, y)
+
+        # Get output twice
+        out_1 = getattr(model, method_name)(X, y, **kwargs)
+        out_2 = getattr(model, method_name)(X, y, **kwargs)
+
+        # Check consistency
+        assert jnp.allclose(
+            out_1, out_2
+        ), f"{method_name} returns different results on consecutive calls"
+
+    @pytest.mark.parametrize(
+        "method_name", ["smooth_proba", "filter_proba", "decode_state"]
+    )
+    def test_single_sample(self, method_name):
+        """Test smooth_proba with a single sample."""
+        model = MockHMM(n_states=3)
+        X = np.random.rand(1, 2)
+        y = np.random.rand(1)
+        model.fit(X, y)
+
+        # Get posteriors for single sample
+        out = getattr(model, method_name)(X, y)
+
+        # Check shape
+        assert out.shape == (1, model.n_states)
+
+        if method_name != "decode_state":
+            # Check probabilities are valid
+            assert jnp.all(out >= 0)
+            assert jnp.all(out <= 1)
+            assert jnp.allclose(jnp.sum(out), 1.0, rtol=1e-5)
+
+    @pytest.mark.parametrize(
+        "method_name", ["smooth_proba", "filter_proba", "decode_state"]
+    )
+    def test_with_nans_filtered(self, method_name):
+        """Test that smooth_proba handles NaNs properly by filtering them."""
+        model = MockHMM(n_states=3)
+        X = np.random.rand(10, 2)
+        y = np.random.rand(10)
+        model.fit(X, y)
+
+        # Create data with NaNs
+        X_with_nan = X.copy()
+        y_with_nan = y.copy()
+
+        # Add NaNs at specific indices
+        nan_indices = [0, 1, 2]
+        X_with_nan[nan_indices] = np.nan
+
+        # This should work - NaNs get filtered internally
+        posteriors = getattr(model, method_name)(X_with_nan, y_with_nan)
+
+        # Check that we get valid output (NaN rows filtered)
+        assert posteriors.shape[1] == model.n_states
+        # After filtering NaNs, shape[0] should be reduced
+        assert posteriors.shape[0] == X.shape[0]
+
+    @pytest.mark.parametrize(
+        "method_name", ["smooth_proba", "filter_proba", "decode_state"]
+    )
+    @pytest.mark.parametrize("nan_location", [[], [0, 1, 10, 11, 12]])
+    def test_pynapple_in_pynapple_out_X(self, method_name, nan_location):
+        model = MockHMM(n_states=3)
+        X = np.random.rand(100, 2)
+        y = np.random.rand(100)
+        model.fit(X, y)
+        X[nan_location] = np.nan
+        ep = nap.IntervalSet([0, 10], [9, 500])
+        X = nap.TsdFrame(t=np.arange(X.shape[0]), d=X, time_support=ep)
+        out = getattr(model, method_name)(X, y)
+        assert isinstance(out, nap.TsdFrame), "Did not return pynapple!"
+        assert np.all(
+            np.isnan(out[nan_location])
+        ), "Not returning NaNs in the expected location!"
+
+    @pytest.mark.parametrize(
+        "method_name", ["smooth_proba", "filter_proba", "decode_state"]
+    )
+    @pytest.mark.parametrize("nan_location", [[], [0, 1, 10, 11, 12]])
+    def test_pynapple_in_pynapple_out_y(self, method_name, nan_location):
+        model = MockHMM(n_states=3)
+        X = np.random.rand(100, 2)
+        y = np.random.rand(100)
+        model.fit(X, y)
+        y[nan_location] = np.nan
+        ep = nap.IntervalSet([0, 10], [9, 500])
+        y = nap.Tsd(t=np.arange(y.shape[0]), d=y, time_support=ep)
+        posteriors = getattr(model, method_name)(X, y)
+        assert isinstance(posteriors, nap.TsdFrame), "Did not return pynapple!"
+        assert np.all(
+            np.isnan(posteriors[nan_location])
+        ), "Not returning NaNs in the expected location!"
+
+    @pytest.mark.parametrize(
+        "method_name", ["smooth_proba", "filter_proba", "decode_state"]
+    )
+    def test_int_vs_float_y(self, method_name):
+        """Test that integer and float y with same values give same posteriors.
+
+        This is a regression test for a bug where y.dtype was used to cast params
+        before preprocessing, causing integer y to round float params to integers.
+        """
+        model = MockHMM(n_states=3)
+        X = np.random.rand(100, 2)
+        y = np.random.rand(100)
+        model.fit(X, y)
+        y = np.round(y)
+        y_float = y.astype(float)
+        y_int = y.astype(int)
+
+        # Get posteriors with float y
+        out_float = getattr(model, method_name)(X, y_float)
+
+        # Get posteriors with int y (same values)
+        out_int = getattr(model, method_name)(X, y_int)
+
+        # Posteriors should be identical regardless of y dtype
+        np.testing.assert_allclose(
+            out_float,
+            out_int,
+            rtol=1e-10,
+            err_msg=f"{method_name} gives different results for int vs float y with same values",
+        )
+
+    def test_onehot_vs_index_decode(self):
+        model = MockHMM(n_states=3)
+        X = np.random.rand(100, 2)
+        y = np.random.rand(100)
+        model.fit(X, y)
+        out_onehot = model.decode_state(X, y, state_format="one-hot")
+        out_index = model.decode_state(X, y, state_format="index")
+        assert jnp.all(
+            jnp.where(out_onehot == 1)[1] == out_index
+        ), "index and one-hot do not match!"
+        assert jnp.all(
+            out_onehot.sum(axis=1) == 1
+        ), "more than one hot value in one-hot array!"
+
+    def test_decode_state_invalid_state_format(self):
+        """Test that decode_state raises ValueError for invalid state_format."""
+        model = MockHMM(n_states=3)
+        X = np.random.rand(100, 2)
+        y = np.random.rand(100)
+        model.fit(X, y)
+        with pytest.raises(ValueError, match="Invalid state_format"):
+            model.decode_state(X, y, state_format="invalid")
+
+    @pytest.mark.parametrize("n_states", [2, 3, 5])
+    @pytest.mark.parametrize(
+        "method_name", ["smooth_proba", "filter_proba", "decode_state"]
+    )
+    def test_different_n_states(self, n_states, method_name):
+        """Test smooth_proba with different numbers of states."""
+        model = MockHMM(n_states=n_states)
+        n_samples, n_features = 100, 2
+        X = np.random.rand(n_samples, n_features)
+        y = np.random.rand(n_samples)
+        model.fit(X, y)
+
+        out = getattr(model, method_name)(X, y)
+
+        # Check shape
+        assert out.shape == (
+            n_samples,
+            n_states,
+        ), f"Expected shape ({n_samples}, {n_states}), got {out.shape}"
+
+        # Check probabilities are valid
+        assert jnp.all(out >= 0)
+        assert jnp.all(out <= 1)
+        row_sums = jnp.sum(out, axis=1)
+        assert jnp.allclose(row_sums, 1.0)

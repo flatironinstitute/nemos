@@ -3,14 +3,24 @@
 from __future__ import annotations
 
 import abc
+import warnings
 from numbers import Number
-from typing import Any, Callable, Optional, Tuple, Union
+from typing import Any, Callable, Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
+import pynapple as nap
+from numpy.typing import ArrayLike, NDArray
 
+from .. import tree_utils
 from ..base_regressor import BaseRegressor
+from ..hmm.expectation_maximization import (
+    forward_backward,
+    forward_pass,
+    max_sum,
+)
 from ..regularizer import Regularizer
+from ..type_casting import support_pynapple
 from ..typing import (
     DESIGN_INPUT_TYPE,
 )
@@ -22,6 +32,7 @@ from .initialize_parameters import (
     setup_hmm_initialization,
 )
 from .params import HMMModelParamsT, HMMUserParams, HMMUserProvidedParamsT
+from .utils import _check_state_format
 from .validation import HMMValidator
 
 
@@ -384,3 +395,347 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
             X=X, y=y, is_new_session=is_new_session
         )
         return params, X, y, is_new_session
+
+    @abc.abstractmethod
+    def _log_likelihood(self, params: HMMModelParamsT, X, y):
+        """Compute the log-likelihood of the data given the model parameters."""
+        pass
+
+    def _score(
+        self,
+        params: HMMModelParamsT,
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: Union[NDArray, jnp.ndarray, nap.Tsd],
+        is_new_session: jnp.ndarray,
+    ) -> jnp.ndarray:
+        """Private score compute."""
+        # filter for non-nans, grab data if needed
+        data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
+        # safe conversion to jax arrays of float
+        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+
+        # make sure is_new_session starts with a 1
+        is_new_session = is_new_session.at[0].set(True)
+
+        # smooth with forward backward
+        _, log_norm = forward_pass(
+            params=params,
+            X=data,
+            y=y,
+            is_new_session=is_new_session,
+            # do we store this in the model during initialization?
+            log_likelihood_func=self._log_likelihood,
+        )
+        return jnp.sum(log_norm)
+
+    def score(
+        self,
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: ArrayLike,
+        is_new_session: Optional[ArrayLike] = None,
+        score_type: Literal[
+            "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"
+        ] = "log-likelihood",
+        null_model: Optional[Literal["constant", "glm"]] = None,
+    ) -> jnp.ndarray:
+        """Compute the model score."""
+        if score_type == "log-likelihood" and null_model is not None:
+            warnings.warn(
+                "The null model is not used for the log-likelihood computation.",
+                UserWarning,
+                stacklevel=2,
+            )
+        if score_type != "log-likelihood":
+            raise NotImplementedError(
+                f"score of type {score_type} not implemented yet!"
+            )
+        params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
+        return self._score(params, X, y, is_new_session)
+
+    @support_pynapple(conv_type="jax")
+    def _smooth_proba(
+        self,
+        params: HMMModelParamsT,
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: Union[NDArray, jnp.ndarray, nap.Tsd],
+        is_new_session: jnp.ndarray,
+    ) -> jnp.ndarray:
+        """Private smooth_proba compute."""
+        # filter for non-nans, grab data if needed
+        valid = tree_utils.get_valid_multitree(X, y)
+        data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
+
+        # safe conversion to jax arrays of float
+        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+
+        # make sure is_new_session starts with a 1
+        is_new_session = is_new_session.at[0].set(True)
+
+        # smooth with forward backward
+        log_posteriors, _, _, _, _, _ = forward_backward(
+            params=params,
+            X=data,
+            y=y,
+            is_new_session=is_new_session,
+            log_likelihood_func=self._log_likelihood,
+        )
+        proba = jnp.exp(log_posteriors)
+        # renormalize (numerical precision due to exponentiation)
+        proba /= proba.sum(axis=1, keepdims=True)
+        # re-attach nans
+        proba = jnp.full((valid.shape[0], proba.shape[1]), jnp.nan).at[valid].set(proba)
+        return proba
+
+    def smooth_proba(
+        self,
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: Union[NDArray, jnp.ndarray, nap.Tsd],
+        is_new_session: Optional[ArrayLike] = None,
+    ) -> jnp.ndarray | nap.TsdFrame:
+        """Compute smoothing posterior probabilities over hidden states.
+
+        Computes the probability of being in each hidden state at each time point,
+        conditioned on the entire observed sequence. This method uses the forward-backward
+        algorithm to incorporate information from both past and future observations,
+        providing optimal state estimates given all available data.
+
+        The smoothing posteriors answer: "Given all observations, what is the probability
+        that the system was in state k at time t?"
+
+        Parameters
+        ----------
+        X
+            Predictors, shape ``(n_time_points, n_features)``.
+        y
+            Observations, shape ``(n_time_points,)`` for single observation or
+            ``(n_time_points, n_observations)`` for population.
+
+        Returns
+        -------
+        posteriors
+            Smoothing posterior probabilities, shape ``(n_time_points, n_states)``.
+            Each row sums to 1 and represents the probability distribution over states
+            at that time point.
+
+        Raises
+        ------
+        ValueError
+            If the model has not been fit (``fit()`` must be called first).
+        ValueError
+            If inputs contain NaN values in the middle of epochs (only boundary NaNs allowed).
+        ValueError
+            If X and y have inconsistent shapes or features.
+
+        See Also
+        --------
+        filter_proba : Compute filtering posteriors (conditioned on past observations only).
+        decode_state : Compute most likely state sequence (Viterbi decoding).
+
+        Notes
+        -----
+        - Smoothing provides better state estimates than filtering because it uses all data
+        - The algorithm properly handles session boundaries and NaN values at epoch borders
+        """
+        params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
+        return self._smooth_proba(params, X, y, is_new_session)
+
+    @support_pynapple(conv_type="jax")
+    def _filter_proba(
+        self,
+        params: HMMModelParamsT,
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: Union[NDArray, jnp.ndarray, nap.Tsd],
+        is_new_session: jnp.ndarray,
+    ) -> jnp.ndarray:
+        """Compute filtering probabilities without validation (internal method)."""
+        # filter for non-nans, grab data if needed
+        valid = tree_utils.get_valid_multitree(X, y)
+        data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
+
+        # safe conversion to jax arrays of float
+        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+
+        # make sure is_new_session starts with a 1
+        is_new_session = is_new_session.at[0].set(True)
+        log_proba, _ = forward_pass(
+            params,
+            data,
+            y,
+            is_new_session=is_new_session,
+            log_likelihood_func=self._log_likelihood,
+        )
+        proba = jnp.exp(log_proba)
+        # renormalize (numerical errors due to exponentiating)
+        proba /= proba.sum(axis=1, keepdims=True)
+        # re-attach nans
+        proba = jnp.full((valid.shape[0], proba.shape[1]), jnp.nan).at[valid].set(proba)
+        return proba
+
+    def filter_proba(
+        self,
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: Union[NDArray, jnp.ndarray, nap.Tsd],
+        is_new_session: Optional[ArrayLike] = None,
+    ) -> jnp.ndarray | nap.TsdFrame:
+        """Compute filtering posterior probabilities over hidden states.
+
+        Computes the probability of being in each hidden state at each time point,
+        conditioned only on observations up to that time point. This method uses the
+        forward pass of the forward-backward algorithm, providing causal (online) state
+        estimates that only use past and current observations.
+
+        The filtering posteriors answer: "Given observations up to time t, what is the
+        probability that the system is in state k at time t?"
+
+        Parameters
+        ----------
+        X
+            Predictors, shape ``(n_time_points, n_features)``.
+        y
+            Observations, shape ``(n_time_points,)`` for single observation or
+            ``(n_time_points, n_observations)`` for population.
+
+        Returns
+        -------
+        posteriors
+            Filtering posterior probabilities, shape ``(n_time_points, n_states)``.
+            Each row sums to 1 and represents the probability distribution over states
+            at that time point conditioned on past observations.
+
+        Raises
+        ------
+        ValueError
+            If the model has not been fit (``fit()`` must be called first).
+        ValueError
+            If inputs contain NaN values in the middle of epochs (only boundary NaNs allowed).
+        ValueError
+            If X and y have inconsistent shapes or features.
+
+        See Also
+        --------
+        smooth_proba : Compute smoothing posteriors (conditioned on all observations).
+        decode_state : Compute most likely state sequence (Viterbi decoding).
+
+        Notes
+        -----
+        - Filtering provides causal state estimates suitable for online/real-time applications
+        - Smoothing provides better estimates but requires all data (non-causal)
+        - The algorithm properly handles session boundaries and NaN values at epoch borders
+        - NaN values are removed before inference, but session markers are preserved
+        - For pynapple inputs, the output TsdFrame has columns named "state_0", "state_1", etc.
+        """
+        params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
+        return self._filter_proba(params, X, y, is_new_session)
+
+    @support_pynapple(conv_type="jax")
+    def _decode_state(
+        self,
+        params: HMMModelParamsT,
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: Union[NDArray, jnp.ndarray, nap.Tsd],
+        is_new_session: jnp.ndarray,
+        return_index: bool,
+    ) -> jnp.ndarray:
+        """Decode most likely state sequence without validation (internal method)."""
+        # filter for non-nans, grab data if needed
+        valid = tree_utils.get_valid_multitree(X, y)
+        data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
+
+        # safe conversion to jax arrays of float
+        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+
+        # make sure is_new_session starts with a 1
+        is_new_session = is_new_session.at[0].set(True)
+
+        decoded_states = max_sum(
+            params,
+            data,
+            y,
+            is_new_session=is_new_session,
+            log_likelihood_func=self._log_likelihood,
+            return_index=return_index,
+        )
+
+        # reattach nans
+        decoded_states = (
+            jnp.full((valid.shape[0], *decoded_states.shape[1:]), jnp.nan)
+            .at[valid]
+            .set(decoded_states)
+        )
+        return decoded_states
+
+    def decode_state(
+        self,
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: ArrayLike,
+        is_new_session: Optional[ArrayLike] = None,
+        state_format: Literal["one-hot", "index"] = "one-hot",
+    ) -> jnp.ndarray | nap.TsdFrame:
+        """Compute the most likely hidden state sequence (Viterbi decoding).
+
+        Finds the single most likely sequence of hidden states that best explains
+        the observed data. This method uses the Viterbi (max-sum) algorithm to
+        compute the state sequence that maximizes the joint probability of states
+        and observations.
+
+        Unlike ``smooth_proba()`` and ``filter_proba()`` which return probability
+        distributions over states at each time point, this method makes a deterministic
+        choice of the single best state sequence.
+
+        The decoded states answer: "What is the most likely sequence of states that
+        generated the observed data?"
+
+        Parameters
+        ----------
+        X
+            Predictors, shape ``(n_time_points, n_features)``.
+        y
+            Observations, shape ``(n_time_points,)`` for single observation or
+            ``(n_time_points, n_observations)`` for population.
+        state_format
+            Format of the returned states:
+
+            - ``"one-hot"``: Binary matrix of shape ``(n_time_points, n_states)`` where
+              each row has a single 1 indicating the decoded state.
+            - ``"index"``: Integer array of shape ``(n_time_points,)`` with values
+              in ``[0, n_states-1]`` indicating the decoded state.
+
+        Returns
+        -------
+        decoded_states
+            Most likely state sequence:
+
+            - If ``state_format="one-hot"``: shape ``(n_time_points, n_states)``.
+              Each row is a one-hot vector with 1 in the position of the decoded state.
+            - If ``state_format="index"``: shape ``(n_time_points,)``.
+              Integer indices of the decoded states.
+
+        Raises
+        ------
+        ValueError
+            If the model has not been fit (``fit()`` must be called first).
+        ValueError
+            If inputs contain NaN values in the middle of epochs (only boundary NaNs allowed).
+        ValueError
+            If X and y have inconsistent shapes or features.
+
+        See Also
+        --------
+        smooth_proba : Compute smoothing posteriors (conditioned on all observations).
+        filter_proba : Compute filtering posteriors (conditioned on past observations only).
+
+        Notes
+        -----
+        - Viterbi decoding finds the globally optimal state sequence, not the sequence
+          of individually most likely states from ``smooth_proba()``
+        - This is a hard assignment (single best path) unlike probabilistic posteriors
+        - The algorithm properly handles session boundaries and NaN values at epoch borders
+        - Decoding is useful for segmenting continuous data into discrete behavioral states
+        - For uncertainty estimates about states, use ``smooth_proba()`` instead
+        """
+        params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
+        # validate state_format
+        _check_state_format(state_format)
+        # define the return type for the max-sum
+        return_index = False if state_format == "one-hot" else True
+        return self._decode_state(params, X, y, is_new_session, return_index)
