@@ -951,8 +951,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         self.solver_state_ = state
         self.aux_ = aux
 
-        # TODO: Do we need to implement this?
-        # Note: scale_ and dof_resid_ require full data - skip for stochastic fit
+        # TODO: Add a version of these calculations that iterates through the data again
         self.scale_ = None
         self.dof_resid_ = None
 
