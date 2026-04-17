@@ -17,7 +17,7 @@ kernelspec:
 In this note we will compares solvers performance in GLM problems on simulated data and neural recordings (from [1]_), for all combinations of:
 
 - **devices:** cpu vs cuda.
-- **algorithms:**  NeMoS JIT compiled solvers and a scipy wrapper of `L-BFGS-B`, see table below.
+- **solvwera:**  NeMoS JIT compiled solvers and a scipy wrapper of `L-BFGS-B`, see table below.
 - **problem sizes:** (simulation only) by varying number of samples, features and neurons.
 
 
@@ -32,13 +32,13 @@ NeMoS native solvers JIT-compile the full optimization when `GLM.fit` is called,
 
 | Solver | Backend | Notes |
 |--------|---------|-------|
-| [`GradientDescent`](https://en.wikipedia.org/wiki/Gradient_descent) | optimistix | First-order (gradient only). Memory scales linearly with parameter count. Smooth penalties only; typically requires many iterations. |
-| [`BFGS`](https://en.wikipedia.org/wiki/Broyden%E2%80%93Fletcher%E2%80%93Goldfarb%E2%80%93Shanno_algorithm) | optimistix | Quasi-Newton; maintains a dense Hessian approximation. Memory scales quadratically with parameter count — impractical for large parameter spaces. Fewer iterations than first-order methods. |
-| [`LBFGS`](https://en.wikipedia.org/wiki/Limited-memory_BFGS) | optax + optimistix | Limited-memory quasi-second-order; stores the last *m* gradient vectors. Memory scales linearly. Fewer iterations than first-order methods. Recommended default for smooth problems. |
-| [`ProximalGradient`](https://en.wikipedia.org/wiki/Proximal_gradient_method) | optimistix | First-order + proximal step for non-smooth penalties (Lasso, GroupLasso, ElasticNet). Memory scales linearly. Typically requires many iterations. |
+| [`GradientDescent`](https://en.wikipedia.org/wiki/Gradient_descent) | [optimistix](https://docs.kidger.site/optimistix/) | First-order (gradient only). Memory scales linearly with parameter count. Smooth penalties only; typically requires many iterations. |
+| [`BFGS`](https://en.wikipedia.org/wiki/Broyden%E2%80%93Fletcher%E2%80%93Goldfarb%E2%80%93Shanno_algorithm) | [optimistix](https://docs.kidger.site/optimistix/) | Quasi-Newton; maintains a dense Hessian approximation. Memory scales quadratically with parameter count — impractical for large parameter spaces. Fewer iterations than first-order methods. |
+| [`LBFGS`](https://en.wikipedia.org/wiki/Limited-memory_BFGS) | [optax](https://optax.readthedocs.io/) + [optimistix](https://docs.kidger.site/optimistix/) | Limited-memory quasi-second-order; stores the last *m* gradient vectors. Memory scales linearly. Fewer iterations than first-order methods. Recommended default for smooth problems. |
+| [`LBFGS`](https://en.wikipedia.org/wiki/Limited-memory_BFGS) | scipy | L-BFGS-B via [`scipy.optimize.minimize`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html). No JIT compilation cost; Python callback per iteration. Preferred for small problems or many repeated `fit()` calls. |
+| [`ProximalGradient`](https://en.wikipedia.org/wiki/Proximal_gradient_method) | [optimistix](https://docs.kidger.site/optimistix/) | First-order + proximal step for non-smooth penalties (Lasso, GroupLasso, ElasticNet). Memory scales linearly. Typically requires many iterations. |
 | [`SVRG`](https://en.wikipedia.org/wiki/Stochastic_variance_reduction_gradient) | nemos | Inner loop of fast mini-batch gradient steps followed by a full-gradient anchor step each epoch. Memory scales linearly. The nested inner-outer loop structure can be slow on GPU. |
 | [`ProxSVRG`](https://en.wikipedia.org/wiki/Stochastic_variance_reduction_gradient) | nemos | Proximal variant of SVRG for non-smooth penalties. Same inner-outer loop structure and GPU caveats as `SVRG`. |
-| [`LBFGS`](https://en.wikipedia.org/wiki/Limited-memory_BFGS) | scipy | L-BFGS-B via [`scipy.optimize.minimize`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html). No JIT compilation cost; Python callback per iteration. Preferred for small problems or many repeated `fit()` calls. |
 
 ## Scipy L-BFGS-B reference adapter
 
