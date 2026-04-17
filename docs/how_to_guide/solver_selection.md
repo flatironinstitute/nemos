@@ -12,180 +12,33 @@ kernelspec:
 ---
 
 (solver-selection)=
-# Solver Selection: Performance and Device Considerations
+# Benchmarking GLM Configurations
 
-This note compares solver and device configurations to help identify which setup is most
-efficient for a given problem.
+In this note we will compares solvers performance in GLM problems on simulated data and neural recordings (from [1]_), for all combinations of:
 
-In particular, we will focus on how to choose a configuration along the axis:
-
-- **Device:** cpu vs cuda.
-- **Algorithm:** first (`GradientDescent`) vs second order (`LBFGS`, `BFGS`) vs stochastic (`SVRG`) optimization methods.
-- **Compilation:** fully compiled (`optax` or `optimistix` solvers) vs a wrapper of `L-BFGS-B` from `scipy`.
+- **devices:** cpu vs cuda.
+- **algorithms:**  NeMoS JIT compiled solvers and a scipy wrapper of `L-BFGS-B`, see table below.
+- **problem sizes:** (simulation only) by varying number of samples, features and neurons.
 
 
-:::{admonition} Compilation
-:info:
 
-JAX jit-compiles the full optimization just-in-time at each model re-instantiation and change in the input structure (shape, data type etc.). The `L-BFGS-B` from `scipy.minimize` is ahead-of-time compiled, meaning that the compile binary is readily available, saving the compilation costs entirely. This may be advantageous when fitting multiple small models.
+:::{admonition} JIT vs `scipy.minimize`
+:class: note
+
+NeMoS native solvers JIT-compile the full optimization when `GLM.fit` is called, incurring a one-time compilation cost before the first iteration. `L-BFGS-B` from `scipy.minimize` calls pre-compiled Fortran routines but invokes Python at each iteration to evaluate the GLM likelihood and gradient. As a result, most JIT-compiled solvers run faster per-iteration once compiled, while `scipy` avoids the compilation cost entirely. If the optimization loop dominates over compilation (large problems, many iterations), prefer the JIT-compiled solvers; for small problems, the scipy wrapper provided below is likely faster.
 :::
 
-## Short Answer
+## Solvers
 
-In this section we will provide a quick summary of the take home messages of our benchmarking analysis.  We divided our recommendation into smooth vs non-smooth problems, since the algorithms requirements are different for these two problem types.
-
-### Smooth Optimization (Unregularized or Ridge GLM)
-
-For smooth optimizations, NeMoS provides several second order (`BFGS`, `LBFGS`,...) and first order methods (`GradientDescent`). We generally recommend `LBFGS` since it is performant and, in terms of memory footprint, scales well with problem size.
-
-- For problem medium to large size problems (>10k samples, >10 parameters), use or default `LBFGS` which is fully JIT-compiled, and a GPU if available and if the problem fit in memory.
-- For small problems <1k samples, tens of model parameters, use the scipy wrapper provided below; It executes a `LBFGS` solve without JIT-compilation costs. Likely faster with a JAX CPU backend (if you have a JAX cuda, set `jax.config.update("jax_platform_name", "cpu")` at the beginning of your script). The GPU is likely detrimental, and the JIT compilation may dominate the computational cost.
-- For problems that don't fit in memory, we recommend trying `SVRG`. Call repeatedly `model.update` passing data batches. This implements a form of stochastic optimization with convergence guarantees under certain assumptions, see [1]_ for details. For a simpler alternative one can use stochastic gradient descent (SGD), see our note [batching](batching) that explain how to set SGD up.
-
-### Non-Smooth Optimization (Lasso, GroupLasso or Elastic Net)
-
-Nemos provide two first order proximal gradient methods, `ProxGradientDescent` and `ProxSVRG`.
-
-- For problems that fit in memory, we recommend `ProximalGradientDescent`.
-  - For small problems, <1k samples, tens of model parameters, configure JAX for CPU.
-  - For larger problems, >10k samples, rely on the GPU if available.
-- For very large problems, we recommend `ProxSVRG`.
-
-
-## Interpreting the benchmarking results
-
-To interpret the benchmarking results, it is helpful to decompose the `model.fit()` time into different contributions. An approximate but useful decomposition is the following:
-
-```
-total_time ≈ t_compile + n_iter × t_iter
-```
-
-where,
-
-- **`t_compile`** — NeMoS JAX-based solvers compiles at every `fit()` call.
-This cost is fixed for a given problem size (the size of `X` and `y`) and depends on the device as well as the algorithm chosen. The `scipy` based wrapper has no such cost.
-
-- **`t_iter`** — Time per solver step. For a fixed problem shape and device, `t_iter` is roughly
-constant. It scales with problem size and depends strongly on both the algorithm and the device.
-
-**`n_iter`** — Iterations to convergence. This is the least predictable term: it depends on
-both problem difficulty and the algorithm chosen.
-
-
-
--  `t_compile` is spent at each `fit` call: the more fit calls (as in a grid-search) the more time will be spent compiling. For small problems, the compilation time may be the highest cost, and a `scipy` adapter may be preferred.
-
-
-## Benchmarking Smooth Optimization
-
-For smooth penalties (Ridge, UnRegularized, and others), multiple solvers are available.
-The benchmarks below compare `LBFGS[optax+optimistix]` and `GradientDescent[optimistix]`,
-the two most commonly used, together with a scipy L-BFGS-B reference
-(see [Scipy L-BFGS-B reference adapter](#scipy-lbfgs-b-reference-adapter)).
-
-Set `CSV_PATH` to the CSV produced by `scripts/benchmarking/benchmarking_glm.py`:
-
-```{code-cell} ipython3
-from pathlib import Path
-
-CSV_PATH = Path("../../benchmarking_results/20260413_182029_benchmarking_ef6bffe.csv")
-```
-
-```{code-cell} ipython3
-import pandas as pd
-
-df = pd.read_csv(CSV_PATH)
-df = df[df["rep"] != 0]   # rep 0 is a warmup run
-
-synth = df[df["data_source"] == "synthetic"].copy()
-real  = df[df["data_source"] != "synthetic"].copy()
-
-synth["t_iter"] = synth["fit_s"] / synth["iter_num"]
-real["t_iter"]  = real["fit_s"]  / real["iter_num"]
-```
-
-### Compilation overhead
-
-```{code-cell} ipython3
-compile_tbl = (
-    synth.groupby(["solver_name", "device"])["compilation_s"]
-    .median()
-    .unstack("device")
-    .rename(columns={"cpu": "CPU (s)", "gpu": "GPU (s)"})
-)
-compile_tbl.index.name = "Solver"
-compile_tbl
-```
-
-### Per-iteration time
-
-```{code-cell} ipython3
-t_iter_tbl = (
-    synth.groupby(["solver_name", "device", "sample_size"])["t_iter"]
-    .median()
-    .mul(1e3)   # convert to milliseconds
-    .unstack("sample_size")
-)
-t_iter_tbl.index.names = ["Solver", "Device"]
-t_iter_tbl.columns.name = "n"
-t_iter_tbl.round(3)
-```
-
-JAX solver iteration time on GPU is nearly flat from n = 100 to n = 100 k, while CPU time
-grows roughly linearly with *n*. The scipy adapter benefits from GPU at large *n* (~2.6×
-at n = 100 k) because gradients and likelihoods are evaluated in JAX on-device, but the C
-optimizer loop limits the gain compared to native JAX solvers; at small *n* the dispatch
-overhead makes scipy slower on GPU than on CPU.
-
-GPU speedup over CPU at n = 100 k: `GradientDescent` ~46×, `LBFGS[optax+optimistix]` ~9×,
-scipy L-BFGS-B ~2.6×. The large per-iteration speedup of `GradientDescent` on GPU does not
-translate into end-to-end gains because of the higher iteration count required; see below.
-
-### Number of iterations
-
-**Synthetic data**
-
-```{code-cell} ipython3
-iter_synth = (
-    synth.groupby("solver_name")["iter_num"]
-    .median()
-    .rename("Median iterations (synthetic)")
-    .to_frame()
-)
-iter_synth.index.name = "Solver"
-iter_synth
-```
-
-**Real data**
-
-```{code-cell} ipython3
-iter_real = (
-    real.groupby(["solver_name", "device"])[["iter_num", "end_to_end_s"]]
-    .median()
-    .rename(columns={"iter_num": "Iterations", "end_to_end_s": "End-to-end (s)"})
-)
-iter_real.index.names = ["Solver", "Device"]
-iter_real.round(1)
-```
-
-On the real-data benchmark `GradientDescent` hit the iteration cap on both devices without
-converging. LBFGS required hundreds of iterations — far more than on synthetic data — but
-its low `t_iter` kept total runtime manageable, particularly on GPU.
-
-:::{note}
-Always check `model.solver_state_.converged` and `model.solver_state_.num_steps` after
-fitting. `GradientDescent` convergence can be improved by increasing `max_iter` and tuning
-the learning rate via `solver_kwargs`, but LBFGS is the safer choice for real neural
-recordings.
-:::
-
-
-
-## Benchmarking Non-smooth optimization
-
-*Coming soon.*
-
-
+| Solver | Backend | Notes |
+|--------|---------|-------|
+| [`GradientDescent`](https://en.wikipedia.org/wiki/Gradient_descent) | optimistix | First-order (gradient only). Memory scales linearly with parameter count. Smooth penalties only; typically requires many iterations. |
+| [`BFGS`](https://en.wikipedia.org/wiki/Broyden%E2%80%93Fletcher%E2%80%93Goldfarb%E2%80%93Shanno_algorithm) | optimistix | Quasi-Newton; maintains a dense Hessian approximation. Memory scales quadratically with parameter count — impractical for large parameter spaces. Fewer iterations than first-order methods. |
+| [`LBFGS`](https://en.wikipedia.org/wiki/Limited-memory_BFGS) | optax + optimistix | Limited-memory quasi-second-order; stores the last *m* gradient vectors. Memory scales linearly. Fewer iterations than first-order methods. Recommended default for smooth problems. |
+| [`ProximalGradient`](https://en.wikipedia.org/wiki/Proximal_gradient_method) | optimistix | First-order + proximal step for non-smooth penalties (Lasso, GroupLasso, ElasticNet). Memory scales linearly. Typically requires many iterations. |
+| [`SVRG`](https://en.wikipedia.org/wiki/Stochastic_variance_reduction_gradient) | nemos | Inner loop of fast mini-batch gradient steps followed by a full-gradient anchor step each epoch. Memory scales linearly. The nested inner-outer loop structure can be slow on GPU. |
+| [`ProxSVRG`](https://en.wikipedia.org/wiki/Stochastic_variance_reduction_gradient) | nemos | Proximal variant of SVRG for non-smooth penalties. Same inner-outer loop structure and GPU caveats as `SVRG`. |
+| [`LBFGS`](https://en.wikipedia.org/wiki/Limited-memory_BFGS) | scipy | L-BFGS-B via [`scipy.optimize.minimize`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html). No JIT compilation cost; Python callback per iteration. Preferred for small problems or many repeated `fit()` calls. |
 
 ## Scipy L-BFGS-B reference adapter
 
@@ -316,4 +169,7 @@ model.fit(X, y)
 
 ## References
 
-[1] [Gower, Robert M., Mark Schmidt, Francis Bach, and Peter Richtárik. "Variance-Reduced Methods for Machine Learning." arXiv preprint arXiv:2010.00892 (2020).](https://arxiv.org/abs/2010.00892)
+[1] [Peyrache A, Lacroix MM, Petersen PC, Buzsáki G. Internally organized mechanisms of the head direction sense. Nat Neurosci. 2015 Apr;18(4):569-75. doi: 10.1038/nn.3968. Epub 2015 Mar 2. PMID: 25730672; PMCID: PMC4376557.](https://pubmed.ncbi.nlm.nih.gov/25730672/)
+
+https://doi.org/10.7554/eLife.85786.2
+[2] [Gower, Robert M., Mark Schmidt, Francis Bach, and Peter Richtárik. "Variance-Reduced Methods for Machine Learning." arXiv preprint arXiv:2010.00892 (2020).](https://arxiv.org/abs/2010.00892)
