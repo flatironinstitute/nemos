@@ -456,6 +456,7 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         y: Union[NDArray, jnp.ndarray, nap.Tsd],
         is_new_session: jnp.ndarray,
     ) -> jnp.ndarray:
+        """Private smooth_proba compute."""
         # filter for non-nans, grab data if needed
         valid = tree_utils.get_valid_multitree(X, y)
         data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
@@ -502,8 +503,8 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         X
             Predictors, shape ``(n_time_points, n_features)``.
         y
-            Observed neural activity, shape ``(n_time_points,)`` for single neuron or
-            ``(n_time_points, n_neurons)`` for population.
+            Observations, shape ``(n_time_points,)`` for single observation or
+            ``(n_time_points, n_observations)`` for population.
 
         Returns
         -------
@@ -530,41 +531,6 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         -----
         - Smoothing provides better state estimates than filtering because it uses all data
         - The algorithm properly handles session boundaries and NaN values at epoch borders
-
-        Examples
-        --------
-        Fit a GLM-HMM and compute smoothing posteriors:
-
-        >>> import numpy as np
-        >>> import nemos as nmo
-        >>> # Generate example data
-        >>> np.random.seed(123)
-        >>> X = np.random.randn(100, 5)  # 100 time points, 5 features
-        >>> y = np.random.poisson(2, size=100)  # Poisson spike counts
-        >>>
-        >>> # Fit model with 3 hidden states
-        >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson")
-        >>> model = model.fit(X, y)
-        >>> # Compute smoothing posteriors
-        >>> posteriors = model.smooth_proba(X, y)
-        >>> print(posteriors.shape)
-        (100, 3)
-        >>> # Each row sums to 1
-        >>> print(np.allclose(posteriors.sum(axis=1), 1.0))
-        True
-
-        Using with pynapple for time-series analysis:
-
-        >>> import pynapple as nap
-        >>> # Create time-indexed data
-        >>> t = np.arange(100) * 0.01  # 10ms bins
-        >>> X_tsd = nap.TsdFrame(t=t, d=X)
-        >>> y_tsd = nap.Tsd(t=t, d=y)
-        >>>
-        >>> # Posteriors returned as TsdFrame
-        >>> posteriors_tsd = model.smooth_proba(X_tsd, y_tsd)
-        >>> print(type(posteriors_tsd))
-        <class 'pynapple.core.time_series.TsdFrame'>
         """
         params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
         return self._smooth_proba(params, X, y, is_new_session)
@@ -622,8 +588,8 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         X
             Predictors, shape ``(n_time_points, n_features)``.
         y
-            Observed neural activity, shape ``(n_time_points,)`` for single neuron or
-            ``(n_time_points, n_neurons)`` for population.
+            Observations, shape ``(n_time_points,)`` for single observation or
+            ``(n_time_points, n_observations)`` for population.
 
         Returns
         -------
@@ -653,42 +619,6 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         - The algorithm properly handles session boundaries and NaN values at epoch borders
         - NaN values are removed before inference, but session markers are preserved
         - For pynapple inputs, the output TsdFrame has columns named "state_0", "state_1", etc.
-
-        Examples
-        --------
-        Fit a GLM-HMM and compute filtering posteriors:
-
-        >>> import numpy as np
-        >>> import nemos as nmo
-        >>> # Generate example data
-        >>> np.random.seed(123)
-        >>> X = np.random.randn(100, 5)  # 100 time points, 5 features
-        >>> y = np.random.poisson(2, size=100)  # Poisson spike counts
-        >>>
-        >>> # Fit model with 3 hidden states
-        >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson")
-        >>> model = model.fit(X, y)
-        >>>
-        >>> # Compute filtering posteriors (causal/online)
-        >>> filter_posteriors = model.filter_proba(X, y)
-        >>> print(filter_posteriors.shape)
-        (100, 3)
-        >>> # Each row sums to 1
-        >>> print(np.allclose(filter_posteriors.sum(axis=1), 1.0))
-        True
-
-        Using with pynapple for real-time state estimation:
-
-        >>> import pynapple as nap
-        >>> # Create time-indexed data
-        >>> t = np.arange(100) * 0.01  # 10ms bins
-        >>> X_tsd = nap.TsdFrame(t=t, d=X)
-        >>> y_tsd = nap.Tsd(t=t, d=y)
-        >>>
-        >>> # Filtering posteriors returned as TsdFrame
-        >>> filter_tsd = model.filter_proba(X_tsd, y_tsd)
-        >>> print(type(filter_tsd))
-        <class 'pynapple.core.time_series.TsdFrame'>
         """
         params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
         return self._filter_proba(params, X, y, is_new_session)
@@ -756,8 +686,8 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         X
             Predictors, shape ``(n_time_points, n_features)``.
         y
-            Observed neural activity, shape ``(n_time_points,)`` for single neuron or
-            ``(n_time_points, n_neurons)`` for population.
+            Observations, shape ``(n_time_points,)`` for single observation or
+            ``(n_time_points, n_observations)`` for population.
         state_format
             Format of the returned states:
 
@@ -798,55 +728,6 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         - The algorithm properly handles session boundaries and NaN values at epoch borders
         - Decoding is useful for segmenting continuous data into discrete behavioral states
         - For uncertainty estimates about states, use ``smooth_proba()`` instead
-
-        Examples
-        --------
-        Fit a GLM-HMM and decode the most likely state sequence:
-
-        >>> import numpy as np
-        >>> import nemos as nmo
-        >>> # Generate example data
-        >>> np.random.seed(123)
-        >>> X = np.random.randn(100, 5)  # 100 time points, 5 features
-        >>> y = np.random.poisson(2, size=100)  # Poisson spike counts
-        >>>
-        >>> # Fit model with 3 hidden states
-        >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson")
-        >>> model = model.fit(X, y)
-        >>>
-        >>> # Decode states as one-hot encoding
-        >>> states_onehot = model.decode_state(X, y, state_format="one-hot")
-        >>> print(states_onehot.shape)
-        (100, 3)
-        >>> # Each row has exactly one 1
-        >>> print(np.all(states_onehot.sum(axis=1) == 1))
-        True
-        >>>
-        >>> # Decode states as integer indices
-        >>> states_idx = model.decode_state(X, y, state_format="index")
-        >>> print(states_idx.shape)
-        (100,)
-        >>> print(states_idx[:10])  # First 10 decoded states
-        [...]
-
-        Using with pynapple for time-series state decoding:
-
-        >>> import pynapple as nap
-        >>> # suppress jax to numpy conversion warning
-        >>> nap.nap_config.suppress_conversion_warnings = True
-        >>> # Create time-indexed data
-        >>> t = np.arange(100) * 0.01  # 10ms bins
-        >>> X_tsd = nap.TsdFrame(t=t, d=X)
-        >>> y_tsd = nap.Tsd(t=t, d=y)
-        >>>
-        >>> # Decoded states returned as TsdFrame or Tsd
-        >>> states_tsd = model.decode_state(X_tsd, y_tsd, state_format="one-hot")
-        >>> print(type(states_tsd))
-        <class 'pynapple.core.time_series.TsdFrame'>
-        >>> # With index format, returns Tsd
-        >>> states_idx_tsd = model.decode_state(X_tsd, y_tsd, state_format="index")
-        >>> print(type(states_idx_tsd))
-        <class 'pynapple.core.time_series.Tsd'>
         """
         params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
         # validate state_format
