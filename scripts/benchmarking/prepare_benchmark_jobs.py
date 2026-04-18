@@ -11,7 +11,7 @@ Usage
 
 # After all jobs finish, aggregation runs automatically inside each .dsb script.
 # To re-run manually:
-#    python scripts/benchmarking_glm.py --aggregate \\
+#    python scripts/prepare_benchmark_jobs.py --aggregate \\
 #        --output_path <base_dir>/results --csv_path <web_output_dir>/<run>.csv
 """
 
@@ -33,35 +33,64 @@ from benchmarking_glm import (
     DEFAULT_REGULARIZERS,
     DEFAULT_SAMPLE_SIZES,
     DEFAULT_SOLVER_NAMES,
+    aggregate_results,
+    generate_all_data,
+    generate_glm_configs,
+    run_benchmarks,
 )
 
-BENCHMARKING_SCRIPT = _HERE / "benchmarking_glm.py"
+_SELF = Path(__file__)
+
+
+def _print_env_info() -> None:
+    """Print environment diagnostics for debugging worker configuration."""
+    import os
+    import socket
+    import sys
+
+    import jax
+
+    import nemos as nmo
+
+    print("=" * 60)
+    print("WORKER ENV DIAGNOSTICS")
+    print("=" * 60)
+    print(f"  hostname       : {socket.gethostname()}")
+    print(f"  python         : {sys.executable}")
+    print(f"  python version : {sys.version.split()[0]}")
+    print(f"  nemos version  : {nmo.__version__}")
+    print(f"  jax version    : {jax.__version__}")
+    print(f"  JAX_PLATFORMS  : {os.environ.get('JAX_PLATFORMS', '(not set)')}")
+    try:
+        devices = jax.devices()
+        print(f"  jax devices    : {devices}")
+    except Exception as e:
+        print(f"  jax devices    : ERROR — {e}")
+    ld = os.environ.get("LD_LIBRARY_PATH", "")
+    cuda_in_path = any(
+        "cuda" in p.lower() or "cudnn" in p.lower() for p in ld.split(":")
+    )
+    print(f"  CUDA in LD_LIBRARY_PATH: {cuda_in_path}")
+    if not cuda_in_path:
+        print(f"  LD_LIBRARY_PATH: {ld or '(not set)'}")
+    print("=" * 60)
 
 
 def generate_configs(args) -> list:
     base_dir = Path(args.base_dir)
     base_dir.mkdir(parents=True, exist_ok=True)
-    cmd = [
-        sys.executable,
-        str(BENCHMARKING_SCRIPT),
-        "--generate_configs",
-        "--config_path",
-        str(base_dir / "configs.json"),
-        "--sample_sizes",
-        *[str(s) for s in args.sample_sizes],
-        "--feature_dims",
-        *[str(f) for f in args.feature_dims],
-        "--pop_sizes",
-        *[str(p) for p in args.pop_sizes],
-        "--regularizers",
-        *args.regularizers,
-        "--solver_names",
-        *args.solver_names,
-        "--devices",
-        *args.devices,
-    ]
-    subprocess.run(cmd, check=True)
-    return json.loads((base_dir / "configs.json").read_text())
+    configs = generate_glm_configs(
+        sample_sizes=args.sample_sizes,
+        feature_dims=args.feature_dims,
+        population_sizes=args.pop_sizes,
+        regularizers=args.regularizers,
+        solver_names=args.solver_names,
+        devices=args.devices,
+    )
+    config_path = base_dir / "configs.json"
+    config_path.write_text(json.dumps(configs, indent=2))
+    print(f"Generated {len(configs)} configs -> {config_path}")
+    return configs
 
 
 def write_disbatch_script(args, device: str, indices: list[int]) -> Tuple[Path, int]:
@@ -103,7 +132,8 @@ def write_disbatch_script(args, device: str, indices: list[int]) -> Tuple[Path, 
                 ),
                 f"export XDG_CACHE_HOME={Path(args.base_dir) / 'pynwb_cache'}",
                 (
-                    f"python -u {BENCHMARKING_SCRIPT}"
+                    f"python -u {_SELF}"
+                    f" --run"
                     f" --config_path {base_dir / 'configs.json'}"
                     f" --fit_ids {fit_ids_str}"
                     f" --output_path {base_dir / 'results'}"
@@ -118,7 +148,7 @@ def write_disbatch_script(args, device: str, indices: list[int]) -> Tuple[Path, 
         agg_log = log_dir / "aggregate.log"
         agg_cmd = (
             f"source {args.venv} && "
-            f"python -u {BENCHMARKING_SCRIPT}"
+            f"python -u {_SELF}"
             f" --aggregate"
             f" --output_path {base_dir / 'results'}"
             f" --csv_path {args.csv_path}"
@@ -163,7 +193,7 @@ def print_commands(args, dsb_paths: dict[str, Path], n_tasks: dict[str, int]) ->
     print("\nAfter ALL device jobs finish, aggregate:")
     print(
         f"  source {args.venv} && "
-        f"python {BENCHMARKING_SCRIPT}"
+        f"python {_SELF}"
         f" --aggregate"
         f" --output_path {base_dir / 'results'}"
         f" --csv_path {args.csv_path}"
@@ -180,13 +210,62 @@ def submit_jobs(args, dsb_paths: dict[str, Path], n_tasks: dict[str, int]) -> No
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Prepare disBatch task file for GLM benchmarking.",
+        description="Orchestrate GLM benchmarking jobs, or act as a worker entry point.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
-    # required cluster paths
+    # worker modes (mutually exclusive)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--run",
+        action="store_true",
+        help="Worker mode: run benchmark fits for --fit_ids.",
+    )
+    mode.add_argument(
+        "--aggregate",
+        action="store_true",
+        help="Worker mode: aggregate JSON results in --output_path into --csv_path.",
+    )
+
+    # worker: run args
     parser.add_argument(
-        "--venv", required=True, help="Path to the venv activate script."
+        "--config_path",
+        type=str,
+        default="glm_benchmark_configs.json",
+        help="Path to the config list JSON (--run mode).",
+    )
+    parser.add_argument(
+        "--fit_ids",
+        type=int,
+        nargs="+",
+        default=None,
+        help="Config indices to benchmark. Defaults to all (--run mode).",
+    )
+    parser.add_argument(
+        "--data_path",
+        type=str,
+        default="benchmark_data",
+        help="Directory for cached synthetic data files (--run mode).",
+    )
+
+    # shared worker arg
+    parser.add_argument(
+        "--output_path",
+        type=str,
+        default="benchmark_results",
+        help="Directory for per-config JSON result files.",
+    )
+    parser.add_argument(
+        "--csv_path",
+        type=str,
+        default=None,
+        help="Aggregated CSV output path (--aggregate mode or orchestration).",
+    )
+    parser.add_argument("--n_reps", type=int, default=DEFAULT_N_REPS)
+
+    # orchestration-only cluster paths
+    parser.add_argument(
+        "--venv", default=None, help="Path to the venv activate script."
     )
     parser.add_argument(
         "--cuda_env",
@@ -195,13 +274,8 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--base_dir",
-        required=True,
+        default=None,
         help="Root directory for configs, results, data, and logs.",
-    )
-    parser.add_argument(
-        "--csv_path",
-        required=True,
-        help="Path for the aggregated CSV output (web-accessible location).",
     )
     parser.add_argument(
         "--nemos_data_dir",
@@ -209,7 +283,6 @@ def _parse_args() -> argparse.Namespace:
         help="Directory where NWB files are cached (sets NEMOS_DATA_DIR on workers). "
         "Required when benchmarking real data.",
     )
-
     parser.add_argument(
         "--submit",
         action="store_true",
@@ -234,7 +307,7 @@ def _parse_args() -> argparse.Namespace:
         "--gpus_per_task", type=int, default=1, help="GPUs per task for GPU jobs."
     )
 
-    # grid parameters — same defaults as benchmarking_glm.py
+    # grid parameters
     parser.add_argument(
         "--sample_sizes", type=int, nargs="+", default=DEFAULT_SAMPLE_SIZES
     )
@@ -249,53 +322,73 @@ def _parse_args() -> argparse.Namespace:
         "--solver_names", type=str, nargs="+", default=DEFAULT_SOLVER_NAMES
     )
     parser.add_argument("--devices", type=str, nargs="+", default=DEFAULT_DEVICES)
-    parser.add_argument("--n_reps", type=int, default=DEFAULT_N_REPS)
 
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    # validate orchestration-required args when not in worker mode
+    if not args.run and not args.aggregate:
+        missing = [
+            f
+            for f, v in [
+                ("--venv", args.venv),
+                ("--base_dir", args.base_dir),
+                ("--csv_path", args.csv_path),
+            ]
+            if v is None
+        ]
+        if missing:
+            parser.error(f"orchestration mode requires: {', '.join(missing)}")
+
+    return args
 
 
-def generate_data(args) -> None:
+def generate_data(args, configs: list) -> None:
     """Pre-generate all unique synthetic datasets so workers only read."""
     base_dir = Path(args.base_dir)
-    cmd = [
-        sys.executable,
-        str(BENCHMARKING_SCRIPT),
-        "--generate_data",
-        "--config_path",
-        str(base_dir / "configs.json"),
-        "--data_path",
-        str(base_dir / "data"),
-    ]
-    subprocess.run(cmd, check=True)
+    generate_all_data(configs, str(base_dir / "data"))
 
 
 if __name__ == "__main__":
     args = _parse_args()
-    if "gpu" in args.devices and args.cuda_env is None:
-        raise SystemExit("--cuda_env is required when devices includes 'gpu'")
-    configs = generate_configs(args)
 
-    print("\nPre-generating synthetic datasets ...")
-    generate_data(args)
+    if args.run:
+        _print_env_info()
+        configs = json.loads(Path(args.config_path).read_text())
+        fit_ids = (
+            args.fit_ids if args.fit_ids is not None else list(range(len(configs)))
+        )
+        run_benchmarks(
+            configs, fit_ids, args.output_path, args.data_path, n_reps=args.n_reps
+        )
 
-    # group config indices by device — one dsb file per device
-    indices_by_device: dict[str, list[int]] = {}
-    for idx, cfg in enumerate(configs):
-        indices_by_device.setdefault(cfg["device"], []).append(idx)
+    elif args.aggregate:
+        aggregate_results(args.output_path, args.csv_path)
 
-    print(f"\nWriting disBatch scripts ({len(configs)} configs total):")
-    dsbatch_out = [
-        write_disbatch_script(args, device, indices)
-        for device, indices in indices_by_device.items()
-    ]
-    dsb_paths = {
-        device: path
-        for device, (path, _) in zip(indices_by_device, dsbatch_out, strict=True)
-    }
-    n_tasks = {
-        device: n_task
-        for device, (_, n_task) in zip(indices_by_device, dsbatch_out, strict=True)
-    }
-    print_commands(args, dsb_paths, n_tasks)
-    if args.submit:
-        submit_jobs(args, dsb_paths, n_tasks)
+    else:
+        if "gpu" in args.devices and args.cuda_env is None:
+            raise SystemExit("--cuda_env is required when devices includes 'gpu'")
+        configs = generate_configs(args)
+
+        print("\nPre-generating synthetic datasets ...")
+        generate_data(args, configs)
+
+        indices_by_device: dict[str, list[int]] = {}
+        for idx, cfg in enumerate(configs):
+            indices_by_device.setdefault(cfg["device"], []).append(idx)
+
+        print(f"\nWriting disBatch scripts ({len(configs)} configs total):")
+        dsbatch_out = [
+            write_disbatch_script(args, device, indices)
+            for device, indices in indices_by_device.items()
+        ]
+        dsb_paths = {
+            device: path
+            for device, (path, _) in zip(indices_by_device, dsbatch_out, strict=True)
+        }
+        n_tasks = {
+            device: n_task
+            for device, (_, n_task) in zip(indices_by_device, dsbatch_out, strict=True)
+        }
+        print_commands(args, dsb_paths, n_tasks)
+        if args.submit:
+            submit_jobs(args, dsb_paths, n_tasks)

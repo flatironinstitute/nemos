@@ -10,7 +10,6 @@ python scripts/benchmarking_glm.py --generate_configs --config_path gpu_configs.
 python scripts/benchmarking_glm.py --config_path gpu_configs.json --output_path gpu_results --data_path gpu_data --fit_ids 0 --n_reps 1
 """
 
-import argparse
 import datetime
 import hashlib
 import json
@@ -380,8 +379,7 @@ def benchmark_fit(
         param_norm.append(float(jnp.linalg.norm(model.coef_)))
 
     step_time = [
-        f / n if n > 0 else float("nan")
-        for f, n in zip(fit_s, num_solver_iter)
+        f / n if n > 0 else float("nan") for f, n in zip(fit_s, num_solver_iter)
     ]
 
     input_shapes = config["input_shapes"]
@@ -506,151 +504,3 @@ def aggregate_results(results_dir: str, csv_path: str) -> None:
         writer.writeheader()
         writer.writerows(rows)
     print(f"Aggregated {len(rows)} rows ({n_configs} configs) -> {csv_path}")
-
-
-def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Benchmark GLM fitting across solvers and configurations.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-
-    # mutually exclusive top-level actions
-    actions = parser.add_mutually_exclusive_group()
-    actions.add_argument(
-        "--generate_configs",
-        action="store_true",
-        help="Generate config list from grid parameters and save to --config_path.",
-    )
-    actions.add_argument(
-        "--generate_data",
-        action="store_true",
-        help="Pre-generate all unique synthetic datasets from --config_path and save to --data_path.",
-    )
-    actions.add_argument(
-        "--aggregate",
-        action="store_true",
-        help="Aggregate JSON results in --output_path into --csv_path.",
-    )
-
-    # paths
-    parser.add_argument(
-        "--config_path",
-        type=str,
-        default="glm_benchmark_configs.json",
-        help="Path to load/save the config list JSON.",
-    )
-    parser.add_argument(
-        "--output_path",
-        type=str,
-        default="benchmark_results",
-        help="Directory for per-config JSON result files.",
-    )
-    parser.add_argument(
-        "--data_path",
-        type=str,
-        default="benchmark_data",
-        help="Directory for cached synthetic data files.",
-    )
-    parser.add_argument(
-        "--csv_path",
-        type=str,
-        default="benchmark_results.csv",
-        help="Output CSV path (used with --aggregate).",
-    )
-
-    # job selection
-    parser.add_argument(
-        "--fit_ids",
-        type=int,
-        nargs="+",
-        default=None,
-        help="Indices into the config list to benchmark. Defaults to all configs.",
-    )
-    parser.add_argument(
-        "--n_reps",
-        type=int,
-        default=DEFAULT_N_REPS,
-        help="Number of independent repetitions per config.",
-    )
-
-    # grid parameters (used with --generate_configs)
-    parser.add_argument(
-        "--sample_sizes", type=int, nargs="+", default=DEFAULT_SAMPLE_SIZES
-    )
-    parser.add_argument(
-        "--feature_dims", type=int, nargs="+", default=DEFAULT_FEATURE_DIMS
-    )
-    parser.add_argument("--pop_sizes", type=int, nargs="+", default=DEFAULT_POP_SIZES)
-    parser.add_argument(
-        "--regularizers", type=str, nargs="+", default=DEFAULT_REGULARIZERS
-    )
-    parser.add_argument(
-        "--solver_names", type=str, nargs="+", default=DEFAULT_SOLVER_NAMES
-    )
-    parser.add_argument("--devices", type=str, nargs="+", default=DEFAULT_DEVICES)
-
-    return parser.parse_args()
-
-
-def _print_env_info() -> None:
-    """Print environment diagnostics for debugging worker configuration."""
-    import os
-    import sys
-
-    print("=" * 60)
-    print("WORKER ENV DIAGNOSTICS")
-    print("=" * 60)
-    print(f"  hostname       : {socket.gethostname()}")
-    print(f"  python         : {sys.executable}")
-    print(f"  python version : {sys.version.split()[0]}")
-    print(f"  nemos version  : {nmo.__version__}")
-    print(f"  jax version    : {jax.__version__}")
-    print(f"  JAX_PLATFORMS  : {os.environ.get('JAX_PLATFORMS', '(not set)')}")
-    try:
-        devices = jax.devices()
-        print(f"  jax devices    : {devices}")
-    except Exception as e:
-        print(f"  jax devices    : ERROR — {e}")
-    # check for CUDA libs in LD_LIBRARY_PATH
-    ld = os.environ.get("LD_LIBRARY_PATH", "")
-    cuda_in_path = any(
-        "cuda" in p.lower() or "cudnn" in p.lower() for p in ld.split(":")
-    )
-    print(f"  CUDA in LD_LIBRARY_PATH: {cuda_in_path}")
-    if not cuda_in_path:
-        print(f"  LD_LIBRARY_PATH: {ld or '(not set)'}")
-    print("=" * 60)
-
-
-if __name__ == "__main__":
-    args = _parse_args()
-    _print_env_info()
-
-    if args.generate_configs:
-        configs = generate_glm_configs(
-            sample_sizes=args.sample_sizes,
-            feature_dims=args.feature_dims,
-            population_sizes=args.pop_sizes,
-            regularizers=args.regularizers,
-            solver_names=args.solver_names,
-            devices=args.devices,
-        )
-        Path(args.config_path).write_text(json.dumps(configs, indent=2))
-        print(f"Generated {len(configs)} configs -> {args.config_path}")
-
-    elif args.generate_data:
-        configs = json.loads(Path(args.config_path).read_text())
-        print(f"Pre-generating synthetic data for {len(configs)} configs ...")
-        generate_all_data(configs, args.data_path)
-
-    elif args.aggregate:
-        aggregate_results(args.output_path, args.csv_path)
-
-    else:
-        configs = json.loads(Path(args.config_path).read_text())
-        fit_ids = (
-            args.fit_ids if args.fit_ids is not None else list(range(len(configs)))
-        )
-        run_benchmarks(
-            configs, fit_ids, args.output_path, args.data_path, n_reps=args.n_reps
-        )
