@@ -14,13 +14,16 @@ kernelspec:
 (solver-selection)=
 # Benchmarking GLM Configurations
 
-In this note we will compares solvers performance in GLM problems on simulated data and neural recordings (from [1]_), for all combinations of:
+```{contents}
+:depth: 2
+:local:
+```
+
+In this note we will compare solvers performance in GLM problems on simulated data and neural recordings (from [[1]](#ref-1)), for all combinations of:
 
 - **devices:** cpu vs cuda.
-- **solvwera:**  NeMoS JIT compiled solvers and a scipy wrapper of `L-BFGS-B`, see table below.
+- **solvers:**  NeMoS JIT compiled solvers and a scipy wrapper of `L-BFGS-B`, see the [table below](table_solvers) for a complete list.
 - **problem sizes:** (simulation only) by varying number of samples, features and neurons.
-
-
 
 :::{admonition} JIT vs `scipy.minimize`
 :class: note
@@ -28,17 +31,140 @@ In this note we will compares solvers performance in GLM problems on simulated d
 NeMoS native solvers JIT-compile the full optimization when `GLM.fit` is called, incurring a one-time compilation cost before the first iteration. `L-BFGS-B` from `scipy.minimize` calls pre-compiled Fortran routines but invokes Python at each iteration to evaluate the GLM likelihood and gradient. As a result, most JIT-compiled solvers run faster per-iteration once compiled, while `scipy` avoids the compilation cost entirely. If the optimization loop dominates over compilation (large problems, many iterations), prefer the JIT-compiled solvers; for small problems, the scipy wrapper provided below is likely faster.
 :::
 
-## Solvers
 
-| Solver | Backend | Notes |
-|--------|---------|-------|
-| [`GradientDescent`](https://en.wikipedia.org/wiki/Gradient_descent) | [optimistix](https://docs.kidger.site/optimistix/) | First-order (gradient only). Memory scales linearly with parameter count. Smooth penalties only; typically requires many iterations. |
-| [`BFGS`](https://en.wikipedia.org/wiki/Broyden%E2%80%93Fletcher%E2%80%93Goldfarb%E2%80%93Shanno_algorithm) | [optimistix](https://docs.kidger.site/optimistix/) | Quasi-Newton; maintains a dense Hessian approximation. Memory scales quadratically with parameter count — impractical for large parameter spaces. Fewer iterations than first-order methods. |
-| [`LBFGS`](https://en.wikipedia.org/wiki/Limited-memory_BFGS) | [optax](https://optax.readthedocs.io/) + [optimistix](https://docs.kidger.site/optimistix/) | Limited-memory quasi-second-order; stores the last *m* gradient vectors. Memory scales linearly. Fewer iterations than first-order methods. Recommended default for smooth problems. |
+## Results
+
+We present the results in two section: simulations and real data. The difference in how algorithm performs under the two conditions is striking, but the interpretation is pretty obvious:
+
+- **Simulations**: fitting simulated data requires a small number of optimization steps, and the compilation cost dominates over the optimization loop; fitting real data requires hundres of iterations (sometimes thousands for some algorithms). Scipy and methods with fast updates and quicker compile times are preferrable.
+- **Real data**: the optimization requires hudreds to thousands of iteratoins depending on the algorithm. JIT compiled solvers are more efficient since the compilation cost is negligible.
+- **GPU vs CPU**: GPU compilation takes longer, but the optimization updates scale very well with problem size making it the most performant option for large problem sizes. This is most likely the case for large neural recordings.
+
+
+Before digging into the data, some let's set up some `pandas` configurations and helper functions.
+
+```{code-cell}
+
+import pandas as pd
+from pathlib import Path
+
+pd.set_option("display.max_rows", 25)
+pd.set_option("display.max_columns", None)
+pd.set_option("display.expand_frame_repr", False)
+pd.set_option("display.float_format", "{:.3f}".format)
+
+def load(csv_path: str | Path) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Return (synthetic_df, recordings_df) split on data_source, warmup rep dropped."""
+    df = pd.read_csv(csv_path)
+    df = df[df["rep"] != 0]  # rep 0 is a warmup run — discard before any stats
+    df["compilation_s"] = df["compilation_s"].fillna(0.0)
+    synth = df[df["data_source"] == "synthetic"].copy()
+    recordings = df[df["data_source"] != "synthetic"].copy()
+    return synth, recordings
+
+
+def filter_and_compute_averages(df: pd.DataFrame, query: str | None=None):
+    """Prepare benchmarking result summary.
+
+    This function filter the result dataframe with a query, and average the
+    end-to-end fit time over fit repetitions, and returns a styled dataframe.
+    """
+    # filter data
+    if query is not None:
+        df = simulations.query(query)
+    df = df.copy()
+
+    # compute the fraction of the end-to-end fit time spent on compilation
+    df.loc[:, "compile_time_fraction"]  = (df["compilation_s"] / df["end_to_end_s"])
+
+    # compute the mean fit time per repetition of the fit, as well as the mean
+    # number of iterations (constant over repetition since it is algorithm dependent)
+    result = (
+        df.groupby(["device", "solver_name"])
+        .agg(
+            fit_time_s=("end_to_end_s", "mean"),
+            converged=("converged", "all"),
+            iter_num=("iter_num", "mean"),
+            compile_time_fraction=("compile_time_fraction", "mean"),
+        )
+        .sort_values("fit_time_s")
+        .reset_index()
+    )
+    return (
+      result.style
+      .hide(axis="index")
+      .set_table_styles([
+          {"selector": "th", "props": [("text-align", "center")]},
+          {"selector": "td", "props": [("text-align", "center")]},
+          {"selector": "tr:nth-child(even)", "props": [("background-color", "#f2f2f2")]},
+          {"selector": "tr:nth-child(odd)", "props": [("background-color", "white")]},
+      ])
+      .format("{:.3f}", subset=["fit_time_s", "compile_time_fraction"])
+      .format("{:.0f}", subset=["iter_num"])
+      )
+
+```
+
+### Simulations
+
+When fitting simulated data, the compilation time represent a significant fraction of the total compute time. That's because the number of iteration required by the numerical solvers to converge to the optimal solution is relatively low. This is more evident in for the smallest problem size, as we can see by comparing the result of the smallest and the largest simulated problem.
+
+
+#### Smallest Dataset
+
+- Sample size: 100
+- Feature dimension: 1
+- Number of neurons: 1
+
+
+```{code-cell}
+
+# TODO: replace with download from www folder
+path = "/Users/ebalzani/Code/nemos/benchmarking_results/20260416_185100_benchmarking_a878a38.csv"
+
+# load the benchmarking results for the recordings and the simulations
+simulations, recordings = load(path)
+
+query = "sample_size == 1e2 and pop_size == 1  and feature_dim == 1"
+filter_and_compute_averages(simulations, query)
+```
+
+#### Largest Dataset
+
+- Sample size: $10^5$
+- Feature dimension: 100
+- Number of neurons: 20
+
+
+```{code-cell}
+
+query = "sample_size == 1e5 and pop_size == 20  and feature_dim == 100"
+filter_and_compute_averages(simulations, query)
+```
+
+### Neural Recordings
+
+- Sample size: 195820
+- Feature dimension: 95
+- Number of neurons: 19
+
+```{code-cell}
+
+filter_and_compute_averages(recordings)
+```
+
+(table_solvers)=
+## Benchmarked Solvers
+
+| Solver | Backend | Notes                                                                                                                                                                                                                                             |
+|--------|---------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [`GradientDescent`](https://en.wikipedia.org/wiki/Gradient_descent) | [optimistix](https://docs.kidger.site/optimistix/) | First-order (gradient only). Memory scales linearly with parameter count. Smooth penalties only; typically requires many iterations.                                                                                                              |
+| [`BFGS`](https://en.wikipedia.org/wiki/Broyden%E2%80%93Fletcher%E2%80%93Goldfarb%E2%80%93Shanno_algorithm) | [optimistix](https://docs.kidger.site/optimistix/) | Quasi-Newton; maintains a dense Hessian approximation. Memory scales quadratically with parameter count — impractical for large parameter spaces. Fewer iterations than first-order methods.                                                      |
+| [`LBFGS`](https://en.wikipedia.org/wiki/Limited-memory_BFGS) | [optax](https://optax.readthedocs.io/) + [optimistix](https://docs.kidger.site/optimistix/) | Limited-memory quasi-second-order; stores the last *m* gradient vectors. Memory scales linearly. Fewer iterations than first-order methods. Recommended default for smooth problems.                                                              |
 | [`LBFGS`](https://en.wikipedia.org/wiki/Limited-memory_BFGS) | scipy | L-BFGS-B via [`scipy.optimize.minimize`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html). No JIT compilation cost; Python callback per iteration. Preferred for small problems or many repeated `fit()` calls. |
-| [`ProximalGradient`](https://en.wikipedia.org/wiki/Proximal_gradient_method) | [optimistix](https://docs.kidger.site/optimistix/) | First-order + proximal step for non-smooth penalties (Lasso, GroupLasso, ElasticNet). Memory scales linearly. Typically requires many iterations. |
-| [`SVRG`](https://en.wikipedia.org/wiki/Stochastic_variance_reduction_gradient) | nemos | Inner loop of fast mini-batch gradient steps followed by a full-gradient anchor step each epoch. Memory scales linearly. The nested inner-outer loop structure can be slow on GPU. |
-| [`ProxSVRG`](https://en.wikipedia.org/wiki/Stochastic_variance_reduction_gradient) | nemos | Proximal variant of SVRG for non-smooth penalties. Same inner-outer loop structure and GPU caveats as `SVRG`. |
+| [`ProximalGradient`](https://en.wikipedia.org/wiki/Proximal_gradient_method) | [optimistix](https://docs.kidger.site/optimistix/) | First-order + proximal step for non-smooth penalties (Lasso, GroupLasso, ElasticNet). Memory scales linearly. Typically requires many iterations.                                                                                                 |
+| [`SVRG`](https://en.wikipedia.org/wiki/Stochastic_variance_reduction_gradient) | nemos | Inner loop of fast mini-batch gradient steps followed by a full-gradient anchor step each epoch. Memory scales linearly. The nested inner-outer loop structure can be slow on GPU. [[2]](#ref-2)                                                  |
+| [`ProxSVRG`](https://en.wikipedia.org/wiki/Stochastic_variance_reduction_gradient) | nemos | Proximal variant of SVRG for non-smooth penalties. Same inner-outer loop structure and GPU caveats as `SVRG`.                                                                                                                                     |
 
 ## Scipy L-BFGS-B reference adapter
 
@@ -169,7 +295,6 @@ model.fit(X, y)
 
 ## References
 
-[1] [Peyrache A, Lacroix MM, Petersen PC, Buzsáki G. Internally organized mechanisms of the head direction sense. Nat Neurosci. 2015 Apr;18(4):569-75. doi: 10.1038/nn.3968. Epub 2015 Mar 2. PMID: 25730672; PMCID: PMC4376557.](https://pubmed.ncbi.nlm.nih.gov/25730672/)
+[1] <span id="ref-1"><a href="https://pubmed.ncbi.nlm.nih.gov/25730672/">Peyrache A, Lacroix MM, Petersen PC, Buzsáki G. Internally organized mechanisms of the head direction sense. Nat Neurosci. 2015 Apr;18(4):569-75. doi: 10.1038/nn.3968. Epub 2015 Mar 2. PMID: 25730672; PMCID: PMC4376557.</a></span>
 
-https://doi.org/10.7554/eLife.85786.2
-[2] [Gower, Robert M., Mark Schmidt, Francis Bach, and Peter Richtárik. "Variance-Reduced Methods for Machine Learning." arXiv preprint arXiv:2010.00892 (2020).](https://arxiv.org/abs/2010.00892)
+[2] <span id="ref-2"><a href="https://arxiv.org/abs/2010.00892">Gower, Robert M., Mark Schmidt, Francis Bach, and Peter Richtárik. "Variance-Reduced Methods for Machine Learning." arXiv preprint arXiv:2010.00892 (2020).</a></span>
