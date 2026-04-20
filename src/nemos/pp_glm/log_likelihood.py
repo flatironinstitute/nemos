@@ -279,6 +279,7 @@ def _negative_log_likelihood(
     scan_size: int,
     max_window: int,
     eval_function: Callable,
+    aggregate_sample_scores: Callable = lambda l, y: l / y.shape[1],
 ) -> jnp.ndarray:
     r"""
     Compute the Poisson point process negative log-likelihood with a Monte Carlo
@@ -358,7 +359,9 @@ def _negative_log_likelihood(
         eval_function,
     )
 
-    return ((recording_time.tot_length() / M_samples) * mc_estimate) - log_lambda_y
+    nll_sum = ((recording_time.tot_length() / M_samples) * mc_estimate) - log_lambda_y
+
+    return aggregate_sample_scores(nll_sum, y)
 
 
 def _compute_loss(

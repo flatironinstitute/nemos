@@ -370,6 +370,7 @@ class TestLogLikelihood:
         )
 
         # numpy loop
+        n_spikes = y.shape[1]
         weights, bias = params_with_key.params.coef, params_with_key.params.intercept
         if all_to_one:
             weights = weights.reshape(-1, n_basis_funcs, 1)
@@ -377,7 +378,7 @@ class TestLogLikelihood:
             weights = weights.reshape(weights.shape[1], -1, weights.shape[1])
 
         log_lam_y_loop = 0
-        for sp in range(y.shape[1]):
+        for sp in range(n_spikes):
             i = y[:, sp]
             slice_start = i[-1].astype(int) - max_window
             slice_end = i[-1].astype(int)
@@ -450,6 +451,7 @@ class TestLogLikelihood:
         loss_loop = (
             (recording_time.tot_length() / M_samples) * mc_est_loop
         ) - log_lam_y_loop
+        loss_loop /= n_spikes
 
         np.testing.assert_almost_equal(loss_loop, loss_scan)
 
