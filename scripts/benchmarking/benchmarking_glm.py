@@ -23,6 +23,8 @@ from typing import List, Tuple
 import jax
 import jax.numpy as jnp
 import pynapple as nap
+from sklearn.linear_model import PoissonRegressor
+
 from scipy_adapter import ScipyLBFGS
 
 import nemos as nmo
@@ -49,6 +51,7 @@ DEFAULT_SOLVER_NAMES = [
     "ProximalGradient[optimistix]",
     "ProxSVRG[nemos]",
 ]
+DEFAULT_PACKAGES = ["nemos", "sklearn"]
 DEFAULT_DEVICES = ["cpu"]
 DEFAULT_N_REPS = 10
 
@@ -65,6 +68,7 @@ def generate_glm_configs(
     regularizers: List[str],
     solver_names: List[str],
     devices: List[str],
+    packages: List[str] = DEFAULT_PACKAGES,
 ) -> List[dict]:
     """
     Generate GLM configurations to benchmark.
@@ -105,40 +109,47 @@ def generate_glm_configs(
     _smooth_regs = frozenset({"Ridge", "UnRegularized"})
 
     configs = []
-    for samp, feat, pop_size, reg, solv, dev in product(
-        sample_sizes,
-        feature_dims,
-        population_sizes,
-        regularizers,
-        solver_names,
-        devices,
+    for samp, feat, pop_size, reg, dev in product(
+        sample_sizes, feature_dims, population_sizes, regularizers, devices
     ):
-        base_name = solv.split("[")[0]
-        if reg not in allowed_reg or base_name not in allowed_reg[reg]:
-            continue
-        if base_name in _prox_solvers and reg in _smooth_regs:
-            continue
-
-        solver_kw = {"maxiter": 1000, "tol": 1e-6}
-        if base_name in _svrg_solvers:
-            solver_kw["batch_size"] = max(1, samp // 10)
-
-        fit_config = {
-            "input_shapes": {
-                "X": [samp, feat],
-                "y": [samp, pop_size] if pop_size > 1 else [samp],
-            },
-            "model_conf": {
-                "solver_name": solv,
-                "solver_kwargs": solver_kw,
-                "regularizer": reg,
-                "regularizer_strength": 0.001 if reg != "UnRegularized" else None,
-            },
-            "device": dev,
+        input_shapes = {
+            "X": [samp, feat],
+            "y": [samp, pop_size] if pop_size > 1 else [samp],
         }
-        # file_name ties each result file back to a unique config
-        fit_config["file_name"] = f"{dev}_{dict_to_filename(fit_config)}.json"
-        configs.append(fit_config)
+
+        if "nemos" in packages:
+            for solv in solver_names:
+                base_name = solv.split("[")[0]
+                if reg not in allowed_reg or base_name not in allowed_reg[reg]:
+                    continue
+                if base_name in _prox_solvers and reg in _smooth_regs:
+                    continue
+                solver_kw = {"maxiter": 1000, "tol": 1e-6}
+                if base_name in _svrg_solvers:
+                    solver_kw["batch_size"] = max(1, samp // 10)
+                fit_config = {
+                    "package": "nemos",
+                    "input_shapes": input_shapes,
+                    "model_conf": {
+                        "solver_name": solv,
+                        "solver_kwargs": solver_kw,
+                        "regularizer": reg,
+                        "regularizer_strength": 0.001 if reg != "UnRegularized" else None,
+                    },
+                    "device": dev,
+                }
+                fit_config["file_name"] = f"{dev}_{dict_to_filename(fit_config)}.json"
+                configs.append(fit_config)
+
+        if "sklearn" in packages and reg == "Ridge" and dev == "cpu":
+            fit_config = {
+                "package": "sklearn",
+                "input_shapes": input_shapes,
+                "model_conf": {"alpha": 0.001, "max_iter": 1000, "solver": "newton-cholesky"},
+                "device": "cpu",
+            }
+            fit_config["file_name"] = f"cpu_{dict_to_filename(fit_config)}.json"
+            configs.append(fit_config)
 
     # add HD dataset
     path = nmo.fetch.fetch_data("Mouse32-140822.nwb")
@@ -146,36 +157,57 @@ def generate_glm_configs(
         "rate_threshold": 1,
         "epoch_tag": "wake",
         "location": "adn",
-        "n_basis_funcs": 5,
+        "n_basis_funcs": 8,
         "bin_size": 0.01,
         "window_size": 80,
     }
     X, y = get_hd_data(path, **kwargs)
-    for reg, solv, dev in product(regularizers, solver_names, devices):
-        base_name = solv.split("[")[0]
-        if reg not in allowed_reg or base_name not in allowed_reg[reg]:
-            continue
-        if base_name in _prox_solvers and reg in _smooth_regs:
-            continue
-        solver_kw = {"maxiter": 1000, "tol": 1e-6}
-        if base_name in _svrg_solvers:
-            solver_kw["batch_size"] = max(1, X.shape[0] // 10)
-        fit_configs = {
-            "input_shapes": {"X": [*X.shape], "y": [*y.shape]},
-            "model_conf": {
-                "regularizer": reg,
-                "solver_name": solv,
-                "solver_kwargs": solver_kw,
-            },
-            "device": dev,
-            "get_hd_data_kwargs": kwargs,
-            "file_name": path,
-        }
-        configs.append(fit_configs)
+    input_shapes = {"X": [*X.shape], "y": [*y.shape]}
+    extra = {"get_hd_data_kwargs": kwargs, "file_name": path}
+    for reg, dev in product(regularizers, devices):
+        if "nemos" in packages:
+            for solv in solver_names:
+                base_name = solv.split("[")[0]
+                if reg not in allowed_reg or base_name not in allowed_reg[reg]:
+                    continue
+                if base_name in _prox_solvers and reg in _smooth_regs:
+                    continue
+                solver_kw = {"maxiter": 1000, "tol": 1e-6}
+                if base_name in _svrg_solvers:
+                    solver_kw["batch_size"] = max(1, X.shape[0] // 10)
+                configs.append({
+                    "package": "nemos",
+                    "input_shapes": input_shapes,
+                    "model_conf": {
+                        "regularizer": reg,
+                        "solver_name": solv,
+                        "solver_kwargs": solver_kw,
+                        "regularizer_strength": 0.001,
+                    },
+                    "device": dev,
+                    **extra,
+                })
+
+        if "sklearn" in packages and reg == "Ridge" and dev == "cpu":
+            configs.append({
+                "package": "sklearn",
+                "input_shapes": input_shapes,
+                "model_conf": {"alpha": 0.001, "max_iter": 1000, "solver": "newton-cholesky"},
+                "device": "cpu",
+                **extra,
+            })
     return configs
 
 
-def model_from_config(config: dict) -> nmo.glm.GLM | nmo.glm.PopulationGLM:
+def _sklearn_model(config) -> list[PoissonRegressor]:
+    y_shape = config["input_shapes"]["y"]
+    n_neurons = 1 if len(y_shape) == 1 else y_shape[1]
+    return [PoissonRegressor(**config["model_conf"]) for _ in range(n_neurons)]
+
+
+def model_from_config(config: dict) -> nmo.glm.GLM | nmo.glm.PopulationGLM | list[PoissonRegressor]:
+    if config["package"] == "sklearn":
+        return _sklearn_model(config)
     y_shape = config["input_shapes"]["y"]
     is_population = len(y_shape) > 1
     if is_population:
@@ -194,11 +226,15 @@ def generate_data(
     w = 0.1 * jax.random.normal(keys[1], shape=(feat, n_neurons))
     weights = w[:, 0] if n_neurons == 1 else w
     intercept = -0.1 * jnp.ones(n_neurons)
-    model.coef_ = weights
-    model.intercept_ = intercept
-    y, _ = model.simulate(keys[2], X)
-    model.coef_ = None
-    model.intercept_ = None
+    if not isinstance(model, list):
+        mdl = model.__sklearn_clone__()
+    else:
+        # sklearn
+        cls = nmo.glm.GLM if n_neurons == 1 else nmo.glm.PopulationGLM
+        mdl = cls()
+    mdl.coef_ = weights
+    mdl.intercept_ = intercept
+    y, _ = mdl.simulate(keys[2], X)
     return X, y
 
 
@@ -286,10 +322,211 @@ def _get_git_commit() -> str:
         return "unknown"
 
 
+def _get_cpu_model() -> str:
+    try:
+        out = subprocess.check_output(["lscpu"], stderr=subprocess.DEVNULL).decode()
+        for line in out.splitlines():
+            if line.startswith("Model name:"):
+                return line.split(":", 1)[1].strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pass
+    return "unknown"
+
+
+def _get_gpu_models() -> list[str]:
+    try:
+        out = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            stderr=subprocess.DEVNULL,
+        ).decode()
+        return [line.strip() for line in out.splitlines() if line.strip()]
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return []
+
+
+def _get_meta() -> dict:
+    return {
+        "nemos_version": nmo.__version__,
+        "jax_version": jax.__version__,
+        "hostname": socket.gethostname(),
+        "cpu_model": _get_cpu_model(),
+        "gpu_models": _get_gpu_models(),
+        "timestamp": datetime.datetime.now().isoformat(),
+        "git_commit": _get_git_commit(),
+    }
+
+
+def _benchmark_nemos(config: dict, X: jnp.ndarray, y: jnp.ndarray, n_reps: int) -> dict:
+    """Benchmark a NeMoS GLM/PopulationGLM, isolating solver init, compilation, and execution."""
+    model = model_from_config(config)
+    pars = model.initialize_params(X, y)
+    model_pars = model._validator.to_model_params(pars)
+
+    is_scipy = model.solver_spec.backend == "scipy"
+
+    def _get_iter_num(m):
+        if is_scipy:
+            return int(m.solver_state_.iter_num)
+        return int(m.solver_state_.stats.num_steps.item())
+
+    def _get_converged(state):
+        if is_scipy:
+            return bool(state.converged)
+        return bool(state.stats.converged.item())
+
+    solver_init_s = []
+    compilation_s = []
+    fit_s = []
+    end_to_end_s = []
+    converged = []
+    num_solver_iter = []
+    param_norm = []
+
+    for _ in range(n_reps):
+        model = model_from_config(config)
+
+        t0 = perf_counter()
+        _ = model._initialize_optimizer_and_state(model_pars, X, y)
+        t1 = perf_counter()
+        solver_init_s.append(t1 - t0)
+
+        if not is_scipy:
+            t2 = perf_counter()
+            compiled = (
+                jax.jit(model._optimizer_run).trace(model_pars, X, y).lower().compile()
+            )
+            t3 = perf_counter()
+            compilation_s.append(t3 - t2)
+        else:
+            compiled = model._optimizer_run
+            compilation_s.append(jnp.nan)
+
+        t4 = perf_counter()
+        pars, state, _ = compiled(model_pars, X, y)
+        pars.coef.block_until_ready()
+        t5 = perf_counter()
+        fit_s.append(t5 - t4)
+
+        converged.append(_get_converged(state))
+
+        # end-to-end fit: includes all preprocessing, validation, param init,
+        # solver init, compilation, and execution. Subtracting (solver_init +
+        # compilation + fit) from this gives an estimate of preprocessing overhead.
+        model = model_from_config(config)
+        t6 = perf_counter()
+        model.fit(X, y)
+        t7 = perf_counter()
+        end_to_end_s.append(t7 - t6)
+        num_solver_iter.append(_get_iter_num(model))
+        param_norm.append(float(jnp.linalg.norm(model.coef_)))
+
+    step_time = [
+        f / n if n > 0 else float("nan") for f, n in zip(fit_s, num_solver_iter)
+    ]
+
+    input_shapes = config["input_shapes"]
+    model_conf = config["model_conf"]
+    flat_config = {
+        "package": "nemos",
+        "sample_size": input_shapes["X"][0],
+        "feature_dim": input_shapes["X"][1],
+        "pop_size": input_shapes["y"][1] if len(input_shapes["y"]) > 1 else 1,
+        "solver_name": model_conf["solver_name"],
+        "regularizer": model_conf["regularizer"],
+        "maxiter": model_conf["solver_kwargs"]["maxiter"],
+        "tol": model_conf["solver_kwargs"]["tol"],
+        "batch_size": model_conf["solver_kwargs"].get("batch_size"),
+        "device": config["device"],
+        "solver_class": model._solver.__class__.__name__,
+        "data_source": (
+            Path(config["file_name"]).name
+            if config["file_name"].endswith("nwb")
+            else "synthetic"
+        ),
+    }
+
+    return {
+        "config": flat_config,
+        "results": {
+            "solver_init_s": solver_init_s,
+            "compilation_s": compilation_s,
+            "fit_s": fit_s,
+            "step_time": step_time,
+            "end_to_end_s": end_to_end_s,
+            "converged": converged,
+            "iter_num": num_solver_iter,
+            "param_norm": param_norm,
+        },
+        "meta": _get_meta(),
+    }
+
+
+def _benchmark_sklearn(config: dict, X: jnp.ndarray, y: jnp.ndarray, n_reps: int) -> dict:
+    """Benchmark sklearn PoissonRegressor, timing the sequential per-neuron fit loop."""
+    n_neurons = 1 if len(y.shape) == 1 else y.shape[1]
+    y_cols = [y] if n_neurons == 1 else [y[:, i] for i in range(n_neurons)]
+    nan = float("nan")
+
+    end_to_end_s = []
+    converged = []
+    num_solver_iter = []
+    param_norm = []
+
+    for _ in range(n_reps):
+        models = _sklearn_model(config)
+        t0 = perf_counter()
+        for m, yi in zip(models, y_cols):
+            m.fit(X, yi)
+        t1 = perf_counter()
+        end_to_end_s.append(t1 - t0)
+
+        max_iter = models[0].max_iter
+        converged.append(all(m.n_iter_ < max_iter for m in models))
+        num_solver_iter.append(sum(int(m.n_iter_) for m in models))
+        coefs = jnp.concatenate([jnp.ravel(jnp.array(m.coef_)) for m in models])
+        param_norm.append(float(jnp.linalg.norm(coefs)))
+
+    input_shapes = config["input_shapes"]
+    model_conf = config["model_conf"]
+    flat_config = {
+        "package": "sklearn",
+        "sample_size": input_shapes["X"][0],
+        "feature_dim": input_shapes["X"][1],
+        "pop_size": input_shapes["y"][1] if len(input_shapes["y"]) > 1 else 1,
+        "solver_name": "newton-cholesky[sklearn]",
+        "regularizer": "Ridge",
+        "maxiter": model_conf.get("max_iter", 1000),
+        "tol": nan,
+        "batch_size": None,
+        "device": config["device"],
+        "solver_class": "PoissonRegressor",
+        "data_source": (
+            Path(config["file_name"]).name
+            if config["file_name"].endswith("nwb")
+            else "synthetic"
+        ),
+    }
+
+    return {
+        "config": flat_config,
+        "results": {
+            "solver_init_s": [nan] * n_reps,
+            "compilation_s": [nan] * n_reps,
+            "fit_s": [nan] * n_reps,
+            "step_time": [nan] * n_reps,
+            "end_to_end_s": end_to_end_s,
+            "converged": converged,
+            "iter_num": num_solver_iter,
+            "param_norm": param_norm,
+        },
+        "meta": _get_meta(),
+    }
+
+
 def benchmark_fit(
     config: dict, X: jnp.ndarray, y: jnp.ndarray, n_reps: int = DEFAULT_N_REPS
 ) -> dict:
-    """Benchmark model fitting, isolating solver init, compilation, and execution.
+    """Benchmark model fitting for a single config.
 
     Parameters
     ----------
@@ -311,118 +548,9 @@ def benchmark_fit(
             "Device configuration doesn't match requested platform. "
             "GPU configs must be run on GPU nodes."
         )
-
-    # initialize_params is deterministic for fixed config/data — compute once
-    model = model_from_config(config)
-    pars = model.initialize_params(X, y)
-    model_pars = model._validator.to_model_params(pars)
-
-    is_scipy = model.solver_spec.backend == "scipy"
-
-    def _get_iter_num(model):
-        if is_scipy:
-            return int(model.solver_state_.iter_num)
-        return int(model.solver_state_.stats.num_steps.item())
-
-    def _get_converged(state):
-        if is_scipy:
-            return bool(state.converged)
-        return bool(state.stats.converged.item())
-
-    solver_init_s = []
-    compilation_s = []
-    fit_s = []
-    end_to_end_s = []
-    converged = []
-    num_solver_iter = []
-    param_norm = []
-
-    for _ in range(n_reps):
-        # fresh model each rep for independent measurements
-        model = model_from_config(config)
-
-        t0 = perf_counter()
-        _ = model._initialize_optimizer_and_state(model_pars, X, y)
-        t1 = perf_counter()
-        solver_init_s.append(t1 - t0)
-
-        # compile on the same instance so _optimizer_run is valid
-        if not is_scipy:
-            t2 = perf_counter()
-            compiled = (
-                jax.jit(model._optimizer_run).trace(model_pars, X, y).lower().compile()
-            )
-            t3 = perf_counter()
-            compilation_s.append(t3 - t2)
-        else:
-            compiled = model._optimizer_run
-            compilation_s.append(jnp.nan)
-        # execution only — no compilation overhead
-        t4 = perf_counter()
-        pars, state, _ = compiled(model_pars, X, y)
-        pars.coef.block_until_ready()
-        t5 = perf_counter()
-        fit_s.append(t5 - t4)
-
-        has_converged = _get_converged(state)
-        converged.append(has_converged)
-
-        # end-to-end fit: includes all preprocessing, validation, param init,
-        # solver init, compilation, and execution. Subtracting (solver_init +
-        # compilation + fit) from this gives an estimate of preprocessing overhead.
-        model = model_from_config(config)
-        t6 = perf_counter()
-        model.fit(X, y)
-        t7 = perf_counter()
-        end_to_end_s.append(t7 - t6)
-        num_solver_iter.append(_get_iter_num(model))
-        param_norm.append(float(jnp.linalg.norm(model.coef_)))
-
-    step_time = [
-        f / n if n > 0 else float("nan") for f, n in zip(fit_s, num_solver_iter)
-    ]
-
-    input_shapes = config["input_shapes"]
-    model_conf = config["model_conf"]
-    flat_config = {
-        "sample_size": input_shapes["X"][0],
-        "feature_dim": input_shapes["X"][1],
-        "pop_size": input_shapes["y"][1] if len(input_shapes["y"]) > 1 else 1,
-        "solver_name": model_conf["solver_name"],
-        "regularizer": model_conf["regularizer"],
-        "maxiter": model_conf["solver_kwargs"]["maxiter"],
-        "tol": model_conf["solver_kwargs"]["tol"],
-        "batch_size": model_conf["solver_kwargs"].get("batch_size"),
-        "device": config["device"],
-        # ground truth solver used
-        "solver_class": model._solver.__class__.__name__,
-        "data_source": (
-            Path(config["file_name"]).name
-            if config["file_name"].endswith("nwb")
-            else "synthetic"
-        ),
-    }
-
-    return {
-        "config": flat_config,
-        "results": {
-            "solver_init_s": solver_init_s,
-            "compilation_s": compilation_s,
-            "fit_s": fit_s,
-            "step_time": step_time,
-            "end_to_end_s": end_to_end_s,
-            "converged": converged,
-            "iter_num": num_solver_iter,
-            "param_norm": param_norm,
-        },
-        "meta": {
-            "nemos_version": nmo.__version__,
-            "jax_version": jax.__version__,
-            "hostname": socket.gethostname(),
-            "timestamp": datetime.datetime.now().isoformat(),
-            "git_commit": _get_git_commit(),
-        },
-    }
+    if config["package"] == "sklearn":
+        return _benchmark_sklearn(config, X, y, n_reps)
+    return _benchmark_nemos(config, X, y, n_reps)
 
 
 def run_benchmarks(
@@ -439,19 +567,18 @@ def run_benchmarks(
     for idx in fit_ids:
         config = configs[idx]
         is_real_data = config["file_name"].endswith("nwb")
-        mc = config["model_conf"]
+        pkg = config["package"]
         shapes = config["input_shapes"]
-        if is_real_data:
-            data_name = Path(config["file_name"]).name
-            print(
-                f"{data_name}: [{idx}] {mc['solver_name']} | {mc['regularizer']} | "
-                f"X={shapes['X']} | y={shapes['y']} | device={config['device']}"
-            )
+        if pkg == "sklearn":
+            solver_label = f"newton-cholesky[sklearn] | Ridge | alpha={config['model_conf']['alpha']}"
         else:
-            print(
-                f"Simulation: [{idx}] {mc['solver_name']} | {mc['regularizer']} | "
-                f"X={shapes['X']} | y={shapes['y']} | device={config['device']}"
-            )
+            mc = config["model_conf"]
+            solver_label = f"{mc['solver_name']} | {mc['regularizer']}"
+        data_label = Path(config["file_name"]).name if is_real_data else "Simulation"
+        print(
+            f"{data_label}: [{idx}] {solver_label} | "
+            f"X={shapes['X']} | y={shapes['y']} | device={config['device']}"
+        )
         X, y = get_data(config, path=data_path)
         result = benchmark_fit(config, X, y, n_reps=n_reps)
         if is_real_data:
