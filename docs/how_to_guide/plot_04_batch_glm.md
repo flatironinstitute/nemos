@@ -77,21 +77,21 @@ Draw Poisson counts in each bin from this rate, convert them to spike times, and
 
 ```{code-cell} ipython3
 spike_t, spike_id = np.where(np.random.poisson(rate))
-units = nap.Tsd(spike_t / T, spike_id).to_tsgroup()
+units = nap.Tsd(spike_t / len(times) * T, spike_id).to_tsgroup()
 ```
 
 ## Define the features
 
-Each neuron's firing rate will be predicted from the recent spike history of the whole population. We build those history features with a NeMoS convolutional basis.
+Each neuron's firing rate will be predicted from the recent spike history of the whole population. We build those history features with a NeMoS convolutional basis with a window size of 200 ms.
 
 ```{code-cell} ipython3
-basis = nmo.basis.RaisedCosineLogConv(5, window_size=40)
+basis = nmo.basis.RaisedCosineLogConv(5, window_size=int(0.2 / bin_size))
 ```
 
-Each batch is the population activity in a `batch_size` long window, binned at `bin_size`, and passed through this basis. With `window_size=40` bins and `bin_size=0.005` s, the basis's kernel covers 200 ms.
+Each batch is the population activity in a `batch_size` long window, binned at `bin_size`, and passed through this basis.
 
 ```{code-cell} ipython3
-batch_size = 5  # seconds
+batch_size = 1  # seconds
 ```
 
 :::{note}
@@ -280,7 +280,7 @@ For the `GradientDescent` solver, set `acceleration=False` and provide an explic
 ```{code-cell} ipython3
 glm = nmo.glm.PopulationGLM(
     solver_name="GradientDescent",
-    solver_kwargs={"stepsize": 0.1, "acceleration": False},
+    solver_kwargs={"stepsize": 0.01, "acceleration": False},
 )
 ```
 
@@ -454,9 +454,8 @@ After the fit, the model exposes a [`StochasticFitSummary`](nemos.callbacks.Stoc
 through ``stochastic_fit_summary_``. This can, for example, be used to inspect why the run stopped:
 
 ```{code-cell} ipython3
-glm.stochastic_fit_summary_.stop_reason
+print(glm.stochastic_fit_summary_.stop_reason)
 ```
-
 
 We can also take a look at the coefficients.
 Here we extract the weight matrix of shape `(n_neurons*n_basis, n_neurons)`
@@ -478,7 +477,7 @@ ax.set_ylabel("Neurons")
 Since this example is small enough, we can fit the full model until convergence and compare the scores.
 
 ```{code-cell} ipython3
-full_model = nmo.glm.PopulationGLM(solver_kwargs={"maxiter": 10_000}).fit(X, full_counts)
+full_model = nmo.glm.PopulationGLM(solver_kwargs={"tol" : 1e-3}).fit(X, full_counts)
 ```
 
 Now that the full model is fitted, we score the full model and the batch model against the full dataset using pseudo-R2:
@@ -492,7 +491,7 @@ batch_scores = glm.score(
 )
 ```
 
-Let's compare scores for each neurons as well as the coefficients:
+Let's compare scores for each neuron as well as the coefficients:
 
 ```{code-cell} ipython3
 Wm2 = np.mean(np.abs(full_model.coef_.reshape(len(units), basis.n_basis_funcs, len(units))), 1)
@@ -504,7 +503,7 @@ ax_scores = fig.add_subplot(gs[0, :])
 ax_scores.bar(np.arange(n_neurons), full_scores, 0.4, label="Full model")
 ax_scores.bar(np.arange(n_neurons) + 0.5, batch_scores, 0.4, label="Batch model")
 ax_scores.set_ylabel("Pseudo R2")
-ax_scores.set_xlabel("Neurons")
+ax_scores.set_xlabel("Neuron")
 ax_scores.set_ylim(0, 1)
 ax_scores.legend()
 
@@ -519,4 +518,4 @@ ax_full.set_title("Full model")
 fig.tight_layout()
 ```
 
-As we can see, the batch model managed to recover a similar coefficient matrix.
+As we can see, the batch model starts to approximate the full model.
