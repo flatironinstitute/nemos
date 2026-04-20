@@ -377,10 +377,7 @@ def _benchmark_nemos(config: dict, X: jnp.ndarray, y: jnp.ndarray, n_reps: int) 
     solver_init_s = []
     compilation_s = []
     fit_s = []
-    end_to_end_s = []
     converged = []
-    num_solver_iter = []
-    param_norm = []
 
     for _ in range(n_reps):
         model = model_from_config(config)
@@ -409,9 +406,15 @@ def _benchmark_nemos(config: dict, X: jnp.ndarray, y: jnp.ndarray, n_reps: int) 
 
         converged.append(_get_converged(state))
 
-        # end-to-end fit: includes all preprocessing, validation, param init,
-        # solver init, compilation, and execution. Subtracting (solver_init +
-        # compilation + fit) from this gives an estimate of preprocessing overhead.
+    # Clear XLA cache so end-to-end reps see a cold cache, independent of the
+    # compilation measurements above.
+    jax.clear_caches()
+
+    end_to_end_s = []
+    num_solver_iter = []
+    param_norm = []
+
+    for _ in range(n_reps):
         model = model_from_config(config)
         t6 = perf_counter()
         model.fit(X, y)

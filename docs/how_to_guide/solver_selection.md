@@ -41,6 +41,8 @@ In this note we will compare solvers performance in GLM problems on simulated da
 - **solvers:**  NeMoS JIT compiled solvers and a scipy wrapper of `L-BFGS-B`, see the [table below](table_solvers) for a complete list.
 - **problem sizes:** (simulation only) by varying number of samples, features and neurons.
 
+Additionally, we compared against scikit-learn's `PoissonRegressor` with the `"newton-cholevsky"` solver, which is the most efficient for the configuration tested.
+
 :::{admonition} JIT vs `scipy.minimize`
 :class: note
 
@@ -93,7 +95,7 @@ def filter_and_compute_averages(df: pd.DataFrame, query: str | None=None):
     df = df.copy()
 
     # compute the fraction of the end-to-end fit time spent on compilation
-    df.loc[:, "compile_time_fraction"]  = (df["compilation_s"] / df["end_to_end_s"])
+    df.loc[:, "compile_time_fraction"]  = df["compilation_s"] / (df["solver_init_s"] + df["compilation_s"] + df["fit_s"])
 
     # compute the mean fit time per repetition of the fit, as well as the mean
     # number of iterations (constant over repetition since it is algorithm dependent)
