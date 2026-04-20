@@ -232,7 +232,7 @@ class TestUtils:
 
         # test padding values are out of bound and basis evals to 0
         bound = dataset["recording_time"].start[0] - dataset["history_window"]
-        padding = dataset["X"][0][:dataset["max_window"]]
+        padding = dataset["X"][0][: dataset["max_window"]]
         assert np.all(padding < bound)
 
         first_spike = dataset["y"][0][0]

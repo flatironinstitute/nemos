@@ -29,11 +29,7 @@ def slice_array(array: jnp.ndarray, i: int, window_size: int):
     :
         A slice of recent events. Shape (n_channels, window_size).
     """
-    return jax.lax.dynamic_slice(
-        array,
-        (i - window_size,),
-        (window_size,)
-    )
+    return jax.lax.dynamic_slice(array, (i - window_size,), (window_size,))
 
 
 def reshape_coef_for_scan(weights: jnp.ndarray, n_basis_funcs: int):
@@ -64,6 +60,7 @@ def reshape_coef_for_scan(weights: jnp.ndarray, n_basis_funcs: int):
             f"Weights must be either 1d or 2d array, the provided weights have shape {weights.shape}"
         )
 
+
 @partial(jax.jit, static_argnums=1)
 def reshape_input_for_scan(times: tuple, scan_size: int):
     """
@@ -86,6 +83,7 @@ def reshape_input_for_scan(times: tuple, scan_size: int):
     padding_len :
         Number of padding time points appended to make n_points divisible by scan_size.
     """
+
     def reshape_one(arr):
         padding_len = -arr.shape[0] % scan_size
         padded = jnp.concatenate([arr, jnp.full((padding_len,), arr[-1])])

@@ -1,10 +1,8 @@
-from typing import Callable, Dict, Union
-
 from functools import partial
+from typing import Callable, Dict, Union
 
 import jax
 import jax.numpy as jnp
-
 from pynapple import IntervalSet
 
 from ..typing import DESIGN_INPUT_TYPE
@@ -45,7 +43,7 @@ def _compute_lam_tilde(
     """
     fx = eval_function(dts)  # shape (max_window, n_basis_funcs)
 
-    return jnp.einsum('hjn,hj->n', weights, fx) + bias
+    return jnp.einsum("hjn,hj->n", weights, fx) + bias
 
 
 def _draw_mc_sample(
