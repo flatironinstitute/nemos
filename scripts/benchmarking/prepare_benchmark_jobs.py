@@ -29,6 +29,7 @@ from benchmarking_glm import (
     DEFAULT_DEVICES,
     DEFAULT_FEATURE_DIMS,
     DEFAULT_N_REPS,
+    DEFAULT_PACKAGES,
     DEFAULT_POP_SIZES,
     DEFAULT_REGULARIZERS,
     DEFAULT_SAMPLE_SIZES,
@@ -86,6 +87,7 @@ def generate_configs(args) -> list:
         regularizers=args.regularizers,
         solver_names=args.solver_names,
         devices=args.devices,
+        packages=args.packages,
     )
     config_path = base_dir / "configs.json"
     config_path.write_text(json.dumps(configs, indent=2))
@@ -322,6 +324,7 @@ def _parse_args() -> argparse.Namespace:
         "--solver_names", type=str, nargs="+", default=DEFAULT_SOLVER_NAMES
     )
     parser.add_argument("--devices", type=str, nargs="+", default=DEFAULT_DEVICES)
+    parser.add_argument("--packages", type=str, nargs="+", default=DEFAULT_PACKAGES)
 
     args = parser.parse_args()
 
