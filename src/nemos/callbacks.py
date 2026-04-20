@@ -6,6 +6,36 @@ from dataclasses import dataclass, field
 from typing import Any, Union
 
 
+@dataclass(frozen=True)
+class StochasticFitSummary:
+    """
+    Post-fit summary of a stochastic training run.
+
+    Stored on fitted models as ``stochastic_fit_summary_`` after
+    ``stochastic_fit`` completes. This summary is runtime state and is not
+    serialized by ``save_params()``.
+
+    Parameters
+    ----------
+    epoch_idx :
+        Final epoch index reached by the training loop.
+    batch_idx :
+        Final batch index reached within the last epoch.
+    num_epochs :
+        Total number of epochs requested for the run.
+    should_stop :
+        Whether a callback requested early stopping.
+    stop_reason :
+        Human-readable stop reason, if any.
+    """
+
+    epoch_idx: int | None = None
+    batch_idx: int | None = None
+    num_epochs: int = 0
+    should_stop: bool = False
+    stop_reason: str = ""
+
+
 @dataclass
 class TrainingContext:
     """
@@ -69,6 +99,17 @@ class TrainingContext:
     def stop_reason(self) -> str:
         """Reason for the stop request, if any."""
         return self._stop_reason
+
+    def to_summary(self) -> StochasticFitSummary:
+        """Create a post-fit summary from the current training context."""
+        return StochasticFitSummary(
+            epoch_idx=self.epoch_idx,
+            batch_idx=self.batch_idx,
+            num_epochs=self.num_epochs,
+            should_stop=self.should_stop,
+            stop_reason=self.stop_reason,
+        )
+
 
 class Callback:
     """

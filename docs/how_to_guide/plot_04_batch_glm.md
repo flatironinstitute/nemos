@@ -450,6 +450,14 @@ if path.exists():
     fig.savefig(path / "plot_04_batch_glm.svg")
 ```
 
+After the fit, the model exposes a [`StochasticFitSummary`](nemos.callbacks.StochasticFitSummary)
+through ``stochastic_fit_summary_``. This can, for example, be used to inspect why the run stopped:
+
+```{code-cell} ipython3
+glm.stochastic_fit_summary_.stop_reason
+```
+
+
 We can also take a look at the coefficients.
 Here we extract the weight matrix of shape `(n_neurons*n_basis, n_neurons)`
 and reshape it to `(n_neurons, n_basis, n_neurons)`.

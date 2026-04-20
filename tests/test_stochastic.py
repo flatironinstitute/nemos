@@ -12,6 +12,7 @@ from nemos.callbacks import (
     Callback,
     CallbackList,
     SolverConvergenceCallback,
+    StochasticFitSummary,
     TrainingContext,
     _normalize_callbacks,
 )
@@ -351,6 +352,49 @@ class TestGLMStochasticFit:
 
         assert model.scale_ is None
         assert model.dof_resid_ is None
+
+    def test_stochastic_fit_summary_contains_post_fit_state(self, simple_data):
+        """Test that stochastic_fit stores a post-fit summary rather than the full context."""
+        X, y = simple_data
+        loader = ArrayDataLoader(X, y, batch_size=32)
+
+        class StopAfterFirstBatch(Callback):
+            def on_batch_end(self, ctx):
+                ctx.request_stop("stop after first batch")
+
+        model = nmo.glm.GLM(
+            solver_name="GradientDescent",
+            solver_kwargs={"stepsize": 0.001, "maxiter": 100, "acceleration": False},
+        )
+        model.stochastic_fit(loader, num_epochs=5, callbacks=StopAfterFirstBatch())
+
+        assert isinstance(model.stochastic_fit_summary_, StochasticFitSummary)
+        assert model.stochastic_fit_summary_.epoch_idx == 0
+        assert model.stochastic_fit_summary_.batch_idx == 0
+        assert model.stochastic_fit_summary_.num_epochs == 5
+        assert model.stochastic_fit_summary_.should_stop
+        assert model.stochastic_fit_summary_.stop_reason == "stop after first batch"
+
+    def test_save_params_excludes_stochastic_fit_summary(self, simple_data, tmp_path):
+        """Test that stochastic_fit_summary_ is not serialized with save_params."""
+        X, y = simple_data
+        loader = ArrayDataLoader(X, y, batch_size=32)
+
+        class StopImmediately(Callback):
+            def on_batch_end(self, ctx):
+                ctx.request_stop("done")
+
+        model = nmo.glm.GLM(
+            solver_name="GradientDescent",
+            solver_kwargs={"stepsize": 0.001, "maxiter": 100, "acceleration": False},
+        )
+        model.stochastic_fit(loader, num_epochs=2, callbacks=StopImmediately())
+
+        save_path = tmp_path / "stochastic_model.npz"
+        model.save_params(save_path)
+        loaded_model = nmo.load_model(save_path)
+
+        assert not hasattr(loaded_model, "stochastic_fit_summary_")
 
 
 class TestPopulationGLMStochasticFit:

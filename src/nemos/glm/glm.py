@@ -20,6 +20,7 @@ from ..base_regressor import BaseRegressor, strip_metadata
 from ..batching import DataLoader, _PreprocessedDataLoader, is_data_loader
 from ..callbacks import (
     Callback,
+    StochasticFitSummary,
     TrainingContext,
     _normalize_callbacks,
 )
@@ -163,6 +164,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         Basis coefficients for the model.
     solver_state_ :
         State of the solver after fitting. May include details like optimization error.
+    stochastic_fit_summary_ :
+        Summary of the most recent stochastic training run, including the
+        final epoch and batch indices and any callback stop reason.
     scale_:
         Scale parameter for the model. The scale parameter is the constant :math:`\Phi`, for which
         :math:`\text{Var} \left( y \right) = \Phi V(\mu)`. This parameter, together with the estimate
@@ -859,8 +863,10 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
 
         Returns
         -------
-        self :
-            The fitted model.
+        self
+            The fitted model. After fitting, ``self.stochastic_fit_summary_``
+            stores a :class:`nemos.callbacks.StochasticFitSummary`
+            describing the run.
 
         Raises
         ------
@@ -948,6 +954,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         self._set_model_params(params)
         self.solver_state_ = state
         self.aux_ = aux
+        self.stochastic_fit_summary_: StochasticFitSummary = ctx.to_summary()
 
         # TODO: Add a version of these calculations that iterates through the data again
         self.scale_ = None
@@ -1340,6 +1347,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         # initialize saving dictionary
         fit_attrs = self._get_fit_state()
         fit_attrs.pop("solver_state_")
+        fit_attrs.pop("stochastic_fit_summary_", None)
         string_attrs = ["inverse_link_function"]
 
         self._save_params(filename, fit_attrs, string_attrs)
@@ -1440,6 +1448,9 @@ class PopulationGLM(GLM):
         Basis coefficients for the model.
     solver_state_ :
         State of the solver after fitting. May include details like optimization error.
+    stochastic_fit_summary_ :
+        Summary of the most recent stochastic training run, including the
+        final epoch and batch indices and any callback stop reason.
 
     Raises
     ------
