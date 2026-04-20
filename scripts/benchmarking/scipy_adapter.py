@@ -4,7 +4,6 @@ import scipy.optimize
 
 from nemos.utils import get_flattener_unflattener
 
-
 class ScipySolverState(NamedTuple):
     """State of a scipy-based solver."""
 
@@ -27,6 +26,7 @@ class ScipySolver:
         has_aux,
         init_params,
         method: str,
+        hess=None,
         maxiter: int = 100,
         tol: float = 1e-8,
     ) -> None:
@@ -49,8 +49,8 @@ class ScipySolver:
         self.fun = regularizer.penalized_loss(
             unregularized_loss, init_params, regularizer_strength
         )
-        self.grad = jax.grad(self.fun)
-
+        self.val_and_grad = jax.value_and_grad(self.fun)
+        self.hess = hess
         # storing these to later pass to scipy
         self.method = method
         self.tol = tol
@@ -65,7 +65,7 @@ class ScipySolver:
         For alternative, more flexible implementations see the solvers
         implemented in `nemos.solvers`.
         """
-        return {"method", "maxiter", "tol"}
+        return {"method", "hess", "maxiter", "tol"}
 
     def init_state(self, init_params, *args):
         """
@@ -127,17 +127,20 @@ class ScipySolver:
         # so that it can be evaluated
         def _flat_obj(flat_params, *args):
             params_in_their_orig_shape = unflattener_fun(flat_params)
-            return self.fun(params_in_their_orig_shape, *args)
+            f, fgrad = self.val_and_grad(params_in_their_orig_shape, *args)
+            return f, flattener_fun(fgrad)
 
-        def _flat_grad(flat_params, *args):
+
+        def _flat_hess(flat_params, *args):
             params_in_their_orig_shape = unflattener_fun(flat_params)
-            return flattener_fun(self.grad(params_in_their_orig_shape, *args))
+            return self.hess(params_in_their_orig_shape, *args)
 
         # pass the flat parameters and the objective function taking them
         # also the custom parameters we saved in __init__
         res = scipy.optimize.minimize(
             fun=_flat_obj,
-            jac=_flat_grad,
+            jac=True,
+            hess=_flat_hess if self.hess is not None else None,
             x0=_flat_params,
             args=args,
             method=self.method,
@@ -167,7 +170,7 @@ class ScipyLBFGS(ScipySolver):
             regularizer_strength,
             has_aux,
             init_params,
-            "L-BFGS-B",
-            maxiter,
-            tol,
+            method="L-BFGS-B",
+            maxiter=maxiter,
+            tol=tol,
         )
