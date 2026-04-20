@@ -389,6 +389,18 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
             )
         _check_unique_shapes(xi, basis=self)
         set_input_shape(self, *xi)
+
+        if len(xi[0]) == 0:
+            # no samples
+            if self._pynapple_support:
+                conv_type = "numpy" if nap.nap_config.backend == "numba" else "jax"
+                apply_func = support_pynapple(conv_type)(
+                    lambda *x: np.zeros((0, self.n_output_features))
+                )
+                return apply_func(*xi)
+            else:
+                return jnp.zeros((0, self.n_output_features))
+
         design_matrix = self.evaluate(
             *xi
         )  # (n_samples, *n_output_shape, n_vec_dim, n_basis)

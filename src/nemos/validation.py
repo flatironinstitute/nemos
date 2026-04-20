@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import difflib
 import warnings
-from typing import Any, Callable, List, Optional, Union
+from typing import Any, Callable, List, Optional
 
 import jax
 import jax.numpy as jnp
 from numpy.typing import DTypeLike, NDArray
 
 from . import utils
-from .pytrees import FeaturePytree
 from .tree_utils import get_valid_multitree, pytree_map_and_reduce
 
 
@@ -210,8 +209,8 @@ def check_array_shape_match_tree(
 
 
 def array_axis_consistency(
-    array_1: Union[FeaturePytree, jnp.ndarray, NDArray],
-    array_2: Union[FeaturePytree, jnp.ndarray, NDArray],
+    array_1: Any,
+    array_2: Any,
     axis_1: int,
     axis_2: int,
 ):
@@ -317,8 +316,6 @@ def _check_basis_matrix_shape(basis_matrix):
             "basis_matrix must be a 2 dimensional array! "
             f"{basis_matrix.ndim} dimensions provided instead."
         )
-    if basis_matrix.shape[0] == 1:
-        raise ValueError("`basis_matrix.shape[0]` should be at least 2!")
     return basis_matrix
 
 

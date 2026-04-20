@@ -1,4 +1,6 @@
+from contextlib import nullcontext as does_not_raise
 from typing import Union
+from unittest.mock import MagicMock, patch
 
 import jax.numpy as jnp
 import pytest
@@ -6,6 +8,7 @@ from numpy.typing import NDArray
 
 from nemos.base_class import Base
 from nemos.base_regressor import BaseRegressor
+from nemos.regularizer import Lasso, Ridge
 
 
 class MockBaseRegressorInvalid(BaseRegressor):
@@ -87,6 +90,63 @@ def test_empty_set(mock_regressor):
     assert mock_regressor.set_params() is mock_regressor
 
 
+class TestRegularizerSetter:
+    """Test solver_spec and warning behavior when switching regularizers."""
+
+    @pytest.mark.parametrize(
+        "new_regularizer, solver_name, expectation, solver_spec_is_none",
+        [
+            (
+                Ridge(),
+                "LBFGS",
+                does_not_raise(),
+                False,
+            ),  # LBFGS compat with Ridge: spec preserved
+            (
+                Lasso(),
+                "LBFGS",
+                pytest.warns(UserWarning, match="not allowed"),
+                True,
+            ),  # incompatible: reset + warn
+            (
+                Lasso(),
+                None,
+                does_not_raise(),
+                True,
+            ),  # no explicit solver: stays None, no warning
+        ],
+    )
+    def test_solver_spec_on_regularizer_switch(
+        self,
+        mock_regressor,
+        new_regularizer,
+        solver_name,
+        expectation,
+        solver_spec_is_none,
+    ):
+        if solver_name is not None:
+            mock_regressor.solver_name = solver_name
+        with expectation:
+            mock_regressor.regularizer = new_regularizer
+        assert (mock_regressor._solver_spec is None) == solver_spec_is_none
+
+    @pytest.mark.parametrize(
+        "new_regularizer, solver_name",
+        [
+            (Ridge(), "LBFGS"),  # LBFGS compat with Ridge
+            (Lasso(), None),  # no explicit solver: no warning regardless of regularizer
+        ],
+    )
+    def test_no_warning_on_compatible_switch(
+        self, mock_regressor, new_regularizer, solver_name, recwarn
+    ):
+        if solver_name is not None:
+            mock_regressor.solver_name = solver_name
+        mock_regressor.regularizer = new_regularizer
+        user_warnings = [w for w in recwarn if issubclass(w.category, UserWarning)]
+        assert len(user_warnings) == 0
+
+
 def test_glm_varargs_error():
     """Test that variable number of argument in __init__ is not allowed."""
     bad_estimator = BadEstimator(1)
@@ -95,3 +155,111 @@ def test_glm_varargs_error():
         match="scikit-learn estimators should always specify their parameters",
     ):
         bad_estimator._get_param_names()
+
+
+class TestInstantiateSolverOverrides:
+    """Tests that optional params in _instantiate_solver fall back to or override instance attributes."""
+
+    @pytest.fixture
+    def regressor(self, mock_regressor):
+        # Pre-set _solver_spec so solver_spec never calls the real get_solver.
+        # algo_name must be in UnRegularized._allowed_solvers to pass check_solver.
+        solver_spec = MagicMock()
+        solver_spec.algo_name = "GradientDescent"
+        solver_spec.full_name = "GradientDescent[optax+optimistix]"
+        mock_regressor._solver_spec = solver_spec
+        return mock_regressor
+
+    @pytest.fixture
+    def mock_solver_cls(self):
+        mock_cls = MagicMock()
+        mock_cls.get_accepted_arguments.return_value = []
+        mock_instance = MagicMock()
+        mock_instance.fun = MagicMock()
+        mock_cls.return_value = mock_instance
+        return mock_cls
+
+    @pytest.fixture
+    def mock_get_solver(self, mock_solver_cls):
+        spec = MagicMock()
+        spec.algo_name = "GradientDescent"
+        spec.implementation = mock_solver_cls
+        return MagicMock(return_value=spec)
+
+    @pytest.mark.parametrize(
+        "solver_name_override, expected",
+        [
+            (
+                None,
+                "GradientDescent[optax+optimistix]",
+            ),  # None → falls back to self.solver_spec.full_name
+            ("LBFGS[optax+optimistix]", "LBFGS[optax+optimistix]"),
+        ],
+    )
+    def test_solver_name_resolution(
+        self, regressor, mock_get_solver, solver_name_override, expected
+    ):
+        with patch("nemos.base_regressor.solvers.get_solver", mock_get_solver):
+            regressor._instantiate_solver(
+                lambda p, X, y: None, None, solver_name=solver_name_override
+            )
+        mock_get_solver.assert_called_with(expected)
+
+    @pytest.mark.parametrize("regularizer_override", [None, Ridge()])
+    def test_regularizer_resolution(
+        self, regressor, mock_solver_cls, mock_get_solver, regularizer_override
+    ):
+        expected = (
+            regularizer_override
+            if regularizer_override is not None
+            else regressor.regularizer
+        )
+        with patch("nemos.base_regressor.solvers.get_solver", mock_get_solver):
+            regressor._instantiate_solver(
+                lambda p, X, y: None, None, regularizer=regularizer_override
+            )
+        assert mock_solver_cls.call_args.args[1] == expected
+
+    @pytest.mark.parametrize("strength_override", [None, 2.0])
+    def test_regularizer_strength_resolution(
+        self, regressor, mock_solver_cls, mock_get_solver, strength_override
+    ):
+        expected = (
+            strength_override
+            if strength_override is not None
+            else regressor.regularizer_strength
+        )
+        with patch("nemos.base_regressor.solvers.get_solver", mock_get_solver):
+            regressor._instantiate_solver(
+                lambda p, X, y: None, None, regularizer_strength=strength_override
+            )
+        assert mock_solver_cls.call_args.args[2] == expected
+
+    @pytest.mark.parametrize(
+        "solver_kwargs_override, extra_accepted_args",
+        [
+            (None, []),
+            ({"tol": 1e-4}, ["tol"]),
+        ],
+    )
+    def test_solver_kwargs_resolution(
+        self,
+        regressor,
+        mock_solver_cls,
+        mock_get_solver,
+        solver_kwargs_override,
+        extra_accepted_args,
+    ):
+        mock_solver_cls.get_accepted_arguments.return_value = extra_accepted_args
+        expected = (
+            solver_kwargs_override
+            if solver_kwargs_override is not None
+            else regressor.solver_kwargs
+        )
+        with patch("nemos.base_regressor.solvers.get_solver", mock_get_solver):
+            regressor._instantiate_solver(
+                lambda p, X, y: None, None, solver_kwargs=solver_kwargs_override
+            )
+        actual_kwargs = mock_solver_cls.call_args.kwargs
+        for k, v in expected.items():
+            assert actual_kwargs[k] == v

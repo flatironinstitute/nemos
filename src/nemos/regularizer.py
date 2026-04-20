@@ -247,6 +247,9 @@ class Regularizer(Base, abc.ABC):
         """
         filter_kwargs = self._get_filter_kwargs(strength=strength, params=params)
 
+        # hyperparams is unused: strength is captured in filter_kwargs at construction time.
+        # The argument is required to match the jaxopt prox interface:
+        # prox(params, hyperparams_prox, scaling=1.0).
         def prox_op(params, hyperparams, scaling=1.0, *args):
             return apply_operator(
                 self._proximal_operator,
@@ -452,7 +455,7 @@ class UnRegularized(Regularizer):
         "ProxSVRG",
     )
 
-    _default_solver = "GradientDescent"
+    _default_solver = "LBFGS"
     _proximal_operator = staticmethod(prox_none)
 
     def _penalty_on_subtree(self, subtree, **kwargs) -> jnp.ndarray:
@@ -480,7 +483,7 @@ class Ridge(Regularizer):
         "ProxSVRG",
     )
 
-    _default_solver = "GradientDescent"
+    _default_solver = "LBFGS"
 
     _proximal_operator = staticmethod(prox_ridge)
 
@@ -685,11 +688,13 @@ class GroupLasso(Regularizer):
     Attributes
     ----------
     mask :
-        A 2d mask array indicating groups of features for regularization, shape ``(num_groups, num_features)``.
-        Each row represents a group of features.
-        Each column corresponds to a feature, where a value of 1 indicates that the feature belongs
-        to the group, and a value of 0 indicates it doesn't.
-        Default is ``mask = np.ones((1, num_features))``, grouping all features in a single group.
+        A mask array (or PyTree of arrays) indicating group membership for regularization.
+        Each regularizable parameter leaf with shape ``(n_features, ...)`` requires a corresponding
+        mask leaf with shape ``(n_groups, n_features, ...)``, i.e. ``(n_groups, *params.shape)``.
+        Row ``i`` of a mask leaf is 1 for features belonging to group ``i`` and 0 elsewhere;
+        each feature may belong to at most one group.
+        If ``None`` (default), a mask is auto-initialized so that each trailing dimension of each
+        parameter leaf forms its own group.
 
     Notes
     -----
@@ -718,6 +723,27 @@ class GroupLasso(Regularizer):
     >>> model = GLM(regularizer=group_lasso, regularizer_strength=0.1).fit(X, y)
     >>> print(f"coeff shape: {model.coef_.shape}")
     coeff shape: (5,)
+
+    For a :class:`~nemos.glm.PopulationGLM`, where ``coef_`` has shape
+    ``(n_features, n_neurons)``, the mask must have the matching shape
+    ``(n_groups, n_features, n_neurons)``:
+
+    >>> import nemos as nmo
+    >>> num_samples, num_features, num_neurons = 1000, 4, 3
+    >>> X = np.random.normal(size=(num_samples, num_features))
+    >>> w = np.random.randn(num_features, num_neurons) * 0.1
+    >>> y = np.random.poisson(np.exp(X.dot(w)))
+    >>> # group 0: regularize all features jointly for neurons 0-1
+    >>> # group 1: regularize all features jointly for neuron 2
+    >>> mask = np.zeros((2, num_features, num_neurons))
+    >>> mask[0, :, :2] = 1
+    >>> mask[1, :, 2:] = 1
+    >>> model = nmo.glm.PopulationGLM(
+    ...     regularizer=nmo.regularizer.GroupLasso(mask=mask),
+    ...     regularizer_strength=0.1,
+    ... ).fit(X, y)
+    >>> print(f"coef shape: {model.coef_.shape}")
+    coef shape: (4, 3)
     """
 
     _allowed_solvers = (
@@ -892,7 +918,7 @@ class GroupLasso(Regularizer):
         self, subtree, strength: Any, mask: Any = None, **kwargs
     ) -> jnp.ndarray:
         r"""
-        Apply the Group Lasso penaly to a subtree.
+        Apply the Group Lasso penalty to a subtree.
 
         Note: the penalty is being calculated according to the following formula:
 
@@ -918,8 +944,36 @@ class GroupLasso(Regularizer):
 
         return jnp.sum(jnp.array(jax.tree_util.tree_leaves(penalties)))
 
+    def _check_mask_and_params_shape_match(self, mask, params):
+        reg_subtrees = (
+            params.regularizable_subtrees()
+            if hasattr(params, "regularizable_subtrees")
+            else [lambda z: z]
+        )
+        for where in reg_subtrees:
+            sub_mask = where(mask)
+            sub_params = where(params)
+            shape_mismatched = pytree_map_and_reduce(
+                lambda s, p: s.shape[1:] != p.shape, any, sub_mask, sub_params
+            )
+            if shape_mismatched:
+                flat_mask_leaves = jax.tree_util.tree_leaves(sub_mask)
+                flat_param_leaves = jax.tree_util.tree_leaves(sub_params)
+                mismatches = [
+                    f"mask {s.shape} (expected {(s.shape[0], *p.shape)})"
+                    for s, p in zip(flat_mask_leaves, flat_param_leaves)
+                    if s.shape[1:] != p.shape
+                ]
+                sep = "\n\t- "
+                raise ValueError(
+                    "GroupLasso mask shape mismatch: the mask must have shape "
+                    "``(n_groups, *params.shape)`` for every regularizable parameter leaf. "
+                    f"Mismatched leaves:\n\t- {sep.join(mismatches)}"
+                )
+
     def _validate_strength_structure(self, params: Any, strength: Any):
-        flat_mask = jax.tree_util.tree_leaves(self.mask)
+        mask = self.mask if self.mask is not None else self.initialize_mask(params)
+        flat_mask = jax.tree_util.tree_leaves(mask)
         n_groups = flat_mask[0].shape[0]
 
         if isinstance(strength, (int, float)) or strength.ndim == 0:
@@ -933,9 +987,12 @@ class GroupLasso(Regularizer):
                 )
             per_group_strength = strength
 
-        return jax.tree_util.tree_map(lambda _: per_group_strength, self.mask)
+        return jax.tree_util.tree_map(lambda _: per_group_strength, mask)
 
     def _get_filter_kwargs(self, params: Any, strength: Any) -> dict:
-        if self.mask is None:
-            self.mask = self.initialize_mask(params)
-        return {"mask": self.mask, **super()._get_filter_kwargs(params, strength)}
+        if self.mask is not None:
+            mask = self.mask
+            self._check_mask_and_params_shape_match(mask, params)
+        else:
+            mask = self.initialize_mask(params)
+        return {"mask": mask, **super()._get_filter_kwargs(params, strength)}

@@ -19,6 +19,20 @@ from nemos.glm.params import GLMParams
 pytestmark = pytest.mark.solver_related
 
 
+class _TwoLeafModule(eqx.Module):
+    w: jnp.ndarray
+    b: jnp.ndarray
+
+
+_SIMPLE_PYTREE_CASES = [
+    pytest.param(lambda: {"w": jnp.ones(3), "b": jnp.zeros(1)}, id="dict"),
+    pytest.param(
+        lambda: _TwoLeafModule(w=jnp.ones(3), b=jnp.zeros(1)), id="eqx_module"
+    ),
+    pytest.param(lambda: {"w": [jnp.ones(3)], "b": jnp.zeros(1)}, id="dict_list"),
+]
+
+
 @pytest.fixture(scope="module", autouse=True)
 def register_deregister_agradientdescent():
     """Fixture for registering and deregistering AGradientDescent."""
@@ -174,7 +188,7 @@ def test_allow_solver(regularizer_class):
         with does_not_raise():
             reg1.check_solver(new_solver)
             model = nmo.glm.GLM(regularizer=reg1, solver_name=new_solver)
-            assert model.algo_name == new_solver
+            assert model.solver_name == new_solver
 
         # allowing a solver already allowed does nothing
         _default_solver = regularizer_class._default_solver
@@ -281,7 +295,7 @@ def test_change_regularizer_reset_strength(
             "bah",
             pytest.raises(
                 TypeError,
-                match=f"Could not convert regularizer strength to floats:",
+                match="Could not convert regularizer strength to floats:",
             ),
         ),
     ],
@@ -917,8 +931,8 @@ class TestUnRegularized:
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
         params = GLMParams(true_params.coef * 0.0, true_params.intercept)
-        model._instantiate_solver(model._compute_loss, params)
-        model.solver_run(params, X, y)
+        runner = model._instantiate_solver(model._compute_loss, params).run
+        runner(params, X, y)
 
     @pytest.mark.parametrize(
         "solver_name",
@@ -936,10 +950,10 @@ class TestUnRegularized:
             jax.tree_util.tree_map(jnp.zeros_like, true_params.coef),
             true_params.intercept,
         )
-        model._instantiate_solver(model._compute_loss, params)
-        model.solver_run(
+        runner = model._instantiate_solver(model._compute_loss, params).run
+        runner(
             params,
-            X.data,
+            X,
             y,
         )
 
@@ -954,14 +968,16 @@ class TestUnRegularized:
         model.solver_kwargs = {"tol": 10**-12}
 
         init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
-        model._instantiate_solver(model._compute_loss, init_params)
+        runner_gd = model._instantiate_solver(model._compute_loss, init_params).run
 
         # update solver name
         model_bfgs = copy.deepcopy(model)
         model_bfgs.solver_name = "BFGS"
-        model_bfgs._instantiate_solver(model_bfgs._compute_loss, init_params)
-        params_gd = model.solver_run(init_params, X, y)[0]
-        params_bfgs = model_bfgs.solver_run(init_params, X, y)[0]
+        runner_bfgs = model_bfgs._instantiate_solver(
+            model_bfgs._compute_loss, init_params
+        ).run
+        params_gd = runner_gd(init_params, X, y)[0]
+        params_bfgs = runner_bfgs(init_params, X, y)[0]
 
         match_weights = np.allclose(params_gd.coef, params_bfgs.coef)
         match_intercepts = np.allclose(params_gd.intercept, params_bfgs.intercept)
@@ -980,8 +996,8 @@ class TestUnRegularized:
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-12}
         init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
-        model._instantiate_solver(model._compute_loss, init_params)
-        params = model.solver_run(init_params, X, y)[0]
+        runner = model._instantiate_solver(model._compute_loss, init_params).run
+        params = runner(init_params, X, y)[0]
         model_skl = PoissonRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
         model_skl.fit(X, y)
 
@@ -1002,8 +1018,8 @@ class TestUnRegularized:
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-12}
         init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
-        model._instantiate_solver(model._compute_loss, init_params)
-        params = model.solver_run(init_params, X, y)[0]
+        runner = model._instantiate_solver(model._compute_loss, init_params).run
+        params = runner(init_params, X, y)[0]
         model_skl = GammaRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
         model_skl.fit(X, y)
 
@@ -1031,8 +1047,8 @@ class TestUnRegularized:
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-13}
         init_params = model._model_specific_initialization(X, y)
-        model._instantiate_solver(model._compute_loss, init_params)
-        params = model.solver_run(init_params, X, y)[0]
+        runner = model._instantiate_solver(model._compute_loss, init_params).run
+        params = runner(init_params, X, y)[0]
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore", message="The InversePower link function does "
@@ -1075,8 +1091,8 @@ class TestUnRegularized:
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-13}
         init_params = model._model_specific_initialization(X, y)
-        model._instantiate_solver(model._compute_loss, init_params)
-        params = model.solver_run(init_params, X, y)[0]
+        runner = model._instantiate_solver(model._compute_loss, init_params).run
+        params = runner(init_params, X, y)[0]
         model_sm = sm.GLM(
             endog=y,
             exog=sm.add_constant(X),
@@ -1113,6 +1129,29 @@ class TestUnRegularized:
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
         model.fit(X, y)
+
+    @pytest.mark.parametrize("make_params", _SIMPLE_PYTREE_CASES)
+    def test_get_proximal_operator_pytree(self, make_params):
+        """get_proximal_operator output preserves pytree structure for any pytree params."""
+        params = make_params()
+        regularizer = self.cls()
+        prox_op = regularizer.get_proximal_operator(params, strength=None)
+        out = prox_op(params, None)
+        assert jax.tree_util.tree_structure(out) == jax.tree_util.tree_structure(params)
+
+    @pytest.mark.parametrize("make_params", _SIMPLE_PYTREE_CASES)
+    def test_penalized_loss_pytree(self, make_params):
+        """penalized_loss can be called with any pytree params and returns a scalar."""
+        params = make_params()
+        regularizer = self.cls()
+
+        def dummy_loss(p, X, y):
+            return sum(jnp.sum(leaf) for leaf in jax.tree_util.tree_leaves(p))
+
+        penalized = regularizer.penalized_loss(dummy_loss, params=params, strength=None)
+        result = penalized(params, jnp.ones((10, 3)), jnp.ones(10))
+        assert isinstance(result, jnp.ndarray)
+        assert result.ndim == 0
 
 
 class TestRidge:
@@ -1254,7 +1293,7 @@ class TestRidge:
         model.set_params(regularizer=self.cls(), regularizer_strength=1.0)
         model.solver_name = solver_name
         params = GLMParams(true_params.coef * 0.0, true_params.intercept)
-        runner = model._instantiate_solver(model._compute_loss, params).solver_run
+        runner = model._instantiate_solver(model._compute_loss, params).run
         runner(params, X, y)
 
     @pytest.mark.parametrize(
@@ -1273,8 +1312,8 @@ class TestRidge:
             jax.tree_util.tree_map(jnp.zeros_like, true_params.coef),
             true_params.intercept,
         )
-        runner = model._instantiate_solver(model._compute_loss, params).solver_run
-        runner(params, X.data, y)
+        runner = model._instantiate_solver(model._compute_loss, params).run
+        runner(params, X, y)
 
     @pytest.mark.parametrize("solver_name", ["GradientDescent", "SVRG"])
     @pytest.mark.requires_x64
@@ -1293,12 +1332,10 @@ class TestRidge:
         model_bfgs.solver_name = "BFGS"
 
         init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
-        runner_gd = model._instantiate_solver(
-            model._compute_loss, init_params
-        ).solver_run
+        runner_gd = model._instantiate_solver(model._compute_loss, init_params).run
         runner_bfgs = model_bfgs._instantiate_solver(
             model_bfgs._compute_loss, init_params
-        ).solver_run
+        ).run
 
         params_gd = runner_gd(init_params, X, y)[0]
         params_bfgs = runner_bfgs(init_params, X, y)[0]
@@ -1320,9 +1357,7 @@ class TestRidge:
         model.solver_name = "BFGS"
 
         init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
-        runner_bfgs = model._instantiate_solver(
-            model._compute_loss, init_params
-        ).solver_run
+        runner_bfgs = model._instantiate_solver(model._compute_loss, init_params).run
         params = runner_bfgs(init_params, X, y)[0]
         model_skl = PoissonRegressor(fit_intercept=True, tol=10**-12, alpha=1.0)
         model_skl.fit(X, y)
@@ -1345,9 +1380,7 @@ class TestRidge:
         model.regularizer_strength = 0.1
         model.solver_name = solver_name
         init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
-        runner_bfgs = model._instantiate_solver(
-            model._compute_loss, init_params
-        ).solver_run
+        runner_bfgs = model._instantiate_solver(model._compute_loss, init_params).run
         params = runner_bfgs(init_params, X, y)[0]
         model_skl = GammaRegressor(
             fit_intercept=True,
@@ -1376,6 +1409,29 @@ class TestRidge:
         model.set_params(regularizer=self.cls(), regularizer_strength=1.0)
         model.solver_name = solver_name
         model.fit(X, y)
+
+    @pytest.mark.parametrize("make_params", _SIMPLE_PYTREE_CASES)
+    def test_get_proximal_operator_pytree(self, make_params):
+        """get_proximal_operator output preserves pytree structure for any pytree params."""
+        params = make_params()
+        regularizer = self.cls()
+        prox_op = regularizer.get_proximal_operator(params, strength=1.0)
+        out = prox_op(params, None)
+        assert jax.tree_util.tree_structure(out) == jax.tree_util.tree_structure(params)
+
+    @pytest.mark.parametrize("make_params", _SIMPLE_PYTREE_CASES)
+    def test_penalized_loss_pytree(self, make_params):
+        """penalized_loss can be called with any pytree params and returns a scalar."""
+        params = make_params()
+        regularizer = self.cls()
+
+        def dummy_loss(p, X, y):
+            return sum(jnp.sum(leaf) for leaf in jax.tree_util.tree_leaves(p))
+
+        penalized = regularizer.penalized_loss(dummy_loss, params=params, strength=1.0)
+        result = penalized(params, jnp.ones((10, 3)), jnp.ones(10))
+        assert isinstance(result, jnp.ndarray)
+        assert result.ndim == 0
 
 
 class TestLasso:
@@ -1516,7 +1572,7 @@ class TestLasso:
         model.set_params(regularizer=self.cls(), regularizer_strength=1)
         model.solver_name = solver_name
         params = GLMParams(true_params.coef * 0.0, true_params.intercept)
-        runner = model._instantiate_solver(model._compute_loss, params).solver_run
+        runner = model._instantiate_solver(model._compute_loss, params).run
         runner(params, X, y)
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
@@ -1532,8 +1588,8 @@ class TestLasso:
             jax.tree_util.tree_map(jnp.zeros_like, true_params.coef),
             true_params.intercept,
         )
-        runner = model._instantiate_solver(model._compute_loss, params).solver_run
-        runner(params, X.data, y)
+        runner = model._instantiate_solver(model._compute_loss, params).run
+        runner(params, X, y)
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
     @pytest.mark.requires_x64
@@ -1549,7 +1605,7 @@ class TestLasso:
         model.solver_kwargs = {"tol": 10**-12}
 
         init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
-        runner = model._instantiate_solver(model._compute_loss, init_params).solver_run
+        runner = model._instantiate_solver(model._compute_loss, init_params).run
         params = runner(init_params, X, y)[0]
 
         # instantiate the glm with statsmodels
@@ -1611,6 +1667,29 @@ class TestLasso:
         model.set_params(regularizer=self.cls(), regularizer_strength=1.0)
         model.solver_name = solver_name
         model.fit(X, y)
+
+    @pytest.mark.parametrize("make_params", _SIMPLE_PYTREE_CASES)
+    def test_get_proximal_operator_pytree(self, make_params):
+        """get_proximal_operator output preserves pytree structure for any pytree params."""
+        params = make_params()
+        regularizer = self.cls()
+        prox_op = regularizer.get_proximal_operator(params, strength=1.0)
+        out = prox_op(params, None)
+        assert jax.tree_util.tree_structure(out) == jax.tree_util.tree_structure(params)
+
+    @pytest.mark.parametrize("make_params", _SIMPLE_PYTREE_CASES)
+    def test_penalized_loss_pytree(self, make_params):
+        """penalized_loss can be called with any pytree params and returns a scalar."""
+        params = make_params()
+        regularizer = self.cls()
+
+        def dummy_loss(p, X, y):
+            return sum(jnp.sum(leaf) for leaf in jax.tree_util.tree_leaves(p))
+
+        penalized = regularizer.penalized_loss(dummy_loss, params=params, strength=1.0)
+        result = penalized(params, jnp.ones((10, 3)), jnp.ones(10))
+        assert isinstance(result, jnp.ndarray)
+        assert result.ndim == 0
 
 
 class TestElasticNet:
@@ -2260,7 +2339,7 @@ class TestElasticNet:
                 pytest.raises(
                     ValueError,
                     match=re.escape(
-                        f"ElasticNet regularization ratio must be in (0, 1], got 0.0"
+                        "ElasticNet regularization ratio must be in (0, 1], got 0.0"
                     ),
                 ),
             ),
@@ -2269,7 +2348,7 @@ class TestElasticNet:
                 pytest.raises(
                     ValueError,
                     match=re.escape(
-                        f"ElasticNet regularization ratio must be in (0, 1], got 1.1"
+                        "ElasticNet regularization ratio must be in (0, 1], got 1.1"
                     ),
                 ),
             ),
@@ -2278,7 +2357,7 @@ class TestElasticNet:
                 pytest.raises(
                     ValueError,
                     match=re.escape(
-                        f"ElasticNet regularization ratio must be in (0, 1], got -0.1"
+                        "ElasticNet regularization ratio must be in (0, 1], got -0.1"
                     ),
                 ),
             ),
@@ -2336,7 +2415,7 @@ class TestElasticNet:
         model.set_params(regularizer=self.cls(), regularizer_strength=(1, 0.5))
         model.solver_name = solver_name
         params = GLMParams(true_params.coef * 0.0, true_params.intercept)
-        runner = model._instantiate_solver(model._compute_loss, params).solver_run
+        runner = model._instantiate_solver(model._compute_loss, params).run
         runner(params, X, y)
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
@@ -2352,10 +2431,10 @@ class TestElasticNet:
             jax.tree_util.tree_map(jnp.zeros_like, true_params.coef),
             true_params.intercept,
         )
-        runner = model._instantiate_solver(model._compute_loss, params).solver_run
+        runner = model._instantiate_solver(model._compute_loss, params).run
         runner(
             params,
-            X.data,
+            X,
             y,
         )
 
@@ -2384,7 +2463,7 @@ class TestElasticNet:
         model.solver_kwargs = {"tol": 10**-12, "maxiter": 10000}
 
         init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
-        runner = model._instantiate_solver(model._compute_loss, init_params).solver_run
+        runner = model._instantiate_solver(model._compute_loss, init_params).run
         params = runner(init_params, X, y)[0]
 
         model.fit(X, y)
@@ -2521,6 +2600,31 @@ class TestElasticNet:
         model.solver_name = solver_name
         model.fit(X, y)
 
+    @pytest.mark.parametrize("make_params", _SIMPLE_PYTREE_CASES)
+    def test_get_proximal_operator_pytree(self, make_params):
+        """get_proximal_operator output preserves pytree structure for any pytree params."""
+        params = make_params()
+        regularizer = self.cls()
+        prox_op = regularizer.get_proximal_operator(params, strength=(1.0, 0.5))
+        out = prox_op(params, None)
+        assert jax.tree_util.tree_structure(out) == jax.tree_util.tree_structure(params)
+
+    @pytest.mark.parametrize("make_params", _SIMPLE_PYTREE_CASES)
+    def test_penalized_loss_pytree(self, make_params):
+        """penalized_loss can be called with any pytree params and returns a scalar."""
+        params = make_params()
+        regularizer = self.cls()
+
+        def dummy_loss(p, X, y):
+            return sum(jnp.sum(leaf) for leaf in jax.tree_util.tree_leaves(p))
+
+        penalized = regularizer.penalized_loss(
+            dummy_loss, params=params, strength=(1.0, 0.5)
+        )
+        result = penalized(params, jnp.ones((10, 3)), jnp.ones(10))
+        assert isinstance(result, jnp.ndarray)
+        assert result.ndim == 0
+
 
 class TestGroupLasso:
     cls = nmo.regularizer.GroupLasso
@@ -2528,11 +2632,6 @@ class TestGroupLasso:
     def test_filter_kwargs_contains_strength(self):
         """Test that strength is in filter kwargs."""
         n_features = 3
-        # 2 groups x 3 features (coef), intercept leaf is None in the mask
-        mask = GLMParams(
-            coef=jnp.array([[1, 1, 0], [0, 0, 1]], dtype=float),
-            intercept=None,
-        )
         params = GLMParams(coef=jnp.ones((n_features,)), intercept=jnp.array([0.0]))
         regularizer = self.cls()
 
@@ -2545,6 +2644,18 @@ class TestGroupLasso:
         assert isinstance(s, GLMParams)
         assert isinstance(s.coef, jnp.ndarray)
         assert s.coef == 0.5
+
+    def test_auto_generated_mask_not_stored(self):
+        """Auto-generated mask must not be cached on the regularizer.
+
+        Caching the mask would break re-fitting with a different pytree structure.
+        """
+        params = GLMParams(coef=jnp.ones((3,)), intercept=jnp.array([0.0]))
+        regularizer = self.cls()  # mask=None
+
+        regularizer._get_filter_kwargs(params=params, strength=0.5)
+
+        assert regularizer.mask is None
 
     def test_validate_strength_structure_scalar_broadcast(self):
         """Scalar strength broadcasts to per-group vector with length n_groups."""
@@ -2637,6 +2748,45 @@ class TestGroupLasso:
         assert strength_struct["b"].shape == (2,) and jnp.allclose(
             strength_struct["b"], jnp.array([0.2, 0.2])
         )
+
+    @pytest.mark.parametrize(
+        "mask_coef, params_coef, expectation",
+        [
+            # correct: mask shape (n_groups, n_features) matches params shape (n_features,)
+            (
+                jnp.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=float),
+                jnp.ones((3,)),
+                does_not_raise(),
+            ),
+            # wrong number of features in mask
+            (
+                jnp.array([[1, 0], [0, 1]], dtype=float),  # (2, 2) but params is (3,)
+                jnp.ones((3,)),
+                pytest.raises(
+                    ValueError,
+                    match=r"mask \(2, 2\) \(expected \(2, 3\)\)",
+                ),
+            ),
+            # extra trailing dim in mask doesn't match scalar params
+            (
+                jnp.ones((2, 3, 4), dtype=float),  # (2, 3, 4) but params is (3,)
+                jnp.ones((3,)),
+                pytest.raises(
+                    ValueError,
+                    match=r"mask \(2, 3, 4\) \(expected \(2, 3\)\)",
+                ),
+            ),
+        ],
+    )
+    def test_check_mask_and_params_shape_match(
+        self, mask_coef, params_coef, expectation
+    ):
+        """_check_mask_and_params_shape_match raises ValueError on shape mismatch."""
+        mask = GLMParams(coef=mask_coef, intercept=None)
+        params = GLMParams(coef=params_coef, intercept=jnp.array([0.0]))
+        regularizer = self.cls()
+        with expectation:
+            regularizer._check_mask_and_params_shape_match(mask, params)
 
     @pytest.mark.parametrize(
         "solver_name, expectation",
@@ -2788,8 +2938,8 @@ class TestGroupLasso:
         model.solver_name = solver_name
 
         init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
-        model._instantiate_solver(model._compute_loss, init_params)
-        model.solver_run(init_params, X, y)
+        runner = model._instantiate_solver(model._compute_loss, init_params).run
+        runner(init_params, X, y)
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
     def test_init_solver(self, solver_name, poissonGLM_model_instantiation):
@@ -2806,8 +2956,8 @@ class TestGroupLasso:
         model.set_params(regularizer=self.cls(mask=mask), regularizer_strength=1.0)
         model.solver_name = solver_name
 
-        model._instantiate_solver(model._compute_loss, true_params)
-        state = model.solver_init_state(true_params, X, y)
+        solver = model._instantiate_solver(model._compute_loss, true_params)
+        state = solver.init_state(true_params, X, y)
         # asses that state is a NamedTuple by checking tuple type and the availability of some NamedTuple
         # specific namespace attributes
         assert isinstance(state, tuple | eqx.Module)
@@ -2828,16 +2978,21 @@ class TestGroupLasso:
         model.solver_name = solver_name
 
         init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
-        model._instantiate_solver(model._compute_loss, init_params)
+        solver = model._instantiate_solver(model._compute_loss, init_params)
 
-        state = model.solver_init_state(init_params, X, y)
+        state = solver.init_state(init_params, X, y)
 
         # ProxSVRG needs the full gradient at the anchor point to be initialized
         # so here just set it to xs, which is not correct, but fine shape-wise
         if solver_name == "ProxSVRG":
-            state = state._replace(full_grad_at_reference_point=state.reference_point)
+            state = type(state)(
+                solver_state=state.solver_state._replace(
+                    full_grad_at_reference_point=state.solver_state.reference_point
+                ),
+                stats=state.stats,
+            )
 
-        params, state, _ = model.solver_update(true_params, state, X, y)
+        params, state, _ = solver.update(true_params, state, X, y)
         # asses that state is a NamedTuple by checking tuple type and the availability of some NamedTuple
         # specific namespace attributes
         assert isinstance(state, tuple | eqx.Module)
@@ -2992,7 +3147,7 @@ class TestGroupLasso:
         model.solver_name = "ProximalGradient"
 
         init_params = GLMParams(true_params.coef * 0.0, true_params.intercept)
-        runner = model._instantiate_solver(model._compute_loss, init_params).solver_run
+        runner = model._instantiate_solver(model._compute_loss, init_params).run
         params, _, _ = runner(init_params, X, y)
 
         zeros_est = params.coef == 0.0
@@ -3263,7 +3418,7 @@ class TestGroupLasso:
         """Test penalized_loss with dict-based PyTree parameters."""
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
 
-        # Create dict-based mask (simulating FeaturePytree structure)
+        # Create dict-based mask
         # Split features into two groups
         n_features = X.shape[1]
         mask_dict = {
@@ -3321,6 +3476,52 @@ class TestGroupLasso:
         assert isinstance(penalty, jnp.ndarray)
         assert penalty.ndim == 0
         assert penalty >= 0
+
+    @pytest.mark.parametrize("make_params", _SIMPLE_PYTREE_CASES)
+    def test_get_proximal_operator_pytree(self, make_params):
+        """get_proximal_operator output preserves pytree structure for any pytree params."""
+        params = make_params()
+        # mask=None: auto-initialized from params structure
+        regularizer = self.cls(mask=None)
+        prox_op = regularizer.get_proximal_operator(params, strength=1.0)
+        out = prox_op(params, None)
+        assert jax.tree_util.tree_structure(out) == jax.tree_util.tree_structure(params)
+
+    @pytest.mark.parametrize("make_params", _SIMPLE_PYTREE_CASES)
+    def test_penalized_loss_pytree(self, make_params):
+        """penalized_loss can be called with any pytree params and returns a scalar."""
+        params = make_params()
+        regularizer = self.cls(mask=None)
+
+        def dummy_loss(p, X, y):
+            return sum(jnp.sum(leaf) for leaf in jax.tree_util.tree_leaves(p))
+
+        penalized = regularizer.penalized_loss(dummy_loss, params=params, strength=1.0)
+        result = penalized(params, jnp.ones((10, 3)), jnp.ones(10))
+        assert isinstance(result, jnp.ndarray)
+        assert result.ndim == 0
+
+    @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
+    def test_run_solver_tree(self, solver_name, poissonGLM_model_instantiation_pytree):
+        """Test that the GroupLasso solver runs with pytree X (mask auto-initialized)."""
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation_pytree
+
+        # mask=None: auto-initialized from params structure during _instantiate_solver
+        model.set_params(regularizer=self.cls(mask=None), regularizer_strength=1.0)
+        model.solver_name = solver_name
+        params = GLMParams(
+            jax.tree_util.tree_map(jnp.zeros_like, true_params.coef),
+            true_params.intercept,
+        )
+        runner = model._instantiate_solver(model._compute_loss, params).run
+        runner(params, X, y)
+
+    def test_grouplasso_pytree(self, poissonGLM_model_instantiation_pytree):
+        """Check that GroupLasso fits with a dict X (mask auto-initialized)."""
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation_pytree
+        model.set_params(regularizer=self.cls(mask=None), regularizer_strength=0.1)
+        model.solver_name = "ProximalGradient"
+        model.fit(X, y)
 
 
 @pytest.mark.parametrize(

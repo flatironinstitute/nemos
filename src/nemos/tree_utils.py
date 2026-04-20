@@ -132,8 +132,8 @@ def pytree_map_and_reduce(
     Examples
     --------
     >>> import nemos as nmo
-    >>> pytree1 = nmo.pytrees.FeaturePytree(a=jnp.array([0]), b=jnp.array([0]))
-    >>> pytree2 = nmo.pytrees.FeaturePytree(a=jnp.array([10]), b=jnp.array([20]))
+    >>> pytree1 = dict(a=jnp.array([0]), b=jnp.array([0]))
+    >>> pytree2 = dict(a=jnp.array([10]), b=jnp.array([20]))
     >>> map_fn = lambda x, y: x > y
     >>> # Example usage
     >>> result_any = pytree_map_and_reduce(map_fn, any, pytree1, pytree2)
@@ -223,4 +223,4 @@ def has_matching_axis_pytree(*pytree: Any, axis: int = 0):
 def drop_nans(*trees):
     """Drop all NaNs from trees."""
     is_valid = get_valid_multitree(*trees)
-    return (jax.tree_util.tree_map(lambda x: x[is_valid], par) for par in trees)
+    return [jax.tree_util.tree_map(lambda x: x[is_valid], par) for par in trees]

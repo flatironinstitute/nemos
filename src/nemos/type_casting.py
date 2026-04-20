@@ -322,7 +322,11 @@ def get_time_info(*args, **kwargs):
 
 
 def cast_to_pynapple(
-    array: jnp.ndarray, time: NDArray, time_support: nap.IntervalSet, metadata=None
+    array: jnp.ndarray,
+    time: NDArray,
+    time_support: nap.IntervalSet,
+    columns=None,
+    metadata=None,
 ) -> Union[nap.Tsd, nap.TsdFrame, nap.TsdTensor]:
     """
     Convert an array to a pynapple time series object.
@@ -338,6 +342,8 @@ def cast_to_pynapple(
         Time axis for the pynapple object.
     time_support:
         Time support information for the pynapple object.
+    columns:
+        The column names.
     metadata:
         Pynapple metadata to be re-attached.
 
@@ -353,13 +359,13 @@ def cast_to_pynapple(
     elif array.ndim == 1:
         return nap.Tsd(t=time, d=array, time_support=time_support)
     elif array.ndim == 2:
-        cols = metadata.get("columns", None) if hasattr(metadata, "get") else None
-        metadata = (
-            metadata
-            if hasattr(cols, "__len__") and (len(cols) == array.shape[1])
-            else {}
+        return nap.TsdFrame(
+            t=time,
+            d=array,
+            time_support=time_support,
+            metadata=metadata,
+            columns=columns,
         )
-        return nap.TsdFrame(t=time, d=array, time_support=time_support, **metadata)
     else:
         return nap.TsdTensor(t=time, d=array, time_support=time_support)
 
@@ -461,11 +467,11 @@ def support_pynapple(conv_type: Literal["jax", "numpy"] = "jax") -> Callable:
                     )
                 time, time_support = get_time_info(*args, **kwargs)
 
-                def cast_out(pytree, metadata=None):
-                    # cast back to pynapple
+                def cast_out(pytree, columns=None, metadata=None):
+                    # cast back to pynapple, re-attaching stored columns/metadata
                     return jax.tree_util.tree_map(
                         lambda x: cast_to_pynapple(
-                            x, time, time_support, metadata=metadata
+                            x, time, time_support, columns=columns, metadata=metadata
                         ),
                         pytree,
                     )
@@ -485,11 +491,14 @@ def support_pynapple(conv_type: Literal["jax", "numpy"] = "jax") -> Callable:
                     f"Conversion of type '{conv_type}' not implemented!"
                 )
             # apply function/method
-            res = func(*args, **kwargs)
-            # strip metadata (if args[0] hasattr _metadata)
+            # extract the metadata from self.
             meta = getattr(args[0], "_metadata", None) if args else None
+            col = meta.get("columns", None) if hasattr(meta, "get") else None
+            meta = meta.get("metadata", None) if hasattr(meta, "get") else None
+
+            res = func(*args, **kwargs)
             # revert casting if pynapple
-            return cast_out(res, metadata=meta)
+            return cast_out(res, columns=col, metadata=meta)
 
         return wrapper
 
