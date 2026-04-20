@@ -57,12 +57,15 @@ def create_dataset(
     spike_times = np.sort(np.random.uniform(0, sim_time, n_spikes))
     spike_ids = np.random.choice(np.arange(n_neurons), n_spikes)
 
-    X = jnp.vstack((spike_times, spike_ids))
-    y = jnp.vstack((X, jnp.arange(spike_times.size)))
+    # X = jnp.vstack((spike_times, spike_ids))
+    # y = jnp.vstack((X, jnp.arange(spike_times.size)))
+    X = (jnp.array(spike_times), jnp.array(spike_ids).astype(int))
+    y = X + (jnp.arange(spike_times.size).astype(int),)
 
     if all_to_one:
         n_target = 0
-        y = y[:, y[1] == n_target]
+        mask = jnp.where(y[1] == n_target)
+        y = tuple(y_i[mask] for y_i in y)
 
     max_window = int(
         utils.compute_max_window_size(jnp.array([-history_window, 0]), X[0], X[0])
@@ -101,10 +104,12 @@ def create_dataset_single_spike(
     eval_function = create_basis(n_basis_funcs, history_window)
 
     spike_times = jnp.array([spike_time])
-    spike_ids = jnp.array([0])
+    spike_ids = jnp.array([0]).astype(int)
 
-    X = jnp.vstack((spike_times, spike_ids))  # shape (2, 1)
-    y = jnp.vstack((X, jnp.arange(1)))  # shape (3, 1)
+    # X = jnp.vstack((spike_times, spike_ids))  # shape (2, 1)
+    # y = jnp.vstack((X, jnp.arange(1)))  # shape (3, 1)
+    X = (spike_times, spike_ids)
+    y = X + (jnp.arange(1).astype(int),)
 
     max_window = int(
         utils.compute_max_window_size(jnp.array([-history_window, 0.0]), X[0], X[0])
@@ -157,26 +162,28 @@ class TestUtils:
     def test_reshape_input_for_scan(self):
         """Test that reshaping works properly and that padding length and value are correct"""
         # when divisible, padding length is 0
-        times = jnp.ones((3, 8))
-        out, pad_val, pad_len = utils.reshape_input_for_scan(times, scan_size=2)
-        assert out.shape == (4, 2, 3)  # (n_scans, scan_size, n_channels)
+        times = (jnp.ones(8), jnp.arange(8).astype(int))
+
+        reshaped, pad_val, pad_len = utils.reshape_input_for_scan(times, scan_size=2)
+        for out in reshaped:
+            assert out.shape == (4, 2)  # (n_scans, scan_size)
         assert pad_len == 0
 
         # when not divisible, padding fills to next multiple
-        times = jnp.ones((3, 9))
-        out, pad_val, pad_len = utils.reshape_input_for_scan(times, scan_size=2)
-        assert out.shape == (5, 2, 3)  # (n_scans, scan_size, n_channels)
+        times = (jnp.ones(9), jnp.arange(9).astype(int))
+        reshaped, pad_val, pad_len = utils.reshape_input_for_scan(times, scan_size=2)
+        for out in reshaped:
+            assert out.shape == (5, 2)  # (n_scans, scan_size)
         assert pad_len == 1
 
         # test that padding is the last spike and that it's all the same
-        times = jnp.stack(
-            [jnp.arange(5, dtype=jnp.float64), jnp.arange(5, dtype=jnp.float64)]
-        )
-        out, pad_val, pad_len = utils.reshape_input_for_scan(times, scan_size=3)
-        padding = out[:, -pad_len:]
-
-        assert np.all(padding == padding[:, [0]])
-        np.testing.assert_array_equal(pad_val, times[:, -1])
+        times = (jnp.arange(4), jnp.arange(4).astype(int))
+        reshaped, pad_val, pad_len = utils.reshape_input_for_scan(times, scan_size=3)
+        for out in reshaped:
+            padding = out[-1, -pad_len:]
+            assert np.all(padding == padding[0])
+        for ch, pad in zip(times, pad_val):
+            np.testing.assert_array_equal(pad, ch[-1])
 
     @pytest.mark.requires_x64
     def test_build_mc_sampling_grid(self):
@@ -216,19 +223,20 @@ class TestUtils:
         dataset = create_dataset()
 
         # test X shape increase by history window
-        n_spk_original = dataset["y"].shape[1]  # unchanged
-        assert dataset["X"].shape[1] == n_spk_original + dataset["max_window"]
+        n_spk_original = dataset["y"][0].shape[0]  # unchanged
+        for arr in dataset["X"]:
+            assert arr.shape[0] == n_spk_original + dataset["max_window"]
 
         # test y index is shifted by max_window
-        assert dataset["y"][-1, 0] == dataset["max_window"]
+        assert dataset["y"][-1][0] == dataset["max_window"]
 
         # test padding values are out of bound and basis evals to 0
         bound = dataset["recording_time"].start[0] - dataset["history_window"]
-        padding = dataset["X"][:, : dataset["max_window"]]
-        assert np.all(padding[0] < bound)
+        padding = dataset["X"][0][:dataset["max_window"]]
+        assert np.all(padding < bound)
 
-        first_spike = dataset["y"][:, 0]
-        dts = first_spike[0] - padding[0]
+        first_spike = dataset["y"][0][0]
+        dts = first_spike - padding
         basis_at_dts = dataset["eval_function"](dts)
 
         np.testing.assert_array_equal(basis_at_dts, 0)
@@ -370,7 +378,7 @@ class TestLogLikelihood:
         )
 
         # numpy loop
-        n_spikes = y.shape[1]
+        n_spikes = y[0].shape[0]
         weights, bias = params_with_key.params.coef, params_with_key.params.intercept
         if all_to_one:
             weights = weights.reshape(-1, n_basis_funcs, 1)
@@ -379,14 +387,14 @@ class TestLogLikelihood:
 
         log_lam_y_loop = 0
         for sp in range(n_spikes):
-            i = y[:, sp]
-            slice_start = i[-1].astype(int) - max_window
-            slice_end = i[-1].astype(int)
-            spk_in_window = X[:, slice_start:slice_end]
-            dts = i[0] - spk_in_window[0]
+            t, id, slice_end = [y_i[sp] for y_i in y]
+            slice_start = slice_end - max_window
+            spk_in_window = X[0][slice_start:slice_end]
+            ids_in_window = X[1][slice_start:slice_end]
+            dts = t - spk_in_window
             basis_at_dts = eval_function(dts)
-            selected_w = weights[spk_in_window[1].astype(int), :, i[1].astype(int)]
-            lam_tilde = np.sum(basis_at_dts * selected_w) + bias[i[1].astype(int)]
+            selected_w = weights[ids_in_window, :, id]
+            lam_tilde = np.sum(basis_at_dts * selected_w) + bias[id]
             log_lam_y_loop += np.log(inverse_link_function(lam_tilde))
 
         np.testing.assert_almost_equal(log_lam_y_scan, log_lam_y_loop)
@@ -417,13 +425,13 @@ class TestLogLikelihood:
         # numpy loop
         mc_est_loop = 0
         for sp in range(M_samples):
-            i = mc_samples[:, sp]
-            slice_start = i[-1].astype(int) - max_window
-            slice_end = i[-1].astype(int)
-            spk_in_window = X[:, slice_start:slice_end]
-            dts = i[0] - spk_in_window[0]
+            t, slice_end = [mc_i[sp] for mc_i in mc_samples]
+            slice_start = slice_end - max_window
+            spk_in_window = X[0][slice_start:slice_end]
+            ids_in_window = X[1][slice_start:slice_end]
+            dts = t - spk_in_window
             basis_at_dts = eval_function(dts)
-            selected_w = weights[spk_in_window[1].astype(int)]
+            selected_w = weights[ids_in_window]
             lam_tilde = (
                 np.sum(basis_at_dts[:, :, None] * selected_w, axis=(0, 1)) + bias
             )

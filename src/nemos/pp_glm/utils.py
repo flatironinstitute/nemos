@@ -18,7 +18,7 @@ def slice_array(array: jnp.ndarray, i: int, window_size: int):
     Parameters
     ----------
     array :
-        event time series. Shape (n_channels, n_events).
+        array to slice. Shape (n_events,).
     i :
         index where the reference time point falls within array.
     window_size :
@@ -29,14 +29,10 @@ def slice_array(array: jnp.ndarray, i: int, window_size: int):
     :
         A slice of recent events. Shape (n_channels, window_size).
     """
-    n_channels = array.shape[0]
     return jax.lax.dynamic_slice(
         array,
-        (0, i - window_size),
-        (
-            n_channels,
-            window_size,
-        ),
+        (i - window_size,),
+        (window_size,)
     )
 
 
@@ -68,39 +64,38 @@ def reshape_coef_for_scan(weights: jnp.ndarray, n_basis_funcs: int):
             f"Weights must be either 1d or 2d array, the provided weights have shape {weights.shape}"
         )
 
-
 @partial(jax.jit, static_argnums=1)
-def reshape_input_for_scan(times: jnp.ndarray, scan_size: int):
+def reshape_input_for_scan(times: tuple, scan_size: int):
     """
     Reshape time series into scan inputs of equal size. Pad the last input with copies of
     the last time point if needed.
 
     Parameters
     ----------
-    times :
-        time series to scan over. Shape (n_channels, n_time_points)
+    times : tuple of jnp.ndarray, length n_channels
+        Marked time series to scan over. Each array has shape (n_time_points,).
     scan_size :
         the number of time points to process in each scan
 
     Returns
     -------
-    padded_times_reshaped :
-        Reshaped padded input. Shape (n_scans, scan_size, n_channels).
-    padding_value:
-        The last time point. Shape (n_channels,)
+    padded_times_reshaped : tuple of jnp.ndarray, length n_channels
+        Reshaped padded input. Each array has shape (n_scans, scan_size).
+    padding_value: tuple of jnp.ndarray, length n_channels
+        The last time point.
     padding_len :
         Number of padding time points appended to make n_points divisible by scan_size.
     """
-    n_channels = times.shape[0]
-    padding_value = times[:, -1]
-    padding_len = -times.shape[1] % scan_size
-    padding = jnp.full((n_channels,) + (padding_len,), padding_value[:, None])
-    padded_spikes = jnp.hstack((times, padding))
-    padded_times_reshaped = padded_spikes.reshape(n_channels, scan_size, -1).transpose(
-        2, 1, 0
-    )
+    def reshape_one(arr):
+        padding_len = -arr.shape[0] % scan_size
+        padded = jnp.concatenate([arr, jnp.full((padding_len,), arr[-1])])
+        return padded.reshape(-1, scan_size)  # (n_scans, scan_size)
 
-    return padded_times_reshaped, padding_value, padding_len
+    padding_len = -times[0].shape[0] % scan_size
+    padding_values = tuple(arr[-1] for arr in times)
+    reshaped = tuple(reshape_one(arr) for arr in times)
+
+    return reshaped, padding_values, padding_len
 
 
 def build_mc_sampling_grid(recording_time: IntervalSet, M_samples: int):
@@ -174,7 +169,7 @@ def adjust_indices_and_spike_times(
     X: DESIGN_INPUT_TYPE,
     history_window: float,
     max_window: int,
-    y: Optional[jnp.ndarray] = None,
+    y: Optional[tuple] = None,
 ):
     """
     Add padding to the events array so that history window selection near
@@ -192,8 +187,8 @@ def adjust_indices_and_spike_times(
     max_window :
         Number of dummy events to prepend.
     y :
-        Spike time array whose last row contains integer indices into X.
-        Shape (3, n_spikes). If provided, indices are shifted by max_window.
+        Spike time series: (times: float (n_spikes,), neuron_ids: int (n_spikes,),
+        event_indices: int (n_spikes,)).
 
     Returns
     -------
@@ -203,13 +198,16 @@ def adjust_indices_and_spike_times(
         Index-corrected spike time array (only returned if y is not None).
         Shape (3, n_spikes).
     """
-    shift = jnp.vstack(
-        (jnp.full(max_window, -history_window - 1), jnp.full(max_window, 0))
+    shifted_X = (
+        jnp.concatenate([jnp.full(max_window, -history_window - 1), X[0]]),
+        jnp.concatenate([jnp.zeros(max_window, dtype=jnp.int32), X[1]]),
     )
-    shifted_X = jnp.hstack((shift, X))
     if y is not None:
-        shifted_idx = y[-1].astype(int) + max_window
-        shifted_y = jnp.vstack((y[:-1], shifted_idx))
+        shifted_y = (
+            y[0],
+            y[1],
+            y[2] + max_window,
+        )
         return shifted_X, shifted_y
     else:
         return shifted_X

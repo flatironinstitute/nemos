@@ -54,7 +54,7 @@ def _draw_mc_sample(
     M_samples,
     recording_time,
     M_grid,
-) -> jnp.ndarray:
+) -> tuple:
     """
     Draw stratified sample time points for Monte Carlo estimate
     of the conditional intensity function.
@@ -65,15 +65,16 @@ def _draw_mc_sample(
     Parameters
     ----------
     X :
-        Padded event time series. Shape (2, n_events).
+         Padded event time series: (times: float (n_events,), predictor_ids: int (n_events,)).
     random_key :
         JAX PRNG key for sampling the jitter.
 
     Returns
     -------
     :
-        Array of sample time points and their indices into X.
-        Shape (2, M_samples).
+        Tuple of jnp.ndarray. Contains:
+            - sample time points. Shape (M_samples,).
+            - indices into X. Shape (M_samples,).
     """
     dt = recording_time.tot_length() / M_samples
     epsilon_m = jax.random.uniform(
@@ -81,15 +82,15 @@ def _draw_mc_sample(
     )
     tau_m = M_grid + epsilon_m
     tau_m_idx = jnp.searchsorted(X[0], tau_m)
-    mc_spikes = jnp.vstack((tau_m, tau_m_idx))
+    mc_spikes = (tau_m, tau_m_idx)
 
     return mc_spikes
 
 
 def _scan_fn_log_lam_y(
     lam_sum: jnp.ndarray,
-    i: jnp.ndarray,
-    X: jnp.ndarray,
+    i: tuple,
+    X: DESIGN_INPUT_TYPE,
     weights: jnp.ndarray,
     bias: jnp.ndarray,
     eval_function: Callable,
@@ -106,13 +107,13 @@ def _scan_fn_log_lam_y(
     ----------
     lam_sum :
         Running scalar sum of log-firing rates (scan carry).
-    i : jnp.ndarray
-        Current eval point. Entries are [spike_time, spike_neuron_id, preceding_event_idx].
+    i :
+        Current eval point. Entries are (spike_time, spike_neuron_id, preceding_event_idx).
 
     Closed over via ``functools.partial``
     --------------------------------------
     X :
-        Padded event time series. Shape (2, n_events).
+         Padded event time series: (times: float (n_events,), predictor_ids: int (n_events,)).
     weights :
         Reshaped basis coefficients. Shape (n_predictors, n_basis_funcs, n_neurons).
     bias :
@@ -131,12 +132,13 @@ def _scan_fn_log_lam_y(
     None
         No concatenated per-step output (required by jax.lax.scan).
     """
-    spk_in_window = utils.slice_array(X, i[-1].astype(int), max_window)
-    dts = i[0] - spk_in_window[0]
+    spk_in_window = utils.slice_array(X[0], i[-1], max_window)
+    ids_in_window = utils.slice_array(X[1], i[-1], max_window)
+    dts = i[0] - spk_in_window
     lam_tilde = _compute_lam_tilde(
         dts,
-        weights[spk_in_window[1].astype(int), :, i[1].astype(int), None],
-        bias[i[1].astype(int)],
+        weights[ids_in_window, :, i[1], None],
+        bias[i[1]],
         eval_function,
     )
     lam_sum += jnp.log(inverse_link_function(lam_tilde)).sum()
@@ -145,8 +147,8 @@ def _scan_fn_log_lam_y(
 
 def _scan_fn_mc_est(
     lam_sum: jnp.ndarray,
-    i: jnp.ndarray,
-    X: jnp.ndarray,
+    i: tuple,
+    X: DESIGN_INPUT_TYPE,
     weights: jnp.ndarray,
     bias: jnp.ndarray,
     eval_function: Callable,
@@ -164,13 +166,13 @@ def _scan_fn_mc_est(
     ----------
     lam_sum :
         Running scalar sum of log-firing rates (scan carry).
-    i : jnp.ndarray
-        Current eval point. Entries are [sample_time, preceding_event_idx].
+    i :
+        Current eval point. Entries are (sample_time, preceding_event_idx).
 
     Closed over via ``functools.partial``
     --------------------------------------
     X :
-        Padded event time series. Shape (2, n_events).
+         Padded event time series: (times: float (n_events,), predictor_ids: int (n_events,)).
     weights :
         Reshaped basis coefficients. Shape (n_predictors, n_basis_funcs, n_neurons).
     bias :
@@ -189,11 +191,12 @@ def _scan_fn_mc_est(
     None
         No concatenated per-step output (required by jax.lax.scan).
     """
-    spk_in_window = utils.slice_array(X, i[-1].astype(int), max_window)
-    dts = i[0] - spk_in_window[0]
+    spk_in_window = utils.slice_array(X[0], i[-1], max_window)
+    ids_in_window = utils.slice_array(X[1], i[-1], max_window)
+    dts = i[0] - spk_in_window
     lam_tilde = _compute_lam_tilde(
         dts,
-        weights[spk_in_window[1].astype(int)],
+        weights[ids_in_window],
         bias,
         eval_function,
     )
@@ -203,7 +206,7 @@ def _scan_fn_mc_est(
 
 def _log_likelihood_scan(
     X: DESIGN_INPUT_TYPE,
-    eval_pts: jnp.ndarray,
+    eval_pts: tuple,
     params: PPGLMParams,
     scan_function: Callable,
     inverse_link_function,
@@ -223,9 +226,10 @@ def _log_likelihood_scan(
     Parameters
     ----------
     X :
-        Padded event time series. Shape (2, n_events).
+        Padded event time series: (times: float (n_events,), predictor_ids: int (n_events,)).
     eval_pts :
-        Observed spike time series or MC sample points. Shape (n_channels, n_time_points).
+        Observed spike time series or MC sample points. Either (times: float (n_spikes,), neuron_ids: int (n_spikes,),
+        event_indices: int (n_spikes,)) or (times: float (M_samples,), event_indices: int (M_samples,)), respectively.
     params :
         PPGLMParams containing the basis coefficients and bias terms.
     scan_function :
@@ -269,7 +273,7 @@ def _log_likelihood_scan(
 def _negative_log_likelihood(
     params: PPGLMParams,
     X: DESIGN_INPUT_TYPE,
-    y: jnp.ndarray,
+    y: tuple,
     random_key: jnp.ndarray,
     inverse_link_function: Callable,
     M_samples: int,
@@ -279,7 +283,7 @@ def _negative_log_likelihood(
     scan_size: int,
     max_window: int,
     eval_function: Callable,
-    aggregate_sample_scores: Callable = lambda l, y: l / y.shape[1],
+    aggregate_sample_scores: Callable = lambda l, y: l / y.shape[0],
 ) -> jnp.ndarray:
     r"""
     Compute the Poisson point process negative log-likelihood with a Monte Carlo
@@ -295,9 +299,10 @@ def _negative_log_likelihood(
     Parameters
     ----------
     X :
-        Padded event time series. Shape (2, n_events).
+        Padded event time series: (times: float (n_events,), predictor_ids: int (n_events,)).
     y :
-        Observed spike time series. Shape (3, n_spikes).
+         Spike time series: (times: float (n_spikes,), neuron_ids: int (n_spikes,),
+        event_indices: int (n_spikes,)).
     params :
         PPGLMParams containing the basis coefficients and bias terms.
     random_key :
@@ -361,13 +366,13 @@ def _negative_log_likelihood(
 
     nll_sum = ((recording_time.tot_length() / M_samples) * mc_estimate) - log_lambda_y
 
-    return aggregate_sample_scores(nll_sum, y)
+    return aggregate_sample_scores(nll_sum, y[0])
 
 
 def _compute_loss(
     params_with_key: PPGLMParamsWithKey,
     X: DESIGN_INPUT_TYPE,
-    y: jnp.ndarray,
+    y: tuple,
     *args,
     **kwargs,
 ) -> jnp.ndarray:
@@ -383,12 +388,16 @@ def _compute_loss(
         a random key used for MC sampling.
     X :
         Padded event time series for all predictors (spikes, stimuli, etc.).
-        Row 0 contains event times; row 1 contains predictor ids (neuron ids, stimulus
-        ids, etc.). Shape (2, n_events).
+        Stored as (times, predictor_ids) where:
+            - times : jnp.ndarray of float, shape (n_events,) — event timestamps
+            - prededictor_ids : jnp.ndarray of int, shape (n_events,) — predictor ids(neuron ids, stimulus
+            ids, etc.)
     y :
-        Spike time series for the neurons being modeled. Row 0 contains spike
-        times; row 1 contains neuron ids; row 2 contains integer indices into X.
-        Shape (3, n_spikes).
+        Spike time series for the neurons being modeled.
+        Stored as (times, neuron_ids, event_indices) where:
+            - times : jnp.ndarray of float, shape (n_spikes,) — spike timestamps
+            - neuron_ids : jnp.ndarray of int, shape (n_spikes,) — neuron indices
+            - event_indices : jnp.ndarray of int, shape (n_spikes,) — indices into X.times
 
     Returns
     -------
