@@ -323,13 +323,12 @@ class TestLogLikelihood:
             X,
             y,
             params_with_key.params,
-            log_likelihood._compute_lam_tilde_single,
+            log_likelihood._scan_fn_log_lam_y,
             inverse_link_function,
             n_basis_funcs,
             max_window,
             scan_size,
             eval_function,
-            log=True,
         )
 
         np.testing.assert_almost_equal(log_lam_y, bias_contrib)
@@ -362,13 +361,12 @@ class TestLogLikelihood:
             X,
             y,
             params_with_key.params,
-            log_likelihood._compute_lam_tilde_single,
+            log_likelihood._scan_fn_log_lam_y,
             inverse_link_function,
             n_basis_funcs,
             max_window,
             scan_size,
             eval_function,
-            log=True,
         )
 
         # numpy loop
@@ -407,13 +405,12 @@ class TestLogLikelihood:
             X,
             mc_samples,
             params_with_key.params,
-            log_likelihood._compute_lam_tilde_all,
+            log_likelihood._scan_fn_mc_est,
             inverse_link_function,
             n_basis_funcs,
             max_window,
             scan_size,
             eval_function,
-            log=False,
         )
 
         # numpy loop

@@ -1,5 +1,7 @@
 from typing import Callable, Dict, Union
 
+from functools import partial
+
 import jax
 import jax.numpy as jnp
 
@@ -12,75 +14,27 @@ from .params import PPGLMParams, PPGLMParamsWithKey
 jax.config.update("jax_enable_x64", True)
 
 
-def _compute_lam_tilde_single(
+def _compute_lam_tilde(
     dts: jnp.ndarray,
-    i: int,
-    event_ids: jnp.ndarray,
     weights: Union[jnp.ndarray, Dict],
     bias: jnp.ndarray,
     eval_function,
 ) -> jnp.ndarray:
     """
-    Evaluate the non-rectified firing rate (lambda tilde) for a single
-    target neurons at a single time point.
+    Evaluate the non-rectified firing rate (lambda tilde) at a single time point.
 
-    Selects the coefficients for the predictors present in the history
-    window, evaluates the basis functions at the lag times, and accumulates
-    their weighted sum plus the bias for the target neuron indexed by i.
+     Selects the coefficients for the predictors present in the history
+     window, evaluates the basis functions at the lag times, and accumulates
+     their weighted sum plus the bias for the target neuron(s).
 
     Parameters
     ----------
     dts :
         Lag times between the reference time point and each event in the history
         window. Shape (max_window,).
-    i :
-        Target neuron index. Scalar int.
-    event_ids :
-        An array of predictor ids corresponding to all events in the history window.
     weights :
-        Reshaped model coefficients. Shape (n_predictors, n_basis_funcs, n_neurons).
-    bias :
-        Intercept for each target neuron. Shape (n_neurons,).
-
-    Returns
-    -------
-    :
-        Scalar non-rectified firing rate for the target neuron.
-    """
-    w = weights[event_ids, :, i]  # shape (max_window, n_basis_funcs)
-    fx = eval_function(dts)  # shape (max_window, n_basis_funcs)
-
-    return jnp.sum(fx * w) + bias[i]
-
-
-def _compute_lam_tilde_all(
-    dts: jnp.ndarray,
-    i: int,
-    event_ids: jnp.ndarray,
-    weights: Union[jnp.ndarray, Dict],
-    bias: jnp.ndarray,
-    eval_function,
-) -> jnp.ndarray:
-    """
-    Evaluate the non-rectified firing rate (lambda tilde) for all target neurons
-    at a single time point.
-
-    Used during the CIF integral computation, where the intensity must
-    be evaluated for all target neurons.
-
-    Parameters
-    ----------
-    dts :
-        Lag times between the reference time point and each event in the history
-        window. Shape (max_window,).
-    i :
-        Target neuron index (unused in this function; retained for a consistent signature
-        with compute_lam_tilde_single).
-    event_ids :
-        An array of event ids corresponding to all events in the history window.
-        Used to select the corresponding coefficients (weights).
-    weights :
-        Reshaped model coefficients. Shape (n_predictors, n_basis_funcs, n_neurons).
+        Model coefficients selected for neurons present in the history window.
+        Shape (max_window, n_basis_funcs, n_neurons).
     bias :
         Intercept for each target neuron. Shape (n_neurons,).
 
@@ -89,10 +43,9 @@ def _compute_lam_tilde_all(
     :
         Non-rectified firing rate for all target neurons. Shape (n_neurons,).
     """
-    w = weights[event_ids]  # shape (max_window, n_basis_funcs, n_neurons)
     fx = eval_function(dts)  # shape (max_window, n_basis_funcs)
 
-    return jnp.sum(fx[:, :, None] * w, axis=(0, 1)) + bias
+    return jnp.einsum('hjn,hj->n', weights, fx) + bias
 
 
 def _draw_mc_sample(
@@ -133,17 +86,131 @@ def _draw_mc_sample(
     return mc_spikes
 
 
+def _scan_fn_log_lam_y(
+    lam_sum: jnp.ndarray,
+    i: jnp.ndarray,
+    X: jnp.ndarray,
+    weights: jnp.ndarray,
+    bias: jnp.ndarray,
+    eval_function: Callable,
+    inverse_link_function: Callable,
+    max_window: int,
+):
+    """
+    Scan body for accumulating log-firing rates at observed spike times.
+
+    Intended to be partially applied over the static arguments before passing
+    to jax.lax.scan via _log_likelihood_scan.
+
+    Parameters
+    ----------
+    lam_sum :
+        Running scalar sum of log-firing rates (scan carry).
+    i : jnp.ndarray
+        Current eval point. Entries are [spike_time, spike_neuron_id, preceding_event_idx].
+
+    Closed over via ``functools.partial``
+    --------------------------------------
+    X :
+        Padded event time series. Shape (2, n_events).
+    weights :
+        Reshaped basis coefficients. Shape (n_predictors, n_basis_funcs, n_neurons).
+    bias :
+        Bias terms. Shape (n_neurons,).
+    eval_function :
+        Basis evaluation function.
+    inverse_link_function :
+        Maps lam_tilde to firing rate.
+    max_window :
+        Number of past events to include in history window.
+
+    Returns
+    -------
+    lam_sum : jnp.ndarray
+        Updated scalar sum.
+    None
+        No concatenated per-step output (required by jax.lax.scan).
+    """
+    spk_in_window = utils.slice_array(X, i[-1].astype(int), max_window)
+    dts = i[0] - spk_in_window[0]
+    lam_tilde = _compute_lam_tilde(
+        dts,
+        weights[spk_in_window[1].astype(int), :, i[1].astype(int), None],
+        bias[i[1].astype(int)],
+        eval_function,
+    )
+    lam_sum += jnp.log(inverse_link_function(lam_tilde)).sum()
+    return lam_sum, None
+
+
+def _scan_fn_mc_est(
+    lam_sum: jnp.ndarray,
+    i: jnp.ndarray,
+    X: jnp.ndarray,
+    weights: jnp.ndarray,
+    bias: jnp.ndarray,
+    eval_function: Callable,
+    inverse_link_function: Callable,
+    max_window: int,
+):
+    """
+    Scan body for accumulating firing rates at Monte Carlo sample points to compute
+    an estimate of the firing rate integral over the recording time.
+
+    Intended to be partially applied over the static arguments before passing
+    to jax.lax.scan via _log_likelihood_scan.
+
+    Parameters
+    ----------
+    lam_sum :
+        Running scalar sum of log-firing rates (scan carry).
+    i : jnp.ndarray
+        Current eval point. Entries are [sample_time, preceding_event_idx].
+
+    Closed over via ``functools.partial``
+    --------------------------------------
+    X :
+        Padded event time series. Shape (2, n_events).
+    weights :
+        Reshaped basis coefficients. Shape (n_predictors, n_basis_funcs, n_neurons).
+    bias :
+        Bias terms. Shape (n_neurons,).
+    eval_function :
+        Basis evaluation function.
+    inverse_link_function :
+        Maps lam_tilde to firing rate.
+    max_window :
+        Number of past events to include in history window.
+
+    Returns
+    -------
+    lam_sum : jnp.ndarray
+        Updated scalar sum.
+    None
+        No concatenated per-step output (required by jax.lax.scan).
+    """
+    spk_in_window = utils.slice_array(X, i[-1].astype(int), max_window)
+    dts = i[0] - spk_in_window[0]
+    lam_tilde = _compute_lam_tilde(
+        dts,
+        weights[spk_in_window[1].astype(int)],
+        bias,
+        eval_function,
+    )
+    lam_sum += inverse_link_function(lam_tilde).sum()
+    return lam_sum, None
+
+
 def _log_likelihood_scan(
     X: DESIGN_INPUT_TYPE,
     eval_pts: jnp.ndarray,
     params: PPGLMParams,
-    lam_tilde_function: Callable,
+    scan_function: Callable,
     inverse_link_function,
     n_basis_funcs,
     max_window,
     scan_size,
     eval_function,
-    log=False,
 ) -> jnp.ndarray:
     """
     Compute the sum of log-firing rates (or firing rates) at a set of time points
@@ -161,12 +228,8 @@ def _log_likelihood_scan(
         Observed spike time series or MC sample points. Shape (n_channels, n_time_points).
     params :
         PPGLMParams containing the basis coefficients and bias terms.
-    lam_tilde_function :
-        Either compute_lam_tilde_single or compute_lam_tilde_all, depending on
-        whether intensity is needed for one target neuron or all.
-    log :
-        If True, accumulate log-firing rates; if False, accumulate firing rates directly.
-        Default False.
+    scan_function :
+        Either _scan_fn_log_lam_y for the first NLL term or _scan_fn_mc_est for the second term .
 
     Returns
     -------
@@ -174,28 +237,22 @@ def _log_likelihood_scan(
         Scalar sum of log-firing rates (or firing rates) over all eval points,
         with padding contribution subtracted.
     """
-    optional_log = jnp.log if log else lambda x: x
 
     weights, bias = params.coef, params.intercept
     weights = utils.reshape_coef_for_scan(weights, n_basis_funcs)
 
-    # body of the scan function
-    def scan_fn(lam_sum, i):
-        spk_in_window = utils.slice_array(X, i[-1].astype(int), max_window)
-        dts = i[0] - spk_in_window[0]
-        lam_tilde = lam_tilde_function(
-            dts,
-            i[1].astype(int),
-            spk_in_window[1].astype(int),
-            weights,
-            bias,
-            eval_function,
-        )
-        lam_sum += optional_log(inverse_link_function(lam_tilde)).sum()
-        return lam_sum, None
+    scan_body = partial(
+        scan_function,
+        X=X,
+        weights=weights,
+        bias=bias,
+        eval_function=eval_function,
+        inverse_link_function=inverse_link_function,
+        max_window=max_window,
+    )
 
     scan_vmap = jax.vmap(
-        lambda pts: jax.lax.scan(scan_fn, jnp.array(0), pts), in_axes=0
+        lambda pts: jax.lax.scan(scan_body, jnp.array(0), pts), in_axes=0
     )
 
     reshaped_spikes_array, padding_val, padding_len = utils.reshape_input_for_scan(
@@ -204,7 +261,7 @@ def _log_likelihood_scan(
     out, _ = scan_vmap(reshaped_spikes_array)  # shape (n_scans,)
 
     # compute padding contribution separately to subtract it
-    padding_contrib = scan_fn(jnp.array(0.0), padding_val)[0] * padding_len
+    padding_contrib = scan_body(jnp.array(0.0), padding_val)[0] * padding_len
 
     return jnp.sum(out) - padding_contrib
 
@@ -273,13 +330,12 @@ def _negative_log_likelihood(
         X,
         y,
         params,
-        _compute_lam_tilde_single,
+        _scan_fn_log_lam_y,
         inverse_link_function,
         n_basis_funcs,
         max_window,
         scan_size,
         eval_function,
-        log=True,
     )
 
     mc_samples = _draw_mc_sample(
@@ -294,13 +350,12 @@ def _negative_log_likelihood(
         X,
         mc_samples,
         params,
-        _compute_lam_tilde_all,
+        _scan_fn_mc_est,
         inverse_link_function,
         n_basis_funcs,
         max_window,
         scan_size,
         eval_function,
-        log=False,
     )
 
     return ((recording_time.tot_length() / M_samples) * mc_estimate) - log_lambda_y
