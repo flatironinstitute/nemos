@@ -70,7 +70,6 @@ class TrainingContext:
         """Reason for the stop request, if any."""
         return self._stop_reason
 
-
 class Callback:
     """
     Base class for training callbacks.
@@ -90,7 +89,7 @@ class Callback:
         """
         Run at the start of an epoch.
 
-        This hook is called after the training loop advances ``ctx.epoch`` and
+        This hook is called after the training loop advances ``ctx.epoch_idx`` and
         before the first batch of that epoch is processed. It marks the start
         of epoch-level work from the callback perspective.
 
@@ -185,7 +184,7 @@ class SolverConvergenceCallback(Callback):
             ctx.state,
             self._prev_state,
             ctx.aux,
-            ctx.epoch,
+            ctx.epoch_idx,
         )
         if converged:
             ctx.request_stop("Satisfied the solver's convergence criterion.")

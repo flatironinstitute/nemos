@@ -277,7 +277,7 @@ class TestGLMStochasticFit:
         # Early stop: callback requests stop after first epoch
         class StopAfterFirstEpoch(Callback):
             def on_epoch_end(self, ctx):
-                if ctx.epoch >= 0:
+                if ctx.epoch_idx >= 0:
                     ctx.request_stop("test stop")
 
         model_early = nmo.glm.GLM(solver_name=solver, solver_kwargs=solver_kwargs)
@@ -553,7 +553,7 @@ class TestSolverStochasticRun:
                 self.epoch_counts = []
 
             def on_epoch_end(self, ctx):
-                self.epoch_counts.append(self.multiplier * ctx.epoch)
+                self.epoch_counts.append(self.multiplier * ctx.epoch_idx)
 
         solver = solver_class(loss, **self._default_solver_kwargs(solver_class))
         init_params = jnp.zeros(3)

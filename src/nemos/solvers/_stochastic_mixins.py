@@ -132,7 +132,7 @@ class StochasticSolverMixin:
         callback.on_train_begin(ctx)
 
         for epoch in range(num_epochs):
-            ctx.epoch = epoch
+            ctx.epoch_idx = epoch
 
             callback.on_epoch_begin(ctx)
 
