@@ -10,6 +10,22 @@ kernelspec:
   language: python
   name: python3
 ---
+```{code-cell}
+:tags: [hide-input]
+
+import pynapple as nap
+import warnings
+
+nap.nap_config.suppress_conversion_warnings = True
+
+warnings.filterwarnings(
+    "ignore",
+    message="DataFrame is not sorted by start",
+    category=UserWarning,
+)
+
+```
+
 
 (solver-selection)=
 # Benchmarking GLM Configurations
@@ -36,9 +52,11 @@ NeMoS native solvers JIT-compile the full optimization when `GLM.fit` is called,
 
 We present the results in two section: simulations and real data. The difference in how algorithm performs under the two conditions is striking, but the interpretation is pretty obvious:
 
-- **Simulations**: fitting simulated data requires a small number of optimization steps, and the compilation cost dominates over the optimization loop; fitting real data requires hundres of iterations (sometimes thousands for some algorithms). Scipy and methods with fast updates and quicker compile times are preferrable.
-- **Real data**: the optimization requires hudreds to thousands of iteratoins depending on the algorithm. JIT compiled solvers are more efficient since the compilation cost is negligible.
-- **GPU vs CPU**: GPU compilation takes longer, but the optimization updates scale very well with problem size making it the most performant option for large problem sizes. This is most likely the case for large neural recordings.
+- **Simulations**: fitting simulated data requires a smaller number of optimization steps, and the compilation cost may dominate over the optimization loop, especially true for smaller dataset; For this reason the `scipy.minimize` wrapper is the most efficient algorithm for small problem sizes, while `BFGS` is comes up on top for larger problems.
+
+- **Neural Recordings**: fitting neural recordings often requires hundreds or even thousands of optimization steps, depending on the algorithm. The JIT compiled solvers tends to be more efficient since the compilation cost is negligible. In our experience, this is commonly the case in real applications.
+
+- **GPU vs CPU**: GPU compilation is slower than its CPU counterpart, however, the optimization updates scale very well with the problem size. For this reason, the GPU optimization is the most performant option for large  problems.
 
 
 Before digging into the data, some let's set up some `pandas` configurations and helper functions.
@@ -110,7 +128,7 @@ def filter_and_compute_averages(df: pd.DataFrame, query: str | None=None):
 When fitting simulated data, the compilation time represent a significant fraction of the total compute time. That's because the number of iteration required by the numerical solvers to converge to the optimal solution is relatively low. This is more evident in for the smallest problem size, as we can see by comparing the result of the smallest and the largest simulated problem.
 
 
-#### Smallest Dataset
+#### Small problem size
 
 - Sample size: 100
 - Feature dimension: 1
@@ -129,7 +147,7 @@ query = "sample_size == 1e2 and pop_size == 1  and feature_dim == 1"
 filter_and_compute_averages(simulations, query)
 ```
 
-#### Largest Dataset
+#### Large problem size
 
 - Sample size: $10^5$
 - Feature dimension: 100
@@ -152,6 +170,63 @@ filter_and_compute_averages(simulations, query)
 
 filter_and_compute_averages(recordings)
 ```
+
+## Comparison with `scikit-learn`
+
+Finally, let's take a look on how NeMoS performs compared to `scikit-learn` `PoissonRegressor` on the same neural recording used for benchmarking. Note that this example runs on a completely different machine than the benchmarking, therefore the actual numbers won't be directly comparable to the table above.
+
+```{code-cell}
+from sklearn.linear_model import PoissonRegressor
+import pynapple as nap
+import numpy as np
+import nemos as nmo
+from time import perf_counter
+import jax.numpy as jnp
+
+
+def get_data():
+    """Model design."""
+    path = nmo.fetch.fetch_data("Mouse32-140822.nwb")
+    data = nap.load_file(path)
+    spikes = data["units"]
+    epochs = data["epochs"]
+    wake_ep = epochs[epochs.tags == "wake"]
+    spikes = spikes.getby_category("location")["adn"]
+    spikes = spikes.restrict(wake_ep).getby_threshold("rate", 1.)
+    y = spikes.count(0.01, ep=wake_ep)
+    X = nmo.basis.RaisedCosineLogConv(
+        5, window_size=80
+    ).compute_features(y)
+    X, y = X.d, y.d
+    keep = np.all(~np.isnan(X), axis=1)
+    return X[keep], y[keep]
+
+
+X, y = get_data()
+
+skl_glm = PoissonRegressor(alpha=0.001, tol=1e-6, max_iter=1000)
+nemos_glm = nmo.glm.GLM(
+    regularizer="Ridge",
+    regularizer_strength=0.001,
+    solver_name="BFGS",
+    solver_kwargs={"tol":1e-6, "maxiter": 1000},
+)
+
+t0 = perf_counter()
+skl_glm.fit(X, y[:, 0])
+sklearn_time = perf_counter() - t0
+
+X, y = jnp.array(X), jnp.array(y)
+t0 = perf_counter()
+nemos_glm.fit(X, y[:, 0])
+nemos_time = perf_counter() - t0
+
+print(f"scikit-learn fit duration: {np.round(sklearn_time, 2)} sec")
+print(f"NeMoS fit duration: {np.round(nemos_time, 2)} sec")
+print(f"NeMoS is {np.round(sklearn_time/nemos_time, 2)}x faster then scikit-learn")
+```
+
+
 
 (table_solvers)=
 ## Benchmarked Solvers
