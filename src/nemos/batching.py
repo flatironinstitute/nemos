@@ -62,7 +62,6 @@ class DataLoader(Protocol):
         ...
 
 
-# TODO: How can this work with pynapple's lazy laoding?
 class ArrayDataLoader:
     """
     DataLoader for in-memory arrays.
