@@ -140,7 +140,7 @@ When fitting simulated data, the compilation time represent a significant fracti
 ```{code-cell}
 
 # TODO: replace with download from www folder
-path = "/Users/ebalzani/Code/nemos/benchmarking_results/20260416_185100_benchmarking_a878a38.csv"
+path = "/Users/ebalzani/Code/nemos/benchmarking_results/20260420_170138_benchmarking_921bdd8.csv"
 
 # load the benchmarking results for the recordings and the simulations
 simulations, recordings = load(path)

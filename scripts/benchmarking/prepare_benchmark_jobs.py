@@ -22,9 +22,6 @@ import sys
 from pathlib import Path
 from typing import Tuple
 
-# Import grid defaults from the benchmarking script
-_HERE = Path(__file__).parent
-sys.path.insert(0, str(_HERE))
 from benchmarking_glm import (
     DEFAULT_DEVICES,
     DEFAULT_FEATURE_DIMS,
@@ -34,6 +31,7 @@ from benchmarking_glm import (
     DEFAULT_REGULARIZERS,
     DEFAULT_SAMPLE_SIZES,
     DEFAULT_SOLVER_NAMES,
+    _setup,
     aggregate_results,
     generate_all_data,
     generate_glm_configs,
@@ -352,6 +350,7 @@ def generate_data(args, configs: list) -> None:
 
 
 if __name__ == "__main__":
+    _setup()
     args = _parse_args()
 
     if args.run:

@@ -56,7 +56,8 @@ class ScipySolver:
         self.tol = tol
         self.maxiter = maxiter
 
-        assert not has_aux, "Not implementing aux support now."
+        if has_aux:
+            raise NotImplementedError("Auxiliary outputs are not supported by ScipySolver.")
 
     @classmethod
     def get_accepted_arguments(cls):
@@ -101,7 +102,8 @@ class ScipySolver:
         and increment the number steps in the state by hand.
         """
         unstacked_final_params, res = self._run_for_n_steps(params, 1, *args)
-        assert res.nit <= 1
+        if res.nit > 1:
+            raise RuntimeError(f"Expected at most 1 solver step, got {res.nit}.")
         return (
             unstacked_final_params,
             ScipySolverState(state.iter_num + res.nit, {**res}, False),
@@ -152,7 +154,7 @@ class ScipySolver:
 
 
 class ScipyLBFGS(ScipySolver):
-    """Solver using the modified Powell algorithm."""
+    """Solver using the L-BFGS-B algorithm via scipy.optimize.minimize."""
 
     def __init__(
         self,

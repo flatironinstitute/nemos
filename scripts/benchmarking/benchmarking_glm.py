@@ -29,11 +29,10 @@ from scipy_adapter import ScipyLBFGS
 
 import nemos as nmo
 
-# use 64 precision
-jax.config.update("jax_enable_x64", True)
-
-# register solver
-nmo.solvers.register("LBFGS", ScipyLBFGS, "scipy")
+def _setup() -> None:
+    """Configure JAX and register custom solvers. Must be called before any fitting."""
+    jax.config.update("jax_enable_x64", True)
+    nmo.solvers.register("LBFGS", ScipyLBFGS, "scipy")
 
 # --- grid defaults ---
 DEFAULT_SAMPLE_SIZES = [100, 1_000, 10_000, 100_000]
@@ -407,7 +406,8 @@ def _benchmark_nemos(config: dict, X: jnp.ndarray, y: jnp.ndarray, n_reps: int) 
         converged.append(_get_converged(state))
 
     # Clear XLA cache so end-to-end reps see a cold cache, independent of the
-    # compilation measurements above.
+    # compilation measurements above. Global side effect: invalidates all cached
+    # JIT compilations in the current process.
     jax.clear_caches()
 
     end_to_end_s = []
