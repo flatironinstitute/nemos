@@ -23,16 +23,17 @@ from typing import List, Tuple
 import jax
 import jax.numpy as jnp
 import pynapple as nap
+from scipy_adapter import ScipyLBFGS
 from sklearn.linear_model import PoissonRegressor
 
-from scipy_adapter import ScipyLBFGS
-
 import nemos as nmo
+
 
 def _setup() -> None:
     """Configure JAX and register custom solvers. Must be called before any fitting."""
     jax.config.update("jax_enable_x64", True)
     nmo.solvers.register("LBFGS", ScipyLBFGS, "scipy")
+
 
 # --- grid defaults ---
 DEFAULT_SAMPLE_SIZES = [100, 1_000, 10_000, 100_000]
@@ -133,7 +134,9 @@ def generate_glm_configs(
                         "solver_name": solv,
                         "solver_kwargs": solver_kw,
                         "regularizer": reg,
-                        "regularizer_strength": 0.001 if reg != "UnRegularized" else None,
+                        "regularizer_strength": (
+                            0.001 if reg != "UnRegularized" else None
+                        ),
                     },
                     "device": dev,
                 }
@@ -144,7 +147,11 @@ def generate_glm_configs(
             fit_config = {
                 "package": "sklearn",
                 "input_shapes": input_shapes,
-                "model_conf": {"alpha": 0.001, "max_iter": 1000, "solver": "newton-cholesky"},
+                "model_conf": {
+                    "alpha": 0.001,
+                    "max_iter": 1000,
+                    "solver": "newton-cholesky",
+                },
                 "device": "cpu",
             }
             fit_config["file_name"] = f"cpu_{dict_to_filename(fit_config)}.json"
@@ -174,27 +181,35 @@ def generate_glm_configs(
                 solver_kw = {"maxiter": 1000, "tol": 1e-6}
                 if base_name in _svrg_solvers:
                     solver_kw["batch_size"] = max(1, X.shape[0] // 10)
-                configs.append({
-                    "package": "nemos",
-                    "input_shapes": input_shapes,
-                    "model_conf": {
-                        "regularizer": reg,
-                        "solver_name": solv,
-                        "solver_kwargs": solver_kw,
-                        "regularizer_strength": 0.001,
-                    },
-                    "device": dev,
-                    **extra,
-                })
+                configs.append(
+                    {
+                        "package": "nemos",
+                        "input_shapes": input_shapes,
+                        "model_conf": {
+                            "regularizer": reg,
+                            "solver_name": solv,
+                            "solver_kwargs": solver_kw,
+                            "regularizer_strength": 0.001,
+                        },
+                        "device": dev,
+                        **extra,
+                    }
+                )
 
         if "sklearn" in packages and reg == "Ridge" and dev == "cpu":
-            configs.append({
-                "package": "sklearn",
-                "input_shapes": input_shapes,
-                "model_conf": {"alpha": 0.001, "max_iter": 1000, "solver": "newton-cholesky"},
-                "device": "cpu",
-                **extra,
-            })
+            configs.append(
+                {
+                    "package": "sklearn",
+                    "input_shapes": input_shapes,
+                    "model_conf": {
+                        "alpha": 0.001,
+                        "max_iter": 1000,
+                        "solver": "newton-cholesky",
+                    },
+                    "device": "cpu",
+                    **extra,
+                }
+            )
     return configs
 
 
@@ -204,7 +219,9 @@ def _sklearn_model(config) -> list[PoissonRegressor]:
     return [PoissonRegressor(**config["model_conf"]) for _ in range(n_neurons)]
 
 
-def model_from_config(config: dict) -> nmo.glm.GLM | nmo.glm.PopulationGLM | list[PoissonRegressor]:
+def model_from_config(
+    config: dict,
+) -> nmo.glm.GLM | nmo.glm.PopulationGLM | list[PoissonRegressor]:
     if config["package"] == "sklearn":
         return _sklearn_model(config)
     y_shape = config["input_shapes"]["y"]
@@ -464,7 +481,9 @@ def _benchmark_nemos(config: dict, X: jnp.ndarray, y: jnp.ndarray, n_reps: int) 
     }
 
 
-def _benchmark_sklearn(config: dict, X: jnp.ndarray, y: jnp.ndarray, n_reps: int) -> dict:
+def _benchmark_sklearn(
+    config: dict, X: jnp.ndarray, y: jnp.ndarray, n_reps: int
+) -> dict:
     """Benchmark sklearn PoissonRegressor, timing the sequential per-neuron fit loop."""
     n_neurons = 1 if len(y.shape) == 1 else y.shape[1]
     y_cols = [y] if n_neurons == 1 else [y[:, i] for i in range(n_neurons)]

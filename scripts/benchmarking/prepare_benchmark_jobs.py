@@ -213,7 +213,9 @@ def print_commands(args, dsb_paths: dict[str, Path], n_tasks: dict[str, int]) ->
         var_names[device] = var
         print(f"\n  # {device.upper()}")
         print(f"  {var}=$({cmd} | awk '{{print $NF}}')")
-    agg_cmd = _build_aggregation_sbatch_command(args, [f"${v}" for v in var_names.values()])
+    agg_cmd = _build_aggregation_sbatch_command(
+        args, [f"${v}" for v in var_names.values()]
+    )
     print(f"\n  # Aggregation (runs after all device jobs succeed)")
     print(f"  {agg_cmd}")
 
@@ -224,7 +226,9 @@ def submit_jobs(args, dsb_paths: dict[str, Path], n_tasks: dict[str, int]) -> No
     for device, dsb_path in dsb_paths.items():
         cmd = _build_sbatch_command(args, device, dsb_path, n_tasks[device])
         print(f"\nSubmitting {device.upper()} jobs:\n  {cmd}")
-        result = subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True)
+        result = subprocess.run(
+            cmd, shell=True, check=True, capture_output=True, text=True
+        )
         job_id = result.stdout.strip().split()[-1]
         print(f"  -> job ID: {job_id}")
         job_ids.append(job_id)

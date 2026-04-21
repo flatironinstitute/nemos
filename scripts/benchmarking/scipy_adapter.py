@@ -4,6 +4,7 @@ import scipy.optimize
 
 from nemos.utils import get_flattener_unflattener
 
+
 class ScipySolverState(NamedTuple):
     """State of a scipy-based solver."""
 
@@ -57,7 +58,9 @@ class ScipySolver:
         self.maxiter = maxiter
 
         if has_aux:
-            raise NotImplementedError("Auxiliary outputs are not supported by ScipySolver.")
+            raise NotImplementedError(
+                "Auxiliary outputs are not supported by ScipySolver."
+            )
 
     @classmethod
     def get_accepted_arguments(cls):
@@ -131,7 +134,6 @@ class ScipySolver:
             params_in_their_orig_shape = unflattener_fun(flat_params)
             f, fgrad = self.val_and_grad(params_in_their_orig_shape, *args)
             return f, flattener_fun(fgrad)
-
 
         def _flat_hess(flat_params, *args):
             params_in_their_orig_shape = unflattener_fun(flat_params)
