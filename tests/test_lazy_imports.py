@@ -265,6 +265,7 @@ PYNAPPLE_FREE_IMPORTS = [
     "import nemos.regularizer",
     "from nemos.glm import GLM, PopulationGLM, ClassifierGLM, ClassifierPopulationGLM",
     "from nemos.hmm.utils import *",
+    "from nemos.type_casting import *",
 ]
 
 
@@ -280,5 +281,33 @@ def test_pynapple_not_loaded(import_stmt: str):
     assert is_lazy, (
         f"pynapple was fully loaded (numba in sys.modules) by `{import_stmt}`.\n"
         f"This module should not depend on pynapple.\n"
+        f"{error_msg}"
+    )
+
+
+# =============================================================================
+# Test 6: Modules that don't need scipy should not fully load it
+# =============================================================================
+
+# We check for scipy.stats rather than scipy itself, because lazy.load("scipy")
+# adds a lazy wrapper to sys.modules but doesn't execute scipy's code until an
+# attribute (e.g. scipy.stats) is actually accessed at runtime.
+SCIPY_FREE_IMPORTS = [
+    "import nemos.simulation",
+]
+
+
+@pytest.mark.parametrize("import_stmt", SCIPY_FREE_IMPORTS)
+def test_scipy_not_loaded(import_stmt: str):
+    """Test that modules that don't need scipy at import time don't fully load it.
+
+    We check for scipy.stats rather than scipy itself, because lazy.load("scipy")
+    adds a lazy wrapper to sys.modules but doesn't execute scipy's code until an
+    attribute is accessed.
+    """
+    is_lazy, error_msg = _check_module_not_imported_after(import_stmt, "scipy.stats")
+    assert is_lazy, (
+        f"scipy was fully loaded (scipy.stats in sys.modules) by `{import_stmt}`.\n"
+        f"This module should not depend on scipy at import time.\n"
         f"{error_msg}"
     )
