@@ -143,23 +143,43 @@ def write_disbatch_script(args, device: str, indices: list[int]) -> Tuple[Path, 
             ]
             f.write(f'( {" && ".join(lines)} ) &> {log}\n')
 
-        # barrier within this device's job — no cross-device aggregation here
         f.write("#DISBATCH BARRIER\n")
-        agg_log = log_dir / "aggregate.log"
-        agg_cmd = (
-            f"source {args.venv} && "
-            f"python -u {_SELF}"
-            f" --aggregate"
-            f" --output_path {base_dir / 'results'}"
-            f" --csv_path {args.csv_path}"
-        )
-        f.write(f"( {agg_cmd} ) &> {agg_log}\n")
 
     n_tasks = len(batches)
     print(
         f"  {dsb_path}  ({len(indices)} configs, {n_tasks} tasks, {args.fits_per_worker} fits/task)"
     )
     return dsb_path, n_tasks
+
+
+def _build_aggregation_sbatch_command(args, job_ids: list[str]) -> str:
+    """Return sbatch command for the cross-device aggregation job.
+
+    Runs only after all device jobs succeed (--dependency=afterok).
+    Always forces JAX to CPU so the import doesn't try to init CUDA.
+    """
+    base_dir = Path(args.base_dir)
+    agg_log = base_dir / "logs" / "aggregate.log"
+    dependency = "afterok:" + ":".join(job_ids)
+    agg_cmd = (
+        f"source {args.venv} && "
+        f"export JAX_PLATFORMS=cpu && "
+        f"python -u {_SELF}"
+        f" --aggregate"
+        f" --output_path {base_dir / 'results'}"
+        f" --csv_path {args.csv_path}"
+    )
+    return (
+        f"sbatch"
+        f" --dependency={dependency}"
+        f" --kill-on-invalid-dep=yes"
+        f" -p {args.cpu_partition}"
+        f" -t 0-05:00"
+        f" --mem-per-cpu=4GB"
+        f" -c 1"
+        f" -o {agg_log}"
+        f" --wrap='{agg_cmd}'"
+    )
 
 
 def _build_sbatch_command(args, device: str, dsb_path: Path, n_tasks: int) -> str:
@@ -185,27 +205,33 @@ def _build_sbatch_command(args, device: str, dsb_path: Path, n_tasks: int) -> st
 
 
 def print_commands(args, dsb_paths: dict[str, Path], n_tasks: dict[str, int]) -> None:
-    base_dir = Path(args.base_dir)
-    print("\nTo launch (one sbatch per device):")
+    print("\nTo launch (capture job IDs, then submit dependent aggregation):")
+    var_names = {}
     for device, dsb_path in dsb_paths.items():
         cmd = _build_sbatch_command(args, device, dsb_path, n_tasks[device])
-        print(f"\n  # {device.upper()}\n  {cmd}")
-    print("\nAfter ALL device jobs finish, aggregate:")
-    print(
-        f"  source {args.venv} && "
-        f"python {_SELF}"
-        f" --aggregate"
-        f" --output_path {base_dir / 'results'}"
-        f" --csv_path {args.csv_path}"
-    )
+        var = f"{device.upper()}_JID"
+        var_names[device] = var
+        print(f"\n  # {device.upper()}")
+        print(f"  {var}=$({cmd} | awk '{{print $NF}}')")
+    agg_cmd = _build_aggregation_sbatch_command(args, [f"${v}" for v in var_names.values()])
+    print(f"\n  # Aggregation (runs after all device jobs succeed)")
+    print(f"  {agg_cmd}")
 
 
 def submit_jobs(args, dsb_paths: dict[str, Path], n_tasks: dict[str, int]) -> None:
-    """Submit one sbatch job per device. Always prints the command before running it."""
+    """Submit one sbatch job per device, then a dependent aggregation job."""
+    job_ids = []
     for device, dsb_path in dsb_paths.items():
         cmd = _build_sbatch_command(args, device, dsb_path, n_tasks[device])
         print(f"\nSubmitting {device.upper()} jobs:\n  {cmd}")
-        subprocess.run(cmd, shell=True, check=True)
+        result = subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True)
+        job_id = result.stdout.strip().split()[-1]
+        print(f"  -> job ID: {job_id}")
+        job_ids.append(job_id)
+
+    agg_cmd = _build_aggregation_sbatch_command(args, job_ids)
+    print(f"\nSubmitting aggregation job (depends on {job_ids}):\n  {agg_cmd}")
+    subprocess.run(agg_cmd, shell=True, check=True)
 
 
 def _parse_args() -> argparse.Namespace:
