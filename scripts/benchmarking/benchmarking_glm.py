@@ -13,7 +13,7 @@ import subprocess
 from itertools import product
 from pathlib import Path
 from time import perf_counter
-from typing import List, Tuple, Optional, Literal
+from typing import List, Literal, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
