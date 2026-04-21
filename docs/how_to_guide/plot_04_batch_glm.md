@@ -476,6 +476,11 @@ ax.set_ylabel("Neurons")
 
 Since this example is small enough, we can fit the full model until convergence and compare the scores.
 
+:::{warning}
+In this tutorial, calling ``score()`` after ``stochastic_fit()`` works because the example uses a Poisson ``PopulationGLM``, whose scale does not need to be estimated from the data after fitting.
+Support for models that require post-hoc estimation of residual degrees of freedom and scale is still in progress.
+:::
+
 ```{code-cell} ipython3
 full_model = nmo.glm.PopulationGLM(solver_kwargs={"tol" : 1e-3}).fit(X, full_counts)
 ```

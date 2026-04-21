@@ -338,20 +338,113 @@ class TestGLMStochasticFit:
         with pytest.raises(ValueError, match="does not support stochastic"):
             model.stochastic_fit(loader)
 
-    # TODO: Update this if they are implemented.
-    def test_scale_and_dof_are_none(self, simple_data):
-        """Test that scale_ and dof_resid_ are None after stochastic_fit."""
+    @pytest.mark.parametrize(
+        "obs_name, y_transform",
+        [
+            ("Poisson", lambda y: y),
+            ("Bernoulli", lambda y: (y > 0).astype(float)),
+            ("NegativeBinomial", lambda y: y),
+        ],
+    )
+    def test_scale_finalized_for_constant_scale_family(
+        self, simple_data, obs_name, y_transform
+    ):
+        """
+        After stochastic_fit with a constant-scale observation model, scale_
+        is set to 1 (the model's constant value) and dof_resid_ is left unset.
+        """
         X, y = simple_data
+        y = y_transform(y)
         loader = ArrayDataLoader(X, y, batch_size=32)
 
         model = nmo.glm.GLM(
+            observation_model=obs_name,
             solver_name="GradientDescent",
             solver_kwargs={"stepsize": 0.001, "maxiter": 100, "acceleration": False},
         )
         model.stochastic_fit(loader, num_epochs=1)
 
+        assert model.scale_ is not None
+        np.testing.assert_allclose(model.scale_, 1.0)
+        # NOTE: residual dof estimation after stochastic_fit is not yet implemented
+        assert model.dof_resid_ is None
+
+    @pytest.mark.parametrize(
+        "obs_name, y_transform",
+        [
+            ("Poisson", lambda y: y),
+            ("Bernoulli", lambda y: (y > 0).astype(float)),
+            ("NegativeBinomial", lambda y: y),
+        ],
+    )
+    def test_score_works_after_stochastic_fit_with_constant_scale(
+        self, simple_data, obs_name, y_transform
+    ):
+        """``score`` works after stochastic_fit when the observation model has a constant scale."""
+        X, y = simple_data
+        y = y_transform(y)
+        loader = ArrayDataLoader(X, y, batch_size=32)
+
+        model = nmo.glm.GLM(
+            observation_model=obs_name,
+            solver_name="GradientDescent",
+            solver_kwargs={"stepsize": 0.001, "maxiter": 100, "acceleration": False},
+        )
+        model.stochastic_fit(loader, num_epochs=1)
+
+        score = model.score(X, y)
+        assert jnp.isfinite(score)
+
+    @pytest.mark.parametrize(
+        "obs_name, y_transform",
+        [
+            ("Gamma", lambda y: np.abs(y).astype(float) + 1.0),
+            ("Gaussian", lambda y: y.astype(float)),
+        ],
+    )
+    def test_stochastic_fit_warns_and_score_raises_for_data_dependent_scale(
+        self, simple_data, obs_name, y_transform
+    ):
+        """stochastic_fit warns and score raises when the observation model's scale depends on the data."""
+        X, y = simple_data
+        y = y_transform(y)
+        loader = ArrayDataLoader(X, y, batch_size=32)
+
+        model = nmo.glm.GLM(
+            observation_model=obs_name,
+            solver_name="GradientDescent",
+            solver_kwargs={"stepsize": 0.001, "maxiter": 100, "acceleration": False},
+        )
+        with pytest.warns(UserWarning, match="scale_"):
+            model.stochastic_fit(loader, num_epochs=1)
+
         assert model.scale_ is None
         assert model.dof_resid_ is None
+
+        with pytest.raises(ValueError, match="scale_"):
+            model.score(X, y)
+
+    def test_classifier_categorical_score_works_after_stochastic_fit(self):
+        """ClassifierGLM uses the categorical constant-scale path after stochastic_fit."""
+        np.random.seed(123)
+        X = np.random.randn(200, 5)
+        y = np.random.randint(0, 3, size=200)
+        loader = ArrayDataLoader(X, y, batch_size=32)
+
+        model = nmo.glm.ClassifierGLM(
+            n_classes=3,
+            solver_name="GradientDescent",
+            solver_kwargs={"stepsize": 0.001, "maxiter": 100, "acceleration": False},
+        )
+        model.set_classes(np.arange(model.n_classes))
+        model.stochastic_fit(loader, num_epochs=1)
+
+        assert model.scale_ is not None
+        np.testing.assert_allclose(model.scale_, 1.0)
+        assert model.dof_resid_ is None
+
+        score = model.score(X, y)
+        assert jnp.isfinite(score)
 
     def test_stochastic_fit_summary_contains_post_fit_state(self, simple_data):
         """Test that stochastic_fit stores a post-fit summary rather than the full context."""

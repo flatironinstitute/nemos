@@ -605,6 +605,12 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
 
         """
         self._check_is_fit()
+        if self.scale_ is None:
+            raise ValueError(
+                "`score()` requires `scale_`, which is not set. This happens after `stochastic_fit()`"
+                " with an observation model whose scale depends on the data (e.g., Gamma, Gaussian)."
+                " Workaround: use `compute_loss(X, y)` for model comparison as it does not depend on `scale_`)."
+            )
         params = self._get_model_params()
 
         self._validator.validate_inputs(X, y)
@@ -911,6 +917,14 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         # Preprocess sample batch (cast to jax, drop nans, etc.)
         sample_X, sample_y = self._preprocess_inputs(raw_sample_X, raw_sample_y)
 
+        if not self._has_constant_scale():
+            warnings.warn(
+                "`stochastic_fit()` will not populate `scale_` for observation models whose scale"
+                " depends on the data (e.g., Gamma, Gaussian), and `score()` will raise after this fit."
+                " Tip: for evaluation and model comparison use `compute_loss(X, y)` instead.",
+                UserWarning,
+            )
+
         # Initialize params if not provided (using preprocessed batch)
         if init_params is None:
             init_params = self._model_specific_initialization(sample_X, sample_y)
@@ -956,11 +970,41 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         self.aux_ = aux
         self.stochastic_fit_summary_: StochasticFitSummary = ctx.to_summary()
 
-        # TODO: Add a version of these calculations that iterates through the data again
-        self.scale_ = None
+        # instead of keeping it as None, for some observation models we can set the scale_ easily
+        if self._has_constant_scale():
+            # for these families `estimate_scale` ignores `y`, `predicted_rate`, and `dof_resid`
+            # the sample batch and `dof_resid=1.0` are placeholders just to satisfy the shared signature
+            self.scale_ = self.observation_model.estimate_scale(
+                sample_y,
+                self._predict(params, sample_X),
+                dof_resid=1.0,
+            )
+        else:
+            # TODO: estimate residual dof and data-dependent scale after stochastic_fit
+            self.scale_ = None
         self.dof_resid_ = None
 
         return self
+
+    def _has_constant_scale(self) -> bool:
+        """
+        Whether the observation model's scale is independent of the data.
+
+        When True, ``stochastic_fit`` can populate ``scale_`` without a
+        finalization pass over the data. When False (Gamma, Gaussian),
+        ``scale_`` is left unset.
+
+        Quick fix until a streaming residual d.o.f. and scale estimation is added.
+        """
+        return isinstance(
+            self.observation_model,
+            (
+                obs.PoissonObservations,
+                obs.BernoulliObservations,
+                obs.CategoricalObservations,
+                obs.NegativeBinomialObservations,
+            ),
+        )
 
     def _get_model_params(self):
         """Pack coef_ and intercept_  into a params pytree.
