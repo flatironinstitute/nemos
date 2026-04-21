@@ -1,13 +1,8 @@
-"""Benchmark GLM fitting for different solvers.
+"""Core benchmarking logic for GLM solvers.
 
-
-Examples
---------
-# generate config
-python scripts/benchmarking_glm.py --generate_configs --config_path gpu_configs.json --devices gpu --feature_dims 1 --pop_sizes 1
-
-# fit one
-python scripts/benchmarking_glm.py --config_path gpu_configs.json --output_path gpu_results --data_path gpu_data --fit_ids 0 --n_reps 1
+This module is not invoked directly. Use prepare_benchmark_jobs.py to generate
+configs, write disBatch task files, and submit jobs. Workers call this module
+via prepare_benchmark_jobs.py --run.
 """
 
 import datetime
@@ -18,7 +13,7 @@ import subprocess
 from itertools import product
 from pathlib import Path
 from time import perf_counter
-from typing import List, Tuple
+from typing import List, Tuple, Optional, Literal
 
 import jax
 import jax.numpy as jnp
@@ -68,7 +63,7 @@ def generate_glm_configs(
     regularizers: List[str],
     solver_names: List[str],
     devices: List[str],
-    packages: List[str] = DEFAULT_PACKAGES,
+    packages: Optional[Literal["nemos", "sklearn"]] = None,
 ) -> List[dict]:
     """
     Generate GLM configurations to benchmark.
@@ -90,12 +85,16 @@ def generate_glm_configs(
         List of the full solver names to try, i.e. "solvername[backend]".
     devices:
         List of devices to try, e.g. ["cpu", "gpu"].
+    packages:
+        The packages to benchmark, options are "nemos"  or "sklearn".
 
     Returns
     -------
     The serializable configs.
 
     """
+    if packages is None:
+        packages = DEFAULT_PACKAGES
     allowed_reg = {
         name: getattr(nmo.regularizer, name)._allowed_solvers
         for name in dir(nmo.regularizer)
