@@ -1,5 +1,9 @@
 """Prepare a disBatch task file for GLM benchmarking on a Slurm cluster.
 
+This script is specific for the Flatiron slurm cluster and makes use of disBatch.
+
+https://github.com/flatironinstitute/disBatch
+
 Usage
 -----
 # 1. Generate configs and write the disBatch task file:
@@ -7,11 +11,12 @@ Usage
 #        --venv /path/to/venv/bin/activate \\
 #        --base_dir /path/to/output/dir
 
-# 2. Copy-paste the printed sbatch command to launch.
+# 2. Copy-paste the printed commands to launch. Each device job ID is captured
+#    and passed as a --dependency to a third aggregation job, which runs only
+#    after all device jobs succeed.
 
-# After all jobs finish, aggregation runs automatically inside each .dsb script.
-# To re-run manually:
-#    python scripts/prepare_benchmark_jobs.py --aggregate \\
+# To re-run aggregation manually:
+#    JAX_PLATFORMS=cpu python scripts/prepare_benchmark_jobs.py --aggregate \\
 #        --output_path <base_dir>/results --csv_path <web_output_dir>/<run>.csv
 """
 
