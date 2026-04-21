@@ -18,12 +18,7 @@ from .. import tree_utils, validation
 from .._observation_model_builder import instantiate_observation_model
 from ..base_regressor import BaseRegressor, strip_metadata
 from ..batching import DataLoader, _PreprocessedDataLoader, is_data_loader
-from ..callbacks import (
-    Callback,
-    StochasticFitSummary,
-    TrainingContext,
-    _normalize_callbacks,
-)
+from ..callbacks import Callback, TrainingContext, _normalize_callbacks
 from ..exceptions import NotFittedError
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..pytrees import FeaturePytree
@@ -968,7 +963,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         self._set_model_params(params)
         self.solver_state_ = state
         self.aux_ = aux
-        self.stochastic_fit_summary_: StochasticFitSummary = ctx.to_summary()
+        self.stochastic_fit_summary_ = ctx.to_summary()
 
         # instead of keeping it as None, for some observation models we can set the scale_ easily
         if self._has_constant_scale():
