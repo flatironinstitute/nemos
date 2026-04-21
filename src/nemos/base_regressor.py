@@ -518,6 +518,25 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         """Unpack and store params pytree to coef_ and intercept_."""
         pass
 
+    def get_model_params(self) -> UserProvidedParamsT:
+        """Return the fitted model parameters in user-facing form.
+
+        The exact structure depends on the concrete subclass (e.g.
+        ``(coef, intercept)`` for a GLM), matching what
+        :meth:`initialize_params` returns.
+
+        Returns
+        -------
+        :
+            The fitted parameters in user-facing form.
+        """
+        params = self._validator.from_model_params(self._get_model_params())
+        # Make a kind of copy by rebuilding the pytree structure so callers
+        # cannot mutate container-like model params (for example dict coefficients)
+        # by changing the return value. This is fine for the current JAX-array leaves,
+        # but it would need revisiting if future subclasses store mutable objects at the leaves.
+        return jax.tree_util.tree_map(lambda x: x, params)
+
     @abc.abstractmethod
     def _compute_loss(
         self,

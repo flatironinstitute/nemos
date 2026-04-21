@@ -843,7 +843,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         init_params :
             Initial parameters (coefficients, intercept).
             If None, initialized from ``sample_batch()``.
-            To continue fitting, pass the current parameters (``(model.coef_, model.intercept_)``)
+            To continue fitting, pass the current parameters (``model.get_model_params()``)
         num_epochs :
             Maximum number of passes over the data. Must be >= 1.
             Optimization may stop earlier if a callback requests a stop.

@@ -317,7 +317,7 @@ To continue from where we left off, pass the current parameters as `init_params`
 glm.stochastic_fit(
     loader,
     num_epochs=10,
-    init_params=(glm.coef_, glm.intercept_),
+    init_params=glm.get_model_params(),
     # using the same callback so the new loss values are appended to the existing history
     callbacks=batch_logger,
 )
@@ -410,7 +410,7 @@ glm.stochastic_fit(
     loader,
     # set num_epochs very high, so stopping has to be triggered by the callback
     num_epochs=10_000,
-    init_params=(glm.coef_, glm.intercept_),
+    init_params=glm.get_model_params(),
     callbacks=[batch_logger, early_stopping],
 )
 ```
