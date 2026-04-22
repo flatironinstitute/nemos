@@ -248,7 +248,7 @@ try:
     print(f"Downloaded benchmark summary -> {_benchmark_csv_dst}")
 except Exception as e:
     raise RuntimeError(
-        f"Could not fetch benchmark summary from {_benchmark_csv_url}: {e}"
+        f"Could not fetch benchmark summary from {_benchmark_csv_url}."
     ) from e
 
 
@@ -274,5 +274,5 @@ try:
     print(f"Downloaded benchmark summary -> {_benchmark_csv_dst}")
 except Exception as e:
     raise RuntimeError(
-        f"Could not fetch benchmark summary from {_benchmark_csv_url}: {e}"
+        f"Could not fetch benchmark summary from {_benchmark_csv_url}."
     ) from e
