@@ -679,7 +679,10 @@ def compute_summary_stats(df: pd.DataFrame) -> pd.DataFrame:
     df.loc[:, "compile_time_fraction"]  = df["compilation_s"] / (df["solver_init_s"] + df["compilation_s"] + df["fit_s"])
     # replace nans with 0s (this is for timed compilation with nan in the index
     df["compile_time_fraction"] = df["compile_time_fraction"].fillna(0)
-    summary = df.groupby(["device", "solver_name", "version", "git_commit"]).agg(
+    summary = df.groupby(
+            ["version", "git_commit", "data_source", "device", "solver_name",
+             "sample_size", "feature_dim", "pop_size"]
+        ).agg(
             fit_time_s=("end_to_end_s", "mean"),
             converged=("converged", "all"),
             iter_num=("iter_num", "mean"),
@@ -692,7 +695,8 @@ def combine_summary_statistics(
 ):
     csv_dir = Path(csv_path).parent
     tagged_commits = _get_all_tagged_commits()
-    current_commit = _get_git_commit()
+    # derive current commit from the filename — robust regardless of cwd or checkout
+    current_commit = Path(csv_path).stem.split("_")[-1]
     # add latest(or replace tag with latest)
     tagged_commits[current_commit] = "latest"
 
