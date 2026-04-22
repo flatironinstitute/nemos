@@ -69,6 +69,7 @@ dev = [
     "h5py",                         # For testing lazy array loading from HDF5 files
 ]
 docs = [
+    "pynapple>=0.11",               # Required for nap.compute_event_triggered_average(...) in a tutorial
     "numpydoc",
     "sphinx",
     "pydata-sphinx-theme",

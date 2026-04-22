@@ -128,6 +128,9 @@ VALID_PAIRS = [
     {"n_features", "features"},
     {"n_outputs", "output"},
     {"callback", "callbacks"},
+    {"initial_proba_init", "initial_proba_init_kwargs"},
+    {"transition_proba_init", "transition_proba_init_kwargs"},
+    {"initial_proba_init_kwargs", "transition_proba_init_kwargs"},
 ]
 
 
