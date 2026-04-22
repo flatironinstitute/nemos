@@ -4,10 +4,10 @@
 In this note we compare solver performance in GLM problems on simulated data and neural recordings (from [[1]](#ref-1)), for all combinations of:
 
 - **devices:** cpu vs cuda.
-- **solvers:** NeMoS JIT compiled solvers and a scipy wrapper of `L-BFGS-B`, see the [table below](table_solvers) for a complete list.
+- **solvers:** NeMoS JIT compiled solvers and a scipy wrapper of `L-BFGS-B`. Additionally, we compared against scikit-learn's `PoissonRegressor` with the `"newton-cholesky"` solver, which was their most efficient option for all the configurations tested. See the [table below](table_solvers) for a complete list.
 - **problem sizes:** (simulation only) by varying number of samples, features and neurons.
 
-Additionally, we compared against scikit-learn's `PoissonRegressor` with the `"newton-cholesky"` solver, which was their most efficient option for all the configurations tested.
+
 
 :::{admonition} JIT vs `scipy.minimize`
 :class: note
