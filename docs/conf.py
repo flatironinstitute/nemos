@@ -247,7 +247,9 @@ try:
     urllib.request.urlretrieve(_benchmark_csv_url, _benchmark_csv_dst)
     print(f"Downloaded benchmark summary -> {_benchmark_csv_dst}")
 except Exception as e:
-    print(f"Warning: could not fetch benchmark summary ({e}); using stale copy if present.")
+    raise RuntimeError(
+        f"Could not fetch benchmark summary from {_benchmark_csv_url}: {e}"
+    ) from e
 
 
 def _add_benchmark_assets(app, pagename, templatename, context, doctree):
@@ -271,4 +273,6 @@ try:
     urllib.request.urlretrieve(_benchmark_csv_url, _benchmark_csv_dst)
     print(f"Downloaded benchmark summary -> {_benchmark_csv_dst}")
 except Exception as e:
-    print(f"Warning: could not fetch benchmark summary ({e}); using stale copy if present.")
+    raise RuntimeError(
+        f"Could not fetch benchmark summary from {_benchmark_csv_url}: {e}"
+    ) from e
