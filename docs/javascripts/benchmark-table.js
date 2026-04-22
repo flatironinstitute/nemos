@@ -77,20 +77,18 @@ document.addEventListener("DOMContentLoaded", function () {
       });
     });
 
-    var logAxis = {
-      type: "log",
-      exponentformat: "power",
-      minor: { ticks: "inside", tickmode: "auto", nticks: 9 },
-      autorange: true,
-    };
+    var scaleType = document.getElementById("filter-scale").value;
+    var yAxisBase = scaleType === "log"
+      ? { type: "log", exponentformat: "power", minor: { ticks: "inside", tickmode: "auto", nticks: 9 }, autorange: true }
+      : { type: "linear", autorange: true };
 
     Plotly.react("benchmark-chart", traces, {
       barmode: "group",
       grid: { rows: 1, columns: 2, pattern: "independent" },
       xaxis:  { tickangle: -35, domain: [0, 0.47] },
-      yaxis:  Object.assign({ title: "Fit time (s)" }, logAxis),
+      yaxis:  Object.assign({ title: "Fit time (s)" }, yAxisBase),
       xaxis2: { tickangle: -35, domain: [0.53, 1], anchor: "y2" },
-      yaxis2: Object.assign({ matches: "y" }, logAxis, { anchor: "x2" }),
+      yaxis2: Object.assign({ matches: "y" }, yAxisBase, { anchor: "x2" }),
       annotations: [
         { text: "GPU", xref: "paper", yref: "paper", x: 0.235, y: 1.05,
           showarrow: false, font: { size: 15, weight: "bold" }, xanchor: "center" },
@@ -174,6 +172,7 @@ document.addEventListener("DOMContentLoaded", function () {
       versionSel.addEventListener("change", refresh);
       document.getElementById("filter-dataset").addEventListener("change", refresh);
       document.getElementById("filter-sort").addEventListener("change", refresh);
+      document.getElementById("filter-scale").addEventListener("change", refresh);
       refresh();
     },
   });

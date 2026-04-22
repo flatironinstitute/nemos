@@ -139,7 +139,6 @@ html_theme_options = {
     "secondary_sidebar_items": {
         "[!a]?[!p]?[!i]**": ["page-toc", "sourcelink"],
         "background/basis/README": [],
-        "benchmarking": [],
     },
 }
 
