@@ -135,5 +135,3 @@ NeMoS native solvers JIT-compile the full optimization when `GLM.fit` is called,
 [1] <span id="ref-1"><a href="https://pubmed.ncbi.nlm.nih.gov/25730672/">Peyrache A, Lacroix MM, Petersen PC, Buzsáki G. Internally organized mechanisms of the head direction sense. Nat Neurosci. 2015 Apr;18(4):569-75.</a></span>
 
 [2] <span id="ref-2"><a href="https://arxiv.org/abs/2010.00892">Gower, Robert M., Mark Schmidt, Francis Bach, and Peter Richtárik. "Variance-Reduced Methods for Machine Learning." arXiv preprint arXiv:2010.00892 (2020).</a></span>
-
-[3] <span id="ref-3">Boyd, S. and Vandenberghe, L., <em>Convex Optimization</em> (2004), Cambridge University Press. Freely available at <a href="https://web.stanford.edu/~boyd/cvxbook/">https://web.stanford.edu/~boyd/cvxbook/</a>. §9.3–9.5 cover gradient descent, quasi-Newton, and Newton step costs.</span>
