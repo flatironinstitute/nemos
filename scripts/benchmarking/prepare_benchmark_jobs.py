@@ -199,6 +199,7 @@ def _build_sbatch_command(args, device: str, dsb_path: Path, n_tasks: int) -> st
         f" -t {args.time}"
         f" --mem-per-cpu={args.mem_per_cpu}"
         f" -c {args.cpus_per_task}"
+        f" -o {disbatch_logs}/slurm-%j.out"
     )
     if device == "gpu":
         sbatch_flags += f" --gpus-per-task={args.gpus_per_task}"
