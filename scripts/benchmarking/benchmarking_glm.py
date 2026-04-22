@@ -355,7 +355,7 @@ def _get_all_tagged_commits() -> dict[str, str]:
         .replace("'", "")
         .split("\n")
     )
-    return dict(s.split(" ") for s in lst)
+    return dict(s.split(" ") for s in lst if s)
 
 def _get_cpu_model() -> str:
     try:
