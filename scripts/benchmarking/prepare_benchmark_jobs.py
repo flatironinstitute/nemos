@@ -38,6 +38,7 @@ from benchmarking_glm import (
     DEFAULT_SOLVER_NAMES,
     _setup,
     aggregate_results,
+    combine_summary_statistics,
     generate_all_data,
     generate_glm_configs,
     run_benchmarks,
@@ -157,6 +158,32 @@ def write_disbatch_script(args, device: str, indices: list[int]) -> Tuple[Path, 
     return dsb_path, n_tasks
 
 
+def _build_combine_sbatch_command(args, agg_job_id: str) -> str:
+    """Return sbatch command for the summary-statistics combine job.
+
+    Runs only after the aggregation job succeeds (--dependency=afterok).
+    """
+    combine_log = Path(args.base_dir) / "logs" / "combine.log"
+    combine_cmd = (
+        f"source {args.venv} && "
+        f"export JAX_PLATFORMS=cpu && "
+        f"python -u {_SELF}"
+        f" --combine"
+        f" --csv_path {args.csv_path}"
+    )
+    return (
+        f"sbatch"
+        f" --dependency=afterok:{agg_job_id}"
+        f" --kill-on-invalid-dep=yes"
+        f" -p {args.cpu_partition}"
+        f" -t 0-01:00"
+        f" --mem-per-cpu=4GB"
+        f" -c 1"
+        f" -o {combine_log}"
+        f" --wrap='{combine_cmd}'"
+    )
+
+
 def _build_aggregation_sbatch_command(args, job_ids: list[str]) -> str:
     """Return sbatch command for the cross-device aggregation job.
 
@@ -223,7 +250,10 @@ def print_commands(args, dsb_paths: dict[str, Path], n_tasks: dict[str, int]) ->
         args, [f"${v}" for v in var_names.values()]
     )
     print(f"\n  # Aggregation (runs after all device jobs succeed)")
-    print(f"  {agg_cmd}")
+    print(f"  AGG_JID=$({agg_cmd} | awk '{{print $NF}}')")
+    combine_cmd = _build_combine_sbatch_command(args, "$AGG_JID")
+    print(f"\n  # Summary statistics (runs after aggregation succeeds)")
+    print(f"  {combine_cmd}")
 
 
 def submit_jobs(args, dsb_paths: dict[str, Path], n_tasks: dict[str, int]) -> None:
@@ -241,7 +271,13 @@ def submit_jobs(args, dsb_paths: dict[str, Path], n_tasks: dict[str, int]) -> No
 
     agg_cmd = _build_aggregation_sbatch_command(args, job_ids)
     print(f"\nSubmitting aggregation job (depends on {job_ids}):\n  {agg_cmd}")
-    subprocess.run(agg_cmd, shell=True, check=True)
+    result = subprocess.run(agg_cmd, shell=True, check=True, capture_output=True, text=True)
+    agg_job_id = result.stdout.strip().split()[-1]
+    print(f"  -> job ID: {agg_job_id}")
+
+    combine_cmd = _build_combine_sbatch_command(args, agg_job_id)
+    print(f"\nSubmitting summary job (depends on {agg_job_id}):\n  {combine_cmd}")
+    subprocess.run(combine_cmd, shell=True, check=True)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -261,6 +297,11 @@ def _parse_args() -> argparse.Namespace:
         "--aggregate",
         action="store_true",
         help="Worker mode: aggregate JSON results in --output_path into --csv_path.",
+    )
+    mode.add_argument(
+        "--combine",
+        action="store_true",
+        help="Worker mode: merge all tagged-commit CSVs in --csv_path's directory into aggregate_summary.csv.",
     )
 
     # worker: run args
@@ -363,7 +404,7 @@ def _parse_args() -> argparse.Namespace:
     args = parser.parse_args()
 
     # validate orchestration-required args when not in worker mode
-    if not args.run and not args.aggregate:
+    if not args.run and not args.aggregate and not args.combine:
         missing = [
             f
             for f, v in [
@@ -401,6 +442,9 @@ if __name__ == "__main__":
 
     elif args.aggregate:
         aggregate_results(args.output_path, args.csv_path)
+
+    elif args.combine:
+        combine_summary_statistics(args.csv_path)
 
     else:
         if "gpu" in args.devices and args.cuda_env is None:
