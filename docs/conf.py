@@ -156,7 +156,7 @@ html_sidebars = {
 
 
 # Path for static files (custom stylesheets or JavaScript)
-html_static_path = ['assets/stylesheets', "assets"]
+html_static_path = ['assets/stylesheets', "assets", "javascripts"]
 html_css_files = ['custom.css']
 
 html_js_files = [
@@ -254,10 +254,11 @@ except Exception as e:
 def _add_benchmark_assets(app, pagename, templatename, context, doctree):
     if pagename != "benchmarking":
         return
+    app.add_css_file("https://cdn.datatables.net/2.0.0/css/dataTables.dataTables.min.css")
     app.add_js_file("https://code.jquery.com/jquery-3.7.0.js")
     app.add_js_file("https://cdn.datatables.net/2.0.0/js/dataTables.min.js")
     app.add_js_file("https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js")
-    app.add_css_file("https://cdn.datatables.net/2.0.0/css/dataTables.dataTables.min.css")
+    app.add_js_file("benchmark-table.js")
 
 
 def setup(app):
