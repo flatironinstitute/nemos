@@ -278,7 +278,9 @@ def submit_jobs(args, dsb_paths: dict[str, Path], n_tasks: dict[str, int]) -> No
 
     agg_cmd = _build_aggregation_sbatch_command(args, job_ids)
     print(f"\nSubmitting aggregation job (depends on {job_ids}):\n  {agg_cmd}")
-    result = subprocess.run(agg_cmd, shell=True, check=True, capture_output=True, text=True)
+    result = subprocess.run(
+        agg_cmd, shell=True, check=True, capture_output=True, text=True
+    )
     agg_job_id = result.stdout.strip().split()[-1]
     print(f"  -> job ID: {agg_job_id}")
 
@@ -383,10 +385,18 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--cpu_partition", type=str, default="gen")
     parser.add_argument("--gpu_partition", type=str, default="gpu")
-    parser.add_argument("--cpu_constraint", type=str, default=None,
-                        help="Slurm --constraint for CPU jobs (e.g. 'icelake').")
-    parser.add_argument("--gpu_constraint", type=str, default=None,
-                        help="Slurm --constraint for GPU jobs (e.g. 'a100-80gb').")
+    parser.add_argument(
+        "--cpu_constraint",
+        type=str,
+        default=None,
+        help="Slurm --constraint for CPU jobs (e.g. 'icelake').",
+    )
+    parser.add_argument(
+        "--gpu_constraint",
+        type=str,
+        default=None,
+        help="Slurm --constraint for GPU jobs (e.g. 'a100-80gb').",
+    )
     parser.add_argument("--time", type=str, default="0-20:00")
     parser.add_argument("--mem_per_cpu", type=str, default="8GB")
     parser.add_argument("--cpus_per_task", type=int, default=1)

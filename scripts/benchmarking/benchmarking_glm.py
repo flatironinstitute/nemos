@@ -17,12 +17,12 @@ from typing import List, Literal, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
+import pandas as pd
 import pynapple as nap
 from scipy_adapter import ScipyLBFGS
 from sklearn.linear_model import PoissonRegressor
 
 import nemos as nmo
-import pandas as pd
 
 
 def _setup() -> None:
@@ -357,6 +357,7 @@ def _get_all_tagged_commits() -> dict[str, str]:
     )
     return dict(s.split(" ") for s in lst if s)
 
+
 def _get_cpu_model() -> str:
     try:
         out = subprocess.check_output(["lscpu"], stderr=subprocess.DEVNULL).decode()
@@ -676,22 +677,38 @@ def aggregate_results(results_dir: str, csv_path: str) -> None:
 
 def compute_summary_stats(df: pd.DataFrame) -> pd.DataFrame:
     # compute the fraction of the end-to-end fit time spent on compilation
-    df.loc[:, "compile_time_fraction"]  = df["compilation_s"] / (df["solver_init_s"] + df["compilation_s"] + df["fit_s"])
+    df.loc[:, "compile_time_fraction"] = df["compilation_s"] / (
+        df["solver_init_s"] + df["compilation_s"] + df["fit_s"]
+    )
     # replace nans with 0s (this is for timed compilation with nan in the index
     df["compile_time_fraction"] = df["compile_time_fraction"].fillna(0)
-    summary = df.groupby(
-            ["version", "git_commit", "data_source", "device", "solver_name",
-             "sample_size", "feature_dim", "pop_size"]
-        ).agg(
+    summary = (
+        df.groupby(
+            [
+                "version",
+                "git_commit",
+                "data_source",
+                "device",
+                "solver_name",
+                "sample_size",
+                "feature_dim",
+                "pop_size",
+            ]
+        )
+        .agg(
             fit_time_s=("end_to_end_s", "mean"),
             converged=("converged", "all"),
             iter_num=("iter_num", "mean"),
             compile_time_fraction=("compile_time_fraction", "mean"),
-        ).sort_values("fit_time_s").reset_index()
+        )
+        .sort_values("fit_time_s")
+        .reset_index()
+    )
     return summary
 
+
 def combine_summary_statistics(
-        csv_path: str,
+    csv_path: str,
 ):
     csv_dir = Path(csv_path).parent
     tagged_commits = _get_all_tagged_commits()
@@ -713,7 +730,9 @@ def combine_summary_statistics(
             df["version"] = tagged_commits.get(commit, commit)
             dfs.append(df)
         except Exception as e:
-            raise RuntimeError("Failed to aggregate benchmark results. Dataframe entries may be incompatible.") from e
+            raise RuntimeError(
+                "Failed to aggregate benchmark results. Dataframe entries may be incompatible."
+            ) from e
 
     if not dfs:
         print("No matching benchmark CSVs found.")
