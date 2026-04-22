@@ -22,6 +22,7 @@ from scipy_adapter import ScipyLBFGS
 from sklearn.linear_model import PoissonRegressor
 
 import nemos as nmo
+import pandas as pd
 
 
 def _setup() -> None:
@@ -336,6 +337,25 @@ def _get_git_commit() -> str:
     except subprocess.CalledProcessError:
         return "unknown"
 
+
+def _get_all_tagged_commits() -> dict[str, str]:
+    lst = (
+        subprocess.check_output(
+            [
+                "git",
+                "-C",
+                str(Path(__file__).parent),
+                "for-each-ref",
+                "--format='%(objectname:short) %(refname:short)'",
+                "refs/tags",
+            ]
+        )
+        .decode()
+        .strip()
+        .replace("'", "")
+        .split("\n")
+    )
+    return dict(s.split(" ") for s in lst)
 
 def _get_cpu_model() -> str:
     try:
@@ -652,3 +672,51 @@ def aggregate_results(results_dir: str, csv_path: str) -> None:
         writer.writeheader()
         writer.writerows(rows)
     print(f"Aggregated {len(rows)} rows ({n_configs} configs) -> {csv_path}")
+
+
+def compute_summary_stats(df: pd.DataFrame) -> pd.DataFrame:
+    # compute the fraction of the end-to-end fit time spent on compilation
+    df.loc[:, "compile_time_fraction"]  = df["compilation_s"] / (df["solver_init_s"] + df["compilation_s"] + df["fit_s"])
+    # replace nans with 0s (this is for timed compilation with nan in the index
+    df["compile_time_fraction"] = df["compile_time_fraction"].fillna(0)
+    summary = df.groupby(["device", "solver_name", "version", "git_commit"]).agg(
+            fit_time_s=("end_to_end_s", "mean"),
+            converged=("converged", "all"),
+            iter_num=("iter_num", "mean"),
+            compile_time_fraction=("compile_time_fraction", "mean"),
+        ).sort_values("fit_time_s").reset_index()
+    return summary
+
+def combine_summary_statistics(
+        csv_path: str,
+):
+    csv_dir = Path(csv_path).parent
+    tagged_commits = _get_all_tagged_commits()
+    current_commit = _get_git_commit()
+    # add latest(or replace tag with latest)
+    tagged_commits[current_commit] = "latest"
+
+    # loop over available benchmarking results and aggregate
+    dfs = []
+    for f in csv_dir.glob("*.csv"):
+        commit = f.stem.split("_")[-1]
+        # skip non-tagged non-current commits
+        if commit not in tagged_commits:
+            continue
+        try:
+            df = pd.read_csv(f)
+            commit = df["git_commit"].iloc[0]
+            df["version"] = tagged_commits.get(commit, commit)
+            dfs.append(df)
+        except Exception as e:
+            raise RuntimeError("Failed to aggregate benchmark results. Dataframe entries may be incompatible.") from e
+
+    if not dfs:
+        print("No matching benchmark CSVs found.")
+        return pd.DataFrame()
+    aggregate_df = pd.concat(dfs, ignore_index=True)
+
+    summary = compute_summary_stats(aggregate_df)
+    summary.to_csv(csv_dir / "aggregate_summary.csv", index=False)
+    print(f"Aggregated summary statistics saved to {csv_dir}")
+    return summary
