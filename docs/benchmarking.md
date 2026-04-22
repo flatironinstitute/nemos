@@ -33,7 +33,7 @@ NeMoS native solvers JIT-compile the full optimization when `GLM.fit` is called,
 <div style="display:flex; align-items:center; gap:1.5em; margin-bottom:1.2em; flex-wrap:wrap;">
   <div>
     <label for="filter-version"><strong>Version:&nbsp;</strong></label>
-    <select id="filter-version"><option value="">All</option></select>
+    <select id="filter-version"></select>
   </div>
   <div>
     <label for="filter-dataset"><strong>Dataset:&nbsp;</strong></label>
