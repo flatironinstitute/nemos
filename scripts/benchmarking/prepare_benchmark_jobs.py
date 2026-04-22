@@ -171,11 +171,13 @@ def _build_combine_sbatch_command(args, agg_job_id: str) -> str:
         f" --combine"
         f" --csv_path {args.csv_path}"
     )
+    cpu_constraint = f" -C {args.cpu_constraint}" if args.cpu_constraint else ""
     return (
         f"sbatch"
         f" --dependency=afterok:{agg_job_id}"
         f" --kill-on-invalid-dep=yes"
         f" -p {args.cpu_partition}"
+        f"{cpu_constraint}"
         f" -t 0-01:00"
         f" --mem-per-cpu=4GB"
         f" -c 1"
@@ -193,6 +195,7 @@ def _build_aggregation_sbatch_command(args, job_ids: list[str]) -> str:
     base_dir = Path(args.base_dir)
     agg_log = base_dir / "logs" / "aggregate.log"
     dependency = "afterok:" + ":".join(job_ids)
+    cpu_constraint = f" -C {args.cpu_constraint}" if args.cpu_constraint else ""
     agg_cmd = (
         f"source {args.venv} && "
         f"export JAX_PLATFORMS=cpu && "
@@ -210,6 +213,7 @@ def _build_aggregation_sbatch_command(args, job_ids: list[str]) -> str:
         f" --mem-per-cpu=4GB"
         f" -c 1"
         f" -o {agg_log}"
+        f"{cpu_constraint}"
         f" --wrap='{agg_cmd}'"
     )
 
@@ -220,6 +224,7 @@ def _build_sbatch_command(args, device: str, dsb_path: Path, n_tasks: int) -> st
     partition_for = {"cpu": args.cpu_partition, "gpu": args.gpu_partition}
     disbatch_logs = base_dir / "logs" / device / "disbatch"
     n_workers = min(n_tasks, args.max_workers)
+    constraint = args.gpu_constraint if device == "gpu" else args.cpu_constraint
     sbatch_flags = (
         f"-n {n_workers}"
         f" -p {partition_for[device]}"
@@ -228,6 +233,8 @@ def _build_sbatch_command(args, device: str, dsb_path: Path, n_tasks: int) -> st
         f" -c {args.cpus_per_task}"
         f" -o {disbatch_logs}/slurm-%j.out"
     )
+    if constraint:
+        sbatch_flags += f" -C {constraint}"
     if device == "gpu":
         sbatch_flags += f" --gpus-per-task={args.gpus_per_task}"
     return (
@@ -376,6 +383,10 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--cpu_partition", type=str, default="gen")
     parser.add_argument("--gpu_partition", type=str, default="gpu")
+    parser.add_argument("--cpu_constraint", type=str, default=None,
+                        help="Slurm --constraint for CPU jobs (e.g. 'icelake').")
+    parser.add_argument("--gpu_constraint", type=str, default=None,
+                        help="Slurm --constraint for GPU jobs (e.g. 'a100-80gb').")
     parser.add_argument("--time", type=str, default="0-20:00")
     parser.add_argument("--mem_per_cpu", type=str, default="8GB")
     parser.add_argument("--cpus_per_task", type=int, default=1)

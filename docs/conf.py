@@ -258,6 +258,7 @@ def _add_benchmark_assets(app, pagename, templatename, context, doctree):
     app.add_js_file("https://code.jquery.com/jquery-3.7.0.js")
     app.add_js_file("https://cdn.datatables.net/2.0.0/js/dataTables.min.js")
     app.add_js_file("https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js")
+    app.add_js_file("https://cdn.plot.ly/plotly-2.35.2.min.js")
     app.add_js_file("benchmark-table.js")
 
 
