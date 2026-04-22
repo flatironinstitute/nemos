@@ -118,18 +118,16 @@ NeMoS native solvers JIT-compile the full optimization when `GLM.fit` is called,
 (benchmarked-solvers)=
 ## Benchmarked solvers
 
-n = samples, p = features. Cost per iteration refers to one gradient/update step; for SVRG and ProxSVRG it refers to one full epoch. [[3]](#ref-3)
-
-| Solver | Backend | Cost / iteration | Notes |
-|--------|---------|:----------------:|-------|
-| [`GradientDescent`](https://en.wikipedia.org/wiki/Gradient_descent) | [optimistix](https://docs.kidger.site/optimistix/) | O(n · p) | First-order (gradient only). Memory scales linearly with parameter count. Smooth penalties only; typically requires many iterations. |
-| [`BFGS`](https://en.wikipedia.org/wiki/Broyden%E2%80%93Fletcher%E2%80%93Goldfarb%E2%80%93Shanno_algorithm) | [optimistix](https://docs.kidger.site/optimistix/) | O(n · p + p²) | Quasi-Newton; maintains a dense Hessian approximation. Memory scales quadratically — impractical for large parameter spaces. Fewer iterations than first-order methods. |
-| [`LBFGS`](https://en.wikipedia.org/wiki/Limited-memory_BFGS) | [optax](https://optax.readthedocs.io/) + [optimistix](https://docs.kidger.site/optimistix/) | O(n · p) | Limited-memory quasi-second-order; stores the last *m* gradient vectors. Memory scales linearly. Recommended default for smooth problems. |
-| [`LBFGS`](https://en.wikipedia.org/wiki/Limited-memory_BFGS) | scipy | O(n · p) | L-BFGS-B via [`scipy.optimize.minimize`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html). No JIT compilation cost; Python callback per iteration. Preferred for small problems or many repeated `fit()` calls. |
-| [`NewtonCholesky`](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.PoissonRegressor.html) | scikit-learn | O(n · p² + p³) | Newton method; each iteration builds the p × p Hessian (O(n · p²)) and solves it via Cholesky (O(p³)). Memory O(p²). Converges in very few iterations. CPU only. |
-| [`ProximalGradient`](https://en.wikipedia.org/wiki/Proximal_gradient_method) | [optimistix](https://docs.kidger.site/optimistix/) | O(n · p) | First-order + proximal step for non-smooth penalties (Lasso, GroupLasso, ElasticNet). Memory scales linearly. Typically requires many iterations. |
-| [`SVRG`](https://en.wikipedia.org/wiki/Stochastic_variance_reduction_gradient) | nemos | O(n · p) per epoch | Mini-batch gradient steps with a full-gradient anchor step per epoch. Memory scales linearly. The nested inner-outer loop structure can be slow on GPU. [[2]](#ref-2) |
-| [`ProxSVRG`](https://en.wikipedia.org/wiki/Stochastic_variance_reduction_gradient) | nemos | O(n · p) per epoch | Proximal variant of SVRG for non-smooth penalties. Same inner-outer loop structure and GPU caveats as `SVRG`. |
+| Solver | Backend | Notes |
+|--------|---------|-------|
+| [`GradientDescent`](https://en.wikipedia.org/wiki/Gradient_descent) | [optimistix](https://docs.kidger.site/optimistix/) | First-order (gradient only). Memory scales linearly with parameter count. Smooth penalties only; typically requires many iterations. |
+| [`BFGS`](https://en.wikipedia.org/wiki/Broyden%E2%80%93Fletcher%E2%80%93Goldfarb%E2%80%93Shanno_algorithm) | [optimistix](https://docs.kidger.site/optimistix/) | Quasi-Newton; maintains a dense Hessian approximation. Memory scales quadratically — impractical for large parameter spaces. Fewer iterations than first-order methods. |
+| [`LBFGS`](https://en.wikipedia.org/wiki/Limited-memory_BFGS) | [optax](https://optax.readthedocs.io/) + [optimistix](https://docs.kidger.site/optimistix/) | Limited-memory quasi-second-order; stores the last *m* gradient vectors. Memory scales linearly. Recommended default for smooth problems. |
+| [`LBFGS`](https://en.wikipedia.org/wiki/Limited-memory_BFGS) | scipy | L-BFGS-B via [`scipy.optimize.minimize`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html). No JIT compilation cost; Python callback per iteration. Preferred for small problems or many repeated `fit()` calls. |
+| [`NewtonCholesky`](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.PoissonRegressor.html) | scikit-learn | Newton method; each iteration builds the p × p Hessian (O(n · p²)) and solves it via Cholesky (O(p³)), where n = samples and p = features. Memory O(p²). Converges in very few iterations. CPU only. |
+| [`ProximalGradient`](https://en.wikipedia.org/wiki/Proximal_gradient_method) | [optimistix](https://docs.kidger.site/optimistix/) | First-order + proximal step for non-smooth penalties (Lasso, GroupLasso, ElasticNet). Memory scales linearly. Typically requires many iterations. |
+| [`SVRG`](https://en.wikipedia.org/wiki/Stochastic_variance_reduction#SVRG) | nemos | Mini-batch gradient steps with a full-gradient anchor step per epoch. Memory scales linearly. The nested inner-outer loop structure can be slow on GPU. [[2]](#ref-2) |
+| [`ProxSVRG`](https://en.wikipedia.org/wiki/Stochastic_variance_reduction#SVRG) | nemos | Proximal variant of SVRG for non-smooth penalties. Same inner-outer loop structure and GPU caveats as `SVRG`. |
 
 
 ## References
