@@ -88,7 +88,10 @@ document.addEventListener("DOMContentLoaded", function () {
       xaxis:  { tickangle: -35, domain: [0, 0.47] },
       yaxis:  Object.assign({ title: "Fit time (s)" }, yAxisBase),
       xaxis2: { tickangle: -35, domain: [0.53, 1], anchor: "y2" },
-      yaxis2: Object.assign({ matches: "y" }, yAxisBase, { anchor: "x2" }),
+      yaxis2: Object.assign(
+        document.getElementById("filter-share-y").checked ? { matches: "y" } : {},
+        yAxisBase, { anchor: "x2" }
+      ),
       annotations: [
         { text: "GPU", xref: "paper", yref: "paper", x: 0.235, y: 1.05,
           showarrow: false, font: { size: 15, weight: "bold" }, xanchor: "center" },
@@ -173,6 +176,7 @@ document.addEventListener("DOMContentLoaded", function () {
       document.getElementById("filter-dataset").addEventListener("change", refresh);
       document.getElementById("filter-sort").addEventListener("change", refresh);
       document.getElementById("filter-scale").addEventListener("change", refresh);
+      document.getElementById("filter-share-y").addEventListener("change", refresh);
       refresh();
     },
   });

@@ -54,9 +54,12 @@ NeMoS native solvers JIT-compile the full optimization when `GLM.fit` is called,
   <div>
     <label for="filter-scale"><strong>Y-scale:&nbsp;</strong></label>
     <select id="filter-scale">
-      <option value="log">Log</option>
       <option value="linear">Linear</option>
+      <option value="log">Log</option>
     </select>
+  </div>
+  <div>
+    <label><input type="checkbox" id="filter-share-y" checked>&nbsp;<strong>Share Y</strong></label>
   </div>
 </div>
 ```
