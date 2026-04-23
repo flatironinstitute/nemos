@@ -713,30 +713,6 @@ def _validate_custom_init_func(
     return func, kwargs, True
 
 
-def _validate_custom_init_output(proba: jnp.ndarray, n_states: int, key: str):
-    """Validate the output of a custom initialization function to ensure it has the correct shape and properties."""
-    if key == "initial_proba_init":
-        if proba.shape != (n_states,):
-            raise ValueError(
-                f"Custom initial state probability initialization function must return an array of shape "
-                f"({n_states},), but got {proba.shape}."
-            )
-        if not jnp.isclose(proba.sum(), 1.0):
-            raise ValueError(
-                f"Custom initial state probabilities must sum to 1, but got sum={proba.sum()}."
-            )
-    elif key == "transition_proba_init":
-        if proba.shape != (n_states, n_states):
-            raise ValueError(
-                f"Custom transition probability initialization function must return an array of shape "
-                f"({n_states}, {n_states}), but got {proba.shape}."
-            )
-        if not jnp.allclose(proba.sum(axis=1), 1.0):
-            raise ValueError(
-                f"Custom transition probabilities must have rows that sum to 1, but got row sums={proba.sum(axis=1)}."
-            )
-
-
 def generate_hmm_initial_params(
     n_states: int,
     X: DESIGN_INPUT_TYPE,
@@ -806,16 +782,9 @@ def generate_hmm_initial_params(
     initial_probs = initial_proba_init(
         n_states=n_states, X=X, y=y, random_key=keys[0], **initial_proba_init_kwargs
     )
-    if init_funcs["initial_proba_init_custom"]:
-        _validate_custom_init_output(initial_probs, n_states, "initial_proba_init")
-
     transition_matrix = transition_proba_init(
         n_states=n_states, X=X, y=y, random_key=keys[1], **transition_proba_init_kwargs
     )
-    if init_funcs["transition_proba_init_custom"]:
-        _validate_custom_init_output(
-            transition_matrix, n_states, "transition_proba_init"
-        )
 
     return initial_probs, transition_matrix
 
