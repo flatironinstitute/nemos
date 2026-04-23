@@ -27,7 +27,6 @@ import nemos as nmo
 
 def _setup() -> None:
     """Configure JAX and register custom solvers. Must be called before any fitting."""
-    jax.config.update("jax_enable_x64", True)
     nmo.solvers.register("LBFGS", ScipyLBFGS, "scipy")
 
 
@@ -238,10 +237,10 @@ def generate_data(
     samp, feat = config["input_shapes"]["X"]
     y_shape = config["input_shapes"]["y"]
     n_neurons = y_shape[1] if len(y_shape) > 1 else 1
-    X = jax.random.normal(keys[0], shape=(samp, feat))
-    w = 0.1 * jax.random.normal(keys[1], shape=(feat, n_neurons))
+    X = jax.random.normal(keys[0], shape=(samp, feat), dtype=jnp.float64)
+    w = 0.1 * jax.random.normal(keys[1], shape=(feat, n_neurons), dtype=jnp.float64)
     weights = w[:, 0] if n_neurons == 1 else w
-    intercept = -0.1 * jnp.ones(n_neurons)
+    intercept = -0.1 * jnp.ones(n_neurons, dtype=jnp.float64)
     if not isinstance(model, list):
         mdl = model.__sklearn_clone__()
     else:
@@ -276,7 +275,7 @@ def get_hd_data(
     X = nmo.basis.RaisedCosineLogConv(
         n_basis_funcs, window_size=window_size
     ).compute_features(y)
-    X, y = jnp.asarray(X.d), jnp.asarray(y.d)
+    X, y = jnp.asarray(X.d, dtype=jnp.float64), jnp.asarray(y.d, dtype=jnp.float64)
     keep = jnp.all(~jnp.isnan(X), axis=1)
     return X[keep], y[keep]
 
@@ -314,7 +313,7 @@ def get_data(config: dict, path: str = ".") -> Tuple[jnp.ndarray, jnp.ndarray]:
         return get_hd_data(config["file_name"], **config["get_hd_data_kwargs"])
     file_path = Path(path) / (dict_to_filename(config["input_shapes"]) + ".npz")
     npz = jnp.load(str(file_path))
-    return jnp.asarray(npz["X"]), jnp.asarray(npz["y"])
+    return jnp.asarray(npz["X"], dtype=jnp.float64), jnp.asarray(npz["y"], dtype=jnp.float64)
 
 
 def _get_git_commit() -> str:

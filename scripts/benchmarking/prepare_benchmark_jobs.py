@@ -128,6 +128,7 @@ def write_disbatch_script(args, device: str, indices: list[int]) -> Tuple[Path, 
                 # and it tries ROCm first, fails with GpuAllocatorConfig.
                 # If you set cuda explicitly, then it works fine.
                 f"export JAX_PLATFORMS={'cuda' if device == 'gpu' else device}",
+                "export JAX_ENABLE_X64=1",
                 # NEMOS_DATA_DIR: tells fetch_data() where to find cached NWB files.
                 # XDG_CACHE_HOME: pynwb tries to create ~/.cache at import time;
                 # worker nodes may not have /home/<user>, only /mnt/home/<user>.
