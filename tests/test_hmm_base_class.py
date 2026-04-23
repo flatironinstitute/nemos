@@ -143,7 +143,7 @@ class MockHMM(BaseHMM[MockHMMParams, MockHMMUserParams]):
         self.initial_prob_ = initial_prob
         self.transition_prob_ = transition_prob
 
-    def _log_likelihood(self, X, y, params):
+    def _log_likelihood(self, params, X, y):
         return jnp.zeros((y.shape[0], self.n_states))
 
     def _model_params_initialization(self, X, y, is_new_session):
@@ -1378,7 +1378,6 @@ class TestHMMInference:
 
         # Check that we get valid output (NaN rows filtered)
         assert posteriors.shape[1] == model.n_states
-        # After filtering NaNs, shape[0] should be reduced
         assert posteriors.shape[0] == X.shape[0]
 
     @pytest.mark.parametrize(
@@ -1496,3 +1495,32 @@ class TestHMMInference:
         assert jnp.all(out <= 1)
         row_sums = jnp.sum(out, axis=1)
         assert jnp.allclose(row_sums, 1.0)
+
+    @pytest.mark.parametrize(
+        "method_name", ["smooth_proba", "filter_proba", "decode_state"]
+    )
+    def test_is_new_session_is_used(self, method_name):
+        model = MockHMM(n_states=3)
+        X = np.random.rand(10, 2)
+        y = np.random.rand(10)
+        model.param_ = jnp.ones((3,))
+        model.initial_prob_ = jnp.array([0.8, 0.1, 0.1])
+        model.transition_prob_ = jnp.array(
+            [[0.1, 0.8, 0.1], [0.1, 0.1, 0.8], [0.8, 0.1, 0.1]]
+        )
+        out_all_new_sess = getattr(model, method_name)(
+            X, y, is_new_session=np.ones(10, dtype=bool)
+        )
+        assert np.all(
+            out_all_new_sess == out_all_new_sess[0]
+        ), "Output should be the same for all time points"
+        out_default = getattr(model, method_name)(X, y)
+        assert not np.allclose(
+            out_all_new_sess, out_default
+        ), "Output with all new sessions should not match default output"
+        out_no_new_sess = getattr(model, method_name)(
+            X, y, is_new_session=np.zeros(10, dtype=bool)
+        )
+        assert jnp.allclose(
+            out_no_new_sess, out_default
+        ), "Output with no new sessions should match default output"
