@@ -136,10 +136,35 @@ document.addEventListener("DOMContentLoaded", function () {
       tbody.appendChild(tr);
     });
     if (_dtInstances[tableId]) { _dtInstances[tableId].destroy(); }
+    document.querySelectorAll("#" + tableId + " thead th select").forEach(function (s) { s.remove(); });
     _dtInstances[tableId] = new DataTable("#" + tableId, {
-      pageLength: 25, searching: false,
+      pageLength: 25,
+      dom: "lrtip",
       columnDefs: [{ targets: 0, visible: false }],
       order: [[3, "asc"]],
+      initComplete: function () {
+        var api = this.api();
+        [1, 4].forEach(function (colIdx) {
+          var column = api.column(colIdx);
+          var th = column.header();
+          var sel = document.createElement("select");
+          sel.style.cssText = "display:block;width:100%;margin-top:4px;font-size:0.82em;";
+          var allOpt = document.createElement("option");
+          allOpt.value = ""; allOpt.textContent = "All";
+          sel.appendChild(allOpt);
+          var vals = {};
+          column.data().each(function (d) { vals[String(d)] = true; });
+          Object.keys(vals).sort().forEach(function (v) {
+            var opt = document.createElement("option");
+            opt.value = v; opt.textContent = v;
+            sel.appendChild(opt);
+          });
+          sel.addEventListener("change", function () {
+            column.search(this.value).draw();
+          });
+          th.appendChild(sel);
+        });
+      },
     });
   }
 
