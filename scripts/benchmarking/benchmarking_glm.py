@@ -27,6 +27,7 @@ import nemos as nmo
 
 def _setup() -> None:
     """Configure JAX and register custom solvers. Must be called before any fitting."""
+    jax.config.update("jax_enable_x64", True)
     nmo.solvers.register("LBFGS", ScipyLBFGS, "scipy")
 
 
@@ -123,7 +124,7 @@ def generate_glm_configs(
                     continue
                 if base_name in _prox_solvers and reg in _smooth_regs:
                     continue
-                solver_kw = {"maxiter": 1000, "tol": 1e-6}
+                solver_kw = {"maxiter": 3000, "tol": 1e-6}
                 if base_name in _svrg_solvers:
                     solver_kw["batch_size"] = max(1, samp // 10)
                 fit_config = {
@@ -177,7 +178,7 @@ def generate_glm_configs(
                     continue
                 if base_name in _prox_solvers and reg in _smooth_regs:
                     continue
-                solver_kw = {"maxiter": 1000, "tol": 1e-6}
+                solver_kw = {"maxiter": 3000, "tol": 1e-6}
                 if base_name in _svrg_solvers:
                     solver_kw["batch_size"] = max(1, X.shape[0] // 10)
                 configs.append(
