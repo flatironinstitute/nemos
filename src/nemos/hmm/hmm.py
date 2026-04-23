@@ -451,7 +451,9 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
             raise NotImplementedError(
                 f"score of type {score_type} not implemented yet!"
             )
-        params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
+        params, X, y, is_new_session = self._validate_and_prepare_inputs(
+            X, y, is_new_session
+        )
         return self._score(params, X, y, is_new_session)
 
     @support_pynapple(conv_type="jax")
@@ -506,15 +508,22 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
 
         Parameters
         ----------
-        X
+        X :
             Predictors, shape ``(n_time_points, n_features)``.
-        y
+        y :
             Observations, shape ``(n_time_points,)`` for single observation or
             ``(n_time_points, n_observations)`` for population.
+        is_new_session :
+            Optional array indicating user-provided session boundaries. Can be:
+            - a boolean array indicating session starts, shape ``(n_time_points,)``
+            - an integer array of indices marking session starts, shape ``(n_sessions,)``
+            - a pynapple.IntervalSet marking session epochs (requires either X or y to be a
+            pynapple Tsd or TsdFrame to get timestamps)
+            If None, creates a default array treating all data as one session.
 
         Returns
         -------
-        posteriors
+        posteriors :
             Smoothing posterior probabilities, shape ``(n_time_points, n_states)``.
             Each row sums to 1 and represents the probability distribution over states
             at that time point.
@@ -538,7 +547,9 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         - Smoothing provides better state estimates than filtering because it uses all data
         - The algorithm properly handles session boundaries and NaN values at epoch borders
         """
-        params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
+        params, X, y, is_new_session = self._validate_and_prepare_inputs(
+            X, y, is_new_session
+        )
         return self._smooth_proba(params, X, y, is_new_session)
 
     @support_pynapple(conv_type="jax")
@@ -596,6 +607,13 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         y
             Observations, shape ``(n_time_points,)`` for single observation or
             ``(n_time_points, n_observations)`` for population.
+        is_new_session :
+            Optional array indicating user-provided session boundaries. Can be:
+            - a boolean array indicating session starts, shape ``(n_time_points,)``
+            - an integer array of indices marking session starts, shape ``(n_sessions,)``
+            - a pynapple.IntervalSet marking session epochs (requires either X or y to be a
+            pynapple Tsd or TsdFrame to get timestamps)
+            If None, creates a default array treating all data as one session.
 
         Returns
         -------
@@ -626,7 +644,9 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         - NaN values are removed before inference, but session markers are preserved
         - For pynapple inputs, the output TsdFrame has columns named "state_0", "state_1", etc.
         """
-        params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
+        params, X, y, is_new_session = self._validate_and_prepare_inputs(
+            X, y, is_new_session
+        )
         return self._filter_proba(params, X, y, is_new_session)
 
     @support_pynapple(conv_type="jax")
@@ -694,6 +714,13 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         y
             Observations, shape ``(n_time_points,)`` for single observation or
             ``(n_time_points, n_observations)`` for population.
+        is_new_session :
+            Optional array indicating user-provided session boundaries. Can be:
+            - a boolean array indicating session starts, shape ``(n_time_points,)``
+            - an integer array of indices marking session starts, shape ``(n_sessions,)``
+            - a pynapple.IntervalSet marking session epochs (requires either X or y to be a
+            pynapple Tsd or TsdFrame to get timestamps)
+            If None, creates a default array treating all data as one session.
         state_format
             Format of the returned states:
 
@@ -735,7 +762,9 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         - Decoding is useful for segmenting continuous data into discrete behavioral states
         - For uncertainty estimates about states, use ``smooth_proba()`` instead
         """
-        params, X, y, is_new_session = self._validate_and_prepare_inputs(X, y)
+        params, X, y, is_new_session = self._validate_and_prepare_inputs(
+            X, y, is_new_session
+        )
         # validate state_format
         _check_state_format(state_format)
         # define the return type for the max-sum
