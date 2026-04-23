@@ -264,7 +264,7 @@ def forward_pass(
     )
 
     # Compute log-likelihoods
-    log_conditionals = log_likelihood_func(X, y, model_params)
+    log_conditionals = log_likelihood_func(model_params, X, y)
 
     # Compute forward pass
     log_alphas, log_normalizers = _forward_pass(
@@ -455,7 +455,7 @@ def forward_backward(
     )
 
     # Compute log-likelihoods
-    log_conditionals = log_likelihood_func(X, y, model_params)
+    log_conditionals = log_likelihood_func(model_params, X, y)
 
     # Compute forward pass
     log_alphas, log_normalization = _forward_pass(
@@ -915,7 +915,7 @@ def max_sum(
         else jnp.zeros(y.shape[0], dtype=bool).at[0].set(1)
     )
 
-    log_emission = log_likelihood_func(X, y, model_params)
+    log_emission = log_likelihood_func(model_params, X, y)
 
     # Forward pass: similar to forward-backward, scan over all time points
     def forward_max_sum(omega_prev, xs):

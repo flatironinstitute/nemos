@@ -1002,7 +1002,7 @@ class TestMStep:
             inverse_link_function=obs.default_inverse_link_function,
         )
         log_conditionals = log_likelihood(
-            X, y, GLMHMMModelParams(coef, jnp.ones(coef.shape[-1]))
+            GLMHMMModelParams(coef, jnp.ones(coef.shape[-1])), X, y
         )
         new_sess = np.zeros(10)
         new_sess[0] = 1
@@ -2237,7 +2237,7 @@ class TestViterbi:
         )
 
         # to be in the correct for for max_sum
-        def log_like_func_max_sum(X, y, params):
+        def log_like_func_max_sum(params, X, y):
             predicted_rate = inverse_link_function(X @ params.coef + params.intercept)
             return log_like_func(y, predicted_rate)
 
@@ -2285,7 +2285,7 @@ class TestViterbi:
         )
 
         # to be in the correct for for max_sum
-        def log_like_func_max_sum(X, y, params):
+        def log_like_func_max_sum(params, X, y):
             predicted_rate = inverse_link_function(X @ params.coef + params.intercept)
             return log_like_func(y, predicted_rate)
 

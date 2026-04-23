@@ -397,7 +397,9 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         return params, X, y, is_new_session
 
     @abc.abstractmethod
-    def _log_likelihood(self, params: HMMModelParamsT, X, y):
+    def _log_likelihood(
+        self, params: HMMModelParamsT, X: DESIGN_INPUT_TYPE, y: ArrayLike
+    ) -> jnp.ndarray:
         """Compute the log-likelihood of the data given the model parameters."""
         pass
 
