@@ -465,6 +465,8 @@ class KMeansInitializer:
         )
         self.model.fit(data)
         self.states = jax.nn.one_hot(self.model.labels_, num_classes=n_states)
+        self._X = jnp.asarray(X)
+        self._y = jnp.asarray(y)
 
     def initial_probability(self):
         """
