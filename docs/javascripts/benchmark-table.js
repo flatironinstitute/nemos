@@ -29,7 +29,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function buildChart(rows, datasetFilter) {
     var ridgeRows = rows.filter(function (r) {
-      return !r.regularizer || r.regularizer === "Ridge";
+      return (!r.regularizer || r.regularizer === "Ridge") &&
+             r.converged !== false && r.converged !== "False";
     });
 
     var activeCats = datasetFilter === "all"
