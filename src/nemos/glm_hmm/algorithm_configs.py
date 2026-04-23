@@ -224,7 +224,7 @@ def prepare_estep_log_likelihood(
             out_axes=state_axes,
         )
 
-    def log_likelihood(X, y, params):
+    def log_likelihood(params, X, y):
         rate = compute_rate_per_state(X, params, inverse_link_function)
         scale = jnp.exp(params.log_scale) if params.log_scale is not None else None
         log_like = log_likelihood_per_sample(y, rate, scale)
