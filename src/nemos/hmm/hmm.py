@@ -440,7 +440,36 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         ] = "log-likelihood",
         null_model: Optional[Literal["constant", "glm"]] = None,
     ) -> jnp.ndarray:
-        """Compute the model score."""
+        """
+        Compute the model score.
+
+        Scores the model by computing the log-likelihood of the data given the model parameters.
+        Other score metrics are currently not implemented.
+
+        Parameters
+        ----------
+        X :
+            Input data/design matrix, shape ``(n_samples, n_features)``.
+        y :
+            Output data/observations, shape ``(n_samples, n_observations)``.
+        is_new_session :
+            Optional array indicating user-provided session boundaries. Can be:
+            - a boolean array indicating session starts, shape ``(n_samples,)``
+            - an integer array of indices marking session starts, shape ``(n_sessions,)``
+            - a pynapple.IntervalSet marking session epochs (requires either X or y to be a
+            pynapple Tsd or TsdFrame to get timestamps)
+            If None, creates a default array treating all data as one session.
+        score_type :
+            The type of score to compute. Currently, only "log-likelihood" is implemented.
+        null_model :
+            Used for scoring metrics that require a null model (e.g., pseudo-R2).
+            Currently not used as only log-likelihood is implemented.
+
+        Returns
+        -------
+        :
+            The computed model score.
+        """
         if score_type == "log-likelihood" and null_model is not None:
             warnings.warn(
                 "The null model is not used for the log-likelihood computation.",
@@ -539,8 +568,10 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
 
         See Also
         --------
-        filter_proba : Compute filtering posteriors (conditioned on past observations only).
-        decode_state : Compute most likely state sequence (Viterbi decoding).
+        :meth:`~nemos.hmm.BaseHMM.filter_proba`
+            Compute filtering posteriors (conditioned on past observations only).
+        :meth:`~nemos.hmm.BaseHMM.decode_state`
+            Compute most likely state sequence (Viterbi decoding).
 
         Notes
         -----
@@ -633,8 +664,10 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
 
         See Also
         --------
-        smooth_proba : Compute smoothing posteriors (conditioned on all observations).
-        decode_state : Compute most likely state sequence (Viterbi decoding).
+        :meth:`~nemos.hmm.BaseHMM.smooth_proba`
+            Compute smoothing posteriors (conditioned on all observations).
+        :meth:`~nemos.hmm.BaseHMM.decode_state`
+            Compute most likely state sequence (Viterbi decoding).
 
         Notes
         -----
@@ -750,8 +783,10 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
 
         See Also
         --------
-        smooth_proba : Compute smoothing posteriors (conditioned on all observations).
-        filter_proba : Compute filtering posteriors (conditioned on past observations only).
+        :meth:`~nemos.hmm.BaseHMM.smooth_proba`
+            Compute smoothing posteriors (conditioned on all observations).
+        :meth:`~nemos.hmm.BaseHMM.filter_proba`
+            Compute filtering posteriors (conditioned on past observations only).
 
         Notes
         -----
