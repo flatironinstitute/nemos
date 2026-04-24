@@ -829,7 +829,82 @@ class TestHMMNewSession:
         ],
     )
     def test_initialize_new_session(self, X, y, is_new_session, expected_new_session):
-        """Test that session boundaries are correctly initialized and moved when there are NaN values."""
+        """Test that session boundaries are correctly initialized."""
+        model = MockHMM(n_states=3)
+        is_new_session = model._validator.validate_and_cast_is_new_session(
+            X, y, is_new_session
+        )
+        assert jnp.all(is_new_session == expected_new_session)
+
+    @pytest.mark.parametrize(
+        "X, y, is_new_session, expected_new_session",
+        [
+            # NaN at start in y
+            (np.ones((3, 1)), np.array([np.nan, 0, 0]), None, jnp.array([0, 1, 0])),
+            # X and y both have NaNs at different positions
+            (
+                np.array([[np.nan], [2], [3], [4]]),
+                np.array([0, np.nan, 3, 4]),
+                None,
+                jnp.array([0, 0, 1, 0]),
+            ),
+            # X and y both have NaNs at same position
+            (
+                np.array([[np.nan], [1], [2], [3]]),
+                np.array([np.nan, 1, 2, 3]),
+                None,
+                jnp.array([0, 1, 0, 0]),
+            ),
+            # NaN at the very end of data
+            (
+                np.ones((4, 1)),
+                np.array([0, 1, 2, np.nan]),
+                None,
+                jnp.array([1, 0, 0, 0]),
+            ),
+            # Multiple NaNs at the start
+            (
+                np.ones((5, 1)),
+                np.array([np.nan, np.nan, 1, 2, 3]),
+                None,
+                jnp.array([0, 0, 1, 0, 0]),
+            ),
+            # Multiple NaNs spaced
+            (
+                np.ones((5, 1)),
+                np.array([np.nan, 1, np.nan, 2, 3]),
+                None,
+                jnp.array([0, 1, 0, 0, 0]),
+            ),
+            # Explicit is_new_session provided by user
+            # beginning session shifted
+            (
+                np.ones((3, 1)),
+                np.array([np.nan, 0, 0]),
+                jnp.array([1, 0, 1]),
+                jnp.array([0, 1, 1]),
+            ),
+            # beginning new session dropped
+            (
+                np.array([[np.nan], [2], [3], [4]]),
+                np.array([0, np.nan, 3, 4]),
+                jnp.array([1, 0, 1, 0]),
+                jnp.array([0, 0, 1, 0]),
+            ),
+            # middle session moved
+            (
+                np.ones((5, 1)),
+                np.array([0, 1, np.nan, np.nan, 3]),
+                jnp.array([1, 0, 1, 0, 0]),
+                jnp.array([1, 0, 0, 0, 1]),
+            ),
+            # nan moving is independent of input type so I won't add casses with different types
+        ],
+    )
+    def test_initialize_new_session_with_nan_shift(
+        self, X, y, is_new_session, expected_new_session
+    ):
+        """Test that session boundaries are correctly moved when there are NaN values."""
         model = MockHMM(n_states=3)
         is_new_session = model._validator.validate_and_cast_is_new_session(
             X, y, is_new_session

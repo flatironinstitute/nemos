@@ -34,7 +34,7 @@ def initialize_is_new_session(
         n_samples and to infer session boundaries if is_new_session is a pynapple.IntervalSet.
     is_new_session :
         Optional array indicating user-provided session boundaries. Can be:
-        - a boolean array indicating session starts, shape ``(n_samples,)``
+        - a boolean array or integer array of 1s and 0s indicating session starts, shape ``(n_samples,)``
         - an integer array of indices marking session starts, shape ``(n_sessions,)``
         - a pynapple.IntervalSet marking session epochs (requires either X or y to be a
           pynapple Tsd or TsdFrame to get timestamps)
