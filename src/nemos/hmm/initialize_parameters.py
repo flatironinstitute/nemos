@@ -718,7 +718,7 @@ def _validate_init_funcs_keys(
 
 def _resolve_init_funcs(
     key: str, value: str | Callable, kwargs: Optional[dict] = None
-) -> Tuple[InitFunctionHMM, dict]:
+) -> Tuple[InitFunctionHMM, dict, bool]:
     """
     Validate a provided initialization function.
 
@@ -793,7 +793,7 @@ def _validate_init_funcs_kwargs(func: InitFunctionHMM, kwargs: dict | None) -> d
 
 def _validate_custom_init_func(
     func: Callable, kwargs: Optional[dict] = None
-) -> Tuple[InitFunctionHMM, dict]:
+) -> Tuple[InitFunctionHMM, dict, bool]:
     """
     Validate a custom initialization function against the expected signature.
 

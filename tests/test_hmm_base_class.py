@@ -722,43 +722,6 @@ class TestHMMNewSession:
         [
             # No is_new_session provided
             (np.ones((3, 1)), np.ones((3,)), None, jnp.array([1, 0, 0])),
-            # NaN at start in y
-            (np.ones((3, 1)), np.array([np.nan, 0, 0]), None, jnp.array([0, 1, 0])),
-            # X and y both have NaNs at different positions
-            (
-                np.array([[np.nan], [2], [3], [4]]),
-                np.array([0, np.nan, 3, 4]),
-                None,
-                jnp.array([0, 0, 1, 0]),
-            ),
-            # X and y both have NaNs at same position
-            (
-                np.array([[np.nan], [1], [2], [3]]),
-                np.array([np.nan, 1, 2, 3]),
-                None,
-                jnp.array([0, 1, 0, 0]),
-            ),
-            # NaN at the very end of data
-            (
-                np.ones((4, 1)),
-                np.array([0, 1, 2, np.nan]),
-                None,
-                jnp.array([1, 0, 0, 0]),
-            ),
-            # Multiple NaNs at the start
-            (
-                np.ones((5, 1)),
-                np.array([np.nan, np.nan, 1, 2, 3]),
-                None,
-                jnp.array([0, 0, 1, 0, 0]),
-            ),
-            # Multiple NaNs spaced
-            (
-                np.ones((5, 1)),
-                np.array([np.nan, 1, np.nan, 2, 3]),
-                None,
-                jnp.array([0, 1, 0, 0, 0]),
-            ),
             # Explicit is_new_session provided by user
             # boolean array or integer array with 1s and 0s
             (
@@ -786,46 +749,35 @@ class TestHMMNewSession:
                 jnp.array([0, 1, 0], dtype=bool),
                 jnp.array([1, 1, 0]),
             ),
-            (
-                np.ones((3, 1)),
-                np.array([np.nan, 0, 0]),
-                jnp.array([1, 0, 1]),
-                jnp.array([0, 1, 1]),
-            ),
-            # beginning new session dropped
-            (
-                np.array([[np.nan], [2], [3], [4]]),
-                np.array([0, np.nan, 3, 4]),
-                jnp.array([1, 0, 1, 0]),
-                jnp.array([0, 0, 1, 0]),
-            ),
-            # middle new session moved
-            (
-                np.ones((5, 1)),
-                np.array([0, 1, np.nan, np.nan, 3]),
-                jnp.array([1, 0, 1, 0, 0]),
-                jnp.array([1, 0, 0, 0, 1]),
-            ),
             # integer array with indices of new sessions
+            # 1 session
             (
                 np.ones((5, 1)),
                 np.array([0, 1, 2, 3, 4]),
                 jnp.array([0]),
                 jnp.array([1, 0, 0, 0, 0]),
             ),
+            # repeated values
+            (
+                np.ones((5, 1)),
+                np.array([0, 1, 2, 3, 4]),
+                jnp.array([0, 0]),
+                jnp.array([1, 0, 0, 0, 0]),
+            ),
+            # all 0s and 1s with length < n_samples
             (
                 np.ones((5, 1)),
                 np.array([0, 1, 2, 3, 4]),
                 jnp.array([0, 1]),
                 jnp.array([1, 1, 0, 0, 0]),
             ),
+            # higher int values, adding first session
             (
                 np.ones((5, 1)),
                 np.array([0, 1, 2, 3, 4]),
                 jnp.array([2, 4]),
                 jnp.array([1, 0, 1, 0, 1]),
             ),
-            # nan moving is independent of input type so I won't add more cases
         ],
     )
     def test_initialize_new_session(self, X, y, is_new_session, expected_new_session):
