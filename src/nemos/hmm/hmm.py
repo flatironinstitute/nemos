@@ -328,6 +328,7 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
             self._n_states,
             X,
             y,
+            is_new_session,
             random_key=self._seed,
             init_funcs=self._hmm_initialization_funcs,
         )

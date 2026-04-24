@@ -714,6 +714,61 @@ class TestHMMInitialParams:
             jnp.log(DEFAULT_INIT_FUNCTIONS["transition_proba_init"](3)),
         )
 
+    @pytest.mark.parametrize(
+        "key, value, expectation",
+        [
+            (
+                "initial_proba_init",
+                lambda n_states, X, y, is_new_session, random_key: jnp.ones((n_states,))
+                / n_states,
+                does_not_raise(),
+            ),
+            (
+                "transition_proba_init",
+                lambda n_states, X, y, is_new_session, random_key: jnp.ones(
+                    (n_states, n_states)
+                )
+                / n_states,
+                does_not_raise(),
+            ),
+            (
+                "initial_proba_init",
+                lambda n_states, X, y, is_new_session, random_key: jnp.ones(
+                    (n_states - 1,)
+                ),
+                pytest.raises(ValueError, match="initial_prob must be"),
+            ),
+            (
+                "transition_proba_init",
+                lambda n_states, X, y, is_new_session, random_key: jnp.ones(
+                    (n_states - 1, n_states - 1)
+                ),
+                pytest.raises(ValueError, match="transition_prob must be"),
+            ),
+            (
+                "initial_proba_init",
+                lambda n_states, X, y, is_new_session, random_key: jnp.ones(
+                    (n_states,)
+                ),
+                pytest.raises(ValueError, match="must sum to 1"),
+            ),
+            (
+                "transition_proba_init",
+                lambda n_states, X, y, is_new_session, random_key: jnp.ones(
+                    (n_states, n_states)
+                ),
+                pytest.raises(ValueError, match="rows must sum to 1"),
+            ),
+        ],
+    )
+    def test_custom_init_and_transition_prob_sum_and_shape(
+        self, key, value, expectation
+    ):
+        model = MockHMM(n_states=3)
+        model.setup(**{key: value})
+        with expectation:
+            model_params = model._model_specific_initialization(None, None, None)
+
 
 class TestHMMNewSession:
 
@@ -1116,6 +1171,41 @@ class TestHMMNewSession:
             is_new_session = model._validator.validate_and_cast_is_new_session(
                 X, y, is_new_session
             )
+
+
+class TestHMMValidator:
+
+    @pytest.mark.parametrize(
+        "X, y, expectation",
+        [
+            (
+                np.random.rand(10, 2),
+                np.random.rand(10),
+                does_not_raise(),
+            ),
+            (
+                np.random.rand(10, 2),
+                np.random.rand(9),
+                pytest.raises(ValueError, match="X and y must have"),
+            ),
+            (
+                nap.TsdFrame(
+                    t=np.arange(10),
+                    d=np.random.rand(10, 2),
+                ),
+                nap.Tsd(
+                    t=np.arange(10) + 1,
+                    d=np.random.rand(10),
+                ),
+                pytest.raises(ValueError, match="Time axis mismatch"),
+            ),
+        ],
+    )
+    def test_validate_inputs(self, X, y, expectation):
+        """Test that validate_inputs correctly validates X and y."""
+        model = MockHMM(n_states=3)
+        with expectation:
+            model._validator.validate_inputs(X, y)
 
 
 class TestHMMInference:

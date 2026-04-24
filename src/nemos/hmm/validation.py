@@ -193,7 +193,7 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
             is_continuous = has_nans_only_at_border(X) and has_nans_only_at_border(y)
         if not is_continuous:
             raise ValueError(
-                "HMM requires continuous time-series data. NaN values must only "
+                f"{self.model_class} requires continuous time-series data. NaN values must only "
                 "appear at the beginning or end of the data, not in the middle. "
                 "Found NaN values within the time series, which would break the "
                 "forward-backward algorithm. Please ensure your data is continuous "
