@@ -104,6 +104,18 @@ class TestInitialProbaInitialization:
 
         assert not jnp.allclose(initial_prob1, initial_prob2)
 
+    @pytest.mark.parametrize("method_subset", [[dirichlet_initial_proba_init]])
+    @pytest.mark.parametrize("n_states", [2, 3, 5])
+    def test_dirichlet_alphas_is_used(
+        self, method, method_subset, use_method_for_test, n_states
+    ):
+        """Test that dirichlet_initial_proba_init uses the provided alphas."""
+        alphas = jnp.ones(n_states)
+        alphas = alphas.at[n_states - 1].set(100.0)  # Make the last state most likely
+
+        initial_prob = method(n_states, random_key=jax.random.PRNGKey(0), alphas=alphas)
+        assert jnp.argmax(initial_prob) == n_states - 1
+
 
 @pytest.mark.parametrize(
     "method",
@@ -215,6 +227,24 @@ class TestTransitionProbaInitialization:
         transition_prob2 = method(n_states, random_key=jax.random.PRNGKey(999))
 
         assert not jnp.allclose(transition_prob1, transition_prob2)
+
+    @pytest.mark.parametrize("method_subset", [[dirichlet_transition_proba_init]])
+    @pytest.mark.parametrize("n_states", [2, 3, 5])
+    def test_dirichlet_alphas_is_used(
+        self, method, method_subset, use_method_for_test, n_states
+    ):
+        """Test that dirichlet_initial_proba_init uses the provided alphas."""
+        alphas = jnp.ones((n_states, n_states))
+        for i in range(n_states):
+            alphas = alphas.at[i, n_states - 1].set(
+                100.0
+            )  # Make the last state most likely
+
+        transition_prob = method(
+            n_states, random_key=jax.random.PRNGKey(0), alphas=alphas
+        )
+        for i in range(n_states):
+            assert jnp.argmax(transition_prob[i]) == n_states - 1
 
 
 def generate_kmeans_data(n_states=3, min_prob=0.02):
