@@ -24,6 +24,7 @@ class InitFunctionHMM(Protocol):
         n_states: int,
         X: DESIGN_INPUT_TYPE,
         y: NDArray | jnp.ndarray,
+        is_new_session: NDArray | jnp.ndarray,
         random_key: jax.random.PRNGKey,
         **kwargs: Any,
     ) -> jnp.ndarray:
@@ -61,10 +62,11 @@ INITIALIZATION_FN_DICT = dict[
 
 def sticky_transition_proba_init(
     n_states: int,
+    prob_stay: float = 0.95,
     X: Optional[DESIGN_INPUT_TYPE] = None,
     y: Optional[NDArray | jnp.ndarray] = None,
+    is_new_session: Optional[NDArray | jnp.ndarray] = None,
     random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
-    prob_stay: float = 0.95,
 ) -> jnp.ndarray:
     """
     Initialize transition probabilities with sticky dynamics.
@@ -78,14 +80,17 @@ def sticky_transition_proba_init(
     ----------
     n_states :
         Number of HMM states. Must be greater than 1.
+    prob_stay :
+        Probability of staying in the current state. Default is 0.95.
     X :
         Optional predictor data. Unused for this particular initialization, but added for API consistency.
     y :
         Optional output data. Unused for this particular initialization, but added for API consistency.
+    is_new_session :
+        Optional boolean array of shape (n_samples,) indicating the start of new sessions. Unused for this
+        particular initialization, but added for API consistency.
     random_key :
         Random key, unused for this particular initialization, but added for API consistency.
-    prob_stay :
-        Probability of staying in the current state. Default is 0.95.
 
     Returns
     -------
@@ -119,6 +124,7 @@ def uniform_transition_proba_init(
     n_states: int,
     X: Optional[DESIGN_INPUT_TYPE] = None,
     y: Optional[NDArray | jnp.ndarray] = None,
+    is_new_session: Optional[NDArray | jnp.ndarray] = None,
     random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
 ) -> jnp.ndarray:
     """
@@ -135,6 +141,9 @@ def uniform_transition_proba_init(
         Optional predictor data. Unused for this particular initialization, but added for API consistency.
     y :
         Optional output data. Unused for this particular initialization, but added for API consistency.
+    is_new_session :
+        Optional boolean array of shape (n_samples,) indicating the start of new sessions. Unused for this
+        particular initialization, but added for API consistency.
     random_key :
         Random key, unused for this particular initialization, but added for API consistency.
 
@@ -160,9 +169,10 @@ def uniform_transition_proba_init(
 
 def random_transition_proba_init(
     n_states: int,
+    random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
     X: Optional[DESIGN_INPUT_TYPE] = None,
     y: Optional[NDArray | jnp.ndarray] = None,
-    random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
+    is_new_session: Optional[NDArray | jnp.ndarray] = None,
 ) -> jnp.ndarray:
     """
     Initialize transition probabilities randomly.
@@ -174,12 +184,15 @@ def random_transition_proba_init(
     ----------
     n_states :
         Number of HMM states. Must be greater than 1.
+    random_key :
+        Random key for reproducibility of random initialization.
     X :
         Optional predictor data. Unused for this particular initialization, but added for API consistency.
     y :
         Optional output data. Unused for this particular initialization, but added for API consistency.
-    random_key :
-        Random key for reproducibility of random initialization.
+    is_new_session :
+        Optional boolean array of shape (n_samples,) indicating the start of new sessions. Unused for this
+        particular initialization, but added for API consistency.
 
     Returns
     -------
@@ -203,10 +216,63 @@ def random_transition_proba_init(
     return prob_transition / prob_transition.sum(axis=1, keepdims=True)
 
 
+def dirichlet_transition_proba_init(
+    n_states: int,
+    alphas: Optional[float | NDArray | jnp.ndarray] = None,
+    random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
+    X: Optional[DESIGN_INPUT_TYPE] = None,
+    y: Optional[NDArray | jnp.ndarray] = None,
+    is_new_session: Optional[NDArray | jnp.ndarray] = None,
+) -> jnp.ndarray:
+    """
+    Initialize transition probabilities by sampling from a Dirichlet distribution.
+
+    Generates a random transition probability matrix by sampling each row from a Dirichlet distribution with
+    specified concentration parameters (alphas).
+
+    Parameters
+    ----------
+    n_states :
+        Number of HMM states. Must be greater than 1.
+    alphas :
+        Concentration parameters for the Dirichlet distribution. Must be an array of shape (n_states, n_states)
+        specifying the alpha for each transition. If None, defaults to 1.0 for all transitions (uniform).
+    random_key :
+        Random key for reproducibility of random initialization.
+    X :
+        Optional predictor data. Unused for this particular initialization, but added for API consistency.
+    y :
+        Optional output data. Unused for this particular initialization, but added for API consistency.
+    is_new_session :
+        Optional boolean array of shape (n_samples,) indicating the start of new sessions. Unused for this
+        particular initialization, but added for API consistency.
+
+    Examples
+    --------
+    >>> import jax
+    >>> import jax.numpy as jnp
+    >>> from nemos.hmm.initialize_parameters import dirichlet_transition_proba_init
+    >>>
+    >>> # Generate transition probabilities for 3 states with Dirichlet initialization
+    >>> n_states = 3
+    >>> alphas = jnp.array([[5.0, 1.0, 1.0],[1.0, 5.0, 1.0],[1.0, 1.0, 5.0]])  # favor self-transitions
+    >>> transition_matrix = dirichlet_transition_proba_init(n_states, alphas=alphas, random_key=jax.random.PRNGKey(0))
+    >>> print(transition_matrix)
+    [[0.8081229  0.1293587  0.0625184 ]
+     [0.241275   0.67095065 0.08777437]
+     [0.09245212 0.00998352 0.8975643 ]]
+    """
+    if alphas is None:
+        alphas = jnp.ones((n_states, n_states))
+    prob = jax.random.dirichlet(random_key, alphas)
+    return prob / prob.sum(axis=1, keepdims=True)
+
+
 def uniform_initial_proba_init(
     n_states: int,
     X: Optional[DESIGN_INPUT_TYPE] = None,
     y: Optional[NDArray | jnp.ndarray] = None,
+    is_new_session: Optional[NDArray | jnp.ndarray] = None,
     random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
 ) -> jnp.ndarray:
     """
@@ -223,6 +289,9 @@ def uniform_initial_proba_init(
         Optional predictor data. Unused for this particular initialization, but added for API consistency.
     y :
         Optional output data. Unused for this particular initialization, but added for API consistency.
+    is_new_session :
+        Optional boolean array of shape (n_samples,) indicating the start of new sessions. Unused for this
+        particular initialization, but added for API consistency.
     random_key :
         Random key, unused for this particular initialization, but added for API consistency.
 
@@ -247,9 +316,10 @@ def uniform_initial_proba_init(
 
 def random_initial_proba_init(
     n_states: int,
+    random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
     X: Optional[DESIGN_INPUT_TYPE] = None,
     y: Optional[NDArray | jnp.ndarray] = None,
-    random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
+    is_new_session: Optional[NDArray | jnp.ndarray] = None,
 ) -> jnp.ndarray:
     """
     Randomly initialize initial state probabilities.
@@ -261,12 +331,15 @@ def random_initial_proba_init(
     ----------
     n_states :
         Number of HMM states.
+    random_key :
+        Random key for reproducibility of random initialization.
     X :
         Optional predictor data. Unused for this particular initialization, but added for API consistency.
     y :
         Optional output data. Unused for this particular initialization, but added for API consistency.
-    random_key :
-        Random key for reproducibility of random initialization.
+    is_new_session :
+        Optional boolean array of shape (n_samples,) indicating the start of new sessions. Unused for this
+        particular initialization, but added for API consistency.
 
     Returns
     -------
@@ -288,6 +361,56 @@ def random_initial_proba_init(
     """
     prob = jax.random.uniform(random_key, (n_states,), dtype=float)
     return prob / jnp.sum(prob)
+
+
+def dirichlet_initial_proba_init(
+    n_states: int,
+    alphas: Optional[float | NDArray | jnp.ndarray] = None,
+    random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
+    X: Optional[DESIGN_INPUT_TYPE] = None,
+    y: Optional[NDArray | jnp.ndarray] = None,
+    is_new_session: Optional[NDArray | jnp.ndarray] = None,
+) -> jnp.ndarray:
+    """
+    Initialize initial state probabilities by sampling from a Dirichlet distribution.
+
+    Generates random initial state probabilities by sampling from a Dirichlet distribution with specified
+    concentration parameters (alphas).
+
+    Parameters
+    ----------
+    n_states :
+        Number of HMM states. Must be greater than 1.
+    alphas :
+        Concentration parameters for the Dirichlet distribution. Must be an array of shape (n_states,)
+        specifying the alpha for each state. If None, defaults to 1.0 for all states (uniform).
+    random_key :
+        Random key for reproducibility of random initialization.
+    X :
+        Optional predictor data. Unused for this particular initialization, but added for API consistency.
+    y :
+        Optional output data. Unused for this particular initialization, but added for API consistency.
+    is_new_session :
+        Optional boolean array of shape (n_samples,) indicating the start of new sessions. Unused for this
+        particular initialization, but added for API consistency.
+
+    Examples
+    --------
+    >>> import jax
+    >>> import jax.numpy as jnp
+    >>> from nemos.hmm.initialize_parameters import dirichlet_initial_proba_init
+    >>>
+    >>> # Generate initial state probabilities for 3 states with Dirichlet initialization
+    >>> n_states = 3
+    >>> alphas = jnp.array([5.0, 1.0, 1.0])  # favor first state
+    >>> init_prob = dirichlet_initial_proba_init(n_states, alphas=alphas, random_key=jax.random.PRNGKey(0))
+    >>> print(init_prob)
+    [0.8081229 0.1293587 0.0625184]
+    """
+    if alphas is None:
+        alphas = jnp.ones((n_states,))
+    prob = jax.random.dirichlet(random_key, alphas)
+    return prob / prob.sum()
 
 
 class KMeansInitializer:
@@ -473,12 +596,14 @@ AVAILABLE_INIT_FUNCTIONS = {
     "initial_proba_init": {
         "uniform": uniform_initial_proba_init,
         "random": random_initial_proba_init,
+        "dirichlet": dirichlet_initial_proba_init,
         "kmeans": kmeans_initial_proba_init,
     },
     "transition_proba_init": {
         "sticky": sticky_transition_proba_init,
         "uniform": uniform_transition_proba_init,
         "random": random_transition_proba_init,
+        "dirichlet": dirichlet_transition_proba_init,
         "kmeans": kmeans_transition_proba_init,
     },
 }
@@ -717,6 +842,7 @@ def generate_hmm_initial_params(
     n_states: int,
     X: DESIGN_INPUT_TYPE,
     y: NDArray | jnp.ndarray,
+    is_new_session: NDArray | jnp.ndarray,
     random_key: int | jax.Array = 123,
     init_funcs: Optional[dict] = None,
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
@@ -734,6 +860,8 @@ def generate_hmm_initial_params(
         Predictor data (e.g., model design for GLM) of shape (n_samples, n_features).
     y :
         Output data (e.g., neural activity) of shape (n_samples,).
+    is_new_session :
+        Boolean array of shape (n_samples,) indicating the start of new sessions.
     random_key :
         Optional key for random number generation, if needed by the initialization functions. The key is split to
         ensure different random states for initial probabilities and transition probabilities.
@@ -783,10 +911,20 @@ def generate_hmm_initial_params(
     # compute probabilities and validate if custom functions are used
     keys = jax.random.split(random_key, 2)
     initial_probs = initial_proba_init(
-        n_states=n_states, X=X, y=y, random_key=keys[0], **initial_proba_init_kwargs
+        n_states=n_states,
+        X=X,
+        y=y,
+        is_new_session=is_new_session,
+        random_key=keys[0],
+        **initial_proba_init_kwargs,
     )
     transition_matrix = transition_proba_init(
-        n_states=n_states, X=X, y=y, random_key=keys[1], **transition_proba_init_kwargs
+        n_states=n_states,
+        X=X,
+        y=y,
+        is_new_session=is_new_session,
+        random_key=keys[1],
+        **transition_proba_init_kwargs,
     )
 
     return initial_probs, transition_matrix

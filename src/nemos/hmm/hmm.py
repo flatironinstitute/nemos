@@ -134,12 +134,27 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         Set up the HMM model with specified initialization functions for the initial and transition probabilities.
 
         An optional initialization step that allows for users to specify initialization functions other than the
-        defaulst for initial and transition probabilities. The user can specify other built-in initialization functions
+        defaults for initial and transition probabilities. The user can specify other built-in initialization functions
         or provide custom ones. If no initialization functions are provided, default initialization will be used.
 
         Available built-in initialization functions include:
         - For initial probabilities: "uniform" (default), "random", "kmeans"
         - For transition probabilities: "sticky" (default), "uniform", "random", "kmeans"
+
+        Any custom initialization function provided by the user should be a callable that matches the following input
+        (n_states, X, y, is_new_session, random_key, **kwargs) and returns an array of the appropriate shape for the
+        parameters it initializes (initial probabilities should return shape (n_states,) and transition probabilities
+        should return shape (n_states, n_states)). Even if the function does not use all the inputs, they should be
+        included in the function signature to ensure compatibility with the setup process.
+
+        An example of a custom initialization function for initial probabilities could be:
+        ```
+        def custom_initial_proba_init(n_states, X, y, is_new_session, random_key, min_prob=0.05):
+            init_prob = jax.random.uniform(random_key, (n_states,), dtype=float)
+            init_prob = init_prob / init_prob.sum()  # normalize to sum to 1
+            init_prob = jnp.clip(init_prob, a_min=min_prob)  # enforce minimum probability
+            return init_prob / init_prob.sum()  # renormalize after clipping
+        ```
 
         Parameters
         ----------
