@@ -465,8 +465,6 @@ class KMeansInitializer:
         )
         self.model.fit(data)
         self.states = jax.nn.one_hot(self.model.labels_, num_classes=n_states)
-        self._X = jnp.asarray(X)
-        self._y = jnp.asarray(y)
 
     def initial_probability(self):
         """
@@ -962,7 +960,10 @@ def generate_hmm_initial_params(
         random_key=random_key_pair[1],
         **transition_proba_init_kwargs,
     )
-
+    if init_funcs["transition_proba_init_custom"]:
+        _validate_custom_init_output(
+            transition_matrix, n_states, "transition_proba_init"
+        )
     return initial_probs, transition_matrix
 
 

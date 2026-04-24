@@ -132,6 +132,8 @@ VALID_PAIRS = [
     {"_func", "func"},
     {"_func", "funcs"},
     {"dirichlet_initial_proba", "dirichlet_transition_proba"},
+    {"glm_params_init", "glm_params_init_kwargs"},
+    {"scale_init_kwargs", "solver_init_kwargs"},
     {"random_key_pair", "random_key"},
 ]
 

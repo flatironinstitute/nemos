@@ -24,6 +24,11 @@ _ANALYTICAL_SCALE_UPDATE: dict[Type[Observations], Callable] = {
 }
 
 
+def has_fixed_scale(observation_model: Observations) -> bool:
+    """Check if observation has fixed scale."""
+    return type(observation_model) in _NO_SCALE
+
+
 def _posterior_weighted_objective_impl(
     y: Array,
     predicted_rate: Array,
@@ -208,7 +213,7 @@ def prepare_estep_log_likelihood(
             x, z, scale=s, aggregate_sample_scores=lambda v: v
         )
 
-    if type(observation_model) in _NO_SCALE:
+    if has_fixed_scale(observation_model):
 
         log_likelihood_per_sample = jax.vmap(
             log_likelihood_per_sample,
@@ -479,9 +484,7 @@ def prepare_mstep_update_fn(
     )
 
     # if scale is separable and needs to be optimized, get update function for optimizing scale
-    if observation_model._separable_scale and (
-        type(observation_model) not in _NO_SCALE
-    ):
+    if observation_model._separable_scale and (not has_fixed_scale(observation_model)):
         # GLM params solver only needs coef and intercept — exclude log_scale
         glm_init_params = GLMParams(init_params.coef, init_params.intercept)
         params_update_fn = setup_solver(
