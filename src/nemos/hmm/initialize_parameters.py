@@ -755,8 +755,11 @@ def generate_hmm_initial_params(
         Function to set up the initialization functions and their kwargs based on user input.
     """
     # check for unexpected/unknown keys in init_funcs if user provided dictionary not made by setup_hmm_initialization
-    init_funcs = {} if init_funcs is None else init_funcs
-    init_funcs = _validate_init_funcs_keys(init_funcs)
+    init_funcs = (
+        DEFAULT_INIT_FUNCTIONS.copy()
+        if init_funcs is None
+        else _validate_init_funcs_keys(init_funcs)
+    )
 
     if isinstance(random_key, int):
         random_key = jax.random.PRNGKey(random_key)

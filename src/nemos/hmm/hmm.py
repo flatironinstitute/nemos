@@ -27,7 +27,6 @@ from ..typing import (
 from .initialize_parameters import (
     INITIALIZATION_FN_DICT,
     _resolve_dirichlet_priors,
-    _validate_init_funcs_keys,
     generate_hmm_initial_params,
     setup_hmm_initialization,
 )
@@ -47,10 +46,10 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
     ----------
     n_states :
         The number of hidden states in the HMM. Must be a positive integer.
-    dirichlet_prior_alphas_init_prob :
+    dirichlet_initial_proba :
         Alpha parameters for the Dirichlet prior over the initial state probabilities.
         Shape ``(n_states,)``. If None, a flat (uninformative) prior is assumed.
-    dirichlet_prior_alphas_transition :
+    dirichlet_transition_proba :
         Alpha parameters for the Dirichlet prior over the transition probabilities.
         Shape ``(n_states, n_states)``. If None, a flat (uninformative) prior is assumed.
     regularizer :
@@ -88,10 +87,8 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
     def __init__(
         self,
         n_states: int,
-        dirichlet_prior_alphas_init_prob: Union[
-            jnp.ndarray, None
-        ] = None,  # (n_state, )
-        dirichlet_prior_alphas_transition: Union[
+        dirichlet_initial_proba: Union[jnp.ndarray, None] = None,  # (n_state, )
+        dirichlet_transition_proba: Union[
             jnp.ndarray | None
         ] = None,  # (n_state, n_state):
         regularizer: Optional[Union[str, Regularizer]] = None,
@@ -103,7 +100,7 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         maxiter: int = 1000,
         tol: float = 1e-8,
         seed=jax.random.PRNGKey(123),
-        hmm_initialization_funcs: INITIALIZATION_FN_DICT = {},
+        hmm_initialization_funcs: Optional[INITIALIZATION_FN_DICT] = None,
     ):
         super().__init__(
             regularizer=regularizer,
@@ -113,16 +110,16 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         )
         self.n_states = n_states
         # set the prior params
-        self.dirichlet_prior_alphas_init_prob = dirichlet_prior_alphas_init_prob
-        self.dirichlet_prior_alphas_transition = dirichlet_prior_alphas_transition
+        self.dirichlet_initial_proba = dirichlet_initial_proba
+        self.dirichlet_transition_proba = dirichlet_transition_proba
 
         self.seed = seed
         self.maxiter = maxiter
         self.tol = tol
 
         # fit attributes
-        self.transition_prob_: jnp.ndarray | None = None
-        self.initial_prob_: jnp.ndarray | None = None
+        self.transition_prob_: Optional[jnp.ndarray] = None
+        self.initial_prob_: Optional[jnp.ndarray] = None
 
         self.hmm_initialization_funcs = hmm_initialization_funcs
 
@@ -237,32 +234,32 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         self._tol = float(tol)
 
     @property
-    def dirichlet_prior_alphas_init_prob(self) -> jnp.ndarray | None:
+    def dirichlet_initial_proba(self) -> jnp.ndarray | None:
         """Alpha parameters of the Dirichlet prior over the initial probabilities of HMM states.
 
         If ``None``, a flat prior is assumed.
         """
-        return self._dirichlet_prior_alphas_init_prob
+        return self._dirichlet_initial_proba
 
-    @dirichlet_prior_alphas_init_prob.setter
-    def dirichlet_prior_alphas_init_prob(self, value: jnp.ndarray | None):
+    @dirichlet_initial_proba.setter
+    def dirichlet_initial_proba(self, value: jnp.ndarray | None):
         """Validate and set the alpha parameters of the Dirichlet prior over the initial probabilities."""
-        self._dirichlet_prior_alphas_init_prob = _resolve_dirichlet_priors(
+        self._dirichlet_initial_proba = _resolve_dirichlet_priors(
             value, (self._n_states,)
         )
 
     @property
-    def dirichlet_prior_alphas_transition(self) -> jnp.ndarray | None:
+    def dirichlet_transition_proba(self) -> jnp.ndarray | None:
         """Alpha parameters of the Dirichlet prior over the initial probabilities of HMM states.
 
         If ``None``, a flat prior is assumed.
         """
-        return self._dirichlet_prior_alphas_transition
+        return self._dirichlet_transition_proba
 
-    @dirichlet_prior_alphas_transition.setter
-    def dirichlet_prior_alphas_transition(self, value: jnp.ndarray | None):
+    @dirichlet_transition_proba.setter
+    def dirichlet_transition_proba(self, value: jnp.ndarray | None):
         """Validate and set the alpha parameters of the Dirichlet prior over the transition probabilities."""
-        self._dirichlet_prior_alphas_transition = _resolve_dirichlet_priors(
+        self._dirichlet_transition_proba = _resolve_dirichlet_priors(
             value, (self._n_states, self._n_states)
         )
 
@@ -295,9 +292,15 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         return self._hmm_initialization_funcs
 
     @hmm_initialization_funcs.setter
-    def hmm_initialization_funcs(self, value: INITIALIZATION_FN_DICT | dict):
-        """Validate and set the dictionary of initialization functions for HMM parameters."""
-        self._hmm_initialization_funcs = _validate_init_funcs_keys(value)
+    def hmm_initialization_funcs(self, value: INITIALIZATION_FN_DICT | None):
+        """
+        Set the dictionary of initialization functions for HMM parameters.
+
+        This should only be called by __init__ for sklearn cloning, users should
+        use the `setup` method to set initialization functions.
+        """
+        self._hmm_initialization_funcs = value
+        self.setup()
 
     def _hmm_params_initialization(
         self,

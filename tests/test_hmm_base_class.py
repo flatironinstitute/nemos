@@ -82,30 +82,28 @@ class MockHMM(BaseHMM[MockHMMParams, MockHMMUserParams]):
     def __init__(
         self,
         n_states: int,
-        dirichlet_prior_alphas_init_prob: Union[
-            jnp.ndarray, None
-        ] = None,  # (n_state, )
-        dirichlet_prior_alphas_transition: Union[
+        dirichlet_initial_proba: Union[jnp.ndarray, None] = None,  # (n_state, )
+        dirichlet_transition_proba: Union[
             jnp.ndarray | None
         ] = None,  # (n_state, n_state):
         maxiter: int = 1000,
         tol: float = 1e-8,
         seed=jax.random.PRNGKey(123),
-        hmm_initialization_funcs: INITIALIZATION_FN_DICT = {},
-        model_initialization_funcs: INITIALIZATION_FN_DICT = {},
+        hmm_initialization_funcs: INITIALIZATION_FN_DICT = None,
+        model_initialization_funcs: INITIALIZATION_FN_DICT = None,
     ):
         BaseHMM.__init__(
             self,
             n_states=n_states,
-            dirichlet_prior_alphas_init_prob=dirichlet_prior_alphas_init_prob,
-            dirichlet_prior_alphas_transition=dirichlet_prior_alphas_transition,
+            dirichlet_initial_proba=dirichlet_initial_proba,
+            dirichlet_transition_proba=dirichlet_transition_proba,
             maxiter=maxiter,
             tol=tol,
             seed=seed,
             hmm_initialization_funcs=hmm_initialization_funcs,
         )
         self.param_: jnp.ndarray | None = None
-        self.model_initialization_funcs = model_initialization_funcs
+        self.model_initialization_funcs = {}
 
     def setup(
         self,
@@ -313,50 +311,50 @@ class TestHMMInit:
             MockHMM(n_states=2, seed=seed)
 
     # -------------------------------------------------------------------------
-    # dirichlet_prior_alphas_init_prob setter tests
+    # dirichlet_initial_proba setter tests
     # -------------------------------------------------------------------------
     def test_dirichlet_prior_init_prob_none(self):
         """Test that None is accepted for dirichlet prior."""
-        model = MockHMM(n_states=3, dirichlet_prior_alphas_init_prob=None)
-        assert model.dirichlet_prior_alphas_init_prob is None
+        model = MockHMM(n_states=3, dirichlet_initial_proba=None)
+        assert model.dirichlet_initial_proba is None
 
     def test_dirichlet_prior_init_prob_valid(self):
         """Test valid dirichlet prior alphas."""
         alphas = jnp.array([1.0, 2.0, 3.0])
-        model = MockHMM(n_states=3, dirichlet_prior_alphas_init_prob=alphas)
-        assert jnp.array_equal(model.dirichlet_prior_alphas_init_prob, alphas)
+        model = MockHMM(n_states=3, dirichlet_initial_proba=alphas)
+        assert jnp.array_equal(model.dirichlet_initial_proba, alphas)
 
     def test_dirichlet_prior_init_prob_wrong_shape(self):
         """Test that wrong shape raises ValueError."""
         alphas = jnp.array([1.0, 2.0])  # n_states=3 but only 2 elements
         with pytest.raises(ValueError, match="must have shape"):
-            MockHMM(n_states=3, dirichlet_prior_alphas_init_prob=alphas)
+            MockHMM(n_states=3, dirichlet_initial_proba=alphas)
 
     def test_dirichlet_prior_init_prob_values_less_than_one(self):
         """Test that alpha values < 1 raise ValueError."""
         alphas = jnp.array([1.0, 0.5, 2.0])
         with pytest.raises(ValueError, match="must be >= 1"):
-            MockHMM(n_states=3, dirichlet_prior_alphas_init_prob=alphas)
+            MockHMM(n_states=3, dirichlet_initial_proba=alphas)
 
     # -------------------------------------------------------------------------
-    # dirichlet_prior_alphas_transition setter tests
+    # dirichlet_transition_proba setter tests
     # -------------------------------------------------------------------------
     def test_dirichlet_prior_transition_none(self):
         """Test that None is accepted for dirichlet prior."""
-        model = MockHMM(n_states=3, dirichlet_prior_alphas_transition=None)
-        assert model.dirichlet_prior_alphas_transition is None
+        model = MockHMM(n_states=3, dirichlet_transition_proba=None)
+        assert model.dirichlet_transition_proba is None
 
     def test_dirichlet_prior_transition_valid(self):
         """Test valid dirichlet prior alphas for transitions."""
         alphas = jnp.ones((3, 3))
-        model = MockHMM(n_states=3, dirichlet_prior_alphas_transition=alphas)
-        assert jnp.array_equal(model.dirichlet_prior_alphas_transition, alphas)
+        model = MockHMM(n_states=3, dirichlet_transition_proba=alphas)
+        assert jnp.array_equal(model.dirichlet_transition_proba, alphas)
 
     def test_dirichlet_prior_transition_wrong_shape(self):
         """Test that wrong shape raises ValueError."""
         alphas = jnp.ones((2, 3))  # n_states=3 but wrong shape
         with pytest.raises(ValueError, match="must have shape"):
-            MockHMM(n_states=3, dirichlet_prior_alphas_transition=alphas)
+            MockHMM(n_states=3, dirichlet_transition_proba=alphas)
 
     # -------------------------------------------------------------------------
     # hmm_initialization_funcs setter tests
@@ -394,8 +392,8 @@ class TestHMMInit:
         assert model.n_states == 3
         assert model.maxiter == 1000
         assert model.tol == 1e-8
-        assert model.dirichlet_prior_alphas_init_prob is None
-        assert model.dirichlet_prior_alphas_transition is None
+        assert model.dirichlet_initial_proba is None
+        assert model.dirichlet_transition_proba is None
 
     def test_fit_attributes_initialized_to_none(self):
         """Test that fit attributes are initialized to None."""

@@ -515,8 +515,8 @@ def run_m_step(
     m_step_fn_model_params: Callable[
         [ModelParamsT, Array, Array, Array], Tuple[ModelParamsT, SolverState, Aux]
     ],
-    dirichlet_prior_alphas_init_prob: Array | None = None,
-    dirichlet_prior_alphas_transition: Array | None = None,
+    dirichlet_initial_proba: Array | None = None,
+    dirichlet_transition_proba: Array | None = None,
 ) -> Tuple[ModelParamsT, SolverState]:
     r"""
     Perform the M-step of the EM algorithm for an HMM.
@@ -543,9 +543,9 @@ def run_m_step(
         Callable that performs the M-step update for model parameters (e.g., coefficients and intercepts for a GLM).
         Should have signature: ``f(model_params, X, y, posteriors) -> (updated_params, state, aux)``.
         The regularizer/prior for the parameters should be configured within this callable.
-    dirichlet_prior_alphas_init_prob :
+    dirichlet_initial_proba :
         Prior for the initial states, shape ``(n_states,)``.
-    dirichlet_prior_alphas_transition :
+    dirichlet_transition_proba :
         Prior for the transition probabilities, shape ``(n_states, n_states)``.
 
     Returns
@@ -567,10 +567,10 @@ def run_m_step(
     log_initial_prob = _analytical_m_step_log_initial_prob(
         log_posteriors,
         is_new_session=is_new_session,
-        dirichlet_prior_alphas=dirichlet_prior_alphas_init_prob,
+        dirichlet_prior_alphas=dirichlet_initial_proba,
     )
     log_transition_prob = _analytical_m_step_log_transition_prob(
-        log_joint_posterior, dirichlet_prior_alphas=dirichlet_prior_alphas_transition
+        log_joint_posterior, dirichlet_prior_alphas=dirichlet_transition_proba
     )
 
     # Minimize negative log-likelihood to update model parameters
