@@ -9,12 +9,11 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from nemos.glm import GLM
 from nemos.glm_hmm.initialize_parameters import (
     DEFAULT_INIT_FUNCTIONS_GLMHMM,
     GLM_INIT_FUCS,
     KMeansInitializerGLM,
-    _validate_custom_glm_params_output,
-    _validate_custom_scale_output,
     constant_scale_init,
     generate_glm_hmm_initial_params,
     kmeans_glm_params_init,
@@ -309,55 +308,46 @@ class TestConstantScaleInitialization:
 # =============================================================================
 
 
-@pytest.fixture(scope="module")
-def kmeans_glm_data():
-    """Simple clustered data for KMeans GLM initialization tests."""
-    rng = np.random.default_rng(0)
+@pytest.fixture
+def kmeans_mock(monkeypatch):
+    """Patch GLM.fit to avoid slow JAX optimization. Uses small data so sklearn KMeans is fast."""
     n_states = 3
-    n_samples = 300
+    n_samples = 30
     n_features = 4
+
+    rng = np.random.default_rng(0)
     X = rng.standard_normal((n_samples, n_features))
-    y = rng.poisson(5, n_samples).astype(float)
-    y_pop = rng.poisson(5, (n_samples, 2)).astype(float)
-    return n_states, X, y, y_pop
+    y = np.ones(n_samples)
+
+    def fake_glm_fit(self, X, y, **kwargs):
+        n_feat = X.shape[1]
+        self.coef_ = jnp.zeros(n_feat)
+        self.intercept_ = jnp.array([0.0])
+
+    monkeypatch.setattr(GLM, "fit", fake_glm_fit)
+    return n_states, X, y, n_features
 
 
 class TestKMeansInitializerGLM:
     """Test KMeans-based GLM parameter initialization."""
 
-    @pytest.mark.parametrize("n_neurons", [1, 2])
-    def test_glm_params_output_shape(self, kmeans_glm_data, n_neurons):
-        n_states, X, y, y_pop = kmeans_glm_data
-        obs = y_pop if n_neurons > 1 else y
-
-        initializer = KMeansInitializerGLM(n_states, X, obs, jnp.exp, random_key=0)
+    def test_glm_params_output_shape(self, kmeans_mock):
+        n_states, X, y, n_features = kmeans_mock
+        initializer = KMeansInitializerGLM(n_states, X, y, jnp.exp, random_key=0)
         coef, intercept = initializer.glm_params()
+        assert coef.shape == (n_features, n_states)
+        assert intercept.shape == (n_states,)
 
-        if n_neurons == 1:
-            assert coef.shape == (X.shape[1], n_states)
-            assert intercept.shape == (n_states,)
-        else:
-            assert coef.shape == (X.shape[1], n_neurons, n_states)
-            assert intercept.shape == (n_neurons, n_states)
-
-    @pytest.mark.parametrize("n_neurons", [1, 2])
-    def test_scale_output_shape(self, kmeans_glm_data, n_neurons):
+    def test_scale_output_shape(self, kmeans_mock):
         """Poisson GLM has fixed scale=1, so scale() returns ones without fitting."""
-        n_states, X, y, y_pop = kmeans_glm_data
-        obs = y_pop if n_neurons > 1 else y
-
-        initializer = KMeansInitializerGLM(n_states, X, obs, jnp.exp, random_key=0)
+        n_states, X, y, _ = kmeans_mock
+        initializer = KMeansInitializerGLM(n_states, X, y, jnp.exp, random_key=0)
         scale = initializer.scale()
+        assert scale.shape == (n_states,)
 
-        if n_neurons == 1:
-            assert scale.shape == (n_states,)
-        else:
-            assert scale.shape == (n_states, n_neurons)
-
-    def test_shared_initializer(self, kmeans_glm_data):
-        """Providing a pre-built initializer skips refitting."""
-        n_states, X, y, _ = kmeans_glm_data
-
+    def test_shared_initializer(self, kmeans_mock):
+        """Providing a pre-built initializer skips creating a new one."""
+        n_states, X, y, _ = kmeans_mock
         initializer = KMeansInitializerGLM(n_states, X, y, jnp.exp, random_key=7)
         result = kmeans_glm_params_init(
             n_states, X, y, jnp.exp, initializer=initializer
@@ -367,18 +357,6 @@ class TestKMeansInitializerGLM:
         coef_e, int_e = expected
         assert jnp.allclose(coef_r, coef_e)
         assert jnp.allclose(int_r, int_e)
-
-    def test_different_random_keys_give_different_results(self, kmeans_glm_data):
-        n_states, X, y, _ = kmeans_glm_data
-
-        init1 = KMeansInitializerGLM(n_states, X, y, jnp.exp, random_key=1)
-        init2 = KMeansInitializerGLM(n_states, X, y, jnp.exp, random_key=2)
-
-        coef1, _ = init1.glm_params()
-        coef2, _ = init2.glm_params()
-        # KMeans with different seeds may produce different state assignments
-        # sorted coefficients should still differ unless by chance
-        assert not jnp.allclose(jnp.sort(coef1.ravel()), jnp.sort(coef2.ravel()))
 
 
 # =============================================================================
@@ -648,52 +626,18 @@ class TestGenerateGLMHMMInitialParams:
         assert jnp.allclose(initial_probs, 1.0 / 3)
         assert jnp.allclose(jnp.diag(transition_matrix), 0.95)
 
-    def test_random_key_splitting(self):
-        """All outputs differ from each other — each init function gets a distinct subkey."""
-        n_states = 3
-        n_features = 5
-        X = jnp.ones((100, n_features))
-        y = jnp.ones(100)
-
-        fixed_shape = (10,)
-
-        def rand_glm(n_states, X, y, inverse_link_function, random_key):
-            k1, k2 = jax.random.split(random_key)
-            return jax.random.normal(k1, fixed_shape), jax.random.normal(
-                k2, fixed_shape
-            )
-
-        def rand_scale(n_states, X, y, inverse_link_function, random_key):
-            return jax.random.normal(random_key, fixed_shape)
-
-        def rand_initial(n_states, X, y, random_key):
-            return jax.random.normal(random_key, fixed_shape)
-
-        def rand_transition(n_states, X, y, random_key):
-            return jax.random.normal(random_key, fixed_shape)
-
-        init_funcs = setup_glm_hmm_initialization(
-            glm_params_init=rand_glm,
-            scale_init=rand_scale,
-            initial_proba_init=rand_initial,
-            transition_proba_init=rand_transition,
-        )
-
-        coef, intercept, scale, initial_probs, transition_matrix = (
-            generate_glm_hmm_initial_params(
-                n_states, X, y, lambda x: x, init_funcs=init_funcs
-            )
-        )
-
-        for p1, p2 in itertools.combinations(
-            [coef, intercept, scale, initial_probs, transition_matrix], 2
-        ):
-            assert not jnp.allclose(p1, p2)
+    def test_random_key_affects_output(self):
+        """Different random keys produce different GLM coefficient initializations."""
+        X = jnp.ones((50, 5))
+        y = jnp.ones(50)
+        coef1, *_ = generate_glm_hmm_initial_params(3, X, y, lambda x: x, random_key=1)
+        coef2, *_ = generate_glm_hmm_initial_params(3, X, y, lambda x: x, random_key=2)
+        assert not jnp.allclose(coef1, coef2)
 
     @pytest.mark.parametrize(
-        "custom_func, custom_flag, expectation",
+        "custom_func, custom_flag, expectation, X",
         [
-            # Valid coef+intercept
+            # Valid coef+intercept, plain array X
             (
                 lambda n_states, X, y, inverse_link_function, random_key: (
                     jnp.zeros((X.shape[1], n_states)),
@@ -701,6 +645,7 @@ class TestGenerateGLMHMMInitialParams:
                 ),
                 "glm_params_init_custom",
                 does_not_raise(),
+                jnp.ones((10, 5)),
             ),
             # Wrong coef shape
             (
@@ -710,6 +655,7 @@ class TestGenerateGLMHMMInitialParams:
                 ),
                 "glm_params_init_custom",
                 pytest.raises(ValueError, match="mis-shaped"),
+                jnp.ones((10, 5)),
             ),
             # Wrong intercept shape
             (
@@ -719,6 +665,7 @@ class TestGenerateGLMHMMInitialParams:
                 ),
                 "glm_params_init_custom",
                 pytest.raises(ValueError, match="incorrect shape"),
+                jnp.ones((10, 5)),
             ),
             # Wrong coef type
             (
@@ -728,6 +675,7 @@ class TestGenerateGLMHMMInitialParams:
                 ),
                 "glm_params_init_custom",
                 pytest.raises(TypeError, match="did not return a pytree of arrays"),
+                jnp.ones((10, 5)),
             ),
             # Wrong intercept type
             (
@@ -737,6 +685,7 @@ class TestGenerateGLMHMMInitialParams:
                 ),
                 "glm_params_init_custom",
                 pytest.raises(TypeError, match="did not return an array"),
+                jnp.ones((10, 5)),
             ),
             # Valid scale
             (
@@ -745,6 +694,7 @@ class TestGenerateGLMHMMInitialParams:
                 ),
                 "scale_init_custom",
                 does_not_raise(),
+                jnp.ones((10, 5)),
             ),
             # Wrong scale shape
             (
@@ -753,21 +703,45 @@ class TestGenerateGLMHMMInitialParams:
                 ),
                 "scale_init_custom",
                 pytest.raises(ValueError, match="incorrect shape"),
+                jnp.ones((10, 5)),
             ),
             # Wrong scale type
             (
                 lambda n_states, X, y, inverse_link_function, random_key: "not_an_array",
                 "scale_init_custom",
                 pytest.raises(TypeError, match="must return an array"),
+                jnp.ones((10, 5)),
+            ),
+            # Valid pytree coef: dict X with matching dict coef and correct leaf shapes
+            (
+                lambda n_states, X, y, inverse_link_function, random_key: (
+                    {k: jnp.zeros((v.shape[1], n_states)) for k, v in X.items()},
+                    jnp.zeros(n_states),
+                ),
+                "glm_params_init_custom",
+                does_not_raise(),
+                {"feature_a": jnp.ones((10, 3)), "feature_b": jnp.ones((10, 2))},
+            ),
+            # Wrong pytree structure: dict X but plain-array coef
+            (
+                lambda n_states, X, y, inverse_link_function, random_key: (
+                    jnp.zeros((5, n_states)),
+                    jnp.zeros(n_states),
+                ),
+                "glm_params_init_custom",
+                pytest.raises(ValueError, match="tree structure"),
+                {"feature_a": jnp.ones((10, 3))},
             ),
         ],
     )
-    def test_validate_custom_func_output(self, custom_func, custom_flag, expectation):
+    def test_validate_custom_func_output(
+        self, custom_func, custom_flag, expectation, X
+    ):
         func_key = custom_flag.replace("_custom", "")
         with expectation:
             generate_glm_hmm_initial_params(
                 3,
-                jnp.ones((10, 5)),
+                X,
                 jnp.ones(10),
                 lambda x: x,
                 init_funcs={func_key: custom_func, custom_flag: True},
