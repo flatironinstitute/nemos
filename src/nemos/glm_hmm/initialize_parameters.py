@@ -8,8 +8,6 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import NDArray
 
-from build.lib.nemos.tree_utils import pytree_map_and_reduce
-
 from ..glm import GLM, PopulationGLM
 from ..glm.initialize_parameters import initialize_intercept_matching_mean_rate
 from ..glm.params import GLMUserParams
@@ -24,6 +22,7 @@ from ..hmm.initialize_parameters import (
     setup_hmm_initialization,
 )
 from ..pytrees import FeaturePytree
+from ..tree_utils import pytree_map_and_reduce
 from ..type_casting import cast_to_jax, is_numpy_array_like
 from ..typing import DESIGN_INPUT_TYPE
 from ..validation import check_tree_structure
@@ -166,10 +165,12 @@ class KMeansInitializerGLM(KMeansInitializer):
         self.glm_kwargs = glm_kwargs if glm_kwargs is not None else {}
         if self._y.ndim == 1:
             self._glm_models = {i: GLM(**self.glm_kwargs) for i in range(self.n_states)}
+            self._is_population = False
         else:
             self._glm_models = {
                 i: PopulationGLM(**self.glm_kwargs) for i in range(self.n_states)
             }
+            self._is_population = True
 
     def glm_params(self) -> GLMUserParams:
         """Generate glm parameters for initialization."""
@@ -189,9 +190,12 @@ class KMeansInitializerGLM(KMeansInitializer):
             X_state, y_state = self._X[state_mask], self._y[state_mask]
             model.fit(X_state, y_state)
             coef = jax.tree_util.tree_map(
-                lambda c, mc: c.at[:, i].set(mc), coef, model.coef_
+                lambda c, mc: c.at[..., i].set(mc), coef, model.coef_
             )
-            intercept = intercept.at[i : i + 1].set(model.intercept_)
+            if self._is_population:
+                intercept = intercept.at[..., i].set(model.intercept_)
+            else:
+                intercept = intercept.at[i : i + 1].set(model.intercept_)
 
         return coef, intercept
 
