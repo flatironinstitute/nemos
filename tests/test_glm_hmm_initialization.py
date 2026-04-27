@@ -1,6 +1,5 @@
 """Tests for glm_hmm/initialize_parameters.py"""
 
-import itertools
 from contextlib import nullcontext as does_not_raise
 from unittest.mock import create_autospec
 
@@ -729,7 +728,7 @@ class TestGenerateGLMHMMInitialParams:
                     jnp.zeros(n_states),
                 ),
                 "glm_params_init_custom",
-                pytest.raises(ValueError, match="tree structure"),
+                pytest.raises(TypeError, match="tree structure"),
                 {"feature_a": jnp.ones((10, 3))},
             ),
         ],
@@ -788,7 +787,9 @@ class TestValidateCustomGLMParamsOutput:
 
         init_funcs = setup_glm_hmm_initialization(glm_params_init=custom_init)
         with pytest.raises(ValueError, match="mis-shaped"):
-            generate_glm_hmm_initial_params(n_states, X, y, jnp.exp, init_funcs=init_funcs)
+            generate_glm_hmm_initial_params(
+                n_states, X, y, jnp.exp, init_funcs=init_funcs
+            )
 
     @pytest.mark.parametrize("n_neurons", [1, 3])
     def test_wrong_intercept_shape_raises(self, n_neurons):
@@ -807,7 +808,9 @@ class TestValidateCustomGLMParamsOutput:
 
         init_funcs = setup_glm_hmm_initialization(glm_params_init=custom_init)
         with pytest.raises(ValueError, match="incorrect shape"):
-            generate_glm_hmm_initial_params(n_states, X, y, jnp.exp, init_funcs=init_funcs)
+            generate_glm_hmm_initial_params(
+                n_states, X, y, jnp.exp, init_funcs=init_funcs
+            )
 
     def test_wrong_coef_type_raises(self):
         n_states, n_features = 3, 5
@@ -819,7 +822,9 @@ class TestValidateCustomGLMParamsOutput:
 
         init_funcs = setup_glm_hmm_initialization(glm_params_init=custom_init)
         with pytest.raises(TypeError, match="did not return a pytree of arrays"):
-            generate_glm_hmm_initial_params(n_states, X, y, jnp.exp, init_funcs=init_funcs)
+            generate_glm_hmm_initial_params(
+                n_states, X, y, jnp.exp, init_funcs=init_funcs
+            )
 
     def test_wrong_intercept_type_raises(self):
         n_states, n_features = 3, 5
@@ -831,7 +836,9 @@ class TestValidateCustomGLMParamsOutput:
 
         init_funcs = setup_glm_hmm_initialization(glm_params_init=custom_init)
         with pytest.raises(TypeError, match="did not return an array"):
-            generate_glm_hmm_initial_params(n_states, X, y, jnp.exp, init_funcs=init_funcs)
+            generate_glm_hmm_initial_params(
+                n_states, X, y, jnp.exp, init_funcs=init_funcs
+            )
 
     def test_error_message_shows_shapes(self):
         """Error message includes both actual and expected shapes."""
@@ -845,10 +852,14 @@ class TestValidateCustomGLMParamsOutput:
 
         init_funcs = setup_glm_hmm_initialization(glm_params_init=custom_init)
         with pytest.raises(ValueError, match="Actual shapes"):
-            generate_glm_hmm_initial_params(n_states, X, y, jnp.exp, init_funcs=init_funcs)
+            generate_glm_hmm_initial_params(
+                n_states, X, y, jnp.exp, init_funcs=init_funcs
+            )
 
         with pytest.raises(ValueError, match="Expected shapes"):
-            generate_glm_hmm_initial_params(n_states, X, y, jnp.exp, init_funcs=init_funcs)
+            generate_glm_hmm_initial_params(
+                n_states, X, y, jnp.exp, init_funcs=init_funcs
+            )
 
 
 # =============================================================================
@@ -884,7 +895,9 @@ class TestValidateCustomScaleOutput:
 
         init_funcs = setup_glm_hmm_initialization(scale_init=custom_scale)
         with pytest.raises(ValueError, match="incorrect shape"):
-            generate_glm_hmm_initial_params(n_states, X, y, jnp.exp, init_funcs=init_funcs)
+            generate_glm_hmm_initial_params(
+                n_states, X, y, jnp.exp, init_funcs=init_funcs
+            )
 
     def test_wrong_type_raises(self):
         n_states = 3
@@ -896,7 +909,9 @@ class TestValidateCustomScaleOutput:
 
         init_funcs = setup_glm_hmm_initialization(scale_init=custom_scale)
         with pytest.raises(TypeError, match="must return an array"):
-            generate_glm_hmm_initial_params(n_states, X, y, jnp.exp, init_funcs=init_funcs)
+            generate_glm_hmm_initial_params(
+                n_states, X, y, jnp.exp, init_funcs=init_funcs
+            )
 
     def test_error_message_shows_expected_shape(self):
         n_states = 3
@@ -909,4 +924,6 @@ class TestValidateCustomScaleOutput:
 
         init_funcs = setup_glm_hmm_initialization(scale_init=custom_scale)
         with pytest.raises(ValueError, match=rf"\({n_states},\)"):
-            generate_glm_hmm_initial_params(n_states, X, y, jnp.exp, init_funcs=init_funcs)
+            generate_glm_hmm_initial_params(
+                n_states, X, y, jnp.exp, init_funcs=init_funcs
+            )
