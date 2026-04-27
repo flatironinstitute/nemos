@@ -378,7 +378,7 @@ def constant_scale_init(
     return scale
 
 
-GLM_INIT_FUCS = {
+GLM_INIT_FUNCS = {
     "glm_params_init": random_glm_params_init,
     "glm_params_init_kwargs": {},
     "glm_params_init_custom": False,
@@ -387,7 +387,7 @@ GLM_INIT_FUCS = {
     "scale_init_custom": False,
 }
 DEFAULT_INIT_FUNCTIONS_GLMHMM = DEFAULT_INIT_FUNCTIONS.copy()
-DEFAULT_INIT_FUNCTIONS_GLMHMM.update(GLM_INIT_FUCS)
+DEFAULT_INIT_FUNCTIONS_GLMHMM.update(GLM_INIT_FUNCS)
 
 AVAIL_INIT_FUNCTIONS_GLM = {
     "glm_params_init": {
@@ -467,15 +467,15 @@ def setup_glm_hmm_initialization(
 
     if init_funcs is None:
         init_funcs = DEFAULT_INIT_FUNCTIONS_GLMHMM.copy()
-        glm_init_funcs = GLM_INIT_FUCS.copy()
+        glm_init_funcs = GLM_INIT_FUNCS.copy()
     else:
 
-        glm_init_funcs = {k: v for k, v in init_funcs.items() if k in GLM_INIT_FUCS}
+        glm_init_funcs = {k: v for k, v in init_funcs.items() if k in GLM_INIT_FUNCS}
         # check for unexpected/unknown keys in init_funcs and backfill with defaults
         # note that the hmm init function falidation will be done in the setup
         init_funcs = _validate_init_funcs_keys(init_funcs, glm_init_funcs)
 
-    hmm_init_funcs = {k: v for k, v in init_funcs.items() if k not in GLM_INIT_FUCS}
+    hmm_init_funcs = {k: v for k, v in init_funcs.items() if k not in GLM_INIT_FUNCS}
     hmm_init_funcs = setup_hmm_initialization(
         initial_proba_init,
         initial_proba_init_kwargs,
@@ -578,8 +578,8 @@ def generate_glm_hmm_initial_params(
         Function to set up the initialization functions and their kwargs based on user input.
     """
     init_funcs = {} if init_funcs is None else init_funcs
-    glm_init_funcs = {k: v for k, v in init_funcs.items() if k in GLM_INIT_FUCS}
-    hmm_init_funcs = {k: v for k, v in init_funcs.items() if k not in GLM_INIT_FUCS}
+    glm_init_funcs = {k: v for k, v in init_funcs.items() if k in GLM_INIT_FUNCS}
+    hmm_init_funcs = {k: v for k, v in init_funcs.items() if k not in GLM_INIT_FUNCS}
 
     if isinstance(random_key, int):
         random_key = jax.random.PRNGKey(random_key)
@@ -587,11 +587,11 @@ def generate_glm_hmm_initial_params(
     glm_params_key, scale_key, hmm_key = jax.random.split(random_key, 3)
 
     glm_init_funcs = _validate_init_funcs_keys(
-        glm_init_funcs, default_init_dict=GLM_INIT_FUCS
+        glm_init_funcs, default_init_dict=GLM_INIT_FUNCS
     )
 
     glm_params_init = (
-        glm_init_funcs["glm_params_init"] or GLM_INIT_FUCS["glm_params_init"]
+        glm_init_funcs["glm_params_init"] or GLM_INIT_FUNCS["glm_params_init"]
     )
     glm_params_init_kwargs = glm_init_funcs["glm_params_init_kwargs"] or {}
 
@@ -606,7 +606,7 @@ def generate_glm_hmm_initial_params(
     if glm_init_funcs["glm_params_init_custom"]:
         _validate_custom_glm_params_output((coef, intercept), n_states, X, y)
 
-    scale_init_fn = glm_init_funcs["scale_init"] or GLM_INIT_FUCS["scale_init"]
+    scale_init_fn = glm_init_funcs["scale_init"] or GLM_INIT_FUNCS["scale_init"]
     scale_init_kwargs = glm_init_funcs["scale_init_kwargs"] or {}
 
     scale = scale_init_fn(

@@ -11,7 +11,7 @@ import pytest
 from nemos.glm import GLM
 from nemos.glm_hmm.initialize_parameters import (
     DEFAULT_INIT_FUNCTIONS_GLMHMM,
-    GLM_INIT_FUCS,
+    GLM_INIT_FUNCS,
     KMeansInitializerGLM,
     constant_scale_init,
     generate_glm_hmm_initial_params,
@@ -494,7 +494,7 @@ class TestSetupGLMHMMInitialization:
         first = setup_glm_hmm_initialization(**{key: init_str, kwargs_key: kwargs_val})
         second = setup_glm_hmm_initialization(
             **{key: init_str},
-            init_funcs={k: v for k, v in first.items() if k in GLM_INIT_FUCS},
+            init_funcs={k: v for k, v in first.items() if k in GLM_INIT_FUNCS},
         )
         assert first[kwargs_key] == kwargs_val
         assert second[kwargs_key] == {}
