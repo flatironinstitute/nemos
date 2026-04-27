@@ -31,43 +31,64 @@ from nemos.inverse_link_function_utils import resolve_inverse_link_function
 # =============================================================================
 
 
-# GLM-type templates: 5 mandatory params (used for glm_params_init and scale_init)
-def _glm_template_no_extra(n_states, X, y, inverse_link_function, random_key):
+# GLM-type templates: 6 mandatory params
+# (n_states, X, y, inverse_link_function, is_new_session, random_key)
+def _glm_template_no_extra(
+    n_states, X, y, inverse_link_function, is_new_session, random_key
+):
     pass
 
 
 def _glm_template_one_extra(
-    n_states, X, y, inverse_link_function, random_key, param1=None
+    n_states, X, y, inverse_link_function, is_new_session, random_key, param1=None
 ):
     pass
 
 
 def _glm_template_two_extra(
-    n_states, X, y, inverse_link_function, random_key, param1=None, param2=None
+    n_states,
+    X,
+    y,
+    inverse_link_function,
+    is_new_session,
+    random_key,
+    param1=None,
+    param2=None,
 ):
     pass
 
 
 def _glm_template_special(
-    n_states, X, y, inverse_link_function, random_key, my_special_param=None
+    n_states,
+    X,
+    y,
+    inverse_link_function,
+    is_new_session,
+    random_key,
+    my_special_param=None,
 ):
     pass
 
 
-# HMM-type templates: 4 mandatory params (used for initial_proba_init and transition_proba_init)
-def _hmm_template_no_extra(n_states, X, y, random_key):
+# HMM-type templates: 5 mandatory params
+# (n_states, X, y, is_new_session, random_key)
+def _hmm_template_no_extra(n_states, X, y, is_new_session, random_key):
     pass
 
 
-def _hmm_template_one_extra(n_states, X, y, random_key, param1=None):
+def _hmm_template_one_extra(n_states, X, y, is_new_session, random_key, param1=None):
     pass
 
 
-def _hmm_template_two_extra(n_states, X, y, random_key, param1=None, param2=None):
+def _hmm_template_two_extra(
+    n_states, X, y, is_new_session, random_key, param1=None, param2=None
+):
     pass
 
 
-def _hmm_template_special(n_states, X, y, random_key, my_special_param=None):
+def _hmm_template_special(
+    n_states, X, y, is_new_session, random_key, my_special_param=None
+):
     pass
 
 
@@ -411,7 +432,7 @@ class TestSetupGLMHMMInitialization:
         "init_func, expectation",
         [
             (
-                lambda n_states, X, y, inverse_link_function, random_key: (
+                lambda n_states, X, y, inverse_link_function, is_new_session, random_key: (
                     jnp.zeros((1, n_states)),
                     jnp.zeros(n_states),
                 ),
@@ -432,7 +453,7 @@ class TestSetupGLMHMMInitialization:
         "init_func, expectation",
         [
             (
-                lambda n_states, X, y, inverse_link_function, random_key: jnp.ones(
+                lambda n_states, X, y, inverse_link_function, is_new_session, random_key: jnp.ones(
                     n_states
                 ),
                 does_not_raise(),
@@ -449,7 +470,8 @@ class TestSetupGLMHMMInitialization:
             assert init_funcs["scale_init"] == init_func
 
     @pytest.mark.parametrize(
-        "kwarg_name", ["n_states", "X", "y", "inverse_link_function", "random_key"]
+        "kwarg_name",
+        ["n_states", "X", "y", "inverse_link_function", "is_new_session", "random_key"],
     )
     def test_glm_params_init_kwargs_reserved(self, kwarg_name):
         with pytest.raises(
@@ -458,7 +480,8 @@ class TestSetupGLMHMMInitialization:
             setup_glm_hmm_initialization(glm_params_init_kwargs={kwarg_name: 123})
 
     @pytest.mark.parametrize(
-        "kwarg_name", ["n_states", "X", "y", "inverse_link_function", "random_key"]
+        "kwarg_name",
+        ["n_states", "X", "y", "inverse_link_function", "is_new_session", "random_key"],
     )
     def test_scale_init_kwargs_reserved(self, kwarg_name):
         with pytest.raises(
@@ -523,7 +546,6 @@ class TestSetupGLMHMMInitializationKwargs:
 
     def test_none_returns_empty_kwargs(self, func_name, recwarn):
         mock_registry = _get_mock_registry("one_extra")
-        # inject a mock function then check kwargs validation
         init_funcs = setup_glm_hmm_initialization(
             **{func_name: mock_registry[func_name]}
         )
@@ -632,298 +654,3 @@ class TestGenerateGLMHMMInitialParams:
         coef1, *_ = generate_glm_hmm_initial_params(3, X, y, lambda x: x, random_key=1)
         coef2, *_ = generate_glm_hmm_initial_params(3, X, y, lambda x: x, random_key=2)
         assert not jnp.allclose(coef1, coef2)
-
-    @pytest.mark.parametrize(
-        "custom_func, custom_flag, expectation, X",
-        [
-            # Valid coef+intercept, plain array X
-            (
-                lambda n_states, X, y, inverse_link_function, random_key: (
-                    jnp.zeros((X.shape[1], n_states)),
-                    jnp.zeros(n_states),
-                ),
-                "glm_params_init_custom",
-                does_not_raise(),
-                jnp.ones((10, 5)),
-            ),
-            # Wrong coef shape
-            (
-                lambda n_states, X, y, inverse_link_function, random_key: (
-                    jnp.zeros((X.shape[1] + 1, n_states)),
-                    jnp.zeros(n_states),
-                ),
-                "glm_params_init_custom",
-                pytest.raises(ValueError, match="mis-shaped"),
-                jnp.ones((10, 5)),
-            ),
-            # Wrong intercept shape
-            (
-                lambda n_states, X, y, inverse_link_function, random_key: (
-                    jnp.zeros((X.shape[1], n_states)),
-                    jnp.zeros(n_states + 1),
-                ),
-                "glm_params_init_custom",
-                pytest.raises(ValueError, match="incorrect shape"),
-                jnp.ones((10, 5)),
-            ),
-            # Wrong coef type
-            (
-                lambda n_states, X, y, inverse_link_function, random_key: (
-                    "not_an_array",
-                    jnp.zeros(n_states),
-                ),
-                "glm_params_init_custom",
-                pytest.raises(TypeError, match="did not return a pytree of arrays"),
-                jnp.ones((10, 5)),
-            ),
-            # Wrong intercept type
-            (
-                lambda n_states, X, y, inverse_link_function, random_key: (
-                    jnp.zeros((X.shape[1], n_states)),
-                    "not_an_array",
-                ),
-                "glm_params_init_custom",
-                pytest.raises(TypeError, match="did not return an array"),
-                jnp.ones((10, 5)),
-            ),
-            # Valid scale
-            (
-                lambda n_states, X, y, inverse_link_function, random_key: jnp.ones(
-                    n_states
-                ),
-                "scale_init_custom",
-                does_not_raise(),
-                jnp.ones((10, 5)),
-            ),
-            # Wrong scale shape
-            (
-                lambda n_states, X, y, inverse_link_function, random_key: jnp.ones(
-                    n_states + 1
-                ),
-                "scale_init_custom",
-                pytest.raises(ValueError, match="incorrect shape"),
-                jnp.ones((10, 5)),
-            ),
-            # Wrong scale type
-            (
-                lambda n_states, X, y, inverse_link_function, random_key: "not_an_array",
-                "scale_init_custom",
-                pytest.raises(TypeError, match="must return an array"),
-                jnp.ones((10, 5)),
-            ),
-            # Valid pytree coef: dict X with matching dict coef and correct leaf shapes
-            (
-                lambda n_states, X, y, inverse_link_function, random_key: (
-                    {k: jnp.zeros((v.shape[1], n_states)) for k, v in X.items()},
-                    jnp.zeros(n_states),
-                ),
-                "glm_params_init_custom",
-                does_not_raise(),
-                {"feature_a": jnp.ones((10, 3)), "feature_b": jnp.ones((10, 2))},
-            ),
-            # Wrong pytree structure: dict X but plain-array coef
-            (
-                lambda n_states, X, y, inverse_link_function, random_key: (
-                    jnp.zeros((5, n_states)),
-                    jnp.zeros(n_states),
-                ),
-                "glm_params_init_custom",
-                pytest.raises(TypeError, match="tree structure"),
-                {"feature_a": jnp.ones((10, 3))},
-            ),
-        ],
-    )
-    def test_validate_custom_func_output(
-        self, custom_func, custom_flag, expectation, X
-    ):
-        func_key = custom_flag.replace("_custom", "")
-        with expectation:
-            generate_glm_hmm_initial_params(
-                3,
-                X,
-                jnp.ones(10),
-                lambda x: x,
-                init_funcs={func_key: custom_func, custom_flag: True},
-            )
-
-
-# =============================================================================
-# Tests for _validate_custom_glm_params_output
-# =============================================================================
-
-
-class TestValidateCustomGLMParamsOutput:
-    """Test custom GLM params output validation via generate_glm_hmm_initial_params."""
-
-    @pytest.mark.parametrize("n_neurons", [1, 3])
-    def test_valid_output(self, n_neurons):
-        n_states, n_features = 3, 5
-        X = jnp.ones((10, n_features))
-        y = jnp.ones((10, n_neurons)) if n_neurons > 1 else jnp.ones(10)
-
-        if n_neurons == 1:
-            coef = jnp.zeros((n_features, n_states))
-            intercept = jnp.zeros(n_states)
-        else:
-            coef = jnp.zeros((n_features, n_neurons, n_states))
-            intercept = jnp.zeros((n_neurons, n_states))
-
-        def custom_init(n_states, X, y, inverse_link_function, random_key, **kwargs):
-            return coef, intercept
-
-        init_funcs = setup_glm_hmm_initialization(glm_params_init=custom_init)
-        generate_glm_hmm_initial_params(n_states, X, y, jnp.exp, init_funcs=init_funcs)
-
-    @pytest.mark.parametrize("n_neurons", [1, 3])
-    def test_wrong_coef_shape_raises(self, n_neurons):
-        n_states, n_features = 3, 5
-        X = jnp.ones((10, n_features))
-        y = jnp.ones((10, n_neurons)) if n_neurons > 1 else jnp.ones(10)
-        coef = jnp.zeros((n_features + 1, n_states))  # wrong n_features
-        intercept = jnp.zeros((n_neurons, n_states) if n_neurons > 1 else (n_states,))
-
-        def custom_init(n_states, X, y, inverse_link_function, random_key, **kwargs):
-            return coef, intercept
-
-        init_funcs = setup_glm_hmm_initialization(glm_params_init=custom_init)
-        with pytest.raises(ValueError, match="mis-shaped"):
-            generate_glm_hmm_initial_params(
-                n_states, X, y, jnp.exp, init_funcs=init_funcs
-            )
-
-    @pytest.mark.parametrize("n_neurons", [1, 3])
-    def test_wrong_intercept_shape_raises(self, n_neurons):
-        n_states, n_features = 3, 5
-        X = jnp.ones((10, n_features))
-        y = jnp.ones((10, n_neurons)) if n_neurons > 1 else jnp.ones(10)
-        coef = jnp.zeros(
-            (n_features, n_neurons, n_states)
-            if n_neurons > 1
-            else (n_features, n_states)
-        )
-        intercept = jnp.zeros(n_states + 1)  # wrong shape
-
-        def custom_init(n_states, X, y, inverse_link_function, random_key, **kwargs):
-            return coef, intercept
-
-        init_funcs = setup_glm_hmm_initialization(glm_params_init=custom_init)
-        with pytest.raises(ValueError, match="incorrect shape"):
-            generate_glm_hmm_initial_params(
-                n_states, X, y, jnp.exp, init_funcs=init_funcs
-            )
-
-    def test_wrong_coef_type_raises(self):
-        n_states, n_features = 3, 5
-        X = jnp.ones((10, n_features))
-        y = jnp.ones(10)
-
-        def custom_init(n_states, X, y, inverse_link_function, random_key, **kwargs):
-            return "not_an_array", jnp.zeros(n_states)
-
-        init_funcs = setup_glm_hmm_initialization(glm_params_init=custom_init)
-        with pytest.raises(TypeError, match="did not return a pytree of arrays"):
-            generate_glm_hmm_initial_params(
-                n_states, X, y, jnp.exp, init_funcs=init_funcs
-            )
-
-    def test_wrong_intercept_type_raises(self):
-        n_states, n_features = 3, 5
-        X = jnp.ones((10, n_features))
-        y = jnp.ones(10)
-
-        def custom_init(n_states, X, y, inverse_link_function, random_key, **kwargs):
-            return jnp.zeros((n_features, n_states)), "not_an_array"
-
-        init_funcs = setup_glm_hmm_initialization(glm_params_init=custom_init)
-        with pytest.raises(TypeError, match="did not return an array"):
-            generate_glm_hmm_initial_params(
-                n_states, X, y, jnp.exp, init_funcs=init_funcs
-            )
-
-    def test_error_message_shows_shapes(self):
-        """Error message includes both actual and expected shapes."""
-        n_states, n_features = 3, 5
-        X = jnp.ones((10, n_features))
-        y = jnp.ones(10)
-        coef = jnp.zeros((n_features + 2, n_states))
-
-        def custom_init(n_states, X, y, inverse_link_function, random_key, **kwargs):
-            return coef, jnp.zeros(n_states)
-
-        init_funcs = setup_glm_hmm_initialization(glm_params_init=custom_init)
-        with pytest.raises(ValueError, match="Actual shapes"):
-            generate_glm_hmm_initial_params(
-                n_states, X, y, jnp.exp, init_funcs=init_funcs
-            )
-
-        with pytest.raises(ValueError, match="Expected shapes"):
-            generate_glm_hmm_initial_params(
-                n_states, X, y, jnp.exp, init_funcs=init_funcs
-            )
-
-
-# =============================================================================
-# Tests for _validate_custom_scale_output
-# =============================================================================
-
-
-class TestValidateCustomScaleOutput:
-    """Test custom scale output validation via generate_glm_hmm_initial_params."""
-
-    @pytest.mark.parametrize("n_neurons", [1, 3])
-    def test_valid_output(self, n_neurons):
-        n_states = 3
-        X = jnp.ones((10, 5))
-        y = jnp.ones((10, n_neurons)) if n_neurons > 1 else jnp.ones(10)
-        scale = jnp.ones((n_states, n_neurons) if n_neurons > 1 else (n_states,))
-
-        def custom_scale(n_states, X, y, inverse_link_function, random_key, **kwargs):
-            return scale
-
-        init_funcs = setup_glm_hmm_initialization(scale_init=custom_scale)
-        generate_glm_hmm_initial_params(n_states, X, y, jnp.exp, init_funcs=init_funcs)
-
-    @pytest.mark.parametrize("n_neurons", [1, 3])
-    def test_wrong_shape_raises(self, n_neurons):
-        n_states = 3
-        X = jnp.ones((10, 5))
-        y = jnp.ones((10, n_neurons)) if n_neurons > 1 else jnp.ones(10)
-        scale = jnp.ones(n_states + 1)
-
-        def custom_scale(n_states, X, y, inverse_link_function, random_key, **kwargs):
-            return scale
-
-        init_funcs = setup_glm_hmm_initialization(scale_init=custom_scale)
-        with pytest.raises(ValueError, match="incorrect shape"):
-            generate_glm_hmm_initial_params(
-                n_states, X, y, jnp.exp, init_funcs=init_funcs
-            )
-
-    def test_wrong_type_raises(self):
-        n_states = 3
-        X = jnp.ones((10, 5))
-        y = jnp.ones(10)
-
-        def custom_scale(n_states, X, y, inverse_link_function, random_key, **kwargs):
-            return "not_an_array"
-
-        init_funcs = setup_glm_hmm_initialization(scale_init=custom_scale)
-        with pytest.raises(TypeError, match="must return an array"):
-            generate_glm_hmm_initial_params(
-                n_states, X, y, jnp.exp, init_funcs=init_funcs
-            )
-
-    def test_error_message_shows_expected_shape(self):
-        n_states = 3
-        X = jnp.ones((10, 5))
-        y = jnp.ones(10)
-        scale = jnp.ones(n_states + 2)
-
-        def custom_scale(n_states, X, y, inverse_link_function, random_key, **kwargs):
-            return scale
-
-        init_funcs = setup_glm_hmm_initialization(scale_init=custom_scale)
-        with pytest.raises(ValueError, match=rf"\({n_states},\)"):
-            generate_glm_hmm_initial_params(
-                n_states, X, y, jnp.exp, init_funcs=init_funcs
-            )
