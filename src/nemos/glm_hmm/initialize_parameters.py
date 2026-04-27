@@ -8,6 +8,8 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import NDArray
 
+from build.lib.nemos.tree_utils import pytree_map_and_reduce
+
 from ..glm import GLM, PopulationGLM
 from ..glm.initialize_parameters import initialize_intercept_matching_mean_rate
 from ..glm.params import GLMUserParams
@@ -21,8 +23,10 @@ from ..hmm.initialize_parameters import (
     generate_hmm_initial_params,
     setup_hmm_initialization,
 )
-from ..type_casting import cast_to_jax
+from ..pytrees import FeaturePytree
+from ..type_casting import cast_to_jax, is_numpy_array_like
 from ..typing import DESIGN_INPUT_TYPE
+from ..validation import check_tree_structure
 from .algorithm_configs import (
     has_fixed_scale,
 )
@@ -87,6 +91,8 @@ def random_glm_params_init(
     """
     is_one_dim = y.ndim == 1
     n_neurons = 1 if is_one_dim else y.shape[1]
+    if isinstance(X, FeaturePytree):
+        X = X.data
     # small random noisy coef
     coef = jax.tree_util.tree_map(
         lambda x: std_dev
@@ -153,6 +159,8 @@ class KMeansInitializerGLM(KMeansInitializer):
             random_key=random_key,
         )
         self._X = jax.tree_util.tree_map(jnp.asarray, X)
+        if isinstance(self._X, FeaturePytree):
+            self._X = self._X.data
         self._y = jnp.asarray(y)
         self.inverse_link_function = inverse_link_function
         self.glm_kwargs = glm_kwargs if glm_kwargs is not None else {}
@@ -165,16 +173,14 @@ class KMeansInitializerGLM(KMeansInitializer):
 
     def glm_params(self) -> GLMUserParams:
         """Generate glm parameters for initialization."""
-        if isinstance(self.random_key, int):
-            key = jax.random.PRNGKey(self.random_key)
-        sub, _ = jax.random.split(key)
+        key = jax.random.PRNGKey(self.random_key)
         states = self.states.astype(bool)
         coef, intercept = random_glm_params_init(
             states.shape[1],
             self._X,
             self._y,
             self.inverse_link_function,
-            random_key=sub,
+            random_key=key,
             std_dev=0.0,
         )
         # initialize
@@ -330,6 +336,7 @@ def constant_scale_init(
     n_states: int,
     X: DESIGN_INPUT_TYPE,
     y: NDArray | jnp.ndarray,
+    inverse_link_function: Callable,
     random_key=jax.random.PRNGKey(124),
     scale_val: float = 1.0,
 ):
@@ -346,6 +353,8 @@ def constant_scale_init(
         Design matrix, unused but included for API consistency.
     y : NDArray | jnp.ndarray
         Observations, used to determine number of neurons from shape.
+    inverse_link_function :
+        Inverse link function of the GLM. Unused for this initialization, but included for API consistency.
     random_key : jax.random.PRNGKey
         Random key, unused for this initialization, but included for API consistency.
     scale_val : float
@@ -368,8 +377,10 @@ def constant_scale_init(
 GLM_INIT_FUCS = {
     "glm_params_init": random_glm_params_init,
     "glm_params_init_kwargs": {},
+    "glm_params_init_custom": False,
     "scale_init": constant_scale_init,
     "scale_init_kwargs": {},
+    "scale_init_custom": False,
 }
 DEFAULT_INIT_FUNCTIONS_GLMHMM = DEFAULT_INIT_FUNCTIONS.copy()
 DEFAULT_INIT_FUNCTIONS_GLMHMM.update(GLM_INIT_FUCS)
@@ -379,10 +390,10 @@ AVAIL_INIT_FUNCTIONS_GLM = {
         "random": random_glm_params_init,
         "kmeans": kmeans_glm_params_init,
     },
-    "glm_scale_init": {"constant": constant_scale_init, "kmeans": kmeans_scale_init},
+    "scale_init": {"constant": constant_scale_init, "kmeans": kmeans_scale_init},
 }
 
-INITIALIZATION_FN_DICT = dict[
+GLMHMM_INITIALIZATION_FN_DICT = dict[
     Literal[
         "initial_proba_init",
         "initial_proba_init_kwargs",
@@ -410,8 +421,8 @@ def setup_glm_hmm_initialization(
     glm_params_init_kwargs: Optional[dict] = None,
     scale_init: Optional[str | Callable] = None,
     scale_init_kwargs: Optional[dict] = None,
-    init_funcs: Optional[dict | INITIALIZATION_FN_DICT] = None,
-) -> INITIALIZATION_FN_DICT:
+    init_funcs: Optional[dict | GLMHMM_INITIALIZATION_FN_DICT] = None,
+) -> GLMHMM_INITIALIZATION_FN_DICT:
     """
     Set up HMM initialization functions based on user input, merging with defaults.
 
@@ -517,31 +528,41 @@ def generate_glm_hmm_initial_params(
     inverse_link_function: Callable,
     random_key: int | jax.Array = 123,
     init_funcs: Optional[dict] = None,
-) -> Tuple[Any, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+) -> Tuple[Any, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     """
-    Generate initial HMM parameters using the provided initialization functions.
+    Generate initial GLM-HMM parameters using the provided initialization functions.
 
-    This function calls the specified initialization functions for initial state probabilities
-    stored in the `init_funcs` dictionary passing `n_states` and any additional stored kwargs.
+    Calls the specified initialization functions for GLM coefficients, intercept, scale,
+    initial state probabilities, and transition probabilities, splitting the random key
+    to ensure independent random states for each component.
 
     Parameters
     ----------
     n_states :
         Number of HMM states.
     X :
-        Predictor data (e.g., model design for GLM) of shape (n_samples, n_features).
+        Predictor data of shape (n_samples, n_features).
     y :
-        Output data (e.g., neural activity) of shape (n_samples,).
+        Output data (e.g., neural activity) of shape (n_samples,) or (n_samples, n_neurons).
+    inverse_link_function :
+        Inverse link function of the GLM, passed to GLM parameter and scale initialization functions.
     random_key :
-        Optional key for random number generation, if needed by the initialization functions. The key is split to
-        ensure different random states for initial probabilities and transition probabilities.
+        Key for random number generation. Split into three independent subkeys for GLM params,
+        scale, and HMM probabilities respectively.
     init_funcs :
-        Dictionary containing the initialization functions and their kwargs for both initial state probabilities
-        and transition probabilities. This dictionary can be set up using the `setup_hmm_initialization` function.
-        If not provided, or if specific functions are missing, defaults will be used.
+        Dictionary containing initialization functions and their kwargs for all GLM-HMM parameters.
+        Can be constructed with :func:`setup_glm_hmm_initialization`. Missing keys are backfilled
+        with defaults.
 
     Returns
     -------
+    coef :
+        GLM coefficients, a pytree matching the structure of X with leaves of shape
+        (n_features, n_neurons, n_states) or (n_features, n_states) for single-neuron.
+    intercept :
+        Intercept array of shape (n_neurons, n_states) or (n_states,) for single-neuron.
+    scale :
+        Scale array of shape (n_states,) for single-neuron or (n_neurons, n_states) for population.
     initial_probs :
         Initial state probability vector of shape (n_states,) that sums to 1.
     transition_matrix :
@@ -549,10 +570,9 @@ def generate_glm_hmm_initial_params(
 
     See Also
     --------
-    :func:`nemos.hmm.setup_hmm_initialization`
+    :func:`nemos.glm_hmm.initialize_parameters.setup_glm_hmm_initialization`
         Function to set up the initialization functions and their kwargs based on user input.
     """
-    # check for unexpected/unknown keys in init_funcs if user provided dictionary not made by setup_hmm_initialization
     init_funcs = {} if init_funcs is None else init_funcs
     glm_init_funcs = {k: v for k, v in init_funcs.items() if k in GLM_INIT_FUCS}
     hmm_init_funcs = {k: v for k, v in init_funcs.items() if k not in GLM_INIT_FUCS}
@@ -560,24 +580,17 @@ def generate_glm_hmm_initial_params(
     if isinstance(random_key, int):
         random_key = jax.random.PRNGKey(random_key)
 
-    # glm, scale, hmm
     glm_params_key, scale_key, hmm_key = jax.random.split(random_key, 3)
 
-    # validate glm specific
     glm_init_funcs = _validate_init_funcs_keys(
-        glm_init_funcs, default_init_funcs=GLM_INIT_FUCS
+        glm_init_funcs, default_init_dict=GLM_INIT_FUCS
     )
 
-    # grab glm initialization function
     glm_params_init = (
         glm_init_funcs["glm_params_init"] or GLM_INIT_FUCS["glm_params_init"]
     )
-
-    # set to empty kwargs if set to None
     glm_params_init_kwargs = glm_init_funcs["glm_params_init_kwargs"] or {}
 
-    # split seed into a new key
-    # compute probabilities and validate if custom functions are used
     coef, intercept = glm_params_init(
         n_states=n_states,
         X=X,
@@ -586,6 +599,23 @@ def generate_glm_hmm_initial_params(
         random_key=glm_params_key,
         **glm_params_init_kwargs,
     )
+    if glm_init_funcs["glm_params_init_custom"]:
+        _validate_custom_glm_params_output((coef, intercept), n_states, X, y)
+
+    scale_init_fn = glm_init_funcs["scale_init"] or GLM_INIT_FUCS["scale_init"]
+    scale_init_kwargs = glm_init_funcs["scale_init_kwargs"] or {}
+
+    scale = scale_init_fn(
+        n_states=n_states,
+        X=X,
+        y=y,
+        inverse_link_function=inverse_link_function,
+        random_key=scale_key,
+        **scale_init_kwargs,
+    )
+
+    if glm_init_funcs["scale_init_custom"]:
+        _validate_custom_scale_output(scale, n_states, y)
 
     initial_probs, transition_matrix = generate_hmm_initial_params(
         n_states,
@@ -595,4 +625,104 @@ def generate_glm_hmm_initial_params(
         hmm_init_funcs,
     )
 
-    return coef, intercept, initial_probs, transition_matrix
+    return coef, intercept, scale, initial_probs, transition_matrix
+
+
+def _validate_custom_glm_params_output(
+    params: GLMUserParams,
+    n_states: int,
+    X: DESIGN_INPUT_TYPE,
+    y: jnp.ndarray,
+):
+    coef, intercept = params
+    is_pop = y.ndim > 1
+    n_neurons = 1 if not is_pop else y.shape[1]
+
+    if not all(is_numpy_array_like(x)[1] for x in jax.tree_util.tree_leaves(coef)):
+        raise TypeError(
+            "The custom initialization function for the glm coefficients"
+            " did not return a pytree of arrays. "
+            "Some of the leaves of the coefficient pytree are not arrays."
+        )
+
+    data = X.data if isinstance(X, FeaturePytree) else X
+    if isinstance(X, FeaturePytree):
+        msg = (
+            "The custom initialization function for the glm coefficients returned an incorrect tree structure. "
+            "X and coef must have the same structure. "
+            "X was provided as a FeaturePytree, so coef should be a dictionary with matching keys. "
+            f"X keys are ``{X.keys()}``, but coef has structure "
+            f"``{jax.tree_util.tree_structure(coef)}`` instead."
+        )
+    else:
+        msg = (
+            "The custom initialization function for the glm coefficients returned an incorrect tree structure. "
+            "X and coef must have the same structure. "
+            f"X has pytree structure ``{jax.tree_util.tree_structure(X)}``, "
+            f"but coef has structure ``{jax.tree_util.tree_structure(coef)}``."
+        )
+    check_tree_structure(data, coef, err_message=msg)
+
+    if is_pop:
+        if not pytree_map_and_reduce(
+            lambda p, x: p.shape == (x.shape[1], n_states, n_neurons),
+            all,
+            coef,
+            data,
+        ):
+            actual_shapes = jax.tree_util.tree_map(lambda p: p.shape, coef)
+            expected_shapes = jax.tree_util.tree_map(
+                lambda x: (x.shape[1], n_states, n_neurons), data
+            )
+            raise ValueError(
+                "The custom initialization function for the glm coefficients returned mis-shaped coefficients. "
+                "Each array in the coefficient pytree must have shape ``(n_features, n_states, n_neurons)``.\n"
+                f"  Actual shapes:   {actual_shapes}\n"
+                f"  Expected shapes: {expected_shapes}"
+            )
+    else:
+        if not pytree_map_and_reduce(
+            lambda p, x: p.shape == (x.shape[1], n_states), all, coef, data
+        ):
+            actual_shapes = jax.tree_util.tree_map(lambda p: p.shape, coef)
+            expected_shapes = jax.tree_util.tree_map(
+                lambda x: (x.shape[1], n_states), data
+            )
+            raise ValueError(
+                "The custom initialization function for the glm coefficients returned mis-shaped coefficients. "
+                "Each array in the coefficient pytree must have shape ``(n_features, n_states)``.\n"
+                f"  Actual shapes:   {actual_shapes}\n"
+                f"  Expected shapes: {expected_shapes}"
+            )
+
+    if not is_numpy_array_like(intercept)[1]:
+        raise TypeError(
+            "The custom initialization function for the glm intercept did not return an array. "
+            f"Return type was {type(intercept)}."
+        )
+    expected_intercept_shape = (n_states, n_neurons) if is_pop else (n_states,)
+    if intercept.shape != expected_intercept_shape:
+        raise ValueError(
+            "The custom initialization function for the glm intercept returned an array with incorrect shape. "
+            f"Expected ``{expected_intercept_shape}``, got ``{intercept.shape}``."
+        )
+
+
+def _validate_custom_scale_output(
+    params: jnp.ndarray,
+    n_states: int,
+    y: jnp.ndarray,
+):
+    is_pop = y.ndim > 1
+    n_neurons = 1 if not is_pop else y.shape[1]
+    if not is_numpy_array_like(params)[1]:
+        raise TypeError(
+            "The custom initialization function for the scale must return an array. "
+            f"Return type was {type(params)}."
+        )
+    expected_shape = (n_states, n_neurons) if is_pop else (n_states,)
+    if params.shape != expected_shape:
+        raise ValueError(
+            "The custom initialization function for the scale returned an array with incorrect shape. "
+            f"Expected ``{expected_shape}``, got ``{params.shape}``."
+        )
