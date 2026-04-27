@@ -960,10 +960,7 @@ def generate_hmm_initial_params(
         random_key=random_key_pair[1],
         **transition_proba_init_kwargs,
     )
-    if init_funcs["transition_proba_init_custom"]:
-        _validate_custom_init_output(
-            transition_matrix, n_states, "transition_proba_init"
-        )
+
     return initial_probs, transition_matrix
 
 
